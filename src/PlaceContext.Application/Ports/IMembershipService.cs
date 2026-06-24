@@ -8,6 +8,10 @@ public interface IMembershipService
     Task<IReadOnlyList<MemberView>> ListMembersAsync(CancellationToken ct = default);
     Task SetRoleAsync(Guid userId, UserRole role, CancellationToken ct = default);
 
+    /// <summary>The current role of a member by id within the tenant, or null if no such user exists
+    /// (e.g. a stale/ghost token whose user was removed or predates a DB reseed).</summary>
+    Task<string?> GetRoleAsync(Guid userId, CancellationToken ct = default);
+
     /// <summary>Creates a single-use invite for an email at a role and returns its token.</summary>
     Task<InviteView> CreateInviteAsync(string email, UserRole role, CancellationToken ct = default);
 

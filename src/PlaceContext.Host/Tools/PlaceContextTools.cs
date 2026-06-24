@@ -1,10 +1,12 @@
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Security.Claims;
 using System.Text.Json;
 using PlaceContext.Application;
 using PlaceContext.Application.Features;
 using PlaceContext.Application.Ports;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using ModelContextProtocol.Server;
 
 namespace PlaceContext.Host.Tools;
@@ -19,6 +21,37 @@ namespace PlaceContext.Host.Tools;
 public sealed class PlaceContextTools
 {
     private static readonly JsonSerializerOptions Json = new() { WriteIndented = true };
+
+    // Deliberately ungated: a Viewer (or a stale/ghost token) must be able to call this to discover *why*
+    // its writes are rejected. Reports the token's embedded identity and cross-checks it against the DB.
+    [McpServerTool(Name = "whoami"), Description("Diagnose the calling access token: returns its user id, tenant, and embedded role, and cross-checks whether that user still exists in this tenant and what role the database holds for them. Use this when writes are rejected to confirm the token isn't a stale/ghost session (role stuck at Viewer, or a user id from a previous seed).")]
+    public static Task<string> WhoAmI(IHttpContextAccessor http, IToolCallLog log, IMembershipService members, ICurrentTenant tenant)
+        => Traced(log, "whoami", "—", "whoami", new { }, async () =>
+        {
+            var user = http.HttpContext?.User;
+            var tokenRole = user?.FindFirst(ClaimTypes.Role)?.Value ?? user?.FindFirst("role")?.Value;
+            var subRaw = user?.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? user?.FindFirst("sub")?.Value;
+            Guid.TryParse(subRaw, out var userId);
+
+            var dbMember = (await members.ListMembersAsync()).FirstOrDefault(m => m.Id == userId);
+
+            return (object)new
+            {
+                tokenUserId = subRaw,
+                tokenRole,
+                tenantId = tenant.TenantId,
+                tenantSlug = tenant.Slug,
+                existsInTenant = dbMember is not null,
+                dbRole = dbMember?.Role,
+                email = dbMember?.Email,
+                displayName = dbMember?.DisplayName,
+                note = dbMember is null
+                    ? "Token user not found in this tenant — a stale/ghost session (e.g. from a previous DB seed). Sign out of the portal, sign in as a current user, then re-authorize the MCP client to mint a fresh token."
+                    : !string.Equals(dbMember.Role, tokenRole, StringComparison.OrdinalIgnoreCase)
+                        ? $"Token role '{tokenRole}' is stale — the database now has '{dbMember.Role}'. Sign out and back in to refresh the portal cookie, then re-authorize MCP."
+                        : "Token matches the database.",
+            };
+        });
 
     [Authorize(Policy = "Member")]
     [McpServerTool(Name = "create_project"), Description("Register a project with PlaceContext by its absolute repo path. Idempotent: re-creating a known path returns the existing project. New projects are created already registered.")]

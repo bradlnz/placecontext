@@ -72,13 +72,38 @@ builder.Services
                 return Task.CompletedTask;
             },
             // The token's tenant must match the subdomain it's used on — no cross-tenant token reuse.
-            OnTokenValidated = ctx =>
+            OnTokenValidated = async ctx =>
             {
                 var current = ctx.HttpContext.RequestServices.GetRequiredService<ICurrentTenant>();
                 var claim = ctx.Principal?.FindFirst("tenant")?.Value;
                 if (claim is null || !Guid.TryParse(claim, out var tid) || tid != current.TenantId)
+                {
                     ctx.Fail("Token tenant does not match this workspace.");
-                return Task.CompletedTask;
+                    return;
+                }
+
+                // The JWT is self-contained, but the user it names must still exist: a DB reseed or a
+                // removed member leaves 'ghost' tokens that would otherwise keep their embedded role.
+                // Reject ghosts, and refresh the role claim from the DB so promotions/demotions take
+                // effect without re-issuing the token.
+                if (!Guid.TryParse(ctx.Principal?.FindFirst("sub")?.Value, out var userId))
+                {
+                    ctx.Fail("Token has no valid subject.");
+                    return;
+                }
+                var members = ctx.HttpContext.RequestServices.GetRequiredService<IMembershipService>();
+                var dbRole = await members.GetRoleAsync(userId, ctx.HttpContext.RequestAborted);
+                if (dbRole is null)
+                {
+                    ctx.Fail("Token user no longer exists in this workspace — re-authorize to mint a fresh token.");
+                    return;
+                }
+                if (ctx.Principal?.Identity is ClaimsIdentity id &&
+                    !string.Equals(dbRole, id.FindFirst("role")?.Value, StringComparison.OrdinalIgnoreCase))
+                {
+                    if (id.FindFirst("role") is { } stale) id.RemoveClaim(stale);
+                    id.AddClaim(new Claim("role", dbRole));
+                }
             },
         };
     });
@@ -92,6 +117,9 @@ builder.Services.AddAuthorization(o =>
     o.AddPolicy("Owner", p => p.RequireAuthenticatedUser().RequireAssertion(c => RoleAtLeast(c.User, UserRole.Owner)));
 });
 builder.Services.AddSingleton<OAuthStore>();
+
+// Exposes the current request's ClaimsPrincipal to MCP tools (e.g. whoami reads the bearer's claims).
+builder.Services.AddHttpContextAccessor();
 
 // Tenancy: per-request/circuit holder + a circuit handler that keeps interactive renders tenant-scoped.
 builder.Services.AddScoped<TenantHolder>();
