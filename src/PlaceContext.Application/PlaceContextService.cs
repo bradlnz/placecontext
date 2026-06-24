@@ -87,6 +87,9 @@ public sealed class PlaceContextService : IPlaceContextService
     public Task<FocusView> GetFocusAsync(CancellationToken ct = default)
         => _dispatcher.Query(new GetFocusQuery(), ct);
 
+    public Task<GraphVizView> GetBrainAsync(CancellationToken ct = default)
+        => _dispatcher.Query(new GetBrainQuery(), ct);
+
     public Task<WorkItemView> AddWorkItemAsync(Guid projectId, string title, string? detail, string priority, CancellationToken ct = default)
         => _dispatcher.Send(new AddWorkItemCommand(projectId, title, detail, priority), ct);
 
@@ -95,6 +98,9 @@ public sealed class PlaceContextService : IPlaceContextService
 
     public Task<WorkItemView> CompleteWorkItemAsync(Guid workItemId, CancellationToken ct = default)
         => _dispatcher.Send(new CompleteWorkItemCommand(workItemId), ct);
+
+    public Task<WorkItemView> MoveWorkItemAsync(Guid workItemId, string status, CancellationToken ct = default)
+        => _dispatcher.Send(new MoveWorkItemCommand(workItemId, status), ct);
 
     public Task<IReadOnlyList<WorkItemView>> GetWorkItemsAsync(Guid projectId, CancellationToken ct = default)
         => _dispatcher.Query(new GetWorkItemsQuery(projectId), ct);
