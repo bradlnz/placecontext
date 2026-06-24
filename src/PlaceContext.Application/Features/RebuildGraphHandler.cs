@@ -1,0 +1,40 @@
+using PlaceContext.Application.Cqrs;
+using PlaceContext.Application.Dtos;
+using PlaceContext.Application.Ports;
+using PlaceContext.Domain.Repositories;
+using PlaceContext.Domain.ValueObjects;
+
+namespace PlaceContext.Application.Features;
+
+public sealed class RebuildGraphHandler : ICommandHandler<RebuildGraphCommand, ProjectSummaryView>
+{
+    private readonly IProjectRepository _projects;
+    private readonly IDecisionTreeProvider _tree;
+    private readonly IUnitOfWork _uow;
+    private readonly IClock _clock;
+
+    public RebuildGraphHandler(
+        IProjectRepository projects, IDecisionTreeProvider tree, IUnitOfWork uow, IClock clock)
+    {
+        _projects = projects;
+        _tree = tree;
+        _uow = uow;
+        _clock = clock;
+    }
+
+    public async Task<ProjectSummaryView> HandleAsync(RebuildGraphCommand command, CancellationToken ct = default)
+    {
+        var project = await _projects.GetByIdAsync(ProjectId.From(command.ProjectId), ct)
+            ?? throw new InvalidOperationException($"Project {command.ProjectId} not found.");
+
+        var tree = await _tree.BuildAsync(project.Id, ct);
+        var snapshot = GraphSnapshotRef.Of(
+            $"decision-tree:{project.Id.Value}", _clock.UtcNow,
+            tree.Nodes.Count, tree.Edges.Count, tree.Hotspots());
+
+        project.RecordGraphBuild(snapshot);
+        await _projects.UpdateAsync(project, ct);
+        await _uow.SaveChangesAsync(ct);
+        return ViewMapper.ToSummary(project);
+    }
+}

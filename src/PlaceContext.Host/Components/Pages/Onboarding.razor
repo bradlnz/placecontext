@@ -1,0 +1,75 @@
+@page "/onboarding"
+@inject PortalUiState Ui
+@inject NavigationManager Nav
+
+<PageTitle>PlaceContext — Onboarding</PageTitle>
+
+<div style="padding:24px 24px 40px; max-width:880px; margin:0 auto">
+    <div style="margin-bottom:20px">
+        <h2 style="font-size:15px; font-weight:600; margin:0 0 5px">Get started</h2>
+        <span style="font-size:12.5px; color:var(--text-3)">Connect a coding agent to this workspace and give it the context it needs.</span>
+    </div>
+
+    <!-- Step 1: connect agent over MCP -->
+    <div class="dccard" style="padding:0; overflow:hidden; margin-bottom:14px">
+        <div style="display:flex; align-items:center; gap:11px; padding:15px 18px; border-bottom:1px solid var(--border)">
+            <span style="@StepNum">1</span>
+            <div>
+                <div style="font-size:13.5px; font-weight:600">Connect your agent over MCP</div>
+                <div style="font-size:11.5px; color:var(--text-3)">Authenticates with OAuth — scoped to this workspace only.</div>
+            </div>
+        </div>
+        <div style="padding:16px 18px">
+            <div style="font-size:10.5px; font-weight:600; letter-spacing:.5px; color:var(--text-3); text-transform:uppercase; margin-bottom:7px">Your MCP endpoint</div>
+            <code style="display:block; font-family:'Geist Mono',monospace; font-size:13px; color:var(--text); background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:11px 13px; overflow:auto; margin-bottom:14px">@McpUrl</code>
+            <div style="font-size:12px; font-weight:600; margin-bottom:6px">Add it to Claude Code</div>
+            <code style="display:block; font-family:'Geist Mono',monospace; font-size:12.5px; color:var(--text); background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:11px 13px; white-space:pre-wrap">claude mcp add --transport http placecontext @McpUrl</code>
+            <div style="font-size:12px; color:var(--text-2); margin-top:11px; line-height:1.6">
+                On first use the agent opens a browser to <strong>sign in to PlaceContext</strong> (the same login you used here)
+                and authorize access. It then receives a token scoped to <strong>@Host</strong> and can call the tools and prompts.
+            </div>
+        </div>
+    </div>
+
+    <!-- Step 2: bring in projects -->
+    <div class="dccard" style="padding:0; overflow:hidden; margin-bottom:14px">
+        <div style="display:flex; align-items:center; gap:11px; padding:15px 18px">
+            <span style="@StepNum">2</span>
+            <div style="flex:1">
+                <div style="font-size:13.5px; font-weight:600">Add a project</div>
+                <div style="font-size:11.5px; color:var(--text-3)">Import a repo from GitHub, or let the agent register one with <code>create_project</code>.</div>
+            </div>
+            <button class="dcbtn primary" @onclick="@(() => Nav.NavigateTo("/import"))">Import from GitHub</button>
+        </div>
+    </div>
+
+    <!-- Step 3: set the rules -->
+    <div class="dccard" style="padding:0; overflow:hidden; margin-bottom:14px">
+        <div style="display:flex; align-items:center; gap:11px; padding:15px 18px">
+            <span style="@StepNum">3</span>
+            <div style="flex:1">
+                <div style="font-size:13.5px; font-weight:600">Set your code requirements</div>
+                <div style="font-size:11.5px; color:var(--text-3)">The standards the review &amp; skill prompts hold the agent to.</div>
+            </div>
+            <button class="dcbtn" @onclick="@(() => Nav.NavigateTo("/requirements"))">Define requirements</button>
+        </div>
+    </div>
+
+    <div class="dccard" style="padding:16px 20px">
+        <div style="font-size:13px; font-weight:600; margin-bottom:8px">How the authentication works</div>
+        <ol style="margin:0; padding-left:18px; font-size:12.5px; color:var(--text-2); line-height:1.7">
+            <li>The agent calls the endpoint with no token and gets a <code>401</code> pointing to this workspace's OAuth server.</li>
+            <li>It runs OAuth 2.1 (auth code + PKCE); you sign in and consent in the browser.</li>
+            <li>It receives a tenant-scoped access token and sends it as a bearer on every MCP call.</li>
+            <li>The server rejects any token whose tenant doesn't match this subdomain.</li>
+        </ol>
+    </div>
+</div>
+
+@code {
+    private string Host => new Uri(Nav.BaseUri).Host;
+    private string McpUrl => $"{Nav.BaseUri}mcp";
+    private const string StepNum = "flex:none; width:24px; height:24px; border-radius:50%; background:var(--brand); color:#fff; display:inline-flex; align-items:center; justify-content:center; font-size:12px; font-weight:700";
+
+    protected override void OnInitialized() => Ui.Set("Onboarding", "connect an agent and set up your workspace");
+}

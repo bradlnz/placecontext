@@ -1,0 +1,110 @@
+@page "/settings/github"
+@page "/import"
+@using PlaceContext.Application.Ports
+@using PlaceContext.Infrastructure.Tenancy
+@inject ICurrentTenant Tenant
+@inject ITenantStore Tenants
+@inject IGitHubGateway GitHub
+@inject ICodeWorkspace Workspace
+@inject IPlaceContextService Svc
+@inject PortalUiState Ui
+@inject NavigationManager Nav
+
+<PageTitle>PlaceContext — Import from GitHub</PageTitle>
+
+<div style="padding:24px 24px 40px; max-width:1080px; margin:0 auto">
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px">
+        <div style="display:flex; align-items:center; gap:9px">
+            <h2 style="font-size:14px; font-weight:600; margin:0">Import from GitHub</h2>
+            <span style="font-size:11px; color:var(--text-3)">clone a repository into this workspace and register it as a project</span>
+        </div>
+        @if (_login is not null)
+        {
+            <span style="font-size:11.5px; color:var(--good); background:var(--good-bg); padding:4px 9px; border-radius:6px">connected as @_login</span>
+        }
+    </div>
+
+    @if (_message is not null) { <div style="color:var(--text-3); font-size:12px; margin-bottom:10px">@_message</div> }
+
+    @if (!GitHub.IsConfigured)
+    {
+        <div class="dccard" style="padding:24px; color:var(--text-3); font-size:13px; line-height:1.6">
+            GitHub OAuth isn't configured yet. Set <code>PlaceContext:GitHub:ClientId</code> and
+            <code>PlaceContext:GitHub:ClientSecret</code> (env or user-secrets) from a GitHub OAuth app whose
+            callback is <code>{scheme}://{host}/auth/github/callback</code>, then restart.
+        </div>
+    }
+    else if (_token is null)
+    {
+        <div class="dccard" style="padding:30px; text-align:center">
+            <div style="color:var(--text-3); font-size:13px; margin-bottom:16px">Connect your GitHub account to list and import repositories.</div>
+            <button class="dcbtn primary" @onclick="ConnectGitHub">Connect GitHub</button>
+        </div>
+    }
+    else if (_repos is null)
+    {
+        <p style="color:var(--text-3)">Loading repositories…</p>
+    }
+    else
+    {
+        <div class="dccard" style="overflow:hidden">
+            @foreach (var r in _repos)
+            {
+                <div style="display:flex; align-items:center; gap:13px; padding:13px 16px; border-bottom:1px solid var(--border)">
+                    <span style="width:9px; height:9px; border-radius:2.5px; background:@Viz.LangColor(r.Language ?? r.Name); flex:none"></span>
+                    <div style="min-width:0; flex:1">
+                        <div style="display:flex; align-items:center; gap:8px">
+                            <span style="font-size:13.5px; font-weight:600">@r.FullName</span>
+                            @if (r.Private) { <span style="font-size:10px; color:var(--text-3); border:1px solid var(--border); padding:1px 6px; border-radius:5px">private</span> }
+                            @if (r.Language is not null) { <span style="font-size:11px; color:var(--text-3); font-family:'Geist Mono',monospace">@r.Language</span> }
+                        </div>
+                        @if (!string.IsNullOrWhiteSpace(r.Description))
+                        {
+                            <div style="font-size:11.5px; color:var(--text-3); margin-top:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis">@r.Description</div>
+                        }
+                    </div>
+                    <button class="dcbtn primary" @onclick="@(() => ImportRepo(r))" disabled="@(_importing == r.FullName)">
+                        @(_importing == r.FullName ? "importing…" : "Import")
+                    </button>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private string? _token;
+    private string? _login;
+    private IReadOnlyList<GitHubRepo>? _repos;
+    private string? _importing;
+    private string? _message;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Ui.Set("Import from GitHub", "clone repositories into projects");
+        var row = await Tenants.GetRowAsync(Tenant.TenantId);
+        _token = string.IsNullOrWhiteSpace(row?.GitHubToken) ? null : row!.GitHubToken;
+        _login = row?.GitHubLogin;
+        if (_token is not null && GitHub.IsConfigured)
+        {
+            try { _repos = await GitHub.ListReposAsync(_token); }
+            catch (Exception ex) { _message = $"Could not list repositories: {ex.Message}"; }
+        }
+    }
+
+    private void ConnectGitHub() => Nav.NavigateTo("/auth/github/login", forceLoad: true);
+
+    private async Task ImportRepo(GitHubRepo repo)
+    {
+        _importing = repo.FullName; _message = null;
+        try
+        {
+            var path = await Workspace.CloneAsync(Tenant.Slug, repo.CloneUrl, repo.Name, _token);
+            var project = await Svc.CreateProjectAsync(path, repo.Name);
+            _message = $"Imported {repo.FullName} → project '{project.Name}'.";
+            Nav.NavigateTo($"/project/{project.Id}");
+        }
+        catch (Exception ex) { _message = $"Import failed: {ex.Message}"; }
+        finally { _importing = null; }
+    }
+}

@@ -1,0 +1,15 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/PlaceContext.Application/PlaceContext.Application.csproj" />
+    <Project Path="src/PlaceContext.Domain/PlaceContext.Domain.csproj" />
+    <Project Path="src/PlaceContext.Host/PlaceContext.Host.csproj" />
+    <Project Path="src/PlaceContext.Infrastructure/PlaceContext.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/PlaceContext.Application.Tests/PlaceContext.Application.Tests.csproj" />
+    <Project Path="tests/PlaceContext.Architecture.Tests/PlaceContext.Architecture.Tests.csproj" />
+    <Project Path="tests/PlaceContext.Domain.Tests/PlaceContext.Domain.Tests.csproj" />
+    <Project Path="tests/PlaceContext.Infrastructure.Tests/PlaceContext.Infrastructure.Tests.csproj" />
+    <Project Path="tests/PlaceContext.TestSupport/PlaceContext.TestSupport.csproj" />
+  </Folder>
+</Solution>

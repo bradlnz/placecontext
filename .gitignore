@@ -1,0 +1,8 @@
+bin/
+obj/
+*.user
+.vs/
+.idea/
+[Tt]est[Rr]esults/
+graphify-out/
+.claude/settings.local.json

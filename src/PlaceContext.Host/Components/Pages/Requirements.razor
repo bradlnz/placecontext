@@ -1,0 +1,65 @@
+@page "/requirements"
+@inject IPlaceContextService Svc
+@inject PortalUiState Ui
+
+<PageTitle>PlaceContext — Code Requirements</PageTitle>
+
+<div style="padding:24px 24px 40px; max-width:1080px; margin:0 auto">
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px">
+        <div style="display:flex; align-items:center; gap:9px">
+            <h2 style="font-size:14px; font-weight:600; margin:0">Global code requirements</h2>
+            <span style="font-size:11px; color:var(--text-3)">apply to every project · injected into the review &amp; skill prompts</span>
+        </div>
+        <div style="display:flex; align-items:center; gap:11px">
+            @if (_doc?.UpdatedAt is { } ts)
+            {
+                <span style="font-size:11px; color:var(--text-3); font-family:'Geist Mono',monospace">updated @ts.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</span>
+            }
+            <button class="dcbtn primary" @onclick="Save" disabled="@(_saving || !_dirty)">@(_saving ? "saving…" : "Save requirements")</button>
+        </div>
+    </div>
+
+    @if (_message is not null) { <div style="color:var(--text-3); font-size:12px; margin-bottom:10px">@_message</div> }
+
+    <div class="dccard" style="padding:14px 15px">
+        <textarea @bind="_draft" @bind:after="MarkDirty" spellcheck="false"
+            placeholder="Coding standards every project must follow — architecture, testing, security, naming, review gates… plain Markdown."
+            style="width:100%; min-height:340px; resize:vertical; box-sizing:border-box; background:var(--bg); border:1px solid var(--border); border-radius:8px; color:var(--text); padding:12px; font-family:'Geist Mono',monospace; font-size:12.5px; line-height:1.55"></textarea>
+        <div style="margin-top:10px; font-size:11.5px; color:var(--text-3)">
+            Per-project requirements are edited on each project's page; an agent's effective requirements are
+            this global document followed by the project's own.
+        </div>
+    </div>
+</div>
+
+@code {
+    private CodeRequirementsView? _doc;
+    private string _draft = string.Empty;
+    private string _saved = string.Empty;
+    private bool _saving;
+    private string? _message;
+    private bool _dirty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Ui.Set("Code Requirements", "global coding standards · drive MCP prompts");
+        _doc = await Svc.GetGlobalRequirementsAsync();
+        _draft = _saved = _doc.Markdown;
+    }
+
+    private void MarkDirty() => _dirty = !string.Equals(_draft, _saved, StringComparison.Ordinal);
+
+    private async Task Save()
+    {
+        _saving = true; _message = null;
+        try
+        {
+            _doc = await Svc.SetGlobalRequirementsAsync(_draft);
+            _draft = _saved = _doc.Markdown;
+            _dirty = false;
+            _message = "Global requirements saved.";
+        }
+        catch (Exception ex) { _message = ex.Message; }
+        finally { _saving = false; }
+    }
+}

@@ -1,0 +1,157 @@
+@page "/"
+@inject IPlaceContextService Svc
+@inject PortalUiState Ui
+@inject NavigationManager Nav
+
+<PageTitle>PlaceContext — Overview</PageTitle>
+
+<div style="padding:24px 24px 40px; max-width:1320px; margin:0 auto">
+
+    <!-- root stat strip -->
+    <div style="display:grid; grid-template-columns:repeat(6,1fr); gap:0; background:var(--card); border:1px solid var(--border); border-radius:12px; overflow:hidden; margin-bottom:22px">
+        @foreach (var s in _stats)
+        {
+            <div style="padding:15px 16px; border-right:1px solid var(--border)">
+                <div style="font-size:10.5px; color:var(--text-3); text-transform:uppercase; letter-spacing:.5px; font-weight:600; margin-bottom:9px">@s.Label</div>
+                <div style="font-size:25px; font-weight:600; letter-spacing:-.6px; font-family:'Geist Mono',monospace; color:@s.Color">@s.Value</div>
+                <div style="font-size:11px; color:var(--text-3); margin-top:3px">@s.Sub</div>
+            </div>
+        }
+    </div>
+
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:13px">
+        <div style="display:flex; align-items:center; gap:9px">
+            <h2 style="font-size:14px; font-weight:600; margin:0; letter-spacing:-.2px">Projects</h2>
+            <span style="font-size:11px; color:var(--text-3); font-family:'Geist Mono',monospace; background:var(--card); border:1px solid var(--border); padding:1px 7px; border-radius:20px">@(_projects?.Count ?? 0)</span>
+        </div>
+        <div style="display:flex; align-items:center; gap:8px">
+            <button class="dcbtn primary" @onclick="Refresh" disabled="@_busy">@(_busy ? "Refreshing…" : "Refresh")</button>
+        </div>
+    </div>
+
+    @if (_projects is null)
+    {
+        <p style="color:var(--text-3)">Loading…</p>
+    }
+    else if (_projects.Count == 0)
+    {
+        <div class="dccard" style="padding:30px; text-align:center; color:var(--text-3)">
+            No projects yet. Projects register themselves through the MCP <code>create_project</code> tool when an agent starts working in a repo.
+        </div>
+    }
+    else
+    {
+        <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(380px,1fr)); gap:14px">
+            @foreach (var p in _projects)
+            {
+                var agentic = Viz.Pct(p.AgenticDebt);
+                var tech = Viz.Pct(p.TechnicalDebt);
+                <div class="dccard" style="padding:16px; cursor:pointer; display:flex; flex-direction:column" @onclick="@(() => Open(p.Id))">
+                    <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:12px">
+                        <div style="min-width:0">
+                            <div style="display:flex; align-items:center; gap:8px">
+                                <span style="width:9px; height:9px; border-radius:2.5px; background:@Viz.LangColor(p.Path); flex:none"></span>
+                                <span style="font-size:14.5px; font-weight:600; letter-spacing:-.2px">@p.Name</span>
+                            </div>
+                            <div style="font-family:'Geist Mono',monospace; font-size:11px; color:var(--text-3); margin-top:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis">@p.Path</div>
+                        </div>
+                        <div style="display:flex; align-items:center; gap:5px; flex:none; padding:3px 8px 3px 7px; border-radius:20px; font-size:11px; font-weight:600; color:@Viz.BandColor(p.AgenticBand); background:@Viz.BandBg(p.AgenticBand)">
+                            <span style="width:6px; height:6px; border-radius:50%; background:@Viz.BandColor(p.AgenticBand)"></span>
+                            @p.Status
+                        </div>
+                    </div>
+
+                    <div style="display:flex; gap:14px; margin-top:16px; align-items:center">
+                        <div style="flex:1; display:flex; flex-direction:column; gap:11px">
+                            @DebtBar("Agentic debt", agentic)
+                            @DebtBar("Technical debt", tech)
+                        </div>
+                        <div style="width:96px; height:72px; flex:none; border-radius:8px; background:var(--card-2); border:1px solid var(--border); overflow:hidden; position:relative">
+                            <svg viewBox="0 0 100 76" width="100%" height="100%" preserveAspectRatio="xMidYMid slice">
+                                @foreach (var (x, y, god) in MiniNodes(p))
+                                {
+                                    <circle cx="@N(x)" cy="@N(y)" r="@(god ? "3" : "1.3")" fill="@(god ? "var(--brand)" : "var(--text-3)")"></circle>
+                                }
+                            </svg>
+                            <span style="position:absolute; bottom:4px; right:5px; font-family:'Geist Mono',monospace; font-size:8.5px; color:var(--text-3); background:var(--card-2); padding:0 3px; border-radius:3px">@p.GodNodeCount god</span>
+                        </div>
+                    </div>
+
+                    <div style="display:flex; align-items:center; justify-content:space-between; margin-top:15px; padding-top:13px; border-top:1px solid var(--border)">
+                        <span style="font-size:11.5px; color:var(--text-3)">@(p.IsGraphified ? "graphified" : "not graphified")</span>
+                        <div style="display:flex; align-items:center; gap:13px; font-family:'Geist Mono',monospace; font-size:11px; color:var(--text-3)">
+                            <span>@p.NodeCount nodes</span>
+                            <span style="color:var(--border-2)">·</span>
+                            <span>@p.LinkCount links</span>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private IReadOnlyList<ProjectSummaryView>? _projects;
+    private List<Stat> _stats = new();
+    private bool _busy;
+
+    private record Stat(string Label, string Value, string Sub, string Color);
+
+    protected override async Task OnInitializedAsync()
+    {
+        Ui.Set("Overview", "codebase visibility · projects register via MCP");
+        await Load();
+    }
+
+    private async Task Load()
+    {
+        _projects = await Svc.GetProjectsAsync();
+        var st = await Svc.GetRootStatsAsync();
+        var agentic = (int)Math.Round(st.RootAgenticDebt * 100);
+        var trust = 100 - agentic;
+        _stats = new()
+        {
+            new("Projects", st.ProjectCount.ToString(), "under root", "var(--text)"),
+            new("Changes today", st.ChangesToday.ToString(), $"{st.AgentChangesToday} agent · {st.HumanChangesToday} human", "var(--text)"),
+            new("Agentic debt", agentic.ToString(), "root average", Viz.Tone(agentic)),
+            new("Process-trust", trust.ToString(), "100 − agentic", Viz.Tone(100 - trust)),
+            new("God-nodes", st.GodNodeTotal.ToString(), "top-degree files", "var(--text)"),
+            new("Stale context", st.StaleContextCount.ToString(), "need re-index", st.StaleContextCount > 0 ? "var(--warn)" : "var(--good)"),
+        };
+    }
+
+    private async Task Refresh()
+    {
+        // Projects are created explicitly via the MCP `create_project` tool; this reloads the list.
+        _busy = true;
+        try { await Load(); }
+        finally { _busy = false; }
+    }
+
+    private void Open(Guid id) => Nav.NavigateTo($"/project/{id}");
+
+    private IEnumerable<(double x, double y, bool god)> MiniNodes(ProjectSummaryView p)
+    {
+        var count = Math.Min(22, p.GodNodeCount * 3 + 10);
+        var pos = Viz.Layout(count, Viz.Seed(p.Id), 100, 76);
+        for (var i = 0; i < pos.Length; i++)
+            yield return (pos[i].X, pos[i].Y, i < p.GodNodeCount);
+    }
+
+    private static string N(double v) => v.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture);
+
+    private RenderFragment DebtBar(string label, int pct) => builder =>
+    {
+        builder.AddMarkupContent(0, $@"
+            <div>
+              <div style='display:flex; justify-content:space-between; align-items:baseline; margin-bottom:5px'>
+                <span style='font-size:11px; color:var(--text-2)'>{label}</span>
+                <span style='font-size:12px; font-weight:600; font-family:Geist Mono,monospace; color:{Viz.Tone(pct)}'>{pct}</span>
+              </div>
+              <div style='height:5px; border-radius:99px; background:var(--card-2); overflow:hidden'>
+                <div class='dcbar' data-pct='{pct}' style='background:{Viz.Tone(pct)}'></div>
+              </div>
+            </div>");
+    };
+}

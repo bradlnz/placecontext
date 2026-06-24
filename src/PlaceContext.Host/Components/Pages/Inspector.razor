@@ -1,0 +1,99 @@
+@page "/inspector"
+@inject IPlaceContextService Svc
+@inject PortalUiState Ui
+
+<PageTitle>PlaceContext — MCP Inspector</PageTitle>
+
+<div style="display:flex; height:100%; min-height:0">
+    <!-- call feed -->
+    <div style="width:420px; flex:none; border-right:1px solid var(--border); display:flex; flex-direction:column; min-height:0">
+        <div style="padding:13px 16px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between">
+            <div style="display:flex; align-items:center; gap:8px">
+                <span style="font-size:13px; font-weight:600">Tool calls</span>
+                <span style="width:7px; height:7px; border-radius:50%; background:var(--good); animation:dcpulse 1.8s ease-in-out infinite"></span>
+            </div>
+            <button class="dcbtn" style="padding:4px 9px; font-size:11px" @onclick="Load">refresh</button>
+        </div>
+        <div style="flex:1; overflow-y:auto">
+            @if (_calls is null || _calls.Count == 0)
+            {
+                <div style="padding:18px 16px; color:var(--text-3); font-size:12.5px">
+                    No tool calls yet. Launch the MCP server (<code>--mcp</code>) and call a tool, or use the portal — calls appear here live.
+                </div>
+            }
+            else
+            {
+                @foreach (var c in _calls)
+                {
+                    var active = _active?.Id == c.Id;
+                    <div style="display:flex; align-items:center; gap:11px; padding:12px 16px; border-bottom:1px solid var(--border); cursor:pointer; background:@(active ? "var(--card)" : "transparent"); border-left:2px solid @(active ? "var(--brand)" : "transparent")" @onclick="@(() => _active = c)">
+                        <span style="width:7px; height:7px; border-radius:50%; background:@Status(c.Status); flex:none"></span>
+                        <div style="flex:1; min-width:0">
+                            <div style="display:flex; align-items:center; gap:8px">
+                                <span style="font-family:'Geist Mono',monospace; font-size:12.5px; font-weight:500; color:var(--text)">@c.Tool</span>
+                                <span style="font-size:10px; color:var(--text-3); font-family:'Geist Mono',monospace">@c.Direction</span>
+                            </div>
+                            <div style="font-size:11px; color:var(--text-3); margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis">@c.Summary</div>
+                        </div>
+                        <div style="text-align:right; flex:none">
+                            <div style="font-family:'Geist Mono',monospace; font-size:11px; color:@Status(c.Status)">@c.Status.ToLower()</div>
+                            <div style="font-family:'Geist Mono',monospace; font-size:10.5px; color:var(--text-3); margin-top:2px">@c.DurationMs ms</div>
+                        </div>
+                    </div>
+                }
+            }
+        </div>
+    </div>
+
+    <!-- detail -->
+    <div style="flex:1; min-width:0; display:flex; flex-direction:column; min-height:0; background:var(--bg)">
+        @if (_active is null)
+        {
+            <div style="flex:1; display:flex; align-items:center; justify-content:center; color:var(--text-3); font-size:12.5px">Select a tool call to inspect its request and response.</div>
+        }
+        else
+        {
+            <div style="padding:13px 18px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:10px">
+                <span style="font-family:'Geist Mono',monospace; font-size:13px; font-weight:600">@_active.Tool</span>
+                <span style="font-size:10.5px; font-weight:600; color:@Status(_active.Status); background:@StatusBg(_active.Status); padding:2px 8px; border-radius:5px">@_active.Status.ToLower()</span>
+                <span style="font-family:'Geist Mono',monospace; font-size:11px; color:var(--text-3)">@_active.DurationMs ms · @_active.Project</span>
+            </div>
+            <div style="flex:1; overflow-y:auto; padding:18px; display:flex; flex-direction:column; gap:16px">
+                <div>
+                    <div style="font-size:11px; font-weight:600; letter-spacing:.5px; color:var(--text-3); text-transform:uppercase; margin-bottom:8px">Request</div>
+                    <pre style="margin:0; padding:15px 17px; background:var(--card); border:1px solid var(--border); border-radius:10px; font-family:'Geist Mono',monospace; font-size:12px; line-height:1.6; color:var(--text-2); overflow-x:auto; white-space:pre-wrap">@_active.RequestJson</pre>
+                </div>
+                <div>
+                    <div style="font-size:11px; font-weight:600; letter-spacing:.5px; color:var(--text-3); text-transform:uppercase; margin-bottom:8px">Response</div>
+                    <pre style="margin:0; padding:15px 17px; background:var(--card); border:1px solid var(--border); border-radius:10px; font-family:'Geist Mono',monospace; font-size:12px; line-height:1.6; color:var(--text-2); overflow-x:auto; white-space:pre-wrap">@_active.ResponseJson</pre>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    private IReadOnlyList<ToolCallView>? _calls;
+    private ToolCallView? _active;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Ui.Set("MCP Inspector", "live tool traffic · MCP via Streamable HTTP");
+        await Load();
+    }
+
+    private async Task Load()
+    {
+        _calls = await Svc.GetRecentToolCallsAsync(100);
+        _active ??= _calls.FirstOrDefault();
+    }
+
+    private static string Status(string s) => s switch
+    {
+        "Ok" => "var(--good)", "Warn" => "var(--warn)", _ => "var(--bad)"
+    };
+    private static string StatusBg(string s) => s switch
+    {
+        "Ok" => "var(--good-bg)", "Warn" => "var(--warn-bg)", _ => "var(--bad-bg)"
+    };
+}

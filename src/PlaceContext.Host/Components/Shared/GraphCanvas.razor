@@ -1,0 +1,37 @@
+@using PlaceContext.Application.Dtos
+@inject IJSRuntime JS
+@implements IAsyncDisposable
+
+<canvas id="@_id" style="display:block; width:100%; height:@(Height)px"></canvas>
+
+@code {
+    [Parameter] public GraphVizView? Graph { get; set; }
+    [Parameter] public int Height { get; set; } = 340;
+
+    private readonly string _id = "pcgraph-" + Guid.NewGuid().ToString("N");
+    private GraphVizView? _rendered;
+    private bool _needsInit;
+
+    protected override void OnParametersSet()
+    {
+        if (!ReferenceEquals(_rendered, Graph)) { _rendered = Graph; _needsInit = true; }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!_needsInit || Graph is null || Graph.Nodes.Count == 0) return;
+        _needsInit = false;
+
+        var payload = new
+        {
+            nodes = Graph.Nodes.Take(180).Select(n => new { id = n.Id, label = n.Label, degree = n.Degree, god = n.IsGod }),
+            links = Graph.Links.Take(500).Select(l => new { source = l.Source, target = l.Target, confidence = l.Confidence }),
+        };
+        await JS.InvokeVoidAsync("pcgraph.init", _id, payload);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        try { await JS.InvokeVoidAsync("pcgraph.destroy", _id); } catch { /* circuit gone */ }
+    }
+}

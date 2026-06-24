@@ -1,0 +1,22 @@
+:root { color-scheme: dark; }
+* { box-sizing: border-box; }
+body {
+  margin: 0; min-height: 100vh;
+  display: flex; align-items: center; justify-content: center;
+  background: #0c0d10; color: #e6e7ea;
+  font: 14px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+.card { width: 360px; max-width: 92vw; background: #15171c; border: 1px solid #262a31; border-radius: 14px; padding: 30px 28px; }
+.brand { display: flex; align-items: center; gap: 10px; margin-bottom: 22px; }
+.brand .logo { width: 30px; height: 30px; border-radius: 8px; background: #5b5ef0; display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 700; }
+h1 { font-size: 16px; margin: 0 0 18px; font-weight: 600; }
+label { display: block; font-size: 12px; color: #9aa0ab; margin-bottom: 13px; }
+input { display: block; width: 100%; margin-top: 6px; background: #0c0d10; border: 1px solid #2b303a; border-radius: 8px; color: #e6e7ea; padding: 10px 11px; font-size: 13.5px; }
+input:focus { outline: none; border-color: #5b5ef0; }
+.hint { display: block; color: #6b7280; font-size: 11px; margin-top: 5px; }
+button { width: 100%; margin-top: 8px; background: #5b5ef0; color: #fff; border: none; border-radius: 8px; padding: 11px; font-size: 14px; font-weight: 600; cursor: pointer; }
+button:hover { background: #6d70f2; }
+.alt { margin: 16px 0 0; font-size: 12.5px; color: #9aa0ab; text-align: center; }
+.alt a { color: #8b8df5; text-decoration: none; }
+.err { background: #3a1d22; border: 1px solid #7f2c38; color: #f1a7b0; padding: 9px 11px; border-radius: 8px; font-size: 12.5px; margin-bottom: 16px; }
+.err.hidden { display: none; }

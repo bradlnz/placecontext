@@ -1,0 +1,292 @@
+@page "/project/{Id:guid}"
+@inject IPlaceContextService Svc
+@inject PortalUiState Ui
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+<PageTitle>PlaceContext — Project</PageTitle>
+
+@if (_overview is null)
+{
+    <div style="padding:24px; color:var(--text-3)">Loading…</div>
+}
+else
+{
+    <div style="padding:20px 24px 40px; max-width:1320px; margin:0 auto">
+        <button class="dcbtn" style="border:none; background:none; color:var(--text-3); padding:4px 0; margin-bottom:14px" @onclick="@(() => Nav.NavigateTo("/"))">← All projects</button>
+
+        <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:16px; margin-bottom:20px">
+            <div>
+                <div style="display:flex; align-items:center; gap:10px">
+                    <span style="width:11px; height:11px; border-radius:3px; background:@Viz.LangColor(_overview.Path)"></span>
+                    <h1 style="font-size:21px; font-weight:600; margin:0; letter-spacing:-.4px">@_overview.Name</h1>
+                    <span style="font-size:11px; font-weight:600; color:@Viz.BandColor(_overview.Debt.AgenticBand); background:@Viz.BandBg(_overview.Debt.AgenticBand); padding:3px 9px; border-radius:20px">@_overview.Status</span>
+                </div>
+                <div style="font-family:'Geist Mono',monospace; font-size:12px; color:var(--text-3); margin-top:7px">@_overview.Path</div>
+            </div>
+            <button class="dcbtn" @onclick="Rebuild" disabled="@_busy">@(_busy ? "running…" : "rebuild tree")</button>
+        </div>
+
+        @if (_message is not null) { <div style="color:var(--text-3); font-size:12px; margin-bottom:10px">@_message</div> }
+
+        <div style="display:grid; grid-template-columns:1.4fr 1fr; gap:14px; align-items:start">
+            <!-- graph -->
+            <div class="dccard" style="overflow:hidden">
+                <div style="display:flex; align-items:center; justify-content:space-between; padding:13px 15px; border-bottom:1px solid var(--border)">
+                    <div style="display:flex; align-items:center; gap:8px">
+                        <span style="font-size:13px; font-weight:600">Dependency graph</span>
+                        <span style="font-family:'Geist Mono',monospace; font-size:11px; color:var(--text-3)">@(_graph?.NodeCount ?? 0) nodes · @(_graph?.LinkCount ?? 0) links</span>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:12px; font-size:10.5px; color:var(--text-3)">
+                        <span style="display:flex; align-items:center; gap:5px"><span style="width:8px; height:8px; border-radius:50%; background:var(--brand)"></span>god-node</span>
+                        <span style="display:flex; align-items:center; gap:5px"><span style="width:14px; height:0; border-top:1.5px dashed var(--warn)"></span>ambiguous</span>
+                    </div>
+                </div>
+                <div style="padding:8px; background:var(--bg)">
+                    @if (_graph is null || _graph.NodeCount == 0)
+                    {
+                        <div style="height:320px; display:flex; align-items:center; justify-content:center; color:var(--text-3); font-size:12.5px; text-align:center">
+                            No tree yet — click <code style="margin:0 5px">rebuild tree</code> to build it from logged activity.
+                        </div>
+                    }
+                    else
+                    {
+                        <GraphCanvas Graph="_graph" Height="340" />
+                    }
+                </div>
+            </div>
+
+            <!-- right column -->
+            <div style="display:flex; flex-direction:column; gap:14px">
+                <div class="dccard" style="padding:15px">
+                    <div style="font-size:13px; font-weight:600; margin-bottom:14px">Debt profile</div>
+                    <div style="display:flex; gap:14px">
+                        @DebtRing("Agentic debt", Viz.Pct(_overview.Debt.Agentic))
+                        @DebtRing("Technical debt", Viz.Pct(_overview.Debt.Technical))
+                    </div>
+                </div>
+
+                <div class="dccard" style="padding:15px">
+                    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px">
+                        <span style="font-size:13px; font-weight:600">God-nodes</span>
+                        <span style="font-size:11px; color:var(--text-3); font-family:'Geist Mono',monospace">top degree</span>
+                    </div>
+                    @if (_overview.GodNodes.Count == 0)
+                    {
+                        <div style="color:var(--text-3); font-size:12px">None detected.</div>
+                    }
+                    else
+                    {
+                        <div style="display:flex; flex-direction:column; gap:9px">
+                            @foreach (var g in _overview.GodNodes)
+                            {
+                                <div style="display:flex; align-items:center; gap:10px">
+                                    <span style="width:8px; height:8px; border-radius:2px; background:var(--brand); flex:none"></span>
+                                    <span style="font-family:'Geist Mono',monospace; font-size:11.5px; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex:1">@g.Label</span>
+                                    <span style="font-family:'Geist Mono',monospace; font-size:11px; color:var(--text-3); flex:none">@g.Degree edges</span>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- context -->
+        <div id="context" class="dccard" style="margin-top:14px; overflow:hidden">
+            <div style="display:flex; align-items:center; justify-content:space-between; padding:13px 15px; border-bottom:1px solid var(--border)">
+                <div style="display:flex; align-items:center; gap:8px">
+                    <span style="font-size:13px; font-weight:600">Context</span>
+                    <span style="font-family:'Geist Mono',monospace; font-size:11px; color:var(--text-3)">the knowledge agents read before working</span>
+                </div>
+                <div style="display:flex; align-items:center; gap:11px">
+                    @if (_context?.UpdatedAt is { } ts)
+                    {
+                        <span style="font-size:11px; color:var(--text-3); font-family:'Geist Mono',monospace">updated @ts.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</span>
+                    }
+                    <button class="dcbtn primary" @onclick="SaveContext" disabled="@(_savingContext || !ContextDirty)">@(_savingContext ? "saving…" : "Save context")</button>
+                </div>
+            </div>
+            <div style="padding:12px 15px">
+                <textarea @bind="_contextDraft" spellcheck="false"
+                    placeholder="Project context in Markdown — goals, conventions, gotchas, key decisions agents should know."
+                    style="width:100%; min-height:200px; resize:vertical; box-sizing:border-box; background:var(--bg); border:1px solid var(--border); border-radius:8px; color:var(--text); padding:12px; font-family:'Geist Mono',monospace; font-size:12.5px; line-height:1.55"></textarea>
+            </div>
+        </div>
+
+        <!-- project code requirements -->
+        <div class="dccard" style="margin-top:14px; overflow:hidden">
+            <div style="display:flex; align-items:center; justify-content:space-between; padding:13px 15px; border-bottom:1px solid var(--border)">
+                <div style="display:flex; align-items:center; gap:8px">
+                    <span style="font-size:13px; font-weight:600">Code requirements</span>
+                    <span style="font-family:'Geist Mono',monospace; font-size:11px; color:var(--text-3)">project-specific · added on top of the global requirements</span>
+                </div>
+                <div style="display:flex; align-items:center; gap:11px">
+                    @if (_requirements?.UpdatedAt is { } rts)
+                    {
+                        <span style="font-size:11px; color:var(--text-3); font-family:'Geist Mono',monospace">updated @rts.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</span>
+                    }
+                    <a href="/requirements" style="font-size:11.5px; color:var(--text-3)">edit global →</a>
+                    <button class="dcbtn primary" @onclick="SaveRequirements" disabled="@(_savingReq || !RequirementsDirty)">@(_savingReq ? "saving…" : "Save requirements")</button>
+                </div>
+            </div>
+            <div style="padding:12px 15px">
+                <textarea @bind="_reqDraft" spellcheck="false"
+                    placeholder="Requirements specific to this project (Markdown) — frameworks, patterns, constraints the review &amp; skill prompts should enforce here."
+                    style="width:100%; min-height:160px; resize:vertical; box-sizing:border-box; background:var(--bg); border:1px solid var(--border); border-radius:8px; color:var(--text); padding:12px; font-family:'Geist Mono',monospace; font-size:12.5px; line-height:1.55"></textarea>
+            </div>
+        </div>
+
+        <!-- decisions -->
+        <div id="decisions" class="dccard" style="margin-top:14px; overflow:hidden">
+            <div style="padding:13px 15px; border-bottom:1px solid var(--border); font-size:13px; font-weight:600">Decisions</div>
+            @if (_decisions is null || _decisions.Count == 0)
+            {
+                <div style="padding:14px 15px; color:var(--text-3); font-size:12.5px">No decisions recorded yet — they flow in through the <code>add_decision</code> MCP tool.</div>
+            }
+            else
+            {
+                @foreach (var d in _decisions)
+                {
+                    <div id="@($"decision-{d.Id}")" class="dcflashable" style="padding:13px 15px; border-bottom:1px solid var(--border)">
+                        <div style="display:flex; align-items:baseline; gap:10px">
+                            <span style="font-size:13px; font-weight:600; flex:1">@d.Question</span>
+                            <span style="font-size:11px; color:var(--text-3); font-family:'Geist Mono',monospace">@d.DecidedAt.ToLocalTime().ToString("yyyy-MM-dd")</span>
+                        </div>
+                        <div style="font-size:12.5px; color:var(--brand-2); margin-top:4px">→ @d.Choice</div>
+                        @if (!string.IsNullOrWhiteSpace(d.Rationale) && d.Rationale != "(none)")
+                        {
+                            <div style="font-size:12px; color:var(--text-2); margin-top:5px; line-height:1.5">@d.Rationale</div>
+                        }
+                    </div>
+                }
+            }
+        </div>
+
+        <!-- recent changes -->
+        <div id="changes" class="dccard" style="margin-top:14px; overflow:hidden">
+            <div style="padding:13px 15px; border-bottom:1px solid var(--border); font-size:13px; font-weight:600">Recent changes</div>
+            @if (_timeline is null || _timeline.Changes.Count == 0)
+            {
+                <div style="padding:14px 15px; color:var(--text-3); font-size:12.5px">No changes recorded yet — they flow in through the <code>record_change</code> MCP tool.</div>
+            }
+            else
+            {
+                @foreach (var c in _timeline.Changes)
+                {
+                    <div style="display:flex; align-items:center; gap:13px; padding:12px 15px; border-bottom:1px solid var(--border)">
+                        <span style="font-family:'Geist Mono',monospace; font-size:11px; color:var(--text-3); flex:none; width:30px">#@c.Sequence</span>
+                        <span style="display:inline-flex; align-items:center; padding:2px 7px; border-radius:5px; font-weight:600; font-size:10px; color:@Viz.AuthorColor(c.Kind); background:@Viz.AuthorBg(c.Kind); flex:none">@c.Kind.ToLower()</span>
+                        <span style="font-size:13px; flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis">@c.Title</span>
+                        <span style="font-family:'Geist Mono',monospace; font-size:11px; color:var(--text-3); flex:none">@(c.Commit ?? "—")</span>
+                    </div>
+                }
+            }
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    private ProjectOverviewView? _overview;
+    private GraphVizView? _graph;
+    private ChangeTimelineView? _timeline;
+    private IReadOnlyList<DecisionView>? _decisions;
+    private string? _message;
+    private bool _busy;
+
+    private ProjectContextView? _context;
+    private string _contextDraft = string.Empty;
+    private string _contextSaved = string.Empty;
+    private bool _savingContext;
+    private bool ContextDirty => !string.Equals(_contextDraft, _contextSaved, StringComparison.Ordinal);
+
+    private CodeRequirementsView? _requirements;
+    private string _reqDraft = string.Empty;
+    private string _reqSaved = string.Empty;
+    private bool _savingReq;
+    private bool RequirementsDirty => !string.Equals(_reqDraft, _reqSaved, StringComparison.Ordinal);
+
+    private bool _scrollPending;
+
+    // OnParametersSet (not OnInitialized) so navigating between projects reloads the data.
+    protected override async Task OnParametersSetAsync() => await Load();
+
+    private async Task Load()
+    {
+        _overview = await Svc.GetProjectOverviewAsync(Id);
+        Ui.Set(_overview.Name, $"{_overview.Path} · {_overview.Status}");
+        _graph = await Svc.GetGraphVizAsync(Id);
+        _timeline = await Svc.GetTimelineAsync(Id, 8);
+        _context = await Svc.GetContextAsync(Id);
+        _contextDraft = _contextSaved = _context.Markdown;
+        _requirements = await Svc.GetProjectRequirementsAsync(Id);
+        _reqDraft = _reqSaved = _requirements.Markdown;
+        _decisions = await Svc.GetDecisionsAsync(Id);
+        _scrollPending = true; // arrived (often from a search hit) — scroll to the URL fragment once loaded
+    }
+
+    // After the loaded page renders, scroll to (and flash) the section/decision named in the URL
+    // fragment — e.g. /project/{id}#context or #decision-{id} from a search hit.
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_scrollPending && _overview is not null)
+        {
+            _scrollPending = false;
+            await JS.InvokeVoidAsync("placecontext.scrollToHash");
+        }
+    }
+
+    private async Task SaveRequirements()
+    {
+        _savingReq = true; _message = null;
+        try
+        {
+            _requirements = await Svc.SetProjectRequirementsAsync(Id, _reqDraft);
+            _reqDraft = _reqSaved = _requirements.Markdown;
+            _message = "Project requirements saved.";
+        }
+        catch (Exception ex) { _message = ex.Message; }
+        finally { _savingReq = false; }
+    }
+
+    private async Task SaveContext()
+    {
+        _savingContext = true; _message = null;
+        try
+        {
+            _context = await Svc.SetContextAsync(Id, _contextDraft);
+            _contextDraft = _contextSaved = _context.Markdown;
+            _message = "Context saved.";
+        }
+        catch (Exception ex) { _message = ex.Message; }
+        finally { _savingContext = false; }
+    }
+
+    private async Task Rebuild()
+    {
+        _busy = true; _message = null;
+        try { await Svc.RebuildGraphAsync(Id); await Load(); _message = "Graph rebuilt."; }
+        catch (Exception ex) { _message = ex.Message; }
+        finally { _busy = false; }
+    }
+
+    private RenderFragment DebtRing(string label, int pct) => builder =>
+    {
+        var color = Viz.Tone(pct);
+        builder.AddMarkupContent(0, $@"
+            <div style='flex:1; text-align:center'>
+              <div style='position:relative; width:84px; height:84px; margin:0 auto'>
+                <svg width='84' height='84' viewBox='0 0 84 84' style='transform:rotate(-90deg)'>
+                  <circle cx='42' cy='42' r='34' fill='none' stroke='var(--card-2)' stroke-width='7'></circle>
+                  <circle class='dcring' data-pct='{pct}' cx='42' cy='42' r='34' fill='none' stroke='{color}' stroke-width='7' stroke-linecap='round' stroke-dasharray='214' stroke-dashoffset='214' style='transition:stroke-dashoffset .8s cubic-bezier(.4,0,.2,1)'></circle>
+                </svg>
+                <div style='position:absolute; inset:0; display:flex; align-items:center; justify-content:center'>
+                  <span style='font-size:20px; font-weight:600; font-family:Geist Mono,monospace; color:{color}'>{pct}</span>
+                </div>
+              </div>
+              <div style='font-size:11.5px; color:var(--text-2); margin-top:8px'>{label}</div>
+            </div>");
+    };
+}

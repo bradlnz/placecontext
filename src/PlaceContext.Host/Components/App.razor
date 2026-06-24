@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <base href="/" />
+    <title>PlaceContext — codebase visibility</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+    <HeadOutlet @rendermode="InteractiveServer" />
+    <style>
+        #dcshell {
+            --bg:#0a0b0d; --panel:#0c0e11; --card:#111418; --card-2:#161a1f; --hover:#1b2026;
+            --border:#1d232b; --border-2:#2a323c;
+            --text:#e8ebef; --text-2:#98a2ad; --text-3:#5e6873;
+            --brand:#8b7cff; --brand-2:#a99bff; --brand-bg:rgba(139,124,255,0.13);
+            --good:#3fb950; --good-bg:rgba(63,185,80,0.13);
+            --warn:#d9a527; --warn-bg:rgba(217,165,39,0.14);
+            --bad:#f0533f; --bad-bg:rgba(240,83,63,0.13);
+            --human:#4a9eff; --human-bg:rgba(74,158,255,0.13);
+            --shadow:0 1px 2px rgba(0,0,0,0.4), 0 8px 24px rgba(0,0,0,0.22);
+        }
+        #dcshell[data-theme="light"] {
+            --bg:#f5f6f8; --panel:#ffffff; --card:#ffffff; --card-2:#f4f6f8; --hover:#eef1f4;
+            --border:#e5e9ed; --border-2:#d3dade;
+            --text:#101620; --text-2:#5a6571; --text-3:#8b95a1;
+            --brand:#6b53ff; --brand-2:#5840e6; --brand-bg:rgba(107,83,255,0.10);
+            --good:#1a7f37; --good-bg:rgba(26,127,55,0.10);
+            --warn:#9a6700; --warn-bg:rgba(154,103,0,0.11);
+            --bad:#cf222e; --bad-bg:rgba(207,34,46,0.09);
+            --human:#0a66c2; --human-bg:rgba(10,102,194,0.10);
+            --shadow:0 1px 2px rgba(16,22,32,0.06), 0 8px 22px rgba(16,22,32,0.07);
+        }
+        * { box-sizing:border-box; }
+        html, body { margin:0; padding:0; height:100%; }
+        body { font-family:'Geist',system-ui,sans-serif; background:#0a0b0d; -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility; }
+        #dcshell { font-family:'Geist',system-ui,sans-serif; color:var(--text); }
+        a { color:inherit; text-decoration:none; }
+        ::selection { background:var(--brand-bg); }
+        ::-webkit-scrollbar { width:10px; height:10px; }
+        ::-webkit-scrollbar-thumb { background:var(--border-2); border-radius:8px; border:3px solid var(--bg); }
+        ::-webkit-scrollbar-track { background:transparent; }
+        @@keyframes dcpulse { 0%,100% { opacity:1; transform:scale(1); } 50% { opacity:.35; transform:scale(.82); } }
+        @@keyframes dcgrow { from { transform:scaleX(0); } to { transform:scaleX(1); } }
+        .dcbar { height:100%; width:0; border-radius:99px; transition:width .6s cubic-bezier(.4,0,.2,1); }
+        .dcnav { position:relative; display:flex; align-items:center; gap:10px; padding:8px 10px; border:none; cursor:pointer;
+            border-radius:7px; font-size:13px; font-weight:500; font-family:inherit; text-align:left; transition:background .12s;
+            color:var(--text-2); background:transparent; width:100%; }
+        .dcnav:hover { background:var(--card-2); }
+        .dcnav.active { color:var(--text); background:var(--card-2); }
+        .dcnav .bar { position:absolute; left:-12px; top:9px; bottom:9px; width:2.5px; border-radius:2px; background:var(--brand); opacity:0; }
+        .dcnav.active .bar { opacity:1; }
+        .dcbtn { background:var(--card); color:var(--text-2); border:1px solid var(--border); border-radius:7px;
+            padding:7px 12px; cursor:pointer; font-size:12.5px; font-family:inherit; font-weight:500; }
+        .dcbtn:hover { border-color:var(--border-2); color:var(--text); }
+        .dcbtn.primary { background:var(--brand); border-color:var(--brand); color:#fff; }
+        .dccard { background:var(--card); border:1px solid var(--border); border-radius:12px; }
+
+        .dcsearch-trigger { display:flex; align-items:center; gap:7px; padding:6px 11px; background:var(--card); border:1px solid var(--border); border-radius:7px; color:var(--text-3); font-size:12.5px; min-width:200px; cursor:pointer; }
+        .dcsearch-trigger:hover { border-color:var(--border-2); color:var(--text-2); }
+        .dcsearch-trigger kbd { margin-left:auto; font-family:'Geist Mono',monospace; font-size:10.5px; color:var(--text-3); border:1px solid var(--border); border-radius:4px; padding:0 4px; }
+        .dcsearch-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.5); display:flex; align-items:flex-start; justify-content:center; padding-top:12vh; z-index:50; }
+        .dcsearch-modal { width:560px; max-width:92vw; background:var(--panel); border:1px solid var(--border-2); border-radius:14px; overflow:hidden; box-shadow:0 24px 70px rgba(0,0,0,.55); }
+        .dcsearch-input { width:100%; border:none; border-bottom:1px solid var(--border); background:transparent; color:var(--text); font-size:15px; padding:16px 18px; outline:none; }
+        .dcsearch-results { max-height:52vh; overflow-y:auto; }
+        .dcsearch-hit { display:flex; align-items:center; gap:12px; padding:11px 18px; cursor:pointer; border-bottom:1px solid var(--border); text-align:left; width:100%; background:transparent; border-left:none; border-right:none; border-top:none; }
+        .dcsearch-hit:hover { background:var(--card-2); }
+        .dcsearch-kind { font-size:9px; font-weight:700; letter-spacing:.4px; text-transform:uppercase; color:var(--brand-2); background:var(--brand-bg); padding:2px 6px; border-radius:5px; flex:none; width:60px; text-align:center; }
+        .dcsearch-title { flex:1; min-width:0; overflow:hidden; }
+        .dcsearch-title .t { font-size:13px; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .dcsearch-title .s { font-size:11px; color:var(--text-3); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .dcsearch-empty { padding:22px 18px; color:var(--text-3); font-size:13px; text-align:center; }
+
+        @@keyframes dcflashkf { 0% { background:var(--brand-bg); } 100% { background:transparent; } }
+        .dcflash { animation:dcflashkf 1.6s ease-out; }
+        #context.dcflash, #decisions.dcflash { box-shadow:0 0 0 1.5px var(--brand); }
+    </style>
+</head>
+<body>
+    <Routes @rendermode="InteractiveServer" />
+    <script src="_framework/blazor.web.js"></script>
+    <script src="placecontext.js"></script>
+    <script src="pcgraph.js"></script>
+</body>
+</html>
