@@ -4,6 +4,7 @@ using System.Text.Json;
 using PlaceContext.Application;
 using PlaceContext.Application.Features;
 using PlaceContext.Application.Ports;
+using Microsoft.AspNetCore.Authorization;
 using ModelContextProtocol.Server;
 
 namespace PlaceContext.Host.Tools;
@@ -19,6 +20,7 @@ public sealed class PlaceContextTools
 {
     private static readonly JsonSerializerOptions Json = new() { WriteIndented = true };
 
+    [Authorize(Policy = "Member")]
     [McpServerTool(Name = "create_project"), Description("Register a project with PlaceContext by its absolute repo path. Idempotent: re-creating a known path returns the existing project. New projects are created already registered.")]
     public static Task<string> CreateProject(IPlaceContextService svc, IToolCallLog log,
         [Description("Absolute path of the project repo, e.g. /home/brad/code/myapp")] string path,
@@ -26,6 +28,7 @@ public sealed class PlaceContextTools
         => Traced(log, "create_project", "—", $"create {path}", new { path, name },
             () => svc.CreateProjectAsync(path, name));
 
+    [Authorize(Policy = "Member")]
     [McpServerTool(Name = "onboard"), Description("Bootstrap a repo into PlaceContext in one call: create the project (with initial debt), backfill the change ledger from git history, seed context from the repo's README/AGENTS/CLAUDE, and scaffold a local skill + agent for the target coding agent. Returns a setup summary.")]
     public static Task<string> Onboard(IPlaceContextService svc, IToolCallLog log,
         [Description("Absolute path of the project repo")] string path,
@@ -35,17 +38,20 @@ public sealed class PlaceContextTools
         => Traced(log, "onboard", "—", $"onboard {path}", new { path, name, agent, backfillLimit },
             () => svc.OnboardAsync(path, name, agent, backfillLimit));
 
+    [Authorize(Policy = "Member")]
     [McpServerTool(Name = "add_work_item"), Description("Queue a work item (a change to be done) for a project. Priority is Low, Normal, or High.")]
     public static Task<string> AddWorkItem(IPlaceContextService svc, IToolCallLog log,
         Guid projectId, string title, string? detail = null, string priority = "Normal")
         => Traced(log, "add_work_item", projectId.ToString(), $"queue {title}", new { projectId, title, detail, priority },
             () => svc.AddWorkItemAsync(projectId, title, detail, priority));
 
+    [Authorize(Policy = "Member")]
     [McpServerTool(Name = "next_work_item"), Description("Claim the next queued work item for a project (highest priority, then oldest) and mark it in-progress. Returns null if the queue is empty. Use this to pick up what to work on next.")]
     public static Task<string> NextWorkItem(IPlaceContextService svc, IToolCallLog log, Guid projectId)
         => Traced(log, "next_work_item", projectId.ToString(), "claim next", new { projectId },
             () => svc.NextWorkItemAsync(projectId));
 
+    [Authorize(Policy = "Member")]
     [McpServerTool(Name = "complete_work_item"), Description("Mark a work item finished once the change is done (and recorded via record_change).")]
     public static Task<string> CompleteWorkItem(IPlaceContextService svc, IToolCallLog log, Guid workItemId)
         => Traced(log, "complete_work_item", "—", "complete work item", new { workItemId },
@@ -61,12 +67,14 @@ public sealed class PlaceContextTools
         => Traced(log, "list_projects", "—", "list all projects", new { },
             () => svc.GetProjectsAsync());
 
+    [Authorize(Policy = "Member")]
     [McpServerTool(Name = "register_project"), Description("Promote a discovered project to registered (watched) status.")]
     public static Task<string> RegisterProject(IPlaceContextService svc, IToolCallLog log,
         [Description("The project's GUID id")] Guid projectId)
         => Traced(log, "register_project", projectId.ToString(), "register project", new { projectId },
             () => svc.RegisterProjectAsync(projectId));
 
+    [Authorize(Policy = "Member")]
     [McpServerTool(Name = "rebuild_graph"), Description("Rebuild a project's decision tree from logged activity (decisions, changes, tool calls) and record the snapshot.")]
     public static Task<string> RebuildGraph(IPlaceContextService svc, IToolCallLog log, Guid projectId, bool incremental = true)
         => Traced(log, "rebuild_graph", projectId.ToString(), "rebuild decision tree", new { projectId, incremental },
@@ -77,6 +85,7 @@ public sealed class PlaceContextTools
         => Traced(log, "get_project_overview", projectId.ToString(), "project overview", new { projectId },
             () => svc.GetProjectOverviewAsync(projectId));
 
+    [Authorize(Policy = "Member")]
     [McpServerTool(Name = "record_change"), Description("Record a development change through the git-backed ledger: appends an entry, makes a scoped commit, and returns the change record. Provide rationale, touched files/nodes, test deltas, and verification flags so agentic debt is scored accurately.")]
     public static Task<string> RecordChange(IPlaceContextService svc, IToolCallLog log,
         Guid projectId, string authorName, bool isAgent, string? rationale,
@@ -91,6 +100,7 @@ public sealed class PlaceContextTools
             () => svc.RecordChangeAsync(cmd));
     }
 
+    [Authorize(Policy = "Member")]
     [McpServerTool(Name = "recompute_debt"), Description("Recompute a project's technical and agentic debt and return the dashboard.")]
     public static Task<string> RecomputeDebt(IPlaceContextService svc, IToolCallLog log, Guid projectId)
         => Traced(log, "recompute_debt", projectId.ToString(), "recompute debt", new { projectId },
@@ -101,6 +111,7 @@ public sealed class PlaceContextTools
         => Traced(log, "get_timeline", projectId.ToString(), "change timeline", new { projectId, take },
             () => svc.GetTimelineAsync(projectId, take));
 
+    [Authorize(Policy = "Member")]
     [McpServerTool(Name = "add_decision"), Description("Record an architecture decision (ADR-lite) for a project.")]
     public static Task<string> AddDecision(IPlaceContextService svc, IToolCallLog log,
         Guid projectId, string question, string choice, string? rationale)
@@ -112,12 +123,14 @@ public sealed class PlaceContextTools
         => Traced(log, "query_graph", projectId.ToString(), question, new { projectId, question },
             () => svc.QueryGraphAsync(projectId, question));
 
+    [Authorize(Policy = "Member")]
     [McpServerTool(Name = "add_context"), Description("Append a Markdown section to the project's context document — the durable knowledge agents read before working. Creates the document if absent.")]
     public static Task<string> AddContext(IPlaceContextService svc, IToolCallLog log,
         Guid projectId, [Description("Markdown to append (a heading + notes)")] string section)
         => Traced(log, "add_context", projectId.ToString(), "append context", new { projectId, section },
             () => svc.AddContextAsync(projectId, section));
 
+    [Authorize(Policy = "Member")]
     [McpServerTool(Name = "set_context"), Description("Replace the project's entire Markdown context document. Use add_context to append a section; use this to rewrite the whole document (e.g. after consolidating notes).")]
     public static Task<string> SetContext(IPlaceContextService svc, IToolCallLog log,
         Guid projectId, [Description("The full Markdown document to store, replacing any existing content")] string markdown)
@@ -134,12 +147,14 @@ public sealed class PlaceContextTools
         => Traced(log, "suggest_improvements", projectId.ToString(), "suggest improvements", new { projectId },
             () => svc.SuggestImprovementsAsync(projectId));
 
+    [Authorize(Policy = "Member")]
     [McpServerTool(Name = "scaffold_skill"), Description("Scaffold a Claude Code skill into the project (.claude/skills/<name>/SKILL.md), seeded from its recorded decisions and context.")]
     public static Task<string> ScaffoldSkill(IPlaceContextService svc, IToolCallLog log,
         Guid projectId, string skillName, string? description = null)
         => Traced(log, "scaffold_skill", projectId.ToString(), $"scaffold {skillName}", new { projectId, skillName, description },
             () => svc.ScaffoldSkillAsync(projectId, skillName, description));
 
+    [Authorize(Policy = "Member")]
     [McpServerTool(Name = "record_usage"), Description("Record LLM token usage for a project (metadata only — model name and token counts, never code or prompts). Powers the cost dashboards. Returns the entry with its computed USD cost.")]
     public static Task<string> RecordUsage(IPlaceContextService svc, IToolCallLog log,
         Guid projectId,

@@ -23,7 +23,10 @@ public sealed class AuthService : IAuthService
     public async Task<bool> EmailExistsAsync(string email, CancellationToken ct = default)
         => await _db.Users.AsNoTracking().AnyAsync(u => u.Email == Normalize(email), ct);
 
-    public async Task<AuthUser?> RegisterAsync(string email, string displayName, string password, CancellationToken ct = default)
+    public Task<bool> HasAnyMembersAsync(CancellationToken ct = default)
+        => _db.Users.AsNoTracking().AnyAsync(ct);
+
+    public async Task<AuthUser?> RegisterAsync(string email, string displayName, string password, UserRole role, CancellationToken ct = default)
     {
         email = Normalize(email);
         if (await _db.Users.AsNoTracking().AnyAsync(u => u.Email == email, ct))
@@ -35,11 +38,12 @@ public sealed class AuthService : IAuthService
             Email = email,
             DisplayName = string.IsNullOrWhiteSpace(displayName) ? email.Split('@')[0] : displayName.Trim(),
             PasswordHash = PasswordHasher.Hash(password),
+            Role = role.ToString(),
             CreatedAt = DateTimeOffset.UtcNow,
         };
         await _db.Users.AddAsync(row, ct);
         await _db.SaveChangesAsync(ct); // TenantId stamped here
-        return new AuthUser(row.Id, row.TenantId, row.Email, row.DisplayName);
+        return ToAuthUser(row);
     }
 
     public async Task<AuthUser?> ValidateAsync(string email, string password, CancellationToken ct = default)
@@ -48,8 +52,12 @@ public sealed class AuthService : IAuthService
         var row = await _db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Email == email, ct);
         if (row is null || !PasswordHasher.Verify(password, row.PasswordHash))
             return null;
-        return new AuthUser(row.Id, row.TenantId, row.Email, row.DisplayName);
+        return ToAuthUser(row);
     }
+
+    private static AuthUser ToAuthUser(UserRow r) => new(
+        r.Id, r.TenantId, r.Email, r.DisplayName,
+        Enum.TryParse<UserRole>(r.Role, out var role) ? role : UserRole.Member);
 
     private static string Normalize(string email) => (email ?? string.Empty).Trim().ToLowerInvariant();
 }

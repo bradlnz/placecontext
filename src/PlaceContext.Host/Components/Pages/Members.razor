@@ -1,0 +1,118 @@
+@page "/settings/members"
+@attribute [Authorize(Policy = "Admin")]
+@using PlaceContext.Application.Ports
+@inject IMembershipService Membership
+@inject NavigationManager Nav
+@inject PortalUiState Ui
+
+<PageTitle>PlaceContext — Members</PageTitle>
+
+<div style="padding:24px 24px 40px; max-width:1000px; margin:0 auto">
+    <div style="display:flex; align-items:center; gap:9px; margin-bottom:18px">
+        <h2 style="font-size:14px; font-weight:600; margin:0">Organisation members</h2>
+        <span style="font-size:11px; color:var(--text-3)">invite people and set their role · Owner &gt; Admin &gt; Member &gt; Viewer</span>
+    </div>
+
+    @if (_message is not null) { <div style="color:var(--text-3); font-size:12px; margin-bottom:10px">@_message</div> }
+
+    <!-- invite -->
+    <div class="dccard" style="padding:14px 16px; margin-bottom:16px">
+        <div style="font-size:13px; font-weight:600; margin-bottom:10px">Invite a member</div>
+        <div style="display:flex; gap:8px; align-items:center">
+            <input @bind="_inviteEmail" placeholder="name@company.com" type="email"
+                style="flex:1; background:var(--bg); border:1px solid var(--border); border-radius:7px; color:var(--text); padding:8px 10px; font-size:13px" />
+            <select @bind="_inviteRole" style="background:var(--bg); border:1px solid var(--border); border-radius:7px; color:var(--text); padding:8px 10px; font-size:12.5px">
+                <option>Admin</option><option>Member</option><option>Viewer</option>
+            </select>
+            <button class="dcbtn primary" @onclick="CreateInvite" disabled="@(_busy || string.IsNullOrWhiteSpace(_inviteEmail))">Create invite</button>
+        </div>
+        @if (_inviteLink is not null)
+        {
+            <div style="margin-top:12px; padding:10px 12px; background:var(--bg); border:1px solid var(--border); border-radius:8px">
+                <div style="font-size:11px; color:var(--text-3); margin-bottom:5px">Share this single-use link with @_inviteEmailSent</div>
+                <code style="font-family:'Geist Mono',monospace; font-size:12px; color:var(--brand-2); word-break:break-all">@_inviteLink</code>
+            </div>
+        }
+    </div>
+
+    <!-- members -->
+    <div class="dccard" style="overflow:hidden">
+        <div style="padding:13px 16px; border-bottom:1px solid var(--border); font-size:13px; font-weight:600">Members @(_members is null ? "" : $"· {_members.Count}")</div>
+        @if (_members is null)
+        {
+            <div style="padding:16px; color:var(--text-3); font-size:12.5px">Loading…</div>
+        }
+        else
+        {
+            @foreach (var m in _members)
+            {
+                <div style="display:flex; align-items:center; gap:12px; padding:11px 16px; border-bottom:1px solid var(--border)">
+                    <div style="width:28px; height:28px; flex:none; border-radius:7px; background:var(--card-2); border:1px solid var(--border); display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:600; color:var(--text-2); font-family:'Geist Mono',monospace">@Initials(m.DisplayName)</div>
+                    <div style="min-width:0; flex:1">
+                        <div style="font-size:13px; font-weight:500">@m.DisplayName</div>
+                        <div style="font-size:11.5px; color:var(--text-3); font-family:'Geist Mono',monospace">@m.Email</div>
+                    </div>
+                    @if (m.Role == "Owner")
+                    {
+                        <span style="font-size:11px; font-weight:600; color:var(--brand-2); background:var(--brand-bg); padding:3px 10px; border-radius:20px">Owner</span>
+                    }
+                    else
+                    {
+                        <select value="@m.Role" @onchange="@(e => ChangeRole(m.Id, e.Value?.ToString()))"
+                            style="background:var(--bg); border:1px solid var(--border); border-radius:7px; color:var(--text); padding:6px 9px; font-size:12px">
+                            <option>Admin</option><option>Member</option><option>Viewer</option>
+                        </select>
+                    }
+                </div>
+            }
+        }
+    </div>
+</div>
+
+@code {
+    private IReadOnlyList<MemberView>? _members;
+    private string _inviteEmail = "";
+    private string _inviteRole = "Member";
+    private string? _inviteLink;
+    private string? _inviteEmailSent;
+    private string? _message;
+    private bool _busy;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Ui.Set("Members", "organisation roles & invites");
+        _members = await Membership.ListMembersAsync();
+    }
+
+    private async Task CreateInvite()
+    {
+        if (string.IsNullOrWhiteSpace(_inviteEmail)) return;
+        _busy = true; _message = null; _inviteLink = null;
+        try
+        {
+            var role = Enum.TryParse<UserRole>(_inviteRole, out var r) ? r : UserRole.Member;
+            var invite = await Membership.CreateInviteAsync(_inviteEmail.Trim(), role);
+            _inviteEmailSent = invite.Email;
+            _inviteLink = $"{Nav.BaseUri}join?token={invite.Token}";
+            _inviteEmail = "";
+        }
+        catch (Exception ex) { _message = ex.Message; }
+        finally { _busy = false; }
+    }
+
+    private async Task ChangeRole(Guid userId, string? role)
+    {
+        if (!Enum.TryParse<UserRole>(role, out var r)) return;
+        try { await Membership.SetRoleAsync(userId, r); _members = await Membership.ListMembersAsync(); _message = "Role updated."; }
+        catch (Exception ex) { _message = ex.Message; }
+    }
+
+    private static string Initials(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return "?";
+        var parts = name.Split(new[] { ' ', '.', '@', '_', '-' }, StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length == 0 ? "?" : parts.Length == 1
+            ? parts[0][..Math.Min(2, parts[0].Length)].ToUpperInvariant()
+            : string.Concat(parts[0][0], parts[1][0]).ToUpperInvariant();
+    }
+}

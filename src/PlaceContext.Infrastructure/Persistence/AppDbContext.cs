@@ -22,6 +22,7 @@ public sealed class AppDbContext : DbContext, IUnitOfWork
     public DbSet<TenantRow> Tenants => Set<TenantRow>();
     public DbSet<OAuthClientRow> OAuthClients => Set<OAuthClientRow>();
     public DbSet<UserRow> Users => Set<UserRow>();
+    public DbSet<InviteRow> Invites => Set<InviteRow>();
     public DbSet<ProjectRow> Projects => Set<ProjectRow>();
     public DbSet<ChangeRecordRow> ChangeRecords => Set<ChangeRecordRow>();
     public DbSet<DecisionRow> Decisions => Set<DecisionRow>();
@@ -75,6 +76,14 @@ public sealed class AppDbContext : DbContext, IUnitOfWork
             e.ToTable("users");
             e.HasKey(x => x.Id);
             e.HasIndex(x => new { x.TenantId, x.Email }).IsUnique(); // email unique within a tenant
+            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
+        });
+
+        b.Entity<InviteRow>(e =>
+        {
+            e.ToTable("invites");
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => x.Token).IsUnique();
             e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
         });
 

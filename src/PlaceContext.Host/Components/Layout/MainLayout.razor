@@ -3,6 +3,7 @@
 @inject PortalUiState Ui
 @inject IConfiguration Config
 @inject IPlaceContextService Svc
+@inject PlaceContext.Application.Ports.ICurrentTenant Tenant
 @inject IJSRuntime JS
 @inject NavigationManager Nav
 
@@ -16,7 +17,7 @@
             </div>
             <div style="display:flex; flex-direction:column; line-height:1.15">
                 <span style="font-size:14px; font-weight:600; letter-spacing:-.2px">PlaceContext</span>
-                <span style="font-size:10.5px; color:var(--text-3); font-family:'Geist Mono',monospace">localhost:7700</span>
+                <span style="font-size:10.5px; color:var(--text-3); font-family:'Geist Mono',monospace">@OrgName</span>
             </div>
         </div>
 
@@ -33,6 +34,9 @@
 
             <div style="font-size:10px; font-weight:600; letter-spacing:.7px; color:var(--text-3); padding:14px 10px 6px; text-transform:uppercase">Settings</div>
             <NavLink class="dcnav" href="settings/github"><span class="bar"></span>@Icon("github")<span style="flex:1">GitHub</span></NavLink>
+            <AuthorizeView Roles="Owner,Admin" Context="adminCtx">
+                <NavLink class="dcnav" href="settings/members"><span class="bar"></span>@Icon("grid")<span style="flex:1">Members</span></NavLink>
+            </AuthorizeView>
         </div>
 
         <div style="margin:14px 12px 6px; padding:10px 10px 4px; border-top:1px solid var(--border)">
@@ -47,7 +51,10 @@
                 <Authorized>
                     <div style="display:flex; align-items:center; gap:8px; min-width:0">
                         <div style="width:26px; height:26px; flex:none; border-radius:6px; background:var(--card-2); border:1px solid var(--border); display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:600; color:var(--text-2); font-family:'Geist Mono',monospace">@Initials(context.User.Identity?.Name)</div>
-                        <span style="font-size:12px; color:var(--text-2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis">@context.User.Identity?.Name</span>
+                        <div style="min-width:0">
+                            <div style="font-size:12px; color:var(--text-2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis">@context.User.Identity?.Name</div>
+                            <div style="font-size:10px; color:var(--text-3)">@context.User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value</div>
+                        </div>
                     </div>
                 </Authorized>
                 <NotAuthorized>
@@ -133,6 +140,7 @@
 @code {
     private int _projectCount;
     private string _mcpLabel = "live";
+    private string OrgName => string.IsNullOrEmpty(Tenant.Slug) ? "organisation" : Tenant.Slug;
     private string RootPath => Config["PlaceContext:RootPath"] ?? "/home/brad/code";
 
     protected override void OnInitialized() => Ui.OnChanged += OnUiChanged;

@@ -57,6 +57,7 @@ builder.Services
             IssuerSigningKey = OAuthKeys.SigningKey,
             ValidateLifetime = true,
             NameClaimType = "sub",
+            RoleClaimType = "role",
         };
         o.Events = new JwtBearerEvents
         {
@@ -82,7 +83,14 @@ builder.Services
         };
     });
 builder.Services.AddAuthorization(o =>
-    o.FallbackPolicy = new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build());
+{
+    // Any authenticated member can read (Viewer+).
+    o.FallbackPolicy = new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build();
+    // Role-gated policies, used on portal management endpoints and MCP write tools.
+    o.AddPolicy("Member", p => p.RequireAuthenticatedUser().RequireAssertion(c => RoleAtLeast(c.User, UserRole.Member)));
+    o.AddPolicy("Admin", p => p.RequireAuthenticatedUser().RequireAssertion(c => RoleAtLeast(c.User, UserRole.Admin)));
+    o.AddPolicy("Owner", p => p.RequireAuthenticatedUser().RequireAssertion(c => RoleAtLeast(c.User, UserRole.Owner)));
+});
 builder.Services.AddSingleton<OAuthStore>();
 
 // Tenancy: per-request/circuit holder + a circuit handler that keeps interactive renders tenant-scoped.
@@ -94,7 +102,8 @@ builder.Services
     .AddMcpServer()
     .WithHttpTransport()
     .WithTools<PlaceContextTools>()
-    .WithPrompts<PlaceContextPrompts>();
+    .WithPrompts<PlaceContextPrompts>()
+    .AddAuthorizationFilters(); // enforce [Authorize] on tools/prompts against the bearer token's role
 
 builder.WebHost.UseUrls("http://localhost:7700");
 
@@ -121,14 +130,39 @@ app.MapGet("/login", (HttpContext ctx, IAntiforgery af, string? error) =>
 app.MapGet("/register", (HttpContext ctx, IAntiforgery af, string? error) =>
     Results.Content(AuthPages.Register(af.GetAndStoreTokens(ctx), error), "text/html")).AllowAnonymous();
 
+// Self-registration creates the organisation's FIRST member as Owner. After that the org is
+// invite-only — further members join via an Admin invite (/join?token=…).
 app.MapPost("/auth/register", async (HttpContext ctx, IAuthService auth,
     [FromForm] string email, [FromForm] string password, [FromForm] string? displayName) =>
 {
+    if (await auth.HasAnyMembersAsync(ctx.RequestAborted))
+        return Results.Redirect("/register?error=" + Uri.EscapeDataString("This organisation is invite-only — ask an admin to invite you."));
     if (string.IsNullOrWhiteSpace(email) || (password?.Length ?? 0) < 8)
         return Results.Redirect("/register?error=" + Uri.EscapeDataString("Enter an email and a password of at least 8 characters."));
-    var user = await auth.RegisterAsync(email, displayName ?? "", password!, ctx.RequestAborted);
+    var user = await auth.RegisterAsync(email, displayName ?? "", password!, UserRole.Owner, ctx.RequestAborted);
     if (user is null)
-        return Results.Redirect("/register?error=" + Uri.EscapeDataString("That email is already registered for this workspace."));
+        return Results.Redirect("/register?error=" + Uri.EscapeDataString("That email is already registered."));
+    await SignInAsync(ctx, user);
+    return Results.Redirect("/");
+}).AllowAnonymous();
+
+// ---- Invite acceptance (join page) ----
+app.MapGet("/join", async (HttpContext ctx, IAntiforgery af, IMembershipService members, string? token, string? error) =>
+{
+    var info = string.IsNullOrEmpty(token) ? null : await members.GetInviteAsync(token, ctx.RequestAborted);
+    if (info is null)
+        return Results.Content(AuthPages.JoinInvalid(), "text/html");
+    return Results.Content(AuthPages.Join(af.GetAndStoreTokens(ctx), token!, info, error), "text/html");
+}).AllowAnonymous();
+
+app.MapPost("/auth/accept-invite", async (HttpContext ctx, IMembershipService members,
+    [FromForm] string token, [FromForm] string password, [FromForm] string? displayName) =>
+{
+    if ((password?.Length ?? 0) < 8)
+        return Results.Redirect($"/join?token={Uri.EscapeDataString(token)}&error=" + Uri.EscapeDataString("Choose a password of at least 8 characters."));
+    var user = await members.AcceptInviteAsync(token, displayName ?? "", password!, ctx.RequestAborted);
+    if (user is null)
+        return Results.Redirect($"/join?token={Uri.EscapeDataString(token)}&error=" + Uri.EscapeDataString("This invite is invalid, used, or the email is already a member."));
     await SignInAsync(ctx, user);
     return Results.Redirect("/");
 }).AllowAnonymous();
@@ -180,7 +214,7 @@ app.MapGet("/auth/github/callback", async (HttpContext ctx, IGitHubGateway gh, I
 
 await app.RunAsync();
 
-// Signs the user into the cookie scheme with their identity + tenant claim.
+// Signs the user into the cookie scheme with their identity + tenant + role claims.
 static Task SignInAsync(HttpContext ctx, AuthUser user)
 {
     var claims = new[]
@@ -189,8 +223,18 @@ static Task SignInAsync(HttpContext ctx, AuthUser user)
         new Claim(ClaimTypes.Email, user.Email),
         new Claim(ClaimTypes.Name, user.DisplayName),
         new Claim("tenant", user.TenantId.ToString()),
+        new Claim(ClaimTypes.Role, user.Role.ToString()),
+        new Claim("role", user.Role.ToString()),
     };
     var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
     return ctx.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme,
         new ClaimsPrincipal(identity), new AuthenticationProperties { IsPersistent = true });
+}
+
+// Reads the principal's role (from either the cookie's ClaimTypes.Role or the JWT's "role" claim) and
+// returns whether it meets the minimum. Backs the Member/Admin/Owner authorization policies.
+static bool RoleAtLeast(ClaimsPrincipal user, UserRole min)
+{
+    var value = user.FindFirst(ClaimTypes.Role)?.Value ?? user.FindFirst("role")?.Value;
+    return Enum.TryParse<UserRole>(value, out var role) && role >= min;
 }

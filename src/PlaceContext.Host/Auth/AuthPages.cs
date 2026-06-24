@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Net;
+using PlaceContext.Application.Dtos;
 using Microsoft.AspNetCore.Antiforgery;
 
 namespace PlaceContext.Host;
@@ -16,6 +17,15 @@ public static class AuthPages
 
     public static string Login(AntiforgeryTokenSet tokens, string? error) => Render("login", tokens, error);
     public static string Register(AntiforgeryTokenSet tokens, string? error) => Render("register", tokens, error);
+
+    public static string Join(AntiforgeryTokenSet tokens, string token, InviteInfo invite, string? error)
+        => Render("join", tokens, error)
+            .Replace("{{token}}", WebUtility.HtmlEncode(token))
+            .Replace("{{email}}", WebUtility.HtmlEncode(invite.Email))
+            .Replace("{{role}}", WebUtility.HtmlEncode(invite.Role));
+
+    public static string JoinInvalid() => Cache.GetOrAdd("joininvalid", static name =>
+        File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Auth", "templates", name + ".html")));
 
     private static string Render(string template, AntiforgeryTokenSet tokens, string? error)
     {

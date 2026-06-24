@@ -31,6 +31,7 @@ public static class DependencyInjection
 
         // Portal authentication (tenant-scoped users) + persisted OAuth clients.
         services.AddScoped<IAuthService, Auth.AuthService>();
+        services.AddScoped<IMembershipService, Auth.MembershipService>();
         services.AddScoped<IOAuthClientStore, Persistence.EfOAuthClientStore>();
 
         // EF Core code-first store. The DbContext is the request-scoped unit of work.

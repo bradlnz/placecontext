@@ -97,9 +97,10 @@ public static class OAuthServer
                 return Results.BadRequest("Only response_type=code with S256 PKCE is supported.");
 
             var userId = Guid.Parse(ctx.User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+            var role = ctx.User.FindFirstValue(ClaimTypes.Role) ?? "Viewer";
             var code = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
             store.SaveCode(new AuthCode(code, client_id, redirect_uri, code_challenge, userId, tenant.TenantId,
-                scope ?? "mcp", DateTimeOffset.UtcNow.AddMinutes(5)));
+                role, scope ?? "mcp", DateTimeOffset.UtcNow.AddMinutes(5)));
 
             var sep = redirect_uri.Contains('?') ? "&" : "?";
             var loc = $"{redirect_uri}{sep}code={Uri.EscapeDataString(code)}";
@@ -145,6 +146,7 @@ public static class OAuthServer
             {
                 ["sub"] = ac.UserId.ToString(),
                 ["tenant"] = ac.TenantId.ToString(),
+                ["role"] = ac.Role,
                 ["scope"] = ac.Scope,
             },
         };
