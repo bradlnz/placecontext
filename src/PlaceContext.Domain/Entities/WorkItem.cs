@@ -64,4 +64,12 @@ public sealed class WorkItem
         Status = WorkItemStatus.Done;
         CompletedAt = now;
     }
+
+    /// <summary>Moves the item to any column (board drag/drop). Stamps the first time it reaches a status.</summary>
+    public void MoveTo(WorkItemStatus status, DateTimeOffset now)
+    {
+        Status = status;
+        if (status == WorkItemStatus.InProgress && ClaimedAt is null) ClaimedAt = now;
+        if (status == WorkItemStatus.Done && CompletedAt is null) CompletedAt = now;
+    }
 }

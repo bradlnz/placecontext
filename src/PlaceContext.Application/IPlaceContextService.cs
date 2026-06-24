@@ -37,9 +37,11 @@ public interface IPlaceContextService
     Task<RootCostView> GetRootCostAsync(CancellationToken ct = default);
     Task<SearchResultsView> SearchAsync(string term, CancellationToken ct = default);
     Task<FocusView> GetFocusAsync(CancellationToken ct = default);
+    Task<GraphVizView> GetBrainAsync(CancellationToken ct = default);
     Task<WorkItemView> AddWorkItemAsync(Guid projectId, string title, string? detail, string priority, CancellationToken ct = default);
     Task<WorkItemView?> NextWorkItemAsync(Guid projectId, CancellationToken ct = default);
     Task<WorkItemView> CompleteWorkItemAsync(Guid workItemId, CancellationToken ct = default);
+    Task<WorkItemView> MoveWorkItemAsync(Guid workItemId, string status, CancellationToken ct = default);
     Task<IReadOnlyList<WorkItemView>> GetWorkItemsAsync(Guid projectId, CancellationToken ct = default);
     Task<ImprovementsView> SuggestImprovementsAsync(Guid projectId, CancellationToken ct = default);
     Task<SkillScaffoldView> ScaffoldSkillAsync(Guid projectId, string skillName, string? description, CancellationToken ct = default);

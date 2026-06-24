@@ -29,9 +29,17 @@ else
 
         @if (_message is not null) { <div style="color:var(--text-3); font-size:12px; margin-bottom:10px">@_message</div> }
 
-        <div style="display:grid; grid-template-columns:1.4fr 1fr; gap:14px; align-items:start">
-            <!-- graph -->
-            <div class="dccard" style="overflow:hidden">
+        <div class="dctabs">
+            <button class="dctab @(_tab == "overview" ? "active" : "")" @onclick='@(() => _tab = "overview")'>Overview</button>
+            <button class="dctab @(_tab == "board" ? "active" : "")" @onclick='@(() => _tab = "board")'>Board<span class="n">@(_workItems?.Count(w => w.Status != "Done") ?? 0)</span></button>
+            <button class="dctab @(_tab == "knowledge" ? "active" : "")" @onclick='@(() => _tab = "knowledge")'>Knowledge</button>
+            <button class="dctab @(_tab == "activity" ? "active" : "")" @onclick='@(() => _tab = "activity")'>Activity</button>
+        </div>
+
+        @if (_tab == "overview")
+        {
+        <!-- graph (full width) -->
+        <div class="dccard" style="overflow:hidden">
                 <div style="display:flex; align-items:center; justify-content:space-between; padding:13px 15px; border-bottom:1px solid var(--border)">
                     <div style="display:flex; align-items:center; gap:8px">
                         <span style="font-size:13px; font-weight:600">Dependency graph</span>
@@ -54,10 +62,10 @@ else
                         <GraphCanvas Graph="_graph" Height="340" />
                     }
                 </div>
-            </div>
+        </div>
 
-            <!-- right column -->
-            <div style="display:flex; flex-direction:column; gap:14px">
+        <!-- debt + god-nodes -->
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px; align-items:start; margin-top:14px">
                 <div class="dccard" style="padding:15px">
                     <div style="font-size:13px; font-weight:600; margin-bottom:14px">Debt profile</div>
                     <div style="display:flex; gap:14px">
@@ -89,9 +97,11 @@ else
                         </div>
                     }
                 </div>
-            </div>
         </div>
+        }
 
+        @if (_tab == "knowledge")
+        {
         <!-- context -->
         <div id="context" class="dccard" style="margin-top:14px; overflow:hidden">
             <div style="display:flex; align-items:center; justify-content:space-between; padding:13px 15px; border-bottom:1px solid var(--border)">
@@ -136,7 +146,10 @@ else
                     style="width:100%; min-height:160px; resize:vertical; box-sizing:border-box; background:var(--bg); border:1px solid var(--border); border-radius:8px; color:var(--text); padding:12px; font-family:'Geist Mono',monospace; font-size:12.5px; line-height:1.55"></textarea>
             </div>
         </div>
+        }
 
+        @if (_tab == "activity")
+        {
         <!-- decisions -->
         <div id="decisions" class="dccard" style="margin-top:14px; overflow:hidden">
             <div style="padding:13px 15px; border-bottom:1px solid var(--border); font-size:13px; font-weight:600">Decisions</div>
@@ -162,43 +175,42 @@ else
                 }
             }
         </div>
+        }
 
-        <!-- work queue -->
-        <div id="work" class="dccard" style="margin-top:14px; overflow:hidden">
-            <div style="display:flex; align-items:center; gap:8px; padding:13px 15px; border-bottom:1px solid var(--border)">
-                <span style="font-size:13px; font-weight:600">Work queue</span>
-                <span style="font-family:'Geist Mono',monospace; font-size:11px; color:var(--text-3)">changes to do · agents pick up via the <code>next_work_item</code> tool</span>
-            </div>
-            <div style="display:flex; gap:8px; padding:12px 15px; border-bottom:1px solid var(--border)">
-                <input @bind="_wiTitle" placeholder="What needs doing?" @onkeydown="WorkKey"
-                    style="flex:1; background:var(--bg); border:1px solid var(--border); border-radius:7px; color:var(--text); padding:8px 10px; font-size:13px" />
-                <select @bind="_wiPriority" style="background:var(--bg); border:1px solid var(--border); border-radius:7px; color:var(--text); padding:8px 10px; font-size:12.5px">
-                    <option>High</option><option>Normal</option><option>Low</option>
-                </select>
-                <button class="dcbtn primary" @onclick="AddWorkItem" disabled="@(_wiBusy || string.IsNullOrWhiteSpace(_wiTitle))">Add</button>
-            </div>
-            @if (_workItems is null || _workItems.Count == 0)
+        @if (_tab == "board")
+        {
+        <!-- work board (kanban) -->
+        <div style="display:flex; gap:8px; margin-bottom:12px; align-items:center">
+            <input @bind="_wiTitle" placeholder="Add a card…" @onkeydown="WorkKey"
+                style="flex:1; background:var(--bg); border:1px solid var(--border); border-radius:7px; color:var(--text); padding:9px 11px; font-size:13px" />
+            <select @bind="_wiPriority" style="background:var(--bg); border:1px solid var(--border); border-radius:7px; color:var(--text); padding:9px 11px; font-size:12.5px">
+                <option>High</option><option>Normal</option><option>Low</option>
+            </select>
+            <button class="dcbtn primary" @onclick="AddWorkItem" disabled="@(_wiBusy || string.IsNullOrWhiteSpace(_wiTitle))">Add card</button>
+        </div>
+        <div class="dckanban">
+            @foreach (var col in Columns)
             {
-                <div style="padding:14px 15px; color:var(--text-3); font-size:12.5px">No work items yet. Add one above, or an agent can queue them with <code>add_work_item</code>.</div>
-            }
-            else
-            {
-                @foreach (var w in _workItems)
-                {
-                    var done = w.Status == "Done";
-                    <div style="display:flex; align-items:center; gap:11px; padding:11px 15px; border-bottom:1px solid var(--border)">
-                        <span style="flex:none; font-size:9.5px; font-weight:700; letter-spacing:.4px; text-transform:uppercase; width:54px; text-align:center; padding:2px 6px; border-radius:5px; color:@PriColor(w.Priority); background:var(--card-2)">@w.Priority</span>
-                        <span style="flex:1; font-size:13px; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; @(done ? "text-decoration:line-through; color:var(--text-3)" : "")">@w.Title</span>
-                        <span style="flex:none; font-size:10.5px; font-weight:600; color:@StatusColor(w.Status); background:var(--card-2); padding:2px 8px; border-radius:20px">@w.Status</span>
-                        @if (!done)
+                <div class="dkcol @(_dragOver == col.Status ? "drop" : "")"
+                     @ondragover:preventDefault="true" @ondragenter="@(() => _dragOver = col.Status)" @ondrop="@(() => DropOn(col.Status))">
+                    <div class="dkcol-head"><span style="width:8px; height:8px; border-radius:50%; background:@col.Color"></span>@col.Title<span class="n">@ItemsIn(col.Status).Count()</span></div>
+                    <div class="dkcol-body">
+                        @foreach (var w in ItemsIn(col.Status))
                         {
-                            <button class="dcbtn" @onclick="@(() => CompleteWorkItem(w.Id))">Done</button>
+                            <div class="dkcard" draggable="true" @ondragstart="@(() => _dragId = w.Id)" @onclick="@(() => _selected = w)">
+                                <div class="t">@w.Title</div>
+                                <div class="m"><span class="dkpri" style="color:@PriColor(w.Priority)">@w.Priority</span></div>
+                            </div>
                         }
+                        @if (!ItemsIn(col.Status).Any()) { <div class="dkempty">—</div> }
                     </div>
-                }
+                </div>
             }
         </div>
+        }
 
+        @if (_tab == "activity")
+        {
         <!-- recent changes -->
         <div id="changes" class="dccard" style="margin-top:14px; overflow:hidden">
             <div style="padding:13px 15px; border-bottom:1px solid var(--border); font-size:13px; font-weight:600">Recent changes</div>
@@ -219,6 +231,38 @@ else
                 }
             }
         </div>
+        }
+
+        @if (_selected is not null)
+        {
+            <div class="dcslide-scrim" @onclick="@(() => _selected = null)"></div>
+            <div class="dcslide">
+                <div class="dcslide-head">
+                    <span style="flex:1; font-size:14px; font-weight:600">Work item</span>
+                    <button class="dcslide-x" @onclick="@(() => _selected = null)">×</button>
+                </div>
+                <div class="dcslide-body">
+                    <div style="font-size:15px; font-weight:600; line-height:1.4">@_selected.Title</div>
+                    <div style="display:flex; gap:8px; margin-top:10px; align-items:center">
+                        <span class="dkpri" style="color:@PriColor(_selected.Priority)">@_selected.Priority</span>
+                        <span style="font-size:11.5px; font-weight:600; color:@StatusColor(_selected.Status)">@_selected.Status</span>
+                    </div>
+                    @if (!string.IsNullOrWhiteSpace(_selected.Detail))
+                    {
+                        <div class="dcslide-label">Detail</div>
+                        <div style="font-size:13px; color:var(--text-2); line-height:1.55; white-space:pre-wrap">@_selected.Detail</div>
+                    }
+                    <div class="dcslide-label">Move to</div>
+                    <div style="display:flex; gap:6px">
+                        <button class="dcbtn" @onclick="@(() => MoveSelected("Queued"))">To do</button>
+                        <button class="dcbtn" @onclick="@(() => MoveSelected("InProgress"))">In progress</button>
+                        <button class="dcbtn primary" @onclick="@(() => MoveSelected("Done"))">Done</button>
+                    </div>
+                    <div class="dcslide-label">Created</div>
+                    <div style="font-size:12px; color:var(--text-3); font-family:'Geist Mono',monospace">@_selected.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</div>
+                </div>
+            </div>
+        }
     </div>
 }
 
@@ -233,6 +277,41 @@ else
     private string _wiTitle = "";
     private string _wiPriority = "Normal";
     private bool _wiBusy;
+
+    private string _tab = "overview";
+    private WorkItemView? _selected;
+    private Guid? _dragId;
+    private string? _dragOver;
+
+    private record Col(string Status, string Title, string Color);
+    private static readonly Col[] Columns =
+    {
+        new("Queued", "To do", "var(--text-3)"),
+        new("InProgress", "In progress", "var(--brand-2)"),
+        new("Done", "Done", "var(--good)"),
+    };
+
+    private IEnumerable<WorkItemView> ItemsIn(string status)
+        => _workItems?.Where(w => w.Status == status) ?? Enumerable.Empty<WorkItemView>();
+
+    private async Task DropOn(string status)
+    {
+        _dragOver = null;
+        if (_dragId is { } id) { _dragId = null; await Move(id, status); }
+    }
+
+    private async Task MoveSelected(string status) { if (_selected is { } s) await Move(s.Id, status); }
+
+    private async Task Move(Guid id, string status)
+    {
+        try
+        {
+            await Svc.MoveWorkItemAsync(id, status);
+            _workItems = await Svc.GetWorkItemsAsync(Id);
+            _selected = _workItems?.FirstOrDefault(w => w.Id == id);
+        }
+        catch (Exception ex) { _message = ex.Message; }
+    }
     private string? _message;
     private bool _busy;
 
