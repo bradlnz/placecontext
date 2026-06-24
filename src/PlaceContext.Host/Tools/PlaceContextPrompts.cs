@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using PlaceContext.Application;
+using Microsoft.AspNetCore.Authorization;
 using ModelContextProtocol.Server;
 
 namespace PlaceContext.Host.Tools;
@@ -14,6 +15,7 @@ namespace PlaceContext.Host.Tools;
 [McpServerPromptType]
 public sealed class PlaceContextPrompts
 {
+    [Authorize(Policy = "Member")]
     [McpServerPrompt(Name = "review_code"), Description("Review the project's current changes against its code requirements (global + project) and context.")]
     public static async Task<string> ReviewCode(
         IPlaceContextService svc,
@@ -37,6 +39,7 @@ public sealed class PlaceContextPrompts
         """;
     }
 
+    [Authorize(Policy = "Member")]
     [McpServerPrompt(Name = "create_skill"), Description("Guide creating a reusable skill/command for the project for a coding agent (Claude Code or Codex), in that agent's format and following the project's requirements.")]
     public static async Task<string> CreateSkill(
         IPlaceContextService svc,
@@ -94,6 +97,7 @@ public sealed class PlaceContextPrompts
                 """),
         };
 
+    [Authorize(Policy = "Member")]
     [McpServerPrompt(Name = "record_change_guidance"), Description("Walk through recording a change correctly through the git-backed ledger so it passes the process-trust gates.")]
     public static async Task<string> RecordChangeGuidance(
         IPlaceContextService svc,
@@ -121,6 +125,7 @@ public sealed class PlaceContextPrompts
         """;
     }
 
+    [Authorize(Policy = "Member")]
     [McpServerPrompt(Name = "onboard"), Description("Load the project's context and code requirements to start a session well-grounded.")]
     public static async Task<string> Onboard(
         IPlaceContextService svc,

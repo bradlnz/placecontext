@@ -57,11 +57,13 @@ public sealed class PlaceContextTools
         => Traced(log, "complete_work_item", "—", "complete work item", new { workItemId },
             () => svc.CompleteWorkItemAsync(workItemId));
 
+    [Authorize(Policy = "Member")]
     [McpServerTool(Name = "list_work_items"), Description("List a project's work-queue items (queued, in-progress, and done).")]
     public static Task<string> ListWorkItems(IPlaceContextService svc, IToolCallLog log, Guid projectId)
         => Traced(log, "list_work_items", projectId.ToString(), "list work items", new { projectId },
             () => svc.GetWorkItemsAsync(projectId));
 
+    [Authorize(Policy = "Member")]
     [McpServerTool(Name = "list_projects"), Description("List all projects PlaceContext is tracking, with their debt bands.")]
     public static Task<string> ListProjects(IPlaceContextService svc, IToolCallLog log)
         => Traced(log, "list_projects", "—", "list all projects", new { },
@@ -80,6 +82,7 @@ public sealed class PlaceContextTools
         => Traced(log, "rebuild_graph", projectId.ToString(), "rebuild decision tree", new { projectId, incremental },
             () => svc.RebuildGraphAsync(projectId, incremental));
 
+    [Authorize(Policy = "Member")]
     [McpServerTool(Name = "get_project_overview"), Description("Get a project's overview: status, graph stats, god nodes, debt, and change count.")]
     public static Task<string> GetProjectOverview(IPlaceContextService svc, IToolCallLog log, Guid projectId)
         => Traced(log, "get_project_overview", projectId.ToString(), "project overview", new { projectId },
@@ -106,6 +109,7 @@ public sealed class PlaceContextTools
         => Traced(log, "recompute_debt", projectId.ToString(), "recompute debt", new { projectId },
             () => svc.RecomputeDebtAsync(projectId));
 
+    [Authorize(Policy = "Member")]
     [McpServerTool(Name = "get_timeline"), Description("Get the recent change timeline for a project.")]
     public static Task<string> GetTimeline(IPlaceContextService svc, IToolCallLog log, Guid projectId, int take = 20)
         => Traced(log, "get_timeline", projectId.ToString(), "change timeline", new { projectId, take },
@@ -118,6 +122,7 @@ public sealed class PlaceContextTools
         => Traced(log, "add_decision", projectId.ToString(), question, new { projectId, question, choice, rationale },
             () => svc.AddDecisionAsync(projectId, question, choice, rationale));
 
+    [Authorize(Policy = "Member")]
     [McpServerTool(Name = "query_graph"), Description("Ask the project's decision tree a structured question (e.g. 'hotspots', 'decisions', 'unverified', 'activity'). Answered in-process from logged activity.")]
     public static Task<string> QueryGraph(IPlaceContextService svc, IToolCallLog log, Guid projectId, string question)
         => Traced(log, "query_graph", projectId.ToString(), question, new { projectId, question },
@@ -137,11 +142,13 @@ public sealed class PlaceContextTools
         => Traced(log, "set_context", projectId.ToString(), "set context", new { projectId, markdown },
             () => svc.SetContextAsync(projectId, markdown));
 
+    [Authorize(Policy = "Member")]
     [McpServerTool(Name = "get_context"), Description("Fetch the project's Markdown context document. Call this at the start of a session to load what's known about the project.")]
     public static Task<string> GetContext(IPlaceContextService svc, IToolCallLog log, Guid projectId)
         => Traced(log, "get_context", projectId.ToString(), "fetch context", new { projectId },
             () => svc.GetContextAsync(projectId));
 
+    [Authorize(Policy = "Member")]
     [McpServerTool(Name = "suggest_improvements"), Description("Suggest prioritized improvements for a project, derived from logged activity: churn hotspots, unverified changes, missing context, and debt signals.")]
     public static Task<string> SuggestImprovements(IPlaceContextService svc, IToolCallLog log, Guid projectId)
         => Traced(log, "suggest_improvements", projectId.ToString(), "suggest improvements", new { projectId },
