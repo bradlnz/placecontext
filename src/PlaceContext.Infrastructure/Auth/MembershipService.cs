@@ -22,6 +22,9 @@ public sealed class MembershipService : IMembershipService
         return rows.Select(u => new MemberView(u.Id, u.Email, u.DisplayName, u.Role, u.CreatedAt)).ToList();
     }
 
+    public Task<string?> GetRoleAsync(Guid userId, CancellationToken ct = default)
+        => _db.Users.AsNoTracking().Where(u => u.Id == userId).Select(u => (string?)u.Role).FirstOrDefaultAsync(ct);
+
     public async Task SetRoleAsync(Guid userId, UserRole role, CancellationToken ct = default)
     {
         var row = await _db.Users.FirstOrDefaultAsync(u => u.Id == userId, ct);
