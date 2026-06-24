@@ -99,7 +99,7 @@ builder.Services
 builder.WebHost.UseUrls("http://localhost:7700");
 
 var app = builder.Build();
-PlaceContext.Infrastructure.DependencyInjection.EnsureDatabaseCreated(app.Services);
+PlaceContext.Infrastructure.DependencyInjection.MigrateDatabase(app.Services);
 
 app.UseStaticFiles();
 app.UseMiddleware<TenantResolutionMiddleware>(); // resolve {user}.placecontext.ai → tenant, before any data access

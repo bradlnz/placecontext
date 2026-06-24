@@ -84,6 +84,21 @@ public sealed class PlaceContextService : IPlaceContextService
     public Task<SearchResultsView> SearchAsync(string term, CancellationToken ct = default)
         => _dispatcher.Query(new SearchQuery(term), ct);
 
+    public Task<FocusView> GetFocusAsync(CancellationToken ct = default)
+        => _dispatcher.Query(new GetFocusQuery(), ct);
+
+    public Task<WorkItemView> AddWorkItemAsync(Guid projectId, string title, string? detail, string priority, CancellationToken ct = default)
+        => _dispatcher.Send(new AddWorkItemCommand(projectId, title, detail, priority), ct);
+
+    public Task<WorkItemView?> NextWorkItemAsync(Guid projectId, CancellationToken ct = default)
+        => _dispatcher.Send(new NextWorkItemCommand(projectId), ct);
+
+    public Task<WorkItemView> CompleteWorkItemAsync(Guid workItemId, CancellationToken ct = default)
+        => _dispatcher.Send(new CompleteWorkItemCommand(workItemId), ct);
+
+    public Task<IReadOnlyList<WorkItemView>> GetWorkItemsAsync(Guid projectId, CancellationToken ct = default)
+        => _dispatcher.Query(new GetWorkItemsQuery(projectId), ct);
+
     public Task<ImprovementsView> SuggestImprovementsAsync(Guid projectId, CancellationToken ct = default)
         => _dispatcher.Query(new SuggestImprovementsQuery(projectId), ct);
 

@@ -29,6 +29,7 @@ public sealed class AppDbContext : DbContext, IUnitOfWork
     public DbSet<ProjectContextRow> ProjectContexts => Set<ProjectContextRow>();
     public DbSet<CodeRequirementsRow> CodeRequirements => Set<CodeRequirementsRow>();
     public DbSet<UsageRow> UsageRecords => Set<UsageRow>();
+    public DbSet<WorkItemRow> WorkItems => Set<WorkItemRow>();
     public DbSet<ToolCallRow> ToolCalls => Set<ToolCallRow>();
 
     Task<int> IUnitOfWork.SaveChangesAsync(CancellationToken ct) => SaveChangesAsync(ct);
@@ -129,6 +130,14 @@ public sealed class AppDbContext : DbContext, IUnitOfWork
             e.ToTable("usage_records");
             e.HasKey(x => x.Id);
             e.HasIndex(x => new { x.ProjectId, x.RecordedAt });
+            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
+        });
+
+        b.Entity<WorkItemRow>(e =>
+        {
+            e.ToTable("work_items");
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => new { x.ProjectId, x.Status });
             e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
         });
 

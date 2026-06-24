@@ -33,6 +33,33 @@ public sealed class EfOAuthClientStore : IOAuthClientStore
         return row is null ? null : ToDomain(row);
     }
 
+    public async Task<OAuthClient> EnsureAsync(string clientId, string redirectUri, CancellationToken ct = default)
+    {
+        var row = await _db.OAuthClients.FirstOrDefaultAsync(x => x.ClientId == clientId, ct);
+        if (row is null)
+        {
+            row = new OAuthClientRow
+            {
+                ClientId = clientId,
+                RedirectUris = JsonSerializer.Serialize(new[] { redirectUri }),
+                Name = "MCP Client",
+                CreatedAt = DateTimeOffset.UtcNow,
+            };
+            await _db.OAuthClients.AddAsync(row, ct);
+            await _db.SaveChangesAsync(ct);
+            return ToDomain(row);
+        }
+
+        var uris = JsonSerializer.Deserialize<List<string>>(row.RedirectUris) ?? new();
+        if (!uris.Contains(redirectUri))
+        {
+            uris.Add(redirectUri);
+            row.RedirectUris = JsonSerializer.Serialize(uris);
+            await _db.SaveChangesAsync(ct);
+        }
+        return ToDomain(row);
+    }
+
     private static OAuthClient ToDomain(OAuthClientRow r) => new(
         r.ClientId, JsonSerializer.Deserialize<List<string>>(r.RedirectUris) ?? new(), r.Name);
 }

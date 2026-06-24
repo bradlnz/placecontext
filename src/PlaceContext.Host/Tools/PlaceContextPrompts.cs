@@ -57,7 +57,12 @@ public sealed class PlaceContextPrompts
 
         {{spec.Instructions}}
 
-        Make the skill obey the project's code requirements, and reuse its established tooling/commands.
+        Make the skill obey the project's code requirements, reuse its established tooling/commands, and bake
+        in the PlaceContext workflow:
+        - **Pre-action**: load context (`get_context`), pull the next task (`next_work_item`), note starting tokens.
+        - **Guardrails** every change must pass: rationale, tests, architecture review, live verification.
+        - **Post-action**: `record_change` (rationale/files/test deltas/guardrail flags), `record_usage`
+          (tokens spent on that change — cost per change), and `complete_work_item`.
 
         ## Code requirements
         {{requirements}}

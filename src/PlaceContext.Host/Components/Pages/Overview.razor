@@ -19,6 +19,40 @@
         }
     </div>
 
+    <!-- current focus checklist -->
+    <div class="dccard" style="overflow:hidden; margin-bottom:22px">
+        <div style="display:flex; align-items:center; gap:9px; padding:13px 16px; border-bottom:1px solid var(--border)">
+            <span style="font-size:13px; font-weight:600">Current focus</span>
+            <span style="font-size:11px; color:var(--text-3)">what needs attention across your workspace</span>
+            @if (_focus is { Items.Count: > 0 })
+            {
+                <span style="margin-left:auto; font-size:11px; color:var(--text-3); font-family:'Geist Mono',monospace; background:var(--card-2); border:1px solid var(--border); padding:1px 7px; border-radius:20px">@_focus.Items.Count</span>
+            }
+        </div>
+        @if (_focus is null)
+        {
+            <div class="dcfocus-clear" style="color:var(--text-3)">Loading…</div>
+        }
+        else if (_focus.Items.Count == 0)
+        {
+            <div class="dcfocus-clear">✓ All clear — nothing needs attention right now.</div>
+        }
+        else
+        {
+            @foreach (var f in _focus.Items)
+            {
+                <button class="dcfocus-row sev-@f.Severity" @onclick="@(() => Nav.NavigateTo(f.Url))">
+                    <span class="dcfocus-box"></span>
+                    <span style="min-width:0">
+                        <span class="dcfocus-title">@f.Title</span>
+                        <div class="dcfocus-detail">@f.Detail</div>
+                    </span>
+                    <span class="dcfocus-proj">@f.Project</span>
+                </button>
+            }
+        }
+    </div>
+
     <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:13px">
         <div style="display:flex; align-items:center; gap:9px">
             <h2 style="font-size:14px; font-weight:600; margin:0; letter-spacing:-.2px">Projects</h2>
@@ -93,6 +127,7 @@
 
 @code {
     private IReadOnlyList<ProjectSummaryView>? _projects;
+    private FocusView? _focus;
     private List<Stat> _stats = new();
     private bool _busy;
 
@@ -107,6 +142,7 @@
     private async Task Load()
     {
         _projects = await Svc.GetProjectsAsync();
+        _focus = await Svc.GetFocusAsync();
         var st = await Svc.GetRootStatsAsync();
         var agentic = (int)Math.Round(st.RootAgenticDebt * 100);
         var trust = 100 - agentic;

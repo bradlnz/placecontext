@@ -35,6 +35,27 @@ public sealed class PlaceContextTools
         => Traced(log, "onboard", "—", $"onboard {path}", new { path, name, agent, backfillLimit },
             () => svc.OnboardAsync(path, name, agent, backfillLimit));
 
+    [McpServerTool(Name = "add_work_item"), Description("Queue a work item (a change to be done) for a project. Priority is Low, Normal, or High.")]
+    public static Task<string> AddWorkItem(IPlaceContextService svc, IToolCallLog log,
+        Guid projectId, string title, string? detail = null, string priority = "Normal")
+        => Traced(log, "add_work_item", projectId.ToString(), $"queue {title}", new { projectId, title, detail, priority },
+            () => svc.AddWorkItemAsync(projectId, title, detail, priority));
+
+    [McpServerTool(Name = "next_work_item"), Description("Claim the next queued work item for a project (highest priority, then oldest) and mark it in-progress. Returns null if the queue is empty. Use this to pick up what to work on next.")]
+    public static Task<string> NextWorkItem(IPlaceContextService svc, IToolCallLog log, Guid projectId)
+        => Traced(log, "next_work_item", projectId.ToString(), "claim next", new { projectId },
+            () => svc.NextWorkItemAsync(projectId));
+
+    [McpServerTool(Name = "complete_work_item"), Description("Mark a work item finished once the change is done (and recorded via record_change).")]
+    public static Task<string> CompleteWorkItem(IPlaceContextService svc, IToolCallLog log, Guid workItemId)
+        => Traced(log, "complete_work_item", "—", "complete work item", new { workItemId },
+            () => svc.CompleteWorkItemAsync(workItemId));
+
+    [McpServerTool(Name = "list_work_items"), Description("List a project's work-queue items (queued, in-progress, and done).")]
+    public static Task<string> ListWorkItems(IPlaceContextService svc, IToolCallLog log, Guid projectId)
+        => Traced(log, "list_work_items", projectId.ToString(), "list work items", new { projectId },
+            () => svc.GetWorkItemsAsync(projectId));
+
     [McpServerTool(Name = "list_projects"), Description("List all projects PlaceContext is tracking, with their debt bands.")]
     public static Task<string> ListProjects(IPlaceContextService svc, IToolCallLog log)
         => Traced(log, "list_projects", "—", "list all projects", new { },

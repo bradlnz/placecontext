@@ -50,6 +50,7 @@ public static class DependencyInjection
         services.AddScoped<IProjectContextRepository, EfProjectContextRepository>();
         services.AddScoped<ICodeRequirementsRepository, EfCodeRequirementsRepository>();
         services.AddScoped<IUsageRepository, EfUsageRepository>();
+        services.AddScoped<IWorkItemRepository, EfWorkItemRepository>();
 
         // Git, metrics, skill scaffolding.
         services.AddSingleton<IGitPort, CliGitAdapter>();
@@ -70,11 +71,15 @@ public static class DependencyInjection
         return services;
     }
 
-    /// <summary>Ensures the Postgres schema exists. Call once at startup from the composition root.</summary>
-    public static void EnsureDatabaseCreated(IServiceProvider provider)
+    /// <summary>
+    /// Applies any pending EF Core migrations at startup (creating the schema on a fresh database).
+    /// Migrations replace the old <c>EnsureCreated</c> so schema changes apply non-destructively — no
+    /// more dropping the database. Call once from the composition root.
+    /// </summary>
+    public static void MigrateDatabase(IServiceProvider provider)
     {
         using var scope = provider.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        db.Database.EnsureCreated();
+        db.Database.Migrate();
     }
 }

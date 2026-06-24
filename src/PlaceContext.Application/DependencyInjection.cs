@@ -46,6 +46,9 @@ public static class DependencyInjection
         services.AddScoped<ICommandHandler<SetProjectRequirementsCommand, CodeRequirementsView>, SetProjectRequirementsHandler>();
         services.AddScoped<ICommandHandler<RecordUsageCommand, UsageEntryView>, RecordUsageHandler>();
         services.AddScoped<ICommandHandler<OnboardCommand, OnboardResultView>, OnboardHandler>();
+        services.AddScoped<ICommandHandler<AddWorkItemCommand, WorkItemView>, AddWorkItemHandler>();
+        services.AddScoped<ICommandHandler<NextWorkItemCommand, WorkItemView?>, NextWorkItemHandler>();
+        services.AddScoped<ICommandHandler<CompleteWorkItemCommand, WorkItemView>, CompleteWorkItemHandler>();
 
         // Queries.
         services.AddScoped<IQueryHandler<GetProjectsQuery, IReadOnlyList<ProjectSummaryView>>, GetProjectsHandler>();
@@ -62,6 +65,8 @@ public static class DependencyInjection
         services.AddScoped<IQueryHandler<GetCostDashboardQuery, CostDashboardView>, GetCostDashboardHandler>();
         services.AddScoped<IQueryHandler<GetRootCostQuery, RootCostView>, GetRootCostHandler>();
         services.AddScoped<IQueryHandler<SearchQuery, SearchResultsView>, SearchHandler>();
+        services.AddScoped<IQueryHandler<GetFocusQuery, FocusView>, FocusHandler>();
+        services.AddScoped<IQueryHandler<GetWorkItemsQuery, IReadOnlyList<WorkItemView>>, GetWorkItemsHandler>();
 
         // Root-level read models (redesigned portal).
         services.AddScoped<IQueryHandler<GetRootStatsQuery, RootStatsView>, GetRootStatsHandler>();

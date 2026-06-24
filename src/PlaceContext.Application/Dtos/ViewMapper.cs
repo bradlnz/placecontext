@@ -61,4 +61,8 @@ public static class ViewMapper
 
     public static UsageEntryView ToView(UsageRecord r, decimal costUsd) => new(
         r.Id, r.Usage.Model, r.Usage.InputTokens, r.Usage.OutputTokens, costUsd, r.Description, r.RecordedAt);
+
+    public static WorkItemView ToView(WorkItem w) => new(
+        w.Id, w.ProjectId.Value, w.Title, w.Detail, w.Priority.ToString(), w.Status.ToString(),
+        w.CreatedAt, w.ClaimedAt, w.CompletedAt);
 }

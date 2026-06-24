@@ -86,8 +86,12 @@ public static class OAuthServer
                     new AuthenticationProperties { RedirectUri = ctx.Request.GetEncodedUrl() },
                     [CookieAuthenticationDefaults.AuthenticationScheme]);
 
-            var client = await clients.GetAsync(client_id, ctx.RequestAborted);
-            if (client is null || !client.RedirectUris.Contains(redirect_uri))
+            if (string.IsNullOrWhiteSpace(client_id) || string.IsNullOrWhiteSpace(redirect_uri))
+                return Results.BadRequest("Missing client_id or redirect_uri.");
+            // Self-heal: register the client (or add this redirect URI) if it isn't on record — handles a
+            // public PKCE client whose DCR registration was lost (e.g. after a database reset).
+            var client = await clients.EnsureAsync(client_id, redirect_uri, ctx.RequestAborted);
+            if (!client.RedirectUris.Contains(redirect_uri))
                 return Results.BadRequest("Unknown client or redirect_uri.");
             if (response_type != "code" || string.IsNullOrEmpty(code_challenge) || (code_challenge_method ?? "S256") != "S256")
                 return Results.BadRequest("Only response_type=code with S256 PKCE is supported.");

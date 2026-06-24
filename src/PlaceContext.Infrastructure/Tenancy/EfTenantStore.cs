@@ -17,20 +17,30 @@ public sealed class EfTenantStore : ITenantStore
     public async Task<TenantInfo> GetOrCreateAsync(string slug, CancellationToken ct = default)
     {
         var row = await _db.Tenants.FirstOrDefaultAsync(t => t.Slug == slug, ct);
-        if (row is null)
+        if (row is not null) return ToInfo(row);
+
+        row = new TenantRow
         {
-            row = new TenantRow
-            {
-                Id = Guid.NewGuid(),
-                Slug = slug,
-                Name = slug,
-                TimeZoneId = "UTC",
-                CreatedAt = DateTimeOffset.UtcNow
-            };
-            await _db.Tenants.AddAsync(row, ct);
+            Id = Guid.NewGuid(),
+            Slug = slug,
+            Name = slug,
+            TimeZoneId = "UTC",
+            CreatedAt = DateTimeOffset.UtcNow
+        };
+        await _db.Tenants.AddAsync(row, ct);
+        try
+        {
             await _db.SaveChangesAsync(ct);
+            return ToInfo(row);
         }
-        return ToInfo(row);
+        catch (DbUpdateException)
+        {
+            // Provisioning race: a concurrent first-request for this new tenant won the insert.
+            _db.Entry(row).State = EntityState.Detached;
+            var existing = await _db.Tenants.AsNoTracking().FirstOrDefaultAsync(t => t.Slug == slug, ct);
+            if (existing is null) throw;
+            return ToInfo(existing);
+        }
     }
 
     public Task<TenantRow?> GetRowAsync(Guid tenantId, CancellationToken ct = default)

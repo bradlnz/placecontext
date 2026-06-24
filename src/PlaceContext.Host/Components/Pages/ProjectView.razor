@@ -163,6 +163,42 @@ else
             }
         </div>
 
+        <!-- work queue -->
+        <div id="work" class="dccard" style="margin-top:14px; overflow:hidden">
+            <div style="display:flex; align-items:center; gap:8px; padding:13px 15px; border-bottom:1px solid var(--border)">
+                <span style="font-size:13px; font-weight:600">Work queue</span>
+                <span style="font-family:'Geist Mono',monospace; font-size:11px; color:var(--text-3)">changes to do · agents pick up via the <code>next_work_item</code> tool</span>
+            </div>
+            <div style="display:flex; gap:8px; padding:12px 15px; border-bottom:1px solid var(--border)">
+                <input @bind="_wiTitle" placeholder="What needs doing?" @onkeydown="WorkKey"
+                    style="flex:1; background:var(--bg); border:1px solid var(--border); border-radius:7px; color:var(--text); padding:8px 10px; font-size:13px" />
+                <select @bind="_wiPriority" style="background:var(--bg); border:1px solid var(--border); border-radius:7px; color:var(--text); padding:8px 10px; font-size:12.5px">
+                    <option>High</option><option>Normal</option><option>Low</option>
+                </select>
+                <button class="dcbtn primary" @onclick="AddWorkItem" disabled="@(_wiBusy || string.IsNullOrWhiteSpace(_wiTitle))">Add</button>
+            </div>
+            @if (_workItems is null || _workItems.Count == 0)
+            {
+                <div style="padding:14px 15px; color:var(--text-3); font-size:12.5px">No work items yet. Add one above, or an agent can queue them with <code>add_work_item</code>.</div>
+            }
+            else
+            {
+                @foreach (var w in _workItems)
+                {
+                    var done = w.Status == "Done";
+                    <div style="display:flex; align-items:center; gap:11px; padding:11px 15px; border-bottom:1px solid var(--border)">
+                        <span style="flex:none; font-size:9.5px; font-weight:700; letter-spacing:.4px; text-transform:uppercase; width:54px; text-align:center; padding:2px 6px; border-radius:5px; color:@PriColor(w.Priority); background:var(--card-2)">@w.Priority</span>
+                        <span style="flex:1; font-size:13px; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; @(done ? "text-decoration:line-through; color:var(--text-3)" : "")">@w.Title</span>
+                        <span style="flex:none; font-size:10.5px; font-weight:600; color:@StatusColor(w.Status); background:var(--card-2); padding:2px 8px; border-radius:20px">@w.Status</span>
+                        @if (!done)
+                        {
+                            <button class="dcbtn" @onclick="@(() => CompleteWorkItem(w.Id))">Done</button>
+                        }
+                    </div>
+                }
+            }
+        </div>
+
         <!-- recent changes -->
         <div id="changes" class="dccard" style="margin-top:14px; overflow:hidden">
             <div style="padding:13px 15px; border-bottom:1px solid var(--border); font-size:13px; font-weight:600">Recent changes</div>
@@ -193,6 +229,10 @@ else
     private GraphVizView? _graph;
     private ChangeTimelineView? _timeline;
     private IReadOnlyList<DecisionView>? _decisions;
+    private IReadOnlyList<WorkItemView>? _workItems;
+    private string _wiTitle = "";
+    private string _wiPriority = "Normal";
+    private bool _wiBusy;
     private string? _message;
     private bool _busy;
 
@@ -224,6 +264,7 @@ else
         _requirements = await Svc.GetProjectRequirementsAsync(Id);
         _reqDraft = _reqSaved = _requirements.Markdown;
         _decisions = await Svc.GetDecisionsAsync(Id);
+        _workItems = await Svc.GetWorkItemsAsync(Id);
         _scrollPending = true; // arrived (often from a search hit) — scroll to the URL fragment once loaded
     }
 
@@ -250,6 +291,41 @@ else
         catch (Exception ex) { _message = ex.Message; }
         finally { _savingReq = false; }
     }
+
+    private async Task AddWorkItem()
+    {
+        if (string.IsNullOrWhiteSpace(_wiTitle)) return;
+        _wiBusy = true; _message = null;
+        try
+        {
+            await Svc.AddWorkItemAsync(Id, _wiTitle.Trim(), null, _wiPriority);
+            _wiTitle = "";
+            _workItems = await Svc.GetWorkItemsAsync(Id);
+        }
+        catch (Exception ex) { _message = ex.Message; }
+        finally { _wiBusy = false; }
+    }
+
+    private async Task WorkKey(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await AddWorkItem();
+    }
+
+    private async Task CompleteWorkItem(Guid id)
+    {
+        try { await Svc.CompleteWorkItemAsync(id); _workItems = await Svc.GetWorkItemsAsync(Id); }
+        catch (Exception ex) { _message = ex.Message; }
+    }
+
+    private static string PriColor(string p) => p switch
+    {
+        "High" => "var(--bad)", "Low" => "var(--text-3)", _ => "var(--text-2)"
+    };
+
+    private static string StatusColor(string s) => s switch
+    {
+        "Done" => "var(--good)", "InProgress" => "var(--brand-2)", _ => "var(--text-3)"
+    };
 
     private async Task SaveContext()
     {
