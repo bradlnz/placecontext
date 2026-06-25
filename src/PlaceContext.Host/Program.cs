@@ -152,26 +152,27 @@ app.MapMcp("/mcp").RequireAuthorization(new AuthorizeAttribute { AuthenticationS
 app.MapOAuthServer();
 
 // ---- Login / register (standalone HTML so they don't depend on the Blazor render pipeline) ----
-app.MapGet("/login", (HttpContext ctx, IAntiforgery af, string? error) =>
-    Results.Content(AuthPages.Login(af.GetAndStoreTokens(ctx), error), "text/html")).AllowAnonymous();
+app.MapGet("/login", (HttpContext ctx, IAntiforgery af, string? error, string? returnUrl) =>
+    Results.Content(AuthPages.Login(af.GetAndStoreTokens(ctx), error, returnUrl), "text/html")).AllowAnonymous();
 
-app.MapGet("/register", (HttpContext ctx, IAntiforgery af, string? error) =>
-    Results.Content(AuthPages.Register(af.GetAndStoreTokens(ctx), error), "text/html")).AllowAnonymous();
+app.MapGet("/register", (HttpContext ctx, IAntiforgery af, string? error, string? returnUrl) =>
+    Results.Content(AuthPages.Register(af.GetAndStoreTokens(ctx), error, returnUrl), "text/html")).AllowAnonymous();
 
 // Self-registration creates the organisation's FIRST member as Owner. After that the org is
 // invite-only — further members join via an Admin invite (/join?token=…).
 app.MapPost("/auth/register", async (HttpContext ctx, IAuthService auth,
-    [FromForm] string email, [FromForm] string password, [FromForm] string? displayName) =>
+    [FromForm] string email, [FromForm] string password, [FromForm] string? displayName, [FromForm] string? returnUrl) =>
 {
     if (await auth.HasAnyMembersAsync(ctx.RequestAborted))
-        return Results.Redirect("/register?error=" + Uri.EscapeDataString("This organisation is invite-only — ask an admin to invite you."));
+        return Results.Redirect("/register?error=" + Uri.EscapeDataString("This organisation is invite-only — ask an admin to invite you.") + ReturnUrlQuery(returnUrl));
     if (string.IsNullOrWhiteSpace(email) || (password?.Length ?? 0) < 8)
-        return Results.Redirect("/register?error=" + Uri.EscapeDataString("Enter an email and a password of at least 8 characters."));
+        return Results.Redirect("/register?error=" + Uri.EscapeDataString("Enter an email and a password of at least 8 characters.") + ReturnUrlQuery(returnUrl));
     var user = await auth.RegisterAsync(email, displayName ?? "", password!, UserRole.Owner, ctx.RequestAborted);
     if (user is null)
-        return Results.Redirect("/register?error=" + Uri.EscapeDataString("That email is already registered."));
+        return Results.Redirect("/register?error=" + Uri.EscapeDataString("That email is already registered.") + ReturnUrlQuery(returnUrl));
     await SignInAsync(ctx, user);
-    return Results.Redirect("/");
+    // A brand-new org owner who registered mid-OAuth should land back at the authorize URL.
+    return Results.Redirect(LocalOrHome(returnUrl));
 }).AllowAnonymous();
 
 // ---- Invite acceptance (join page) ----
@@ -196,13 +197,15 @@ app.MapPost("/auth/accept-invite", async (HttpContext ctx, IMembershipService me
 }).AllowAnonymous();
 
 app.MapPost("/auth/login", async (HttpContext ctx, IAuthService auth,
-    [FromForm] string email, [FromForm] string password) =>
+    [FromForm] string email, [FromForm] string password, [FromForm] string? returnUrl) =>
 {
     var user = await auth.ValidateAsync(email, password, ctx.RequestAborted);
     if (user is null)
-        return Results.Redirect("/login?error=" + Uri.EscapeDataString("Incorrect email or password."));
+        return Results.Redirect("/login?error=" + Uri.EscapeDataString("Incorrect email or password.")
+            + ReturnUrlQuery(returnUrl));
     await SignInAsync(ctx, user);
-    return Results.Redirect("/");
+    // Honour returnUrl so the OAuth authorize round-trip resumes after login (local URLs only).
+    return Results.Redirect(LocalOrHome(returnUrl));
 }).AllowAnonymous();
 
 app.MapPost("/auth/logout", async (HttpContext ctx) =>
@@ -266,3 +269,16 @@ static bool RoleAtLeast(ClaimsPrincipal user, UserRole min)
     var value = user.FindFirst(ClaimTypes.Role)?.Value ?? user.FindFirst("role")?.Value;
     return Enum.TryParse<UserRole>(value, out var role) && role >= min;
 }
+
+// Guards against open redirects: only a same-site relative path (e.g. "/connect/authorize?…") is
+// honoured as a post-login destination; anything absolute or protocol-relative falls back to home.
+static string LocalOrHome(string? returnUrl) =>
+    !string.IsNullOrEmpty(returnUrl)
+        && Uri.TryCreate(returnUrl, UriKind.Relative, out _)
+        && returnUrl.StartsWith('/') && !returnUrl.StartsWith("//") && !returnUrl.StartsWith("/\\")
+            ? returnUrl : "/";
+
+// Re-appends a validated returnUrl as a query parameter when redirecting back to a login/register page
+// after a form error, so the OAuth round-trip survives a failed attempt. Empty when there's nothing safe.
+static string ReturnUrlQuery(string? returnUrl) =>
+    LocalOrHome(returnUrl) is var safe && safe != "/" ? "&returnUrl=" + Uri.EscapeDataString(safe) : string.Empty;

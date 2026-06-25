@@ -82,8 +82,10 @@ public static class OAuthServer
             string code_challenge, string? code_challenge_method, string? scope, string? state) =>
         {
             if (ctx.User.Identity?.IsAuthenticated != true)
+                // Send the browser to the portal login, then back to this authorize URL so the OAuth
+                // round-trip completes. A relative path keeps it a safe local redirect after login.
                 return Results.Challenge(
-                    new AuthenticationProperties { RedirectUri = ctx.Request.GetEncodedUrl() },
+                    new AuthenticationProperties { RedirectUri = ctx.Request.Path + ctx.Request.QueryString },
                     [CookieAuthenticationDefaults.AuthenticationScheme]);
 
             if (string.IsNullOrWhiteSpace(client_id) || string.IsNullOrWhiteSpace(redirect_uri))

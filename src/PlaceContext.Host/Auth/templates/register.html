@@ -16,8 +16,9 @@
     <label>Password<input type="password" name="password" autocomplete="new-password" minlength="8" required>
       <span class="hint">At least 8 characters.</span></label>
     <input type="hidden" name="{{afName}}" value="{{afValue}}">
+    <input type="hidden" name="returnUrl" value="{{returnUrl}}">
     <button type="submit">Create account</button>
-    <p class="alt">Already have an account? <a href="/login">Sign in</a></p>
+    <p class="alt">Already have an account? <a href="/login{{returnUrlHref}}">Sign in</a></p>
   </form>
 </body>
 </html>

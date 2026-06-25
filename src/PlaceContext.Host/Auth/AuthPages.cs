@@ -15,8 +15,8 @@ public static class AuthPages
 {
     private static readonly ConcurrentDictionary<string, string> Cache = new();
 
-    public static string Login(AntiforgeryTokenSet tokens, string? error) => Render("login", tokens, error);
-    public static string Register(AntiforgeryTokenSet tokens, string? error) => Render("register", tokens, error);
+    public static string Login(AntiforgeryTokenSet tokens, string? error, string? returnUrl = null) => Render("login", tokens, error, returnUrl);
+    public static string Register(AntiforgeryTokenSet tokens, string? error, string? returnUrl = null) => Render("register", tokens, error, returnUrl);
 
     public static string Join(AntiforgeryTokenSet tokens, string token, InviteInfo invite, string? error)
         => Render("join", tokens, error)
@@ -27,15 +27,20 @@ public static class AuthPages
     public static string JoinInvalid() => Cache.GetOrAdd("joininvalid", static name =>
         File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Auth", "templates", name + ".html")));
 
-    private static string Render(string template, AntiforgeryTokenSet tokens, string? error)
+    private static string Render(string template, AntiforgeryTokenSet tokens, string? error, string? returnUrl = null)
     {
         var html = Cache.GetOrAdd(template, static name =>
             File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Auth", "templates", name + ".html")));
 
+        // {{returnUrl}} → HTML-encoded value for the hidden form field; {{returnUrlHref}} → a URL-encoded
+        // "?returnUrl=…" suffix for the login↔register cross-links (empty when there's nothing to carry).
+        var hasReturn = !string.IsNullOrEmpty(returnUrl);
         return html
             .Replace("{{afName}}", tokens.FormFieldName)
             .Replace("{{afValue}}", tokens.RequestToken)
             .Replace("{{errorClass}}", string.IsNullOrEmpty(error) ? "hidden" : "")
-            .Replace("{{error}}", WebUtility.HtmlEncode(error ?? string.Empty));
+            .Replace("{{error}}", WebUtility.HtmlEncode(error ?? string.Empty))
+            .Replace("{{returnUrl}}", WebUtility.HtmlEncode(returnUrl ?? string.Empty))
+            .Replace("{{returnUrlHref}}", hasReturn ? "?returnUrl=" + Uri.EscapeDataString(returnUrl!) : string.Empty);
     }
 }

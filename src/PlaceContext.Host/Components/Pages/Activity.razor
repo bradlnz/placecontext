@@ -1,0 +1,126 @@
+@page "/activity"
+@inject IPlaceContextService Svc
+@inject PortalUiState Ui
+
+<PageTitle>PlaceContext — Change Activity</PageTitle>
+
+<div style="padding:24px 24px 40px; max-width:1080px; margin:0 auto">
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px">
+        <div style="display:flex; align-items:center; gap:9px">
+            <h2 style="font-size:14px; font-weight:600; margin:0">Change ledger</h2>
+            <span style="font-size:11px; color:var(--text-3)">git-backed · every change routed through MCP</span>
+        </div>
+        <div style="display:flex; gap:6px">
+            <span style="font-size:11.5px; color:var(--brand-2); background:var(--brand-bg); padding:4px 9px; border-radius:6px; font-weight:500">agent</span>
+            <span style="font-size:11.5px; color:var(--human); background:var(--human-bg); padding:4px 9px; border-radius:6px; font-weight:500">human</span>
+        </div>
+    </div>
+
+    @if (_ledger is null)
+    {
+        <p style="color:var(--text-3)">Loading…</p>
+    }
+    else if (_ledger.Entries.Count == 0)
+    {
+        <div class="dccard" style="padding:30px; text-align:center; color:var(--text-3)">
+            No changes recorded yet. Every change made through the <code>record_activity</code> MCP tool appears here.
+        </div>
+    }
+    else
+    {
+        <div class="dccard" style="overflow:hidden">
+            @foreach (var e in _ledger.Entries)
+            {
+                <div style="border-bottom:1px solid var(--border)">
+                    <div style="display:flex; align-items:center; gap:13px; padding:13px 16px; cursor:pointer" @onclick="@(() => Toggle(e.Id))">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none; transform:rotate(@(_expanded == e.Id ? "90" : "0")deg); transition:transform .15s"><path d="M9 6l6 6-6 6"></path></svg>
+                        <span style="font-family:'Geist Mono',monospace; font-size:11.5px; color:var(--text-3); flex:none; width:30px">#@e.Sequence</span>
+                        <span style="display:inline-flex; align-items:center; justify-content:center; padding:2px 7px; border-radius:5px; font-weight:600; font-size:10px; color:@Viz.AuthorColor(e.Kind); background:@Viz.AuthorBg(e.Kind); flex:none; width:48px">@e.Kind.ToLower()</span>
+                        <span style="font-size:13px; flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis">@e.Title</span>
+                        <span style="font-size:11.5px; color:var(--text-3); flex:none">@e.Project</span>
+                        @if (e.Clean)
+                        {
+                            <span style="display:inline-flex; align-items:center; gap:4px; font-size:10.5px; font-weight:600; color:var(--good); background:var(--good-bg); padding:2px 7px; border-radius:5px; flex:none">✓ verified</span>
+                        }
+                        else
+                        {
+                            <span style="font-size:10.5px; font-weight:600; color:var(--bad); background:var(--bad-bg); padding:2px 7px; border-radius:5px; flex:none">@e.Signals.Count signal@(e.Signals.Count == 1 ? "" : "s")</span>
+                        }
+                        <span style="font-family:'Geist Mono',monospace; font-size:11px; color:var(--text-3); flex:none; width:48px; text-align:right">@Viz.Ago(e.RecordedAt)</span>
+                    </div>
+
+                    @if (_expanded == e.Id)
+                    {
+                        <div style="padding:4px 16px 18px 60px; background:var(--bg)">
+                            <div style="display:grid; grid-template-columns:1fr 1fr; gap:18px; padding:16px 0 4px">
+                                <div>
+                                    <div style="font-size:10px; font-weight:600; letter-spacing:.5px; color:var(--text-3); text-transform:uppercase; margin-bottom:6px">Why</div>
+                                    <div style="font-size:12.5px; line-height:1.55; color:@(e.HasRationale ? "var(--text-2)" : "var(--bad)")">@e.Why</div>
+                                    <div style="display:flex; gap:22px; margin-top:16px">
+                                        @Field("Test delta", e.TestDelta, e.TestDelta == "none" ? "var(--bad)" : "var(--text-2)")
+                                        @Field("Risk delta", (e.RiskNet > 0 ? "+" : "") + e.RiskNet, e.RiskNet > 0 ? "var(--bad)" : "var(--good)")
+                                        @Field("Commit", e.Commit ?? "—", "var(--human)")
+                                        @Field("Files", e.FileCount.ToString(), "var(--text-2)")
+                                    </div>
+                                </div>
+                                <div>
+                                    <div style="font-size:10px; font-weight:600; letter-spacing:.5px; color:var(--text-3); text-transform:uppercase; margin-bottom:8px">Process-trust signals</div>
+                                    @if (e.Clean)
+                                    {
+                                        <div style="display:flex; align-items:center; gap:8px; font-size:12.5px; color:var(--good)">✓ All guardrails passed — rationale, tests, reviewer, live-verify.</div>
+                                    }
+                                    else
+                                    {
+                                        <div style="display:flex; flex-direction:column; gap:7px">
+                                            @foreach (var sg in e.Signals)
+                                            {
+                                                <div style="display:flex; align-items:center; gap:9px; padding:8px 11px; background:var(--card); border:1px solid var(--border); border-left:2.5px solid var(--bad); border-radius:7px">
+                                                    <span style="font-size:12px; color:var(--text)">@sg</span>
+                                                </div>
+                                            }
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+
+                            @if (e.Files.Count > 0)
+                            {
+                                <div style="padding-top:14px; border-top:1px solid var(--border)">
+                                    <div style="font-size:10px; font-weight:600; letter-spacing:.5px; color:var(--text-3); text-transform:uppercase; margin-bottom:9px">Files changed · @e.Files.Count</div>
+                                    <div style="display:flex; flex-wrap:wrap; gap:6px">
+                                        @foreach (var f in e.Files)
+                                        {
+                                            <span style="font-family:'Geist Mono',monospace; font-size:11.5px; color:var(--text-2); background:var(--card); border:1px solid var(--border); padding:3px 8px; border-radius:6px">@f</span>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private RootActivityView? _ledger;
+    private Guid? _expanded;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Ui.Set("Change Activity", "git-backed record of every change");
+        _ledger = await Svc.GetRootActivityAsync(40);
+    }
+
+    private void Toggle(Guid id) => _expanded = _expanded == id ? null : id;
+
+    private RenderFragment Field(string label, string value, string color) => builder =>
+    {
+        builder.AddMarkupContent(0, $@"
+            <div>
+              <div style='font-size:10px; font-weight:600; letter-spacing:.5px; color:var(--text-3); text-transform:uppercase; margin-bottom:5px'>{label}</div>
+              <div style='font-family:Geist Mono,monospace; font-size:13px; color:{color}'>{System.Net.WebUtility.HtmlEncode(value)}</div>
+            </div>");
+    };
+}
