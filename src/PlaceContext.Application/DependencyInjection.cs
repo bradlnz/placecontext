@@ -98,6 +98,7 @@ public static class DependencyInjection
         services.AddScoped<IQueryHandler<ListTriggersQuery, IReadOnlyList<TriggerView>>, ListTriggersHandler>();
         services.AddScoped<IQueryHandler<ListEventTypesQuery, IReadOnlyList<EventTypeView>>, ListEventTypesHandler>();
         services.AddScoped<IQueryHandler<ListEventOccurrencesQuery, IReadOnlyList<EventOccurrenceView>>, ListEventOccurrencesHandler>();
+        services.AddScoped<IQueryHandler<SearchRunOutputsQuery, IReadOnlyList<RunOutputMatchView>>, SearchRunOutputsHandler>();
 
         return services;
     }

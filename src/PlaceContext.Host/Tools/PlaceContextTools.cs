@@ -355,6 +355,13 @@ public sealed class PlaceContextTools
         => Traced(log, "list_event_occurrences", "—", "list event log", new { take },
             () => svc.ListEventOccurrencesAsync(take));
 
+    [Authorize(Policy = "Member")]
+    [McpServerTool(Name = "search_run_outputs"), Description("Semantic search over a project's job-run outputs: returns the runs whose organized output is most similar to the query text, by vector similarity. Requires embeddings to be configured (Voyage AI); returns an empty list otherwise. Use this to find prior runs related to a question or to surface related results.")]
+    public static Task<string> SearchRunOutputs(IPlaceContextService svc, IToolCallLog log,
+        Guid projectId, string query, int take = 10)
+        => Traced(log, "search_run_outputs", projectId.ToString(), $"search runs: {query}", new { projectId, query, take },
+            () => svc.SearchRunOutputsAsync(projectId, query, take));
+
     private static IReadOnlyList<CodeFileDto> ParseFiles(string filesJson)
     {
         if (string.IsNullOrWhiteSpace(filesJson))

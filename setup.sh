@@ -6,7 +6,7 @@
 # launch with ./run.sh:
 #   • .NET 10 SDK            (installed to ~/.dotnet via the official script if not already present)
 #   • Docker                 (checked; used for PostgreSQL + the job workload runner)
-#   • PostgreSQL 16          (pulled + started as the `placecontext-db` container on port 5433)
+#   • PostgreSQL 16 + pgvector (pulled + started as the `placecontext-db` container on port 5433)
 #   • dotnet-ef local tool   (restored from the tool manifest)
 #   • EF Core migrations     (applied to the database)
 #   • (optional) Ollama + a small Gemma model for the local LLM provider  [--with-ollama]
@@ -73,7 +73,7 @@ if have docker && docker info >/dev/null 2>&1; then
   else
     docker run -d --name "${DB_CONTAINER}" \
       -e POSTGRES_PASSWORD=postgres -e POSTGRES_USER=postgres -e POSTGRES_DB=placecontext \
-      -p "${DB_PORT}:5432" postgres:16 >/dev/null
+      -p "${DB_PORT}:5432" pgvector/pgvector:pg16 >/dev/null
     echo "    Created ${DB_CONTAINER}."
   fi
   printf '    Waiting for PostgreSQL'

@@ -71,6 +71,7 @@ public interface IPlaceContextService
     Task<EventOccurrenceView> EmitEventAsync(string name, Guid? projectId, string? payload, CancellationToken ct = default);
     Task<IReadOnlyList<EventTypeView>> ListEventTypesAsync(CancellationToken ct = default);
     Task<IReadOnlyList<EventOccurrenceView>> ListEventOccurrencesAsync(int take = 50, CancellationToken ct = default);
+    Task<IReadOnlyList<RunOutputMatchView>> SearchRunOutputsAsync(Guid projectId, string query, int take = 10, CancellationToken ct = default);
 
     // Root-level read models for the redesigned portal.
     Task<RootStatsView> GetRootStatsAsync(CancellationToken ct = default);

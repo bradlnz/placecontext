@@ -108,6 +108,14 @@ public static class DependencyInjection
         services.AddScoped<IJobTriggerRepository, EfJobTriggerRepository>();
         services.AddScoped<IEventRepository, EfEventRepository>();
 
+        // Embeddings: Voyage AI when a key is configured, else a graceful no-op. The pgvector-backed
+        // run-embedding store self-initializes lazily and degrades if the extension is unavailable.
+        if (!string.IsNullOrWhiteSpace(configuration["PlaceContext:Voyage:ApiKey"]))
+            services.AddSingleton<IEmbeddingGateway, Embeddings.VoyageEmbeddingGateway>();
+        else
+            services.AddSingleton<IEmbeddingGateway, Embeddings.NullEmbeddingGateway>();
+        services.AddScoped<IRunEmbeddingRepository, EfRunEmbeddingRepository>();
+
         // Trigger scheduling: cron evaluation, in-process run queue, and the background firing service.
         services.AddSingleton<ICronSchedule, Scheduling.CronosCronSchedule>();
         services.AddSingleton<Scheduling.InMemoryJobRunQueue>();

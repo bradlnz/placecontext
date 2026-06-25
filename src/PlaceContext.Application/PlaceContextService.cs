@@ -187,6 +187,9 @@ public sealed class PlaceContextService : IPlaceContextService
     public Task<IReadOnlyList<EventOccurrenceView>> ListEventOccurrencesAsync(int take = 50, CancellationToken ct = default)
         => _dispatcher.Query(new ListEventOccurrencesQuery(take), ct);
 
+    public Task<IReadOnlyList<RunOutputMatchView>> SearchRunOutputsAsync(Guid projectId, string query, int take = 10, CancellationToken ct = default)
+        => _dispatcher.Query(new SearchRunOutputsQuery(projectId, query, take), ct);
+
     public Task<JobView> UploadJobCodeAsync(UploadJobCodeCommand command, CancellationToken ct = default)
         => _dispatcher.Send(command, ct);
 }
