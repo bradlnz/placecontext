@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <ImplicitUsings>enable</ImplicitUsings>
@@ -8,7 +8,6 @@
 
   <ItemGroup>
     <PackageReference Include="coverlet.collector" Version="6.0.4" />
-    <PackageReference Include="Microsoft.Extensions.Configuration" Version="10.0.9" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
     <PackageReference Include="xunit" Version="2.9.3" />
     <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
@@ -19,11 +18,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\PlaceContext.Infrastructure\PlaceContext.Infrastructure.csproj" />
     <ProjectReference Include="..\..\src\PlaceContext.Licensing\PlaceContext.Licensing.csproj" />
-    <ProjectReference Include="..\..\src\PlaceContext.Application\PlaceContext.Application.csproj" />
-    <ProjectReference Include="..\..\src\PlaceContext.Domain\PlaceContext.Domain.csproj" />
-    <ProjectReference Include="..\PlaceContext.TestSupport\PlaceContext.TestSupport.csproj" />
   </ItemGroup>
 
 </Project>

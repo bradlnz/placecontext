@@ -29,6 +29,7 @@ src/
   PlaceContext.Application     → CQRS dispatcher + handlers + ports
   PlaceContext.Infrastructure  → graphify ACL, git, EF Core/PostgreSQL, debt strategies, metrics
   PlaceContext.Host            → MCP (Streamable HTTP) tools + Blazor portal (composition root)
+  PlaceContext.Licensing       → standalone licensing server (activation, payments, key rotation)
 tests/
   PlaceContext.Domain.Tests        → GREEN (invariants, debt scorers)
   PlaceContext.Application.Tests   → GREEN (command/query handlers)
@@ -60,3 +61,42 @@ dotnet run --project src/PlaceContext.Host   # portal at http://localhost:7700 +
 
 The schema is created automatically on startup (`EnsureCreated`). Point an MCP client at
 `http://localhost:7700/mcp` (Streamable HTTP).
+
+## Activation & licensing
+
+A self-host deployment is gated by an **activation key**. There are two modes, chosen by config:
+
+- **Offline (default).** No network. The key is a signed token
+  (`base64url(payload).base64url(ECDSA-P256/SHA256 sig)`) verified against the public key in
+  `PlaceContext:Activation:PublicKey`. Mint keys with `tools/activation.sh`.
+- **Online (phone-home).** Set `PlaceContext:Activation:ServerUrl` to a **PlaceContext licensing
+  server**. The deployment then calls `POST {ServerUrl}/activate` with its license `Key`, receives a
+  freshly-signed entitlement token plus the current signing-key set, and verifies the token offline
+  against its configured anchor (`PublicKey`). It refreshes on a timer (`RefreshMinutes`, default 60).
+
+  Resilience for self-host boxes:
+  - If the server is **unreachable**, the last-good activation is cached and stays valid through a
+    **grace window** (`GraceDays`, default 7) before degrading.
+  - An explicit **denial** (payment past due → 402, unknown/revoked key → 403) is honoured immediately
+    — grace only covers unreachability, never a "no".
+  - **Key rotation** is followed automatically: the server publishes a rotation set where each new key
+    is endorsed (signed) by its predecessor, so a deployment anchored on the original key extends trust
+    forward through the chain without a config change.
+
+### The licensing server (`src/PlaceContext.Licensing`)
+
+A standalone minimal-API service — the licensor side — that handles **activation**, **payments**, and
+**signing-key rotation**:
+
+```bash
+# The server's root signing key should match the deployments' PlaceContext:Activation:PublicKey.
+# Provide your existing licensor key (same one tools/activation.sh uses), or let it generate one
+# and print the public key to pin on deployments.
+LICENSING_SIGNING_KEY_PEM="$(cat tools/activation-signing-key.pem)" \
+  dotnet run --project src/PlaceContext.Licensing
+```
+
+Endpoints: `POST /activate`, `GET /keys` (rotation set), `POST /admin/rotate` (guarded by
+`Licensing:AdminKey`), `GET /health`. Licenses are seeded from `Licensing:Licenses`; billing state comes
+from a pluggable **`IPaymentProvider`** (the bundled `StubPaymentProvider` is config-driven — swap it for
+a Stripe-backed provider to gate activation on real subscription state).
