@@ -31,6 +31,7 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
     private readonly IUnitOfWork _uow;
     private readonly IClock _clock;
     private readonly EventDispatchService? _events;
+    private readonly ILlmGateway? _llm;
 
     public RunJobHandler(
         IJobRepository jobs,
@@ -39,8 +40,9 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
         IWorkloadRunner runner,
         IUnitOfWork uow,
         IClock clock,
-        // Optional so unit tests can construct the handler without the event layer; DI always supplies it.
-        EventDispatchService? events = null)
+        // Optional so unit tests can construct the handler without the event/LLM layers; DI always supplies them.
+        EventDispatchService? events = null,
+        ILlmGateway? llm = null)
     {
         _jobs = jobs;
         _runs = runs;
@@ -49,6 +51,7 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
         _uow = uow;
         _clock = clock;
         _events = events;
+        _llm = llm;
     }
 
     public async Task<JobRunDetailView> HandleAsync(RunJobCommand command, CancellationToken ct = default)
@@ -255,7 +258,31 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
             }
         }
 
-        context.Append(sb.ToString().TrimEnd(), _clock.UtcNow);
+        var raw = sb.ToString().TrimEnd();
+
+        // When an LLM gateway is configured (local Ollama/Gemma or Anthropic), organize the raw run
+        // output into a clean structured summary before storing it; otherwise store the raw dump.
+        var toStore = raw;
+        if (_llm is { IsEnabled: true })
+        {
+            try
+            {
+                const string system =
+                    "You organize raw job-run output into a concise, well-structured Markdown summary. " +
+                    "Group related results, surface key values and any errors, and keep it faithful to the data. " +
+                    "Do not invent information.";
+                var organized = await _llm.GenerateAsync(system, raw, ct);
+                if (!string.IsNullOrWhiteSpace(organized))
+                    toStore = $"## Organized run output: {job.Name} [{run.Status}] — {run.FinishedAt:yyyy-MM-dd HH:mm} UTC\n\n{organized.Trim()}";
+            }
+            catch
+            {
+                // Organization is best-effort — fall back to the raw summary on any gateway failure.
+                toStore = raw;
+            }
+        }
+
+        context.Append(toStore, _clock.UtcNow);
         await _contexts.SaveAsync(context, ct);
     }
 

@@ -83,6 +83,31 @@ public class JobParameterTests
     }
 
     [Fact]
+    public async Task RunJob_organizes_output_via_llm_gateway_when_enabled()
+    {
+        var jobs = new InMemoryJobRepository();
+        var runs = new InMemoryJobRunRepository();
+        var contexts = new InMemoryProjectContextRepository();
+        var runner = new FakeWorkloadRunner();
+        var uow = new RecordingUnitOfWork();
+        var clock = new FakeClock(T0);
+        var llm = new FakeLlmGateway(enabled: true);
+
+        var map = new MapSpec("img/worker:latest", new[] { "{}" }, new Dictionary<string, string>());
+        var job = Job.Create(Guid.NewGuid(), "j", null, map, null, 1, ExitCodePolicy.Default, T0);
+        await jobs.AddAsync(job);
+
+        var handler = new RunJobHandler(jobs, runs, contexts, runner, uow, clock, events: null, llm: llm);
+        await handler.HandleAsync(new RunJobCommand(job.Id));
+
+        // The organized (LLM-polished) summary, not the raw dump, is appended to the project context.
+        var ctx = await contexts.GetForProjectAsync(
+            PlaceContext.Domain.ValueObjects.ProjectId.From(job.ProjectId));
+        Assert.NotNull(ctx);
+        Assert.Contains("POLISHED:", ctx!.Markdown);
+    }
+
+    [Fact]
     public async Task RunJob_without_override_runs_stored_shards()
     {
         var jobs = new InMemoryJobRepository();
