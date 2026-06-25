@@ -259,7 +259,10 @@ cmd_kill() {
     node)
       have k3d || die "node kill currently supports k3d dev nodes only."
       say "Removing node '$name' from cluster '$PCTL_CLUSTER'…"
-      k3d node delete "$name"
+      k3d node delete "$name" || true
+      # Also drop the Kubernetes node registration so it doesn't linger as NotReady.
+      resolve_ctx
+      kube delete node "$name" --ignore-not-found >/dev/null 2>&1 || true
       ;;
     job)
       resolve_ctx

@@ -1040,6 +1040,27 @@ func (c *canvas) text(x, y int, s string, color int) {
 	}
 }
 
+// box draws a labelled rectangle centred on (cxp,cyp) — a little "computer" icon for a
+// cluster item. The interior is blanked so connecting lines don't bleed through.
+func (c *canvas) box(cxp, cyp int, label string, color int) {
+	r := []rune(label)
+	iw := len(r)
+	w := iw + 2
+	x0 := cxp - w/2
+	y0 := cyp - 1
+	c.set(x0, y0, '┌', color)
+	c.set(x0+w-1, y0, '┐', color)
+	c.set(x0, y0+2, '└', color)
+	c.set(x0+w-1, y0+2, '┘', color)
+	for i := 1; i < w-1; i++ {
+		c.set(x0+i, y0, '─', color)
+		c.set(x0+i, y0+2, '─', color)
+	}
+	c.set(x0, y0+1, '│', color)
+	c.set(x0+w-1, y0+1, '│', color)
+	c.text(x0+1, y0+1, label, color)
+}
+
 // line draws an edge with Bresenham, choosing a glyph by slope. It won't overwrite a
 // non-link cell, so markers/labels drawn earlier stay legible.
 func (c *canvas) line(x0, y0, x1, y1, color int) {
@@ -1118,6 +1139,18 @@ func shortName(s string) string {
 	return s
 }
 
+// podLabel keeps pod boxes compact: "db" for the database, otherwise the unique
+// suffix (the bit after the last hyphen) so replicas stay distinguishable.
+func podLabel(name string) string {
+	if strings.HasPrefix(name, "placecontext-db") {
+		return "db"
+	}
+	if i := strings.LastIndex(name, "-"); i >= 0 && i < len(name)-1 {
+		return name[i+1:]
+	}
+	return shortName(name)
+}
+
 // cluster3DView renders the live cluster as an animated 3D system-topology graph: the
 // control-plane and workers laid out in a rotating ring, each pod linked to its node by
 // a line, every entity labelled with its (shortened) name.
@@ -1144,19 +1177,19 @@ func (m model) cluster3DView() string {
 			workers = append(workers, n)
 		}
 	}
-	for i, s := range servers { // control plane near the centre
-		nodePos[s.Name] = p3{0, 0.5 - 0.5*float64(i), 0}
+	for i, s := range servers { // control plane near the centre, slightly raised
+		nodePos[s.Name] = p3{0, 0.4 - 0.6*float64(i), 0}
 	}
-	for i, wk := range workers { // workers on a ring
+	for i, wk := range workers { // workers on a wide ring on the floor
 		ang := 2 * math.Pi * float64(i) / float64(max(1, len(workers)))
-		nodePos[wk.Name] = p3{2.4 * math.Cos(ang), -0.4, 2.4 * math.Sin(ang)}
+		nodePos[wk.Name] = p3{3.8 * math.Cos(ang), -0.8, 3.8 * math.Sin(ang)}
 	}
 
-	// rotate around Y by clAngY, fixed tilt + user clAngX around X, perspective project
+	// rotate around Y by clAngY, fixed tilt + user clAngX around X; gentle perspective
 	angX := 0.5 + m.clAngX
 	sinX, cosX := math.Sin(angX), math.Cos(angX)
 	sinY, cosY := math.Sin(m.clAngY), math.Cos(m.clAngY)
-	const dist = 6.0
+	const dist = 10.0
 	cx, cy := float64(w)/2, float64(h)/2
 	project := func(p p3) (int, int, float64) {
 		x1 := p.x*cosY + p.z*sinY
@@ -1164,8 +1197,8 @@ func (m model) cluster3DView() string {
 		y1 := p.y*cosX - z1*sinX
 		z2 := p.y*sinX + z1*cosX
 		ooz := 1.0 / (z2 + dist)
-		return int(cx + m.clZoom*x1*ooz*float64(w)*0.42),
-			int(cy - m.clZoom*y1*ooz*float64(h)*0.92), z2
+		return int(cx + m.clZoom*x1*ooz*float64(w)*0.78),
+			int(cy - m.clZoom*y1*ooz*float64(h)*1.5), z2
 	}
 
 	var ents []ent
@@ -1191,7 +1224,7 @@ func (m model) cluster3DView() string {
 		}
 	}
 
-	// pods around their node, each linked by a line
+	// pods stacked vertically above their node, each linked by a line
 	stack := map[string]int{}
 	for _, p := range m.state.pods {
 		base, ok := nodePos[p.Node]
@@ -1200,8 +1233,7 @@ func (m model) cluster3DView() string {
 		}
 		k := stack[p.Node]
 		stack[p.Node]++
-		pang := float64(k)*2.39996 + 0.5
-		pp := p3{base.x + 0.95*math.Cos(pang), base.y + 0.55 + 0.3*float64(k), base.z + 0.95*math.Sin(pang)}
+		pp := p3{base.x, base.y + 1.1 + 1.1*float64(k), base.z}
 		bx, by, _ := project(base)
 		px, py, pd := project(pp)
 		cv.line(bx, by, px, py, 5)
@@ -1212,14 +1244,13 @@ func (m model) cluster3DView() string {
 		if strings.HasPrefix(p.Name, "placecontext-db") {
 			col, mark = 4, '◆'
 		}
-		ents = append(ents, ent{px, py, pd, shortName(p.Name), mark, col})
+		ents = append(ents, ent{px, py, pd, podLabel(p.Name), mark, col})
 	}
 
-	// draw entities far→near so nearer markers/labels win
+	// draw entities far→near so nearer boxes win, each as a labelled "computer" box
 	sort.Slice(ents, func(i, j int) bool { return ents[i].depth > ents[j].depth })
 	for _, e := range ents {
-		cv.set(e.sx, e.sy, e.marker, e.color)
-		cv.text(e.sx+2, e.sy, e.label, e.color)
+		cv.box(e.sx, e.sy, string(e.marker)+" "+e.label, e.color)
 	}
 
 	spin := "on"
