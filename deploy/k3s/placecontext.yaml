@@ -1,5 +1,7 @@
 # PlaceContext Host deployment — portal + MCP + trigger scheduler.
-# __IMAGE__ is substituted by deploy/selfhost.sh with the published image ref.
+# __IMAGE__ and __ENFORCE__ are substituted by the `pctl` CLI (deploy/pctl):
+#   __IMAGE__   → the container image ref
+#   __ENFORCE__ → "true" (prod) or "false" (local dev) for activation enforcement
 # The activation key comes from the placecontext-activation secret (created by the installer).
 #
 # The scheduler is safe to scale: a Postgres advisory lock elects one replica to scan schedules, and the
@@ -17,6 +19,18 @@ spec:
     metadata:
       labels: { app: placecontext }
     spec:
+      # Wait for PostgreSQL to accept connections before starting the Host, so the
+      # first boot doesn't crash-loop while the DB is still coming up / migrating.
+      initContainers:
+        - name: wait-for-db
+          image: pgvector/pgvector:pg16
+          command:
+            - sh
+            - -c
+            - |
+              until pg_isready -h placecontext-db -p 5432 -U postgres -d placecontext; do
+                echo "waiting for placecontext-db…"; sleep 2
+              done
       containers:
         - name: host
           image: __IMAGE__
@@ -26,16 +40,30 @@ spec:
             - name: PlaceContext__ConnectionString
               value: "Host=placecontext-db;Port=5432;Database=placecontext;Username=postgres;Password=postgres"
             - name: PlaceContext__Activation__Enforce
-              value: "true"
+              value: "__ENFORCE__"
             - name: PlaceContext__Activation__Key
               valueFrom:
                 secretKeyRef:
                   name: placecontext-activation
                   key: key
+            # HMAC key the pctl TUI uses to mint short-lived portal sign-in tokens (see deploy/pctl).
+            - name: PlaceContext__Portal__SigningKey
+              valueFrom:
+                secretKeyRef:
+                  name: placecontext-portal
+                  key: signing-key
+          # Give the app time to run EF migrations on first boot before liveness/readiness apply.
+          startupProbe:
+            httpGet: { path: /, port: 7700 }
+            periodSeconds: 5
+            failureThreshold: 30   # up to ~150s to become healthy
           readinessProbe:
             httpGet: { path: /, port: 7700 }
-            initialDelaySeconds: 10
             periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /, port: 7700 }
+            periodSeconds: 15
+            failureThreshold: 4
 ---
 apiVersion: v1
 kind: Service
