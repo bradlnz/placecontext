@@ -39,8 +39,8 @@ parameters/modal → `6c29f00` artifacts → `4ae1900` configurable LLM → `81a
 
 ## ⏳ Remaining (tracked, with decisions)
 
-**Only #13 is open.** #9–#12 are done and merged into `main` (see the table above); their
-original decision notes are retained below for reference.
+**#13 reorg landed (folders); namespace-per-slice deferred.** #9–#12 are done and merged into
+`main` (see the table above); their original decision notes are retained below for reference.
 
 ### #9 — Vectorize run output → dependency graph  *(done)*
 Pipeline: job completes → (configurable LLM) **organizes** output → **Voyage AI** embeds it →
@@ -75,10 +75,25 @@ A CLI customers run to self-host: pulls the published image, stands up k3s, appl
 and gates usage by an **activation code** (validate against a licensing service or signed offline token;
 enforce at startup; surface activation state in the portal).
 
-### #13 — Folder reorganization for human maintainability
+### #13 — Folder reorganization for human maintainability  *(folders done; namespaces deferred)*
 **Decided:** by **feature/vertical-slice** grouping (`Application/Jobs/`, `/Triggers/`, `/Events/`,
 `/Reports/`, `/Projects/`, `/Risk/` — command+handler+query+DTO+mapper per slice). Preserve
 one-class-per-file + Onion boundaries; update namespaces. **Do AFTER #9–12** to avoid churn.
+
+**Done:** dissolved the flat `Application/Features/` (~130 files) and `Application/Dtos/` (~49 files)
+dumps into 21 vertical-slice folders — `Jobs/`, `Triggers/`, `Events/`, `Reports/`, `Projects/`,
+`WorkItems/`, `Risk/`, `Graph/`, `Context/`, `Decisions/`, `Requirements/`, `Activity/`, `Cost/`,
+`Search/`, `Skills/`, `Onboarding/`, `Focus/`, `Improvements/`, `Organization/` (org-wide rollups),
+`Membership/`, plus `Shared/` (`ViewMapper`). Each slice now co-locates its commands, handlers,
+queries, DTOs, and mappers. `Cqrs/` (mediator plumbing) and `Ports/` (cross-cutting contracts) were
+left intact. All 178 moves are pure `git mv` renames — no content edits.
+
+**Deferred — namespace-per-slice (`PlaceContext.Application.Jobs`, etc.):** the file namespaces are
+deliberately left as `…Application.Features` / `…Application.Dtos`, so the slice folders and
+namespaces don't yet match. Renaming namespaces means rewriting ~167 `using` statements across
+Host/Infrastructure/tests, and a single consumer often pulls types from several would-be slices —
+unsafe to do blind because the **.NET SDK download host is blocked by the egress policy here**, so a
+missed `using` can't be compiler-caught. Do this pass once a compiler is available to verify the build.
 
 ---
 
