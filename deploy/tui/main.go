@@ -144,10 +144,9 @@ type model struct {
 	confirmVerb string
 	confirmArgs []string
 
-	// 3D cluster view (the main page default)
-	dash3D bool
-	clAngX float64 // viewing tilt (user)
-	clAngY float64 // viewing yaw (user)
+	// cluster panel (top of the dashboard)
+	clAngX float64 // reserved viewing tilt
+	clAngY float64 // reserved viewing yaw
 	clZoom float64
 	clSpin bool
 	orbit  float64 // orbital animation phase (advances while clSpin)
@@ -570,7 +569,6 @@ func initialModel() model {
 		brainPts:   generateBrain(),
 		brainZoom:  1.0,
 		brainSpin:  true,
-		dash3D:     true,
 		clZoom:     1.0,
 		clSpin:     true,
 	}
@@ -665,51 +663,27 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		switch key {
 		case "up", "k":
-			if m.view == viewDash {
-				if m.dash3D {
-					m.clAngX -= 0.15
-				} else if m.cursor > 0 {
-					m.cursor--
-				}
+			if m.view == viewDash && m.cursor > 0 {
+				m.cursor--
 			}
 		case "down", "j":
-			if m.view == viewDash {
-				if m.dash3D {
-					m.clAngX += 0.15
-				} else if m.cursor < len(m.sel)-1 {
-					m.cursor++
-				}
-			}
-		case "left":
-			if m.view == viewDash && m.dash3D {
-				m.clAngY -= 0.18
-			}
-		case "right":
-			if m.view == viewDash && m.dash3D {
-				m.clAngY += 0.18
+			if m.view == viewDash && m.cursor < len(m.sel)-1 {
+				m.cursor++
 			}
 		case "+", "=":
-			if m.view == viewDash && m.dash3D {
+			if m.view == viewDash {
 				m.clZoom *= 1.1
 			}
 		case "-", "_":
-			if m.view == viewDash && m.dash3D {
+			if m.view == viewDash {
 				m.clZoom /= 1.1
 			}
 		case " ":
-			if m.view == viewDash && m.dash3D {
+			if m.view == viewDash {
 				m.clSpin = !m.clSpin
 			}
-		case "v":
-			if m.view == viewDash && !m.busy {
-				m.dash3D = !m.dash3D
-				if m.dash3D {
-					return m, clusterTick()
-				}
-			}
-			return m, nil
 		case "enter":
-			if m.view == viewDash && !m.dash3D && m.cursor < len(m.sel) {
+			if m.view == viewDash && m.cursor < len(m.sel) {
 				it := m.sel[m.cursor]
 				m.view = viewLogs
 				m.logs.SetContent("")
@@ -735,7 +709,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		case "x":
-			if m.view == viewDash && !m.dash3D && !m.busy && m.cursor < len(m.sel) {
+			if m.view == viewDash && !m.busy && m.cursor < len(m.sel) {
 				m.prevView = viewDash
 				m.armKill(m.sel[m.cursor])
 				m.view = viewConfirm
@@ -789,8 +763,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, brainTick()
 
 	case clusterTickMsg:
-		if m.view != viewDash || !m.dash3D {
-			return m, nil // only animate while the 3D dashboard is showing
+		if m.view != viewDash {
+			return m, nil // only animate while the dashboard is showing
 		}
 		if m.clSpin {
 			m.orbit += 0.012 // slow, elegant orbital motion
@@ -922,9 +896,18 @@ func (m model) healthLine() string {
 }
 
 func (m model) dashboard() string {
-	if m.dash3D {
-		return m.cluster3DView()
+	rows := m.h / 3
+	if rows < 8 {
+		rows = 8
+	} else if rows > 14 {
+		rows = 14
 	}
+	div := dimStyle.Render("  " + strings.Repeat("─", max(0, m.w-4)))
+	return m.clusterPanel(rows) + "\n" + div + "\n" + m.listBody()
+}
+
+// listBody renders the selectable nodes + pods + jobs tables shown beneath the cluster.
+func (m model) listBody() string {
 	var b strings.Builder
 	gi := 0 // global selectable index (nodes then pods), matches m.sel order
 
@@ -1001,7 +984,7 @@ func (m model) dashboard() string {
 	return b.String()
 }
 
-func (m model) selected(i int) bool { return m.view == viewDash && !m.dash3D && i == m.cursor }
+func (m model) selected(i int) bool { return m.view == viewDash && i == m.cursor }
 
 // scenePalette maps a colour id → style.
 // 0 server, 1 worker, 2 pod-ok, 3 pod-pending, 4 db, 5 link.
@@ -1124,30 +1107,40 @@ func center(s string, width int) string {
 	return strings.Repeat(" ", left) + s + strings.Repeat(" ", width-len(r)-left)
 }
 
-// cylinder draws a 3D cylinder/globe centred on (cxp,cyp) — the control-plane hub the
-// satellites orbit. The "═" bands read as a globe's latitudes; the elliptical top and
-// bottom give it depth.
-func (c *canvas) cylinder(cxp, cyp int, label string, color int) {
-	iw := len([]rune(label))
-	if iw < 6 {
-		iw = 6
+// planet draws a shaded ASCII 3D sphere centred on (cxp,cyp) with vertical radius ry — the
+// control-plane "planet" the satellites orbit. Each surface point is lit by a fixed light so
+// it reads as a 3D ball; the label sits just below it. Horizontal radius is 2×ry to offset
+// the ~2:1 cell aspect ratio so it looks round.
+func (c *canvas) planet(cxp, cyp, ry int, color int, label string) {
+	ramp := []rune(".,:;+*oO#@")
+	lx, ly, lz := -0.5, -0.6, 0.62
+	ln := math.Sqrt(lx*lx + ly*ly + lz*lz)
+	lx, ly, lz = lx/ln, ly/ln, lz/ln
+	rx := ry * 2
+	for dy := -ry; dy <= ry; dy++ {
+		for dx := -rx; dx <= rx; dx++ {
+			nx := float64(dx) / float64(rx)
+			ny := float64(dy) / float64(ry)
+			d2 := nx*nx + ny*ny
+			if d2 > 1 {
+				continue
+			}
+			nz := math.Sqrt(1 - d2)
+			lum := nx*lx + ny*ly + nz*lz
+			if lum < 0 {
+				lum = 0
+			}
+			lum = 0.12 + 0.88*lum // ambient so the dark side isn't blank
+			i := int(lum * float64(len(ramp)-1))
+			if i < 0 {
+				i = 0
+			} else if i >= len(ramp) {
+				i = len(ramp) - 1
+			}
+			c.set(cxp+dx, cyp+dy, ramp[i], color)
+		}
 	}
-	w := iw + 2
-	x0 := cxp - w/2
-	y0 := cyp - 3
-	dash := strings.Repeat("─", iw)
-	band := strings.Repeat("═", iw)
-	rows := []string{
-		" " + dash + " ",
-		"╭" + band + "╮",
-		"│" + center(label, iw) + "│",
-		"│" + strings.Repeat(" ", iw) + "│",
-		"╰" + band + "╯",
-		" " + dash + " ",
-	}
-	for dy, row := range rows {
-		c.text(x0, y0+dy, row, color)
-	}
+	c.text(cxp-len([]rune(label))/2, cyp+ry+1, label, color)
 }
 
 // trimToBox returns the point on the border of a box (centre cx,cy, half-extents hw,hh)
@@ -1188,16 +1181,16 @@ func podLabel(name string) string {
 // cluster3DView renders the live cluster as an animated 3D system-topology graph: the
 // control-plane and workers laid out in a rotating ring, each pod linked to its node by
 // a line, every entity labelled with its (shortened) name.
-func (m model) cluster3DView() string {
+func (m model) clusterPanel(rows int) string {
 	if !m.state.reach {
-		return "  " + warnStyle.Render("● no cluster") + dimStyle.Render("   press [u] to bring it up, or [v] for the list view") + "\n"
+		return "  " + warnStyle.Render("● no cluster") + dimStyle.Render("   press [u] to bring it up") + "\n"
 	}
-	w, h := m.w-2, m.h-13
+	w, h := m.w-2, rows
 	if w < 30 {
 		w = 80
 	}
-	if h < 10 {
-		h = 20
+	if h < 7 {
+		h = 7
 	}
 	cv := newCanvas(w, h)
 
@@ -1224,8 +1217,9 @@ func (m model) cluster3DView() string {
 		nodePos[wk.Name] = p3{ring * math.Cos(th), -0.2, ring * math.Sin(th)}
 	}
 
-	// viewing transform: fixed tilt + user clAngX around X, user yaw clAngY around Y
-	angX := 0.5 + m.clAngX
+	// viewing transform: fixed tilt + user clAngX around X, user yaw clAngY around Y.
+	// A steeper tilt (~55°) makes the orbital plane read as a ring around the planet.
+	angX := 0.95 + m.clAngX
 	sinX, cosX := math.Sin(angX), math.Cos(angX)
 	sinY, cosY := math.Sin(m.clAngY), math.Cos(m.clAngY)
 	const dist = 11.0
@@ -1240,6 +1234,17 @@ func (m model) cluster3DView() string {
 			int(cy - m.clZoom*y1*ooz*float64(h)*1.6), z2
 	}
 
+	// faint orbital path around the planet (drawn first, so everything sits on top)
+	if len(workers) > 0 {
+		for a := 0; a < 180; a++ {
+			th := 2 * math.Pi * float64(a) / 180
+			ox, oy, _ := project(p3{ring * math.Cos(th), -0.2, ring * math.Sin(th)})
+			if ox >= 0 && ox < w && oy >= 0 && oy < h && cv.col[oy*w+ox] == -1 {
+				cv.set(ox, oy, '·', 5)
+			}
+		}
+	}
+
 	// a visible entity, with screen position + box half-extents (for edge-trimmed links)
 	type vis struct {
 		sx, sy, hw, hh int
@@ -1252,16 +1257,17 @@ func (m model) cluster3DView() string {
 	scr := map[string][3]int{} // name → sx, sy + radius for link trimming
 	var ents []vis
 
+	planetRy := (h - 3) / 2
+	if planetRy > 4 {
+		planetRy = 4
+	} else if planetRy < 2 {
+		planetRy = 2
+	}
 	for _, s := range servers {
 		x, y, d := project(nodePos[s.Name])
-		lab := shortName(s.Name)
-		cw := len([]rune(lab))
-		if cw < 6 {
-			cw = 6
-		}
-		cw += 2
-		ents = append(ents, vis{x, y, cw / 2, 3, d, lab, '◆', 0, true})
-		scr[s.Name] = [3]int{x, y, cw / 2}
+		// planet half-extents: horizontal 2×ry, vertical ry (for link trimming)
+		ents = append(ents, vis{x, y, planetRy * 2, planetRy, d, shortName(s.Name), '◆', 0, true})
+		scr[s.Name] = [3]int{x, y, planetRy * 2}
 	}
 	for _, wk := range workers {
 		x, y, d := project(nodePos[wk.Name])
@@ -1320,11 +1326,11 @@ func (m model) cluster3DView() string {
 		}
 	}
 
-	// draw far→near so nearer items win; server hub as a cylinder/globe, others as boxes
+	// draw far→near so nearer items win; server hub as a 3D planet, others as boxes
 	sort.Slice(ents, func(i, j int) bool { return ents[i].depth > ents[j].depth })
 	for _, e := range ents {
 		if e.cyl {
-			cv.cylinder(e.sx, e.sy, e.label, e.color)
+			cv.planet(e.sx, e.sy, planetRy, e.color, e.label)
 		} else {
 			cv.box(e.sx, e.sy, string(e.marker)+" "+e.label, e.color)
 		}
@@ -1335,13 +1341,11 @@ func (m model) cluster3DView() string {
 		spin = "off"
 	}
 	var b strings.Builder
-	b.WriteString(titleStyle.Render(" cluster ") +
-		dimStyle.Render(fmt.Sprintf("  spin:%s  zoom:%.1f×  (←→↑↓ rotate · +/- zoom · space spin · [v] list)", spin, m.clZoom)) + "\n")
-	b.WriteString(cv.String())
 	leg := func(c int, s string) string { return scenePalette[c].Render(s) }
-	b.WriteString(dimStyle.Render("  ") +
-		leg(0, "◆ server") + "  " + leg(1, "● worker") + "  " +
-		leg(2, "• pod") + "  " + leg(3, "◦ pending") + "  " + leg(4, "◆ db"))
+	b.WriteString(titleStyle.Render(" cluster ") + "  " +
+		leg(0, "◆ server") + " " + leg(1, "● worker") + " " + leg(2, "• pod") + " " + leg(4, "◆ db") +
+		dimStyle.Render(fmt.Sprintf("   spin:%s zoom:%.1f×", spin, m.clZoom)) + "\n")
+	b.WriteString(cv.String())
 	return b.String()
 }
 
@@ -1502,13 +1506,9 @@ func (m model) footer() string {
 	var keys []string
 	switch m.view {
 	case viewDash:
-		if m.dash3D {
-			keys = []string{k("←→↑↓", "rotate"), k("+/-", "zoom"), k("space", "spin"), k("v", "list"),
-				k("m", "mcp"), k("a", "add node"), k("z", "brain"), k("u", "up"), k("d", "down"), k("q", "quit")}
-		} else {
-			keys = []string{k("↑↓", "nav"), k("⏎", "logs"), k("x", "kill"), k("v", "cluster"), k("m", "mcp"),
-				k("p", "portal"), k("a", "add node"), k("z", "brain"), k("u", "up"), k("d", "down"), k("q", "quit")}
-		}
+		keys = []string{k("↑↓", "nav"), k("⏎", "logs"), k("x", "kill"), k("m", "mcp"), k("p", "portal"),
+			k("a", "add node"), k("z", "brain"), k("space", "spin"), k("+/-", "zoom"),
+			k("u", "up"), k("d", "down"), k("r", "refresh"), k("q", "quit")}
 	case viewConfirm:
 		keys = []string{k("y", "confirm"), k("n", "cancel"), k("q", "quit")}
 	case viewMcp:

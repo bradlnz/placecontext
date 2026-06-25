@@ -43,19 +43,8 @@ func withState(m model) model {
 	return nm.(model)
 }
 
-// list returns a model in list mode (the dashboard defaults to the 3D view).
-func list(m model) model { return press(m, "v") }
-
-func TestDefaultsToCluster3D(t *testing.T) {
-	m := withState(initialModel())
-	if !m.dash3D {
-		t.Fatal("dashboard should default to the 3D cluster view")
-	}
-	m = press(m, "v")
-	if m.dash3D {
-		t.Error("v should toggle off the 3D view")
-	}
-}
+// list is now a no-op: the dashboard always shows the selectable list beneath the cluster.
+func list(m model) model { return m }
 
 func TestKeyDispatchSwitchesViews(t *testing.T) {
 	base := list(withState(initialModel()))
@@ -113,13 +102,17 @@ func TestKillConfirmFlow(t *testing.T) {
 func TestClusterTopologyRenders(t *testing.T) {
 	m := withState(initialModel())
 	m.w, m.h = 100, 34
-	out := m.cluster3DView()
+	out := m.clusterPanel(13)
 	if len(out) == 0 {
-		t.Fatal("cluster3DView produced empty frame")
+		t.Fatal("clusterPanel produced empty frame")
 	}
-	// the live node/pod names should appear as labels in the topology
+	// the live server name should appear as the planet label
 	if !strings.Contains(out, "server-0") {
-		t.Errorf("topology missing server label; got:\n%s", out)
+		t.Errorf("cluster panel missing server label; got:\n%s", out)
+	}
+	// and the full dashboard should include the list beneath (a pod row)
+	if !strings.Contains(m.dashboard(), "host-1") {
+		t.Errorf("dashboard list should appear beneath the cluster")
 	}
 }
 
