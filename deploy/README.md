@@ -4,11 +4,40 @@ One CLI for the whole cluster lifecycle, on a laptop or across a fleet.
 
 ```
 deploy/
+  install.sh      ← one-command installer: deps + global `placecontext` cmd + first-run setup
   pctl            ← the engine (bash): all orchestration logic, idempotent
   tui/            ← reactive Go TUI dashboard (Bubble Tea), wraps the engine
   k3s/            ← Kubernetes manifests (Postgres + PlaceContext Host + Ingress)
   selfhost.sh     ← deprecated shim → forwards to `pctl server up` / `pctl agent join`
 ```
+
+## Install (one command)
+
+```bash
+# local dev (k3d on this machine):
+./deploy/install.sh
+
+# production server (real k3s, activation enforced):
+sudo ./deploy/install.sh --prod --activation-key <KEY>
+```
+
+It installs the dependencies it can (k3d, kubectl → `~/.local/bin`), installs a global
+**`placecontext`** command (and `pctl`), then on this first run brings the cluster up,
+applies your activation key, and configures **autostart on boot** (a systemd *user*
+service runs `k3d cluster start` for dev; prod k3s already auto-starts via its own
+service). Afterwards just type **`placecontext`** anywhere to open the dashboard.
+
+## Dashboard (TUI)
+
+`placecontext` (or `pctl tui`) opens a reactive full-screen dashboard:
+
+- **3D cluster topology** on the main page — control-plane + workers in a rotating ring,
+  pods linked to their node by lines, everything labelled. `←→↑↓` rotate · `+/-` zoom ·
+  `space` spin · `v` switch to the interactive list.
+- **List view** (`v`) — selectable nodes + pods + jobs; `⏎` logs/detail, `x` kill
+  (with an "are you sure?" gate), `a` add node.
+- **MCP calls** (`m`) — recent tool calls from `tool_calls`.
+- **Portal** (`p`) — opens the portal signed-in. **Brain** (`z`) — 3D dependency view.
 
 ## Local dev — a real 1-server + 2-agent cluster on one machine
 

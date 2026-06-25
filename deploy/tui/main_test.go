@@ -43,8 +43,22 @@ func withState(m model) model {
 	return nm.(model)
 }
 
+// list returns a model in list mode (the dashboard defaults to the 3D view).
+func list(m model) model { return press(m, "v") }
+
+func TestDefaultsToCluster3D(t *testing.T) {
+	m := withState(initialModel())
+	if !m.dash3D {
+		t.Fatal("dashboard should default to the 3D cluster view")
+	}
+	m = press(m, "v")
+	if m.dash3D {
+		t.Error("v should toggle off the 3D view")
+	}
+}
+
 func TestKeyDispatchSwitchesViews(t *testing.T) {
-	base := withState(initialModel())
+	base := list(withState(initialModel()))
 	cases := []struct {
 		key  string
 		want view
@@ -61,7 +75,7 @@ func TestKeyDispatchSwitchesViews(t *testing.T) {
 }
 
 func TestDashboardNavigationIncludesJobs(t *testing.T) {
-	m := withState(initialModel()) // 1 node + 2 pods + 1 job = 4 selectable rows
+	m := list(withState(initialModel())) // 1 node + 2 pods + 1 job = 4 selectable rows
 	if got := len(m.sel); got != 4 {
 		t.Fatalf("selectable rows = %d, want 4 (nodes+pods+jobs)", got)
 	}
@@ -77,7 +91,7 @@ func TestDashboardNavigationIncludesJobs(t *testing.T) {
 }
 
 func TestKillConfirmFlow(t *testing.T) {
-	m := withState(initialModel())
+	m := list(withState(initialModel()))
 	// move to the job row and arm kill
 	for i := 0; i < 3; i++ {
 		m = press(m, "down")
@@ -96,6 +110,19 @@ func TestKillConfirmFlow(t *testing.T) {
 	}
 }
 
+func TestClusterTopologyRenders(t *testing.T) {
+	m := withState(initialModel())
+	m.w, m.h = 100, 34
+	out := m.cluster3DView()
+	if len(out) == 0 {
+		t.Fatal("cluster3DView produced empty frame")
+	}
+	// the live node/pod names should appear as labels in the topology
+	if !strings.Contains(out, "server-0") {
+		t.Errorf("topology missing server label; got:\n%s", out)
+	}
+}
+
 func equal(a, b []string) bool {
 	if len(a) != len(b) {
 		return false
@@ -109,7 +136,7 @@ func equal(a, b []string) bool {
 }
 
 func TestEnterOnRowOpensLogs(t *testing.T) {
-	m := withState(initialModel())
+	m := list(withState(initialModel()))
 	m = press(m, "down") // select pod "host-1"
 	m = press(m, "enter")
 	if m.view != viewLogs {

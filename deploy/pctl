@@ -184,6 +184,52 @@ cmd_image_import() {
   ok "Image available in cluster."
 }
 
+# ── autostart (boot persistence) ───────────────────────────────────────────────────────────────
+# Dev (k3d/Docker): a systemd *user* service runs `k3d cluster start` at boot.
+# Prod (k3s): k3s already installs its own systemd service, so this is a no-op note.
+cmd_autostart() {
+  local disable=0
+  [ "${1:-}" = "--disable" ] && disable=1
+
+  if have k3s && systemctl is-enabled k3s >/dev/null 2>&1; then
+    ok "Prod k3s already auto-starts via its systemd service (nothing to do)."
+    return 0
+  fi
+  have k3d || die "autostart supports the k3d dev cluster (k3d not found)."
+  local k3dbin unit; k3dbin="$(command -v k3d)"
+  unit="$HOME/.config/systemd/user/placecontext.service"
+
+  if [ "$disable" = 1 ]; then
+    systemctl --user disable --now placecontext.service >/dev/null 2>&1 || true
+    rm -f "$unit"; systemctl --user daemon-reload >/dev/null 2>&1 || true
+    ok "Autostart disabled."; return 0
+  fi
+
+  command -v systemctl >/dev/null 2>&1 || die "systemd not available — cannot configure autostart."
+  mkdir -p "$(dirname "$unit")"
+  cat > "$unit" <<EOF
+[Unit]
+Description=PlaceContext dev cluster (k3d)
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=${k3dbin} cluster start ${PCTL_CLUSTER}
+ExecStop=${k3dbin} cluster stop ${PCTL_CLUSTER}
+
+[Install]
+WantedBy=default.target
+EOF
+  systemctl --user daemon-reload >/dev/null 2>&1 || die "systemd --user unavailable."
+  systemctl --user enable placecontext.service >/dev/null 2>&1 || true
+  if ! loginctl enable-linger "$USER" >/dev/null 2>&1; then
+    warn "Could not enable linger — cluster will start on login, not at boot. Run: sudo loginctl enable-linger $USER"
+  fi
+  ok "Autostart enabled (systemd user service 'placecontext')."
+}
+
 # ── kill (destructive — pod | node | job) ─────────────────────────────────────────────────────────
 cmd_kill() {
   local kind="${1:-}"; shift || true
@@ -368,6 +414,7 @@ ${C_BOLD}ANYWHERE${C_RESET}
   deploy [--enforce true|false] [--image IMG] [--activation-key KEY] [--context CTX]
                          Apply the manifests to the current (or given) kube context
   kill pod|node|job NAME [--yes]   Delete a pod / k3d node / job (prompts unless --yes)
+  autostart [--disable]  Start the cluster on boot (k3d → systemd user service; k3s → already a service)
   status                 Show nodes + workloads
   logs [-f]              Tail the PlaceContext Host logs
   url                    Print the portal / MCP URL
@@ -412,6 +459,7 @@ main() {
         *) die "unknown 'agent' subcommand: '$sub' (try: join)";;
       esac;;
     kill)         cmd_kill "$@";;
+    autostart)    cmd_autostart "$@";;
     tui|ui)       cmd_tui "$@";;
     build)        cmd_build "$@";;
     deploy)       cmd_deploy "$@";;

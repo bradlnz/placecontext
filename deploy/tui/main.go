@@ -22,6 +22,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -93,6 +94,7 @@ const (
 	viewMenu
 	viewBrain
 	viewConfirm
+	viewMcp
 )
 
 // menuItem is a choice in the "add node" (or any future) list picker.
@@ -141,6 +143,17 @@ type model struct {
 	confirmText string
 	confirmVerb string
 	confirmArgs []string
+
+	// 3D cluster view (the main page default)
+	dash3D bool
+	clAngX float64
+	clAngY float64
+	clZoom float64
+	clSpin bool
+
+	// MCP tool-call log
+	mcp    []mcpRow
+	mcpErr string
 }
 
 type pt3 struct{ x, y, z float64 }
@@ -156,9 +169,14 @@ type actionDoneMsg struct {
 
 type flashMsg string
 type brainTickMsg time.Time
+type clusterTickMsg time.Time
 
 func brainTick() tea.Cmd {
 	return tea.Tick(80*time.Millisecond, func(t time.Time) tea.Msg { return brainTickMsg(t) })
+}
+
+func clusterTick() tea.Cmd {
+	return tea.Tick(90*time.Millisecond, func(t time.Time) tea.Msg { return clusterTickMsg(t) })
 }
 
 // selItem is one keyboard-selectable row in the dashboard (a node or a pod).
@@ -361,6 +379,44 @@ func (m *model) armKill(it selItem) {
 	m.confirmArgs = []string{"kill", it.kind, it.name, "--yes"}
 }
 
+type mcpRow struct{ at, tool, dir, status, dur string }
+type mcpMsg struct {
+	rows []mcpRow
+	err  string
+}
+
+// fetchMcp reads recent MCP/tool calls from the tool_calls table via psql.
+func (m model) fetchMcp() tea.Cmd {
+	mc := m
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		const q = `SELECT "At", "Tool", "Direction", "Status", "DurationMs" ` +
+			`FROM tool_calls ORDER BY "At" DESC LIMIT 200`
+		b, err := mc.kubectl(ctx, "-n", ns, "exec", "deploy/placecontext-db", "--",
+			"psql", "-U", "postgres", "-d", "placecontext", "-At", "-F", "\t", "-c", q)
+		if err != nil {
+			return mcpMsg{nil, "could not query tool_calls: " + err.Error()}
+		}
+		var rows []mcpRow
+		for _, ln := range strings.Split(strings.TrimSpace(string(b)), "\n") {
+			if ln == "" {
+				continue
+			}
+			f := strings.Split(ln, "\t")
+			for len(f) < 5 {
+				f = append(f, "")
+			}
+			at := f[0]
+			if len(at) > 19 {
+				at = at[:19]
+			}
+			rows = append(rows, mcpRow{at, f[1], f[2], f[3], f[4]})
+		}
+		return mcpMsg{rows, ""}
+	}
+}
+
 type jobRow struct{ name, source, conc, egress, updated string }
 
 // queryJobs reads the jobs table directly from the Postgres pod via psql.
@@ -513,11 +569,14 @@ func initialModel() model {
 		brainPts:   generateBrain(),
 		brainZoom:  1.0,
 		brainSpin:  true,
+		dash3D:     true,
+		clZoom:     1.0,
+		clSpin:     true,
 	}
 }
 
 func (m model) Init() tea.Cmd {
-	return tea.Batch(m.sp.Tick, m.fetchState(), tick())
+	return tea.Batch(m.sp.Tick, m.fetchState(), tick(), clusterTick())
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -605,15 +664,51 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		switch key {
 		case "up", "k":
-			if m.view == viewDash && m.cursor > 0 {
-				m.cursor--
+			if m.view == viewDash {
+				if m.dash3D {
+					m.clAngX -= 0.15
+				} else if m.cursor > 0 {
+					m.cursor--
+				}
 			}
 		case "down", "j":
-			if m.view == viewDash && m.cursor < len(m.sel)-1 {
-				m.cursor++
+			if m.view == viewDash {
+				if m.dash3D {
+					m.clAngX += 0.15
+				} else if m.cursor < len(m.sel)-1 {
+					m.cursor++
+				}
 			}
+		case "left":
+			if m.view == viewDash && m.dash3D {
+				m.clAngY -= 0.18
+			}
+		case "right":
+			if m.view == viewDash && m.dash3D {
+				m.clAngY += 0.18
+			}
+		case "+", "=":
+			if m.view == viewDash && m.dash3D {
+				m.clZoom *= 1.1
+			}
+		case "-", "_":
+			if m.view == viewDash && m.dash3D {
+				m.clZoom /= 1.1
+			}
+		case " ":
+			if m.view == viewDash && m.dash3D {
+				m.clSpin = !m.clSpin
+			}
+		case "v":
+			if m.view == viewDash && !m.busy {
+				m.dash3D = !m.dash3D
+				if m.dash3D {
+					return m, clusterTick()
+				}
+			}
+			return m, nil
 		case "enter":
-			if m.view == viewDash && m.cursor < len(m.sel) {
+			if m.view == viewDash && !m.dash3D && m.cursor < len(m.sel) {
 				it := m.sel[m.cursor]
 				m.view = viewLogs
 				m.logs.SetContent("")
@@ -632,8 +727,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		case "p":
 			return m, m.openPortal()
+		case "m":
+			if m.view == viewDash && !m.busy {
+				m.view = viewMcp
+				return m, m.fetchMcp()
+			}
+			return m, nil
 		case "x":
-			if m.view == viewDash && !m.busy && m.cursor < len(m.sel) {
+			if m.view == viewDash && !m.dash3D && !m.busy && m.cursor < len(m.sel) {
 				m.prevView = viewDash
 				m.armKill(m.sel[m.cursor])
 				m.view = viewConfirm
@@ -642,6 +743,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "r":
 			if m.view == viewLogs && m.cursor < len(m.sel) {
 				return m, m.fetchLogsFor(m.sel[m.cursor])
+			}
+			if m.view == viewMcp {
+				return m, m.fetchMcp()
 			}
 			return m, m.fetchState()
 		case "u":
@@ -683,6 +787,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, brainTick()
 
+	case clusterTickMsg:
+		if m.view != viewDash || !m.dash3D {
+			return m, nil // only animate while the 3D dashboard is showing
+		}
+		if m.clSpin {
+			m.clAngY += 0.04
+		}
+		return m, clusterTick()
+
 	case stateMsg:
 		m.state = clusterState(msg)
 		m.updated = time.Now()
@@ -706,6 +819,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.logTitle = msg.title
 		m.logs.SetContent(msg.body)
 		m.logs.GotoTop()
+		return m, nil
+
+	case mcpMsg:
+		m.mcp, m.mcpErr = msg.rows, msg.err
 		return m, nil
 
 	case actionDoneMsg:
@@ -769,6 +886,8 @@ func (m model) View() string {
 		b.WriteString(m.brainView())
 	case viewConfirm:
 		b.WriteString(m.confirmView())
+	case viewMcp:
+		b.WriteString(m.mcpView())
 	default:
 		b.WriteString(m.dashboard())
 	}
@@ -802,6 +921,9 @@ func (m model) healthLine() string {
 }
 
 func (m model) dashboard() string {
+	if m.dash3D {
+		return m.cluster3DView()
+	}
 	var b strings.Builder
 	gi := 0 // global selectable index (nodes then pods), matches m.sel order
 
@@ -878,7 +1000,242 @@ func (m model) dashboard() string {
 	return b.String()
 }
 
-func (m model) selected(i int) bool { return m.view == viewDash && i == m.cursor }
+func (m model) selected(i int) bool { return m.view == viewDash && !m.dash3D && i == m.cursor }
+
+// scenePalette maps a colour id → style.
+// 0 server, 1 worker, 2 pod-ok, 3 pod-pending, 4 db, 5 link.
+var scenePalette = []lipgloss.Style{
+	lipgloss.NewStyle().Foreground(lipgloss.Color("44")).Bold(true),  // server (teal)
+	lipgloss.NewStyle().Foreground(lipgloss.Color("39")).Bold(true),  // worker (blue)
+	lipgloss.NewStyle().Foreground(lipgloss.Color("42")).Bold(true),  // pod ok (green)
+	lipgloss.NewStyle().Foreground(lipgloss.Color("220")).Bold(true), // pod pending (yellow)
+	lipgloss.NewStyle().Foreground(lipgloss.Color("141")).Bold(true), // db (magenta)
+	lipgloss.NewStyle().Foreground(lipgloss.Color("238")),            // link (faint)
+}
+
+// canvas is a coloured character grid for drawing the topology (lines + markers + labels).
+type canvas struct {
+	w, h int
+	ch   []rune
+	col  []int
+}
+
+func newCanvas(w, h int) *canvas {
+	c := &canvas{w: w, h: h, ch: make([]rune, w*h), col: make([]int, w*h)}
+	for i := range c.ch {
+		c.ch[i] = ' '
+		c.col[i] = -1
+	}
+	return c
+}
+func (c *canvas) set(x, y int, r rune, color int) {
+	if x >= 0 && x < c.w && y >= 0 && y < c.h {
+		c.ch[y*c.w+x] = r
+		c.col[y*c.w+x] = color
+	}
+}
+func (c *canvas) text(x, y int, s string, color int) {
+	for i, r := range []rune(s) {
+		c.set(x+i, y, r, color)
+	}
+}
+
+// line draws an edge with Bresenham, choosing a glyph by slope. It won't overwrite a
+// non-link cell, so markers/labels drawn earlier stay legible.
+func (c *canvas) line(x0, y0, x1, y1, color int) {
+	dx, dy := x1-x0, y1-y0
+	ax, ay := abs(dx), abs(dy)
+	glyph := '·'
+	switch {
+	case ax > ay*2:
+		glyph = '─'
+	case ay > ax*2:
+		glyph = '│'
+	case dx*dy < 0:
+		glyph = '╱'
+	default:
+		glyph = '╲'
+	}
+	sx, sy := sgn(dx), sgn(dy)
+	err := ax - ay
+	x, y := x0, y0
+	for {
+		if x >= 0 && x < c.w && y >= 0 && y < c.h && c.col[y*c.w+x] == -1 {
+			c.ch[y*c.w+x] = glyph
+			c.col[y*c.w+x] = color
+		}
+		if x == x1 && y == y1 {
+			break
+		}
+		e2 := 2 * err
+		if e2 > -ay {
+			err -= ay
+			x += sx
+		}
+		if e2 < ax {
+			err += ax
+			y += sy
+		}
+	}
+}
+
+func (c *canvas) String() string {
+	var b strings.Builder
+	for y := 0; y < c.h; y++ {
+		x := 0
+		for x < c.w {
+			col := c.col[y*c.w+x]
+			j := x
+			var run []rune
+			for j < c.w && c.col[y*c.w+j] == col {
+				run = append(run, c.ch[y*c.w+j])
+				j++
+			}
+			if col < 0 {
+				b.WriteString(string(run))
+			} else {
+				b.WriteString(scenePalette[col].Render(string(run)))
+			}
+			x = j
+		}
+		b.WriteByte('\n')
+	}
+	return b.String()
+}
+
+// ent is a projected topology entity (node or pod) ready to draw.
+type ent struct {
+	sx, sy int
+	depth  float64
+	label  string
+	marker rune
+	color  int
+}
+
+func shortName(s string) string {
+	s = strings.TrimPrefix(s, "k3d-"+cluster+"-")
+	s = strings.TrimPrefix(s, "placecontext-")
+	return s
+}
+
+// cluster3DView renders the live cluster as an animated 3D system-topology graph: the
+// control-plane and workers laid out in a rotating ring, each pod linked to its node by
+// a line, every entity labelled with its (shortened) name.
+func (m model) cluster3DView() string {
+	if !m.state.reach {
+		return "  " + warnStyle.Render("● no cluster") + dimStyle.Render("   press [u] to bring it up, or [v] for the list view") + "\n"
+	}
+	w, h := m.w-2, m.h-13
+	if w < 30 {
+		w = 80
+	}
+	if h < 10 {
+		h = 20
+	}
+	cv := newCanvas(w, h)
+
+	type p3 struct{ x, y, z float64 }
+	nodePos := map[string]p3{}
+	var servers, workers []nodeRow
+	for _, n := range m.state.nodes {
+		if n.Role == "server" {
+			servers = append(servers, n)
+		} else {
+			workers = append(workers, n)
+		}
+	}
+	for i, s := range servers { // control plane near the centre
+		nodePos[s.Name] = p3{0, 0.5 - 0.5*float64(i), 0}
+	}
+	for i, wk := range workers { // workers on a ring
+		ang := 2 * math.Pi * float64(i) / float64(max(1, len(workers)))
+		nodePos[wk.Name] = p3{2.4 * math.Cos(ang), -0.4, 2.4 * math.Sin(ang)}
+	}
+
+	// rotate around Y by clAngY, fixed tilt + user clAngX around X, perspective project
+	angX := 0.5 + m.clAngX
+	sinX, cosX := math.Sin(angX), math.Cos(angX)
+	sinY, cosY := math.Sin(m.clAngY), math.Cos(m.clAngY)
+	const dist = 6.0
+	cx, cy := float64(w)/2, float64(h)/2
+	project := func(p p3) (int, int, float64) {
+		x1 := p.x*cosY + p.z*sinY
+		z1 := -p.x*sinY + p.z*cosY
+		y1 := p.y*cosX - z1*sinX
+		z2 := p.y*sinX + z1*cosX
+		ooz := 1.0 / (z2 + dist)
+		return int(cx + m.clZoom*x1*ooz*float64(w)*0.42),
+			int(cy - m.clZoom*y1*ooz*float64(h)*0.92), z2
+	}
+
+	var ents []ent
+	for _, s := range servers {
+		x, y, d := project(nodePos[s.Name])
+		ents = append(ents, ent{x, y, d, shortName(s.Name), '◆', 0})
+	}
+	for _, wk := range workers {
+		x, y, d := project(nodePos[wk.Name])
+		col := 1
+		if wk.Status != "Ready" {
+			col = 3
+		}
+		ents = append(ents, ent{x, y, d, shortName(wk.Name), '●', col})
+	}
+
+	// control-plane ↔ worker links
+	for _, s := range servers {
+		sx, sy, _ := project(nodePos[s.Name])
+		for _, wk := range workers {
+			wx, wy, _ := project(nodePos[wk.Name])
+			cv.line(sx, sy, wx, wy, 5)
+		}
+	}
+
+	// pods around their node, each linked by a line
+	stack := map[string]int{}
+	for _, p := range m.state.pods {
+		base, ok := nodePos[p.Node]
+		if !ok {
+			continue
+		}
+		k := stack[p.Node]
+		stack[p.Node]++
+		pang := float64(k)*2.39996 + 0.5
+		pp := p3{base.x + 0.95*math.Cos(pang), base.y + 0.55 + 0.3*float64(k), base.z + 0.95*math.Sin(pang)}
+		bx, by, _ := project(base)
+		px, py, pd := project(pp)
+		cv.line(bx, by, px, py, 5)
+		col, mark := 2, '•'
+		if !(p.Ready == "1/1" && p.Status == "Running") {
+			col, mark = 3, '◦'
+		}
+		if strings.HasPrefix(p.Name, "placecontext-db") {
+			col, mark = 4, '◆'
+		}
+		ents = append(ents, ent{px, py, pd, shortName(p.Name), mark, col})
+	}
+
+	// draw entities far→near so nearer markers/labels win
+	sort.Slice(ents, func(i, j int) bool { return ents[i].depth > ents[j].depth })
+	for _, e := range ents {
+		cv.set(e.sx, e.sy, e.marker, e.color)
+		cv.text(e.sx+2, e.sy, e.label, e.color)
+	}
+
+	spin := "on"
+	if !m.clSpin {
+		spin = "off"
+	}
+	var b strings.Builder
+	b.WriteString(titleStyle.Render(" cluster — 3D topology ") +
+		dimStyle.Render(fmt.Sprintf("  spin:%s  zoom:%.1f×  (←→↑↓ rotate · +/- zoom · space spin · [v] list)", spin, m.clZoom)) + "\n")
+	b.WriteString(cv.String())
+	leg := func(c int, s string) string { return scenePalette[c].Render(s) }
+	b.WriteString(dimStyle.Render("  ") +
+		leg(0, "◆ server") + "  " + leg(1, "● worker") + "  " +
+		leg(2, "• pod") + "  " + leg(3, "◦ pending") + "  " + leg(4, "◆ db"))
+	return b.String()
+}
 
 // generateBrain builds a 3D point cloud shaped like a two-lobed brain: two folded
 // ellipsoids set side by side with a central fissure. Points are sampled on the
@@ -988,6 +1345,28 @@ func (m model) brainView() string {
 	return b.String()
 }
 
+func (m model) mcpView() string {
+	var b strings.Builder
+	b.WriteString(titleStyle.Render(fmt.Sprintf(" MCP / tool calls (%d) ", len(m.mcp))) + "\n\n")
+	if m.mcpErr != "" {
+		b.WriteString(errStyle.Render("  "+m.mcpErr) + "\n")
+		return b.String()
+	}
+	b.WriteString("  " + headStyle.Render(pad("TIME", 21)+pad("TOOL", 26)+pad("DIR", 6)+pad("STATUS", 10)+"ms") + "\n")
+	if len(m.mcp) == 0 {
+		b.WriteString(dimStyle.Render("    (no MCP calls recorded yet)") + "\n")
+		return b.String()
+	}
+	for _, c := range m.mcp {
+		st := okStyle.Render(pad(c.status, 10))
+		if c.status != "" && c.status != "ok" && c.status != "success" && c.status != "Success" {
+			st = warnStyle.Render(pad(c.status, 10))
+		}
+		b.WriteString("  " + dimStyle.Render(pad(c.at, 21)) + pad(trunc(c.tool, 25), 26) + pad(c.dir, 6) + st + dimStyle.Render(c.dur) + "\n")
+	}
+	return b.String()
+}
+
 func (m model) confirmView() string {
 	var b strings.Builder
 	b.WriteString(errStyle.Render(" ⚠  Confirm destructive action ") + "\n\n")
@@ -1015,10 +1394,17 @@ func (m model) footer() string {
 	var keys []string
 	switch m.view {
 	case viewDash:
-		keys = []string{k("↑↓", "nav"), k("⏎", "logs"), k("x", "kill"), k("p", "portal"), k("a", "add node"), k("z", "brain"),
-			k("u", "up"), k("d", "down"), k("r", "refresh"), k("q", "quit")}
+		if m.dash3D {
+			keys = []string{k("←→↑↓", "rotate"), k("+/-", "zoom"), k("space", "spin"), k("v", "list"),
+				k("m", "mcp"), k("a", "add node"), k("z", "brain"), k("u", "up"), k("d", "down"), k("q", "quit")}
+		} else {
+			keys = []string{k("↑↓", "nav"), k("⏎", "logs"), k("x", "kill"), k("v", "3D"), k("m", "mcp"),
+				k("p", "portal"), k("a", "add node"), k("z", "brain"), k("u", "up"), k("d", "down"), k("q", "quit")}
+		}
 	case viewConfirm:
 		keys = []string{k("y", "confirm"), k("n", "cancel"), k("q", "quit")}
+	case viewMcp:
+		keys = []string{k("r", "refresh"), k("b", "back"), k("q", "quit")}
 	case viewMenu:
 		keys = []string{k("↑↓", "nav"), k("⏎", "select"), k("b", "back"), k("q", "quit")}
 	case viewBrain:
@@ -1074,6 +1460,21 @@ func trunc(s string, n int) string {
 		return s
 	}
 	return s[:n-1] + "…"
+}
+func abs(a int) int {
+	if a < 0 {
+		return -a
+	}
+	return a
+}
+func sgn(a int) int {
+	if a > 0 {
+		return 1
+	}
+	if a < 0 {
+		return -1
+	}
+	return 0
 }
 func max(a, b int) int {
 	if a > b {
