@@ -763,10 +763,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, brainTick()
 
 	case clusterTickMsg:
-		if m.view != viewDash {
-			return m, nil // only animate while the dashboard is showing
-		}
-		if m.clSpin {
+		// Keep the loop alive across view changes (returning nil would stop it for good, so
+		// the animation wouldn't resume when you navigate back to the dashboard). Only advance
+		// the phase while the dashboard is visible and spin is on.
+		if m.view == viewDash && m.clSpin {
 			m.orbit += 0.012 // slow, elegant orbital motion
 		}
 		return m, clusterTick()
@@ -1111,7 +1111,7 @@ func center(s string, width int) string {
 // control-plane "planet" the satellites orbit. Each surface point is lit by a fixed light so
 // it reads as a 3D ball; the label sits just below it. Horizontal radius is 2×ry to offset
 // the ~2:1 cell aspect ratio so it looks round.
-func (c *canvas) planet(cxp, cyp, ry int, color int, label string) {
+func (c *canvas) planet(cxp, cyp, ry int, color int, label string, spin float64) {
 	ramp := []rune(".,:;+*oO#@")
 	lx, ly, lz := -0.5, -0.6, 0.62
 	ln := math.Sqrt(lx*lx + ly*ly + lz*lz)
@@ -1132,6 +1132,14 @@ func (c *canvas) planet(cxp, cyp, ry int, color int, label string) {
 			}
 			lum = 0.12 + 0.88*lum // ambient so the dark side isn't blank
 			i := int(lum * float64(len(ramp)-1))
+			// rotating surface texture: longitude advances with `spin`, so continents sweep
+			// across the disc and the ball visibly rotates about its vertical axis.
+			lon := math.Atan2(nx, nz) + spin
+			lat := math.Asin(ny)
+			cont := math.Sin(2*lon)*math.Cos(3*lat) + 0.6*math.Sin(4*lon+1.7)*math.Cos(2*lat)
+			if cont > 0.5 {
+				i += 3 // land: denser glyph
+			}
 			if i < 0 {
 				i = 0
 			} else if i >= len(ramp) {
@@ -1330,7 +1338,7 @@ func (m model) clusterPanel(rows int) string {
 	sort.Slice(ents, func(i, j int) bool { return ents[i].depth > ents[j].depth })
 	for _, e := range ents {
 		if e.cyl {
-			cv.planet(e.sx, e.sy, planetRy, e.color, e.label)
+			cv.planet(e.sx, e.sy, planetRy, e.color, e.label, m.orbit*1.6)
 		} else {
 			cv.box(e.sx, e.sy, string(e.marker)+" "+e.label, e.color)
 		}
