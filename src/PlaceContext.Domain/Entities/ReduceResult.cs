@@ -1,3 +1,5 @@
+using PlaceContext.Domain.ValueObjects;
+
 namespace PlaceContext.Domain.Entities;
 
 /// <summary>
@@ -6,12 +8,14 @@ namespace PlaceContext.Domain.Entities;
 /// </summary>
 public sealed class ReduceResult
 {
-    public ReduceResult(int exitCode, bool succeeded, string? artifact, string? log)
+    public ReduceResult(int exitCode, bool succeeded, string? artifact, string? log,
+        IReadOnlyList<RunArtifact>? artifacts = null)
     {
         ExitCode = exitCode;
         Succeeded = succeeded;
         Artifact = artifact;
         Log = log;
+        Artifacts = artifacts ?? Array.Empty<RunArtifact>();
     }
 
     /// <summary>Raw exit code returned by the reduce container.</summary>
@@ -25,4 +29,7 @@ public sealed class ReduceResult
 
     /// <summary>Combined stdout/stderr from the reduce container. May be truncated.</summary>
     public string? Log { get; }
+
+    /// <summary>Named output files captured from /out beyond result.json (e.g. report.csv). May be empty.</summary>
+    public IReadOnlyList<RunArtifact> Artifacts { get; }
 }

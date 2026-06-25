@@ -404,6 +404,16 @@ else
                     {
                         <div style="font-size:12px; color:var(--text-3)">_(no artifact)_</div>
                     }
+                    @if (shard.Artifacts.Count > 0)
+                    {
+                        <div style="margin-top:6px; display:flex; flex-wrap:wrap; gap:8px">
+                            @foreach (var a in shard.Artifacts)
+                            {
+                                <a class="dcbtn" style="padding:3px 10px; font-size:11px; text-decoration:none"
+                                   href="@DataUri(a)" download="@a.Name">⬇ @a.Name</a>
+                            }
+                        </div>
+                    }
                     @if (!string.IsNullOrWhiteSpace(shard.Log))
                     {
                         <details style="margin-top:4px">
@@ -428,6 +438,16 @@ else
                     @if (reduce.Artifact is not null)
                     {
                         <pre style="background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:10px; font-size:11px; font-family:'Geist Mono',monospace; overflow-x:auto; white-space:pre-wrap; word-break:break-all; color:var(--text-2); max-height:300px; overflow-y:auto">@PrettyJson(reduce.Artifact)</pre>
+                    }
+                    @if (reduce.Artifacts.Count > 0)
+                    {
+                        <div style="margin-top:6px; display:flex; flex-wrap:wrap; gap:8px">
+                            @foreach (var a in reduce.Artifacts)
+                            {
+                                <a class="dcbtn" style="padding:3px 10px; font-size:11px; text-decoration:none"
+                                   href="@DataUri(a)" download="@a.Name">⬇ @a.Name</a>
+                            }
+                        </div>
                     }
                 </div>
             }
@@ -852,6 +872,17 @@ else
         var span = end - start;
         if (span.TotalSeconds < 60) return $"{(int)span.TotalSeconds}s";
         return $"{(int)span.TotalMinutes}m {span.Seconds}s";
+    }
+
+    private static string DataUri(RunArtifactView a)
+    {
+        var contentType = a.Name.EndsWith(".csv", StringComparison.OrdinalIgnoreCase) ? "text/csv"
+            : a.Name.EndsWith(".json", StringComparison.OrdinalIgnoreCase) ? "application/json"
+            : a.Name.EndsWith(".html", StringComparison.OrdinalIgnoreCase) ? "text/html"
+            : a.Name.EndsWith(".svg", StringComparison.OrdinalIgnoreCase) ? "image/svg+xml"
+            : "text/plain";
+        var b64 = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(a.Content));
+        return $"data:{contentType};base64,{b64}";
     }
 
     private static string PrettyJson(string raw)

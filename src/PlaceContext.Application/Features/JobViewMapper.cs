@@ -56,12 +56,16 @@ internal static class JobViewMapper
         FinishedAt: run.FinishedAt,
         ShardResults: run.ShardResults
             .OrderBy(s => s.Index)
-            .Select(s => new ShardResultView(s.Index, s.ExitCode, s.Outcome.ToString(), s.Artifact, s.Log))
+            .Select(s => new ShardResultView(s.Index, s.ExitCode, s.Outcome.ToString(), s.Artifact, s.Log,
+                ToArtifactViews(s.Artifacts)))
             .ToList(),
         ReduceResult: run.ReduceResult is { } r
-            ? new ReduceResultView(r.ExitCode, r.Succeeded, r.Artifact, r.Log)
+            ? new ReduceResultView(r.ExitCode, r.Succeeded, r.Artifact, r.Log, ToArtifactViews(r.Artifacts))
             : null,
         Snapshot: ToSnapshotView(run.Snapshot));
+
+    private static IReadOnlyList<RunArtifactView> ToArtifactViews(IReadOnlyList<RunArtifact> artifacts)
+        => artifacts.Select(a => new RunArtifactView(a.Name, a.Content)).ToList();
 
     private static JobRunSnapshotView ToSnapshotView(WorkloadSnapshot snap) => new(
         MapSourceKind: SourceKind(snap.MapSource),

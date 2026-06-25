@@ -70,8 +70,16 @@ public sealed record WorkloadRunRequest(
 /// </param>
 /// <param name="Stdout">Standard output captured from the container. May be truncated.</param>
 /// <param name="Stderr">Standard error captured from the container. May be truncated.</param>
+/// <param name="Artifacts">
+///   Named output files captured from /out beyond the primary <see cref="Artifact"/> (e.g. report.csv).
+///   Each is (name, textContent). Empty when the step produced only result.json (or nothing).
+/// </param>
 public sealed record WorkloadRunResult(
     int ExitCode,
     string? Artifact,
     string Stdout,
-    string Stderr);
+    string Stderr,
+    IReadOnlyList<WorkloadArtifact>? Artifacts = null);
+
+/// <summary>A named output file captured from a container's /out directory.</summary>
+public sealed record WorkloadArtifact(string Name, string Content);

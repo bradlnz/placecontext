@@ -136,7 +136,7 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
             var outcome = job.ExitCodePolicy.Classify(result.ExitCode);
             var log = CombineLog(result.Stdout, result.Stderr);
 
-            return new ShardResult(index, result.ExitCode, outcome, result.Artifact, log);
+            return new ShardResult(index, result.ExitCode, outcome, result.Artifact, log, MapArtifacts(result.Artifacts));
         }
         finally
         {
@@ -167,7 +167,7 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
         var succeeded = job.ExitCodePolicy.SuccessCodes.Contains(result.ExitCode);
         var log = CombineLog(result.Stdout, result.Stderr);
 
-        return new ReduceResult(result.ExitCode, succeeded, result.Artifact, log);
+        return new ReduceResult(result.ExitCode, succeeded, result.Artifact, log, MapArtifacts(result.Artifacts));
     }
 
     // ---- WorkloadSource → WorkloadRunRequest ------------------------------------------------
@@ -258,6 +258,11 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
         context.Append(sb.ToString().TrimEnd(), _clock.UtcNow);
         await _contexts.SaveAsync(context, ct);
     }
+
+    private static IReadOnlyList<RunArtifact> MapArtifacts(IReadOnlyList<WorkloadArtifact>? artifacts)
+        => artifacts is null or { Count: 0 }
+            ? Array.Empty<RunArtifact>()
+            : artifacts.Select(a => new RunArtifact(a.Name, a.Content)).ToList();
 
     private static string? CombineLog(string stdout, string stderr)
     {

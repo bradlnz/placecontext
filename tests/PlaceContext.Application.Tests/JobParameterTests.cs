@@ -56,6 +56,33 @@ public class JobParameterTests
     }
 
     [Fact]
+    public async Task RunJob_captures_named_artifacts_from_runner()
+    {
+        var jobs = new InMemoryJobRepository();
+        var runs = new InMemoryJobRunRepository();
+        var contexts = new InMemoryProjectContextRepository();
+        var runner = new FakeWorkloadRunner();
+        var uow = new RecordingUnitOfWork();
+        var clock = new FakeClock(T0);
+
+        // Runner returns result.json plus a named report.csv.
+        runner.EnqueueResult(new PlaceContext.Application.Ports.WorkloadRunResult(
+            0, "{}", "stdout", "",
+            new[] { new PlaceContext.Application.Ports.WorkloadArtifact("report.csv", "a,b\n1,2") }));
+
+        var map = new MapSpec("img/worker:latest", new[] { "{}" }, new Dictionary<string, string>());
+        var job = Job.Create(Guid.NewGuid(), "j", null, map, null, 1, ExitCodePolicy.Default, T0);
+        await jobs.AddAsync(job);
+
+        var handler = new RunJobHandler(jobs, runs, contexts, runner, uow, clock);
+        var detail = await handler.HandleAsync(new RunJobCommand(job.Id));
+
+        var artifact = Assert.Single(detail.ShardResults[0].Artifacts);
+        Assert.Equal("report.csv", artifact.Name);
+        Assert.Equal("a,b\n1,2", artifact.Content);
+    }
+
+    [Fact]
     public async Task RunJob_without_override_runs_stored_shards()
     {
         var jobs = new InMemoryJobRepository();
