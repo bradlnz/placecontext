@@ -258,6 +258,36 @@ public sealed class PlaceContextTools
             () => svc.UploadJobCodeAsync(cmd));
     }
 
+    [Authorize(Policy = "Member")]
+    [McpServerTool(Name = "list_jobs"), Description("List a project's jobs (map/reduce code workloads) with their run configuration: shard count, concurrency, runtime, and network-egress policy. Use this to discover jobs and their ids before running one.")]
+    public static Task<string> ListJobs(IPlaceContextService svc, IToolCallLog log, Guid projectId)
+        => Traced(log, "list_jobs", projectId.ToString(), "list jobs", new { projectId },
+            () => svc.ListJobsAsync(projectId));
+
+    [Authorize(Policy = "Member")]
+    [McpServerTool(Name = "get_job"), Description("Get one job's full definition by id, including its map/reduce source files, input payloads (shards), env, concurrency, and exit-code policy. Returns null if the job does not exist.")]
+    public static Task<string> GetJob(IPlaceContextService svc, IToolCallLog log, Guid jobId)
+        => Traced(log, "get_job", jobId.ToString(), "get job", new { jobId },
+            () => svc.GetJobAsync(jobId));
+
+    [Authorize(Policy = "Member")]
+    [McpServerTool(Name = "run_job"), Description("Run a job now: executes its map shards (and reduce step, if defined) as isolated containers and waits for completion. Returns the run detail — overall status plus each shard's exit code, outcome, artifact, and log, and any reduce result. Use list_job_runs/get_job_run to fetch results later.")]
+    public static Task<string> RunJob(IPlaceContextService svc, IToolCallLog log, Guid jobId)
+        => Traced(log, "run_job", jobId.ToString(), "run job", new { jobId },
+            () => svc.RunJobAsync(jobId));
+
+    [Authorize(Policy = "Member")]
+    [McpServerTool(Name = "list_job_runs"), Description("List a job's run history (most recent first): each run's status, start/finish times, and shard success/partial/failure counts. Use get_job_run for a run's full artifacts.")]
+    public static Task<string> ListJobRuns(IPlaceContextService svc, IToolCallLog log, Guid jobId)
+        => Traced(log, "list_job_runs", jobId.ToString(), "list job runs", new { jobId },
+            () => svc.ListJobRunsAsync(jobId));
+
+    [Authorize(Policy = "Member")]
+    [McpServerTool(Name = "get_job_run"), Description("Get the full result of a single job run by run id: overall status, every shard's exit code/outcome/artifact/log, the reduce result, and a snapshot of the executed workload spec. Returns null if the run does not exist.")]
+    public static Task<string> GetJobRun(IPlaceContextService svc, IToolCallLog log, Guid runId)
+        => Traced(log, "get_job_run", runId.ToString(), "get job run", new { runId },
+            () => svc.GetJobRunAsync(runId));
+
     private static IReadOnlyList<CodeFileDto> ParseFiles(string filesJson)
     {
         if (string.IsNullOrWhiteSpace(filesJson))
