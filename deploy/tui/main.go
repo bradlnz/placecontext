@@ -792,7 +792,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil // only animate while the 3D dashboard is showing
 		}
 		if m.clSpin {
-			m.clAngY += 0.04
+			m.clAngY += 0.015
 		}
 		return m, clusterTick()
 
@@ -1227,7 +1227,7 @@ func (m model) cluster3DView() string {
 		spin = "off"
 	}
 	var b strings.Builder
-	b.WriteString(titleStyle.Render(" cluster — 3D topology ") +
+	b.WriteString(titleStyle.Render(" cluster ") +
 		dimStyle.Render(fmt.Sprintf("  spin:%s  zoom:%.1f×  (←→↑↓ rotate · +/- zoom · space spin · [v] list)", spin, m.clZoom)) + "\n")
 	b.WriteString(cv.String())
 	leg := func(c int, s string) string { return scenePalette[c].Render(s) }
@@ -1398,7 +1398,7 @@ func (m model) footer() string {
 			keys = []string{k("←→↑↓", "rotate"), k("+/-", "zoom"), k("space", "spin"), k("v", "list"),
 				k("m", "mcp"), k("a", "add node"), k("z", "brain"), k("u", "up"), k("d", "down"), k("q", "quit")}
 		} else {
-			keys = []string{k("↑↓", "nav"), k("⏎", "logs"), k("x", "kill"), k("v", "3D"), k("m", "mcp"),
+			keys = []string{k("↑↓", "nav"), k("⏎", "logs"), k("x", "kill"), k("v", "cluster"), k("m", "mcp"),
 				k("p", "portal"), k("a", "add node"), k("z", "brain"), k("u", "up"), k("d", "down"), k("q", "quit")}
 		}
 	case viewConfirm:
