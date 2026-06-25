@@ -28,7 +28,7 @@ public static class Viz
     /// <summary>Score in [0,1] → 0–100 integer percentage.</summary>
     public static int Pct(double? score) => (int)Math.Round(100 * Math.Clamp(score ?? 0, 0, 1));
 
-    /// <summary>Debt 0–100 → tone bucket → CSS var colour.</summary>
+    /// <summary>Risk 0–100 → tone bucket → CSS var colour.</summary>
     public static string Tone(double pct) => pct >= 50 ? "var(--bad)" : pct >= 30 ? "var(--warn)" : "var(--good)";
 
     /// <summary>Named tone (good|warn|bad) → CSS var colour.</summary>
@@ -46,7 +46,7 @@ public static class Viz
         _ => "var(--good-bg)"
     };
 
-    /// <summary>Debt band → tone colour for pills.</summary>
+    /// <summary>Risk band → tone colour for pills.</summary>
     public static string BandColor(string? band) => band switch
     {
         "Critical" or "High" => "var(--bad)",

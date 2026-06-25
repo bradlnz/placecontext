@@ -2,12 +2,12 @@
 @inject IPlaceContextService Svc
 @inject PortalUiState Ui
 
-<PageTitle>PlaceContext — Code Requirements</PageTitle>
+<PageTitle>PlaceContext — Requirements</PageTitle>
 
 <div style="padding:24px 24px 40px; max-width:1080px; margin:0 auto">
     <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px">
         <div style="display:flex; align-items:center; gap:9px">
-            <h2 style="font-size:14px; font-weight:600; margin:0">Global code requirements</h2>
+            <h2 style="font-size:14px; font-weight:600; margin:0">Global requirements</h2>
             <span style="font-size:11px; color:var(--text-3)">apply to every project · injected into the review &amp; skill prompts</span>
         </div>
         <div style="display:flex; align-items:center; gap:11px">
@@ -23,7 +23,7 @@
 
     <div class="dccard" style="padding:14px 15px">
         <textarea @bind="_draft" @bind:after="MarkDirty" spellcheck="false"
-            placeholder="Coding standards every project must follow — architecture, testing, security, naming, review gates… plain Markdown."
+            placeholder="Standards every project must follow — policies, quality bars, process gates, naming, compliance… plain Markdown."
             style="width:100%; min-height:340px; resize:vertical; box-sizing:border-box; background:var(--bg); border:1px solid var(--border); border-radius:8px; color:var(--text); padding:12px; font-family:'Geist Mono',monospace; font-size:12.5px; line-height:1.55"></textarea>
         <div style="margin-top:10px; font-size:11.5px; color:var(--text-3)">
             Per-project requirements are edited on each project's page; an agent's effective requirements are
@@ -33,7 +33,7 @@
 </div>
 
 @code {
-    private CodeRequirementsView? _doc;
+    private RequirementsView? _doc;
     private string _draft = string.Empty;
     private string _saved = string.Empty;
     private bool _saving;
@@ -42,7 +42,7 @@
 
     protected override async Task OnInitializedAsync()
     {
-        Ui.Set("Code Requirements", "global coding standards · drive MCP prompts");
+        Ui.Set("Requirements", "global standards · drive MCP prompts");
         _doc = await Svc.GetGlobalRequirementsAsync();
         _draft = _saved = _doc.Markdown;
     }

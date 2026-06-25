@@ -7,5 +7,5 @@ using PlaceContext.Domain.ValueObjects;
 
 namespace PlaceContext.Application.Features;
 
-/// <summary>Fetch the global code-requirements document.</summary>
-public sealed record GetGlobalRequirementsQuery : IQuery<CodeRequirementsView>;
+/// <summary>Fetch the global requirements document.</summary>
+public sealed record GetGlobalRequirementsQuery : IQuery<RequirementsView>;

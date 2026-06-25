@@ -6,9 +6,9 @@ public sealed record RootStatsView(
     int ChangesToday,
     int AgentChangesToday,
     int HumanChangesToday,
-    double RootAgenticDebt,
-    string RootAgenticBand,
-    double RootTechnicalDebt,
+    double RootProcessRisk,
+    string RootProcessBand,
+    double RootTechnicalRisk,
     string RootTechnicalBand,
     int GodNodeTotal,
     int StaleContextCount);

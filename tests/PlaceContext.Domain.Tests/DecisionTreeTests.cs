@@ -13,13 +13,13 @@ public class DecisionTreeTests
     public void Assembler_builds_root_decision_change_and_hotspot_nodes()
     {
         var pid = ProjectId.New();
-        var ledger = ChangeLedger.Start(pid);
+        var ledger = ActivityLog.Start(pid);
         for (var i = 1; i <= 3; i++)
             ledger.Append($"change {i}", Author.Agent("claude"), Rationale.None, TestDelta.None,
-                DebtDelta.None, ChangeVerification.None, new[] { "core.cs" }, Array.Empty<GraphNodeId>(), T0);
+                RiskDelta.None, ActivityVerification.None, new[] { "core.cs" }, Array.Empty<GraphNodeId>(), T0);
 
         var decisions = new[] { Decision.Record(pid, "Use EF?", "Yes", Rationale.None, T0) };
-        var activity = new[] { new ToolActivity("record_change", false), new ToolActivity("query_graph", true) };
+        var activity = new[] { new ToolActivity("record_activity", false), new ToolActivity("query_graph", true) };
 
         var tree = new DecisionTreeAssembler().Assemble(ProjectName.From("alpha"), decisions, ledger, activity);
 
@@ -39,7 +39,7 @@ public class DecisionTreeTests
     {
         var pid = ProjectId.New();
         var tree = new DecisionTreeAssembler().Assemble(
-            ProjectName.From("alpha"), Array.Empty<Decision>(), ChangeLedger.Start(pid),
+            ProjectName.From("alpha"), Array.Empty<Decision>(), ActivityLog.Start(pid),
             new[] { new ToolActivity("query_graph", true) });
 
         // The failed tool's edge is Ambiguous, so the low-confidence ratio is non-zero.
@@ -50,10 +50,10 @@ public class DecisionTreeTests
     public void Answer_reports_hotspots()
     {
         var pid = ProjectId.New();
-        var ledger = ChangeLedger.Start(pid);
+        var ledger = ActivityLog.Start(pid);
         for (var i = 1; i <= 4; i++)
             ledger.Append($"c{i}", Author.Agent("claude"), Rationale.None, TestDelta.None,
-                DebtDelta.None, ChangeVerification.None, new[] { "hot.cs" }, Array.Empty<GraphNodeId>(), T0);
+                RiskDelta.None, ActivityVerification.None, new[] { "hot.cs" }, Array.Empty<GraphNodeId>(), T0);
 
         var tree = new DecisionTreeAssembler().Assemble(
             ProjectName.From("alpha"), Array.Empty<Decision>(), ledger, Array.Empty<ToolActivity>());

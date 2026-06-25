@@ -1,6 +1,6 @@
 namespace PlaceContext.Domain.ValueObjects;
 
-/// <summary>Severity weight of a single debt signal.</summary>
+/// <summary>Severity weight of a single risk signal.</summary>
 public enum Severity
 {
     Low = 1,

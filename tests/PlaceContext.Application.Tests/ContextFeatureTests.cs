@@ -79,15 +79,15 @@ public class ContextFeatureTests
             },
             new[] { new DecisionTreeEdge("root", "file:core.cs", ConfidenceTag.Extracted) });
 
-        var ledgers = new InMemoryChangeLedgerRepository();
-        var ledger = ChangeLedger.Start(pid);
+        var ledgers = new InMemoryActivityLogRepository();
+        var ledger = ActivityLog.Start(pid);
         ledger.Append("sloppy", Author.Agent("claude"), Rationale.None, TestDelta.None,
-            DebtDelta.None, ChangeVerification.None, new[] { "core.cs" }, Array.Empty<GraphNodeId>(), T0);
+            RiskDelta.None, ActivityVerification.None, new[] { "core.cs" }, Array.Empty<GraphNodeId>(), T0);
         await ledgers.SaveAsync(ledger);
 
         var handler = new SuggestImprovementsHandler(
             new FakeDecisionTreeProvider { Tree = tree }, ledgers,
-            new InMemoryProjectContextRepository(), new InMemoryDebtAssessmentRepository());
+            new InMemoryProjectContextRepository(), new InMemoryRiskAssessmentRepository());
 
         var view = await handler.HandleAsync(new SuggestImprovementsQuery(projectId));
         var codes = view.Items.Select(i => i.Code).ToList();
@@ -101,7 +101,7 @@ public class ContextFeatureTests
     public async Task ScaffoldSkill_writes_seeded_skill_markdown()
     {
         var projects = new InMemoryProjectRepository();
-        var project = Project.Discover(RepoPath.From("/home/brad/code/alpha"), ProjectName.From("alpha"), T0);
+        var project = Project.Discover(ProjectPath.From("/home/brad/code/alpha"), ProjectName.From("alpha"), T0);
         project.Register(T0);
         await projects.AddAsync(project);
 

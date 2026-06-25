@@ -1,7 +1,7 @@
 namespace PlaceContext.Domain.ValueObjects;
 
 /// <summary>
-/// A project's decision tree, assembled from everything PlaceContext has logged: decisions branch off
+/// A project's knowledge graph, assembled from everything PlaceContext has logged: decisions branch off
 /// the root, the changes they led to hang beneath them, the files/nodes those changes touched hang
 /// beneath the changes, and a tool-call activity branch summarizes MCP traffic. This replaces the
 /// external graphify knowledge graph — it is derived purely from recorded activity, not from parsing
@@ -38,7 +38,7 @@ public sealed record DecisionTree
             .Select(n => GodNode.Of(GraphNodeId.From(n.Id), NormLabel.From(n.Label), n.Degree))
             .ToList();
 
-    /// <summary>Structural metrics the technical-debt scorer reads, distilled from the tree shape.</summary>
+    /// <summary>Structural metrics the technical-risk scorer reads, distilled from the tree shape.</summary>
     public GraphMetrics ToMetrics()
     {
         var nodeCount = Nodes.Count;

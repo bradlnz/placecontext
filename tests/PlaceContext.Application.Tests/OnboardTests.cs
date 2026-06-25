@@ -10,19 +10,19 @@ public class OnboardTests
 {
     private static readonly DateTimeOffset T0 = new(2026, 6, 24, 12, 0, 0, TimeSpan.Zero);
 
-    private static DebtAssessmentService Debt(IClock clock) => new(
-        new InMemoryChangeLedgerRepository(), new InMemoryDebtAssessmentRepository(), new FakeDecisionTreeProvider(),
-        new FakeCodeMetricsProbe(), new FakeDebtCalculatorFactory(), new DebtScoreCalculator(), clock);
+    private static RiskAssessmentService Risk(IClock clock) => new(
+        new InMemoryActivityLogRepository(), new InMemoryRiskAssessmentRepository(), new FakeDecisionTreeProvider(),
+        new FakeCodeMetricsProbe(), new FakeRiskCalculatorFactory(), new RiskScoreCalculator(), clock);
 
-    private static (OnboardHandler handler, InMemoryProjectRepository projects, InMemoryChangeLedgerRepository ledgers, FakeRepoFiles files)
+    private static (OnboardHandler handler, InMemoryProjectRepository projects, InMemoryActivityLogRepository ledgers, FakeRepoFiles files)
         Build(FakeGitPort git, FakeRepoFiles files)
     {
         var projects = new InMemoryProjectRepository();
-        var ledgers = new InMemoryChangeLedgerRepository();
+        var ledgers = new InMemoryActivityLogRepository();
         var clock = new FakeClock(T0);
         var handler = new OnboardHandler(
-            projects, Debt(clock), ledgers, git, new InMemoryProjectContextRepository(),
-            new InMemoryCodeRequirementsRepository(), files, new RecordingUnitOfWork(), clock);
+            projects, Risk(clock), ledgers, git, new InMemoryProjectContextRepository(),
+            new InMemoryRequirementsRepository(), files, new RecordingUnitOfWork(), clock);
         return (handler, projects, ledgers, files);
     }
 
@@ -49,7 +49,7 @@ public class OnboardTests
         Assert.Single(result.SkillsCreated);
         Assert.Single(result.AgentsCreated);
         Assert.Contains(files.Written, w => w.Path == ".claude/skills/placecontext/SKILL.md");
-        Assert.Contains(files.Written, w => w.Path == ".claude/agents/code-reviewer.md");
+        Assert.Contains(files.Written, w => w.Path == ".claude/agents/reviewer.md");
 
         var project = (await projects.ListAsync()).Single();
         var ledger = await ledgers.GetForProjectAsync(project.Id);
@@ -66,7 +66,7 @@ public class OnboardTests
         await handler.HandleAsync(new OnboardCommand("/home/brad/code/payments", null, "codex", 50));
 
         Assert.Contains(files.Written, w => w.Path == ".codex/prompts/placecontext.md");
-        Assert.Contains(files.Written, w => w.Path == ".codex/prompts/code-reviewer.md");
+        Assert.Contains(files.Written, w => w.Path == ".codex/prompts/reviewer.md");
     }
 
     [Fact]

@@ -49,6 +49,10 @@ builder.Services
     // Bearer tokens for MCP, issued by the first-party OAuth server (signed with the in-process RSA key).
     .AddJwtBearer(o =>
     {
+        // Keep the JWT's raw claim names ("sub", "role", "tenant"). Default-true mapping renames "sub"
+        // to ClaimTypes.NameIdentifier and "role" to ClaimTypes.Role, which would make the FindFirst("sub")
+        // subject check below (and the role-claim refresh) silently see null and reject every valid token.
+        o.MapInboundClaims = false;
         o.TokenValidationParameters = new TokenValidationParameters
         {
             ValidateIssuer = false,           // issuer is per-tenant subdomain

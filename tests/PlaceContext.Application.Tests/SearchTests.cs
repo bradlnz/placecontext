@@ -13,14 +13,14 @@ public class SearchTests
     private static async Task<SearchHandler> SeedAsync()
     {
         var projects = new InMemoryProjectRepository();
-        var project = Project.Discover(RepoPath.From("/home/brad/code/payments"), ProjectName.From("payments"), T0);
+        var project = Project.Discover(ProjectPath.From("/home/brad/code/payments"), ProjectName.From("payments"), T0);
         project.Register(T0);
         await projects.AddAsync(project);
 
-        var ledgers = new InMemoryChangeLedgerRepository();
-        var ledger = ChangeLedger.Start(project.Id);
+        var ledgers = new InMemoryActivityLogRepository();
+        var ledger = ActivityLog.Start(project.Id);
         ledger.Append("Add payment webhook", Author.Agent("claude"), Rationale.None, TestDelta.None,
-            DebtDelta.None, ChangeVerification.None, new[] { "a.cs" }, Array.Empty<GraphNodeId>(), T0);
+            RiskDelta.None, ActivityVerification.None, new[] { "a.cs" }, Array.Empty<GraphNodeId>(), T0);
         await ledgers.SaveAsync(ledger);
 
         var contexts = new InMemoryProjectContextRepository();

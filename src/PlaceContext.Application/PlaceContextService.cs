@@ -21,11 +21,11 @@ public sealed class PlaceContextService : IPlaceContextService
     public Task<ProjectSummaryView> RebuildGraphAsync(Guid projectId, bool incremental = true, CancellationToken ct = default)
         => _dispatcher.Send(new RebuildGraphCommand(projectId, incremental), ct);
 
-    public Task<ChangeRecordView> RecordChangeAsync(RecordChangeCommand command, CancellationToken ct = default)
+    public Task<ActivityRecordView> RecordActivityAsync(RecordActivityCommand command, CancellationToken ct = default)
         => _dispatcher.Send(command, ct);
 
-    public Task<DebtDashboardView> RecomputeDebtAsync(Guid projectId, CancellationToken ct = default)
-        => _dispatcher.Send(new RecomputeDebtCommand(projectId), ct);
+    public Task<RiskDashboardView> RecomputeRiskAsync(Guid projectId, CancellationToken ct = default)
+        => _dispatcher.Send(new RecomputeRiskCommand(projectId), ct);
 
     public Task<DecisionView> AddDecisionAsync(Guid projectId, string question, string choice, string? rationale, CancellationToken ct = default)
         => _dispatcher.Send(new AddDecisionCommand(projectId, question, choice, rationale), ct);
@@ -36,11 +36,11 @@ public sealed class PlaceContextService : IPlaceContextService
     public Task<ProjectOverviewView> GetProjectOverviewAsync(Guid projectId, CancellationToken ct = default)
         => _dispatcher.Query(new GetProjectOverviewQuery(projectId), ct);
 
-    public Task<ChangeTimelineView> GetTimelineAsync(Guid projectId, int take = 50, CancellationToken ct = default)
+    public Task<ActivityTimelineView> GetTimelineAsync(Guid projectId, int take = 50, CancellationToken ct = default)
         => _dispatcher.Query(new GetTimelineQuery(projectId, take), ct);
 
-    public Task<DebtDashboardView> GetDebtDashboardAsync(Guid projectId, CancellationToken ct = default)
-        => _dispatcher.Query(new GetDebtDashboardQuery(projectId), ct);
+    public Task<RiskDashboardView> GetRiskDashboardAsync(Guid projectId, CancellationToken ct = default)
+        => _dispatcher.Query(new GetRiskDashboardQuery(projectId), ct);
 
     public Task<IReadOnlyList<DecisionView>> GetDecisionsAsync(Guid projectId, CancellationToken ct = default)
         => _dispatcher.Query(new GetDecisionsQuery(projectId), ct);
@@ -57,16 +57,16 @@ public sealed class PlaceContextService : IPlaceContextService
     public Task<ProjectContextView> GetContextAsync(Guid projectId, CancellationToken ct = default)
         => _dispatcher.Query(new GetContextQuery(projectId), ct);
 
-    public Task<CodeRequirementsView> GetGlobalRequirementsAsync(CancellationToken ct = default)
+    public Task<RequirementsView> GetGlobalRequirementsAsync(CancellationToken ct = default)
         => _dispatcher.Query(new GetGlobalRequirementsQuery(), ct);
 
-    public Task<CodeRequirementsView> SetGlobalRequirementsAsync(string markdown, CancellationToken ct = default)
+    public Task<RequirementsView> SetGlobalRequirementsAsync(string markdown, CancellationToken ct = default)
         => _dispatcher.Send(new SetGlobalRequirementsCommand(markdown), ct);
 
-    public Task<CodeRequirementsView> GetProjectRequirementsAsync(Guid projectId, CancellationToken ct = default)
+    public Task<RequirementsView> GetProjectRequirementsAsync(Guid projectId, CancellationToken ct = default)
         => _dispatcher.Query(new GetProjectRequirementsQuery(projectId), ct);
 
-    public Task<CodeRequirementsView> SetProjectRequirementsAsync(Guid projectId, string markdown, CancellationToken ct = default)
+    public Task<RequirementsView> SetProjectRequirementsAsync(Guid projectId, string markdown, CancellationToken ct = default)
         => _dispatcher.Send(new SetProjectRequirementsCommand(projectId, markdown), ct);
 
     public Task<EffectiveRequirementsView> GetEffectiveRequirementsAsync(Guid projectId, CancellationToken ct = default)
@@ -108,21 +108,57 @@ public sealed class PlaceContextService : IPlaceContextService
     public Task<ImprovementsView> SuggestImprovementsAsync(Guid projectId, CancellationToken ct = default)
         => _dispatcher.Query(new SuggestImprovementsQuery(projectId), ct);
 
+    public Task<ReportView> GenerateReportAsync(Guid projectId, string? templateName, bool createWorkItems, CancellationToken ct = default)
+        => _dispatcher.Send(new GenerateReportCommand(projectId, templateName, createWorkItems), ct);
+
+    public Task<ReportView> SynthesizeContextAsync(Guid projectId, bool createWorkItems, CancellationToken ct = default)
+        => _dispatcher.Send(new GenerateReportCommand(projectId, Domain.Services.BuiltInReportTemplates.OnboardingBriefName, createWorkItems), ct);
+
+    public Task<IReadOnlyList<ReportTemplateView>> ListReportTemplatesAsync(CancellationToken ct = default)
+        => _dispatcher.Query(new ListReportTemplatesQuery(), ct);
+
+    public Task<ReportTemplateView> DefineReportTemplateAsync(string name, string description, IReadOnlyList<string> sources, CancellationToken ct = default)
+        => _dispatcher.Send(new DefineReportTemplateCommand(name, description, sources), ct);
+
     public Task<SkillScaffoldView> ScaffoldSkillAsync(Guid projectId, string skillName, string? description, CancellationToken ct = default)
         => _dispatcher.Send(new ScaffoldSkillCommand(projectId, skillName, description), ct);
 
     public Task<RootStatsView> GetRootStatsAsync(CancellationToken ct = default)
         => _dispatcher.Query(new GetRootStatsQuery(), ct);
 
-    public Task<RootDebtView> GetRootDebtAsync(CancellationToken ct = default)
-        => _dispatcher.Query(new GetRootDebtQuery(), ct);
+    public Task<RootRiskView> GetRootRiskAsync(CancellationToken ct = default)
+        => _dispatcher.Query(new GetRootRiskQuery(), ct);
 
-    public Task<RootLedgerView> GetRootLedgerAsync(int take = 40, CancellationToken ct = default)
-        => _dispatcher.Query(new GetRootLedgerQuery(take), ct);
+    public Task<RootActivityView> GetRootActivityAsync(int take = 40, CancellationToken ct = default)
+        => _dispatcher.Query(new GetRootActivityQuery(take), ct);
 
     public Task<GraphVizView> GetGraphVizAsync(Guid projectId, CancellationToken ct = default)
         => _dispatcher.Query(new GetGraphVizQuery(projectId), ct);
 
     public Task<IReadOnlyList<ToolCallView>> GetRecentToolCallsAsync(int take = 100, CancellationToken ct = default)
         => _dispatcher.Query(new GetRecentToolCallsQuery(take), ct);
+
+    public Task<JobView> CreateJobAsync(CreateJobCommand command, CancellationToken ct = default)
+        => _dispatcher.Send(command, ct);
+
+    public Task<JobView> UpdateJobAsync(UpdateJobCommand command, CancellationToken ct = default)
+        => _dispatcher.Send(command, ct);
+
+    public Task<JobRunDetailView> RunJobAsync(Guid jobId, CancellationToken ct = default)
+        => _dispatcher.Send(new RunJobCommand(jobId), ct);
+
+    public Task<IReadOnlyList<JobView>> ListJobsAsync(Guid projectId, CancellationToken ct = default)
+        => _dispatcher.Query(new ListJobsQuery(projectId), ct);
+
+    public Task<IReadOnlyList<JobRunView>> ListJobRunsAsync(Guid jobId, CancellationToken ct = default)
+        => _dispatcher.Query(new ListJobRunsQuery(jobId), ct);
+
+    public Task<JobRunDetailView?> GetJobRunAsync(Guid runId, CancellationToken ct = default)
+        => _dispatcher.Query(new GetJobRunQuery(runId), ct);
+
+    public Task<JobView?> GetJobAsync(Guid jobId, CancellationToken ct = default)
+        => _dispatcher.Query(new GetJobQuery(jobId), ct);
+
+    public Task<JobView> UploadJobCodeAsync(UploadJobCodeCommand command, CancellationToken ct = default)
+        => _dispatcher.Send(command, ct);
 }

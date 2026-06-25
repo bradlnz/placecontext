@@ -13,15 +13,15 @@ public sealed class FakeGitPort : IGitPort
     public bool IsRepo { get; set; } = true;
     public IReadOnlyList<CommitInfo> Commits { get; set; } = Array.Empty<CommitInfo>();
 
-    public bool IsRepository(RepoPath path) => IsRepo;
+    public bool IsRepository(ProjectPath path) => IsRepo;
 
     public Task<CommitSha?> CommitScopedAsync(
-        RepoPath path, IReadOnlyList<string> files, string message, Author author, CancellationToken ct = default)
+        ProjectPath path, IReadOnlyList<string> files, string message, Author author, CancellationToken ct = default)
         => Task.FromResult<CommitSha?>(CommitSha.From(ShaToReturn));
 
-    public Task<DateTimeOffset?> GetFileLastModifiedAsync(RepoPath path, string relativeFile, CancellationToken ct = default)
+    public Task<DateTimeOffset?> GetFileLastModifiedAsync(ProjectPath path, string relativeFile, CancellationToken ct = default)
         => Task.FromResult<DateTimeOffset?>(null);
 
-    public Task<IReadOnlyList<CommitInfo>> GetRecentCommitsAsync(RepoPath path, int limit, CancellationToken ct = default)
+    public Task<IReadOnlyList<CommitInfo>> GetRecentCommitsAsync(ProjectPath path, int limit, CancellationToken ct = default)
         => Task.FromResult<IReadOnlyList<CommitInfo>>(Commits.Take(limit).ToList());
 }

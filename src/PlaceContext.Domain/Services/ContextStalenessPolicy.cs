@@ -6,7 +6,7 @@ namespace PlaceContext.Domain.Services;
 /// <summary>
 /// Pure domain policy: a context note is stale when the code it describes has changed underneath it
 /// — either committed more recently than the note was last revised, or its digest no longer matches
-/// what the note was anchored to. Stale context is an agentic-debt contributor.
+/// what the note was anchored to. Stale context is an process-risk contributor.
 /// </summary>
 public sealed class ContextStalenessPolicy
 {

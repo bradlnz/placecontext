@@ -13,7 +13,7 @@ public class WorkQueueTests
     private static async Task<(AddWorkItemHandler add, NextWorkItemHandler next, CompleteWorkItemHandler complete, GetWorkItemsHandler get, Guid pid)> SeedAsync()
     {
         var projects = new InMemoryProjectRepository();
-        var project = Project.Discover(RepoPath.From("/home/brad/code/alpha"), ProjectName.From("alpha"), T0);
+        var project = Project.Discover(ProjectPath.From("/home/brad/code/alpha"), ProjectName.From("alpha"), T0);
         project.Register(T0);
         await projects.AddAsync(project);
 

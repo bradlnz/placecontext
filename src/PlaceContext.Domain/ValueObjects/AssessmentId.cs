@@ -1,6 +1,6 @@
 namespace PlaceContext.Domain.ValueObjects;
 
-/// <summary>Identity of an immutable <c>DebtAssessment</c> snapshot.</summary>
+/// <summary>Identity of an immutable <c>RiskAssessment</c> snapshot.</summary>
 public readonly record struct AssessmentId(Guid Value)
 {
     public static AssessmentId New() => new(Guid.NewGuid());

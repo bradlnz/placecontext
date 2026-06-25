@@ -6,7 +6,7 @@ namespace PlaceContext.Infrastructure.Files;
 /// <summary>Reads/writes plain files within a project's working tree (context seeding + scaffolding).</summary>
 public sealed class FileRepoFiles : IRepoFiles
 {
-    public async Task<string?> ReadFirstAsync(RepoPath repo, IReadOnlyList<string> candidates, CancellationToken ct = default)
+    public async Task<string?> ReadFirstAsync(ProjectPath repo, IReadOnlyList<string> candidates, CancellationToken ct = default)
     {
         foreach (var rel in candidates)
         {
@@ -17,7 +17,7 @@ public sealed class FileRepoFiles : IRepoFiles
         return null;
     }
 
-    public async Task<string> WriteAsync(RepoPath repo, string relativePath, string content, CancellationToken ct = default)
+    public async Task<string> WriteAsync(ProjectPath repo, string relativePath, string content, CancellationToken ct = default)
     {
         var full = Path.Combine(repo.Value, relativePath);
         Directory.CreateDirectory(Path.GetDirectoryName(full)!);

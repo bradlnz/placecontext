@@ -1,11 +1,12 @@
 using PlaceContext.Application.Ports;
 using PlaceContext.Domain.Repositories;
-using PlaceContext.Infrastructure.Debt;
+using PlaceContext.Infrastructure.Risk;
 using PlaceContext.Infrastructure.Git;
 using PlaceContext.Infrastructure.Metrics;
 using PlaceContext.Infrastructure.Persistence;
 using PlaceContext.Infrastructure.Skills;
 using PlaceContext.Infrastructure.Tenancy;
+using PlaceContext.Infrastructure.Workload;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -15,7 +16,7 @@ namespace PlaceContext.Infrastructure;
 /// <summary>
 /// Composition root for the Infrastructure layer: binds options, opens the EF Core (PostgreSQL)
 /// store, and wires every Application port to its adapter — the EF repositories, the git/metrics
-/// adapters, the skill scaffolder, and the Strategy-behind-Factory debt calculators.
+/// adapters, the skill scaffolder, and the Strategy-behind-Factory risk calculators.
 /// </summary>
 public static class DependencyInjection
 {
@@ -45,13 +46,14 @@ public static class DependencyInjection
 
         // EF repositories.
         services.AddScoped<IProjectRepository, EfProjectRepository>();
-        services.AddScoped<IChangeLedgerRepository, EfChangeLedgerRepository>();
+        services.AddScoped<IActivityLogRepository, EfActivityLogRepository>();
         services.AddScoped<IDecisionRepository, EfDecisionRepository>();
-        services.AddScoped<IDebtAssessmentRepository, EfDebtAssessmentRepository>();
+        services.AddScoped<IRiskAssessmentRepository, EfRiskAssessmentRepository>();
         services.AddScoped<IProjectContextRepository, EfProjectContextRepository>();
-        services.AddScoped<ICodeRequirementsRepository, EfCodeRequirementsRepository>();
+        services.AddScoped<IRequirementsRepository, EfRequirementsRepository>();
         services.AddScoped<IUsageRepository, EfUsageRepository>();
         services.AddScoped<IWorkItemRepository, EfWorkItemRepository>();
+        services.AddScoped<IReportTemplateRepository, EfReportTemplateRepository>();
 
         // Git, metrics, skill scaffolding.
         services.AddSingleton<IGitPort, CliGitAdapter>();
@@ -64,10 +66,26 @@ public static class DependencyInjection
         services.AddSingleton<IGitHubGateway, GitHub.GitHubGateway>();
         services.AddSingleton<ICodeWorkspace, Git.CodeWorkspace>();
 
-        // Debt strategies behind a factory (domain scorers come from AddApplication()).
-        services.AddScoped<IDebtCalculator, TechnicalDebtCalculator>();
-        services.AddScoped<IDebtCalculator, AgenticDebtCalculator>();
-        services.AddScoped<IDebtCalculatorFactory, DebtCalculatorFactory>();
+        // Report generation layer: real LLM polish when a key is configured, else a graceful no-op.
+        var hasLlmKey = !string.IsNullOrWhiteSpace(configuration["PlaceContext:Llm:ApiKey"]);
+        if (hasLlmKey)
+            services.AddSingleton<ILlmGateway, Llm.AnthropicLlmGateway>();
+        else
+            services.AddSingleton<ILlmGateway, Llm.NullLlmGateway>();
+
+        // Risk strategies behind a factory (domain scorers come from AddApplication()).
+        services.AddScoped<IRiskCalculator, TechnicalRiskCalculator>();
+        services.AddScoped<IRiskCalculator, ProcessRiskCalculator>();
+        services.AddScoped<IRiskCalculatorFactory, RiskCalculatorFactory>();
+
+        // Generic workload runner: Docker-based container adapter for Jobs.
+        services.Configure<WorkloadRunnerOptions>(
+            configuration.GetSection("PlaceContext:WorkloadRunner"));
+        services.AddSingleton<IWorkloadRunner, DockerWorkloadRunner>();
+
+        // Job / JobRun repositories.
+        services.AddScoped<IJobRepository, EfJobRepository>();
+        services.AddScoped<IJobRunRepository, EfJobRunRepository>();
 
         return services;
     }

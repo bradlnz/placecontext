@@ -3,11 +3,11 @@ namespace PlaceContext.Domain.ValueObjects;
 /// <summary>
 /// Why a change was made. Optional: a change may carry <see cref="None"/>, but a *present*
 /// rationale must be non-blank. Whether a rationale is absent is a first-class signal the
-/// agentic-debt scorer reads.
+/// process-risk scorer reads.
 /// </summary>
 public sealed record Rationale
 {
-    /// <summary>Sentinel for "no rationale recorded" — drives an agentic-debt signal.</summary>
+    /// <summary>Sentinel for "no rationale recorded" — drives an process-risk signal.</summary>
     public static readonly Rationale None = new(string.Empty);
 
     public string Value { get; }

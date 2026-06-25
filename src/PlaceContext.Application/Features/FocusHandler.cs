@@ -8,7 +8,7 @@ namespace PlaceContext.Application.Features;
 
 /// <summary>
 /// Aggregates the workspace's actionable focus items across all projects — cheaply, from each project's
-/// logged state (graph status, context, ledger, latest debt assessment) without rebuilding decision
+/// logged state (graph status, context, ledger, latest risk assessment) without rebuilding decision
 /// trees. Items auto-resolve: they disappear from the checklist once the underlying condition clears.
 /// </summary>
 public sealed class FocusHandler : IQueryHandler<GetFocusQuery, FocusView>
@@ -16,13 +16,13 @@ public sealed class FocusHandler : IQueryHandler<GetFocusQuery, FocusView>
     private static readonly Dictionary<string, int> SeverityRank = new() { ["high"] = 0, ["medium"] = 1, ["low"] = 2 };
 
     private readonly IProjectRepository _projects;
-    private readonly IChangeLedgerRepository _ledgers;
+    private readonly IActivityLogRepository _ledgers;
     private readonly IProjectContextRepository _contexts;
-    private readonly IDebtAssessmentRepository _assessments;
+    private readonly IRiskAssessmentRepository _assessments;
 
     public FocusHandler(
-        IProjectRepository projects, IChangeLedgerRepository ledgers,
-        IProjectContextRepository contexts, IDebtAssessmentRepository assessments)
+        IProjectRepository projects, IActivityLogRepository ledgers,
+        IProjectContextRepository contexts, IRiskAssessmentRepository assessments)
     {
         _projects = projects;
         _ledgers = ledgers;
@@ -41,7 +41,7 @@ public sealed class FocusHandler : IQueryHandler<GetFocusQuery, FocusView>
             var name = p.Name.Value;
 
             if (!p.IsGraphified)
-                items.Add(new FocusItem("graphify", "low", "Build the decision tree",
+                items.Add(new FocusItem("graphify", "low", "Build the knowledge graph",
                     "Run rebuild_graph to map this project's structure.", p.Id.Value, name, url));
 
             var context = await _contexts.GetForProjectAsync(p.Id, ct);
@@ -56,11 +56,11 @@ public sealed class FocusHandler : IQueryHandler<GetFocusQuery, FocusView>
                     $"Verify {unverified} agent change(s)",
                     "Run and observe the app, then record live verification.", p.Id.Value, name, $"{url}#changes"));
 
-            var debt = await _assessments.GetLatestAsync(p.Id, ct);
-            var signal = debt?.Signals.Where(s => (int)s.Severity >= 2).OrderByDescending(s => (int)s.Severity).FirstOrDefault();
+            var risk = await _assessments.GetLatestAsync(p.Id, ct);
+            var signal = risk?.Signals.Where(s => (int)s.Severity >= 2).OrderByDescending(s => (int)s.Severity).FirstOrDefault();
             if (signal is not null)
-                items.Add(new FocusItem($"debt:{signal.Code}", "medium",
-                    $"Debt signal: {signal.Code}", signal.Evidence, p.Id.Value, name, url));
+                items.Add(new FocusItem($"risk:{signal.Code}", "medium",
+                    $"Risk signal: {signal.Code}", signal.Evidence, p.Id.Value, name, url));
         }
 
         var ordered = items

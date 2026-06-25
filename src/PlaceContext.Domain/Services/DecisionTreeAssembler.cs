@@ -19,7 +19,7 @@ public sealed class DecisionTreeAssembler
     public DecisionTree Assemble(
         ProjectName projectName,
         IReadOnlyList<Decision> decisions,
-        ChangeLedger ledger,
+        ActivityLog ledger,
         IReadOnlyList<ToolActivity> activity)
     {
         const string rootId = "root";

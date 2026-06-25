@@ -13,6 +13,6 @@ public sealed record ProjectOverviewView(
     int NodeCount,
     int LinkCount,
     IReadOnlyList<GodNodeView> GodNodes,
-    DebtDashboardView Debt,
+    RiskDashboardView Risk,
     int ChangeCount,
     string Context);

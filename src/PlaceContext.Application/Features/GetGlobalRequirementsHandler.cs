@@ -7,14 +7,14 @@ using PlaceContext.Domain.ValueObjects;
 
 namespace PlaceContext.Application.Features;
 
-public sealed class GetGlobalRequirementsHandler : IQueryHandler<GetGlobalRequirementsQuery, CodeRequirementsView>
+public sealed class GetGlobalRequirementsHandler : IQueryHandler<GetGlobalRequirementsQuery, RequirementsView>
 {
-    private readonly ICodeRequirementsRepository _requirements;
-    public GetGlobalRequirementsHandler(ICodeRequirementsRepository requirements) => _requirements = requirements;
+    private readonly IRequirementsRepository _requirements;
+    public GetGlobalRequirementsHandler(IRequirementsRepository requirements) => _requirements = requirements;
 
-    public async Task<CodeRequirementsView> HandleAsync(GetGlobalRequirementsQuery query, CancellationToken ct = default)
+    public async Task<RequirementsView> HandleAsync(GetGlobalRequirementsQuery query, CancellationToken ct = default)
     {
         var doc = await _requirements.GetGlobalAsync(ct);
-        return doc is null ? CodeRequirementsView.EmptyGlobal() : ViewMapper.ToView(doc);
+        return doc is null ? RequirementsView.EmptyGlobal() : ViewMapper.ToView(doc);
     }
 }

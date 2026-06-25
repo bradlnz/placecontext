@@ -8,7 +8,7 @@ using PlaceContext.Domain.ValueObjects;
 
 namespace PlaceContext.Application.Features;
 
-/// <summary>Friendly labels and tones for debt signal codes, shared by the Debt and Ledger views.</summary>
+/// <summary>Friendly labels and tones for risk signal codes, shared by the Risk and Activity views.</summary>
 internal static class SignalLabels
 {
     public static string Label(string code) => code switch

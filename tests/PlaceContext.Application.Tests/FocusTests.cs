@@ -14,18 +14,18 @@ public class FocusTests
     public async Task Focus_flags_missing_context_and_unverified_changes_high_first()
     {
         var projects = new InMemoryProjectRepository();
-        var project = Project.Discover(RepoPath.From("/home/brad/code/alpha"), ProjectName.From("alpha"), T0);
+        var project = Project.Discover(ProjectPath.From("/home/brad/code/alpha"), ProjectName.From("alpha"), T0);
         project.Register(T0);
         await projects.AddAsync(project);
 
-        var ledgers = new InMemoryChangeLedgerRepository();
-        var ledger = ChangeLedger.Start(project.Id);
+        var ledgers = new InMemoryActivityLogRepository();
+        var ledger = ActivityLog.Start(project.Id);
         for (var i = 0; i < 3; i++)
             ledger.Append($"agent change {i}", Author.Agent("claude"), Rationale.None, TestDelta.None,
-                DebtDelta.None, ChangeVerification.None, new[] { "a.cs" }, Array.Empty<GraphNodeId>(), T0);
+                RiskDelta.None, ActivityVerification.None, new[] { "a.cs" }, Array.Empty<GraphNodeId>(), T0);
         await ledgers.SaveAsync(ledger);
 
-        var handler = new FocusHandler(projects, ledgers, new InMemoryProjectContextRepository(), new InMemoryDebtAssessmentRepository());
+        var handler = new FocusHandler(projects, ledgers, new InMemoryProjectContextRepository(), new InMemoryRiskAssessmentRepository());
         var view = await handler.HandleAsync(new GetFocusQuery());
 
         var kinds = view.Items.Select(i => i.Kind).ToList();
@@ -42,8 +42,8 @@ public class FocusTests
     public async Task Focus_is_empty_when_nothing_needs_attention()
     {
         var projects = new InMemoryProjectRepository(); // no projects → no items
-        var handler = new FocusHandler(projects, new InMemoryChangeLedgerRepository(),
-            new InMemoryProjectContextRepository(), new InMemoryDebtAssessmentRepository());
+        var handler = new FocusHandler(projects, new InMemoryActivityLogRepository(),
+            new InMemoryProjectContextRepository(), new InMemoryRiskAssessmentRepository());
 
         var view = await handler.HandleAsync(new GetFocusQuery());
 

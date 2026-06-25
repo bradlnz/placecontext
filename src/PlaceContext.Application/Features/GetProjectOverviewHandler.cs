@@ -8,13 +8,13 @@ namespace PlaceContext.Application.Features;
 public sealed class GetProjectOverviewHandler : IQueryHandler<GetProjectOverviewQuery, ProjectOverviewView>
 {
     private readonly IProjectRepository _projects;
-    private readonly IChangeLedgerRepository _ledgers;
-    private readonly IDebtAssessmentRepository _assessments;
+    private readonly IActivityLogRepository _ledgers;
+    private readonly IRiskAssessmentRepository _assessments;
     private readonly IProjectContextRepository _contexts;
 
     public GetProjectOverviewHandler(
-        IProjectRepository projects, IChangeLedgerRepository ledgers,
-        IDebtAssessmentRepository assessments, IProjectContextRepository contexts)
+        IProjectRepository projects, IActivityLogRepository ledgers,
+        IRiskAssessmentRepository assessments, IProjectContextRepository contexts)
     {
         _projects = projects;
         _ledgers = ledgers;

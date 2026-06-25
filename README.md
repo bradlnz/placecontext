@@ -1,18 +1,20 @@
-# PlaceContext — hosted MCP server + codebase-visibility portal
+# PlaceContext — hosted MCP server + context-visibility portal
 
-A **hosted MCP server** that is the system of record for *development context* across multiple
-projects, paired with an embedded web **portal** (MCP-Inspector-style). Both surfaces run in one
-process on `http://localhost:7700`: the portal at the site root and the MCP server over
-**Streamable HTTP** at `/mcp`.
+A **hosted MCP server** that is the system of record for *project context* across multiple
+projects in **any industry**, paired with an embedded web **portal** (MCP-Inspector-style). Both
+surfaces run in one process on `http://localhost:7700`: the portal at the site root and the MCP
+server over **Streamable HTTP** at `/mcp`.
 
-A coding agent (Claude Code) connects to `/mcp` and reads/writes context through the MCP tools
-while developing features; you watch and steer from the portal. PlaceContext:
+An AI agent (e.g. Claude Code) connects to `/mcp` and reads/writes context through the MCP tools
+while doing the work; you watch and steer from the portal, and a **generation layer turns the
+accumulated data into defined reports**. PlaceContext:
 
 - **Registers projects on demand** through the MCP `create_project` tool (no folder scanning) and
-  **graphifies** each into a decision tree.
-- Routes **every change through a git-backed ledger** (what/why/author/agent-vs-human/
-  test-delta/debt-delta → scoped commit → `graphify --update`).
-- Measures **technical debt** and **agentic debt** and surfaces them on dashboards.
+  **graphifies** each into a knowledge graph.
+- Routes **every change through an activity log** (what/why/author/agent-vs-human/
+  check-delta/risk-delta → optional scoped git commit when the project is a repo → `graphify --update`).
+- Measures **technical risk** and **process risk** and surfaces them on dashboards.
+- Captures **requirements** (any domain's standards) that drive the review/skill MCP prompts.
 
 Built **Onion-first and test-first** (mirrors the CodeRag template): the inner layers go green in
 dependency order **Domain → Application → Infrastructure → Host**. Domain, Application, and

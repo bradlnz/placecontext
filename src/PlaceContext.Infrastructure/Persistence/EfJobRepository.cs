@@ -1,0 +1,184 @@
+using System.Text.Json;
+using PlaceContext.Domain.Entities;
+using PlaceContext.Domain.Repositories;
+using PlaceContext.Domain.ValueObjects;
+using Microsoft.EntityFrameworkCore;
+
+namespace PlaceContext.Infrastructure.Persistence;
+
+public sealed class EfJobRepository : IJobRepository
+{
+    private readonly AppDbContext _db;
+    private static readonly JsonSerializerOptions Json = new() { WriteIndented = false };
+
+    public EfJobRepository(AppDbContext db) => _db = db;
+
+    public async Task AddAsync(Job job, CancellationToken ct = default)
+        => await _db.Jobs.AddAsync(ToRow(job), ct);
+
+    public async Task UpdateAsync(Job job, CancellationToken ct = default)
+    {
+        var existing = await _db.Jobs.FindAsync(new object[] { job.Id }, ct);
+        if (existing is null) return;
+
+        var updated = ToRow(job);
+        existing.Name = updated.Name;
+        existing.Description = updated.Description;
+        existing.MapSourceKind = updated.MapSourceKind;
+        existing.MapImage = updated.MapImage;
+        existing.MapRuntimeId = updated.MapRuntimeId;
+        existing.MapSource = updated.MapSource;
+        existing.MapFilesJson = updated.MapFilesJson;
+        existing.MapEntrypoint = updated.MapEntrypoint;
+        existing.InputPayloadsJson = updated.InputPayloadsJson;
+        existing.MapEnvJson = updated.MapEnvJson;
+        existing.ReduceSourceKind = updated.ReduceSourceKind;
+        existing.ReduceImage = updated.ReduceImage;
+        existing.ReduceRuntimeId = updated.ReduceRuntimeId;
+        existing.ReduceSource = updated.ReduceSource;
+        existing.ReduceFilesJson = updated.ReduceFilesJson;
+        existing.ReduceEntrypoint = updated.ReduceEntrypoint;
+        existing.ReduceEnvJson = updated.ReduceEnvJson;
+        existing.SuccessCodesJson = updated.SuccessCodesJson;
+        existing.PartialCodesJson = updated.PartialCodesJson;
+        existing.ConcurrencyLimit = updated.ConcurrencyLimit;
+        existing.AllowNetworkEgress = updated.AllowNetworkEgress;
+        existing.UpdatedAt = updated.UpdatedAt;
+    }
+
+    public async Task<Job?> GetByIdAsync(Guid jobId, CancellationToken ct = default)
+    {
+        var row = await _db.Jobs.AsNoTracking().FirstOrDefaultAsync(j => j.Id == jobId, ct);
+        return row is null ? null : ToDomain(row);
+    }
+
+    public async Task<IReadOnlyList<Job>> ListForProjectAsync(Guid projectId, CancellationToken ct = default)
+    {
+        var rows = await _db.Jobs.AsNoTracking()
+            .Where(j => j.ProjectId == projectId)
+            .OrderBy(j => j.CreatedAt)
+            .ToListAsync(ct);
+        return rows.Select(ToDomain).ToList();
+    }
+
+    private static JobRow ToRow(Job job)
+    {
+        var row = new JobRow
+        {
+            Id = job.Id,
+            ProjectId = job.ProjectId,
+            Name = job.Name,
+            Description = job.Description,
+            InputPayloadsJson = JsonSerializer.Serialize(job.MapSpec.InputPayloads, Json),
+            MapEnvJson = JsonSerializer.Serialize(job.MapSpec.Env, Json),
+            SuccessCodesJson = JsonSerializer.Serialize(job.ExitCodePolicy.SuccessCodes.ToList(), Json),
+            PartialCodesJson = JsonSerializer.Serialize(job.ExitCodePolicy.PartialCodes.ToList(), Json),
+            ConcurrencyLimit = job.ConcurrencyLimit,
+            AllowNetworkEgress = job.AllowNetworkEgress,
+            CreatedAt = job.CreatedAt,
+            UpdatedAt = job.UpdatedAt,
+        };
+
+        (row.MapSourceKind, row.MapImage, row.MapRuntimeId, row.MapSource, row.MapFilesJson, row.MapEntrypoint)
+            = SerialiseSource(job.MapSpec.Source);
+
+        if (job.ReduceSpec is not null)
+        {
+            var (kind, img, rtId, src, filesJson, entry) = SerialiseSource(job.ReduceSpec.Source);
+            row.ReduceSourceKind = kind;
+            row.ReduceImage = img;
+            row.ReduceRuntimeId = rtId;
+            row.ReduceSource = src;
+            row.ReduceFilesJson = filesJson;
+            row.ReduceEntrypoint = entry;
+            row.ReduceEnvJson = JsonSerializer.Serialize(job.ReduceSpec.Env, Json);
+        }
+
+        return row;
+    }
+
+    private static (string Kind, string? Image, string? RuntimeId, string? Source, string? FilesJson, string? Entrypoint)
+        SerialiseSource(WorkloadSource source) => source switch
+        {
+            WorkloadSource.ImageWorkload img => ("image", img.Image, null, null, null, null),
+            WorkloadSource.CodeWorkload code => (
+                "code", null, code.RuntimeId,
+                code.Source, // legacy single-source column kept populated with the entry file for back-compat
+                JsonSerializer.Serialize(code.Files.Select(f => new CodeFileJson(f.Path, f.Content)).ToList(), Json),
+                code.Entrypoint),
+            _ => throw new InvalidOperationException($"Unknown WorkloadSource type: {source.GetType().Name}"),
+        };
+
+    private static Job ToDomain(JobRow row)
+    {
+        var inputPayloads = JsonSerializer.Deserialize<List<string>>(row.InputPayloadsJson, Json)
+            ?? new List<string>();
+        var mapEnv = JsonSerializer.Deserialize<Dictionary<string, string>>(row.MapEnvJson, Json)
+            ?? new Dictionary<string, string>();
+        var successCodes = JsonSerializer.Deserialize<List<int>>(row.SuccessCodesJson, Json)
+            ?? new List<int> { 0 };
+        var partialCodes = JsonSerializer.Deserialize<List<int>>(row.PartialCodesJson, Json)
+            ?? new List<int>();
+
+        var mapSource = DeserialiseSource("map", row.MapSourceKind,
+            row.MapImage, row.MapRuntimeId, row.MapSource, row.MapFilesJson, row.MapEntrypoint);
+        var mapSpec = new MapSpec(mapSource, inputPayloads, mapEnv);
+
+        ReduceSpec? reduceSpec = null;
+        if (row.ReduceSourceKind is not null)
+        {
+            var reduceSource = DeserialiseSource("reduce", row.ReduceSourceKind,
+                row.ReduceImage, row.ReduceRuntimeId, row.ReduceSource, row.ReduceFilesJson, row.ReduceEntrypoint);
+            var reduceEnv = row.ReduceEnvJson is not null
+                ? JsonSerializer.Deserialize<Dictionary<string, string>>(row.ReduceEnvJson, Json)
+                    ?? new Dictionary<string, string>()
+                : new Dictionary<string, string>();
+            reduceSpec = new ReduceSpec(reduceSource, reduceEnv);
+        }
+
+        var policy = new ExitCodePolicy(successCodes, partialCodes);
+
+        return Job.Rehydrate(
+            row.Id, row.ProjectId, row.Name, row.Description,
+            mapSpec, reduceSpec, row.ConcurrencyLimit, policy, row.CreatedAt, row.UpdatedAt,
+            allowNetworkEgress: row.AllowNetworkEgress);
+    }
+
+    private static WorkloadSource DeserialiseSource(
+        string context,
+        string kind,
+        string? image, string? runtimeId, string? source, string? filesJson, string? entrypoint)
+        => kind switch
+        {
+            "image" => new WorkloadSource.ImageWorkload(
+                image ?? throw new InvalidOperationException($"{context} image is null for ImageWorkload row.")),
+            "code" => DeserialiseCode(context,
+                runtimeId ?? throw new InvalidOperationException($"{context} runtimeId is null for CodeWorkload row."),
+                source, filesJson, entrypoint),
+            _ => throw new InvalidOperationException($"Unknown WorkloadSource kind '{kind}' in {context} row."),
+        };
+
+    /// <summary>
+    /// Prefers the multi-file JSON column; falls back to the legacy single-source column (via the
+    /// single-file CodeWorkload constructor, which honours the entrypoint) for rows written before the
+    /// file-set migration.
+    /// </summary>
+    private static WorkloadSource DeserialiseCode(
+        string context, string runtimeId, string? legacySource, string? filesJson, string? entrypoint)
+    {
+        if (!string.IsNullOrWhiteSpace(filesJson))
+        {
+            var files = JsonSerializer.Deserialize<List<CodeFileJson>>(filesJson, Json);
+            if (files is { Count: > 0 })
+                return new WorkloadSource.CodeWorkload(
+                    runtimeId, files.Select(f => new CodeFile(f.Path, f.Content)).ToList(), entrypoint);
+        }
+
+        if (!string.IsNullOrWhiteSpace(legacySource))
+            return new WorkloadSource.CodeWorkload(runtimeId, legacySource!, entrypoint);
+
+        throw new InvalidOperationException($"{context} code workload has neither files nor source.");
+    }
+
+    private sealed record CodeFileJson(string Path, string Content);
+}

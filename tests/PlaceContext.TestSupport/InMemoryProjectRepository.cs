@@ -26,7 +26,7 @@ public sealed class InMemoryProjectRepository : IProjectRepository
     public Task<Project?> GetByIdAsync(ProjectId id, CancellationToken ct = default)
         => Task.FromResult(_store.GetValueOrDefault(id.Value));
 
-    public Task<Project?> GetByPathAsync(RepoPath path, CancellationToken ct = default)
+    public Task<Project?> GetByPathAsync(ProjectPath path, CancellationToken ct = default)
         => Task.FromResult(_store.Values.FirstOrDefault(p => p.Path == path));
 
     public Task<IReadOnlyList<Project>> ListAsync(CancellationToken ct = default)

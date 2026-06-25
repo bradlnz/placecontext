@@ -6,4 +6,4 @@ using PlaceContext.Domain.ValueObjects;
 namespace PlaceContext.Application.Features;
 
 /// <summary>The change timeline for one project, newest first.</summary>
-public sealed record GetTimelineQuery(Guid ProjectId, int Take = 50) : IQuery<ChangeTimelineView>;
+public sealed record GetTimelineQuery(Guid ProjectId, int Take = 50) : IQuery<ActivityTimelineView>;

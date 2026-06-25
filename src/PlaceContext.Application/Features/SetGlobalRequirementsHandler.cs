@@ -7,22 +7,22 @@ using PlaceContext.Domain.ValueObjects;
 
 namespace PlaceContext.Application.Features;
 
-public sealed class SetGlobalRequirementsHandler : ICommandHandler<SetGlobalRequirementsCommand, CodeRequirementsView>
+public sealed class SetGlobalRequirementsHandler : ICommandHandler<SetGlobalRequirementsCommand, RequirementsView>
 {
-    private readonly ICodeRequirementsRepository _requirements;
+    private readonly IRequirementsRepository _requirements;
     private readonly IUnitOfWork _uow;
     private readonly IClock _clock;
 
-    public SetGlobalRequirementsHandler(ICodeRequirementsRepository requirements, IUnitOfWork uow, IClock clock)
+    public SetGlobalRequirementsHandler(IRequirementsRepository requirements, IUnitOfWork uow, IClock clock)
     {
         _requirements = requirements;
         _uow = uow;
         _clock = clock;
     }
 
-    public async Task<CodeRequirementsView> HandleAsync(SetGlobalRequirementsCommand command, CancellationToken ct = default)
+    public async Task<RequirementsView> HandleAsync(SetGlobalRequirementsCommand command, CancellationToken ct = default)
     {
-        var doc = await _requirements.GetGlobalAsync(ct) ?? CodeRequirements.StartGlobal(_clock.UtcNow);
+        var doc = await _requirements.GetGlobalAsync(ct) ?? Requirements.StartGlobal(_clock.UtcNow);
         doc.Replace(command.Markdown, _clock.UtcNow);
         await _requirements.SaveAsync(doc, ct);
         await _uow.SaveChangesAsync(ct);
