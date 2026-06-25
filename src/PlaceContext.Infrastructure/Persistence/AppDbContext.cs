@@ -38,6 +38,7 @@ public sealed class AppDbContext : DbContext, IUnitOfWork
     public DbSet<JobTriggerRow> JobTriggers => Set<JobTriggerRow>();
     public DbSet<EventDefinitionRow> EventDefinitions => Set<EventDefinitionRow>();
     public DbSet<EventOccurrenceRow> EventOccurrences => Set<EventOccurrenceRow>();
+    public DbSet<PendingRunRow> PendingRuns => Set<PendingRunRow>();
 
     Task<int> IUnitOfWork.SaveChangesAsync(CancellationToken ct) => SaveChangesAsync(ct);
 
@@ -220,6 +221,14 @@ public sealed class AppDbContext : DbContext, IUnitOfWork
             e.HasKey(x => x.Id);
             e.HasIndex(x => new { x.Name, x.OccurredAt });
             e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
+        });
+
+        b.Entity<PendingRunRow>(e =>
+        {
+            e.ToTable("pending_job_runs"); // global system queue — NOT tenant-filtered
+            e.HasKey(x => x.Id);
+            // Drained oldest-first among unclaimed rows.
+            e.HasIndex(x => new { x.ClaimedAt, x.EnqueuedAt });
         });
     }
 }

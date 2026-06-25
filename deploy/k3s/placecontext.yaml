@@ -2,14 +2,15 @@
 # __IMAGE__ is substituted by deploy/selfhost.sh with the published image ref.
 # The activation key comes from the placecontext-activation secret (created by the installer).
 #
-# NOTE: the scheduler is a single-process worker — keep replicas at 1 until leader-election lands
-# (otherwise every replica fires due schedules). See task: k3s runner + scheduler leader-election.
+# The scheduler is safe to scale: a Postgres advisory lock elects one replica to scan schedules, and the
+# durable run queue (pending_job_runs) is drained with FOR UPDATE SKIP LOCKED so any replica can execute
+# runs without duplication. Bump replicas freely.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: placecontext
 spec:
-  replicas: 1
+  replicas: 2
   selector:
     matchLabels: { app: placecontext }
   template:

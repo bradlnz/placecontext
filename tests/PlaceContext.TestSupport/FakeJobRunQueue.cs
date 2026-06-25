@@ -7,5 +7,9 @@ public sealed class FakeJobRunQueue : IJobRunQueue
 {
     public List<QueuedJobRun> Enqueued { get; } = new();
 
-    public void Enqueue(QueuedJobRun run) => Enqueued.Add(run);
+    public Task EnqueueAsync(QueuedJobRun run, CancellationToken ct = default)
+    {
+        Enqueued.Add(run);
+        return Task.CompletedTask;
+    }
 }

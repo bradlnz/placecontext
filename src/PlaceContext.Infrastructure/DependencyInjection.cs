@@ -116,10 +116,10 @@ public static class DependencyInjection
             services.AddSingleton<IEmbeddingGateway, Embeddings.NullEmbeddingGateway>();
         services.AddScoped<IRunEmbeddingRepository, EfRunEmbeddingRepository>();
 
-        // Trigger scheduling: cron evaluation, in-process run queue, and the background firing service.
+        // Trigger scheduling: cron evaluation, a durable DB-backed run queue, and the background firing
+        // service (advisory-lock-elected schedule scan + atomic queue drain — correct across replicas).
         services.AddSingleton<ICronSchedule, Scheduling.CronosCronSchedule>();
-        services.AddSingleton<Scheduling.InMemoryJobRunQueue>();
-        services.AddSingleton<IJobRunQueue>(sp => sp.GetRequiredService<Scheduling.InMemoryJobRunQueue>());
+        services.AddScoped<IJobRunQueue, Scheduling.DbJobRunQueue>();
         services.AddHostedService<Scheduling.TriggerSchedulerService>();
 
         return services;
