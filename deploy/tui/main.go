@@ -1062,28 +1062,18 @@ func (c *canvas) box(cxp, cyp int, label string, color int) {
 	c.text(x0+1, y0+1, label, color)
 }
 
-// line draws an edge with Bresenham, choosing a glyph by slope. It won't overwrite a
+// line draws an edge with Bresenham using a single steady glyph ('·'), so a link does not
+// flicker/distort between ─│╱╲ as its slope changes while items orbit. It won't overwrite a
 // non-link cell, so markers/labels drawn earlier stay legible.
 func (c *canvas) line(x0, y0, x1, y1, color int) {
 	dx, dy := x1-x0, y1-y0
 	ax, ay := abs(dx), abs(dy)
-	glyph := '·'
-	switch {
-	case ax > ay*2:
-		glyph = '─'
-	case ay > ax*2:
-		glyph = '│'
-	case dx*dy < 0:
-		glyph = '╱'
-	default:
-		glyph = '╲'
-	}
 	sx, sy := sgn(dx), sgn(dy)
 	err := ax - ay
 	x, y := x0, y0
 	for {
 		if x >= 0 && x < c.w && y >= 0 && y < c.h && c.col[y*c.w+x] == -1 {
-			c.ch[y*c.w+x] = glyph
+			c.ch[y*c.w+x] = '·'
 			c.col[y*c.w+x] = color
 		}
 		if x == x1 && y == y1 {
