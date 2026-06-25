@@ -126,6 +126,96 @@ else
             </div>
         }
 
+        @if (_selectedJobId.HasValue)
+        {
+            <div style="margin-top:24px">
+                <div style="font-size:14px; font-weight:600; margin-bottom:12px">Triggers</div>
+
+                <div style="display:flex; flex-direction:column; gap:8px; margin-bottom:12px">
+                    @foreach (var t in JobTriggers())
+                    {
+                        <div class="dccard" style="padding:12px 16px; display:flex; align-items:center; gap:12px">
+                            <span style="font-size:11px; font-weight:600; padding:3px 8px; border-radius:5px;
+                                  color:@(t.Enabled ? "var(--good)" : "var(--text-3)"); background:@(t.Enabled ? "var(--good-bg)" : "var(--card-2)")">
+                                @(t.Enabled ? "on" : "paused")
+                            </span>
+                            <div style="flex:1; min-width:0">
+                                <div style="font-size:13px; font-weight:600">
+                                    @t.Name <span style="font-size:11px; color:var(--text-3); font-weight:400">· @t.Kind</span>
+                                </div>
+                                <div style="font-size:11px; color:var(--text-3); font-family:'Geist Mono',monospace; margin-top:2px">
+                                    @if (t.Kind == "Schedule")
+                                    {
+                                        <span>@t.CronExpression</span>
+                                        @if (t.NextRunAt.HasValue)
+                                        {
+                                            <span style="margin-left:8px">next @t.NextRunAt.Value.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</span>
+                                        }
+                                    }
+                                    else
+                                    {
+                                        <span>on @t.EventName</span>
+                                    }
+                                    @if (t.LastFiredAt.HasValue)
+                                    {
+                                        <span style="margin-left:8px">last @t.LastFiredAt.Value.ToLocalTime().ToString("MM-dd HH:mm")</span>
+                                    }
+                                </div>
+                            </div>
+                            <button class="dcbtn" @onclick="@(() => ToggleTrigger(t))">@(t.Enabled ? "Pause" : "Enable")</button>
+                            <button class="dcbtn" @onclick="@(() => RemoveTrigger(t.Id))">Delete</button>
+                        </div>
+                    }
+                    @if (!JobTriggers().Any())
+                    {
+                        <div style="font-size:12px; color:var(--text-3)">No triggers — add one below to run this job automatically.</div>
+                    }
+                </div>
+
+                <div class="dccard" style="padding:14px 16px; display:flex; flex-direction:column; gap:10px">
+                    <div style="font-size:12.5px; font-weight:600">Add trigger</div>
+                    <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:flex-end">
+                        <div style="flex:1; min-width:150px">
+                            <label style="font-size:12px; color:var(--text-3); display:block; margin-bottom:4px">Name</label>
+                            <input class="dcinput" style="width:100%" @bind="_trName" placeholder="nightly" />
+                        </div>
+                        <div>
+                            <label style="font-size:12px; color:var(--text-3); display:block; margin-bottom:4px">Kind</label>
+                            <select class="dcinput" @bind="_trKind">
+                                <option value="Schedule">Schedule</option>
+                                <option value="Event">Event</option>
+                            </select>
+                        </div>
+                        @if (_trKind == "Schedule")
+                        {
+                            <div style="flex:1; min-width:150px">
+                                <label style="font-size:12px; color:var(--text-3); display:block; margin-bottom:4px">Cron</label>
+                                <input class="dcinput" style="width:100%" @bind="_trCron" placeholder="0 0 * * *" />
+                            </div>
+                        }
+                        else
+                        {
+                            <div style="flex:1; min-width:150px">
+                                <label style="font-size:12px; color:var(--text-3); display:block; margin-bottom:4px">Event</label>
+                                <input class="dcinput" style="width:100%" list="evt-names" @bind="_trEvent" placeholder="deploy.finished" />
+                                <datalist id="evt-names">
+                                    @foreach (var e in _eventTypes ?? Array.Empty<EventTypeView>())
+                                    {
+                                        <option value="@e.Name" />
+                                    }
+                                </datalist>
+                            </div>
+                        }
+                        <button class="dcbtn primary" disabled="@_trBusy" @onclick="AddTrigger">Add</button>
+                    </div>
+                    @if (_trError is not null)
+                    {
+                        <div style="color:var(--bad); font-size:12px">@_trError</div>
+                    }
+                </div>
+            </div>
+        }
+
     </div>
 }
 
@@ -343,6 +433,16 @@ else
     private string? _message;
     private bool _loading = true;
 
+    // ── Triggers state ────────────────────────────────────────────────────────────────────────────
+    private IReadOnlyList<TriggerView>? _triggers;
+    private IReadOnlyList<EventTypeView>? _eventTypes;
+    private string _trName = "";
+    private string _trKind = "Schedule";
+    private string _trCron = "0 0 * * *";
+    private string _trEvent = "";
+    private bool _trBusy;
+    private string? _trError;
+
     // ── Editor state ────────────────────────────────────────────────────────────────────────────
     private bool _showEditor;
     private bool _saving;
@@ -370,10 +470,57 @@ else
         try
         {
             _jobs = await Svc.ListJobsAsync(ProjectId);
+            _triggers = await Svc.ListTriggersAsync(ProjectId);
+            _eventTypes = await Svc.ListEventTypesAsync();
             Ui.Set("Jobs", "project workload runner");
         }
         catch (Exception ex) { _message = ex.Message; }
         finally { _loading = false; }
+    }
+
+    // ── Triggers ─────────────────────────────────────────────────────────────────────────────────
+
+    private IEnumerable<TriggerView> JobTriggers() =>
+        _triggers?.Where(t => t.JobId == _selectedJobId) ?? Enumerable.Empty<TriggerView>();
+
+    private async Task AddTrigger()
+    {
+        _trError = null;
+        if (!_selectedJobId.HasValue) return;
+        if (string.IsNullOrWhiteSpace(_trName)) { _trError = "Name is required."; return; }
+
+        _trBusy = true;
+        try
+        {
+            var cron = _trKind == "Schedule" ? _trCron : null;
+            var evt = _trKind == "Event" ? _trEvent : null;
+            await Svc.CreateTriggerAsync(new CreateTriggerCommand(_selectedJobId.Value, _trName.Trim(), _trKind, cron, evt));
+            _triggers = await Svc.ListTriggersAsync(ProjectId);
+            _trName = "";
+            _trEvent = "";
+        }
+        catch (Exception ex) { _trError = ex.Message; }
+        finally { _trBusy = false; }
+    }
+
+    private async Task ToggleTrigger(TriggerView t)
+    {
+        try
+        {
+            await Svc.SetTriggerEnabledAsync(t.Id, !t.Enabled);
+            _triggers = await Svc.ListTriggersAsync(ProjectId);
+        }
+        catch (Exception ex) { _trError = ex.Message; }
+    }
+
+    private async Task RemoveTrigger(Guid triggerId)
+    {
+        try
+        {
+            await Svc.DeleteTriggerAsync(triggerId);
+            _triggers = await Svc.ListTriggersAsync(ProjectId);
+        }
+        catch (Exception ex) { _trError = ex.Message; }
     }
 
     private async Task SelectJob(Guid jobId)
