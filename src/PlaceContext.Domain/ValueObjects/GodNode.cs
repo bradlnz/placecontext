@@ -1,8 +1,8 @@
 namespace PlaceContext.Domain.ValueObjects;
 
 /// <summary>
-/// A highly-connected ("god") node — a hotspot of coupling. Touching one is an agentic-debt
-/// signal and a technical-debt contributor.
+/// A highly-connected ("god") node — a hotspot of coupling. Touching one is an process-risk
+/// signal and a technical-risk contributor.
 /// </summary>
 public sealed record GodNode
 {

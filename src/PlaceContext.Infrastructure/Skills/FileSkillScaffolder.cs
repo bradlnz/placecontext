@@ -10,9 +10,9 @@ namespace PlaceContext.Infrastructure.Skills;
 /// </summary>
 public sealed class FileSkillScaffolder : ISkillScaffolder
 {
-    public async Task<string> ScaffoldAsync(RepoPath repoPath, string skillName, string markdown, CancellationToken ct = default)
+    public async Task<string> ScaffoldAsync(ProjectPath projectPath, string skillName, string markdown, CancellationToken ct = default)
     {
-        var dir = Path.Combine(repoPath.Value, ".claude", "skills", skillName);
+        var dir = Path.Combine(projectPath.Value, ".claude", "skills", skillName);
         Directory.CreateDirectory(dir);
         var file = Path.Combine(dir, "SKILL.md");
         await File.WriteAllTextAsync(file, markdown, ct);

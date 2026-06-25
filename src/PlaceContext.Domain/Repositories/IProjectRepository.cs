@@ -9,6 +9,6 @@ public interface IProjectRepository
     Task AddAsync(Project project, CancellationToken ct = default);
     Task UpdateAsync(Project project, CancellationToken ct = default);
     Task<Project?> GetByIdAsync(ProjectId id, CancellationToken ct = default);
-    Task<Project?> GetByPathAsync(RepoPath path, CancellationToken ct = default);
+    Task<Project?> GetByPathAsync(ProjectPath path, CancellationToken ct = default);
     Task<IReadOnlyList<Project>> ListAsync(CancellationToken ct = default);
 }

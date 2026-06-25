@@ -8,13 +8,13 @@ namespace PlaceContext.Application.Features;
 public sealed class DecisionTreeProvider : IDecisionTreeProvider
 {
     private readonly IProjectRepository _projects;
-    private readonly IChangeLedgerRepository _ledgers;
+    private readonly IActivityLogRepository _ledgers;
     private readonly IDecisionRepository _decisions;
     private readonly IToolCallLog _log;
     private readonly DecisionTreeAssembler _assembler;
 
     public DecisionTreeProvider(
-        IProjectRepository projects, IChangeLedgerRepository ledgers, IDecisionRepository decisions,
+        IProjectRepository projects, IActivityLogRepository ledgers, IDecisionRepository decisions,
         IToolCallLog log, DecisionTreeAssembler assembler)
     {
         _projects = projects;

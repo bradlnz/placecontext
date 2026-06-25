@@ -35,15 +35,15 @@ internal static class JsonCodec
         return GraphSnapshotRef.Of(dto.Path, dto.BuiltAt, dto.NodeCount, dto.LinkCount, gods);
     }
 
-    public static string EncodeSignals(IReadOnlyList<DebtSignal> signals)
+    public static string EncodeSignals(IReadOnlyList<RiskSignal> signals)
         => JsonSerializer.Serialize(
             signals.Select(s => new SignalDto(s.Code, s.Kind.ToString(), (int)s.Severity, s.Evidence)).ToList(), Opts);
 
-    public static IReadOnlyList<DebtSignal> DecodeSignals(string? json)
+    public static IReadOnlyList<RiskSignal> DecodeSignals(string? json)
     {
-        if (string.IsNullOrWhiteSpace(json)) return Array.Empty<DebtSignal>();
+        if (string.IsNullOrWhiteSpace(json)) return Array.Empty<RiskSignal>();
         var dtos = JsonSerializer.Deserialize<List<SignalDto>>(json, Opts) ?? new();
-        return dtos.Select(d => DebtSignal.Of(
-            d.Code, Enum.Parse<DebtKind>(d.Kind), (Severity)d.Severity, d.Evidence)).ToList();
+        return dtos.Select(d => RiskSignal.Of(
+            d.Code, Enum.Parse<RiskKind>(d.Kind), (Severity)d.Severity, d.Evidence)).ToList();
     }
 }

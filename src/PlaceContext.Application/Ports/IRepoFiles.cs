@@ -6,8 +6,8 @@ namespace PlaceContext.Application.Ports;
 public interface IRepoFiles
 {
     /// <summary>Returns the contents of the first candidate file that exists (relative paths), or null.</summary>
-    Task<string?> ReadFirstAsync(RepoPath repo, IReadOnlyList<string> candidates, CancellationToken ct = default);
+    Task<string?> ReadFirstAsync(ProjectPath repo, IReadOnlyList<string> candidates, CancellationToken ct = default);
 
     /// <summary>Writes a file at a repo-relative path (creating folders) and returns its absolute path.</summary>
-    Task<string> WriteAsync(RepoPath repo, string relativePath, string content, CancellationToken ct = default);
+    Task<string> WriteAsync(ProjectPath repo, string relativePath, string content, CancellationToken ct = default);
 }

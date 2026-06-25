@@ -10,5 +10,5 @@ namespace PlaceContext.TestSupport;
 public sealed class FakeCodeMetricsProbe : ICodeMetricsProbe
 {
     public CodeMetrics Metrics { get; set; } = CodeMetrics.From(0, 0, 0, 0);
-    public Task<CodeMetrics> ProbeAsync(RepoPath path, CancellationToken ct = default) => Task.FromResult(Metrics);
+    public Task<CodeMetrics> ProbeAsync(ProjectPath path, CancellationToken ct = default) => Task.FromResult(Metrics);
 }

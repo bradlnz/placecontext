@@ -10,9 +10,9 @@ namespace PlaceContext.TestSupport;
 public sealed class FakeSkillScaffolder : ISkillScaffolder
 {
     public string? LastMarkdown { get; private set; }
-    public Task<string> ScaffoldAsync(RepoPath repoPath, string skillName, string markdown, CancellationToken ct = default)
+    public Task<string> ScaffoldAsync(ProjectPath projectPath, string skillName, string markdown, CancellationToken ct = default)
     {
         LastMarkdown = markdown;
-        return Task.FromResult($"{repoPath.Value}/.claude/skills/{skillName}/SKILL.md");
+        return Task.FromResult($"{projectPath.Value}/.claude/skills/{skillName}/SKILL.md");
     }
 }

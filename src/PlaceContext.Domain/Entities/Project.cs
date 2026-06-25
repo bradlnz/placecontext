@@ -15,13 +15,13 @@ public sealed class Project : AggregateRoot
     private Project(
         ProjectId id,
         ProjectName name,
-        RepoPath path,
+        ProjectPath path,
         ProjectStatus status,
         DateTimeOffset discoveredAt,
         DateTimeOffset? registeredAt,
         GraphSnapshotRef? lastGraph,
-        DebtScore? technicalDebt,
-        DebtScore? agenticDebt)
+        RiskScore? technicalRisk,
+        RiskScore? processRisk)
     {
         Id = id;
         Name = name;
@@ -30,24 +30,24 @@ public sealed class Project : AggregateRoot
         DiscoveredAt = discoveredAt;
         RegisteredAt = registeredAt;
         LastGraph = lastGraph;
-        TechnicalDebt = technicalDebt;
-        AgenticDebt = agenticDebt;
+        TechnicalRisk = technicalRisk;
+        ProcessRisk = processRisk;
     }
 
     public ProjectId Id { get; }
     public ProjectName Name { get; private set; }
-    public RepoPath Path { get; }
+    public ProjectPath Path { get; }
     public ProjectStatus Status { get; private set; }
     public DateTimeOffset DiscoveredAt { get; }
     public DateTimeOffset? RegisteredAt { get; private set; }
     public GraphSnapshotRef? LastGraph { get; private set; }
-    public DebtScore? TechnicalDebt { get; private set; }
-    public DebtScore? AgenticDebt { get; private set; }
+    public RiskScore? TechnicalRisk { get; private set; }
+    public RiskScore? ProcessRisk { get; private set; }
 
     public bool IsGraphified => LastGraph is not null;
 
     /// <summary>Factory for a freshly-discovered candidate (not yet registered).</summary>
-    public static Project Discover(RepoPath path, ProjectName name, DateTimeOffset discoveredAt)
+    public static Project Discover(ProjectPath path, ProjectName name, DateTimeOffset discoveredAt)
     {
         ArgumentNullException.ThrowIfNull(path);
         ArgumentNullException.ThrowIfNull(name);
@@ -55,21 +55,21 @@ public sealed class Project : AggregateRoot
         return new Project(
             ProjectId.New(), name, path, ProjectStatus.Discovered,
             discoveredAt, registeredAt: null, lastGraph: null,
-            technicalDebt: null, agenticDebt: null);
+            technicalRisk: null, processRisk: null);
     }
 
     /// <summary>Rebuilds an aggregate from persisted state. Used only by the Infrastructure repository.</summary>
     public static Project Rehydrate(
         ProjectId id,
         ProjectName name,
-        RepoPath path,
+        ProjectPath path,
         ProjectStatus status,
         DateTimeOffset discoveredAt,
         DateTimeOffset? registeredAt,
         GraphSnapshotRef? lastGraph,
-        DebtScore? technicalDebt,
-        DebtScore? agenticDebt)
-        => new(id, name, path, status, discoveredAt, registeredAt, lastGraph, technicalDebt, agenticDebt);
+        RiskScore? technicalRisk,
+        RiskScore? processRisk)
+        => new(id, name, path, status, discoveredAt, registeredAt, lastGraph, technicalRisk, processRisk);
 
     /// <summary>Promotes a discovered candidate to a registered, watched project.</summary>
     public void Register(DateTimeOffset registeredAt)
@@ -105,17 +105,17 @@ public sealed class Project : AggregateRoot
         Raise(new GraphRebuilt(Id, snapshot, snapshot.BuiltAt));
     }
 
-    /// <summary>Applies freshly-computed debt scores to the project's registry record.</summary>
-    public void ApplyDebt(DebtScore technical, DebtScore agentic, DateTimeOffset computedAt)
+    /// <summary>Applies freshly-computed risk scores to the project's registry record.</summary>
+    public void ApplyRisk(RiskScore technical, RiskScore process, DateTimeOffset computedAt)
     {
         ArgumentNullException.ThrowIfNull(technical);
-        ArgumentNullException.ThrowIfNull(agentic);
+        ArgumentNullException.ThrowIfNull(process);
         if (Status == ProjectStatus.Archived)
             throw new InvalidOperationException("Cannot score an archived project.");
 
-        TechnicalDebt = technical;
-        AgenticDebt = agentic;
-        Raise(new DebtRecomputed(Id, technical, agentic, computedAt));
+        TechnicalRisk = technical;
+        ProcessRisk = process;
+        Raise(new RiskRecomputed(Id, technical, process, computedAt));
     }
 
     /// <summary>Stops tracking the project. Terminal state.</summary>

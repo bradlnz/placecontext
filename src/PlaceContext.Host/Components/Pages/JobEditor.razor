@@ -1,0 +1,378 @@
+@page "/project/{ProjectId:guid}/jobs/{JobId:guid}"
+@using PlaceContext.Application.Dtos
+@using PlaceContext.Application.Features
+@inject IPlaceContextService Svc
+@inject PortalUiState Ui
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+<PageTitle>PlaceContext — @(_job?.Name ?? "Job editor")</PageTitle>
+
+@if (_loading)
+{
+    <div style="padding:24px; color:var(--text-3)">Loading…</div>
+}
+else if (_job is null)
+{
+    <div style="padding:24px; color:var(--text-3)">Job not found. <a href="/project/@ProjectId/jobs">Back to jobs</a></div>
+}
+else if (_job.MapSourceKind != "code")
+{
+    <div style="padding:24px; color:var(--text-3)">
+        This job runs a container image (<code>@_job.MapImage</code>), not inline code — there is nothing to edit here.
+        <a href="/project/@ProjectId/jobs">Back to jobs</a>
+    </div>
+}
+else
+{
+    @* ── Toolbar ─────────────────────────────────────────────────────────────────────────── *@
+    <div style="display:flex; align-items:center; gap:12px; padding:10px 16px; border-bottom:1px solid var(--border); background:var(--card)">
+        <button class="dcbtn" style="border:none; background:none; color:var(--text-3); padding:4px"
+                @onclick="@(() => Nav.NavigateTo($"/project/{ProjectId}/jobs"))">←</button>
+        <span style="font-size:14px; font-weight:600">@_job.Name</span>
+        <span style="font-size:11px; font-family:'Geist Mono',monospace; color:var(--brand-2); background:var(--brand-bg); padding:2px 8px; border-radius:5px">@_runtimeId</span>
+        <span style="flex:1"></span>
+        @if (_message is not null)
+        {
+            <span style="font-size:12px; color:var(--text-3)">@_message</span>
+        }
+        <button class="dcbtn" disabled="@_busy" @onclick="RunAsync">
+            @(_running ? "Testing…" : "▶ Test")
+        </button>
+        <button class="dcbtn primary" disabled="@_busy" @onclick="DeployAsync">
+            @(_saving ? "Deploying…" : "Deploy")
+        </button>
+    </div>
+
+    <div style="display:flex; height:calc(100vh - 53px)">
+
+        @* ── File tree ───────────────────────────────────────────────────────────────────── *@
+        <div style="width:240px; flex:none; border-right:1px solid var(--border); background:var(--card); display:flex; flex-direction:column">
+            <div style="display:flex; align-items:center; justify-content:space-between; padding:10px 12px; font-size:11px; text-transform:uppercase; letter-spacing:.5px; color:var(--text-3)">
+                <span>Files</span>
+                <button class="dcbtn" style="padding:2px 7px; font-size:12px" @onclick="StartAddFile" title="Add file">+</button>
+            </div>
+
+            @if (_addingFile)
+            {
+                <div style="padding:4px 10px; display:flex; gap:6px">
+                    <input class="dcinput" style="flex:1; font-size:12px; padding:4px 7px" placeholder="path/name.js"
+                           @bind="_newFileName" @bind:event="oninput" @onkeydown="AddFileKey" @ref="_newFileInput" />
+                    <button class="dcbtn" style="padding:2px 7px" @onclick="ConfirmAddFile">✓</button>
+                </div>
+            }
+
+            <div style="overflow-y:auto; flex:1; padding:2px 6px">
+                @for (var i = 0; i < _files.Count; i++)
+                {
+                    var idx = i;
+                    var file = _files[idx];
+                    var isActive = idx == _active;
+                    var isEntry = file.Path == _entrypoint;
+                    <div class="dcfile @(isActive ? "active" : "")"
+                         style="display:flex; align-items:center; gap:6px; padding:5px 8px; border-radius:5px; cursor:pointer; font-size:12.5px; font-family:'Geist Mono',monospace; @(isActive ? "background:var(--card-2); color:var(--text-1)" : "color:var(--text-2)")"
+                         @onclick="@(() => SwitchFileAsync(idx))">
+                        <span style="flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis" title="@file.Path">@file.Path</span>
+                        @if (isEntry)
+                        {
+                            <span title="Entry point" style="color:var(--brand-2); font-size:11px">★</span>
+                        }
+                        else
+                        {
+                            <button class="dcfile-act" title="Set as entry point" style="border:none; background:none; color:var(--text-3); cursor:pointer; font-size:11px; padding:0"
+                                    @onclick:stopPropagation="true" @onclick="@(() => SetEntry(file.Path))">☆</button>
+                        }
+                        @if (_files.Count > 1)
+                        {
+                            <button class="dcfile-act" title="Delete file" style="border:none; background:none; color:var(--text-3); cursor:pointer; font-size:13px; padding:0"
+                                    @onclick:stopPropagation="true" @onclick="@(() => DeleteFileAsync(idx))">×</button>
+                        }
+                    </div>
+                }
+            </div>
+
+            <div style="padding:8px 12px; border-top:1px solid var(--border); font-size:11px; color:var(--text-3)">
+                Entry: <code style="color:var(--brand-2)">@(_entrypoint ?? "(runtime default)")</code>
+            </div>
+        </div>
+
+        @* ── Editor + results ────────────────────────────────────────────────────────────── *@
+        <div style="flex:1; min-width:0; display:flex; flex-direction:column">
+            <div id="@_editorId" style="flex:1; min-height:0"></div>
+
+            @* Results panel *@
+            <div style="height:@(_panelOpen ? "240px" : "34px"); flex:none; border-top:1px solid var(--border); background:var(--card); display:flex; flex-direction:column; transition:height .12s">
+                <div style="display:flex; align-items:center; gap:10px; padding:7px 14px; cursor:pointer; user-select:none" @onclick="@(() => _panelOpen = !_panelOpen)">
+                    <span style="font-size:11px; text-transform:uppercase; letter-spacing:.5px; color:var(--text-3)">Execution results</span>
+                    @if (_lastRun is not null)
+                    {
+                        <span style="font-size:11px; font-weight:600; padding:2px 8px; border-radius:5px; color:@StatusColor(_lastRun.Status); background:@StatusBg(_lastRun.Status)">@_lastRun.Status</span>
+                    }
+                    <span style="flex:1"></span>
+                    <span style="font-size:12px; color:var(--text-3)">@(_panelOpen ? "▾" : "▴")</span>
+                </div>
+
+                @if (_panelOpen)
+                {
+                    <div style="overflow-y:auto; flex:1; padding:6px 14px 14px">
+                        @if (_lastRun is null)
+                        {
+                            <div style="font-size:12px; color:var(--text-3)">Click <strong>Test</strong> to deploy and run this job. Shard artifacts and logs appear here.</div>
+                        }
+                        else
+                        {
+                            @foreach (var shard in _lastRun.ShardResults)
+                            {
+                                <div style="margin-bottom:12px">
+                                    <div style="font-size:12px; font-weight:600; margin-bottom:4px; display:flex; align-items:center; gap:8px">
+                                        <span>Shard @shard.Index</span>
+                                        <span style="font-size:10.5px; padding:1px 6px; border-radius:4px; color:@StatusColor(shard.Outcome); background:@StatusBg(shard.Outcome)">@shard.Outcome</span>
+                                        <span style="font-size:10.5px; color:var(--text-3)">exit @shard.ExitCode</span>
+                                    </div>
+                                    @if (shard.Artifact is not null)
+                                    {
+                                        <pre style="background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:8px; font-size:10.5px; font-family:'Geist Mono',monospace; white-space:pre-wrap; word-break:break-all; color:var(--text-2); max-height:120px; overflow:auto; margin:0">@PrettyJson(shard.Artifact)</pre>
+                                    }
+                                    @if (!string.IsNullOrWhiteSpace(shard.Log))
+                                    {
+                                        <details style="margin-top:3px">
+                                            <summary style="font-size:10.5px; color:var(--text-3); cursor:pointer">Log</summary>
+                                            <pre style="font-size:10px; font-family:'Geist Mono',monospace; color:var(--text-3); white-space:pre-wrap; margin:3px 0 0">@shard.Log</pre>
+                                        </details>
+                                    }
+                                </div>
+                            }
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public Guid ProjectId { get; set; }
+    [Parameter] public Guid JobId { get; set; }
+
+    private readonly string _editorId = "pcmonaco-" + Guid.NewGuid().ToString("N");
+
+    private JobView? _job;
+    private readonly List<EditorFile> _files = new();
+    private int _active;
+    private string? _entrypoint;
+    private string _runtimeId = "node";
+
+    private JobRunDetailView? _lastRun;
+    private string? _message;
+    private bool _loading = true;
+    private bool _saving;
+    private bool _running;
+    private bool _panelOpen = true;
+    private bool _monacoReady;
+
+    private bool _addingFile;
+    private string _newFileName = "";
+    private ElementReference _newFileInput;
+
+    private bool _busy => _saving || _running;
+
+    private sealed class EditorFile
+    {
+        public string Path { get; set; } = "";
+        public string Content { get; set; } = "";
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _loading = true;
+        _monacoReady = false;
+        _message = null;
+        try
+        {
+            _job = await Svc.GetJobAsync(JobId);
+            if (_job is { MapSourceKind: "code" })
+            {
+                _runtimeId = _job.MapRuntimeId ?? "node";
+                _entrypoint = _job.MapEntrypoint;
+                _files.Clear();
+                if (_job.MapFiles.Count > 0)
+                {
+                    foreach (var f in _job.MapFiles)
+                        _files.Add(new EditorFile { Path = f.Path, Content = f.Content });
+                }
+                else if (_job.MapSource is not null)
+                {
+                    _files.Add(new EditorFile { Path = _entrypoint ?? "main", Content = _job.MapSource });
+                }
+                _active = Math.Max(0, _files.FindIndex(f => f.Path == _entrypoint));
+                Ui.Set(_job.Name, "code editor");
+            }
+        }
+        catch (Exception ex) { _message = ex.Message; }
+        finally { _loading = false; }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_monacoReady || _job is not { MapSourceKind: "code" } || _files.Count == 0)
+            return;
+        _monacoReady = true;
+        var active = _files[_active];
+        await JS.InvokeVoidAsync("pcmonaco.init", _editorId, active.Content, Language(active.Path), "vs-dark");
+    }
+
+    // ── File operations ──────────────────────────────────────────────────────────────────────────
+
+    private async Task SyncActiveAsync()
+    {
+        if (!_monacoReady || _files.Count == 0) return;
+        _files[_active].Content = await JS.InvokeAsync<string>("pcmonaco.getValue", _editorId);
+    }
+
+    private async Task SwitchFileAsync(int idx)
+    {
+        if (idx == _active) return;
+        await SyncActiveAsync();
+        _active = idx;
+        var file = _files[_active];
+        await JS.InvokeVoidAsync("pcmonaco.setValue", _editorId, file.Content, Language(file.Path));
+    }
+
+    private async Task StartAddFile()
+    {
+        _addingFile = true;
+        _newFileName = "";
+        StateHasChanged();
+        await Task.Yield();
+        try { await _newFileInput.FocusAsync(); } catch { /* not yet rendered */ }
+    }
+
+    private async Task AddFileKey(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await ConfirmAddFile();
+        else if (e.Key == "Escape") _addingFile = false;
+    }
+
+    private async Task ConfirmAddFile()
+    {
+        var name = _newFileName.Trim().Replace('\\', '/').TrimStart('/');
+        _message = null;
+        if (string.IsNullOrWhiteSpace(name)) { _addingFile = false; return; }
+        if (_files.Any(f => f.Path == name)) { _message = $"'{name}' already exists."; return; }
+
+        await SyncActiveAsync();
+        _files.Add(new EditorFile { Path = name, Content = "" });
+        _active = _files.Count - 1;
+        _addingFile = false;
+        await JS.InvokeVoidAsync("pcmonaco.setValue", _editorId, "", Language(name));
+    }
+
+    private async Task DeleteFileAsync(int idx)
+    {
+        if (_files.Count <= 1) return;
+        var removed = _files[idx];
+        _files.RemoveAt(idx);
+        if (removed.Path == _entrypoint) _entrypoint = _files.Count == 1 ? null : _files[0].Path;
+        if (_active >= _files.Count) _active = _files.Count - 1;
+        else if (idx < _active) _active--;
+        var file = _files[_active];
+        await JS.InvokeVoidAsync("pcmonaco.setValue", _editorId, file.Content, Language(file.Path));
+    }
+
+    private void SetEntry(string path) => _entrypoint = path;
+
+    // ── Deploy / Test ────────────────────────────────────────────────────────────────────────────
+
+    private async Task DeployAsync()
+    {
+        if (_job is null) return;
+        _saving = true;
+        _message = null;
+        try
+        {
+            await SaveCoreAsync();
+            _message = "Deployed.";
+        }
+        catch (Exception ex) { _message = ex.Message; }
+        finally { _saving = false; }
+    }
+
+    private async Task RunAsync()
+    {
+        if (_job is null) return;
+        _running = true;
+        _message = null;
+        try
+        {
+            await SaveCoreAsync();
+            _lastRun = await Svc.RunJobAsync(JobId);
+            _panelOpen = true;
+            _message = $"Run {_lastRun.Status}.";
+        }
+        catch (Exception ex) { _message = ex.Message; }
+        finally { _running = false; }
+    }
+
+    private async Task SaveCoreAsync()
+    {
+        await SyncActiveAsync();
+
+        // Default the entrypoint to the single file (or first) when none is explicitly chosen.
+        var entry = _entrypoint;
+        if (entry is null && _files.Count > 1) entry = _files[0].Path;
+
+        var files = _files.Select(f => new CodeFileDto(f.Path, f.Content)).ToList();
+        var cmd = new UploadJobCodeCommand(JobId, ProjectId, _job!.Name, _runtimeId, entry, files);
+        _job = await Svc.UploadJobCodeAsync(cmd);
+        _entrypoint = _job.MapEntrypoint ?? entry;
+    }
+
+    // ── Utilities ────────────────────────────────────────────────────────────────────────────────
+
+    private static string Language(string path)
+    {
+        var ext = System.IO.Path.GetExtension(path).ToLowerInvariant();
+        return ext switch
+        {
+            ".js" or ".cjs" or ".mjs" => "javascript",
+            ".ts" => "typescript",
+            ".py" => "python",
+            ".json" => "json",
+            ".sh" => "shell",
+            ".md" => "markdown",
+            ".html" => "html",
+            ".css" => "css",
+            ".yml" or ".yaml" => "yaml",
+            _ => "plaintext",
+        };
+    }
+
+    private static string StatusColor(string status) => status switch
+    {
+        "Succeeded" => "var(--good)",
+        "Partial" => "var(--warn)",
+        "Failed" => "var(--bad)",
+        "Running" => "var(--brand-2)",
+        _ => "var(--text-3)",
+    };
+
+    private static string StatusBg(string status) => status switch
+    {
+        "Succeeded" => "var(--good-bg)",
+        "Partial" => "var(--warn-bg)",
+        "Failed" => "var(--bad-bg)",
+        "Running" => "var(--brand-bg)",
+        _ => "var(--card-2)",
+    };
+
+    private static string PrettyJson(string raw)
+    {
+        try
+        {
+            var doc = System.Text.Json.JsonDocument.Parse(raw);
+            return System.Text.Json.JsonSerializer.Serialize(doc.RootElement,
+                new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+        }
+        catch { return raw; }
+    }
+}

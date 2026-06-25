@@ -7,17 +7,17 @@ namespace PlaceContext.Host.Tools;
 
 /// <summary>
 /// MCP prompt surface: reusable, parameterized prompts an agent can invoke for common PlaceContext
-/// scenarios. Each prompt is assembled from the project's <i>effective code requirements</i> (the
+/// scenarios. Each prompt is assembled from the project's <i>effective requirements</i> (the
 /// global document plus the project's own, defined in the portal) and its context document, so the
 /// agent always works against the standards you set. Prompts are read-only — they return text to
-/// steer the agent; tools (e.g. <c>record_change</c>) are what mutate state.
+/// steer the agent; tools (e.g. <c>record_activity</c>) are what mutate state.
 /// </summary>
 [McpServerPromptType]
 public sealed class PlaceContextPrompts
 {
     [Authorize(Policy = "Member")]
-    [McpServerPrompt(Name = "review_code"), Description("Review the project's current changes against its code requirements (global + project) and context.")]
-    public static async Task<string> ReviewCode(
+    [McpServerPrompt(Name = "review_work"), Description("Review the project's current work against its requirements (global + project) and context.")]
+    public static async Task<string> ReviewWork(
         IPlaceContextService svc,
         [Description("The project's GUID id")] Guid projectId)
     {
@@ -25,27 +25,27 @@ public sealed class PlaceContextPrompts
         return $$"""
         {{header}}
 
-        You are performing a **code review** of the working changes in this project.
+        You are performing a **review** of the current work in this project.
 
-        ## Code requirements (must be satisfied)
+        ## Requirements (must be satisfied)
         {{requirements}}
 
         ## Project context
         {{context}}
 
-        Review the current diff. For each finding give: file:line, the requirement or correctness issue,
-        severity (blocker / major / minor), and a concrete fix. Call out any requirement above that is
-        violated. If the change is clean against the requirements, say so explicitly.
+        Review the current work. For each finding give: where it occurs, the requirement or correctness
+        issue, severity (blocker / major / minor), and a concrete fix. Call out any requirement above that
+        is violated. If the work is clean against the requirements, say so explicitly.
         """;
     }
 
     [Authorize(Policy = "Member")]
-    [McpServerPrompt(Name = "create_skill"), Description("Guide creating a reusable skill/command for the project for a coding agent (Claude Code or Codex), in that agent's format and following the project's requirements.")]
+    [McpServerPrompt(Name = "create_skill"), Description("Guide creating a reusable skill/command for the project for an AI agent (Claude Code or Codex), in that agent's format and following the project's requirements.")]
     public static async Task<string> CreateSkill(
         IPlaceContextService svc,
         [Description("The project's GUID id")] Guid projectId,
         [Description("Short skill name, e.g. 'run-tests' or 'add-endpoint'")] string skillName,
-        [Description("Target coding agent: 'claude' (Claude Code) or 'codex' (OpenAI Codex CLI). Defaults to claude.")] string agent = "claude",
+        [Description("Target AI agent: 'claude' (Claude Code) or 'codex' (OpenAI Codex CLI). Defaults to claude.")] string agent = "claude",
         [Description("Optional one-line description of what the skill should do")] string? description = null)
     {
         var (header, requirements, context) = await GatherAsync(svc, projectId);
@@ -60,14 +60,14 @@ public sealed class PlaceContextPrompts
 
         {{spec.Instructions}}
 
-        Make the skill obey the project's code requirements, reuse its established tooling/commands, and bake
+        Make the skill obey the project's requirements, reuse its established tooling/commands, and bake
         in the PlaceContext workflow:
         - **Pre-action**: load context (`get_context`), pull the next task (`next_work_item`), note starting tokens.
-        - **Guardrails** every change must pass: rationale, tests, architecture review, live verification.
-        - **Post-action**: `record_change` (rationale/files/test deltas/guardrail flags), `record_usage`
+        - **Guardrails** every change must pass: rationale, checks, review, live verification.
+        - **Post-action**: `record_activity` (rationale/items/check deltas/guardrail flags), `record_usage`
           (tokens spent on that change — cost per change), and `complete_work_item`.
 
-        ## Code requirements
+        ## Requirements
         {{requirements}}
 
         ## Project context
@@ -85,7 +85,7 @@ public sealed class PlaceContextPrompts
                 Author it the way the OpenAI Codex CLI expects:
                 - Write a reusable prompt to `.codex/prompts/{{skillName}}.md` (Codex loads project prompts from there).
                 - Start with a one-line summary of when to use it, then concrete, CLI-runnable steps — the exact
-                  commands, files, and checks — matching how this codebase already does things, not generic advice.
+                  commands, files, and checks — matching how this project already does things, not generic advice.
                 - If the guidance should always apply (not just on demand), add it to the project's `AGENTS.md` instead.
                 """),
             _ => ("Claude Code", $$"""
@@ -98,8 +98,8 @@ public sealed class PlaceContextPrompts
         };
 
     [Authorize(Policy = "Member")]
-    [McpServerPrompt(Name = "record_change_guidance"), Description("Walk through recording a change correctly through the git-backed ledger so it passes the process-trust gates.")]
-    public static async Task<string> RecordChangeGuidance(
+    [McpServerPrompt(Name = "record_activity_guidance"), Description("Walk through recording a change correctly into the activity log so it passes the process-trust gates.")]
+    public static async Task<string> RecordActivityGuidance(
         IPlaceContextService svc,
         [Description("The project's GUID id")] Guid projectId)
     {
@@ -107,26 +107,26 @@ public sealed class PlaceContextPrompts
         return $$"""
         {{header}}
 
-        Record the change you just made through PlaceContext's `record_change` tool. To keep agentic
-        debt low, satisfy every trust gate:
+        Record the change you just made through PlaceContext's `record_activity` tool. To keep process
+        risk low, satisfy every trust gate:
 
         1. **Rationale** — explain *why*, not just what.
-        2. **Tests** — report tests added/changed; a change with no test activity is flagged.
-        3. **Touched files & nodes** — list exactly what you changed (these become the scoped commit).
-        4. **Architecture review** — set `architectureReviewerRun` only if you actually ran it.
-        5. **Live verification** — set `liveVerified` only if you ran the app and observed the behavior.
+        2. **Checks** — report checks added/changed; a change with no verification activity is flagged.
+        3. **Touched items & nodes** — list exactly what you changed (these are the scope of the record).
+        4. **Review** — set `architectureReviewerRun` only if you actually ran a review.
+        5. **Live verification** — set `liveVerified` only if you exercised the work and observed the result.
 
-        The change must also uphold the project's code requirements:
+        The change must also uphold the project's requirements:
 
-        ## Code requirements
+        ## Requirements
         {{requirements}}
 
-        Then call `record_change` with an honest, specific `commitMessage`.
+        Then call `record_activity` with an honest, specific `commitMessage`.
         """;
     }
 
     [Authorize(Policy = "Member")]
-    [McpServerPrompt(Name = "onboard"), Description("Load the project's context and code requirements to start a session well-grounded.")]
+    [McpServerPrompt(Name = "onboard"), Description("Load the project's context and requirements to start a session well-grounded.")]
     public static async Task<string> Onboard(
         IPlaceContextService svc,
         [Description("The project's GUID id")] Guid projectId)
@@ -135,16 +135,16 @@ public sealed class PlaceContextPrompts
         return $$"""
         {{header}}
 
-        You are starting a working session on this project. Before writing any code, load what is known:
+        You are starting a working session on this project. Before starting work, load what is known:
 
         ## Project context
         {{context}}
 
-        ## Code requirements you must follow
+        ## Requirements you must follow
         {{requirements}}
 
         Acknowledge the key constraints, then ask what to work on (or proceed with the stated task).
-        Record what you learn with `add_context`, and route every change through `record_change`.
+        Record what you learn with `add_context`, and route every change through `record_activity`.
         """;
     }
 
@@ -157,7 +157,7 @@ public sealed class PlaceContextPrompts
         var ctx = await svc.GetContextAsync(projectId);
 
         var header = $"# Project: {overview.Name}\nPath: {overview.Path}\nStatus: {overview.Status}";
-        var requirements = reqs.IsEmpty ? "_No code requirements defined yet (global or project)._" : reqs.Markdown;
+        var requirements = reqs.IsEmpty ? "_No requirements defined yet (global or project)._" : reqs.Markdown;
         var context = ctx.IsEmpty ? "_No context recorded yet._" : ctx.Markdown;
         return (header, requirements, context);
     }

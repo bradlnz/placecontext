@@ -7,12 +7,12 @@ namespace PlaceContext.Application.Features;
 public sealed class SearchHandler : IQueryHandler<SearchQuery, SearchResultsView>
 {
     private readonly IProjectRepository _projects;
-    private readonly IChangeLedgerRepository _ledgers;
+    private readonly IActivityLogRepository _ledgers;
     private readonly IProjectContextRepository _contexts;
     private readonly IDecisionRepository _decisions;
 
     public SearchHandler(
-        IProjectRepository projects, IChangeLedgerRepository ledgers,
+        IProjectRepository projects, IActivityLogRepository ledgers,
         IProjectContextRepository contexts, IDecisionRepository decisions)
     {
         _projects = projects;

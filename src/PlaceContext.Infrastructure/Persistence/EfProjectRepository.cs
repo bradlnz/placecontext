@@ -28,7 +28,7 @@ public sealed class EfProjectRepository : IProjectRepository
         return row is null ? null : ToDomain(row);
     }
 
-    public async Task<Project?> GetByPathAsync(RepoPath path, CancellationToken ct = default)
+    public async Task<Project?> GetByPathAsync(ProjectPath path, CancellationToken ct = default)
     {
         var row = await _db.Projects.AsNoTracking().FirstOrDefaultAsync(x => x.Path == path.Value, ct);
         return row is null ? null : ToDomain(row);
@@ -53,14 +53,14 @@ public sealed class EfProjectRepository : IProjectRepository
         row.Status = p.Status.ToString();
         row.RegisteredAt = p.RegisteredAt;
         row.GraphJson = JsonCodec.EncodeSnapshot(p.LastGraph);
-        row.TechnicalDebt = p.TechnicalDebt?.Value;
-        row.AgenticDebt = p.AgenticDebt?.Value;
+        row.TechnicalRisk = p.TechnicalRisk?.Value;
+        row.ProcessRisk = p.ProcessRisk?.Value;
     }
 
     private static Project ToDomain(ProjectRow r) => Project.Rehydrate(
-        ProjectId.From(r.Id), ProjectName.From(r.Name), RepoPath.From(r.Path),
+        ProjectId.From(r.Id), ProjectName.From(r.Name), ProjectPath.From(r.Path),
         Enum.Parse<ProjectStatus>(r.Status), r.DiscoveredAt, r.RegisteredAt,
         JsonCodec.DecodeSnapshot(r.GraphJson),
-        r.TechnicalDebt is null ? null : DebtScore.From(r.TechnicalDebt.Value),
-        r.AgenticDebt is null ? null : DebtScore.From(r.AgenticDebt.Value));
+        r.TechnicalRisk is null ? null : RiskScore.From(r.TechnicalRisk.Value),
+        r.ProcessRisk is null ? null : RiskScore.From(r.ProcessRisk.Value));
 }

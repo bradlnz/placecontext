@@ -22,7 +22,7 @@ namespace PlaceContext.Infrastructure.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
-            modelBuilder.Entity("PlaceContext.Infrastructure.Persistence.ChangeRecordRow", b =>
+            modelBuilder.Entity("PlaceContext.Infrastructure.Persistence.ActivityRecordRow", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -42,12 +42,6 @@ namespace PlaceContext.Infrastructure.Migrations
                     b.Property<string>("CommitSha")
                         .HasColumnType("text");
 
-                    b.Property<int>("DebtIntroduced")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("DebtResolved")
-                        .HasColumnType("integer");
-
                     b.Property<bool>("LiveVerified")
                         .HasColumnType("boolean");
 
@@ -60,6 +54,12 @@ namespace PlaceContext.Infrastructure.Migrations
 
                     b.Property<DateTimeOffset>("RecordedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("RiskIntroduced")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("RiskResolved")
+                        .HasColumnType("integer");
 
                     b.Property<int>("Sequence")
                         .HasColumnType("integer");
@@ -92,62 +92,7 @@ namespace PlaceContext.Infrastructure.Migrations
 
                     b.HasIndex("ProjectId", "Sequence");
 
-                    b.ToTable("change_records", (string)null);
-                });
-
-            modelBuilder.Entity("PlaceContext.Infrastructure.Persistence.CodeRequirementsRow", b =>
-                {
-                    b.Property<Guid>("TenantId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("ProjectId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Markdown")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<DateTimeOffset>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("TenantId", "ProjectId");
-
-                    b.ToTable("code_requirements", (string)null);
-                });
-
-            modelBuilder.Entity("PlaceContext.Infrastructure.Persistence.DebtAssessmentRow", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<double>("Agentic")
-                        .HasColumnType("double precision");
-
-                    b.Property<DateTimeOffset>("ComputedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid>("ProjectId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Signals")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<double>("Technical")
-                        .HasColumnType("double precision");
-
-                    b.Property<Guid>("TenantId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ProjectId", "ComputedAt");
-
-                    b.ToTable("debt_assessments", (string)null);
+                    b.ToTable("activity_log", (string)null);
                 });
 
             modelBuilder.Entity("PlaceContext.Infrastructure.Persistence.DecisionRow", b =>
@@ -219,6 +164,153 @@ namespace PlaceContext.Infrastructure.Migrations
                     b.ToTable("invites", (string)null);
                 });
 
+            modelBuilder.Entity("PlaceContext.Infrastructure.Persistence.JobRow", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("AllowNetworkEgress")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<int>("ConcurrencyLimit")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("text");
+
+                    b.Property<string>("InputPayloadsJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("MapEntrypoint")
+                        .HasColumnType("text");
+
+                    b.Property<string>("MapEnvJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("MapFilesJson")
+                        .HasColumnType("text");
+
+                    b.Property<string>("MapImage")
+                        .HasColumnType("text");
+
+                    b.Property<string>("MapRuntimeId")
+                        .HasColumnType("text");
+
+                    b.Property<string>("MapSource")
+                        .HasColumnType("text");
+
+                    b.Property<string>("MapSourceKind")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("image");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("PartialCodesJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ReduceEntrypoint")
+                        .HasColumnType("text");
+
+                    b.Property<string>("ReduceEnvJson")
+                        .HasColumnType("text");
+
+                    b.Property<string>("ReduceFilesJson")
+                        .HasColumnType("text");
+
+                    b.Property<string>("ReduceImage")
+                        .HasColumnType("text");
+
+                    b.Property<string>("ReduceRuntimeId")
+                        .HasColumnType("text");
+
+                    b.Property<string>("ReduceSource")
+                        .HasColumnType("text");
+
+                    b.Property<string>("ReduceSourceKind")
+                        .HasColumnType("text");
+
+                    b.Property<string>("SuccessCodesJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("now()");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProjectId");
+
+                    b.ToTable("jobs", (string)null);
+                });
+
+            modelBuilder.Entity("PlaceContext.Infrastructure.Persistence.JobRunRow", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("FinishedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("JobId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ReduceResultJson")
+                        .HasColumnType("text");
+
+                    b.Property<string>("ShardResultsJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("SnapshotJson")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("{}");
+
+                    b.Property<DateTimeOffset>("StartedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProjectId");
+
+                    b.HasIndex("JobId", "StartedAt");
+
+                    b.ToTable("job_runs", (string)null);
+                });
+
             modelBuilder.Entity("PlaceContext.Infrastructure.Persistence.OAuthClientRow", b =>
                 {
                     b.Property<string>("ClientId")
@@ -270,9 +362,6 @@ namespace PlaceContext.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
-                    b.Property<double?>("AgenticDebt")
-                        .HasColumnType("double precision");
-
                     b.Property<DateTimeOffset>("DiscoveredAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -287,6 +376,9 @@ namespace PlaceContext.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<double?>("ProcessRisk")
+                        .HasColumnType("double precision");
+
                     b.Property<DateTimeOffset?>("RegisteredAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -294,7 +386,7 @@ namespace PlaceContext.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<double?>("TechnicalDebt")
+                    b.Property<double?>("TechnicalRisk")
                         .HasColumnType("double precision");
 
                     b.Property<Guid>("TenantId")
@@ -306,6 +398,96 @@ namespace PlaceContext.Infrastructure.Migrations
                         .IsUnique();
 
                     b.ToTable("projects", (string)null);
+                });
+
+            modelBuilder.Entity("PlaceContext.Infrastructure.Persistence.ReportTemplateRow", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Sections")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "Name")
+                        .IsUnique();
+
+                    b.ToTable("report_templates", (string)null);
+                });
+
+            modelBuilder.Entity("PlaceContext.Infrastructure.Persistence.RequirementsRow", b =>
+                {
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Markdown")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("TenantId", "ProjectId");
+
+                    b.ToTable("requirements", (string)null);
+                });
+
+            modelBuilder.Entity("PlaceContext.Infrastructure.Persistence.RiskAssessmentRow", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("ComputedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<double>("Process")
+                        .HasColumnType("double precision");
+
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Signals")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<double>("Technical")
+                        .HasColumnType("double precision");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProjectId", "ComputedAt");
+
+                    b.ToTable("risk_assessments", (string)null);
                 });
 
             modelBuilder.Entity("PlaceContext.Infrastructure.Persistence.TenantRow", b =>

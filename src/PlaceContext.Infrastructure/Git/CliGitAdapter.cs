@@ -11,12 +11,12 @@ namespace PlaceContext.Infrastructure.Git;
 /// </summary>
 public sealed class CliGitAdapter : IGitPort
 {
-    public bool IsRepository(RepoPath path)
+    public bool IsRepository(ProjectPath path)
         => Directory.Exists(Path.Combine(path.Value, ".git"))
            || Run(path.Value, "rev-parse", "--is-inside-work-tree").ExitCode == 0;
 
     public async Task<CommitSha?> CommitScopedAsync(
-        RepoPath path, IReadOnlyList<string> files, string message, Author author, CancellationToken ct = default)
+        ProjectPath path, IReadOnlyList<string> files, string message, Author author, CancellationToken ct = default)
     {
         if (!IsRepository(path)) return null;
         if (files.Count > 0)
@@ -37,7 +37,7 @@ public sealed class CliGitAdapter : IGitPort
             : null;
     }
 
-    public Task<DateTimeOffset?> GetFileLastModifiedAsync(RepoPath path, string relativeFile, CancellationToken ct = default)
+    public Task<DateTimeOffset?> GetFileLastModifiedAsync(ProjectPath path, string relativeFile, CancellationToken ct = default)
     {
         var r = Run(path.Value, "log", "-1", "--format=%cI", "--", relativeFile);
         if (r.ExitCode != 0 || string.IsNullOrWhiteSpace(r.Stdout))
@@ -45,7 +45,7 @@ public sealed class CliGitAdapter : IGitPort
         return Task.FromResult<DateTimeOffset?>(DateTimeOffset.Parse(r.Stdout.Trim()));
     }
 
-    public Task<IReadOnlyList<CommitInfo>> GetRecentCommitsAsync(RepoPath path, int limit, CancellationToken ct = default)
+    public Task<IReadOnlyList<CommitInfo>> GetRecentCommitsAsync(ProjectPath path, int limit, CancellationToken ct = default)
     {
         if (!IsRepository(path) || limit <= 0)
             return Task.FromResult<IReadOnlyList<CommitInfo>>(Array.Empty<CommitInfo>());

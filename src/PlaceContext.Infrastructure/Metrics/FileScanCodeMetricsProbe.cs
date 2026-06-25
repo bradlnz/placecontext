@@ -5,7 +5,7 @@ using PlaceContext.Domain.ValueObjects;
 namespace PlaceContext.Infrastructure.Metrics;
 
 /// <summary>
-/// Lightweight technical-debt probe: walks the source files (skipping build/dep output), counting
+/// Lightweight technical-risk probe: walks the source files (skipping build/dep output), counting
 /// TODO/FIXME markers and files. Complexity and coverage are best-effort (coverage read from a
 /// cobertura file when present; otherwise reported as unknown = 0 gap).
 /// </summary>
@@ -20,7 +20,7 @@ public sealed partial class FileScanCodeMetricsProbe : ICodeMetricsProbe
     [GeneratedRegex(@"\b(TODO|FIXME|HACK|XXX)\b")]
     private static partial Regex MarkerRegex();
 
-    public Task<CodeMetrics> ProbeAsync(RepoPath path, CancellationToken ct = default)
+    public Task<CodeMetrics> ProbeAsync(ProjectPath path, CancellationToken ct = default)
     {
         int todos = 0, files = 0;
 

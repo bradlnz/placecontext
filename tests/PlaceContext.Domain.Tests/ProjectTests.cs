@@ -9,7 +9,7 @@ public class ProjectTests
     private static readonly DateTimeOffset T0 = new(2026, 6, 23, 12, 0, 0, TimeSpan.Zero);
 
     private static Project Discovered() =>
-        Project.Discover(RepoPath.From("/home/brad/code/demo"), ProjectName.From("demo"), T0);
+        Project.Discover(ProjectPath.From("/home/brad/code/demo"), ProjectName.From("demo"), T0);
 
     private static GraphSnapshotRef Snapshot() =>
         GraphSnapshotRef.Of("/home/brad/code/demo/graphify-out/graph.json", T0, 10, 20,
@@ -67,16 +67,16 @@ public class ProjectTests
     }
 
     [Fact]
-    public void ApplyDebt_sets_both_scores_and_raises_event()
+    public void ApplyRisk_sets_both_scores_and_raises_event()
     {
         var p = Discovered();
         p.Register(T0);
         p.PullDomainEvents();
-        p.ApplyDebt(DebtScore.From(0.3), DebtScore.From(0.8), T0);
+        p.ApplyRisk(RiskScore.From(0.3), RiskScore.From(0.8), T0);
 
-        Assert.Equal(DebtBand.Moderate, p.TechnicalDebt!.Band);
-        Assert.Equal(DebtBand.Critical, p.AgenticDebt!.Band);
-        Assert.Contains(p.PullDomainEvents(), e => e is Events.DebtRecomputed);
+        Assert.Equal(RiskBand.Moderate, p.TechnicalRisk!.Band);
+        Assert.Equal(RiskBand.Critical, p.ProcessRisk!.Band);
+        Assert.Contains(p.PullDomainEvents(), e => e is Events.RiskRecomputed);
     }
 
     [Fact]

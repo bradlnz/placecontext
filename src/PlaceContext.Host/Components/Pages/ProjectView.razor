@@ -20,7 +20,7 @@ else
                 <div style="display:flex; align-items:center; gap:10px">
                     <span style="width:11px; height:11px; border-radius:3px; background:@Viz.LangColor(_overview.Path)"></span>
                     <h1 style="font-size:21px; font-weight:600; margin:0; letter-spacing:-.4px">@_overview.Name</h1>
-                    <span style="font-size:11px; font-weight:600; color:@Viz.BandColor(_overview.Debt.AgenticBand); background:@Viz.BandBg(_overview.Debt.AgenticBand); padding:3px 9px; border-radius:20px">@_overview.Status</span>
+                    <span style="font-size:11px; font-weight:600; color:@Viz.BandColor(_overview.Risk.ProcessBand); background:@Viz.BandBg(_overview.Risk.ProcessBand); padding:3px 9px; border-radius:20px">@_overview.Status</span>
                 </div>
                 <div style="font-family:'Geist Mono',monospace; font-size:12px; color:var(--text-3); margin-top:7px">@_overview.Path</div>
             </div>
@@ -34,6 +34,7 @@ else
             <button class="dctab @(_tab == "board" ? "active" : "")" @onclick='@(() => _tab = "board")'>Board<span class="n">@(_workItems?.Count(w => w.Status != "Done") ?? 0)</span></button>
             <button class="dctab @(_tab == "knowledge" ? "active" : "")" @onclick='@(() => _tab = "knowledge")'>Knowledge</button>
             <button class="dctab @(_tab == "activity" ? "active" : "")" @onclick='@(() => _tab = "activity")'>Activity</button>
+            <button class="dctab" @onclick="@(() => Nav.NavigateTo($"/project/{Id}/jobs"))">Jobs</button>
         </div>
 
         @if (_tab == "overview")
@@ -64,13 +65,13 @@ else
                 </div>
         </div>
 
-        <!-- debt + god-nodes -->
+        <!-- risk + god-nodes -->
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px; align-items:start; margin-top:14px">
                 <div class="dccard" style="padding:15px">
-                    <div style="font-size:13px; font-weight:600; margin-bottom:14px">Debt profile</div>
+                    <div style="font-size:13px; font-weight:600; margin-bottom:14px">Risk profile</div>
                     <div style="display:flex; gap:14px">
-                        @DebtRing("Agentic debt", Viz.Pct(_overview.Debt.Agentic))
-                        @DebtRing("Technical debt", Viz.Pct(_overview.Debt.Technical))
+                        @RiskRing("Process risk", Viz.Pct(_overview.Risk.Process))
+                        @RiskRing("Technical risk", Viz.Pct(_overview.Risk.Technical))
                     </div>
                 </div>
 
@@ -124,11 +125,11 @@ else
             </div>
         </div>
 
-        <!-- project code requirements -->
+        <!-- project requirements -->
         <div class="dccard" style="margin-top:14px; overflow:hidden">
             <div style="display:flex; align-items:center; justify-content:space-between; padding:13px 15px; border-bottom:1px solid var(--border)">
                 <div style="display:flex; align-items:center; gap:8px">
-                    <span style="font-size:13px; font-weight:600">Code requirements</span>
+                    <span style="font-size:13px; font-weight:600">Requirements</span>
                     <span style="font-family:'Geist Mono',monospace; font-size:11px; color:var(--text-3)">project-specific · added on top of the global requirements</span>
                 </div>
                 <div style="display:flex; align-items:center; gap:11px">
@@ -216,7 +217,7 @@ else
             <div style="padding:13px 15px; border-bottom:1px solid var(--border); font-size:13px; font-weight:600">Recent changes</div>
             @if (_timeline is null || _timeline.Changes.Count == 0)
             {
-                <div style="padding:14px 15px; color:var(--text-3); font-size:12.5px">No changes recorded yet — they flow in through the <code>record_change</code> MCP tool.</div>
+                <div style="padding:14px 15px; color:var(--text-3); font-size:12.5px">No changes recorded yet — they flow in through the <code>record_activity</code> MCP tool.</div>
             }
             else
             {
@@ -271,7 +272,7 @@ else
 
     private ProjectOverviewView? _overview;
     private GraphVizView? _graph;
-    private ChangeTimelineView? _timeline;
+    private ActivityTimelineView? _timeline;
     private IReadOnlyList<DecisionView>? _decisions;
     private IReadOnlyList<WorkItemView>? _workItems;
     private string _wiTitle = "";
@@ -321,7 +322,7 @@ else
     private bool _savingContext;
     private bool ContextDirty => !string.Equals(_contextDraft, _contextSaved, StringComparison.Ordinal);
 
-    private CodeRequirementsView? _requirements;
+    private RequirementsView? _requirements;
     private string _reqDraft = string.Empty;
     private string _reqSaved = string.Empty;
     private bool _savingReq;
@@ -427,7 +428,7 @@ else
         finally { _busy = false; }
     }
 
-    private RenderFragment DebtRing(string label, int pct) => builder =>
+    private RenderFragment RiskRing(string label, int pct) => builder =>
     {
         var color = Viz.Tone(pct);
         builder.AddMarkupContent(0, $@"

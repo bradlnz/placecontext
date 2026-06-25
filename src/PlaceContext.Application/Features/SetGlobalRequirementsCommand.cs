@@ -7,5 +7,5 @@ using PlaceContext.Domain.ValueObjects;
 
 namespace PlaceContext.Application.Features;
 
-/// <summary>Replace the global code-requirements document (applies to every project).</summary>
-public sealed record SetGlobalRequirementsCommand(string Markdown) : ICommand<CodeRequirementsView>;
+/// <summary>Replace the global requirements document (applies to every project).</summary>
+public sealed record SetGlobalRequirementsCommand(string Markdown) : ICommand<RequirementsView>;

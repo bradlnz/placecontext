@@ -19,49 +19,54 @@ public static class DependencyInjection
         services.AddScoped<IPlaceContextService, PlaceContextService>();
 
         // Pure domain services (no I/O) used by handlers.
-        services.AddSingleton<DebtScoreCalculator>();
-        services.AddSingleton<AgenticDebtScorer>();
-        services.AddSingleton<TechnicalDebtScorer>();
+        services.AddSingleton<RiskScoreCalculator>();
+        services.AddSingleton<ProcessRiskScorer>();
+        services.AddSingleton<TechnicalRiskScorer>();
         services.AddSingleton<ContextStalenessPolicy>();
         services.AddSingleton<DecisionTreeAssembler>();
         services.AddSingleton<TokenCostCalculator>();
-
-        // Decision tree (replaces the graphify reader).
+        // Knowledge graph (replaces the graphify reader).
         services.AddScoped<IDecisionTreeProvider, DecisionTreeProvider>();
 
-        // Shared debt computation (used by recompute + project creation).
-        services.AddScoped<DebtAssessmentService>();
+        // Shared risk computation (used by recompute + project creation).
+        services.AddScoped<RiskAssessmentService>();
 
         // Commands.
         services.AddScoped<ICommandHandler<CreateProjectCommand, ProjectSummaryView>, CreateProjectHandler>();
         services.AddScoped<ICommandHandler<RegisterProjectCommand, ProjectSummaryView>, RegisterProjectHandler>();
         services.AddScoped<ICommandHandler<RebuildGraphCommand, ProjectSummaryView>, RebuildGraphHandler>();
-        services.AddScoped<ICommandHandler<RecordChangeCommand, ChangeRecordView>, RecordChangeHandler>();
-        services.AddScoped<ICommandHandler<RecomputeDebtCommand, DebtDashboardView>, RecomputeDebtHandler>();
+        services.AddScoped<ICommandHandler<RecordActivityCommand, ActivityRecordView>, RecordActivityHandler>();
+        services.AddScoped<ICommandHandler<RecomputeRiskCommand, RiskDashboardView>, RecomputeRiskHandler>();
         services.AddScoped<ICommandHandler<AddDecisionCommand, DecisionView>, AddDecisionHandler>();
         services.AddScoped<ICommandHandler<AddContextCommand, ProjectContextView>, AddContextHandler>();
         services.AddScoped<ICommandHandler<SetContextCommand, ProjectContextView>, SetContextHandler>();
         services.AddScoped<ICommandHandler<ScaffoldSkillCommand, SkillScaffoldView>, ScaffoldSkillHandler>();
-        services.AddScoped<ICommandHandler<SetGlobalRequirementsCommand, CodeRequirementsView>, SetGlobalRequirementsHandler>();
-        services.AddScoped<ICommandHandler<SetProjectRequirementsCommand, CodeRequirementsView>, SetProjectRequirementsHandler>();
+        services.AddScoped<ICommandHandler<SetGlobalRequirementsCommand, RequirementsView>, SetGlobalRequirementsHandler>();
+        services.AddScoped<ICommandHandler<SetProjectRequirementsCommand, RequirementsView>, SetProjectRequirementsHandler>();
         services.AddScoped<ICommandHandler<RecordUsageCommand, UsageEntryView>, RecordUsageHandler>();
         services.AddScoped<ICommandHandler<OnboardCommand, OnboardResultView>, OnboardHandler>();
         services.AddScoped<ICommandHandler<AddWorkItemCommand, WorkItemView>, AddWorkItemHandler>();
         services.AddScoped<ICommandHandler<NextWorkItemCommand, WorkItemView?>, NextWorkItemHandler>();
         services.AddScoped<ICommandHandler<CompleteWorkItemCommand, WorkItemView>, CompleteWorkItemHandler>();
         services.AddScoped<ICommandHandler<MoveWorkItemCommand, WorkItemView>, MoveWorkItemHandler>();
+        services.AddScoped<ICommandHandler<GenerateReportCommand, ReportView>, GenerateReportHandler>();
+        services.AddScoped<ICommandHandler<DefineReportTemplateCommand, ReportTemplateView>, DefineReportTemplateHandler>();
+        services.AddScoped<ICommandHandler<CreateJobCommand, JobView>, CreateJobHandler>();
+        services.AddScoped<ICommandHandler<UpdateJobCommand, JobView>, UpdateJobHandler>();
+        services.AddScoped<ICommandHandler<RunJobCommand, JobRunDetailView>, RunJobHandler>();
+        services.AddScoped<ICommandHandler<UploadJobCodeCommand, JobView>, UploadJobCodeHandler>();
 
         // Queries.
         services.AddScoped<IQueryHandler<GetProjectsQuery, IReadOnlyList<ProjectSummaryView>>, GetProjectsHandler>();
         services.AddScoped<IQueryHandler<GetProjectOverviewQuery, ProjectOverviewView>, GetProjectOverviewHandler>();
-        services.AddScoped<IQueryHandler<GetTimelineQuery, ChangeTimelineView>, GetTimelineHandler>();
-        services.AddScoped<IQueryHandler<GetDebtDashboardQuery, DebtDashboardView>, GetDebtDashboardHandler>();
+        services.AddScoped<IQueryHandler<GetTimelineQuery, ActivityTimelineView>, GetTimelineHandler>();
+        services.AddScoped<IQueryHandler<GetRiskDashboardQuery, RiskDashboardView>, GetRiskDashboardHandler>();
         services.AddScoped<IQueryHandler<GetDecisionsQuery, IReadOnlyList<DecisionView>>, GetDecisionsHandler>();
         services.AddScoped<IQueryHandler<QueryGraphQuery, GraphQueryView>, QueryGraphHandler>();
         services.AddScoped<IQueryHandler<GetContextQuery, ProjectContextView>, GetContextHandler>();
         services.AddScoped<IQueryHandler<SuggestImprovementsQuery, ImprovementsView>, SuggestImprovementsHandler>();
-        services.AddScoped<IQueryHandler<GetGlobalRequirementsQuery, CodeRequirementsView>, GetGlobalRequirementsHandler>();
-        services.AddScoped<IQueryHandler<GetProjectRequirementsQuery, CodeRequirementsView>, GetProjectRequirementsHandler>();
+        services.AddScoped<IQueryHandler<GetGlobalRequirementsQuery, RequirementsView>, GetGlobalRequirementsHandler>();
+        services.AddScoped<IQueryHandler<GetProjectRequirementsQuery, RequirementsView>, GetProjectRequirementsHandler>();
         services.AddScoped<IQueryHandler<GetEffectiveRequirementsQuery, EffectiveRequirementsView>, GetEffectiveRequirementsHandler>();
         services.AddScoped<IQueryHandler<GetCostDashboardQuery, CostDashboardView>, GetCostDashboardHandler>();
         services.AddScoped<IQueryHandler<GetRootCostQuery, RootCostView>, GetRootCostHandler>();
@@ -69,13 +74,18 @@ public static class DependencyInjection
         services.AddScoped<IQueryHandler<GetFocusQuery, FocusView>, FocusHandler>();
         services.AddScoped<IQueryHandler<GetBrainQuery, GraphVizView>, BrainHandler>();
         services.AddScoped<IQueryHandler<GetWorkItemsQuery, IReadOnlyList<WorkItemView>>, GetWorkItemsHandler>();
+        services.AddScoped<IQueryHandler<ListReportTemplatesQuery, IReadOnlyList<ReportTemplateView>>, ListReportTemplatesHandler>();
 
         // Root-level read models (redesigned portal).
         services.AddScoped<IQueryHandler<GetRootStatsQuery, RootStatsView>, GetRootStatsHandler>();
-        services.AddScoped<IQueryHandler<GetRootDebtQuery, RootDebtView>, GetRootDebtHandler>();
-        services.AddScoped<IQueryHandler<GetRootLedgerQuery, RootLedgerView>, GetRootLedgerHandler>();
+        services.AddScoped<IQueryHandler<GetRootRiskQuery, RootRiskView>, GetRootRiskHandler>();
+        services.AddScoped<IQueryHandler<GetRootActivityQuery, RootActivityView>, GetRootActivityHandler>();
         services.AddScoped<IQueryHandler<GetGraphVizQuery, GraphVizView>, GetGraphVizHandler>();
         services.AddScoped<IQueryHandler<GetRecentToolCallsQuery, IReadOnlyList<ToolCallView>>, GetRecentToolCallsHandler>();
+        services.AddScoped<IQueryHandler<ListJobsQuery, IReadOnlyList<JobView>>, ListJobsHandler>();
+        services.AddScoped<IQueryHandler<ListJobRunsQuery, IReadOnlyList<JobRunView>>, ListJobRunsHandler>();
+        services.AddScoped<IQueryHandler<GetJobRunQuery, JobRunDetailView?>, GetJobRunHandler>();
+        services.AddScoped<IQueryHandler<GetJobQuery, JobView?>, GetJobHandler>();
 
         return services;
     }

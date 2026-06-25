@@ -14,23 +14,23 @@ public interface IPlaceContextService
     Task<OnboardResultView> OnboardAsync(string path, string? name, string agent, int backfillLimit, CancellationToken ct = default);
     Task<ProjectSummaryView> RegisterProjectAsync(Guid projectId, CancellationToken ct = default);
     Task<ProjectSummaryView> RebuildGraphAsync(Guid projectId, bool incremental = true, CancellationToken ct = default);
-    Task<ChangeRecordView> RecordChangeAsync(RecordChangeCommand command, CancellationToken ct = default);
-    Task<DebtDashboardView> RecomputeDebtAsync(Guid projectId, CancellationToken ct = default);
+    Task<ActivityRecordView> RecordActivityAsync(RecordActivityCommand command, CancellationToken ct = default);
+    Task<RiskDashboardView> RecomputeRiskAsync(Guid projectId, CancellationToken ct = default);
     Task<DecisionView> AddDecisionAsync(Guid projectId, string question, string choice, string? rationale, CancellationToken ct = default);
 
     Task<IReadOnlyList<ProjectSummaryView>> GetProjectsAsync(CancellationToken ct = default);
     Task<ProjectOverviewView> GetProjectOverviewAsync(Guid projectId, CancellationToken ct = default);
-    Task<ChangeTimelineView> GetTimelineAsync(Guid projectId, int take = 50, CancellationToken ct = default);
-    Task<DebtDashboardView> GetDebtDashboardAsync(Guid projectId, CancellationToken ct = default);
+    Task<ActivityTimelineView> GetTimelineAsync(Guid projectId, int take = 50, CancellationToken ct = default);
+    Task<RiskDashboardView> GetRiskDashboardAsync(Guid projectId, CancellationToken ct = default);
     Task<IReadOnlyList<DecisionView>> GetDecisionsAsync(Guid projectId, CancellationToken ct = default);
     Task<GraphQueryView> QueryGraphAsync(Guid projectId, string question, CancellationToken ct = default);
     Task<ProjectContextView> AddContextAsync(Guid projectId, string section, CancellationToken ct = default);
     Task<ProjectContextView> SetContextAsync(Guid projectId, string markdown, CancellationToken ct = default);
     Task<ProjectContextView> GetContextAsync(Guid projectId, CancellationToken ct = default);
-    Task<CodeRequirementsView> GetGlobalRequirementsAsync(CancellationToken ct = default);
-    Task<CodeRequirementsView> SetGlobalRequirementsAsync(string markdown, CancellationToken ct = default);
-    Task<CodeRequirementsView> GetProjectRequirementsAsync(Guid projectId, CancellationToken ct = default);
-    Task<CodeRequirementsView> SetProjectRequirementsAsync(Guid projectId, string markdown, CancellationToken ct = default);
+    Task<RequirementsView> GetGlobalRequirementsAsync(CancellationToken ct = default);
+    Task<RequirementsView> SetGlobalRequirementsAsync(string markdown, CancellationToken ct = default);
+    Task<RequirementsView> GetProjectRequirementsAsync(Guid projectId, CancellationToken ct = default);
+    Task<RequirementsView> SetProjectRequirementsAsync(Guid projectId, string markdown, CancellationToken ct = default);
     Task<EffectiveRequirementsView> GetEffectiveRequirementsAsync(Guid projectId, CancellationToken ct = default);
     Task<UsageEntryView> RecordUsageAsync(Guid projectId, string model, long inputTokens, long outputTokens, string? description, CancellationToken ct = default);
     Task<CostDashboardView> GetCostDashboardAsync(Guid projectId, CancellationToken ct = default);
@@ -46,10 +46,26 @@ public interface IPlaceContextService
     Task<ImprovementsView> SuggestImprovementsAsync(Guid projectId, CancellationToken ct = default);
     Task<SkillScaffoldView> ScaffoldSkillAsync(Guid projectId, string skillName, string? description, CancellationToken ct = default);
 
+    // Report generation layer.
+    Task<ReportView> GenerateReportAsync(Guid projectId, string? templateName, bool createWorkItems, CancellationToken ct = default);
+    Task<ReportView> SynthesizeContextAsync(Guid projectId, bool createWorkItems, CancellationToken ct = default);
+    Task<IReadOnlyList<ReportTemplateView>> ListReportTemplatesAsync(CancellationToken ct = default);
+    Task<ReportTemplateView> DefineReportTemplateAsync(string name, string description, IReadOnlyList<string> sources, CancellationToken ct = default);
+
+    // Job management.
+    Task<JobView> CreateJobAsync(CreateJobCommand command, CancellationToken ct = default);
+    Task<JobView> UpdateJobAsync(UpdateJobCommand command, CancellationToken ct = default);
+    Task<JobRunDetailView> RunJobAsync(Guid jobId, CancellationToken ct = default);
+    Task<IReadOnlyList<JobView>> ListJobsAsync(Guid projectId, CancellationToken ct = default);
+    Task<IReadOnlyList<JobRunView>> ListJobRunsAsync(Guid jobId, CancellationToken ct = default);
+    Task<JobRunDetailView?> GetJobRunAsync(Guid runId, CancellationToken ct = default);
+    Task<JobView?> GetJobAsync(Guid jobId, CancellationToken ct = default);
+    Task<JobView> UploadJobCodeAsync(UploadJobCodeCommand command, CancellationToken ct = default);
+
     // Root-level read models for the redesigned portal.
     Task<RootStatsView> GetRootStatsAsync(CancellationToken ct = default);
-    Task<RootDebtView> GetRootDebtAsync(CancellationToken ct = default);
-    Task<RootLedgerView> GetRootLedgerAsync(int take = 40, CancellationToken ct = default);
+    Task<RootRiskView> GetRootRiskAsync(CancellationToken ct = default);
+    Task<RootActivityView> GetRootActivityAsync(int take = 40, CancellationToken ct = default);
     Task<GraphVizView> GetGraphVizAsync(Guid projectId, CancellationToken ct = default);
     Task<IReadOnlyList<ToolCallView>> GetRecentToolCallsAsync(int take = 100, CancellationToken ct = default);
 }

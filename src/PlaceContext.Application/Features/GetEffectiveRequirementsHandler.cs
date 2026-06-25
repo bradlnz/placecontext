@@ -9,8 +9,8 @@ namespace PlaceContext.Application.Features;
 
 public sealed class GetEffectiveRequirementsHandler : IQueryHandler<GetEffectiveRequirementsQuery, EffectiveRequirementsView>
 {
-    private readonly ICodeRequirementsRepository _requirements;
-    public GetEffectiveRequirementsHandler(ICodeRequirementsRepository requirements) => _requirements = requirements;
+    private readonly IRequirementsRepository _requirements;
+    public GetEffectiveRequirementsHandler(IRequirementsRepository requirements) => _requirements = requirements;
 
     public async Task<EffectiveRequirementsView> HandleAsync(GetEffectiveRequirementsQuery query, CancellationToken ct = default)
     {

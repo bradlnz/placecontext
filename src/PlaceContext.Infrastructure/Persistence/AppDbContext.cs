@@ -24,14 +24,17 @@ public sealed class AppDbContext : DbContext, IUnitOfWork
     public DbSet<UserRow> Users => Set<UserRow>();
     public DbSet<InviteRow> Invites => Set<InviteRow>();
     public DbSet<ProjectRow> Projects => Set<ProjectRow>();
-    public DbSet<ChangeRecordRow> ChangeRecords => Set<ChangeRecordRow>();
+    public DbSet<ActivityRecordRow> ActivityRecords => Set<ActivityRecordRow>();
     public DbSet<DecisionRow> Decisions => Set<DecisionRow>();
-    public DbSet<DebtAssessmentRow> DebtAssessments => Set<DebtAssessmentRow>();
+    public DbSet<RiskAssessmentRow> RiskAssessments => Set<RiskAssessmentRow>();
     public DbSet<ProjectContextRow> ProjectContexts => Set<ProjectContextRow>();
-    public DbSet<CodeRequirementsRow> CodeRequirements => Set<CodeRequirementsRow>();
+    public DbSet<RequirementsRow> Requirements => Set<RequirementsRow>();
     public DbSet<UsageRow> UsageRecords => Set<UsageRow>();
     public DbSet<WorkItemRow> WorkItems => Set<WorkItemRow>();
+    public DbSet<ReportTemplateRow> ReportTemplates => Set<ReportTemplateRow>();
     public DbSet<ToolCallRow> ToolCalls => Set<ToolCallRow>();
+    public DbSet<JobRow> Jobs => Set<JobRow>();
+    public DbSet<JobRunRow> JobRuns => Set<JobRunRow>();
 
     Task<int> IUnitOfWork.SaveChangesAsync(CancellationToken ct) => SaveChangesAsync(ct);
 
@@ -95,9 +98,9 @@ public sealed class AppDbContext : DbContext, IUnitOfWork
             e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
         });
 
-        b.Entity<ChangeRecordRow>(e =>
+        b.Entity<ActivityRecordRow>(e =>
         {
-            e.ToTable("change_records");
+            e.ToTable("activity_log");
             e.HasKey(x => x.Id);
             e.HasIndex(x => new { x.ProjectId, x.Sequence });
             e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
@@ -111,9 +114,9 @@ public sealed class AppDbContext : DbContext, IUnitOfWork
             e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
         });
 
-        b.Entity<DebtAssessmentRow>(e =>
+        b.Entity<RiskAssessmentRow>(e =>
         {
-            e.ToTable("debt_assessments");
+            e.ToTable("risk_assessments");
             e.HasKey(x => x.Id);
             e.HasIndex(x => new { x.ProjectId, x.ComputedAt });
             e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
@@ -126,9 +129,9 @@ public sealed class AppDbContext : DbContext, IUnitOfWork
             e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
         });
 
-        b.Entity<CodeRequirementsRow>(e =>
+        b.Entity<RequirementsRow>(e =>
         {
-            e.ToTable("code_requirements");
+            e.ToTable("requirements");
             // Composite key: each tenant has its own per-project docs AND its own global doc (ProjectId = Guid.Empty).
             e.HasKey(x => new { x.TenantId, x.ProjectId });
             e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
@@ -150,12 +153,43 @@ public sealed class AppDbContext : DbContext, IUnitOfWork
             e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
         });
 
+        b.Entity<ReportTemplateRow>(e =>
+        {
+            e.ToTable("report_templates");
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => new { x.TenantId, x.Name }).IsUnique(); // name unique within a tenant
+            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
+        });
+
         b.Entity<ToolCallRow>(e =>
         {
             e.ToTable("tool_calls");
             e.HasKey(x => x.Id);
             e.HasIndex(x => x.At);
             e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
+        });
+
+        b.Entity<JobRow>(e =>
+        {
+            e.ToTable("jobs");
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => x.ProjectId);
+            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
+            // New columns added for WorkloadSource discriminated union.
+            e.Property(x => x.MapSourceKind).HasDefaultValue("image");
+            e.Property(x => x.UpdatedAt).HasDefaultValueSql("now()");
+            e.Property(x => x.AllowNetworkEgress).HasDefaultValue(false);
+        });
+
+        b.Entity<JobRunRow>(e =>
+        {
+            e.ToTable("job_runs");
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => new { x.JobId, x.StartedAt });
+            e.HasIndex(x => x.ProjectId);
+            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
+            // SnapshotJson stores the full WorkloadSnapshot at run-start.
+            e.Property(x => x.SnapshotJson).HasDefaultValue("{}");
         });
     }
 }

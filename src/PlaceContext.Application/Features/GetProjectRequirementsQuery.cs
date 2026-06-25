@@ -7,5 +7,5 @@ using PlaceContext.Domain.ValueObjects;
 
 namespace PlaceContext.Application.Features;
 
-/// <summary>Fetch a project's own code-requirements document (not merged with global).</summary>
-public sealed record GetProjectRequirementsQuery(Guid ProjectId) : IQuery<CodeRequirementsView>;
+/// <summary>Fetch a project's own requirements document (not merged with global).</summary>
+public sealed record GetProjectRequirementsQuery(Guid ProjectId) : IQuery<RequirementsView>;

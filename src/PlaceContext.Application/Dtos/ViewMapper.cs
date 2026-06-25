@@ -15,27 +15,27 @@ public static class ViewMapper
         p.LastGraph?.GodNodes.Count ?? 0,
         p.LastGraph?.NodeCount ?? 0,
         p.LastGraph?.LinkCount ?? 0,
-        p.TechnicalDebt?.Value,
-        p.TechnicalDebt?.Band.ToString(),
-        p.AgenticDebt?.Value,
-        p.AgenticDebt?.Band.ToString());
+        p.TechnicalRisk?.Value,
+        p.TechnicalRisk?.Band.ToString(),
+        p.ProcessRisk?.Value,
+        p.ProcessRisk?.Band.ToString());
 
     public static GodNodeView ToView(GodNode g) => new(g.Id.Value, g.Label.Value, g.Degree);
 
-    public static DebtSignalView ToView(DebtSignal s) => new(s.Code, s.Severity.ToString(), s.Evidence);
+    public static RiskSignalView ToView(RiskSignal s) => new(s.Code, s.Severity.ToString(), s.Evidence);
 
-    public static DebtDashboardView ToDashboard(DebtAssessment? a)
+    public static RiskDashboardView ToDashboard(RiskAssessment? a)
     {
-        if (a is null) return DebtDashboardView.Empty;
-        return new DebtDashboardView(
+        if (a is null) return RiskDashboardView.Empty;
+        return new RiskDashboardView(
             a.Technical.Value, a.Technical.Band.ToString(),
-            a.Agentic.Value, a.Agentic.Band.ToString(),
+            a.Process.Value, a.Process.Band.ToString(),
             a.TechnicalSignals.Select(ToView).ToList(),
-            a.AgenticSignals.Select(ToView).ToList(),
+            a.ProcessSignals.Select(ToView).ToList(),
             a.ComputedAt);
     }
 
-    public static ChangeRecordView ToView(ChangeRecord r) => new(
+    public static ActivityRecordView ToView(ActivityRecord r) => new(
         r.Id.Value,
         r.Sequence,
         string.IsNullOrWhiteSpace(r.Summary) ? "(no summary)" : r.Summary,
@@ -56,7 +56,7 @@ public static class ViewMapper
     public static ProjectContextView ToView(ProjectContext c) => new(
         c.ProjectId.Value, c.Markdown, c.IsEmpty, c.UpdatedAt);
 
-    public static CodeRequirementsView ToView(CodeRequirements r) => new(
+    public static RequirementsView ToView(Requirements r) => new(
         r.ProjectId?.Value, r.IsGlobal, r.Markdown, r.IsEmpty, r.UpdatedAt);
 
     public static UsageEntryView ToView(UsageRecord r, decimal costUsd) => new(
@@ -65,4 +65,8 @@ public static class ViewMapper
     public static WorkItemView ToView(WorkItem w) => new(
         w.Id, w.ProjectId.Value, w.Title, w.Detail, w.Priority.ToString(), w.Status.ToString(),
         w.CreatedAt, w.ClaimedAt, w.CompletedAt);
+
+    public static ReportTemplateView ToView(ReportTemplate t) => new(
+        t.Id, t.Name, t.Description, t.IsBuiltIn,
+        t.Sections.Select(s => new ReportSectionView(s.Title, s.Source.ToString(), s.Instruction)).ToList());
 }

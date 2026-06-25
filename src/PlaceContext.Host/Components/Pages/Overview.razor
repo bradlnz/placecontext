@@ -78,8 +78,8 @@
         <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(380px,1fr)); gap:14px">
             @foreach (var p in _projects)
             {
-                var agentic = Viz.Pct(p.AgenticDebt);
-                var tech = Viz.Pct(p.TechnicalDebt);
+                var process = Viz.Pct(p.ProcessRisk);
+                var tech = Viz.Pct(p.TechnicalRisk);
                 <div class="dccard" style="padding:16px; cursor:pointer; display:flex; flex-direction:column" @onclick="@(() => Open(p.Id))">
                     <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:12px">
                         <div style="min-width:0">
@@ -89,16 +89,16 @@
                             </div>
                             <div style="font-family:'Geist Mono',monospace; font-size:11px; color:var(--text-3); margin-top:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis">@p.Path</div>
                         </div>
-                        <div style="display:flex; align-items:center; gap:5px; flex:none; padding:3px 8px 3px 7px; border-radius:20px; font-size:11px; font-weight:600; color:@Viz.BandColor(p.AgenticBand); background:@Viz.BandBg(p.AgenticBand)">
-                            <span style="width:6px; height:6px; border-radius:50%; background:@Viz.BandColor(p.AgenticBand)"></span>
+                        <div style="display:flex; align-items:center; gap:5px; flex:none; padding:3px 8px 3px 7px; border-radius:20px; font-size:11px; font-weight:600; color:@Viz.BandColor(p.ProcessBand); background:@Viz.BandBg(p.ProcessBand)">
+                            <span style="width:6px; height:6px; border-radius:50%; background:@Viz.BandColor(p.ProcessBand)"></span>
                             @p.Status
                         </div>
                     </div>
 
                     <div style="display:flex; gap:14px; margin-top:16px; align-items:center">
                         <div style="flex:1; display:flex; flex-direction:column; gap:11px">
-                            @DebtBar("Agentic debt", agentic)
-                            @DebtBar("Technical debt", tech)
+                            @RiskBar("Process risk", process)
+                            @RiskBar("Technical risk", tech)
                         </div>
                         <div style="width:96px; height:72px; flex:none; border-radius:8px; background:var(--card-2); border:1px solid var(--border); overflow:hidden; position:relative">
                             <svg viewBox="0 0 100 76" width="100%" height="100%" preserveAspectRatio="xMidYMid slice">
@@ -144,14 +144,14 @@
         _projects = await Svc.GetProjectsAsync();
         _focus = await Svc.GetFocusAsync();
         var st = await Svc.GetRootStatsAsync();
-        var agentic = (int)Math.Round(st.RootAgenticDebt * 100);
-        var trust = 100 - agentic;
+        var process = (int)Math.Round(st.RootProcessRisk * 100);
+        var trust = 100 - process;
         _stats = new()
         {
             new("Projects", st.ProjectCount.ToString(), "under root", "var(--text)"),
             new("Changes today", st.ChangesToday.ToString(), $"{st.AgentChangesToday} agent · {st.HumanChangesToday} human", "var(--text)"),
-            new("Agentic debt", agentic.ToString(), "root average", Viz.Tone(agentic)),
-            new("Process-trust", trust.ToString(), "100 − agentic", Viz.Tone(100 - trust)),
+            new("Process risk", process.ToString(), "root average", Viz.Tone(process)),
+            new("Process-trust", trust.ToString(), "100 − process", Viz.Tone(100 - trust)),
             new("God-nodes", st.GodNodeTotal.ToString(), "top-degree files", "var(--text)"),
             new("Stale context", st.StaleContextCount.ToString(), "need re-index", st.StaleContextCount > 0 ? "var(--warn)" : "var(--good)"),
         };
@@ -177,7 +177,7 @@
 
     private static string N(double v) => v.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture);
 
-    private RenderFragment DebtBar(string label, int pct) => builder =>
+    private RenderFragment RiskBar(string label, int pct) => builder =>
     {
         builder.AddMarkupContent(0, $@"
             <div>

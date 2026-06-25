@@ -14,8 +14,9 @@
     <label>Email<input type="email" name="email" autocomplete="username" required autofocus></label>
     <label>Password<input type="password" name="password" autocomplete="current-password" required></label>
     <input type="hidden" name="{{afName}}" value="{{afValue}}">
+    <input type="hidden" name="returnUrl" value="{{returnUrl}}">
     <button type="submit">Sign in</button>
-    <p class="alt">New here? <a href="/register">Create an account</a></p>
+    <p class="alt">New here? <a href="/register{{returnUrlHref}}">Create an account</a></p>
   </form>
 </body>
 </html>

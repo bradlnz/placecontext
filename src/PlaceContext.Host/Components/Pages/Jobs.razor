@@ -1,0 +1,609 @@
+@page "/project/{ProjectId:guid}/jobs"
+@inject IPlaceContextService Svc
+@inject PortalUiState Ui
+@inject NavigationManager Nav
+
+<PageTitle>PlaceContext — Jobs</PageTitle>
+
+@if (_loading)
+{
+    <div style="padding:24px; color:var(--text-3)">Loading…</div>
+}
+else
+{
+    <div style="padding:20px 24px 40px; max-width:1320px; margin:0 auto">
+
+        <button class="dcbtn" style="border:none; background:none; color:var(--text-3); padding:4px 0; margin-bottom:14px"
+                @onclick="@(() => Nav.NavigateTo($"/project/{ProjectId}"))">← Back to project</button>
+
+        <div style="display:flex; align-items:baseline; justify-content:space-between; margin-bottom:18px">
+            <h2 style="font-size:18px; font-weight:600; margin:0">Jobs</h2>
+            <button class="dcbtn primary" @onclick="NewJob">+ New job</button>
+        </div>
+
+        @if (_message is not null)
+        {
+            <div style="margin-bottom:12px; padding:10px 14px; border-radius:8px; background:var(--card); font-size:12.5px; color:var(--text-2)">@_message</div>
+        }
+
+        @if (_jobs is null || _jobs.Count == 0)
+        {
+            <div class="dccard" style="padding:24px; color:var(--text-3); font-size:13px; text-align:center">
+                No jobs defined for this project yet. Click <strong>+ New job</strong> to create one.
+            </div>
+        }
+        else
+        {
+            <div style="display:flex; flex-direction:column; gap:10px">
+                @foreach (var job in _jobs)
+                {
+                    var isSelected = _selectedJobId == job.Id;
+                    <div class="dccard @(isSelected ? "selected" : "")" style="padding:14px 16px; cursor:pointer"
+                         @onclick="@(() => SelectJob(job.Id))">
+                        <div style="display:flex; align-items:center; justify-content:space-between; gap:14px">
+                            <div style="min-width:0">
+                                <div style="font-size:14px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis">@job.Name</div>
+                                @if (!string.IsNullOrWhiteSpace(job.Description))
+                                {
+                                    <div style="font-size:12px; color:var(--text-3); margin-top:3px">@job.Description</div>
+                                }
+                                <div style="display:flex; gap:10px; margin-top:6px; font-size:11px; color:var(--text-3); font-family:'Geist Mono',monospace">
+                                    @if (job.MapSourceKind == "code")
+                                    {
+                                        <span style="color:var(--brand-2)">[@job.MapRuntimeId]</span>
+                                    }
+                                    else
+                                    {
+                                        <span>@job.MapImage</span>
+                                    }
+                                    <span>@job.ShardCount shard(s)</span>
+                                    <span>concurrency @job.ConcurrencyLimit</span>
+                                    @if (job.ReduceSourceKind is not null)
+                                    {
+                                        <span style="color:var(--brand-2)">+ reduce</span>
+                                    }
+                                </div>
+                            </div>
+                            <div style="display:flex; align-items:center; gap:8px; flex:none">
+                                @if (job.MapSourceKind == "code")
+                                {
+                                    <button class="dcbtn" @onclick:stopPropagation="true"
+                                            @onclick="@(() => Nav.NavigateTo($"/project/{ProjectId}/jobs/{job.Id}"))">⌁ Editor</button>
+                                }
+                                <button class="dcbtn" @onclick:stopPropagation="true"
+                                        @onclick="@(() => EditJob(job))">Edit</button>
+                                <button class="dcbtn primary" disabled="@(_runningJobId == job.Id)"
+                                        @onclick:stopPropagation="true"
+                                        @onclick="@(() => RunJob(job.Id))">
+                                    @(_runningJobId == job.Id ? "running…" : "Run")
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+
+        @if (_selectedJobId.HasValue && _runs is not null)
+        {
+            <div style="margin-top:24px">
+                <div style="font-size:14px; font-weight:600; margin-bottom:12px">
+                    Run history — @(_jobs?.FirstOrDefault(j => j.Id == _selectedJobId)?.Name ?? "")
+                </div>
+
+                @if (_runs.Count == 0)
+                {
+                    <div style="color:var(--text-3); font-size:13px">No runs yet — click Run to start one.</div>
+                }
+                else
+                {
+                    <div style="display:flex; flex-direction:column; gap:8px">
+                        @foreach (var run in _runs)
+                        {
+                            <div class="dccard" style="padding:12px 16px; cursor:pointer" @onclick="@(() => OpenRunDetail(run.Id))">
+                                <div style="display:flex; align-items:center; gap:12px">
+                                    <span style="font-size:11px; font-weight:600; padding:3px 8px; border-radius:5px;
+                                          color:@StatusColor(run.Status); background:@StatusBg(run.Status)">
+                                        @run.Status
+                                    </span>
+                                    <span style="font-family:'Geist Mono',monospace; font-size:11.5px; color:var(--text-2); flex:1">
+                                        @run.StartedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")
+                                    </span>
+                                    <span style="font-size:11px; color:var(--text-3)">
+                                        ✓ @run.SucceededShards  @(run.PartialShards > 0 ? $"~ {run.PartialShards}" : "")  @(run.FailedShards > 0 ? $"✗ {run.FailedShards}" : "")
+                                    </span>
+                                    @if (run.FinishedAt.HasValue)
+                                    {
+                                        <span style="font-size:11px; color:var(--text-3); font-family:'Geist Mono',monospace">
+                                            @FormatDuration(run.StartedAt, run.FinishedAt.Value)
+                                        </span>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        }
+
+    </div>
+}
+
+@* ── Job editor slide-out ─────────────────────────────────────────────────────────────── *@
+@if (_showEditor)
+{
+    <div class="dcslide-scrim" @onclick="CloseEditor"></div>
+    <div class="dcslide" style="width:620px">
+        <div class="dcslide-head">
+            <span style="flex:1; font-size:14px; font-weight:600">@(_editJobId.HasValue ? "Edit job" : "New job")</span>
+            <button class="dcslide-x" @onclick="CloseEditor">×</button>
+        </div>
+        <div class="dcslide-body" style="overflow-y:auto; max-height:calc(100vh - 80px); display:flex; flex-direction:column; gap:14px">
+
+            <div>
+                <label style="font-size:12px; color:var(--text-3); display:block; margin-bottom:4px">Name *</label>
+                <input class="dcinput" style="width:100%" @bind="_edName" placeholder="my-job" />
+            </div>
+            <div>
+                <label style="font-size:12px; color:var(--text-3); display:block; margin-bottom:4px">Description</label>
+                <input class="dcinput" style="width:100%" @bind="_edDescription" placeholder="(optional)" />
+            </div>
+
+            <div>
+                <label style="font-size:12px; color:var(--text-3); display:block; margin-bottom:6px">Workload source</label>
+                <div style="display:flex; gap:8px; margin-bottom:10px">
+                    <button class="dcbtn @(_edMapSourceKind == "image" ? "primary" : "")"
+                            @onclick="@(() => _edMapSourceKind = "image")">Container image</button>
+                    <button class="dcbtn @(_edMapSourceKind == "code" ? "primary" : "")"
+                            @onclick="@(() => _edMapSourceKind = "code")">Inline code</button>
+                </div>
+
+                @if (_edMapSourceKind == "image")
+                {
+                    <label style="font-size:12px; color:var(--text-3); display:block; margin-bottom:4px">Image *</label>
+                    <input class="dcinput" style="width:100%" @bind="_edMapImage" placeholder="myorg/worker:latest" />
+                }
+                else
+                {
+                    <div style="display:flex; gap:8px; margin-bottom:8px">
+                        <div style="flex:1">
+                            <label style="font-size:12px; color:var(--text-3); display:block; margin-bottom:4px">Runtime *</label>
+                            <select class="dcinput" style="width:100%" @bind="_edMapRuntimeId">
+                                <option value="">— select —</option>
+                                <option value="node">node</option>
+                                <option value="python">python</option>
+                            </select>
+                        </div>
+                        <div style="flex:1">
+                            <label style="font-size:12px; color:var(--text-3); display:block; margin-bottom:4px">Entrypoint</label>
+                            <input class="dcinput" style="width:100%" @bind="_edMapEntrypoint"
+                                   placeholder="@(_edMapRuntimeId == "python" ? "main.py" : "index.js")" />
+                        </div>
+                    </div>
+                    <label style="font-size:12px; color:var(--text-3); display:block; margin-bottom:4px">Source code *</label>
+                    <textarea class="dcinput" rows="12"
+                              style="width:100%; font-family:'Geist Mono',monospace; font-size:12px; resize:vertical"
+                              @bind="_edMapSource"
+                              placeholder="@(_edMapRuntimeId == "python" ? "import sys, json\ndata = json.load(sys.stdin)\nresult = {}\nwith open('/out/result.json','w') as f:\n    json.dump(result, f)" : "const fs = require('fs');\nconst data = JSON.parse(fs.readFileSync('/dev/stdin','utf8'));\nconst result = {};\nfs.writeFileSync('/out/result.json', JSON.stringify(result));")">
+                    </textarea>
+                    <div style="font-size:11px; color:var(--text-3); margin-top:4px">
+                        Stdin: opaque JSON payload. Write artifact to <code>/out/result.json</code>.
+                        Dependencies (npm install/pip install) are not supported in this pass — use the image path for dep-heavy jobs.
+                    </div>
+                }
+            </div>
+
+            <div>
+                <label style="font-size:12px; color:var(--text-3); display:block; margin-bottom:4px">
+                    Input payloads (one JSON per line — one shard per line) *
+                </label>
+                <textarea class="dcinput" rows="4"
+                          style="width:100%; font-family:'Geist Mono',monospace; font-size:12px; resize:vertical"
+                          @bind="_edInputPayloadsRaw"
+                          placeholder="{&quot;key&quot;: &quot;value1&quot;}&#10;{&quot;key&quot;: &quot;value2&quot;}">
+                </textarea>
+            </div>
+
+            <div>
+                <label style="font-size:12px; color:var(--text-3); display:block; margin-bottom:4px">
+                    Environment variables (KEY=VALUE, one per line)
+                </label>
+                <textarea class="dcinput" rows="3"
+                          style="width:100%; font-family:'Geist Mono',monospace; font-size:12px; resize:vertical"
+                          @bind="_edMapEnvRaw"
+                          placeholder="MY_KEY=my_value">
+                </textarea>
+            </div>
+
+            <div style="display:flex; gap:10px">
+                <div style="flex:1">
+                    <label style="font-size:12px; color:var(--text-3); display:block; margin-bottom:4px">Concurrency</label>
+                    <input class="dcinput" type="number" min="1" max="32" style="width:100%" @bind="_edConcurrency" />
+                </div>
+                <div style="flex:1">
+                    <label style="font-size:12px; color:var(--text-3); display:block; margin-bottom:4px">Success exit codes (comma-separated)</label>
+                    <input class="dcinput" style="width:100%" @bind="_edSuccessCodesRaw" placeholder="0" />
+                </div>
+                <div style="flex:1">
+                    <label style="font-size:12px; color:var(--text-3); display:block; margin-bottom:4px">Partial exit codes</label>
+                    <input class="dcinput" style="width:100%" @bind="_edPartialCodesRaw" placeholder="" />
+                </div>
+            </div>
+
+            <div>
+                <label style="display:flex; align-items:center; gap:8px; font-size:12.5px; color:var(--text-2); cursor:pointer; user-select:none">
+                    <input type="checkbox" @bind="_edAllowNetworkEgress"
+                           style="width:16px; height:16px; accent-color:var(--brand-2); cursor:pointer" />
+                    Allow network egress
+                    <span style="font-size:11px; color:var(--text-3)">(disables --network none sandbox; only enable for jobs that require outbound access)</span>
+                </label>
+            </div>
+
+            @if (_editorError is not null)
+            {
+                <div style="color:var(--bad); font-size:12px; padding:8px; background:var(--bad-bg); border-radius:6px">@_editorError</div>
+            }
+
+            <div style="display:flex; gap:8px; justify-content:flex-end; padding-top:6px">
+                <button class="dcbtn" @onclick="CloseEditor">Cancel</button>
+                <button class="dcbtn primary" disabled="@_saving" @onclick="SaveJob">
+                    @(_saving ? "Saving…" : "Save")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@* ── Run detail slide-out ────────────────────────────────────────────────────────────── *@
+@if (_runDetail is not null)
+{
+    <div class="dcslide-scrim" @onclick="@(() => _runDetail = null)"></div>
+    <div class="dcslide" style="width:560px">
+        <div class="dcslide-head">
+            <span style="flex:1; font-size:14px; font-weight:600">Run detail</span>
+            <button class="dcslide-x" @onclick="@(() => _runDetail = null)">×</button>
+        </div>
+        <div class="dcslide-body" style="overflow-y:auto; max-height:calc(100vh - 80px)">
+            <div style="display:flex; align-items:center; gap:8px; margin-bottom:14px">
+                <span style="font-size:12px; font-weight:600; padding:3px 9px; border-radius:5px;
+                      color:@StatusColor(_runDetail.Status); background:@StatusBg(_runDetail.Status)">
+                    @_runDetail.Status
+                </span>
+                <span style="font-size:11px; color:var(--text-3); font-family:'Geist Mono',monospace">@_runDetail.Id</span>
+            </div>
+
+            @* Snapshot badge *@
+            <div style="margin-bottom:12px; font-size:11px; color:var(--text-3)">
+                Ran as: <code>@_runDetail.Snapshot.MapSourceKind</code> · @_runDetail.Snapshot.MapSourceLabel
+                · @_runDetail.Snapshot.ShardCount shard(s) · concurrency @_runDetail.Snapshot.ConcurrencyLimit
+                @if (_runDetail.Snapshot.AllowNetworkEgress)
+                {
+                    <span style="margin-left:6px; color:var(--warn); font-weight:600">[network egress allowed]</span>
+                }
+            </div>
+
+            @foreach (var shard in _runDetail.ShardResults)
+            {
+                <div style="margin-bottom:14px">
+                    <div style="font-size:12.5px; font-weight:600; margin-bottom:6px; display:flex; align-items:center; gap:8px">
+                        <span>Shard @shard.Index</span>
+                        <span style="font-size:11px; padding:2px 7px; border-radius:4px;
+                              color:@StatusColor(shard.Outcome); background:@StatusBg(shard.Outcome)">
+                            @shard.Outcome
+                        </span>
+                        <span style="font-size:11px; color:var(--text-3)">exit @shard.ExitCode</span>
+                    </div>
+                    @if (shard.Artifact is not null)
+                    {
+                        <pre style="background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:10px; font-size:11px; font-family:'Geist Mono',monospace; overflow-x:auto; white-space:pre-wrap; word-break:break-all; color:var(--text-2); max-height:240px; overflow-y:auto">@PrettyJson(shard.Artifact)</pre>
+                    }
+                    else
+                    {
+                        <div style="font-size:12px; color:var(--text-3)">_(no artifact)_</div>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(shard.Log))
+                    {
+                        <details style="margin-top:4px">
+                            <summary style="font-size:11px; color:var(--text-3); cursor:pointer">Log</summary>
+                            <pre style="font-size:10.5px; font-family:'Geist Mono',monospace; color:var(--text-3); white-space:pre-wrap; margin-top:4px">@shard.Log</pre>
+                        </details>
+                    }
+                </div>
+            }
+
+            @if (_runDetail.ReduceResult is { } reduce)
+            {
+                <div style="border-top:1px solid var(--border); padding-top:12px; margin-top:4px">
+                    <div style="font-size:12.5px; font-weight:600; margin-bottom:6px; display:flex; align-items:center; gap:8px">
+                        <span>Reduce step</span>
+                        <span style="font-size:11px; padding:2px 7px; border-radius:4px;
+                              color:@(reduce.Succeeded ? "var(--good)" : "var(--bad)"); background:@(reduce.Succeeded ? "var(--good-bg)" : "var(--bad-bg)")">
+                            @(reduce.Succeeded ? "succeeded" : "failed")
+                        </span>
+                        <span style="font-size:11px; color:var(--text-3)">exit @reduce.ExitCode</span>
+                    </div>
+                    @if (reduce.Artifact is not null)
+                    {
+                        <pre style="background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:10px; font-size:11px; font-family:'Geist Mono',monospace; overflow-x:auto; white-space:pre-wrap; word-break:break-all; color:var(--text-2); max-height:300px; overflow-y:auto">@PrettyJson(reduce.Artifact)</pre>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public Guid ProjectId { get; set; }
+
+    private IReadOnlyList<JobView>? _jobs;
+    private IReadOnlyList<JobRunView>? _runs;
+    private JobRunDetailView? _runDetail;
+    private Guid? _selectedJobId;
+    private Guid? _runningJobId;
+    private string? _message;
+    private bool _loading = true;
+
+    // ── Editor state ────────────────────────────────────────────────────────────────────────────
+    private bool _showEditor;
+    private bool _saving;
+    private Guid? _editJobId;
+    private string? _editorError;
+
+    private string _edName = "";
+    private string _edDescription = "";
+    private string _edMapSourceKind = "image";
+    private string _edMapImage = "";
+    private string _edMapRuntimeId = "node";
+    private string _edMapEntrypoint = "";
+    private string _edMapSource = "";
+    private string _edInputPayloadsRaw = "{}";
+    private string _edMapEnvRaw = "";
+    private int _edConcurrency = 1;
+    private string _edSuccessCodesRaw = "0";
+    private string _edPartialCodesRaw = "";
+    private bool _edAllowNetworkEgress;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _loading = true;
+        _message = null;
+        try
+        {
+            _jobs = await Svc.ListJobsAsync(ProjectId);
+            Ui.Set("Jobs", "project workload runner");
+        }
+        catch (Exception ex) { _message = ex.Message; }
+        finally { _loading = false; }
+    }
+
+    private async Task SelectJob(Guid jobId)
+    {
+        _selectedJobId = jobId;
+        _runDetail = null;
+        _message = null;
+        try
+        {
+            _runs = await Svc.ListJobRunsAsync(jobId);
+        }
+        catch (Exception ex) { _message = ex.Message; }
+    }
+
+    private async Task RunJob(Guid jobId)
+    {
+        _runningJobId = jobId;
+        _message = null;
+        try
+        {
+            var result = await Svc.RunJobAsync(jobId);
+            _message = $"Run {result.Id} completed — status: {result.Status}.";
+            if (_selectedJobId == jobId)
+                _runs = await Svc.ListJobRunsAsync(jobId);
+        }
+        catch (Exception ex) { _message = ex.Message; }
+        finally { _runningJobId = null; }
+    }
+
+    private async Task OpenRunDetail(Guid runId)
+    {
+        try
+        {
+            _runDetail = await Svc.GetJobRunAsync(runId);
+        }
+        catch (Exception ex) { _message = ex.Message; }
+    }
+
+    // ── Editor ───────────────────────────────────────────────────────────────────────────────────
+
+    private void NewJob()
+    {
+        _editJobId = null;
+        _edName = "";
+        _edDescription = "";
+        _edMapSourceKind = "image";
+        _edMapImage = "";
+        _edMapRuntimeId = "node";
+        _edMapEntrypoint = "";
+        _edMapSource = "";
+        _edInputPayloadsRaw = "{}";
+        _edMapEnvRaw = "";
+        _edConcurrency = 1;
+        _edSuccessCodesRaw = "0";
+        _edPartialCodesRaw = "";
+        _edAllowNetworkEgress = false;
+        _editorError = null;
+        _showEditor = true;
+    }
+
+    private void EditJob(JobView job)
+    {
+        _editJobId = job.Id;
+        _edName = job.Name;
+        _edDescription = job.Description ?? "";
+        _edMapSourceKind = job.MapSourceKind;
+        _edMapImage = job.MapImage ?? "";
+        _edMapRuntimeId = job.MapRuntimeId ?? "node";
+        _edMapEntrypoint = job.MapEntrypoint ?? "";
+        _edMapSource = job.MapSource ?? "";
+        _edInputPayloadsRaw = string.Join("\n", job.InputPayloads);
+        _edMapEnvRaw = string.Join("\n", job.MapEnv.Select(kv => $"{kv.Key}={kv.Value}"));
+        _edConcurrency = job.ConcurrencyLimit;
+        _edSuccessCodesRaw = string.Join(",", job.SuccessExitCodes);
+        _edPartialCodesRaw = string.Join(",", job.PartialExitCodes);
+        _edAllowNetworkEgress = job.AllowNetworkEgress;
+        _editorError = null;
+        _showEditor = true;
+    }
+
+    private void CloseEditor()
+    {
+        _showEditor = false;
+        _editorError = null;
+    }
+
+    private async Task SaveJob()
+    {
+        _editorError = null;
+        if (string.IsNullOrWhiteSpace(_edName)) { _editorError = "Name is required."; return; }
+
+        // Parse payloads — one per non-empty line.
+        var payloads = _edInputPayloadsRaw
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .ToList();
+        if (payloads.Count == 0) { _editorError = "At least one input payload is required."; return; }
+
+        // Parse env vars — KEY=VALUE per line.
+        var env = new Dictionary<string, string>();
+        foreach (var line in _edMapEnvRaw.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var eq = line.IndexOf('=');
+            if (eq > 0)
+                env[line[..eq].Trim()] = line[(eq + 1)..];
+        }
+
+        // Parse exit codes.
+        var successCodes = ParseInts(_edSuccessCodesRaw, out var sucErr);
+        if (sucErr is not null) { _editorError = $"Success codes: {sucErr}"; return; }
+        var partialCodes = ParseInts(_edPartialCodesRaw, out var parErr);
+        if (parErr is not null) { _editorError = $"Partial codes: {parErr}"; return; }
+
+        _saving = true;
+        try
+        {
+            if (_editJobId.HasValue)
+            {
+                var cmd = new UpdateJobCommand(
+                    JobId: _editJobId.Value,
+                    Name: _edName.Trim(),
+                    Description: string.IsNullOrWhiteSpace(_edDescription) ? null : _edDescription.Trim(),
+                    MapImage: _edMapSourceKind == "image" ? _edMapImage : null,
+                    MapRuntimeId: _edMapSourceKind == "code" ? _edMapRuntimeId : null,
+                    MapSource: _edMapSourceKind == "code" ? _edMapSource : null,
+                    MapEntrypoint: _edMapSourceKind == "code" && !string.IsNullOrWhiteSpace(_edMapEntrypoint) ? _edMapEntrypoint : null,
+                    InputPayloads: payloads,
+                    MapEnv: env,
+                    ReduceImage: null,
+                    ReduceRuntimeId: null,
+                    ReduceSource: null,
+                    ReduceEntrypoint: null,
+                    ReduceEnv: null,
+                    ConcurrencyLimit: _edConcurrency,
+                    SuccessExitCodes: successCodes,
+                    PartialExitCodes: partialCodes,
+                    AllowNetworkEgress: _edAllowNetworkEgress);
+
+                await Svc.UpdateJobAsync(cmd);
+                _message = $"Job '{_edName.Trim()}' updated.";
+            }
+            else
+            {
+                var cmd = new CreateJobCommand(
+                    ProjectId: ProjectId,
+                    Name: _edName.Trim(),
+                    Description: string.IsNullOrWhiteSpace(_edDescription) ? null : _edDescription.Trim(),
+                    MapImage: _edMapSourceKind == "image" ? _edMapImage : null,
+                    MapRuntimeId: _edMapSourceKind == "code" ? _edMapRuntimeId : null,
+                    MapSource: _edMapSourceKind == "code" ? _edMapSource : null,
+                    MapEntrypoint: _edMapSourceKind == "code" && !string.IsNullOrWhiteSpace(_edMapEntrypoint) ? _edMapEntrypoint : null,
+                    InputPayloads: payloads,
+                    MapEnv: env,
+                    ReduceImage: null,
+                    ReduceRuntimeId: null,
+                    ReduceSource: null,
+                    ReduceEntrypoint: null,
+                    ReduceEnv: null,
+                    ConcurrencyLimit: _edConcurrency,
+                    SuccessExitCodes: successCodes,
+                    PartialExitCodes: partialCodes,
+                    AllowNetworkEgress: _edAllowNetworkEgress);
+
+                await Svc.CreateJobAsync(cmd);
+                _message = $"Job '{_edName.Trim()}' created.";
+            }
+
+            _jobs = await Svc.ListJobsAsync(ProjectId);
+            _showEditor = false;
+        }
+        catch (Exception ex)
+        {
+            _editorError = ex.Message;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private static int[] ParseInts(string raw, out string? error)
+    {
+        error = null;
+        if (string.IsNullOrWhiteSpace(raw)) return Array.Empty<int>();
+        var result = new List<int>();
+        foreach (var part in raw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            if (!int.TryParse(part, out var n)) { error = $"'{part}' is not a valid integer."; return Array.Empty<int>(); }
+            result.Add(n);
+        }
+        return result.ToArray();
+    }
+
+    // ── Utilities ────────────────────────────────────────────────────────────────────────────────
+
+    private static string StatusColor(string status) => status switch
+    {
+        "Succeeded" => "var(--good)",
+        "Partial" => "var(--warn)",
+        "Failed" => "var(--bad)",
+        "Running" => "var(--brand-2)",
+        _ => "var(--text-3)"
+    };
+
+    private static string StatusBg(string status) => status switch
+    {
+        "Succeeded" => "var(--good-bg)",
+        "Partial" => "var(--warn-bg)",
+        "Failed" => "var(--bad-bg)",
+        "Running" => "var(--brand-bg)",
+        _ => "var(--card-2)"
+    };
+
+    private static string FormatDuration(DateTimeOffset start, DateTimeOffset end)
+    {
+        var span = end - start;
+        if (span.TotalSeconds < 60) return $"{(int)span.TotalSeconds}s";
+        return $"{(int)span.TotalMinutes}m {span.Seconds}s";
+    }
+
+    private static string PrettyJson(string raw)
+    {
+        try
+        {
+            var doc = System.Text.Json.JsonDocument.Parse(raw);
+            return System.Text.Json.JsonSerializer.Serialize(doc.RootElement,
+                new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+        }
+        catch
+        {
+            return raw;
+        }
+    }
+}

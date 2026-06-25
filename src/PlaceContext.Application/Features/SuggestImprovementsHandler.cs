@@ -10,13 +10,13 @@ namespace PlaceContext.Application.Features;
 public sealed class SuggestImprovementsHandler : IQueryHandler<SuggestImprovementsQuery, ImprovementsView>
 {
     private readonly IDecisionTreeProvider _tree;
-    private readonly IChangeLedgerRepository _ledgers;
+    private readonly IActivityLogRepository _ledgers;
     private readonly IProjectContextRepository _contexts;
-    private readonly IDebtAssessmentRepository _assessments;
+    private readonly IRiskAssessmentRepository _assessments;
 
     public SuggestImprovementsHandler(
-        IDecisionTreeProvider tree, IChangeLedgerRepository ledgers,
-        IProjectContextRepository contexts, IDebtAssessmentRepository assessments)
+        IDecisionTreeProvider tree, IActivityLogRepository ledgers,
+        IProjectContextRepository contexts, IRiskAssessmentRepository assessments)
     {
         _tree = tree;
         _ledgers = ledgers;
@@ -30,7 +30,7 @@ public sealed class SuggestImprovementsHandler : IQueryHandler<SuggestImprovemen
         var tree = await _tree.BuildAsync(projectId, ct);
         var ledger = await _ledgers.GetForProjectAsync(projectId, ct);
         var context = await _contexts.GetForProjectAsync(projectId, ct);
-        var debt = await _assessments.GetLatestAsync(projectId, ct);
+        var risk = await _assessments.GetLatestAsync(projectId, ct);
 
         var items = new List<ImprovementView>();
 
@@ -46,7 +46,7 @@ public sealed class SuggestImprovementsHandler : IQueryHandler<SuggestImprovemen
             items.Add(new ImprovementView(
                 "unverified-changes", unverified >= 3 ? "high" : "medium",
                 $"{unverified} agent change(s) not live-verified",
-                "Run and observe the app for these changes; record live verification on record_change."));
+                "Run and observe the app for these changes; record live verification on record_activity."));
 
         var unreviewed = ledger.Records.Count(r => r.IsAgentAuthored && !r.Verification.ArchitectureReviewerRun);
         if (unreviewed > 0)
@@ -61,17 +61,17 @@ public sealed class SuggestImprovementsHandler : IQueryHandler<SuggestImprovemen
                 "No project context recorded",
                 "Capture goals, conventions, and gotchas with add_context so future sessions start informed."));
 
-        if (debt is not null)
+        if (risk is not null)
         {
-            foreach (var s in debt.Signals.Where(s => (int)s.Severity >= 2).Take(3))
+            foreach (var s in risk.Signals.Where(s => (int)s.Severity >= 2).Take(3))
                 items.Add(new ImprovementView(
-                    $"debt:{s.Code}", "medium",
-                    $"Debt signal: {s.Code}", s.Evidence));
+                    $"risk:{s.Code}", "medium",
+                    $"Risk signal: {s.Code}", s.Evidence));
         }
 
         if (items.Count == 0)
             items.Add(new ImprovementView("clean", "low", "No issues detected",
-                "No hotspots, unverified changes, or debt signals from the logged activity."));
+                "No hotspots, unverified changes, or risk signals from the logged activity."));
 
         return new ImprovementsView(query.ProjectId, items);
     }

@@ -12,7 +12,7 @@ public sealed record ProjectSummaryView(
     int GodNodeCount,
     int NodeCount,
     int LinkCount,
-    double? TechnicalDebt,
+    double? TechnicalRisk,
     string? TechnicalBand,
-    double? AgenticDebt,
-    string? AgenticBand);
+    double? ProcessRisk,
+    string? ProcessBand);

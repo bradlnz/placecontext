@@ -13,19 +13,19 @@ public class ValueObjectTests
     }
 
     [Fact]
-    public void RepoPath_requires_absolute_and_trims_trailing_slash()
+    public void ProjectPath_requires_absolute_and_trims_trailing_slash()
     {
-        Assert.Throws<ArgumentException>(() => RepoPath.From("relative/path"));
-        Assert.Equal("/home/brad/code/demo", RepoPath.From("/home/brad/code/demo/").Value);
-        Assert.Equal("demo", RepoPath.From("/home/brad/code/demo").LeafName);
+        Assert.Throws<ArgumentException>(() => ProjectPath.From("relative/path"));
+        Assert.Equal("/home/brad/code/demo", ProjectPath.From("/home/brad/code/demo/").Value);
+        Assert.Equal("demo", ProjectPath.From("/home/brad/code/demo").LeafName);
     }
 
     [Fact]
-    public void DebtScore_clamps_and_bands()
+    public void RiskScore_clamps_and_bands()
     {
-        Assert.Equal(1.0, DebtScore.From(5.0).Value);
-        Assert.Equal(DebtBand.Low, DebtScore.From(0.1).Band);
-        Assert.Equal(DebtBand.Critical, DebtScore.From(0.9).Band);
+        Assert.Equal(1.0, RiskScore.From(5.0).Value);
+        Assert.Equal(RiskBand.Low, RiskScore.From(0.1).Band);
+        Assert.Equal(RiskBand.Critical, RiskScore.From(0.9).Band);
     }
 
     [Fact]

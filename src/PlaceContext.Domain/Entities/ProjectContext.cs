@@ -6,7 +6,7 @@ namespace PlaceContext.Domain.Entities;
 
 /// <summary>
 /// Aggregate Root: the single, appendable Markdown context document for a project — the durable
-/// knowledge a coding agent fetches before working and adds to as it learns. One per project,
+/// knowledge a AI agent fetches before working and adds to as it learns. One per project,
 /// identified by its <see cref="ProjectId"/>. The body is plain Markdown; appends are separated by a
 /// blank line so the document reads as a running set of sections.
 /// </summary>

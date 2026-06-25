@@ -6,5 +6,5 @@ using PlaceContext.Domain.ValueObjects;
 
 namespace PlaceContext.Application.Features;
 
-/// <summary>(Re)build a project's decision tree from logged activity and record the snapshot.</summary>
+/// <summary>(Re)build a project's knowledge graph from logged activity and record the snapshot.</summary>
 public sealed record RebuildGraphCommand(Guid ProjectId, bool Incremental = true) : ICommand<ProjectSummaryView>;

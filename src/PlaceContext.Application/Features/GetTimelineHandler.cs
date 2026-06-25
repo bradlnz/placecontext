@@ -5,12 +5,12 @@ using PlaceContext.Domain.ValueObjects;
 
 namespace PlaceContext.Application.Features;
 
-public sealed class GetTimelineHandler : IQueryHandler<GetTimelineQuery, ChangeTimelineView>
+public sealed class GetTimelineHandler : IQueryHandler<GetTimelineQuery, ActivityTimelineView>
 {
-    private readonly IChangeLedgerRepository _ledgers;
-    public GetTimelineHandler(IChangeLedgerRepository ledgers) => _ledgers = ledgers;
+    private readonly IActivityLogRepository _ledgers;
+    public GetTimelineHandler(IActivityLogRepository ledgers) => _ledgers = ledgers;
 
-    public async Task<ChangeTimelineView> HandleAsync(GetTimelineQuery query, CancellationToken ct = default)
+    public async Task<ActivityTimelineView> HandleAsync(GetTimelineQuery query, CancellationToken ct = default)
     {
         var id = ProjectId.From(query.ProjectId);
         var ledger = await _ledgers.GetForProjectAsync(id, ct);
@@ -19,6 +19,6 @@ public sealed class GetTimelineHandler : IQueryHandler<GetTimelineQuery, ChangeT
             .Take(query.Take)
             .Select(ViewMapper.ToView)
             .ToList();
-        return new ChangeTimelineView(query.ProjectId, rows);
+        return new ActivityTimelineView(query.ProjectId, rows);
     }
 }

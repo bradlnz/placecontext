@@ -11,10 +11,10 @@ namespace PlaceContext.Application.Features;
 public sealed class GetRootStatsHandler : IQueryHandler<GetRootStatsQuery, RootStatsView>
 {
     private readonly IProjectRepository _projects;
-    private readonly IChangeLedgerRepository _ledgers;
+    private readonly IActivityLogRepository _ledgers;
     private readonly IClock _clock;
 
-    public GetRootStatsHandler(IProjectRepository projects, IChangeLedgerRepository ledgers, IClock clock)
+    public GetRootStatsHandler(IProjectRepository projects, IActivityLogRepository ledgers, IClock clock)
     {
         _projects = projects;
         _ledgers = ledgers;
@@ -27,7 +27,7 @@ public sealed class GetRootStatsHandler : IQueryHandler<GetRootStatsQuery, RootS
         var since = _clock.UtcNow.Date;
 
         int agentToday = 0, humanToday = 0, godTotal = 0, stale = 0;
-        var agenticScores = new List<double>();
+        var processScores = new List<double>();
         var technicalScores = new List<double>();
 
         foreach (var p in projects)
@@ -40,16 +40,16 @@ public sealed class GetRootStatsHandler : IQueryHandler<GetRootStatsQuery, RootS
 
             godTotal += p.LastGraph?.GodNodes.Count ?? 0;
             if (RootRollup.IsStale(p, ledger)) stale++;
-            if (p.AgenticDebt is not null) agenticScores.Add(p.AgenticDebt.Value);
-            if (p.TechnicalDebt is not null) technicalScores.Add(p.TechnicalDebt.Value);
+            if (p.ProcessRisk is not null) processScores.Add(p.ProcessRisk.Value);
+            if (p.TechnicalRisk is not null) technicalScores.Add(p.TechnicalRisk.Value);
         }
 
-        var agentic = agenticScores.Count > 0 ? agenticScores.Average() : 0.0;
+        var process = processScores.Count > 0 ? processScores.Average() : 0.0;
         var technical = technicalScores.Count > 0 ? technicalScores.Average() : 0.0;
 
         return new RootStatsView(
             projects.Count, agentToday + humanToday, agentToday, humanToday,
-            agentic, RootRollup.Band(agentic),
+            process, RootRollup.Band(process),
             technical, RootRollup.Band(technical),
             godTotal, stale);
     }

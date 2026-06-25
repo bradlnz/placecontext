@@ -1,7 +1,7 @@
 namespace PlaceContext.Domain.ValueObjects;
 
 /// <summary>
-/// Structural metrics distilled from a project's graphify graph, consumed by the technical-debt
+/// Structural metrics distilled from a project's graphify graph, consumed by the technical-risk
 /// scorer. All ratios are in [0,1]; counts are non-negative.
 /// </summary>
 public readonly record struct GraphMetrics(

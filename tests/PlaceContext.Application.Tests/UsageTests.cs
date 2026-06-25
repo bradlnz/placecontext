@@ -14,7 +14,7 @@ public class UsageTests
     private static async Task<(InMemoryProjectRepository projects, InMemoryUsageRepository usage, Guid projectId)> SeedAsync()
     {
         var projects = new InMemoryProjectRepository();
-        var project = Project.Discover(RepoPath.From("/home/brad/code/alpha"), ProjectName.From("alpha"), T0);
+        var project = Project.Discover(ProjectPath.From("/home/brad/code/alpha"), ProjectName.From("alpha"), T0);
         project.Register(T0);
         await projects.AddAsync(project);
         return (projects, new InMemoryUsageRepository(), project.Id.Value);

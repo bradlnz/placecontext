@@ -1,7 +1,7 @@
 namespace PlaceContext.Domain.ValueObjects;
 
 /// <summary>
-/// Code-level metrics probed from the working tree, consumed by the technical-debt scorer.
+/// Code-level metrics probed from the working tree, consumed by the technical-risk scorer.
 /// <see cref="CoverageGap"/> is 1 − coverage in [0,1]; pass −1 coverage as gap 0 when unknown.
 /// </summary>
 public readonly record struct CodeMetrics(
