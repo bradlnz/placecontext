@@ -9,3 +9,10 @@ graphify-out/
 
 # Licensor activation signing key (secret — never commit)
 tools/activation-signing-key.pem
+
+# Locally-built image tarball for k3s import (build artifact)
+deploy/*.tar
+
+# Compiled TUI binary (build with: make -C deploy/tui)
+deploy/tui/pctl-tui
+deploy/tui/dist/
