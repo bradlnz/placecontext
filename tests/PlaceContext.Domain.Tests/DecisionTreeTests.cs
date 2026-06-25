@@ -47,6 +47,36 @@ public class DecisionTreeTests
     }
 
     [Fact]
+    public void Run_outputs_become_brain_nodes_cross_linked_by_similarity()
+    {
+        var pid = ProjectId.New();
+
+        // Two near-identical vectors (should link) + one orthogonal (should not).
+        var runOutputs = new[]
+        {
+            new RunOutputNode("aaaaaaaa", "## Organized run output: nightly etl", new[] { 1f, 0f, 0f }),
+            new RunOutputNode("bbbbbbbb", "## Organized run output: nightly etl rerun", new[] { 0.9f, 0.1f, 0f }),
+            new RunOutputNode("cccccccc", "## Organized run output: image resize", new[] { 0f, 0f, 1f }),
+        };
+
+        var tree = new DecisionTreeAssembler().Assemble(
+            ProjectName.From("alpha"), Array.Empty<Decision>(), ActivityLog.Start(pid),
+            Array.Empty<ToolActivity>(), runOutputs);
+
+        // Each embedded run output is woven in as a JobRunOutput node, with the markdown header stripped.
+        Assert.Equal(3, tree.Nodes.Count(n => n.Kind == TreeNodeKind.JobRunOutput));
+        Assert.Contains(tree.Nodes, n => n.Kind == TreeNodeKind.JobRunOutput && n.Label == "Organized run output: nightly etl");
+
+        // Exactly one semantic cross-link: the two near-identical outputs; the orthogonal one stays unlinked.
+        var crossLinks = tree.Edges.Count(e =>
+            e.ParentId.StartsWith("runoutput:") && e.ChildId.StartsWith("runoutput:"));
+        Assert.Equal(1, crossLinks);
+
+        // The brain vocabulary surfaces the run-output nodes.
+        Assert.Contains("brain", tree.Answer("show me the brain").ToLowerInvariant());
+    }
+
+    [Fact]
     public void Answer_reports_hotspots()
     {
         var pid = ProjectId.New();

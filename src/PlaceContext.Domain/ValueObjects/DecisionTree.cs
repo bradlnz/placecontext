@@ -45,8 +45,14 @@ public sealed record DecisionTree
         var linkCount = Edges.Count;
         var hotspots = Nodes.Count(n => n.IsHotspot);
         var avgDegree = nodeCount == 0 ? 0.0 : (double)linkCount * 2 / nodeCount;
-        var lowConf = linkCount == 0 ? 0.0
-            : (double)Edges.Count(e => e.Confidence != ConfidenceTag.Extracted) / linkCount;
+
+        // The low-confidence ratio is a *coupling-provenance* signal (orphan changes, failed tool calls),
+        // so it ignores the run-output "brain" subgraph: its semantic similarity links are legitimately
+        // Inferred but say nothing about code coupling, and must not inflate technical risk.
+        var brain = Nodes.Where(n => n.Kind == TreeNodeKind.JobRunOutput).Select(n => n.Id).ToHashSet();
+        var coupling = Edges.Where(e => !brain.Contains(e.ParentId) && !brain.Contains(e.ChildId)).ToList();
+        var lowConf = coupling.Count == 0 ? 0.0
+            : (double)coupling.Count(e => e.Confidence != ConfidenceTag.Extracted) / coupling.Count;
         return GraphMetrics.From(nodeCount, linkCount, hotspots, avgDegree, lowConf);
     }
 
@@ -79,6 +85,15 @@ public sealed record DecisionTree
         {
             var low = Edges.Count(e => e.Confidence != ConfidenceTag.Extracted);
             return $"{low} of {Edges.Count} links are low-confidence (orphan changes or failed tool calls).";
+        }
+
+        if (Has(q, "brain", "memory", "run output", "output", "semantic"))
+        {
+            var outs = Nodes.Where(n => n.Kind == TreeNodeKind.JobRunOutput).OrderByDescending(n => n.Degree).ToList();
+            return outs.Count == 0
+                ? "No job-run outputs have been woven into the graph yet."
+                : $"Run-output brain nodes ({outs.Count}):\n"
+                    + string.Join("\n", outs.Take(10).Select(n => $"  • {n.Label} — linked to {n.Degree}"));
         }
 
         if (Has(q, "tool", "activity", "traffic"))

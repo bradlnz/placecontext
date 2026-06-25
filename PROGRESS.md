@@ -38,19 +38,24 @@ parameters/modal → `6c29f00` artifacts → `4ae1900` configurable LLM → `81a
 
 ## ⏳ Remaining (tracked, with decisions)
 
-### #9 — Vectorize run output → dependency graph  *(in progress)*
+### #9 — Vectorize run output → dependency graph  *(done)*
 Pipeline: job completes → (configurable LLM) **organizes** output → **Voyage AI** embeds it →
 stored in the **dependency graph** as queryable nodes.
 - **Decision made:** use **pgvector** in the existing Postgres.
 - Recon: the graph is assembled **on-read** from activity log + decisions + tool calls
-  (`DecisionTreeAssembler`); only a `GraphSnapshotRef` is persisted (`projects.GraphJson`);
-  **no pgvector / no embeddings exist yet**.
-- **To build:** `IEmbeddingGateway` port + `VoyageEmbeddingGateway` + Null fallback (provider
-  pattern, keyed by `PlaceContext:Voyage:ApiKey`); enable the `vector` extension (needs the DB
-  image switched to `pgvector/pgvector:pg16` in `run.sh`/`setup.sh`); a tenant-owned
-  `job_run_embeddings` table (text + `vector(N)` column); a repo with cosine nearest-neighbour
-  search; embed organized run output in `RunJobHandler`; a `search_run_outputs` query + MCP tool;
-  optionally a `JobRunOutput` node kind in the assembled graph.
+  (`DecisionTreeAssembler`); only a `GraphSnapshotRef` is persisted (`projects.GraphJson`).
+- **Built:** `IEmbeddingGateway` port + `VoyageEmbeddingGateway` + Null fallback (provider
+  pattern, keyed by `PlaceContext:Voyage:ApiKey`); the `vector` extension (DB image switched to
+  `pgvector/pgvector:pg16`); a tenant-owned `job_run_embeddings` table (text + `vector(N)` column);
+  `EfRunEmbeddingRepository` with cosine nearest-neighbour search; embed organized run output in
+  `RunJobHandler`; a `search_run_outputs` query + MCP tool.
+- **Run outputs woven into the graph as the "brain":** `TreeNodeKind.JobRunOutput` + the
+  `RunOutputNode` VO; `DecisionTreeAssembler` adds one node per embedded run output and **cross-links
+  the semantically-nearest peers** (cosine ≥ 0.6, top-3 each, Inferred edges) so accumulated outputs
+  link the dependency graph together into queryable memory. `IRunEmbeddingRepository.ListForProjectAsync`
+  (vectors included) feeds them in via `DecisionTreeProvider`; `DecisionTree.Answer` gained a
+  brain/memory vocabulary branch. Each per-project graph (run-output nodes included) still rolls up
+  into the org-wide `BrainHandler`.
 
 ### #10 — Deploy on k3s
 A Kubernetes-Job-based `IWorkloadRunner` (shards run as k8s Jobs); the in-process trigger scheduler
