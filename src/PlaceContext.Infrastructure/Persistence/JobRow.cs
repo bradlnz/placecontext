@@ -49,6 +49,9 @@ public sealed class JobRow : ITenantOwned
 
     public int ConcurrencyLimit { get; set; } = 1;
 
+    /// <summary>JSON array of declared input parameters [{Name,Label,Required}]. Empty = no prompt.</summary>
+    public string ParametersJson { get; set; } = "[]";
+
     // ── Network policy ────────────────────────────────────────────────────────────────────────────
     /// <summary>True when containers may make outbound network calls. Default false (network-none sandbox).</summary>
     public bool AllowNetworkEgress { get; set; }

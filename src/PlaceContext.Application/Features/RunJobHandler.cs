@@ -56,8 +56,14 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
         var job = await _jobs.GetByIdAsync(command.JobId, ct)
             ?? throw new InvalidOperationException($"Job {command.JobId} not found.");
 
-        // Snapshot the current spec onto the run at start-time (captures AllowNetworkEgress too).
-        var snapshot = WorkloadSnapshot.From(job.MapSpec, job.ReduceSpec, job.ConcurrencyLimit,
+        // An input override (modal-collected parameters or event-injected fields) replaces the stored
+        // shard payloads with a single shard carrying the supplied payload.
+        var effectiveMap = command.InputPayload is { } p
+            ? new MapSpec(job.MapSpec.Source, new[] { p }, job.MapSpec.Env)
+            : job.MapSpec;
+
+        // Snapshot the effective spec onto the run at start-time (captures AllowNetworkEgress too).
+        var snapshot = WorkloadSnapshot.From(effectiveMap, job.ReduceSpec, job.ConcurrencyLimit,
             job.AllowNetworkEgress);
         var startedAt = _clock.UtcNow;
         var run = JobRun.Start(job.Id, job.ProjectId, startedAt, snapshot);
@@ -65,7 +71,7 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
         await _uow.SaveChangesAsync(ct);
 
         // ---- MAP PHASE: fan-out shards with bounded concurrency ----
-        var shardResults = await RunMapShardsAsync(job, run.Id, ct);
+        var shardResults = await RunMapShardsAsync(job, effectiveMap.InputPayloads, run.Id, ct);
 
         // ---- REDUCE PHASE (optional) ----
         ReduceResult? reduceResult = null;
@@ -97,11 +103,11 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
 
     // ---- MAP PHASE ----
 
-    private async Task<List<ShardResult>> RunMapShardsAsync(Job job, Guid runId, CancellationToken ct)
+    private async Task<List<ShardResult>> RunMapShardsAsync(
+        Job job, IReadOnlyList<string> payloads, Guid runId, CancellationToken ct)
     {
         var concurrency = job.ConcurrencyLimit;
         var semaphore = new SemaphoreSlim(concurrency, concurrency);
-        var payloads = job.MapSpec.InputPayloads;
         var tasks = new Task<ShardResult>[payloads.Count];
 
         for (var i = 0; i < payloads.Count; i++)

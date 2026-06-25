@@ -101,7 +101,7 @@ public sealed class TriggerSchedulerService : BackgroundService
                 {
                     await using var scope = _scopes.CreateAsyncScope();
                     var dispatcher = scope.ServiceProvider.GetRequiredService<IDispatcher>();
-                    await dispatcher.Send(new RunJobCommand(run.JobId), ct);
+                    await dispatcher.Send(new RunJobCommand(run.JobId, run.Payload), ct);
                     _log.LogInformation("Trigger '{Trigger}' ran job {JobId} for tenant {Slug}.",
                         run.TriggerName, run.JobId, tenant.Slug);
                 }

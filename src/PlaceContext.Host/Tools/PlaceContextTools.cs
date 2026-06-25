@@ -271,10 +271,11 @@ public sealed class PlaceContextTools
             () => svc.GetJobAsync(jobId));
 
     [Authorize(Policy = "Member")]
-    [McpServerTool(Name = "run_job"), Description("Run a job now: executes its map shards (and reduce step, if defined) as isolated containers and waits for completion. Returns the run detail — overall status plus each shard's exit code, outcome, artifact, and log, and any reduce result. Use list_job_runs/get_job_run to fetch results later.")]
-    public static Task<string> RunJob(IPlaceContextService svc, IToolCallLog log, Guid jobId)
-        => Traced(log, "run_job", jobId.ToString(), "run job", new { jobId },
-            () => svc.RunJobAsync(jobId));
+    [McpServerTool(Name = "run_job"), Description("Run a job now: executes its map shards (and reduce step, if defined) as isolated containers and waits for completion. Returns the run detail — overall status plus each shard's exit code, outcome, artifact, and log, and any reduce result. Pass 'inputPayload' to override the stored shards with a single shard carrying that payload (e.g. parameters for a job that declares input fields). Use list_job_runs/get_job_run to fetch results later.")]
+    public static Task<string> RunJob(IPlaceContextService svc, IToolCallLog log, Guid jobId,
+        [Description("Optional input payload override (typically JSON); runs a single shard with it")] string? inputPayload = null)
+        => Traced(log, "run_job", jobId.ToString(), "run job", new { jobId, inputPayload },
+            () => svc.RunJobAsync(jobId, inputPayload));
 
     [Authorize(Policy = "Member")]
     [McpServerTool(Name = "list_job_runs"), Description("List a job's run history (most recent first): each run's status, start/finish times, and shard success/partial/failure counts. Use get_job_run for a run's full artifacts.")]

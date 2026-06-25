@@ -55,7 +55,7 @@ public interface IPlaceContextService
     // Job management.
     Task<JobView> CreateJobAsync(CreateJobCommand command, CancellationToken ct = default);
     Task<JobView> UpdateJobAsync(UpdateJobCommand command, CancellationToken ct = default);
-    Task<JobRunDetailView> RunJobAsync(Guid jobId, CancellationToken ct = default);
+    Task<JobRunDetailView> RunJobAsync(Guid jobId, string? inputPayload = null, CancellationToken ct = default);
     Task<IReadOnlyList<JobView>> ListJobsAsync(Guid projectId, CancellationToken ct = default);
     Task<IReadOnlyList<JobRunView>> ListJobRunsAsync(Guid jobId, CancellationToken ct = default);
     Task<JobRunDetailView?> GetJobRunAsync(Guid runId, CancellationToken ct = default);

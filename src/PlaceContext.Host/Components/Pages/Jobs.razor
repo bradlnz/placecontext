@@ -329,6 +329,19 @@ else
                 </label>
             </div>
 
+            <div>
+                <label style="font-size:12px; color:var(--text-3); display:block; margin-bottom:4px">
+                    Input parameters (one per line — <code>name</code> or <code>name|Label</code>)
+                </label>
+                <textarea class="dcinput" rows="3"
+                          style="width:100%; font-family:'Geist Mono',monospace; font-size:12px; resize:vertical"
+                          @bind="_edParametersRaw"
+                          placeholder="customerEmail|Customer email&#10;plan|Plan tier"></textarea>
+                <div style="font-size:11px; color:var(--text-3); margin-top:4px">
+                    When set, running this job (manually or via an event) prompts for these and passes them as the input payload.
+                </div>
+            </div>
+
             @if (_editorError is not null)
             {
                 <div style="color:var(--bad); font-size:12px; padding:8px; background:var(--bad-bg); border-radius:6px">@_editorError</div>
@@ -422,6 +435,42 @@ else
     </div>
 }
 
+@* ── Run-input modal (prompts for a job's declared parameters) ────────────────────────── *@
+@if (_runPromptJob is not null)
+{
+    <div class="dcslide-scrim" @onclick="@(() => _runPromptJob = null)"></div>
+    <div class="dcslide" style="width:460px">
+        <div class="dcslide-head">
+            <span style="flex:1; font-size:14px; font-weight:600">Run @_runPromptJob.Name</span>
+            <button class="dcslide-x" @onclick="@(() => _runPromptJob = null)">×</button>
+        </div>
+        <div class="dcslide-body" style="display:flex; flex-direction:column; gap:12px">
+            <div style="font-size:12px; color:var(--text-3)">This job needs input before it runs. Values are passed as the run's payload.</div>
+            @foreach (var p in _runPromptJob.Parameters)
+            {
+                <div>
+                    <label style="font-size:12px; color:var(--text-3); display:block; margin-bottom:4px">
+                        @(p.Label ?? p.Name) @(p.Required ? "*" : "")
+                        <span style="font-family:'Geist Mono',monospace; color:var(--text-3)">(@p.Name)</span>
+                    </label>
+                    <input class="dcinput" style="width:100%" value="@GetArg(p.Name)"
+                           @oninput="@(e => SetArg(p.Name, e.Value?.ToString() ?? ""))" />
+                </div>
+            }
+            @if (_runPromptError is not null)
+            {
+                <div style="color:var(--bad); font-size:12px">@_runPromptError</div>
+            }
+            <div style="display:flex; gap:8px; justify-content:flex-end">
+                <button class="dcbtn" @onclick="@(() => _runPromptJob = null)">Cancel</button>
+                <button class="dcbtn primary" disabled="@(_runningJobId == _runPromptJob.Id)" @onclick="SubmitRunPrompt">
+                    @(_runningJobId == _runPromptJob.Id ? "running…" : "Run")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
 @code {
     [Parameter] public Guid ProjectId { get; set; }
 
@@ -462,6 +511,12 @@ else
     private string _edSuccessCodesRaw = "0";
     private string _edPartialCodesRaw = "";
     private bool _edAllowNetworkEgress;
+    private string _edParametersRaw = "";
+
+    // ── Run-input prompt state ────────────────────────────────────────────────────────────────────
+    private JobView? _runPromptJob;
+    private Dictionary<string, string> _runArgs = new();
+    private string? _runPromptError;
 
     protected override async Task OnParametersSetAsync()
     {
@@ -537,17 +592,55 @@ else
 
     private async Task RunJob(Guid jobId)
     {
+        // If the job declares input parameters, prompt for them before running.
+        var job = _jobs?.FirstOrDefault(j => j.Id == jobId);
+        if (job is not null && job.Parameters.Count > 0)
+        {
+            _runPromptJob = job;
+            _runArgs = job.Parameters.ToDictionary(p => p.Name, _ => "");
+            _runPromptError = null;
+            return;
+        }
+        await RunJobCore(jobId, null);
+    }
+
+    private async Task RunJobCore(Guid jobId, string? payload)
+    {
         _runningJobId = jobId;
         _message = null;
         try
         {
-            var result = await Svc.RunJobAsync(jobId);
+            var result = await Svc.RunJobAsync(jobId, payload);
             _message = $"Run {result.Id} completed — status: {result.Status}.";
+            _runPromptJob = null;
             if (_selectedJobId == jobId)
                 _runs = await Svc.ListJobRunsAsync(jobId);
         }
-        catch (Exception ex) { _message = ex.Message; }
+        catch (Exception ex)
+        {
+            if (_runPromptJob is not null) _runPromptError = ex.Message;
+            else _message = ex.Message;
+        }
         finally { _runningJobId = null; }
+    }
+
+    private string GetArg(string name) => _runArgs.TryGetValue(name, out var v) ? v : "";
+    private void SetArg(string name, string value) => _runArgs[name] = value;
+
+    private async Task SubmitRunPrompt()
+    {
+        if (_runPromptJob is null) return;
+        _runPromptError = null;
+
+        var missing = _runPromptJob.Parameters
+            .Where(p => p.Required && string.IsNullOrWhiteSpace(GetArg(p.Name)))
+            .Select(p => p.Label ?? p.Name)
+            .ToList();
+        if (missing.Count > 0) { _runPromptError = $"Required: {string.Join(", ", missing)}"; return; }
+
+        var payload = System.Text.Json.JsonSerializer.Serialize(
+            _runPromptJob.Parameters.ToDictionary(p => p.Name, p => GetArg(p.Name)));
+        await RunJobCore(_runPromptJob.Id, payload);
     }
 
     private async Task OpenRunDetail(Guid runId)
@@ -577,6 +670,7 @@ else
         _edSuccessCodesRaw = "0";
         _edPartialCodesRaw = "";
         _edAllowNetworkEgress = false;
+        _edParametersRaw = "";
         _editorError = null;
         _showEditor = true;
     }
@@ -597,6 +691,7 @@ else
         _edSuccessCodesRaw = string.Join(",", job.SuccessExitCodes);
         _edPartialCodesRaw = string.Join(",", job.PartialExitCodes);
         _edAllowNetworkEgress = job.AllowNetworkEgress;
+        _edParametersRaw = string.Join("\n", job.Parameters.Select(p => p.Label is null ? p.Name : $"{p.Name}|{p.Label}"));
         _editorError = null;
         _showEditor = true;
     }
@@ -633,6 +728,9 @@ else
         var partialCodes = ParseInts(_edPartialCodesRaw, out var parErr);
         if (parErr is not null) { _editorError = $"Partial codes: {parErr}"; return; }
 
+        // Parse parameters — one per line, "name" or "name|Label".
+        var parameters = ParseParameters(_edParametersRaw);
+
         _saving = true;
         try
         {
@@ -656,7 +754,8 @@ else
                     ConcurrencyLimit: _edConcurrency,
                     SuccessExitCodes: successCodes,
                     PartialExitCodes: partialCodes,
-                    AllowNetworkEgress: _edAllowNetworkEgress);
+                    AllowNetworkEgress: _edAllowNetworkEgress,
+                    Parameters: parameters);
 
                 await Svc.UpdateJobAsync(cmd);
                 _message = $"Job '{_edName.Trim()}' updated.";
@@ -681,7 +780,8 @@ else
                     ConcurrencyLimit: _edConcurrency,
                     SuccessExitCodes: successCodes,
                     PartialExitCodes: partialCodes,
-                    AllowNetworkEgress: _edAllowNetworkEgress);
+                    AllowNetworkEgress: _edAllowNetworkEgress,
+                    Parameters: parameters);
 
                 await Svc.CreateJobAsync(cmd);
                 _message = $"Job '{_edName.Trim()}' created.";
@@ -698,6 +798,20 @@ else
         {
             _saving = false;
         }
+    }
+
+    private static List<JobParameterDto> ParseParameters(string raw)
+    {
+        var result = new List<JobParameterDto>();
+        foreach (var line in raw.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var pipe = line.IndexOf('|');
+            if (pipe > 0)
+                result.Add(new JobParameterDto(line[..pipe].Trim(), line[(pipe + 1)..].Trim()));
+            else
+                result.Add(new JobParameterDto(line.Trim()));
+        }
+        return result;
     }
 
     private static int[] ParseInts(string raw, out string? error)

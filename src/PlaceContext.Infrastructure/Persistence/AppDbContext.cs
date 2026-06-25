@@ -182,6 +182,7 @@ public sealed class AppDbContext : DbContext, IUnitOfWork
             e.Property(x => x.MapSourceKind).HasDefaultValue("image");
             e.Property(x => x.UpdatedAt).HasDefaultValueSql("now()");
             e.Property(x => x.AllowNetworkEgress).HasDefaultValue(false);
+            e.Property(x => x.ParametersJson).HasDefaultValue("[]");
         });
 
         b.Entity<JobRunRow>(e =>

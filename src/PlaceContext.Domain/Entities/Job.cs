@@ -22,6 +22,7 @@ public sealed class Job : AggregateRoot
         int concurrencyLimit,
         ExitCodePolicy exitCodePolicy,
         bool allowNetworkEgress,
+        IReadOnlyList<JobParameter> parameters,
         DateTimeOffset createdAt,
         DateTimeOffset updatedAt)
     {
@@ -34,6 +35,7 @@ public sealed class Job : AggregateRoot
         ConcurrencyLimit = concurrencyLimit;
         ExitCodePolicy = exitCodePolicy;
         AllowNetworkEgress = allowNetworkEgress;
+        Parameters = parameters;
         CreatedAt = createdAt;
         UpdatedAt = updatedAt;
     }
@@ -65,11 +67,17 @@ public sealed class Job : AggregateRoot
     /// </summary>
     public bool AllowNetworkEgress { get; private set; }
 
+    /// <summary>Declared input fields this job needs before it can run. Empty = no prompt.</summary>
+    public IReadOnlyList<JobParameter> Parameters { get; private set; }
+
     public DateTimeOffset CreatedAt { get; }
     public DateTimeOffset UpdatedAt { get; private set; }
 
     /// <summary>Whether this job has a reduce step.</summary>
     public bool HasReduceStep => ReduceSpec is not null;
+
+    /// <summary>True when the job declares parameters that must be collected before a run.</summary>
+    public bool RequiresInput => Parameters.Count > 0;
 
     // ── Factories ─────────────────────────────────────────────────────────────────────────────────
 
@@ -83,7 +91,8 @@ public sealed class Job : AggregateRoot
         int concurrencyLimit,
         ExitCodePolicy exitCodePolicy,
         DateTimeOffset createdAt,
-        bool allowNetworkEgress = false)
+        bool allowNetworkEgress = false,
+        IReadOnlyList<JobParameter>? parameters = null)
     {
         if (projectId == Guid.Empty)
             throw new ArgumentException("ProjectId must not be empty.", nameof(projectId));
@@ -99,7 +108,7 @@ public sealed class Job : AggregateRoot
         return new Job(
             Guid.NewGuid(), projectId, name.Trim(), description?.Trim(),
             mapSpec, reduceSpec, concurrencyLimit, exitCodePolicy,
-            allowNetworkEgress, createdAt, createdAt);
+            allowNetworkEgress, parameters ?? Array.Empty<JobParameter>(), createdAt, createdAt);
     }
 
     /// <summary>Rehydrates a job from persisted state. Infrastructure only.</summary>
@@ -114,9 +123,10 @@ public sealed class Job : AggregateRoot
         ExitCodePolicy exitCodePolicy,
         DateTimeOffset createdAt,
         DateTimeOffset updatedAt,
-        bool allowNetworkEgress = false)
+        bool allowNetworkEgress = false,
+        IReadOnlyList<JobParameter>? parameters = null)
         => new(id, projectId, name, description, mapSpec, reduceSpec, concurrencyLimit, exitCodePolicy,
-               allowNetworkEgress, createdAt, updatedAt);
+               allowNetworkEgress, parameters ?? Array.Empty<JobParameter>(), createdAt, updatedAt);
 
     // ── Behaviour ─────────────────────────────────────────────────────────────────────────────────
 
@@ -131,7 +141,8 @@ public sealed class Job : AggregateRoot
         int concurrencyLimit,
         ExitCodePolicy exitCodePolicy,
         DateTimeOffset updatedAt,
-        bool allowNetworkEgress = false)
+        bool allowNetworkEgress = false,
+        IReadOnlyList<JobParameter>? parameters = null)
     {
         if (string.IsNullOrWhiteSpace(name))
             throw new ArgumentException("Job name must not be empty.", nameof(name));
@@ -149,6 +160,7 @@ public sealed class Job : AggregateRoot
         ConcurrencyLimit = concurrencyLimit;
         ExitCodePolicy = exitCodePolicy;
         AllowNetworkEgress = allowNetworkEgress;
+        if (parameters is not null) Parameters = parameters;
         UpdatedAt = updatedAt;
     }
 }

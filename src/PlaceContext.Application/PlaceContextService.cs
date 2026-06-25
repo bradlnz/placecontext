@@ -144,8 +144,8 @@ public sealed class PlaceContextService : IPlaceContextService
     public Task<JobView> UpdateJobAsync(UpdateJobCommand command, CancellationToken ct = default)
         => _dispatcher.Send(command, ct);
 
-    public Task<JobRunDetailView> RunJobAsync(Guid jobId, CancellationToken ct = default)
-        => _dispatcher.Send(new RunJobCommand(jobId), ct);
+    public Task<JobRunDetailView> RunJobAsync(Guid jobId, string? inputPayload = null, CancellationToken ct = default)
+        => _dispatcher.Send(new RunJobCommand(jobId, inputPayload), ct);
 
     public Task<IReadOnlyList<JobView>> ListJobsAsync(Guid projectId, CancellationToken ct = default)
         => _dispatcher.Query(new ListJobsQuery(projectId), ct);
