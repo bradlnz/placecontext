@@ -1,9 +1,9 @@
 # PlaceContext — Jobs Automation Progress
 
-Branch: `feat/job-triggers-and-events` · Base: `main`
+Branch: `main` · all jobs-automation work merged
 Last updated: 2026-06-25
 
-Status: **198 tests passing** (4 Docker-gated skipped), all layers build clean.
+Status: **212 tests passing** (4 Docker-gated skipped), all layers build clean.
 
 This document tracks the jobs-automation work: scheduled/event triggers, an events layer,
 run parameters, run artifacts, a configurable LLM organize step, and the local installer —
@@ -38,6 +38,9 @@ parameters/modal → `6c29f00` artifacts → `4ae1900` configurable LLM → `81a
 
 ## ⏳ Remaining (tracked, with decisions)
 
+**Only #13 is open.** #9–#12 are done and merged into `main` (see the table above); their
+original decision notes are retained below for reference.
+
 ### #9 — Vectorize run output → dependency graph  *(done)*
 Pipeline: job completes → (configurable LLM) **organizes** output → **Voyage AI** embeds it →
 stored in the **dependency graph** as queryable nodes.
@@ -57,16 +60,16 @@ stored in the **dependency graph** as queryable nodes.
   brain/memory vocabulary branch. Each per-project graph (run-output nodes included) still rolls up
   into the org-wide `BrainHandler`.
 
-### #10 — Deploy on k3s
+### #10 — Deploy on k3s  *(done)*
 A Kubernetes-Job-based `IWorkloadRunner` (shards run as k8s Jobs); the in-process trigger scheduler
 needs **leader-election** (or run as a singleton Deployment) so schedules fire once across replicas.
 
-### #11 — External event sources + parameter injection
+### #11 — External event sources + parameter injection  *(done)*
 Webhook ingress + an external queue listener (e.g. **Cloudflare Queue**) that push events in; event
 types carry **field definitions**; a fired event injects its payload fields as run **parameters**.
 Plumbing started: `QueuedJobRun.Payload` + `RunJobCommand.InputPayload` already flow a payload through.
 
-### #12 — Self-host CLI (changed from Terraform), gated by an activation code
+### #12 — Self-host CLI (changed from Terraform), gated by an activation code  *(done)*
 A CLI customers run to self-host: pulls the published image, stands up k3s, applies config/migrations,
 and gates usage by an **activation code** (validate against a licensing service or signed offline token;
 enforce at startup; surface activation state in the portal).
