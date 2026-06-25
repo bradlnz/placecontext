@@ -6,3 +6,6 @@ obj/
 [Tt]est[Rr]esults/
 graphify-out/
 .claude/settings.local.json
+
+# Licensor activation signing key (secret — never commit)
+tools/activation-signing-key.pem

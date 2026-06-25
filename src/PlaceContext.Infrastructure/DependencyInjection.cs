@@ -26,6 +26,9 @@ public static class DependencyInjection
 
         services.AddSingleton<IClock, SystemClock>();
 
+        // Self-host activation: offline signed-key validation (licensing).
+        services.AddSingleton<IActivationService, Activation.SignedActivationService>();
+
         // Multi-tenancy: ambient current-tenant (AsyncLocal singleton) + the tenant registry.
         services.AddSingleton<ICurrentTenant, CurrentTenant>();
         services.AddScoped<ITenantStore, EfTenantStore>();

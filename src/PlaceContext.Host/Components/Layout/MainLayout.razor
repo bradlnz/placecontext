@@ -4,6 +4,7 @@
 @inject IConfiguration Config
 @inject IPlaceContextService Svc
 @inject PlaceContext.Application.Ports.ICurrentTenant Tenant
+@inject PlaceContext.Application.Ports.IActivationService Activation
 @inject IJSRuntime JS
 @inject NavigationManager Nav
 
@@ -95,6 +96,19 @@
                 </div>
             </div>
         </header>
+
+        @if (!Activation.Current.IsActive)
+        {
+            <div style="padding:8px 24px; background:var(--warn-bg); color:var(--warn); font-size:12.5px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:8px; flex-wrap:wrap">
+                <strong>Not activated</strong>
+                <span>@Activation.Current.Reason</span>
+                @if (Activation.Enforced)
+                {
+                    <span style="font-weight:600">MCP access is blocked until a valid activation key is set.</span>
+                }
+                <span style="color:var(--text-3)">Set <code>PlaceContext:Activation:Key</code>.</span>
+            </div>
+        }
 
         <div style="flex:1; overflow-y:auto; overflow-x:hidden">
             @Body

@@ -142,11 +142,34 @@ builder.WebHost.UseUrls("http://localhost:7700");
 var app = builder.Build();
 PlaceContext.Infrastructure.DependencyInjection.MigrateDatabase(app.Services);
 
+// Self-host activation: validate the configured key once and log the result.
+var activation = app.Services.GetRequiredService<PlaceContext.Application.Ports.IActivationService>();
+var activationInfo = activation.Current;
+app.Logger.LogInformation("Activation: {Status} — {Reason}{Org}",
+    activationInfo.Status, activationInfo.Reason,
+    activationInfo.Organisation is { } org ? $" (org: {org})" : "");
+if (activation.Enforced && !activationInfo.IsActive)
+    app.Logger.LogWarning("Activation is ENFORCED and the deployment is not active — the MCP surface is blocked until a valid key is configured.");
+
 app.UseStaticFiles();
 app.UseMiddleware<TenantResolutionMiddleware>(); // resolve {user}.placecontext.ai → tenant, before any data access
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseAntiforgery();
+
+// Enforcement: when activation is enforced and not active, block the MCP product surface (the portal
+// stays reachable so the operator can see the activation status and fix it).
+app.Use(async (ctx, next) =>
+{
+    if (activation.Enforced && ctx.Request.Path.StartsWithSegments("/mcp") && !activation.Current.IsActive)
+    {
+        ctx.Response.StatusCode = StatusCodes.Status403Forbidden;
+        await ctx.Response.WriteAsync($"PlaceContext is not activated: {activation.Current.Reason}");
+        return;
+    }
+    await next();
+});
+
 app.MapRazorComponents<App>().AddInteractiveServerRenderMode();
 
 // MCP requires an OAuth bearer token (validated by the JwtBearer scheme); the token binds the tenant.

@@ -25,6 +25,8 @@ plus the roadmap items still to do.
 | 8 | **Run artifacts** | `RunArtifact` VO; `DockerWorkloadRunner` captures all `/out` files except `result.json` (≤5 MB, ≤50 files); surfaced per shard/reduce in the run detail + `get_job_run`, downloadable in the UI via data-URI links. |
 | 14 | **Configurable LLM gateway** | `PlaceContext:Llm:Provider = none\|anthropic\|ollama`; added `OllamaLlmGateway` (local Gemma e.g. `gemma3:4b`) beside Anthropic/Null. `RunJobHandler` **organizes** each run's output through the gateway before storing it to project context (best-effort, falls back to raw). |
 | 15 | **`setup.sh` installer** | One-shot idempotent bootstrap: .NET 10 SDK, Docker check, `placecontext-db` Postgres, dotnet tools, EF migrations, optional `--with-ollama` (Ollama + Gemma). Hands off to `./run.sh`. |
+| 12a | **Activation-key licensing** | Offline-verifiable signed token (ECDSA P-256/SHA-256 DER, BCL-only). `IActivationService` + `SignedActivationService` (verifies against the committed public key, checks expiry). Host: startup log + `/mcp` enforcement (portal stays visible) + portal banner. `tools/activation.sh` keygen/sign (licensor private key gitignored). Interop proven: openssl-minted key validates in .NET. |
+| 12b | **Self-host on k3s** | `Dockerfile` (Host image); `deploy/k3s/` (Postgres **pgvector** + Host Deployment/Service/Ingress, activation enforced via secret); `deploy/selfhost.sh --activation-key <KEY>` installs k3s, deploys, and prints the worker-node join command. |
 
 Commits: `6411749` triggers/events layer → `aec4860` MCP → `1450683` UI → `1240f6a`
 parameters/modal → `6c29f00` artifacts → `4ae1900` configurable LLM → `81a4fbb` setup.sh.
