@@ -91,6 +91,37 @@ public sealed class EfRunEmbeddingRepository : IRunEmbeddingRepository
         return results;
     }
 
+    public async Task<IReadOnlyList<RunEmbedding>> ListForProjectAsync(
+        Guid projectId, int take = 200, CancellationToken ct = default)
+    {
+        if (!await EnsureReadyAsync(ct)) return Array.Empty<RunEmbedding>();
+
+        var conn = (NpgsqlConnection)_db.Database.GetDbConnection();
+        await OpenAsync(conn, ct);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = """
+            SELECT id, job_run_id, job_id, project_id, text, embedding::text, created_at
+            FROM job_run_embeddings
+            WHERE tenant_id = @tenant AND project_id = @project
+            ORDER BY created_at DESC
+            LIMIT @take
+            """;
+        cmd.Parameters.AddWithValue("tenant", _tenant.TenantId);
+        cmd.Parameters.AddWithValue("project", projectId);
+        cmd.Parameters.AddWithValue("take", take);
+
+        var results = new List<RunEmbedding>();
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+        {
+            results.Add(RunEmbedding.Rehydrate(
+                reader.GetGuid(0), reader.GetGuid(1), reader.GetGuid(2), reader.GetGuid(3),
+                reader.GetString(4), ParseVectorLiteral(reader.GetString(5)),
+                reader.GetFieldValue<DateTimeOffset>(6)));
+        }
+        return results;
+    }
+
     // ── Lazy init / graceful degradation ───────────────────────────────────────────────────────────
 
     private async Task<bool> EnsureReadyAsync(CancellationToken ct)
@@ -147,4 +178,14 @@ public sealed class EfRunEmbeddingRepository : IRunEmbeddingRepository
 
     private static string ToVectorLiteral(float[] vector)
         => "[" + string.Join(",", vector.Select(f => f.ToString(CultureInfo.InvariantCulture))) + "]";
+
+    /// <summary>Parses pgvector's text form (<c>[0.1,0.2,…]</c>) back into a float array.</summary>
+    private static float[] ParseVectorLiteral(string literal)
+    {
+        var inner = literal.Trim().Trim('[', ']');
+        if (inner.Length == 0) return Array.Empty<float>();
+        return inner.Split(',')
+            .Select(p => float.Parse(p, CultureInfo.InvariantCulture))
+            .ToArray();
+    }
 }

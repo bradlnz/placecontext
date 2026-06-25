@@ -27,6 +27,17 @@ public sealed class InMemoryRunEmbeddingRepository : IRunEmbeddingRepository
         return Task.FromResult<IReadOnlyList<RunEmbeddingMatch>>(matches);
     }
 
+    public Task<IReadOnlyList<RunEmbedding>> ListForProjectAsync(
+        Guid projectId, int take = 200, CancellationToken ct = default)
+    {
+        var list = Store
+            .Where(e => e.ProjectId == projectId)
+            .OrderByDescending(e => e.CreatedAt)
+            .Take(take)
+            .ToList();
+        return Task.FromResult<IReadOnlyList<RunEmbedding>>(list);
+    }
+
     private static double Cosine(float[] a, float[] b)
     {
         if (a.Length == 0 || b.Length == 0 || a.Length != b.Length) return 0;

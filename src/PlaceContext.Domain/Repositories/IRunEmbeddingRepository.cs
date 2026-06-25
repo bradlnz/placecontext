@@ -18,4 +18,12 @@ public interface IRunEmbeddingRepository
     /// </summary>
     Task<IReadOnlyList<RunEmbeddingMatch>> SearchAsync(
         Guid projectId, float[] queryVector, int take, CancellationToken ct = default);
+
+    /// <summary>
+    /// Returns every stored run-output embedding for a project — vectors included — most recent first, so
+    /// they can be woven into the dependency graph as semantically-linked "brain" nodes. Empty if the store
+    /// is unavailable. <paramref name="take"/> caps how many are returned (newest kept).
+    /// </summary>
+    Task<IReadOnlyList<RunEmbedding>> ListForProjectAsync(
+        Guid projectId, int take = 200, CancellationToken ct = default);
 }

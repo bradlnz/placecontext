@@ -16,11 +16,17 @@ public sealed class DecisionTreeAssembler
     private const int MaxHotspots = 25;
     private const int MaxLabel = 80;
 
+    /// <summary>Two run-output nodes are linked when their embeddings are at least this cosine-similar.</summary>
+    private const double SimilarityThreshold = 0.6;
+    /// <summary>Each run-output node links to at most this many of its nearest semantic neighbours.</summary>
+    private const int MaxSimilarLinks = 3;
+
     public DecisionTree Assemble(
         ProjectName projectName,
         IReadOnlyList<Decision> decisions,
         ActivityLog ledger,
-        IReadOnlyList<ToolActivity> activity)
+        IReadOnlyList<ToolActivity> activity,
+        IReadOnlyList<RunOutputNode>? runOutputs = null)
     {
         const string rootId = "root";
         var specs = new List<(string Id, string Label, TreeNodeKind Kind)> { (rootId, projectName.Value, TreeNodeKind.Root) };
@@ -83,6 +89,12 @@ public sealed class DecisionTreeAssembler
             }
         }
 
+        // Job-run outputs become the project's "brain": each embedded run output is a node off the root,
+        // then cross-linked to its most semantically-similar peers (cosine over the embedding vectors) so
+        // the accumulated outputs weave the dependency graph together into a queryable memory. The
+        // cross-links are Inferred — they are semantic, not extracted from a recorded relationship.
+        WeaveRunOutputs(runOutputs, rootId, edges, seen, AddNode);
+
         // Degree = incident-edge count. For file nodes that equals the number of changes touching it.
         var degree = new Dictionary<string, int>();
         foreach (var e in edges)
@@ -102,6 +114,75 @@ public sealed class DecisionTreeAssembler
             s.Id, s.Label, s.Kind, degree.GetValueOrDefault(s.Id), hotspotIds.Contains(s.Id))).ToList();
 
         return DecisionTree.Of(nodes, edges);
+    }
+
+    /// <summary>
+    /// Adds one <see cref="TreeNodeKind.JobRunOutput"/> node per embedded run output (hung off the root),
+    /// then links each to its top-<see cref="MaxSimilarLinks"/> nearest peers above
+    /// <see cref="SimilarityThreshold"/> cosine similarity. Undirected — symmetric pairs are de-duplicated.
+    /// </summary>
+    private static void WeaveRunOutputs(
+        IReadOnlyList<RunOutputNode>? runOutputs,
+        string rootId,
+        List<DecisionTreeEdge> edges,
+        HashSet<string> seen,
+        Action<string, string, TreeNodeKind> addNode)
+    {
+        if (runOutputs is not { Count: > 0 }) return;
+
+        var outputs = new List<(string Id, float[] Vector)>();
+        foreach (var o in runOutputs)
+        {
+            if (o.Vector.Count == 0) continue;
+            var id = "runoutput:" + o.Id;
+            if (!seen.Contains(id))
+            {
+                addNode(id, Clip(CleanLabel(o.Label, id)), TreeNodeKind.JobRunOutput);
+                edges.Add(new DecisionTreeEdge(rootId, id, ConfidenceTag.Extracted));
+                outputs.Add((id, o.Vector.ToArray()));
+            }
+        }
+
+        var linked = new HashSet<string>();
+        for (var i = 0; i < outputs.Count; i++)
+        {
+            var neighbours = new List<(int J, double Sim)>();
+            for (var j = 0; j < outputs.Count; j++)
+            {
+                if (i == j) continue;
+                var sim = Cosine(outputs[i].Vector, outputs[j].Vector);
+                if (sim >= SimilarityThreshold) neighbours.Add((j, sim));
+            }
+
+            foreach (var (j, _) in neighbours.OrderByDescending(n => n.Sim).Take(MaxSimilarLinks))
+            {
+                var a = outputs[i].Id;
+                var b = outputs[j].Id;
+                var key = string.CompareOrdinal(a, b) < 0 ? a + "|" + b : b + "|" + a;
+                if (linked.Add(key))
+                    edges.Add(new DecisionTreeEdge(a, b, ConfidenceTag.Inferred));
+            }
+        }
+    }
+
+    private static double Cosine(float[] a, float[] b)
+    {
+        if (a.Length == 0 || b.Length == 0 || a.Length != b.Length) return 0;
+        double dot = 0, na = 0, nb = 0;
+        for (var i = 0; i < a.Length; i++)
+        {
+            dot += a[i] * b[i];
+            na += a[i] * a[i];
+            nb += b[i] * b[i];
+        }
+        return na == 0 || nb == 0 ? 0 : dot / (Math.Sqrt(na) * Math.Sqrt(nb));
+    }
+
+    /// <summary>Strips leading Markdown header markers/whitespace from an embedded output's first line.</summary>
+    private static string CleanLabel(string label, string fallback)
+    {
+        var line = (label ?? string.Empty).Split('\n', 2)[0].TrimStart('#', ' ', '\t').Trim();
+        return string.IsNullOrWhiteSpace(line) ? fallback : line;
     }
 
     private static string Clip(string s) => s.Length <= MaxLabel ? s : s[..(MaxLabel - 1)] + "…";
