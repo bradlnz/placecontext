@@ -146,10 +146,11 @@ type model struct {
 
 	// 3D cluster view (the main page default)
 	dash3D bool
-	clAngX float64
-	clAngY float64
+	clAngX float64 // viewing tilt (user)
+	clAngY float64 // viewing yaw (user)
 	clZoom float64
 	clSpin bool
+	orbit  float64 // orbital animation phase (advances while clSpin)
 
 	// MCP tool-call log
 	mcp    []mcpRow
@@ -792,7 +793,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil // only animate while the 3D dashboard is showing
 		}
 		if m.clSpin {
-			m.clAngY += 0.015
+			m.orbit += 0.012 // slow, elegant orbital motion
 		}
 		return m, clusterTick()
 
@@ -1124,13 +1125,56 @@ func (c *canvas) String() string {
 	return b.String()
 }
 
-// ent is a projected topology entity (node or pod) ready to draw.
-type ent struct {
-	sx, sy int
-	depth  float64
-	label  string
-	marker rune
-	color  int
+func center(s string, width int) string {
+	r := []rune(s)
+	if len(r) >= width {
+		return string(r[:width])
+	}
+	left := (width - len(r)) / 2
+	return strings.Repeat(" ", left) + s + strings.Repeat(" ", width-len(r)-left)
+}
+
+// cylinder draws a 3D cylinder/globe centred on (cxp,cyp) — the control-plane hub the
+// satellites orbit. The "═" bands read as a globe's latitudes; the elliptical top and
+// bottom give it depth.
+func (c *canvas) cylinder(cxp, cyp int, label string, color int) {
+	iw := len([]rune(label))
+	if iw < 6 {
+		iw = 6
+	}
+	w := iw + 2
+	x0 := cxp - w/2
+	y0 := cyp - 3
+	dash := strings.Repeat("─", iw)
+	band := strings.Repeat("═", iw)
+	rows := []string{
+		" " + dash + " ",
+		"╭" + band + "╮",
+		"│" + center(label, iw) + "│",
+		"│" + strings.Repeat(" ", iw) + "│",
+		"╰" + band + "╯",
+		" " + dash + " ",
+	}
+	for dy, row := range rows {
+		c.text(x0, y0+dy, row, color)
+	}
+}
+
+// trimToBox returns the point on the border of a box (centre cx,cy, half-extents hw,hh)
+// in the direction of (tx,ty) — so link lines start/end at the box edge, not its centre.
+func trimToBox(cx, cy, hw, hh, tx, ty int) (int, int) {
+	dx, dy := float64(tx-cx), float64(ty-cy)
+	if dx == 0 && dy == 0 {
+		return cx, cy
+	}
+	s := math.Inf(1)
+	if dx != 0 {
+		s = math.Min(s, float64(hw)/math.Abs(dx))
+	}
+	if dy != 0 {
+		s = math.Min(s, float64(hh)/math.Abs(dy))
+	}
+	return cx + int(dx*s), cy + int(dy*s)
 }
 
 func shortName(s string) string {
@@ -1177,19 +1221,24 @@ func (m model) cluster3DView() string {
 			workers = append(workers, n)
 		}
 	}
-	for i, s := range servers { // control plane near the centre, slightly raised
-		nodePos[s.Name] = p3{0, 0.4 - 0.6*float64(i), 0}
+	orb := m.orbit
+	// control-plane hub(s) at the centre
+	for i, s := range servers {
+		nodePos[s.Name] = p3{0, 0.2 - 0.5*float64(i), 0}
 	}
-	for i, wk := range workers { // workers on a wide ring on the floor
-		ang := 2 * math.Pi * float64(i) / float64(max(1, len(workers)))
-		nodePos[wk.Name] = p3{3.8 * math.Cos(ang), -0.8, 3.8 * math.Sin(ang)}
+	// workers orbit the hub like satellites (slow, majestic)
+	nw := max(1, len(workers))
+	const ring = 4.4
+	for i, wk := range workers {
+		th := 2*math.Pi*float64(i)/float64(nw) + orb*0.6
+		nodePos[wk.Name] = p3{ring * math.Cos(th), -0.2, ring * math.Sin(th)}
 	}
 
-	// rotate around Y by clAngY, fixed tilt + user clAngX around X; gentle perspective
+	// viewing transform: fixed tilt + user clAngX around X, user yaw clAngY around Y
 	angX := 0.5 + m.clAngX
 	sinX, cosX := math.Sin(angX), math.Cos(angX)
 	sinY, cosY := math.Sin(m.clAngY), math.Cos(m.clAngY)
-	const dist = 10.0
+	const dist = 11.0
 	cx, cy := float64(w)/2, float64(h)/2
 	project := func(p p3) (int, int, float64) {
 		x1 := p.x*cosY + p.z*sinY
@@ -1197,14 +1246,32 @@ func (m model) cluster3DView() string {
 		y1 := p.y*cosX - z1*sinX
 		z2 := p.y*sinX + z1*cosX
 		ooz := 1.0 / (z2 + dist)
-		return int(cx + m.clZoom*x1*ooz*float64(w)*0.78),
-			int(cy - m.clZoom*y1*ooz*float64(h)*1.5), z2
+		return int(cx + m.clZoom*x1*ooz*float64(w)*0.80),
+			int(cy - m.clZoom*y1*ooz*float64(h)*1.6), z2
 	}
 
-	var ents []ent
+	// a visible entity, with screen position + box half-extents (for edge-trimmed links)
+	type vis struct {
+		sx, sy, hw, hh int
+		depth          float64
+		label          string
+		marker         rune
+		color          int
+		cyl            bool
+	}
+	scr := map[string][3]int{} // name → sx, sy + radius for link trimming
+	var ents []vis
+
 	for _, s := range servers {
 		x, y, d := project(nodePos[s.Name])
-		ents = append(ents, ent{x, y, d, shortName(s.Name), '◆', 0})
+		lab := shortName(s.Name)
+		cw := len([]rune(lab))
+		if cw < 6 {
+			cw = 6
+		}
+		cw += 2
+		ents = append(ents, vis{x, y, cw / 2, 3, d, lab, '◆', 0, true})
+		scr[s.Name] = [3]int{x, y, cw / 2}
 	}
 	for _, wk := range workers {
 		x, y, d := project(nodePos[wk.Name])
@@ -1212,31 +1279,28 @@ func (m model) cluster3DView() string {
 		if wk.Status != "Ready" {
 			col = 3
 		}
-		ents = append(ents, ent{x, y, d, shortName(wk.Name), '●', col})
+		bw := len([]rune("● "+shortName(wk.Name))) + 2
+		ents = append(ents, vis{x, y, bw / 2, 1, d, shortName(wk.Name), '●', col, false})
+		scr[wk.Name] = [3]int{x, y, bw / 2}
 	}
 
-	// control-plane ↔ worker links
-	for _, s := range servers {
-		sx, sy, _ := project(nodePos[s.Name])
-		for _, wk := range workers {
-			wx, wy, _ := project(nodePos[wk.Name])
-			cv.line(sx, sy, wx, wy, 5)
-		}
+	// pods orbit their worker like moons (tilted ring), each linked to it
+	count := map[string]int{}
+	for _, p := range m.state.pods {
+		count[p.Node]++
 	}
-
-	// pods stacked vertically above their node, each linked by a line
-	stack := map[string]int{}
+	idx := map[string]int{}
 	for _, p := range m.state.pods {
 		base, ok := nodePos[p.Node]
 		if !ok {
 			continue
 		}
-		k := stack[p.Node]
-		stack[p.Node]++
-		pp := p3{base.x, base.y + 1.1 + 1.1*float64(k), base.z}
-		bx, by, _ := project(base)
+		k := idx[p.Node]
+		idx[p.Node]++
+		ph := 2*math.Pi*float64(k)/float64(max(1, count[p.Node])) + orb*1.4
+		const pr = 1.6
+		pp := p3{base.x + pr*math.Cos(ph), base.y + 0.5 + pr*0.45*math.Sin(ph), base.z + pr*math.Sin(ph)}
 		px, py, pd := project(pp)
-		cv.line(bx, by, px, py, 5)
 		col, mark := 2, '•'
 		if !(p.Ready == "1/1" && p.Status == "Running") {
 			col, mark = 3, '◦'
@@ -1244,13 +1308,36 @@ func (m model) cluster3DView() string {
 		if strings.HasPrefix(p.Name, "placecontext-db") {
 			col, mark = 4, '◆'
 		}
-		ents = append(ents, ent{px, py, pd, podLabel(p.Name), mark, col})
+		lab := podLabel(p.Name)
+		bw := len([]rune(string(mark)+" "+lab)) + 2
+		ents = append(ents, vis{px, py, bw / 2, 1, pd, lab, mark, col, false})
+		// link pod → its node, trimmed to both borders
+		if b, ok := scr[p.Node]; ok {
+			ax, ay := trimToBox(b[0], b[1], b[2], 1, px, py)
+			bx, by := trimToBox(px, py, bw/2, 1, b[0], b[1])
+			cv.line(ax, ay, bx, by, 5)
+		}
 	}
 
-	// draw entities far→near so nearer boxes win, each as a labelled "computer" box
+	// control-plane ↔ worker links (edge to edge)
+	for _, s := range servers {
+		a := scr[s.Name]
+		for _, wk := range workers {
+			b := scr[wk.Name]
+			ax, ay := trimToBox(a[0], a[1], a[2], 3, b[0], b[1])
+			bx, by := trimToBox(b[0], b[1], b[2], 1, a[0], a[1])
+			cv.line(ax, ay, bx, by, 5)
+		}
+	}
+
+	// draw far→near so nearer items win; server hub as a cylinder/globe, others as boxes
 	sort.Slice(ents, func(i, j int) bool { return ents[i].depth > ents[j].depth })
 	for _, e := range ents {
-		cv.box(e.sx, e.sy, string(e.marker)+" "+e.label, e.color)
+		if e.cyl {
+			cv.cylinder(e.sx, e.sy, e.label, e.color)
+		} else {
+			cv.box(e.sx, e.sy, string(e.marker)+" "+e.label, e.color)
+		}
 	}
 
 	spin := "on"
