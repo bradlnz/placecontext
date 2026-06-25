@@ -36,5 +36,7 @@ public sealed record JobView(
     IReadOnlyList<int> PartialExitCodes,
     /// <summary>True when containers for this job are permitted outbound network access.</summary>
     bool AllowNetworkEgress,
+    /// <summary>Declared input parameters prompted before a manual run (empty = none).</summary>
+    IReadOnlyList<JobParameterDto> Parameters,
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt);

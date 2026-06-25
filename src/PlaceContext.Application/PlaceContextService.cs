@@ -144,8 +144,8 @@ public sealed class PlaceContextService : IPlaceContextService
     public Task<JobView> UpdateJobAsync(UpdateJobCommand command, CancellationToken ct = default)
         => _dispatcher.Send(command, ct);
 
-    public Task<JobRunDetailView> RunJobAsync(Guid jobId, CancellationToken ct = default)
-        => _dispatcher.Send(new RunJobCommand(jobId), ct);
+    public Task<JobRunDetailView> RunJobAsync(Guid jobId, string? inputPayload = null, CancellationToken ct = default)
+        => _dispatcher.Send(new RunJobCommand(jobId, inputPayload), ct);
 
     public Task<IReadOnlyList<JobView>> ListJobsAsync(Guid projectId, CancellationToken ct = default)
         => _dispatcher.Query(new ListJobsQuery(projectId), ct);
@@ -158,6 +158,37 @@ public sealed class PlaceContextService : IPlaceContextService
 
     public Task<JobView?> GetJobAsync(Guid jobId, CancellationToken ct = default)
         => _dispatcher.Query(new GetJobQuery(jobId), ct);
+
+    // ── Triggers ──────────────────────────────────────────────────────────────────────────────────
+
+    public Task<TriggerView> CreateTriggerAsync(CreateTriggerCommand command, CancellationToken ct = default)
+        => _dispatcher.Send(command, ct);
+
+    public Task<TriggerView> SetTriggerEnabledAsync(Guid triggerId, bool enabled, CancellationToken ct = default)
+        => _dispatcher.Send(new SetTriggerEnabledCommand(triggerId, enabled), ct);
+
+    public Task<bool> DeleteTriggerAsync(Guid triggerId, CancellationToken ct = default)
+        => _dispatcher.Send(new DeleteTriggerCommand(triggerId), ct);
+
+    public Task<IReadOnlyList<TriggerView>> ListTriggersAsync(Guid projectId, CancellationToken ct = default)
+        => _dispatcher.Query(new ListTriggersQuery(projectId), ct);
+
+    // ── Events ────────────────────────────────────────────────────────────────────────────────────
+
+    public Task<EventTypeView> DefineEventTypeAsync(string name, string? description, string? payloadSchema, CancellationToken ct = default)
+        => _dispatcher.Send(new DefineEventTypeCommand(name, description, payloadSchema), ct);
+
+    public Task<EventOccurrenceView> EmitEventAsync(string name, Guid? projectId, string? payload, CancellationToken ct = default)
+        => _dispatcher.Send(new EmitEventCommand(name, projectId, payload), ct);
+
+    public Task<IReadOnlyList<EventTypeView>> ListEventTypesAsync(CancellationToken ct = default)
+        => _dispatcher.Query(new ListEventTypesQuery(), ct);
+
+    public Task<IReadOnlyList<EventOccurrenceView>> ListEventOccurrencesAsync(int take = 50, CancellationToken ct = default)
+        => _dispatcher.Query(new ListEventOccurrencesQuery(take), ct);
+
+    public Task<IReadOnlyList<RunOutputMatchView>> SearchRunOutputsAsync(Guid projectId, string query, int take = 10, CancellationToken ct = default)
+        => _dispatcher.Query(new SearchRunOutputsQuery(projectId, query, take), ct);
 
     public Task<JobView> UploadJobCodeAsync(UploadJobCodeCommand command, CancellationToken ct = default)
         => _dispatcher.Send(command, ct);

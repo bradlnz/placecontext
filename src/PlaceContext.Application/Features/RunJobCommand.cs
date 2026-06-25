@@ -9,4 +9,9 @@ namespace PlaceContext.Application.Features;
 /// Completed run artifacts are also appended to the project's context so the existing generic
 /// generation layer can see them.
 /// </summary>
-public sealed record RunJobCommand(Guid JobId) : ICommand<JobRunDetailView>;
+/// <param name="InputPayload">
+/// Optional override for the run's input. When supplied (by a portal modal collecting the job's
+/// declared parameters, or by an event source injecting form fields), it replaces the job's stored
+/// shard payloads with a single shard carrying this payload. Null = run the job's stored payloads.
+/// </param>
+public sealed record RunJobCommand(Guid JobId, string? InputPayload = null) : ICommand<JobRunDetailView>;

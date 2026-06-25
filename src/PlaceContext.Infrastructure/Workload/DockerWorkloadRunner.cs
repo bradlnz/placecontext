@@ -134,7 +134,9 @@ public sealed class DockerWorkloadRunner : IWorkloadRunner
             if (File.Exists(artifactPath))
                 artifact = await File.ReadAllTextAsync(artifactPath, ct);
 
-            return new WorkloadRunResult(exitCode, artifact, stdout ?? "", stderr ?? "");
+            var artifacts = await CaptureNamedArtifactsAsync(hostOutDir, ct);
+
+            return new WorkloadRunResult(exitCode, artifact, stdout ?? "", stderr ?? "", artifacts);
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
@@ -152,6 +154,36 @@ public sealed class DockerWorkloadRunner : IWorkloadRunner
             if (workDir is not null)
                 try { Directory.Delete(workDir, recursive: true); } catch { /* best-effort */ }
         }
+    }
+
+    /// <summary>
+    /// Captures every file written to <paramref name="hostOutDir"/> except the primary result.json, as named
+    /// text artifacts (e.g. report.csv). Names are relative paths within /out. Bounded for safety: skips
+    /// files larger than 5 MB and caps the set at 50 files.
+    /// </summary>
+    private async Task<List<WorkloadArtifact>> CaptureNamedArtifactsAsync(string hostOutDir, CancellationToken ct)
+    {
+        const long maxBytes = 5L * 1024 * 1024;
+        const int maxFiles = 50;
+        var artifacts = new List<WorkloadArtifact>();
+        if (!Directory.Exists(hostOutDir)) return artifacts;
+
+        foreach (var path in Directory.EnumerateFiles(hostOutDir, "*", SearchOption.AllDirectories))
+        {
+            var name = Path.GetRelativePath(hostOutDir, path).Replace(Path.DirectorySeparatorChar, '/');
+            if (string.Equals(name, _options.ArtifactFileName, StringComparison.Ordinal))
+                continue; // the primary result.json is surfaced as Artifact
+
+            try
+            {
+                if (new FileInfo(path).Length > maxBytes) continue;
+                artifacts.Add(new WorkloadArtifact(name, await File.ReadAllTextAsync(path, ct)));
+                if (artifacts.Count >= maxFiles) break;
+            }
+            catch { /* best-effort: skip unreadable/binary files */ }
+        }
+
+        return artifacts;
     }
 
     /// <summary>

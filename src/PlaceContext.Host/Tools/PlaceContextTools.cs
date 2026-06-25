@@ -271,10 +271,11 @@ public sealed class PlaceContextTools
             () => svc.GetJobAsync(jobId));
 
     [Authorize(Policy = "Member")]
-    [McpServerTool(Name = "run_job"), Description("Run a job now: executes its map shards (and reduce step, if defined) as isolated containers and waits for completion. Returns the run detail — overall status plus each shard's exit code, outcome, artifact, and log, and any reduce result. Use list_job_runs/get_job_run to fetch results later.")]
-    public static Task<string> RunJob(IPlaceContextService svc, IToolCallLog log, Guid jobId)
-        => Traced(log, "run_job", jobId.ToString(), "run job", new { jobId },
-            () => svc.RunJobAsync(jobId));
+    [McpServerTool(Name = "run_job"), Description("Run a job now: executes its map shards (and reduce step, if defined) as isolated containers and waits for completion. Returns the run detail — overall status plus each shard's exit code, outcome, artifact, and log, and any reduce result. Pass 'inputPayload' to override the stored shards with a single shard carrying that payload (e.g. parameters for a job that declares input fields). Use list_job_runs/get_job_run to fetch results later.")]
+    public static Task<string> RunJob(IPlaceContextService svc, IToolCallLog log, Guid jobId,
+        [Description("Optional input payload override (typically JSON); runs a single shard with it")] string? inputPayload = null)
+        => Traced(log, "run_job", jobId.ToString(), "run job", new { jobId, inputPayload },
+            () => svc.RunJobAsync(jobId, inputPayload));
 
     [Authorize(Policy = "Member")]
     [McpServerTool(Name = "list_job_runs"), Description("List a job's run history (most recent first): each run's status, start/finish times, and shard success/partial/failure counts. Use get_job_run for a run's full artifacts.")]
@@ -287,6 +288,79 @@ public sealed class PlaceContextTools
     public static Task<string> GetJobRun(IPlaceContextService svc, IToolCallLog log, Guid runId)
         => Traced(log, "get_job_run", runId.ToString(), "get job run", new { runId },
             () => svc.GetJobRunAsync(runId));
+
+    // ── Triggers ──────────────────────────────────────────────────────────────────────────────────
+
+    [Authorize(Policy = "Member")]
+    [McpServerTool(Name = "create_trigger"), Description("Create a trigger that starts runs of a job automatically. kind='Schedule' fires on a recurring cron expression (5-field, or 6-field with seconds; evaluated in the workspace timezone) — supply 'cron'. kind='Event' fires whenever a named event is emitted — supply 'eventName' (a built-in like 'job.completed'/'activity.recorded', or a user-defined event type). The project is inferred from the job. Firing enqueues an independent run; concurrent runs are allowed.")]
+    public static Task<string> CreateTrigger(IPlaceContextService svc, IToolCallLog log,
+        [Description("The job to run when the trigger fires")] Guid jobId,
+        [Description("Human-readable trigger name")] string name,
+        [Description("'Schedule' or 'Event'")] string kind,
+        [Description("Cron expression (schedule triggers); e.g. '0 0 * * *' for daily midnight")] string? cron = null,
+        [Description("Event name to subscribe to (event triggers)")] string? eventName = null)
+        => Traced(log, "create_trigger", jobId.ToString(), $"{kind} trigger {name}",
+            new { jobId, name, kind, cron, eventName },
+            () => svc.CreateTriggerAsync(new CreateTriggerCommand(jobId, name, kind, cron, eventName)));
+
+    [Authorize(Policy = "Member")]
+    [McpServerTool(Name = "list_triggers"), Description("List a project's triggers (schedule + event), with their next-run/last-fired times and enabled state.")]
+    public static Task<string> ListTriggers(IPlaceContextService svc, IToolCallLog log, Guid projectId)
+        => Traced(log, "list_triggers", projectId.ToString(), "list triggers", new { projectId },
+            () => svc.ListTriggersAsync(projectId));
+
+    [Authorize(Policy = "Member")]
+    [McpServerTool(Name = "set_trigger_enabled"), Description("Enable or pause a trigger. Re-enabling a schedule recomputes its next-run time; pausing stops it firing until re-enabled.")]
+    public static Task<string> SetTriggerEnabled(IPlaceContextService svc, IToolCallLog log,
+        Guid triggerId, bool enabled)
+        => Traced(log, "set_trigger_enabled", triggerId.ToString(), enabled ? "enable trigger" : "pause trigger",
+            new { triggerId, enabled },
+            () => svc.SetTriggerEnabledAsync(triggerId, enabled));
+
+    [Authorize(Policy = "Member")]
+    [McpServerTool(Name = "delete_trigger"), Description("Permanently remove a trigger. Returns true if it existed.")]
+    public static Task<string> DeleteTrigger(IPlaceContextService svc, IToolCallLog log, Guid triggerId)
+        => Traced(log, "delete_trigger", triggerId.ToString(), "delete trigger", new { triggerId },
+            () => svc.DeleteTriggerAsync(triggerId));
+
+    // ── Events ────────────────────────────────────────────────────────────────────────────────────
+
+    [Authorize(Policy = "Member")]
+    [McpServerTool(Name = "define_event_type"), Description("Define (or update) a user event type for this workspace so triggers can subscribe to it and it can be emitted. The name must not collide with a reserved built-in event. 'payloadSchema' is optional freetext/JSON describing the expected payload fields.")]
+    public static Task<string> DefineEventType(IPlaceContextService svc, IToolCallLog log,
+        [Description("Unique event name, e.g. 'deploy.finished'")] string name,
+        [Description("What this event means / when it is emitted")] string? description = null,
+        [Description("Optional freetext/JSON describing the payload fields")] string? payloadSchema = null)
+        => Traced(log, "define_event_type", "—", $"define {name}", new { name, description, payloadSchema },
+            () => svc.DefineEventTypeAsync(name, description, payloadSchema));
+
+    [Authorize(Policy = "Member")]
+    [McpServerTool(Name = "emit_event"), Description("Emit an event occurrence. Every enabled event-trigger subscribed to the name fires (each enqueues a job run); the optional payload is passed through as parameters for those runs. The name may be a user-defined event type or a built-in. Returns the occurrence and how many triggers fired.")]
+    public static Task<string> EmitEvent(IPlaceContextService svc, IToolCallLog log,
+        [Description("Event name to emit")] string name,
+        [Description("Optional project this event concerns")] Guid? projectId = null,
+        [Description("Optional opaque payload (typically JSON)")] string? payload = null)
+        => Traced(log, "emit_event", projectId?.ToString() ?? "—", $"emit {name}", new { name, projectId, payload },
+            () => svc.EmitEventAsync(name, projectId, payload));
+
+    [Authorize(Policy = "Member")]
+    [McpServerTool(Name = "list_event_types"), Description("List all event types: the reserved built-ins (job.completed, activity.recorded, risk.recomputed) plus this workspace's user-defined ones.")]
+    public static Task<string> ListEventTypes(IPlaceContextService svc, IToolCallLog log)
+        => Traced(log, "list_event_types", "—", "list event types", new { },
+            () => svc.ListEventTypesAsync());
+
+    [Authorize(Policy = "Member")]
+    [McpServerTool(Name = "list_event_occurrences"), Description("List the most recent emitted events (the event log), newest first.")]
+    public static Task<string> ListEventOccurrences(IPlaceContextService svc, IToolCallLog log, int take = 50)
+        => Traced(log, "list_event_occurrences", "—", "list event log", new { take },
+            () => svc.ListEventOccurrencesAsync(take));
+
+    [Authorize(Policy = "Member")]
+    [McpServerTool(Name = "search_run_outputs"), Description("Semantic search over a project's job-run outputs: returns the runs whose organized output is most similar to the query text, by vector similarity. Requires embeddings to be configured (Voyage AI); returns an empty list otherwise. Use this to find prior runs related to a question or to surface related results.")]
+    public static Task<string> SearchRunOutputs(IPlaceContextService svc, IToolCallLog log,
+        Guid projectId, string query, int take = 10)
+        => Traced(log, "search_run_outputs", projectId.ToString(), $"search runs: {query}", new { projectId, query, take },
+            () => svc.SearchRunOutputsAsync(projectId, query, take));
 
     private static IReadOnlyList<CodeFileDto> ParseFiles(string filesJson)
     {

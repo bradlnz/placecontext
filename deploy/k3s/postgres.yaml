@@ -1,0 +1,53 @@
+# PostgreSQL with pgvector for PlaceContext (single-replica, PVC-backed).
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: placecontext-db
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: placecontext-db
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: placecontext-db }
+  strategy: { type: Recreate }
+  template:
+    metadata:
+      labels: { app: placecontext-db }
+    spec:
+      containers:
+        - name: postgres
+          image: pgvector/pgvector:pg16
+          env:
+            - { name: POSTGRES_USER, value: postgres }
+            - { name: POSTGRES_PASSWORD, value: postgres }
+            - { name: POSTGRES_DB, value: placecontext }
+            - { name: PGDATA, value: /var/lib/postgresql/data/pgdata }
+          ports:
+            - containerPort: 5432
+          volumeMounts:
+            - { name: data, mountPath: /var/lib/postgresql/data }
+          readinessProbe:
+            exec: { command: ["pg_isready", "-U", "postgres", "-d", "placecontext"] }
+            initialDelaySeconds: 5
+            periodSeconds: 5
+      volumes:
+        - name: data
+          persistentVolumeClaim: { claimName: placecontext-db }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: placecontext-db
+spec:
+  selector: { app: placecontext-db }
+  ports:
+    - port: 5432
+      targetPort: 5432

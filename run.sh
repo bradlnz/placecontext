@@ -26,7 +26,7 @@ if command -v docker >/dev/null 2>&1; then
         -e POSTGRES_USER=postgres \
         -e POSTGRES_DB=placecontext \
         -p "${DB_PORT}:5432" \
-        postgres:16 >/dev/null
+        pgvector/pgvector:pg16 >/dev/null
     fi
   else
     echo "${DB_CONTAINER} already running."

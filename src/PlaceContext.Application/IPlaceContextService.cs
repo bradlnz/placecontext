@@ -55,12 +55,23 @@ public interface IPlaceContextService
     // Job management.
     Task<JobView> CreateJobAsync(CreateJobCommand command, CancellationToken ct = default);
     Task<JobView> UpdateJobAsync(UpdateJobCommand command, CancellationToken ct = default);
-    Task<JobRunDetailView> RunJobAsync(Guid jobId, CancellationToken ct = default);
+    Task<JobRunDetailView> RunJobAsync(Guid jobId, string? inputPayload = null, CancellationToken ct = default);
     Task<IReadOnlyList<JobView>> ListJobsAsync(Guid projectId, CancellationToken ct = default);
     Task<IReadOnlyList<JobRunView>> ListJobRunsAsync(Guid jobId, CancellationToken ct = default);
     Task<JobRunDetailView?> GetJobRunAsync(Guid runId, CancellationToken ct = default);
     Task<JobView?> GetJobAsync(Guid jobId, CancellationToken ct = default);
     Task<JobView> UploadJobCodeAsync(UploadJobCodeCommand command, CancellationToken ct = default);
+
+    // Triggers (schedule + event) and events.
+    Task<TriggerView> CreateTriggerAsync(CreateTriggerCommand command, CancellationToken ct = default);
+    Task<TriggerView> SetTriggerEnabledAsync(Guid triggerId, bool enabled, CancellationToken ct = default);
+    Task<bool> DeleteTriggerAsync(Guid triggerId, CancellationToken ct = default);
+    Task<IReadOnlyList<TriggerView>> ListTriggersAsync(Guid projectId, CancellationToken ct = default);
+    Task<EventTypeView> DefineEventTypeAsync(string name, string? description, string? payloadSchema, CancellationToken ct = default);
+    Task<EventOccurrenceView> EmitEventAsync(string name, Guid? projectId, string? payload, CancellationToken ct = default);
+    Task<IReadOnlyList<EventTypeView>> ListEventTypesAsync(CancellationToken ct = default);
+    Task<IReadOnlyList<EventOccurrenceView>> ListEventOccurrencesAsync(int take = 50, CancellationToken ct = default);
+    Task<IReadOnlyList<RunOutputMatchView>> SearchRunOutputsAsync(Guid projectId, string query, int take = 10, CancellationToken ct = default);
 
     // Root-level read models for the redesigned portal.
     Task<RootStatsView> GetRootStatsAsync(CancellationToken ct = default);

@@ -1,0 +1,64 @@
+# PlaceContext Host deployment — portal + MCP + trigger scheduler.
+# __IMAGE__ is substituted by deploy/selfhost.sh with the published image ref.
+# The activation key comes from the placecontext-activation secret (created by the installer).
+#
+# NOTE: the scheduler is a single-process worker — keep replicas at 1 until leader-election lands
+# (otherwise every replica fires due schedules). See task: k3s runner + scheduler leader-election.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: placecontext
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: placecontext }
+  template:
+    metadata:
+      labels: { app: placecontext }
+    spec:
+      containers:
+        - name: host
+          image: __IMAGE__
+          ports:
+            - containerPort: 7700
+          env:
+            - name: PlaceContext__ConnectionString
+              value: "Host=placecontext-db;Port=5432;Database=placecontext;Username=postgres;Password=postgres"
+            - name: PlaceContext__Activation__Enforce
+              value: "true"
+            - name: PlaceContext__Activation__Key
+              valueFrom:
+                secretKeyRef:
+                  name: placecontext-activation
+                  key: key
+          readinessProbe:
+            httpGet: { path: /, port: 7700 }
+            initialDelaySeconds: 10
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: placecontext
+spec:
+  selector: { app: placecontext }
+  ports:
+    - port: 80
+      targetPort: 7700
+---
+# k3s ships Traefik — expose the portal/MCP via an Ingress. Set your host as needed.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: placecontext
+spec:
+  rules:
+    - http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: placecontext
+                port:
+                  number: 80

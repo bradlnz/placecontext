@@ -126,6 +126,96 @@ else
             </div>
         }
 
+        @if (_selectedJobId.HasValue)
+        {
+            <div style="margin-top:24px">
+                <div style="font-size:14px; font-weight:600; margin-bottom:12px">Triggers</div>
+
+                <div style="display:flex; flex-direction:column; gap:8px; margin-bottom:12px">
+                    @foreach (var t in JobTriggers())
+                    {
+                        <div class="dccard" style="padding:12px 16px; display:flex; align-items:center; gap:12px">
+                            <span style="font-size:11px; font-weight:600; padding:3px 8px; border-radius:5px;
+                                  color:@(t.Enabled ? "var(--good)" : "var(--text-3)"); background:@(t.Enabled ? "var(--good-bg)" : "var(--card-2)")">
+                                @(t.Enabled ? "on" : "paused")
+                            </span>
+                            <div style="flex:1; min-width:0">
+                                <div style="font-size:13px; font-weight:600">
+                                    @t.Name <span style="font-size:11px; color:var(--text-3); font-weight:400">· @t.Kind</span>
+                                </div>
+                                <div style="font-size:11px; color:var(--text-3); font-family:'Geist Mono',monospace; margin-top:2px">
+                                    @if (t.Kind == "Schedule")
+                                    {
+                                        <span>@t.CronExpression</span>
+                                        @if (t.NextRunAt.HasValue)
+                                        {
+                                            <span style="margin-left:8px">next @t.NextRunAt.Value.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</span>
+                                        }
+                                    }
+                                    else
+                                    {
+                                        <span>on @t.EventName</span>
+                                    }
+                                    @if (t.LastFiredAt.HasValue)
+                                    {
+                                        <span style="margin-left:8px">last @t.LastFiredAt.Value.ToLocalTime().ToString("MM-dd HH:mm")</span>
+                                    }
+                                </div>
+                            </div>
+                            <button class="dcbtn" @onclick="@(() => ToggleTrigger(t))">@(t.Enabled ? "Pause" : "Enable")</button>
+                            <button class="dcbtn" @onclick="@(() => RemoveTrigger(t.Id))">Delete</button>
+                        </div>
+                    }
+                    @if (!JobTriggers().Any())
+                    {
+                        <div style="font-size:12px; color:var(--text-3)">No triggers — add one below to run this job automatically.</div>
+                    }
+                </div>
+
+                <div class="dccard" style="padding:14px 16px; display:flex; flex-direction:column; gap:10px">
+                    <div style="font-size:12.5px; font-weight:600">Add trigger</div>
+                    <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:flex-end">
+                        <div style="flex:1; min-width:150px">
+                            <label style="font-size:12px; color:var(--text-3); display:block; margin-bottom:4px">Name</label>
+                            <input class="dcinput" style="width:100%" @bind="_trName" placeholder="nightly" />
+                        </div>
+                        <div>
+                            <label style="font-size:12px; color:var(--text-3); display:block; margin-bottom:4px">Kind</label>
+                            <select class="dcinput" @bind="_trKind">
+                                <option value="Schedule">Schedule</option>
+                                <option value="Event">Event</option>
+                            </select>
+                        </div>
+                        @if (_trKind == "Schedule")
+                        {
+                            <div style="flex:1; min-width:150px">
+                                <label style="font-size:12px; color:var(--text-3); display:block; margin-bottom:4px">Cron</label>
+                                <input class="dcinput" style="width:100%" @bind="_trCron" placeholder="0 0 * * *" />
+                            </div>
+                        }
+                        else
+                        {
+                            <div style="flex:1; min-width:150px">
+                                <label style="font-size:12px; color:var(--text-3); display:block; margin-bottom:4px">Event</label>
+                                <input class="dcinput" style="width:100%" list="evt-names" @bind="_trEvent" placeholder="deploy.finished" />
+                                <datalist id="evt-names">
+                                    @foreach (var e in _eventTypes ?? Array.Empty<EventTypeView>())
+                                    {
+                                        <option value="@e.Name" />
+                                    }
+                                </datalist>
+                            </div>
+                        }
+                        <button class="dcbtn primary" disabled="@_trBusy" @onclick="AddTrigger">Add</button>
+                    </div>
+                    @if (_trError is not null)
+                    {
+                        <div style="color:var(--bad); font-size:12px">@_trError</div>
+                    }
+                </div>
+            </div>
+        }
+
     </div>
 }
 
@@ -239,6 +329,19 @@ else
                 </label>
             </div>
 
+            <div>
+                <label style="font-size:12px; color:var(--text-3); display:block; margin-bottom:4px">
+                    Input parameters (one per line — <code>name</code> or <code>name|Label</code>)
+                </label>
+                <textarea class="dcinput" rows="3"
+                          style="width:100%; font-family:'Geist Mono',monospace; font-size:12px; resize:vertical"
+                          @bind="_edParametersRaw"
+                          placeholder="customerEmail|Customer email&#10;plan|Plan tier"></textarea>
+                <div style="font-size:11px; color:var(--text-3); margin-top:4px">
+                    When set, running this job (manually or via an event) prompts for these and passes them as the input payload.
+                </div>
+            </div>
+
             @if (_editorError is not null)
             {
                 <div style="color:var(--bad); font-size:12px; padding:8px; background:var(--bad-bg); border-radius:6px">@_editorError</div>
@@ -301,6 +404,16 @@ else
                     {
                         <div style="font-size:12px; color:var(--text-3)">_(no artifact)_</div>
                     }
+                    @if (shard.Artifacts.Count > 0)
+                    {
+                        <div style="margin-top:6px; display:flex; flex-wrap:wrap; gap:8px">
+                            @foreach (var a in shard.Artifacts)
+                            {
+                                <a class="dcbtn" style="padding:3px 10px; font-size:11px; text-decoration:none"
+                                   href="@DataUri(a)" download="@a.Name">⬇ @a.Name</a>
+                            }
+                        </div>
+                    }
                     @if (!string.IsNullOrWhiteSpace(shard.Log))
                     {
                         <details style="margin-top:4px">
@@ -326,8 +439,54 @@ else
                     {
                         <pre style="background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:10px; font-size:11px; font-family:'Geist Mono',monospace; overflow-x:auto; white-space:pre-wrap; word-break:break-all; color:var(--text-2); max-height:300px; overflow-y:auto">@PrettyJson(reduce.Artifact)</pre>
                     }
+                    @if (reduce.Artifacts.Count > 0)
+                    {
+                        <div style="margin-top:6px; display:flex; flex-wrap:wrap; gap:8px">
+                            @foreach (var a in reduce.Artifacts)
+                            {
+                                <a class="dcbtn" style="padding:3px 10px; font-size:11px; text-decoration:none"
+                                   href="@DataUri(a)" download="@a.Name">⬇ @a.Name</a>
+                            }
+                        </div>
+                    }
                 </div>
             }
+        </div>
+    </div>
+}
+
+@* ── Run-input modal (prompts for a job's declared parameters) ────────────────────────── *@
+@if (_runPromptJob is not null)
+{
+    <div class="dcslide-scrim" @onclick="@(() => _runPromptJob = null)"></div>
+    <div class="dcslide" style="width:460px">
+        <div class="dcslide-head">
+            <span style="flex:1; font-size:14px; font-weight:600">Run @_runPromptJob.Name</span>
+            <button class="dcslide-x" @onclick="@(() => _runPromptJob = null)">×</button>
+        </div>
+        <div class="dcslide-body" style="display:flex; flex-direction:column; gap:12px">
+            <div style="font-size:12px; color:var(--text-3)">This job needs input before it runs. Values are passed as the run's payload.</div>
+            @foreach (var p in _runPromptJob.Parameters)
+            {
+                <div>
+                    <label style="font-size:12px; color:var(--text-3); display:block; margin-bottom:4px">
+                        @(p.Label ?? p.Name) @(p.Required ? "*" : "")
+                        <span style="font-family:'Geist Mono',monospace; color:var(--text-3)">(@p.Name)</span>
+                    </label>
+                    <input class="dcinput" style="width:100%" value="@GetArg(p.Name)"
+                           @oninput="@(e => SetArg(p.Name, e.Value?.ToString() ?? ""))" />
+                </div>
+            }
+            @if (_runPromptError is not null)
+            {
+                <div style="color:var(--bad); font-size:12px">@_runPromptError</div>
+            }
+            <div style="display:flex; gap:8px; justify-content:flex-end">
+                <button class="dcbtn" @onclick="@(() => _runPromptJob = null)">Cancel</button>
+                <button class="dcbtn primary" disabled="@(_runningJobId == _runPromptJob.Id)" @onclick="SubmitRunPrompt">
+                    @(_runningJobId == _runPromptJob.Id ? "running…" : "Run")
+                </button>
+            </div>
         </div>
     </div>
 }
@@ -342,6 +501,16 @@ else
     private Guid? _runningJobId;
     private string? _message;
     private bool _loading = true;
+
+    // ── Triggers state ────────────────────────────────────────────────────────────────────────────
+    private IReadOnlyList<TriggerView>? _triggers;
+    private IReadOnlyList<EventTypeView>? _eventTypes;
+    private string _trName = "";
+    private string _trKind = "Schedule";
+    private string _trCron = "0 0 * * *";
+    private string _trEvent = "";
+    private bool _trBusy;
+    private string? _trError;
 
     // ── Editor state ────────────────────────────────────────────────────────────────────────────
     private bool _showEditor;
@@ -362,6 +531,12 @@ else
     private string _edSuccessCodesRaw = "0";
     private string _edPartialCodesRaw = "";
     private bool _edAllowNetworkEgress;
+    private string _edParametersRaw = "";
+
+    // ── Run-input prompt state ────────────────────────────────────────────────────────────────────
+    private JobView? _runPromptJob;
+    private Dictionary<string, string> _runArgs = new();
+    private string? _runPromptError;
 
     protected override async Task OnParametersSetAsync()
     {
@@ -370,10 +545,57 @@ else
         try
         {
             _jobs = await Svc.ListJobsAsync(ProjectId);
+            _triggers = await Svc.ListTriggersAsync(ProjectId);
+            _eventTypes = await Svc.ListEventTypesAsync();
             Ui.Set("Jobs", "project workload runner");
         }
         catch (Exception ex) { _message = ex.Message; }
         finally { _loading = false; }
+    }
+
+    // ── Triggers ─────────────────────────────────────────────────────────────────────────────────
+
+    private IEnumerable<TriggerView> JobTriggers() =>
+        _triggers?.Where(t => t.JobId == _selectedJobId) ?? Enumerable.Empty<TriggerView>();
+
+    private async Task AddTrigger()
+    {
+        _trError = null;
+        if (!_selectedJobId.HasValue) return;
+        if (string.IsNullOrWhiteSpace(_trName)) { _trError = "Name is required."; return; }
+
+        _trBusy = true;
+        try
+        {
+            var cron = _trKind == "Schedule" ? _trCron : null;
+            var evt = _trKind == "Event" ? _trEvent : null;
+            await Svc.CreateTriggerAsync(new CreateTriggerCommand(_selectedJobId.Value, _trName.Trim(), _trKind, cron, evt));
+            _triggers = await Svc.ListTriggersAsync(ProjectId);
+            _trName = "";
+            _trEvent = "";
+        }
+        catch (Exception ex) { _trError = ex.Message; }
+        finally { _trBusy = false; }
+    }
+
+    private async Task ToggleTrigger(TriggerView t)
+    {
+        try
+        {
+            await Svc.SetTriggerEnabledAsync(t.Id, !t.Enabled);
+            _triggers = await Svc.ListTriggersAsync(ProjectId);
+        }
+        catch (Exception ex) { _trError = ex.Message; }
+    }
+
+    private async Task RemoveTrigger(Guid triggerId)
+    {
+        try
+        {
+            await Svc.DeleteTriggerAsync(triggerId);
+            _triggers = await Svc.ListTriggersAsync(ProjectId);
+        }
+        catch (Exception ex) { _trError = ex.Message; }
     }
 
     private async Task SelectJob(Guid jobId)
@@ -390,17 +612,55 @@ else
 
     private async Task RunJob(Guid jobId)
     {
+        // If the job declares input parameters, prompt for them before running.
+        var job = _jobs?.FirstOrDefault(j => j.Id == jobId);
+        if (job is not null && job.Parameters.Count > 0)
+        {
+            _runPromptJob = job;
+            _runArgs = job.Parameters.ToDictionary(p => p.Name, _ => "");
+            _runPromptError = null;
+            return;
+        }
+        await RunJobCore(jobId, null);
+    }
+
+    private async Task RunJobCore(Guid jobId, string? payload)
+    {
         _runningJobId = jobId;
         _message = null;
         try
         {
-            var result = await Svc.RunJobAsync(jobId);
+            var result = await Svc.RunJobAsync(jobId, payload);
             _message = $"Run {result.Id} completed — status: {result.Status}.";
+            _runPromptJob = null;
             if (_selectedJobId == jobId)
                 _runs = await Svc.ListJobRunsAsync(jobId);
         }
-        catch (Exception ex) { _message = ex.Message; }
+        catch (Exception ex)
+        {
+            if (_runPromptJob is not null) _runPromptError = ex.Message;
+            else _message = ex.Message;
+        }
         finally { _runningJobId = null; }
+    }
+
+    private string GetArg(string name) => _runArgs.TryGetValue(name, out var v) ? v : "";
+    private void SetArg(string name, string value) => _runArgs[name] = value;
+
+    private async Task SubmitRunPrompt()
+    {
+        if (_runPromptJob is null) return;
+        _runPromptError = null;
+
+        var missing = _runPromptJob.Parameters
+            .Where(p => p.Required && string.IsNullOrWhiteSpace(GetArg(p.Name)))
+            .Select(p => p.Label ?? p.Name)
+            .ToList();
+        if (missing.Count > 0) { _runPromptError = $"Required: {string.Join(", ", missing)}"; return; }
+
+        var payload = System.Text.Json.JsonSerializer.Serialize(
+            _runPromptJob.Parameters.ToDictionary(p => p.Name, p => GetArg(p.Name)));
+        await RunJobCore(_runPromptJob.Id, payload);
     }
 
     private async Task OpenRunDetail(Guid runId)
@@ -430,6 +690,7 @@ else
         _edSuccessCodesRaw = "0";
         _edPartialCodesRaw = "";
         _edAllowNetworkEgress = false;
+        _edParametersRaw = "";
         _editorError = null;
         _showEditor = true;
     }
@@ -450,6 +711,7 @@ else
         _edSuccessCodesRaw = string.Join(",", job.SuccessExitCodes);
         _edPartialCodesRaw = string.Join(",", job.PartialExitCodes);
         _edAllowNetworkEgress = job.AllowNetworkEgress;
+        _edParametersRaw = string.Join("\n", job.Parameters.Select(p => p.Label is null ? p.Name : $"{p.Name}|{p.Label}"));
         _editorError = null;
         _showEditor = true;
     }
@@ -486,6 +748,9 @@ else
         var partialCodes = ParseInts(_edPartialCodesRaw, out var parErr);
         if (parErr is not null) { _editorError = $"Partial codes: {parErr}"; return; }
 
+        // Parse parameters — one per line, "name" or "name|Label".
+        var parameters = ParseParameters(_edParametersRaw);
+
         _saving = true;
         try
         {
@@ -509,7 +774,8 @@ else
                     ConcurrencyLimit: _edConcurrency,
                     SuccessExitCodes: successCodes,
                     PartialExitCodes: partialCodes,
-                    AllowNetworkEgress: _edAllowNetworkEgress);
+                    AllowNetworkEgress: _edAllowNetworkEgress,
+                    Parameters: parameters);
 
                 await Svc.UpdateJobAsync(cmd);
                 _message = $"Job '{_edName.Trim()}' updated.";
@@ -534,7 +800,8 @@ else
                     ConcurrencyLimit: _edConcurrency,
                     SuccessExitCodes: successCodes,
                     PartialExitCodes: partialCodes,
-                    AllowNetworkEgress: _edAllowNetworkEgress);
+                    AllowNetworkEgress: _edAllowNetworkEgress,
+                    Parameters: parameters);
 
                 await Svc.CreateJobAsync(cmd);
                 _message = $"Job '{_edName.Trim()}' created.";
@@ -551,6 +818,20 @@ else
         {
             _saving = false;
         }
+    }
+
+    private static List<JobParameterDto> ParseParameters(string raw)
+    {
+        var result = new List<JobParameterDto>();
+        foreach (var line in raw.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var pipe = line.IndexOf('|');
+            if (pipe > 0)
+                result.Add(new JobParameterDto(line[..pipe].Trim(), line[(pipe + 1)..].Trim()));
+            else
+                result.Add(new JobParameterDto(line.Trim()));
+        }
+        return result;
     }
 
     private static int[] ParseInts(string raw, out string? error)
@@ -591,6 +872,17 @@ else
         var span = end - start;
         if (span.TotalSeconds < 60) return $"{(int)span.TotalSeconds}s";
         return $"{(int)span.TotalMinutes}m {span.Seconds}s";
+    }
+
+    private static string DataUri(RunArtifactView a)
+    {
+        var contentType = a.Name.EndsWith(".csv", StringComparison.OrdinalIgnoreCase) ? "text/csv"
+            : a.Name.EndsWith(".json", StringComparison.OrdinalIgnoreCase) ? "application/json"
+            : a.Name.EndsWith(".html", StringComparison.OrdinalIgnoreCase) ? "text/html"
+            : a.Name.EndsWith(".svg", StringComparison.OrdinalIgnoreCase) ? "image/svg+xml"
+            : "text/plain";
+        var b64 = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(a.Content));
+        return $"data:{contentType};base64,{b64}";
     }
 
     private static string PrettyJson(string raw)

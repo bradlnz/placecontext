@@ -137,16 +137,43 @@ builder.Services
     .WithPrompts<PlaceContextPrompts>()
     .AddAuthorizationFilters(); // enforce [Authorize] on tools/prompts against the bearer token's role
 
-builder.WebHost.UseUrls("http://localhost:7700");
+// Honor ASPNETCORE_URLS when set (containers bind http://+:7700 so the k8s Service/Ingress can reach
+// the pod); default to localhost:7700 for local dev.
+var bindUrls = Environment.GetEnvironmentVariable("ASPNETCORE_URLS");
+builder.WebHost.UseUrls(string.IsNullOrWhiteSpace(bindUrls) ? "http://localhost:7700" : bindUrls);
 
 var app = builder.Build();
 PlaceContext.Infrastructure.DependencyInjection.MigrateDatabase(app.Services);
+
+// Self-host activation: validate the configured key once and log the result.
+var activation = app.Services.GetRequiredService<PlaceContext.Application.Ports.IActivationService>();
+var activationInfo = activation.Current;
+app.Logger.LogInformation("Activation: {Status} — {Reason}{Org}",
+    activationInfo.Status, activationInfo.Reason,
+    activationInfo.Organisation is { } org ? $" (org: {org})" : "");
+if (activation.Enforced && !activationInfo.IsActive)
+    app.Logger.LogWarning("Activation is ENFORCED and the deployment is not active — the MCP surface is blocked until a valid key is configured.");
 
 app.UseStaticFiles();
 app.UseMiddleware<TenantResolutionMiddleware>(); // resolve {user}.placecontext.ai → tenant, before any data access
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseAntiforgery();
+
+// Enforcement: when activation is enforced and not active, block the MCP product surface (the portal
+// stays reachable so the operator can see the activation status and fix it).
+app.Use(async (ctx, next) =>
+{
+    if (activation.Enforced && !activation.Current.IsActive
+        && (ctx.Request.Path.StartsWithSegments("/mcp") || ctx.Request.Path.StartsWithSegments("/ingest")))
+    {
+        ctx.Response.StatusCode = StatusCodes.Status403Forbidden;
+        await ctx.Response.WriteAsync($"PlaceContext is not activated: {activation.Current.Reason}");
+        return;
+    }
+    await next();
+});
+
 app.MapRazorComponents<App>().AddInteractiveServerRenderMode();
 
 // MCP requires an OAuth bearer token (validated by the JwtBearer scheme); the token binds the tenant.
@@ -154,6 +181,35 @@ app.MapMcp("/mcp").RequireAuthorization(new AuthorizeAttribute { AuthenticationS
 
 // First-party OAuth 2.1 authorization server (authorize/token/register/jwks + metadata).
 app.MapOAuthServer();
+
+// ---- External event ingress ----
+// An external source (a form on a site, a Cloudflare Queue consumer, a webhook) POSTs an event here;
+// it is emitted into this tenant (resolved by subdomain) and fires any subscribed event-triggers, with
+// the JSON body injected as the triggered runs' input payload. Gated by a shared ingest key
+// (PlaceContext:Ingest:Key); disabled when no key is configured to avoid an open relay.
+app.MapPost("/ingest/{eventName}", async (HttpContext ctx, PlaceContext.Application.IPlaceContextService svc,
+    IConfiguration config, string eventName, Guid? projectId) =>
+{
+    var configuredKey = config["PlaceContext:Ingest:Key"];
+    if (string.IsNullOrWhiteSpace(configuredKey))
+        return Results.StatusCode(StatusCodes.Status404NotFound);
+
+    var presented = ctx.Request.Headers["X-Ingest-Key"].ToString();
+    if (!System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(
+            System.Text.Encoding.UTF8.GetBytes(presented),
+            System.Text.Encoding.UTF8.GetBytes(configuredKey)))
+        return Results.Unauthorized();
+
+    string? payload = null;
+    if (ctx.Request.ContentLength is > 0)
+    {
+        using var reader = new StreamReader(ctx.Request.Body);
+        payload = await reader.ReadToEndAsync(ctx.RequestAborted);
+    }
+
+    var result = await svc.EmitEventAsync(eventName, projectId, payload, ctx.RequestAborted);
+    return Results.Ok(new { result.Name, result.TriggeredRuns, result.OccurredAt });
+}).AllowAnonymous();
 
 // ---- Login / register (standalone HTML so they don't depend on the Blazor render pipeline) ----
 app.MapGet("/login", (HttpContext ctx, IAntiforgery af, string? error, string? returnUrl) =>

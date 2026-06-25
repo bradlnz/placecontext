@@ -30,6 +30,10 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
     private readonly IWorkloadRunner _runner;
     private readonly IUnitOfWork _uow;
     private readonly IClock _clock;
+    private readonly EventDispatchService? _events;
+    private readonly ILlmGateway? _llm;
+    private readonly IEmbeddingGateway? _embeddings;
+    private readonly IRunEmbeddingRepository? _embeddingStore;
 
     public RunJobHandler(
         IJobRepository jobs,
@@ -37,7 +41,12 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
         IProjectContextRepository contexts,
         IWorkloadRunner runner,
         IUnitOfWork uow,
-        IClock clock)
+        IClock clock,
+        // Optional so unit tests can construct the handler without the event/LLM/embedding layers; DI always supplies them.
+        EventDispatchService? events = null,
+        ILlmGateway? llm = null,
+        IEmbeddingGateway? embeddings = null,
+        IRunEmbeddingRepository? embeddingStore = null)
     {
         _jobs = jobs;
         _runs = runs;
@@ -45,6 +54,10 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
         _runner = runner;
         _uow = uow;
         _clock = clock;
+        _events = events;
+        _llm = llm;
+        _embeddings = embeddings;
+        _embeddingStore = embeddingStore;
     }
 
     public async Task<JobRunDetailView> HandleAsync(RunJobCommand command, CancellationToken ct = default)
@@ -52,8 +65,14 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
         var job = await _jobs.GetByIdAsync(command.JobId, ct)
             ?? throw new InvalidOperationException($"Job {command.JobId} not found.");
 
-        // Snapshot the current spec onto the run at start-time (captures AllowNetworkEgress too).
-        var snapshot = WorkloadSnapshot.From(job.MapSpec, job.ReduceSpec, job.ConcurrencyLimit,
+        // An input override (modal-collected parameters or event-injected fields) replaces the stored
+        // shard payloads with a single shard carrying the supplied payload.
+        var effectiveMap = command.InputPayload is { } p
+            ? new MapSpec(job.MapSpec.Source, new[] { p }, job.MapSpec.Env)
+            : job.MapSpec;
+
+        // Snapshot the effective spec onto the run at start-time (captures AllowNetworkEgress too).
+        var snapshot = WorkloadSnapshot.From(effectiveMap, job.ReduceSpec, job.ConcurrencyLimit,
             job.AllowNetworkEgress);
         var startedAt = _clock.UtcNow;
         var run = JobRun.Start(job.Id, job.ProjectId, startedAt, snapshot);
@@ -61,7 +80,7 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
         await _uow.SaveChangesAsync(ct);
 
         // ---- MAP PHASE: fan-out shards with bounded concurrency ----
-        var shardResults = await RunMapShardsAsync(job, run.Id, ct);
+        var shardResults = await RunMapShardsAsync(job, effectiveMap.InputPayloads, run.Id, ct);
 
         // ---- REDUCE PHASE (optional) ----
         ReduceResult? reduceResult = null;
@@ -81,16 +100,23 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
 
         await _uow.SaveChangesAsync(ct);
 
+        // Raise the built-in "job.completed" domain event so event-triggers can chain off this run.
+        if (_events is not null)
+        {
+            var payload = $"{{\"runId\":\"{run.Id:N}\",\"jobId\":\"{job.Id:N}\",\"status\":\"{run.Status}\"}}";
+            await _events.RaiseAsync(BuiltInEvents.JobCompleted, run.ProjectId, payload, ct);
+        }
+
         return JobViewMapper.ToDetailView(run);
     }
 
     // ---- MAP PHASE ----
 
-    private async Task<List<ShardResult>> RunMapShardsAsync(Job job, Guid runId, CancellationToken ct)
+    private async Task<List<ShardResult>> RunMapShardsAsync(
+        Job job, IReadOnlyList<string> payloads, Guid runId, CancellationToken ct)
     {
         var concurrency = job.ConcurrencyLimit;
         var semaphore = new SemaphoreSlim(concurrency, concurrency);
-        var payloads = job.MapSpec.InputPayloads;
         var tasks = new Task<ShardResult>[payloads.Count];
 
         for (var i = 0; i < payloads.Count; i++)
@@ -119,7 +145,7 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
             var outcome = job.ExitCodePolicy.Classify(result.ExitCode);
             var log = CombineLog(result.Stdout, result.Stderr);
 
-            return new ShardResult(index, result.ExitCode, outcome, result.Artifact, log);
+            return new ShardResult(index, result.ExitCode, outcome, result.Artifact, log, MapArtifacts(result.Artifacts));
         }
         finally
         {
@@ -150,7 +176,7 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
         var succeeded = job.ExitCodePolicy.SuccessCodes.Contains(result.ExitCode);
         var log = CombineLog(result.Stdout, result.Stderr);
 
-        return new ReduceResult(result.ExitCode, succeeded, result.Artifact, log);
+        return new ReduceResult(result.ExitCode, succeeded, result.Artifact, log, MapArtifacts(result.Artifacts));
     }
 
     // ---- WorkloadSource → WorkloadRunRequest ------------------------------------------------
@@ -238,9 +264,58 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
             }
         }
 
-        context.Append(sb.ToString().TrimEnd(), _clock.UtcNow);
+        var raw = sb.ToString().TrimEnd();
+
+        // When an LLM gateway is configured (local Ollama/Gemma or Anthropic), organize the raw run
+        // output into a clean structured summary before storing it; otherwise store the raw dump.
+        var toStore = raw;
+        if (_llm is { IsEnabled: true })
+        {
+            try
+            {
+                const string system =
+                    "You organize raw job-run output into a concise, well-structured Markdown summary. " +
+                    "Group related results, surface key values and any errors, and keep it faithful to the data. " +
+                    "Do not invent information.";
+                var organized = await _llm.GenerateAsync(system, raw, ct);
+                if (!string.IsNullOrWhiteSpace(organized))
+                    toStore = $"## Organized run output: {job.Name} [{run.Status}] — {run.FinishedAt:yyyy-MM-dd HH:mm} UTC\n\n{organized.Trim()}";
+            }
+            catch
+            {
+                // Organization is best-effort — fall back to the raw summary on any gateway failure.
+                toStore = raw;
+            }
+        }
+
+        context.Append(toStore, _clock.UtcNow);
         await _contexts.SaveAsync(context, ct);
+
+        // Vectorize the organized output (Voyage) and store it so runs become semantically searchable
+        // and linkable in the dependency graph. Best-effort — never fails the run.
+        if (_embeddings is { IsEnabled: true } && _embeddingStore is not null)
+        {
+            try
+            {
+                var text = toStore.Length > 8000 ? toStore[..8000] : toStore;
+                var vectors = await _embeddings.EmbedAsync(new[] { text }, ct);
+                if (vectors.Count > 0 && vectors[0].Length > 0)
+                {
+                    var embedding = RunEmbedding.Create(run.Id, job.Id, run.ProjectId, text, vectors[0], _clock.UtcNow);
+                    await _embeddingStore.AddAsync(embedding, ct);
+                }
+            }
+            catch
+            {
+                // Embedding is best-effort; a gateway/store failure must not fail the job run.
+            }
+        }
     }
+
+    private static IReadOnlyList<RunArtifact> MapArtifacts(IReadOnlyList<WorkloadArtifact>? artifacts)
+        => artifacts is null or { Count: 0 }
+            ? Array.Empty<RunArtifact>()
+            : artifacts.Select(a => new RunArtifact(a.Name, a.Content)).ToList();
 
     private static string? CombineLog(string stdout, string stderr)
     {

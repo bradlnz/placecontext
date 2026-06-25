@@ -1,0 +1,209 @@
+@page "/project/{ProjectId:guid}/events"
+@inject IPlaceContextService Svc
+@inject PortalUiState Ui
+@inject NavigationManager Nav
+
+<PageTitle>PlaceContext — Events</PageTitle>
+
+@if (_loading)
+{
+    <div style="padding:24px; color:var(--text-3)">Loading…</div>
+}
+else
+{
+    <div style="padding:20px 24px 40px; max-width:1100px; margin:0 auto">
+
+        <button class="dcbtn" style="border:none; background:none; color:var(--text-3); padding:4px 0; margin-bottom:14px"
+                @onclick="@(() => Nav.NavigateTo($"/project/{ProjectId}"))">← Back to project</button>
+
+        <h2 style="font-size:18px; font-weight:600; margin:0 0 4px">Events</h2>
+        <div style="font-size:12.5px; color:var(--text-3); margin-bottom:18px">
+            Define event types, emit them, and watch the log. Event triggers on a job fire whenever a matching event is emitted.
+        </div>
+
+        @if (_message is not null)
+        {
+            <div style="margin-bottom:12px; padding:10px 14px; border-radius:8px; background:var(--card); font-size:12.5px; color:var(--text-2)">@_message</div>
+        }
+
+        <div style="display:flex; gap:16px; flex-wrap:wrap; align-items:flex-start">
+
+            @* ── Event types ─────────────────────────────────────────────── *@
+            <div style="flex:1; min-width:340px; display:flex; flex-direction:column; gap:12px">
+                <div style="font-size:14px; font-weight:600">Event types</div>
+
+                <div style="display:flex; flex-direction:column; gap:8px">
+                    @foreach (var e in _types ?? Array.Empty<EventTypeView>())
+                    {
+                        <div class="dccard" style="padding:12px 16px">
+                            <div style="display:flex; align-items:center; gap:8px">
+                                <span style="font-size:13px; font-weight:600; font-family:'Geist Mono',monospace">@e.Name</span>
+                                @if (e.IsBuiltIn)
+                                {
+                                    <span style="font-size:10px; font-weight:600; padding:2px 6px; border-radius:4px; color:var(--brand-2); background:var(--brand-bg)">built-in</span>
+                                }
+                            </div>
+                            @if (!string.IsNullOrWhiteSpace(e.Description))
+                            {
+                                <div style="font-size:12px; color:var(--text-3); margin-top:3px">@e.Description</div>
+                            }
+                            <button class="dcbtn" style="margin-top:8px; padding:3px 10px; font-size:11px"
+                                    @onclick="@(() => Emit(e.Name))">Emit</button>
+                        </div>
+                    }
+                </div>
+
+                <div class="dccard" style="padding:14px 16px; display:flex; flex-direction:column; gap:10px">
+                    <div style="font-size:12.5px; font-weight:600">Define event type</div>
+                    <input class="dcinput" @bind="_defName" placeholder="deploy.finished" />
+                    <input class="dcinput" @bind="_defDescription" placeholder="Description (optional)" />
+                    <textarea class="dcinput" rows="2" style="resize:vertical; font-family:'Geist Mono',monospace; font-size:12px"
+                              @bind="_defSchema" placeholder="Payload fields (optional freetext/JSON)"></textarea>
+                    @if (_defError is not null)
+                    {
+                        <div style="color:var(--bad); font-size:12px">@_defError</div>
+                    }
+                    <button class="dcbtn primary" disabled="@_defBusy" style="align-self:flex-start" @onclick="Define">Define</button>
+                </div>
+            </div>
+
+            @* ── Event log ───────────────────────────────────────────────── *@
+            <div style="flex:1; min-width:340px; display:flex; flex-direction:column; gap:12px">
+                <div style="font-size:14px; font-weight:600">Recent events</div>
+
+                @if (_log is null || _log.Count == 0)
+                {
+                    <div style="font-size:12px; color:var(--text-3)">No events emitted yet.</div>
+                }
+                else
+                {
+                    <div style="display:flex; flex-direction:column; gap:8px">
+                        @foreach (var o in _log)
+                        {
+                            <div class="dccard" style="padding:10px 14px">
+                                <div style="display:flex; align-items:center; gap:8px">
+                                    <span style="font-size:12.5px; font-weight:600; font-family:'Geist Mono',monospace; flex:1">@o.Name</span>
+                                    <span style="font-size:10px; font-weight:600; padding:2px 6px; border-radius:4px;
+                                          color:@(o.Source == "Domain" ? "var(--brand-2)" : "var(--text-2)"); background:var(--card-2)">@o.Source</span>
+                                    <span style="font-size:11px; color:var(--text-3); font-family:'Geist Mono',monospace">@o.OccurredAt.ToLocalTime().ToString("MM-dd HH:mm:ss")</span>
+                                </div>
+                                @if (!string.IsNullOrWhiteSpace(o.Payload))
+                                {
+                                    <pre style="margin-top:6px; background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:8px; font-size:10.5px; font-family:'Geist Mono',monospace; white-space:pre-wrap; word-break:break-all; color:var(--text-3); max-height:120px; overflow-y:auto">@o.Payload</pre>
+                                }
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+}
+
+@* ── Emit modal ──────────────────────────────────────────────────────────────────────── *@
+@if (_emitName is not null)
+{
+    <div class="dcslide-scrim" @onclick="@(() => _emitName = null)"></div>
+    <div class="dcslide" style="width:460px">
+        <div class="dcslide-head">
+            <span style="flex:1; font-size:14px; font-weight:600">Emit @_emitName</span>
+            <button class="dcslide-x" @onclick="@(() => _emitName = null)">×</button>
+        </div>
+        <div class="dcslide-body" style="display:flex; flex-direction:column; gap:12px">
+            <div style="font-size:12px; color:var(--text-3)">
+                Every enabled event trigger subscribed to <code>@_emitName</code> will fire; the payload is passed through as run parameters.
+            </div>
+            <label style="font-size:12px; color:var(--text-3)">Payload (optional JSON)</label>
+            <textarea class="dcinput" rows="6" style="resize:vertical; font-family:'Geist Mono',monospace; font-size:12px"
+                      @bind="_emitPayload" placeholder="{&quot;customerEmail&quot;: &quot;a@b.com&quot;}"></textarea>
+            @if (_emitError is not null)
+            {
+                <div style="color:var(--bad); font-size:12px">@_emitError</div>
+            }
+            <div style="display:flex; gap:8px; justify-content:flex-end">
+                <button class="dcbtn" @onclick="@(() => _emitName = null)">Cancel</button>
+                <button class="dcbtn primary" disabled="@_emitBusy" @onclick="DoEmit">Emit</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public Guid ProjectId { get; set; }
+
+    private IReadOnlyList<EventTypeView>? _types;
+    private IReadOnlyList<EventOccurrenceView>? _log;
+    private bool _loading = true;
+    private string? _message;
+
+    private string _defName = "";
+    private string _defDescription = "";
+    private string _defSchema = "";
+    private bool _defBusy;
+    private string? _defError;
+
+    private string? _emitName;
+    private string _emitPayload = "";
+    private bool _emitBusy;
+    private string? _emitError;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _loading = true;
+        _message = null;
+        try
+        {
+            await ReloadAsync();
+            Ui.Set("Events", "workspace event log + types");
+        }
+        catch (Exception ex) { _message = ex.Message; }
+        finally { _loading = false; }
+    }
+
+    private async Task ReloadAsync()
+    {
+        _types = await Svc.ListEventTypesAsync();
+        _log = await Svc.ListEventOccurrencesAsync(50);
+    }
+
+    private async Task Define()
+    {
+        _defError = null;
+        if (string.IsNullOrWhiteSpace(_defName)) { _defError = "Name is required."; return; }
+        _defBusy = true;
+        try
+        {
+            await Svc.DefineEventTypeAsync(_defName.Trim(),
+                string.IsNullOrWhiteSpace(_defDescription) ? null : _defDescription.Trim(),
+                string.IsNullOrWhiteSpace(_defSchema) ? null : _defSchema.Trim());
+            _defName = ""; _defDescription = ""; _defSchema = "";
+            await ReloadAsync();
+        }
+        catch (Exception ex) { _defError = ex.Message; }
+        finally { _defBusy = false; }
+    }
+
+    private void Emit(string name)
+    {
+        _emitName = name;
+        _emitPayload = "";
+        _emitError = null;
+    }
+
+    private async Task DoEmit()
+    {
+        if (_emitName is null) return;
+        _emitError = null;
+        _emitBusy = true;
+        try
+        {
+            var result = await Svc.EmitEventAsync(_emitName,
+                ProjectId, string.IsNullOrWhiteSpace(_emitPayload) ? null : _emitPayload);
+            _message = $"Emitted '{_emitName}' — {result.TriggeredRuns} trigger(s) fired.";
+            _emitName = null;
+            await ReloadAsync();
+        }
+        catch (Exception ex) { _emitError = ex.Message; }
+        finally { _emitBusy = false; }
+    }
+}

@@ -26,6 +26,9 @@ public static class DependencyInjection
 
         services.AddSingleton<IClock, SystemClock>();
 
+        // Self-host activation: offline signed-key validation (licensing).
+        services.AddSingleton<IActivationService, Activation.SignedActivationService>();
+
         // Multi-tenancy: ambient current-tenant (AsyncLocal singleton) + the tenant registry.
         services.AddSingleton<ICurrentTenant, CurrentTenant>();
         services.AddScoped<ITenantStore, EfTenantStore>();
@@ -66,12 +69,26 @@ public static class DependencyInjection
         services.AddSingleton<IGitHubGateway, GitHub.GitHubGateway>();
         services.AddSingleton<ICodeWorkspace, Git.CodeWorkspace>();
 
-        // Report generation layer: real LLM polish when a key is configured, else a graceful no-op.
+        // LLM gateway (report polish + job-output organization). Provider-configurable:
+        //   PlaceContext:Llm:Provider = "anthropic" | "ollama" | "none".
+        // When unset, default to anthropic if an API key is present, else none (back-compat).
         var hasLlmKey = !string.IsNullOrWhiteSpace(configuration["PlaceContext:Llm:ApiKey"]);
-        if (hasLlmKey)
-            services.AddSingleton<ILlmGateway, Llm.AnthropicLlmGateway>();
-        else
-            services.AddSingleton<ILlmGateway, Llm.NullLlmGateway>();
+        var llmProvider = (configuration["PlaceContext:Llm:Provider"] ?? "").Trim().ToLowerInvariant();
+        if (string.IsNullOrEmpty(llmProvider))
+            llmProvider = hasLlmKey ? "anthropic" : "none";
+
+        switch (llmProvider)
+        {
+            case "anthropic":
+                services.AddSingleton<ILlmGateway, Llm.AnthropicLlmGateway>();
+                break;
+            case "ollama":
+                services.AddSingleton<ILlmGateway, Llm.OllamaLlmGateway>();
+                break;
+            default:
+                services.AddSingleton<ILlmGateway, Llm.NullLlmGateway>();
+                break;
+        }
 
         // Risk strategies behind a factory (domain scorers come from AddApplication()).
         services.AddScoped<IRiskCalculator, TechnicalRiskCalculator>();
@@ -86,6 +103,24 @@ public static class DependencyInjection
         // Job / JobRun repositories.
         services.AddScoped<IJobRepository, EfJobRepository>();
         services.AddScoped<IJobRunRepository, EfJobRunRepository>();
+
+        // Trigger + event repositories.
+        services.AddScoped<IJobTriggerRepository, EfJobTriggerRepository>();
+        services.AddScoped<IEventRepository, EfEventRepository>();
+
+        // Embeddings: Voyage AI when a key is configured, else a graceful no-op. The pgvector-backed
+        // run-embedding store self-initializes lazily and degrades if the extension is unavailable.
+        if (!string.IsNullOrWhiteSpace(configuration["PlaceContext:Voyage:ApiKey"]))
+            services.AddSingleton<IEmbeddingGateway, Embeddings.VoyageEmbeddingGateway>();
+        else
+            services.AddSingleton<IEmbeddingGateway, Embeddings.NullEmbeddingGateway>();
+        services.AddScoped<IRunEmbeddingRepository, EfRunEmbeddingRepository>();
+
+        // Trigger scheduling: cron evaluation, in-process run queue, and the background firing service.
+        services.AddSingleton<ICronSchedule, Scheduling.CronosCronSchedule>();
+        services.AddSingleton<Scheduling.InMemoryJobRunQueue>();
+        services.AddSingleton<IJobRunQueue>(sp => sp.GetRequiredService<Scheduling.InMemoryJobRunQueue>());
+        services.AddHostedService<Scheduling.TriggerSchedulerService>();
 
         return services;
     }

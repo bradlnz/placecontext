@@ -47,5 +47,8 @@ public sealed record CreateJobCommand(
     /// <summary>Map-step source files. When non-empty, supersedes <see cref="MapSource"/>.</summary>
     IReadOnlyList<CodeFileDto>? MapFiles = null,
     /// <summary>Reduce-step source files. When non-empty, supersedes <see cref="ReduceSource"/>.</summary>
-    IReadOnlyList<CodeFileDto>? ReduceFiles = null)
+    IReadOnlyList<CodeFileDto>? ReduceFiles = null,
+
+    /// <summary>Declared input parameters prompted at run time (or injected by an event source).</summary>
+    IReadOnlyList<JobParameterDto>? Parameters = null)
     : ICommand<JobView>;

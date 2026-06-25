@@ -42,6 +42,7 @@ public sealed class EfJobRepository : IJobRepository
         existing.SuccessCodesJson = updated.SuccessCodesJson;
         existing.PartialCodesJson = updated.PartialCodesJson;
         existing.ConcurrencyLimit = updated.ConcurrencyLimit;
+        existing.ParametersJson = updated.ParametersJson;
         existing.AllowNetworkEgress = updated.AllowNetworkEgress;
         existing.UpdatedAt = updated.UpdatedAt;
     }
@@ -74,6 +75,8 @@ public sealed class EfJobRepository : IJobRepository
             SuccessCodesJson = JsonSerializer.Serialize(job.ExitCodePolicy.SuccessCodes.ToList(), Json),
             PartialCodesJson = JsonSerializer.Serialize(job.ExitCodePolicy.PartialCodes.ToList(), Json),
             ConcurrencyLimit = job.ConcurrencyLimit,
+            ParametersJson = JsonSerializer.Serialize(
+                job.Parameters.Select(p => new JobParameterJson(p.Name, p.Label, p.Required)).ToList(), Json),
             AllowNetworkEgress = job.AllowNetworkEgress,
             CreatedAt = job.CreatedAt,
             UpdatedAt = job.UpdatedAt,
@@ -138,10 +141,15 @@ public sealed class EfJobRepository : IJobRepository
 
         var policy = new ExitCodePolicy(successCodes, partialCodes);
 
+        var parameters = (JsonSerializer.Deserialize<List<JobParameterJson>>(row.ParametersJson, Json)
+                ?? new List<JobParameterJson>())
+            .Select(p => new JobParameter(p.Name, p.Label, p.Required))
+            .ToList();
+
         return Job.Rehydrate(
             row.Id, row.ProjectId, row.Name, row.Description,
             mapSpec, reduceSpec, row.ConcurrencyLimit, policy, row.CreatedAt, row.UpdatedAt,
-            allowNetworkEgress: row.AllowNetworkEgress);
+            allowNetworkEgress: row.AllowNetworkEgress, parameters: parameters);
     }
 
     private static WorkloadSource DeserialiseSource(
@@ -181,4 +189,5 @@ public sealed class EfJobRepository : IJobRepository
     }
 
     private sealed record CodeFileJson(string Path, string Content);
+    private sealed record JobParameterJson(string Name, string? Label, bool Required);
 }

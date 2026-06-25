@@ -66,6 +66,7 @@ public sealed class EfJobRunRepository : IJobRunRepository
                 Outcome = s.Outcome.ToString(),
                 Artifact = s.Artifact,
                 Log = s.Log,
+                Artifacts = ToArtifactsJson(s.Artifacts),
             }).ToList(), Json),
         ReduceResultJson = run.ReduceResult is { } r
             ? JsonSerializer.Serialize(new ReduceResultJson
@@ -74,6 +75,7 @@ public sealed class EfJobRunRepository : IJobRunRepository
                 Succeeded = r.Succeeded,
                 Artifact = r.Artifact,
                 Log = r.Log,
+                Artifacts = ToArtifactsJson(r.Artifacts),
             }, Json)
             : null,
         SnapshotJson = JsonSerializer.Serialize(ToSnapshotJson(run.Snapshot), Json),
@@ -89,14 +91,16 @@ public sealed class EfJobRunRepository : IJobRunRepository
             exitCode: s.ExitCode,
             outcome: Enum.TryParse<WorkloadOutcome>(s.Outcome, out var o) ? o : WorkloadOutcome.Failed,
             artifact: s.Artifact,
-            log: s.Log));
+            log: s.Log,
+            artifacts: FromArtifactsJson(s.Artifacts)));
 
         ReduceResult? reduceResult = null;
         if (row.ReduceResultJson is not null)
         {
             var rj = JsonSerializer.Deserialize<ReduceResultJson>(row.ReduceResultJson, Json);
             if (rj is not null)
-                reduceResult = new ReduceResult(rj.ExitCode, rj.Succeeded, rj.Artifact, rj.Log);
+                reduceResult = new ReduceResult(rj.ExitCode, rj.Succeeded, rj.Artifact, rj.Log,
+                    FromArtifactsJson(rj.Artifacts));
         }
 
         var status = Enum.TryParse<JobRunStatus>(row.Status, out var st) ? st : JobRunStatus.Failed;
@@ -106,6 +110,16 @@ public sealed class EfJobRunRepository : IJobRunRepository
         return JobRun.Rehydrate(row.Id, row.JobId, row.ProjectId, status,
             row.StartedAt, row.FinishedAt, shardResults, reduceResult, snapshot);
     }
+
+    // ── Artifact serialisation ────────────────────────────────────────────────────────────────────
+
+    private static List<ArtifactJson> ToArtifactsJson(IReadOnlyList<RunArtifact> artifacts)
+        => artifacts.Select(a => new ArtifactJson { Name = a.Name, Content = a.Content }).ToList();
+
+    private static IReadOnlyList<RunArtifact> FromArtifactsJson(List<ArtifactJson>? artifacts)
+        => artifacts is null or { Count: 0 }
+            ? Array.Empty<RunArtifact>()
+            : artifacts.Select(a => new RunArtifact(a.Name, a.Content)).ToList();
 
     // ── Snapshot serialisation ────────────────────────────────────────────────────────────────────
 
@@ -175,6 +189,7 @@ public sealed class EfJobRunRepository : IJobRunRepository
         public string Outcome { get; set; } = "";
         public string? Artifact { get; set; }
         public string? Log { get; set; }
+        public List<ArtifactJson>? Artifacts { get; set; }
     }
 
     private sealed class ReduceResultJson
@@ -183,6 +198,13 @@ public sealed class EfJobRunRepository : IJobRunRepository
         public bool Succeeded { get; set; }
         public string? Artifact { get; set; }
         public string? Log { get; set; }
+        public List<ArtifactJson>? Artifacts { get; set; }
+    }
+
+    private sealed class ArtifactJson
+    {
+        public string Name { get; set; } = "";
+        public string Content { get; set; } = "";
     }
 
     private sealed class SnapshotJson
