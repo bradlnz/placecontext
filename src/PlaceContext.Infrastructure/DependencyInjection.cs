@@ -87,6 +87,16 @@ public static class DependencyInjection
         services.AddScoped<IJobRepository, EfJobRepository>();
         services.AddScoped<IJobRunRepository, EfJobRunRepository>();
 
+        // Trigger + event repositories.
+        services.AddScoped<IJobTriggerRepository, EfJobTriggerRepository>();
+        services.AddScoped<IEventRepository, EfEventRepository>();
+
+        // Trigger scheduling: cron evaluation, in-process run queue, and the background firing service.
+        services.AddSingleton<ICronSchedule, Scheduling.CronosCronSchedule>();
+        services.AddSingleton<Scheduling.InMemoryJobRunQueue>();
+        services.AddSingleton<IJobRunQueue>(sp => sp.GetRequiredService<Scheduling.InMemoryJobRunQueue>());
+        services.AddHostedService<Scheduling.TriggerSchedulerService>();
+
         return services;
     }
 

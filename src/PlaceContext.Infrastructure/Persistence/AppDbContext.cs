@@ -35,6 +35,9 @@ public sealed class AppDbContext : DbContext, IUnitOfWork
     public DbSet<ToolCallRow> ToolCalls => Set<ToolCallRow>();
     public DbSet<JobRow> Jobs => Set<JobRow>();
     public DbSet<JobRunRow> JobRuns => Set<JobRunRow>();
+    public DbSet<JobTriggerRow> JobTriggers => Set<JobTriggerRow>();
+    public DbSet<EventDefinitionRow> EventDefinitions => Set<EventDefinitionRow>();
+    public DbSet<EventOccurrenceRow> EventOccurrences => Set<EventOccurrenceRow>();
 
     Task<int> IUnitOfWork.SaveChangesAsync(CancellationToken ct) => SaveChangesAsync(ct);
 
@@ -190,6 +193,32 @@ public sealed class AppDbContext : DbContext, IUnitOfWork
             e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
             // SnapshotJson stores the full WorkloadSnapshot at run-start.
             e.Property(x => x.SnapshotJson).HasDefaultValue("{}");
+        });
+
+        b.Entity<JobTriggerRow>(e =>
+        {
+            e.ToTable("job_triggers");
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => x.JobId);
+            // Scheduler scans by (Enabled, Kind, NextRunAt) across tenants.
+            e.HasIndex(x => new { x.Enabled, x.Kind, x.NextRunAt });
+            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
+        });
+
+        b.Entity<EventDefinitionRow>(e =>
+        {
+            e.ToTable("event_definitions");
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => new { x.TenantId, x.Name }).IsUnique(); // event name unique within a tenant
+            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
+        });
+
+        b.Entity<EventOccurrenceRow>(e =>
+        {
+            e.ToTable("event_occurrences");
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => new { x.Name, x.OccurredAt });
+            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
         });
     }
 }

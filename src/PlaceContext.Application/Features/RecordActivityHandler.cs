@@ -14,16 +14,20 @@ public sealed class RecordActivityHandler : ICommandHandler<RecordActivityComman
     private readonly IGitPort _git;
     private readonly IUnitOfWork _uow;
     private readonly IClock _clock;
+    private readonly EventDispatchService? _events;
 
     public RecordActivityHandler(
         IProjectRepository projects, IActivityLogRepository ledgers,
-        IGitPort git, IUnitOfWork uow, IClock clock)
+        IGitPort git, IUnitOfWork uow, IClock clock,
+        // Optional so unit tests can construct the handler without the event layer; DI always supplies it.
+        EventDispatchService? events = null)
     {
         _projects = projects;
         _ledgers = ledgers;
         _git = git;
         _uow = uow;
         _clock = clock;
+        _events = events;
     }
 
     public async Task<ActivityRecordView> HandleAsync(RecordActivityCommand command, CancellationToken ct = default)
@@ -54,6 +58,14 @@ public sealed class RecordActivityHandler : ICommandHandler<RecordActivityComman
 
         await _ledgers.SaveAsync(ledger, ct);
         await _uow.SaveChangesAsync(ct);
+
+        // Raise the built-in "activity.recorded" domain event so event-triggers can react to changes.
+        if (_events is not null)
+        {
+            var payload = $"{{\"changeId\":\"{record.Id}\",\"projectId\":\"{command.ProjectId:N}\"}}";
+            await _events.RaiseAsync(BuiltInEvents.ActivityRecorded, command.ProjectId, payload, ct);
+        }
+
         return ViewMapper.ToView(record);
     }
 }

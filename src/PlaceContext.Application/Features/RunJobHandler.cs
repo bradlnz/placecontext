@@ -30,6 +30,7 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
     private readonly IWorkloadRunner _runner;
     private readonly IUnitOfWork _uow;
     private readonly IClock _clock;
+    private readonly EventDispatchService? _events;
 
     public RunJobHandler(
         IJobRepository jobs,
@@ -37,7 +38,9 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
         IProjectContextRepository contexts,
         IWorkloadRunner runner,
         IUnitOfWork uow,
-        IClock clock)
+        IClock clock,
+        // Optional so unit tests can construct the handler without the event layer; DI always supplies it.
+        EventDispatchService? events = null)
     {
         _jobs = jobs;
         _runs = runs;
@@ -45,6 +48,7 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
         _runner = runner;
         _uow = uow;
         _clock = clock;
+        _events = events;
     }
 
     public async Task<JobRunDetailView> HandleAsync(RunJobCommand command, CancellationToken ct = default)
@@ -80,6 +84,13 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
         await AppendRunSummaryToProjectContextAsync(job, run, ct);
 
         await _uow.SaveChangesAsync(ct);
+
+        // Raise the built-in "job.completed" domain event so event-triggers can chain off this run.
+        if (_events is not null)
+        {
+            var payload = $"{{\"runId\":\"{run.Id:N}\",\"jobId\":\"{job.Id:N}\",\"status\":\"{run.Status}\"}}";
+            await _events.RaiseAsync(BuiltInEvents.JobCompleted, run.ProjectId, payload, ct);
+        }
 
         return JobViewMapper.ToDetailView(run);
     }
