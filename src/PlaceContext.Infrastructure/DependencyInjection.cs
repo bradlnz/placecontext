@@ -103,6 +103,10 @@ public static class DependencyInjection
         else
             services.AddSingleton<IWorkloadRunner, DockerWorkloadRunner>();
 
+        // Vault: encrypted project secrets (AES at rest via Data Protection) injected into job runs.
+        services.AddScoped<Domain.Repositories.IProjectSecretRepository, Persistence.EfProjectSecretRepository>();
+        services.AddSingleton<Application.Ports.ISecretProtector, Security.DataProtectionSecretProtector>();
+
         // Job / JobRun repositories.
         services.AddScoped<IJobRepository, EfJobRepository>();
         services.AddScoped<IJobRunRepository, EfJobRunRepository>();

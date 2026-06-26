@@ -34,6 +34,9 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
     private readonly ILlmGateway? _llm;
     private readonly IEmbeddingGateway? _embeddings;
     private readonly IRunEmbeddingRepository? _embeddingStore;
+    private readonly IProjectSecretRepository? _secretRepo;
+    private readonly ISecretProtector? _secretProtector;
+    private IReadOnlyDictionary<string, string> _runSecrets = new Dictionary<string, string>();
 
     public RunJobHandler(
         IJobRepository jobs,
@@ -42,12 +45,16 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
         IWorkloadRunner runner,
         IUnitOfWork uow,
         IClock clock,
-        // Optional so unit tests can construct the handler without the event/LLM/embedding layers; DI always supplies them.
+        // Optional so unit tests can construct the handler without the event/LLM/embedding/secret layers; DI always supplies them.
         EventDispatchService? events = null,
         ILlmGateway? llm = null,
         IEmbeddingGateway? embeddings = null,
-        IRunEmbeddingRepository? embeddingStore = null)
+        IRunEmbeddingRepository? embeddingStore = null,
+        IProjectSecretRepository? secretRepo = null,
+        ISecretProtector? secretProtector = null)
     {
+        _secretRepo = secretRepo;
+        _secretProtector = secretProtector;
         _jobs = jobs;
         _runs = runs;
         _contexts = contexts;
@@ -64,6 +71,10 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
     {
         var job = await _jobs.GetByIdAsync(command.JobId, ct)
             ?? throw new InvalidOperationException($"Job {command.JobId} not found.");
+
+        // Load the project's vault secrets (decrypted) for injection as env into each sandbox. Never
+        // persisted to the run snapshot — only merged into the live WorkloadRunRequest below.
+        _runSecrets = await LoadSecretsAsync(job.ProjectId, ct);
 
         // An input override (modal-collected parameters or event-injected fields) replaces the stored
         // shard payloads with a single shard carrying the supplied payload.
@@ -138,7 +149,7 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
         try
         {
             var correlationId = $"{runId:N}-map-{index}";
-            var request = BuildRequest(job.MapSpec.Source, payload, job.MapSpec.Env,
+            var request = BuildRequest(job.MapSpec.Source, payload, MergeSecrets(job.MapSpec.Env),
                 Array.Empty<(string, string)>(), correlationId, job.AllowNetworkEgress);
 
             var result = await _runner.RunAsync(request, ct);
@@ -169,7 +180,7 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
             .ToList();
 
         var correlationId = $"{runId:N}-reduce";
-        var request = BuildRequest(reduceSpec.Source, "{}", reduceSpec.Env,
+        var request = BuildRequest(reduceSpec.Source, "{}", MergeSecrets(reduceSpec.Env),
             artifactMounts, correlationId, job.AllowNetworkEgress);
 
         var result = await _runner.RunAsync(request, ct);
@@ -221,6 +232,28 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
 
             _ => throw new InvalidOperationException($"Unsupported WorkloadSource type: {source.GetType().Name}"),
         };
+    }
+
+    // Decrypt the project's vault secrets for run-time env injection. Empty when the vault isn't wired.
+    private async Task<IReadOnlyDictionary<string, string>> LoadSecretsAsync(Guid projectId, CancellationToken ct)
+    {
+        if (_secretRepo is null || _secretProtector is null) return new Dictionary<string, string>();
+        var ciphers = await _secretRepo.GetCiphersAsync(projectId, ct);
+        var plain = new Dictionary<string, string>(ciphers.Count);
+        foreach (var (name, cipher) in ciphers)
+        {
+            try { plain[name] = _secretProtector.Unprotect(cipher); } catch { /* skip un-decryptable */ }
+        }
+        return plain;
+    }
+
+    // Vault secrets form the base env; the job's own env overrides on key collision.
+    private IReadOnlyDictionary<string, string> MergeSecrets(IReadOnlyDictionary<string, string> env)
+    {
+        if (_runSecrets.Count == 0) return env;
+        var merged = new Dictionary<string, string>(_runSecrets);
+        foreach (var (k, v) in env) merged[k] = v;
+        return merged;
     }
 
     // ---- PROJECT CONTEXT PERSISTENCE ----

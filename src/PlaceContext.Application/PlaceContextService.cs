@@ -57,6 +57,15 @@ public sealed class PlaceContextService : IPlaceContextService
     public Task<ProjectContextView> GetContextAsync(Guid projectId, CancellationToken ct = default)
         => _dispatcher.Query(new GetContextQuery(projectId), ct);
 
+    public Task<ProjectSecretView> AddProjectSecretAsync(Guid projectId, string name, string value, CancellationToken ct = default)
+        => _dispatcher.Send(new AddProjectSecretCommand(projectId, name, value), ct);
+
+    public Task<bool> DeleteProjectSecretAsync(Guid projectId, string name, CancellationToken ct = default)
+        => _dispatcher.Send(new DeleteProjectSecretCommand(projectId, name), ct);
+
+    public Task<IReadOnlyList<ProjectSecretView>> ListProjectSecretsAsync(Guid projectId, CancellationToken ct = default)
+        => _dispatcher.Query(new ListProjectSecretsQuery(projectId), ct);
+
     public Task<RequirementsView> GetGlobalRequirementsAsync(CancellationToken ct = default)
         => _dispatcher.Query(new GetGlobalRequirementsQuery(), ct);
 

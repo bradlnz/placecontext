@@ -27,6 +27,9 @@ public interface IPlaceContextService
     Task<ProjectContextView> AddContextAsync(Guid projectId, string section, CancellationToken ct = default);
     Task<ProjectContextView> SetContextAsync(Guid projectId, string markdown, CancellationToken ct = default);
     Task<ProjectContextView> GetContextAsync(Guid projectId, CancellationToken ct = default);
+    Task<ProjectSecretView> AddProjectSecretAsync(Guid projectId, string name, string value, CancellationToken ct = default);
+    Task<bool> DeleteProjectSecretAsync(Guid projectId, string name, CancellationToken ct = default);
+    Task<IReadOnlyList<ProjectSecretView>> ListProjectSecretsAsync(Guid projectId, CancellationToken ct = default);
     Task<RequirementsView> GetGlobalRequirementsAsync(CancellationToken ct = default);
     Task<RequirementsView> SetGlobalRequirementsAsync(string markdown, CancellationToken ct = default);
     Task<RequirementsView> GetProjectRequirementsAsync(Guid projectId, CancellationToken ct = default);
