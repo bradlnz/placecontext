@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using Microsoft.AspNetCore.DataProtection;
 using PlaceContext.Host;
 using PlaceContext.Host.Auth;
 using PlaceContext.Application;
@@ -34,6 +35,13 @@ builder.Services.AddRazorComponents().AddInteractiveServerComponents();
 builder.Services.AddCascadingAuthenticationState();
 builder.Services.AddScoped<PlaceContext.Host.PortalUiState>();
 
+// Share the Data Protection key ring across replicas (persisted in Postgres) and pin the application
+// name, so the auth cookie one replica issues can be decrypted by any other — otherwise a token sign-in
+// handled by pod A produces a cookie pod B can't read, bouncing the operator back to /locked.
+builder.Services.AddDataProtection()
+    .SetApplicationName("placecontext")
+    .PersistKeysToDbContext<PlaceContext.Infrastructure.Persistence.AppDbContext>();
+
 // Cookie authentication. The portal requires a logged-in user (fallback policy); /login, /register,
 // the auth endpoints, and /mcp opt out explicitly.
 builder.Services
@@ -41,7 +49,9 @@ builder.Services
     .AddCookie(o =>
     {
         o.Cookie.Name = "placecontext_auth";
-        o.LoginPath = "/login";
+        // No password login: an unauthenticated request is sent to /locked, which tells the operator to
+        // open the portal from the pctl TUI (the TUI mints a token and signs them in via /auth/portal).
+        o.LoginPath = "/locked";
         o.LogoutPath = "/auth/logout";
         o.ExpireTimeSpan = TimeSpan.FromDays(14);
         o.SlidingExpiration = true;
@@ -121,6 +131,7 @@ builder.Services.AddAuthorization(o =>
     o.AddPolicy("Owner", p => p.RequireAuthenticatedUser().RequireAssertion(c => RoleAtLeast(c.User, UserRole.Owner)));
 });
 builder.Services.AddSingleton<OAuthStore>();
+builder.Services.AddSingleton<PlaceContext.Host.Auth.PortalToken>();
 
 // Exposes the current request's ClaimsPrincipal to MCP tools (e.g. whoami reads the bearer's claims).
 builder.Services.AddHttpContextAccessor();
@@ -211,28 +222,34 @@ app.MapPost("/ingest/{eventName}", async (HttpContext ctx, PlaceContext.Applicat
     return Results.Ok(new { result.Name, result.TriggeredRuns, result.OccurredAt });
 }).AllowAnonymous();
 
-// ---- Login / register (standalone HTML so they don't depend on the Blazor render pipeline) ----
-app.MapGet("/login", (HttpContext ctx, IAntiforgery af, string? error, string? returnUrl) =>
-    Results.Content(AuthPages.Login(af.GetAndStoreTokens(ctx), error, returnUrl), "text/html")).AllowAnonymous();
+// ---- Token sign-in (self-hosted; the pctl TUI mints the token and opens /auth/portal) ----
+// The portal has no password login. A valid short-lived token (HMAC-signed with the shared
+// PlaceContext:Portal:SigningKey) signs the cluster operator into the cookie. In Development with no
+// key configured, sign-in is automatic so `./run.sh` + opening localhost just works with no cluster.
+var portalSigningKey = builder.Configuration["PlaceContext:Portal:SigningKey"];
+var devAutoLogin = app.Environment.IsDevelopment() && string.IsNullOrWhiteSpace(portalSigningKey);
 
-app.MapGet("/register", (HttpContext ctx, IAntiforgery af, string? error, string? returnUrl) =>
-    Results.Content(AuthPages.Register(af.GetAndStoreTokens(ctx), error, returnUrl), "text/html")).AllowAnonymous();
-
-// Self-registration creates the organisation's FIRST member as Owner. After that the org is
-// invite-only — further members join via an Admin invite (/join?token=…).
-app.MapPost("/auth/register", async (HttpContext ctx, IAuthService auth,
-    [FromForm] string email, [FromForm] string password, [FromForm] string? displayName, [FromForm] string? returnUrl) =>
+app.MapGet("/auth/portal", async (HttpContext ctx, IAuthService auth, PlaceContext.Host.Auth.PortalToken portal,
+    string? token, string? returnUrl) =>
 {
-    if (await auth.HasAnyMembersAsync(ctx.RequestAborted))
-        return Results.Redirect("/register?error=" + Uri.EscapeDataString("This organisation is invite-only — ask an admin to invite you.") + ReturnUrlQuery(returnUrl));
-    if (string.IsNullOrWhiteSpace(email) || (password?.Length ?? 0) < 8)
-        return Results.Redirect("/register?error=" + Uri.EscapeDataString("Enter an email and a password of at least 8 characters.") + ReturnUrlQuery(returnUrl));
-    var user = await auth.RegisterAsync(email, displayName ?? "", password!, UserRole.Owner, ctx.RequestAborted);
-    if (user is null)
-        return Results.Redirect("/register?error=" + Uri.EscapeDataString("That email is already registered.") + ReturnUrlQuery(returnUrl));
-    await SignInAsync(ctx, user);
-    // A brand-new org owner who registered mid-OAuth should land back at the authorize URL.
+    if (!devAutoLogin && !portal.TryValidate(token, portalSigningKey, DateTimeOffset.UtcNow))
+        return Results.Redirect("/locked");
+    var operatorUser = await auth.GetOrCreateOperatorAsync(ctx.RequestAborted);
+    await SignInAsync(ctx, operatorUser);
     return Results.Redirect(LocalOrHome(returnUrl));
+}).AllowAnonymous();
+
+// Shown when an unauthenticated request hits a protected page (cookie LoginPath). In dev it just
+// signs you in; otherwise it points the operator at the TUI.
+app.MapGet("/locked", async (HttpContext ctx, IAuthService auth) =>
+{
+    if (devAutoLogin)
+    {
+        var operatorUser = await auth.GetOrCreateOperatorAsync(ctx.RequestAborted);
+        await SignInAsync(ctx, operatorUser);
+        return Results.Redirect("/");
+    }
+    return Results.Content(AuthPages.Locked(), "text/html");
 }).AllowAnonymous();
 
 // ---- Invite acceptance (join page) ----
@@ -256,22 +273,10 @@ app.MapPost("/auth/accept-invite", async (HttpContext ctx, IMembershipService me
     return Results.Redirect("/");
 }).AllowAnonymous();
 
-app.MapPost("/auth/login", async (HttpContext ctx, IAuthService auth,
-    [FromForm] string email, [FromForm] string password, [FromForm] string? returnUrl) =>
-{
-    var user = await auth.ValidateAsync(email, password, ctx.RequestAborted);
-    if (user is null)
-        return Results.Redirect("/login?error=" + Uri.EscapeDataString("Incorrect email or password.")
-            + ReturnUrlQuery(returnUrl));
-    await SignInAsync(ctx, user);
-    // Honour returnUrl so the OAuth authorize round-trip resumes after login (local URLs only).
-    return Results.Redirect(LocalOrHome(returnUrl));
-}).AllowAnonymous();
-
 app.MapPost("/auth/logout", async (HttpContext ctx) =>
 {
     await ctx.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
-    return Results.Redirect("/login");
+    return Results.Redirect("/locked");
 }).AllowAnonymous();
 
 // ---- GitHub OAuth (repo import) — requires a logged-in user (covered by the fallback policy) ----
@@ -337,8 +342,3 @@ static string LocalOrHome(string? returnUrl) =>
         && Uri.TryCreate(returnUrl, UriKind.Relative, out _)
         && returnUrl.StartsWith('/') && !returnUrl.StartsWith("//") && !returnUrl.StartsWith("/\\")
             ? returnUrl : "/";
-
-// Re-appends a validated returnUrl as a query parameter when redirecting back to a login/register page
-// after a form error, so the OAuth round-trip survives a failed attempt. Empty when there's nothing safe.
-static string ReturnUrlQuery(string? returnUrl) =>
-    LocalOrHome(returnUrl) is var safe && safe != "/" ? "&returnUrl=" + Uri.EscapeDataString(safe) : string.Empty;

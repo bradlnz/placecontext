@@ -46,12 +46,27 @@ public sealed class AuthService : IAuthService
         return ToAuthUser(row);
     }
 
-    public async Task<AuthUser?> ValidateAsync(string email, string password, CancellationToken ct = default)
+    public async Task<AuthUser> GetOrCreateOperatorAsync(CancellationToken ct = default)
     {
-        email = Normalize(email);
-        var row = await _db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Email == email, ct);
-        if (row is null || !PasswordHasher.Verify(password, row.PasswordHash))
-            return null;
+        // The first user in the tenant is the operator. AsNoTracking + oldest-first keeps this stable
+        // even if invites later add more members; the operator is whoever the deployment was created for.
+        var existing = await _db.Users.AsNoTracking().OrderBy(u => u.CreatedAt).FirstOrDefaultAsync(ct);
+        if (existing is not null)
+            return ToAuthUser(existing);
+
+        var row = new UserRow
+        {
+            Id = Guid.NewGuid(),
+            Email = "operator@localhost",
+            DisplayName = "Operator",
+            // Password login is removed; this hash is unusable (a random secret nobody holds), present
+            // only to satisfy the non-null column. Sign-in happens via the portal token, never a password.
+            PasswordHash = PasswordHasher.Hash(Guid.NewGuid().ToString("N")),
+            Role = UserRole.Owner.ToString(),
+            CreatedAt = DateTimeOffset.UtcNow,
+        };
+        await _db.Users.AddAsync(row, ct);
+        await _db.SaveChangesAsync(ct); // TenantId stamped here
         return ToAuthUser(row);
     }
 

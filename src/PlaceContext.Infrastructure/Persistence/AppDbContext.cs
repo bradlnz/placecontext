@@ -1,4 +1,5 @@
 using PlaceContext.Application.Ports;
+using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 
 namespace PlaceContext.Infrastructure.Persistence;
@@ -12,12 +13,15 @@ namespace PlaceContext.Infrastructure.Persistence;
 /// scoping reads to <see cref="ICurrentTenant.TenantId"/>, and <see cref="SaveChangesAsync"/> stamps the
 /// current tenant onto new rows. The <c>tenants</c> registry itself is not tenant-scoped.
 /// </summary>
-public sealed class AppDbContext : DbContext, IUnitOfWork
+public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyContext
 {
     private readonly ICurrentTenant _tenant;
 
     public AppDbContext(DbContextOptions<AppDbContext> options, ICurrentTenant tenant) : base(options)
         => _tenant = tenant;
+
+    /// <summary>Shared ASP.NET Data Protection key ring (so every replica decrypts the same auth cookie).</summary>
+    public DbSet<DataProtectionKey> DataProtectionKeys => Set<DataProtectionKey>();
 
     public DbSet<TenantRow> Tenants => Set<TenantRow>();
     public DbSet<OAuthClientRow> OAuthClients => Set<OAuthClientRow>();

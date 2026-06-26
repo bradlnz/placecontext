@@ -1592,6 +1592,16 @@ func max(a, b int) int {
 }
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "url" {
+		m := initialModel()
+		key := m.portalSigningKey()
+		target := portalURL()
+		if key != "" {
+			target += "auth/portal?token=" + neturl.QueryEscape(mintPortalToken(key, time.Now()))
+		}
+		fmt.Printf("kubeconfig=%s\nsigningKey.len=%d\ntarget=%s\n", m.kubeconfig, len(key), target)
+		return
+	}
 	p := tea.NewProgram(initialModel(), tea.WithAltScreen())
 	if _, err := p.Run(); err != nil {
 		fmt.Fprintln(os.Stderr, "pctl-tui error:", err)

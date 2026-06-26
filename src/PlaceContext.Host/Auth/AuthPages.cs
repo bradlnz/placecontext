@@ -15,8 +15,10 @@ public static class AuthPages
 {
     private static readonly ConcurrentDictionary<string, string> Cache = new();
 
-    public static string Login(AntiforgeryTokenSet tokens, string? error, string? returnUrl = null) => Render("login", tokens, error, returnUrl);
-    public static string Register(AntiforgeryTokenSet tokens, string? error, string? returnUrl = null) => Render("register", tokens, error, returnUrl);
+    /// <summary>The "open the portal from the TUI" page shown to unauthenticated visitors (no markup here —
+    /// <c>Auth/templates/locked.html</c> owns it).</summary>
+    public static string Locked() => Cache.GetOrAdd("locked", static name =>
+        File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Auth", "templates", name + ".html")));
 
     public static string Join(AntiforgeryTokenSet tokens, string token, InviteInfo invite, string? error)
         => Render("join", tokens, error)
