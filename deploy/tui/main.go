@@ -395,14 +395,15 @@ func (m model) fetchSearch(query string) tea.Cmd {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		esc := strings.ReplaceAll(q, "'", "''")
-		sql := `\pset format unaligned` + "\n" +
-			`SELECT 'DECISION  ' || "Question" || '  →  ' || "Choice" FROM decisions ` +
-			`WHERE "Question" ILIKE '%` + esc + `%' OR "Choice" ILIKE '%` + esc + `%' OR "Rationale" ILIKE '%` + esc + `%' LIMIT 40;` + "\n" +
-			`SELECT 'CONTEXT   ' || left("Markdown", 160) FROM project_contexts WHERE "Markdown" ILIKE '%` + esc + `%' LIMIT 15;` + "\n" +
+		// One -c with multiple SELECTs; psql -A -t gives clean unaligned rows. (No backslash meta-commands
+		// here — psql -c can't run them, it would swallow the SQL as arguments.)
+		sql := `SELECT 'DECISION  ' || "Question" || '  →  ' || "Choice" FROM decisions ` +
+			`WHERE "Question" ILIKE '%` + esc + `%' OR "Choice" ILIKE '%` + esc + `%' OR "Rationale" ILIKE '%` + esc + `%' LIMIT 40;` +
+			`SELECT 'CONTEXT   ' || left("Markdown", 160) FROM project_contexts WHERE "Markdown" ILIKE '%` + esc + `%' LIMIT 15;` +
 			`SELECT 'ACTIVITY  ' || "Summary" FROM activity_log ` +
 			`WHERE "Summary" ILIKE '%` + esc + `%' OR "Rationale" ILIKE '%` + esc + `%' LIMIT 40;`
 		b, err := mc.kubectl(ctx, "-n", ns, "exec", "deploy/placecontext-db", "--",
-			"psql", "-U", "postgres", "-d", "placecontext", "-q", "-t", "-c", sql)
+			"psql", "-U", "postgres", "-d", "placecontext", "-A", "-t", "-c", sql)
 		if err != nil {
 			return searchMsg{"search failed: " + err.Error()}
 		}
