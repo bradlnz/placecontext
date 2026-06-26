@@ -100,6 +100,11 @@ public static class DependencyInjection
         services.AddScoped<IQueryHandler<ListEventOccurrencesQuery, IReadOnlyList<EventOccurrenceView>>, ListEventOccurrencesHandler>();
         services.AddScoped<IQueryHandler<SearchRunOutputsQuery, IReadOnlyList<RunOutputMatchView>>, SearchRunOutputsHandler>();
 
+        // Project secrets (vault) — encrypted env injected into job runs.
+        services.AddScoped<ICommandHandler<AddProjectSecretCommand, ProjectSecretView>, AddProjectSecretHandler>();
+        services.AddScoped<ICommandHandler<DeleteProjectSecretCommand, bool>, DeleteProjectSecretHandler>();
+        services.AddScoped<IQueryHandler<ListProjectSecretsQuery, IReadOnlyList<ProjectSecretView>>, ListProjectSecretsHandler>();
+
         return services;
     }
 }
