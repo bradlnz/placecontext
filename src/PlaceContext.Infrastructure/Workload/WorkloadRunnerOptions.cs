@@ -80,6 +80,25 @@ public sealed class WorkloadRunnerOptions
             InvokeCommand = new[] { "python", "/work/{entrypoint}" },
             DefaultEntrypoint = "main.py",
         },
+        ["go"] = new RuntimeDefinition
+        {
+            BaseImage = "golang:1.23-alpine",
+            InvokeCommand = new[] { "go", "run", "/work/{entrypoint}" },
+            DefaultEntrypoint = "main.go",
+        },
+        ["ruby"] = new RuntimeDefinition
+        {
+            BaseImage = "ruby:3.3-slim",
+            InvokeCommand = new[] { "ruby", "/work/{entrypoint}" },
+            DefaultEntrypoint = "main.rb",
+        },
+        // .NET 10 file-based apps: `dotnet run app.cs` runs a single C# file with no project file.
+        ["dotnet"] = new RuntimeDefinition
+        {
+            BaseImage = "mcr.microsoft.com/dotnet/sdk:10.0",
+            InvokeCommand = new[] { "dotnet", "run", "/work/{entrypoint}" },
+            DefaultEntrypoint = "main.cs",
+        },
     };
 }
 

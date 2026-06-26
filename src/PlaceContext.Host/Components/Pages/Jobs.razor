@@ -262,19 +262,22 @@ else
                                 <option value="">— select —</option>
                                 <option value="node">node</option>
                                 <option value="python">python</option>
+                                <option value="go">go</option>
+                                <option value="ruby">ruby</option>
+                                <option value="dotnet">.NET (C#)</option>
                             </select>
                         </div>
                         <div style="flex:1">
                             <label style="font-size:12px; color:var(--text-3); display:block; margin-bottom:4px">Entrypoint</label>
                             <input class="dcinput" style="width:100%" @bind="_edMapEntrypoint"
-                                   placeholder="@(_edMapRuntimeId == "python" ? "main.py" : "index.js")" />
+                                   placeholder="@DefaultEntrypointFor(_edMapRuntimeId)" />
                         </div>
                     </div>
                     <label style="font-size:12px; color:var(--text-3); display:block; margin-bottom:4px">Source code *</label>
                     <textarea class="dcinput" rows="12"
                               style="width:100%; font-family:'Geist Mono',monospace; font-size:12px; resize:vertical"
                               @bind="_edMapSource"
-                              placeholder="@(_edMapRuntimeId == "python" ? "import sys, json\ndata = json.load(sys.stdin)\nresult = {}\nwith open('/out/result.json','w') as f:\n    json.dump(result, f)" : "const fs = require('fs');\nconst data = JSON.parse(fs.readFileSync('/dev/stdin','utf8'));\nconst result = {};\nfs.writeFileSync('/out/result.json', JSON.stringify(result));")">
+                              placeholder="@SourcePlaceholderFor(_edMapRuntimeId)">
                     </textarea>
                     <div style="font-size:11px; color:var(--text-3); margin-top:4px">
                         Stdin: opaque JSON payload. Write artifact to <code>/out/result.json</code>.
@@ -556,6 +559,25 @@ else
 
 @code {
     [Parameter] public Guid ProjectId { get; set; }
+
+    // Per-runtime hints for the inline-code editor (must match WorkloadRunnerOptions.Runtimes).
+    private static string DefaultEntrypointFor(string? runtime) => runtime switch
+    {
+        "python" => "main.py",
+        "go" => "main.go",
+        "ruby" => "main.rb",
+        "dotnet" => "main.cs",
+        _ => "index.js",
+    };
+
+    private static string SourcePlaceholderFor(string? runtime) => runtime switch
+    {
+        "python" => "import sys, json\ndata = json.load(sys.stdin)\nresult = {}\nwith open('/out/result.json','w') as f:\n    json.dump(result, f)",
+        "go" => "package main\n\nimport (\n    \"encoding/json\"\n    \"io\"\n    \"os\"\n)\n\nfunc main() {\n    in, _ := io.ReadAll(os.Stdin)\n    var data any\n    json.Unmarshal(in, &data)\n    out, _ := os.Create(\"/out/result.json\")\n    json.NewEncoder(out).Encode(map[string]any{})\n}",
+        "ruby" => "require 'json'\ndata = JSON.parse(STDIN.read)\nresult = {}\nFile.write('/out/result.json', result.to_json)",
+        "dotnet" => "using System.Text.Json;\nvar input = Console.In.ReadToEnd();\nvar data = JsonSerializer.Deserialize<JsonElement>(input);\nvar result = new { };\nFile.WriteAllText(\"/out/result.json\", JsonSerializer.Serialize(result));",
+        _ => "const fs = require('fs');\nconst data = JSON.parse(fs.readFileSync('/dev/stdin','utf8'));\nconst result = {};\nfs.writeFileSync('/out/result.json', JSON.stringify(result));",
+    };
 
     private IReadOnlyList<JobView>? _jobs;
     private IReadOnlyList<ProjectSecretView>? _vaultSecrets; // names injected as env at run time (Vault)

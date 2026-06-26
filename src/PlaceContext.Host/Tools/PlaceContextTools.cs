@@ -261,6 +261,9 @@ public sealed class PlaceContextTools
         ## Runtimes
         - `node`  → base `node:22-slim`, default entrypoint `index.js`, invoked `node /work/index.js`.
         - `python`→ base `python:3.12-slim`, default entrypoint `main.py`, invoked `python /work/main.py`.
+        - `go`    → base `golang:1.23-alpine`, default entrypoint `main.go`, invoked `go run /work/main.go`.
+        - `ruby`  → base `ruby:3.3-slim`, default entrypoint `main.rb`, invoked `ruby /work/main.rb`.
+        - `dotnet`→ base `mcr.microsoft.com/dotnet/sdk:10.0`, default entrypoint `main.cs`, invoked `dotnet run /work/main.cs` (.NET 10 file-based app).
         Dependency-free by default (no install step) — vendor any libs into your file set.
 
         ## Environment variables & secrets
@@ -286,11 +289,11 @@ public sealed class PlaceContextTools
 
         ## Next step
         Upload with **upload_job_code**: `filesJson` = [{"path":"index.js","content":"…"}], `runtimeId` =
-        "node"|"python", and `entrypoint` when uploading multiple files.
+        "node"|"python"|"go"|"ruby"|"dotnet", and `entrypoint` when uploading multiple files.
         """;
 
     [Authorize(Policy = "Member")]
-    [McpServerTool(Name = "upload_job_code"), Description("Upload (replace) the source file set of a job's map step so it can be run as isolated containers. Target an existing job by jobId, OR by projectId + jobName (the job is created with sensible defaults — one '{}' shard, concurrency 1, success exit 0 — when it does not yet exist). 'filesJson' is a JSON array of {\"path\":\"index.js\",\"content\":\"...\"}; paths may include subdirectories (e.g. 'lib/report.js'). 'runtimeId' selects the sandbox ('node' or 'python'); 'entrypoint' is the path of the file to invoke (required when uploading more than one file; defaults to the runtime's default for a single file). Existing input payloads, env, concurrency, reduce step, and exit-code policy are preserved.")]
+    [McpServerTool(Name = "upload_job_code"), Description("Upload (replace) the source file set of a job's map step so it can be run as isolated containers. Target an existing job by jobId, OR by projectId + jobName (the job is created with sensible defaults — one '{}' shard, concurrency 1, success exit 0 — when it does not yet exist). 'filesJson' is a JSON array of {\"path\":\"index.js\",\"content\":\"...\"}; paths may include subdirectories (e.g. 'lib/report.js'). 'runtimeId' selects the sandbox ('node', 'python', 'go', 'ruby', or 'dotnet'); 'entrypoint' is the path of the file to invoke (required when uploading more than one file; defaults to the runtime's default for a single file). Existing input payloads, env, concurrency, reduce step, and exit-code policy are preserved.")]
     public static Task<string> UploadJobCode(IPlaceContextService svc, IToolCallLog log,
         [Description("JSON array of files, e.g. [{\"path\":\"index.js\",\"content\":\"...\"}]")] string filesJson,
         [Description("Runtime sandbox id: 'node' or 'python'")] string runtimeId,
