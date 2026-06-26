@@ -150,6 +150,8 @@ type model struct {
 
 	// search (decisions / context / activity — the knowledge graph's contents)
 	searchQuery string
+
+	loading bool // a data fetch (logs/mcp/metrics/search) is in flight → show a loading box
 }
 
 // ── messages ──────────────────────────────────────────────────────────────────────────────────
@@ -630,6 +632,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "esc", "ctrl+c":
 				m.view = viewDash
 			case "enter":
+				m.loading = true
 				return m, m.fetchSearch(m.searchQuery)
 			case "backspace":
 				if r := []rune(m.searchQuery); len(r) > 0 {
@@ -712,9 +715,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.prevView = viewMcp
 					m.view = viewLogs
 					m.logs.SetContent("")
+					m.loading = true
 					return m, m.fetchMcpDetail(m.mcp[m.mcpCursor])
 				}
 			case "r":
+				m.loading = true
 				return m, m.fetchMcp()
 			}
 			return m, nil
@@ -747,6 +752,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.prevView = viewDash
 				m.view = viewLogs
 				m.logs.SetContent("")
+				m.loading = true
 				return m, m.fetchLogsFor(it)
 			}
 		case "a":
@@ -760,6 +766,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "g":
 			if !m.busy {
 				m.view = viewMetrics
+				m.loading = true
 				return m, tea.Batch(m.fetchMetrics(), metricsTick())
 			}
 			return m, nil
@@ -781,6 +788,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "m":
 			if m.view == viewDash && !m.busy {
 				m.view, m.mcpCursor = viewMcp, 0
+				m.loading = true
 				return m, m.fetchMcp()
 			}
 			return m, nil
@@ -793,9 +801,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		case "r":
 			if m.view == viewLogs && m.cursor < len(m.sel) {
+				m.loading = true
 				return m, m.fetchLogsFor(m.sel[m.cursor])
 			}
 			if m.view == viewMcp {
+				m.loading = true
 				return m, m.fetchMcp()
 			}
 			return m, m.fetchState()
@@ -815,6 +825,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.prevView = viewDash
 			m.view = viewLogs
 			m.logs.SetContent("")
+			m.loading = true
 			return m, m.fetchLogs()
 		}
 
@@ -834,9 +845,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.view != viewMetrics {
 			return m, nil // stop sampling when the metrics view isn't shown
 		}
+		m.loading = true
 		return m, tea.Batch(m.fetchMetrics(), metricsTick())
 
 	case metricsMsg:
+		m.loading = false
 		if msg.err != "" {
 			m.metricsErr = msg.err
 			return m, nil
@@ -875,17 +888,20 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case logsMsg:
+		m.loading = false
 		m.logTitle = msg.title
 		m.logs.SetContent(colorizeLogs(msg.body))
 		m.logs.GotoTop()
 		return m, nil
 
 	case searchMsg:
+		m.loading = false
 		m.logs.SetContent(renderMarkdown(msg.body, m.logs.Width))
 		m.logs.GotoTop()
 		return m, nil
 
 	case mcpMsg:
+		m.loading = false
 		m.mcp, m.mcpErr = msg.rows, msg.err
 		if m.mcpCursor >= len(m.mcp) {
 			m.mcpCursor = max(0, len(m.mcp)-1)
@@ -933,7 +949,9 @@ func (m model) View() string {
 	if a := m.alerts(); a != "" {
 		b.WriteString(a)
 	}
-	if m.flash != "" {
+	if m.loading {
+		b.WriteString("  " + boxStyle.Render(m.sp.View()+dimStyle.Render(" loading…")) + "\n")
+	} else if m.flash != "" {
 		b.WriteString("  " + okStyle.Render("✓ "+m.flash) + "\n")
 	} else {
 		b.WriteString("\n")
