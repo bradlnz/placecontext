@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"encoding/json"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -9,7 +11,19 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-type jobRow struct{ id, tenant, name, source, conc, egress, updated, timeout string }
+type jobRow struct {
+	id, tenant, name, source, conc, egress, updated, timeout string
+	postJobActions                                           string // JSON array, e.g. ["HtmlReport","Chart"]; empty = none
+}
+
+// uuidRe matches a canonical UUID. All ids/tenant ids interpolated into psql come from the jobs table
+// (they're DB-generated UUID columns), but we validate the shape before building any SQL as defence in
+// depth: a value that passes this can contain no quote or SQL metacharacter, so it cannot break out of
+// the literal. Anything else is rejected before a query is built. (Column names interpolated elsewhere
+// come only from the hard-coded jobSettings() list, never from user or DB input.)
+var uuidRe = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
+
+func validUUID(s string) bool { return uuidRe.MatchString(s) }
 
 func (m model) queryJobs(ctx context.Context) ([]jobRow, string) {
 	const base = `"Id", "TenantId", "Name", "MapSourceKind", "ConcurrencyLimit", "AllowNetworkEgress", "UpdatedAt"`
@@ -18,12 +32,15 @@ func (m model) queryJobs(ctx context.Context) ([]jobRow, string) {
 		return m.kubectl(ctx, "-n", ns, "exec", "deploy/placecontext-db", "--",
 			"psql", "-U", "postgres", "-d", "placecontext", "-At", "-F", "\t", "-c", q)
 	}
-	// TimeoutSeconds is a newer column; if the DB is behind the app code (migration not yet
-	// applied) fall back to a query without it so the jobs list still works — the migration
-	// banner (checkMigrations) tells the user to deploy.
-	b, err := run(base + `, "TimeoutSeconds"`)
+	// TimeoutSeconds and PostJobActionsJson are newer columns; if the DB is behind the app code
+	// (migration not yet applied) fall back progressively so the jobs list still works — the
+	// migration banner (checkMigrations) tells the user to deploy.
+	b, err := run(base + `, "TimeoutSeconds", "PostJobActionsJson"`)
 	if err != nil && strings.Contains(err.Error(), "does not exist") {
-		b, err = run(base) // 7 cols; the row padding below defaults TimeoutSeconds to 300
+		b, err = run(base + `, "TimeoutSeconds"`)
+		if err != nil && strings.Contains(err.Error(), "does not exist") {
+			b, err = run(base) // 7 cols; the row padding below defaults the newer fields
+		}
 	}
 	if err != nil {
 		return nil, "could not query jobs: " + err.Error()
@@ -34,7 +51,7 @@ func (m model) queryJobs(ctx context.Context) ([]jobRow, string) {
 			continue
 		}
 		f := strings.Split(ln, "\t")
-		for len(f) < 8 {
+		for len(f) < 9 {
 			f = append(f, "")
 		}
 		eg := "no"
@@ -49,7 +66,11 @@ func (m model) queryJobs(ctx context.Context) ([]jobRow, string) {
 		if to == "" {
 			to = "300"
 		}
-		rows = append(rows, jobRow{f[0], f[1], f[2], f[3], f[4], eg, upd, to})
+		acts := f[8]
+		if strings.TrimSpace(acts) == "" {
+			acts = "[]"
+		}
+		rows = append(rows, jobRow{f[0], f[1], f[2], f[3], f[4], eg, upd, to, acts})
 	}
 	return rows, ""
 }
@@ -97,8 +118,8 @@ func shortMig(id string) string {
 func (m model) runJobCmd(j jobRow) tea.Cmd {
 	mc := m
 	return func() tea.Msg {
-		if j.id == "" || j.tenant == "" {
-			return flashMsg("could not run job — missing id/tenant (refresh and retry)")
+		if !validUUID(j.id) || !validUUID(j.tenant) {
+			return flashMsg("could not run job — invalid id/tenant (refresh and retry)")
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
@@ -114,47 +135,127 @@ func (m model) runJobCmd(j jobRow) tea.Cmd {
 	}
 }
 
-// jobSetting is one toggleable (checkbox) job setting in the settings view ([s]). Each maps to a
-// boolean column on the jobs table; toggling persists immediately and takes effect on the next run.
+// jobSetting is one toggleable (checkbox) job setting in the settings view ([s]). It maps either to a
+// boolean column on the jobs table (column set) or to a post-job action kind held in the
+// PostJobActionsJson array column (action set). Toggling persists immediately and takes effect on the
+// next run.
 type jobSetting struct {
-	label, desc, column string
-	get                 func(jobRow) bool
+	label, desc, column, action string
+	get                         func(jobRow) bool
 }
+
+// postJobActionKinds are the action names recognised by the server (PostJobActionKind). The TUI only
+// ever writes values from this fixed list into PostJobActionsJson, so no untrusted text reaches SQL.
+var postJobActionKinds = []string{"HtmlReport", "Chart", "Csv", "RawBundle"}
 
 func jobSettings() []jobSetting {
 	return []jobSetting{
-		{"Allow network egress",
-			"Let this job's containers reach the network. When off, a deny-all NetworkPolicy isolates the run.",
-			"AllowNetworkEgress", func(j jobRow) bool { return j.egress == "yes" }},
+		{label: "Allow network egress",
+			desc:   "Let this job's containers reach the network. When off, a deny-all NetworkPolicy isolates the run.",
+			column: "AllowNetworkEgress", get: func(j jobRow) bool { return j.egress == "yes" }},
+		{label: "Post-job: HTML report",
+			desc:   "After each run, render the run's data as a styled HTML page (LLM-generated, deterministic fallback).",
+			action: "HtmlReport", get: jobHasAction("HtmlReport")},
+		{label: "Post-job: chart",
+			desc:   "After each run, draw the run's data as an inline-SVG chart.",
+			action: "Chart", get: jobHasAction("Chart")},
+		{label: "Post-job: CSV export",
+			desc:   "After each run, flatten the run's artifacts into a downloadable CSV.",
+			action: "Csv", get: jobHasAction("Csv")},
+		{label: "Post-job: raw bundle",
+			desc:   "After each run, store every produced output file as-is for download.",
+			action: "RawBundle", get: jobHasAction("RawBundle")},
 	}
 }
 
-type jobSettingMsg struct {
-	column string
-	val    bool
-	flash  string
+// jobHasAction reports whether a job's PostJobActionsJson array contains the given action kind.
+func jobHasAction(kind string) func(jobRow) bool {
+	return func(j jobRow) bool {
+		for _, a := range parseActions(j.postJobActions) {
+			if a == kind {
+				return true
+			}
+		}
+		return false
+	}
 }
 
-// toggleJobSettingCmd flips a boolean job setting in the jobs table via psql, off the UI thread.
+// parseActions decodes the PostJobActionsJson array, keeping only recognised kinds (defensive: ignores
+// anything unexpected so a stray value can never be echoed back into a write).
+func parseActions(s string) []string {
+	var raw []string
+	if strings.TrimSpace(s) == "" || json.Unmarshal([]byte(s), &raw) != nil {
+		return nil
+	}
+	var out []string
+	for _, r := range raw {
+		for _, k := range postJobActionKinds {
+			if r == k {
+				out = append(out, k)
+				break
+			}
+		}
+	}
+	return out
+}
+
+type jobSettingMsg struct {
+	column  string
+	val     bool
+	actions string // new PostJobActionsJson when this toggled a post-job action; "" otherwise
+	flash   string
+}
+
+// toggleJobSettingCmd flips a job setting in the jobs table via psql, off the UI thread — either a
+// boolean column or membership of a post-job action kind in PostJobActionsJson.
 func (m model) toggleJobSettingCmd(j jobRow, s jobSetting, val bool) tea.Cmd {
 	mc := m
 	return func() tea.Msg {
-		if j.id == "" {
-			return flashMsg("could not update setting — missing job id (refresh and retry)")
+		if !validUUID(j.id) {
+			return flashMsg("could not update setting — invalid job id (refresh and retry)")
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		b := "false"
+
+		var setClause string
 		state := "off"
-		if val {
-			b, state = "true", "on"
+		var newActions string
+		if s.action != "" {
+			// Rebuild the action set from the recognised kinds only, then add/remove this one.
+			has := map[string]bool{}
+			for _, a := range parseActions(j.postJobActions) {
+				has[a] = true
+			}
+			has[s.action] = val
+			if val {
+				state = "on"
+			}
+			var keep []string
+			for _, k := range postJobActionKinds { // stable, allowlisted order
+				if has[k] {
+					keep = append(keep, k)
+				}
+			}
+			if keep == nil {
+				keep = []string{}
+			}
+			enc, _ := json.Marshal(keep) // values are fixed identifiers — no quotes/metacharacters
+			newActions = string(enc)
+			setClause = `"PostJobActionsJson"='` + newActions + `'`
+		} else {
+			b := "false"
+			if val {
+				b, state = "true", "on"
+			}
+			setClause = `"` + s.column + `"=` + b
 		}
-		q := `UPDATE jobs SET "` + s.column + `"=` + b + `, "UpdatedAt"=now() WHERE "Id"='` + j.id + `'`
+
+		q := `UPDATE jobs SET ` + setClause + `, "UpdatedAt"=now() WHERE "Id"='` + j.id + `'`
 		if _, err := mc.kubectl(ctx, "-n", ns, "exec", "deploy/placecontext-db", "--",
 			"psql", "-U", "postgres", "-d", "placecontext", "-c", q); err != nil {
 			return flashMsg(s.label + " toggle failed: " + err.Error())
 		}
-		return jobSettingMsg{s.column, val, s.label + ": " + state}
+		return jobSettingMsg{column: s.column, val: val, actions: newActions, flash: s.label + ": " + state}
 	}
 }
 
@@ -175,8 +276,8 @@ type jobTimeoutMsg struct {
 func (m model) adjustTimeoutCmd(j jobRow, delta int) tea.Cmd {
 	mc := m
 	return func() tea.Msg {
-		if j.id == "" {
-			return flashMsg("could not update timeout — missing job id (refresh and retry)")
+		if !validUUID(j.id) {
+			return flashMsg("could not update timeout — invalid job id (refresh and retry)")
 		}
 		cur, err := strconv.Atoi(strings.TrimSpace(j.timeout))
 		if err != nil || cur <= 0 {

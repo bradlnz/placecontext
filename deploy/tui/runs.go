@@ -26,8 +26,8 @@ type runDetailMsg struct{ title, body string }
 func (m model) fetchRuns(j jobRow) tea.Cmd {
 	mc := m
 	return func() tea.Msg {
-		if j.id == "" {
-			return runsMsg{nil, "missing job id (refresh and retry)"}
+		if !validUUID(j.id) {
+			return runsMsg{nil, "invalid job id (refresh and retry)"}
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
@@ -90,8 +90,8 @@ func (m model) fetchRunDetail(r runRow) tea.Cmd {
 	mc := m
 	return func() tea.Msg {
 		title := "run " + shortID(r.id)
-		if r.id == "" {
-			return runDetailMsg{title, "missing run id"}
+		if !validUUID(r.id) {
+			return runDetailMsg{title, "invalid run id"}
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
@@ -121,6 +121,9 @@ func (m model) fetchRunDetail(r runRow) tea.Cmd {
 // MinIO for a run and renders them as a markdown section of portal links. The URLs are picked up by the
 // detail view's link extractor, so they open with [o]/[1-9]. Returns "" when there are none.
 func (m model) fetchRunArtifacts(ctx context.Context, runID string) string {
+	if !validUUID(runID) {
+		return ""
+	}
 	q := `SELECT "Kind","Title","Id" FROM job_run_artifacts WHERE "RunId"='` + runID + `' ORDER BY "CreatedAt"`
 	b, err := m.kubectl(ctx, "-n", ns, "exec", "deploy/placecontext-db", "--",
 		"psql", "-U", "postgres", "-d", "placecontext", "-At", "-F", "\t", "-c", q)

@@ -650,6 +650,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, m.runAction("adding a worker", "dev", "add-node", "--role", "agent")
 			}
 			return m, nil
+		case "u":
+			// Pull the latest source from git (fast-forward). Deploy separately to roll it out.
+			if !m.busy {
+				m.busy, m.busyVerb, m.view = true, "updating from git", viewAction
+				m.out.SetContent("")
+				return m, m.runAction("updating from git", "update")
+			}
+			return m, nil
 		case "g":
 			if !m.busy {
 				m.view = viewMetrics
@@ -752,7 +760,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case jobSettingMsg:
-		if msg.column == "AllowNetworkEgress" {
+		if msg.actions != "" {
+			m.setJob.postJobActions = msg.actions
+		} else if msg.column == "AllowNetworkEgress" {
 			if msg.val {
 				m.setJob.egress = "yes"
 			} else {
@@ -1188,7 +1198,7 @@ func (m model) footer() string {
 	case viewDash:
 		keys = []string{k("↑↓", "nav"), k("⏎", "logs/runs"), k("R", "run job"), k("s", "settings"), k("x", "kill job"),
 			k("/", "search"), k("g", "metrics"), k("m", "mcp"), k("p", "portal"), k("$", "subscribe"),
-			k("a", "add worker"), k("c", "theme"), k("r", "refresh"), k("q", "quit")}
+			k("a", "add worker"), k("u", "update"), k("c", "theme"), k("r", "refresh"), k("q", "quit")}
 	case viewRuns:
 		keys = []string{k("↑↓", "nav"), k("⏎", "open run"), k("r", "refresh"), k("b", "back"), k("q", "quit")}
 	case viewRunDetail:
