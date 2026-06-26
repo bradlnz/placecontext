@@ -48,7 +48,8 @@ public sealed class MinioObjectStore : IObjectStore, IDisposable
             InputStream = ms,
             ContentType = contentType,
             AutoCloseStream = false,
-            DisablePayloadSigning = true, // MinIO over plain HTTP — avoids chunked-signing incompatibilities
+            // NB: do NOT set DisablePayloadSigning — the SDK rejects it over plain HTTP
+            // ("must be sent over HTTPS"). Normal SigV4 payload signing works fine with MinIO on HTTP.
         }, ct);
     }
 
