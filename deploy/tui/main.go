@@ -88,6 +88,8 @@ const (
 	viewMcp
 	viewSearch
 	viewSettings
+	viewRuns      // run history for a selected job (list of runs)
+	viewRunDetail // one run's per-shard output, errors, and artifacts
 )
 
 // menuItem is a choice in the "add node" (or any future) list picker.
@@ -153,6 +155,11 @@ type model struct {
 	// per-job settings view (checkboxes)
 	setJob    jobRow // the job whose settings are being edited
 	setCursor int
+
+	// run-history drill-down: job → runs list → one run's per-shard detail
+	runsJob   jobRow
+	runs      []runRow
+	runCursor int
 
 	loading bool // a data fetch (logs/mcp/metrics/search) is in flight → show a loading box
 }
@@ -289,31 +296,7 @@ func (m model) fetchLogsFor(it selItem) tea.Cmd {
 			}
 			return logsMsg{title, string(b)}
 		}
-		if it.kind == "job" {
-			title := "job/" + it.name
-			esc := strings.ReplaceAll(it.name, "'", "''")
-			// recent runs (status table) + the latest run's actual output (map shard + reduce results)
-			runsQ := `SELECT "StartedAt","Status","FinishedAt" FROM job_runs WHERE "JobId" IN ` +
-				`(SELECT "Id" FROM jobs WHERE "Name"='` + esc + `') ORDER BY "StartedAt" DESC LIMIT 20`
-			runs, err := mc.kubectl(ctx, "-n", ns, "exec", "deploy/placecontext-db", "--",
-				"psql", "-U", "postgres", "-d", "placecontext", "-c", runsQ)
-			if err != nil {
-				return logsMsg{title, "could not fetch job runs: " + err.Error()}
-			}
-			outQ := `SELECT coalesce("ReduceResultJson", "ShardResultsJson") FROM job_runs WHERE "JobId" IN ` +
-				`(SELECT "Id" FROM jobs WHERE "Name"='` + esc + `') ORDER BY "StartedAt" DESC LIMIT 1`
-			out, _ := mc.kubectl(ctx, "-n", ns, "exec", "deploy/placecontext-db", "--",
-				"psql", "-U", "postgres", "-d", "placecontext", "-At", "-c", outQ)
-			runsTxt := strings.TrimSpace(string(runs))
-			if runsTxt == "" {
-				runsTxt = "(no runs yet for this job)"
-			}
-			outTxt := strings.TrimSpace(string(out))
-			if outTxt == "" {
-				outTxt = "(no output recorded for the latest run)"
-			}
-			return logsMsg{title, "recent runs:\n\n" + runsTxt + "\n\nlatest run output:\n\n" + outTxt}
-		}
+		// Jobs are handled by the dedicated run-history drill-down (viewRuns/viewRunDetail), not here.
 		title := "node/" + it.name
 		b, err := mc.kubectl(ctx, "describe", "node", it.name)
 		if err != nil {
@@ -608,6 +591,167 @@ func (m model) adjustTimeoutCmd(j jobRow, delta int) tea.Cmd {
 	}
 }
 
+// ── run-history drill-down ──────────────────────────────────────────────────────────────────────
+// runRow is one row in the runs list for a job.
+type runRow struct{ id, status, started, finished, duration string }
+
+type runsMsg struct {
+	rows []runRow
+	err  string
+}
+type runDetailMsg struct{ title, body string }
+
+// fetchRuns reads the recent runs for a job (newest first) from job_runs via psql.
+func (m model) fetchRuns(j jobRow) tea.Cmd {
+	mc := m
+	return func() tea.Msg {
+		if j.id == "" {
+			return runsMsg{nil, "missing job id (refresh and retry)"}
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		// EXTRACT(EPOCH …) gives a numeric duration we format client-side; NULL finished ⇒ still running.
+		q := `SELECT "Id","Status",` +
+			`to_char("StartedAt",'YYYY-MM-DD HH24:MI:SS'),` +
+			`coalesce(to_char("FinishedAt",'YYYY-MM-DD HH24:MI:SS'),''),` +
+			`coalesce(round(EXTRACT(EPOCH FROM ("FinishedAt"-"StartedAt")))::text,'') ` +
+			`FROM job_runs WHERE "JobId"='` + j.id + `' ORDER BY "StartedAt" DESC LIMIT 50`
+		b, err := mc.kubectl(ctx, "-n", ns, "exec", "deploy/placecontext-db", "--",
+			"psql", "-U", "postgres", "-d", "placecontext", "-At", "-F", "\t", "-c", q)
+		if err != nil {
+			return runsMsg{nil, "could not query runs: " + err.Error()}
+		}
+		var rows []runRow
+		for _, ln := range strings.Split(strings.TrimSpace(string(b)), "\n") {
+			if ln == "" {
+				continue
+			}
+			f := strings.Split(ln, "\t")
+			for len(f) < 5 {
+				f = append(f, "")
+			}
+			dur := f[4]
+			if dur != "" {
+				dur += "s"
+			} else if f[3] == "" {
+				dur = "running…"
+			}
+			rows = append(rows, runRow{f[0], f[1], f[2], f[3], dur})
+		}
+		return runsMsg{rows, ""}
+	}
+}
+
+// shardJson / reduceJson / artifactJson mirror the camelCase JSON persisted by EfJobRunRepository.
+type artifactJson struct {
+	Name    string `json:"name"`
+	Content string `json:"content"`
+}
+type shardJson struct {
+	Index     int            `json:"index"`
+	ExitCode  int            `json:"exitCode"`
+	Outcome   string         `json:"outcome"`
+	Artifact  *string        `json:"artifact"`
+	Log       *string        `json:"log"`
+	Artifacts []artifactJson `json:"artifacts"`
+}
+type reduceJson struct {
+	ExitCode  int            `json:"exitCode"`
+	Succeeded bool           `json:"succeeded"`
+	Artifact  *string        `json:"artifact"`
+	Log       *string        `json:"log"`
+	Artifacts []artifactJson `json:"artifacts"`
+}
+
+// fetchRunDetail reads one run's shard + reduce results and formats them into a scrollable report:
+// per-shard exit code, outcome, the combined stdout/stderr (console logs + errors), and artifacts.
+func (m model) fetchRunDetail(r runRow) tea.Cmd {
+	mc := m
+	return func() tea.Msg {
+		title := "run " + shortID(r.id)
+		if r.id == "" {
+			return runDetailMsg{title, "missing run id"}
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		q := `SELECT coalesce("ShardResultsJson",'[]'), coalesce("ReduceResultJson",'') ` +
+			`FROM job_runs WHERE "Id"='` + r.id + `'`
+		b, err := mc.kubectl(ctx, "-n", ns, "exec", "deploy/placecontext-db", "--",
+			"psql", "-U", "postgres", "-d", "placecontext", "-At", "-F", "\x1f", "-c", q)
+		if err != nil {
+			return runDetailMsg{title, "could not load run: " + err.Error()}
+		}
+		parts := strings.SplitN(strings.TrimRight(string(b), "\n"), "\x1f", 2)
+		shardsJSON := ""
+		reduceJSON := ""
+		if len(parts) > 0 {
+			shardsJSON = parts[0]
+		}
+		if len(parts) > 1 {
+			reduceJSON = parts[1]
+		}
+		return runDetailMsg{title, renderRunDetail(r, shardsJSON, reduceJSON)}
+	}
+}
+
+// renderRunDetail builds the markdown-ish body for a single run from its persisted JSON.
+func renderRunDetail(r runRow, shardsJSON, reduceJSON string) string {
+	var b strings.Builder
+	b.WriteString("# run " + shortID(r.id) + "\n\n")
+	b.WriteString("status: " + r.status + "   started: " + r.started)
+	if r.duration != "" {
+		b.WriteString("   took: " + r.duration)
+	}
+	b.WriteString("\n\n")
+
+	var shards []shardJson
+	if err := json.Unmarshal([]byte(shardsJSON), &shards); err != nil {
+		b.WriteString("could not parse shard results: " + err.Error() + "\n")
+	} else if len(shards) == 0 {
+		b.WriteString("_(no shards recorded for this run)_\n")
+	} else {
+		for _, s := range shards {
+			b.WriteString(fmt.Sprintf("## shard %d — %s (exit %d)\n\n", s.Index, s.Outcome, s.ExitCode))
+			b.WriteString(renderStream("console (stdout/stderr)", s.Log))
+			b.WriteString(renderStream("artifact", s.Artifact))
+			for _, a := range s.Artifacts {
+				c := a.Content
+				b.WriteString(renderStream("file: "+a.Name, &c))
+			}
+		}
+	}
+
+	if strings.TrimSpace(reduceJSON) != "" {
+		var rd reduceJson
+		if err := json.Unmarshal([]byte(reduceJSON), &rd); err == nil {
+			state := "failed"
+			if rd.Succeeded {
+				state = "succeeded"
+			}
+			b.WriteString(fmt.Sprintf("## reduce — %s (exit %d)\n\n", state, rd.ExitCode))
+			b.WriteString(renderStream("console (stdout/stderr)", rd.Log))
+			b.WriteString(renderStream("artifact", rd.Artifact))
+		}
+	}
+	return b.String()
+}
+
+// renderStream prints a labelled fenced block, or a dim "none" note when empty.
+func renderStream(label string, content *string) string {
+	if content == nil || strings.TrimSpace(*content) == "" {
+		return "_" + label + ": (none)_\n\n"
+	}
+	return "**" + label + "**\n\n```\n" + strings.TrimRight(*content, "\n") + "\n```\n\n"
+}
+
+func shortID(id string) string {
+	id = strings.ReplaceAll(id, "-", "")
+	if len(id) > 8 {
+		return id[:8]
+	}
+	return id
+}
+
 // addNodeMenu lists the "add node" choices (dev k3d nodes + the prod join command).
 func addNodeMenu() []menuItem {
 	return []menuItem{
@@ -773,11 +917,16 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.busy {
 				return m, nil
 			}
-			// confirm and the logs detail return to wherever they were opened from; everything else
-			// returns to the dashboard.
-			if m.view == viewConfirm || m.view == viewLogs {
+			// confirm and the logs detail return to wherever they were opened from; the run drill-down
+			// steps back one level (detail → list → dashboard); everything else returns to the dashboard.
+			switch {
+			case m.view == viewConfirm || m.view == viewLogs:
 				m.view = m.prevView
-			} else {
+			case m.view == viewRunDetail:
+				m.view = viewRuns
+			case m.view == viewRuns:
+				m.view = viewDash
+			default:
 				m.view = viewDash
 			}
 			return m, nil
@@ -878,6 +1027,24 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
+		// run-history list navigation (drill into a run with ⏎, handled in the main enter case)
+		if m.view == viewRuns {
+			switch key {
+			case "up", "k":
+				if m.runCursor > 0 {
+					m.runCursor--
+				}
+			case "down", "j":
+				if m.runCursor < len(m.runs)-1 {
+					m.runCursor++
+				}
+			case "r":
+				m.loading = true
+				return m, m.fetchRuns(m.runsJob)
+			}
+			return m, nil
+		}
+
 		switch key {
 		case "up", "k":
 			if m.view == viewDash && m.cursor > 0 {
@@ -902,11 +1069,29 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "enter":
 			if m.view == viewDash && m.cursor < len(m.sel) {
 				it := m.sel[m.cursor]
+				// Jobs drill into run history (list → per-run detail); pods/nodes show logs/describe.
+				if it.kind == "job" {
+					for _, j := range m.state.jobs {
+						if j.name == it.name {
+							m.runsJob, m.runCursor, m.view = j, 0, viewRuns
+							m.loading = true
+							return m, m.fetchRuns(j)
+						}
+					}
+					return m, nil
+				}
 				m.prevView = viewDash
 				m.view = viewLogs
 				m.logs.SetContent("")
 				m.loading = true
 				return m, m.fetchLogsFor(it)
+			}
+			// Runs list → open the highlighted run's detail.
+			if m.view == viewRuns && m.runCursor < len(m.runs) {
+				m.view = viewRunDetail
+				m.logs.SetContent("")
+				m.loading = true
+				return m, m.fetchRunDetail(m.runs[m.runCursor])
 			}
 		case "a":
 			// One keypress adds a worker computer to the cluster — no jargon, no choices.
@@ -1033,6 +1218,24 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.flash = msg.flash
 		return m, m.fetchState()
 
+	case runsMsg:
+		m.loading = false
+		m.runs = msg.rows
+		if msg.err != "" {
+			m.flash = msg.err
+		}
+		if m.runCursor >= len(m.runs) {
+			m.runCursor = max(0, len(m.runs)-1)
+		}
+		return m, nil
+
+	case runDetailMsg:
+		m.loading = false
+		m.logTitle = msg.title
+		m.logs.SetContent(renderMarkdown(msg.body, m.logs.Width))
+		m.logs.GotoTop()
+		return m, nil
+
 	case metricsTickMsg:
 		if m.view != viewMetrics {
 			return m, nil // stop sampling when the metrics view isn't shown
@@ -1122,7 +1325,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// route scrolling to the active pane
 	var cmd tea.Cmd
 	switch m.view {
-	case viewLogs:
+	case viewLogs, viewRunDetail:
 		m.logs, cmd = m.logs.Update(msg)
 	case viewAction:
 		m.out, cmd = m.out.Update(msg)
@@ -1176,6 +1379,11 @@ func (m model) View() string {
 		b.WriteString(m.searchView())
 	case viewSettings:
 		b.WriteString(m.settingsView())
+	case viewRuns:
+		b.WriteString(m.runsView())
+	case viewRunDetail:
+		b.WriteString(titleStyle.Render(" "+m.logTitle+" ") + dimStyle.Render("  job: "+m.runsJob.name) + "\n")
+		b.WriteString(boxStyle.Render(m.logs.View()) + "\n")
 	default:
 		b.WriteString(m.dashboard())
 	}
@@ -1368,6 +1576,39 @@ func (m model) searchView() string {
 	return b.String()
 }
 
+// runsView lists the runs for the selected job; ⏎ opens a run's per-shard detail.
+func (m model) runsView() string {
+	var b strings.Builder
+	b.WriteString(titleStyle.Render(fmt.Sprintf(" runs: %s (%d) ", m.runsJob.name, len(m.runs))) + "\n\n")
+	if len(m.runs) == 0 {
+		b.WriteString("  " + dimStyle.Render("no runs yet — press [R] on the dashboard to queue one.") + "\n")
+		return b.String()
+	}
+	b.WriteString("  " + headStyle.Render(fmt.Sprintf("%-10s %-10s %-21s %-10s", "RUN", "STATUS", "STARTED", "TOOK")) + "\n")
+	for i, r := range m.runs {
+		st := r.status
+		switch strings.ToLower(r.status) {
+		case "succeeded", "success", "completed":
+			st = okStyle.Render(r.status)
+		case "failed", "error":
+			st = errStyle.Render(r.status)
+		default:
+			st = warnStyle.Render(r.status)
+		}
+		line := fmt.Sprintf("%-10s %-19s %-21s %-10s", shortID(r.id), r.status, r.started, r.duration)
+		if i == m.runCursor {
+			b.WriteString(selStyle.Render("❯ "+line) + "\n")
+		} else {
+			// recompose with the colourised status so columns still align
+			b.WriteString("  " + fmt.Sprintf("%-10s ", shortID(r.id)) + st +
+				strings.Repeat(" ", max(1, 19-len(r.status))) +
+				fmt.Sprintf("%-21s %-10s", r.started, r.duration) + "\n")
+		}
+	}
+	b.WriteString("\n  " + dimStyle.Render("⏎ open run · per-shard console output, errors & artifacts") + "\n")
+	return b.String()
+}
+
 func (m model) mcpView() string {
 	var b strings.Builder
 	b.WriteString(titleStyle.Render(fmt.Sprintf(" MCP / tool calls (%d) ", len(m.mcp))) + "\n\n")
@@ -1516,9 +1757,13 @@ func (m model) footer() string {
 	var keys []string
 	switch m.view {
 	case viewDash:
-		keys = []string{k("↑↓", "nav"), k("⏎", "logs"), k("R", "run job"), k("s", "settings"), k("x", "kill job"),
+		keys = []string{k("↑↓", "nav"), k("⏎", "logs/runs"), k("R", "run job"), k("s", "settings"), k("x", "kill job"),
 			k("/", "search"), k("g", "metrics"), k("m", "mcp"), k("p", "portal"), k("$", "subscribe"),
 			k("a", "add worker"), k("c", "theme"), k("r", "refresh"), k("q", "quit")}
+	case viewRuns:
+		keys = []string{k("↑↓", "nav"), k("⏎", "open run"), k("r", "refresh"), k("b", "back"), k("q", "quit")}
+	case viewRunDetail:
+		keys = []string{k("↑↓", "scroll"), k("b", "back"), k("q", "quit")}
 	case viewSettings:
 		keys = []string{k("↑↓", "nav"), k("space", "toggle"), k("←→", "timeout"), k("b", "back"), k("q", "quit")}
 	case viewConfirm:
