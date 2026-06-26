@@ -52,7 +52,7 @@ func TestKeyDispatchSwitchesViews(t *testing.T) {
 		key  string
 		want view
 	}{
-		{"z", viewBrain},
+		{"g", viewMetrics},
 		{"a", viewMenu},
 		{"x", viewConfirm}, // kill the selected row → confirmation gate
 	}
@@ -139,9 +139,9 @@ func TestEnterOnRowOpensLogs(t *testing.T) {
 
 func TestBackReturnsToDashboard(t *testing.T) {
 	m := withState(initialModel())
-	m = press(m, "z")
-	if m.view != viewBrain {
-		t.Fatalf("expected brain view")
+	m = press(m, "g")
+	if m.view != viewMetrics {
+		t.Fatalf("expected metrics view")
 	}
 	m = press(m, "b")
 	if m.view != viewDash {
@@ -181,17 +181,36 @@ func TestMintPortalToken(t *testing.T) {
 	}
 }
 
-func TestBrainGeneratesPoints(t *testing.T) {
-	if n := len(generateBrain()); n < 500 {
-		t.Errorf("brain point cloud too small: %d points", n)
+func TestMetricsParsing(t *testing.T) {
+	if got := parseCPU("250m"); got != 250 {
+		t.Errorf("parseCPU(250m) = %v, want 250", got)
+	}
+	if got := parseCPU("2"); got != 2000 {
+		t.Errorf("parseCPU(2) = %v, want 2000", got)
+	}
+	if got := parseMem("512Mi"); got != 512 {
+		t.Errorf("parseMem(512Mi) = %v, want 512", got)
+	}
+	if got := parseMem("1Gi"); got != 1024 {
+		t.Errorf("parseMem(1Gi) = %v, want 1024", got)
 	}
 }
 
-func TestRenderBrainProducesFrame(t *testing.T) {
-	m := initialModel()
-	m.w, m.h = 80, 30
-	out := m.renderBrain(70, 22)
+func TestLineChartRenders(t *testing.T) {
+	series := []float64{1, 3, 2, 5, 4, 6, 2}
+	out := lineChart(series, 40, 6, 2)
 	if len(out) == 0 {
-		t.Fatal("renderBrain returned empty frame")
+		t.Fatal("lineChart produced empty output")
+	}
+}
+
+func TestMetricsView(t *testing.T) {
+	m := withState(initialModel())
+	m.w, m.h = 90, 30
+	m.cpuHist = []float64{5, 8, 6, 10, 9}
+	m.memHist = []float64{100, 120, 110, 130}
+	out := m.metricsView()
+	if !strings.Contains(out, "CPU") || !strings.Contains(out, "Memory") {
+		t.Errorf("metrics view missing CPU/Memory charts:\n%s", out)
 	}
 }

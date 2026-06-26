@@ -22,6 +22,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -56,7 +57,6 @@ var (
 	keyStyle    = lipgloss.NewStyle().Foreground(cTeal).Bold(true)
 	headStyle   = lipgloss.NewStyle().Foreground(cGray).Bold(true).Underline(true)
 	selStyle    = lipgloss.NewStyle().Background(lipgloss.Color("24")).Foreground(lipgloss.Color("231")).Bold(true)
-	brainStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("141")).Bold(true)
 )
 
 // ── data model ──────────────────────────────────────────────────────────────────────────────────
@@ -91,7 +91,7 @@ const (
 	viewLogs
 	viewAction
 	viewMenu
-	viewBrain
+	viewMetrics
 	viewConfirm
 	viewMcp
 )
@@ -130,12 +130,10 @@ type model struct {
 
 	flash string // transient one-line notice under the health line
 
-	// 3D brain view
-	brainPts  []pt3
-	brainAngX float64
-	brainAngY float64
-	brainZoom float64
-	brainSpin bool
+	// metrics view (line graphs)
+	cpuHist    []float64 // total CPU millicores across workload pods, over time
+	memHist    []float64 // total memory MiB, over time
+	metricsErr string
 
 	// destructive-action confirmation
 	prevView    view
@@ -155,8 +153,6 @@ type model struct {
 	mcpErr string
 }
 
-type pt3 struct{ x, y, z float64 }
-
 // ── messages ──────────────────────────────────────────────────────────────────────────────────
 type tickMsg time.Time
 type stateMsg clusterState
@@ -167,11 +163,15 @@ type actionDoneMsg struct {
 }
 
 type flashMsg string
-type brainTickMsg time.Time
+type metricsMsg struct {
+	cpu, mem float64
+	err      string
+}
+type metricsTickMsg time.Time
 type clusterTickMsg time.Time
 
-func brainTick() tea.Cmd {
-	return tea.Tick(80*time.Millisecond, func(t time.Time) tea.Msg { return brainTickMsg(t) })
+func metricsTick() tea.Cmd {
+	return tea.Tick(2*time.Second, func(t time.Time) tea.Msg { return metricsTickMsg(t) })
 }
 
 func clusterTick() tea.Cmd {
@@ -565,9 +565,6 @@ func initialModel() model {
 		pctl:       findPctl(),
 		out:        viewport.New(80, 14),
 		logs:       viewport.New(80, 14),
-		brainPts:   generateBrain(),
-		brainZoom:  1.0,
-		brainSpin:  true,
 		clZoom:     1.0,
 		clSpin:     true,
 	}
@@ -639,27 +636,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		// 3D brain — steer with arrows, +/- zoom, space toggles auto-spin
-		if m.view == viewBrain {
-			switch key {
-			case "left", "h":
-				m.brainAngY -= 0.2
-			case "right", "l":
-				m.brainAngY += 0.2
-			case "up", "k":
-				m.brainAngX -= 0.2
-			case "down", "j":
-				m.brainAngX += 0.2
-			case "+", "=":
-				m.brainZoom *= 1.1
-			case "-", "_":
-				m.brainZoom /= 1.1
-			case " ":
-				m.brainSpin = !m.brainSpin
-			}
-			return m, nil
-		}
-
 		switch key {
 		case "up", "k":
 			if m.view == viewDash && m.cursor > 0 {
@@ -693,10 +669,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.menu, m.menuTitle, m.menuCursor, m.view = addNodeMenu(), "Add node", 0, viewMenu
 			}
 			return m, nil
-		case "z":
+		case "g":
 			if !m.busy {
-				m.view = viewBrain
-				return m, brainTick()
+				m.view = viewMetrics
+				return m, tea.Batch(m.fetchMetrics(), metricsTick())
 			}
 			return m, nil
 		case "p":
@@ -752,14 +728,21 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.flash = string(msg)
 		return m, nil
 
-	case brainTickMsg:
-		if m.view != viewBrain {
-			return m, nil // leaving the brain view stops the animation loop
+	case metricsTickMsg:
+		if m.view != viewMetrics {
+			return m, nil // stop sampling when the metrics view isn't shown
 		}
-		if m.brainSpin {
-			m.brainAngY += 0.06
+		return m, tea.Batch(m.fetchMetrics(), metricsTick())
+
+	case metricsMsg:
+		if msg.err != "" {
+			m.metricsErr = msg.err
+			return m, nil
 		}
-		return m, brainTick()
+		m.metricsErr = ""
+		m.cpuHist = appendCap(m.cpuHist, msg.cpu, 240)
+		m.memHist = appendCap(m.memHist, msg.mem, 240)
+		return m, nil
 
 	case clusterTickMsg:
 		// Keep the loop alive across view changes (returning nil would stop it for good, so
@@ -856,8 +839,8 @@ func (m model) View() string {
 		b.WriteString(boxStyle.Render(m.out.View()) + "\n")
 	case viewMenu:
 		b.WriteString(m.menuView())
-	case viewBrain:
-		b.WriteString(m.brainView())
+	case viewMetrics:
+		b.WriteString(m.metricsView())
 	case viewConfirm:
 		b.WriteString(m.confirmView())
 	case viewMcp:
@@ -1349,111 +1332,147 @@ func (m model) clusterPanel(rows int) string {
 	return b.String()
 }
 
-// generateBrain builds a 3D point cloud shaped like a two-lobed brain: two folded
-// ellipsoids set side by side with a central fissure. Points are sampled on the
-// surface and modulated by sinusoidal "gyri" so the silhouette reads as a brain.
-func generateBrain() []pt3 {
-	var pts []pt3
-	const (
-		uSteps = 90
-		vSteps = 44
-	)
-	for i := 0; i < uSteps; i++ {
-		theta := math.Pi * float64(i) / float64(uSteps-1) // 0..π (pole to pole)
-		for j := 0; j < vSteps; j++ {
-			phi := 2 * math.Pi * float64(j) / float64(vSteps) // 0..2π
-			// folds: higher frequency around the equator → gyri/sulci
-			fold := 0.13*math.Sin(7*phi)*math.Sin(5*theta) + 0.06*math.Cos(9*theta)
-			r := 1.0 + fold
-			x := r * math.Sin(theta) * math.Cos(phi)
-			y := r * math.Cos(theta) * 0.78 // flatten top-to-bottom
-			z := r * math.Sin(theta) * math.Sin(phi)
-			// two lobes offset along X with a fissure gap in the middle
-			for _, side := range []float64{-1, 1} {
-				px := x*0.62 + side*0.62
-				if side*px < 0.06 { // carve the central fissure
-					continue
-				}
-				pts = append(pts, pt3{px, y, z * 0.95})
-			}
-		}
+// appendCap appends v to s, keeping at most the last n samples.
+func appendCap(s []float64, v float64, n int) []float64 {
+	s = append(s, v)
+	if len(s) > n {
+		s = s[len(s)-n:]
 	}
-	// a short brain-stem so it's unmistakable
-	for k := 0; k < 60; k++ {
-		t := float64(k) / 59.0
-		pts = append(pts, pt3{0, -0.8 - t*0.7, -0.1 + 0.05*math.Sin(t*12)})
-	}
-	return pts
+	return s
 }
 
-const brainShades = ".,-~:;=!*#$@"
+// fetchMetrics sums CPU (millicores) and memory (MiB) across the namespace's pods via `kubectl top`.
+func (m model) fetchMetrics() tea.Cmd {
+	mc := m
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+		defer cancel()
+		b, err := mc.kubectl(ctx, "-n", ns, "top", "pods", "--no-headers")
+		if err != nil {
+			return metricsMsg{err: "metrics unavailable (is metrics-server up?): " + err.Error()}
+		}
+		var cpu, mem float64
+		for _, ln := range strings.Split(strings.TrimSpace(string(b)), "\n") {
+			f := strings.Fields(ln)
+			if len(f) < 3 {
+				continue
+			}
+			cpu += parseCPU(f[1])
+			mem += parseMem(f[2])
+		}
+		return metricsMsg{cpu: cpu, mem: mem}
+	}
+}
 
-// renderBrain projects the rotated point cloud into an ASCII frame with a depth buffer.
-func (m model) renderBrain(w, h int) string {
+// parseCPU turns a kubectl cpu quantity ("10m", "1") into millicores.
+func parseCPU(s string) float64 {
+	if strings.HasSuffix(s, "m") {
+		v, _ := strconv.ParseFloat(strings.TrimSuffix(s, "m"), 64)
+		return v
+	}
+	v, _ := strconv.ParseFloat(s, 64)
+	return v * 1000
+}
+
+// parseMem turns a kubectl memory quantity ("126Mi", "1Gi", "500Ki") into MiB.
+func parseMem(s string) float64 {
+	switch {
+	case strings.HasSuffix(s, "Gi"):
+		v, _ := strconv.ParseFloat(strings.TrimSuffix(s, "Gi"), 64)
+		return v * 1024
+	case strings.HasSuffix(s, "Mi"):
+		v, _ := strconv.ParseFloat(strings.TrimSuffix(s, "Mi"), 64)
+		return v
+	case strings.HasSuffix(s, "Ki"):
+		v, _ := strconv.ParseFloat(strings.TrimSuffix(s, "Ki"), 64)
+		return v / 1024
+	default:
+		v, _ := strconv.ParseFloat(s, 64)
+		return v / (1024 * 1024)
+	}
+}
+
+// lineChart renders a time series as a connected line graph (w×h cells), coloured by `color`.
+func lineChart(series []float64, w, h, color int) string {
+	cv := newCanvas(w, h)
+	if len(series) == 0 {
+		return cv.String()
+	}
+	s := series
+	if len(s) > w {
+		s = s[len(s)-w:]
+	}
+	maxv := 0.0
+	for _, v := range s {
+		if v > maxv {
+			maxv = v
+		}
+	}
+	if maxv <= 0 {
+		maxv = 1
+	}
+	yOf := func(v float64) int {
+		y := int(float64(h-1) - (v/maxv)*float64(h-1))
+		if y < 0 {
+			y = 0
+		} else if y >= h {
+			y = h - 1
+		}
+		return y
+	}
+	px, py := -1, -1
+	for i, v := range s {
+		x := w - len(s) + i
+		y := yOf(v)
+		if px >= 0 {
+			cv.line(px, py, x, y, color)
+		} else {
+			cv.set(x, y, '·', color)
+		}
+		px, py = x, y
+	}
+	return cv.String()
+}
+
+func lastOf(s []float64) float64 {
+	if len(s) == 0 {
+		return 0
+	}
+	return s[len(s)-1]
+}
+func maxOf(s []float64) float64 {
+	m := 0.0
+	for _, v := range s {
+		if v > m {
+			m = v
+		}
+	}
+	return m
+}
+
+func (m model) metricsView() string {
+	var b strings.Builder
+	b.WriteString(titleStyle.Render(" metrics ") + dimStyle.Render("  live CPU + memory across the workload (kubectl top)") + "\n")
+	if !m.state.reach {
+		return b.String() + "  " + warnStyle.Render("● no cluster") + "\n"
+	}
+	if m.metricsErr != "" {
+		return b.String() + "  " + errStyle.Render(m.metricsErr) + "\n"
+	}
+	w := m.w - 4
 	if w < 20 {
-		w = 70
+		w = 76
 	}
-	if h < 10 {
-		h = 22
+	chartH := (m.h - 8) / 2
+	if chartH < 3 {
+		chartH = 3
+	} else if chartH > 12 {
+		chartH = 12
 	}
-	zbuf := make([]float64, w*h)
-	cbuf := make([]byte, w*h)
-	for i := range cbuf {
-		cbuf[i] = ' '
-	}
-	sinA, cosA := math.Sin(m.brainAngX), math.Cos(m.brainAngX)
-	sinB, cosB := math.Sin(m.brainAngY), math.Cos(m.brainAngY)
-
-	const dist = 4.0
-	scale := m.brainZoom * float64(h) * 0.62
-	cx, cy := float64(w)/2, float64(h)/2
-
-	for _, p := range m.brainPts {
-		// rotate around Y then X
-		x1 := p.x*cosB + p.z*sinB
-		z1 := -p.x*sinB + p.z*cosB
-		y1 := p.y*cosA - z1*sinA
-		z2 := p.y*sinA + z1*cosA
-		ooz := 1.0 / (z2 + dist)
-		sx := int(cx + scale*x1*ooz*1.9) // ×1.9: terminal cells are ~2:1 tall
-		sy := int(cy - scale*y1*ooz)
-		if sx < 0 || sx >= w || sy < 0 || sy >= h {
-			continue
-		}
-		idx := sy*w + sx
-		if ooz > zbuf[idx] {
-			zbuf[idx] = ooz
-			lum := (ooz - 0.18) / 0.16 // map depth → brightness
-			si := int(lum * float64(len(brainShades)-1))
-			if si < 0 {
-				si = 0
-			}
-			if si >= len(brainShades) {
-				si = len(brainShades) - 1
-			}
-			cbuf[idx] = brainShades[si]
-		}
-	}
-
-	var b strings.Builder
-	for y := 0; y < h; y++ {
-		b.WriteString(brainStyle.Render(string(cbuf[y*w : (y+1)*w])))
-		b.WriteByte('\n')
-	}
-	return b.String()
-}
-
-func (m model) brainView() string {
-	var b strings.Builder
-	spin := "on"
-	if !m.brainSpin {
-		spin = "off"
-	}
-	b.WriteString(titleStyle.Render(" PlaceContext brain — 3D ") +
-		dimStyle.Render(fmt.Sprintf("  spin:%s  zoom:%.1f×  (←→↑↓ rotate · +/- zoom · space spin)", spin, m.brainZoom)) + "\n")
-	w := m.w - 2
-	h := m.h - 12
-	b.WriteString(m.renderBrain(w, h))
+	b.WriteString("  " + scenePalette[2].Render(fmt.Sprintf("CPU  cur %.0fm  peak %.0fm", lastOf(m.cpuHist), maxOf(m.cpuHist))) + "\n")
+	b.WriteString(lineChart(m.cpuHist, w, chartH, 2))
+	b.WriteString("  " + scenePalette[1].Render(fmt.Sprintf("Memory  cur %.0fMi  peak %.0fMi", lastOf(m.memHist), maxOf(m.memHist))) + "\n")
+	b.WriteString(lineChart(m.memHist, w, chartH, 1))
 	return b.String()
 }
 
@@ -1506,17 +1525,15 @@ func (m model) footer() string {
 	var keys []string
 	switch m.view {
 	case viewDash:
-		keys = []string{k("↑↓", "nav"), k("⏎", "logs"), k("x", "kill"), k("m", "mcp"), k("p", "portal"),
-			k("a", "add node"), k("z", "brain"), k("space", "spin"), k("+/-", "zoom"),
+		keys = []string{k("↑↓", "nav"), k("⏎", "logs"), k("x", "kill"), k("g", "metrics"), k("m", "mcp"),
+			k("p", "portal"), k("a", "add node"), k("space", "spin"), k("+/-", "zoom"),
 			k("u", "up"), k("d", "down"), k("r", "refresh"), k("q", "quit")}
 	case viewConfirm:
 		keys = []string{k("y", "confirm"), k("n", "cancel"), k("q", "quit")}
-	case viewMcp:
+	case viewMcp, viewMetrics:
 		keys = []string{k("r", "refresh"), k("b", "back"), k("q", "quit")}
 	case viewMenu:
 		keys = []string{k("↑↓", "nav"), k("⏎", "select"), k("b", "back"), k("q", "quit")}
-	case viewBrain:
-		keys = []string{k("←→↑↓", "rotate"), k("+/-", "zoom"), k("space", "spin"), k("b", "back"), k("q", "quit")}
 	default:
 		keys = []string{k("r", "refresh"), k("b", "back"), k("q", "quit")}
 	}
