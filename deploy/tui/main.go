@@ -1238,9 +1238,51 @@ func main() {
 		fmt.Printf("kubeconfig=%s\nsigningKey.len=%d\ntarget=%s\n", m.kubeconfig, len(key), target)
 		return
 	}
+	// If a mesh is configured (PCTL_MESH_CONTROL + PCTL_MESH_AUTHKEY) and this isn't the host running
+	// the cluster, join the tailnet so a remote operator can see jobs/logs over the mesh; disconnect on
+	// exit. Ephemeral keys mean the node auto-deregisters.
+	if joinedMesh() {
+		defer leaveMesh()
+	}
 	p := tea.NewProgram(initialModel(), tea.WithAltScreen())
 	if _, err := p.Run(); err != nil {
 		fmt.Fprintln(os.Stderr, "pctl-tui error:", err)
 		os.Exit(1)
 	}
+}
+
+// joinedMesh brings this machine onto the self-hosted mesh (Headscale/Tailscale) for the session.
+// No-op (returns false) when no mesh is configured, tailscale is absent, or we're the cluster host.
+func joinedMesh() bool {
+	ctrl, key := os.Getenv("PCTL_MESH_CONTROL"), os.Getenv("PCTL_MESH_AUTHKEY")
+	if ctrl == "" || key == "" || !commandExists("tailscale") || isClusterHost() {
+		return false
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "tailscale", "up",
+		"--login-server="+ctrl, "--authkey="+key, "--hostname=pctl-tui", "--accept-routes")
+	cmd.Env = childEnv()
+	if err := cmd.Run(); err != nil {
+		fmt.Fprintln(os.Stderr, "mesh: could not join ("+err.Error()+") — continuing without it")
+		return false
+	}
+	fmt.Fprintln(os.Stderr, "mesh: joined "+ctrl)
+	return true
+}
+
+func leaveMesh() {
+	cmd := exec.Command("tailscale", "down")
+	cmd.Env = childEnv()
+	_ = cmd.Run()
+}
+
+// isClusterHost reports whether this machine hosts the cluster (a local k3d cluster or a running k3s
+// server) — in which case it's already reachable and shouldn't auto-join the mesh as a viewer.
+func isClusterHost() bool {
+	out, err := exec.Command("k3d", "cluster", "list", "-o", "json").Output()
+	if err == nil && strings.Contains(string(out), "\"name\":\""+cluster+"\"") {
+		return true
+	}
+	return false
 }
