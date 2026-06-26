@@ -75,6 +75,13 @@ apiVersion: v1
 kind: Service
 metadata:
   name: placecontext
+  annotations:
+    # Sticky sessions: Blazor Server interactive circuits (SignalR over WebSocket/long-poll) are stateful
+    # and pinned to one pod; without affinity a reconnect hits another replica → "No Connection with that
+    # ID: 404" and the interactive UI (e.g. clickable cards) breaks. Traefik pins each client by cookie.
+    traefik.ingress.kubernetes.io/service.sticky.cookie: "true"
+    traefik.ingress.kubernetes.io/service.sticky.cookie.name: "placecontext_affinity"
+    traefik.ingress.kubernetes.io/service.sticky.cookie.httponly: "true"
 spec:
   selector: { app: placecontext }
   ports:
