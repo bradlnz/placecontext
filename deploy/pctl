@@ -253,6 +253,23 @@ cmd_db() {
   esac
 }
 
+# Download a MinIO object to a temp file and open it (e.g. a rendered report HTML).
+cmd_minio_open() {
+  local path="${1:-}"
+  [ -n "$path" ] || die "usage: pctl minio open <bucket/key>"
+  resolve_ctx
+  local base; base="$(basename "$path")"
+  local dst="${TMPDIR:-/tmp}/pctl-${base}"
+  say "Fetching ${path}…"
+  kube -n "$PCTL_NAMESPACE" exec deploy/minio -- sh -c \
+    'mc alias set s http://localhost:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD" >/dev/null 2>&1; mc cat "s/'"$path"'"' > "$dst" 2>/dev/null
+  [ -s "$dst" ] || die "could not fetch '$path' (does it exist?)"
+  if command -v xdg-open >/dev/null 2>&1; then xdg-open "$dst" >/dev/null 2>&1 &
+  elif command -v open >/dev/null 2>&1; then open "$dst";
+  else echo "saved to $dst"; fi
+  ok "Opened ${dst}"
+}
+
 # Expose the in-cluster MinIO (backup store) on localhost so you can browse backups from your machine.
 cmd_db_minio() {
   resolve_ctx
@@ -746,6 +763,7 @@ ${C_BOLD}ANYWHERE${C_RESET}
   db restore --time TS [--name N] [--cutover]   Recover a new cluster to a point in time (PITR)
   db restore-info        Print the manual PITR recipe
   db minio               Port-forward the MinIO backup store to localhost (console :9001)
+  minio open BUCKET/KEY  Download a MinIO object and open it (e.g. a report's HTML)
   autostart [--disable]  Start the cluster on boot (k3d → systemd user service; k3s → already a service)
   status                 Show nodes + workloads
   logs [-f]              Tail the PlaceContext Host logs
@@ -793,6 +811,7 @@ main() {
     kill)         cmd_kill "$@";;
     db)           cmd_db "$@";;
     mesh)         cmd_mesh "$@";;
+    minio)        case "${1:-}" in open) shift; cmd_minio_open "$@";; *) die "usage: pctl minio open <bucket/key>";; esac;;
     autostart)    cmd_autostart "$@";;
     tui|ui)       cmd_tui "$@";;
     build)        cmd_build "$@";;
