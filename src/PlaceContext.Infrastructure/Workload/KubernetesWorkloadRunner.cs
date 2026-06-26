@@ -110,10 +110,35 @@ public sealed class KubernetesWorkloadRunner : IWorkloadRunner
                 TtlSecondsAfterFinished = 120,
                 Template = new V1PodTemplateSpec
                 {
-                    Metadata = new V1ObjectMeta { Labels = new Dictionary<string, string> { ["placecontext-run"] = runLabel } },
+                    Metadata = new V1ObjectMeta
+                    {
+                        // placecontext-run is unique per run (NetworkPolicy selector); placecontext-workload is the
+                        // shared label every job pod carries so the scheduler can balance them across nodes.
+                        Labels = new Dictionary<string, string>
+                        {
+                            ["placecontext-run"] = runLabel,
+                            ["placecontext-workload"] = "job",
+                        },
+                    },
                     Spec = new V1PodSpec
                     {
                         RestartPolicy = "Never",
+                        // Spread job pods evenly across nodes by hostname. ScheduleAnyway keeps it a soft
+                        // preference (never blocks a run), but a freshly added node — which carries zero job
+                        // pods — becomes the lowest-skew target, so new workload flows onto it automatically.
+                        TopologySpreadConstraints = new[]
+                        {
+                            new V1TopologySpreadConstraint
+                            {
+                                MaxSkew = 1,
+                                TopologyKey = "kubernetes.io/hostname",
+                                WhenUnsatisfiable = "ScheduleAnyway",
+                                LabelSelector = new V1LabelSelector
+                                {
+                                    MatchLabels = new Dictionary<string, string> { ["placecontext-workload"] = "job" },
+                                },
+                            },
+                        },
                         InitContainers = new[]
                         {
                             new V1Container

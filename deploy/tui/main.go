@@ -970,7 +970,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.view != viewMetrics {
 			return m, nil // stop sampling when the metrics view isn't shown
 		}
-		m.loading = true
+		// Refresh silently: keep the graphs on screen while the next sample fetches in the
+		// background (the initial open sets loading once; periodic ticks must not re-blank it).
 		return m, tea.Batch(m.fetchMetrics(), metricsTick())
 
 	case metricsMsg:
