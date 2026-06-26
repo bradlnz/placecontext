@@ -146,7 +146,10 @@ builder.Services.AddScoped<CircuitHandler, TenantCircuitHandler>();
 // MCP over Streamable HTTP, exposed below at /mcp.
 builder.Services
     .AddMcpServer()
-    .WithHttpTransport()
+    // Stateless transport: each request is self-contained, so no in-memory session is pinned to a pod.
+    // With >1 replica a stateful session lives on one pod and a reconnect that lands on another 404s;
+    // stateless lets any replica serve any request (and survives restarts/rollouts).
+    .WithHttpTransport(o => o.Stateless = true)
     .WithTools<PlaceContextTools>()
     .WithPrompts<PlaceContextPrompts>()
     .AddAuthorizationFilters(); // enforce [Authorize] on tools/prompts against the bearer token's role
