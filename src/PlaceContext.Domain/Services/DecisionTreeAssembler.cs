@@ -72,22 +72,10 @@ public sealed class DecisionTreeAssembler
             }
         }
 
-        // Tool-call activity is summarized as one branch, one node per tool (degree = call count).
-        if (activity.Count > 0)
-        {
-            const string activityId = "activity";
-            AddNode(activityId, "MCP activity", TreeNodeKind.Activity);
-            edges.Add(new DecisionTreeEdge(rootId, activityId, ConfidenceTag.Extracted));
-
-            foreach (var g in activity.GroupBy(a => a.Tool).OrderBy(g => g.Key))
-            {
-                var count = g.Count();
-                var failed = g.Any(a => a.Failed);
-                var toolId = "tool:" + g.Key;
-                AddNode(toolId, $"{g.Key} ×{count}", TreeNodeKind.Tool);
-                edges.Add(new DecisionTreeEdge(activityId, toolId, failed ? ConfidenceTag.Ambiguous : ConfidenceTag.Extracted));
-            }
-        }
+        // MCP tool-call activity is intentionally NOT shown in the dependency graph — it is transient
+        // access, not a structural dependency, and clutters the picture. (It remains in the activity log
+        // and the MCP view.) The parameter is retained for API stability.
+        _ = activity;
 
         // Job-run outputs become the project's "brain": each embedded run output is a node off the root,
         // then cross-linked to its most semantically-similar peers (cosine over the embedding vectors) so
