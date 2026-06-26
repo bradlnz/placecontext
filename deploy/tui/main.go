@@ -269,18 +269,27 @@ func (m model) fetchLogsFor(it selItem) tea.Cmd {
 		if it.kind == "job" {
 			title := "job/" + it.name
 			esc := strings.ReplaceAll(it.name, "'", "''")
-			q := `SELECT "StartedAt","Status","FinishedAt" FROM job_runs WHERE "JobId" IN ` +
-				`(SELECT "Id" FROM jobs WHERE "Name"='` + esc + `') ORDER BY "StartedAt" DESC LIMIT 50`
-			b, err := mc.kubectl(ctx, "-n", ns, "exec", "deploy/placecontext-db", "--",
-				"psql", "-U", "postgres", "-d", "placecontext", "-c", q)
+			// recent runs (status table) + the latest run's actual output (map shard + reduce results)
+			runsQ := `SELECT "StartedAt","Status","FinishedAt" FROM job_runs WHERE "JobId" IN ` +
+				`(SELECT "Id" FROM jobs WHERE "Name"='` + esc + `') ORDER BY "StartedAt" DESC LIMIT 20`
+			runs, err := mc.kubectl(ctx, "-n", ns, "exec", "deploy/placecontext-db", "--",
+				"psql", "-U", "postgres", "-d", "placecontext", "-c", runsQ)
 			if err != nil {
 				return logsMsg{title, "could not fetch job runs: " + err.Error()}
 			}
-			body := string(b)
-			if strings.TrimSpace(body) == "" {
-				body = "(no runs yet for this job)"
+			outQ := `SELECT coalesce("ReduceResultJson", "ShardResultsJson") FROM job_runs WHERE "JobId" IN ` +
+				`(SELECT "Id" FROM jobs WHERE "Name"='` + esc + `') ORDER BY "StartedAt" DESC LIMIT 1`
+			out, _ := mc.kubectl(ctx, "-n", ns, "exec", "deploy/placecontext-db", "--",
+				"psql", "-U", "postgres", "-d", "placecontext", "-At", "-c", outQ)
+			runsTxt := strings.TrimSpace(string(runs))
+			if runsTxt == "" {
+				runsTxt = "(no runs yet for this job)"
 			}
-			return logsMsg{title, "recent runs:\n\n" + body}
+			outTxt := strings.TrimSpace(string(out))
+			if outTxt == "" {
+				outTxt = "(no output recorded for the latest run)"
+			}
+			return logsMsg{title, "recent runs:\n\n" + runsTxt + "\n\nlatest run output:\n\n" + outTxt}
 		}
 		title := "node/" + it.name
 		b, err := mc.kubectl(ctx, "describe", "node", it.name)
