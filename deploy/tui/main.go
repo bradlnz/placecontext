@@ -737,8 +737,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, m.fetchLogsFor(it)
 			}
 		case "a":
+			// One keypress adds a worker computer to the cluster — no jargon, no choices.
 			if !m.busy {
-				m.menu, m.menuTitle, m.menuCursor, m.view = addNodeMenu(), "Add node", 0, viewMenu
+				m.busy, m.busyVerb, m.view = true, "adding a worker", viewAction
+				m.out.SetContent("")
+				return m, tea.Batch(m.sp.Tick, m.runAction("adding a worker", "dev", "add-node", "--role", "agent"))
 			}
 			return m, nil
 		case "g":
@@ -914,6 +917,9 @@ func (m model) View() string {
 	b.WriteString(bannerStyle.Render(banner) + "\n")
 	b.WriteString(dimStyle.Render("  hosted multi-tenant context · MCP + portal") + "\n\n")
 	b.WriteString(m.healthLine() + "\n")
+	if a := m.alerts(); a != "" {
+		b.WriteString(a)
+	}
 	if m.flash != "" {
 		b.WriteString("  " + okStyle.Render("✓ "+m.flash) + "\n")
 	} else {
@@ -973,7 +979,58 @@ func (m model) healthLine() string {
 	return "  ▸ dev cluster '" + cluster + "'   " + strings.Join(parts, "   ") + upd
 }
 
+// alerts renders error/warning lines at the top of the dashboard (cluster down, crashing/pending pods,
+// db not ready). Empty string when all is well.
+func (m model) alerts() string {
+	s := m.state
+	var out strings.Builder
+	if !s.reach {
+		return "" // first-run: the friendly setup guide covers this, no scary banner
+	}
+	n := 0
+	warn := func(msg string) {
+		if n < 3 {
+			out.WriteString("  " + warnStyle.Render("▲ "+msg) + "\n")
+		}
+		n++
+	}
+	if s.hostTot > 0 && s.hostUp < s.hostTot {
+		warn(fmt.Sprintf("host: %d/%d replicas ready", s.hostUp, s.hostTot))
+	}
+	if !s.dbUp {
+		warn("database not ready")
+	}
+	for _, p := range s.pods {
+		if p.Status != "Running" && p.Status != "Succeeded" {
+			warn("pod " + trunc(p.Name, 28) + " " + p.Status)
+		} else if p.Restarts > 0 {
+			warn(fmt.Sprintf("pod %s restarted ×%d", trunc(p.Name, 28), p.Restarts))
+		}
+	}
+	if n > 3 {
+		out.WriteString("  " + dimStyle.Render(fmt.Sprintf("…and %d more", n-3)) + "\n")
+	}
+	return out.String()
+}
+
+// setupGuide is the friendly empty state shown before any cluster exists.
+func (m model) setupGuide() string {
+	step := func(k, s string) string { return "   " + keyStyle.Render(k) + "  " + s + "\n" }
+	var b strings.Builder
+	b.WriteString(titleStyle.Render(" Welcome to PlaceContext ") + "\n\n")
+	b.WriteString("  No cluster yet. Let's get you running:\n\n")
+	b.WriteString(step("[u]", "Create your cluster (one key — sets up everything locally)"))
+	b.WriteString(step("[p]", "Open the portal once it's up"))
+	b.WriteString(step("[$]", "Manage your subscription"))
+	b.WriteString(step("[q]", "Quit"))
+	b.WriteString("\n  " + dimStyle.Render("Tip: see docs/SETUP.md for the full guide.") + "\n")
+	return b.String()
+}
+
 func (m model) dashboard() string {
+	if !m.state.reach {
+		return m.setupGuide()
+	}
 	// Side-by-side: cluster on the left, selectable node/pod/job list on the right. This keeps the
 	// page short (so the banner/footer don't scroll off as more items are added).
 	rows := m.h - 11 // height available below the banner/health, above the footer
@@ -1190,7 +1247,7 @@ func (m model) footer() string {
 	switch m.view {
 	case viewDash:
 		keys = []string{k("↑↓", "nav"), k("⏎", "logs"), k("/", "search"), k("x", "kill"), k("g", "metrics"),
-			k("m", "mcp"), k("p", "portal"), k("$", "subscribe"), k("a", "add node"), k("c", "theme"),
+			k("m", "mcp"), k("p", "portal"), k("$", "subscribe"), k("a", "add worker"), k("c", "theme"),
 			k("u", "up"), k("d", "down"), k("r", "refresh"), k("q", "quit")}
 	case viewConfirm:
 		keys = []string{k("y", "confirm"), k("n", "cancel"), k("q", "quit")}

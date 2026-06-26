@@ -73,11 +73,13 @@ func portalURL() string {
 // hand it to /auth/portal so the operator is signed in automatically. With no key reachable (e.g. local
 // `./run.sh` with no cluster) we open the bare URL — the host auto-signs-in in Development.
 func (m model) openPortal() tea.Cmd {
-	target := portalURL()
-	if key := m.portalSigningKey(); key != "" {
-		target += "auth/portal?token=" + neturl.QueryEscape(mintPortalToken(key, time.Now()))
-	}
+	mc := m
 	return func() tea.Msg {
+		// Resolve the sign-in token inside the command (off the UI thread) so the dashboard stays responsive.
+		target := portalURL()
+		if key := mc.portalSigningKey(); key != "" {
+			target += "auth/portal?token=" + neturl.QueryEscape(mintPortalToken(key, time.Now()))
+		}
 		var bin string
 		var args []string
 		switch {
