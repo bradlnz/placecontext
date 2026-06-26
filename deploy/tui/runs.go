@@ -111,8 +111,37 @@ func (m model) fetchRunDetail(r runRow) tea.Cmd {
 		if len(parts) > 1 {
 			reduceJSON = parts[1]
 		}
-		return runDetailMsg{title, renderRunDetail(r, shardsJSON, reduceJSON)}
+		body := renderRunDetail(r, shardsJSON, reduceJSON)
+		body += mc.fetchRunArtifacts(ctx, r.id) // post-job outputs (MinIO) as openable links
+		return runDetailMsg{title, body}
 	}
+}
+
+// fetchRunArtifacts queries the post-job outputs (HTML report / chart / CSV / raw bundle) stored in
+// MinIO for a run and renders them as a markdown section of portal links. The URLs are picked up by the
+// detail view's link extractor, so they open with [o]/[1-9]. Returns "" when there are none.
+func (m model) fetchRunArtifacts(ctx context.Context, runID string) string {
+	q := `SELECT "Kind","Title","Id" FROM job_run_artifacts WHERE "RunId"='` + runID + `' ORDER BY "CreatedAt"`
+	b, err := m.kubectl(ctx, "-n", ns, "exec", "deploy/placecontext-db", "--",
+		"psql", "-U", "postgres", "-d", "placecontext", "-At", "-F", "\t", "-c", q)
+	if err != nil {
+		return ""
+	}
+	var sb strings.Builder
+	for _, ln := range strings.Split(strings.TrimSpace(string(b)), "\n") {
+		if ln == "" {
+			continue
+		}
+		f := strings.Split(ln, "\t")
+		if len(f) < 3 {
+			continue
+		}
+		if sb.Len() == 0 {
+			sb.WriteString("\n## Post-job outputs\n\n")
+		}
+		sb.WriteString("- " + f[0] + " — " + f[1] + ": " + portalURL() + "runs/" + runID + "/artifacts/" + f[2] + "\n")
+	}
+	return sb.String()
 }
 
 // urlRe matches http(s) URLs in run output; trailing punctuation/brackets are trimmed by extractURLs.

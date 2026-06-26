@@ -208,6 +208,25 @@ app.MapPost("/ingest/{eventName}", async (HttpContext ctx, PlaceContext.Applicat
     return Results.Ok(new { result.Name, result.TriggeredRuns, result.OccurredAt });
 }).AllowAnonymous();
 
+// ---- Run artifacts (post-job outputs) — stream an artifact from the object store (MinIO) ----
+// The portal/TUI link here; the IRunArtifactLinkRepository tenant filter scopes the lookup to the
+// signed-in tenant, so one tenant can't read another's artifacts. HTML/SVG render inline; the rest
+// download with their original filename.
+app.MapGet("/runs/{runId:guid}/artifacts/{artifactId:guid}", async (
+    Guid runId, Guid artifactId, HttpContext ctx,
+    PlaceContext.Domain.Repositories.IRunArtifactLinkRepository links,
+    PlaceContext.Application.Ports.IObjectStore store) =>
+{
+    var link = await links.GetByIdAsync(artifactId, ctx.RequestAborted);
+    if (link is null || link.RunId != runId) return Results.NotFound();
+    var obj = await store.OpenReadAsync(link.Bucket, link.ObjectKey, ctx.RequestAborted);
+    if (obj is null) return Results.NotFound();
+
+    var inline = obj.ContentType.StartsWith("text/html") || obj.ContentType.StartsWith("image/svg");
+    var fileName = inline ? null : link.ObjectKey[(link.ObjectKey.LastIndexOf('/') + 1)..];
+    return Results.Stream(obj.Content, obj.ContentType, fileDownloadName: fileName);
+}).RequireAuthorization();
+
 // ---- Token sign-in (self-hosted; the pctl TUI mints the token and opens /auth/portal) ----
 // The portal has no password login. A valid short-lived token (HMAC-signed with the shared
 // PlaceContext:Portal:SigningKey) signs the cluster operator into the cookie. In Development with no

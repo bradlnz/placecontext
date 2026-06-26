@@ -161,12 +161,17 @@ are unreferenced (safe to delete in a follow-up).
 
 ### Remaining / in progress
 - **Portal job-creation UI + runtimes** (import-from-GitHub or in-editor; Python/.NET/Go/Ruby).
-- **Reports → MinIO** (store rendered HTML; open from portal/TUI).
 - **Redis** cache pod (shared cache; sticky still required for Blazor circuits).
 - Open-source/setup **wiki** (`docs/SETUP.md` started).
 - Optional: graduate the in-cluster job controller into a standalone **control-plane API** for multi-cluster.
+- TUI: per-job **post-job action** toggles in the settings view (portal authoring exists; TUI shows outputs).
 
 ### Recently done
+- ✓ **Post-job actions → MinIO** (per job: HTML report, inline-SVG chart, CSV, raw bundle). After a run,
+  `PostJobActionService` builds outputs from its artifacts, stores them in the `placecontext-reports`
+  bucket via the `IObjectStore`/MinIO adapter, and records `RunArtifactLink`s. Surfaced as openable links
+  in the portal run-detail and the TUI run-detail; the Host streams them at `/runs/{id}/artifacts/{id}`
+  (tenant-scoped). Configured on the portal job form. Best-effort — never fails the run.
 - ✓ **Host Gemma in-cluster** (`deploy/k3s/ollama.yaml`): Ollama + `gemma3:4b` on a persistent model PVC,
   pulled once on boot, Ready-gated on model presence. Host wired via `PlaceContext:Llm:Provider=ollama`
   (env in `placecontext.yaml`) so `RunJobHandler` organizes each run's output through it (best-effort).

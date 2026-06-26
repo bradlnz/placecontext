@@ -368,6 +368,24 @@ else
                 </div>
             </div>
 
+            @* ── Post-job actions ──────────────────────────────────────────────────────────────── *@
+            <div>
+                <label style="font-size:12px; color:var(--text-3); display:block; margin-bottom:4px">Post-job actions</label>
+                <div style="display:flex; flex-wrap:wrap; gap:14px">
+                    @foreach (var (kind, label) in PostJobActionChoices)
+                    {
+                        <label style="display:flex; align-items:center; gap:6px; font-size:12.5px; cursor:pointer">
+                            <input type="checkbox" checked="@_edPostJobActions.Contains(kind)"
+                                   @onchange="@(e => TogglePostJobAction(kind, (bool)e.Value!))" />
+                            @label
+                        </label>
+                    }
+                </div>
+                <div style="font-size:11px; color:var(--text-3); margin-top:4px">
+                    After each run, generate these from the run's artifacts and store them in the object store — they appear as links on the run.
+                </div>
+            </div>
+
             @if (_editorError is not null)
             {
                 <div style="color:var(--bad); font-size:12px; padding:8px; background:var(--bad-bg); border-radius:6px">@_editorError</div>
@@ -410,6 +428,25 @@ else
                     <span style="margin-left:6px; color:var(--warn); font-weight:600">[network egress allowed]</span>
                 }
             </div>
+
+            @* ── Post-job outputs (reports / charts / CSVs / raw files stored in MinIO) ───────────── *@
+            @if (_runArtifacts is { Count: > 0 })
+            {
+                <div class="dccard" style="padding:12px 16px; margin-bottom:14px">
+                    <div style="font-size:12.5px; font-weight:600; margin-bottom:8px">Post-job outputs</div>
+                    <div style="display:flex; flex-direction:column; gap:6px">
+                        @foreach (var art in _runArtifacts)
+                        {
+                            <div style="display:flex; align-items:center; gap:10px">
+                                <span style="font-size:10.5px; padding:1px 7px; border-radius:4px; background:var(--bg-2); color:var(--text-3)">@art.Kind</span>
+                                <a href="@($"/runs/{art.RunId}/artifacts/{art.Id}")" target="_blank" rel="noopener"
+                                   style="font-size:12.5px; color:var(--accent); text-decoration:none; flex:1; min-width:0">@art.Title ↗</a>
+                                <span style="font-size:10.5px; color:var(--text-3)">@FormatBytes(art.SizeBytes)</span>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
 
             @foreach (var shard in _runDetail.ShardResults)
             {
@@ -524,6 +561,7 @@ else
     private IReadOnlyList<ProjectSecretView>? _vaultSecrets; // names injected as env at run time (Vault)
     private IReadOnlyList<JobRunView>? _runs;
     private JobRunDetailView? _runDetail;
+    private IReadOnlyList<RunArtifactLinkView>? _runArtifacts; // MinIO post-job outputs for the open run
     private Guid? _selectedJobId;
     private Guid? _runningJobId;
     private string? _message;
@@ -559,6 +597,7 @@ else
     private string _edPartialCodesRaw = "";
     private bool _edAllowNetworkEgress;
     private string _edParametersRaw = "";
+    private readonly List<PlaceContext.Domain.ValueObjects.PostJobActionKind> _edPostJobActions = new();
 
     // ── Run-input prompt state ────────────────────────────────────────────────────────────────────
     private JobView? _runPromptJob;
@@ -696,6 +735,7 @@ else
         try
         {
             _runDetail = await Svc.GetJobRunAsync(runId);
+            _runArtifacts = await Svc.ListRunArtifactsAsync(runId);
         }
         catch (Exception ex) { _message = ex.Message; }
     }
@@ -719,6 +759,7 @@ else
         _edPartialCodesRaw = "";
         _edAllowNetworkEgress = false;
         _edParametersRaw = "";
+        _edPostJobActions.Clear();
         _editorError = null;
         _showEditor = true;
     }
@@ -740,9 +781,28 @@ else
         _edPartialCodesRaw = string.Join(",", job.PartialExitCodes);
         _edAllowNetworkEgress = job.AllowNetworkEgress;
         _edParametersRaw = string.Join("\n", job.Parameters.Select(p => p.Label is null ? p.Name : $"{p.Name}|{p.Label}"));
+        _edPostJobActions.Clear();
+        _edPostJobActions.AddRange(job.PostJobActions);
         _editorError = null;
         _showEditor = true;
     }
+
+    private void TogglePostJobAction(PlaceContext.Domain.ValueObjects.PostJobActionKind kind, bool on)
+    {
+        if (on) { if (!_edPostJobActions.Contains(kind)) _edPostJobActions.Add(kind); }
+        else _edPostJobActions.Remove(kind);
+    }
+
+    private static string FormatBytes(long n) =>
+        n >= 1_048_576 ? $"{n / 1_048_576.0:0.#} MB" : n >= 1024 ? $"{n / 1024.0:0.#} KB" : $"{n} B";
+
+    private static readonly (PlaceContext.Domain.ValueObjects.PostJobActionKind Kind, string Label)[] PostJobActionChoices =
+    {
+        (PlaceContext.Domain.ValueObjects.PostJobActionKind.HtmlReport, "HTML report"),
+        (PlaceContext.Domain.ValueObjects.PostJobActionKind.Chart, "Chart"),
+        (PlaceContext.Domain.ValueObjects.PostJobActionKind.Csv, "CSV export"),
+        (PlaceContext.Domain.ValueObjects.PostJobActionKind.RawBundle, "Raw artifacts bundle"),
+    };
 
     private void CloseEditor()
     {
@@ -803,7 +863,8 @@ else
                     SuccessExitCodes: successCodes,
                     PartialExitCodes: partialCodes,
                     AllowNetworkEgress: _edAllowNetworkEgress,
-                    Parameters: parameters);
+                    Parameters: parameters,
+                    PostJobActions: _edPostJobActions.ToList());
 
                 await Svc.UpdateJobAsync(cmd);
                 _message = $"Job '{_edName.Trim()}' updated.";
@@ -829,7 +890,8 @@ else
                     SuccessExitCodes: successCodes,
                     PartialExitCodes: partialCodes,
                     AllowNetworkEgress: _edAllowNetworkEgress,
-                    Parameters: parameters);
+                    Parameters: parameters,
+                    PostJobActions: _edPostJobActions.ToList());
 
                 await Svc.CreateJobAsync(cmd);
                 _message = $"Job '{_edName.Trim()}' created.";
