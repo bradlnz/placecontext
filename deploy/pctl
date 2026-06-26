@@ -248,11 +248,73 @@ PCTL_CNPG_MANIFEST="${PCTL_CNPG_MANIFEST:-https://raw.githubusercontent.com/clou
 cmd_db() {
   local sub="${1:-}"; shift || true
   case "$sub" in
-    ha)         cmd_db_ha "$@";;
-    backup-now) cmd_db_backup "$@";;
+    ha)           cmd_db_ha "$@";;
+    backup-now)   cmd_db_backup "$@";;
+    restore)      cmd_db_restore "$@";;
     restore-info) cmd_db_restore_info "$@";;
-    *) die "unknown 'db' subcommand: '$sub' (try: ha | backup-now | restore-info)";;
+    *) die "unknown 'db' subcommand: '$sub' (try: ha | backup-now | restore --time TS | restore-info)";;
   esac
+}
+
+# Point-in-time recovery: spin up a NEW cluster recovered from the backups to the given instant, then
+# (optionally) cut the app over to it. Non-destructive — the live cluster is untouched until you switch.
+cmd_db_restore() {
+  local ttime="" name="placecontext-pg-restored" cutover=0
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --time)    ttime="$2"; shift 2;;
+      --name)    name="$2"; shift 2;;
+      --cutover) cutover=1; shift;;
+      *) die "db restore: unknown arg $1";;
+    esac
+  done
+  [ -n "$ttime" ] || die "db restore needs --time \"YYYY-MM-DD HH:MM:SS+00\" (the instant to recover to)"
+  resolve_ctx
+  say "Recovering a new cluster '${name}' to ${ttime}…"
+  cat <<EOF | kube -n "$PCTL_NAMESPACE" apply -f -
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: ${name}
+spec:
+  instances: 3
+  imageName: ghcr.io/bradlnz/placecontext-pg:16-pgvector
+  enableSuperuserAccess: true
+  superuserSecret: { name: placecontext-pg-superuser }
+  storage: { size: 2Gi }
+  bootstrap:
+    recovery:
+      source: placecontext-pg
+      recoveryTarget:
+        targetTime: "${ttime}"
+  externalClusters:
+    - name: placecontext-pg
+      barmanObjectStore:
+        destinationPath: s3://placecontext-backups/
+        endpointURL: http://minio:9000
+        s3Credentials:
+          accessKeyId:     { name: placecontext-minio, key: ACCESS_KEY_ID }
+          secretAccessKey: { name: placecontext-minio, key: ACCESS_SECRET_KEY }
+EOF
+  say "Waiting for the recovered cluster to become healthy…"
+  local i ready
+  for i in $(seq 1 90); do
+    ready="$(kube -n "$PCTL_NAMESPACE" get cluster "$name" -o jsonpath='{.status.readyInstances}' 2>/dev/null || true)"
+    [ "$ready" = "3" ] && break
+    sleep 5
+  done
+  [ "$ready" = "3" ] || die "recovered cluster '${name}' not healthy yet (ready='${ready:-0}'); check: kubectl -n $PCTL_NAMESPACE get cluster $name"
+  ok "Recovered '${name}' to ${ttime}."
+  if [ "$cutover" = 1 ]; then
+    say "Cutting the app over to '${name}-rw'…"
+    kube -n "$PCTL_NAMESPACE" set env deploy/placecontext \
+      "PlaceContext__ConnectionString=Host=${name}-rw;Port=5432;Database=placecontext;Username=postgres;Password=postgres"
+    kube -n "$PCTL_NAMESPACE" rollout status deploy/placecontext --timeout=240s
+    ok "App now using the recovered database."
+  else
+    echo "  Verify it, then cut over:  pctl db restore --time \"${ttime}\" --name ${name} --cutover"
+    echo "  (or point the app at ${name}-rw yourself)"
+  fi
 }
 
 # Stand up replicated Postgres (1 primary + 2 replicas) with PITR backups, and point the app at it.
@@ -669,7 +731,8 @@ ${C_BOLD}ANYWHERE${C_RESET}
   kill pod|node|job NAME [--yes]   Delete a pod / k3d node / job (prompts unless --yes)
   db ha                  Replicated Postgres (1 primary + 2 replicas) + PITR backups via CloudNativePG
   db backup-now          Trigger an on-demand base backup
-  db restore-info        Print point-in-time recovery (PITR) steps
+  db restore --time TS [--name N] [--cutover]   Recover a new cluster to a point in time (PITR)
+  db restore-info        Print the manual PITR recipe
   autostart [--disable]  Start the cluster on boot (k3d → systemd user service; k3s → already a service)
   status                 Show nodes + workloads
   logs [-f]              Tail the PlaceContext Host logs
