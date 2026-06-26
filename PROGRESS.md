@@ -167,11 +167,19 @@ are unreferenced (safe to delete in a follow-up).
 - TUI: per-job **post-job action** toggles in the settings view (portal authoring exists; TUI shows outputs).
 
 ### Recently done
+- ✓ **Run summary → search + dependency graph (local)**: every run's output is organized by Gemma and
+  embedded by a local **Ollama `nomic-embed-text`** gateway (768-dim) into the pgvector
+  `job_run_embeddings` store — so runs are semantically searchable and linked in the brain/dependency
+  graph with no external key. Selected via `PlaceContext:Embeddings:Provider=ollama`.
+- ✓ **Boot persistence**: `pctl ensure` idempotently starts/creates the k3d cluster, applies manifests,
+  and waits for the Host rollout; `pctl autostart` installs a systemd **user** service running `ensure`
+  on boot (prefers the k3d dev cluster even when k3s is also installed). Linger-enabled.
 - ✓ **Post-job actions → MinIO** (per job: HTML report, inline-SVG chart, CSV, raw bundle). After a run,
   `PostJobActionService` builds outputs from its artifacts, stores them in the `placecontext-reports`
   bucket via the `IObjectStore`/MinIO adapter, and records `RunArtifactLink`s. Surfaced as openable links
   in the portal run-detail and the TUI run-detail; the Host streams them at `/runs/{id}/artifacts/{id}`
-  (tenant-scoped). Configured on the portal job form. Best-effort — never fails the run.
+  (tenant-scoped). Configured on the portal job form. Best-effort — never fails the run. (MinIO uploads
+  over plain HTTP: do **not** set `DisablePayloadSigning` — the SDK rejects it without HTTPS.)
 - ✓ **Host Gemma in-cluster** (`deploy/k3s/ollama.yaml`): Ollama + `gemma3:4b` on a persistent model PVC,
   pulled once on boot, Ready-gated on model presence. Host wired via `PlaceContext:Llm:Provider=ollama`
   (env in `placecontext.yaml`) so `RunJobHandler` organizes each run's output through it (best-effort).
