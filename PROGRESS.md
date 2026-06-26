@@ -102,3 +102,68 @@ missed `using` can't be compiler-caught. Do this pass once a compiler is availab
   scheduler sets the ambient `CurrentTenant` (AsyncLocal) per unit of work before dispatching.
 - Schema is **EF migrations** (not `EnsureCreated`) — never drop the dev DB; add a migration.
 - Convention: **one top-level type per file**.
+
+---
+
+## ✅ Platform / ops / TUI (2026-06-26)
+
+Hosted multi-tenant control plane, deploy CLI + reactive TUI, HA database, mesh, secrets vault,
+in-cluster job execution. All committed on `main`; Go TUI builds + tests pass; Host builds clean.
+
+**Deploy CLI + TUI (`deploy/`)**
+- `pctl` (bash engine) — one tool for the whole lifecycle: `dev up/down/clean/add-node`, `build`,
+  `image import`, `deploy`, `status`, `logs`, `kill pod|node|job`, `autostart`, `tui`, `doctor`,
+  prod `server up`/`agent join`. `deploy/install.sh` one-command install + global `placecontext`.
+- `deploy/tui/` — Go + Bubble Tea reactive dashboard (modular: `main.go`, `cluster.go`, `metrics.go`,
+  `portal.go`, `themes.go`). Side-by-side **cluster (left)** / **node·pod·job list (right)**; the
+  cluster is a rotating ASCII **planet** hub with workers/pods as satellites, dotted links + app→db
+  pulses. Keys: `↑↓` nav, `⏎` logs/detail, `/` search, `g` metrics, `m` mcp, `p` portal, `$`
+  subscribe, `a` add worker, `x` kill (jobs only — pods/nodes read-only), `c` theme, `l` global logs.
+  Metrics = area charts across every node; search = decisions/context/activity + MinIO files, rendered
+  as markdown (glamour); MCP/job drill-down; loading box; first-run setup guide; top alert lines.
+  Async fetches off the UI thread; ~1.5s realtime refresh.
+
+**Multi-replica correctness (all fixed + deployed)**
+- Shared **Data Protection** keys (DB-persisted) → portal cookie works across replicas.
+- Shared **OAuth/MCP RSA signing key** (from a secret, deterministic kid) → MCP tokens validate on any replica.
+- **MCP stateless** Streamable-HTTP transport → reconnects don't 404.
+- **Traefik sticky sessions** → Blazor Server circuit (SignalR) works (fixed unclickable projects card).
+
+**Database HA + PITR** — `pctl db ha`: CloudNativePG operator + a 3-instance pgvector cluster
+(1 primary + 2 replicas, anti-affinity) + continuous backup/WAL archiving to **MinIO** + daily
+ScheduledBackup. `pctl db backup-now`, `db restore --time <ts> [--cutover]` (PITR into a new cluster),
+`db minio` (browse backups). Custom CNPG pgvector image `deploy/postgres/Dockerfile.cnpg`. Validated live.
+
+**Mesh (multi-location fleet)** — `pctl server up`/`agent join` accept managed-Tailscale OAuth
+(`--ts-oauth-*`) **or** self-hosted Headscale (`--vpn-control`/`--vpn-authkey`) via k3s `--vpn-auth`.
+Headscale stack in `deploy/headscale/` is **multi-tenant**: per-customer isolated network (tag + default-deny
+ACL regenerated from a tenant registry). Mesh access is **gated by PlaceContext** (TUI exchanges the
+subscription key for a short-lived mesh key); cluster nodes get persistent keys, TUI viewers ephemeral.
+
+**Jobs run as Kubernetes Jobs in-cluster** — `KubernetesWorkloadRunner` (selected when the Host runs
+in-cluster): code+payload via ConfigMap → /work, runtime image pipes input on stdin, stdout→artifact,
+deny-egress NetworkPolicy unless opted in, TTL cleanup. ServiceAccount + RBAC in the manifest. Docker
+runner stays for local dev. MCP `job_authoring_guide` tool returns the code-structuring contract.
+
+**Encrypted secrets vault** — `job_secrets` table, values encrypted at rest via Data Protection (AES);
+Add/Delete/List CQRS + `IPlaceContextService`; secrets immutable (delete+recreate to rotate); decrypted
+at run time and injected as env into each k8s Job (never persisted to the run snapshot). Access reuses
+the signed-token auth.
+
+**Activation removed** — product no longer key-gated; subscriptions handled by a separate billing
+portal (TUI `$` opens it). Dead activation C# classes + the `PlaceContext.Licensing` project remain but
+are unreferenced (safe to delete in a follow-up).
+
+**Portal** — reports render as HTML (Markdig) with a severity chart + action cards; quieter Host logs
+(EF/framework → Warning); dependency/brain graph excludes MCP tool activity.
+
+### Remaining / in progress
+- **Portal job-creation UI + runtimes** (import-from-GitHub or in-editor; Python/.NET/Go/Ruby).
+- **Host Gemma (smallest)** in-cluster (Ollama) for HTML reports + data organization.
+- **Reports → MinIO** (store rendered HTML; open from portal/TUI).
+- **Redis** cache pod (shared cache; sticky still required for Blazor circuits).
+- **Vault portal page** (add/delete secrets UI) — backend done; UI pending.
+- TUI: **settings menu** (checkboxes, e.g. allow-network-egress), **run jobs from the TUI**, **job→runs
+  navigation** (drill into each run's container output), **theme also changes font**.
+- Open-source/setup **wiki** (`docs/SETUP.md` started).
+- Optional: graduate the in-cluster job controller into a standalone **control-plane API** for multi-cluster.
