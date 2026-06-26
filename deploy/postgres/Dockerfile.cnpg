@@ -1,0 +1,11 @@
+# CloudNativePG-compatible PostgreSQL 16 image with the pgvector extension.
+# CNPG's stock operand image ships barman-cloud (for backups/PITR) but not pgvector, so we add it
+# from the PGDG apt repo on top of the official CNPG image.
+FROM ghcr.io/cloudnative-pg/postgresql:16.4
+
+USER root
+RUN set -eux; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends postgresql-16-pgvector; \
+    rm -rf /var/lib/apt/lists/*
+USER 26

@@ -242,6 +242,99 @@ EOF
   ok "Autostart enabled (systemd user service 'placecontext')."
 }
 
+# ── db (replicated Postgres + PITR backups via CloudNativePG) ─────────────────────────────────────
+PCTL_CNPG_MANIFEST="${PCTL_CNPG_MANIFEST:-https://raw.githubusercontent.com/cloudnative-pg/cloudnative-pg/release-1.24/releases/cnpg-1.24.1.yaml}"
+
+cmd_db() {
+  local sub="${1:-}"; shift || true
+  case "$sub" in
+    ha)         cmd_db_ha "$@";;
+    backup-now) cmd_db_backup "$@";;
+    restore-info) cmd_db_restore_info "$@";;
+    *) die "unknown 'db' subcommand: '$sub' (try: ha | backup-now | restore-info)";;
+  esac
+}
+
+# Stand up replicated Postgres (1 primary + 2 replicas) with PITR backups, and point the app at it.
+cmd_db_ha() {
+  resolve_ctx
+  say "Installing the CloudNativePG operator…"
+  kube apply --server-side -f "$PCTL_CNPG_MANIFEST" >/dev/null
+  kube -n cnpg-system rollout status deploy/cnpg-controller-manager --timeout=180s
+
+  say "Object store (MinIO) for backups…"
+  kube -n "$PCTL_NAMESPACE" apply -f "$K3S_DIR/minio.yaml"
+  kube -n "$PCTL_NAMESPACE" rollout status deploy/minio --timeout=180s
+
+  say "Superuser secret (keeps the app's postgres/postgres credentials)…"
+  kube -n "$PCTL_NAMESPACE" create secret generic placecontext-pg-superuser \
+    --type=kubernetes.io/basic-auth --from-literal=username=postgres --from-literal=password=postgres \
+    --dry-run=client -o yaml | kube apply -f -
+
+  say "Replicated cluster + scheduled backups…"
+  kube -n "$PCTL_NAMESPACE" apply -f "$K3S_DIR/postgres-ha.yaml"
+  say "Waiting for the cluster to become healthy (3 instances)…"
+  local i ready
+  for i in $(seq 1 60); do
+    ready="$(kube -n "$PCTL_NAMESPACE" get cluster placecontext-pg -o jsonpath='{.status.readyInstances}' 2>/dev/null || true)"
+    [ "$ready" = "3" ] && break
+    sleep 5
+  done
+  [ "$ready" = "3" ] || die "cluster did not reach 3 ready instances (got '${ready:-0}')."
+
+  say "Pointing the app at the primary (placecontext-pg-rw)…"
+  kube -n "$PCTL_NAMESPACE" set env deploy/placecontext \
+    "PlaceContext__ConnectionString=Host=placecontext-pg-rw;Port=5432;Database=placecontext;Username=postgres;Password=postgres"
+  kube -n "$PCTL_NAMESPACE" rollout status deploy/placecontext --timeout=240s
+  ok "Replicated Postgres + PITR active. Reads can also use placecontext-pg-ro."
+}
+
+cmd_db_backup() {
+  resolve_ctx
+  local name="manual-$(date +%s 2>/dev/null || echo now)"
+  say "Triggering an on-demand base backup…"
+  cat <<EOF | kube -n "$PCTL_NAMESPACE" apply -f -
+apiVersion: postgresql.cnpg.io/v1
+kind: Backup
+metadata:
+  name: placecontext-pg-${name}
+spec:
+  cluster:
+    name: placecontext-pg
+EOF
+  ok "Backup '${name}' requested — watch: kubectl -n $PCTL_NAMESPACE get backup"
+}
+
+cmd_db_restore_info() {
+  cat <<'EOF'
+Point-in-time recovery (PITR) — restore into a NEW cluster, then cut over:
+
+  apiVersion: postgresql.cnpg.io/v1
+  kind: Cluster
+  metadata: { name: placecontext-pg-restored }
+  spec:
+    instances: 3
+    imageName: ghcr.io/bradlnz/placecontext-pg:16-pgvector
+    superuserSecret: { name: placecontext-pg-superuser }
+    bootstrap:
+      recovery:
+        source: placecontext-pg
+        recoveryTarget:
+          targetTime: "2026-06-26 01:38:00+00"   # the moment to recover to
+    externalClusters:
+      - name: placecontext-pg
+        barmanObjectStore:
+          destinationPath: s3://placecontext-backups/
+          endpointURL: http://minio:9000
+          s3Credentials:
+            accessKeyId:     { name: placecontext-minio, key: ACCESS_KEY_ID }
+            secretAccessKey: { name: placecontext-minio, key: ACCESS_SECRET_KEY }
+
+Apply it, wait until healthy, then repoint the app:
+  pctl … set env deploy/placecontext PlaceContext__ConnectionString=Host=placecontext-pg-restored-rw;...
+EOF
+}
+
 # ── kill (destructive — pod | node | job) ─────────────────────────────────────────────────────────
 cmd_kill() {
   local kind="${1:-}"; shift || true
@@ -429,6 +522,9 @@ ${C_BOLD}ANYWHERE${C_RESET}
   deploy [--enforce true|false] [--image IMG] [--activation-key KEY] [--context CTX]
                          Apply the manifests to the current (or given) kube context
   kill pod|node|job NAME [--yes]   Delete a pod / k3d node / job (prompts unless --yes)
+  db ha                  Replicated Postgres (1 primary + 2 replicas) + PITR backups via CloudNativePG
+  db backup-now          Trigger an on-demand base backup
+  db restore-info        Print point-in-time recovery (PITR) steps
   autostart [--disable]  Start the cluster on boot (k3d → systemd user service; k3s → already a service)
   status                 Show nodes + workloads
   logs [-f]              Tail the PlaceContext Host logs
@@ -474,6 +570,7 @@ main() {
         *) die "unknown 'agent' subcommand: '$sub' (try: join)";;
       esac;;
     kill)         cmd_kill "$@";;
+    db)           cmd_db "$@";;
     autostart)    cmd_autostart "$@";;
     tui|ui)       cmd_tui "$@";;
     build)        cmd_build "$@";;
