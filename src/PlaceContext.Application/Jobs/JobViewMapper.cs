@@ -33,6 +33,7 @@ internal static class JobViewMapper
         PartialExitCodes: job.ExitCodePolicy.PartialCodes.ToList(),
         AllowNetworkEgress: job.AllowNetworkEgress,
         Parameters: job.Parameters.Select(p => new JobParameterDto(p.Name, p.Label, p.Required)).ToList(),
+        PostJobActions: job.PostJobActions.ToList(),
         CreatedAt: job.CreatedAt,
         UpdatedAt: job.UpdatedAt);
 

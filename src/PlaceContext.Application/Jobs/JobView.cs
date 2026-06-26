@@ -38,5 +38,7 @@ public sealed record JobView(
     bool AllowNetworkEgress,
     /// <summary>Declared input parameters prompted before a manual run (empty = none).</summary>
     IReadOnlyList<JobParameterDto> Parameters,
+    /// <summary>Post-job actions that produce stored outputs after each run (empty = none).</summary>
+    IReadOnlyList<PlaceContext.Domain.ValueObjects.PostJobActionKind> PostJobActions,
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt);

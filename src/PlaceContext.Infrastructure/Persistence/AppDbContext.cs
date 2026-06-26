@@ -39,6 +39,7 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
     public DbSet<ToolCallRow> ToolCalls => Set<ToolCallRow>();
     public DbSet<JobRow> Jobs => Set<JobRow>();
     public DbSet<JobRunRow> JobRuns => Set<JobRunRow>();
+    public DbSet<RunArtifactLinkRow> RunArtifacts => Set<RunArtifactLinkRow>();
     public DbSet<JobSecretRow> JobSecrets => Set<JobSecretRow>();
     public DbSet<JobTriggerRow> JobTriggers => Set<JobTriggerRow>();
     public DbSet<EventDefinitionRow> EventDefinitions => Set<EventDefinitionRow>();
@@ -190,6 +191,16 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
             e.Property(x => x.AllowNetworkEgress).HasDefaultValue(false);
             e.Property(x => x.TimeoutSeconds).HasDefaultValue(300);
             e.Property(x => x.ParametersJson).HasDefaultValue("[]");
+            e.Property(x => x.PostJobActionsJson).HasDefaultValue("[]");
+        });
+
+        b.Entity<RunArtifactLinkRow>(e =>
+        {
+            e.ToTable("job_run_artifacts");
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => x.RunId);
+            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
+            e.Property(x => x.CreatedAt).HasDefaultValueSql("now()");
         });
 
         b.Entity<JobSecretRow>(e =>

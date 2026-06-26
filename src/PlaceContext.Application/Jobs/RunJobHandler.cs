@@ -36,6 +36,7 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
     private readonly IRunEmbeddingRepository? _embeddingStore;
     private readonly IProjectSecretRepository? _secretRepo;
     private readonly ISecretProtector? _secretProtector;
+    private readonly PostJobActionService? _postActions;
     private IReadOnlyDictionary<string, string> _runSecrets = new Dictionary<string, string>();
 
     public RunJobHandler(
@@ -51,10 +52,12 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
         IEmbeddingGateway? embeddings = null,
         IRunEmbeddingRepository? embeddingStore = null,
         IProjectSecretRepository? secretRepo = null,
-        ISecretProtector? secretProtector = null)
+        ISecretProtector? secretProtector = null,
+        PostJobActionService? postActions = null)
     {
         _secretRepo = secretRepo;
         _secretProtector = secretProtector;
+        _postActions = postActions;
         _jobs = jobs;
         _runs = runs;
         _contexts = contexts;
@@ -110,6 +113,14 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
         await AppendRunSummaryToProjectContextAsync(job, run, ct);
 
         await _uow.SaveChangesAsync(ct);
+
+        // Post-job actions: turn this run's artifacts into stored outputs (HTML report / chart / CSV /
+        // raw bundle) surfaced as links. Best-effort — never fails the run.
+        if (_postActions is not null)
+        {
+            try { await _postActions.RunAsync(job, run, ct); }
+            catch { /* isolated inside the service too; belt-and-suspenders */ }
+        }
 
         // Raise the built-in "job.completed" domain event so event-triggers can chain off this run.
         if (_events is not null)

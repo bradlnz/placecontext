@@ -50,5 +50,8 @@ public sealed record CreateJobCommand(
     IReadOnlyList<CodeFileDto>? ReduceFiles = null,
 
     /// <summary>Declared input parameters prompted at run time (or injected by an event source).</summary>
-    IReadOnlyList<JobParameterDto>? Parameters = null)
+    IReadOnlyList<JobParameterDto>? Parameters = null,
+
+    /// <summary>Post-job actions: turn the run's artifacts into stored outputs (report/chart/CSV/bundle).</summary>
+    IReadOnlyList<PlaceContext.Domain.ValueObjects.PostJobActionKind>? PostJobActions = null)
     : ICommand<JobView>;

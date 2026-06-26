@@ -34,6 +34,7 @@ public static class DependencyInjection
         // Trigger + event application services (event fan-out, schedule scanning).
         services.AddScoped<EventDispatchService>();
         services.AddScoped<ScheduleScanService>();
+        services.AddScoped<PostJobActionService>();
 
         // Commands.
         services.AddScoped<ICommandHandler<CreateProjectCommand, ProjectSummaryView>, CreateProjectHandler>();
@@ -104,6 +105,7 @@ public static class DependencyInjection
         services.AddScoped<ICommandHandler<AddProjectSecretCommand, ProjectSecretView>, AddProjectSecretHandler>();
         services.AddScoped<ICommandHandler<DeleteProjectSecretCommand, bool>, DeleteProjectSecretHandler>();
         services.AddScoped<IQueryHandler<ListProjectSecretsQuery, IReadOnlyList<ProjectSecretView>>, ListProjectSecretsHandler>();
+        services.AddScoped<IQueryHandler<ListRunArtifactsQuery, IReadOnlyList<RunArtifactLinkView>>, ListRunArtifactsHandler>();
 
         return services;
     }

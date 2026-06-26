@@ -45,6 +45,7 @@ public sealed class EfJobRepository : IJobRepository
         existing.ParametersJson = updated.ParametersJson;
         existing.AllowNetworkEgress = updated.AllowNetworkEgress;
         existing.TimeoutSeconds = updated.TimeoutSeconds;
+        existing.PostJobActionsJson = updated.PostJobActionsJson;
         existing.UpdatedAt = updated.UpdatedAt;
     }
 
@@ -80,6 +81,7 @@ public sealed class EfJobRepository : IJobRepository
                 job.Parameters.Select(p => new JobParameterJson(p.Name, p.Label, p.Required)).ToList(), Json),
             AllowNetworkEgress = job.AllowNetworkEgress,
             TimeoutSeconds = job.TimeoutSeconds,
+            PostJobActionsJson = JsonSerializer.Serialize(job.PostJobActions.Select(a => a.ToString()).ToList(), Json),
             CreatedAt = job.CreatedAt,
             UpdatedAt = job.UpdatedAt,
         };
@@ -148,11 +150,17 @@ public sealed class EfJobRepository : IJobRepository
             .Select(p => new JobParameter(p.Name, p.Label, p.Required))
             .ToList();
 
+        var postJobActions = (JsonSerializer.Deserialize<List<string>>(row.PostJobActionsJson, Json)
+                ?? new List<string>())
+            .Select(s => Enum.TryParse<PostJobActionKind>(s, out var k) ? (PostJobActionKind?)k : null)
+            .Where(k => k is not null).Select(k => k!.Value)
+            .ToList();
+
         return Job.Rehydrate(
             row.Id, row.ProjectId, row.Name, row.Description,
             mapSpec, reduceSpec, row.ConcurrencyLimit, policy, row.CreatedAt, row.UpdatedAt,
             allowNetworkEgress: row.AllowNetworkEgress, parameters: parameters,
-            timeoutSeconds: row.TimeoutSeconds);
+            timeoutSeconds: row.TimeoutSeconds, postJobActions: postJobActions);
     }
 
     private static WorkloadSource DeserialiseSource(

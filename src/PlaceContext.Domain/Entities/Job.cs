@@ -24,6 +24,7 @@ public sealed class Job : AggregateRoot
         bool allowNetworkEgress,
         int timeoutSeconds,
         IReadOnlyList<JobParameter> parameters,
+        IReadOnlyList<PostJobActionKind> postJobActions,
         DateTimeOffset createdAt,
         DateTimeOffset updatedAt)
     {
@@ -38,6 +39,7 @@ public sealed class Job : AggregateRoot
         AllowNetworkEgress = allowNetworkEgress;
         TimeoutSeconds = timeoutSeconds;
         Parameters = parameters;
+        PostJobActions = postJobActions;
         CreatedAt = createdAt;
         UpdatedAt = updatedAt;
     }
@@ -84,6 +86,12 @@ public sealed class Job : AggregateRoot
     /// <summary>Declared input fields this job needs before it can run. Empty = no prompt.</summary>
     public IReadOnlyList<JobParameter> Parameters { get; private set; }
 
+    /// <summary>
+    /// Actions run after a successful/finished run to turn its artifacts into stored outputs (HTML
+    /// report, chart, CSV, raw bundle) surfaced as links. Empty = no post-processing. Best-effort.
+    /// </summary>
+    public IReadOnlyList<PostJobActionKind> PostJobActions { get; private set; }
+
     public DateTimeOffset CreatedAt { get; }
     public DateTimeOffset UpdatedAt { get; private set; }
 
@@ -107,7 +115,8 @@ public sealed class Job : AggregateRoot
         DateTimeOffset createdAt,
         bool allowNetworkEgress = false,
         IReadOnlyList<JobParameter>? parameters = null,
-        int timeoutSeconds = DefaultTimeoutSeconds)
+        int timeoutSeconds = DefaultTimeoutSeconds,
+        IReadOnlyList<PostJobActionKind>? postJobActions = null)
     {
         if (projectId == Guid.Empty)
             throw new ArgumentException("ProjectId must not be empty.", nameof(projectId));
@@ -124,8 +133,12 @@ public sealed class Job : AggregateRoot
             Guid.NewGuid(), projectId, name.Trim(), description?.Trim(),
             mapSpec, reduceSpec, concurrencyLimit, exitCodePolicy,
             allowNetworkEgress, NormalizeTimeout(timeoutSeconds), parameters ?? Array.Empty<JobParameter>(),
-            createdAt, createdAt);
+            DistinctActions(postJobActions), createdAt, createdAt);
     }
+
+    // Post-job actions are a set (no duplicates) and order-stable for display.
+    private static IReadOnlyList<PostJobActionKind> DistinctActions(IReadOnlyList<PostJobActionKind>? actions)
+        => actions is null ? Array.Empty<PostJobActionKind>() : actions.Distinct().ToList();
 
     /// <summary>Clamps a requested timeout into the valid [1, <see cref="MaxTimeoutSeconds"/>] range.</summary>
     public static int NormalizeTimeout(int timeoutSeconds)
@@ -145,10 +158,11 @@ public sealed class Job : AggregateRoot
         DateTimeOffset updatedAt,
         bool allowNetworkEgress = false,
         IReadOnlyList<JobParameter>? parameters = null,
-        int timeoutSeconds = DefaultTimeoutSeconds)
+        int timeoutSeconds = DefaultTimeoutSeconds,
+        IReadOnlyList<PostJobActionKind>? postJobActions = null)
         => new(id, projectId, name, description, mapSpec, reduceSpec, concurrencyLimit, exitCodePolicy,
                allowNetworkEgress, NormalizeTimeout(timeoutSeconds), parameters ?? Array.Empty<JobParameter>(),
-               createdAt, updatedAt);
+               DistinctActions(postJobActions), createdAt, updatedAt);
 
     // ── Behaviour ─────────────────────────────────────────────────────────────────────────────────
 
@@ -165,7 +179,8 @@ public sealed class Job : AggregateRoot
         DateTimeOffset updatedAt,
         bool allowNetworkEgress = false,
         IReadOnlyList<JobParameter>? parameters = null,
-        int timeoutSeconds = DefaultTimeoutSeconds)
+        int timeoutSeconds = DefaultTimeoutSeconds,
+        IReadOnlyList<PostJobActionKind>? postJobActions = null)
     {
         if (string.IsNullOrWhiteSpace(name))
             throw new ArgumentException("Job name must not be empty.", nameof(name));
@@ -185,6 +200,7 @@ public sealed class Job : AggregateRoot
         AllowNetworkEgress = allowNetworkEgress;
         TimeoutSeconds = NormalizeTimeout(timeoutSeconds);
         if (parameters is not null) Parameters = parameters;
+        if (postJobActions is not null) PostJobActions = DistinctActions(postJobActions);
         UpdatedAt = updatedAt;
     }
 

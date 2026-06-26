@@ -52,6 +52,9 @@ public sealed class JobRow : ITenantOwned
     /// <summary>JSON array of declared input parameters [{Name,Label,Required}]. Empty = no prompt.</summary>
     public string ParametersJson { get; set; } = "[]";
 
+    /// <summary>JSON array of post-job action kinds, e.g. ["HtmlReport","Chart"]. Empty = none.</summary>
+    public string PostJobActionsJson { get; set; } = "[]";
+
     // ── Network policy ────────────────────────────────────────────────────────────────────────────
     /// <summary>True when containers may make outbound network calls. Default false (network-none sandbox).</summary>
     public bool AllowNetworkEgress { get; set; }
