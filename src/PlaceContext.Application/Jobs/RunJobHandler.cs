@@ -150,7 +150,7 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
         {
             var correlationId = $"{runId:N}-map-{index}";
             var request = BuildRequest(job.MapSpec.Source, payload, MergeSecrets(job.MapSpec.Env),
-                Array.Empty<(string, string)>(), correlationId, job.AllowNetworkEgress);
+                Array.Empty<(string, string)>(), correlationId, job.AllowNetworkEgress, job.TimeoutSeconds);
 
             var result = await _runner.RunAsync(request, ct);
             var outcome = job.ExitCodePolicy.Classify(result.ExitCode);
@@ -181,7 +181,7 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
 
         var correlationId = $"{runId:N}-reduce";
         var request = BuildRequest(reduceSpec.Source, "{}", MergeSecrets(reduceSpec.Env),
-            artifactMounts, correlationId, job.AllowNetworkEgress);
+            artifactMounts, correlationId, job.AllowNetworkEgress, job.TimeoutSeconds);
 
         var result = await _runner.RunAsync(request, ct);
         var succeeded = job.ExitCodePolicy.SuccessCodes.Contains(result.ExitCode);
@@ -204,7 +204,8 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
         IReadOnlyDictionary<string, string> env,
         IReadOnlyList<(string Content, string ContainerPath)> artifactMounts,
         string correlationId,
-        bool allowNetworkEgress)
+        bool allowNetworkEgress,
+        int timeoutSeconds)
     {
         return source switch
         {
@@ -217,7 +218,8 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
                 CodeFiles: null,
                 RuntimeId: null,
                 Entrypoint: null,
-                AllowNetworkEgress: allowNetworkEgress),
+                AllowNetworkEgress: allowNetworkEgress,
+                TimeoutSeconds: timeoutSeconds),
 
             WorkloadSource.CodeWorkload code => new WorkloadRunRequest(
                 Image: null,
@@ -228,7 +230,8 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
                 CodeFiles: code.Files.Select(f => (f.Path, f.Content)).ToList(),
                 RuntimeId: code.RuntimeId,
                 Entrypoint: code.Entrypoint,
-                AllowNetworkEgress: allowNetworkEgress),
+                AllowNetworkEgress: allowNetworkEgress,
+                TimeoutSeconds: timeoutSeconds),
 
             _ => throw new InvalidOperationException($"Unsupported WorkloadSource type: {source.GetType().Name}"),
         };

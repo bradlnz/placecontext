@@ -59,7 +59,8 @@ public sealed record WorkloadRunRequest(
     IReadOnlyList<(string Path, string Content)>? CodeFiles,
     string? RuntimeId,
     string? Entrypoint,
-    bool AllowNetworkEgress = false);
+    bool AllowNetworkEgress = false,
+    int? TimeoutSeconds = null);
 
 /// <summary>
 /// Raw result from one container invocation.

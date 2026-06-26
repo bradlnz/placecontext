@@ -31,6 +31,8 @@ public sealed class KubernetesWorkloadRunner : IWorkloadRunner
 
         var name = MakeName(request.CorrelationId);
         var runLabel = name; // pod selector for the NetworkPolicy
+        // Per-job timeout wins; fall back to the global default when the job didn't set one.
+        var timeoutSeconds = request.TimeoutSeconds is > 0 ? request.TimeoutSeconds.Value : _options.DefaultTimeoutSeconds;
 
         // ── Resolve image + the in-pod run command ────────────────────────────────────────────────
         string image;
@@ -106,7 +108,7 @@ public sealed class KubernetesWorkloadRunner : IWorkloadRunner
             Spec = new V1JobSpec
             {
                 BackoffLimit = 0,
-                ActiveDeadlineSeconds = _options.DefaultTimeoutSeconds,
+                ActiveDeadlineSeconds = timeoutSeconds,
                 TtlSecondsAfterFinished = 120,
                 Template = new V1PodTemplateSpec
                 {
@@ -167,7 +169,7 @@ public sealed class KubernetesWorkloadRunner : IWorkloadRunner
         try
         {
             await client.BatchV1.CreateNamespacedJobAsync(job, ns, cancellationToken: ct);
-            return await AwaitResultAsync(client, ns, name, ct);
+            return await AwaitResultAsync(client, ns, name, timeoutSeconds, ct);
         }
         finally
         {
@@ -176,9 +178,11 @@ public sealed class KubernetesWorkloadRunner : IWorkloadRunner
     }
 
     // Poll the Job to completion (or the deadline), then read the pod's exit code + logs (the artifact).
-    private async Task<WorkloadRunResult> AwaitResultAsync(Kubernetes client, string ns, string name, CancellationToken ct)
+    private async Task<WorkloadRunResult> AwaitResultAsync(Kubernetes client, string ns, string name, int timeoutSeconds, CancellationToken ct)
     {
-        var deadline = DateTimeOffset.UtcNow.AddSeconds(_options.DefaultTimeoutSeconds + 30);
+        // Give the poller a small grace beyond the pod's own ActiveDeadlineSeconds so we observe the
+        // Job's Failed status (deadline-exceeded) rather than timing out the poll first.
+        var deadline = DateTimeOffset.UtcNow.AddSeconds(timeoutSeconds + 30);
         while (DateTimeOffset.UtcNow < deadline)
         {
             var job = await client.BatchV1.ReadNamespacedJobStatusAsync(name, ns, cancellationToken: ct);

@@ -44,6 +44,7 @@ public sealed class EfJobRepository : IJobRepository
         existing.ConcurrencyLimit = updated.ConcurrencyLimit;
         existing.ParametersJson = updated.ParametersJson;
         existing.AllowNetworkEgress = updated.AllowNetworkEgress;
+        existing.TimeoutSeconds = updated.TimeoutSeconds;
         existing.UpdatedAt = updated.UpdatedAt;
     }
 
@@ -78,6 +79,7 @@ public sealed class EfJobRepository : IJobRepository
             ParametersJson = JsonSerializer.Serialize(
                 job.Parameters.Select(p => new JobParameterJson(p.Name, p.Label, p.Required)).ToList(), Json),
             AllowNetworkEgress = job.AllowNetworkEgress,
+            TimeoutSeconds = job.TimeoutSeconds,
             CreatedAt = job.CreatedAt,
             UpdatedAt = job.UpdatedAt,
         };
@@ -149,7 +151,8 @@ public sealed class EfJobRepository : IJobRepository
         return Job.Rehydrate(
             row.Id, row.ProjectId, row.Name, row.Description,
             mapSpec, reduceSpec, row.ConcurrencyLimit, policy, row.CreatedAt, row.UpdatedAt,
-            allowNetworkEgress: row.AllowNetworkEgress, parameters: parameters);
+            allowNetworkEgress: row.AllowNetworkEgress, parameters: parameters,
+            timeoutSeconds: row.TimeoutSeconds);
     }
 
     private static WorkloadSource DeserialiseSource(

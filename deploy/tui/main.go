@@ -16,6 +16,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -396,7 +397,7 @@ func (m model) fetchMcpDetail(c mcpRow) tea.Cmd {
 	}
 }
 
-type jobRow struct{ id, tenant, name, source, conc, egress, updated string }
+type jobRow struct{ id, tenant, name, source, conc, egress, updated, timeout string }
 
 // queryJobs reads the jobs table directly from the Postgres pod via psql.
 type searchMsg struct{ body string }
@@ -462,7 +463,7 @@ mc ls --recursive s 2>/dev/null | awk '{print $NF}' | grep -iv '^placecontext-ba
 }
 
 func (m model) queryJobs(ctx context.Context) ([]jobRow, string) {
-	const q = `SELECT "Id", "TenantId", "Name", "MapSourceKind", "ConcurrencyLimit", "AllowNetworkEgress", "UpdatedAt" ` +
+	const q = `SELECT "Id", "TenantId", "Name", "MapSourceKind", "ConcurrencyLimit", "AllowNetworkEgress", "UpdatedAt", "TimeoutSeconds" ` +
 		`FROM jobs ORDER BY "UpdatedAt" DESC LIMIT 100`
 	b, err := m.kubectl(ctx, "-n", ns, "exec", "deploy/placecontext-db", "--",
 		"psql", "-U", "postgres", "-d", "placecontext", "-At", "-F", "\t", "-c", q)
@@ -475,7 +476,7 @@ func (m model) queryJobs(ctx context.Context) ([]jobRow, string) {
 			continue
 		}
 		f := strings.Split(ln, "\t")
-		for len(f) < 7 {
+		for len(f) < 8 {
 			f = append(f, "")
 		}
 		eg := "no"
@@ -486,7 +487,11 @@ func (m model) queryJobs(ctx context.Context) ([]jobRow, string) {
 		if len(upd) > 19 {
 			upd = upd[:19]
 		}
-		rows = append(rows, jobRow{f[0], f[1], f[2], f[3], f[4], eg, upd})
+		to := f[7]
+		if to == "" {
+			to = "300"
+		}
+		rows = append(rows, jobRow{f[0], f[1], f[2], f[3], f[4], eg, upd, to})
 	}
 	return rows, ""
 }
@@ -555,6 +560,51 @@ func (m model) toggleJobSettingCmd(j jobRow, s jobSetting, val bool) tea.Cmd {
 			return flashMsg(s.label + " toggle failed: " + err.Error())
 		}
 		return jobSettingMsg{s.column, val, s.label + ": " + state}
+	}
+}
+
+// timeout adjustment bounds (mirrors Job.DefaultTimeoutSeconds / MaxTimeoutSeconds on the server).
+const (
+	timeoutStep = 30
+	timeoutMin  = 30
+	timeoutMax  = 3600
+)
+
+type jobTimeoutMsg struct {
+	val   int
+	flash string
+}
+
+// adjustTimeoutCmd persists a new per-job timeout (clamped) to the jobs table via psql, off the UI
+// thread. delta is added to the current value and snapped to the [timeoutMin, timeoutMax] range.
+func (m model) adjustTimeoutCmd(j jobRow, delta int) tea.Cmd {
+	mc := m
+	return func() tea.Msg {
+		if j.id == "" {
+			return flashMsg("could not update timeout — missing job id (refresh and retry)")
+		}
+		cur, err := strconv.Atoi(strings.TrimSpace(j.timeout))
+		if err != nil || cur <= 0 {
+			cur = 300
+		}
+		next := cur + delta
+		if next < timeoutMin {
+			next = timeoutMin
+		}
+		if next > timeoutMax {
+			next = timeoutMax
+		}
+		if next == cur {
+			return jobTimeoutMsg{cur, "timeout: " + strconv.Itoa(cur) + "s (limit reached)"}
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		q := `UPDATE jobs SET "TimeoutSeconds"=` + strconv.Itoa(next) + `, "UpdatedAt"=now() WHERE "Id"='` + j.id + `'`
+		if _, err := mc.kubectl(ctx, "-n", ns, "exec", "deploy/placecontext-db", "--",
+			"psql", "-U", "postgres", "-d", "placecontext", "-c", q); err != nil {
+			return flashMsg("timeout update failed: " + err.Error())
+		}
+		return jobTimeoutMsg{next, "timeout: " + strconv.Itoa(next) + "s"}
 	}
 }
 
@@ -739,7 +789,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "y", "Y":
 				m.busy, m.busyVerb, m.view = true, m.confirmVerb, viewAction
 				m.out.SetContent("")
-				return m, tea.Batch(m.sp.Tick, m.runAction(m.confirmVerb, m.confirmArgs...))
+				// The spinner ticks on a single chain started in Init — don't start another (racing
+				// chains drop each other's ticks via tag-dedup and can freeze the spinner).
+				return m, m.runAction(m.confirmVerb, m.confirmArgs...)
 			case "n", "N":
 				m.view = m.prevView
 			}
@@ -762,7 +814,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					it := m.menu[m.menuCursor]
 					m.busy, m.busyVerb, m.view = true, it.verb, viewAction
 					m.out.SetContent("")
-					return m, tea.Batch(m.sp.Tick, m.runAction(it.verb, it.args...))
+					return m, m.runAction(it.verb, it.args...)
 				}
 			}
 			return m, nil
@@ -794,16 +846,18 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		// per-job settings — checkboxes toggled with space, persisted to the jobs table
+		// per-job settings — checkboxes toggled with space; the timeout row (last) is adjusted with
+		// ←/→ (or -/+). All changes persist to the jobs table off the UI thread.
 		if m.view == viewSettings {
 			items := jobSettings()
+			timeoutRow := len(items) // the timeout sits one past the checkboxes
 			switch key {
 			case "up", "k":
 				if m.setCursor > 0 {
 					m.setCursor--
 				}
 			case "down", "j":
-				if m.setCursor < len(items)-1 {
+				if m.setCursor < timeoutRow {
 					m.setCursor++
 				}
 			case " ", "enter":
@@ -811,6 +865,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					s := items[m.setCursor]
 					cur := s.get(m.setJob)
 					return m, m.toggleJobSettingCmd(m.setJob, s, !cur)
+				}
+			case "right", "l", "+", "=":
+				if m.setCursor == timeoutRow {
+					return m, m.adjustTimeoutCmd(m.setJob, timeoutStep)
+				}
+			case "left", "h", "-", "_":
+				if m.setCursor == timeoutRow {
+					return m, m.adjustTimeoutCmd(m.setJob, -timeoutStep)
 				}
 			}
 			return m, nil
@@ -851,7 +913,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if !m.busy {
 				m.busy, m.busyVerb, m.view = true, "adding a worker", viewAction
 				m.out.SetContent("")
-				return m, tea.Batch(m.sp.Tick, m.runAction("adding a worker", "dev", "add-node", "--role", "agent"))
+				return m, m.runAction("adding a worker", "dev", "add-node", "--role", "agent")
 			}
 			return m, nil
 		case "g":
@@ -965,6 +1027,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.flash = msg.flash
 		return m, m.fetchState() // refresh the jobs list so the change shows everywhere
+
+	case jobTimeoutMsg:
+		m.setJob.timeout = strconv.Itoa(msg.val)
+		m.flash = msg.flash
+		return m, m.fetchState()
 
 	case metricsTickMsg:
 		if m.view != viewMetrics {
@@ -1350,6 +1417,21 @@ func (m model) settingsView() string {
 		}
 		b.WriteString("       " + dimStyle.Render(s.desc) + "\n\n")
 	}
+
+	// Timeout row — adjustable numeric value (not a checkbox); last in the list.
+	to := strings.TrimSpace(m.setJob.timeout)
+	if to == "" {
+		to = "300"
+	}
+	val := okStyle.Render("‹ " + to + "s ›")
+	tline := "⏱  per-container timeout   " + val
+	if m.setCursor == len(items) {
+		b.WriteString(selStyle.Render("❯ "+tline) + "\n")
+	} else {
+		b.WriteString("  " + tline + "\n")
+	}
+	b.WriteString("       " + dimStyle.Render("Max wall-clock per container before it's killed and the shard fails. ←/→ to adjust (30s–3600s).") + "\n\n")
+
 	b.WriteString("  " + dimStyle.Render("changes persist immediately and apply on the job's next run.") + "\n")
 	return b.String()
 }
@@ -1438,7 +1520,7 @@ func (m model) footer() string {
 			k("/", "search"), k("g", "metrics"), k("m", "mcp"), k("p", "portal"), k("$", "subscribe"),
 			k("a", "add worker"), k("c", "theme"), k("r", "refresh"), k("q", "quit")}
 	case viewSettings:
-		keys = []string{k("↑↓", "nav"), k("space", "toggle"), k("b", "back"), k("q", "quit")}
+		keys = []string{k("↑↓", "nav"), k("space", "toggle"), k("←→", "timeout"), k("b", "back"), k("q", "quit")}
 	case viewConfirm:
 		keys = []string{k("y", "confirm"), k("n", "cancel"), k("q", "quit")}
 	case viewMcp:

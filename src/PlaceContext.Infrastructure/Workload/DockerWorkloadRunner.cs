@@ -107,13 +107,15 @@ public sealed class DockerWorkloadRunner : IWorkloadRunner
             }
         }
 
+        // Per-job timeout wins; fall back to the global default when the job didn't set one.
+        var timeoutSeconds = request.TimeoutSeconds is > 0 ? request.TimeoutSeconds.Value : _options.DefaultTimeoutSeconds;
         try
         {
             var args = BuildArgs(request, image, hostOutDir, hostMounts, workDir, overrideCmd);
             var psi = BuildProcessStartInfo(args);
 
             using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            timeoutCts.CancelAfter(TimeSpan.FromSeconds(_options.DefaultTimeoutSeconds));
+            timeoutCts.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds));
 
             using var proc = Process.Start(psi)
                 ?? throw new InvalidOperationException($"Failed to start '{_options.DockerExecutable}'.");
@@ -144,7 +146,7 @@ public sealed class DockerWorkloadRunner : IWorkloadRunner
                 ExitCode: -1,
                 Artifact: null,
                 Stdout: "",
-                Stderr: $"Workload timed out after {_options.DefaultTimeoutSeconds}s (correlationId={request.CorrelationId}).");
+                Stderr: $"Workload timed out after {timeoutSeconds}s (correlationId={request.CorrelationId}).");
         }
         finally
         {

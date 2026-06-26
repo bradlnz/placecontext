@@ -22,6 +22,7 @@ public sealed class Job : AggregateRoot
         int concurrencyLimit,
         ExitCodePolicy exitCodePolicy,
         bool allowNetworkEgress,
+        int timeoutSeconds,
         IReadOnlyList<JobParameter> parameters,
         DateTimeOffset createdAt,
         DateTimeOffset updatedAt)
@@ -35,10 +36,17 @@ public sealed class Job : AggregateRoot
         ConcurrencyLimit = concurrencyLimit;
         ExitCodePolicy = exitCodePolicy;
         AllowNetworkEgress = allowNetworkEgress;
+        TimeoutSeconds = timeoutSeconds;
         Parameters = parameters;
         CreatedAt = createdAt;
         UpdatedAt = updatedAt;
     }
+
+    /// <summary>Default per-container timeout when a job doesn't specify one.</summary>
+    public const int DefaultTimeoutSeconds = 300;
+
+    /// <summary>Hard ceiling for a per-job timeout (1 hour) — guards against runaway containers.</summary>
+    public const int MaxTimeoutSeconds = 3600;
 
     public Guid Id { get; }
     public Guid ProjectId { get; }
@@ -67,6 +75,12 @@ public sealed class Job : AggregateRoot
     /// </summary>
     public bool AllowNetworkEgress { get; private set; }
 
+    /// <summary>
+    /// Per-container wall-clock timeout in seconds. A container exceeding this is killed and the shard
+    /// fails. Defaults to <see cref="DefaultTimeoutSeconds"/>; raise it for long-running jobs.
+    /// </summary>
+    public int TimeoutSeconds { get; private set; }
+
     /// <summary>Declared input fields this job needs before it can run. Empty = no prompt.</summary>
     public IReadOnlyList<JobParameter> Parameters { get; private set; }
 
@@ -92,7 +106,8 @@ public sealed class Job : AggregateRoot
         ExitCodePolicy exitCodePolicy,
         DateTimeOffset createdAt,
         bool allowNetworkEgress = false,
-        IReadOnlyList<JobParameter>? parameters = null)
+        IReadOnlyList<JobParameter>? parameters = null,
+        int timeoutSeconds = DefaultTimeoutSeconds)
     {
         if (projectId == Guid.Empty)
             throw new ArgumentException("ProjectId must not be empty.", nameof(projectId));
@@ -108,8 +123,13 @@ public sealed class Job : AggregateRoot
         return new Job(
             Guid.NewGuid(), projectId, name.Trim(), description?.Trim(),
             mapSpec, reduceSpec, concurrencyLimit, exitCodePolicy,
-            allowNetworkEgress, parameters ?? Array.Empty<JobParameter>(), createdAt, createdAt);
+            allowNetworkEgress, NormalizeTimeout(timeoutSeconds), parameters ?? Array.Empty<JobParameter>(),
+            createdAt, createdAt);
     }
+
+    /// <summary>Clamps a requested timeout into the valid [1, <see cref="MaxTimeoutSeconds"/>] range.</summary>
+    public static int NormalizeTimeout(int timeoutSeconds)
+        => timeoutSeconds < 1 ? DefaultTimeoutSeconds : Math.Min(timeoutSeconds, MaxTimeoutSeconds);
 
     /// <summary>Rehydrates a job from persisted state. Infrastructure only.</summary>
     public static Job Rehydrate(
@@ -124,9 +144,11 @@ public sealed class Job : AggregateRoot
         DateTimeOffset createdAt,
         DateTimeOffset updatedAt,
         bool allowNetworkEgress = false,
-        IReadOnlyList<JobParameter>? parameters = null)
+        IReadOnlyList<JobParameter>? parameters = null,
+        int timeoutSeconds = DefaultTimeoutSeconds)
         => new(id, projectId, name, description, mapSpec, reduceSpec, concurrencyLimit, exitCodePolicy,
-               allowNetworkEgress, parameters ?? Array.Empty<JobParameter>(), createdAt, updatedAt);
+               allowNetworkEgress, NormalizeTimeout(timeoutSeconds), parameters ?? Array.Empty<JobParameter>(),
+               createdAt, updatedAt);
 
     // ── Behaviour ─────────────────────────────────────────────────────────────────────────────────
 
@@ -142,7 +164,8 @@ public sealed class Job : AggregateRoot
         ExitCodePolicy exitCodePolicy,
         DateTimeOffset updatedAt,
         bool allowNetworkEgress = false,
-        IReadOnlyList<JobParameter>? parameters = null)
+        IReadOnlyList<JobParameter>? parameters = null,
+        int timeoutSeconds = DefaultTimeoutSeconds)
     {
         if (string.IsNullOrWhiteSpace(name))
             throw new ArgumentException("Job name must not be empty.", nameof(name));
@@ -160,7 +183,15 @@ public sealed class Job : AggregateRoot
         ConcurrencyLimit = concurrencyLimit;
         ExitCodePolicy = exitCodePolicy;
         AllowNetworkEgress = allowNetworkEgress;
+        TimeoutSeconds = NormalizeTimeout(timeoutSeconds);
         if (parameters is not null) Parameters = parameters;
+        UpdatedAt = updatedAt;
+    }
+
+    /// <summary>Sets just the per-container timeout (clamped). Used by operational settings edits.</summary>
+    public void SetTimeout(int timeoutSeconds, DateTimeOffset updatedAt)
+    {
+        TimeoutSeconds = NormalizeTimeout(timeoutSeconds);
         UpdatedAt = updatedAt;
     }
 }

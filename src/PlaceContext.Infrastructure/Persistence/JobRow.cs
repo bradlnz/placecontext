@@ -56,6 +56,9 @@ public sealed class JobRow : ITenantOwned
     /// <summary>True when containers may make outbound network calls. Default false (network-none sandbox).</summary>
     public bool AllowNetworkEgress { get; set; }
 
+    /// <summary>Per-container wall-clock timeout in seconds. Default 300 (5 minutes).</summary>
+    public int TimeoutSeconds { get; set; } = 300;
+
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
 }
