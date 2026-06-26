@@ -87,6 +87,7 @@ const (
 	viewMetrics
 	viewConfirm
 	viewMcp
+	viewSearch
 )
 
 // menuItem is a choice in the "add node" (or any future) list picker.
@@ -145,6 +146,9 @@ type model struct {
 	mcp       []mcpRow
 	mcpErr    string
 	mcpCursor int
+
+	// search (decisions / context / activity — the knowledge graph's contents)
+	searchQuery string
 }
 
 // ── messages ──────────────────────────────────────────────────────────────────────────────────
@@ -377,6 +381,39 @@ func (m model) fetchMcpDetail(c mcpRow) tea.Cmd {
 type jobRow struct{ name, source, conc, egress, updated string }
 
 // queryJobs reads the jobs table directly from the Postgres pod via psql.
+type searchMsg struct{ body string }
+
+// fetchSearch queries the knowledge graph's contents — decisions, project context, and the change
+// ledger — for a term, via psql. Powers the TUI search ([/]).
+func (m model) fetchSearch(query string) tea.Cmd {
+	mc := m
+	q := strings.TrimSpace(query)
+	return func() tea.Msg {
+		if q == "" {
+			return searchMsg{"(type a query and press enter)"}
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		esc := strings.ReplaceAll(q, "'", "''")
+		sql := `\pset format unaligned` + "\n" +
+			`SELECT 'DECISION  ' || "Question" || '  →  ' || "Choice" FROM decisions ` +
+			`WHERE "Question" ILIKE '%` + esc + `%' OR "Choice" ILIKE '%` + esc + `%' OR "Rationale" ILIKE '%` + esc + `%' LIMIT 40;` + "\n" +
+			`SELECT 'CONTEXT   ' || left("Markdown", 160) FROM project_contexts WHERE "Markdown" ILIKE '%` + esc + `%' LIMIT 15;` + "\n" +
+			`SELECT 'ACTIVITY  ' || "Summary" FROM activity_log ` +
+			`WHERE "Summary" ILIKE '%` + esc + `%' OR "Rationale" ILIKE '%` + esc + `%' LIMIT 40;`
+		b, err := mc.kubectl(ctx, "-n", ns, "exec", "deploy/placecontext-db", "--",
+			"psql", "-U", "postgres", "-d", "placecontext", "-q", "-t", "-c", sql)
+		if err != nil {
+			return searchMsg{"search failed: " + err.Error()}
+		}
+		body := strings.TrimSpace(string(b))
+		if body == "" {
+			body = "no matches for \"" + q + "\""
+		}
+		return searchMsg{body}
+	}
+}
+
 func (m model) queryJobs(ctx context.Context) ([]jobRow, string) {
 	const q = `SELECT "Name", "MapSourceKind", "ConcurrencyLimit", "AllowNetworkEgress", "UpdatedAt" ` +
 		`FROM jobs ORDER BY "UpdatedAt" DESC LIMIT 100`
@@ -543,6 +580,26 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyMsg:
 		key := msg.String()
+
+		// Search input captures typing first (so q/b/esc aren't treated as global shortcuts).
+		if m.view == viewSearch {
+			switch key {
+			case "esc", "ctrl+c":
+				m.view = viewDash
+			case "enter":
+				return m, m.fetchSearch(m.searchQuery)
+			case "backspace":
+				if r := []rune(m.searchQuery); len(r) > 0 {
+					m.searchQuery = string(r[:len(r)-1])
+				}
+			default:
+				if len(key) == 1 { // a single printable rune
+					m.searchQuery += key
+				}
+			}
+			return m, nil
+		}
+
 		switch key {
 		case "q", "ctrl+c":
 			m.quitting = true
@@ -665,6 +722,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			applyTheme(themeIdx)
 			m.flash = "theme: " + themeName()
 			return m, nil
+		case "/":
+			if !m.busy {
+				m.view, m.searchQuery = viewSearch, ""
+				m.logs.SetContent("type a query (decisions · context · activity), then enter")
+			}
+			return m, nil
 		case "p":
 			return m, m.openPortal()
 		case "m":
@@ -769,6 +832,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.logs.GotoTop()
 		return m, nil
 
+	case searchMsg:
+		m.logs.SetContent(colorizeLogs(msg.body))
+		m.logs.GotoTop()
+		return m, nil
+
 	case mcpMsg:
 		m.mcp, m.mcpErr = msg.rows, msg.err
 		if m.mcpCursor >= len(m.mcp) {
@@ -839,6 +907,8 @@ func (m model) View() string {
 		b.WriteString(m.confirmView())
 	case viewMcp:
 		b.WriteString(m.mcpView())
+	case viewSearch:
+		b.WriteString(m.searchView())
 	default:
 		b.WriteString(m.dashboard())
 	}
@@ -972,6 +1042,14 @@ func (m model) listBody() string {
 
 func (m model) selected(i int) bool { return m.view == viewDash && i == m.cursor }
 
+func (m model) searchView() string {
+	var b strings.Builder
+	b.WriteString(titleStyle.Render(" search ") + dimStyle.Render("  decisions · context · activity (the knowledge graph)") + "\n\n")
+	b.WriteString("  " + keyStyle.Render("/ ") + m.searchQuery + dimStyle.Render("▌") + "\n\n")
+	b.WriteString(boxStyle.Render(m.logs.View()) + "\n")
+	return b.String()
+}
+
 func (m model) mcpView() string {
 	var b strings.Builder
 	b.WriteString(titleStyle.Render(fmt.Sprintf(" MCP / tool calls (%d) ", len(m.mcp))) + "\n\n")
@@ -1062,8 +1140,8 @@ func (m model) footer() string {
 	var keys []string
 	switch m.view {
 	case viewDash:
-		keys = []string{k("↑↓", "nav"), k("⏎", "logs"), k("x", "kill"), k("g", "metrics"), k("m", "mcp"),
-			k("p", "portal"), k("a", "add node"), k("c", "theme"), k("space", "spin"), k("+/-", "zoom"),
+		keys = []string{k("↑↓", "nav"), k("⏎", "logs"), k("/", "search"), k("x", "kill"), k("g", "metrics"),
+			k("m", "mcp"), k("p", "portal"), k("a", "add node"), k("c", "theme"), k("space", "spin"),
 			k("u", "up"), k("d", "down"), k("r", "refresh"), k("q", "quit")}
 	case viewConfirm:
 		keys = []string{k("y", "confirm"), k("n", "cancel"), k("q", "quit")}
@@ -1071,6 +1149,8 @@ func (m model) footer() string {
 		keys = []string{k("↑↓", "nav"), k("⏎", "detail"), k("r", "refresh"), k("b", "back"), k("q", "quit")}
 	case viewMetrics:
 		keys = []string{k("r", "refresh"), k("b", "back"), k("q", "quit")}
+	case viewSearch:
+		keys = []string{k("type", "query"), k("⏎", "search"), k("esc", "back")}
 	case viewMenu:
 		keys = []string{k("↑↓", "nav"), k("⏎", "select"), k("b", "back"), k("q", "quit")}
 	default:
