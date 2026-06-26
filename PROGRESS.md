@@ -156,8 +156,8 @@ at run time and injected as env into each k8s Job (never persisted to the run sn
 the signed-token auth.
 
 **Activation removed** — product no longer key-gated; subscriptions handled by a separate billing
-portal (TUI `$` opens it). Dead activation C# classes + the `PlaceContext.Licensing` project remain but
-are unreferenced (safe to delete in a follow-up).
+portal (TUI `$` opens it). The dead activation C# classes and the standalone `PlaceContext.Licensing`
+project (plus its test project) have now been **deleted** from the tree and the solution.
 
 **Portal** — reports render as HTML (Markdig) with a severity chart + action cards; quieter Host logs
 (EF/framework → Warning); dependency/brain graph excludes MCP tool activity.
