@@ -1,0 +1,32 @@
+# Headscale control server config (self-hosted, Tailscale-compatible / WireGuard).
+# __DOMAIN__ is templated by `pctl mesh up --domain <fqdn>`. Runs on a DigitalOcean droplet.
+server_url: https://__DOMAIN__:443
+listen_addr: 0.0.0.0:8080
+metrics_listen_addr: 127.0.0.1:9090
+grpc_listen_addr: 0.0.0.0:50443
+grpc_allow_insecure: false
+
+noise:
+  private_key_path: /var/lib/headscale/noise_private.key
+prefixes:
+  v4: 100.64.0.0/10
+  v6: fd7a:115c:a1e0::/48
+
+database:
+  type: sqlite
+  sqlite:
+    path: /var/lib/headscale/db.sqlite
+
+# Built-in Let's Encrypt TLS (needs ports 80+443 open and __DOMAIN__ pointing at this droplet).
+tls_letsencrypt_hostname: __DOMAIN__
+tls_letsencrypt_challenge_type: HTTP-01
+tls_letsencrypt_listen: ":http"
+
+dns:
+  magic_dns: true
+  base_domain: mesh.internal
+  nameservers:
+    global: [1.1.1.1, 8.8.8.8]
+
+log:
+  level: info

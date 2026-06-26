@@ -335,6 +335,45 @@ Apply it, wait until healthy, then repoint the app:
 EOF
 }
 
+# ── mesh (self-hosted WireGuard control plane via Headscale) ──────────────────────────────────────
+# Run these on the DigitalOcean droplet that hosts the mesh control server.
+cmd_mesh() {
+  local sub="${1:-}"; shift || true
+  case "$sub" in
+    up)      cmd_mesh_up "$@";;
+    authkey) cmd_mesh_authkey "$@";;
+    down)    cmd_mesh_down "$@";;
+    *) die "unknown 'mesh' subcommand: '$sub' (try: up --domain FQDN | authkey | down)";;
+  esac
+}
+
+dc() { if docker compose version >/dev/null 2>&1; then docker compose "$@"; else docker-compose "$@"; fi; }
+
+cmd_mesh_up() {
+  local domain=""
+  while [ $# -gt 0 ]; do case "$1" in --domain) domain="$2"; shift 2;; *) die "mesh up: unknown arg $1";; esac; done
+  [ -n "$domain" ] || die "mesh up needs --domain <fqdn> (DNS A record → this droplet)"
+  have docker || die "docker is required to run Headscale."
+  say "Templating Headscale config for ${domain}…"
+  sed "s|__DOMAIN__|${domain}|g" deploy/headscale/config.yaml > deploy/headscale/config.live.yaml
+  ( cd deploy/headscale && sed 's|config.yaml|config.live.yaml|' docker-compose.yml > docker-compose.live.yml && dc -f docker-compose.live.yml up -d )
+  ok "Headscale up at https://${domain}  — create a user + key: pctl mesh authkey"
+}
+
+cmd_mesh_authkey() {
+  local user="placecontext"
+  while [ $# -gt 0 ]; do case "$1" in --user) user="$2"; shift 2;; *) die "mesh authkey: unknown arg $1";; esac; done
+  have docker || die "docker is required."
+  # ensure the user exists (idempotent), then mint a reusable, 1h pre-auth key
+  ( cd deploy/headscale && dc -f docker-compose.live.yml exec -T headscale headscale users create "$user" >/dev/null 2>&1 || true
+    dc -f docker-compose.live.yml exec -T headscale headscale preauthkeys create --user "$user" --reusable --expiration 1h )
+}
+
+cmd_mesh_down() {
+  ( cd deploy/headscale && dc -f docker-compose.live.yml down 2>/dev/null || dc down 2>/dev/null || true )
+  ok "Headscale stopped."
+}
+
 # ── kill (destructive — pod | node | job) ─────────────────────────────────────────────────────────
 cmd_kill() {
   local kind="${1:-}"; shift || true
@@ -431,8 +470,23 @@ ts_mint_authkey() {
   printf '%s' "$key"
 }
 
+# Build the k3s --vpn-auth exec arg into the named array, from either a Tailscale OAuth client
+# (managed tailscale.com) or a self-hosted control server (Headscale) + pre-auth key. No-op if neither.
+# Args: <array-name> <ts_id> <ts_secret> <ts_tag> <vpn_control> <vpn_authkey>
+build_vpn_arg() {
+  local __arr="$1" ts_id="$2" ts_secret="$3" ts_tag="$4" ctrl="$5" authkey="$6"
+  if [ -n "$ctrl" ] && [ -n "$authkey" ]; then
+    say "Joining the self-hosted mesh control server ${ctrl}…"
+    eval "${__arr}+=(\"--vpn-auth=name=tailscale,joinKey=${authkey},controlServerURL=${ctrl}\")"
+  elif [ -n "$ts_id" ] && [ -n "$ts_secret" ]; then
+    say "Minting a Tailscale auth key from the OAuth client…"
+    local tskey; tskey="$(ts_mint_authkey "$ts_id" "$ts_secret" "$ts_tag")"
+    eval "${__arr}+=(\"--vpn-auth=name=tailscale,joinKey=${tskey}\")"
+  fi
+}
+
 cmd_server_up() {
-  local key="" image="$PCTL_IMAGE" ts_id="" ts_secret="" ts_tag="tag:k8s"
+  local key="" image="$PCTL_IMAGE" ts_id="" ts_secret="" ts_tag="tag:k8s" vpn_ctrl="" vpn_key=""
   while [ $# -gt 0 ]; do
     case "$1" in
       --activation-key)     key="$2"; shift 2;;
@@ -440,6 +494,8 @@ cmd_server_up() {
       --ts-oauth-client-id) ts_id="$2"; shift 2;;
       --ts-oauth-secret)    ts_secret="$2"; shift 2;;
       --ts-tag)             ts_tag="$2"; shift 2;;
+      --vpn-control)        vpn_ctrl="$2"; shift 2;;
+      --vpn-authkey)        vpn_key="$2"; shift 2;;
       *) die "server up: unknown arg $1";;
     esac
   done
@@ -447,12 +503,7 @@ cmd_server_up() {
   [ "$(id -u)" = 0 ] || die "server up installs a systemd service — run with sudo."
 
   local -a exec_args=()
-  if [ -n "$ts_id" ] && [ -n "$ts_secret" ]; then
-    say "Minting a Tailscale auth key from the OAuth client…"
-    local tskey; tskey="$(ts_mint_authkey "$ts_id" "$ts_secret" "$ts_tag")"
-    exec_args+=("--vpn-auth=name=tailscale,joinKey=${tskey}")
-    ok "Tailscale enabled — the cluster will mesh over your tailnet."
-  fi
+  build_vpn_arg exec_args "$ts_id" "$ts_secret" "$ts_tag" "$vpn_ctrl" "$vpn_key"
 
   say "Installing k3s (server)…"
   if have k3s; then ok "k3s already installed."; else curl -sfL https://get.k3s.io | sh -s - server "${exec_args[@]}"; fi
@@ -469,7 +520,7 @@ cmd_server_up() {
 }
 
 cmd_agent_join() {
-  local url="" token="" ts_id="" ts_secret="" ts_tag="tag:k8s"
+  local url="" token="" ts_id="" ts_secret="" ts_tag="tag:k8s" vpn_ctrl="" vpn_key=""
   while [ $# -gt 0 ]; do
     case "$1" in
       --server-url)         url="$2"; shift 2;;
@@ -477,6 +528,8 @@ cmd_agent_join() {
       --ts-oauth-client-id) ts_id="$2"; shift 2;;
       --ts-oauth-secret)    ts_secret="$2"; shift 2;;
       --ts-tag)             ts_tag="$2"; shift 2;;
+      --vpn-control)        vpn_ctrl="$2"; shift 2;;
+      --vpn-authkey)        vpn_key="$2"; shift 2;;
       *) die "agent join: unknown arg $1";;
     esac
   done
@@ -484,11 +537,7 @@ cmd_agent_join() {
   [ "$(id -u)" = 0 ] || die "agent join installs a systemd service — run with sudo."
 
   local -a exec_args=()
-  if [ -n "$ts_id" ] && [ -n "$ts_secret" ]; then
-    say "Minting a Tailscale auth key from the OAuth client…"
-    local tskey; tskey="$(ts_mint_authkey "$ts_id" "$ts_secret" "$ts_tag")"
-    exec_args+=("--vpn-auth=name=tailscale,joinKey=${tskey}")
-  fi
+  build_vpn_arg exec_args "$ts_id" "$ts_secret" "$ts_tag" "$vpn_ctrl" "$vpn_key"
   say "Joining this machine to $url as a worker…"
   curl -sfL https://get.k3s.io | K3S_URL="$url" K3S_TOKEN="$token" sh -s - agent "${exec_args[@]}"
   ok "Worker joined."
@@ -558,7 +607,13 @@ ${C_BOLD}PRODUCTION${C_RESET} ${C_DIM}(k3s across multiple machines)${C_RESET}
                          Install k3s server here + deploy (sudo); Tailscale meshes the fleet (sudo)
   agent join --server-url URL --node-token TOK [--ts-oauth-client-id ID --ts-oauth-secret SECRET]
                          Join this machine as a worker (sudo)
+                         (self-hosted mesh: --vpn-control https://headscale --vpn-authkey KEY)
   join-cmd                                        Print the worker-join command (run on server)
+
+${C_BOLD}MESH${C_RESET} ${C_DIM}(self-hosted WireGuard control plane via Headscale, on a DO droplet)${C_RESET}
+  mesh up --domain FQDN  Start Headscale (your own Tailscale) for the fleet
+  mesh authkey [--user U] Mint a reusable pre-auth key (use as --vpn-authkey)
+  mesh down              Stop Headscale
 
 ${C_BOLD}ANYWHERE${C_RESET}
   tui                    Launch the reactive full-screen dashboard (Go TUI)
@@ -615,6 +670,7 @@ main() {
       esac;;
     kill)         cmd_kill "$@";;
     db)           cmd_db "$@";;
+    mesh)         cmd_mesh "$@";;
     autostart)    cmd_autostart "$@";;
     tui|ui)       cmd_tui "$@";;
     build)        cmd_build "$@";;

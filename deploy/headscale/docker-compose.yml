@@ -1,0 +1,16 @@
+# Headscale — self-hosted WireGuard mesh control plane (your own "Tailscale") on a DO droplet.
+# Bring up with: pctl mesh up --domain headscale.example.com
+services:
+  headscale:
+    image: headscale/headscale:0.23.0
+    command: serve
+    restart: unless-stopped
+    ports:
+      - "80:80"     # ACME HTTP-01 challenge
+      - "443:443"   # control server (TLS)
+      - "3478:3478/udp" # DERP/STUN for NAT traversal
+    volumes:
+      - ./config.yaml:/etc/headscale/config.yaml:ro
+      - headscale-data:/var/lib/headscale
+volumes:
+  headscale-data:
