@@ -38,16 +38,44 @@ public class PostJobArtifactsTests
     }
 
     [Fact]
-    public void Html_report_is_self_contained_with_embedded_chart()
+    public void Html_report_renders_the_data_not_a_run_dump()
     {
-        var (job, run) = Sample();
+        var pid = ProjectId.New();
+        var mapSpec = new MapSpec("img", new[] { "{}" }, new Dictionary<string, string>());
+        var job = Job.Create(Guid.NewGuid(), "brisbane-news", null, mapSpec, null, 1,
+            new ExitCodePolicy(new[] { 0 }, Array.Empty<int>()), T0);
+        var run = JobRun.Start(job.Id, job.ProjectId, T0, WorkloadSnapshot.From(mapSpec, null, 1));
+        // An artifact carrying actual information (a list of records with a title + url).
+        const string artifact = """
+            {"query":"Brisbane property","count":2,"items":[
+              {"title":"Prices climb","source":"ABC","url":"https://example.com/a"},
+              {"title":"New estate approved","source":"Courier","url":"https://example.com/b"}]}
+            """;
+        run.Complete(new[] { new ShardResult(0, 0, WorkloadOutcome.Succeeded, artifact, null) }, null, T0.AddSeconds(2));
+
         var f = PostJobArtifacts.HtmlReport(job, run);
         var html = Text(f);
         Assert.StartsWith("text/html", f.ContentType);
         Assert.Contains("<!doctype html>", html);
-        Assert.Contains("nightly-etl", html);
-        Assert.Contains("<svg", html);          // chart embedded inline
-        Assert.DoesNotContain("<script", html); // no CDN/JS — opens offline
+        Assert.Contains("brisbane-news", html);
+        // The data is rendered (titles, a humanized scalar, and the link), not exit codes / shard dumps.
+        Assert.Contains("Prices climb", html);
+        Assert.Contains("New estate approved", html);
+        Assert.Contains("https://example.com/a", html);
+        Assert.DoesNotContain("exit ", html);
+        Assert.DoesNotContain("<script", html);
+    }
+
+    [Fact]
+    public void Html_report_falls_back_to_raw_for_non_json()
+    {
+        var (job, run0) = Sample();
+        var run = JobRun.Start(job.Id, job.ProjectId, T0, WorkloadSnapshot.From(
+            new MapSpec("img", new[] { "{}" }, new Dictionary<string, string>()), null, 1));
+        run.Complete(new[] { new ShardResult(0, 0, WorkloadOutcome.Succeeded, "not-json-output", null) }, null, T0.AddSeconds(1));
+        var html = Text(PostJobArtifacts.HtmlReport(job, run));
+        Assert.Contains("not-json-output", html);
+        _ = run0;
     }
 
     [Fact]

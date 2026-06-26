@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.Json;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.ValueObjects;
 
@@ -14,35 +15,177 @@ public static class PostJobArtifacts
     public sealed record BuiltFile(string FileName, byte[] Content, string ContentType, string Title);
 
     // ── HTML report ───────────────────────────────────────────────────────────────────────────────
+    // Parses each shard's artifact as JSON and renders the *information* it carries (scalar fields as a
+    // header, arrays of objects as cards/tables), not a report of the run. Falls back to a preformatted
+    // block when an artifact isn't JSON. The reduce artifact (when present) is treated as the primary data.
     public static BuiltFile HtmlReport(Job job, JobRun run)
     {
         var sb = new StringBuilder();
-        sb.Append(HtmlHead($"{job.Name} — run {Short(run.Id)}"));
+        sb.Append(HtmlHead(job.Name));
         sb.Append($"<h1>{Esc(job.Name)}</h1>");
-        sb.Append($"<p class=meta>Run <code>{run.Id:N}</code> · status <b class=\"s-{run.Status}\">{run.Status}</b>");
-        if (run.FinishedAt is { } f) sb.Append($" · finished {f:yyyy-MM-dd HH:mm} UTC");
-        sb.Append($" · {run.ShardResults.Count} shard(s)</p>");
+        if (run.FinishedAt is { } f) sb.Append($"<p class=meta>Generated {f:yyyy-MM-dd HH:mm} UTC</p>");
 
-        sb.Append(OutcomeChartSvg(run)); // embed the same chart at the top of the report
+        // Prefer the reduce artifact (the job's final, aggregated output) if it exists; else each shard.
+        var rendered = false;
+        if (run.ReduceResult?.Artifact is { Length: > 0 } reduceArtifact)
+        {
+            sb.Append(RenderArtifactHtml(reduceArtifact));
+            rendered = true;
+        }
+        else
+        {
+            foreach (var s in run.ShardResults)
+            {
+                if (string.IsNullOrWhiteSpace(s.Artifact)) continue;
+                if (run.ShardResults.Count(x => !string.IsNullOrWhiteSpace(x.Artifact)) > 1)
+                    sb.Append($"<h2>Shard {s.Index}</h2>");
+                sb.Append(RenderArtifactHtml(s.Artifact!));
+                rendered = true;
+            }
+        }
+        if (!rendered) sb.Append("<p class=meta>This run produced no data artifact.</p>");
 
-        foreach (var s in run.ShardResults)
-        {
-            sb.Append($"<section><h2>Shard {s.Index} <span class=\"badge o-{s.Outcome}\">{s.Outcome}</span> <span class=exit>exit {s.ExitCode}</span></h2>");
-            if (!string.IsNullOrWhiteSpace(s.Artifact)) sb.Append($"<h3>artifact</h3><pre>{Esc(s.Artifact!)}</pre>");
-            if (!string.IsNullOrWhiteSpace(s.Log)) sb.Append($"<details><summary>console (stdout/stderr)</summary><pre class=log>{Esc(s.Log!)}</pre></details>");
-            foreach (var a in s.Artifacts) sb.Append($"<h3>file: {Esc(a.Name)}</h3><pre>{Esc(a.Content)}</pre>");
-            sb.Append("</section>");
-        }
-        if (run.ReduceResult is { } r)
-        {
-            sb.Append($"<section><h2>Reduce <span class=\"badge\">{(r.Succeeded ? "succeeded" : "failed")}</span> <span class=exit>exit {r.ExitCode}</span></h2>");
-            if (!string.IsNullOrWhiteSpace(r.Artifact)) sb.Append($"<h3>artifact</h3><pre>{Esc(r.Artifact!)}</pre>");
-            foreach (var a in r.Artifacts) sb.Append($"<h3>file: {Esc(a.Name)}</h3><pre>{Esc(a.Content)}</pre>");
-            sb.Append("</section>");
-        }
         sb.Append("</body></html>");
         return new BuiltFile("report.html", Bytes(sb), "text/html; charset=utf-8", "HTML report");
     }
+
+    // ── data → HTML rendering (generic; the artifact content is opaque JSON) ─────────────────────────
+    private const int MaxItems = 2000;
+    private const int MaxDepth = 6;
+    private static readonly string[] TitleKeys = { "title", "name", "headline", "label", "subject", "heading" };
+    private static readonly string[] UrlKeys = { "url", "link", "href", "sourceurl", "permalink" };
+
+    private static string RenderArtifactHtml(string artifact)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(artifact);
+            return RenderElement(doc.RootElement, 0);
+        }
+        catch
+        {
+            return $"<pre>{Esc(artifact)}</pre>"; // not JSON — show it raw
+        }
+    }
+
+    private static string RenderElement(JsonElement el, int depth) => el.ValueKind switch
+    {
+        JsonValueKind.Object => RenderObject(el, depth),
+        JsonValueKind.Array => RenderArray(el, depth),
+        _ => "<p>" + Scalar(el) + "</p>",
+    };
+
+    private static string RenderObject(JsonElement obj, int depth)
+    {
+        var sb = new StringBuilder();
+        var scalars = new List<JsonProperty>();
+        var complex = new List<JsonProperty>();
+        foreach (var p in obj.EnumerateObject())
+            (p.Value.ValueKind is JsonValueKind.Array or JsonValueKind.Object ? complex : scalars).Add(p);
+
+        if (scalars.Count > 0)
+        {
+            sb.Append("<dl class=kv>");
+            foreach (var p in scalars)
+            {
+                if (p.Value.ValueKind is JsonValueKind.Null) continue;
+                sb.Append($"<dt>{Esc(Humanize(p.Name))}</dt><dd>{Scalar(p.Value)}</dd>");
+            }
+            sb.Append("</dl>");
+        }
+        if (depth < MaxDepth)
+            foreach (var p in complex)
+            {
+                sb.Append($"<h3>{Esc(Humanize(p.Name))}</h3>");
+                sb.Append(RenderElement(p.Value, depth + 1));
+            }
+        return sb.ToString();
+    }
+
+    private static string RenderArray(JsonElement arr, int depth)
+    {
+        var items = arr.EnumerateArray().ToList();
+        if (items.Count == 0) return "<p class=meta>(none)</p>";
+
+        if (items[0].ValueKind == JsonValueKind.Object)
+        {
+            var sb = new StringBuilder("<div class=cards>");
+            for (var i = 0; i < items.Count && i < MaxItems; i++) sb.Append(RenderCard(items[i]));
+            if (items.Count > MaxItems) sb.Append($"<p class=meta>… and {items.Count - MaxItems} more</p>");
+            sb.Append("</div>");
+            return sb.ToString();
+        }
+
+        var ul = new StringBuilder("<ul>");
+        foreach (var it in items.Take(MaxItems)) ul.Append($"<li>{Scalar(it)}</li>");
+        ul.Append("</ul>");
+        return ul.ToString();
+    }
+
+    private static string RenderCard(JsonElement obj)
+    {
+        string? title = null, url = null;
+        foreach (var p in obj.EnumerateObject())
+        {
+            var lk = p.Name.ToLowerInvariant();
+            if (title is null && p.Value.ValueKind == JsonValueKind.String && TitleKeys.Contains(lk)) title = p.Value.GetString();
+            if (url is null && p.Value.ValueKind == JsonValueKind.String && UrlKeys.Contains(lk)) url = p.Value.GetString();
+        }
+
+        var sb = new StringBuilder("<div class=card>");
+        if (!string.IsNullOrWhiteSpace(title))
+            sb.Append(url is not null
+                ? $"<div class=ctitle><a href=\"{EscAttr(url)}\" target=_blank rel=noopener>{Esc(title!)}</a></div>"
+                : $"<div class=ctitle>{Esc(title!)}</div>");
+
+        sb.Append("<dl class=kv>");
+        foreach (var p in obj.EnumerateObject())
+        {
+            var lk = p.Name.ToLowerInvariant();
+            if (TitleKeys.Contains(lk) || UrlKeys.Contains(lk)) continue; // already shown as the card title/link
+            if (p.Value.ValueKind is JsonValueKind.Null) continue;
+            var val = p.Value.ValueKind is JsonValueKind.Object or JsonValueKind.Array ? Esc(Compact(p.Value)) : Scalar(p.Value);
+            sb.Append($"<dt>{Esc(Humanize(p.Name))}</dt><dd>{val}</dd>");
+        }
+        sb.Append("</dl></div>");
+        return sb.ToString();
+    }
+
+    // A scalar value as HTML — URLs become links.
+    private static string Scalar(JsonElement v)
+    {
+        if (v.ValueKind == JsonValueKind.String)
+        {
+            var s = v.GetString() ?? "";
+            if (s.StartsWith("http://") || s.StartsWith("https://"))
+                return $"<a href=\"{EscAttr(s)}\" target=_blank rel=noopener>{Esc(s)}</a>";
+            return Esc(s);
+        }
+        return Esc(v.ToString());
+    }
+
+    private static string Compact(JsonElement v)
+    {
+        var s = v.GetRawText();
+        return s.Length > 200 ? s[..200] + "…" : s;
+    }
+
+    // "publishedAt" → "Published at", "source_url" → "Source url".
+    private static string Humanize(string key)
+    {
+        var spaced = new StringBuilder();
+        for (var i = 0; i < key.Length; i++)
+        {
+            var c = key[i];
+            if (c is '_' or '-') { spaced.Append(' '); continue; }
+            if (char.IsUpper(c) && i > 0 && !char.IsUpper(key[i - 1])) spaced.Append(' ');
+            spaced.Append(c);
+        }
+        var s = spaced.ToString().Trim();
+        return s.Length == 0 ? key : char.ToUpperInvariant(s[0]) + s[1..];
+    }
+
+    private static string EscAttr(string s) => Esc(s).Replace("\"", "&quot;");
 
     // ── Chart (standalone HTML wrapping the inline SVG) ─────────────────────────────────────────────
     public static BuiltFile Chart(Job job, JobRun run)
@@ -129,10 +272,14 @@ public static class PostJobArtifacts
         ".badge{font-size:11px;padding:2px 8px;border-radius:6px;background:#eef2f7;color:#374151}" +
         ".o-Succeeded{background:#dcfce7;color:#166534}.o-Partial{background:#fef3c7;color:#92400e}.o-Failed{background:#fee2e2;color:#991b1b}" +
         ".exit{font-size:11px;color:#9ca3af}.s-Succeeded{color:#166534}.s-Failed{color:#991b1b}.s-Partial{color:#92400e}" +
+        ".cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;margin:8px 0}" +
+        ".card{border:1px solid #e5e7eb;border-radius:10px;padding:12px 14px;background:#fff}" +
+        ".ctitle{font-size:14px;font-weight:600;margin-bottom:6px;line-height:1.3}.ctitle a{color:#1d4ed8;text-decoration:none}" +
+        "dl.kv{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;margin:4px 0;font-size:12.5px}" +
+        "dl.kv dt{color:#6b7280}dl.kv dd{margin:0;word-break:break-word}a{color:#1d4ed8}ul{font-size:13px}" +
         "</style></head><body>";
 
     private static byte[] Bytes(StringBuilder sb) => Encoding.UTF8.GetBytes(sb.ToString());
-    private static string Short(Guid id) => id.ToString("N")[..8];
 
     private static string Esc(string s) => s
         .Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;");
