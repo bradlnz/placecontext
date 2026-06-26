@@ -239,6 +239,57 @@ public sealed class PlaceContextTools
             () => svc.DefineReportTemplateAsync(name, description, sources));
 
     [Authorize(Policy = "Member")]
+    [McpServerTool(Name = "job_authoring_guide"), Description("Return instructions for structuring PlaceContext job code: the sandbox contract (stdin input, /work entrypoint, stdout output, exit codes), available runtimes, how environment variables/secrets are provided, and the next step (upload_job_code). Call this BEFORE writing a job so the code matches the runtime contract.")]
+    public static string JobAuthoringGuide() => JobGuide;
+
+    private const string JobGuide = """
+        # Authoring a PlaceContext job
+
+        A job is **map** code (optionally a **reduce** step) run as isolated, sandboxed containers.
+
+        ## The sandbox contract
+        - **Input** arrives on **STDIN**: the shard's input payload (one run per payload in the job's
+          `inputPayloads`). Read all of stdin and parse it (usually JSON). With no payloads you get one
+          run with `{}`.
+        - **Working dir**: your files are mounted **read-only at `/work`**; the entrypoint is invoked as
+          `/work/<entrypoint>`.
+        - **Output**: write your result to **STDOUT** — it's captured as the shard's artifact. Keep logs
+          on STDERR so they don't pollute the result.
+        - **Exit codes**: `0` = success (configurable). Non-success codes can be mapped to Partial.
+        - **No network** by default (sealed sandbox). Set the job's network-egress policy to allow it.
+
+        ## Runtimes
+        - `node`  → base `node:22-slim`, default entrypoint `index.js`, invoked `node /work/index.js`.
+        - `python`→ base `python:3.12-slim`, default entrypoint `main.py`, invoked `python /work/main.py`.
+        Dependency-free by default (no install step) — vendor any libs into your file set.
+
+        ## Environment variables & secrets
+        Plain config goes in the job's `env`. **Secrets/credentials come from the encrypted vault** —
+        reference them by name (managed in the portal; encrypted at rest). They are injected as env vars
+        into the sandbox at run time; never hard-code credentials in the code.
+
+        ## Examples
+        node `index.js`:
+        ```js
+        const input = JSON.parse(require('fs').readFileSync(0, 'utf8') || '{}');
+        const apiKey = process.env.API_KEY;            // from the vault
+        const result = { count: (input.items ?? []).length };
+        process.stdout.write(JSON.stringify(result));  // the artifact
+        ```
+        python `main.py`:
+        ```py
+        import sys, json, os
+        data = json.loads(sys.stdin.read() or "{}")
+        api_key = os.environ.get("API_KEY")            # from the vault
+        print(json.dumps({"count": len(data.get("items", []))}))
+        ```
+
+        ## Next step
+        Upload with **upload_job_code**: `filesJson` = [{"path":"index.js","content":"…"}], `runtimeId` =
+        "node"|"python", and `entrypoint` when uploading multiple files.
+        """;
+
+    [Authorize(Policy = "Member")]
     [McpServerTool(Name = "upload_job_code"), Description("Upload (replace) the source file set of a job's map step so it can be run as isolated containers. Target an existing job by jobId, OR by projectId + jobName (the job is created with sensible defaults — one '{}' shard, concurrency 1, success exit 0 — when it does not yet exist). 'filesJson' is a JSON array of {\"path\":\"index.js\",\"content\":\"...\"}; paths may include subdirectories (e.g. 'lib/report.js'). 'runtimeId' selects the sandbox ('node' or 'python'); 'entrypoint' is the path of the file to invoke (required when uploading more than one file; defaults to the runtime's default for a single file). Existing input payloads, env, concurrency, reduce step, and exit-code policy are preserved.")]
     public static Task<string> UploadJobCode(IPlaceContextService svc, IToolCallLog log,
         [Description("JSON array of files, e.g. [{\"path\":\"index.js\",\"content\":\"...\"}]")] string filesJson,
