@@ -31,6 +31,9 @@ builder.Logging.AddConsole();
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
 
+// Load the shared OAuth signing key (so every replica signs/verifies MCP tokens with the same RSA key).
+PlaceContext.Host.Auth.OAuthKeys.Init(builder.Configuration["PlaceContext:OAuth:SigningKeyPem"]);
+
 builder.Services.AddRazorComponents().AddInteractiveServerComponents();
 builder.Services.AddCascadingAuthenticationState();
 builder.Services.AddScoped<PlaceContext.Host.PortalUiState>();

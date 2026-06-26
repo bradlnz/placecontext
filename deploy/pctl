@@ -73,6 +73,18 @@ apply_manifests() {
       --from-literal=signing-key="$signing_key" --dry-run=client -o yaml | kube apply -f -
   fi
 
+  # Shared RSA key for signing OAuth/MCP access tokens — generated once so every replica (and restart)
+  # signs with the same key id. Requires openssl; only created if absent.
+  if ! kube -n "$PCTL_NAMESPACE" get secret placecontext-oauth >/dev/null 2>&1; then
+    if command -v openssl >/dev/null 2>&1; then
+      local pem; pem="$(openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 2>/dev/null)"
+      kube -n "$PCTL_NAMESPACE" create secret generic placecontext-oauth \
+        --from-literal=key.pem="$pem" --dry-run=client -o yaml | kube apply -f -
+    else
+      warn "openssl not found — OAuth signing key not created; MCP tokens won't validate across replicas."
+    fi
+  fi
+
   say "PostgreSQL (pgvector)…"
   kube -n "$PCTL_NAMESPACE" apply -f "$K3S_DIR/postgres.yaml"
 
