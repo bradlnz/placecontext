@@ -17,11 +17,35 @@ var themes = []theme{
 	{"mono", "252", "248", "250", "250", "246", "245", "240", "238", "237", "250", "255"},
 }
 
+// bannerFonts are distinct ASCII "fonts" for the PlaceContext logo; the theme picks one, so cycling
+// the theme ([c]) also changes the banner font.
+var bannerFonts = []string{
+	// 0 — small slant
+	`  ___ _              ___         _           _
+ | _ \ |__ _ __ ___ / __|___ _ _| |_ _____ _| |_
+ |  _/ / _' / _/ -_) (__/ _ \ ' \  _/ -_) \ /  _|
+ |_| |_\__,_\__\___|\___\___/_||_\__\___/_\_\\__|`,
+	// 1 — block (half-blocks)
+	`█▀█ █   █▀█ █▀▀ █▀▀ █▀▀ █▀█ █▄ █ ▀█▀ █▀▀ ▀▄▀ ▀█▀
+█▀▀ █▄▄ █▀█ █▄▄ ██▄ █▄▄ █▄█ █ ▀█  █  ██▄ █ █  █ `,
+	// 2 — heavy
+	`╔═╗ ╦  ╔═╗ ╔═╗ ╔═╗ ╔═╗ ╔═╗ ╔╗╔ ╔╦╗ ╔═╗ ═╗ ╦ ╔╦╗
+╠═╝ ║  ╠═╣ ║   ║╣  ║   ║ ║ ║║║  ║  ║╣  ╔╩╦╝  ║
+╩   ╩  ╩ ╩ ╚═╝ ╚═╝ ╚═╝ ╚═╝ ╝╚╝  ╩  ╚═╝ ╩ ╚═  ╩`,
+	// 3 — dotted / lowercase
+	`._ |  _.  _ ._ _ _ ._ _|_ _ _|_
+|_)|_(_| (_|(/_(_(_)| | |_(/_>< |_   placecontext`,
+	// 4 — minimal
+	`P L A C E C O N T E X T
+· hosted context · mcp + portal ·`,
+}
+
 var themeIdx = 0
 
 func applyTheme(i int) {
 	t := themes[((i%len(themes))+len(themes))%len(themes)]
 	cTeal, cGreen, cYellow, cRed, cGray, cDim = t.accent, t.ok, t.warn, t.err, t.gray, t.dim
+	banner = bannerFonts[((i%len(bannerFonts))+len(bannerFonts))%len(bannerFonts)] // theme also picks the font
 
 	bannerStyle = lipgloss.NewStyle().Foreground(cTeal).Bold(true)
 	titleStyle = lipgloss.NewStyle().Foreground(cTeal).Bold(true)

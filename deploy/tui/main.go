@@ -26,11 +26,8 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-// PlaceContext ASCII banner (small figlet).
-const banner = `  ___ _              ___         _           _
- | _ \ |__ _ __ ___ / __|___ _ _| |_ _____ _| |_
- |  _/ / _' / _/ -_) (__/ _ \ ' \  _/ -_) \ /  _|
- |_| |_\__,_\__\___|\___\___/_||_\__\___/_\_\\__|`
+// PlaceContext ASCII banner — the active font is chosen per theme by applyTheme (see themes.go).
+var banner = bannerFonts[0]
 
 // ── styles ────────────────────────────────────────────────────────────────────────────────────
 var (
