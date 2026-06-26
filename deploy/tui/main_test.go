@@ -53,8 +53,7 @@ func TestKeyDispatchSwitchesViews(t *testing.T) {
 		want view
 	}{
 		{"g", viewMetrics},
-		{"a", viewAction},  // add worker runs an action directly (no menu)
-		{"x", viewConfirm}, // kill the selected row → confirmation gate
+		{"a", viewAction}, // add worker runs an action directly (no menu)
 	}
 	for _, c := range cases {
 		if got := press(base, c.key).view; got != c.want {

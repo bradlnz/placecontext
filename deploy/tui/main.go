@@ -793,10 +793,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		case "x":
+			// Pods and nodes are read-only from the TUI; only jobs can be deleted here.
 			if m.view == viewDash && !m.busy && m.cursor < len(m.sel) {
-				m.prevView = viewDash
-				m.armKill(m.sel[m.cursor])
-				m.view = viewConfirm
+				if it := m.sel[m.cursor]; it.kind == "job" {
+					m.prevView = viewDash
+					m.armKill(it)
+					m.view = viewConfirm
+				} else {
+					m.flash = "pods & nodes are read-only — only jobs can be killed"
+				}
 			}
 			return m, nil
 		case "r":
@@ -1277,7 +1282,7 @@ func (m model) footer() string {
 	var keys []string
 	switch m.view {
 	case viewDash:
-		keys = []string{k("↑↓", "nav"), k("⏎", "logs"), k("/", "search"), k("x", "kill"), k("g", "metrics"),
+		keys = []string{k("↑↓", "nav"), k("⏎", "logs"), k("/", "search"), k("x", "kill job"), k("g", "metrics"),
 			k("m", "mcp"), k("p", "portal"), k("$", "subscribe"), k("a", "add worker"), k("c", "theme"),
 			k("u", "up"), k("d", "down"), k("r", "refresh"), k("q", "quit")}
 	case viewConfirm:
