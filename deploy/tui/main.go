@@ -162,7 +162,8 @@ type model struct {
 	runsJob   jobRow
 	runs      []runRow
 	runCursor int
-	runsErr   string // sticky error for the runs list (e.g. query failed), shown in runsView
+	runsErr   string   // sticky error for the runs list (e.g. query failed), shown in runsView
+	runLinks  []string // URLs found in the currently-open run detail, openable with [o]/[1-9]
 
 	loading bool // a data fetch (logs/mcp/metrics/search) is in flight → show a loading box
 }
@@ -170,7 +171,6 @@ type model struct {
 // ── messages ──────────────────────────────────────────────────────────────────────────────────
 type tickMsg time.Time
 type stateMsg clusterState
-type logsMsg struct{ title, body string }
 type actionDoneMsg struct {
 	verb, output string
 	err          error
@@ -270,56 +270,6 @@ func (m model) fetchState() tea.Cmd {
 	}
 }
 
-// fetchLogs returns global logs — the recent tail from every pod in the namespace, prefixed per pod.
-func (m model) fetchLogs() tea.Cmd {
-	mc := m
-	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
-		defer cancel()
-		names, err := mc.kubectl(ctx, "-n", ns, "get", "pods", "-o", "name")
-		if err != nil {
-			return logsMsg{"cluster logs", "could not list pods: " + err.Error()}
-		}
-		var b strings.Builder
-		for _, pod := range strings.Fields(string(names)) { // pod/<name>
-			out, e := mc.kubectl(ctx, "-n", ns, "logs", pod, "--tail=40", "--prefix", "--all-containers=true")
-			if e != nil {
-				continue
-			}
-			b.Write(out)
-		}
-		body := strings.TrimSpace(b.String())
-		if body == "" {
-			body = "(no logs)"
-		}
-		return logsMsg{"cluster logs (all pods)", body}
-	}
-}
-
-// fetchLogsFor returns logs for a selected pod, or `describe` detail for a node.
-func (m model) fetchLogsFor(it selItem) tea.Cmd {
-	mc := m
-	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		if it.kind == "pod" {
-			title := "pod/" + it.name
-			b, err := mc.kubectl(ctx, "-n", ns, "logs", it.name, "--all-containers=true", "--tail=400", "--prefix")
-			if err != nil {
-				return logsMsg{title, "could not fetch logs: " + err.Error()}
-			}
-			return logsMsg{title, string(b)}
-		}
-		// Jobs are handled by the dedicated run-history drill-down (viewRuns/viewRunDetail), not here.
-		title := "node/" + it.name
-		b, err := mc.kubectl(ctx, "describe", "node", it.name)
-		if err != nil {
-			return logsMsg{title, "could not describe node: " + err.Error()}
-		}
-		return logsMsg{title, string(b)}
-	}
-}
-
 // armKill prepares the confirmation modal for deleting the selected node/pod/job.
 func (m *model) armKill(it selItem) {
 	switch it.kind {
@@ -332,484 +282,6 @@ func (m *model) armKill(it selItem) {
 	}
 	m.confirmVerb = "kill " + it.kind + " " + it.name
 	m.confirmArgs = []string{"kill", it.kind, it.name, "--yes"}
-}
-
-type mcpRow struct{ id, at, tool, dir, status, dur string }
-type mcpMsg struct {
-	rows []mcpRow
-	err  string
-}
-
-// fetchMcp reads recent MCP/tool calls from the tool_calls table via psql.
-func (m model) fetchMcp() tea.Cmd {
-	mc := m
-	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		const q = `SELECT "Id", "At", "Tool", "Direction", "Status", "DurationMs" ` +
-			`FROM tool_calls ORDER BY "At" DESC LIMIT 200`
-		b, err := mc.kubectl(ctx, "-n", ns, "exec", "deploy/placecontext-db", "--",
-			"psql", "-U", "postgres", "-d", "placecontext", "-At", "-F", "\t", "-c", q)
-		if err != nil {
-			return mcpMsg{nil, "could not query tool_calls: " + err.Error()}
-		}
-		var rows []mcpRow
-		for _, ln := range strings.Split(strings.TrimSpace(string(b)), "\n") {
-			if ln == "" {
-				continue
-			}
-			f := strings.Split(ln, "\t")
-			for len(f) < 6 {
-				f = append(f, "")
-			}
-			at := f[1]
-			if len(at) > 19 {
-				at = at[:19]
-			}
-			rows = append(rows, mcpRow{f[0], at, f[2], f[3], f[4], f[5]})
-		}
-		return mcpMsg{rows, ""}
-	}
-}
-
-// fetchMcpDetail loads one tool call's request/response payloads (shown like pod logs).
-func (m model) fetchMcpDetail(c mcpRow) tea.Cmd {
-	mc := m
-	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		esc := strings.ReplaceAll(c.id, "'", "''")
-		q := `SELECT 'REQUEST', "RequestJson", 'RESPONSE', "ResponseJson" FROM tool_calls WHERE "Id"='` + esc + `'`
-		b, err := mc.kubectl(ctx, "-n", ns, "exec", "deploy/placecontext-db", "--",
-			"psql", "-U", "postgres", "-d", "placecontext", "-A", "-F", "\n", "-t", "-c", q)
-		title := "mcp/" + c.tool + " · " + c.at
-		if err != nil {
-			return logsMsg{title, "could not fetch call detail: " + err.Error()}
-		}
-		body := strings.TrimSpace(string(b))
-		if body == "" {
-			body = "(no payload recorded)"
-		}
-		return logsMsg{title, body}
-	}
-}
-
-type jobRow struct{ id, tenant, name, source, conc, egress, updated, timeout string }
-
-// queryJobs reads the jobs table directly from the Postgres pod via psql.
-type searchMsg struct{ body string }
-
-// fetchSearch queries the knowledge graph's contents — decisions, project context, and the change
-// ledger — for a term, via psql. Powers the TUI search ([/]).
-func (m model) fetchSearch(query string) tea.Cmd {
-	mc := m
-	q := strings.TrimSpace(query)
-	return func() tea.Msg {
-		if q == "" {
-			return searchMsg{"(type a query and press enter)"}
-		}
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		esc := strings.ReplaceAll(q, "'", "''")
-		// One -c with multiple SELECTs; psql -A -t gives clean unaligned rows. (No backslash meta-commands
-		// here — psql -c can't run them, it would swallow the SQL as arguments.)
-		sql := `SELECT '- **decision** ' || "Question" || ' → ' || "Choice" FROM decisions ` +
-			`WHERE "Question" ILIKE '%` + esc + `%' OR "Choice" ILIKE '%` + esc + `%' OR "Rationale" ILIKE '%` + esc + `%' LIMIT 40;` +
-			`SELECT '- **context** ' || left("Markdown", 300) FROM project_contexts WHERE "Markdown" ILIKE '%` + esc + `%' LIMIT 15;` +
-			`SELECT '- **activity** ' || "Summary" FROM activity_log ` +
-			`WHERE "Summary" ILIKE '%` + esc + `%' OR "Rationale" ILIKE '%` + esc + `%' LIMIT 40;`
-		b, err := mc.kubectl(ctx, "-n", ns, "exec", "deploy/placecontext-db", "--",
-			"psql", "-U", "postgres", "-d", "placecontext", "-A", "-t", "-c", sql)
-		if err != nil {
-			return searchMsg{"search failed: " + err.Error()}
-		}
-		body := strings.TrimSpace(string(b))
-
-		// Also search MinIO files (reports/artifacts), best-effort — skip if MinIO isn't deployed.
-		// Excludes the backups bucket (binary). Each hit is listed with how to open it.
-		if files := mc.searchMinio(ctx, q); files != "" {
-			body += "\n\n### files (minio)\n\n" + files
-		}
-
-		if strings.TrimSpace(body) == "" {
-			body = "no matches for \"" + q + "\""
-		}
-		return searchMsg{body}
-	}
-}
-
-// searchMinio lists object keys (excluding the backups bucket) matching the term, as markdown bullets
-// with the command to open each. Returns "" if MinIO isn't present or nothing matches.
-func (m model) searchMinio(ctx context.Context, q string) string {
-	script := `mc alias set s http://localhost:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD" >/dev/null 2>&1 || exit 0
-mc ls --recursive s 2>/dev/null | awk '{print $NF}' | grep -iv '^placecontext-backups/' | grep -i -- "$Q" | head -25`
-	cmd := []string{"-n", ns, "exec", "deploy/minio", "--", "sh", "-c", "Q='" + strings.ReplaceAll(q, "'", "") + "' ; " + script}
-	b, err := m.kubectl(ctx, cmd...)
-	if err != nil {
-		return ""
-	}
-	var out strings.Builder
-	for _, ln := range strings.Split(strings.TrimSpace(string(b)), "\n") {
-		ln = strings.TrimSpace(ln)
-		if ln == "" {
-			continue
-		}
-		out.WriteString("- `" + ln + "`  — open: `pctl minio open " + ln + "`\n")
-	}
-	return out.String()
-}
-
-func (m model) queryJobs(ctx context.Context) ([]jobRow, string) {
-	const base = `"Id", "TenantId", "Name", "MapSourceKind", "ConcurrencyLimit", "AllowNetworkEgress", "UpdatedAt"`
-	run := func(sel string) ([]byte, error) {
-		q := `SELECT ` + sel + ` FROM jobs ORDER BY "UpdatedAt" DESC LIMIT 100`
-		return m.kubectl(ctx, "-n", ns, "exec", "deploy/placecontext-db", "--",
-			"psql", "-U", "postgres", "-d", "placecontext", "-At", "-F", "\t", "-c", q)
-	}
-	// TimeoutSeconds is a newer column; if the DB is behind the app code (migration not yet
-	// applied) fall back to a query without it so the jobs list still works — the migration
-	// banner (checkMigrations) tells the user to deploy.
-	b, err := run(base + `, "TimeoutSeconds"`)
-	if err != nil && strings.Contains(err.Error(), "does not exist") {
-		b, err = run(base) // 7 cols; the row padding below defaults TimeoutSeconds to 300
-	}
-	if err != nil {
-		return nil, "could not query jobs: " + err.Error()
-	}
-	var rows []jobRow
-	for _, ln := range strings.Split(strings.TrimSpace(string(b)), "\n") {
-		if ln == "" {
-			continue
-		}
-		f := strings.Split(ln, "\t")
-		for len(f) < 8 {
-			f = append(f, "")
-		}
-		eg := "no"
-		if f[5] == "t" {
-			eg = "yes"
-		}
-		upd := f[6]
-		if len(upd) > 19 {
-			upd = upd[:19]
-		}
-		to := f[7]
-		if to == "" {
-			to = "300"
-		}
-		rows = append(rows, jobRow{f[0], f[1], f[2], f[3], f[4], eg, upd, to})
-	}
-	return rows, ""
-}
-
-// expectedMigration is the newest EF migration id in the source tree at TUI build time, stamped via
-// -ldflags "-X main.expectedMigration=<id>" (see the Makefile). Empty for a plain `go build`, in
-// which case the migration check is skipped (no false warnings).
-var expectedMigration string
-
-// checkMigrations compares the newest migration applied to the live DB against the one this TUI was
-// built from. A DB that is behind means the deployed app image predates pending migrations and needs
-// (re)deploying — exactly the skew that makes newer columns (e.g. TimeoutSeconds) missing. Returns a
-// human-readable warning, or "" when up to date / not determinable.
-func (m model) checkMigrations(ctx context.Context) string {
-	if expectedMigration == "" {
-		return ""
-	}
-	b, err := m.kubectl(ctx, "-n", ns, "exec", "deploy/placecontext-db", "--",
-		"psql", "-U", "postgres", "-d", "placecontext", "-At", "-c",
-		`SELECT coalesce(max("MigrationId"),'') FROM "__EFMigrationsHistory"`)
-	if err != nil {
-		return "" // DB unreachable / not initialised — other alerts cover that
-	}
-	applied := strings.TrimSpace(string(b))
-	// Migration ids are timestamp-prefixed, so lexical order == chronological order.
-	if applied != "" && applied < expectedMigration {
-		return "DB schema is behind app code (applied " + shortMig(applied) +
-			", expected " + shortMig(expectedMigration) + ") — run `pctl deploy` to apply migrations"
-	}
-	return ""
-}
-
-// shortMig drops the timestamp prefix from a migration id for display:
-// "20260626040930_AddJobTimeout" → "AddJobTimeout".
-func shortMig(id string) string {
-	if i := strings.IndexByte(id, '_'); i >= 0 {
-		return id[i+1:]
-	}
-	return id
-}
-
-// runJobCmd enqueues a manual run of a job by inserting a row into the durable pending_job_runs queue,
-// exactly like a trigger would. The in-cluster scheduler claims it (FOR UPDATE SKIP LOCKED) on any
-// replica and dispatches it as a Kubernetes Job — so the TUI never runs work on its own thread.
-func (m model) runJobCmd(j jobRow) tea.Cmd {
-	mc := m
-	return func() tea.Msg {
-		if j.id == "" || j.tenant == "" {
-			return flashMsg("could not run job — missing id/tenant (refresh and retry)")
-		}
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		q := `INSERT INTO pending_job_runs ` +
-			`("Id","TenantId","JobId","TriggerId","TriggerName","Payload","EnqueuedAt") VALUES ` +
-			`(gen_random_uuid(), '` + j.tenant + `', '` + j.id + `', ` +
-			`'00000000-0000-0000-0000-000000000000', 'tui-manual', NULL, now())`
-		if _, err := mc.kubectl(ctx, "-n", ns, "exec", "deploy/placecontext-db", "--",
-			"psql", "-U", "postgres", "-d", "placecontext", "-c", q); err != nil {
-			return flashMsg("run failed: " + err.Error())
-		}
-		return flashMsg("queued run of \"" + j.name + "\" — watch the jobs list / runs")
-	}
-}
-
-// jobSetting is one toggleable (checkbox) job setting in the settings view ([s]). Each maps to a
-// boolean column on the jobs table; toggling persists immediately and takes effect on the next run.
-type jobSetting struct {
-	label, desc, column string
-	get                 func(jobRow) bool
-}
-
-func jobSettings() []jobSetting {
-	return []jobSetting{
-		{"Allow network egress",
-			"Let this job's containers reach the network. When off, a deny-all NetworkPolicy isolates the run.",
-			"AllowNetworkEgress", func(j jobRow) bool { return j.egress == "yes" }},
-	}
-}
-
-type jobSettingMsg struct {
-	column string
-	val    bool
-	flash  string
-}
-
-// toggleJobSettingCmd flips a boolean job setting in the jobs table via psql, off the UI thread.
-func (m model) toggleJobSettingCmd(j jobRow, s jobSetting, val bool) tea.Cmd {
-	mc := m
-	return func() tea.Msg {
-		if j.id == "" {
-			return flashMsg("could not update setting — missing job id (refresh and retry)")
-		}
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		b := "false"
-		state := "off"
-		if val {
-			b, state = "true", "on"
-		}
-		q := `UPDATE jobs SET "` + s.column + `"=` + b + `, "UpdatedAt"=now() WHERE "Id"='` + j.id + `'`
-		if _, err := mc.kubectl(ctx, "-n", ns, "exec", "deploy/placecontext-db", "--",
-			"psql", "-U", "postgres", "-d", "placecontext", "-c", q); err != nil {
-			return flashMsg(s.label + " toggle failed: " + err.Error())
-		}
-		return jobSettingMsg{s.column, val, s.label + ": " + state}
-	}
-}
-
-// timeout adjustment bounds (mirrors Job.DefaultTimeoutSeconds / MaxTimeoutSeconds on the server).
-const (
-	timeoutStep = 30
-	timeoutMin  = 30
-	timeoutMax  = 3600
-)
-
-type jobTimeoutMsg struct {
-	val   int
-	flash string
-}
-
-// adjustTimeoutCmd persists a new per-job timeout (clamped) to the jobs table via psql, off the UI
-// thread. delta is added to the current value and snapped to the [timeoutMin, timeoutMax] range.
-func (m model) adjustTimeoutCmd(j jobRow, delta int) tea.Cmd {
-	mc := m
-	return func() tea.Msg {
-		if j.id == "" {
-			return flashMsg("could not update timeout — missing job id (refresh and retry)")
-		}
-		cur, err := strconv.Atoi(strings.TrimSpace(j.timeout))
-		if err != nil || cur <= 0 {
-			cur = 300
-		}
-		next := cur + delta
-		if next < timeoutMin {
-			next = timeoutMin
-		}
-		if next > timeoutMax {
-			next = timeoutMax
-		}
-		if next == cur {
-			return jobTimeoutMsg{cur, "timeout: " + strconv.Itoa(cur) + "s (limit reached)"}
-		}
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		q := `UPDATE jobs SET "TimeoutSeconds"=` + strconv.Itoa(next) + `, "UpdatedAt"=now() WHERE "Id"='` + j.id + `'`
-		if _, err := mc.kubectl(ctx, "-n", ns, "exec", "deploy/placecontext-db", "--",
-			"psql", "-U", "postgres", "-d", "placecontext", "-c", q); err != nil {
-			return flashMsg("timeout update failed: " + err.Error())
-		}
-		return jobTimeoutMsg{next, "timeout: " + strconv.Itoa(next) + "s"}
-	}
-}
-
-// ── run-history drill-down ──────────────────────────────────────────────────────────────────────
-// runRow is one row in the runs list for a job.
-type runRow struct{ id, status, started, finished, duration string }
-
-type runsMsg struct {
-	rows []runRow
-	err  string
-}
-type runDetailMsg struct{ title, body string }
-
-// fetchRuns reads the recent runs for a job (newest first) from job_runs via psql.
-func (m model) fetchRuns(j jobRow) tea.Cmd {
-	mc := m
-	return func() tea.Msg {
-		if j.id == "" {
-			return runsMsg{nil, "missing job id (refresh and retry)"}
-		}
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		// EXTRACT(EPOCH …) gives a numeric duration we format client-side; NULL finished ⇒ still running.
-		q := `SELECT "Id","Status",` +
-			`to_char("StartedAt",'YYYY-MM-DD HH24:MI:SS'),` +
-			`coalesce(to_char("FinishedAt",'YYYY-MM-DD HH24:MI:SS'),''),` +
-			`coalesce(round(EXTRACT(EPOCH FROM ("FinishedAt"-"StartedAt")))::text,'') ` +
-			`FROM job_runs WHERE "JobId"='` + j.id + `' ORDER BY "StartedAt" DESC LIMIT 50`
-		b, err := mc.kubectl(ctx, "-n", ns, "exec", "deploy/placecontext-db", "--",
-			"psql", "-U", "postgres", "-d", "placecontext", "-At", "-F", "\t", "-c", q)
-		if err != nil {
-			return runsMsg{nil, "could not query runs: " + err.Error()}
-		}
-		var rows []runRow
-		for _, ln := range strings.Split(strings.TrimSpace(string(b)), "\n") {
-			if ln == "" {
-				continue
-			}
-			f := strings.Split(ln, "\t")
-			for len(f) < 5 {
-				f = append(f, "")
-			}
-			dur := f[4]
-			if dur != "" {
-				dur += "s"
-			} else if f[3] == "" {
-				dur = "running…"
-			}
-			rows = append(rows, runRow{f[0], f[1], f[2], f[3], dur})
-		}
-		return runsMsg{rows, ""}
-	}
-}
-
-// shardJson / reduceJson / artifactJson mirror the camelCase JSON persisted by EfJobRunRepository.
-type artifactJson struct {
-	Name    string `json:"name"`
-	Content string `json:"content"`
-}
-type shardJson struct {
-	Index     int            `json:"index"`
-	ExitCode  int            `json:"exitCode"`
-	Outcome   string         `json:"outcome"`
-	Artifact  *string        `json:"artifact"`
-	Log       *string        `json:"log"`
-	Artifacts []artifactJson `json:"artifacts"`
-}
-type reduceJson struct {
-	ExitCode  int            `json:"exitCode"`
-	Succeeded bool           `json:"succeeded"`
-	Artifact  *string        `json:"artifact"`
-	Log       *string        `json:"log"`
-	Artifacts []artifactJson `json:"artifacts"`
-}
-
-// fetchRunDetail reads one run's shard + reduce results and formats them into a scrollable report:
-// per-shard exit code, outcome, the combined stdout/stderr (console logs + errors), and artifacts.
-func (m model) fetchRunDetail(r runRow) tea.Cmd {
-	mc := m
-	return func() tea.Msg {
-		title := "run " + shortID(r.id)
-		if r.id == "" {
-			return runDetailMsg{title, "missing run id"}
-		}
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		q := `SELECT coalesce("ShardResultsJson",'[]'), coalesce("ReduceResultJson",'') ` +
-			`FROM job_runs WHERE "Id"='` + r.id + `'`
-		b, err := mc.kubectl(ctx, "-n", ns, "exec", "deploy/placecontext-db", "--",
-			"psql", "-U", "postgres", "-d", "placecontext", "-At", "-F", "\x1f", "-c", q)
-		if err != nil {
-			return runDetailMsg{title, "could not load run: " + err.Error()}
-		}
-		parts := strings.SplitN(strings.TrimRight(string(b), "\n"), "\x1f", 2)
-		shardsJSON := ""
-		reduceJSON := ""
-		if len(parts) > 0 {
-			shardsJSON = parts[0]
-		}
-		if len(parts) > 1 {
-			reduceJSON = parts[1]
-		}
-		return runDetailMsg{title, renderRunDetail(r, shardsJSON, reduceJSON)}
-	}
-}
-
-// renderRunDetail builds the markdown-ish body for a single run from its persisted JSON.
-func renderRunDetail(r runRow, shardsJSON, reduceJSON string) string {
-	var b strings.Builder
-	b.WriteString("# run " + shortID(r.id) + "\n\n")
-	b.WriteString("status: " + r.status + "   started: " + r.started)
-	if r.duration != "" {
-		b.WriteString("   took: " + r.duration)
-	}
-	b.WriteString("\n\n")
-
-	var shards []shardJson
-	if err := json.Unmarshal([]byte(shardsJSON), &shards); err != nil {
-		b.WriteString("could not parse shard results: " + err.Error() + "\n")
-	} else if len(shards) == 0 {
-		b.WriteString("_(no shards recorded for this run)_\n")
-	} else {
-		for _, s := range shards {
-			b.WriteString(fmt.Sprintf("## shard %d — %s (exit %d)\n\n", s.Index, s.Outcome, s.ExitCode))
-			b.WriteString(renderStream("console (stdout/stderr)", s.Log))
-			b.WriteString(renderStream("artifact", s.Artifact))
-			for _, a := range s.Artifacts {
-				c := a.Content
-				b.WriteString(renderStream("file: "+a.Name, &c))
-			}
-		}
-	}
-
-	if strings.TrimSpace(reduceJSON) != "" {
-		var rd reduceJson
-		if err := json.Unmarshal([]byte(reduceJSON), &rd); err == nil {
-			state := "failed"
-			if rd.Succeeded {
-				state = "succeeded"
-			}
-			b.WriteString(fmt.Sprintf("## reduce — %s (exit %d)\n\n", state, rd.ExitCode))
-			b.WriteString(renderStream("console (stdout/stderr)", rd.Log))
-			b.WriteString(renderStream("artifact", rd.Artifact))
-		}
-	}
-	return b.String()
-}
-
-// renderStream prints a labelled fenced block, or a dim "none" note when empty.
-func renderStream(label string, content *string) string {
-	if content == nil || strings.TrimSpace(*content) == "" {
-		return "_" + label + ": (none)_\n\n"
-	}
-	return "**" + label + "**\n\n```\n" + strings.TrimRight(*content, "\n") + "\n```\n\n"
-}
-
-func shortID(id string) string {
-	id = strings.ReplaceAll(id, "-", "")
-	if len(id) > 8 {
-		return id[:8]
-	}
-	return id
 }
 
 // addNodeMenu lists the "add node" choices (dev k3d nodes + the prod join command).
@@ -967,6 +439,19 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 			return m, nil
+		}
+
+		// In a run's detail, [o] opens the first discovered link and [1-9] opens the nth. Other keys
+		// fall through to scrolling, so paging still works.
+		if m.view == viewRunDetail && len(m.runLinks) > 0 {
+			if key == "o" {
+				return m, openURL(m.runLinks[0])
+			}
+			if len(key) == 1 && key[0] >= '1' && key[0] <= '9' {
+				if idx := int(key[0] - '1'); idx < len(m.runLinks) {
+					return m, openURL(m.runLinks[idx])
+				}
+			}
 		}
 
 		switch key {
@@ -1297,7 +782,23 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case runDetailMsg:
 		m.loading = false
 		m.logTitle = msg.title
-		m.logs.SetContent(renderMarkdown(msg.body, m.logs.Width))
+		m.runLinks = extractURLs(msg.body)
+		body := msg.body
+		if len(m.runLinks) > 0 {
+			var b strings.Builder
+			b.WriteString(body)
+			b.WriteString("\n\n## Links\n\n")
+			for i, u := range m.runLinks {
+				if i < 9 {
+					b.WriteString(fmt.Sprintf("- `[%d]` %s\n", i+1, u))
+				} else {
+					b.WriteString(fmt.Sprintf("- %s\n", u))
+				}
+			}
+			b.WriteString("\n_press [o] to open the first link, [1-9] to open the nth_\n")
+			body = b.String()
+		}
+		m.logs.SetContent(renderMarkdown(body, m.logs.Width))
 		m.logs.GotoTop()
 		return m, nil
 
@@ -1641,120 +1142,6 @@ func (m model) listBody() string {
 
 func (m model) selected(i int) bool { return m.view == viewDash && i == m.cursor }
 
-func (m model) searchView() string {
-	var b strings.Builder
-	b.WriteString(titleStyle.Render(" search ") + dimStyle.Render("  decisions · context · activity (the knowledge graph)") + "\n\n")
-	b.WriteString("  " + keyStyle.Render("/ ") + m.searchQuery + dimStyle.Render("▌") + "\n\n")
-	b.WriteString(boxStyle.Render(m.logs.View()) + "\n")
-	return b.String()
-}
-
-// runsView lists the runs for the selected job; ⏎ opens a run's per-shard detail.
-func (m model) runsView() string {
-	var b strings.Builder
-	b.WriteString(titleStyle.Render(fmt.Sprintf(" runs: %s (%d) ", m.runsJob.name, len(m.runs))) + "\n\n")
-	if m.runsErr != "" {
-		b.WriteString("  " + errStyle.Render("✗ "+m.runsErr) + "\n")
-		b.WriteString("  " + dimStyle.Render("press [r] to retry · [esc] to go back") + "\n")
-		return b.String()
-	}
-	if len(m.runs) == 0 {
-		b.WriteString("  " + dimStyle.Render("no runs yet — press [R] on the dashboard to queue one.") + "\n")
-		return b.String()
-	}
-	b.WriteString("  " + headStyle.Render(fmt.Sprintf("%-10s %-10s %-21s %-10s", "RUN", "STATUS", "STARTED", "TOOK")) + "\n")
-	for i, r := range m.runs {
-		st := r.status
-		switch strings.ToLower(r.status) {
-		case "succeeded", "success", "completed":
-			st = okStyle.Render(r.status)
-		case "failed", "error":
-			st = errStyle.Render(r.status)
-		default:
-			st = warnStyle.Render(r.status)
-		}
-		line := fmt.Sprintf("%-10s %-19s %-21s %-10s", shortID(r.id), r.status, r.started, r.duration)
-		if i == m.runCursor {
-			b.WriteString(selStyle.Render("❯ "+line) + "\n")
-		} else {
-			// recompose with the colourised status so columns still align
-			b.WriteString("  " + fmt.Sprintf("%-10s ", shortID(r.id)) + st +
-				strings.Repeat(" ", max(1, 19-len(r.status))) +
-				fmt.Sprintf("%-21s %-10s", r.started, r.duration) + "\n")
-		}
-	}
-	b.WriteString("\n  " + dimStyle.Render("⏎ open run · per-shard console output, errors & artifacts") + "\n")
-	return b.String()
-}
-
-func (m model) mcpView() string {
-	var b strings.Builder
-	b.WriteString(titleStyle.Render(fmt.Sprintf(" MCP / tool calls (%d) ", len(m.mcp))) + "\n\n")
-	if m.mcpErr != "" {
-		b.WriteString(errStyle.Render("  "+m.mcpErr) + "\n")
-		return b.String()
-	}
-	b.WriteString("  " + headStyle.Render(pad("TIME", 21)+pad("TOOL", 26)+pad("DIR", 6)+pad("STATUS", 10)+"ms") + dimStyle.Render("   (⏎ view request/response)") + "\n")
-	if len(m.mcp) == 0 {
-		b.WriteString(dimStyle.Render("    (no MCP calls recorded yet)") + "\n")
-		return b.String()
-	}
-	for i, c := range m.mcp {
-		plain := pad(c.at, 21) + pad(trunc(c.tool, 25), 26) + pad(c.dir, 6) + pad(c.status, 10) + c.dur
-		if i == m.mcpCursor {
-			b.WriteString(selStyle.Render("❯ "+plain) + "\n")
-			continue
-		}
-		st := okStyle.Render(pad(c.status, 10))
-		if c.status != "" && c.status != "ok" && c.status != "success" && c.status != "Success" {
-			st = warnStyle.Render(pad(c.status, 10))
-		}
-		b.WriteString("  " + dimStyle.Render(pad(c.at, 21)) + pad(trunc(c.tool, 25), 26) + pad(c.dir, 6) + st + dimStyle.Render(c.dur) + "\n")
-	}
-	return b.String()
-}
-
-// settingsView renders the per-job checkbox settings. Space toggles the highlighted setting.
-func (m model) settingsView() string {
-	var b strings.Builder
-	b.WriteString(titleStyle.Render(" settings ") + dimStyle.Render("  job: "+m.setJob.name) + "\n\n")
-	items := jobSettings()
-	for i, s := range items {
-		box := "[ ]"
-		if s.get(m.setJob) {
-			box = "[x]"
-		}
-		line := box + "  " + s.label
-		if i == m.setCursor {
-			b.WriteString(selStyle.Render("❯ "+line) + "\n")
-		} else {
-			mark := dimStyle.Render(box)
-			if s.get(m.setJob) {
-				mark = okStyle.Render(box)
-			}
-			b.WriteString("  " + mark + "  " + s.label + "\n")
-		}
-		b.WriteString("       " + dimStyle.Render(s.desc) + "\n\n")
-	}
-
-	// Timeout row — adjustable numeric value (not a checkbox); last in the list.
-	to := strings.TrimSpace(m.setJob.timeout)
-	if to == "" {
-		to = "300"
-	}
-	val := okStyle.Render("‹ " + to + "s ›")
-	tline := "⏱  per-container timeout   " + val
-	if m.setCursor == len(items) {
-		b.WriteString(selStyle.Render("❯ "+tline) + "\n")
-	} else {
-		b.WriteString("  " + tline + "\n")
-	}
-	b.WriteString("       " + dimStyle.Render("Max wall-clock per container before it's killed and the shard fails. ←/→ to adjust (30s–3600s).") + "\n\n")
-
-	b.WriteString("  " + dimStyle.Render("changes persist immediately and apply on the job's next run.") + "\n")
-	return b.String()
-}
-
 func (m model) confirmView() string {
 	var b strings.Builder
 	b.WriteString(errStyle.Render(" ⚠  Confirm destructive action ") + "\n\n")
@@ -1777,31 +1164,6 @@ func (m model) menuView() string {
 	return b.String()
 }
 
-// logLevelStyle picks a colour for a log line by its level (ASP.NET "info:/warn:/fail:/dbug:/trce:"
-// prefixes and the usual ERROR/WARN/INFO/DEBUG/TRACE words). Returns ok=false for unclassified lines.
-func logLevelStyle(line string) (lipgloss.Style, bool) {
-	l := strings.ToLower(line)
-	has := func(toks ...string) bool {
-		for _, t := range toks {
-			if strings.Contains(l, t) {
-				return true
-			}
-		}
-		return false
-	}
-	switch {
-	case has("fail:", "fatal", "crit:", "critical", "[error]", " error ", "level=error", "\"error\"", "panic"):
-		return errStyle, true
-	case has("warn:", "wrn]", "[warn", " warn ", "warning", "level=warn"):
-		return warnStyle, true
-	case has("dbug:", "trce:", "debug", "trace", "verbose", "level=debug", "level=trace"):
-		return dimStyle, true
-	case has("info:", "[info", " info ", "level=info"):
-		return okStyle, true
-	}
-	return lipgloss.Style{}, false
-}
-
 // renderMarkdown renders text as Markdown (word-wrapped, .md-styled) for the search results pane.
 // Falls back to the raw text if the renderer can't initialise.
 func renderMarkdown(s string, width int) string {
@@ -1817,24 +1179,6 @@ func renderMarkdown(s string, width int) string {
 		return s
 	}
 	return strings.TrimRight(out, "\n")
-}
-
-// colorizeLogs tints each log line by its detected level so the level stands out at a glance.
-func colorizeLogs(s string) string {
-	lines := strings.Split(s, "\n")
-	for i, ln := range lines {
-		// Flag ANY line mentioning an error with a marker + red, even when it doesn't match a
-		// structured log level (e.g. "DbError", "connection error.", "3 errors"). This makes
-		// problems in a pod/node log impossible to miss.
-		if strings.Contains(strings.ToLower(ln), "error") {
-			lines[i] = errStyle.Render("✗ " + ln)
-			continue
-		}
-		if st, ok := logLevelStyle(ln); ok {
-			lines[i] = st.Render(ln)
-		}
-	}
-	return strings.Join(lines, "\n")
 }
 
 func (m model) footer() string {
