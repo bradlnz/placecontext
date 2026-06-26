@@ -118,7 +118,9 @@ in-cluster job execution. All committed on `main`; Go TUI builds + tests pass; H
   `portal.go`, `themes.go`). Side-by-side **cluster (left)** / **node·pod·job list (right)**; the
   cluster is a rotating ASCII **planet** hub with workers/pods as satellites, dotted links + app→db
   pulses. Keys: `↑↓` nav, `⏎` logs/detail, `/` search, `g` metrics, `m` mcp, `p` portal, `$`
-  subscribe, `a` add worker, `x` kill (jobs only — pods/nodes read-only), `c` theme, `l` global logs.
+  subscribe, `a` add worker, `R` run job (enqueues into the durable run queue), `s` per-job settings
+  (checkbox view; toggles allow-network-egress), `x` kill (jobs only — pods/nodes read-only), `c`
+  theme (also swaps the banner **font**), `l` global logs.
   Metrics = area charts across every node; search = decisions/context/activity + MinIO files, rendered
   as markdown (glamour); MCP/job drill-down; loading box; first-run setup guide; top alert lines.
   Async fetches off the UI thread; ~1.5s realtime refresh.
@@ -163,7 +165,7 @@ are unreferenced (safe to delete in a follow-up).
 - **Reports → MinIO** (store rendered HTML; open from portal/TUI).
 - **Redis** cache pod (shared cache; sticky still required for Blazor circuits).
 - **Vault portal page** (add/delete secrets UI) — backend done; UI pending.
-- TUI: **settings menu** (checkboxes, e.g. allow-network-egress), **run jobs from the TUI**, **job→runs
-  navigation** (drill into each run's container output), **theme also changes font**.
+- TUI: **job→runs navigation** (drill into each run's container output) — basic latest-run output done,
+  multi-run navigation pending. (✓ settings menu, ✓ run jobs from TUI, ✓ theme also changes font.)
 - Open-source/setup **wiki** (`docs/SETUP.md` started).
 - Optional: graduate the in-cluster job controller into a standalone **control-plane API** for multi-cluster.
