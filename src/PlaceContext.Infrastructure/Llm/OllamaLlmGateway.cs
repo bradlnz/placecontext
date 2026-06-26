@@ -31,6 +31,9 @@ public sealed class OllamaLlmGateway : ILlmGateway
     public async Task<string> GenerateAsync(string system, string user, CancellationToken ct = default)
     {
         var client = _http.CreateClient();
+        // Local CPU inference of a small Gemma can take well over the default 100s for larger inputs;
+        // give it generous headroom (the call is best-effort and caught upstream regardless).
+        client.Timeout = TimeSpan.FromMinutes(5);
         using var req = new HttpRequestMessage(HttpMethod.Post, $"{_endpoint}/api/generate");
         req.Content = JsonContent.Create(new
         {

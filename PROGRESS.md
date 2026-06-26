@@ -161,11 +161,18 @@ are unreferenced (safe to delete in a follow-up).
 
 ### Remaining / in progress
 - **Portal job-creation UI + runtimes** (import-from-GitHub or in-editor; Python/.NET/Go/Ruby).
-- **Host Gemma (smallest)** in-cluster (Ollama) for HTML reports + data organization.
 - **Reports → MinIO** (store rendered HTML; open from portal/TUI).
 - **Redis** cache pod (shared cache; sticky still required for Blazor circuits).
-- **Vault portal page** (add/delete secrets UI) — backend done; UI pending.
-- TUI: **job→runs navigation** (drill into each run's container output) — basic latest-run output done,
-  multi-run navigation pending. (✓ settings menu, ✓ run jobs from TUI, ✓ theme also changes font.)
+- Open-source/setup **wiki** (`docs/SETUP.md` started).
+- Optional: graduate the in-cluster job controller into a standalone **control-plane API** for multi-cluster.
+
+### Recently done
+- ✓ **Host Gemma in-cluster** (`deploy/k3s/ollama.yaml`): Ollama + `gemma3:4b` on a persistent model PVC,
+  pulled once on boot, Ready-gated on model presence. Host wired via `PlaceContext:Llm:Provider=ollama`
+  (env in `placecontext.yaml`) so `RunJobHandler` organizes each run's output through it (best-effort).
+- ✓ **Vault portal page** (add/delete secrets UI) + the job form now lists the vault secret names that
+  get injected as env vars at run time, with a link to manage them.
+- ✓ TUI: **job→runs navigation** — runs list → per-run detail (per-shard console output, errors, artifacts).
+  (✓ settings menu, ✓ run jobs from TUI, ✓ theme also changes font, ✓ per-job timeout.)
 - Open-source/setup **wiki** (`docs/SETUP.md` started).
 - Optional: graduate the in-cluster job controller into a standalone **control-plane API** for multi-cluster.

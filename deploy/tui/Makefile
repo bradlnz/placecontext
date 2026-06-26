@@ -5,7 +5,11 @@
 #   make fleet      cross-compile static binaries for common fleet targets (./dist)
 #   make clean      remove build artifacts
 BINARY := pctl-tui
-LDFLAGS := -s -w
+# Stamp the newest EF migration id from the source tree so the TUI can warn when the live DB schema
+# is behind the app code (pending migrations). Excludes *.Designer.cs and the model snapshot.
+MIGRATIONS_DIR := ../../src/PlaceContext.Infrastructure/Migrations
+EXPECTED_MIGRATION := $(shell ls $(MIGRATIONS_DIR)/[0-9]*_*.cs 2>/dev/null | grep -vi '\.designer\.cs$$' | sed 's#.*/##; s#\.cs$$##' | sort | tail -1)
+LDFLAGS := -s -w -X main.expectedMigration=$(EXPECTED_MIGRATION)
 GOFLAGS := -trimpath
 
 .PHONY: build install fleet clean

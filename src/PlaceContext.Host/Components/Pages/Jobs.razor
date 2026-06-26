@@ -305,6 +305,32 @@ else
                 </textarea>
             </div>
 
+            @* Vault secrets are injected as env vars at run time (decrypted in-process), on top of the
+               plaintext vars above — names only; values are write-only and managed in the Vault. *@
+            <div style="background:var(--card); border-radius:8px; padding:10px 14px">
+                <div style="display:flex; align-items:baseline; justify-content:space-between; gap:10px; margin-bottom:6px">
+                    <span style="font-size:12px; color:var(--text-3)">Injected at run time (from Vault)</span>
+                    <button type="button" class="dcbtn" style="border:none; background:none; color:var(--accent); padding:0; font-size:12px"
+                            @onclick="@(() => Nav.NavigateTo($"/project/{ProjectId}/secrets"))">manage in Vault →</button>
+                </div>
+                @if (_vaultSecrets is { Count: > 0 })
+                {
+                    <div style="display:flex; flex-wrap:wrap; gap:6px">
+                        @foreach (var s in _vaultSecrets)
+                        {
+                            <span style="font-family:'Geist Mono',monospace; font-size:11.5px; background:var(--bg-2); border:1px solid var(--border); border-radius:6px; padding:2px 8px">@s.Name</span>
+                        }
+                    </div>
+                    <div style="font-size:11px; color:var(--text-3); margin-top:6px">
+                        These encrypted secrets are added to every run's environment. A plaintext variable above with the same name overrides the vault value.
+                    </div>
+                }
+                else
+                {
+                    <div style="font-size:11.5px; color:var(--text-3)">No vault secrets yet — add API keys or passwords in the Vault and they'll be injected here automatically.</div>
+                }
+            </div>
+
             <div style="display:flex; gap:10px">
                 <div style="flex:1">
                     <label style="font-size:12px; color:var(--text-3); display:block; margin-bottom:4px">Concurrency</label>
@@ -495,6 +521,7 @@ else
     [Parameter] public Guid ProjectId { get; set; }
 
     private IReadOnlyList<JobView>? _jobs;
+    private IReadOnlyList<ProjectSecretView>? _vaultSecrets; // names injected as env at run time (Vault)
     private IReadOnlyList<JobRunView>? _runs;
     private JobRunDetailView? _runDetail;
     private Guid? _selectedJobId;
@@ -545,6 +572,7 @@ else
         try
         {
             _jobs = await Svc.ListJobsAsync(ProjectId);
+            _vaultSecrets = await Svc.ListProjectSecretsAsync(ProjectId);
             _triggers = await Svc.ListTriggersAsync(ProjectId);
             _eventTypes = await Svc.ListEventTypesAsync();
             Ui.Set("Jobs", "project workload runner");

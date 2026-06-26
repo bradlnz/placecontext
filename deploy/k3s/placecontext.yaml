@@ -87,6 +87,14 @@ spec:
                 secretKeyRef:
                   name: placecontext-oauth
                   key: key.pem
+            # In-cluster local LLM (Ollama + Gemma) for organizing job output / polishing reports. The
+            # gateway is best-effort: if Ollama is down the run still completes with the raw summary.
+            - name: PlaceContext__Llm__Provider
+              value: "ollama"
+            - name: PlaceContext__Llm__Ollama__Endpoint
+              value: "http://ollama:11434"
+            - name: PlaceContext__Llm__Ollama__Model
+              value: "gemma3:4b"
           # Give the app time to run EF migrations on first boot before liveness/readiness apply.
           startupProbe:
             httpGet: { path: /, port: 7700 }

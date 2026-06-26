@@ -61,15 +61,16 @@ type podRow struct {
 	Restarts                  int
 }
 type clusterState struct {
-	nodes   []nodeRow
-	pods    []podRow
-	jobs    []jobRow
-	jobsErr string
-	hostUp  int // ready placecontext host pods
-	hostTot int
-	dbUp    bool
-	reach   bool
-	err     string
+	nodes       []nodeRow
+	pods        []podRow
+	jobs        []jobRow
+	jobsErr     string
+	migrateWarn string // non-empty when the DB schema is behind the app code (pending migrations)
+	hostUp      int    // ready placecontext host pods
+	hostTot     int
+	dbUp        bool
+	reach       bool
+	err         string
 }
 
 const (
@@ -264,6 +265,7 @@ func (m model) fetchState() tea.Cmd {
 		// Always query jobs while the cluster is reachable (don't gate on dbUp detection, which can
 		// flicker) so a newly-added job shows up on the next ~1.5s refresh.
 		st.jobs, st.jobsErr = mc.queryJobs(ctx)
+		st.migrateWarn = mc.checkMigrations(ctx)
 		return stateMsg(st)
 	}
 }
@@ -498,6 +500,43 @@ func (m model) queryJobs(ctx context.Context) ([]jobRow, string) {
 		rows = append(rows, jobRow{f[0], f[1], f[2], f[3], f[4], eg, upd, to})
 	}
 	return rows, ""
+}
+
+// expectedMigration is the newest EF migration id in the source tree at TUI build time, stamped via
+// -ldflags "-X main.expectedMigration=<id>" (see the Makefile). Empty for a plain `go build`, in
+// which case the migration check is skipped (no false warnings).
+var expectedMigration string
+
+// checkMigrations compares the newest migration applied to the live DB against the one this TUI was
+// built from. A DB that is behind means the deployed app image predates pending migrations and needs
+// (re)deploying — exactly the skew that makes newer columns (e.g. TimeoutSeconds) missing. Returns a
+// human-readable warning, or "" when up to date / not determinable.
+func (m model) checkMigrations(ctx context.Context) string {
+	if expectedMigration == "" {
+		return ""
+	}
+	b, err := m.kubectl(ctx, "-n", ns, "exec", "deploy/placecontext-db", "--",
+		"psql", "-U", "postgres", "-d", "placecontext", "-At", "-c",
+		`SELECT coalesce(max("MigrationId"),'') FROM "__EFMigrationsHistory"`)
+	if err != nil {
+		return "" // DB unreachable / not initialised — other alerts cover that
+	}
+	applied := strings.TrimSpace(string(b))
+	// Migration ids are timestamp-prefixed, so lexical order == chronological order.
+	if applied != "" && applied < expectedMigration {
+		return "DB schema is behind app code (applied " + shortMig(applied) +
+			", expected " + shortMig(expectedMigration) + ") — run `pctl deploy` to apply migrations"
+	}
+	return ""
+}
+
+// shortMig drops the timestamp prefix from a migration id for display:
+// "20260626040930_AddJobTimeout" → "AddJobTimeout".
+func shortMig(id string) string {
+	if i := strings.IndexByte(id, '_'); i >= 0 {
+		return id[i+1:]
+	}
+	return id
 }
 
 // runJobCmd enqueues a manual run of a job by inserting a row into the durable pending_job_runs queue,
@@ -1452,6 +1491,11 @@ func (m model) alerts() string {
 	var out strings.Builder
 	if !s.reach {
 		return "" // first-run: the friendly setup guide covers this, no scary banner
+	}
+	// Pending-migration / stale-image skew is surfaced first and in red — it's the cause of the
+	// "cannot query jobs / open run" failures, so it must stand out above transient warnings.
+	if s.migrateWarn != "" {
+		out.WriteString("  " + errStyle.Render("✗ "+s.migrateWarn) + "\n")
 	}
 	n := 0
 	warn := func(msg string) {
