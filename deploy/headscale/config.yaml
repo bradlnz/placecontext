@@ -28,5 +28,12 @@ dns:
   nameservers:
     global: [1.1.1.1, 8.8.8.8]
 
+# Multi-tenancy: a default-deny ACL isolates each customer. Every tenant's nodes carry tag:cust-<id>
+# and the policy only permits intra-tenant traffic, so one customer can never reach another's network.
+# pctl regenerates acl.json from the tenant registry (deploy/headscale/tenants.list).
+policy:
+  mode: file
+  path: /etc/headscale/acl.json
+
 log:
   level: info

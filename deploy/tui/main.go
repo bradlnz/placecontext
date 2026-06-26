@@ -875,12 +875,12 @@ func (m model) dashboard() string {
 	} else if rows > 26 {
 		rows = 26
 	}
-	leftW := m.w * 3 / 5
+	leftW := m.w / 2 // cluster ~half; the node/pod/job list gets the wider remaining half
 	if leftW < 36 {
 		leftW = 36
 	}
-	if leftW > m.w-24 {
-		leftW = max(24, m.w-24)
+	if leftW > m.w-40 {
+		leftW = max(24, m.w-40)
 	}
 	left := lipgloss.NewStyle().Width(leftW).Render(m.clusterPanel(leftW-2, rows))
 	right := lipgloss.NewStyle().Width(m.w - leftW - 2).Render(m.listBody())

@@ -16,3 +16,7 @@ deploy/*.tar
 # Compiled TUI binary (build with: make -C deploy/tui)
 deploy/tui/pctl-tui
 deploy/tui/dist/
+
+# Headscale mesh runtime state (templated/generated on the control droplet)
+deploy/headscale/*.live.*
+deploy/headscale/tenants.list

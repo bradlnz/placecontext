@@ -341,13 +341,17 @@ cmd_mesh() {
   local sub="${1:-}"; shift || true
   case "$sub" in
     up)      cmd_mesh_up "$@";;
+    tenant)  cmd_mesh_tenant "$@";;
     authkey) cmd_mesh_authkey "$@";;
     down)    cmd_mesh_down "$@";;
-    *) die "unknown 'mesh' subcommand: '$sub' (try: up --domain FQDN | authkey | down)";;
+    *) die "unknown 'mesh' subcommand: '$sub' (try: up --domain FQDN | tenant add|rm ID | authkey --tenant ID | down)";;
   esac
 }
 
 dc() { if docker compose version >/dev/null 2>&1; then docker compose "$@"; else docker-compose "$@"; fi; }
+hs() { ( cd deploy/headscale && dc -f docker-compose.live.yml exec -T headscale headscale "$@" ); }
+MESH_DIR="deploy/headscale"
+MESH_TENANTS="$MESH_DIR/tenants.list"
 
 cmd_mesh_up() {
   local domain=""
@@ -355,22 +359,63 @@ cmd_mesh_up() {
   [ -n "$domain" ] || die "mesh up needs --domain <fqdn> (DNS A record → this droplet)"
   have docker || die "docker is required to run Headscale."
   say "Templating Headscale config for ${domain}…"
-  sed "s|__DOMAIN__|${domain}|g" deploy/headscale/config.yaml > deploy/headscale/config.live.yaml
-  ( cd deploy/headscale && sed 's|config.yaml|config.live.yaml|' docker-compose.yml > docker-compose.live.yml && dc -f docker-compose.live.yml up -d )
-  ok "Headscale up at https://${domain}  — create a user + key: pctl mesh authkey"
+  sed "s|__DOMAIN__|${domain}|g" "$MESH_DIR/config.yaml" > "$MESH_DIR/config.live.yaml"
+  [ -f "$MESH_TENANTS" ] || : > "$MESH_TENANTS"
+  mesh_render_acl
+  ( cd "$MESH_DIR" && sed 's|config.yaml|config.live.yaml|' docker-compose.yml > docker-compose.live.yml && dc -f docker-compose.live.yml up -d )
+  ok "Headscale up at https://${domain}  — add a customer: pctl mesh tenant add <id>"
+}
+
+# Regenerate the default-deny, per-tenant ACL from the tenant registry. Each tenant only sees itself.
+mesh_render_acl() {
+  local owners="" acls="" id first_o=1 first_a=1
+  while IFS= read -r id; do
+    [ -z "$id" ] && continue
+    [ "$first_o" = 1 ] && first_o=0 || owners+=","
+    owners+="\"tag:cust-${id}\":[\"cust-${id}\"]"
+    [ "$first_a" = 1 ] && first_a=0 || acls+=","
+    acls+="{\"action\":\"accept\",\"src\":[\"tag:cust-${id}\"],\"dst\":[\"tag:cust-${id}:*\"]}"
+  done < "$MESH_TENANTS"
+  cat > "$MESH_DIR/acl.json" <<EOF
+{ "tagOwners": { ${owners} }, "acls": [ ${acls} ] }
+EOF
+}
+
+cmd_mesh_tenant() {
+  local action="${1:-}" id="${2:-}"
+  [ -n "$id" ] || die "usage: pctl mesh tenant add|rm <tenant-id>"
+  [ -f "$MESH_TENANTS" ] || : > "$MESH_TENANTS"
+  case "$action" in
+    add)
+      grep -qxF "$id" "$MESH_TENANTS" || echo "$id" >> "$MESH_TENANTS"
+      hs users create "cust-${id}" >/dev/null 2>&1 || true
+      mesh_render_acl
+      ( cd "$MESH_DIR" && dc -f docker-compose.live.yml restart headscale >/dev/null )
+      ok "Tenant '${id}' added (isolated network tag:cust-${id}). Key: pctl mesh authkey --tenant ${id}"
+      ;;
+    rm)
+      grep -vxF "$id" "$MESH_TENANTS" > "$MESH_TENANTS.tmp" 2>/dev/null || true
+      mv -f "$MESH_TENANTS.tmp" "$MESH_TENANTS" 2>/dev/null || true
+      mesh_render_acl
+      ( cd "$MESH_DIR" && dc -f docker-compose.live.yml restart headscale >/dev/null )
+      ok "Tenant '${id}' removed from the ACL."
+      ;;
+    *) die "usage: pctl mesh tenant add|rm <tenant-id>";;
+  esac
 }
 
 cmd_mesh_authkey() {
-  local user="placecontext"
-  while [ $# -gt 0 ]; do case "$1" in --user) user="$2"; shift 2;; *) die "mesh authkey: unknown arg $1";; esac; done
+  local tenant=""
+  while [ $# -gt 0 ]; do case "$1" in --tenant) tenant="$2"; shift 2;; *) die "mesh authkey: unknown arg $1";; esac; done
+  [ -n "$tenant" ] || die "mesh authkey needs --tenant <id> (each customer gets its own key)"
   have docker || die "docker is required."
-  # ensure the user exists (idempotent), then mint a reusable, 1h pre-auth key
-  ( cd deploy/headscale && dc -f docker-compose.live.yml exec -T headscale headscale users create "$user" >/dev/null 2>&1 || true
-    dc -f docker-compose.live.yml exec -T headscale headscale preauthkeys create --user "$user" --reusable --expiration 1h )
+  grep -qxF "$tenant" "$MESH_TENANTS" 2>/dev/null || die "unknown tenant '${tenant}' — add it first: pctl mesh tenant add ${tenant}"
+  # reusable 1h pre-auth key, tagged so the node lands in that tenant's isolated network
+  hs preauthkeys create --user "cust-${tenant}" --tags "tag:cust-${tenant}" --reusable --expiration 1h
 }
 
 cmd_mesh_down() {
-  ( cd deploy/headscale && dc -f docker-compose.live.yml down 2>/dev/null || dc down 2>/dev/null || true )
+  ( cd "$MESH_DIR" && dc -f docker-compose.live.yml down 2>/dev/null || dc down 2>/dev/null || true )
   ok "Headscale stopped."
 }
 
@@ -612,7 +657,8 @@ ${C_BOLD}PRODUCTION${C_RESET} ${C_DIM}(k3s across multiple machines)${C_RESET}
 
 ${C_BOLD}MESH${C_RESET} ${C_DIM}(self-hosted WireGuard control plane via Headscale, on a DO droplet)${C_RESET}
   mesh up --domain FQDN  Start Headscale (your own Tailscale) for the fleet
-  mesh authkey [--user U] Mint a reusable pre-auth key (use as --vpn-authkey)
+  mesh tenant add|rm ID  Add/remove a customer — an isolated private network (tag:cust-ID, ACL-enforced)
+  mesh authkey --tenant ID  Mint that customer's pre-auth key (use as --vpn-authkey on their nodes)
   mesh down              Stop Headscale
 
 ${C_BOLD}ANYWHERE${C_RESET}

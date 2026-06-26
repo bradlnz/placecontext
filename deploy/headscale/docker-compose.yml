@@ -11,6 +11,7 @@ services:
       - "3478:3478/udp" # DERP/STUN for NAT traversal
     volumes:
       - ./config.yaml:/etc/headscale/config.yaml:ro
+      - ./acl.json:/etc/headscale/acl.json:ro
       - headscale-data:/var/lib/headscale
 volumes:
   headscale-data:
