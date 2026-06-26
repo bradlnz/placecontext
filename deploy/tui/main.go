@@ -935,18 +935,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, m.fetchMcp()
 			}
 			return m, m.fetchState()
-		case "u":
-			if !m.busy {
-				m.busy, m.busyVerb, m.view = true, "dev up", viewAction
-				m.out.SetContent("")
-				return m, tea.Batch(m.sp.Tick, m.runAction("dev up", "dev", "up"))
-			}
-		case "d":
-			if !m.busy {
-				m.busy, m.busyVerb, m.view = true, "dev down", viewAction
-				m.out.SetContent("")
-				return m, tea.Batch(m.sp.Tick, m.runAction("dev down", "dev", "down"))
-			}
 		case "l":
 			m.prevView = viewDash
 			m.view = viewLogs
@@ -1079,6 +1067,11 @@ func (m model) View() string {
 	if m.quitting {
 		return ""
 	}
+	// A data fetch in flight takes over the whole screen with a centered loader.
+	if m.loading {
+		box := boxStyle.Render(m.sp.View() + "  " + titleStyle.Render("loading…"))
+		return lipgloss.Place(max(m.w, 1), max(m.h, 1), lipgloss.Center, lipgloss.Center, box)
+	}
 	var b strings.Builder
 	b.WriteString(bannerStyle.Render(banner) + "\n")
 	b.WriteString(dimStyle.Render("  hosted multi-tenant context · MCP + portal") + "\n\n")
@@ -1086,9 +1079,7 @@ func (m model) View() string {
 	if a := m.alerts(); a != "" {
 		b.WriteString(a)
 	}
-	if m.loading {
-		b.WriteString("  " + boxStyle.Render(m.sp.View()+dimStyle.Render(" loading…")) + "\n")
-	} else if m.flash != "" {
+	if m.flash != "" {
 		b.WriteString("  " + okStyle.Render("✓ "+m.flash) + "\n")
 	} else {
 		b.WriteString("\n")
@@ -1444,7 +1435,7 @@ func (m model) footer() string {
 	case viewDash:
 		keys = []string{k("↑↓", "nav"), k("⏎", "logs"), k("R", "run job"), k("s", "settings"), k("x", "kill job"),
 			k("/", "search"), k("g", "metrics"), k("m", "mcp"), k("p", "portal"), k("$", "subscribe"),
-			k("a", "add worker"), k("c", "theme"), k("u", "up"), k("d", "down"), k("r", "refresh"), k("q", "quit")}
+			k("a", "add worker"), k("c", "theme"), k("r", "refresh"), k("q", "quit")}
 	case viewSettings:
 		keys = []string{k("↑↓", "nav"), k("space", "toggle"), k("b", "back"), k("q", "quit")}
 	case viewConfirm:
