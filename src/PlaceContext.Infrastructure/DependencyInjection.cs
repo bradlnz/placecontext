@@ -120,10 +120,14 @@ public static class DependencyInjection
         services.AddScoped<IJobTriggerRepository, EfJobTriggerRepository>();
         services.AddScoped<IEventRepository, EfEventRepository>();
 
-        // Embeddings: Voyage AI when a key is configured, else a graceful no-op. The pgvector-backed
-        // run-embedding store self-initializes lazily and degrades if the extension is unavailable.
+        // Embeddings, in priority order: Voyage AI when a key is configured; else a local Ollama embedding
+        // model when PlaceContext:Embeddings:Provider=ollama (in-cluster, no external key); else a no-op.
+        // The pgvector-backed run-embedding store self-initializes lazily and degrades if unavailable.
+        var embedProvider = (configuration["PlaceContext:Embeddings:Provider"] ?? "").Trim().ToLowerInvariant();
         if (!string.IsNullOrWhiteSpace(configuration["PlaceContext:Voyage:ApiKey"]))
             services.AddSingleton<IEmbeddingGateway, Embeddings.VoyageEmbeddingGateway>();
+        else if (embedProvider == "ollama")
+            services.AddSingleton<IEmbeddingGateway, Embeddings.OllamaEmbeddingGateway>();
         else
             services.AddSingleton<IEmbeddingGateway, Embeddings.NullEmbeddingGateway>();
         services.AddScoped<IRunEmbeddingRepository, EfRunEmbeddingRepository>();

@@ -42,12 +42,15 @@ spec:
               spid=$!
               echo "waiting for ollama to accept connections…"
               until /bin/ollama ls >/dev/null 2>&1; do sleep 1; done
-              echo "ensuring model ${OLLAMA_MODEL} is present…"
+              echo "ensuring models ${OLLAMA_MODEL} + ${OLLAMA_EMBED_MODEL} are present…"
               /bin/ollama pull "${OLLAMA_MODEL}" || echo "pull failed; Ollama will fetch on first request"
+              /bin/ollama pull "${OLLAMA_EMBED_MODEL}" || echo "embed pull failed; Ollama will fetch on first request"
               wait $spid
           env:
             - name: OLLAMA_MODEL
               value: "gemma3:4b"
+            - name: OLLAMA_EMBED_MODEL
+              value: "nomic-embed-text"
             - name: OLLAMA_HOST
               value: "0.0.0.0:11434"
           ports:
