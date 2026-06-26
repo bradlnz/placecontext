@@ -374,10 +374,25 @@ func (m model) clusterPanel(width, rows int) string {
 		}
 	}
 
-	// planet on top of the links so its circle stays intact; satellites are well clear of it
-	for _, s := range servers {
-		cv.planet(cx, cy, planetRy, 0, shortName(s.Name), orb*1.6)
-		break // single hub
+	// planet(s) on top of the links so circles stay intact. One control-plane node → a single hub at
+	// centre; multiple → smaller planets clustered around the centre so every server is shown.
+	ns := len(servers)
+	if ns <= 1 {
+		for _, s := range servers {
+			cv.planet(cx, cy, planetRy, 0, shortName(s.Name), orb*1.6)
+		}
+	} else {
+		sry := planetRy - 1
+		if sry < 2 {
+			sry = 2
+		}
+		hubR := sry*2 + 2 // spacing of the hub cluster around centre
+		for i, s := range servers {
+			ang := 2*math.Pi*float64(i)/float64(ns) + orb*0.3
+			scx := cx + int(float64(hubR)*math.Cos(ang))
+			scy := cy + int(float64(sry+1)*math.Sin(ang))
+			cv.planet(scx, scy, sry, 0, shortName(s.Name), orb*1.6)
+		}
 	}
 	for _, e := range ents {
 		cv.box(e.sx, e.sy, string(e.marker)+" "+e.label, e.color)
