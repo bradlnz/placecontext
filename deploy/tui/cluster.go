@@ -9,7 +9,7 @@ import (
 )
 
 // scenePalette maps a colour id → style.
-// 0 server, 1 worker, 2 pod-ok, 3 pod-pending, 4 db, 5 link.
+// 0 server, 1 worker, 2 pod-ok, 3 pod-pending, 4 db, 5 link, 6 data pulse.
 var scenePalette = []lipgloss.Style{
 	lipgloss.NewStyle().Foreground(lipgloss.Color("44")).Bold(true),  // server (teal)
 	lipgloss.NewStyle().Foreground(lipgloss.Color("39")).Bold(true),  // worker (blue)
@@ -17,6 +17,7 @@ var scenePalette = []lipgloss.Style{
 	lipgloss.NewStyle().Foreground(lipgloss.Color("220")).Bold(true), // pod pending (yellow)
 	lipgloss.NewStyle().Foreground(lipgloss.Color("141")).Bold(true), // db (magenta)
 	lipgloss.NewStyle().Foreground(lipgloss.Color("238")),            // link (faint)
+	lipgloss.NewStyle().Foreground(lipgloss.Color("51")).Bold(true),  // data pulse (bright cyan)
 }
 
 // canvas is a coloured character grid for drawing the topology (lines + markers + labels).
@@ -317,6 +318,8 @@ func (m model) clusterPanel(rows int) string {
 		count[p.Node]++
 	}
 	idx := map[string]int{}
+	dbX, dbY, dbFound := 0, 0, false
+	var hostPods [][2]int
 	for _, p := range m.state.pods {
 		k := idx[p.Node]
 		idx[p.Node]++
@@ -348,6 +351,27 @@ func (m model) clusterPanel(rows int) string {
 		bx, by := trimToBox(nx, ny, nr, nh, px, py)
 		cv.line(ax, ay, bx, by, 5)
 		ents = append(ents, vis{px, py, bw / 2, lab, mark, col})
+
+		if strings.HasPrefix(p.Name, "placecontext-db") {
+			dbX, dbY, dbFound = px, py, true
+		} else if strings.HasPrefix(p.Name, "placecontext-") {
+			hostPods = append(hostPods, [2]int{px, py})
+		}
+	}
+
+	// data-interaction pulses: a bright dot travels each app→db link to show the host calling the
+	// database. (Continuous here; could be gated on real query activity.)
+	if dbFound {
+		for i, hp := range hostPods {
+			sx, sy := trimToBox(hp[0], hp[1], 1, 1, dbX, dbY)
+			ex, ey := trimToBox(dbX, dbY, 1, 1, hp[0], hp[1])
+			cv.line(sx, sy, ex, ey, 5)
+			t := orb*0.55 + float64(i)*0.37
+			t -= math.Floor(t)
+			pxp := sx + int(float64(ex-sx)*t)
+			pyp := sy + int(float64(ey-sy)*t)
+			cv.set(pxp, pyp, '●', 6)
+		}
 	}
 
 	// planet on top of the links so its circle stays intact; satellites are well clear of it
