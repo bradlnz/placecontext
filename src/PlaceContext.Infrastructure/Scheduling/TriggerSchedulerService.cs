@@ -28,7 +28,15 @@ public sealed class TriggerSchedulerService : BackgroundService
     private const long ScanLockKey = 0x504C4143_4378_7363L; // "PLAC...sc"
     private static readonly TimeSpan ScanInterval = TimeSpan.FromSeconds(20);
     private static readonly TimeSpan DrainInterval = TimeSpan.FromSeconds(3);
+    private static readonly TimeSpan ReapInterval = TimeSpan.FromMinutes(2);
     private const int ClaimBatch = 16;
+
+    // A run only stays "Running" while a live in-process driver executes it — every shard pod is bounded
+    // by ActiveDeadlineSeconds and the handler awaits completion. A run still Running long past any
+    // legitimate duration is therefore orphaned: its driving replica died mid-run (crash/restart/deploy)
+    // and no pod backs it any more. The grace must exceed the longest real run, so it is deliberately
+    // generous (per-job timeouts here are minutes, not hours). Reaped runs are marked Failed.
+    private static readonly TimeSpan OrphanGrace = TimeSpan.FromHours(1);
 
     private readonly IServiceScopeFactory _scopes;
     private readonly ILogger<TriggerSchedulerService> _log;
@@ -41,7 +49,7 @@ public sealed class TriggerSchedulerService : BackgroundService
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
-        => await Task.WhenAll(ScanLoopAsync(stoppingToken), DrainLoopAsync(stoppingToken));
+        => await Task.WhenAll(ScanLoopAsync(stoppingToken), DrainLoopAsync(stoppingToken), ReapLoopAsync(stoppingToken));
 
     // ── Loop 1: fire due schedules (single leader via advisory lock) ───────────────────────────────
 
@@ -135,6 +143,45 @@ public sealed class TriggerSchedulerService : BackgroundService
             finally { await DeleteAsync(run.Id, ct); }
         }
         return claimed.Count;
+    }
+
+    // ── Loop 3: reap orphaned runs (all replicas; idempotent UPDATE) ────────────────────────────────
+
+    private async Task ReapLoopAsync(CancellationToken ct)
+    {
+        using var timer = new PeriodicTimer(ReapInterval);
+        do
+        {
+            try { await ReapOrphanedRunsAsync(ct); }
+            catch (OperationCanceledException) { throw; }
+            catch (Exception ex) { _log.LogError(ex, "Orphaned-run reap failed; will retry next interval."); }
+        }
+        while (await SafeWaitAsync(timer, ct));
+    }
+
+    /// <summary>
+    /// Marks runs stuck in <c>Running</c> past <see cref="OrphanGrace"/> as <c>Failed</c> — these were
+    /// abandoned when their driving replica died mid-run, so no pod backs them and they would otherwise
+    /// stay Running forever. Cross-tenant by design and idempotent, so every replica can run it safely
+    /// (the UPDATE is atomic; concurrent runs just no-op on already-reaped rows).
+    /// </summary>
+    private async Task ReapOrphanedRunsAsync(CancellationToken ct)
+    {
+        await using var scope = _scopes.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var conn = (NpgsqlConnection)db.Database.GetDbConnection();
+        if (conn.State != System.Data.ConnectionState.Open) await conn.OpenAsync(ct);
+
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = """
+            UPDATE job_runs
+            SET "Status" = 'Failed', "FinishedAt" = now()
+            WHERE "Status" = 'Running' AND "StartedAt" < now() - make_interval(secs => @grace)
+            """;
+        cmd.Parameters.AddWithValue("grace", (int)OrphanGrace.TotalSeconds);
+        var reaped = await cmd.ExecuteNonQueryAsync(ct);
+        if (reaped > 0)
+            _log.LogWarning("Reaped {Count} orphaned job run(s) stuck in Running → Failed.", reaped);
     }
 
     private async Task<List<ClaimedRun>> ClaimAsync(CancellationToken ct)
