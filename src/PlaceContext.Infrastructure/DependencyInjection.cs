@@ -26,21 +26,7 @@ public static class DependencyInjection
 
         services.AddSingleton<IClock, SystemClock>();
 
-        // Self-host activation (licensing). When a licensing-server URL is configured the deployment phones
-        // home — RemoteActivationService refreshes entitlement on a timer, follows signing-key rotation, and
-        // caches the last-good result through a grace window when the server is unreachable. Otherwise it
-        // falls back to validating a signed offline key. Both verify tokens with BCL crypto (no key leak).
-        if (!string.IsNullOrWhiteSpace(configuration["PlaceContext:Activation:ServerUrl"]))
-        {
-            services.AddHttpClient("activation", c => c.Timeout = TimeSpan.FromSeconds(10));
-            services.AddSingleton<Activation.RemoteActivationService>();
-            services.AddSingleton<IActivationService>(sp => sp.GetRequiredService<Activation.RemoteActivationService>());
-            services.AddHostedService<Activation.ActivationRefreshService>();
-        }
-        else
-        {
-            services.AddSingleton<IActivationService, Activation.SignedActivationService>();
-        }
+        // (Activation/licensing removed — subscriptions are managed by a separate billing portal.)
 
         // Multi-tenancy: ambient current-tenant (AsyncLocal singleton) + the tenant registry.
         services.AddSingleton<ICurrentTenant, CurrentTenant>();

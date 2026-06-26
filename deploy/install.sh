@@ -8,9 +8,8 @@
 # After that, just type `placecontext` anywhere to open the dashboard.
 #
 # Usage:
-#   ./deploy/install.sh [--activation-key KEY] [--prod] [--no-launch]
+#   ./deploy/install.sh [--prod] [--no-launch]
 #
-#   --activation-key KEY  Activation key (required for --prod; optional for dev).
 #   --prod                Install a real k3s server (systemd service) instead of the
 #                         local k3d dev cluster. Run with sudo.
 #   --no-launch           Set everything up but don't open the TUI at the end.
@@ -22,10 +21,9 @@ BIN="${PCTL_INSTALL_BIN:-$HOME/.local/bin}"
 ARCH="$(uname -m)"; case "$ARCH" in x86_64) ARCH=amd64;; aarch64|arm64) ARCH=arm64;; esac
 K3D_VERSION="${K3D_VERSION:-v5.7.4}"
 
-ACTIVATION_KEY=""; MODE="dev"; LAUNCH=1
+MODE="dev"; LAUNCH=1
 while [ $# -gt 0 ]; do
   case "$1" in
-    --activation-key) ACTIVATION_KEY="$2"; shift 2;;
     --prod)           MODE="prod"; shift;;
     --no-launch)      LAUNCH=0; shift;;
     -h|--help)        grep '^#' "$0" | sed 's/^# \{0,1\}//'; exit 0;;
@@ -89,15 +87,14 @@ case ":$PATH:" in
   *) warn "Add $BIN to your PATH, e.g.:  echo 'export PATH=\"$BIN:\$PATH\"' >> ~/.bashrc";;
 esac
 
-# ── 3. First-run setup: cluster + activation + autostart ─────────────────────────────────────────
+# ── 3. First-run setup: cluster + autostart ──────────────────────────────────────────────────────
 if [ "$MODE" = "prod" ]; then
-  [ -n "$ACTIVATION_KEY" ] || die "--prod requires --activation-key <KEY>"
-  say "Setting up the k3s server (activation enforced)…"
-  "$ROOT/deploy/pctl" server up --activation-key "$ACTIVATION_KEY"
+  say "Setting up the k3s server…"
+  "$ROOT/deploy/pctl" server up
   ok "k3s server up — it auto-starts on boot via its systemd service."
 else
   say "Launching the dev cluster…"
-  PCTL_ACTIVATION_KEY="${ACTIVATION_KEY:-dev-local-unenforced}" "$ROOT/deploy/pctl" dev up
+  "$ROOT/deploy/pctl" dev up
   say "Configuring autostart…"
   "$ROOT/deploy/pctl" autostart || warn "autostart not configured (see message above)."
 fi

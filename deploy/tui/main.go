@@ -731,6 +731,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		case "p":
 			return m, m.openPortal()
+		case "$":
+			return m, m.openBilling()
 		case "m":
 			if m.view == viewDash && !m.busy {
 				m.view, m.mcpCursor = viewMcp, 0
@@ -1142,7 +1144,7 @@ func (m model) footer() string {
 	switch m.view {
 	case viewDash:
 		keys = []string{k("↑↓", "nav"), k("⏎", "logs"), k("/", "search"), k("x", "kill"), k("g", "metrics"),
-			k("m", "mcp"), k("p", "portal"), k("a", "add node"), k("c", "theme"), k("space", "spin"),
+			k("m", "mcp"), k("p", "portal"), k("$", "subscribe"), k("a", "add node"), k("c", "theme"),
 			k("u", "up"), k("d", "down"), k("r", "refresh"), k("q", "quit")}
 	case viewConfirm:
 		keys = []string{k("y", "confirm"), k("n", "cancel"), k("q", "quit")}

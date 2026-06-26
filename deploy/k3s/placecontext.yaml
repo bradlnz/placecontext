@@ -1,8 +1,6 @@
 # PlaceContext Host deployment — portal + MCP + trigger scheduler.
-# __IMAGE__ and __ENFORCE__ are substituted by the `pctl` CLI (deploy/pctl):
-#   __IMAGE__   → the container image ref
-#   __ENFORCE__ → "true" (prod) or "false" (local dev) for activation enforcement
-# The activation key comes from the placecontext-activation secret (created by the installer).
+# __IMAGE__ is substituted by the `pctl` CLI with the container image ref.
+# (Subscriptions/billing are handled by a separate web portal — no activation key here.)
 #
 # The scheduler is safe to scale: a Postgres advisory lock elects one replica to scan schedules, and the
 # durable run queue (pending_job_runs) is drained with FOR UPDATE SKIP LOCKED so any replica can execute
@@ -39,13 +37,6 @@ spec:
           env:
             - name: PlaceContext__ConnectionString
               value: "Host=placecontext-db;Port=5432;Database=placecontext;Username=postgres;Password=postgres"
-            - name: PlaceContext__Activation__Enforce
-              value: "__ENFORCE__"
-            - name: PlaceContext__Activation__Key
-              valueFrom:
-                secretKeyRef:
-                  name: placecontext-activation
-                  key: key
             # HMAC key the pctl TUI uses to mint short-lived portal sign-in tokens (see deploy/pctl).
             - name: PlaceContext__Portal__SigningKey
               valueFrom:

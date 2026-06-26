@@ -54,6 +54,36 @@ func (m model) openPortal() tea.Cmd {
 	}
 }
 
+// billingURL is the separate subscription/billing web portal the operator pays through.
+func billingURL() string {
+	if u := os.Getenv("PCTL_BILLING_URL"); u != "" {
+		return u
+	}
+	return "https://placecontext.ai/subscribe"
+}
+
+// openBilling sends the operator to the billing portal to manage/pay for their subscription.
+func (m model) openBilling() tea.Cmd {
+	target := billingURL()
+	return func() tea.Msg {
+		var bin string
+		switch {
+		case commandExists("xdg-open"):
+			bin = "xdg-open"
+		case commandExists("open"):
+			bin = "open"
+		default:
+			return flashMsg("subscribe at: " + target + " (no browser opener found)")
+		}
+		cmd := exec.Command(bin, target)
+		cmd.Env = childEnv()
+		if err := cmd.Start(); err != nil {
+			return flashMsg("subscribe at: " + target + " (open failed: " + err.Error() + ")")
+		}
+		return flashMsg("opened the subscription portal — complete payment in your browser")
+	}
+}
+
 // portalSigningKey reads the shared HMAC key from the placecontext-portal cluster secret. Returns "" if
 // it can't be read (secret absent, or no cluster), so the caller can fall back to a token-less open.
 func (m model) portalSigningKey() string {

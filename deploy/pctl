@@ -54,15 +54,11 @@ use_dev_kubeconfig() {
   KUBECTL="kubectl --context k3d-$PCTL_CLUSTER"
 }
 
-# Substitute manifest placeholders and apply.  $1=enforce(true|false)  $2=image
+# Substitute manifest placeholders and apply.  $1=image
 apply_manifests() {
-  local enforce="$1" image="$2"
-  say "Namespace + activation secret…"
+  local image="$1"
+  say "Namespace…"
   kube create namespace "$PCTL_NAMESPACE" --dry-run=client -o yaml | kube apply -f -
-  # The deployment always references the activation secret; create a placeholder for dev.
-  local key="${PCTL_ACTIVATION_KEY:-dev-local-unenforced}"
-  kube -n "$PCTL_NAMESPACE" create secret generic placecontext-activation \
-    --from-literal=key="$key" --dry-run=client -o yaml | kube apply -f -
 
   # HMAC key for portal sign-in tokens. Generated once and preserved across re-runs so the key the TUI
   # reads to mint tokens stays stable; only created if absent.
@@ -88,8 +84,8 @@ apply_manifests() {
   say "PostgreSQL (pgvector)…"
   kube -n "$PCTL_NAMESPACE" apply -f "$K3S_DIR/postgres.yaml"
 
-  say "PlaceContext Host (image: $image, activation enforce: $enforce)…"
-  sed -e "s|__IMAGE__|${image}|g" -e "s|__ENFORCE__|${enforce}|g" \
+  say "PlaceContext Host (image: $image)…"
+  sed -e "s|__IMAGE__|${image}|g" \
     "$K3S_DIR/placecontext.yaml" | kube -n "$PCTL_NAMESPACE" apply -f -
 }
 
@@ -145,7 +141,7 @@ cmd_dev_up() {
 
   use_dev_kubeconfig
   cmd_image_import
-  apply_manifests "false" "$PCTL_IMAGE"
+  apply_manifests "$PCTL_IMAGE"
   wait_rollout
   ok "Dev cluster ready."
   cmd_url
@@ -252,8 +248,18 @@ cmd_db() {
     backup-now)   cmd_db_backup "$@";;
     restore)      cmd_db_restore "$@";;
     restore-info) cmd_db_restore_info "$@";;
-    *) die "unknown 'db' subcommand: '$sub' (try: ha | backup-now | restore --time TS | restore-info)";;
+    minio)        cmd_db_minio "$@";;
+    *) die "unknown 'db' subcommand: '$sub' (try: ha | backup-now | restore --time TS | restore-info | minio)";;
   esac
+}
+
+# Expose the in-cluster MinIO (backup store) on localhost so you can browse backups from your machine.
+cmd_db_minio() {
+  resolve_ctx
+  local creds; creds="$(kube -n "$PCTL_NAMESPACE" get secret placecontext-minio -o jsonpath='{.data.ACCESS_KEY_ID}' 2>/dev/null | base64 -d 2>/dev/null || true)"
+  say "Forwarding MinIO → console http://localhost:9001, API http://localhost:9000  (Ctrl-C to stop)"
+  [ -n "$creds" ] && echo "  login: ${creds} / (ACCESS_SECRET_KEY from the placecontext-minio secret)"
+  kube -n "$PCTL_NAMESPACE" port-forward svc/minio 9001:9001 9000:9000
 }
 
 # Point-in-time recovery: spin up a NEW cluster recovered from the backups to the given instant, then
@@ -542,17 +548,15 @@ cmd_build() {
 
 # ── deploy (any current kube context) ────────────────────────────────────────────────────────────
 cmd_deploy() {
-  local enforce="true" image="$PCTL_IMAGE"
+  local image="$PCTL_IMAGE"
   while [ $# -gt 0 ]; do
     case "$1" in
-      --enforce)        enforce="$2"; shift 2;;
       --image)          image="$2"; shift 2;;
-      --activation-key) PCTL_ACTIVATION_KEY="$2"; shift 2;;
       --context)        KUBECTL="kubectl --context $2"; shift 2;;
       *) die "deploy: unknown arg $1";;
     esac
   done
-  apply_manifests "$enforce" "$image"
+  apply_manifests "$image"
   wait_rollout
   ok "Deployed."
 }
@@ -593,10 +597,9 @@ build_vpn_arg() {
 }
 
 cmd_server_up() {
-  local key="" image="$PCTL_IMAGE" ts_id="" ts_secret="" ts_tag="tag:k8s" vpn_ctrl="" vpn_key=""
+  local image="$PCTL_IMAGE" ts_id="" ts_secret="" ts_tag="tag:k8s" vpn_ctrl="" vpn_key=""
   while [ $# -gt 0 ]; do
     case "$1" in
-      --activation-key)     key="$2"; shift 2;;
       --image)              image="$2"; shift 2;;
       --ts-oauth-client-id) ts_id="$2"; shift 2;;
       --ts-oauth-secret)    ts_secret="$2"; shift 2;;
@@ -606,7 +609,6 @@ cmd_server_up() {
       *) die "server up: unknown arg $1";;
     esac
   done
-  [ -n "$key" ] || die "server up needs --activation-key <KEY>"
   [ "$(id -u)" = 0 ] || die "server up installs a systemd service — run with sudo."
 
   local -a exec_args=()
@@ -618,8 +620,7 @@ cmd_server_up() {
   say "Waiting for the control plane…"
   until kube get nodes >/dev/null 2>&1; do sleep 2; done
 
-  PCTL_ACTIVATION_KEY="$key"
-  apply_manifests "true" "$image"
+  apply_manifests "$image"
   wait_rollout
   ok "Server node up. PlaceContext deploying to namespace '$PCTL_NAMESPACE'."
   echo
@@ -703,14 +704,14 @@ ${C_BOLD}USAGE${C_RESET}
   pctl <command> [options]
 
 ${C_BOLD}LOCAL DEV${C_RESET} ${C_DIM}(k3d: a 1-server + ${PCTL_AGENTS}-agent k3s cluster on this machine)${C_RESET}
-  dev up [--rebuild]     Clean dev Docker, create cluster, import image, deploy (activation off)
+  dev up [--rebuild]     Clean dev Docker, create cluster, import image, deploy
   dev down               Delete the local k3d cluster
   dev clean              Remove the dev Docker Postgres containers + volumes
   dev add-node [--role agent|server] [--name N]   Add a node to the dev cluster
   image import           (Re)import the local image into the dev cluster
 
 ${C_BOLD}PRODUCTION${C_RESET} ${C_DIM}(k3s across multiple machines)${C_RESET}
-  server up --activation-key KEY [--image IMG] [--ts-oauth-client-id ID --ts-oauth-secret SECRET]
+  server up [--image IMG] [--ts-oauth-client-id ID --ts-oauth-secret SECRET]
                          Install k3s server here + deploy (sudo); Tailscale meshes the fleet (sudo)
   agent join --server-url URL --node-token TOK [--ts-oauth-client-id ID --ts-oauth-secret SECRET]
                          Join this machine as a worker (sudo)
@@ -726,13 +727,14 @@ ${C_BOLD}MESH${C_RESET} ${C_DIM}(self-hosted WireGuard control plane via Headsca
 ${C_BOLD}ANYWHERE${C_RESET}
   tui                    Launch the reactive full-screen dashboard (Go TUI)
   build [--tag TAG]      Build the container image and export it to the tarball
-  deploy [--enforce true|false] [--image IMG] [--activation-key KEY] [--context CTX]
+  deploy [--image IMG] [--context CTX]
                          Apply the manifests to the current (or given) kube context
   kill pod|node|job NAME [--yes]   Delete a pod / k3d node / job (prompts unless --yes)
   db ha                  Replicated Postgres (1 primary + 2 replicas) + PITR backups via CloudNativePG
   db backup-now          Trigger an on-demand base backup
   db restore --time TS [--name N] [--cutover]   Recover a new cluster to a point in time (PITR)
   db restore-info        Print the manual PITR recipe
+  db minio               Port-forward the MinIO backup store to localhost (console :9001)
   autostart [--disable]  Start the cluster on boot (k3d → systemd user service; k3s → already a service)
   status                 Show nodes + workloads
   logs [-f]              Tail the PlaceContext Host logs
