@@ -244,16 +244,29 @@ func (m model) fetchState() tea.Cmd {
 	}
 }
 
+// fetchLogs returns global logs — the recent tail from every pod in the namespace, prefixed per pod.
 func (m model) fetchLogs() tea.Cmd {
 	mc := m
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
 		defer cancel()
-		b, err := mc.kubectl(ctx, "-n", ns, "logs", "-l", "app=placecontext", "--tail=200", "--prefix")
+		names, err := mc.kubectl(ctx, "-n", ns, "get", "pods", "-o", "name")
 		if err != nil {
-			return logsMsg{"all host pods", "could not fetch logs: " + err.Error()}
+			return logsMsg{"cluster logs", "could not list pods: " + err.Error()}
 		}
-		return logsMsg{"all host pods", string(b)}
+		var b strings.Builder
+		for _, pod := range strings.Fields(string(names)) { // pod/<name>
+			out, e := mc.kubectl(ctx, "-n", ns, "logs", pod, "--tail=40", "--prefix", "--all-containers=true")
+			if e != nil {
+				continue
+			}
+			b.Write(out)
+		}
+		body := strings.TrimSpace(b.String())
+		if body == "" {
+			body = "(no logs)"
+		}
+		return logsMsg{"cluster logs (all pods)", body}
 	}
 }
 
