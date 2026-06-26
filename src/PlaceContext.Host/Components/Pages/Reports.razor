@@ -1,4 +1,5 @@
 @page "/reports"
+@using Markdig
 @inject IPlaceContextService Svc
 @inject PortalUiState Ui
 
@@ -54,7 +55,43 @@
             {
                 <div style="font-size:11.5px; color:var(--good); margin-bottom:8px">Queued @_report.CreatedWorkItems.Count work item(s) from the action plan.</div>
             }
-            <pre style="white-space:pre-wrap; font-family:'Geist Mono',monospace; font-size:12.5px; line-height:1.55; background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:14px; margin:0; color:var(--text); max-height:620px; overflow:auto">@_report.Markdown</pre>
+
+            @* Action-plan summary chart: count of actions by severity, as proportional bars. *@
+            @if (_report.Actions.Count > 0)
+            {
+                <div style="margin-bottom:14px">
+                    <div style="font-size:11px; color:var(--text-3); margin-bottom:6px">Action plan — @_report.Actions.Count item(s) by severity</div>
+                    @foreach (var grp in SeverityCounts())
+                    {
+                        <div style="display:flex; align-items:center; gap:8px; margin-bottom:3px">
+                            <span style="width:72px; font-size:11px; color:var(--text-2); text-transform:capitalize">@grp.Key</span>
+                            <div style="flex:1; background:var(--bg); border-radius:4px; overflow:hidden; height:14px">
+                                <div style="width:@(Pct(grp.Value))%; height:100%; background:@SevColor(grp.Key)"></div>
+                            </div>
+                            <span style="width:26px; text-align:right; font-size:11px; color:var(--text-2)">@grp.Value</span>
+                        </div>
+                    }
+                </div>
+
+                <div style="display:flex; flex-direction:column; gap:8px; margin-bottom:14px">
+                    @foreach (var a in _report.Actions)
+                    {
+                        <div style="border:1px solid var(--border); border-left:3px solid @SevColor(a.Severity); border-radius:7px; padding:10px 12px">
+                            <div style="display:flex; align-items:center; gap:8px">
+                                <span style="font-size:10px; font-weight:600; text-transform:uppercase; color:@SevColor(a.Severity)">@a.Severity</span>
+                                <span style="font-size:12.5px; font-weight:600">@a.Title</span>
+                            </div>
+                            <div style="font-size:12px; color:var(--text-2); margin-top:3px">@a.Detail</div>
+                        </div>
+                    }
+                </div>
+            }
+
+            @* Render the report body as HTML (Markdig) — headings, tables, and any embedded HTML render
+               properly instead of as a raw text blob. *@
+            <div class="dcreport" style="background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:16px; max-height:640px; overflow:auto; font-size:13px; line-height:1.6">
+                @((MarkupString)RenderHtml(_report.Markdown))
+            </div>
         </div>
     }
 </div>
@@ -70,6 +107,36 @@
     private ReportView? _report;
 
     private ReportTemplateView? _selectedTemplate => _templates.FirstOrDefault(t => t.Name == _template);
+
+    private static readonly Markdig.MarkdownPipeline _md =
+        new Markdig.MarkdownPipelineBuilder().UseAdvancedExtensions().Build();
+
+    // Render report Markdown (which may contain embedded HTML) to HTML for display.
+    private static string RenderHtml(string markdown) => Markdig.Markdown.ToHtml(markdown ?? "", _md);
+
+    private IEnumerable<KeyValuePair<string, int>> SeverityCounts()
+    {
+        var order = new[] { "critical", "high", "medium", "low", "info" };
+        return _report!.Actions
+            .GroupBy(a => (a.Severity ?? "info").ToLowerInvariant())
+            .ToDictionary(g => g.Key, g => g.Count())
+            .OrderBy(kv => Array.IndexOf(order, kv.Key) is var i && i >= 0 ? i : 99);
+    }
+
+    private int Pct(int n)
+    {
+        var max = _report!.Actions.Count;
+        return max == 0 ? 0 : (int)Math.Round(100.0 * n / max);
+    }
+
+    private static string SevColor(string? severity) => (severity ?? "").ToLowerInvariant() switch
+    {
+        "critical" => "var(--err, #e5484d)",
+        "high"     => "var(--warn, #f5a623)",
+        "medium"   => "var(--brand, #6e9fff)",
+        "low"      => "var(--good, #46a758)",
+        _          => "var(--text-3)",
+    };
 
     protected override async Task OnInitializedAsync()
     {
