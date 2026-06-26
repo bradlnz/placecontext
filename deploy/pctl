@@ -337,7 +337,9 @@ cmd_autostart() {
   local disable=0
   [ "${1:-}" = "--disable" ] && disable=1
 
-  if have k3s && systemctl is-enabled k3s >/dev/null 2>&1; then
+  # Only treat this as prod when there's no local k3d dev cluster — a box can have BOTH k3s installed and
+  # the k3d dev cluster (which is where PlaceContext actually runs), so prefer the k3d unit when present.
+  if ! dev_cluster_exists && have k3s && systemctl is-enabled k3s >/dev/null 2>&1; then
     ok "Prod k3s already auto-starts via its systemd service (nothing to do)."
     return 0
   fi
