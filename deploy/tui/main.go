@@ -149,8 +149,9 @@ type model struct {
 	orbit  float64 // orbital animation phase (advances while clSpin)
 
 	// MCP tool-call log
-	mcp    []mcpRow
-	mcpErr string
+	mcp       []mcpRow
+	mcpErr    string
+	mcpCursor int
 }
 
 // ── messages ──────────────────────────────────────────────────────────────────────────────────
@@ -251,7 +252,9 @@ func mintPortalToken(key string, now time.Time) string {
 func commandExists(name string) bool { _, err := exec.LookPath(name); return err == nil }
 
 func tick() tea.Cmd {
-	return tea.Tick(3*time.Second, func(t time.Time) tea.Msg { return tickMsg(t) })
+	// Poll cluster state ~1.5s so the dashboard reflects events (pods/jobs appearing, status
+	// changes) close to real time.
+	return tea.Tick(1500*time.Millisecond, func(t time.Time) tea.Msg { return tickMsg(t) })
 }
 
 // ── kubectl plumbing ────────────────────────────────────────────────────────────────────────────
@@ -378,7 +381,7 @@ func (m *model) armKill(it selItem) {
 	m.confirmArgs = []string{"kill", it.kind, it.name, "--yes"}
 }
 
-type mcpRow struct{ at, tool, dir, status, dur string }
+type mcpRow struct{ id, at, tool, dir, status, dur string }
 type mcpMsg struct {
 	rows []mcpRow
 	err  string
@@ -390,7 +393,7 @@ func (m model) fetchMcp() tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		const q = `SELECT "At", "Tool", "Direction", "Status", "DurationMs" ` +
+		const q = `SELECT "Id", "At", "Tool", "Direction", "Status", "DurationMs" ` +
 			`FROM tool_calls ORDER BY "At" DESC LIMIT 200`
 		b, err := mc.kubectl(ctx, "-n", ns, "exec", "deploy/placecontext-db", "--",
 			"psql", "-U", "postgres", "-d", "placecontext", "-At", "-F", "\t", "-c", q)
@@ -403,16 +406,38 @@ func (m model) fetchMcp() tea.Cmd {
 				continue
 			}
 			f := strings.Split(ln, "\t")
-			for len(f) < 5 {
+			for len(f) < 6 {
 				f = append(f, "")
 			}
-			at := f[0]
+			at := f[1]
 			if len(at) > 19 {
 				at = at[:19]
 			}
-			rows = append(rows, mcpRow{at, f[1], f[2], f[3], f[4]})
+			rows = append(rows, mcpRow{f[0], at, f[2], f[3], f[4], f[5]})
 		}
 		return mcpMsg{rows, ""}
+	}
+}
+
+// fetchMcpDetail loads one tool call's request/response payloads (shown like pod logs).
+func (m model) fetchMcpDetail(c mcpRow) tea.Cmd {
+	mc := m
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		esc := strings.ReplaceAll(c.id, "'", "''")
+		q := `SELECT 'REQUEST', "RequestJson", 'RESPONSE', "ResponseJson" FROM tool_calls WHERE "Id"='` + esc + `'`
+		b, err := mc.kubectl(ctx, "-n", ns, "exec", "deploy/placecontext-db", "--",
+			"psql", "-U", "postgres", "-d", "placecontext", "-A", "-F", "\n", "-t", "-c", q)
+		title := "mcp/" + c.tool + " · " + c.at
+		if err != nil {
+			return logsMsg{title, "could not fetch call detail: " + err.Error()}
+		}
+		body := strings.TrimSpace(string(b))
+		if body == "" {
+			body = "(no payload recorded)"
+		}
+		return logsMsg{title, body}
 	}
 }
 
@@ -593,7 +618,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.busy {
 				return m, nil
 			}
-			if m.view == viewConfirm {
+			// confirm and the logs detail return to wherever they were opened from; everything else
+			// returns to the dashboard.
+			if m.view == viewConfirm || m.view == viewLogs {
 				m.view = m.prevView
 			} else {
 				m.view = viewDash
@@ -636,6 +663,30 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
+		// MCP call list — navigate and drill into a call's request/response (like pod logs)
+		if m.view == viewMcp {
+			switch key {
+			case "up", "k":
+				if m.mcpCursor > 0 {
+					m.mcpCursor--
+				}
+			case "down", "j":
+				if m.mcpCursor < len(m.mcp)-1 {
+					m.mcpCursor++
+				}
+			case "enter":
+				if m.mcpCursor < len(m.mcp) {
+					m.prevView = viewMcp
+					m.view = viewLogs
+					m.logs.SetContent("")
+					return m, m.fetchMcpDetail(m.mcp[m.mcpCursor])
+				}
+			case "r":
+				return m, m.fetchMcp()
+			}
+			return m, nil
+		}
+
 		switch key {
 		case "up", "k":
 			if m.view == viewDash && m.cursor > 0 {
@@ -660,6 +711,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "enter":
 			if m.view == viewDash && m.cursor < len(m.sel) {
 				it := m.sel[m.cursor]
+				m.prevView = viewDash
 				m.view = viewLogs
 				m.logs.SetContent("")
 				return m, m.fetchLogsFor(it)
@@ -679,7 +731,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.openPortal()
 		case "m":
 			if m.view == viewDash && !m.busy {
-				m.view = viewMcp
+				m.view, m.mcpCursor = viewMcp, 0
 				return m, m.fetchMcp()
 			}
 			return m, nil
@@ -711,6 +763,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, tea.Batch(m.sp.Tick, m.runAction("dev down", "dev", "down"))
 			}
 		case "l":
+			m.prevView = viewDash
 			m.view = viewLogs
 			m.logs.SetContent("")
 			return m, m.fetchLogs()
@@ -780,6 +833,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case mcpMsg:
 		m.mcp, m.mcpErr = msg.rows, msg.err
+		if m.mcpCursor >= len(m.mcp) {
+			m.mcpCursor = max(0, len(m.mcp)-1)
+		}
 		return m, nil
 
 	case actionDoneMsg:
@@ -1392,15 +1448,24 @@ func parseMem(s string) float64 {
 	}
 }
 
-// lineChart renders a time series as a connected line graph (w×h cells), coloured by `color`.
+// lineChart renders a time series as a filled area graph (w×h cells), coloured by `color`. The area
+// fill (rather than a thin line) keeps it clearly visible even when the series is flat or sparse.
 func lineChart(series []float64, w, h, color int) string {
 	cv := newCanvas(w, h)
+	// dotted baseline + left axis so an empty/low chart still reads as a chart
+	for x := 0; x < w; x++ {
+		cv.set(x, h-1, '·', 5)
+	}
+	for y := 0; y < h; y++ {
+		cv.set(0, y, '·', 5)
+	}
 	if len(series) == 0 {
+		cv.text(2, h/2, "collecting…", 5)
 		return cv.String()
 	}
 	s := series
-	if len(s) > w {
-		s = s[len(s)-w:]
+	if len(s) > w-1 {
+		s = s[len(s)-(w-1):]
 	}
 	maxv := 0.0
 	for _, v := range s {
@@ -1408,28 +1473,23 @@ func lineChart(series []float64, w, h, color int) string {
 			maxv = v
 		}
 	}
+	maxv *= 1.15 // headroom so a flat line isn't pinned to the top edge
 	if maxv <= 0 {
 		maxv = 1
 	}
-	yOf := func(v float64) int {
-		y := int(float64(h-1) - (v/maxv)*float64(h-1))
-		if y < 0 {
-			y = 0
-		} else if y >= h {
-			y = h - 1
-		}
-		return y
-	}
-	px, py := -1, -1
+	// columns: area filled from the value down to the baseline; the topmost cell is a bright cap
 	for i, v := range s {
 		x := w - len(s) + i
-		y := yOf(v)
-		if px >= 0 {
-			cv.line(px, py, x, y, color)
-		} else {
-			cv.set(x, y, '·', color)
+		top := int(float64(h-2) - (v/maxv)*float64(h-2))
+		if top < 0 {
+			top = 0
+		} else if top > h-2 {
+			top = h - 2
 		}
-		px, py = x, y
+		for y := top + 1; y < h-1; y++ {
+			cv.set(x, y, '│', color)
+		}
+		cv.set(x, top, '▄', color)
 	}
 	return cv.String()
 }
@@ -1483,12 +1543,17 @@ func (m model) mcpView() string {
 		b.WriteString(errStyle.Render("  "+m.mcpErr) + "\n")
 		return b.String()
 	}
-	b.WriteString("  " + headStyle.Render(pad("TIME", 21)+pad("TOOL", 26)+pad("DIR", 6)+pad("STATUS", 10)+"ms") + "\n")
+	b.WriteString("  " + headStyle.Render(pad("TIME", 21)+pad("TOOL", 26)+pad("DIR", 6)+pad("STATUS", 10)+"ms") + dimStyle.Render("   (⏎ view request/response)") + "\n")
 	if len(m.mcp) == 0 {
 		b.WriteString(dimStyle.Render("    (no MCP calls recorded yet)") + "\n")
 		return b.String()
 	}
-	for _, c := range m.mcp {
+	for i, c := range m.mcp {
+		plain := pad(c.at, 21) + pad(trunc(c.tool, 25), 26) + pad(c.dir, 6) + pad(c.status, 10) + c.dur
+		if i == m.mcpCursor {
+			b.WriteString(selStyle.Render("❯ "+plain) + "\n")
+			continue
+		}
 		st := okStyle.Render(pad(c.status, 10))
 		if c.status != "" && c.status != "ok" && c.status != "success" && c.status != "Success" {
 			st = warnStyle.Render(pad(c.status, 10))
@@ -1530,7 +1595,9 @@ func (m model) footer() string {
 			k("u", "up"), k("d", "down"), k("r", "refresh"), k("q", "quit")}
 	case viewConfirm:
 		keys = []string{k("y", "confirm"), k("n", "cancel"), k("q", "quit")}
-	case viewMcp, viewMetrics:
+	case viewMcp:
+		keys = []string{k("↑↓", "nav"), k("⏎", "detail"), k("r", "refresh"), k("b", "back"), k("q", "quit")}
+	case viewMetrics:
 		keys = []string{k("r", "refresh"), k("b", "back"), k("q", "quit")}
 	case viewMenu:
 		keys = []string{k("↑↓", "nav"), k("⏎", "select"), k("b", "back"), k("q", "quit")}
