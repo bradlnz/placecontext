@@ -5,6 +5,43 @@
 # The scheduler is safe to scale: a Postgres advisory lock elects one replica to scan schedules, and the
 # durable run queue (pending_job_runs) is drained with FOR UPDATE SKIP LOCKED so any replica can execute
 # runs without duplication. Bump replicas freely.
+# ServiceAccount + RBAC so the Host can run jobs as Kubernetes Jobs in its namespace
+# (create/watch Jobs, read their pods + logs, manage the per-run ConfigMap + deny-egress NetworkPolicy).
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: placecontext
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: placecontext-jobs
+rules:
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["create", "get", "list", "watch", "delete"]
+  - apiGroups: [""]
+    resources: ["pods", "pods/log"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["create", "get", "delete"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["networkpolicies"]
+    verbs: ["create", "get", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: placecontext-jobs
+subjects:
+  - kind: ServiceAccount
+    name: placecontext
+roleRef:
+  kind: Role
+  name: placecontext-jobs
+  apiGroup: rbac.authorization.k8s.io
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -17,6 +54,7 @@ spec:
     metadata:
       labels: { app: placecontext }
     spec:
+      serviceAccountName: placecontext
       # Wait for PostgreSQL to accept connections before starting the Host, so the
       # first boot doesn't crash-loop while the DB is still coming up / migrating.
       initContainers:

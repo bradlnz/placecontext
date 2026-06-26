@@ -94,10 +94,14 @@ public static class DependencyInjection
         services.AddScoped<IRiskCalculator, ProcessRiskCalculator>();
         services.AddScoped<IRiskCalculatorFactory, RiskCalculatorFactory>();
 
-        // Generic workload runner: Docker-based container adapter for Jobs.
+        // Generic workload runner. In-cluster (the Host pod has KUBERNETES_SERVICE_HOST) we run jobs as
+        // Kubernetes Jobs via the API + the Host's ServiceAccount/RBAC; otherwise (local dev) Docker.
         services.Configure<WorkloadRunnerOptions>(
             configuration.GetSection("PlaceContext:WorkloadRunner"));
-        services.AddSingleton<IWorkloadRunner, DockerWorkloadRunner>();
+        if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("KUBERNETES_SERVICE_HOST")))
+            services.AddSingleton<IWorkloadRunner, Workload.KubernetesWorkloadRunner>();
+        else
+            services.AddSingleton<IWorkloadRunner, DockerWorkloadRunner>();
 
         // Job / JobRun repositories.
         services.AddScoped<IJobRepository, EfJobRepository>();
