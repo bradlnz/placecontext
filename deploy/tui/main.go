@@ -760,7 +760,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case logsMsg:
 		m.logTitle = msg.title
-		m.logs.SetContent(msg.body)
+		m.logs.SetContent(colorizeLogs(msg.body))
 		m.logs.GotoTop()
 		return m, nil
 
@@ -1014,6 +1014,42 @@ func (m model) menuView() string {
 		}
 	}
 	return b.String()
+}
+
+// logLevelStyle picks a colour for a log line by its level (ASP.NET "info:/warn:/fail:/dbug:/trce:"
+// prefixes and the usual ERROR/WARN/INFO/DEBUG/TRACE words). Returns ok=false for unclassified lines.
+func logLevelStyle(line string) (lipgloss.Style, bool) {
+	l := strings.ToLower(line)
+	has := func(toks ...string) bool {
+		for _, t := range toks {
+			if strings.Contains(l, t) {
+				return true
+			}
+		}
+		return false
+	}
+	switch {
+	case has("fail:", "fatal", "crit:", "critical", "[error]", " error ", "level=error", "\"error\"", "panic"):
+		return errStyle, true
+	case has("warn:", "wrn]", "[warn", " warn ", "warning", "level=warn"):
+		return warnStyle, true
+	case has("dbug:", "trce:", "debug", "trace", "verbose", "level=debug", "level=trace"):
+		return dimStyle, true
+	case has("info:", "[info", " info ", "level=info"):
+		return okStyle, true
+	}
+	return lipgloss.Style{}, false
+}
+
+// colorizeLogs tints each log line by its detected level so the level stands out at a glance.
+func colorizeLogs(s string) string {
+	lines := strings.Split(s, "\n")
+	for i, ln := range lines {
+		if st, ok := logLevelStyle(ln); ok {
+			lines[i] = st.Render(ln)
+		}
+	}
+	return strings.Join(lines, "\n")
 }
 
 func (m model) footer() string {
