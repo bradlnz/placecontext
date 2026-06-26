@@ -391,7 +391,7 @@ func (m model) fetchMcpDetail(c mcpRow) tea.Cmd {
 	}
 }
 
-type jobRow struct{ name, source, conc, egress, updated string }
+type jobRow struct{ id, tenant, name, source, conc, egress, updated string }
 
 // queryJobs reads the jobs table directly from the Postgres pod via psql.
 type searchMsg struct{ body string }
@@ -457,7 +457,7 @@ mc ls --recursive s 2>/dev/null | awk '{print $NF}' | grep -iv '^placecontext-ba
 }
 
 func (m model) queryJobs(ctx context.Context) ([]jobRow, string) {
-	const q = `SELECT "Name", "MapSourceKind", "ConcurrencyLimit", "AllowNetworkEgress", "UpdatedAt" ` +
+	const q = `SELECT "Id", "TenantId", "Name", "MapSourceKind", "ConcurrencyLimit", "AllowNetworkEgress", "UpdatedAt" ` +
 		`FROM jobs ORDER BY "UpdatedAt" DESC LIMIT 100`
 	b, err := m.kubectl(ctx, "-n", ns, "exec", "deploy/placecontext-db", "--",
 		"psql", "-U", "postgres", "-d", "placecontext", "-At", "-F", "\t", "-c", q)
@@ -470,20 +470,43 @@ func (m model) queryJobs(ctx context.Context) ([]jobRow, string) {
 			continue
 		}
 		f := strings.Split(ln, "\t")
-		for len(f) < 5 {
+		for len(f) < 7 {
 			f = append(f, "")
 		}
 		eg := "no"
-		if f[3] == "t" {
+		if f[5] == "t" {
 			eg = "yes"
 		}
-		upd := f[4]
+		upd := f[6]
 		if len(upd) > 19 {
 			upd = upd[:19]
 		}
-		rows = append(rows, jobRow{f[0], f[1], f[2], eg, upd})
+		rows = append(rows, jobRow{f[0], f[1], f[2], f[3], f[4], eg, upd})
 	}
 	return rows, ""
+}
+
+// runJobCmd enqueues a manual run of a job by inserting a row into the durable pending_job_runs queue,
+// exactly like a trigger would. The in-cluster scheduler claims it (FOR UPDATE SKIP LOCKED) on any
+// replica and dispatches it as a Kubernetes Job — so the TUI never runs work on its own thread.
+func (m model) runJobCmd(j jobRow) tea.Cmd {
+	mc := m
+	return func() tea.Msg {
+		if j.id == "" || j.tenant == "" {
+			return flashMsg("could not run job — missing id/tenant (refresh and retry)")
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		q := `INSERT INTO pending_job_runs ` +
+			`("Id","TenantId","JobId","TriggerId","TriggerName","Payload","EnqueuedAt") VALUES ` +
+			`(gen_random_uuid(), '` + j.tenant + `', '` + j.id + `', ` +
+			`'00000000-0000-0000-0000-000000000000', 'tui-manual', NULL, now())`
+		if _, err := mc.kubectl(ctx, "-n", ns, "exec", "deploy/placecontext-db", "--",
+			"psql", "-U", "postgres", "-d", "placecontext", "-c", q); err != nil {
+			return flashMsg("run failed: " + err.Error())
+		}
+		return flashMsg("queued run of \"" + j.name + "\" — watch the jobs list / runs")
+	}
 }
 
 // addNodeMenu lists the "add node" choices (dev k3d nodes + the prod join command).
@@ -798,6 +821,21 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.view = viewConfirm
 				} else {
 					m.flash = "pods & nodes are read-only — only jobs can be killed"
+				}
+			}
+			return m, nil
+		case "R":
+			// Run the selected job — enqueue a manual run drained by the in-cluster scheduler.
+			if m.view == viewDash && m.cursor < len(m.sel) {
+				if it := m.sel[m.cursor]; it.kind == "job" {
+					for _, j := range m.state.jobs {
+						if j.name == it.name {
+							m.flash = "queuing run…"
+							return m, m.runJobCmd(j)
+						}
+					}
+				} else {
+					m.flash = "select a job to run it ([R])"
 				}
 			}
 			return m, nil
@@ -1279,9 +1317,9 @@ func (m model) footer() string {
 	var keys []string
 	switch m.view {
 	case viewDash:
-		keys = []string{k("↑↓", "nav"), k("⏎", "logs"), k("/", "search"), k("x", "kill job"), k("g", "metrics"),
-			k("m", "mcp"), k("p", "portal"), k("$", "subscribe"), k("a", "add worker"), k("c", "theme"),
-			k("u", "up"), k("d", "down"), k("r", "refresh"), k("q", "quit")}
+		keys = []string{k("↑↓", "nav"), k("⏎", "logs"), k("R", "run job"), k("x", "kill job"), k("/", "search"),
+			k("g", "metrics"), k("m", "mcp"), k("p", "portal"), k("$", "subscribe"), k("a", "add worker"),
+			k("c", "theme"), k("u", "up"), k("d", "down"), k("r", "refresh"), k("q", "quit")}
 	case viewConfirm:
 		keys = []string{k("y", "confirm"), k("n", "cancel"), k("q", "quit")}
 	case viewMcp:
