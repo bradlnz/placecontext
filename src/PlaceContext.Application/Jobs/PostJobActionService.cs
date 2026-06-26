@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using PlaceContext.Application.Ports;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.Repositories;
@@ -17,18 +18,26 @@ public sealed class PostJobActionService
     private readonly IRunArtifactLinkRepository _links;
     private readonly IUnitOfWork _uow;
     private readonly IClock _clock;
+    private readonly ILogger<PostJobActionService>? _log;
 
-    public PostJobActionService(IObjectStore store, IRunArtifactLinkRepository links, IUnitOfWork uow, IClock clock)
+    public PostJobActionService(IObjectStore store, IRunArtifactLinkRepository links, IUnitOfWork uow, IClock clock,
+        ILogger<PostJobActionService>? log = null)
     {
         _store = store;
         _links = links;
         _uow = uow;
         _clock = clock;
+        _log = log;
     }
 
     public async Task RunAsync(Job job, JobRun run, CancellationToken ct = default)
     {
-        if (job.PostJobActions.Count == 0 || !_store.IsEnabled) return;
+        if (job.PostJobActions.Count == 0) return;
+        if (!_store.IsEnabled)
+        {
+            _log?.LogWarning("Post-job actions configured for job {JobId} but the object store is disabled — skipping.", job.Id);
+            return;
+        }
 
         var bucket = _store.ReportsBucket;
         var added = false;
@@ -54,9 +63,12 @@ public sealed class PostJobActionService
                         break;
                 }
             }
-            catch
+            catch (Exception ex)
             {
-                // Best-effort: a failing action (e.g. object store hiccup) must not fail the run.
+                // Best-effort: a failing action (e.g. object store hiccup) must not fail the run, but it
+                // must be visible — a silently-empty reports bucket is the worst failure mode.
+                _log?.LogWarning(ex, "Post-job action {Action} failed for run {RunId} (job {JobId}).",
+                    action, run.Id, job.Id);
             }
         }
 
