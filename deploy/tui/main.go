@@ -858,14 +858,24 @@ func (m model) healthLine() string {
 }
 
 func (m model) dashboard() string {
-	rows := m.h / 3
+	// Side-by-side: cluster on the left, selectable node/pod/job list on the right. This keeps the
+	// page short (so the banner/footer don't scroll off as more items are added).
+	rows := m.h - 11 // height available below the banner/health, above the footer
 	if rows < 8 {
 		rows = 8
-	} else if rows > 14 {
-		rows = 14
+	} else if rows > 26 {
+		rows = 26
 	}
-	div := dimStyle.Render("  " + strings.Repeat("─", max(0, m.w-4)))
-	return m.clusterPanel(rows) + "\n" + div + "\n" + m.listBody()
+	leftW := m.w * 3 / 5
+	if leftW < 36 {
+		leftW = 36
+	}
+	if leftW > m.w-24 {
+		leftW = max(24, m.w-24)
+	}
+	left := lipgloss.NewStyle().Width(leftW).Render(m.clusterPanel(leftW-2, rows))
+	right := lipgloss.NewStyle().Width(m.w - leftW - 2).Render(m.listBody())
+	return lipgloss.JoinHorizontal(lipgloss.Top, left, "  ", right)
 }
 
 // listBody renders the selectable nodes + pods + jobs tables shown beneath the cluster.

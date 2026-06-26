@@ -102,7 +102,7 @@ func TestKillConfirmFlow(t *testing.T) {
 func TestClusterTopologyRenders(t *testing.T) {
 	m := withState(initialModel())
 	m.w, m.h = 100, 34
-	out := m.clusterPanel(13)
+	out := m.clusterPanel(80, 13)
 	if len(out) == 0 {
 		t.Fatal("clusterPanel produced empty frame")
 	}

@@ -212,11 +212,11 @@ func podLabel(name string) string {
 // cluster3DView renders the live cluster as an animated 3D system-topology graph: the
 // control-plane and workers laid out in a rotating ring, each pod linked to its node by
 // a line, every entity labelled with its (shortened) name.
-func (m model) clusterPanel(rows int) string {
+func (m model) clusterPanel(width, rows int) string {
 	if !m.state.reach {
 		return "  " + warnStyle.Render("● no cluster") + dimStyle.Render("   press [u] to bring it up") + "\n"
 	}
-	w, h := m.w-2, rows
+	w, h := width, rows
 	if w < 30 {
 		w = 80
 	}
