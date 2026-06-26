@@ -22,6 +22,7 @@ import (
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
 )
 
@@ -397,10 +398,10 @@ func (m model) fetchSearch(query string) tea.Cmd {
 		esc := strings.ReplaceAll(q, "'", "''")
 		// One -c with multiple SELECTs; psql -A -t gives clean unaligned rows. (No backslash meta-commands
 		// here — psql -c can't run them, it would swallow the SQL as arguments.)
-		sql := `SELECT 'DECISION  ' || "Question" || '  →  ' || "Choice" FROM decisions ` +
+		sql := `SELECT '- **decision** ' || "Question" || ' → ' || "Choice" FROM decisions ` +
 			`WHERE "Question" ILIKE '%` + esc + `%' OR "Choice" ILIKE '%` + esc + `%' OR "Rationale" ILIKE '%` + esc + `%' LIMIT 40;` +
-			`SELECT 'CONTEXT   ' || left("Markdown", 160) FROM project_contexts WHERE "Markdown" ILIKE '%` + esc + `%' LIMIT 15;` +
-			`SELECT 'ACTIVITY  ' || "Summary" FROM activity_log ` +
+			`SELECT '- **context** ' || left("Markdown", 300) FROM project_contexts WHERE "Markdown" ILIKE '%` + esc + `%' LIMIT 15;` +
+			`SELECT '- **activity** ' || "Summary" FROM activity_log ` +
 			`WHERE "Summary" ILIKE '%` + esc + `%' OR "Rationale" ILIKE '%` + esc + `%' LIMIT 40;`
 		b, err := mc.kubectl(ctx, "-n", ns, "exec", "deploy/placecontext-db", "--",
 			"psql", "-U", "postgres", "-d", "placecontext", "-A", "-t", "-c", sql)
@@ -836,7 +837,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case searchMsg:
-		m.logs.SetContent(colorizeLogs(msg.body))
+		m.logs.SetContent(renderMarkdown(msg.body, m.logs.Width))
 		m.logs.GotoTop()
 		return m, nil
 
@@ -1125,6 +1126,23 @@ func logLevelStyle(line string) (lipgloss.Style, bool) {
 		return okStyle, true
 	}
 	return lipgloss.Style{}, false
+}
+
+// renderMarkdown renders text as Markdown (word-wrapped, .md-styled) for the search results pane.
+// Falls back to the raw text if the renderer can't initialise.
+func renderMarkdown(s string, width int) string {
+	if width < 20 {
+		width = 80
+	}
+	r, err := glamour.NewTermRenderer(glamour.WithAutoStyle(), glamour.WithWordWrap(width))
+	if err != nil {
+		return s
+	}
+	out, err := r.Render(s)
+	if err != nil {
+		return s
+	}
+	return strings.TrimRight(out, "\n")
 }
 
 // colorizeLogs tints each log line by its detected level so the level stands out at a glance.

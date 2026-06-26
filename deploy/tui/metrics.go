@@ -19,24 +19,26 @@ func appendCap(s []float64, v float64, n int) []float64 {
 	return s
 }
 
-// fetchMetrics sums CPU (millicores) and memory (MiB) across the namespace's pods via `kubectl top`.
+// fetchMetrics sums CPU (millicores) and memory (MiB) across every node in the cluster via
+// `kubectl top nodes` — i.e. whole-cluster usage spanning all nodes and the pods running on them.
 func (m model) fetchMetrics() tea.Cmd {
 	mc := m
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 		defer cancel()
-		b, err := mc.kubectl(ctx, "-n", ns, "top", "pods", "--no-headers")
+		b, err := mc.kubectl(ctx, "top", "nodes", "--no-headers")
 		if err != nil {
 			return metricsMsg{err: "metrics unavailable (is metrics-server up?): " + err.Error()}
 		}
 		var cpu, mem float64
+		// node columns: NAME  CPU(cores)  CPU%  MEMORY  MEMORY%
 		for _, ln := range strings.Split(strings.TrimSpace(string(b)), "\n") {
 			f := strings.Fields(ln)
-			if len(f) < 3 {
+			if len(f) < 4 {
 				continue
 			}
 			cpu += parseCPU(f[1])
-			mem += parseMem(f[2])
+			mem += parseMem(f[3])
 		}
 		return metricsMsg{cpu: cpu, mem: mem}
 	}
@@ -134,7 +136,7 @@ func maxOf(s []float64) float64 {
 
 func (m model) metricsView() string {
 	var b strings.Builder
-	b.WriteString(titleStyle.Render(" metrics ") + dimStyle.Render("  live CPU + memory across the workload (kubectl top)") + "\n")
+	b.WriteString(titleStyle.Render(" metrics ") + dimStyle.Render("  live CPU + memory across every node (whole cluster)") + "\n")
 	if !m.state.reach {
 		return b.String() + "  " + warnStyle.Render("● no cluster") + "\n"
 	}
