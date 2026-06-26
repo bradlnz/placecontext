@@ -99,7 +99,8 @@ public sealed class PostJobActionService
                 if (LooksLikeHtml(html))
                     return new PostJobArtifacts.BuiltFile("report.html", Encoding.UTF8.GetBytes(html),
                         "text/html; charset=utf-8", "HTML report");
-                _log?.LogWarning("LLM HTML report for run {RunId} wasn't usable HTML — using the deterministic renderer.", run.Id);
+                _log?.LogWarning("LLM HTML report for run {RunId} wasn't usable HTML (raw starts: {Raw}) — using the deterministic renderer.",
+                    run.Id, Truncate(raw.Trim(), 200));
             }
             catch (Exception ex)
             {
@@ -119,22 +120,33 @@ public sealed class PostJobActionService
 
     private static string Truncate(string s, int max) => s.Length <= max ? s : s[..max];
 
-    // Strip ``` fences and any prose around the document, narrowing to the HTML when a doc root is present.
+    // Pull the HTML out of an LLM response: take the content of a ``` fenced block if one appears
+    // anywhere, then narrow to the document root (dropping any prose before <!doctype/<html and after
+    // </html>). Robust to the model wrapping the doc in fences and/or adding commentary around it.
     private static string ExtractHtml(string raw)
     {
         var s = raw.Trim();
-        if (s.StartsWith("```"))
+
+        var fence = s.IndexOf("```", StringComparison.Ordinal);
+        if (fence >= 0)
         {
-            var nl = s.IndexOf('\n');
-            if (nl >= 0) s = s[(nl + 1)..];
-            var fence = s.LastIndexOf("```", StringComparison.Ordinal);
-            if (fence >= 0) s = s[..fence];
-            s = s.Trim();
+            var afterTicks = s.IndexOf('\n', fence);     // skip the ```/```html line
+            if (afterTicks >= 0)
+            {
+                var rest = s[(afterTicks + 1)..];
+                var close = rest.IndexOf("```", StringComparison.Ordinal);
+                s = (close >= 0 ? rest[..close] : rest).Trim();
+            }
         }
+
         var lower = s.ToLowerInvariant();
         var start = lower.IndexOf("<!doctype", StringComparison.Ordinal);
         if (start < 0) start = lower.IndexOf("<html", StringComparison.Ordinal);
         if (start > 0) s = s[start..];
+
+        var end = s.ToLowerInvariant().LastIndexOf("</html>", StringComparison.Ordinal);
+        if (end >= 0) s = s[..(end + "</html>".Length)];
+
         return s.Trim();
     }
 
