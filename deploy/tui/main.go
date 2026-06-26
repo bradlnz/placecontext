@@ -22,7 +22,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"sort"
 	"strings"
 	"time"
 
@@ -1202,8 +1201,6 @@ func (m model) clusterPanel(rows int) string {
 	}
 	cv := newCanvas(w, h)
 
-	type p3 struct{ x, y, z float64 }
-	nodePos := map[string]p3{}
 	var servers, workers []nodeRow
 	for _, n := range m.state.nodes {
 		if n.Role == "server" {
@@ -1213,98 +1210,102 @@ func (m model) clusterPanel(rows int) string {
 		}
 	}
 	orb := m.orbit
-	// control-plane hub(s) at the centre
-	for i, s := range servers {
-		nodePos[s.Name] = p3{0, 0.2 - 0.5*float64(i), 0}
+	cx, cy := w/2, h/2
+
+	// planet (clean circle, centred); horizontal radius 2× vertical to offset the ~2:1 cell aspect
+	planetRy := (h - 3) / 2
+	if planetRy > 5 {
+		planetRy = 5
+	} else if planetRy < 3 {
+		planetRy = 3
 	}
-	// workers orbit the hub like satellites (slow, majestic)
+	planetRx := planetRy * 2
+
+	// satellites sit on a tight ellipse kept 20–40 columns from the hub, so they never overlap
+	// the planet and the layout stays compact.
+	orbX := 30.0
+	if mx := float64(cx - planetRx - 8); orbX > mx {
+		orbX = mx
+	}
+	if orbX < 20 {
+		orbX = 20
+	} else if orbX > 40 {
+		orbX = 40
+	}
+	orbY := orbX * 0.36
+	if my := float64(cy) - 2; orbY > my {
+		orbY = my
+	}
+	podX := math.Min(orbX+10, 40)
+	podY := podX * 0.36
+	if my := float64(cy) - 1; podY > my {
+		podY = my
+	}
+
+	type vis struct {
+		sx, sy, hw int
+		label      string
+		marker     rune
+		color      int
+	}
+	var ents []vis
+
+	// worker angle around the hub (advances with orb → orbital motion)
 	nw := max(1, len(workers))
-	const ring = 4.4
+	wAngle := map[string]float64{}
+	wpos := map[string][2]int{}
 	for i, wk := range workers {
-		th := 2*math.Pi*float64(i)/float64(nw) + orb*0.6
-		nodePos[wk.Name] = p3{ring * math.Cos(th), -0.2, ring * math.Sin(th)}
+		th := 2*math.Pi*float64(i)/float64(nw) + orb
+		wAngle[wk.Name] = th
+		x := cx + int(orbX*math.Cos(th))
+		y := cy + int(orbY*math.Sin(th))
+		wpos[wk.Name] = [2]int{x, y}
 	}
 
-	// viewing transform: fixed tilt + user clAngX around X, user yaw clAngY around Y.
-	// A steeper tilt (~55°) makes the orbital plane read as a ring around the planet.
-	angX := 0.95 + m.clAngX
-	sinX, cosX := math.Sin(angX), math.Cos(angX)
-	sinY, cosY := math.Sin(m.clAngY), math.Cos(m.clAngY)
-	const dist = 11.0
-	cx, cy := float64(w)/2, float64(h)/2
-	project := func(p p3) (int, int, float64) {
-		x1 := p.x*cosY + p.z*sinY
-		z1 := -p.x*sinY + p.z*cosY
-		y1 := p.y*cosX - z1*sinX
-		z2 := p.y*sinX + z1*cosX
-		ooz := 1.0 / (z2 + dist)
-		return int(cx + m.clZoom*x1*ooz*float64(w)*0.80),
-			int(cy - m.clZoom*y1*ooz*float64(h)*1.6), z2
-	}
-
-	// faint orbital path around the planet (drawn first, so everything sits on top)
+	// faint orbital path
 	if len(workers) > 0 {
-		for a := 0; a < 180; a++ {
-			th := 2 * math.Pi * float64(a) / 180
-			ox, oy, _ := project(p3{ring * math.Cos(th), -0.2, ring * math.Sin(th)})
+		for a := 0; a < 160; a++ {
+			th := 2 * math.Pi * float64(a) / 160
+			ox := cx + int(orbX*math.Cos(th))
+			oy := cy + int(orbY*math.Sin(th))
 			if ox >= 0 && ox < w && oy >= 0 && oy < h && cv.col[oy*w+ox] == -1 {
 				cv.set(ox, oy, '·', 5)
 			}
 		}
 	}
 
-	// a visible entity, with screen position + box half-extents (for edge-trimmed links)
-	type vis struct {
-		sx, sy, hw, hh int
-		depth          float64
-		label          string
-		marker         rune
-		color          int
-		cyl            bool
-	}
-	scr := map[string][3]int{} // name → sx, sy + radius for link trimming
-	var ents []vis
-
-	planetRy := (h - 3) / 2
-	if planetRy > 4 {
-		planetRy = 4
-	} else if planetRy < 2 {
-		planetRy = 2
-	}
-	for _, s := range servers {
-		x, y, d := project(nodePos[s.Name])
-		// planet half-extents: horizontal 2×ry, vertical ry (for link trimming)
-		ents = append(ents, vis{x, y, planetRy * 2, planetRy, d, shortName(s.Name), '◆', 0, true})
-		scr[s.Name] = [3]int{x, y, planetRy * 2}
-	}
+	// hub ↔ worker links (worker edge → planet edge), drawn before the boxes/planet
 	for _, wk := range workers {
-		x, y, d := project(nodePos[wk.Name])
+		p := wpos[wk.Name]
+		bw := len([]rune("● "+shortName(wk.Name))) + 2
+		ax, ay := trimToBox(p[0], p[1], bw/2, 1, cx, cy)
+		bx, by := trimToBox(cx, cy, planetRx, planetRy, p[0], p[1])
+		cv.line(ax, ay, bx, by, 5)
 		col := 1
 		if wk.Status != "Ready" {
 			col = 3
 		}
-		bw := len([]rune("● "+shortName(wk.Name))) + 2
-		ents = append(ents, vis{x, y, bw / 2, 1, d, shortName(wk.Name), '●', col, false})
-		scr[wk.Name] = [3]int{x, y, bw / 2}
+		ents = append(ents, vis{p[0], p[1], bw / 2, shortName(wk.Name), '●', col})
 	}
 
-	// pods orbit their worker like moons (tilted ring), each linked to it
+	// pods on an outer ring near their node's angle, linked to it
 	count := map[string]int{}
 	for _, p := range m.state.pods {
 		count[p.Node]++
 	}
 	idx := map[string]int{}
 	for _, p := range m.state.pods {
-		base, ok := nodePos[p.Node]
-		if !ok {
-			continue
-		}
 		k := idx[p.Node]
 		idx[p.Node]++
-		ph := 2*math.Pi*float64(k)/float64(max(1, count[p.Node])) + orb*1.4
-		const pr = 1.6
-		pp := p3{base.x + pr*math.Cos(ph), base.y + 0.5 + pr*0.45*math.Sin(ph), base.z + pr*math.Sin(ph)}
-		px, py, pd := project(pp)
+		base, isWorker := wAngle[p.Node]
+		if !isWorker {
+			base = orb * 1.3 // server's pods cluster on one arc
+		}
+		// offset pods off their node's radial (so a single pod doesn't sit on top of the worker box)
+		spread := (float64(k)-float64(count[p.Node]-1)/2)*0.5 + 0.34
+		th := base + spread
+		px := cx + int(podX*math.Cos(th))
+		py := cy + int(podY*math.Sin(th))
 		col, mark := 2, '•'
 		if !(p.Ready == "1/1" && p.Status == "Running") {
 			col, mark = 3, '◦'
@@ -1314,34 +1315,25 @@ func (m model) clusterPanel(rows int) string {
 		}
 		lab := podLabel(p.Name)
 		bw := len([]rune(string(mark)+" "+lab)) + 2
-		ents = append(ents, vis{px, py, bw / 2, 1, pd, lab, mark, col, false})
-		// link pod → its node, trimmed to both borders
-		if b, ok := scr[p.Node]; ok {
-			ax, ay := trimToBox(b[0], b[1], b[2], 1, px, py)
-			bx, by := trimToBox(px, py, bw/2, 1, b[0], b[1])
-			cv.line(ax, ay, bx, by, 5)
+		// link pod → its node (worker box, or the hub for server pods)
+		nx, ny, nr, nh := cx, cy, planetRx, planetRy
+		if wp, ok := wpos[p.Node]; ok {
+			wb := len([]rune("● "+shortName(p.Node)))/2 + 1
+			nx, ny, nr, nh = wp[0], wp[1], wb, 1
 		}
+		ax, ay := trimToBox(px, py, bw/2, 1, nx, ny)
+		bx, by := trimToBox(nx, ny, nr, nh, px, py)
+		cv.line(ax, ay, bx, by, 5)
+		ents = append(ents, vis{px, py, bw / 2, lab, mark, col})
 	}
 
-	// control-plane ↔ worker links (edge to edge)
+	// planet on top of the links so its circle stays intact; satellites are well clear of it
 	for _, s := range servers {
-		a := scr[s.Name]
-		for _, wk := range workers {
-			b := scr[wk.Name]
-			ax, ay := trimToBox(a[0], a[1], a[2], 3, b[0], b[1])
-			bx, by := trimToBox(b[0], b[1], b[2], 1, a[0], a[1])
-			cv.line(ax, ay, bx, by, 5)
-		}
+		cv.planet(cx, cy, planetRy, 0, shortName(s.Name), orb*1.6)
+		break // single hub
 	}
-
-	// draw far→near so nearer items win; server hub as a 3D planet, others as boxes
-	sort.Slice(ents, func(i, j int) bool { return ents[i].depth > ents[j].depth })
 	for _, e := range ents {
-		if e.cyl {
-			cv.planet(e.sx, e.sy, planetRy, e.color, e.label, m.orbit*1.6)
-		} else {
-			cv.box(e.sx, e.sy, string(e.marker)+" "+e.label, e.color)
-		}
+		cv.box(e.sx, e.sy, string(e.marker)+" "+e.label, e.color)
 	}
 
 	spin := "on"
