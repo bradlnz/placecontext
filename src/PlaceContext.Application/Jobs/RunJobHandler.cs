@@ -104,23 +104,31 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
         }
 
         // ---- AGGREGATE + PERSIST ----
+        // Commit the terminal status FIRST and on its own, so the run can never linger in "Running"
+        // (and artifacts can never be blocked) behind the slow, best-effort enrichment below — local
+        // CPU LLM organize/embed can take minutes.
         var finishedAt = _clock.UtcNow;
         run.Complete(shardResults, reduceResult, finishedAt);
         await _runs.UpdateAsync(run, ct);
-
-        // Persist a summary of the completed run into the project's context document so the
-        // existing generic generation layer (GenerateReportHandler) can see run artifacts.
-        await AppendRunSummaryToProjectContextAsync(job, run, ct);
-
         await _uow.SaveChangesAsync(ct);
 
         // Post-job actions: turn this run's artifacts into stored outputs (HTML report / chart / CSV /
-        // raw bundle) surfaced as links. Best-effort — never fails the run.
+        // raw bundle) surfaced as links. Done before the slow LLM enrichment so links appear promptly.
+        // Best-effort — never fails the run.
         if (_postActions is not null)
         {
             try { await _postActions.RunAsync(job, run, ct); }
             catch { /* isolated inside the service too; belt-and-suspenders */ }
         }
+
+        // Persist a Gemma-organized summary of the run into the project's context document and embed it
+        // for search/the dependency graph. Slow + best-effort — isolated so it can't fail or stall the run.
+        try
+        {
+            await AppendRunSummaryToProjectContextAsync(job, run, ct);
+            await _uow.SaveChangesAsync(ct);
+        }
+        catch { /* organize/embed/context-append is best-effort enrichment */ }
 
         // Raise the built-in "job.completed" domain event so event-triggers can chain off this run.
         if (_events is not null)
