@@ -237,9 +237,9 @@ func (m model) fetchState() tea.Cmd {
 				}
 			}
 		}
-		if st.dbUp {
-			st.jobs, st.jobsErr = mc.queryJobs(ctx)
-		}
+		// Always query jobs while the cluster is reachable (don't gate on dbUp detection, which can
+		// flicker) so a newly-added job shows up on the next ~1.5s refresh.
+		st.jobs, st.jobsErr = mc.queryJobs(ctx)
 		return stateMsg(st)
 	}
 }
