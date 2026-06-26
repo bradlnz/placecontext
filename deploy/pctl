@@ -99,7 +99,135 @@ wait_rollout() {
 }
 
 # ── doctor ─────────────────────────────────────────────────────────────────────────────────────
+# Runtime registry — mirrors WorkloadRunnerOptions.Runtimes defaults (src/.../Workload/WorkloadRunnerOptions.cs).
+# Each entry: "<runtimeId>|<image>|<trivial in-container command that must exit 0>".
+# Keep in sync with the C# defaults; the smoke test runs each as a sandboxed Job, exactly how real
+# jobs run — so it catches sandbox regressions (memory units, image pull, egress) before go-live.
+# Use single quotes in the commands: they sit inside the JSON-style "command" array (double-quoted),
+# so single quotes keep the YAML valid while still quoting the runtime's inline program.
+PCTL_RUNTIMES=(
+  "node|node:22-slim|node -e 'process.exit(0)'"
+  "python|python:3.12-slim|python -c 'import sys; sys.exit(0)'"
+)
+
+# Smoke-test one runtime: run a trivial workload as a sandboxed Job (256Mi/1cpu, no egress) and assert
+# it reaches Complete. Returns 0 on pass. Cleans up the Job either way.
+smoke_runtime() {
+  local rid="$1" image="$2" cmd="$3" job="pcdoctor-$rid"
+  kube -n "$PCTL_NAMESPACE" delete job "$job" >/dev/null 2>&1 || true
+  if ! cat <<EOF | kube -n "$PCTL_NAMESPACE" apply -f - >/dev/null 2>&1
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: $job
+  labels: { placecontext-doctor: "true" }
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 30
+  activeDeadlineSeconds: 150
+  template:
+    metadata:
+      labels: { placecontext-doctor: "true" }
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: run
+          image: $image
+          command: ["sh","-c","$cmd"]
+          resources:
+            limits: { memory: "256Mi", cpu: "1" }
+EOF
+  then
+    warn "runtime '$rid' ($image) — could not create smoke-test job"; return 1
+  fi
+  local i
+  for i in $(seq 1 120); do
+    if kube -n "$PCTL_NAMESPACE" wait --for=condition=complete "job/$job" --timeout=1s >/dev/null 2>&1; then
+      ok "runtime '$rid' ($image) — smoke test passed"
+      kube -n "$PCTL_NAMESPACE" delete job "$job" >/dev/null 2>&1 || true; return 0
+    fi
+    if kube -n "$PCTL_NAMESPACE" wait --for=condition=failed "job/$job" --timeout=1s >/dev/null 2>&1; then
+      warn "runtime '$rid' ($image) — smoke test FAILED:"
+      kube -n "$PCTL_NAMESPACE" get pods -l "job-name=$job" \
+        -o jsonpath='{range .items[*]}    run: {.status.containerStatuses[0].state}{"\n"}{end}' 2>/dev/null >&2 || true
+      kube -n "$PCTL_NAMESPACE" delete job "$job" >/dev/null 2>&1 || true; return 1
+    fi
+    sleep 1
+  done
+  warn "runtime '$rid' ($image) — TIMED OUT (slow image pull on a fresh node, or sandbox blocked)"
+  kube -n "$PCTL_NAMESPACE" delete job "$job" >/dev/null 2>&1 || true; return 1
+}
+
+# Latest EF migration id in the source tree (excludes *.Designer.cs / snapshot). Same logic as the TUI build.
+latest_source_migration() {
+  ls src/PlaceContext.Infrastructure/Migrations/[0-9]*_*.cs 2>/dev/null \
+    | grep -vi '\.designer\.cs$' | sed 's#.*/##; s#\.cs$##' | sort | tail -1
+}
+
+# Go-live / initialisation checklist. Verifies the cluster is actually ready to serve: secrets present,
+# DB migrated to the code's level, host replicas ready, and every runtime executes in the sandbox.
+golive_checklist() {
+  echo; say "Go-live checklist (ns: $PCTL_NAMESPACE):"
+  resolve_ctx
+  local fail=0
+
+  if ! kube get nodes >/dev/null 2>&1; then
+    warn "no cluster reachable — bring one up (pctl dev up / pctl server up) before go-live."
+    return 1
+  fi
+  ok "cluster reachable ($(kube get nodes --no-headers 2>/dev/null | grep -c Ready) node(s) Ready)"
+
+  kube get ns "$PCTL_NAMESPACE" >/dev/null 2>&1 && ok "namespace '$PCTL_NAMESPACE' exists" \
+    || { warn "namespace '$PCTL_NAMESPACE' missing — run pctl deploy"; fail=1; }
+
+  # Signing secrets — without these, portal sign-in and MCP tokens break across replicas.
+  for s in placecontext-portal placecontext-oauth; do
+    kube -n "$PCTL_NAMESPACE" get secret "$s" >/dev/null 2>&1 && ok "secret '$s' present" \
+      || { warn "secret '$s' MISSING — run pctl deploy (auto-generates it)"; fail=1; }
+  done
+
+  # Database ready + schema migrated to the code's level.
+  if kube -n "$PCTL_NAMESPACE" exec deploy/placecontext-db -- psql -U postgres -d placecontext -At -c 'SELECT 1' >/dev/null 2>&1; then
+    ok "database reachable"
+    local want have_mig
+    want="$(latest_source_migration)"
+    have_mig="$(kube -n "$PCTL_NAMESPACE" exec deploy/placecontext-db -- psql -U postgres -d placecontext -At -c 'SELECT coalesce(max("MigrationId"),$$$$) FROM "__EFMigrationsHistory"' 2>/dev/null | tr -d '\r')"
+    if [ -n "$want" ] && [ -n "$have_mig" ] && [ "$have_mig" \< "$want" ]; then
+      warn "DB schema behind code (applied ${have_mig#*_}, expected ${want#*_}) — redeploy to migrate"; fail=1
+    else
+      ok "DB schema up to date (${have_mig#*_})"
+    fi
+  else
+    warn "database not reachable — run pctl deploy"; fail=1
+  fi
+
+  # Host replicas ready.
+  local ready desired
+  ready="$(kube -n "$PCTL_NAMESPACE" get deploy placecontext -o jsonpath='{.status.readyReplicas}' 2>/dev/null)"
+  desired="$(kube -n "$PCTL_NAMESPACE" get deploy placecontext -o jsonpath='{.spec.replicas}' 2>/dev/null)"
+  if [ -n "$ready" ] && [ "$ready" = "${desired:-0}" ]; then
+    ok "host replicas ready ($ready/$desired)"
+  else
+    warn "host replicas not ready (${ready:-0}/${desired:-?}) — check pctl status"; fail=1
+  fi
+
+  # Every runtime must execute in the sandbox (the 'all runtimes need to be checked' requirement).
+  say "Runtime smoke tests:"
+  local entry rid image cmd
+  for entry in "${PCTL_RUNTIMES[@]}"; do
+    IFS='|' read -r rid image cmd <<<"$entry"
+    smoke_runtime "$rid" "$image" "$cmd" || fail=1
+  done
+
+  echo
+  [ "$fail" = 0 ] && ok "Go-live checklist passed — ready to serve." \
+    || { warn "Go-live checklist has issues (above) — resolve before going live."; return 1; }
+}
+
 cmd_doctor() {
+  local golive=0
+  while [ $# -gt 0 ]; do case "$1" in --go-live|--golive) golive=1; shift;; *) shift;; esac; done
+
   say "Checking dependencies…"
   local miss=0
   for t in docker k3d kubectl; do
@@ -108,6 +236,13 @@ cmd_doctor() {
   have k3s && ok "k3s — $(command -v k3s) (prod server/agent)" || printf '%s  k3s — not installed (only needed for prod nodes)%s\n' "$C_DIM" "$C_RESET"
   printf '%s  ~/.local/bin on PATH? %s%s\n' "$C_DIM" "$(case ":$PATH:" in *":$HOME/.local/bin:"*) echo yes;; *) echo no — add it;; esac)" "$C_RESET"
   [ "$miss" = 0 ] && ok "Core dev deps present." || die "Install the missing tools above (see README)."
+
+  # The go-live checklist creates throwaway Jobs, so only run it on request or when a cluster is up.
+  if [ "$golive" = 1 ] || { have kubectl && resolve_ctx && kube get nodes >/dev/null 2>&1; }; then
+    golive_checklist || true
+  else
+    printf '%s  (run `pctl doctor --go-live` against a running cluster for the full readiness checklist)%s\n' "$C_DIM" "$C_RESET"
+  fi
 }
 
 # ── dev: local k3d cluster ─────────────────────────────────────────────────────────────────────
