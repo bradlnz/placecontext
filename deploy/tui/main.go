@@ -9,6 +9,7 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -160,6 +161,7 @@ type model struct {
 	runsJob   jobRow
 	runs      []runRow
 	runCursor int
+	runsErr   string // sticky error for the runs list (e.g. query failed), shown in runsView
 
 	loading bool // a data fetch (logs/mcp/metrics/search) is in flight → show a loading box
 }
@@ -203,7 +205,17 @@ func (m model) kubectl(ctx context.Context, args ...string) ([]byte, error) {
 	full := append([]string{"--kubeconfig", m.kubeconfig, "--context", "k3d-" + cluster}, args...)
 	cmd := exec.CommandContext(ctx, "kubectl", full...)
 	cmd.Env = childEnv()
-	return cmd.Output()
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	out, err := cmd.Output()
+	// Surface stderr in the error so callers (and the user) see the real cause — e.g. a psql
+	// "column does not exist" rather than a bare "exit status 1".
+	if err != nil {
+		if msg := strings.TrimSpace(stderr.String()); msg != "" {
+			return out, fmt.Errorf("%s: %w", msg, err)
+		}
+	}
+	return out, err
 }
 
 // childEnv ensures ~/.local/bin (where k3d/kubectl may live) is on PATH for children.
@@ -446,10 +458,19 @@ mc ls --recursive s 2>/dev/null | awk '{print $NF}' | grep -iv '^placecontext-ba
 }
 
 func (m model) queryJobs(ctx context.Context) ([]jobRow, string) {
-	const q = `SELECT "Id", "TenantId", "Name", "MapSourceKind", "ConcurrencyLimit", "AllowNetworkEgress", "UpdatedAt", "TimeoutSeconds" ` +
-		`FROM jobs ORDER BY "UpdatedAt" DESC LIMIT 100`
-	b, err := m.kubectl(ctx, "-n", ns, "exec", "deploy/placecontext-db", "--",
-		"psql", "-U", "postgres", "-d", "placecontext", "-At", "-F", "\t", "-c", q)
+	const base = `"Id", "TenantId", "Name", "MapSourceKind", "ConcurrencyLimit", "AllowNetworkEgress", "UpdatedAt"`
+	run := func(sel string) ([]byte, error) {
+		q := `SELECT ` + sel + ` FROM jobs ORDER BY "UpdatedAt" DESC LIMIT 100`
+		return m.kubectl(ctx, "-n", ns, "exec", "deploy/placecontext-db", "--",
+			"psql", "-U", "postgres", "-d", "placecontext", "-At", "-F", "\t", "-c", q)
+	}
+	// TimeoutSeconds is a newer column; if the DB is behind the app code (migration not yet
+	// applied) fall back to a query without it so the jobs list still works — the migration
+	// banner (checkMigrations) tells the user to deploy.
+	b, err := run(base + `, "TimeoutSeconds"`)
+	if err != nil && strings.Contains(err.Error(), "does not exist") {
+		b, err = run(base) // 7 cols; the row padding below defaults TimeoutSeconds to 300
+	}
 	if err != nil {
 		return nil, "could not query jobs: " + err.Error()
 	}
@@ -1041,6 +1062,16 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "r":
 				m.loading = true
 				return m, m.fetchRuns(m.runsJob)
+			case "enter":
+				// Open the highlighted run's detail. (This must live here: the viewRuns block
+				// returns early below, so the generic enter case further down never sees it.)
+				if m.runCursor < len(m.runs) {
+					m.view = viewRunDetail
+					m.logs.SetContent("")
+					m.loading = true
+					return m, m.fetchRunDetail(m.runs[m.runCursor])
+				}
+				m.flash = "no run to open"
 			}
 			return m, nil
 		}
@@ -1086,13 +1117,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.loading = true
 				return m, m.fetchLogsFor(it)
 			}
-			// Runs list → open the highlighted run's detail.
-			if m.view == viewRuns && m.runCursor < len(m.runs) {
-				m.view = viewRunDetail
-				m.logs.SetContent("")
-				m.loading = true
-				return m, m.fetchRunDetail(m.runs[m.runCursor])
-			}
+			// (Runs-list ⏎ is handled in the viewRuns block above, which returns early.)
 		case "a":
 			// One keypress adds a worker computer to the cluster — no jargon, no choices.
 			if !m.busy {
@@ -1221,6 +1246,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case runsMsg:
 		m.loading = false
 		m.runs = msg.rows
+		m.runsErr = msg.err
 		if msg.err != "" {
 			m.flash = msg.err
 		}
@@ -1265,6 +1291,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, clusterTick()
 
 	case stateMsg:
+		// A completed state fetch always ends any loading state — backstop so the loader can never
+		// freeze on screen (some action paths dispatch fetchState and rely on this to clear it).
+		m.loading = false
 		m.state = clusterState(msg)
 		m.updated = time.Now()
 		sel := make([]selItem, 0, len(m.state.nodes)+len(m.state.pods)+len(m.state.jobs))
@@ -1580,6 +1609,11 @@ func (m model) searchView() string {
 func (m model) runsView() string {
 	var b strings.Builder
 	b.WriteString(titleStyle.Render(fmt.Sprintf(" runs: %s (%d) ", m.runsJob.name, len(m.runs))) + "\n\n")
+	if m.runsErr != "" {
+		b.WriteString("  " + errStyle.Render("✗ "+m.runsErr) + "\n")
+		b.WriteString("  " + dimStyle.Render("press [r] to retry · [esc] to go back") + "\n")
+		return b.String()
+	}
 	if len(m.runs) == 0 {
 		b.WriteString("  " + dimStyle.Render("no runs yet — press [R] on the dashboard to queue one.") + "\n")
 		return b.String()
@@ -1745,6 +1779,13 @@ func renderMarkdown(s string, width int) string {
 func colorizeLogs(s string) string {
 	lines := strings.Split(s, "\n")
 	for i, ln := range lines {
+		// Flag ANY line mentioning an error with a marker + red, even when it doesn't match a
+		// structured log level (e.g. "DbError", "connection error.", "3 errors"). This makes
+		// problems in a pod/node log impossible to miss.
+		if strings.Contains(strings.ToLower(ln), "error") {
+			lines[i] = errStyle.Render("✗ " + ln)
+			continue
+		}
 		if st, ok := logLevelStyle(ln); ok {
 			lines[i] = st.Render(ln)
 		}

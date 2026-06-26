@@ -35,15 +35,17 @@ public class DecisionTreeTests
     }
 
     [Fact]
-    public void Failed_tool_call_lowers_link_confidence()
+    public void Tool_call_activity_is_excluded_from_the_dependency_graph()
     {
         var pid = ProjectId.New();
         var tree = new DecisionTreeAssembler().Assemble(
             ProjectName.From("alpha"), Array.Empty<Decision>(), ActivityLog.Start(pid),
-            new[] { new ToolActivity("query_graph", true) });
+            new[] { new ToolActivity("query_graph", false), new ToolActivity("record_activity", true) });
 
-        // The failed tool's edge is Ambiguous, so the low-confidence ratio is non-zero.
-        Assert.True(tree.ToMetrics().LowConfidenceLinkRatio > 0);
+        // MCP tool calls are transient access, not structural dependencies — the assembler ignores them,
+        // so (with no decisions or changes) they contribute no coupling edges and the low-confidence
+        // ratio stays zero rather than being inflated by tool traffic.
+        Assert.Equal(0.0, tree.ToMetrics().LowConfidenceLinkRatio);
     }
 
     [Fact]
