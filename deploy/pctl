@@ -473,13 +473,24 @@ cmd_mesh_tenant() {
 }
 
 cmd_mesh_authkey() {
-  local tenant=""
-  while [ $# -gt 0 ]; do case "$1" in --tenant) tenant="$2"; shift 2;; *) die "mesh authkey: unknown arg $1";; esac; done
+  local tenant="" ephemeral=0
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --tenant)    tenant="$2"; shift 2;;
+      --ephemeral) ephemeral=1; shift;;   # for TUI viewers: node auto-deregisters when it disconnects
+      *) die "mesh authkey: unknown arg $1";;
+    esac
+  done
   [ -n "$tenant" ] || die "mesh authkey needs --tenant <id> (each customer gets its own key)"
   have docker || die "docker is required."
   grep -qxF "$tenant" "$MESH_TENANTS" 2>/dev/null || die "unknown tenant '${tenant}' — add it first: pctl mesh tenant add ${tenant}"
-  # reusable 1h pre-auth key, tagged so the node lands in that tenant's isolated network
-  hs preauthkeys create --user "cust-${tenant}" --tags "tag:cust-${tenant}" --reusable --expiration 1h
+  # Tagged pre-auth key for that tenant's isolated network. Cluster nodes use a PERSISTENT key (stay on
+  # the mesh so data keeps syncing); TUI viewers use --ephemeral (auto-removed when the TUI closes).
+  if [ "$ephemeral" = 1 ]; then
+    hs preauthkeys create --user "cust-${tenant}" --tags "tag:cust-${tenant}" --reusable --ephemeral --expiration 1h
+  else
+    hs preauthkeys create --user "cust-${tenant}" --tags "tag:cust-${tenant}" --reusable --expiration 720h
+  fi
 }
 
 cmd_mesh_down() {

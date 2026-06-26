@@ -1257,7 +1257,7 @@ func main() {
 // joinedMesh brings this machine onto the self-hosted mesh (Headscale/Tailscale) for the session.
 // No-op (returns false) when no mesh is configured, tailscale is absent, or we're the cluster host.
 func joinedMesh() bool {
-	ctrl, key := os.Getenv("PCTL_MESH_CONTROL"), os.Getenv("PCTL_MESH_AUTHKEY")
+	ctrl, key := os.Getenv("PCTL_MESH_CONTROL"), meshAuthKey()
 	if ctrl == "" || key == "" || !commandExists("tailscale") || isClusterHost() {
 		return false
 	}

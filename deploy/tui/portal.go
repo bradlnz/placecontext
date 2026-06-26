@@ -7,7 +7,9 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"net/http"
 	neturl "net/url"
 	"os"
 	"os/exec"
@@ -16,6 +18,47 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 )
+
+// meshAuthKey resolves the mesh pre-auth key. Mesh access is gated by PlaceContext: the TUI presents the
+// customer's subscription key (PCTL_KEY) to the exchange endpoint (PCTL_MESH_EXCHANGE), which returns a
+// short-lived, tenant-scoped key only for valid subscribers — so you can only join the mesh via the TUI.
+// PCTL_MESH_AUTHKEY is a direct override for local testing.
+func meshAuthKey() string {
+	if k := os.Getenv("PCTL_MESH_AUTHKEY"); k != "" {
+		return k
+	}
+	sub, ex := os.Getenv("PCTL_KEY"), os.Getenv("PCTL_MESH_EXCHANGE")
+	if sub == "" || ex == "" {
+		return ""
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, ex, strings.NewReader(`{"purpose":"tui"}`))
+	if err != nil {
+		return ""
+	}
+	req.Header.Set("Authorization", "Bearer "+sub)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return ""
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return ""
+	}
+	var out struct {
+		AuthKey string `json:"authkey"`
+		Key     string `json:"key"`
+	}
+	if json.NewDecoder(resp.Body).Decode(&out) != nil {
+		return ""
+	}
+	if out.AuthKey != "" {
+		return out.AuthKey
+	}
+	return out.Key
+}
 
 func portalURL() string {
 	port := os.Getenv("PCTL_PORT")
