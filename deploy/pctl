@@ -352,18 +352,25 @@ cmd_autostart() {
   fi
 
   command -v systemctl >/dev/null 2>&1 || die "systemd not available — cannot configure autostart."
+  local self localbin
+  self="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
+  localbin="$HOME/.local/bin"
   mkdir -p "$(dirname "$unit")"
+  # ExecStart runs `pctl ensure` (not bare `k3d cluster start`) so boot brings up the cluster AND applies
+  # the manifests + waits for the Host rollout — i.e. PlaceContext is actually serving, not just the API.
   cat > "$unit" <<EOF
 [Unit]
-Description=PlaceContext dev cluster (k3d)
+Description=PlaceContext dev cluster (k3d) + Host
 After=docker.service network-online.target
 Wants=network-online.target
 
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-ExecStart=${k3dbin} cluster start ${PCTL_CLUSTER}
+Environment=PATH=${localbin}:/usr/local/bin:/usr/bin:/bin
+ExecStart=/bin/bash ${self} ensure
 ExecStop=${k3dbin} cluster stop ${PCTL_CLUSTER}
+TimeoutStartSec=600
 
 [Install]
 WantedBy=default.target
@@ -374,6 +381,31 @@ EOF
     warn "Could not enable linger — cluster will start on login, not at boot. Run: sudo loginctl enable-linger $USER"
   fi
   ok "Autostart enabled (systemd user service 'placecontext')."
+}
+
+# ── ensure (idempotent bring-up) ─────────────────────────────────────────────────────────────────
+# Make the whole dev stack running: create the cluster if missing (full dev up), else start it and
+# (re)apply the manifests, then wait for the Host rollout. Safe to run repeatedly; used at boot by the
+# autostart unit and handy by hand ("is everything up?").
+cmd_ensure() {
+  have k3d   || die "ensure supports the k3d dev cluster (k3d not found)."
+  have docker|| die "docker is required for the k3d dev cluster."
+
+  if ! dev_cluster_exists; then
+    say "No dev cluster yet — creating it…"
+    cmd_dev_up
+    return 0
+  fi
+
+  say "Ensuring cluster '$PCTL_CLUSTER' is started…"
+  k3d cluster start "$PCTL_CLUSTER" >/dev/null 2>&1 || true
+  use_dev_kubeconfig
+  say "Waiting for the cluster API…"
+  local i; for i in $(seq 1 60); do kube get nodes >/dev/null 2>&1 && break; sleep 2; done
+  apply_manifests "$PCTL_IMAGE"
+  wait_rollout
+  ok "PlaceContext is up."
+  cmd_url
 }
 
 # ── db (replicated Postgres + PITR backups via CloudNativePG) ─────────────────────────────────────
@@ -902,7 +934,8 @@ ${C_BOLD}ANYWHERE${C_RESET}
   db restore-info        Print the manual PITR recipe
   db minio               Port-forward the MinIO backup store to localhost (console :9001)
   minio open BUCKET/KEY  Download a MinIO object and open it (e.g. a report's HTML)
-  autostart [--disable]  Start the cluster on boot (k3d → systemd user service; k3s → already a service)
+  ensure                 Bring the whole stack up idempotently (start/create cluster + apply + wait)
+  autostart [--disable]  Run 'ensure' on boot (k3d → systemd user service; k3s → already a service)
   status                 Show nodes + workloads
   logs [-f]              Tail the PlaceContext Host logs
   url                    Print the portal / MCP URL
@@ -951,6 +984,7 @@ main() {
     mesh)         cmd_mesh "$@";;
     minio)        case "${1:-}" in open) shift; cmd_minio_open "$@";; *) die "usage: pctl minio open <bucket/key>";; esac;;
     autostart)    cmd_autostart "$@";;
+    ensure)       cmd_ensure "$@";;
     tui|ui)       cmd_tui "$@";;
     build)        cmd_build "$@";;
     deploy)       cmd_deploy "$@";;
