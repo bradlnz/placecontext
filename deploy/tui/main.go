@@ -86,6 +86,7 @@ const (
 	viewConfirm
 	viewMcp
 	viewSearch
+	viewSettings
 )
 
 // menuItem is a choice in the "add node" (or any future) list picker.
@@ -147,6 +148,10 @@ type model struct {
 
 	// search (decisions / context / activity — the knowledge graph's contents)
 	searchQuery string
+
+	// per-job settings view (checkboxes)
+	setJob    jobRow // the job whose settings are being edited
+	setCursor int
 
 	loading bool // a data fetch (logs/mcp/metrics/search) is in flight → show a loading box
 }
@@ -509,6 +514,50 @@ func (m model) runJobCmd(j jobRow) tea.Cmd {
 	}
 }
 
+// jobSetting is one toggleable (checkbox) job setting in the settings view ([s]). Each maps to a
+// boolean column on the jobs table; toggling persists immediately and takes effect on the next run.
+type jobSetting struct {
+	label, desc, column string
+	get                 func(jobRow) bool
+}
+
+func jobSettings() []jobSetting {
+	return []jobSetting{
+		{"Allow network egress",
+			"Let this job's containers reach the network. When off, a deny-all NetworkPolicy isolates the run.",
+			"AllowNetworkEgress", func(j jobRow) bool { return j.egress == "yes" }},
+	}
+}
+
+type jobSettingMsg struct {
+	column string
+	val    bool
+	flash  string
+}
+
+// toggleJobSettingCmd flips a boolean job setting in the jobs table via psql, off the UI thread.
+func (m model) toggleJobSettingCmd(j jobRow, s jobSetting, val bool) tea.Cmd {
+	mc := m
+	return func() tea.Msg {
+		if j.id == "" {
+			return flashMsg("could not update setting — missing job id (refresh and retry)")
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		b := "false"
+		state := "off"
+		if val {
+			b, state = "true", "on"
+		}
+		q := `UPDATE jobs SET "` + s.column + `"=` + b + `, "UpdatedAt"=now() WHERE "Id"='` + j.id + `'`
+		if _, err := mc.kubectl(ctx, "-n", ns, "exec", "deploy/placecontext-db", "--",
+			"psql", "-U", "postgres", "-d", "placecontext", "-c", q); err != nil {
+			return flashMsg(s.label + " toggle failed: " + err.Error())
+		}
+		return jobSettingMsg{s.column, val, s.label + ": " + state}
+	}
+}
+
 // addNodeMenu lists the "add node" choices (dev k3d nodes + the prod join command).
 func addNodeMenu() []menuItem {
 	return []menuItem{
@@ -745,6 +794,28 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
+		// per-job settings — checkboxes toggled with space, persisted to the jobs table
+		if m.view == viewSettings {
+			items := jobSettings()
+			switch key {
+			case "up", "k":
+				if m.setCursor > 0 {
+					m.setCursor--
+				}
+			case "down", "j":
+				if m.setCursor < len(items)-1 {
+					m.setCursor++
+				}
+			case " ", "enter":
+				if m.setCursor < len(items) {
+					s := items[m.setCursor]
+					cur := s.get(m.setJob)
+					return m, m.toggleJobSettingCmd(m.setJob, s, !cur)
+				}
+			}
+			return m, nil
+		}
+
 		switch key {
 		case "up", "k":
 			if m.view == viewDash && m.cursor > 0 {
@@ -839,6 +910,21 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 			return m, nil
+		case "s":
+			// Open per-job settings (checkboxes) for the selected job.
+			if m.view == viewDash && m.cursor < len(m.sel) {
+				if it := m.sel[m.cursor]; it.kind == "job" {
+					for _, j := range m.state.jobs {
+						if j.name == it.name {
+							m.setJob, m.setCursor, m.prevView, m.view = j, 0, viewDash, viewSettings
+							return m, nil
+						}
+					}
+				} else {
+					m.flash = "select a job to edit its settings ([s])"
+				}
+			}
+			return m, nil
 		case "r":
 			if m.view == viewLogs && m.cursor < len(m.sel) {
 				m.loading = true
@@ -880,6 +966,17 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case flashMsg:
 		m.flash = string(msg)
 		return m, nil
+
+	case jobSettingMsg:
+		if msg.column == "AllowNetworkEgress" {
+			if msg.val {
+				m.setJob.egress = "yes"
+			} else {
+				m.setJob.egress = "no"
+			}
+		}
+		m.flash = msg.flash
+		return m, m.fetchState() // refresh the jobs list so the change shows everywhere
 
 	case metricsTickMsg:
 		if m.view != viewMetrics {
@@ -1018,6 +1115,8 @@ func (m model) View() string {
 		b.WriteString(m.mcpView())
 	case viewSearch:
 		b.WriteString(m.searchView())
+	case viewSettings:
+		b.WriteString(m.settingsView())
 	default:
 		b.WriteString(m.dashboard())
 	}
@@ -1237,6 +1336,32 @@ func (m model) mcpView() string {
 	return b.String()
 }
 
+// settingsView renders the per-job checkbox settings. Space toggles the highlighted setting.
+func (m model) settingsView() string {
+	var b strings.Builder
+	b.WriteString(titleStyle.Render(" settings ") + dimStyle.Render("  job: "+m.setJob.name) + "\n\n")
+	items := jobSettings()
+	for i, s := range items {
+		box := "[ ]"
+		if s.get(m.setJob) {
+			box = "[x]"
+		}
+		line := box + "  " + s.label
+		if i == m.setCursor {
+			b.WriteString(selStyle.Render("❯ "+line) + "\n")
+		} else {
+			mark := dimStyle.Render(box)
+			if s.get(m.setJob) {
+				mark = okStyle.Render(box)
+			}
+			b.WriteString("  " + mark + "  " + s.label + "\n")
+		}
+		b.WriteString("       " + dimStyle.Render(s.desc) + "\n\n")
+	}
+	b.WriteString("  " + dimStyle.Render("changes persist immediately and apply on the job's next run.") + "\n")
+	return b.String()
+}
+
 func (m model) confirmView() string {
 	var b strings.Builder
 	b.WriteString(errStyle.Render(" ⚠  Confirm destructive action ") + "\n\n")
@@ -1317,9 +1442,11 @@ func (m model) footer() string {
 	var keys []string
 	switch m.view {
 	case viewDash:
-		keys = []string{k("↑↓", "nav"), k("⏎", "logs"), k("R", "run job"), k("x", "kill job"), k("/", "search"),
-			k("g", "metrics"), k("m", "mcp"), k("p", "portal"), k("$", "subscribe"), k("a", "add worker"),
-			k("c", "theme"), k("u", "up"), k("d", "down"), k("r", "refresh"), k("q", "quit")}
+		keys = []string{k("↑↓", "nav"), k("⏎", "logs"), k("R", "run job"), k("s", "settings"), k("x", "kill job"),
+			k("/", "search"), k("g", "metrics"), k("m", "mcp"), k("p", "portal"), k("$", "subscribe"),
+			k("a", "add worker"), k("c", "theme"), k("u", "up"), k("d", "down"), k("r", "refresh"), k("q", "quit")}
+	case viewSettings:
+		keys = []string{k("↑↓", "nav"), k("space", "toggle"), k("b", "back"), k("q", "quit")}
 	case viewConfirm:
 		keys = []string{k("y", "confirm"), k("n", "cancel"), k("q", "quit")}
 	case viewMcp:
