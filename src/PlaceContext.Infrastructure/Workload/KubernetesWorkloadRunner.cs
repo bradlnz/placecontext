@@ -223,9 +223,32 @@ public sealed class KubernetesWorkloadRunner : IWorkloadRunner
     private V1ResourceRequirements ResourceLimits()
     {
         var limits = new Dictionary<string, ResourceQuantity>();
-        if (!string.IsNullOrWhiteSpace(_options.SandboxMemory)) limits["memory"] = new ResourceQuantity(_options.SandboxMemory);
+        if (!string.IsNullOrWhiteSpace(_options.SandboxMemory)) limits["memory"] = new ResourceQuantity(ToK8sMemory(_options.SandboxMemory));
         if (_options.SandboxCpus > 0) limits["cpu"] = new ResourceQuantity(_options.SandboxCpus.ToString("0.0"));
         return new V1ResourceRequirements { Limits = limits.Count > 0 ? limits : null };
+    }
+
+    /// <summary>
+    /// Translate the shared <see cref="WorkloadRunnerOptions.SandboxMemory"/> value — written in
+    /// <b>Docker</b> notation (e.g. "256m" = 256&#160;MiB, base-1024) — into a Kubernetes resource
+    /// quantity. This is critical: in a k8s quantity a bare "m" suffix means <i>milli</i> (10⁻³), so
+    /// passing Docker's "256m" verbatim sets the container memory limit to ~0 bytes and runc OOM-kills
+    /// the container's init process before any user code runs (exit 128, StartError, no logs). Docker's
+    /// b/k/m/g suffixes map to k8s bytes/Ki/Mi/Gi; a bare number is bytes; an explicit k8s suffix
+    /// (Ki/Mi/Gi) is left untouched.
+    /// </summary>
+    public static string ToK8sMemory(string docker)
+    {
+        var s = docker.Trim();
+        if (s.Length == 0) return s;
+        return char.ToLowerInvariant(s[^1]) switch
+        {
+            'b' => s[..^1],          // explicit bytes
+            'k' => s[..^1] + "Ki",
+            'm' => s[..^1] + "Mi",
+            'g' => s[..^1] + "Gi",
+            _ => s,                  // bare bytes, or an already-k8s suffix like "Mi"/"Gi"
+        };
     }
 
     // Single file with no explicit entrypoint → write it at the runtime's default name; else each file at its path.
