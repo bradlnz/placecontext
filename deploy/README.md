@@ -8,6 +8,8 @@ deploy/
   pctl            ← the engine (bash): all orchestration logic, idempotent
   tui/            ← reactive Go TUI dashboard (Bubble Tea), wraps the engine
   k3s/            ← Kubernetes manifests (Postgres + PlaceContext Host + Ingress)
+  headscale/      ← self-hosted WireGuard mesh control plane (driven by `pctl mesh`)
+  terraform/      ← IaC to provision the Headscale mesh control droplet on DigitalOcean
   selfhost.sh     ← deprecated shim → forwards to `pctl server up` / `pctl agent join`
 ```
 

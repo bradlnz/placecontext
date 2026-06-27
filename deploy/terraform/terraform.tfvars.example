@@ -1,0 +1,22 @@
+# Copy to terraform.tfvars and fill in. terraform.tfvars is gitignored (it can hold the API token).
+
+# DigitalOcean API token (or export DIGITALOCEAN_TOKEN and leave this unset).
+# do_token = "dop_v1_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+
+# FQDN the mesh control server answers on. Must end up resolving to the reserved IP
+# (managed for you when manage_dns = true and the apex is hosted in DigitalOcean DNS).
+domain = "mesh.example.com"
+
+# Public keys granted root on the droplet (so you can operate the mesh over SSH).
+ssh_public_keys = [
+  "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAA... you@laptop",
+]
+
+# Optional overrides (defaults shown):
+# name              = "placecontext-mesh"
+# region            = "nyc3"
+# droplet_size      = "s-1vcpu-1gb"
+# manage_dns        = true        # false if the domain's DNS is hosted elsewhere
+# ssh_allowed_cidrs = ["0.0.0.0/0", "::/0"]  # tighten to your admin IPs
+# enable_backups    = false
+# repo_ref          = "main"

@@ -20,3 +20,12 @@ deploy/tui/dist/
 # Headscale mesh runtime state (templated/generated on the control droplet)
 deploy/headscale/*.live.*
 deploy/headscale/tenants.list
+
+# Terraform state, plans, local vars (may contain the DO API token) and provider cache
+deploy/terraform/.terraform/
+deploy/terraform/.terraform.lock.hcl
+deploy/terraform/*.tfstate
+deploy/terraform/*.tfstate.*
+deploy/terraform/*.tfvars
+deploy/terraform/*.tfplan
+!deploy/terraform/*.tfvars.example
