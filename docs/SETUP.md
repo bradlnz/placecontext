@@ -106,6 +106,10 @@ Two options, same `--vpn-*` plumbing:
   ```
   TUI viewers join ephemerally (auto-removed on close); the cluster stays connected so data syncs.
 
+  Provision the control-server droplet itself (droplet + stable reserved IP + locked-down firewall +
+  DNS, with cloud-init running `pctl mesh up` on first boot) with Terraform — see
+  [`deploy/terraform/`](../deploy/terraform/README.md).
+
 ---
 
 ## 7. Database: replication + point-in-time recovery
