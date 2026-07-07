@@ -1,7 +1,8 @@
-# MinIO — S3-compatible object store for job run reports/artifacts.
-# Single-node, PVC-backed: fine for dev/self-host. Credentials live in the placecontext-minio secret.
-# (It used to also hold PostgreSQL WAL/base backups; that archiving was removed after it filled the
-#  node disk. If you re-enable PITR, point CNPG at real, capacity-managed S3 — not this PVC.)
+# MinIO — S3-compatible object store for job run reports/artifacts and nightly DB dumps
+# (deploy/k3s/pg-backup.yaml, 7-day retention). Single-node, PVC-backed: fine for dev/self-host.
+# Credentials live in the placecontext-minio secret.
+# (Continuous WAL archiving/PITR was removed after it grew unbounded and filled the node disk;
+#  the retention-pruned dumps are the bounded replacement.)
 apiVersion: v1
 kind: Secret
 metadata:
