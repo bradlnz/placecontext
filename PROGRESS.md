@@ -131,10 +131,13 @@ in-cluster job execution. All committed on `main`; Go TUI builds + tests pass; H
 - **MCP stateless** Streamable-HTTP transport → reconnects don't 404.
 - **Traefik sticky sessions** → Blazor Server circuit (SignalR) works (fixed unclickable projects card).
 
-**Database HA + PITR** — `pctl db ha`: CloudNativePG operator + a 3-instance pgvector cluster
-(1 primary + 2 replicas, anti-affinity) + continuous backup/WAL archiving to **MinIO** + daily
-ScheduledBackup. `pctl db backup-now`, `db restore --time <ts> [--cutover]` (PITR into a new cluster),
-`db minio` (browse backups). Custom CNPG pgvector image `deploy/postgres/Dockerfile.cnpg`. Validated live.
+**Database HA + nightly dumps** — `pctl db ha`: CloudNativePG operator + a 3-instance pgvector
+cluster (1 primary + 2 replicas, anti-affinity). Backups are **bounded nightly dumps**: a CronJob
+(`deploy/k3s/pg-backup.yaml`) `pg_dumpall`s every database to MinIO at 03:00 with 7-day retention;
+`db backup-now` / `db backups` / `db restore [--dump KEY]`. Custom CNPG pgvector image
+`deploy/postgres/Dockerfile.cnpg`.
+*(The previous continuous WAL archiving + PITR was removed: it grew unbounded and filled the host
+disk. Re-add PITR only against capacity-managed real S3.)*
 
 **Mesh (multi-location fleet)** — `pctl server up`/`agent join` accept managed-Tailscale OAuth
 (`--ts-oauth-*`) **or** self-hosted Headscale (`--vpn-control`/`--vpn-authkey`) via k3s `--vpn-auth`.

@@ -1,6 +1,11 @@
 # Replicated, self-healing PostgreSQL (pgvector) via CloudNativePG — 1 primary + 2 hot-standby
-# replicas with streaming replication and automatic failover, spread across nodes by anti-affinity,
-# with continuous backup + point-in-time recovery to an object store (MinIO in dev; S3 in prod).
+# replicas with streaming replication and automatic failover, spread across nodes by anti-affinity.
+#
+# NOTE: continuous backup / WAL archiving to an object store is intentionally NOT configured here —
+# it accumulated WAL faster than it was pruned and filled the node disk. Database backups are the
+# bounded nightly dumps in deploy/k3s/pg-backup.yaml (7-day retention). If you ever want PITR back,
+# re-add a `backup:` + `barmanObjectStore` stanza (and a ScheduledBackup) pointed at real,
+# capacity-managed S3 — never the in-cluster MinIO PVC.
 #
 # Apps connect to:
 #   • placecontext-pg-rw  → the current primary (reads + writes)
@@ -31,25 +36,6 @@ spec:
       postInitSQL:
         - CREATE EXTENSION IF NOT EXISTS vector;
 
-  # Continuous backup → object store: base backups + WAL archiving give point-in-time recovery.
-  # endpointURL points at the in-cluster MinIO (deploy/k3s/minio.yaml); swap for real S3 in prod.
-  backup:
-    retentionPolicy: "30d"
-    barmanObjectStore:
-      destinationPath: s3://placecontext-backups/
-      endpointURL: http://minio:9000
-      s3Credentials:
-        accessKeyId:
-          name: placecontext-minio
-          key: ACCESS_KEY_ID
-        secretAccessKey:
-          name: placecontext-minio
-          key: ACCESS_SECRET_KEY
-      wal:
-        compression: gzip
-      data:
-        compression: gzip
-
   # Spread the 3 instances across different nodes for real HA.
   affinity:
     enablePodAntiAffinity: true
@@ -58,14 +44,3 @@ spec:
 
   storage:
     size: 2Gi
----
-# Daily base backup at 03:00; WAL is archived continuously between base backups for PITR.
-apiVersion: postgresql.cnpg.io/v1
-kind: ScheduledBackup
-metadata:
-  name: placecontext-pg-daily
-spec:
-  schedule: "0 0 3 * * *"
-  backupOwnerReference: self
-  cluster:
-    name: placecontext-pg

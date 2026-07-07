@@ -10,7 +10,7 @@ database and mesh. Everything is driven by one CLI, **`deploy/pctl`** (and its T
 - **PlaceContext Host** — the portal (Blazor) + MCP server (Streamable HTTP at `/mcp`) + job scheduler.
 - **PostgreSQL (pgvector)** — project data, decisions, context, embeddings (RAG).
 - **`pctl`** — a CLI that manages the whole lifecycle; **`pctl tui`** is a live dashboard.
-- Optional: **replicated Postgres + PITR backups**, a **WireGuard mesh** for multi-location fleets.
+- Optional: **replicated Postgres + nightly DB dumps**, a **WireGuard mesh** for multi-location fleets.
 
 ---
 
@@ -112,16 +112,23 @@ Two options, same `--vpn-*` plumbing:
 
 ---
 
-## 7. Database: replication + point-in-time recovery
+## 7. Database: replication + nightly dumps
 
 ```bash
-./deploy/pctl db ha            # CloudNativePG: 1 primary + 2 replicas + continuous backups (MinIO)
-./deploy/pctl db backup-now    # on-demand base backup
-./deploy/pctl db minio         # browse the backup store at http://localhost:9001
-./deploy/pctl db restore --time "2026-06-26 01:38:00+00" [--cutover]   # PITR into a new cluster
+./deploy/pctl db ha            # CloudNativePG: 1 primary + 2 replicas
+./deploy/pctl db backup-now    # dump all DBs to MinIO right now (nightly CronJob runs at 03:00)
+./deploy/pctl db backups       # list the dumps currently held (7-day retention)
+./deploy/pctl db restore       # restore from the latest dump (or --dump KEY); scales the app down/up
+./deploy/pctl db minio         # browse the store at http://localhost:9001
 ```
 
 App reads/writes go to `placecontext-pg-rw` (primary); read-only scale-out via `placecontext-pg-ro`.
+
+> **Backups are bounded by design.** The old continuous-backup pipeline (WAL archiving + PITR)
+> archived every write forever into the in-cluster MinIO and filled the host disk, so it was
+> replaced with a nightly gzipped `pg_dumpall`, pruned after 7 days (`RETENTION_DAYS` in
+> `deploy/k3s/pg-backup.yaml`). Worst case ≈ 7 compressed dumps on disk. The trade-off: you
+> restore to the nightly snapshot, not to an arbitrary instant.
 
 ---
 
