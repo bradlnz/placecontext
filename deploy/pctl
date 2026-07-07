@@ -410,18 +410,15 @@ cmd_ensure() {
   cmd_url
 }
 
-# ── db (replicated Postgres + PITR backups via CloudNativePG) ─────────────────────────────────────
+# ── db (replicated Postgres via CloudNativePG) ────────────────────────────────────────────────────
 PCTL_CNPG_MANIFEST="${PCTL_CNPG_MANIFEST:-https://raw.githubusercontent.com/cloudnative-pg/cloudnative-pg/release-1.24/releases/cnpg-1.24.1.yaml}"
 
 cmd_db() {
   local sub="${1:-}"; shift || true
   case "$sub" in
     ha)           cmd_db_ha "$@";;
-    backup-now)   cmd_db_backup "$@";;
-    restore)      cmd_db_restore "$@";;
-    restore-info) cmd_db_restore_info "$@";;
     minio)        cmd_db_minio "$@";;
-    *) die "unknown 'db' subcommand: '$sub' (try: ha | backup-now | restore --time TS | restore-info | minio)";;
+    *) die "unknown 'db' subcommand: '$sub' (try: ha | minio)";;
   esac
 }
 
@@ -442,7 +439,7 @@ cmd_minio_open() {
   ok "Opened ${dst}"
 }
 
-# Expose the in-cluster MinIO (backup store) on localhost so you can browse backups from your machine.
+# Expose the in-cluster MinIO (run reports/artifacts store) on localhost so you can browse it.
 cmd_db_minio() {
   resolve_ctx
   local creds; creds="$(kube -n "$PCTL_NAMESPACE" get secret placecontext-minio -o jsonpath='{.data.ACCESS_KEY_ID}' 2>/dev/null | base64 -d 2>/dev/null || true)"
@@ -451,75 +448,14 @@ cmd_db_minio() {
   kube -n "$PCTL_NAMESPACE" port-forward svc/minio 9001:9001 9000:9000
 }
 
-# Point-in-time recovery: spin up a NEW cluster recovered from the backups to the given instant, then
-# (optionally) cut the app over to it. Non-destructive — the live cluster is untouched until you switch.
-cmd_db_restore() {
-  local ttime="" name="placecontext-pg-restored" cutover=0
-  while [ $# -gt 0 ]; do
-    case "$1" in
-      --time)    ttime="$2"; shift 2;;
-      --name)    name="$2"; shift 2;;
-      --cutover) cutover=1; shift;;
-      *) die "db restore: unknown arg $1";;
-    esac
-  done
-  [ -n "$ttime" ] || die "db restore needs --time \"YYYY-MM-DD HH:MM:SS+00\" (the instant to recover to)"
-  resolve_ctx
-  say "Recovering a new cluster '${name}' to ${ttime}…"
-  cat <<EOF | kube -n "$PCTL_NAMESPACE" apply -f -
-apiVersion: postgresql.cnpg.io/v1
-kind: Cluster
-metadata:
-  name: ${name}
-spec:
-  instances: 3
-  imageName: ghcr.io/bradlnz/placecontext-pg:16-pgvector
-  enableSuperuserAccess: true
-  superuserSecret: { name: placecontext-pg-superuser }
-  storage: { size: 2Gi }
-  bootstrap:
-    recovery:
-      source: placecontext-pg
-      recoveryTarget:
-        targetTime: "${ttime}"
-  externalClusters:
-    - name: placecontext-pg
-      barmanObjectStore:
-        destinationPath: s3://placecontext-backups/
-        endpointURL: http://minio:9000
-        s3Credentials:
-          accessKeyId:     { name: placecontext-minio, key: ACCESS_KEY_ID }
-          secretAccessKey: { name: placecontext-minio, key: ACCESS_SECRET_KEY }
-EOF
-  say "Waiting for the recovered cluster to become healthy…"
-  local i ready
-  for i in $(seq 1 90); do
-    ready="$(kube -n "$PCTL_NAMESPACE" get cluster "$name" -o jsonpath='{.status.readyInstances}' 2>/dev/null || true)"
-    [ "$ready" = "3" ] && break
-    sleep 5
-  done
-  [ "$ready" = "3" ] || die "recovered cluster '${name}' not healthy yet (ready='${ready:-0}'); check: kubectl -n $PCTL_NAMESPACE get cluster $name"
-  ok "Recovered '${name}' to ${ttime}."
-  if [ "$cutover" = 1 ]; then
-    say "Cutting the app over to '${name}-rw'…"
-    kube -n "$PCTL_NAMESPACE" set env deploy/placecontext \
-      "PlaceContext__ConnectionString=Host=${name}-rw;Port=5432;Database=placecontext;Username=postgres;Password=postgres"
-    kube -n "$PCTL_NAMESPACE" rollout status deploy/placecontext --timeout=240s
-    ok "App now using the recovered database."
-  else
-    echo "  Verify it, then cut over:  pctl db restore --time \"${ttime}\" --name ${name} --cutover"
-    echo "  (or point the app at ${name}-rw yourself)"
-  fi
-}
-
-# Stand up replicated Postgres (1 primary + 2 replicas) with PITR backups, and point the app at it.
+# Stand up replicated Postgres (1 primary + 2 replicas), and point the app at it.
 cmd_db_ha() {
   resolve_ctx
   say "Installing the CloudNativePG operator…"
   kube apply --server-side -f "$PCTL_CNPG_MANIFEST" >/dev/null
   kube -n cnpg-system rollout status deploy/cnpg-controller-manager --timeout=180s
 
-  say "Object store (MinIO) for backups…"
+  say "Object store (MinIO) for run reports/artifacts…"
   kube -n "$PCTL_NAMESPACE" apply -f "$K3S_DIR/minio.yaml"
   kube -n "$PCTL_NAMESPACE" rollout status deploy/minio --timeout=180s
 
@@ -528,7 +464,7 @@ cmd_db_ha() {
     --type=kubernetes.io/basic-auth --from-literal=username=postgres --from-literal=password=postgres \
     --dry-run=client -o yaml | kube apply -f -
 
-  say "Replicated cluster + scheduled backups…"
+  say "Replicated cluster…"
   kube -n "$PCTL_NAMESPACE" apply -f "$K3S_DIR/postgres-ha.yaml"
   say "Waiting for the cluster to become healthy (3 instances)…"
   local i ready
@@ -543,53 +479,7 @@ cmd_db_ha() {
   kube -n "$PCTL_NAMESPACE" set env deploy/placecontext \
     "PlaceContext__ConnectionString=Host=placecontext-pg-rw;Port=5432;Database=placecontext;Username=postgres;Password=postgres"
   kube -n "$PCTL_NAMESPACE" rollout status deploy/placecontext --timeout=240s
-  ok "Replicated Postgres + PITR active. Reads can also use placecontext-pg-ro."
-}
-
-cmd_db_backup() {
-  resolve_ctx
-  local name="manual-$(date +%s 2>/dev/null || echo now)"
-  say "Triggering an on-demand base backup…"
-  cat <<EOF | kube -n "$PCTL_NAMESPACE" apply -f -
-apiVersion: postgresql.cnpg.io/v1
-kind: Backup
-metadata:
-  name: placecontext-pg-${name}
-spec:
-  cluster:
-    name: placecontext-pg
-EOF
-  ok "Backup '${name}' requested — watch: kubectl -n $PCTL_NAMESPACE get backup"
-}
-
-cmd_db_restore_info() {
-  cat <<'EOF'
-Point-in-time recovery (PITR) — restore into a NEW cluster, then cut over:
-
-  apiVersion: postgresql.cnpg.io/v1
-  kind: Cluster
-  metadata: { name: placecontext-pg-restored }
-  spec:
-    instances: 3
-    imageName: ghcr.io/bradlnz/placecontext-pg:16-pgvector
-    superuserSecret: { name: placecontext-pg-superuser }
-    bootstrap:
-      recovery:
-        source: placecontext-pg
-        recoveryTarget:
-          targetTime: "2026-06-26 01:38:00+00"   # the moment to recover to
-    externalClusters:
-      - name: placecontext-pg
-        barmanObjectStore:
-          destinationPath: s3://placecontext-backups/
-          endpointURL: http://minio:9000
-          s3Credentials:
-            accessKeyId:     { name: placecontext-minio, key: ACCESS_KEY_ID }
-            secretAccessKey: { name: placecontext-minio, key: ACCESS_SECRET_KEY }
-
-Apply it, wait until healthy, then repoint the app:
-  pctl … set env deploy/placecontext PlaceContext__ConnectionString=Host=placecontext-pg-restored-rw;...
-EOF
+  ok "Replicated Postgres active. Reads can also use placecontext-pg-ro."
 }
 
 # ── mesh (self-hosted WireGuard control plane via Headscale) ──────────────────────────────────────
@@ -930,11 +820,8 @@ ${C_BOLD}ANYWHERE${C_RESET}
   deploy [--image IMG] [--context CTX]
                          Apply the manifests to the current (or given) kube context
   kill pod|node|job NAME [--yes]   Delete a pod / k3d node / job (prompts unless --yes)
-  db ha                  Replicated Postgres (1 primary + 2 replicas) + PITR backups via CloudNativePG
-  db backup-now          Trigger an on-demand base backup
-  db restore --time TS [--name N] [--cutover]   Recover a new cluster to a point in time (PITR)
-  db restore-info        Print the manual PITR recipe
-  db minio               Port-forward the MinIO backup store to localhost (console :9001)
+  db ha                  Replicated Postgres (1 primary + 2 replicas) via CloudNativePG
+  db minio               Port-forward the MinIO reports/artifacts store to localhost (console :9001)
   minio open BUCKET/KEY  Download a MinIO object and open it (e.g. a report's HTML)
   ensure                 Bring the whole stack up idempotently (start/create cluster + apply + wait)
   autostart [--disable]  Run 'ensure' on boot (k3d → systemd user service; k3s → already a service)

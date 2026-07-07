@@ -1,6 +1,7 @@
-# MinIO — S3-compatible object store for PostgreSQL backups / WAL archiving (PITR).
-# Single-node, PVC-backed: fine for dev/self-host. For multi-region prod, point CNPG at real S3/GCS
-# instead and drop this. Credentials live in the placecontext-minio secret (shared with CNPG).
+# MinIO — S3-compatible object store for job run reports/artifacts.
+# Single-node, PVC-backed: fine for dev/self-host. Credentials live in the placecontext-minio secret.
+# (It used to also hold PostgreSQL WAL/base backups; that archiving was removed after it filled the
+#  node disk. If you re-enable PITR, point CNPG at real, capacity-managed S3 — not this PVC.)
 apiVersion: v1
 kind: Secret
 metadata:
@@ -68,9 +69,8 @@ spec:
           args:
             - |
               until mc alias set m http://minio:9000 "$AKID" "$ASK"; do echo waiting for minio; sleep 3; done
-              mc mb --ignore-existing m/placecontext-backups
               mc mb --ignore-existing m/placecontext-reports
-              echo "buckets ready"
+              echo "bucket ready"
           env:
             - { name: AKID, valueFrom: { secretKeyRef: { name: placecontext-minio, key: ACCESS_KEY_ID } } }
             - { name: ASK, valueFrom: { secretKeyRef: { name: placecontext-minio, key: ACCESS_SECRET_KEY } } }

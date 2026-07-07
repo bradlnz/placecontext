@@ -10,7 +10,7 @@ database and mesh. Everything is driven by one CLI, **`deploy/pctl`** (and its T
 - **PlaceContext Host** — the portal (Blazor) + MCP server (Streamable HTTP at `/mcp`) + job scheduler.
 - **PostgreSQL (pgvector)** — project data, decisions, context, embeddings (RAG).
 - **`pctl`** — a CLI that manages the whole lifecycle; **`pctl tui`** is a live dashboard.
-- Optional: **replicated Postgres + PITR backups**, a **WireGuard mesh** for multi-location fleets.
+- Optional: **replicated Postgres**, a **WireGuard mesh** for multi-location fleets.
 
 ---
 
@@ -112,16 +112,18 @@ Two options, same `--vpn-*` plumbing:
 
 ---
 
-## 7. Database: replication + point-in-time recovery
+## 7. Database: replication
 
 ```bash
-./deploy/pctl db ha            # CloudNativePG: 1 primary + 2 replicas + continuous backups (MinIO)
-./deploy/pctl db backup-now    # on-demand base backup
-./deploy/pctl db minio         # browse the backup store at http://localhost:9001
-./deploy/pctl db restore --time "2026-06-26 01:38:00+00" [--cutover]   # PITR into a new cluster
+./deploy/pctl db ha            # CloudNativePG: 1 primary + 2 replicas
+./deploy/pctl db minio         # browse the reports/artifacts store at http://localhost:9001
 ```
 
 App reads/writes go to `placecontext-pg-rw` (primary); read-only scale-out via `placecontext-pg-ro`.
+
+> **Note:** continuous backups / PITR were removed — WAL archiving into the in-cluster MinIO grew
+> unbounded and filled the host disk. HA replication (above) still protects against node loss. If
+> you want PITR back, archive to real, capacity-managed S3, never to a local PVC.
 
 ---
 
