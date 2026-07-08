@@ -50,6 +50,16 @@ public sealed class EfJobRunRepository : IJobRunRepository
         return rows.Select(ToDomain).ToList();
     }
 
+    public async Task<IReadOnlyList<JobRun>> ListRecentAsync(int take, CancellationToken ct = default)
+    {
+        // Cross-job, newest first; tenant isolation comes from the global query filter on JobRuns.
+        var rows = await _db.JobRuns.AsNoTracking()
+            .OrderByDescending(r => r.StartedAt)
+            .Take(Math.Clamp(take, 1, 200))
+            .ToListAsync(ct);
+        return rows.Select(ToDomain).ToList();
+    }
+
     private static JobRunRow ToRow(JobRun run) => new()
     {
         Id = run.Id,

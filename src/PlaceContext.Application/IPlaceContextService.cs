@@ -63,6 +63,7 @@ public interface IPlaceContextService
     Task<IReadOnlyList<JobRunView>> ListJobRunsAsync(Guid jobId, CancellationToken ct = default);
     Task<JobRunDetailView?> GetJobRunAsync(Guid runId, CancellationToken ct = default);
     Task<IReadOnlyList<RunArtifactLinkView>> ListRunArtifactsAsync(Guid runId, CancellationToken ct = default);
+    Task<IReadOnlyList<RunReportView>> ListRecentRunReportsAsync(int take = 24, CancellationToken ct = default);
     Task<JobView?> GetJobAsync(Guid jobId, CancellationToken ct = default);
     Task<JobView> UploadJobCodeAsync(UploadJobCodeCommand command, CancellationToken ct = default);
 

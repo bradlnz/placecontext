@@ -168,6 +168,9 @@ public sealed class PlaceContextService : IPlaceContextService
     public Task<IReadOnlyList<RunArtifactLinkView>> ListRunArtifactsAsync(Guid runId, CancellationToken ct = default)
         => _dispatcher.Query(new ListRunArtifactsQuery(runId), ct);
 
+    public Task<IReadOnlyList<RunReportView>> ListRecentRunReportsAsync(int take = 24, CancellationToken ct = default)
+        => _dispatcher.Query(new ListRecentRunReportsQuery(take), ct);
+
     public Task<JobView?> GetJobAsync(Guid jobId, CancellationToken ct = default)
         => _dispatcher.Query(new GetJobQuery(jobId), ct);
 

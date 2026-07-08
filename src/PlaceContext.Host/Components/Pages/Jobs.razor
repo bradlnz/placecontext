@@ -465,6 +465,11 @@ else
                     @if (shard.Artifact is not null)
                     {
                         <pre style="background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:10px; font-size:11px; font-family:'Geist Mono',monospace; overflow-x:auto; white-space:pre-wrap; word-break:break-all; color:var(--text-2); max-height:240px; overflow-y:auto">@PrettyJson(shard.Artifact)</pre>
+                        @if (ArtifactChart.TrySvg(shard.Artifact, out var shardChart))
+                        {
+                            <div style="font-size:11px; color:var(--text-3); margin-top:8px">chart <span style="color:var(--text-3)">(from the artifact's JSON)</span></div>
+                            @((MarkupString)shardChart)
+                        }
                     }
                     else
                     {
@@ -504,6 +509,11 @@ else
                     @if (reduce.Artifact is not null)
                     {
                         <pre style="background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:10px; font-size:11px; font-family:'Geist Mono',monospace; overflow-x:auto; white-space:pre-wrap; word-break:break-all; color:var(--text-2); max-height:300px; overflow-y:auto">@PrettyJson(reduce.Artifact)</pre>
+                        @if (ArtifactChart.TrySvg(reduce.Artifact, out var reduceChart))
+                        {
+                            <div style="font-size:11px; color:var(--text-3); margin-top:8px">chart <span style="color:var(--text-3)">(from the artifact's JSON)</span></div>
+                            @((MarkupString)reduceChart)
+                        }
                     }
                     @if (reduce.Artifacts.Count > 0)
                     {

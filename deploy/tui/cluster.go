@@ -148,12 +148,12 @@ var worldMap = [24]string{
 	"        ####  #       ########## #### #####     ",
 	"          ###         #########  ### #####      ",
 	"           ##         #########  ##  ## #       ",
-	"             #####       #####      #######     ",
-	"             #######     #####       ########   ",
-	"              ######     #####         #######  ",
-	"              #####      #### #       ########  ",
-	"               ####       ### #       ########  ",
-	"               ##         ###          ###### ##",
+	"             #####       #####      ### ###     ",
+	"             #######     #####       ###  ####  ",
+	"              ######     #####          ###     ",
+	"              #####      #### #        ######   ",
+	"               ####       ### #        ######   ",
+	"               ##         ###          #####  ##",
 	"              ###                          #  ##",
 	"              ##                             ## ",
 	"              #                                 ",
@@ -311,8 +311,9 @@ func (m model) clusterPanel(width, rows int) string {
 	cx, cy := w/2, h/2
 
 	// planet (clean circle, centred); horizontal radius 2× vertical to offset the ~2:1 cell aspect.
-	// Base radius 8, scaled by the user's zoom (+/-), then shrunk to what the pane can hold.
-	planetRy := int(8*m.clZoom + 0.5)
+	// Base radius 6, scaled by the user's zoom (+/-), then shrunk to what the pane can hold —
+	// big enough for the continents to read, small enough that the list beside it never wraps.
+	planetRy := int(6*m.clZoom + 0.5)
 	if hr := (h - 3) / 2; planetRy > hr {
 		planetRy = hr
 	}

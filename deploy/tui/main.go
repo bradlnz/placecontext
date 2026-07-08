@@ -1313,7 +1313,7 @@ func (m model) dashboard() string {
 	} else if rows > 26 {
 		rows = 26
 	}
-	leftW := m.w * 11 / 20 // cluster ~55%: the globe needs the width; the list wraps fine
+	leftW := m.w / 2 // cluster and the node/pod/job list share the width evenly
 	if leftW < 36 {
 		leftW = 36
 	}
@@ -1360,7 +1360,8 @@ func (m model) listBody() string {
 		b.WriteString(dimStyle.Render("    (no pods in namespace "+ns+")") + "\n")
 	}
 	for _, p := range m.state.pods {
-		plain := pad(trunc(p.Name, 33), 34) + pad(p.Ready, 7) + pad(p.Status, 10) + pad(fmt.Sprintf("%d", p.Restarts), 10) + p.Node
+		// shortName keeps the NODE column narrow so rows never wrap beside the globe.
+		plain := pad(trunc(p.Name, 33), 34) + pad(p.Ready, 7) + pad(p.Status, 10) + pad(fmt.Sprintf("%d", p.Restarts), 10) + shortName(p.Node)
 		if m.selected(gi) {
 			b.WriteString(selStyle.Render("❯ "+plain) + "\n")
 		} else {
@@ -1374,29 +1375,38 @@ func (m model) listBody() string {
 			if p.Restarts > 0 {
 				rs = warnStyle.Render(rs)
 			}
-			b.WriteString("  " + pad(trunc(p.Name, 33), 34) + pad(p.Ready, 7) + st + rs + dimStyle.Render(p.Node) + "\n")
+			b.WriteString("  " + pad(trunc(p.Name, 33), 34) + pad(p.Ready, 7) + st + rs + dimStyle.Render(shortName(p.Node)) + "\n")
 		}
 		gi++
 	}
 	b.WriteString("\n")
 
-	// jobs
-	b.WriteString("  " + headStyle.Render(pad("JOB", 34)+pad("SOURCE", 9)+pad("CONC", 6)+pad("EGRESS", 8)+"UPDATED") + "\n")
+	// jobs — a job's purpose is the artifacts it generates, so that column leads; open a
+	// job (⏎ → run → [o]) to get at the artifacts themselves.
+	b.WriteString("  " + headStyle.Render(pad("JOB", 28)+pad("ARTIFACTS", 11)+pad("SOURCE", 8)+pad("CONC", 5)+pad("EGRESS", 8)+"UPDATED") + "\n")
 	if m.state.jobsErr != "" {
 		b.WriteString(dimStyle.Render("    "+m.state.jobsErr) + "\n")
 	} else if len(m.state.jobs) == 0 {
-		b.WriteString(dimStyle.Render("    (no jobs defined)") + "\n")
+		b.WriteString(dimStyle.Render("    (no jobs defined — jobs run code and generate artifacts: reports, charts, CSVs)") + "\n")
 	}
 	for _, j := range m.state.jobs {
-		plain := pad(trunc(j.name, 33), 34) + pad(j.source, 9) + pad(j.conc, 6) + pad(j.egress, 8) + j.updated
+		upd := j.updated
+		if len(upd) > 10 {
+			upd = upd[:10] // date is enough here; the run history has exact times
+		}
+		plain := pad(trunc(j.name, 27), 28) + pad(j.artifacts, 11) + pad(j.source, 8) + pad(j.conc, 5) + pad(j.egress, 8) + upd
 		if m.selected(gi) {
 			b.WriteString(selStyle.Render("❯ "+plain) + "\n")
 		} else {
+			arts := dimStyle.Render(pad(j.artifacts, 11))
+			if j.artifacts != "-" {
+				arts = okStyle.Render(pad(j.artifacts, 11))
+			}
 			eg := okStyle.Render(pad(j.egress, 8))
 			if j.egress == "yes" {
 				eg = warnStyle.Render(pad(j.egress, 8))
 			}
-			b.WriteString("  " + pad(trunc(j.name, 33), 34) + pad(j.source, 9) + pad(j.conc, 6) + eg + dimStyle.Render(j.updated) + "\n")
+			b.WriteString("  " + pad(trunc(j.name, 27), 28) + arts + pad(j.source, 8) + pad(j.conc, 5) + eg + dimStyle.Render(upd) + "\n")
 		}
 		gi++
 	}

@@ -206,9 +206,11 @@ func renderRunDetail(r runRow, shardsJSON, reduceJSON string) string {
 			b.WriteString(fmt.Sprintf("## shard %d — %s (exit %d)\n\n", s.Index, s.Outcome, s.ExitCode))
 			b.WriteString(renderStream("console (stdout/stderr)", s.Log))
 			b.WriteString(renderStream("artifact", s.Artifact))
+			b.WriteString(renderChart(s.Artifact))
 			for _, a := range s.Artifacts {
 				c := a.Content
 				b.WriteString(renderStream("file: "+a.Name, &c))
+				b.WriteString(renderChart(&c))
 			}
 		}
 	}
@@ -223,6 +225,7 @@ func renderRunDetail(r runRow, shardsJSON, reduceJSON string) string {
 			b.WriteString(fmt.Sprintf("## reduce — %s (exit %d)\n\n", state, rd.ExitCode))
 			b.WriteString(renderStream("console (stdout/stderr)", rd.Log))
 			b.WriteString(renderStream("artifact", rd.Artifact))
+			b.WriteString(renderChart(rd.Artifact))
 		}
 	}
 	return b.String()
@@ -234,6 +237,18 @@ func renderStream(label string, content *string) string {
 		return "_" + label + ": (none)_\n\n"
 	}
 	return "**" + label + "**\n\n```\n" + strings.TrimRight(*content, "\n") + "\n```\n\n"
+}
+
+// renderChart charts a JSON artifact's numeric series (see artchart.go); "" when it isn't one.
+func renderChart(content *string) string {
+	if content == nil {
+		return ""
+	}
+	c := chartFromJSON(*content)
+	if c == "" {
+		return ""
+	}
+	return "**chart** _(from the artifact's JSON)_\n\n```\n" + strings.TrimRight(c, "\n") + "\n```\n\n"
 }
 
 func shortID(id string) string {

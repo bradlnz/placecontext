@@ -14,6 +14,7 @@ import (
 type jobRow struct {
 	id, tenant, name, source, conc, egress, updated, timeout string
 	postJobActions                                           string // JSON array, e.g. ["HtmlReport","Chart"]; empty = none
+	artifacts                                                string // artifacts produced across this job's runs — the job's raison d'être
 }
 
 // uuidRe matches a canonical UUID. All ids/tenant ids interpolated into psql come from the jobs table
@@ -45,6 +46,20 @@ func (m model) queryJobs(ctx context.Context) ([]jobRow, string) {
 	if err != nil {
 		return nil, "could not query jobs: " + err.Error()
 	}
+
+	// Jobs exist to generate artifacts — count what each job has produced so the list leads
+	// with output, not config. Older DBs without the artifacts table just show "-".
+	counts := map[string]string{}
+	if cb, cerr := m.kubectl(ctx, "-n", ns, "exec", "deploy/placecontext-db", "--",
+		"psql", "-U", "postgres", "-d", "placecontext", "-At", "-F", "\t", "-c",
+		`SELECT r."JobId", count(*) FROM job_run_artifacts a JOIN job_runs r ON a."RunId" = r."Id" GROUP BY r."JobId"`); cerr == nil {
+		for _, ln := range strings.Split(strings.TrimSpace(string(cb)), "\n") {
+			if f := strings.Split(ln, "\t"); len(f) == 2 {
+				counts[f[0]] = f[1]
+			}
+		}
+	}
+
 	var rows []jobRow
 	for _, ln := range strings.Split(strings.TrimSpace(string(b)), "\n") {
 		if ln == "" {
@@ -70,7 +85,11 @@ func (m model) queryJobs(ctx context.Context) ([]jobRow, string) {
 		if strings.TrimSpace(acts) == "" {
 			acts = "[]"
 		}
-		rows = append(rows, jobRow{f[0], f[1], f[2], f[3], f[4], eg, upd, to, acts})
+		arts := counts[f[0]]
+		if arts == "" {
+			arts = "-"
+		}
+		rows = append(rows, jobRow{f[0], f[1], f[2], f[3], f[4], eg, upd, to, acts, arts})
 	}
 	return rows, ""
 }

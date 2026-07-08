@@ -94,6 +94,36 @@
             </div>
         </div>
     }
+
+    @* ── Job data: the global chart view. Every recent run's JSON artifacts are ingested and any
+       numeric series becomes a chart card — jobs exist to generate artifacts, and this is where
+       all of that output lands in one place. ── *@
+    <div style="display:flex; align-items:center; gap:9px; margin:24px 0 10px">
+        <h3 style="font-size:13px; font-weight:600; margin:0">Job data</h3>
+        <span style="font-size:11px; color:var(--text-3)">charts from recent job-run artifacts, across all projects</span>
+    </div>
+    @if (_jobCharts.Count == 0)
+    {
+        <div class="dccard" style="padding:14px 15px; font-size:12px; color:var(--text-3)">
+            No chartable job output yet — when a run's artifact is JSON carrying a numeric series
+            (e.g. <code>[{"day":"mon","total":12}, …]</code>), its chart appears here automatically.
+        </div>
+    }
+    else
+    {
+        <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(320px, 1fr)); gap:12px">
+            @foreach (var c in _jobCharts)
+            {
+                <div class="dccard" style="padding:12px 14px">
+                    <div style="display:flex; align-items:baseline; justify-content:space-between; gap:8px; margin-bottom:2px">
+                        <a href="@($"/project/{c.ProjectId}/jobs")" style="font-size:12.5px; font-weight:600; color:var(--text)">@c.JobName</a>
+                        <span style="font-size:10.5px; color:var(--text-3)">@c.Source · @c.StartedAt.ToLocalTime().ToString("MM-dd HH:mm")</span>
+                    </div>
+                    @((MarkupString)c.Svg)
+                </div>
+            }
+        </div>
+    }
 </div>
 
 @code {
@@ -107,6 +137,45 @@
     private ReportView? _report;
 
     private ReportTemplateView? _selectedTemplate => _templates.FirstOrDefault(t => t.Name == _template);
+
+    // ── Job data (global chart view) ──────────────────────────────────────────────────────────
+    private sealed record JobChartCard(string JobName, Guid ProjectId, DateTimeOffset StartedAt, string Source, string Svg);
+    private List<JobChartCard> _jobCharts = new();
+
+    private const int MaxChartCards = 12;
+    private const int MaxChartsPerRun = 2;
+
+    /// <summary>Ingest recent runs and extract every chartable JSON artifact into a card.</summary>
+    private async Task LoadJobChartsAsync()
+    {
+        var reports = await Svc.ListRecentRunReportsAsync(24);
+        var cards = new List<JobChartCard>();
+        foreach (var r in reports)
+        {
+            var seen = new HashSet<string>(); // identical shard outputs chart once per run
+            var fromThisRun = 0;
+            void TryAdd(string? payload, string source)
+            {
+                if (fromThisRun >= MaxChartsPerRun || cards.Count >= MaxChartCards) return;
+                if (!ArtifactChart.TrySvg(payload, out var svg) || !seen.Add(svg)) return;
+                cards.Add(new JobChartCard(r.JobName, r.Run.ProjectId, r.Run.StartedAt, source, svg));
+                fromThisRun++;
+            }
+
+            foreach (var s in r.Run.ShardResults)
+            {
+                TryAdd(s.Artifact, $"shard {s.Index}");
+                foreach (var a in s.Artifacts) TryAdd(a.Content, a.Name);
+            }
+            if (r.Run.ReduceResult is { } red)
+            {
+                TryAdd(red.Artifact, "reduce");
+                foreach (var a in red.Artifacts) TryAdd(a.Content, a.Name);
+            }
+            if (cards.Count >= MaxChartCards) break;
+        }
+        _jobCharts = cards;
+    }
 
     private static readonly Markdig.MarkdownPipeline _md =
         new Markdig.MarkdownPipelineBuilder().UseAdvancedExtensions().Build();
@@ -145,6 +214,7 @@
         {
             _projects = await Svc.GetProjectsAsync();
             _templates = await Svc.ListReportTemplatesAsync();
+            await LoadJobChartsAsync();
         }
         catch (Exception ex) { _message = ex.Message; }
     }
