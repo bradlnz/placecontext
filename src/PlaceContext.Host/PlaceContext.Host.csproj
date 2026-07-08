@@ -24,6 +24,7 @@
 
   <ItemGroup>
     <Content Include="Auth\templates\*.html" CopyToOutputDirectory="PreserveNewest" />
+    <EmbeddedResource Include="Wiki\*.md" />
   </ItemGroup>
 
 </Project>
