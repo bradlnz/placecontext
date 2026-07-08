@@ -1,0 +1,173 @@
+@page "/project/{ProjectId:guid}/data"
+@inject IPlaceContextService Svc
+@inject PortalUiState Ui
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+@using PlaceContext.Application.Ports
+
+<PageTitle>PlaceContext — Data</PageTitle>
+
+<div style="padding:20px 24px 40px; max-width:1320px; margin:0 auto">
+
+    <button class="dcbtn" style="border:none; background:none; color:var(--text-3); padding:4px 0; margin-bottom:14px"
+            @onclick="@(() => Nav.NavigateTo($"/project/{ProjectId}"))">← Back to project</button>
+
+    <div style="display:flex; align-items:baseline; justify-content:space-between; margin-bottom:6px">
+        <h2 style="font-size:18px; font-weight:600; margin:0">Data</h2>
+        <span style="font-size:11.5px; color:var(--text-3)">this project's own database — create tables, store data, query it with SQL</span>
+    </div>
+    @if (_monacoLite)
+    {
+        <div style="font-size:11px; color:var(--warn); margin-bottom:6px">basic editor (Monaco CDN unreachable) — SQL still runs.</div>
+    }
+
+    <div style="display:flex; gap:14px; margin-top:12px">
+
+        @* ── Tables ─────────────────────────────────────────────────────────────────────── *@
+        <div style="width:230px; flex:none">
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px">
+                <span style="font-size:11px; text-transform:uppercase; letter-spacing:.5px; color:var(--text-3)">Tables</span>
+                <button class="dcbtn" style="padding:2px 8px; font-size:11px" @onclick="RefreshTablesAsync" title="Refresh">↻</button>
+            </div>
+            @if (_tables.Count == 0)
+            {
+                <div style="font-size:11.5px; color:var(--text-3); line-height:1.5">
+                    No tables yet — run a<br /><code>CREATE TABLE …</code> to start.
+                </div>
+            }
+            @foreach (var t in _tables)
+            {
+                <div class="dccard" style="padding:8px 10px; margin-bottom:6px; cursor:pointer; display:flex; justify-content:space-between; align-items:baseline"
+                     @onclick="@(() => SelectTableAsync(t.Name))" title="SELECT the first rows">
+                    <span style="font-size:12px; font-family:'Geist Mono',monospace">@t.Name</span>
+                    <span style="font-size:10.5px; color:var(--text-3)">~@t.RowEstimate</span>
+                </div>
+            }
+        </div>
+
+        @* ── Query + results ────────────────────────────────────────────────────────────── *@
+        <div style="flex:1; min-width:0">
+            <div id="@EditorId" style="height:220px; border:1px solid var(--border); border-radius:8px; overflow:hidden"></div>
+            <div style="display:flex; align-items:center; gap:10px; margin:10px 0 14px">
+                <button class="dcbtn primary" disabled="@_running" @onclick="RunAsync">@(_running ? "Running…" : "▶ Run (SQL)")</button>
+                @if (_error is not null)
+                {
+                    <span style="font-size:12px; color:var(--bad)">@_error</span>
+                }
+                else if (_result is not null && _result.Columns.Count == 0)
+                {
+                    <span style="font-size:12px; color:var(--good)">OK — @_result.AffectedRows row(s) affected.</span>
+                }
+                else if (_result is not null)
+                {
+                    <span style="font-size:12px; color:var(--text-3)">
+                        @_result.Rows.Count row(s)@(_result.Truncated ? " (truncated at 500)" : "")@(_result.AffectedRows > 0 ? $" · {_result.AffectedRows} affected" : "")
+                    </span>
+                }
+            </div>
+
+            @if (_result is { Columns.Count: > 0 })
+            {
+                <div style="overflow:auto; max-height:480px; border:1px solid var(--border); border-radius:8px">
+                    <table style="border-collapse:collapse; width:100%; font-size:12px">
+                        <thead>
+                            <tr>
+                                @foreach (var c in _result.Columns)
+                                {
+                                    <th style="position:sticky; top:0; background:var(--card-2); text-align:left; padding:7px 10px; font-weight:600; border-bottom:1px solid var(--border); white-space:nowrap">@c</th>
+                                }
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var row in _result.Rows)
+                            {
+                                <tr>
+                                    @foreach (var cell in row)
+                                    {
+                                        <td style="padding:6px 10px; border-bottom:1px solid var(--border); font-family:'Geist Mono',monospace; color:@(cell is null ? "var(--text-3)" : "var(--text-2)"); white-space:nowrap; max-width:340px; overflow:hidden; text-overflow:ellipsis">
+                                            @(cell ?? "∅")
+                                        </td>
+                                    }
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public Guid ProjectId { get; set; }
+
+    private const string EditorId = "pcdata-editor";
+    private const string StarterSql =
+        "-- This project's own database. Standard SQL — a few ideas:\n" +
+        "--   CREATE TABLE readings (at timestamptz DEFAULT now(), sensor text, value numeric);\n" +
+        "--   INSERT INTO readings (sensor, value) VALUES ('door', 21.5);\n" +
+        "--   SELECT sensor, avg(value) FROM readings GROUP BY sensor;\n\n";
+
+    private IReadOnlyList<ProjectTableInfo> _tables = Array.Empty<ProjectTableInfo>();
+    private ProjectQueryResult? _result;
+    private string? _error;
+    private bool _running;
+    private bool _monacoReady;
+    private bool _monacoLite;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        Ui.Set("Data", "the project's own database");
+        await RefreshTablesAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_monacoReady) return;
+        _monacoReady = true;
+        try
+        {
+            var rich = await JS.InvokeAsync<bool>("pcmonaco.init", EditorId, StarterSql, "sql", "vs-dark");
+            if (!rich) { _monacoLite = true; StateHasChanged(); }
+        }
+        catch { _monacoLite = true; StateHasChanged(); }
+    }
+
+    private async Task RefreshTablesAsync()
+    {
+        try { _tables = await Svc.ListProjectDataTablesAsync(ProjectId); }
+        catch (Exception ex) { _error = ex.Message; }
+    }
+
+    private async Task RunAsync()
+    {
+        _running = true;
+        _error = null;
+        try
+        {
+            var sql = await JS.InvokeAsync<string>("pcmonaco.getValue", EditorId);
+            _result = await Svc.ExecuteProjectDataAsync(ProjectId, sql);
+            await RefreshTablesAsync(); // DDL/DML may have changed the table list or row counts
+        }
+        catch (Exception ex)
+        {
+            _result = null;
+            _error = Trim(ex.Message);
+        }
+        finally { _running = false; }
+    }
+
+    private async Task SelectTableAsync(string table)
+    {
+        var sql = $"SELECT * FROM \"{table.Replace("\"", "\"\"")}\" LIMIT 100;";
+        try { await JS.InvokeVoidAsync("pcmonaco.setValue", EditorId, sql, "sql"); } catch { }
+        await RunAsync();
+    }
+
+    // Npgsql prefixes errors with exception type noise; keep the Postgres message.
+    private static string Trim(string message)
+    {
+        var i = message.IndexOf(": ", StringComparison.Ordinal);
+        return message.Length > 400 ? message[..400] + "…" : message;
+    }
+}

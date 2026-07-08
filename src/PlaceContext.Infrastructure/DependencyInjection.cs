@@ -142,6 +142,9 @@ public static class DependencyInjection
         // configured, deterministic signals otherwise) and queues "what to do next" as work items.
         services.AddHostedService<Scheduling.ProjectAgentSchedulerService>();
 
+        // Each project's own database (Postgres schema + role isolation; Monaco SQL in the portal).
+        services.AddScoped<IProjectDataStore, ProjectData.NpgsqlProjectDataStore>();
+
         return services;
     }
 
