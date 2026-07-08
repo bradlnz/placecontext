@@ -127,9 +127,10 @@ else
                                     <details style="margin-top:8px" open="@(run.Id == _runs[0].Id)">
                                         <summary style="font-size:11px; color:var(--text-3); cursor:pointer">📊 @chart.Title</summary>
                                         @* allow-same-origin (needed for the auth cookie) but NO allow-scripts:
-                                           the LLM-generated document renders but can never execute code. *@
+                                           the LLM-generated document renders but can never execute code. The
+                                           chart carries its own portal theme (StyleChart), so it sits cleanly. *@
                                         <iframe src="@($"/runs/{run.Id}/artifacts/{chart.Id}")" sandbox="allow-same-origin" loading="lazy"
-                                                style="width:100%; height:260px; margin-top:6px; border:1px solid var(--border); border-radius:7px; background:var(--bg)"></iframe>
+                                                style="width:100%; height:280px; margin-top:6px; border:1px solid var(--border); border-radius:8px; background:var(--card)"></iframe>
                                     </details>
                                 }
                             </div>
@@ -293,7 +294,7 @@ else
                               placeholder="@SourcePlaceholderFor(_edMapRuntimeId)">
                     </textarea>
                     <div style="font-size:11px; color:var(--text-3); margin-top:4px">
-                        Stdin: opaque JSON payload. Write artifact to <code>/out/result.json</code>.
+                        Stdin: opaque JSON payload. Print the JSON artifact to <code>stdout</code>.
                         Dependencies (npm install/pip install) are not supported in this pass — use the image path for dep-heavy jobs.
                     </div>
                 }
@@ -593,13 +594,15 @@ else
         _ => "index.js",
     };
 
+    // Placeholders follow the authoring contract (job_authoring_guide): read the payload from
+    // STDIN and print the JSON artifact to STDOUT — that's what the in-cluster runner captures.
     private static string SourcePlaceholderFor(string? runtime) => runtime switch
     {
-        "python" => "import sys, json\ndata = json.load(sys.stdin)\nresult = {}\nwith open('/out/result.json','w') as f:\n    json.dump(result, f)",
-        "go" => "package main\n\nimport (\n    \"encoding/json\"\n    \"io\"\n    \"os\"\n)\n\nfunc main() {\n    in, _ := io.ReadAll(os.Stdin)\n    var data any\n    json.Unmarshal(in, &data)\n    out, _ := os.Create(\"/out/result.json\")\n    json.NewEncoder(out).Encode(map[string]any{})\n}",
-        "ruby" => "require 'json'\ndata = JSON.parse(STDIN.read)\nresult = {}\nFile.write('/out/result.json', result.to_json)",
-        "dotnet" => "using System.Text.Json;\nvar input = Console.In.ReadToEnd();\nvar data = JsonSerializer.Deserialize<JsonElement>(input);\nvar result = new { };\nFile.WriteAllText(\"/out/result.json\", JsonSerializer.Serialize(result));",
-        _ => "const fs = require('fs');\nconst data = JSON.parse(fs.readFileSync('/dev/stdin','utf8'));\nconst result = {};\nfs.writeFileSync('/out/result.json', JSON.stringify(result));",
+        "python" => "import sys, json\ndata = json.loads(sys.stdin.read() or \"{}\")\nresult = {}\nprint(json.dumps(result))",
+        "go" => "package main\n\nimport (\n    \"encoding/json\"\n    \"io\"\n    \"os\"\n)\n\nfunc main() {\n    in, _ := io.ReadAll(os.Stdin)\n    var data any\n    json.Unmarshal(in, &data)\n    json.NewEncoder(os.Stdout).Encode(map[string]any{})\n}",
+        "ruby" => "require 'json'\ndata = JSON.parse(STDIN.read)\nresult = {}\nputs result.to_json",
+        "dotnet" => "using System.Text.Json;\nvar input = Console.In.ReadToEnd();\nvar data = JsonSerializer.Deserialize<JsonElement>(input);\nvar result = new { };\nConsole.Write(JsonSerializer.Serialize(result));",
+        _ => "const fs = require('fs');\nconst data = JSON.parse(fs.readFileSync('/dev/stdin','utf8'));\nconst result = {};\nprocess.stdout.write(JSON.stringify(result));",
     };
 
     private IReadOnlyList<JobView>? _jobs;

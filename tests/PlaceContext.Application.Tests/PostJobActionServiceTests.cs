@@ -56,6 +56,27 @@ public class PostJobActionServiceTests
     }
 
     [Fact]
+    public async Task Chart_is_themed_for_the_portal_whether_llm_or_fallback()
+    {
+        // LLM chart: our theme is injected even though the model set its own light background.
+        var (job, run) = Sample(PostJobActionKind.Chart);
+        var store = new FakeStore();
+        var llm = new FakeLlm("<!doctype html><html><head></head><body style=\"background:#fff\"><svg><rect/></svg></body></html>");
+        await new PostJobActionService(store, new FakeLinks(), new FakeUow(), new FakeClock(), llm).RunAsync(job, run);
+        var llmChart = Encoding.UTF8.GetString(Assert.Single(store.Objects).Content);
+        Assert.Contains("pc-chart-theme", llmChart);
+        Assert.Contains("--pc-bg", llmChart);
+
+        // Deterministic fallback chart is themed the same way.
+        var (job2, run2) = Sample(PostJobActionKind.Chart);
+        var store2 = new FakeStore();
+        await new PostJobActionService(store2, new FakeLinks(), new FakeUow(), new FakeClock(), llm: null).RunAsync(job2, run2);
+        var fallbackChart = Encoding.UTF8.GetString(Assert.Single(store2.Objects).Content);
+        Assert.Contains("pc-chart-theme", fallbackChart);
+        Assert.Contains("shard outcomes", fallbackChart); // still the deterministic chart underneath
+    }
+
+    [Fact]
     public async Task Chart_falls_back_when_the_llm_returns_non_html()
     {
         var (job, run) = Sample(PostJobActionKind.Chart);
