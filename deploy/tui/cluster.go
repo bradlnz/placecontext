@@ -18,6 +18,9 @@ var scenePalette = []lipgloss.Style{
 	lipgloss.NewStyle().Foreground(lipgloss.Color("141")).Bold(true), // db (magenta)
 	lipgloss.NewStyle().Foreground(lipgloss.Color("238")),            // link (faint)
 	lipgloss.NewStyle().Foreground(lipgloss.Color("51")).Bold(true),  // data pulse (bright cyan)
+	lipgloss.NewStyle().Foreground(lipgloss.Color("33")),             // globe: ocean (bright blue)
+	lipgloss.NewStyle().Foreground(lipgloss.Color("76")).Bold(true),  // globe: land (vivid green)
+	lipgloss.NewStyle().Foreground(lipgloss.Color("255")).Bold(true), // globe: polar ice (white)
 }
 
 // canvas is a coloured character grid for drawing the topology (lines + markers + labels).
@@ -109,8 +112,8 @@ func (c *canvas) String() string {
 				run = append(run, c.ch[y*c.w+j])
 				j++
 			}
-			if col < 0 {
-				b.WriteString(string(run))
+			if col < 0 || col >= len(scenePalette) {
+				b.WriteString(string(run)) // unknown palette id: render plain rather than panic
 			} else {
 				b.WriteString(scenePalette[col].Render(string(run)))
 			}
@@ -130,13 +133,68 @@ func center(s string, width int) string {
 	return strings.Repeat(" ", left) + s + strings.Repeat(" ", width-len(r)-left)
 }
 
-// planet draws a shaded ASCII 3D sphere centred on (cxp,cyp) with vertical radius ry — the
-// control-plane "planet" the satellites orbit. Each surface point is lit by a fixed light so
-// it reads as a 3D ball; the label sits just below it. Horizontal radius is 2×ry to offset
-// the ~2:1 cell aspect ratio so it looks round.
+// worldMap is a coarse equirectangular Earth land mask (48 columns × 24 rows, '#' = land):
+// column 0 is 180°W, row 0 is 90°N, 7.5° per cell. Sampled by the globe so the actual
+// continents — Americas, Africa, Eurasia, Australia, Antarctica — rotate across the disc.
+var worldMap = [24]string{
+	"                                                ",
+	"         ###### #####               ######      ",
+	"      ######### #####   ########################",
+	"  ############### ##    ########################",
+	"  ########## ####      #########################",
+	"      ###########      #########################",
+	"       ########       ## ####################   ",
+	"        #######       ###################  ##   ",
+	"        ####  #       ########## #### #####     ",
+	"          ###         #########  ### #####      ",
+	"           ##         #########  ##  ## #       ",
+	"             #####       #####      #######     ",
+	"             #######     #####       ########   ",
+	"              ######     #####         #######  ",
+	"              #####      #### #       ########  ",
+	"               ####       ### #       ########  ",
+	"               ##         ###          ###### ##",
+	"              ###                          #  ##",
+	"              ##                             ## ",
+	"              #                                 ",
+	"                                                ",
+	"        ####################################    ",
+	"    ########################################### ",
+	"          ###############################       ",
+}
+
+// landAt samples worldMap at a latitude/longitude (radians; lat +N, lon +E, both from Earth's
+// usual frame). Longitude wraps, latitude clamps.
+func landAt(lat, lon float64) bool {
+	u := lon/(2*math.Pi) + 0.5
+	u -= math.Floor(u)
+	v := 0.5 - lat/math.Pi
+	row := int(v * float64(len(worldMap)))
+	if row < 0 {
+		row = 0
+	} else if row >= len(worldMap) {
+		row = len(worldMap) - 1
+	}
+	line := worldMap[row]
+	col := int(u * float64(len(line)))
+	if col < 0 || col >= len(line) {
+		return false
+	}
+	return line[col] == '#'
+}
+
+// planet draws Earth as a shaded ASCII globe centred on (cxp,cyp) with vertical radius ry — the
+// control-plane "planet" the satellites orbit. Realism comes from four effects layered per cell:
+// a real continent mask (worldMap) rotating with `spin`, ocean/land/ice colouring, diffuse
+// lighting with limb darkening so the edge curves away, and a day/night terminator (the dark
+// side fades to blank). Horizontal radius is 2×ry to offset the ~2:1 cell aspect ratio.
 func (c *canvas) planet(cxp, cyp, ry int, color int, label string, spin float64) {
-	ramp := []rune(".,:;+*oO#@")
-	lx, ly, lz := -0.5, -0.6, 0.62
+	oceanRamp := []rune(" ·::~~≈≈")
+	landRamp := []rune(",:;=+*oO##@")
+	iceRamp := []rune(".:+##@")
+	// Light from the left, nearly level with the equator: both hemispheres get lit, so
+	// southern continents (Australia, NZ) stay readable instead of sitting in shadow.
+	lx, ly, lz := -0.55, -0.15, 0.82
 	ln := math.Sqrt(lx*lx + ly*ly + lz*lz)
 	lx, ly, lz = lx/ln, ly/ln, lz/ln
 	rx := ry * 2
@@ -153,25 +211,41 @@ func (c *canvas) planet(cxp, cyp, ry int, color int, label string, spin float64)
 			if lum < 0 {
 				lum = 0
 			}
-			lum = 0.12 + 0.88*lum // ambient so the dark side isn't blank
-			i := int(lum * float64(len(ramp)-1))
-			// rotating surface texture: longitude advances with `spin`, so continents sweep
-			// across the disc and the ball visibly rotates about its vertical axis.
+			lum *= 0.45 + 0.55*nz // limb darkening: the edge curves away from the viewer
+			lum = 0.22 + 0.78*lum // ambient lift so the night side stays readable
+
+			// Rotating surface: screen point → (lat, lon), longitude advancing with spin.
+			// Screen y grows downward, so negate for north-up.
+			lat := math.Asin(-ny)
 			lon := math.Atan2(nx, nz) + spin
-			lat := math.Asin(ny)
-			cont := math.Sin(2*lon)*math.Cos(3*lat) + 0.6*math.Sin(4*lon+1.7)*math.Cos(2*lat)
-			if cont > 0.5 {
-				i += 3 // land: denser glyph
+			latDeg := lat * 180 / math.Pi
+
+			land := landAt(lat, lon)
+			switch {
+			case land && (latDeg < -60 || latDeg > 75), !land && latDeg > 78:
+				// Antarctica, Greenland, and the Arctic sea-ice cap read as white.
+				i := int(lum * float64(len(iceRamp)-1))
+				c.set(cxp+dx, cyp+dy, iceRamp[clampIdx(i, len(iceRamp))], 9)
+			case land:
+				i := int(lum * float64(len(landRamp)-1))
+				c.set(cxp+dx, cyp+dy, landRamp[clampIdx(i, len(landRamp))], 8)
+			default:
+				i := int(lum * float64(len(oceanRamp)-1))
+				c.set(cxp+dx, cyp+dy, oceanRamp[clampIdx(i, len(oceanRamp))], 7)
 			}
-			if i < 0 {
-				i = 0
-			} else if i >= len(ramp) {
-				i = len(ramp) - 1
-			}
-			c.set(cxp+dx, cyp+dy, ramp[i], color)
 		}
 	}
 	c.text(cxp-len([]rune(label))/2, cyp+ry+1, label, color)
+}
+
+func clampIdx(i, n int) int {
+	if i < 0 {
+		return 0
+	}
+	if i >= n {
+		return n - 1
+	}
+	return i
 }
 
 // trimToBox returns the point on the border of a box (centre cx,cy, half-extents hw,hh)
@@ -236,31 +310,33 @@ func (m model) clusterPanel(width, rows int) string {
 	orb := m.orbit
 	cx, cy := w/2, h/2
 
-	// planet (clean circle, centred); horizontal radius 2× vertical to offset the ~2:1 cell aspect
-	planetRy := (h - 3) / 2
-	if planetRy > 5 {
-		planetRy = 5
-	} else if planetRy < 3 {
+	// planet (clean circle, centred); horizontal radius 2× vertical to offset the ~2:1 cell aspect.
+	// Base radius 8, scaled by the user's zoom (+/-), then shrunk to what the pane can hold.
+	planetRy := int(8*m.clZoom + 0.5)
+	if hr := (h - 3) / 2; planetRy > hr {
+		planetRy = hr
+	}
+	for planetRy > 3 && 2*planetRy+20 > cx {
+		planetRy-- // width guard: leave room for the satellite ring + labels beside the globe
+	}
+	if planetRy < 3 {
 		planetRy = 3
 	}
 	planetRx := planetRy * 2
 
-	// satellites sit on a tight ellipse kept 20–40 columns from the hub, so they never overlap
-	// the planet and the layout stays compact.
-	orbX := 30.0
-	if mx := float64(cx - planetRx - 8); orbX > mx {
+	// satellites orbit just outside the planet's limb; pods ride a ring further out.
+	orbX := float64(planetRx + 8)
+	if mx := float64(cx - 10); orbX > mx {
 		orbX = mx
-	}
-	if orbX < 20 {
-		orbX = 20
-	} else if orbX > 40 {
-		orbX = 40
 	}
 	orbY := orbX * 0.36
 	if my := float64(cy) - 2; orbY > my {
 		orbY = my
 	}
-	podX := math.Min(orbX+10, 40)
+	podX := orbX + 10
+	if mx := float64(cx - 4); podX > mx {
+		podX = mx
+	}
 	podY := podX * 0.36
 	if my := float64(cy) - 1; podY > my {
 		podY = my

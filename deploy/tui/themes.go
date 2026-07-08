@@ -66,6 +66,12 @@ func applyTheme(i int) {
 		lipgloss.NewStyle().Foreground(t.db).Bold(true),     // 4 db
 		lipgloss.NewStyle().Foreground(t.link),              // 5 link
 		lipgloss.NewStyle().Foreground(t.pulse).Bold(true),  // 6 data pulse
+		// 7–9: the Earth globe — deliberately theme-independent (oceans stay blue,
+		// land green, ice white, whatever accent the theme picks). Keep in sync with
+		// planet() in cluster.go: it panics the renderer if these ids are missing.
+		lipgloss.NewStyle().Foreground(lipgloss.Color("33")),             // 7 ocean
+		lipgloss.NewStyle().Foreground(lipgloss.Color("76")).Bold(true),  // 8 land
+		lipgloss.NewStyle().Foreground(lipgloss.Color("255")).Bold(true), // 9 polar ice
 	}
 }
 

@@ -19,6 +19,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/charmbracelet/bubbles/spinner"
@@ -92,6 +93,8 @@ const (
 	viewSettings
 	viewRuns      // run history for a selected job (list of runs)
 	viewRunDetail // one run's per-shard output, errors, and artifacts
+	viewChat      // encrypted node-to-node chat (PCSP over mutual TLS)
+	viewJoin      // connect this computer to an existing cluster with a join code
 )
 
 // menuItem is a choice in the "add node" (or any future) list picker.
@@ -166,6 +169,21 @@ type model struct {
 	runLinks  []string // URLs found in the currently-open run detail, openable with [o]/[1-9]
 
 	loading bool // a data fetch (logs/mcp/metrics/search) is in flight → show a loading box
+
+	// encrypted node-to-node chat (see chat.go)
+	chatID      *chatIdentity
+	chatErr     string // identity/listener startup failure, shown in the chat view
+	chatPort    int
+	chatEvents  chan chatEvent
+	chatActive  *chatChannel
+	chatPending *chatChannel // incoming request awaiting the operator's permission (y/n)
+	chatPeers   []chatPeer   // nodes found by the LAN scan
+	chatSel     int          // selected row in chatPeers
+	chatLog     []chatLine
+	chatInput   string
+	chatStatus  string
+
+	joinInput string // pasted cluster join code (viewJoin)
 }
 
 // ── messages ──────────────────────────────────────────────────────────────────────────────────
@@ -177,6 +195,12 @@ type actionDoneMsg struct {
 }
 
 type flashMsg string
+type chatMsg chatEvent
+
+// waitChat re-arms after every chat event so the listener/dialer goroutines can keep pumping.
+func waitChat(ch chan chatEvent) tea.Cmd {
+	return func() tea.Msg { return chatMsg(<-ch) }
+}
 type metricsMsg struct {
 	cpu, mem float64
 	err      string
@@ -394,7 +418,7 @@ func initialModel() model {
 	sp := spinner.New()
 	sp.Spinner = spinner.Dot
 	sp.Style = lipgloss.NewStyle().Foreground(cTeal)
-	return model{
+	m := model{
 		sp:         sp,
 		kubeconfig: resolveKubeconfig(),
 		pctl:       findPctl(),
@@ -402,11 +426,32 @@ func initialModel() model {
 		logs:       viewport.New(80, 14),
 		clZoom:     1.0,
 		clSpin:     true,
+		chatPort:   chatDefaultPort,
+		chatEvents: make(chan chatEvent, 64),
+		chatStatus: "not connected",
 	}
+	if p, err := strconv.Atoi(os.Getenv("PCTL_CHAT_PORT")); err == nil && p > 0 {
+		m.chatPort = p
+	}
+	id, err := loadOrCreateChatIdentity()
+	if err != nil {
+		m.chatErr = "chat identity: " + err.Error()
+		return m
+	}
+	m.chatID = id
+	if _, err := startChatListener(id, m.chatPort, m.chatEvents, chatBusy.Load); err != nil {
+		m.chatErr = fmt.Sprintf("chat listener on :%d: %v", m.chatPort, err)
+	} else {
+		startChatResponder(id, m.chatPort) // answer other nodes' LAN scans
+	}
+	return m
 }
 
+// chatBusy mirrors "a conversation is open" for the listener goroutine, which cannot see the model.
+var chatBusy atomic.Bool
+
 func (m model) Init() tea.Cmd {
-	return tea.Batch(m.sp.Tick, m.fetchState(), tick(), clusterTick())
+	return tea.Batch(m.sp.Tick, m.fetchState(), tick(), clusterTick(), waitChat(m.chatEvents))
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -436,6 +481,125 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			default:
 				if len(key) == 1 { // a single printable rune
 					m.searchQuery += key
+				}
+			}
+			return m, nil
+		}
+
+		// Chat input also captures typing first. esc leaves the view (the conversation stays
+		// open); ctrl+d hangs up; enter dials (when disconnected) or sends (when connected).
+		if m.view == viewChat {
+			// A pending request is modal: the operator must answer before anything else.
+			if m.chatPending != nil {
+				switch key {
+				case "y", "Y":
+					m.chatActive = m.chatPending
+					m.chatPending = nil
+					m.chatActive.start(m.chatEvents)
+					m.chatStatus = "connected to " + m.chatActive.peerID
+					m.chatLog = append(m.chatLog, chatLine{text: "— accepted " + m.chatActive.peerID, at: time.Now()})
+				case "n", "N", "esc":
+					go m.chatPending.close("declined")
+					m.chatPending = nil
+					m.chatStatus = "declined"
+					chatBusy.Store(false)
+				case "ctrl+c":
+					m.quitting = true
+					return m, tea.Quit
+				}
+				return m, nil
+			}
+			switch key {
+			case "esc":
+				m.view = viewDash
+			case "ctrl+c":
+				m.quitting = true
+				return m, tea.Quit
+			case "tab":
+				if m.chatActive == nil && len(m.chatPeers) > 0 {
+					m.chatSel = (m.chatSel + 1) % len(m.chatPeers)
+				}
+			case "ctrl+r":
+				if m.chatID != nil && m.chatActive == nil {
+					m.chatStatus = "scanning…"
+					scanForPeers(m.chatID.nodeID, m.chatEvents)
+				}
+			case "ctrl+d":
+				if m.chatActive != nil {
+					ch := m.chatActive
+					go ch.close("closing")
+					m.chatActive = nil
+					m.chatStatus = "not connected"
+					m.chatLog = append(m.chatLog, chatLine{text: "— you hung up", at: time.Now()})
+					chatBusy.Store(false)
+				}
+			case "enter":
+				in := strings.TrimSpace(m.chatInput)
+				if in == "" {
+					// Empty ⏎ while disconnected dials the peer selected in the scan list.
+					if m.chatActive == nil && m.chatID != nil && m.chatSel < len(m.chatPeers) {
+						p := m.chatPeers[m.chatSel]
+						m.chatStatus = "dialing " + p.hostPort + " (asking permission)…"
+						dialChat(m.chatID, p.hostPort, p.nodeID, m.chatEvents)
+					}
+					return m, nil
+				}
+				if m.chatActive == nil {
+					if m.chatID == nil {
+						m.chatStatus = m.chatErr
+						return m, nil
+					}
+					hostPort, nodeID, err := parseChatTarget(in)
+					if err != nil {
+						m.chatStatus = err.Error()
+						return m, nil
+					}
+					m.chatStatus = "dialing " + hostPort + " (asking permission)…"
+					m.chatInput = ""
+					dialChat(m.chatID, hostPort, nodeID, m.chatEvents)
+				} else if err := m.chatActive.send(in); err != nil {
+					m.chatStatus = "send failed: " + err.Error()
+				} else {
+					m.chatLog = append(m.chatLog, chatLine{text: in, at: time.Now()}) // from=="" → you
+					m.chatInput = ""
+				}
+			case "backspace":
+				if r := []rune(m.chatInput); len(r) > 0 {
+					m.chatInput = string(r[:len(r)-1])
+				}
+			default:
+				// KeyRunes covers typing AND pasting (a paste arrives as one multi-rune msg —
+				// exactly how a copied "host:port NODEID" target gets here).
+				if msg.Type == tea.KeyRunes {
+					m.chatInput += string(msg.Runes)
+				} else if key == " " {
+					m.chatInput += " "
+				}
+			}
+			return m, nil
+		}
+
+		// Join-code input: paste the code from the master, ⏎ joins this computer to the cluster.
+		if m.view == viewJoin {
+			switch key {
+			case "esc":
+				m.view = viewDash
+			case "ctrl+c":
+				m.quitting = true
+				return m, tea.Quit
+			case "enter":
+				if code := strings.TrimSpace(m.joinInput); code != "" && !m.busy {
+					m.busy, m.busyVerb, m.view = true, "joining the cluster", viewAction
+					m.out.SetContent("")
+					return m, m.runAction("joining the cluster", "join", "--code", code)
+				}
+			case "backspace":
+				if r := []rune(m.joinInput); len(r) > 0 {
+					m.joinInput = string(r[:len(r)-1])
+				}
+			default:
+				if msg.Type == tea.KeyRunes {
+					m.joinInput += string(msg.Runes)
 				}
 			}
 			return m, nil
@@ -606,6 +770,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.cursor--
 			}
 		case "down", "j":
+			// With no cluster reachable there is no list to navigate — [j] on the welcome
+			// screen means "join an existing cluster with a code" (master + agents).
+			if key == "j" && m.view == viewDash && !m.state.reach && !m.busy {
+				m.view, m.joinInput = viewJoin, ""
+				return m, nil
+			}
 			if m.view == viewDash && m.cursor < len(m.sel)-1 {
 				m.cursor++
 			}
@@ -675,6 +845,17 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if !m.busy {
 				m.view, m.searchQuery = viewSearch, ""
 				m.logs.SetContent("type a query (decisions · context · activity), then enter")
+			}
+			return m, nil
+		case "t":
+			// Encrypted chat with another node (see chat.go). Opening it scans the LAN
+			// for other nodes; each side must approve before a conversation starts.
+			if !m.busy {
+				m.view = viewChat
+				if m.chatID != nil && m.chatActive == nil && m.chatPending == nil {
+					m.chatStatus = "scanning…"
+					scanForPeers(m.chatID.nodeID, m.chatEvents)
+				}
 			}
 			return m, nil
 		case "p":
@@ -759,6 +940,59 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case flashMsg:
 		m.flash = string(msg)
 		return m, nil
+
+	case chatMsg:
+		e := chatEvent(msg)
+		switch e.kind {
+		case "connected": // an outgoing dial came up — no local permission needed, we initiated
+			if m.chatActive != nil && e.channel != m.chatActive {
+				go e.channel.close("busy: another chat is open")
+			} else {
+				m.chatActive = e.channel
+				m.chatStatus = "connected to " + e.channel.peerID
+				m.chatLog = append(m.chatLog, chatLine{text: "— connected to " + e.channel.peerID, at: time.Now()})
+				if m.view != viewChat {
+					m.flash = "chat: " + e.channel.peerID[:8] + "… connected — press [t]"
+				}
+			}
+		case "request": // an incoming caller — held unread until the operator says yes
+			if m.chatActive != nil || m.chatPending != nil {
+				go e.channel.close("busy: another chat is open")
+			} else {
+				m.chatPending = e.channel
+				m.chatStatus = e.channel.peerID[:8] + "… wants to chat — [y] accept, [n] decline"
+				if m.view != viewChat {
+					m.flash = "chat request from " + e.channel.peerID[:8] + "… — press [t]"
+				}
+			}
+		case "line":
+			if e.channel == m.chatActive {
+				m.chatLog = append(m.chatLog, e.line)
+				if m.view != viewChat {
+					m.flash = "chat message from " + e.line.from[:8] + "… — press [t]"
+				}
+			}
+		case "closed":
+			if e.channel == m.chatActive {
+				m.chatActive = nil
+				m.chatStatus = "not connected"
+				m.chatLog = append(m.chatLog, chatLine{text: "— " + e.info, at: time.Now()})
+			} else if e.channel == m.chatPending {
+				m.chatPending = nil
+				m.chatStatus = "caller hung up before you answered"
+			}
+		case "peers":
+			m.chatPeers, m.chatSel = e.peers, 0
+			if len(e.peers) == 0 {
+				m.chatStatus = "scan: no other nodes found"
+			} else {
+				m.chatStatus = fmt.Sprintf("scan: %d node(s) found — tab selects, ⏎ chats", len(e.peers))
+			}
+		case "error":
+			m.chatStatus = e.info
+		}
+		chatBusy.Store(m.chatActive != nil || m.chatPending != nil)
+		return m, waitChat(m.chatEvents)
 
 	case jobSettingMsg:
 		if msg.actions != "" {
@@ -957,6 +1191,10 @@ func (m model) View() string {
 		b.WriteString(m.mcpView())
 	case viewSearch:
 		b.WriteString(m.searchView())
+	case viewChat:
+		b.WriteString(m.chatView())
+	case viewJoin:
+		b.WriteString(m.joinView())
 	case viewSettings:
 		b.WriteString(m.settingsView())
 	case viewRuns:
@@ -1035,6 +1273,19 @@ func (m model) alerts() string {
 	return out.String()
 }
 
+// joinView asks for the join code minted on the master (`pctl join-code`) and connects this
+// computer to that cluster as a worker.
+func (m model) joinView() string {
+	var b strings.Builder
+	b.WriteString(titleStyle.Render(" join cluster ") +
+		dimStyle.Render("  connect this computer to an existing PlaceContext cluster") + "\n\n")
+	b.WriteString("  On the " + keyStyle.Render("master") + " computer, run " + keyStyle.Render("pctl join-code") +
+		" and paste the code it prints here.\n")
+	b.WriteString("  " + dimStyle.Render("This machine then joins as a worker (agent) of that cluster.") + "\n\n")
+	b.WriteString("  " + keyStyle.Render("code: ") + m.joinInput + dimStyle.Render("▌") + "\n")
+	return b.String()
+}
+
 // setupGuide is the friendly empty state shown before any cluster exists.
 func (m model) setupGuide() string {
 	step := func(k, s string) string { return "   " + keyStyle.Render(k) + "  " + s + "\n" }
@@ -1042,6 +1293,7 @@ func (m model) setupGuide() string {
 	b.WriteString(titleStyle.Render(" Welcome to PlaceContext ") + "\n\n")
 	b.WriteString("  No cluster yet. Let's get you running:\n\n")
 	b.WriteString(step("[u]", "Create your cluster (one key — sets up everything locally)"))
+	b.WriteString(step("[j]", "Connect to an existing cluster (asks for a join code from the master)"))
 	b.WriteString(step("[p]", "Open the portal once it's up"))
 	b.WriteString(step("[$]", "Manage your subscription"))
 	b.WriteString(step("[q]", "Quit"))
@@ -1061,7 +1313,7 @@ func (m model) dashboard() string {
 	} else if rows > 26 {
 		rows = 26
 	}
-	leftW := m.w / 2 // cluster ~half; the node/pod/job list gets the wider remaining half
+	leftW := m.w * 11 / 20 // cluster ~55%: the globe needs the width; the list wraps fine
 	if leftW < 36 {
 		leftW = 36
 	}
@@ -1197,9 +1449,37 @@ func (m model) footer() string {
 	var keys []string
 	switch m.view {
 	case viewDash:
-		keys = []string{k("↑↓", "nav"), k("⏎", "logs/runs"), k("R", "run job"), k("s", "settings"), k("x", "kill job"),
-			k("/", "search"), k("g", "metrics"), k("m", "mcp"), k("p", "portal"), k("$", "subscribe"),
-			k("a", "add worker"), k("u", "update+deploy"), k("c", "theme"), k("r", "refresh"), k("q", "quit")}
+		// The dashboard has too many shortcuts for one line — lay them out as an aligned
+		// column grid sized to the terminal, so nothing wraps mid-entry.
+		type kv struct{ key, label string }
+		items := []kv{
+			{"↑↓", "nav"}, {"⏎", "logs/runs"}, {"R", "run job"}, {"s", "settings"},
+			{"x", "kill job"}, {"/", "search"}, {"g", "metrics"}, {"m", "mcp"},
+			{"p", "portal"}, {"$", "subscribe"}, {"a", "add worker"}, {"u", "update+deploy"},
+			{"t", "chat"}, {"c", "theme"}, {"r", "refresh"}, {"q", "quit"},
+		}
+		colW := 0
+		for _, it := range items {
+			if n := len([]rune(it.key)) + len([]rune(it.label)) + 2; n > colW {
+				colW = n
+			}
+		}
+		colW += 2
+		cols := max(1, (m.w-2)/colW)
+		var b strings.Builder
+		b.WriteString("  ")
+		for i, it := range items {
+			vis := len([]rune(it.key)) + len([]rune(it.label)) + 2
+			b.WriteString(k(it.key, it.label))
+			if (i+1)%cols == 0 {
+				if i != len(items)-1 {
+					b.WriteString("\n  ")
+				}
+			} else {
+				b.WriteString(strings.Repeat(" ", colW-vis))
+			}
+		}
+		return b.String()
 	case viewRuns:
 		keys = []string{k("↑↓", "nav"), k("⏎", "open run"), k("r", "refresh"), k("b", "back"), k("q", "quit")}
 	case viewRunDetail:
@@ -1214,6 +1494,16 @@ func (m model) footer() string {
 		keys = []string{k("r", "refresh"), k("b", "back"), k("q", "quit")}
 	case viewSearch:
 		keys = []string{k("type", "query"), k("⏎", "search"), k("esc", "back")}
+	case viewChat:
+		if m.chatPending != nil {
+			keys = []string{k("y", "accept"), k("n", "decline")}
+		} else if m.chatActive != nil {
+			keys = []string{k("type", "message"), k("⏎", "send"), k("ctrl+d", "hang up"), k("esc", "back")}
+		} else {
+			keys = []string{k("tab", "select node"), k("⏎", "chat"), k("ctrl+r", "rescan"), k("type", "manual dial"), k("esc", "back")}
+		}
+	case viewJoin:
+		keys = []string{k("paste", "join code"), k("⏎", "join"), k("esc", "back")}
 	case viewMenu:
 		keys = []string{k("↑↓", "nav"), k("⏎", "select"), k("b", "back"), k("q", "quit")}
 	default:
