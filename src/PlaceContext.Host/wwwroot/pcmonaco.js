@@ -4,47 +4,78 @@
 // invoked from Blazor via IJSRuntime.InvokeVoidAsync / InvokeAsync.
 window.pcmonaco = (function () {
   const VS = 'https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs';
-  const editors = new Map();
+  const LOAD_TIMEOUT_MS = 10000; // a hanging CDN must not hang the page
+  const editors = new Map();   // id → Monaco editor
+  const fallbacks = new Map(); // id → plain <textarea> (CDN unreachable)
   let loaderPromise = null;
 
   function loadMonaco() {
     if (window.monaco) return Promise.resolve(window.monaco);
     if (loaderPromise) return loaderPromise;
     loaderPromise = new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error('Monaco CDN timed out.')), LOAD_TIMEOUT_MS);
       const script = document.createElement('script');
       script.src = VS + '/loader.js';
       script.onload = () => {
         window.require.config({ paths: { vs: VS } });
-        window.require(['vs/editor/editor.main'], () => resolve(window.monaco));
+        window.require(['vs/editor/editor.main'],
+          () => { clearTimeout(timer); resolve(window.monaco); },
+          (e) => { clearTimeout(timer); reject(e || new Error('Monaco modules failed to load.')); });
       };
-      script.onerror = () => reject(new Error('Failed to load Monaco from CDN.'));
+      script.onerror = () => { clearTimeout(timer); reject(new Error('Failed to load Monaco from CDN.')); };
       document.head.appendChild(script);
-    });
+    }).catch(e => { loaderPromise = null; throw e; }); // allow a retry on the next init
     return loaderPromise;
   }
 
+  // Returns true when the real Monaco editor is up, false when it degraded to a plain
+  // textarea (CDN unreachable — offline/self-hosted network). NEVER throws: an exception
+  // here would propagate through JS interop and terminate the Blazor circuit, freezing
+  // the page on "Loading…".
   async function init(id, value, language, theme) {
-    const monaco = await loadMonaco();
-    const el = document.getElementById(id);
-    if (!el) return;
-    destroy(id);
-    const editor = monaco.editor.create(el, {
-      value: value || '',
-      language: language || 'plaintext',
-      theme: theme || 'vs-dark',
-      automaticLayout: true,
-      minimap: { enabled: true },
-      fontSize: 12.5,
-      lineNumbers: 'on',
-      scrollBeyondLastLine: false,
-      tabSize: 2,
-      renderWhitespace: 'selection',
-      fontFamily: "'Geist Mono', ui-monospace, monospace",
-    });
-    editors.set(id, editor);
+    try {
+      const monaco = await loadMonaco();
+      const el = document.getElementById(id);
+      if (!el) return true;
+      destroy(id);
+      const editor = monaco.editor.create(el, {
+        value: value || '',
+        language: language || 'plaintext',
+        theme: theme || 'vs-dark',
+        automaticLayout: true,
+        minimap: { enabled: true },
+        fontSize: 12.5,
+        lineNumbers: 'on',
+        scrollBeyondLastLine: false,
+        tabSize: 2,
+        renderWhitespace: 'selection',
+        fontFamily: "'Geist Mono', ui-monospace, monospace",
+      });
+      editors.set(id, editor);
+      return true;
+    } catch (e) {
+      console.warn('pcmonaco: falling back to a plain editor —', e && e.message);
+      const el = document.getElementById(id);
+      if (el) {
+        destroy(id);
+        el.innerHTML = '';
+        const ta = document.createElement('textarea');
+        ta.value = value || '';
+        ta.spellcheck = false;
+        ta.style.cssText =
+          'width:100%;height:100%;box-sizing:border-box;resize:none;border:none;outline:none;' +
+          'background:#1e1e1e;color:#d4d4d4;padding:10px 12px;font-size:12.5px;line-height:1.5;' +
+          "font-family:'Geist Mono',ui-monospace,monospace;tab-size:2";
+        el.appendChild(ta);
+        fallbacks.set(id, ta);
+      }
+      return false;
+    }
   }
 
   function setValue(id, value, language) {
+    const ta = fallbacks.get(id);
+    if (ta) { ta.value = value || ''; return; }
     const editor = editors.get(id);
     if (!editor) return;
     editor.setValue(value || '');
@@ -54,11 +85,15 @@ window.pcmonaco = (function () {
   }
 
   function getValue(id) {
+    const ta = fallbacks.get(id);
+    if (ta) return ta.value;
     const editor = editors.get(id);
     return editor ? editor.getValue() : '';
   }
 
   function destroy(id) {
+    const ta = fallbacks.get(id);
+    if (ta) { ta.remove(); fallbacks.delete(id); }
     const editor = editors.get(id);
     if (!editor) return;
     editor.dispose();

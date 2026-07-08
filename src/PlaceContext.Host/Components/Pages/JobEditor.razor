@@ -31,6 +31,13 @@ else
                 @onclick="@(() => Nav.NavigateTo($"/project/{ProjectId}/jobs"))">←</button>
         <span style="font-size:14px; font-weight:600">@_job.Name</span>
         <span style="font-size:11px; font-family:'Geist Mono',monospace; color:var(--brand-2); background:var(--brand-bg); padding:2px 8px; border-radius:5px">@_runtimeId</span>
+        @if (_monacoLite)
+        {
+            <span style="font-size:11px; color:var(--warn); background:var(--warn-bg); padding:2px 8px; border-radius:5px"
+                  title="The Monaco editor's CDN was unreachable — editing still works in a plain editor.">
+                basic editor (CDN unreachable)
+            </span>
+        }
         <span style="flex:1"></span>
         @if (_message is not null)
         {
@@ -169,6 +176,7 @@ else
     private bool _running;
     private bool _panelOpen = true;
     private bool _monacoReady;
+    private bool _monacoLite; // Monaco CDN unreachable → plain-textarea mode
 
     private bool _addingFile;
     private string _newFileName = "";
@@ -218,7 +226,23 @@ else
             return;
         _monacoReady = true;
         var active = _files[_active];
-        await JS.InvokeVoidAsync("pcmonaco.init", _editorId, active.Content, Language(active.Path), "vs-dark");
+        try
+        {
+            // init returns false when Monaco's CDN was unreachable and the editor degraded to a
+            // plain textarea. Belt-and-braces try/catch: an interop exception here would kill the
+            // whole Blazor circuit and freeze the page on "Loading…".
+            var rich = await JS.InvokeAsync<bool>("pcmonaco.init", _editorId, active.Content, Language(active.Path), "vs-dark");
+            if (!rich)
+            {
+                _monacoLite = true;
+                StateHasChanged();
+            }
+        }
+        catch (Exception)
+        {
+            _monacoLite = true;
+            StateHasChanged();
+        }
     }
 
     // ── File operations ──────────────────────────────────────────────────────────────────────────
