@@ -259,8 +259,10 @@ public sealed class PlaceContextTools
         - **No network** by default (sealed sandbox). Set the job's network-egress policy to allow it.
 
         ## Runtimes
+        **Default to `python` unless the user asks for another language** — it reads best for the
+        data-shaping work jobs do, and its stdlib covers json/csv/dates without dependencies.
+        - `python`→ base `python:3.12-slim`, default entrypoint `main.py`, invoked `python /work/main.py`. **(default)**
         - `node`  → base `node:22-slim`, default entrypoint `index.js`, invoked `node /work/index.js`.
-        - `python`→ base `python:3.12-slim`, default entrypoint `main.py`, invoked `python /work/main.py`.
         - `go`    → base `golang:1.23-alpine`, default entrypoint `main.go`, invoked `go run /work/main.go`.
         - `ruby`  → base `ruby:3.3-slim`, default entrypoint `main.rb`, invoked `ruby /work/main.rb`.
         - `dotnet`→ base `mcr.microsoft.com/dotnet/sdk:10.0`, default entrypoint `main.cs`, invoked `dotnet run /work/main.cs` (.NET 10 file-based app).
@@ -271,7 +273,19 @@ public sealed class PlaceContextTools
         reference them by name (managed in the portal; encrypted at rest). They are injected as env vars
         into the sandbox at run time; never hard-code credentials in the code.
 
+        ## The artifact IS the point
+        Jobs exist to generate artifacts. Emit **JSON** on stdout, and when the result is a numeric
+        series (e.g. `[{"day":"mon","total":12}, …]` or `{"mon":12,"tue":31}`) the portal and TUI
+        chart it automatically — in the run detail and the global Reports view.
+
         ## Examples
+        python `main.py` (the default runtime):
+        ```py
+        import sys, json, os
+        data = json.loads(sys.stdin.read() or "{}")
+        api_key = os.environ.get("API_KEY")            # from the vault
+        print(json.dumps({"count": len(data.get("items", []))}))
+        ```
         node `index.js`:
         ```js
         const input = JSON.parse(require('fs').readFileSync(0, 'utf8') || '{}');
@@ -279,24 +293,18 @@ public sealed class PlaceContextTools
         const result = { count: (input.items ?? []).length };
         process.stdout.write(JSON.stringify(result));  // the artifact
         ```
-        python `main.py`:
-        ```py
-        import sys, json, os
-        data = json.loads(sys.stdin.read() or "{}")
-        api_key = os.environ.get("API_KEY")            # from the vault
-        print(json.dumps({"count": len(data.get("items", []))}))
-        ```
 
         ## Next step
-        Upload with **upload_job_code**: `filesJson` = [{"path":"index.js","content":"…"}], `runtimeId` =
-        "node"|"python"|"go"|"ruby"|"dotnet", and `entrypoint` when uploading multiple files.
+        Upload with **upload_job_code**: `filesJson` = [{"path":"main.py","content":"…"}], `runtimeId`
+        (defaults to "python"; also "node"|"go"|"ruby"|"dotnet"), and `entrypoint` when uploading
+        multiple files.
         """;
 
     [Authorize(Policy = "Member")]
-    [McpServerTool(Name = "upload_job_code"), Description("Upload (replace) the source file set of a job's map step so it can be run as isolated containers. Target an existing job by jobId, OR by projectId + jobName (the job is created with sensible defaults — one '{}' shard, concurrency 1, success exit 0 — when it does not yet exist). 'filesJson' is a JSON array of {\"path\":\"index.js\",\"content\":\"...\"}; paths may include subdirectories (e.g. 'lib/report.js'). 'runtimeId' selects the sandbox ('node', 'python', 'go', 'ruby', or 'dotnet'); 'entrypoint' is the path of the file to invoke (required when uploading more than one file; defaults to the runtime's default for a single file). Existing input payloads, env, concurrency, reduce step, and exit-code policy are preserved.")]
+    [McpServerTool(Name = "upload_job_code"), Description("Upload (replace) the source file set of a job's map step so it can be run as isolated containers. Target an existing job by jobId, OR by projectId + jobName (the job is created with sensible defaults — one '{}' shard, concurrency 1, success exit 0 — when it does not yet exist). 'filesJson' is a JSON array of {\"path\":\"index.js\",\"content\":\"...\"}; paths may include subdirectories (e.g. 'lib/report.js'). 'runtimeId' selects the sandbox ('python' — the default — 'node', 'go', 'ruby', or 'dotnet'); 'entrypoint' is the path of the file to invoke (required when uploading more than one file; defaults to the runtime's default for a single file). Existing input payloads, env, concurrency, reduce step, and exit-code policy are preserved.")]
     public static Task<string> UploadJobCode(IPlaceContextService svc, IToolCallLog log,
-        [Description("JSON array of files, e.g. [{\"path\":\"index.js\",\"content\":\"...\"}]")] string filesJson,
-        [Description("Runtime sandbox id: 'node' or 'python'")] string runtimeId,
+        [Description("JSON array of files, e.g. [{\"path\":\"main.py\",\"content\":\"...\"}]")] string filesJson,
+        [Description("Runtime sandbox id: 'python' (default), 'node', 'go', 'ruby', or 'dotnet'")] string runtimeId = "python",
         [Description("Existing job id to target; omit to target by projectId + jobName")] Guid? jobId = null,
         [Description("Project id — required when jobId is omitted")] Guid? projectId = null,
         [Description("Job name to find or create within the project — required when jobId is omitted")] string? jobName = null,

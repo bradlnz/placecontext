@@ -160,7 +160,7 @@ else
     private readonly List<EditorFile> _files = new();
     private int _active;
     private string? _entrypoint;
-    private string _runtimeId = "node";
+    private string _runtimeId = "python"; // the default runtime for new jobs
 
     private JobRunDetailView? _lastRun;
     private string? _message;
@@ -192,7 +192,7 @@ else
             _job = await Svc.GetJobAsync(JobId);
             if (_job is { MapSourceKind: "code" })
             {
-                _runtimeId = _job.MapRuntimeId ?? "node";
+                _runtimeId = _job.MapRuntimeId ?? "python";
                 _entrypoint = _job.MapEntrypoint;
                 _files.Clear();
                 if (_job.MapFiles.Count > 0)
