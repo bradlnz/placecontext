@@ -766,7 +766,11 @@ cmd_deploy() {
       *) die "deploy: unknown arg $1";;
     esac
   done
+  resolve_ctx  # default to the k3d dev cluster's kubeconfig when one exists and none was forced
   apply_manifests "$image"
+  # The image tag is constant (:local), so an unchanged Deployment spec would leave the old pods
+  # running the old image — force a restart so freshly imported code actually rolls out.
+  kube -n "$PCTL_NAMESPACE" rollout restart deploy/placecontext >/dev/null 2>&1 || true
   wait_rollout
   ok "Deployed."
 }
