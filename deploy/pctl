@@ -775,6 +775,91 @@ cmd_deploy() {
   ok "Deployed."
 }
 
+# ── package (one tarball that runs anywhere) ─────────────────────────────────────────────────────
+# Bundles everything an operator needs into dist/placecontext-<ver>-<os>-<arch>.tar.gz:
+# pctl, the prebuilt TUI, the k8s manifests, the container image tarball, and an install.sh —
+# so a new machine goes tarball → ./install.sh → running cluster, no source tree or registry needed.
+cmd_package() {
+  local with_image=1
+  while [ $# -gt 0 ]; do case "$1" in --no-image) with_image=0; shift;; *) die "package: unknown arg $1";; esac; done
+
+  local ver os arch name stage
+  ver="$(git describe --tags --always 2>/dev/null || date +%Y%m%d)"
+  os="$(uname -s | tr '[:upper:]' '[:lower:]')"
+  arch="$(uname -m)"; [ "$arch" = x86_64 ] && arch=amd64; [ "$arch" = aarch64 ] && arch=arm64
+  name="placecontext-${ver}-${os}-${arch}"
+  stage="dist/$name"
+
+  say "Packaging $name…"
+  rm -rf "$stage"; mkdir -p "$stage/deploy/tui" "$stage/deploy/k3s"
+
+  # The TUI, statically built with the migration stamp (make handles both).
+  have go || die "the Go toolchain is required to package the TUI (make -C deploy/tui)."
+  make -s -C deploy/tui build || die "TUI build failed."
+  install -m755 deploy/tui/pctl-tui "$stage/deploy/tui/pctl-tui"
+
+  # The engine + manifests, laid out exactly as pctl expects (<root>/deploy/…).
+  install -m755 deploy/pctl "$stage/deploy/pctl"
+  cp deploy/k3s/*.yaml "$stage/deploy/k3s/"
+  if [ -d deploy/headscale ]; then
+    mkdir -p "$stage/deploy/headscale"
+    # Template files only — never the mesh's live runtime state.
+    for f in deploy/headscale/*; do
+      case "$f" in *.live.*|*tenants.list|*acl.json) ;; *) cp -r "$f" "$stage/deploy/headscale/";; esac
+    done
+  fi
+
+  # The application itself, as a prebuilt image tarball (built now if missing).
+  if [ "$with_image" = 1 ]; then
+    [ -s "$PCTL_IMAGE_TAR" ] || cmd_build
+    cp "$PCTL_IMAGE_TAR" "$stage/deploy/placecontext-local.tar"
+  fi
+
+  cat > "$stage/install.sh" <<'INSTALL'
+#!/usr/bin/env bash
+# PlaceContext one-shot installer: checks the two host dependencies, then brings the
+# whole stack up (local k3s cluster + database + object store + local LLM + portal).
+set -euo pipefail
+cd "$(dirname "$0")"
+need() { command -v "$1" >/dev/null 2>&1; }
+
+if ! need docker; then
+  echo "✗ docker is required — install it first: https://docs.docker.com/engine/install/" >&2; exit 1
+fi
+if ! need k3d; then
+  echo "k3d not found — installing it (needs curl)…"
+  curl -sfL https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | bash
+fi
+
+./deploy/pctl dev up
+echo
+echo "PlaceContext is running:"
+echo "  portal   http://localhost:7700/"
+echo "  console  ./deploy/pctl tui        (dashboard, chat, join codes)"
+echo "  help     ./deploy/pctl help"
+INSTALL
+  chmod +x "$stage/install.sh"
+
+  cat > "$stage/README.md" <<README
+# PlaceContext ${ver}
+
+Everything needed to run PlaceContext on this machine (${os}/${arch}).
+
+    ./install.sh            # checks docker + k3d, then brings the stack up
+    ./deploy/pctl tui       # the operator console
+    ./deploy/pctl help      # every command (join codes, backups, mesh, …)
+
+The container image ships prebuilt (deploy/placecontext-local.tar) — no registry,
+no source tree, and no build step needed. Joining this machine to an existing
+cluster instead: run the TUI and press [j], then paste the master's join code.
+README
+
+  say "Compressing…"
+  tar -C dist -czf "dist/$name.tar.gz" "$name"
+  rm -rf "$stage"
+  ok "Packaged → dist/$name.tar.gz ($(du -h "dist/$name.tar.gz" | cut -f1))"
+}
+
 # ── update (pull the latest source from git) ───────────────────────────────────────────────────────
 # Fast-forwards the repo at ROOT to its upstream. Pull only by default; --deploy also rebuilds the
 # image and rolls it out, bringing the dev cluster up first if it isn't running. Used by the TUI's [u] key.
@@ -1029,6 +1114,7 @@ ${C_BOLD}ANYWHERE${C_RESET}
   deploy [--image IMG] [--context CTX]
                          Apply the manifests to the current (or given) kube context
   update [--deploy]      Pull the latest source from git (fast-forward); --deploy also rebuilds + rolls out (starts the dev cluster if needed)
+  package [--no-image]   Build a self-contained release tarball (pctl + TUI + manifests + image) in dist/
   kill pod|node|job NAME [--yes]   Delete a pod / k3d node / job (prompts unless --yes)
   db ha                  Replicated Postgres (1 primary + 2 replicas) via CloudNativePG
   db backup-now          Dump all databases to MinIO right now (nightly CronJob does this at 03:00)
@@ -1091,6 +1177,7 @@ main() {
     build)        cmd_build "$@";;
     deploy)       cmd_deploy "$@";;
     update)       cmd_update "$@";;
+    package)      cmd_package "$@";;
     status)       cmd_status "$@";;
     logs)         cmd_logs "$@";;
     url)          cmd_url "$@";;

@@ -17,6 +17,9 @@ deploy/*.tar
 deploy/tui/pctl-tui
 deploy/tui/dist/
 
+# Release packages (build with: pctl package)
+dist/
+
 # Headscale mesh runtime state (templated/generated on the control droplet)
 deploy/headscale/*.live.*
 deploy/headscale/tenants.list
