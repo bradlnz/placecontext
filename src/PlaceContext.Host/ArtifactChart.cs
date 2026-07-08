@@ -83,9 +83,10 @@ public static class ArtifactChart
                     return map;
                 if (depth < 1)
                 {
-                    // container object: unwrap the first array-valued property (sorted for stability)
+                    // container object: unwrap the first array- or object-valued property that
+                    // yields a series ({"data":[…]}, {"series":[…]}, {"totals":{…}} …)
                     foreach (var p in el.EnumerateObject().OrderBy(p => p.Name, StringComparer.Ordinal))
-                        if (p.Value.ValueKind == JsonValueKind.Array)
+                        if (p.Value.ValueKind is JsonValueKind.Array or JsonValueKind.Object)
                             if (Extract(p.Value, depth + 1) is { Count: > 0 } inner)
                                 return inner;
                 }
@@ -98,13 +99,14 @@ public static class ArtifactChart
 
     private static List<(string, double)>? NumericMap(JsonElement obj)
     {
+        // Tolerant: chart the numeric entries and ignore the rest, so real-world payloads like
+        // {"bookings":3,"sessions":3,"byStatus":{…}} still chart. Two numbers minimum — a single
+        // stray count isn't a series.
         var series = new List<(string, double)>();
         foreach (var p in obj.EnumerateObject())
-        {
-            if (p.Value.ValueKind != JsonValueKind.Number) return null;
-            series.Add((p.Name, p.Value.GetDouble()));
-        }
-        if (series.Count == 0) return null;
+            if (p.Value.ValueKind == JsonValueKind.Number)
+                series.Add((p.Name, p.Value.GetDouble()));
+        if (series.Count < 2) return null;
         series.Sort(static (a, b) => string.CompareOrdinal(a.Item1, b.Item1));
         return series;
     }

@@ -2,6 +2,7 @@
 @using Markdig
 @inject IPlaceContextService Svc
 @inject PortalUiState Ui
+@inject PlaceContext.Application.Ports.ILlmGateway Llm
 
 <PageTitle>PlaceContext — Reports</PageTitle>
 
@@ -95,13 +96,48 @@
         </div>
     }
 
-    @* ── Job data: the global chart view. Every recent run's JSON artifacts are ingested and any
-       numeric series becomes a chart card — jobs exist to generate artifacts, and this is where
-       all of that output lands in one place. ── *@
+    @* ── Job data: the global reporting view. Every recent run is ingested; the tiles summarize
+       the period, the local LLM narrates it, and any JSON numeric series becomes a chart card —
+       jobs exist to generate artifacts, and this is where all of that output lands. ── *@
     <div style="display:flex; align-items:center; gap:9px; margin:24px 0 10px">
         <h3 style="font-size:13px; font-weight:600; margin:0">Job data</h3>
-        <span style="font-size:11px; color:var(--text-3)">charts from recent job-run artifacts, across all projects</span>
+        <span style="font-size:11px; color:var(--text-3)">the last @_statRuns run(s) across all projects</span>
     </div>
+
+    @if (_statRuns > 0)
+    {
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:10px; margin-bottom:12px">
+            <div class="dccard" style="padding:12px 14px">
+                <div style="font-size:22px; font-weight:700">@_statRuns</div>
+                <div style="font-size:11px; color:var(--text-3)">runs ingested</div>
+            </div>
+            <div class="dccard" style="padding:12px 14px">
+                <div style="font-size:22px; font-weight:700; color:@(_statSuccessPct >= 90 ? "var(--good)" : _statSuccessPct >= 60 ? "var(--warn)" : "var(--bad)")">@_statSuccessPct%</div>
+                <div style="font-size:11px; color:var(--text-3)">succeeded</div>
+            </div>
+            <div class="dccard" style="padding:12px 14px">
+                <div style="font-size:22px; font-weight:700">@_statJobs</div>
+                <div style="font-size:11px; color:var(--text-3)">jobs producing output</div>
+            </div>
+            <div class="dccard" style="padding:12px 14px">
+                <div style="font-size:22px; font-weight:700">@_jobCharts.Count</div>
+                <div style="font-size:11px; color:var(--text-3)">chartable series</div>
+            </div>
+        </div>
+    }
+
+    @if (_narrative is not null)
+    {
+        <div class="dccard" style="padding:12px 15px; margin-bottom:12px; border-left:3px solid var(--brand)">
+            <div style="font-size:10.5px; text-transform:uppercase; letter-spacing:.5px; color:var(--text-3); margin-bottom:4px">agent summary</div>
+            <div style="font-size:12.5px; line-height:1.55; color:var(--text-2)">@_narrative</div>
+        </div>
+    }
+    else if (_narrativeLoading)
+    {
+        <div style="font-size:11px; color:var(--text-3); margin-bottom:12px">agent is summarising the period…</div>
+    }
+
     @if (_jobCharts.Count == 0)
     {
         <div class="dccard" style="padding:14px 15px; font-size:12px; color:var(--text-3)">
@@ -111,18 +147,25 @@
     }
     else
     {
-        <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(320px, 1fr)); gap:12px">
-            @foreach (var c in _jobCharts)
-            {
-                <div class="dccard" style="padding:12px 14px">
-                    <div style="display:flex; align-items:baseline; justify-content:space-between; gap:8px; margin-bottom:2px">
-                        <a href="@($"/project/{c.ProjectId}/jobs")" style="font-size:12.5px; font-weight:600; color:var(--text)">@c.JobName</a>
-                        <span style="font-size:10.5px; color:var(--text-3)">@c.Source · @c.StartedAt.ToLocalTime().ToString("MM-dd HH:mm")</span>
+        @foreach (var group in _jobCharts.GroupBy(c => (c.JobName, c.ProjectId)))
+        {
+            <div style="display:flex; align-items:baseline; gap:8px; margin:10px 0 8px">
+                <a href="@($"/project/{group.Key.ProjectId}/jobs")" style="font-size:12.5px; font-weight:600; color:var(--text)">@group.Key.JobName</a>
+                <span style="font-size:10.5px; color:var(--text-3)">@group.Count() chart(s)</span>
+            </div>
+            <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(320px, 1fr)); gap:12px">
+                @foreach (var c in group)
+                {
+                    <div class="dccard" style="padding:12px 14px">
+                        <div style="display:flex; align-items:baseline; justify-content:space-between; gap:8px; margin-bottom:2px">
+                            <span style="font-size:10.5px; color:var(--text-3)">@c.Source</span>
+                            <span style="font-size:10.5px; color:var(--text-3)">@c.StartedAt.ToLocalTime().ToString("MM-dd HH:mm")</span>
+                        </div>
+                        @((MarkupString)c.Svg)
                     </div>
-                    @((MarkupString)c.Svg)
-                </div>
-            }
-        </div>
+                }
+            </div>
+        }
     }
 </div>
 
@@ -141,6 +184,11 @@
     // ── Job data (global chart view) ──────────────────────────────────────────────────────────
     private sealed record JobChartCard(string JobName, Guid ProjectId, DateTimeOffset StartedAt, string Source, string Svg);
     private List<JobChartCard> _jobCharts = new();
+    private int _statRuns;
+    private int _statSuccessPct;
+    private int _statJobs;
+    private string? _narrative;      // the local LLM's 2–3 sentence read of the period
+    private bool _narrativeLoading;
 
     private const int MaxChartCards = 12;
     private const int MaxChartsPerRun = 2;
@@ -149,6 +197,13 @@
     private async Task LoadJobChartsAsync()
     {
         var reports = await Svc.ListRecentRunReportsAsync(24);
+
+        _statRuns = reports.Count;
+        _statJobs = reports.Select(r => r.JobId).Distinct().Count();
+        var finished = reports.Count(r => r.Run.Status is "Succeeded" or "Failed" or "Partial");
+        _statSuccessPct = finished == 0 ? 0
+            : (int)Math.Round(100.0 * reports.Count(r => r.Run.Status == "Succeeded") / finished);
+
         var cards = new List<JobChartCard>();
         foreach (var r in reports)
         {
@@ -175,6 +230,39 @@
             if (cards.Count >= MaxChartCards) break;
         }
         _jobCharts = cards;
+
+        // Hand the period to the local LLM for a short narrative — fire-and-forget so the page
+        // never waits on the model; the summary card streams in when ready.
+        if (Llm.IsEnabled && reports.Count > 0)
+        {
+            var context = string.Join("\n", reports.Select(r =>
+                $"- {r.JobName}: {r.Run.Status}, started {r.Run.StartedAt:yyyy-MM-dd HH:mm}, " +
+                $"{r.Run.ShardResults.Count} shard(s)"));
+            _narrativeLoading = true;
+            _ = GenerateNarrativeAsync(
+                $"Recent job runs across all projects ({_statSuccessPct}% success):\n{context}");
+        }
+    }
+
+    private async Task GenerateNarrativeAsync(string context)
+    {
+        try
+        {
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(45));
+            var text = await Llm.GenerateAsync(
+                "You summarise job-run activity for an operations dashboard. In two or three plain " +
+                "sentences, say how the jobs have been doing and anything notable (failures, gaps, " +
+                "unusually busy jobs). No markdown, no lists, no preamble — just the sentences.",
+                context, cts.Token);
+            var t = text.Trim();
+            _narrative = t.Length > 600 ? t[..600] + "…" : t;
+        }
+        catch { /* the narrative is a bonus — its absence is never an error */ }
+        finally
+        {
+            _narrativeLoading = false;
+            await InvokeAsync(StateHasChanged);
+        }
     }
 
     private static readonly Markdig.MarkdownPipeline _md =

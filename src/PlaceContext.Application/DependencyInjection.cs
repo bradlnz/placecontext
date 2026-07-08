@@ -108,6 +108,9 @@ public static class DependencyInjection
         services.AddScoped<ICommandHandler<DeleteProjectSecretCommand, bool>, DeleteProjectSecretHandler>();
         services.AddScoped<IQueryHandler<ListProjectSecretsQuery, IReadOnlyList<ProjectSecretView>>, ListProjectSecretsHandler>();
         services.AddScoped<IQueryHandler<ListRunArtifactsQuery, IReadOnlyList<RunArtifactLinkView>>, ListRunArtifactsHandler>();
+        services.AddScoped<IQueryHandler<ListJobRunArtifactsQuery, IReadOnlyList<RunArtifactLinkView>>, ListJobRunArtifactsHandler>();
+        services.AddScoped<ICommandHandler<ExecuteProjectDataCommand, Ports.ProjectQueryResult>, ExecuteProjectDataHandler>();
+        services.AddScoped<IQueryHandler<ListProjectDataTablesQuery, IReadOnlyList<Ports.ProjectTableInfo>>, ListProjectDataTablesHandler>();
 
         return services;
     }

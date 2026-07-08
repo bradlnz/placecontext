@@ -86,3 +86,18 @@ func TestRunDetailIncludesChartForJsonArtifact(t *testing.T) {
 		t.Fatalf("chart labels missing:\n%s", out)
 	}
 }
+
+func TestChartFromNestedNumericMap(t *testing.T) {
+	out := chartFromJSON(`{"date":"2026-07-09","totals":{"bookings":3,"sessions":3,"tenants":1}}`)
+	if !strings.Contains(out, "bookings") || !strings.Contains(out, "█") {
+		t.Fatalf("nested totals map should chart, got %q", out)
+	}
+}
+
+func TestChartFromMixedNumericMap(t *testing.T) {
+	// The real daily-booking-summary shape: numbers mixed with sub-objects.
+	out := chartFromJSON(`{"date":"x","totals":{"bookings":3,"sessions":3,"tenants":1,"byStatus":{},"netRevenueByCurrency":{}},"tenants":[]}`)
+	if !strings.Contains(out, "bookings") {
+		t.Fatalf("mixed totals map should chart its numeric entries, got %q", out)
+	}
+}

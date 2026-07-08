@@ -80,7 +80,8 @@ func extractSeries(v any, depth int) ([]string, []float64) {
 		if labels, vals, ok := numericMap(t); ok {
 			return labels, vals
 		}
-		// container object → unwrap the first array value ({"data": […]}, {"series": […]}, …)
+		// container object → unwrap the first array or object value that yields a series
+		// ({"data": […]}, {"series": […]}, {"totals": {…}} …)
 		if depth < 1 {
 			keys := make([]string, 0, len(t))
 			for k := range t {
@@ -88,8 +89,9 @@ func extractSeries(v any, depth int) ([]string, []float64) {
 			}
 			sort.Strings(keys)
 			for _, k := range keys {
-				if arr, ok := t[k].([]any); ok {
-					if labels, vals := extractSeries(arr, depth+1); len(vals) > 0 {
+				switch v := t[k].(type) {
+				case []any, map[string]any:
+					if labels, vals := extractSeries(v, depth+1); len(vals) > 0 {
 						return labels, vals
 					}
 				}
@@ -100,16 +102,18 @@ func extractSeries(v any, depth int) ([]string, []float64) {
 	return nil, nil
 }
 
+// numericMap charts the numeric entries of a map, ignoring non-numeric values, so real-world
+// payloads like {"bookings":3,"sessions":3,"byStatus":{…}} still chart. Two numbers minimum —
+// a single stray count isn't a series.
 func numericMap(m map[string]any) ([]string, []float64, bool) {
-	if len(m) == 0 {
-		return nil, nil, false
-	}
 	keys := make([]string, 0, len(m))
 	for k := range m {
-		if _, ok := m[k].(float64); !ok {
-			return nil, nil, false
+		if _, ok := m[k].(float64); ok {
+			keys = append(keys, k)
 		}
-		keys = append(keys, k)
+	}
+	if len(keys) < 2 {
+		return nil, nil, false
 	}
 	sort.Strings(keys)
 	var vals []float64

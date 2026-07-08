@@ -40,8 +40,11 @@ public sealed class UploadJobCodeHandler : ICommandHandler<UploadJobCodeCommand,
 
             var mapSpec = new MapSpec(codeSource, new[] { "{}" }, new Dictionary<string, string>());
             var policy = new ExitCodePolicy(new[] { 0 }, Array.Empty<int>());
+            // Jobs exist to generate artifacts: new jobs chart their output by default (the local
+            // LLM draws it after each run; the run-history panel and Reports surface it).
             job = Job.Create(projectId, command.JobName!, null, mapSpec, reduceSpec: null,
-                concurrencyLimit: 1, exitCodePolicy: policy, createdAt: _clock.UtcNow);
+                concurrencyLimit: 1, exitCodePolicy: policy, createdAt: _clock.UtcNow,
+                postJobActions: new[] { PostJobActionKind.Chart });
             await _jobs.AddAsync(job, ct);
         }
         else

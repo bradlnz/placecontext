@@ -28,6 +28,16 @@ public sealed class EfRunArtifactLinkRepository : IRunArtifactLinkRepository
         return row is null ? null : ToDomain(row);
     }
 
+    public async Task<IReadOnlyList<RunArtifactLink>> ListForJobAsync(Guid jobId, CancellationToken ct = default)
+    {
+        var rows = await _db.RunArtifacts.AsNoTracking()
+            .Where(r => r.JobId == jobId)
+            .OrderByDescending(r => r.CreatedAt)
+            .Take(200) // the run-history panel shows recent runs; no need to hydrate a job's whole life
+            .ToListAsync(ct);
+        return rows.Select(ToDomain).ToList();
+    }
+
     private static RunArtifactLinkRow ToRow(RunArtifactLink l) => new()
     {
         Id = l.Id,
