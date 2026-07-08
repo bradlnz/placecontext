@@ -138,6 +138,10 @@ public static class DependencyInjection
         services.AddScoped<IJobRunQueue, Scheduling.DbJobRunQueue>();
         services.AddHostedService<Scheduling.TriggerSchedulerService>();
 
+        // The per-project agent: on an interval, reviews each project (local Ollama LLM when
+        // configured, deterministic signals otherwise) and queues "what to do next" as work items.
+        services.AddHostedService<Scheduling.ProjectAgentSchedulerService>();
+
         return services;
     }
 
