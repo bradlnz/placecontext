@@ -68,6 +68,10 @@ public interface IPlaceContextService
     // Project data (each project's own database: tables + SQL).
     Task<Ports.ProjectQueryResult> ExecuteProjectDataAsync(Guid projectId, string sql, CancellationToken ct = default);
     Task<IReadOnlyList<Ports.ProjectTableInfo>> ListProjectDataTablesAsync(Guid projectId, CancellationToken ct = default);
+    Task CreateProjectTableAsync(Guid projectId, string tableName, IReadOnlyList<Ports.ProjectColumnSpec> columns, CancellationToken ct = default);
+    Task RenameProjectTableAsync(Guid projectId, string from, string to, CancellationToken ct = default);
+    Task DropProjectTableAsync(Guid projectId, string tableName, CancellationToken ct = default);
+    Task<string> ExportProjectTableCsvAsync(Guid projectId, string tableName, CancellationToken ct = default);
     Task<IReadOnlyList<RunReportView>> ListRecentRunReportsAsync(int take = 24, CancellationToken ct = default);
     Task<JobView?> GetJobAsync(Guid jobId, CancellationToken ct = default);
     Task<JobView> UploadJobCodeAsync(UploadJobCodeCommand command, CancellationToken ct = default);

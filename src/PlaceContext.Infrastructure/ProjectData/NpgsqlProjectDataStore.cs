@@ -1,3 +1,5 @@
+using System.Text;
+using System.Text.RegularExpressions;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Npgsql;
@@ -30,6 +32,33 @@ public sealed class NpgsqlProjectDataStore : IProjectDataStore
 
     /// <summary>Schema/role name for a project: "proj_" + the guid without dashes (fits PG's 63-char limit).</summary>
     internal static string SchemaFor(Guid projectId) => "proj_" + projectId.ToString("N");
+
+    // DDL can't be parameterised, so identifiers are validated then quote-escaped. A valid identifier
+    // is a letter/underscore start, then letters/digits/underscores, ≤ 63 chars (Postgres's limit).
+    private static readonly Regex IdentRe = new(@"^[A-Za-z_][A-Za-z0-9_]{0,62}$", RegexOptions.Compiled);
+
+    // Column types the wizard offers — an allow-list, so a type string can't smuggle in SQL.
+    internal static readonly IReadOnlyDictionary<string, string> AllowedTypes = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+    {
+        ["text"] = "text",
+        ["integer"] = "integer",
+        ["bigint"] = "bigint",
+        ["numeric"] = "numeric",
+        ["boolean"] = "boolean",
+        ["timestamptz"] = "timestamptz",
+        ["date"] = "date",
+        ["uuid"] = "uuid",
+        ["jsonb"] = "jsonb",
+    };
+
+    private static string Ident(string name, string what)
+    {
+        if (string.IsNullOrWhiteSpace(name) || !IdentRe.IsMatch(name))
+            throw new ArgumentException($"Invalid {what} '{name}'. Use letters, digits and underscores (max 63, no leading digit).");
+        return name;
+    }
+
+    private static string QuoteIdent(string name) => "\"" + name.Replace("\"", "\"\"") + "\"";
 
     public async Task<ProjectQueryResult> ExecuteAsync(Guid projectId, string sql, CancellationToken ct = default)
     {
@@ -108,6 +137,86 @@ public sealed class NpgsqlProjectDataStore : IProjectDataStore
         while (await reader.ReadAsync(ct))
             tables.Add(new ProjectTableInfo(reader.GetString(0), reader.GetInt64(1)));
         return tables;
+    }
+
+    public async Task CreateTableAsync(Guid projectId, string tableName, IReadOnlyList<ProjectColumnSpec> columns, CancellationToken ct = default)
+    {
+        Ident(tableName, "table name");
+        if (columns is null || columns.Count == 0)
+            throw new ArgumentException("A table needs at least one column.");
+
+        var defs = new List<string>();
+        var pkCols = new List<string>();
+        foreach (var c in columns)
+        {
+            Ident(c.Name, "column name");
+            if (!AllowedTypes.TryGetValue(c.Type, out var pgType))
+                throw new ArgumentException($"Unsupported column type '{c.Type}'.");
+            var def = $"{QuoteIdent(c.Name)} {pgType}";
+            if (c.NotNull || c.PrimaryKey) def += " NOT NULL";
+            defs.Add(def);
+            if (c.PrimaryKey) pkCols.Add(QuoteIdent(c.Name));
+        }
+        if (pkCols.Count > 0)
+            defs.Add($"PRIMARY KEY ({string.Join(", ", pkCols)})");
+
+        // Runs as the project role in its own schema — same isolation as ExecuteAsync.
+        await RunAsRoleAsync(projectId,
+            $"CREATE TABLE {QuoteIdent(tableName)} ({string.Join(", ", defs)})", ct);
+    }
+
+    public Task RenameTableAsync(Guid projectId, string from, string to, CancellationToken ct = default)
+    {
+        Ident(from, "table name");
+        Ident(to, "new table name");
+        return RunAsRoleAsync(projectId, $"ALTER TABLE {QuoteIdent(from)} RENAME TO {QuoteIdent(to)}", ct);
+    }
+
+    public Task DropTableAsync(Guid projectId, string tableName, CancellationToken ct = default)
+    {
+        Ident(tableName, "table name");
+        return RunAsRoleAsync(projectId, $"DROP TABLE {QuoteIdent(tableName)}", ct);
+    }
+
+    public async Task<string> ExportTableCsvAsync(Guid projectId, string tableName, CancellationToken ct = default)
+    {
+        Ident(tableName, "table name");
+        var result = await ExecuteAsync(projectId, $"SELECT * FROM {QuoteIdent(tableName)}", ct);
+        var sb = new StringBuilder();
+        sb.AppendLine(string.Join(",", result.Columns.Select(CsvField)));
+        foreach (var row in result.Rows)
+            sb.AppendLine(string.Join(",", row.Select(v => CsvField(v ?? ""))));
+        return sb.ToString();
+    }
+
+    private static string CsvField(string s) =>
+        s.Contains(',') || s.Contains('"') || s.Contains('\n') || s.Contains('\r')
+            ? "\"" + s.Replace("\"", "\"\"") + "\""
+            : s;
+
+    // Run a single non-query statement inside the project's schema as its role (DDL helper).
+    private async Task RunAsRoleAsync(Guid projectId, string statement, CancellationToken ct)
+    {
+        var schema = SchemaFor(projectId);
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+        await EnsureProvisionedAsync(conn, schema, ct);
+        await using var tx = await conn.BeginTransactionAsync(ct);
+        await using (var setup = conn.CreateCommand())
+        {
+            setup.Transaction = tx;
+            setup.CommandText =
+                $"SET LOCAL ROLE \"{schema}\"; SET LOCAL search_path TO \"{schema}\"; " +
+                $"SET LOCAL statement_timeout = '{StatementTimeout}'";
+            await setup.ExecuteNonQueryAsync(ct);
+        }
+        await using (var cmd = conn.CreateCommand())
+        {
+            cmd.Transaction = tx;
+            cmd.CommandText = statement;
+            await cmd.ExecuteNonQueryAsync(ct);
+        }
+        await tx.CommitAsync(ct);
     }
 
     // Idempotent: schema + NOLOGIN role, role owns full rights on its schema and nothing else.

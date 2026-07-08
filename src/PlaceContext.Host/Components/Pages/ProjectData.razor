@@ -24,23 +24,47 @@
     <div style="display:flex; gap:14px; margin-top:12px">
 
         @* ── Tables ─────────────────────────────────────────────────────────────────────── *@
-        <div style="width:230px; flex:none">
+        <div style="width:250px; flex:none">
             <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px">
                 <span style="font-size:11px; text-transform:uppercase; letter-spacing:.5px; color:var(--text-3)">Tables</span>
                 <button class="dcbtn" style="padding:2px 8px; font-size:11px" @onclick="RefreshTablesAsync" title="Refresh">↻</button>
             </div>
+            <button class="dcbtn primary" style="width:100%; margin-bottom:10px; font-size:12px" @onclick="StartNewTable">+ New table</button>
             @if (_tables.Count == 0)
             {
                 <div style="font-size:11.5px; color:var(--text-3); line-height:1.5">
-                    No tables yet — run a<br /><code>CREATE TABLE …</code> to start.
+                    No tables yet — click <b>New table</b> or run a <code>CREATE TABLE …</code>.
                 </div>
             }
             @foreach (var t in _tables)
             {
-                <div class="dccard" style="padding:8px 10px; margin-bottom:6px; cursor:pointer; display:flex; justify-content:space-between; align-items:baseline"
-                     @onclick="@(() => SelectTableAsync(t.Name))" title="SELECT the first rows">
-                    <span style="font-size:12px; font-family:'Geist Mono',monospace">@t.Name</span>
-                    <span style="font-size:10.5px; color:var(--text-3)">~@t.RowEstimate</span>
+                <div class="dccard" style="padding:8px 10px; margin-bottom:6px">
+                    <div style="display:flex; justify-content:space-between; align-items:baseline; cursor:pointer"
+                         @onclick="@(() => SelectTableAsync(t.Name))" title="SELECT the first rows">
+                        <span style="font-size:12px; font-family:'Geist Mono',monospace">@t.Name</span>
+                        <span style="font-size:10.5px; color:var(--text-3)">~@t.RowEstimate</span>
+                    </div>
+                    <div style="display:flex; gap:10px; margin-top:5px">
+                        <button class="dclink" @onclick="@(() => StartRename(t.Name))">rename</button>
+                        <button class="dclink" @onclick="@(() => ExportAsync(t.Name))">export</button>
+                        <button class="dclink" style="color:var(--bad)" @onclick="@(() => StartDrop(t.Name))">drop</button>
+                    </div>
+                    @if (_renaming == t.Name)
+                    {
+                        <div style="display:flex; gap:6px; margin-top:6px">
+                            <input @bind="_renameTo" @bind:event="oninput" placeholder="new name" style="flex:1; min-width:0; padding:4px 7px; font-size:11.5px; background:var(--bg); border:1px solid var(--border); border-radius:5px; color:var(--text); font-family:'Geist Mono',monospace" />
+                            <button class="dcbtn" style="padding:3px 8px; font-size:11px" @onclick="ConfirmRename">✓</button>
+                            <button class="dcbtn" style="padding:3px 8px; font-size:11px" @onclick="@(() => _renaming = null)">✕</button>
+                        </div>
+                    }
+                    @if (_dropping == t.Name)
+                    {
+                        <div style="display:flex; align-items:center; gap:8px; margin-top:6px; font-size:11px; color:var(--bad)">
+                            drop @t.Name?
+                            <button class="dcbtn" style="padding:3px 8px; font-size:11px" @onclick="ConfirmDrop">yes</button>
+                            <button class="dcbtn" style="padding:3px 8px; font-size:11px" @onclick="@(() => _dropping = null)">no</button>
+                        </div>
+                    }
                 </div>
             }
         </div>
@@ -50,6 +74,10 @@
             <div id="@EditorId" style="height:220px; border:1px solid var(--border); border-radius:8px; overflow:hidden"></div>
             <div style="display:flex; align-items:center; gap:10px; margin:10px 0 14px">
                 <button class="dcbtn primary" disabled="@_running" @onclick="RunAsync">@(_running ? "Running…" : "▶ Run (SQL)")</button>
+                @if (_result is { Columns.Count: > 0, Rows.Count: > 0 })
+                {
+                    <a class="dcbtn" style="font-size:12px; text-decoration:none" href="@ResultCsvUri()" download="query-result.csv">⬇ Export CSV</a>
+                }
                 @if (_error is not null)
                 {
                     <span style="font-size:12px; color:var(--bad)">@_error</span>
@@ -98,8 +126,73 @@
     </div>
 </div>
 
+@* ── New-table wizard ───────────────────────────────────────────────────────────────────── *@
+@if (_newTable is not null)
+{
+    <div class="dcslide-scrim" @onclick="@(() => _newTable = null)"></div>
+    <div class="dcslide" style="width:560px">
+        <div class="dcslide-head">
+            <span style="font-size:13px; font-weight:600">New table</span>
+            <button class="dcslide-x" @onclick="@(() => _newTable = null)">×</button>
+        </div>
+        <div style="padding:16px 18px">
+            <label style="display:block; font-size:11.5px; color:var(--text-3); margin-bottom:4px">Table name</label>
+            <input @bind="_newTable.Name" @bind:event="oninput" placeholder="e.g. readings"
+                   style="width:100%; padding:8px 10px; margin-bottom:14px; background:var(--bg); border:1px solid var(--border); border-radius:7px; color:var(--text); font-family:'Geist Mono',monospace" />
+
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px">
+                <span style="font-size:11.5px; color:var(--text-3)">Columns</span>
+                <button class="dcbtn" style="padding:2px 9px; font-size:11px" @onclick="AddColumn">+ column</button>
+            </div>
+            <div style="display:grid; grid-template-columns:1fr 130px 52px 52px 24px; gap:6px; align-items:center; font-size:10.5px; color:var(--text-3); margin-bottom:4px">
+                <span>name</span><span>type</span><span style="text-align:center">not null</span><span style="text-align:center">PK</span><span></span>
+            </div>
+            @for (var i = 0; i < _newTable.Columns.Count; i++)
+            {
+                var col = _newTable.Columns[i];
+                var idx = i;
+                <div style="display:grid; grid-template-columns:1fr 130px 52px 52px 24px; gap:6px; align-items:center; margin-bottom:6px">
+                    <input @bind="col.Name" @bind:event="oninput" placeholder="column"
+                           style="padding:6px 8px; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); font-family:'Geist Mono',monospace; font-size:12px" />
+                    <select @bind="col.Type" style="padding:6px 8px; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:12px">
+                        @foreach (var t in ColumnTypes) { <option value="@t">@t</option> }
+                    </select>
+                    <input type="checkbox" @bind="col.NotNull" style="justify-self:center" />
+                    <input type="checkbox" @bind="col.PrimaryKey" style="justify-self:center" />
+                    <button class="dclink" style="color:var(--bad)" @onclick="@(() => _newTable.Columns.RemoveAt(idx))">✕</button>
+                </div>
+            }
+
+            @if (_newTableError is not null)
+            {
+                <div style="font-size:12px; color:var(--bad); margin-top:8px">@_newTableError</div>
+            }
+            <div style="display:flex; gap:8px; margin-top:16px">
+                <button class="dcbtn primary" disabled="@_creating" @onclick="CreateTableAsync">@(_creating ? "Creating…" : "Create table")</button>
+                <button class="dcbtn" @onclick="@(() => _newTable = null)">Cancel</button>
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+    .dclink { border:none; background:none; padding:0; cursor:pointer; font-size:11px; color:var(--brand-2); }
+    .dclink:hover { text-decoration:underline; }
+</style>
+
 @code {
     [Parameter] public Guid ProjectId { get; set; }
+
+    private static readonly string[] ColumnTypes =
+        { "text", "integer", "bigint", "numeric", "boolean", "timestamptz", "date", "uuid", "jsonb" };
+
+    private sealed class ColumnDraft { public string Name = ""; public string Type = "text"; public bool NotNull; public bool PrimaryKey; }
+    private sealed class TableDraft { public string Name = ""; public List<ColumnDraft> Columns = new(); }
+
+    private TableDraft? _newTable;
+    private string? _newTableError;
+    private bool _creating;
+    private string? _renaming, _renameTo, _dropping;
 
     private const string EditorId = "pcdata-editor";
     private const string StarterSql =
@@ -164,10 +257,91 @@
         await RunAsync();
     }
 
+    // ── New-table wizard ──────────────────────────────────────────────────────────────────────
+    private void StartNewTable()
+    {
+        _newTableError = null;
+        _newTable = new TableDraft { Columns = { new ColumnDraft { Name = "id", Type = "uuid", NotNull = true, PrimaryKey = true } } };
+    }
+
+    private void AddColumn() => _newTable?.Columns.Add(new ColumnDraft());
+
+    private async Task CreateTableAsync()
+    {
+        if (_newTable is null) return;
+        _newTableError = null;
+        if (string.IsNullOrWhiteSpace(_newTable.Name)) { _newTableError = "Give the table a name."; return; }
+        var cols = _newTable.Columns.Where(c => !string.IsNullOrWhiteSpace(c.Name)).ToList();
+        if (cols.Count == 0) { _newTableError = "Add at least one named column."; return; }
+
+        _creating = true;
+        try
+        {
+            var specs = cols.Select(c => new ProjectColumnSpec(c.Name.Trim(), c.Type, c.NotNull, c.PrimaryKey)).ToList();
+            await Svc.CreateProjectTableAsync(ProjectId, _newTable.Name.Trim(), specs);
+            _newTable = null;
+            await RefreshTablesAsync();
+        }
+        catch (Exception ex) { _newTableError = Trim(ex.Message); }
+        finally { _creating = false; }
+    }
+
+    // ── Rename / drop ─────────────────────────────────────────────────────────────────────────
+    private void StartRename(string table) { _dropping = null; _renaming = table; _renameTo = table; }
+    private void StartDrop(string table) { _renaming = null; _dropping = table; }
+
+    private async Task ConfirmRename()
+    {
+        if (_renaming is null || string.IsNullOrWhiteSpace(_renameTo)) return;
+        try
+        {
+            await Svc.RenameProjectTableAsync(ProjectId, _renaming, _renameTo!.Trim());
+            _renaming = null;
+            await RefreshTablesAsync();
+        }
+        catch (Exception ex) { _error = Trim(ex.Message); }
+    }
+
+    private async Task ConfirmDrop()
+    {
+        if (_dropping is null) return;
+        try
+        {
+            await Svc.DropProjectTableAsync(ProjectId, _dropping);
+            _dropping = null;
+            await RefreshTablesAsync();
+        }
+        catch (Exception ex) { _error = Trim(ex.Message); }
+    }
+
+    // ── Export ────────────────────────────────────────────────────────────────────────────────
+    private async Task ExportAsync(string table)
+    {
+        try
+        {
+            var csv = await Svc.ExportProjectTableCsvAsync(ProjectId, table);
+            var uri = "data:text/csv;charset=utf-8;base64," + Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(csv));
+            await JS.InvokeVoidAsync("pcdata.download", $"{table}.csv", uri);
+        }
+        catch (Exception ex) { _error = Trim(ex.Message); }
+    }
+
+    // A data: URI of the current result set, for the "Export CSV" download link.
+    private string ResultCsvUri()
+    {
+        if (_result is null) return "";
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine(string.Join(",", _result.Columns.Select(Csv)));
+        foreach (var row in _result.Rows)
+            sb.AppendLine(string.Join(",", row.Select(v => Csv(v ?? ""))));
+        return "data:text/csv;charset=utf-8;base64," + Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(sb.ToString()));
+    }
+
+    private static string Csv(string s) =>
+        s.Contains(',') || s.Contains('"') || s.Contains('\n') || s.Contains('\r')
+            ? "\"" + s.Replace("\"", "\"\"") + "\"" : s;
+
     // Npgsql prefixes errors with exception type noise; keep the Postgres message.
     private static string Trim(string message)
-    {
-        var i = message.IndexOf(": ", StringComparison.Ordinal);
-        return message.Length > 400 ? message[..400] + "…" : message;
-    }
+        => message.Length > 400 ? message[..400] + "…" : message;
 }

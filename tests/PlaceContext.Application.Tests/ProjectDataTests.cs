@@ -29,6 +29,22 @@ public class ProjectDataTests
             SawProject = projectId;
             return Task.FromResult<IReadOnlyList<ProjectTableInfo>>(new[] { new ProjectTableInfo("readings", 3) });
         }
+
+        public string? CreatedTable;
+        public (string From, string To)? Renamed;
+        public string? Dropped;
+
+        public Task CreateTableAsync(Guid projectId, string tableName, IReadOnlyList<ProjectColumnSpec> columns, CancellationToken ct = default)
+        { SawProject = projectId; CreatedTable = tableName; return Task.CompletedTask; }
+
+        public Task RenameTableAsync(Guid projectId, string from, string to, CancellationToken ct = default)
+        { SawProject = projectId; Renamed = (from, to); return Task.CompletedTask; }
+
+        public Task DropTableAsync(Guid projectId, string tableName, CancellationToken ct = default)
+        { SawProject = projectId; Dropped = tableName; return Task.CompletedTask; }
+
+        public Task<string> ExportTableCsvAsync(Guid projectId, string tableName, CancellationToken ct = default)
+        { SawProject = projectId; return Task.FromResult("a,b\n1,2\n"); }
     }
 
     private static async Task<(InMemoryProjectRepository projects, Project project, FakeStore store)> WorldAsync()
@@ -75,5 +91,33 @@ public class ProjectDataTests
 
         Assert.Single(tables);
         Assert.Equal("readings", tables[0].Name);
+    }
+
+    [Fact]
+    public async Task Create_rename_drop_and_export_reach_the_store_for_a_real_project()
+    {
+        var (projects, project, store) = await WorldAsync();
+        var pid = project.Id.Value;
+
+        await new CreateProjectTableHandler(projects, store).HandleAsync(
+            new CreateProjectTableCommand(pid, "events", new[] { new ProjectColumnSpec("id", "uuid", true, true) }));
+        await new RenameProjectTableHandler(projects, store).HandleAsync(new RenameProjectTableCommand(pid, "events", "log"));
+        await new DropProjectTableHandler(projects, store).HandleAsync(new DropProjectTableCommand(pid, "log"));
+        var csv = await new ExportProjectTableHandler(projects, store).HandleAsync(new ExportProjectTableQuery(pid, "readings"));
+
+        Assert.Equal("events", store.CreatedTable);
+        Assert.Equal(("events", "log"), store.Renamed);
+        Assert.Equal("log", store.Dropped);
+        Assert.Contains("a,b", csv);
+    }
+
+    [Fact]
+    public async Task Table_ops_reject_an_unknown_project()
+    {
+        var (projects, _, store) = await WorldAsync();
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            new CreateProjectTableHandler(projects, store).HandleAsync(
+                new CreateProjectTableCommand(Guid.NewGuid(), "t", new[] { new ProjectColumnSpec("id", "uuid", true, true) })));
+        Assert.Null(store.CreatedTable);
     }
 }

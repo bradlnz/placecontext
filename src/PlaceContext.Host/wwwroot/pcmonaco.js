@@ -102,3 +102,15 @@ window.pcmonaco = (function () {
 
   return { init, setValue, getValue, destroy };
 })();
+
+// pcdata — small helpers for the project Data page (CSV download from a data: URI).
+window.pcdata = {
+  download(filename, dataUri) {
+    const a = document.createElement('a');
+    a.href = dataUri;
+    a.download = filename || 'export.csv';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }
+};
