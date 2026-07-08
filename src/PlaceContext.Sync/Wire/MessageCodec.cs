@@ -74,6 +74,10 @@ public static class MessageCodec
             case ByeMessage b:
                 w.String(b.Reason);
                 break;
+            case ChatMessage c:
+                w.String(c.Text);
+                w.UVarint(c.SentAtUnixMs);
+                break;
             default:
                 throw new WireFormatException($"Unknown message type {message.GetType().Name}.");
         }
@@ -107,6 +111,8 @@ public static class MessageCodec
                 return new AckMessage(ReadClock(ref r));
             case MessageKind.Bye:
                 return new ByeMessage(r.String());
+            case MessageKind.Chat:
+                return new ChatMessage(r.String(), r.UVarint());
             default:
                 throw new WireFormatException($"Unknown message kind {(byte)kind}.");
         }

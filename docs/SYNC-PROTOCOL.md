@@ -32,7 +32,9 @@ change through) and converge to the same history.
 
 ## 2. Identity
 
-A node holds a long-lived signing keypair (Ed25519 at the transport layer). Its **NodeId** is:
+A node holds a long-lived signing keypair (ECDSA P-256 in the implemented TLS binding — the key
+that signs the node's TLS certificate). Its **NodeId** is derived from the key's
+SubjectPublicKeyInfo (DER):
 
 ```
 NodeId = base32-crockford( SHA-256(publicKey)[0..20] )      # 160-bit, 32 chars, no padding
@@ -84,6 +86,7 @@ payload := u8(kind) body                 # kind selects the message; body is kin
 | 2    | `Push`      | both      | `uvarint count` + count × `record`                 |
 | 3    | `Ack`       | both      | `clock frontier`                                   |
 | 4    | `Bye`       | both      | `string reason`                                    |
+| 5    | `Chat`      | both      | `string text`, `uvarint sentAtUnixMs` *(since 1.1)* |
 
 `record` := `string origin` · `uvarint sequence` · `guid projectId` · `string kind` · `string digest` · `bytes payload`
 
@@ -92,6 +95,9 @@ payload := u8(kind) body                 # kind selects the message; body is kin
 - **Push** — a batch of records the *recipient* was missing (computed from the peer's Hello clock).
 - **Ack** — the recipient's new frontier after applying a Push. Lets the sender learn convergence.
 - **Bye** — orderly close with a human reason.
+- **Chat** *(1.1)* — one operator chat line. Deliberately carries **no sender field**: the author is
+  whoever the secure channel authenticated, so a line cannot be spoofed. A reconciliation session
+  ignores Chat; chat runs on its own long-lived channel (see §10).
 
 ## 6. Session state machine
 
@@ -131,16 +137,30 @@ interoperate at v1.
 
 PCSP assumes a secure, ordered, reliable, bidirectional byte stream:
 
-- **QUIC + TLS 1.3 (default).** One bidirectional stream per session. Both endpoints present a
-  self-signed certificate whose key is the node's identity key; each verifies the peer's presented
-  key hashes to the expected `NodeId`. Confidentiality/integrity/forward-secrecy come from TLS.
-  QUIC's UDP + connection migration also give the best NAT traversal of the options.
-- **Noise-over-TCP (alt).** `Noise_IK` with static keys = node identity keys, framed length-prefixed
-  over TCP. Fewer moving parts, no cert plumbing; loses QUIC's multiplexing/migration.
+- **TLS 1.3 over TCP (implemented — `PlaceContext.Sync.Transport`).** Mutually authenticated
+  `SslStream`, TLS 1.3 only. Both endpoints present a self-signed certificate whose key **is** the
+  node's identity key; the dialer's handshake succeeds only if the listener's presented key hashes
+  to the expected `NodeId` (identity pinning — no CA, no chain, no expiry trust), and the listener
+  requires a client certificate and binds the peer's `Hello` NodeId to the key that certificate
+  presented. Confidentiality, integrity, and forward secrecy come from TLS 1.3; every PCSP byte on
+  the wire is inside the TLS channel. `TlsSyncListener`/`TlsSyncClient` run sync sessions;
+  `SyncTlsIdentity` holds the keypair + certificate (persist `ExportKeyPem()` for a stable NodeId).
+- **QUIC + TLS 1.3 (future).** Same certificate/identity model; adds UDP, stream multiplexing and
+  connection migration for better NAT traversal.
+- **Noise-over-TCP (alt, future).** `Noise_IK` with static keys = node identity keys.
 
 The core never sees any of this — it consumes/produces frames. Discovery (how a node learns a
 peer's address) is out of scope for v1: start with a configured `host:port` + the reachability
 probe, and layer mDNS-on-LAN or a DHT in later.
+
+## 10. Chat channel (1.1)
+
+Operators (or agents) on two nodes can talk over the **same security model** as sync: a dedicated
+long-lived connection with the identical mutual-TLS-1.3 handshake and identity pinning, carrying
+only `Chat` (5) and `Bye` (4) frames — implemented by `TlsChatListener` / `TlsChatClient` /
+`ChatChannel` in `PlaceContext.Sync.Transport`. Either side may send at any time (full duplex).
+There is no Hello on a chat channel: the peer's identity is exactly what its certificate proved,
+and each received line is attributed to that identity, never to a field in the message.
 
 ## 9. What v1 is not
 

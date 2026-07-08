@@ -7,6 +7,7 @@ public enum MessageKind : byte
     Push = 2,
     Ack = 3,
     Bye = 4,
+    Chat = 5,
 }
 
 /// <summary>Base for every PCSP message. Sealed hierarchy — one record per <see cref="MessageKind"/>.</summary>
@@ -44,4 +45,14 @@ public sealed record AckMessage(VectorClock Frontier) : Message
 public sealed record ByeMessage(string Reason) : Message
 {
     public override MessageKind Kind => MessageKind.Bye;
+}
+
+/// <summary>
+/// An operator chat line (since 1.1). Carries no sender id on purpose: the sender is whoever the
+/// secure channel authenticated — the transport certificate, not the message, names the author,
+/// so a line cannot be spoofed. A reconciliation session ignores these.
+/// </summary>
+public sealed record ChatMessage(string Text, long SentAtUnixMs) : Message
+{
+    public override MessageKind Kind => MessageKind.Chat;
 }

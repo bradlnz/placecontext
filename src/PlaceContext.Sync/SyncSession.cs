@@ -76,6 +76,7 @@ public sealed class SyncSession
             PushMessage push => OnPush(push),
             AckMessage ack => OnAck(ack),
             ByeMessage => OnBye(),
+            ChatMessage => Array.Empty<Message>(), // chat is a channel concern; reconciliation ignores it (§7)
             _ => throw new InvalidOperationException($"Unhandled message {inbound.Kind}."),
         };
     }

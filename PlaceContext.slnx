@@ -5,6 +5,7 @@
     <Project Path="src/PlaceContext.Host/PlaceContext.Host.csproj" />
     <Project Path="src/PlaceContext.Infrastructure/PlaceContext.Infrastructure.csproj" />
     <Project Path="src/PlaceContext.Sync/PlaceContext.Sync.csproj" />
+    <Project Path="src/PlaceContext.Sync.Transport/PlaceContext.Sync.Transport.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/PlaceContext.Application.Tests/PlaceContext.Application.Tests.csproj" />
@@ -12,6 +13,7 @@
     <Project Path="tests/PlaceContext.Domain.Tests/PlaceContext.Domain.Tests.csproj" />
     <Project Path="tests/PlaceContext.Infrastructure.Tests/PlaceContext.Infrastructure.Tests.csproj" />
     <Project Path="tests/PlaceContext.Sync.Tests/PlaceContext.Sync.Tests.csproj" />
+    <Project Path="tests/PlaceContext.Sync.Transport.Tests/PlaceContext.Sync.Transport.Tests.csproj" />
     <Project Path="tests/PlaceContext.TestSupport/PlaceContext.TestSupport.csproj" />
   </Folder>
 </Solution>

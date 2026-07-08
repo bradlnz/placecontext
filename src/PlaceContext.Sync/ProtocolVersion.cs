@@ -6,8 +6,8 @@ namespace PlaceContext.Sync;
 /// </summary>
 public sealed record ProtocolVersion(int Major, int Minor) : IComparable<ProtocolVersion>
 {
-    /// <summary>The version this build speaks.</summary>
-    public static readonly ProtocolVersion Current = new(1, 0);
+    /// <summary>The version this build speaks. 1.1 added the Chat message (kind 5).</summary>
+    public static readonly ProtocolVersion Current = new(1, 1);
 
     public int CompareTo(ProtocolVersion? other)
     {
