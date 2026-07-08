@@ -1,58 +1,50 @@
 # Jobs and artifacts
 
-*Jobs run your code as sandboxed containers on the cluster — and they exist for exactly one reason: to generate artifacts.*
+*Write a little code that reads a JSON input and prints a JSON result — PlaceContext runs it safely and saves that result as the job's artifact.*
 
-## The doctrine: the artifact IS the point
+## The idea
 
-A job is **map** code (optionally with a **reduce** step) run as isolated containers. Whatever a
-shard writes to STDOUT is captured as its **artifact** — that output is the job's reason to
-exist. The TUI's job list leads with the ARTIFACTS column for the same reason; a job with no
-artifacts is a job that hasn't done anything yet.
+A **job** is some code you write. When it runs, PlaceContext feeds it an input, runs it in a
+safe, isolated sandbox, and captures whatever it prints as the job's **artifact** — the result
+the job exists to produce. A job that hasn't produced an artifact yet hasn't done anything yet.
 
-Emit **JSON**. When the artifact carries a numeric series, the portal and TUI chart it
-automatically, and it feeds the global Reports view (see *Charts and reports*).
+The rule of thumb: **print JSON**. If your result contains numbers, PlaceContext charts it
+automatically and folds it into your reports (see *Charts and reports*).
 
-## The sandbox contract
+## How your code talks to PlaceContext
 
-Every shard runs as an isolated container with this exact contract:
+Every job follows the same simple contract:
 
-| Aspect | Contract |
-|---|---|
-| **Input** | The shard's input payload arrives on **STDIN**. Read all of stdin and parse it (usually JSON). One run per payload in the job's input payloads; with no payloads you get one run with `{}` |
-| **Files** | Your source files are mounted **read-only at `/work`**; the entrypoint is invoked as `/work/<entrypoint>` |
-| **Output** | Write the result to **STDOUT** — it is captured as the shard's artifact. Keep logs on **STDERR** so they don't pollute the result |
-| **Exit codes** | `0` = success by default (configurable). Extra codes can be mapped to *success* or *partial* per job |
-| **Network** | **None by default** — a deny-all NetworkPolicy seals the run. Enable the job's network-egress toggle only when outbound access is genuinely required |
-| **Timeout** | Default **300 s** per job, maximum **3600 s** (adjustable per job; the TUI steps it in 30 s increments) |
-| **Dependencies** | None installed — no `pip install` / `npm install` pass. Vendor any libraries into your file set, or use a container image for dep-heavy jobs |
+- **Input comes in on standard input.** Read all of it and parse it (it's usually JSON). If you
+  give the job no input, it runs once with an empty `{}`.
+- **Your result goes out on standard output.** Print it — that's what gets saved as the artifact.
+- **Keep logs and diagnostics separate** by printing them to standard error, so they don't
+  corrupt the result.
+- **Files you add to the job are available to your code**, read-only.
+- **There's no network access** unless you turn it on — leave it off unless a job genuinely needs
+  to reach the internet.
+- **There's a time limit** — 5 minutes by default, raisable up to an hour per job.
+- **Nothing is installed for you.** No `pip install` step. If your code needs a library, include
+  it in the job's files, or bring your own container image for heavier dependencies.
 
-## Runtimes — python is the default
+## Pick a language
 
-**Default to `python` unless you need another language** — it reads best for the data-shaping
-work jobs do, and its stdlib covers json/csv/dates without dependencies.
+**Python is the default** — it reads best for the data-shaping work jobs usually do, and its
+built-in library handles JSON, CSV, and dates without anything extra. You can also write jobs in
+Node.js, Go, Ruby, or .NET. Each language has a sensible default file name (`main.py`,
+`index.js`, `main.go`, `main.rb`, `main.cs`) so you can usually just paste code and go.
 
-| Runtime | Base image | Default entrypoint | Invoked as |
-|---|---|---|---|
-| `python` **(default)** | `python:3.12-slim` | `main.py` | `python /work/main.py` |
-| `node` | `node:22-slim` | `index.js` | `node /work/index.js` |
-| `go` | `golang:1.23-alpine` | `main.go` | `go run /work/main.go` |
-| `ruby` | `ruby:3.3-slim` | `main.rb` | `ruby /work/main.rb` |
-| `dotnet` | `mcr.microsoft.com/dotnet/sdk:10.0` | `main.cs` | `dotnet run /work/main.cs` (.NET 10 file-based app) |
+## A full example
 
-`pctl doctor --go-live` smoke-tests runtimes by running a trivial sandboxed Job per runtime,
-exactly how real jobs run — catching image-pull and sandbox regressions before they bite.
-
-## A full python example
-
-A job that summarises orders per day and emits chartable JSON:
+Here's a Python job that totals up orders per day and prints a chartable result:
 
 ```python
 import sys, json, os
 
-# 1. Input arrives on stdin — the shard's payload.
+# 1. Read the input from standard input.
 data = json.loads(sys.stdin.read() or "{}")
 
-# 2. Secrets come from the vault as environment variables — never hard-code them.
+# 2. Secrets you stored in the Vault arrive as environment variables — never hard-code them.
 api_key = os.environ.get("API_KEY")
 
 # 3. Do the work.
@@ -61,100 +53,93 @@ for order in data.get("orders", []):
     day = order.get("day", "unknown")
     totals[day] = totals.get(day, 0) + order.get("amount", 0)
 
-# 4. The artifact: JSON on stdout. A numeric map like this charts automatically.
+# 4. Print the result. A map of numbers like this charts automatically.
 print(json.dumps({"totals": totals}))
 
-# Logs belong on stderr:
+# 5. Logs go to standard error, so they don't pollute the result.
 print(f"processed {len(data.get('orders', []))} orders", file=sys.stderr)
 ```
 
-With an input payload of
-`{"orders":[{"day":"mon","amount":12},{"day":"tue","amount":31},{"day":"mon","amount":5}]}`
-the artifact is `{"totals": {"mon": 17, "tue": 31}}` — which renders as a bar chart in the run
-detail, in the run history, and on the Reports page.
-
-## Shards, concurrency, and reduce
-
-- **Input payloads** — one JSON document per line in the job editor; **each line is one shard**.
-  A run executes every shard (up to the concurrency limit in parallel, 1–32).
-- **Reduce step** — an optional second stage that receives the shard results and produces one
-  combined artifact. Its result appears separately in the run detail.
-- **Input parameters** — a job may instead declare named parameters (`name` or `name|Label` per
-  line). Running it then prompts for values (portal modal, or the `inputPayload` argument of the
-  `run_job` MCP tool) and passes them as a single shard's payload.
-
-## Environment variables and secrets
-
-Plain configuration goes in the job's **env** (KEY=VALUE lines). **Credentials come from the
-project Vault**: encrypted at rest, write-only in the UI, and injected into every run's
-environment at execution time. A plaintext env var with the same name overrides the vault value.
-The job editor lists which vault names will be injected, with a link to manage them.
-
-## Post-job actions
-
-After each run, the configured actions generate outputs **from the run's artifacts**, store them
-in the object store (MinIO), and link them on the run:
-
-| Action | Output |
-|---|---|
-| **HtmlReport** | The run's data rendered as a styled, self-contained HTML page — written by the local LLM, with a deterministic fallback |
-| **Chart** | ONE chart (inline SVG) that best visualises the data — **drawn by the local LLM** from the actual values, deterministic fallback when the LLM is unavailable |
-| **Csv** | The run's artifacts flattened into a downloadable CSV |
-| **RawBundle** | Every produced output file stored as-is |
-
-**Chart is enabled by default for new jobs created via MCP `upload_job_code`** — jobs exist to
-generate artifacts, so new jobs chart their output out of the box. In the portal editor, tick the
-actions you want; in the TUI, press `[s]` on a job to toggle each action (and network egress, and
-the timeout) with checkboxes. Actions are best-effort: a failing action never fails the run.
-
-## Creating a job
-
-**Portal editor** — Jobs tab → **+ New job**. Choose the workload source:
-
-- *Container image* — bring your own image (`myorg/worker:latest`) for dep-heavy work.
-- *Inline code* — pick a runtime, paste source, set the entrypoint (or accept the default).
-
-Then set input payloads, env, concurrency, exit-code policy, egress, parameters, and post-job
-actions. Code jobs get a **⌁ Editor** button for a full editor page.
-
-**MCP `upload_job_code`** — the agent path. Call `job_authoring_guide` first (it returns this
-contract), then:
+Give it this input:
 
 ```json
-{
-  "projectId": "…",
-  "jobName": "orders-per-day",
-  "runtimeId": "python",
-  "filesJson": "[{\"path\":\"main.py\",\"content\":\"…\"}]"
-}
+{"orders":[{"day":"mon","amount":12},{"day":"tue","amount":31},{"day":"mon","amount":5}]}
 ```
 
-Targeting an existing job by `jobId` replaces its source and preserves everything else (payloads,
-env, concurrency, reduce, exit-code policy). Targeting `projectId` + `jobName` creates the job if
-absent, with sensible defaults: one `{}` shard, concurrency 1, success exit code 0, and the
-**Chart** post-job action on. Multi-file uploads (paths may include subdirectories, e.g.
-`lib/report.py`) require an explicit `entrypoint`.
+and the artifact is `{"totals": {"mon": 17, "tue": 31}}` — which shows up as a bar chart in the
+run detail, in the run history, and on the Reports page.
 
-## Running a job
+## Create a job
+
+### In the portal
+
+Open the project's **Jobs** tab and click **+ New job**. Then choose how the job's code arrives:
+
+- **Inline code** — pick a language, paste your source, and (optionally) name the entry file.
+  Code jobs get a **⌁ Editor** button for a full editing page.
+- **Container image** — bring your own image (e.g. `myorg/worker:latest`) for dependency-heavy
+  work.
+
+From there you can set the input, environment values, how many copies run in parallel, whether
+network access is allowed, and which post-run outputs to generate.
+
+### With an AI agent
+
+An agent can author and upload a job for you in one call — see *MCP and agents* for the full
+walkthrough. New jobs an agent creates come with charting turned on, so they produce a chart
+from their very first run.
+
+## Give a job secrets and settings
+
+- **Plain settings** go in the job's environment as `KEY=VALUE` lines.
+- **Secrets** — API keys, passwords — belong in the project **Vault**. They're encrypted, can't
+  be read back in the UI, and are handed to every run as environment variables. Reference them by
+  name in your code; never paste the actual value into job code or settings. The job editor shows
+  which vault secrets will be available.
+
+## Run a job
 
 | From | How |
 |---|---|
-| **Portal** | The **Run** button on the job card (prompts for declared parameters first). The run appears in the run history below |
-| **TUI** | Select the job on the dashboard and press **`[R]`** — the run is queued and drained by the in-cluster scheduler. `⏎` drills into run history, then into a run's per-shard detail |
-| **MCP** | `run_job` (waits for completion and returns the full run detail); `list_job_runs` / `get_job_run` fetch results later |
-| **Schedule trigger** | `kind=Schedule` with a cron expression (5-field, or 6-field with seconds; evaluated in the workspace timezone), e.g. `0 0 * * *` for daily midnight |
-| **Event trigger** | `kind=Event` fires whenever a named event is emitted — built-ins (`job.completed`, `activity.recorded`, `risk.recomputed`) or your own types via `define_event_type` + `emit_event`. The event payload is passed through as the run's parameters |
+| **Portal** | The **Run** button on the job card. The run then shows up in the run history below |
+| **TUI** | Select the job and press **`[R]`**. Press `⏎` to drill into the run history and any run's detail |
+| **On a schedule** | Add a schedule trigger with a cron expression, e.g. `0 0 * * *` for daily at midnight |
+| **On an event** | Add an event trigger so the job fires whenever something happens — another job finishing, a change being recorded, or an event you define yourself |
 
-Triggers are managed on the Jobs tab (add / pause / delete) or via the MCP trigger tools.
-Firing enqueues an independent run; concurrent runs are allowed.
+Schedules and event triggers are managed on the **Jobs** tab (add, pause, delete). Each firing
+starts its own run, and several runs can go at once.
 
-## Reading results
+## Run more with shards and reduce
 
-A run records, per shard: exit code, outcome (Succeeded / Partial / Failed), the artifact, and the
-log — plus the reduce result and a snapshot of the exact workload spec that ran. The portal's run
-detail pretty-prints JSON artifacts, charts numeric series inline, and lists the post-job outputs
-(report/chart/CSV/bundle) as links into the object store. In the TUI, a run detail renders the
-same data with ASCII charts, and `[o]` / `[1–9]` open any links found in the output.
+- **Multiple inputs** — put one JSON document per line as the job's input, and each line runs as
+  its own parallel copy (up to your chosen limit, 1–32).
+- **A reduce step** — an optional second stage that receives all those results and combines them
+  into one final artifact, shown separately in the run detail.
+- **Prompted parameters** — instead of raw input, a job can declare named parameters. Running it
+  then asks you for the values.
 
-If you need to find old results by meaning rather than by date, `search_run_outputs` does
-semantic (vector) search over a project's run outputs — when embeddings are configured.
+## Generate extra outputs after each run
+
+Turn on any of these to produce more from a run's result. They're saved and linked on the run,
+and a failing one never fails the run itself:
+
+| Output | What you get |
+|---|---|
+| **Chart** | One chart that best shows the data — composed from the actual values |
+| **HTML report** | The run's data as a clean, self-contained web page |
+| **CSV** | The result flattened into a downloadable spreadsheet |
+| **Raw bundle** | Every file the run produced, stored as-is |
+
+**Chart is on by default for new jobs** — jobs exist to produce results worth looking at. Tick
+the ones you want in the portal editor, or press **`[s]`** on a job in the TUI to toggle them
+(along with network access and the time limit).
+
+## Read the results
+
+A run records, for each copy: whether it succeeded, the artifact it produced, and its log — plus
+the combined reduce result if you used one. The portal pretty-prints JSON artifacts, charts any
+numbers, and lists the extra outputs (report, chart, CSV, bundle) as links. In the TUI, the same
+run shows the numbers as an ASCII chart, and `[o]` / `[1–9]` open any links in the output.
+
+To find an old result by meaning rather than date, search across a project's run outputs from an
+agent — it does a semantic search over everything your jobs have produced.

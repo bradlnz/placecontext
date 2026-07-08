@@ -1,45 +1,25 @@
 # Getting started
 
-*Install PlaceContext on your own machine, sign in to the portal, and learn where everything lives.*
+*Install PlaceContext on your own machine, sign in to the portal, and learn your way around.*
 
-## What PlaceContext is
+## What you get
 
-PlaceContext is a self-hosted, multi-tenant **context + jobs** platform. It runs on your own
-hardware as a small Kubernetes cluster and gives you:
+PlaceContext runs on your own hardware and keeps everything there. It gives every project
+a place to store its context, run your code as jobs, keep its own database, and be worked on
+by an AI agent. It even runs a small AI model locally to draw charts and write summaries, so
+**nothing about your projects ever leaves your machines**.
 
-| Piece | What it does |
-|---|---|
-| **Portal** (Blazor Server) | The web UI: projects, jobs, data, reports, the knowledge graph |
-| **MCP server** (Streamable HTTP at `/mcp`) | Lets AI agents (Claude Code, etc.) work against your projects with real tools |
-| **PostgreSQL** (pgvector) | The platform database, plus a private schema per project |
-| **MinIO** | Object storage for run reports, charts, artifacts, and DB dumps |
-| **Ollama + Gemma** | A local LLM — draws charts, writes report prose, powers the per-project agent. Nothing leaves your machines |
-| **Job runner** | Executes your code as sandboxed containers on the cluster |
+You drive it two ways:
 
-Everything is orchestrated by one CLI, `pctl`, and one full-screen operator console, `pctl tui`.
+- the **portal** — the web app where you click through projects, jobs, data, and reports;
+- **`pctl`** and its full-screen console **`pctl tui`** — the command line and dashboard you
+  use to run and grow the cluster.
 
-## Prerequisites
+## Install it
 
-- **docker** — required. The dev cluster is k3s-in-Docker (k3d).
-- **k3d** — required for the local cluster. The packaged installer installs it for you if missing.
-- **kubectl** — used by `pctl` for status/logs (bundled expectations; `pctl doctor` checks all of this).
-- Go and the .NET SDK are only needed if you build from source.
+You need Docker on the machine. Everything else the installer handles.
 
-Check your machine before anything else:
-
-```bash
-pctl doctor
-```
-
-It verifies docker/k3d/kubectl, and — when a cluster is already up — runs the full go-live
-checklist: secrets present, database migrated to the code's level, host replicas ready, and a
-sandboxed smoke-test job per runtime.
-
-## Way 1 — the packaged tarball (recommended for a new machine)
-
-Releases are built with `pctl package` into a single self-contained tarball: `pctl`, the prebuilt
-TUI, the Kubernetes manifests, and the container image itself (`deploy/placecontext-local.tar`) —
-no registry, no source tree, no build step.
+### The quick way — the release tarball
 
 ```bash
 tar xzf placecontext-<version>-linux-amd64.tar.gz
@@ -47,8 +27,8 @@ cd placecontext-<version>-linux-amd64
 ./install.sh
 ```
 
-`install.sh` checks for docker, installs k3d if it's absent (via the official install script),
-then runs `./deploy/pctl dev up`. When it finishes:
+The installer checks for Docker, sets up anything it needs, and starts PlaceContext. When it
+finishes you'll see:
 
 ```
 PlaceContext is running:
@@ -57,67 +37,59 @@ PlaceContext is running:
   help     ./deploy/pctl help
 ```
 
-If this machine should instead *join* an existing cluster as a worker, don't install — run the
-TUI and press `[j]`, then paste the master's join code (see the *Cluster and nodes* article).
-
-## Way 2 — from a source checkout
+### From a source checkout
 
 ```bash
 git clone <repo> && cd <repo>
 ./deploy/pctl dev up            # add --rebuild to build the image first
 ```
 
-`pctl dev up` does, in order:
-
-1. Cleans any old dev Docker Postgres containers and volumes.
-2. Creates the k3d cluster `placecontext` — **1 server + 2 agent nodes**, with host port
-   `7700` mapped to the cluster's ingress (`-p 7700:80@loadbalancer`).
-3. Imports the container image (from the tarball if present, otherwise the local Docker image).
-4. Applies the manifests: namespace, signing-key secrets, PostgreSQL (pgvector), MinIO,
-   the nightly DB-dump CronJob, Ollama + Gemma, and the PlaceContext Host.
-5. Waits for the rollout and prints the URL.
-
-Useful knobs (environment overrides):
+Want a different port or more worker capacity on this one machine?
 
 ```bash
-PCTL_PORT=8800 pctl dev up      # different host port
-PCTL_AGENTS=4 pctl dev up       # more dev worker nodes
+PCTL_PORT=8800 pctl dev up      # serve the portal on a different port
+PCTL_AGENTS=4 pctl dev up       # more worker capacity
 ```
 
-Related commands:
+If this machine should instead **join a cluster you already run** (as an extra worker
+computer), don't install — see *Cluster and nodes* for the join-code flow.
+
+## Check the machine is ready
+
+Run this any time to confirm things are healthy:
 
 ```bash
-pctl ensure               # idempotent bring-up: create-or-start cluster, apply, wait
-pctl autostart            # run 'ensure' at boot via a systemd user service
-pctl status               # nodes + workloads
-pctl logs -f              # tail the Host logs
-pctl url                  # print the portal / MCP URL
-pctl dev down             # delete the local cluster
+pctl doctor
 ```
 
-## First login to the portal
+It checks the tools PlaceContext needs and, when a cluster is already running, walks the full
+go-live checklist — everything present, the database up to date, and a real test job run in
+each language to prove jobs work end to end.
 
-The portal is at **<http://localhost:7700/>** (the MCP endpoint is `/mcp` on the same origin).
+## Sign in to the portal
 
-The easiest first sign-in is through the TUI: run `pctl tui` and press **`[p]`**. The TUI mints a
-short-lived sign-in token from the cluster's portal signing key (the `placecontext-portal`
-secret, generated once at deploy time) and opens the portal already authenticated. From there,
-manage your team under **Settings → Members**.
+The portal lives at **<http://localhost:7700/>**.
 
-## A tour of the left nav
+The easiest first sign-in skips passwords entirely: run `pctl tui` and press **`[p]`**. It
+opens the portal already signed in. From there, invite and manage your team under
+**Settings → Members**.
 
-| Item | What you'll find |
+## Find your way around
+
+The left-hand nav holds the platform-wide pages:
+
+| Page | What you do there |
 |---|---|
-| **Overview** | All projects at a glance, with their risk bands |
-| **Brain** | The knowledge graph — decisions, context, hotspots built from logged activity |
-| **Activity Log** | The ledger: every recorded change with author, rationale, and verification flags |
-| **Reports** | Defined reports per project, plus the global **Job data** section — stat tiles, an LLM narrative, and auto-generated charts from recent job runs |
-| **Requirements** | The standards agents are held to when they work on your projects |
+| **Overview** | See all your projects at a glance, with their risk bands |
+| **Brain** | Explore what's known about a project — its decisions, context, and hot spots |
+| **Activity Log** | Read the running history of every change: who, what, and why |
+| **Reports** | Generate a report for a project, and see charts from recent job runs |
+| **Requirements** | Set the standards agents are held to when they work for you |
 | **Wiki** | This documentation |
-| **MCP Inspector** | A live trace of every MCP tool call — request, response, timing, status |
+| **MCP Inspector** | Watch, live, every action an AI agent takes |
 
-Each project additionally has its own pages: the work-item board, **Jobs**, **Data** (the
-project's own SQL database), and the **Vault** (encrypted secrets).
+Open any project and you also get its own pages: a **work board**, **Jobs**, **Data** (the
+project's own database), and a **Vault** for its secrets.
 
 ## The operator console: `pctl tui`
 
@@ -125,31 +97,41 @@ project's own SQL database), and the **Vault** (encrypted secrets).
 pctl tui
 ```
 
-The TUI is the day-to-day cockpit: a live dashboard of nodes, pods, and jobs (refreshed about
-every 1.5 s), with one-key actions:
+This is your day-to-day cockpit — a live dashboard of your machines, what's running, and your
+jobs, refreshed every second or two. One key does each job:
 
-- `↑↓`/`jk` navigate · `⏎` open logs (pods/nodes) or run history (jobs)
-- `R` run the selected job · `s` per-job settings · `x` kill a job
-- `g` live CPU/memory graphs · `m` MCP call log · `/` search the knowledge graph
-- `p` open the portal (signed in) · `a` add a worker node · `u` update + deploy
-- `t` encrypted node-to-node chat · `c` cycle theme · `q` quit
+| Key | What it does |
+|---|---|
+| `↑↓` / `jk` | Move the selection |
+| `⏎` | Open logs, or a job's run history |
+| `R` | Run the selected job |
+| `s` | Change a job's settings |
+| `x` | Stop a job |
+| `g` | Live CPU / memory graphs |
+| `m` | Watch AI agent activity |
+| `/` | Search what's known about your projects |
+| `p` | Open the portal, already signed in |
+| `a` | Add a worker computer |
+| `u` | Update to the latest and redeploy |
+| `t` | Secure chat with your other machines |
+| `c` / `q` | Cycle theme / quit |
 
-Before any cluster exists it shows a welcome screen instead: `[u]` creates a local cluster,
-`[j]` joins an existing one with a join code.
+Before you've created a cluster, the TUI shows a welcome screen instead: **`[u]`** sets up
+PlaceContext on this machine, **`[j]`** joins one you already run.
 
 ## If something doesn't come up
 
-| Symptom | Do this |
+| What you see | What to do |
 |---|---|
-| Portal doesn't answer on :7700 | `pctl status` — are the `placecontext` pods Running? `pctl logs -f` for the Host's own errors |
-| "cluster not reachable" in the TUI | The cluster is down — `pctl ensure` starts (or creates) it and re-applies everything |
-| Cluster broken after a `docker system prune` | `pctl ensure` repairs a missing network; if the loadbalancer container is gone the message will say so — `pctl dev down && pctl dev up` recreates it |
-| Red migration banner in the TUI | The database schema is behind the app code — `pctl deploy` (or the TUI's `[u]`) rolls the migration out |
-| Not sure anything is healthy | `pctl doctor --go-live` — the full checklist, including per-runtime sandbox smoke tests |
+| Portal won't answer on :7700 | `pctl status` to see what's running, then `pctl logs -f` for errors |
+| TUI says "cluster not reachable" | It's stopped — `pctl ensure` starts it back up |
+| Broke after a Docker cleanup | `pctl ensure` repairs it; if it can't, it tells you plainly |
+| Red banner about the database | `pctl deploy` (or the TUI's `[u]`) brings it up to date |
+| Not sure anything is healthy | `pctl doctor --go-live` runs the full check |
 
 ## Where to go next
 
 - **Projects** — the top-level unit everything hangs off.
-- **Jobs and artifacts** — the core doctrine: jobs exist to generate artifacts.
-- **Cluster and nodes** — grow from one laptop to a fleet.
-- **MCP and agents** — connect Claude and let agents do the work.
+- **Jobs and artifacts** — write code, get results you can chart.
+- **Cluster and nodes** — grow from one laptop to a fleet of machines.
+- **MCP and agents** — connect Claude and let an agent do the work.

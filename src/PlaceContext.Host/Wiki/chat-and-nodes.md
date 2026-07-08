@@ -1,52 +1,54 @@
 # Chat between nodes
 
-*Press `[t]` in the TUI for encrypted operator-to-operator chat between PlaceContext nodes — mutual TLS 1.3, self-certifying identities, and both sides must say yes.*
+*Press `[t]` in the TUI to open a secure, private chat straight between two of your PlaceContext machines — no server, no account, and both sides have to say yes.*
 
-## What it is
+## What it's for
 
-Every machine running the PlaceContext TUI is a **node** with a stable cryptographic identity.
-Two operators on two nodes can open a direct, encrypted chat channel between them — no server in
-the middle, no account, no relay. It's built for the fleet case: you're at the master, a
-colleague (or you, on another box) is at a worker, and you want a secure line between machines
-**you own**.
+Every machine running the PlaceContext TUI can chat directly with another one. It's built for the
+fleet case: you're at the master, a teammate (or you, on another box) is at a worker, and you want
+a quick, secure line between machines **you own**. There's no chat server in the middle, no
+account to create, and nothing is relayed anywhere — the two machines talk straight to each other,
+end-to-end encrypted.
 
-This is the chat half of **PCSP** — the PlaceContext Sync Protocol (`docs/SYNC-PROTOCOL.md`,
-§10). The Go TUI implementation interoperates byte-for-byte with the C# implementation
-(`TlsChatListener` / `TlsChatClient` in `PlaceContext.Sync.Transport`).
+## Before you start
 
-## Using it
+Both machines need the PlaceContext TUI running — a machine only answers a network scan and
+accepts calls while its TUI is open. To chat on the same local network, that's all you need. To
+reach a machine somewhere else, you'll want its address and its id (both shown on its chat
+screen), or the two machines on the same private mesh network (see *Cluster and nodes*).
 
-1. Run `pctl tui` and press **`[t]`**. The header shows *your* NodeId (32 characters) and the
-   port you're listening on.
-2. Opening the view **scans the LAN** for other PlaceContext nodes. Found nodes are listed as
-   `NODEID  host:port`.
-3. `tab` selects a node; **`⏎` on an empty input dials it**. Or dial manually by typing
-   `host[:port] NODEID` (the port defaults to 7443; the NodeId is shown on the peer's chat
-   screen). `ctrl+r` rescans.
-4. **Both sides must approve.** The callee sees a modal — `<nodeid> wants to chat — [y] accept,
-   [n] decline` — and *nothing is read from the connection until the operator accepts*. While
-   either a conversation or a pending request is open, additional callers are politely refused
-   with "busy".
-5. Once connected: type and `⏎` to send, `ctrl+d` to hang up, `esc` to leave the view (the
-   conversation stays open in the background — a flash tells you when a message arrives).
+## Start a chat
 
-If you're elsewhere in the TUI, incoming requests and messages appear as one-line flashes
-("chat request from a1b2c3d4… — press [t]").
+1. Run `pctl tui` and press **`[t]`**. The header shows *your* machine's id and the port it's
+   listening on.
+2. It **scans your network** for other PlaceContext machines and lists what it finds.
+3. Press `tab` to select a machine, then press **`⏎`** (with the input empty) to call it. To
+   reach a machine that isn't on your local network, type its address and id instead. `ctrl+r`
+   rescans.
+4. **Both sides have to agree.** The other operator sees a prompt — *"… wants to chat — [y]
+   accept, [n] decline"* — and nothing is read from the connection until they accept. While a
+   chat or a pending request is open, other callers are politely told you're busy.
+5. Once connected, type and press `⏎` to send. `ctrl+d` hangs up; `esc` leaves the view but keeps
+   the conversation alive in the background — a flash tells you when a new message arrives.
 
-### Key reference
+If you're somewhere else in the TUI when a call or message comes in, you'll see a one-line flash
+("chat request from … — press [t]"), so you never miss someone reaching out while you're watching
+the dashboard.
 
-| Key | When | Action |
+## Key reference
+
+| Key | When | What it does |
 |---|---|---|
-| `tab` | Disconnected, nodes found | Select the next discovered node |
-| `⏎` (empty input) | Disconnected | Dial the selected node |
-| `⏎` (with text) | Disconnected | Dial a manual target: `host[:port] NODEID` |
+| `tab` | Machines found | Select the next one |
+| `⏎` (empty input) | Not connected | Call the selected machine |
+| `⏎` (with text) | Not connected | Call a machine you typed by address and id |
 | `⏎` (with text) | Connected | Send the message |
-| `ctrl+r` | Disconnected | Rescan the LAN |
-| `y` / `n` | Incoming request | Accept / decline the caller |
-| `ctrl+d` | Connected | Hang up (sends an orderly `Bye`) |
-| `esc` | Any | Back to the dashboard — an open conversation stays alive |
+| `ctrl+r` | Not connected | Rescan the network |
+| `y` / `n` | Incoming call | Accept / decline |
+| `ctrl+d` | Connected | Hang up |
+| `esc` | Any time | Back to the dashboard — the chat stays open |
 
-### A session, end to end
+## A session, end to end
 
 ```
 you are 4Q7ZK9M2…  ·  listening :7443
@@ -64,87 +66,66 @@ nodes on your network:
 14:03 N8PT3W5A…  on it — worker rebuilding now
 ```
 
-The transcript timestamps each line and attributes it to the TLS-authenticated peer (shown by
-the first 8 characters of its NodeId); your own lines are marked `you`.
+Each line is timestamped and labelled with who sent it. Your own lines are marked `you`; the
+other machine's are labelled with its id.
 
-## Identity: the NodeId
+## Why it's secure
 
-Each node holds a long-lived **ECDSA P-256 keypair**, stored at
-`~/.config/placecontext/node.key` (PKCS#8 PEM, mode 0600 — the same format the C# host
-persists). Its identity is derived from the public key:
+You don't have to configure any of this — it's simply how the chat works:
 
-```
-NodeId = crockford-base32( SHA-256(publicKey SPKI)[0..20] )     # 160-bit, 32 chars
-```
+- **Everything is encrypted** between the two machines, end to end. Nobody in between can read it.
+- **Each machine proves who it is.** A call only connects if the machine at the other end really
+  is the one you meant to reach — an impostor advertising someone else's name simply can't
+  complete the connection.
+- **Messages can't be forged.** A line's author is whoever the secure connection proved them to
+  be, not a name typed into a message.
+- **You're always asked first.** An incoming call is shown as a request and nothing is read until
+  you accept; declining just closes it.
 
-This makes identities **self-certifying**: given a NodeId and a presented public key, either the
-key hashes to the id or the peer is lying. There is no directory to consult and no CA to trust.
-The TLS certificate itself is ephemeral (regenerated each start) — **the key is the identity,
-never the cert**. Keep `node.key` if you want a stable NodeId across reinstalls; delete it to
-become a new identity.
+Each machine keeps a stable identity so its id stays the same across restarts. If you ever want a
+machine to become a brand-new identity, an operator can reset its saved key.
 
-## The security model
+## Chatting across networks
 
-| Property | How |
-|---|---|
-| **Encryption** | Mutual **TLS 1.3 only** — confidentiality, integrity, and forward secrecy come from the TLS channel; every chat byte is inside it |
-| **Authentication** | Both endpoints present a self-signed certificate whose key *is* their identity key. The listener requires a client certificate; the dialer's handshake **fails unless the presented key hashes to exactly the expected NodeId** (identity pinning — no CA, no chain, no expiry trust) |
-| **No spoofable sender** | Chat frames deliberately carry **no sender field**. A line's author is whoever the TLS handshake authenticated — attribution can't be forged inside a message |
-| **Consent** | An incoming connection is surfaced as a request; the socket is not read until the operator accepts. Decline closes it |
-| **Bounded input** | Frames are length-prefixed and capped at 1 MiB — hostile lengths are rejected before allocation |
-
-### Discovery is plaintext — by design
-
-The LAN scan is a UDP broadcast on port **7444**: the probe `PCSP-DISCOVER v1`, answered with
-`PCSP-HERE <nodeid> <chatPort>`. It only advertises a (NodeId, port) pair — nothing secret.
-Trust is established later, by the TLS handshake pinning that NodeId when you choose to dial.
-A liar on the network can advertise any NodeId it wants; its handshake will simply fail.
-
-## Ports and configuration
-
-| Port | Protocol | Purpose | Override |
-|---|---|---|---|
-| **7443** | TCP (TLS 1.3) | The chat listener | `PCTL_CHAT_PORT` |
-| **7444** | UDP | LAN discovery (probe/response) | — |
-
-For nodes on different networks, dial manually with a reachable address — e.g. a Tailscale/
-Headscale mesh IP (see `pctl mesh` and the `--vpn-*` flags in *Cluster and nodes*):
+Machines on the same local network find each other automatically. For machines in different
+places, call one directly by its address and id — for example over a private mesh network (see
+`pctl mesh` and the `--vpn-*` options in *Cluster and nodes*):
 
 ```
-100.64.0.7:7443 4Q7Z…32-CHAR-NODEID…
+100.64.0.7:7443 4Q7Z…32-CHARACTER-NODE-ID…
 ```
 
-## On the wire (for the curious)
+## When to reach for it
 
-A chat channel carries exactly two frame kinds from the PCSP framing
-(`uvarint(len)` + `u8(kind)` + body):
+It's the quickest way to coordinate a fleet action without leaving the console. A common
+pattern: you finish a deploy on the master, press `[t]`, and tell the operator at a worker to
+pull the update — all from inside the same dashboard where you can both see what's running. No
+external chat tool, no copy-pasting between windows.
 
-| Kind | Name | Body |
-|---|---|---|
-| 5 | `Chat` | `string text`, `uvarint sentAtUnixMs` |
-| 4 | `Bye` | `string reason` — an orderly hang-up |
-
-Unknown kinds are ignored for forward compatibility. There is no `Hello` on a chat channel: the
-peer's identity is exactly what its certificate proved. (Sync sessions — the reconciliation half
-of PCSP, with `Hello`/`Push`/`Ack` and vector clocks — run on their own connections and ignore
-chat; see `docs/SYNC-PROTOCOL.md` for the full protocol.)
+Because it's tied to the machines themselves rather than to accounts, it's also a handy sanity
+check: if you can reach a machine here and see its id, you know it's up, on the network, and
+really the box you think it is.
 
 ## Scope
 
-This feature is for **operators of machines they own end-to-end** — a few boxes talking to each
-other with no control plane. It is not a multi-tenant messaging system: per-customer network
-isolation is the mesh's job (`pctl mesh tenant add`), and anything needing ACLs between parties
-belongs there, not here.
+This is for **operators of machines they own** — a few boxes talking to each other. It isn't a
+multi-tenant messaging system: keeping different customers' networks apart is the mesh's job
+(`pctl mesh tenant add`), not this chat.
 
 ## Troubleshooting
 
-- **"scan: no other nodes found"** — the other machine must have its TUI running (the responder
-  answers scans while the TUI is up), and both must be on the same broadcast domain. Across
-  networks, dial manually.
-- **"identity mismatch: certificate is X, expected Y"** — the machine at that address is not the
-  node you pinned. Re-check the NodeId on the peer's chat screen; if the peer legitimately
-  regenerated its key, its NodeId changed.
-- **"chat listener on :7443: …address in use"** — another process (or a second TUI) holds the
-  port; set `PCTL_CHAT_PORT` and dial with the explicit port.
-- **Caller sees nothing happen** — the callee hasn't answered the `[y]/[n]` prompt yet; nothing
-  flows until they accept.
+- **"no other nodes found"** — the other machine needs its TUI running too, and both must be on
+  the same local network. Across networks, call it directly by address.
+- **"identity mismatch"** — the machine at that address isn't the one you expected. Re-check its
+  id on its chat screen; if it legitimately reset its key, its id changed.
+- **"address in use"** — another program (or a second TUI) is already using the chat port. Set
+  `PCTL_CHAT_PORT` and call with the explicit port.
+- **The caller sees nothing happen** — the other side hasn't answered the accept/decline prompt
+  yet. Nothing flows until they do.
+- **"busy"** — the machine you called is already in a chat or has another request pending. Wait
+  and try again.
+- **A message came in but you missed it** — leaving the chat view with `esc` keeps the
+  conversation alive in the background; press `[t]` again to return to it. Only `ctrl+d` actually
+  hangs up.
+- **Wrong machine answered** — double-check the id shown on the peer's chat screen against the one
+  you're calling; the id is what pins the identity, not the address.

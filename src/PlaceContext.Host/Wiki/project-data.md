@@ -1,60 +1,68 @@
 # Project data
 
-*Every project has its own database — real SQL over a private, isolated Postgres schema, with a Monaco editor in the portal's Data tab.*
+*Every project gets its own private database — create tables, run SQL, and export results, all from the Data tab.*
 
-## The idea
+## What the Data tab gives you
 
-The **Data** tab (`/project/<id>/data`) gives each project a genuine relational database of its
-own: create tables, store data, and query it with standard PostgreSQL SQL. It is not a toy grid —
-it's a private schema inside the cluster's Postgres, provisioned lazily on first use, with the
-isolation enforced by Postgres itself.
+Open a project and click **Data**. You get a real relational database that belongs to this
+project alone: create tables, store rows, and query them with standard SQL. It's not a toy grid —
+it's a genuine database, and it's **completely private**. One project can never see another
+project's tables, and no project can touch the platform's own data.
 
-## How isolation works
+There's nothing to set up. The database appears the first time you use the Data tab.
 
-For a project with id `4f2e…`, the platform provisions (idempotently, on first use):
+## Create a table
 
-- a schema named `proj_4f2e…` (the guid without dashes), and
-- a matching **NOLOGIN role** of the same name.
+Two ways, whichever you prefer.
 
-Every statement you run executes inside a transaction that first pins:
+### The New table wizard
+
+Click **New table**, give it a name, and add your columns:
+
+1. Name each column and pick its type (text, number, timestamp, boolean, and so on).
+2. Mark a column as the **primary key** if it uniquely identifies a row.
+3. Mark columns **not null** where a value is always required.
+4. Create it — the table appears in the sidebar, ready for data.
+
+### Or write the SQL yourself
+
+Prefer SQL? Just write it in the editor and run it:
 
 ```sql
-SET LOCAL ROLE "proj_<guid>";
-SET LOCAL search_path TO "proj_<guid>";
-SET LOCAL statement_timeout = '10s';
+CREATE TABLE readings (
+    at     timestamptz DEFAULT now(),
+    sensor text        NOT NULL,
+    value  numeric     NOT NULL
+);
 ```
 
-The role holds privileges on **its own schema only** — full rights on its tables and sequences
-(including default privileges for future ones), and `REVOKE ALL ON SCHEMA public`. So:
+## Run a query
 
-- a project **cannot read another project's tables** — different schema, different role, no grant;
-- a project **cannot touch the platform's tables** — those live in `public`, where the project
-  role has no table grants;
-- Postgres enforces this, not application code. There is no query rewriting to bypass.
+Type SQL into the editor and press **▶ Run**. A few things to know:
 
-## The editor
+- Click any table in the sidebar to instantly see its first rows.
+- Results show up to **500 rows** at a time — if there are more, aggregate rather than dumping
+  everything.
+- A single query has up to **10 seconds** to run, so a runaway query gets stopped rather than
+  hanging.
+- You can run several statements at once; the last one that returns rows is what's displayed.
+- Empty values show as `∅`. If something's wrong, the database's error message appears right next
+  to the Run button.
 
-- **Monaco SQL editor** with highlighting (falls back to a basic editor if the Monaco CDN is
-  unreachable — SQL still runs either way).
-- **Tables sidebar** — every table in your schema with an approximate row count (`~N`, from
-  Postgres planner estimates, so it lags a little behind reality). Click a table to run
-  `SELECT * FROM "table" LIMIT 100`. `↻` refreshes.
-- **▶ Run (SQL)** executes what's in the editor.
+## Rename, drop, and refresh
 
-## Result semantics and limits
+The sidebar lists every table with an approximate row count. From there you can **rename** a
+table or **drop** one you no longer need. The `↻` button refreshes the list — handy after your
+jobs have loaded new data.
 
-| Behaviour | Detail |
-|---|---|
-| Row cap | Result grids are truncated at **500 rows** (marked "truncated at 500") |
-| Statement timeout | **10 seconds** per execution — a runaway query is cancelled by Postgres |
-| Multiple statements | Allowed; run in one transaction. When several return rows, **the last result set wins** |
-| DDL/DML | Shows `OK — N row(s) affected`; the tables sidebar refreshes automatically |
-| NULLs | Rendered as `∅` |
-| Errors | The Postgres error message is shown next to the Run button |
+## Export to CSV
+
+Any table or query result can be exported to **CSV** for a spreadsheet or to share. Run the
+query (or open the table), then export the result.
 
 ## Worked example
 
-Paste and run each step (or all at once — remember: last SELECT wins for display):
+Paste and run these in turn:
 
 ```sql
 -- 1. A table for sensor readings
@@ -86,34 +94,14 @@ GROUP BY sensor
 ORDER BY avg_value DESC;
 ```
 
-The result grid shows one row per sensor; `readings` now appears in the sidebar with its row
-estimate. Standard PostgreSQL applies throughout — indexes, views, CTEs, window functions,
-`timestamptz` arithmetic — subject to the 10 s timeout and your schema-scoped privileges.
-
-## Pairing jobs with the Data tab
-
-A powerful pattern: **jobs generate the data, the Data tab is where you interrogate it.**
-
-- A scheduled job fetches or computes something every night (egress enabled if it calls an API),
-  emits the records as its JSON artifact, and a follow-up step loads them into project tables.
-- The Data tab then becomes the project's analytical surface: ad-hoc `GROUP BY`s over everything
-  the jobs have accumulated, not just the latest run's artifact.
-- Conversely, a run's chartable summary (see *Charts and reports*) is great for the glanceable
-  trend, while the Data tab holds the full-fidelity rows behind it.
-
-Keep the shapes boring and SQL-friendly — one row per fact, timestamps as `timestamptz`, numbers
-as `numeric` — and the 500-row/10-second limits will rarely matter, because you'll be selecting
-aggregates rather than raw dumps.
-
-## More SQL that works well here
-
-Everything ordinary PostgreSQL offers is available inside your schema:
+You get one row per sensor, and `readings` now shows in the sidebar. Everything standard SQL
+offers works here — indexes, views, CTEs, window functions, date arithmetic:
 
 ```sql
 -- An index for the queries you actually run
 CREATE INDEX readings_sensor_at ON readings (sensor, at DESC);
 
--- A view to save retyping the aggregate
+-- A view so you don't retype the aggregate
 CREATE VIEW sensor_summary AS
 SELECT sensor, count(*) AS samples, round(avg(value), 2) AS avg_value
 FROM readings GROUP BY sensor;
@@ -122,7 +110,7 @@ SELECT * FROM sensor_summary ORDER BY avg_value DESC;
 ```
 
 ```sql
--- Window functions for trends
+-- Window functions for rolling trends
 SELECT at::date AS day, sensor, value,
        avg(value) OVER (PARTITION BY sensor ORDER BY at
                         ROWS BETWEEN 6 PRECEDING AND CURRENT ROW) AS rolling_avg
@@ -130,26 +118,32 @@ FROM readings
 ORDER BY sensor, at;
 ```
 
-Since your role owns the tables it creates, maintenance statements work too — `ANALYZE readings`
-freshens the planner statistics that feed the sidebar's `~N` row estimates.
+## A great pattern: jobs write, the Data tab reads
+
+Jobs and the Data tab work beautifully together:
+
+- A scheduled job pulls or computes something each night, prints the records as its result, and
+  loads them into a project table.
+- The Data tab then becomes your analysis surface — run ad-hoc `GROUP BY`s over everything the
+  jobs have piled up, not just the latest run.
+- A job's chartable summary (see *Charts and reports*) is perfect for the glanceable trend; the
+  Data tab holds the full detail behind it.
+
+Keep your tables simple — one row per fact, timestamps as `timestamptz`, numbers as `numeric` —
+and select aggregates rather than raw dumps, and the row and time limits will rarely get in your
+way.
 
 ## Troubleshooting
 
-| Symptom | Cause / fix |
+| What you see | What it means |
 |---|---|
-| `canceling statement due to statement timeout` | The 10 s cap fired. Narrow the query (add a `WHERE`, select aggregates, add an index) |
-| `permission denied for schema public` | Working as intended — your role has no rights outside its own schema. Create the table in your schema (no prefix needed; `search_path` is pinned) |
-| Results look cut off | The 500-row display cap — the banner says "truncated at 500". Aggregate instead of dumping raw rows |
-| Only the last query's rows showed | Multiple statements ran fine, but the grid shows the **last** result set. Run SELECTs one at a time to inspect each |
-| Row estimate looks stale | It's a planner estimate. `ANALYZE <table>;` refreshes it |
-| "basic editor (Monaco CDN unreachable)" | The rich editor couldn't load — cosmetic only; SQL still executes |
+| `canceling statement due to statement timeout` | The query took over 10 seconds — narrow it with a `WHERE`, select aggregates, or add an index |
+| `permission denied for schema public` | You're trying to work outside your project's own space. Just create the table without any prefix — it lands in the right place |
+| Results look cut off | You hit the 500-row display limit — aggregate instead of dumping raw rows |
+| Only the last query's rows showed | Several statements ran, but only the last result set is displayed. Run SELECTs one at a time to see each |
+| Row count looks stale | It's an estimate; run `ANALYZE <table>;` to refresh it |
 
-## Operational notes
+## Backups
 
-- Provisioning is **lazy and idempotent** — the schema/role appear the first time the project's
-  Data tab (or data API) is used; re-running provisioning is harmless.
-- The per-project schemas live in the same Postgres the platform uses, so they are covered by the
-  same **nightly dump** (`pctl db backup-now`, `pctl db backups`, `pctl db restore`) and by
-  `pctl db ha` replication when enabled.
-- Schema names are derived from the project GUID (`proj_` + 32 hex chars), safely inside
-  Postgres's 63-character identifier limit.
+Your project's data is backed up along with everything else — the nightly backup covers it
+automatically, and an operator can restore from it when needed (see *Cluster and nodes*).

@@ -1,75 +1,87 @@
 # Projects
 
-*Projects are the top-level unit: each carries its context, activity ledger, work board, jobs, its own database, a vault, and a resident agent that proposes next steps.*
+*Create a project, fill its board with work, run jobs against it, and let a built-in agent keep suggesting what to do next.*
 
 ## What a project is
 
-Everything in PlaceContext hangs off a **project** — usually a code repository, registered by its
-absolute path. Create one from the portal, or from an agent over MCP:
+A **project** is the top-level thing everything hangs off — usually one code repository. Each
+project keeps its own context, history, work board, jobs, database, and secrets, all private
+to it.
 
-```text
-create_project  path=/home/you/code/myapp             # idempotent — re-creating returns the existing project
-onboard         path=/home/you/code/myapp             # create + backfill git history + seed context + scaffold a skill
-```
+Create one from the portal's **Overview** page (**+ New project**), or have an AI agent create
+it for you (see *MCP and agents*). Creating the same project twice is safe — you just get the
+existing one back. If you point PlaceContext at a git repo, an agent can also **onboard** it in
+one step: it reads your recent commits and your README/AGENTS/CLAUDE docs to seed the project's
+context and history, so it starts out already knowing something about your code.
 
-`onboard` is the one-call bootstrap: it creates the project, backfills the activity log from
-recent git commits (default 50), seeds context from README/AGENTS/CLAUDE docs, and scaffolds a
-local skill for your AI agent (Claude Code or Codex).
+## What's inside a project
 
-## What every project carries
+Open a project and you get:
 
-| Facet | Where | What it is |
+| Area | What it's for |
+|---|---|
+| **Board** | Your queue of work items — Low, Normal, or High priority |
+| **Jobs** | Code you run to produce results (see *Jobs and artifacts*) |
+| **Data** | The project's own private database with a SQL editor (see *Project data*) |
+| **Brain** | The context and knowledge about the project — what's known, what was decided |
+| **Activity Log** | The running history of every change: who did it, why, and whether it was verified |
+| **Vault** | Encrypted secrets (API keys, passwords) that jobs can use without you exposing them |
+
+## The work board
+
+The board is a simple, prioritised queue. Every item moves through three states:
+
+| State | Meaning |
+|---|---|
+| **Queued** | Waiting. Ordered by priority, then by age |
+| **In progress** | Someone (or an agent) has claimed it and is working on it |
+| **Done** | Finished, and the change was recorded in the activity log |
+
+Add items yourself, or let the built-in agent and your reports propose them. Closing items
+matters: the agent won't suggest something that's already on the board, so completing work is
+what lets fresh suggestions come through.
+
+## Store secrets in the Vault
+
+Every project has a **Vault** for its sensitive values — API keys, passwords, tokens. Add them
+by name, and they're encrypted and can't be read back in the UI. When a job runs, the vault's
+secrets are handed to it as environment variables, so your job code references them **by name**
+and never contains the actual value. This is the right home for anything you wouldn't want
+sitting in plain text — see *Jobs and artifacts* for using them from a job.
+
+## Run jobs automatically
+
+A project's jobs don't have to be run by hand. On the **Jobs** tab you can put a job on a
+schedule (say, nightly), or have it fire whenever something happens — another job finishing, a
+change being recorded, or an event you define yourself. That's how a project keeps its data and
+charts fresh without anyone lifting a finger. See *Jobs and artifacts* for the details.
+
+## Let the project suggest its own next steps
+
+Every project has a **built-in agent** that quietly reviews where things stand and adds
+suggested next steps to the board for you. On each pass it looks at:
+
+- the most recent changes recorded in the activity log,
+- what's already open on the board, and
+- the project's most recent job runs.
+
+It then proposes at most **three** next steps, each with a title, some detail, and a priority.
+It never repeats a suggestion that's already open, so the board stays useful rather than noisy.
+Suggested items are labelled *"Proposed by the project agent"* so you always know where they
+came from.
+
+If the local AI model is turned off, the agent still surfaces the obvious, concrete signals:
+
+| It notices | It queues | Priority |
 |---|---|---|
-| **Context / knowledge (Brain)** | Brain page, `get_context` / `add_context` / `set_context` | A durable Markdown context document plus a knowledge graph rebuilt from logged activity (`rebuild_graph`, `query_graph`) |
-| **Activity log** | Activity Log page, `record_activity` | The ledger: every change with author, rationale, touched files/nodes, tests added, and verification flags. Risk scoring builds on it |
-| **Work-item board** | Project page, `add_work_item` / `next_work_item` / `complete_work_item` | A prioritised queue (Low / Normal / High). Agents claim the next item, do the work, record it, and complete it |
-| **Decisions** | Brain, `add_decision` | ADR-lite records: question, choice, rationale |
-| **Jobs** | Jobs tab | Sandboxed code workloads that generate artifacts (see *Jobs and artifacts*) |
-| **Data** | Data tab | The project's **own database** — a private Postgres schema with a SQL editor (see *Project data*) |
-| **Vault** | Vault page | Encrypted secrets (API keys, passwords), injected into job runs as environment variables |
-| **Triggers & events** | Jobs tab, `create_trigger` / `emit_event` | Cron schedules and event subscriptions that run jobs automatically |
-| **Risk** | Overview, `recompute_risk` | Technical + process risk computed from the ledger |
+| Recent job runs failed | "Investigate N failed job run(s)" | High |
+| Nothing recorded yet | "Record the project's recent work in the activity log" | Normal |
+| More than 5 items waiting | "Triage the work queue" | Low |
 
-## The per-project agent
+### Change how often it runs
 
-Each project has a resident agent that periodically reviews where the project is and **queues
-next-step work items onto the board**. One pass looks at:
-
-- the 10 most recent activity records,
-- the open work queue,
-- the project's 10 most recent job runs.
-
-It then asks the **local LLM** (Ollama + Gemma, in-cluster — nothing leaves your machines) for an
-assessment and at most **3 next steps**, each with a title, detail, and priority. Suggestions are
-**deduplicated against everything already open** — the agent never nags the same step twice.
-Queued items are tagged in their detail with `Proposed by the project agent — <assessment>`.
-
-When no LLM is configured (or the call fails), a deterministic pass still surfaces the
-objectively actionable signals:
-
-| Signal | Queued item | Priority |
-|---|---|---|
-| Recent runs ended in `Failed` | "Investigate N failed job run(s)" | High |
-| No activity recorded at all | "Record the project's recent work in the activity log" | Normal |
-| More than 5 open work items | "Triage the work queue" | Low |
-
-### Scheduling and configuration
-
-A background scheduler drives the agent across **every tenant's projects** on an interval. Only
-one Host replica runs a pass at a time (leader election via a Postgres advisory lock), and each
-project gets a fresh scope so one failure can't poison the rest.
-
-```jsonc
-// appsettings / environment
-"PlaceContext": {
-  "Agent": {
-    "Enabled": true,          // default true; set false to disable the agent entirely
-    "IntervalMinutes": 60     // default 60; clamped to [5, 1440]
-  }
-}
-```
-
-As environment variables on the deployment:
+By default the agent reviews each project once an hour. To change the interval or turn it off,
+set these on the deployment:
 
 ```bash
 kubectl -n placecontext set env deploy/placecontext \
@@ -77,74 +89,47 @@ kubectl -n placecontext set env deploy/placecontext \
   PlaceContext__Agent__IntervalMinutes=30
 ```
 
-## Getting oriented fast
+`Enabled` defaults to on; `IntervalMinutes` defaults to 60 and can be anywhere from 5 minutes
+to a full day.
 
-Two MCP tools compress a whole project into something an agent (or you) can act on:
+## Your projects stay private from each other
 
-- **`synthesize_context`** — pulls *all* accumulated context (context doc, requirements,
-  decisions, work items, activity, risk) into one structured brief ending in a prioritised action
-  plan. Pass `createWorkItems=true` to queue that plan onto the board.
-- **`suggest_improvements`** — prioritised improvements derived from logged activity: churn
-  hotspots, unverified changes, missing context, risk signals.
+Each project is completely walled off. Its data, jobs, secrets, and history belong only to it —
+**one project can never see another's tables or work**. The same holds at the team level: each
+workspace is isolated, so different teams sharing the same PlaceContext install never see each
+other's projects.
 
-From the portal, the **Reports** page generates defined reports from the same accumulated data
-(see *Charts and reports*).
+If an agent's changes are unexpectedly rejected, it's almost always a stale sign-in from an old
+session. Signing out and back in, then reconnecting the agent, mints a fresh one.
 
-## Multi-tenancy
+## Explore what's known: the Brain
 
-PlaceContext is multi-tenant: each **workspace (tenant) is isolated**. Projects, work items,
-activity, jobs, secrets, report templates, and event types all belong to a tenant, and MCP access
-tokens embed the tenant they were minted for. The `whoami` MCP tool reports the calling token's
-user id, tenant, and role, and cross-checks them against the database — the first thing to reach
-for when writes are unexpectedly rejected (a stale token from a previous session shows up here).
+The **Brain** page is where a project's durable knowledge lives:
 
-Isolation extends below the application layer too:
+- **Context** — a living document describing the project. It's the first thing an agent reads
+  before touching anything, and you can edit it directly.
+- **Decisions** — a lightweight record of important choices: the question, the choice made, and
+  why.
+- **The knowledge map** — built from your recorded activity, it answers questions like *where is
+  the churn concentrated?*, *what did we decide?*, and *what shipped without being verified?*
 
-- Every project's Data tab is a **separate Postgres schema and role** — a project cannot read
-  another project's tables, or the platform's (see *Project data*).
-- On the fleet side, `pctl mesh tenant add <id>` gives each customer an ACL-isolated private
-  network — one tenant's nodes never see another's.
-
-## The Brain: context and the knowledge graph
-
-Two layers of durable knowledge live behind the Brain page:
-
-- **The context document** — one Markdown document per project, the thing an agent reads before
-  touching anything. `add_context` appends a section; `set_context` rewrites the whole document
-  (e.g. after consolidating notes); `get_context` fetches it at session start.
-- **The knowledge graph** — rebuilt from logged activity (decisions, changes, tool calls) with
-  `rebuild_graph` (incremental by default). Ask it structured questions with `query_graph`:
-
-```text
-query_graph  projectId=…  question="hotspots"     # churn concentrations
-query_graph  projectId=…  question="decisions"    # the ADR-lite record
-query_graph  projectId=…  question="unverified"   # changes shipped without verification
-query_graph  projectId=…  question="activity"     # the recent change stream
-```
-
-The TUI's `/` search runs over the same contents — decisions, context, and activity.
-
-## The work-item lifecycle
-
-| State | Entered by | Meaning |
-|---|---|---|
-| **Queued** | `add_work_item` (a person, an agent, a report's action plan, or the project agent) | Waiting, ordered by priority then age |
-| **In progress** | `next_work_item` | Claimed — the tool returns the highest-priority, oldest queued item and marks it |
-| **Done** | `complete_work_item` | Finished — after the change was recorded via `record_activity` |
-
-`list_work_items` shows all three states. The dedupe rule matters here: the project agent
-compares proposed titles (case-insensitively) against everything not Done, so closing items is
-what lets fresh, different proposals through.
+The TUI's `/` search runs over this same knowledge, so you can find a decision or a note from
+the dashboard without opening the portal.
 
 ## A typical loop
 
-1. `onboard` the repo (or create the project in the portal).
-2. Agents `get_context` at session start, claim work with `next_work_item`, do the change, then
-   `record_activity` with rationale and verification flags, and `complete_work_item`.
-3. Jobs run on schedules or events and generate artifacts; charts and reports accumulate.
-4. The per-project agent reviews the state every interval and keeps the board topped up with the
+1. Create the project (or have an agent onboard your repo).
+2. Work gets claimed off the board, done, and recorded — so the history fills in with what
+   happened and why.
+3. Jobs run on schedules or triggers and produce results; charts and reports build up over time.
+4. The built-in agent reviews everything each interval and keeps the board topped up with the
    next most useful steps.
 
-The result is a project that documents itself: the ledger records what happened and why, the
-graph and risk scores are derived from it, the reports narrate it, and the board always shows
-what should happen next.
+The result is a project that documents itself: the history says what happened, the reports
+narrate it, and the board always shows what to do next.
+
+## See everything at a glance
+
+The **Overview** page lists all your projects together, each with a risk band derived from its
+history — how much churn it's seen, what shipped without being verified, and where the gaps are.
+It's the fastest way to spot which project needs attention before you dive in.

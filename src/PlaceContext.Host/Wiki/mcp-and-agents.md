@@ -1,103 +1,80 @@
 # MCP and agents
 
-*PlaceContext is an MCP server over Streamable HTTP — connect Claude (or any MCP client) and give agents real tools: the activity ledger, the knowledge graph, jobs, triggers, and reports.*
+*Connect Claude (or another AI agent) to PlaceContext and let it do real work on your projects — record changes, author and run jobs, generate reports, and more.*
 
-## Connecting a client
+## Connect your agent
 
-The MCP endpoint is **`/mcp`** on the portal origin — `http://localhost:7700/mcp` on a dev
-cluster (`pctl url` prints it). Transport is **Streamable HTTP**; authentication is OAuth
-(access tokens are RSA-signed with the cluster's `placecontext-oauth` key, so they validate
-across replicas and restarts).
+PlaceContext exposes a single endpoint your AI agent connects to. On a dev machine it's
+`http://localhost:7700/mcp` — run `pctl url` to print it.
 
-For Claude Code:
+For **Claude Code**:
 
 ```bash
 claude mcp add --transport http placecontext http://localhost:7700/mcp
 ```
 
-then complete the authorization flow in the browser when prompted. Every tool call an agent makes
-is timed and traced — watch it live in the portal's **MCP Inspector**, or in the TUI with `[m]`
-(navigate with `↑↓`, `⏎` opens a call's full request/response).
+Then finish signing in when the browser prompts you. That's it — the agent now has real tools it
+can use against your projects.
 
-If writes are rejected, call **`whoami`** first: it reports the token's embedded user id, tenant,
-and role, and cross-checks them against the database — the standard diagnosis for a stale token
-(role changed, or a user from a previous seed). Sign out/in of the portal and re-authorize the
-MCP client to mint a fresh token.
+Everything the agent does is visible to you, live: watch it in the portal's **MCP Inspector**, or
+in the TUI with **`[m]`** (`↑↓` to move, `⏎` to open a call's full request and response). That
+trace is your audit trail.
 
-## The tool surface
+If the agent's changes are unexpectedly rejected, it's almost always a stale sign-in from an old
+session. Sign out and back in of the portal, reconnect the agent to get a fresh one, and try
+again.
 
-| Area | Tools |
-|---|---|
-| Diagnosis | `whoami` |
-| Projects | `create_project`, `onboard`, `list_projects`, `register_project`, `get_project_overview` |
-| Work items | `add_work_item`, `next_work_item`, `complete_work_item`, `list_work_items` |
-| **The ledger** | `record_activity` — the write path for every change (see below), `get_timeline`, `recompute_risk` |
-| Knowledge | `add_context`, `set_context`, `get_context`, `add_decision`, `query_graph`, `rebuild_graph`, `synthesize_context`, `suggest_improvements`, `scaffold_skill` |
-| **Jobs** | `job_authoring_guide`, `upload_job_code`, `list_jobs`, `get_job`, `run_job`, `list_job_runs`, `get_job_run` |
-| Triggers & events | `create_trigger`, `list_triggers`, `set_trigger_enabled`, `delete_trigger`, `define_event_type`, `emit_event`, `list_event_types`, `list_event_occurrences` |
-| Reports | `generate_report`, `list_report_templates`, `define_report_template` |
-| Search | `search_run_outputs` — semantic (vector) search over a project's job-run outputs; requires embeddings to be configured, returns empty otherwise |
-| Usage | `record_usage` — LLM token counts and model names only (never code or prompts); powers the cost dashboards |
+## What an agent can do for you
 
-### Recording work through the ledger
+Once connected, an agent can work a project the way you would:
 
-`record_activity` is how a change becomes part of the project's history: it appends a ledger
-entry (author, rationale, touched files/nodes, tests added, whether the architecture reviewer ran,
-whether the change was live-verified, commit message) and makes a scoped git commit when the
-project is a repo. The knowledge graph, risk scores, timeline, and reports are all built from
-this stream — an agent that skips it leaves the project blind. The typical loop:
+- **Set up a project** — create it, or onboard a git repo so it starts already knowing your
+  recent history and docs.
+- **Work the board** — claim the next item, do the work, and mark it done.
+- **Record what it did** — every change goes into the project's history with the reasoning behind
+  it, so the knowledge, risk scores, and reports all stay current. This is the one habit that
+  matters most: a change that isn't recorded leaves the project blind.
+- **Build and run jobs** — write a job, upload it, run it, and put it on a schedule or trigger.
+- **Manage knowledge** — read and update the project's context, record decisions, and ask
+  structured questions about where the risk and churn are.
+- **Generate reports** — produce a written report from everything the project knows.
+- **Get oriented fast** — pull all of a project's accumulated context into one brief with a
+  prioritised action plan, or ask for a ranked list of suggested improvements.
 
-```text
-get_context → next_work_item → (do the work) → record_activity → complete_work_item
-```
+You don't need to memorize tool names — the agent discovers them. The server also offers ready-made
+guidance the agent can pull in so it works to your standards: how to start a session grounded in
+your project, how to review its work against your requirements, and how to record a change
+properly.
 
-### Prompts
+### A good session, start to finish
 
-Alongside tools, the server exposes MCP **prompts** — read-only guidance an agent can pull in so
-it works against your standards:
+A well-behaved agent follows the same loop you would:
 
-| Prompt | Purpose |
-|---|---|
-| `onboard` | Load the project's context and requirements to start a session well-grounded |
-| `review_work` | Review current work against the project's (and global) requirements and context |
-| `record_activity_guidance` | Walk through recording a change so it passes the process-trust gates |
-| `create_skill` | Guide creating a reusable skill/command for the project, in the target agent's format |
+1. Read the project's context so it knows what's already going on.
+2. Claim the next item off the board.
+3. Do the work.
+4. Record the change — with the reasoning, and honest notes on what was tested and verified.
+5. Mark the item done.
 
-## The per-project agent (server-side)
+Because every step is recorded, the project's history, knowledge, risk scores, and reports all
+stay accurate on their own. You can watch the whole thing unfold in the MCP Inspector.
 
-Independent of any connected MCP client, the Host runs a **resident agent per project** on a
-schedule. Each pass reviews the project's recent activity, open work queue, and recent job runs,
-then uses the **local Ollama LLM** (Gemma, in-cluster) to assess where the project is and queue
-up to three next-step work items — deduplicated against what's already open. Without an LLM, a
-deterministic pass still queues the obvious: failed runs to investigate, an empty ledger to fill,
-an overlong queue to triage.
+## Let the project work on itself
 
-Configuration:
+Separately from any agent you connect, each project has a **built-in agent** that reviews it on a
+schedule and adds up to three suggested next steps to the board — never repeating what's already
+there. So the loop closes on its own: the project proposes work, and your connected agent (or you)
+picks it up. See *Projects* for how to tune how often it runs.
 
-```jsonc
-"PlaceContext": {
-  "Agent": {
-    "Enabled": true,        // default true — set false to disable
-    "IntervalMinutes": 60   // default 60, clamped to [5, 1440]
-  }
-}
-```
+## Walkthrough: an agent builds and runs a job
 
-One replica runs the pass per tick (Postgres advisory-lock leader election), across every
-tenant's projects. The queued items appear on each project's board with a
-"Proposed by the project agent" detail — connected agents can then claim them with
-`next_work_item`, closing the loop: the platform proposes, the agent executes.
+Here's the whole arc, from nothing to a running, self-charting job.
 
-## Authoring a job over MCP, end to end
+**1. The agent reads the job guide first.** It returns the rules — read the input from standard
+input, print your result, no network by default, and Python is the default language — plus worked
+examples.
 
-This is the canonical agent workflow — from nothing to a running, charting job in four calls.
-
-**1. `job_authoring_guide`** — always call this first. It returns the sandbox contract (stdin
-input, files read-only at `/work`, artifact on stdout, exit codes, no network by default), the
-runtime table (**python is the default**; also node, go, ruby, dotnet), how vault secrets arrive
-as env vars, and worked examples.
-
-**2. Write code that honours the contract** — read stdin, print JSON:
+**2. It writes code that follows the contract** — read the input, print JSON:
 
 ```python
 import sys, json
@@ -105,60 +82,50 @@ data = json.loads(sys.stdin.read() or "{}")
 counts = {}
 for item in data.get("items", []):
     counts[item.get("kind", "other")] = counts.get(item.get("kind", "other"), 0) + 1
-print(json.dumps(counts))          # the artifact — a numeric map charts automatically
+print(json.dumps(counts))          # a map of numbers — charts automatically
 ```
 
-**3. `upload_job_code`** — create (or replace the source of) the job:
+**3. It uploads the job.** A brand-new job comes with sensible defaults and charting turned on,
+so it produces a chart from its very first run. Uploading again to an existing job just replaces
+the code and keeps all its settings.
 
-```json
-{
-  "projectId": "<project guid>",
-  "jobName": "items-by-kind",
-  "runtimeId": "python",
-  "filesJson": "[{\"path\": \"main.py\", \"content\": \"import sys, json\\n...\"}]"
-}
-```
+**4. It runs the job** with some input and gets the full result back — each run's outcome, its
+result, and its log. Because the result is a series of numbers, it charts everywhere: in the run
+detail, in the run history, on the Reports page, and as ASCII in the TUI.
 
-- Target an existing job with `jobId` instead — its payloads, env, concurrency, reduce step, and
-  exit-code policy are preserved; only the source is replaced.
-- Multi-file uploads may use subdirectories (`lib/report.py`) and must name an `entrypoint`.
-- A **new** job is created with sensible defaults: one `{}` shard, concurrency 1, success exit
-  code 0 — and the **Chart post-job action enabled**, so its output charts from run one.
+From there the agent can put the job on a schedule, or wire it to fire on an event.
 
-**4. `run_job`** — execute and get the full result back in one call:
+### Wiring a job to events
 
-```json
-{ "jobId": "<job guid>", "inputPayload": "{\"items\":[{\"kind\":\"a\"},{\"kind\":\"b\"},{\"kind\":\"a\"}]}" }
-```
-
-The response carries the overall status plus each shard's exit code, outcome, artifact, and log.
-Because the artifact is a numeric series, it charts automatically: inline in the portal's run
-detail, as the LLM-drawn Chart artifact in the run history, in the global Reports "Job data"
-section, and as ASCII in the TUI. Use `list_job_runs` / `get_job_run` to fetch results later, and
-`create_trigger` to put the job on a cron schedule or subscribe it to an event.
-
-### Wiring jobs to events
-
-Jobs become reactive by subscribing them to events:
+Jobs can react to things happening. An agent defines an event once, subscribes a job to it, and
+then anything that emits that event fires the job — passing the event's details through as the
+run's input:
 
 ```text
-define_event_type  name="deploy.finished"  description="a deploy completed"   # once per workspace
-create_trigger     jobId=…  name="post-deploy check"  kind="Event"  eventName="deploy.finished"
-emit_event         name="deploy.finished"  payload="{\"env\":\"prod\"}"       # fires every subscribed trigger
+define a "deploy.finished" event  (once)
+subscribe the "post-deploy check" job to it
+emit "deploy.finished"  →  fires every subscribed job
 ```
 
-The payload is passed through as the fired runs' parameters. Built-in events
-(`job.completed`, `activity.recorded`, `risk.recomputed`) can be subscribed to the same way —
-e.g. a summarising job that runs whenever any other job completes. `list_event_occurrences`
-shows the recent event log.
+Built-in events work the same way — a job can run whenever another job finishes, whenever a
+change is recorded, or whenever risk is recalculated.
 
-## Good agent citizenship
+## Good habits for agents
 
-- **Start with `get_context`** (or the `onboard` prompt) so the session is grounded in what's
-  already known.
-- **Record everything** through `record_activity` — with honest `testsAdded`,
-  `architectureReviewerRun`, and `liveVerified` flags; process risk is scored from them.
-- **Never put credentials in job code or env** — reference vault secret names; values are
-  injected at run time.
-- **Log usage** with `record_usage` (model + token counts only) so cost dashboards stay true.
-- Remember every call is visible in the MCP Inspector — the trace is the audit trail.
+- **Start grounded** — read the project's context before touching anything.
+- **Record everything** — with honest notes on whether tests were added and whether the change
+  was actually verified. Those flags feed the project's risk scores.
+- **Never put secrets in job code** — reference the project Vault's secret names; the real values
+  are supplied at run time.
+- **Log usage** — model names and token counts only (never your code or prompts) so the cost
+  dashboards stay accurate.
+- **Remember it's all visible** — every action shows up in the MCP Inspector.
+
+## Any MCP client works
+
+While the examples above use Claude Code, the endpoint is standard, so any MCP-capable agent can
+connect the same way and use the same tools. Point it at the address `pctl url` prints, complete
+the sign-in, and it's ready to work on your projects.
+
+Whichever agent you use, the picture stays the same: you connect it once, it works your projects
+with real tools, and you keep full visibility over everything it does.
