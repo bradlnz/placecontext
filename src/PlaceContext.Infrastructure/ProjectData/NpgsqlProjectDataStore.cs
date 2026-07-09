@@ -178,6 +178,54 @@ public sealed class NpgsqlProjectDataStore : IProjectDataStore
         return RunAsRoleAsync(projectId, $"DROP TABLE {QuoteIdent(tableName)}", ct);
     }
 
+    public async Task<IReadOnlyList<ProjectColumnInfo>> ListColumnsAsync(Guid projectId, string tableName, CancellationToken ct = default)
+    {
+        Ident(tableName, "table name");
+        var schema = SchemaFor(projectId);
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+        await EnsureProvisionedAsync(conn, schema, ct);
+
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = """
+            SELECT a.attname, format_type(a.atttypid, a.atttypmod), a.attnotnull,
+                   COALESCE(i.indisprimary, false)
+            FROM pg_attribute a
+            JOIN pg_class c ON c.oid = a.attrelid
+            JOIN pg_namespace n ON n.oid = c.relnamespace
+            LEFT JOIN pg_index i ON i.indrelid = c.oid AND i.indisprimary AND a.attnum = ANY(i.indkey)
+            WHERE n.nspname = @schema AND c.relname = @table AND a.attnum > 0 AND NOT a.attisdropped
+            ORDER BY a.attnum
+            """;
+        cmd.Parameters.AddWithValue("schema", schema);
+        cmd.Parameters.AddWithValue("table", tableName);
+        var columns = new List<ProjectColumnInfo>();
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+            columns.Add(new ProjectColumnInfo(reader.GetString(0), reader.GetString(1), reader.GetBoolean(2), reader.GetBoolean(3)));
+        return columns;
+    }
+
+    public Task AddColumnAsync(Guid projectId, string tableName, ProjectColumnSpec column, CancellationToken ct = default)
+    {
+        Ident(tableName, "table name");
+        Ident(column.Name, "column name");
+        if (!AllowedTypes.TryGetValue(column.Type, out var pgType))
+            throw new ArgumentException($"Unsupported column type '{column.Type}'.");
+        if (column.PrimaryKey)
+            throw new ArgumentException("A primary key can only be set when the table is created.");
+        var def = $"{QuoteIdent(column.Name)} {pgType}";
+        if (column.NotNull) def += " NOT NULL"; // Postgres rejects this if the table already has rows.
+        return RunAsRoleAsync(projectId, $"ALTER TABLE {QuoteIdent(tableName)} ADD COLUMN {def}", ct);
+    }
+
+    public Task DropColumnAsync(Guid projectId, string tableName, string columnName, CancellationToken ct = default)
+    {
+        Ident(tableName, "table name");
+        Ident(columnName, "column name");
+        return RunAsRoleAsync(projectId, $"ALTER TABLE {QuoteIdent(tableName)} DROP COLUMN {QuoteIdent(columnName)}", ct);
+    }
+
     public async Task<string> ExportTableCsvAsync(Guid projectId, string tableName, CancellationToken ct = default)
     {
         Ident(tableName, "table name");

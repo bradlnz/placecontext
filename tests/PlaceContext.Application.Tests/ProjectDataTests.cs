@@ -45,6 +45,18 @@ public class ProjectDataTests
 
         public Task<string> ExportTableCsvAsync(Guid projectId, string tableName, CancellationToken ct = default)
         { SawProject = projectId; return Task.FromResult("a,b\n1,2\n"); }
+
+        public (string Table, ProjectColumnSpec Column)? AddedColumn;
+        public (string Table, string Column)? DroppedColumn;
+
+        public Task<IReadOnlyList<ProjectColumnInfo>> ListColumnsAsync(Guid projectId, string tableName, CancellationToken ct = default)
+        { SawProject = projectId; return Task.FromResult<IReadOnlyList<ProjectColumnInfo>>(new[] { new ProjectColumnInfo("id", "uuid", true, true) }); }
+
+        public Task AddColumnAsync(Guid projectId, string tableName, ProjectColumnSpec column, CancellationToken ct = default)
+        { SawProject = projectId; AddedColumn = (tableName, column); return Task.CompletedTask; }
+
+        public Task DropColumnAsync(Guid projectId, string tableName, string columnName, CancellationToken ct = default)
+        { SawProject = projectId; DroppedColumn = (tableName, columnName); return Task.CompletedTask; }
     }
 
     private static async Task<(InMemoryProjectRepository projects, Project project, FakeStore store)> WorldAsync()
@@ -109,6 +121,39 @@ public class ProjectDataTests
         Assert.Equal(("events", "log"), store.Renamed);
         Assert.Equal("log", store.Dropped);
         Assert.Contains("a,b", csv);
+    }
+
+    [Fact]
+    public async Task Column_list_add_and_drop_reach_the_store_for_a_real_project()
+    {
+        var (projects, project, store) = await WorldAsync();
+        var pid = project.Id.Value;
+
+        var cols = await new ListProjectTableColumnsHandler(projects, store).HandleAsync(
+            new ListProjectTableColumnsQuery(pid, "readings"));
+        await new AddProjectTableColumnHandler(projects, store).HandleAsync(
+            new AddProjectTableColumnCommand(pid, "readings", new ProjectColumnSpec("note", "text", false, false)));
+        await new DropProjectTableColumnHandler(projects, store).HandleAsync(
+            new DropProjectTableColumnCommand(pid, "readings", "note"));
+
+        Assert.Single(cols);
+        Assert.Equal("id", cols[0].Name);
+        Assert.Equal(("readings", new ProjectColumnSpec("note", "text", false, false)), store.AddedColumn);
+        Assert.Equal(("readings", "note"), store.DroppedColumn);
+    }
+
+    [Fact]
+    public async Task Column_ops_reject_an_unknown_project()
+    {
+        var (projects, _, store) = await WorldAsync();
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            new AddProjectTableColumnHandler(projects, store).HandleAsync(
+                new AddProjectTableColumnCommand(Guid.NewGuid(), "t", new ProjectColumnSpec("note", "text", false, false))));
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            new DropProjectTableColumnHandler(projects, store).HandleAsync(
+                new DropProjectTableColumnCommand(Guid.NewGuid(), "t", "note")));
+        Assert.Null(store.AddedColumn);
+        Assert.Null(store.DroppedColumn);
     }
 
     [Fact]

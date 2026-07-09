@@ -23,6 +23,15 @@ public sealed record DropProjectTableCommand(Guid ProjectId, string TableName) :
 /// <summary>Export a whole table as CSV.</summary>
 public sealed record ExportProjectTableQuery(Guid ProjectId, string TableName) : IQuery<string>;
 
+/// <summary>List the columns of one table in a project's database.</summary>
+public sealed record ListProjectTableColumnsQuery(Guid ProjectId, string TableName) : IQuery<IReadOnlyList<ProjectColumnInfo>>;
+
+/// <summary>Add a column to an existing table in a project's database.</summary>
+public sealed record AddProjectTableColumnCommand(Guid ProjectId, string TableName, ProjectColumnSpec Column) : ICommand<bool>;
+
+/// <summary>Drop a column from an existing table in a project's database.</summary>
+public sealed record DropProjectTableColumnCommand(Guid ProjectId, string TableName, string ColumnName) : ICommand<bool>;
+
 public sealed class ExecuteProjectDataHandler : ICommandHandler<ExecuteProjectDataCommand, ProjectQueryResult>
 {
     private readonly IProjectRepository _projects;
@@ -109,6 +118,47 @@ public sealed class DropProjectTableHandler : ICommandHandler<DropProjectTableCo
     {
         await ProjectDataGuard.EnsureExistsAsync(_projects, c.ProjectId, ct);
         await _store.DropTableAsync(c.ProjectId, c.TableName, ct);
+        return true;
+    }
+}
+
+public sealed class ListProjectTableColumnsHandler : IQueryHandler<ListProjectTableColumnsQuery, IReadOnlyList<ProjectColumnInfo>>
+{
+    private readonly IProjectRepository _projects;
+    private readonly IProjectDataStore _store;
+    public ListProjectTableColumnsHandler(IProjectRepository projects, IProjectDataStore store) { _projects = projects; _store = store; }
+
+    public async Task<IReadOnlyList<ProjectColumnInfo>> HandleAsync(ListProjectTableColumnsQuery q, CancellationToken ct = default)
+    {
+        await ProjectDataGuard.EnsureExistsAsync(_projects, q.ProjectId, ct);
+        return await _store.ListColumnsAsync(q.ProjectId, q.TableName, ct);
+    }
+}
+
+public sealed class AddProjectTableColumnHandler : ICommandHandler<AddProjectTableColumnCommand, bool>
+{
+    private readonly IProjectRepository _projects;
+    private readonly IProjectDataStore _store;
+    public AddProjectTableColumnHandler(IProjectRepository projects, IProjectDataStore store) { _projects = projects; _store = store; }
+
+    public async Task<bool> HandleAsync(AddProjectTableColumnCommand c, CancellationToken ct = default)
+    {
+        await ProjectDataGuard.EnsureExistsAsync(_projects, c.ProjectId, ct);
+        await _store.AddColumnAsync(c.ProjectId, c.TableName, c.Column, ct);
+        return true;
+    }
+}
+
+public sealed class DropProjectTableColumnHandler : ICommandHandler<DropProjectTableColumnCommand, bool>
+{
+    private readonly IProjectRepository _projects;
+    private readonly IProjectDataStore _store;
+    public DropProjectTableColumnHandler(IProjectRepository projects, IProjectDataStore store) { _projects = projects; _store = store; }
+
+    public async Task<bool> HandleAsync(DropProjectTableColumnCommand c, CancellationToken ct = default)
+    {
+        await ProjectDataGuard.EnsureExistsAsync(_projects, c.ProjectId, ct);
+        await _store.DropColumnAsync(c.ProjectId, c.TableName, c.ColumnName, ct);
         return true;
     }
 }

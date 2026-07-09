@@ -189,6 +189,15 @@ public sealed class PlaceContextService : IPlaceContextService
     public Task<string> ExportProjectTableCsvAsync(Guid projectId, string tableName, CancellationToken ct = default)
         => _dispatcher.Query(new ExportProjectTableQuery(projectId, tableName), ct);
 
+    public Task<IReadOnlyList<Ports.ProjectColumnInfo>> ListProjectTableColumnsAsync(Guid projectId, string tableName, CancellationToken ct = default)
+        => _dispatcher.Query(new ListProjectTableColumnsQuery(projectId, tableName), ct);
+
+    public Task AddProjectTableColumnAsync(Guid projectId, string tableName, Ports.ProjectColumnSpec column, CancellationToken ct = default)
+        => _dispatcher.Send(new AddProjectTableColumnCommand(projectId, tableName, column), ct);
+
+    public Task DropProjectTableColumnAsync(Guid projectId, string tableName, string columnName, CancellationToken ct = default)
+        => _dispatcher.Send(new DropProjectTableColumnCommand(projectId, tableName, columnName), ct);
+
     public Task<IReadOnlyList<RunReportView>> ListRecentRunReportsAsync(int take = 24, CancellationToken ct = default)
         => _dispatcher.Query(new ListRecentRunReportsQuery(take), ct);
 

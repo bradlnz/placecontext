@@ -45,6 +45,7 @@
                         <span style="font-size:10.5px; color:var(--text-3)">~@t.RowEstimate</span>
                     </div>
                     <div style="display:flex; gap:10px; margin-top:5px">
+                        <button class="dclink" @onclick="@(() => StartEditAsync(t.Name))">edit</button>
                         <button class="dclink" @onclick="@(() => StartRename(t.Name))">rename</button>
                         <button class="dclink" @onclick="@(() => ExportAsync(t.Name))">export</button>
                         <button class="dclink" style="color:var(--bad)" @onclick="@(() => StartDrop(t.Name))">drop</button>
@@ -175,6 +176,66 @@
     </div>
 }
 
+@* ── Edit-table panel (add / remove columns) ────────────────────────────────────────────── *@
+@if (_editTable is not null)
+{
+    <div class="dcslide-scrim" @onclick="CloseEdit"></div>
+    <div class="dcslide" style="width:560px">
+        <div class="dcslide-head">
+            <span style="font-size:13px; font-weight:600">Edit table — <span style="font-family:'Geist Mono',monospace">@_editTable</span></span>
+            <button class="dcslide-x" @onclick="CloseEdit">×</button>
+        </div>
+        <div style="padding:16px 18px">
+            <div style="display:grid; grid-template-columns:1fr 170px 52px 34px 60px; gap:6px; align-items:center; font-size:10.5px; color:var(--text-3); margin-bottom:4px">
+                <span>name</span><span>type</span><span style="text-align:center">not null</span><span style="text-align:center">PK</span><span></span>
+            </div>
+            @foreach (var col in _editColumns)
+            {
+                <div style="display:grid; grid-template-columns:1fr 170px 52px 34px 60px; gap:6px; align-items:center; margin-bottom:6px; font-size:12px">
+                    <span style="font-family:'Geist Mono',monospace; overflow:hidden; text-overflow:ellipsis">@col.Name</span>
+                    <span style="color:var(--text-2)">@col.Type</span>
+                    <span style="text-align:center; color:var(--text-3)">@(col.NotNull ? "✓" : "")</span>
+                    <span style="text-align:center; color:var(--text-3)">@(col.PrimaryKey ? "🔑" : "")</span>
+                    @if (col.PrimaryKey)
+                    {
+                        <span></span>
+                    }
+                    else if (_confirmDropColumn == col.Name)
+                    {
+                        <span style="display:flex; gap:4px; justify-content:end">
+                            <button class="dclink" style="color:var(--bad)" @onclick="@(() => DropColumnAsync(col.Name))">yes</button>
+                            <button class="dclink" @onclick="@(() => _confirmDropColumn = null)">no</button>
+                        </span>
+                    }
+                    else
+                    {
+                        <button class="dclink" style="color:var(--bad); justify-self:end" @onclick="@(() => _confirmDropColumn = col.Name)">✕ remove</button>
+                    }
+                </div>
+            }
+
+            <div style="border-top:1px solid var(--border); margin:12px 0 10px"></div>
+            <div style="font-size:11.5px; color:var(--text-3); margin-bottom:6px">Add a column</div>
+            <div style="display:grid; grid-template-columns:1fr 170px 52px 94px; gap:6px; align-items:center">
+                <input @bind="_addCol.Name" @bind:event="oninput" placeholder="column"
+                       style="padding:6px 8px; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); font-family:'Geist Mono',monospace; font-size:12px" />
+                <select @bind="_addCol.Type" style="padding:6px 8px; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:12px">
+                    @foreach (var t in ColumnTypes) { <option value="@t">@t</option> }
+                </select>
+                <input type="checkbox" @bind="_addCol.NotNull" style="justify-self:center" title="NOT NULL — fails if the table already has rows" />
+                <button class="dcbtn primary" style="padding:5px 10px; font-size:12px" disabled="@_alteringColumn" @onclick="AddColumnToTableAsync">
+                    @(_alteringColumn ? "…" : "+ Add")
+                </button>
+            </div>
+
+            @if (_editError is not null)
+            {
+                <div style="font-size:12px; color:var(--bad); margin-top:10px">@_editError</div>
+            }
+        </div>
+    </div>
+}
+
 <style>
     .dclink { border:none; background:none; padding:0; cursor:pointer; font-size:11px; color:var(--brand-2); }
     .dclink:hover { text-decoration:underline; }
@@ -284,6 +345,62 @@
         }
         catch (Exception ex) { _newTableError = Trim(ex.Message); }
         finally { _creating = false; }
+    }
+
+    // ── Edit table (add / remove columns) ────────────────────────────────────────────────────
+    private string? _editTable;
+    private IReadOnlyList<ProjectColumnInfo> _editColumns = Array.Empty<ProjectColumnInfo>();
+    private string? _editError, _confirmDropColumn;
+    private ColumnDraft _addCol = new();
+    private bool _alteringColumn;
+
+    private async Task StartEditAsync(string table)
+    {
+        _editTable = table;
+        _editError = null;
+        _confirmDropColumn = null;
+        _addCol = new ColumnDraft();
+        await RefreshColumnsAsync();
+    }
+
+    private void CloseEdit() { _editTable = null; }
+
+    private async Task RefreshColumnsAsync()
+    {
+        if (_editTable is null) return;
+        try { _editColumns = await Svc.ListProjectTableColumnsAsync(ProjectId, _editTable); }
+        catch (Exception ex) { _editError = Trim(ex.Message); }
+    }
+
+    private async Task AddColumnToTableAsync()
+    {
+        if (_editTable is null) return;
+        _editError = null;
+        if (string.IsNullOrWhiteSpace(_addCol.Name)) { _editError = "Give the column a name."; return; }
+        _alteringColumn = true;
+        try
+        {
+            await Svc.AddProjectTableColumnAsync(ProjectId, _editTable,
+                new ProjectColumnSpec(_addCol.Name.Trim(), _addCol.Type, _addCol.NotNull, PrimaryKey: false));
+            _addCol = new ColumnDraft();
+            await RefreshColumnsAsync();
+            await RefreshTablesAsync();
+        }
+        catch (Exception ex) { _editError = Trim(ex.Message); }
+        finally { _alteringColumn = false; }
+    }
+
+    private async Task DropColumnAsync(string column)
+    {
+        if (_editTable is null) return;
+        _editError = null;
+        _confirmDropColumn = null;
+        try
+        {
+            await Svc.DropProjectTableColumnAsync(ProjectId, _editTable, column);
+            await RefreshColumnsAsync();
+        }
+        catch (Exception ex) { _editError = Trim(ex.Message); }
     }
 
     // ── Rename / drop ─────────────────────────────────────────────────────────────────────────
