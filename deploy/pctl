@@ -352,7 +352,25 @@ cmd_dev_add_node() {
   fi
   say "Adding $role node '$name' to cluster '$PCTL_CLUSTER'…"
   k3d node create "$name" --cluster "$PCTL_CLUSTER" --role "$role" --wait
+  fix_host_dns
   ok "Node '$name' joined."
+}
+
+# k3s regenerates the CoreDNS NodeHosts configmap whenever nodes change, dropping the
+# host.k3d.internal entry k3d injected at cluster create — and with it any pod's ability to
+# reach services on this machine (e.g. a job's Postgres on the host). Re-inject it.
+fix_host_dns() {
+  use_dev_kubeconfig
+  local gw hosts
+  gw="$(docker network inspect "k3d-$PCTL_CLUSTER" --format '{{(index .IPAM.Config 0).Gateway}}' 2>/dev/null)" || return 0
+  [ -n "$gw" ] || return 0
+  hosts="$(kube -n kube-system get cm coredns -o jsonpath='{.data.NodeHosts}' 2>/dev/null)" || return 0
+  if ! printf '%s' "$hosts" | grep -q "host.k3d.internal"; then
+    say "Re-adding host.k3d.internal ($gw) to CoreDNS NodeHosts…"
+    kube -n kube-system patch cm coredns --type merge \
+      -p "{\"data\":{\"NodeHosts\":\"$(printf '%s\\n%s host.k3d.internal' "$hosts" "$gw" | sed ':a;N;$!ba;s/\n/\\n/g')\"}}" >/dev/null
+    kube -n kube-system rollout restart deploy/coredns >/dev/null 2>&1 || true
+  fi
 }
 
 cmd_dev_down() {
