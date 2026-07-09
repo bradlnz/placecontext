@@ -132,6 +132,9 @@ public sealed class PlaceContextService : IPlaceContextService
     public Task<SkillScaffoldView> ScaffoldSkillAsync(Guid projectId, string skillName, string? description, CancellationToken ct = default)
         => _dispatcher.Send(new ScaffoldSkillCommand(projectId, skillName, description), ct);
 
+    public Task<SkillScaffoldView> SetupHermesAsync(Guid projectId, CancellationToken ct = default)
+        => _dispatcher.Send(new SetupHermesCommand(projectId), ct);
+
     public Task<RootStatsView> GetRootStatsAsync(CancellationToken ct = default)
         => _dispatcher.Query(new GetRootStatsQuery(), ct);
 

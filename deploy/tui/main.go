@@ -95,6 +95,7 @@ const (
 	viewRunDetail // one run's per-shard output, errors, and artifacts
 	viewChat      // encrypted node-to-node chat (PCSP over mutual TLS)
 	viewJoin      // connect this computer to an existing cluster with a join code
+	viewAbout     // who built PlaceContext + copyright
 )
 
 // menuItem is a choice in the "add node" (or any future) list picker.
@@ -858,6 +859,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 			return m, nil
+		case "i":
+			if m.view == viewDash && !m.busy {
+				m.view = viewAbout
+			}
+			return m, nil
 		case "p":
 			return m, m.openPortal()
 		case "$":
@@ -1197,6 +1203,8 @@ func (m model) View() string {
 		b.WriteString(m.joinView())
 	case viewSettings:
 		b.WriteString(m.settingsView())
+	case viewAbout:
+		b.WriteString(m.aboutView())
 	case viewRuns:
 		b.WriteString(m.runsView())
 	case viewRunDetail:
@@ -1454,6 +1462,20 @@ func renderMarkdown(s string, width int) string {
 	return strings.TrimRight(out, "\n")
 }
 
+// aboutView: who built PlaceContext and the copyright line (portal has the same at /about).
+func (m model) aboutView() string {
+	var b strings.Builder
+	b.WriteString(titleStyle.Render(" about ") + "\n")
+	body := "PlaceContext — a context platform for AI\n\n" +
+		"A durable, structured home for project context — decisions, activity,\n" +
+		"knowledge graphs, jobs and their artifacts, data, and analytics —\n" +
+		"served over MCP, the portal, and this TUI.\n\n" +
+		"Built by Bradley Lietz of CTRL SIGNAL SOFTWARE PTY LTD.\n" +
+		"© " + time.Now().UTC().Format("2006") + " CTRL SIGNAL SOFTWARE PTY LTD. All rights reserved."
+	b.WriteString(boxStyle.Render(body) + "\n")
+	return b.String()
+}
+
 func (m model) footer() string {
 	k := func(key, label string) string { return keyStyle.Render("["+key+"]") + dimStyle.Render(label) }
 	var keys []string
@@ -1466,7 +1488,7 @@ func (m model) footer() string {
 			{"↑↓", "nav"}, {"⏎", "logs/runs"}, {"R", "run job"}, {"s", "settings"},
 			{"x", "kill job"}, {"/", "search"}, {"g", "metrics"}, {"m", "mcp"},
 			{"p", "portal"}, {"$", "subscribe"}, {"a", "add worker"}, {"u", "update+deploy"},
-			{"t", "chat"}, {"c", "theme"}, {"r", "refresh"}, {"q", "quit"},
+			{"t", "chat"}, {"c", "theme"}, {"i", "about"}, {"r", "refresh"}, {"q", "quit"},
 		}
 		colW := 0
 		for _, it := range items {

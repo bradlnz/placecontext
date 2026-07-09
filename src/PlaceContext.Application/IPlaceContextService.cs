@@ -48,6 +48,7 @@ public interface IPlaceContextService
     Task<IReadOnlyList<WorkItemView>> GetWorkItemsAsync(Guid projectId, CancellationToken ct = default);
     Task<ImprovementsView> SuggestImprovementsAsync(Guid projectId, CancellationToken ct = default);
     Task<SkillScaffoldView> ScaffoldSkillAsync(Guid projectId, string skillName, string? description, CancellationToken ct = default);
+    Task<SkillScaffoldView> SetupHermesAsync(Guid projectId, CancellationToken ct = default);
 
     // Report generation layer.
     Task<ReportView> GenerateReportAsync(Guid projectId, string? templateName, bool createWorkItems, CancellationToken ct = default);

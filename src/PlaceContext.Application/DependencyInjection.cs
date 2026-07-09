@@ -49,6 +49,7 @@ public static class DependencyInjection
         services.AddScoped<ICommandHandler<AddContextCommand, ProjectContextView>, AddContextHandler>();
         services.AddScoped<ICommandHandler<SetContextCommand, ProjectContextView>, SetContextHandler>();
         services.AddScoped<ICommandHandler<ScaffoldSkillCommand, SkillScaffoldView>, ScaffoldSkillHandler>();
+        services.AddScoped<ICommandHandler<SetupHermesCommand, SkillScaffoldView>, SetupHermesHandler>();
         services.AddScoped<ICommandHandler<SetGlobalRequirementsCommand, RequirementsView>, SetGlobalRequirementsHandler>();
         services.AddScoped<ICommandHandler<SetProjectRequirementsCommand, RequirementsView>, SetProjectRequirementsHandler>();
         services.AddScoped<ICommandHandler<RecordUsageCommand, UsageEntryView>, RecordUsageHandler>();

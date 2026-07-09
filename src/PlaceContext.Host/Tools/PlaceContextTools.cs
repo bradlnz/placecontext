@@ -196,6 +196,12 @@ public sealed class PlaceContextTools
             () => svc.ScaffoldSkillAsync(projectId, skillName, description));
 
     [Authorize(Policy = "Member")]
+    [McpServerTool(Name = "setup_hermes"), Description("Install the 'hermes' job-orchestration skill into the project (.claude/skills/hermes/SKILL.md): a playbook that teaches an agent the full PlaceContext job loop — job_authoring_guide → upload_job_code → run_job → list_job_runs/get_job_run → triggers and events. Call once per project (re-running refreshes the skill). Returns the skill's path and content.")]
+    public static Task<string> SetupHermes(IPlaceContextService svc, IToolCallLog log, Guid projectId)
+        => Traced(log, "setup_hermes", projectId.ToString(), "install hermes skill", new { projectId },
+            () => svc.SetupHermesAsync(projectId));
+
+    [Authorize(Policy = "Member")]
     [McpServerTool(Name = "record_usage"), Description("Record LLM token usage for a project (metadata only — model name and token counts, never code or prompts). Powers the cost dashboards. Returns the entry with its computed USD cost.")]
     public static Task<string> RecordUsage(IPlaceContextService svc, IToolCallLog log,
         Guid projectId,
