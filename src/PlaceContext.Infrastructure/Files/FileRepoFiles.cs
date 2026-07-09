@@ -24,4 +24,24 @@ public sealed class FileRepoFiles : IRepoFiles
         await File.WriteAllTextAsync(full, content, ct);
         return full;
     }
+
+    public Task<IReadOnlyList<string>> ListAsync(ProjectPath repo, string extension, CancellationToken ct = default)
+    {
+        if (!Directory.Exists(repo.Value))
+            return Task.FromResult<IReadOnlyList<string>>(Array.Empty<string>());
+        var root = Path.GetFullPath(repo.Value);
+        var files = Directory.EnumerateFiles(root, "*" + extension, SearchOption.AllDirectories)
+            .Select(f => Path.GetRelativePath(root, f).Replace('\\', '/'))
+            // Hidden dirs (.git, .obsidian, …) are tool state, not content.
+            .Where(rel => !rel.Split('/').Any(seg => seg.StartsWith('.')))
+            .OrderBy(rel => rel, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        return Task.FromResult<IReadOnlyList<string>>(files);
+    }
+
+    public async Task<string?> ReadAsync(ProjectPath repo, string relativePath, CancellationToken ct = default)
+    {
+        var full = Path.Combine(repo.Value, relativePath);
+        return File.Exists(full) ? await File.ReadAllTextAsync(full, ct) : null;
+    }
 }

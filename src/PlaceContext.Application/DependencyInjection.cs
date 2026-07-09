@@ -37,6 +37,7 @@ public static class DependencyInjection
         services.AddScoped<PostJobActionService>();
         services.AddScoped<ProjectAgentService>();
         services.AddScoped<ProjectChartService>();
+        services.AddScoped<ObsidianVaultImporter>();
 
         // Commands.
         services.AddScoped<ICommandHandler<CreateProjectCommand, ProjectSummaryView>, CreateProjectHandler>();
