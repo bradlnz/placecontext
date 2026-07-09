@@ -111,6 +111,7 @@ public static class DependencyInjection
         services.Configure<Storage.ObjectStoreOptions>(configuration.GetSection("PlaceContext:ObjectStore"));
         services.AddSingleton<Application.Ports.IObjectStore, Storage.MinioObjectStore>();
         services.AddScoped<Domain.Repositories.IRunArtifactLinkRepository, Persistence.EfRunArtifactLinkRepository>();
+        services.AddScoped<Domain.Repositories.IProjectChartRepository, Persistence.EfProjectChartRepository>();
 
         // Job / JobRun repositories.
         services.AddScoped<IJobRepository, EfJobRepository>();
@@ -146,6 +147,8 @@ public static class DependencyInjection
         // Background portal operations (the notifications-pane ledger) + the analytics chart sweep
         // worker (local-LLM generation takes minutes; the portal only enqueues and reads stored charts).
         services.AddSingleton<Operations.OperationCenter>();
+        services.AddSingleton<Scheduling.AnalyticsRefreshQueue>();
+        services.AddHostedService<Scheduling.AnalyticsWorkerService>();
 
         // Each project's own database (Postgres schema + role isolation; Monaco SQL in the portal).
         services.AddScoped<IProjectDataStore, ProjectData.NpgsqlProjectDataStore>();

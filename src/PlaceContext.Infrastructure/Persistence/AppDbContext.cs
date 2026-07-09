@@ -45,6 +45,7 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
     public DbSet<EventDefinitionRow> EventDefinitions => Set<EventDefinitionRow>();
     public DbSet<EventOccurrenceRow> EventOccurrences => Set<EventOccurrenceRow>();
     public DbSet<PendingRunRow> PendingRuns => Set<PendingRunRow>();
+    public DbSet<ProjectChartRow> ProjectCharts => Set<ProjectChartRow>();
 
     Task<int> IUnitOfWork.SaveChangesAsync(CancellationToken ct) => SaveChangesAsync(ct);
 
@@ -201,6 +202,14 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
             e.HasIndex(x => x.RunId);
             e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
             e.Property(x => x.CreatedAt).HasDefaultValueSql("now()");
+        });
+
+        b.Entity<ProjectChartRow>(e =>
+        {
+            e.ToTable("project_charts");
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => new { x.ProjectId, x.TableName }).IsUnique();
+            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
         });
 
         b.Entity<JobSecretRow>(e =>

@@ -36,6 +36,7 @@ public static class DependencyInjection
         services.AddScoped<ScheduleScanService>();
         services.AddScoped<PostJobActionService>();
         services.AddScoped<ProjectAgentService>();
+        services.AddScoped<ProjectChartService>();
 
         // Commands.
         services.AddScoped<ICommandHandler<CreateProjectCommand, ProjectSummaryView>, CreateProjectHandler>();
@@ -119,6 +120,7 @@ public static class DependencyInjection
         services.AddScoped<ICommandHandler<AddProjectTableColumnCommand, bool>, AddProjectTableColumnHandler>();
         services.AddScoped<ICommandHandler<DropProjectTableColumnCommand, bool>, DropProjectTableColumnHandler>();
         services.AddScoped<ICommandHandler<GenerateProjectChartCommand, string>, GenerateProjectChartHandler>();
+        services.AddScoped<IQueryHandler<ListProjectChartsQuery, IReadOnlyList<ProjectChartView>>, ListProjectChartsHandler>();
 
         return services;
     }

@@ -1,6 +1,7 @@
 using PlaceContext.Application.Features;
 using PlaceContext.Application.Ports;
 using PlaceContext.Domain.Entities;
+using PlaceContext.Domain.Repositories;
 using PlaceContext.Domain.ValueObjects;
 using PlaceContext.TestSupport;
 using Xunit;
@@ -8,8 +9,9 @@ using Xunit;
 namespace PlaceContext.Application.Tests;
 
 /// <summary>
-/// The Analytics tab: table rows go to the local LLM which draws a chart; without an LLM (or when
-/// it misbehaves) the handler still returns a themed, deterministic rendering of the data.
+/// Analytics charts: the background sweep samples each table, sends the rows to the local LLM,
+/// and stores the themed chart; without an LLM (or when it misbehaves) the stored result is still
+/// a themed rendering of the data. Charts of dropped tables are pruned.
 /// </summary>
 public class ProjectAnalyticsTests
 {
@@ -17,11 +19,12 @@ public class ProjectAnalyticsTests
 
     private sealed class FakeStore : IProjectDataStore
     {
-        public string? SawSql;
+        public List<string> SawSql = new();
+        public IReadOnlyList<ProjectTableInfo> Tables = new[] { new ProjectTableInfo("readings", 2) };
 
         public Task<ProjectQueryResult> ExecuteAsync(Guid projectId, string sql, CancellationToken ct = default)
         {
-            SawSql = sql;
+            SawSql.Add(sql);
             return Task.FromResult(new ProjectQueryResult(
                 new[] { "sensor", "value" },
                 new[] { new string?[] { "door", "21.5" }, new string?[] { "window", "19.0" } },
@@ -29,13 +32,13 @@ public class ProjectAnalyticsTests
         }
 
         public Task<IReadOnlyList<ProjectTableInfo>> ListTablesAsync(Guid projectId, CancellationToken ct = default)
-            => Task.FromResult<IReadOnlyList<ProjectTableInfo>>(Array.Empty<ProjectTableInfo>());
+            => Task.FromResult(Tables);
         public Task CreateTableAsync(Guid projectId, string tableName, IReadOnlyList<ProjectColumnSpec> columns, CancellationToken ct = default)
             => Task.CompletedTask;
         public Task RenameTableAsync(Guid projectId, string from, string to, CancellationToken ct = default)
             => Task.CompletedTask;
         public Task<IReadOnlyList<ProjectColumnInfo>> ListColumnsAsync(Guid projectId, string tableName, CancellationToken ct = default)
-            => Task.FromResult<IReadOnlyList<ProjectColumnInfo>>(new[] { new ProjectColumnInfo("sensor", "text", false, false) });
+            => Task.FromResult<IReadOnlyList<ProjectColumnInfo>>(Array.Empty<ProjectColumnInfo>());
         public Task AddColumnAsync(Guid projectId, string tableName, ProjectColumnSpec column, CancellationToken ct = default)
             => Task.CompletedTask;
         public Task DropColumnAsync(Guid projectId, string tableName, string columnName, CancellationToken ct = default)
@@ -62,6 +65,28 @@ public class ProjectAnalyticsTests
         }
     }
 
+    private sealed class InMemoryChartRepository : IProjectChartRepository
+    {
+        public readonly Dictionary<(Guid, string), ProjectChart> Charts = new();
+
+        public Task UpsertAsync(ProjectChart chart, CancellationToken ct = default)
+        {
+            Charts[(chart.ProjectId, chart.TableName)] = chart;
+            return Task.CompletedTask;
+        }
+
+        public Task<IReadOnlyList<ProjectChart>> ListForProjectAsync(Guid projectId, CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<ProjectChart>>(
+                Charts.Values.Where(c => c.ProjectId == projectId).OrderBy(c => c.TableName).ToList());
+
+        public Task DeleteForProjectAsync(Guid projectId, IReadOnlyCollection<string> keepTables, CancellationToken ct = default)
+        {
+            foreach (var key in Charts.Keys.Where(k => k.Item1 == projectId && !keepTables.Contains(k.Item2)).ToList())
+                Charts.Remove(key);
+            return Task.CompletedTask;
+        }
+    }
+
     private static async Task<(InMemoryProjectRepository projects, Project project)> WorldAsync()
     {
         var projects = new InMemoryProjectRepository();
@@ -70,19 +95,22 @@ public class ProjectAnalyticsTests
         return (projects, project);
     }
 
+    private static ProjectChartService Service(FakeStore store, FakeLlm llm, InMemoryChartRepository charts)
+        => new(store, charts, llm, new RecordingUnitOfWork(), new FakeClock(T0));
+
     [Fact]
     public async Task Llm_chart_is_returned_themed_and_fed_the_table_rows()
     {
         var (projects, project) = await WorldAsync();
         var store = new FakeStore();
         var llm = new FakeLlm();
-        var handler = new GenerateProjectChartHandler(projects, store, llm);
+        var handler = new GenerateProjectChartHandler(projects, Service(store, llm, new InMemoryChartRepository()));
 
         var html = await handler.HandleAsync(new GenerateProjectChartCommand(project.Id.Value, "readings", "average per sensor"));
 
         Assert.Contains("pc-chart-theme", html);       // themed for the portal
         Assert.Contains("<svg>", html);                // the LLM's chart survived
-        Assert.Contains("readings", store.SawSql!);    // sampled the right table
+        Assert.Contains("readings", store.SawSql.Single()); // sampled the right table
         Assert.Contains("21.5", llm.SawUser!);         // the rows reached the model
         Assert.Contains("average per sensor", llm.SawUser!); // and so did the instruction
     }
@@ -94,11 +122,11 @@ public class ProjectAnalyticsTests
         var store = new FakeStore();
 
         var disabled = new FakeLlm { IsEnabled = false };
-        var html1 = await new GenerateProjectChartHandler(projects, store, disabled)
+        var html1 = await new GenerateProjectChartHandler(projects, Service(store, disabled, new InMemoryChartRepository()))
             .HandleAsync(new GenerateProjectChartCommand(project.Id.Value, "readings", null));
 
         var broken = new FakeLlm { Throws = true };
-        var html2 = await new GenerateProjectChartHandler(projects, store, broken)
+        var html2 = await new GenerateProjectChartHandler(projects, Service(store, broken, new InMemoryChartRepository()))
             .HandleAsync(new GenerateProjectChartCommand(project.Id.Value, "readings", null));
 
         foreach (var html in new[] { html1, html2 })
@@ -115,13 +143,81 @@ public class ProjectAnalyticsTests
         var store = new FakeStore();
         var chatty = new FakeLlm { Reply = "Sure! Here is a description of your data with no markup at all." };
 
-        var html = await new GenerateProjectChartHandler(projects, store, chatty)
+        var html = await new GenerateProjectChartHandler(projects, Service(store, chatty, new InMemoryChartRepository()))
             .HandleAsync(new GenerateProjectChartCommand(project.Id.Value, "readings", null));
         Assert.Contains("21.5", html); // fallback table, not the chatty reply
         Assert.DoesNotContain("Sure!", html);
 
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            new GenerateProjectChartHandler(projects, store, chatty)
+            new GenerateProjectChartHandler(projects, Service(store, chatty, new InMemoryChartRepository()))
                 .HandleAsync(new GenerateProjectChartCommand(Guid.NewGuid(), "readings", null)));
+    }
+
+    [Fact]
+    public async Task Refresh_sweeps_every_table_storing_a_chart_per_table_and_prunes_dropped_ones()
+    {
+        var (_, project) = await WorldAsync();
+        var store = new FakeStore
+        {
+            Tables = new[] { new ProjectTableInfo("readings", 2), new ProjectTableInfo("bookings", 5) },
+        };
+        var charts = new InMemoryChartRepository();
+        // A chart for a table that no longer exists must be pruned by the sweep.
+        charts.Charts[(project.Id.Value, "dropped_table")] =
+            ProjectChart.Create(project.Id.Value, "dropped_table", "<html>old</html>", T0);
+
+        await Service(store, new FakeLlm(), charts).RefreshProjectAsync(project.Id.Value);
+
+        var stored = await charts.ListForProjectAsync(project.Id.Value);
+        Assert.Equal(new[] { "bookings", "readings" }, stored.Select(c => c.TableName));
+        Assert.All(stored, c => Assert.Contains("pc-chart-theme", c.Html));
+    }
+
+    [Fact]
+    public async Task Refresh_keeps_sweeping_when_one_table_fails()
+    {
+        var (_, project) = await WorldAsync();
+        var store = new FailOnFirstStore
+        {
+            Tables = new[] { new ProjectTableInfo("bad", 1), new ProjectTableInfo("good", 1) },
+        };
+        var charts = new InMemoryChartRepository();
+
+        // The LLM never sees "bad" (its SELECT throws); "good" still gets a stored chart.
+        await Service2(store, new FakeLlm(), charts).RefreshProjectAsync(project.Id.Value);
+
+        var stored = await charts.ListForProjectAsync(project.Id.Value);
+        Assert.Equal(new[] { "good" }, stored.Select(c => c.TableName));
+    }
+
+    private static ProjectChartService Service2(IProjectDataStore store, FakeLlm llm, InMemoryChartRepository charts)
+        => new(store, charts, llm, new RecordingUnitOfWork(), new FakeClock(T0));
+
+    private sealed class FailOnFirstStore : IProjectDataStore
+    {
+        public IReadOnlyList<ProjectTableInfo> Tables = Array.Empty<ProjectTableInfo>();
+
+        public Task<ProjectQueryResult> ExecuteAsync(Guid projectId, string sql, CancellationToken ct = default)
+        {
+            if (sql.Contains("\"bad\"")) throw new InvalidOperationException("relation exploded");
+            return Task.FromResult(new ProjectQueryResult(new[] { "n" }, new[] { new string?[] { "1" } }, 0, false));
+        }
+
+        public Task<IReadOnlyList<ProjectTableInfo>> ListTablesAsync(Guid projectId, CancellationToken ct = default)
+            => Task.FromResult(Tables);
+        public Task CreateTableAsync(Guid projectId, string tableName, IReadOnlyList<ProjectColumnSpec> columns, CancellationToken ct = default)
+            => Task.CompletedTask;
+        public Task RenameTableAsync(Guid projectId, string from, string to, CancellationToken ct = default)
+            => Task.CompletedTask;
+        public Task<IReadOnlyList<ProjectColumnInfo>> ListColumnsAsync(Guid projectId, string tableName, CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<ProjectColumnInfo>>(Array.Empty<ProjectColumnInfo>());
+        public Task AddColumnAsync(Guid projectId, string tableName, ProjectColumnSpec column, CancellationToken ct = default)
+            => Task.CompletedTask;
+        public Task DropColumnAsync(Guid projectId, string tableName, string columnName, CancellationToken ct = default)
+            => Task.CompletedTask;
+        public Task DropTableAsync(Guid projectId, string tableName, CancellationToken ct = default)
+            => Task.CompletedTask;
+        public Task<string> ExportTableCsvAsync(Guid projectId, string tableName, CancellationToken ct = default)
+            => Task.FromResult("");
     }
 }

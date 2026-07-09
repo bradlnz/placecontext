@@ -201,6 +201,9 @@ public sealed class PlaceContextService : IPlaceContextService
     public Task<string> GenerateProjectChartAsync(Guid projectId, string tableName, string? instruction, CancellationToken ct = default)
         => _dispatcher.Send(new GenerateProjectChartCommand(projectId, tableName, instruction), ct);
 
+    public Task<IReadOnlyList<ProjectChartView>> ListProjectChartsAsync(Guid projectId, CancellationToken ct = default)
+        => _dispatcher.Query(new ListProjectChartsQuery(projectId), ct);
+
     public Task<IReadOnlyList<RunReportView>> ListRecentRunReportsAsync(int take = 24, CancellationToken ct = default)
         => _dispatcher.Query(new ListRecentRunReportsQuery(take), ct);
 
