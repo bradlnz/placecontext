@@ -95,9 +95,51 @@ apply_manifests() {
   say "Ollama + Gemma (local LLM)…"
   kube -n "$PCTL_NAMESPACE" apply -f "$K3S_DIR/ollama.yaml"
 
+  say "Docker-in-Docker (project app runtime)…"
+  kube -n "$PCTL_NAMESPACE" apply -f "$K3S_DIR/dind.yaml"
+
   say "PlaceContext Host (image: $image)…"
   sed -e "s|__IMAGE__|${image}|g" \
     "$K3S_DIR/placecontext.yaml" | kube -n "$PCTL_NAMESPACE" apply -f -
+
+  apply_platform_keys
+}
+
+# ── platform keys overlay (feature keys survive every redeploy) ─────────────────────────────────
+# `pctl setup` (or an operator, by hand) writes KEY=VALUE lines of PlaceContext__… env into this
+# file; applying the manifests would otherwise reset the deployment env and silently disable the
+# ingest/SMS gateways, so every apply re-applies the overlay on top.
+PLATFORM_KEYS_FILE_ROOT="/etc/placecontext/platform-keys.env"
+PLATFORM_KEYS_FILE_USER="${XDG_CONFIG_HOME:-$HOME/.config}/placecontext/platform-keys.env"
+
+platform_keys_file() {
+  if [ "$(id -u)" = 0 ]; then printf '%s' "$PLATFORM_KEYS_FILE_ROOT"
+  elif [ -r "$PLATFORM_KEYS_FILE_ROOT" ]; then printf '%s' "$PLATFORM_KEYS_FILE_ROOT"
+  else printf '%s' "$PLATFORM_KEYS_FILE_USER"; fi
+}
+
+apply_platform_keys() {
+  local f; f="$(platform_keys_file)"
+  [ -r "$f" ] || return 0
+  local -a pairs=()
+  while IFS= read -r line; do
+    case "$line" in ''|\#*) continue;; esac
+    pairs+=("$line")
+  done < "$f"
+  [ ${#pairs[@]} -gt 0 ] || return 0
+  say "Applying platform keys overlay (${#pairs[@]} key(s) from $f)…"
+  kube -n "$PCTL_NAMESPACE" set env deploy/placecontext "${pairs[@]}" >/dev/null
+}
+
+save_platform_key() {
+  local f; f="$(platform_keys_file)"
+  mkdir -p "$(dirname "$f")"
+  umask 077
+  touch "$f"
+  # replace-or-append so re-running setup rotates cleanly
+  grep -v "^${1}=" "$f" > "${f}.tmp" 2>/dev/null || true
+  printf '%s=%s\n' "$1" "$2" >> "${f}.tmp"
+  mv "${f}.tmp" "$f"
 }
 
 wait_rollout() {
@@ -934,12 +976,58 @@ ts_mint_authkey() {
     | sed -n 's/.*"access_token"[: ]*"\([^"]*\)".*/\1/p')"
   [ -n "$tok" ] || die "Tailscale OAuth token request failed (check --ts-oauth-client-id/secret)."
   local body key
-  body="{\"capabilities\":{\"devices\":{\"create\":{\"reusable\":false,\"ephemeral\":true,\"preauthorized\":true,\"tags\":[\"${tag}\"]}}},\"expirySeconds\":900}"
+  # ephemeral:false — fleet nodes are durable devices; an ephemeral registration would drop off
+  # the tailnet after an outage and the single-use key could not re-register it. The KEY expiring
+  # (1h) only bounds how long a join code stays usable, not the node's tailnet membership.
+  body="{\"capabilities\":{\"devices\":{\"create\":{\"reusable\":false,\"ephemeral\":false,\"preauthorized\":true,\"tags\":[\"${tag}\"]}}},\"expirySeconds\":3600}"
   key="$(curl -fsSL -H "Authorization: Bearer ${tok}" -H 'Content-Type: application/json' \
     -d "$body" https://api.tailscale.com/api/v2/tailnet/-/keys \
     | sed -n 's/.*"key"[: ]*"\([^"]*\)".*/\1/p')"
   [ -n "$key" ] || die "Tailscale auth key minting failed (does the OAuth client have the '${tag}' tag + key write scope?)."
   printf '%s' "$key"
+}
+
+# ── Tailscale OAuth client (nodes join the tailnet via OAuth; a fresh key is minted per join) ────
+# Saved once with `pctl ts-oauth --client-id X --secret Y`; join-code / server up / agent join /
+# join then mint their own short-lived, single-use, preauthorized keys — no key handling at all.
+TS_OAUTH_FILE_ROOT="/etc/placecontext/ts-oauth.env"
+TS_OAUTH_FILE_USER="${XDG_CONFIG_HOME:-$HOME/.config}/placecontext/ts-oauth.env"
+
+# Populate PCTL_TS_OAUTH_ID/SECRET from the saved client unless the environment already has them.
+load_ts_oauth() {
+  { [ -n "${PCTL_TS_OAUTH_ID:-}" ] && [ -n "${PCTL_TS_OAUTH_SECRET:-}" ]; } && return 0
+  local f
+  for f in "$TS_OAUTH_FILE_ROOT" "$TS_OAUTH_FILE_USER"; do
+    # shellcheck disable=SC1090
+    if [ -r "$f" ]; then . "$f"; return 0; fi
+  done
+  return 0
+}
+
+cmd_ts_oauth() {
+  local id="" secret="" status=0 clear=0
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --client-id) id="$2"; shift 2;;
+      --secret)    secret="$2"; shift 2;;
+      --status)    status=1; shift;;
+      --clear)     clear=1; shift;;
+      *) die "ts-oauth: unknown arg $1";;
+    esac
+  done
+  local f="$TS_OAUTH_FILE_USER"; [ "$(id -u)" = 0 ] && f="$TS_OAUTH_FILE_ROOT"
+  if [ "$status" = 1 ]; then
+    load_ts_oauth
+    if [ -n "${PCTL_TS_OAUTH_ID:-}" ]; then ok "Tailscale OAuth client configured (id: ${PCTL_TS_OAUTH_ID%????}****)."
+    else warn "No Tailscale OAuth client configured — joins need --ts-authkey or an already-joined tailnet."; fi
+    return 0
+  fi
+  if [ "$clear" = 1 ]; then rm -f "$TS_OAUTH_FILE_ROOT" "$TS_OAUTH_FILE_USER" 2>/dev/null; ok "Tailscale OAuth client cleared."; return 0; fi
+  [ -n "$id" ] && [ -n "$secret" ] || die "usage: pctl ts-oauth --client-id ID --secret SECRET  (or --status / --clear)"
+  mkdir -p "$(dirname "$f")"
+  umask 077
+  printf 'PCTL_TS_OAUTH_ID=%q\nPCTL_TS_OAUTH_SECRET=%q\n' "$id" "$secret" > "$f"
+  ok "Tailscale OAuth client saved to $f — joins now mint their own keys."
 }
 
 # Build the k3s --vpn-auth exec arg into the named array, from either a Tailscale OAuth client
@@ -972,6 +1060,12 @@ cmd_server_up() {
   done
   [ "$(id -u)" = 0 ] || die "server up installs a systemd service — run with sudo."
 
+  # OAuth-first: use the saved client when no explicit mesh flags were given.
+  if [ -z "$ts_id" ] && [ -z "$vpn_key" ]; then
+    load_ts_oauth
+    ts_id="${PCTL_TS_OAUTH_ID:-}"; ts_secret="${PCTL_TS_OAUTH_SECRET:-}"
+  fi
+
   local -a exec_args=()
   build_vpn_arg exec_args "$ts_id" "$ts_secret" "$ts_tag" "$vpn_ctrl" "$vpn_key"
 
@@ -989,7 +1083,7 @@ cmd_server_up() {
 }
 
 cmd_agent_join() {
-  local url="" token="" ts_id="" ts_secret="" ts_tag="tag:k8s" vpn_ctrl="" vpn_key=""
+  local url="" token="" ts_id="" ts_secret="" ts_tag="tag:k8s" ts_key="" vpn_ctrl="" vpn_key=""
   while [ $# -gt 0 ]; do
     case "$1" in
       --server-url)         url="$2"; shift 2;;
@@ -997,6 +1091,7 @@ cmd_agent_join() {
       --ts-oauth-client-id) ts_id="$2"; shift 2;;
       --ts-oauth-secret)    ts_secret="$2"; shift 2;;
       --ts-tag)             ts_tag="$2"; shift 2;;
+      --ts-authkey)         ts_key="$2"; shift 2;;
       --vpn-control)        vpn_ctrl="$2"; shift 2;;
       --vpn-authkey)        vpn_key="$2"; shift 2;;
       *) die "agent join: unknown arg $1";;
@@ -1005,24 +1100,72 @@ cmd_agent_join() {
   [ -n "$url" ] && [ -n "$token" ] || die "agent join needs --server-url and --node-token"
   [ "$(id -u)" = 0 ] || die "agent join installs a systemd service — run with sudo."
 
+  # OAuth-first: fall back to the saved OAuth client so a machine with `pctl ts-oauth` configured
+  # joins the tailnet with a freshly minted key and zero extra flags.
+  if [ -z "$ts_id" ] && [ -z "$ts_key" ] && [ -z "$vpn_key" ]; then
+    load_ts_oauth
+    ts_id="${PCTL_TS_OAUTH_ID:-}"; ts_secret="${PCTL_TS_OAUTH_SECRET:-}"
+  fi
+
   local -a exec_args=()
-  build_vpn_arg exec_args "$ts_id" "$ts_secret" "$ts_tag" "$vpn_ctrl" "$vpn_key"
+  # A ready-made Tailscale auth key (join code / --ts-authkey) wins; else OAuth minting / Headscale.
+  if [ -n "$ts_key" ]; then
+    say "Node will connect over Tailscale (k3s --vpn-auth)…"
+    exec_args+=("--vpn-auth=name=tailscale,joinKey=${ts_key}")
+  else
+    build_vpn_arg exec_args "$ts_id" "$ts_secret" "$ts_tag" "$vpn_ctrl" "$vpn_key"
+  fi
+
+  # Fail fast instead of hanging: a tailnet address (100.64.0.0/10) is unreachable unless this
+  # machine is already on the tailnet or the join brings Tailscale up itself.
+  case "$url" in
+    https://100.*)
+      if [ ${#exec_args[@]} -eq 0 ] && ! tailscale status >/dev/null 2>&1; then
+        die "the server address ($url) is a Tailscale address, but this machine is not on the tailnet.
+Pass --ts-authkey (or use a join code generated with one), or bring Tailscale up first."
+      fi;;
+  esac
+
   say "Joining this machine to $url as a worker…"
   curl -sfL https://get.k3s.io | K3S_URL="$url" K3S_TOKEN="$token" sh -s - agent "${exec_args[@]}"
   ok "Worker joined."
 }
 
 # ── join code (one compact string that lets a new computer join as a worker) ────────────────────
-# Master: `pctl join-code` prints PC1.<base64url("https://ip:6443 <token>")>. New computer: the
-# TUI's [j] screen (or `pctl join --code …`) decodes it and runs the agent join.
+# Nodes connect over Tailscale: the code carries the master's TAILNET address (stable across
+# NAT/locations), and — when a Tailscale auth key is provided or mintable — that key too, so a
+# fresh machine lands on the tailnet and in the cluster from one string.
+#   PC1.<b64url("url token")>            (legacy, still accepted by `join`)
+#   PC2.<b64url("url token [tskey]")>    (what this prints)
 cmd_join_code() {
+  load_ts_oauth
+  local ts_key="" ts_id="${PCTL_TS_OAUTH_ID:-}" ts_secret="${PCTL_TS_OAUTH_SECRET:-}" ts_tag="tag:k8s"
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --ts-authkey) ts_key="$2"; shift 2;;
+      --ts-tag)     ts_tag="$2"; shift 2;;
+      *) die "join-code: unknown arg $1";;
+    esac
+  done
   local tok_file="/var/lib/rancher/k3s/server/node-token"
   [ -r "$tok_file" ] || die "no k3s server token readable here — run on the master (or: sudo pctl join-code)"
   local ip; ip="$(tailscale ip -4 2>/dev/null | head -1)"
   [ -n "$ip" ] || ip="$(hostname -I 2>/dev/null | awk '{print $1}')"
   [ -n "$ip" ] || die "could not determine this machine's IP"
+
+  # No key passed but OAuth creds are in the environment → mint one, so the code is self-sufficient.
+  if [ -z "$ts_key" ] && [ -n "$ts_id" ] && [ -n "$ts_secret" ]; then
+    say "Minting a Tailscale auth key for the join code…"
+    ts_key="$(ts_mint_authkey "$ts_id" "$ts_secret" "$ts_tag")"
+  fi
+  if [ -z "$ts_key" ]; then
+    warn "No Tailscale auth key embedded (pass --ts-authkey, or set PCTL_TS_OAUTH_ID/SECRET);"
+    warn "the joining machine must already be on the tailnet to reach https://${ip}:6443."
+  fi
+
   local code
-  code="PC1.$(printf 'https://%s:6443 %s' "$ip" "$(cat "$tok_file")" | base64 -w0 | tr '+/' '-_' | tr -d '=')"
+  code="PC2.$(printf 'https://%s:6443 %s %s' "$ip" "$(cat "$tok_file")" "$ts_key" \
+        | sed 's/ *$//' | base64 -w0 | tr '+/' '-_' | tr -d '=')"
   printf '%sJoin code — give this to the new computer:%s\n\n  %s\n\n' "$C_BOLD" "$C_RESET" "$code"
   printf 'On the new computer: run the TUI and press [j], or: sudo ./deploy/pctl join --code <code>\n'
 }
@@ -1031,23 +1174,29 @@ cmd_join() {
   local code=""
   while [ $# -gt 0 ]; do case "$1" in --code) code="$2"; shift 2;; *) die "join: unknown arg $1";; esac; done
   [ -n "$code" ] || die "join needs --code <code> — generate it on the master: pctl join-code"
-  case "$code" in PC1.*) ;; *) die "unrecognised join code (expected PC1.…)";; esac
-  local b64="${code#PC1.}"
+  case "$code" in PC1.*|PC2.*) ;; *) die "unrecognised join code (expected PC1.… or PC2.…)";; esac
+  local b64="${code#PC?.}"
   b64="$(printf '%s' "$b64" | tr -- '-_' '+/')"
   while [ $((${#b64} % 4)) -ne 0 ]; do b64="${b64}="; done
   local decoded; decoded="$(printf '%s' "$b64" | base64 -d 2>/dev/null)" || die "join code is corrupted"
-  local url="${decoded%% *}" token="${decoded#* }"
-  [ -n "$url" ] && [ -n "$token" ] && [ "$url" != "$decoded" ] || die "join code is incomplete"
+  # Fields: url token [tskey] — PC1 codes simply have no third field.
+  local url token tskey
+  read -r url token tskey <<EOF2
+$decoded
+EOF2
+  [ -n "$url" ] && [ -n "$token" ] || die "join code is incomplete"
+  local -a extra=()
+  [ -n "${tskey:-}" ] && extra=(--ts-authkey "$tskey")
   if [ "$(id -u)" != 0 ]; then
     # The TUI can't prompt for a sudo password — self-elevate when passwordless sudo exists,
     # otherwise hand the operator the exact command to run.
     if sudo -n true 2>/dev/null; then
       say "Joining $url as a worker (via sudo)…"
-      exec sudo -n "$0" agent join --server-url "$url" --node-token "$token"
+      exec sudo -n "$0" agent join --server-url "$url" --node-token "$token" "${extra[@]}"
     fi
     die "joining installs k3s (needs root) — run: sudo $0 join --code '$code'"
   fi
-  cmd_agent_join --server-url "$url" --node-token "$token"
+  cmd_agent_join --server-url "$url" --node-token "$token" "${extra[@]}"
 }
 
 cmd_join_cmd() {
@@ -1096,6 +1245,108 @@ cmd_tui() {
 }
 
 # ── help ─────────────────────────────────────────────────────────────────────────────────────────
+# ── setup (guided, interactive) ──────────────────────────────────────────────────────────────────
+# The hermes idea applied to the platform itself: one command that walks every setup step in
+# order — doctor → mode → Tailscale OAuth → platform keys → bring-up → next steps. Every step
+# maps 1:1 to a plain pctl command, so nothing here is magic; docs/SETUP.md is the long form.
+cmd_setup() {
+  [ -t 0 ] || die "setup is interactive — run it in a terminal (see docs/SETUP.md for scripted installs)."
+
+  printf '\n%sPlaceContext setup%s — a context platform for AI\n' "$C_BOLD" "$C_RESET"
+  printf '%sEach step maps to a plain pctl command; docs/SETUP.md is the long form.%s\n\n' "$C_DIM" "$C_RESET"
+
+  # 1) tooling
+  say "Step 1/5 — checking tooling (pctl doctor)…"
+  cmd_doctor
+
+  # 2) mode
+  printf '\n'
+  say "Step 2/5 — what should this machine be?"
+  printf '  1) dev        — everything on this machine (k3d cluster)\n'
+  printf '  2) server     — production master of a new fleet (k3s; nodes connect via Tailscale)\n'
+  printf '  3) join       — worker joining an existing fleet (needs a join code from the master)\n'
+  local mode
+  while :; do
+    printf '%schoice [1-3]: %s' "$C_BOLD" "$C_RESET"; read -r mode
+    case "$mode" in 1|2|3) break;; *) warn "pick 1, 2 or 3";; esac
+  done
+
+  # 3) Tailscale OAuth (fleet modes) — saved once, every join mints its own key
+  if [ "$mode" != 1 ]; then
+    printf '\n'
+    say "Step 3/5 — Tailscale (nodes connect via Tailscale)…"
+    load_ts_oauth
+    if [ -n "${PCTL_TS_OAUTH_ID:-}" ]; then
+      ok "Tailscale OAuth client already configured (id: ${PCTL_TS_OAUTH_ID%????}****)."
+    else
+      printf 'Create an OAuth client in the Tailscale admin console (auth_keys write scope,\n'
+      printf 'device tag tag:k8s) and paste it here — or leave blank to skip for now.\n'
+      local tsid tssec
+      printf '%sclient id: %s' "$C_BOLD" "$C_RESET"; read -r tsid
+      if [ -n "$tsid" ]; then
+        printf '%sclient secret: %s' "$C_BOLD" "$C_RESET"; read -rs tssec; printf '\n'
+        [ -n "$tssec" ] || die "a client secret is required with a client id"
+        cmd_ts_oauth --client-id "$tsid" --secret "$tssec"
+        load_ts_oauth
+      else
+        warn "Skipped — joins will need --ts-authkey, or run: pctl ts-oauth --client-id … --secret …"
+      fi
+    fi
+  else
+    printf '\n'; say "Step 3/5 — Tailscale: not needed for a single-machine dev cluster (skipped)."
+  fi
+
+  # 4) platform feature keys (stored in the overlay; re-applied on every deploy)
+  printf '\n'
+  say "Step 4/5 — platform features…"
+  local yn key
+  printf '%sEnable the event-ingest webhook (POST /ingest/{event})? [Y/n]: %s' "$C_BOLD" "$C_RESET"; read -r yn
+  if [ "${yn:-y}" != "n" ] && [ "${yn:-y}" != "N" ]; then
+    key="$(openssl rand -hex 24 2>/dev/null || head -c 24 /dev/urandom | od -An -tx1 | tr -d ' \n')"
+    save_platform_key "PlaceContext__Ingest__Key" "$key"
+    ok "Ingest key generated — callers send it as X-Ingest-Key:"
+    printf '    %s\n' "$key"
+  fi
+  printf '%sEnable the inbound SMS gateway (POST /sms/inbound)? [y/N]: %s' "$C_BOLD" "$C_RESET"; read -r yn
+  if [ "${yn:-n}" = "y" ] || [ "${yn:-n}" = "Y" ]; then
+    key="$(openssl rand -hex 24 2>/dev/null || head -c 24 /dev/urandom | od -An -tx1 | tr -d ' \n')"
+    save_platform_key "PlaceContext__Sms__InboundKey" "$key"
+    ok "SMS inbound key generated — point your provider's webhook at /sms/inbound?key=…:"
+    printf '    %s\n' "$key"
+  fi
+  printf '%s  (GitHub import + Anthropic LLM keys are also overlay keys — see docs/SETUP.md §7.)%s\n' "$C_DIM" "$C_RESET"
+
+  # 5) bring-up
+  printf '\n'
+  say "Step 5/5 — bringing the platform up…"
+  case "$mode" in
+    1)
+      [ -s "$PCTL_IMAGE_TAR" ] || cmd_build
+      cmd_dev_up
+      ;;
+    2)
+      [ "$(id -u)" = 0 ] || die "a production master installs k3s + systemd — rerun as: sudo $0 setup"
+      cmd_server_up
+      ;;
+    3)
+      local code
+      printf 'On the master run: sudo pctl join-code — then paste the code here.\n'
+      printf '%sjoin code: %s' "$C_BOLD" "$C_RESET"; read -r code
+      [ -n "$code" ] || die "no join code given"
+      cmd_join --code "$code"
+      ;;
+  esac
+
+  # next steps
+  printf '\n%sSetup complete.%s\n\n' "$C_BOLD" "$C_RESET"
+  [ "$mode" = 1 ] && printf '  Portal + MCP:  http://localhost:%s  (MCP at /mcp)\n' "$PCTL_PORT"
+  [ "$mode" = 2 ] && printf '  Portal + MCP:  http://<this-machine>:%s — add workers with: sudo pctl join-code\n' "$PCTL_PORT"
+  printf '  Dashboard:     pctl tui\n'
+  printf '  First project: portal → Onboarding, or import from GitHub / an Obsidian vault (/import)\n'
+  printf '  Agents:        connect MCP, then call setup_hermes for the job-orchestration skill\n'
+  printf '  Guide:         docs/SETUP.md\n'
+}
+
 cmd_help() {
   cat <<EOF
 ${C_BOLD}pctl${C_RESET} — PlaceContext control CLI
@@ -1117,8 +1368,15 @@ ${C_BOLD}PRODUCTION${C_RESET} ${C_DIM}(k3s across multiple machines)${C_RESET}
                          Join this machine as a worker (sudo)
                          (self-hosted mesh: --vpn-control https://headscale --vpn-authkey KEY)
   join-cmd                                        Print the worker-join command (run on server)
-  join-code              Print a one-string join code (run on the master; give it to a new computer)
-  join --code CODE       Join this computer to the cluster using a join code (TUI: press [j])
+  ts-oauth --client-id ID --secret SECRET   Save the Tailscale OAuth client once (root:
+                         /etc/placecontext, else ~/.config/placecontext); joins then mint their
+                         own single-use tailnet keys — no key handling (--status / --clear)
+  join-code [--ts-authkey KEY]   Print a one-string join code (run on the master). Nodes connect
+                         over Tailscale: the code carries the master's tailnet address, plus a
+                         key minted from the saved OAuth client (or --ts-authkey), so a fresh
+                         machine joins the tailnet and the cluster from one string
+  join --code CODE       Join this computer to the cluster using a join code (TUI: press [j]);
+                         with a saved ts-oauth client a keyless code still joins via OAuth
 
 ${C_BOLD}MESH${C_RESET} ${C_DIM}(self-hosted WireGuard control plane via Headscale, on a DO droplet)${C_RESET}
   mesh up --domain FQDN  Start Headscale (your own Tailscale) for the fleet
@@ -1127,6 +1385,8 @@ ${C_BOLD}MESH${C_RESET} ${C_DIM}(self-hosted WireGuard control plane via Headsca
   mesh down              Stop Headscale
 
 ${C_BOLD}ANYWHERE${C_RESET}
+  setup                  Guided interactive setup: doctor → mode (dev/server/join) → Tailscale
+                         OAuth → platform keys → bring-up → next steps (see docs/SETUP.md)
   tui                    Launch the reactive full-screen dashboard (Go TUI)
   build [--tag TAG]      Build the container image and export it to the tarball
   deploy [--image IMG] [--context CTX]
@@ -1202,6 +1462,8 @@ main() {
     join-cmd)     cmd_join_cmd "$@";;
     join-code)    cmd_join_code "$@";;
     join)         cmd_join "$@";;
+    ts-oauth)     cmd_ts_oauth "$@";;
+    setup)        cmd_setup "$@";;
     doctor)       cmd_doctor "$@";;
     help|-h|--help) cmd_help;;
     version|--version) echo "pctl 0.1.0";;

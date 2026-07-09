@@ -17,7 +17,7 @@ public static class WikiLibrary
     // Reading order for the nav — files not listed here fall to the end, alphabetically.
     private static readonly string[] Order =
     {
-        "getting-started", "projects", "jobs-and-artifacts", "charts-and-reports",
+        "getting-started", "setup", "projects", "jobs-and-artifacts", "charts-and-reports",
         "project-data", "cluster-and-nodes", "chat-and-nodes", "mcp-and-agents",
     };
 
