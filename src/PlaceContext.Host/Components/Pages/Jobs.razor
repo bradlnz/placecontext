@@ -119,20 +119,6 @@ else
                                         </span>
                                     }
                                 </div>
-                                @* The run's chart — drawn by the local LLM (Chart post-job action) and stored in
-                                   the object store; embedded sandboxed since it's self-contained SVG/HTML. The
-                                   newest run's chart is open; older ones expand on demand. *@
-                                @if (ChartFor(run.Id) is { } chart)
-                                {
-                                    <details style="margin-top:8px" open="@(run.Id == _runs[0].Id)">
-                                        <summary style="font-size:11px; color:var(--text-3); cursor:pointer">📊 @chart.Title</summary>
-                                        @* allow-same-origin (needed for the auth cookie) but NO allow-scripts:
-                                           the LLM-generated document renders but can never execute code. The
-                                           chart carries its own portal theme (StyleChart), so it sits cleanly. *@
-                                        <iframe src="@($"/runs/{run.Id}/artifacts/{chart.Id}")" sandbox="allow-same-origin" loading="lazy"
-                                                style="width:100%; height:280px; margin-top:6px; border:1px solid var(--border); border-radius:8px; background:var(--card)"></iframe>
-                                    </details>
-                                }
                             </div>
                         }
                     </div>
@@ -713,11 +699,6 @@ else
         catch (Exception ex) { _trError = ex.Message; }
     }
 
-    // runId → its Chart post-job artifact, for inline charts in the run history.
-    private Dictionary<Guid, RunArtifactLinkView> _jobCharts = new();
-
-    private RunArtifactLinkView? ChartFor(Guid runId) => _jobCharts.TryGetValue(runId, out var c) ? c : null;
-
     private async Task SelectJob(Guid jobId)
     {
         _selectedJobId = jobId;
@@ -726,10 +707,6 @@ else
         try
         {
             _runs = await Svc.ListJobRunsAsync(jobId);
-            _jobCharts = (await Svc.ListJobRunArtifactsAsync(jobId))
-                .Where(a => a.Kind == PlaceContext.Domain.ValueObjects.PostJobActionKind.Chart)
-                .GroupBy(a => a.RunId)
-                .ToDictionary(g => g.Key, g => g.OrderByDescending(a => a.CreatedAt).First());
         }
         catch (Exception ex) { _message = ex.Message; }
     }
