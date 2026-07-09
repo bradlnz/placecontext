@@ -455,7 +455,9 @@ image_import_k3s() {
   [ -s "$PCTL_IMAGE_TAR" ] || { warn "no image tarball at $PCTL_IMAGE_TAR — skipping k3s import."; return 0; }
   [ "$(id -u)" = 0 ] || die "importing into k3s containerd needs root — rerun with sudo."
   say "Importing image from $PCTL_IMAGE_TAR into this node's containerd…"
-  k3s ctr images import "$PCTL_IMAGE_TAR"
+  # -n k8s.io: kubelet only sees the k8s.io containerd namespace — an import into ctr's default
+  # namespace looks successful but pods still can't find the image (→ pull backoff).
+  k3s ctr -n k8s.io images import "$PCTL_IMAGE_TAR"
   ok "Image available on this node."
 }
 
@@ -829,11 +831,28 @@ cmd_kill() {
 
 # ── build ──────────────────────────────────────────────────────────────────────────────────────
 cmd_build() {
-  local tag="$PCTL_IMAGE"
-  while [ $# -gt 0 ]; do case "$1" in --tag) tag="$2"; shift 2;; *) shift;; esac; done
+  local tag="$PCTL_IMAGE" arch=""
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --tag)  tag="$2"; shift 2;;
+      --arch) arch="$2"; shift 2;;
+      *) shift;;
+    esac
+  done
   have docker || die "docker is required to build."
-  say "Building image $tag…"
-  docker build -t "$tag" .
+
+  # --provenance/--sbom off: buildx otherwise attaches attestation manifests, turning the saved
+  # tarball into an OCI index that containerd-side imports (k3s ctr) can fail to resolve — the
+  # distribution must carry a plain, directly-importable image.
+  local -a flags=(-t "$tag")
+  if docker build --help 2>/dev/null | grep -q -- --provenance; then
+    flags+=(--provenance=false --sbom=false)
+  fi
+  # Cross-build (e.g. --arch arm64 for an ARM fleet) — needs binfmt/qemu on this machine.
+  [ -n "$arch" ] && flags+=(--platform "linux/${arch}")
+
+  say "Building image $tag${arch:+ (linux/$arch)}…"
+  docker build "${flags[@]}" .
   say "Exporting to $PCTL_IMAGE_TAR…"
   docker save "$tag" -o "$PCTL_IMAGE_TAR"
   ok "Built and saved."
@@ -863,23 +882,38 @@ cmd_deploy() {
 # pctl, the prebuilt TUI, the k8s manifests, the container image tarball, and an install.sh —
 # so a new machine goes tarball → ./install.sh → running cluster, no source tree or registry needed.
 cmd_package() {
-  local with_image=1
-  while [ $# -gt 0 ]; do case "$1" in --no-image) with_image=0; shift;; *) die "package: unknown arg $1";; esac; done
+  local with_image=1 arch=""
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --no-image) with_image=0; shift;;
+      --arch)     arch="$2"; shift 2;;
+      *) die "package: unknown arg $1";;
+    esac
+  done
 
-  local ver os arch name stage
+  local ver os host_arch name stage
   ver="$(git describe --tags --always 2>/dev/null || date +%Y%m%d)"
   os="$(uname -s | tr '[:upper:]' '[:lower:]')"
-  arch="$(uname -m)"; [ "$arch" = x86_64 ] && arch=amd64; [ "$arch" = aarch64 ] && arch=arm64
+  host_arch="$(uname -m)"; [ "$host_arch" = x86_64 ] && host_arch=amd64; [ "$host_arch" = aarch64 ] && host_arch=arm64
+  arch="${arch:-$host_arch}"
   name="placecontext-${ver}-${os}-${arch}"
   stage="dist/$name"
 
   say "Packaging $name…"
   rm -rf "$stage"; mkdir -p "$stage/deploy/tui" "$stage/deploy/k3s"
 
-  # The TUI, statically built with the migration stamp (make handles both).
+  # The TUI, statically built with the migration stamp; cross-compiled when --arch differs.
   have go || die "the Go toolchain is required to package the TUI (make -C deploy/tui)."
-  make -s -C deploy/tui build || die "TUI build failed."
-  install -m755 deploy/tui/pctl-tui "$stage/deploy/tui/pctl-tui"
+  if [ "$arch" = "$host_arch" ]; then
+    make -s -C deploy/tui build || die "TUI build failed."
+    install -m755 deploy/tui/pctl-tui "$stage/deploy/tui/pctl-tui"
+  else
+    say "Cross-compiling the TUI for linux/${arch}…"
+    ( cd deploy/tui && CGO_ENABLED=0 GOOS=linux GOARCH="$arch" \
+        go build -trimpath -ldflags "-s -w" -o "pctl-tui-${arch}" . ) || die "TUI cross-build failed."
+    install -m755 "deploy/tui/pctl-tui-${arch}" "$stage/deploy/tui/pctl-tui"
+    rm -f "deploy/tui/pctl-tui-${arch}"
+  fi
 
   # The engine + manifests, laid out exactly as pctl expects (<root>/deploy/…).
   install -m755 deploy/pctl "$stage/deploy/pctl"
@@ -892,9 +926,15 @@ cmd_package() {
     done
   fi
 
-  # The application itself, as a prebuilt image tarball (built now if missing).
+  # The application itself, as a prebuilt image tarball. Cross-arch packages always rebuild for
+  # the target platform — bundling a host-arch image in an arm64 package is exactly the
+  # "no match for platform" ImagePullBackOff trap.
   if [ "$with_image" = 1 ]; then
-    [ -s "$PCTL_IMAGE_TAR" ] || cmd_build
+    if [ "$arch" != "$host_arch" ]; then
+      cmd_build --arch "$arch"
+    else
+      [ -s "$PCTL_IMAGE_TAR" ] || cmd_build
+    fi
     cp "$PCTL_IMAGE_TAR" "$stage/deploy/placecontext-local.tar"
   fi
 
@@ -1420,7 +1460,9 @@ ${C_BOLD}ANYWHERE${C_RESET}
   deploy [--image IMG] [--context CTX]
                          Apply the manifests to the current (or given) kube context
   update [--deploy]      Pull the latest source from git (fast-forward); --deploy also rebuilds + rolls out (starts the dev cluster if needed)
-  package [--no-image]   Build a self-contained release tarball (pctl + TUI + manifests + image) in dist/
+  package [--no-image] [--arch amd64|arm64]
+                         Build a self-contained release tarball (pctl + TUI + manifests + image)
+                         in dist/; --arch cross-builds for a different fleet architecture
   kill pod|node|job NAME [--yes]   Delete a pod / k3d node / job (prompts unless --yes)
   db ha                  Replicated Postgres (1 primary + 2 replicas) via CloudNativePG
   db backup-now          Dump all databases to MinIO right now (nightly CronJob does this at 03:00)
