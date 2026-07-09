@@ -2,6 +2,8 @@
 @inject IPlaceContextService Svc
 @inject PortalUiState Ui
 @inject NavigationManager Nav
+@inject PlaceContext.Infrastructure.Operations.OperationCenter OpCenter
+@using Microsoft.Extensions.DependencyInjection
 
 <PageTitle>PlaceContext — Jobs</PageTitle>
 
@@ -13,8 +15,7 @@ else
 {
     <div style="padding:20px 24px 40px; max-width:1320px; margin:0 auto">
 
-        <button class="dcbtn" style="border:none; background:none; color:var(--text-3); padding:4px 0; margin-bottom:14px"
-                @onclick="@(() => Nav.NavigateTo($"/project/{ProjectId}"))">← Back to project</button>
+    <ProjectTabs ProjectId="ProjectId" Active="jobs" />
 
         <div style="display:flex; align-items:baseline; justify-content:space-between; margin-bottom:18px">
             <h2 style="font-size:18px; font-weight:600; margin:0">Jobs</h2>
@@ -727,22 +728,24 @@ else
 
     private async Task RunJobCore(Guid jobId, string? payload)
     {
-        _runningJobId = jobId;
         _message = null;
-        try
+        // Runs execute as background portal operations — leaving this page never interrupts one;
+        // progress and the outcome live in the notifications bell.
+        var tenant = PlaceContext.Infrastructure.Tenancy.CurrentTenant.Current;
+        if (tenant is null) { _message = "No tenant resolved — sign in again."; return; }
+        var jobName = _jobs?.FirstOrDefault(j => j.Id == jobId)?.Name ?? "job";
+        OpCenter.Run(tenant, ProjectId, $"Run job — {jobName}", $"/project/{ProjectId}/jobs",
+            async (sp, ct) =>
+            {
+                var result = await sp.GetRequiredService<IPlaceContextService>().RunJobAsync(jobId, payload, ct);
+                return $"run finished — {result.Status}";
+            });
+        _runPromptJob = null;
+        _message = $"Run of {jobName} started in the background — follow it in the notifications bell.";
+        if (_selectedJobId == jobId)
         {
-            var result = await Svc.RunJobAsync(jobId, payload);
-            _message = $"Run {result.Id} completed — status: {result.Status}.";
-            _runPromptJob = null;
-            if (_selectedJobId == jobId)
-                _runs = await Svc.ListJobRunsAsync(jobId);
+            try { _runs = await Svc.ListJobRunsAsync(jobId); } catch { /* list refresh is best-effort */ }
         }
-        catch (Exception ex)
-        {
-            if (_runPromptJob is not null) _runPromptError = ex.Message;
-            else _message = ex.Message;
-        }
-        finally { _runningJobId = null; }
     }
 
     private string GetArg(string name) => _runArgs.TryGetValue(name, out var v) ? v : "";

@@ -1,0 +1,112 @@
+@implements IDisposable
+@inject PlaceContext.Infrastructure.Operations.OperationCenter Ops
+@inject PlaceContext.Application.Ports.ICurrentTenant Tenant
+@inject NavigationManager Nav
+@using PlaceContext.Infrastructure.Operations
+
+@* Azure-style notifications: the bell shows how many background operations are live; the pane
+   lists recent operations for this tenant. Operations run server-side in OperationCenter, so
+   navigating between pages (or closing the pane) never interrupts them. *@
+
+<button title="Notifications" @onclick="@(() => _open = !_open)"
+        style="position:relative; width:30px; height:30px; border-radius:7px; border:1px solid var(--border); background:var(--card); cursor:pointer; display:flex; align-items:center; justify-content:center; color:var(--text-2)">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.7 21a2 2 0 0 1-3.4 0"></path>
+    </svg>
+    @if (ActiveCount > 0)
+    {
+        <span style="position:absolute; top:-5px; right:-5px; min-width:16px; height:16px; padding:0 4px; border-radius:8px; background:var(--brand); color:#fff; font-size:9.5px; font-weight:700; display:flex; align-items:center; justify-content:center">@ActiveCount</span>
+    }
+</button>
+
+@if (_open)
+{
+    <div style="position:fixed; inset:0; z-index:80" @onclick="@(() => _open = false)"></div>
+    <div class="dccard" style="position:fixed; top:58px; right:16px; width:380px; max-height:calc(100vh - 80px); overflow-y:auto; z-index:81; padding:8px; box-shadow:0 12px 32px rgba(0,0,0,.4)">
+        <div style="display:flex; align-items:center; justify-content:space-between; padding:6px 8px">
+            <span style="font-size:12.5px; font-weight:600">Notifications</span>
+            <span style="font-size:10.5px; color:var(--text-3)">@(ActiveCount > 0 ? $"{ActiveCount} in progress" : "all quiet")</span>
+        </div>
+        @if (_operations.Count == 0)
+        {
+            <div style="padding:18px 8px; font-size:12px; color:var(--text-3); text-align:center">
+                Nothing yet — background work (job runs, chart sweeps, rebuilds) shows up here.
+            </div>
+        }
+        @foreach (var op in _operations)
+        {
+            <div style="display:flex; gap:10px; padding:9px 8px; border-top:1px solid var(--border); align-items:start">
+                <span style="flex:none; width:18px; text-align:center; font-size:13px">
+                    @switch (op.Status)
+                    {
+                        case PortalOperationStatus.Queued: <span style="color:var(--text-3)">⏳</span>; break;
+                        case PortalOperationStatus.Running: <span style="display:inline-block; color:var(--brand-2); animation:dcspin 1.2s linear infinite">◐</span>; break;
+                        case PortalOperationStatus.Succeeded: <span style="color:var(--good)">✓</span>; break;
+                        case PortalOperationStatus.Failed: <span style="color:var(--bad)">✗</span>; break;
+                    }
+                </span>
+                <div style="flex:1; min-width:0">
+                    <div style="font-size:12px; font-weight:500; color:var(--text)">@op.Title</div>
+                    <div style="font-size:10.5px; color:var(--text-3); margin-top:2px">
+                        @StatusLine(op)
+                    </div>
+                    @if (op.Outcome is { Length: > 0 })
+                    {
+                        <div style="font-size:10.5px; color:@(op.Status == PortalOperationStatus.Failed ? "var(--bad)" : "var(--text-3)"); margin-top:2px; word-break:break-word">@op.Outcome</div>
+                    }
+                </div>
+                @if (op.Link is not null)
+                {
+                    <button class="dcbtn" style="padding:2px 8px; font-size:10.5px; flex:none"
+                            @onclick="@(() => Open(op.Link))">view</button>
+                }
+            </div>
+        }
+    </div>
+    <style>@@keyframes dcspin { to { transform: rotate(360deg); } }</style>
+}
+
+@code {
+    private bool _open;
+    private IReadOnlyList<PortalOperation> _operations = Array.Empty<PortalOperation>();
+
+    private int ActiveCount => Tenant.IsResolved ? Ops.ActiveCount(Tenant.TenantId) : 0;
+
+    protected override void OnInitialized()
+    {
+        Ops.Changed += OnOpsChanged;
+        Reload();
+    }
+
+    private void OnOpsChanged() => _ = InvokeAsync(() => { Reload(); StateHasChanged(); });
+
+    private void Reload()
+        => _operations = Tenant.IsResolved ? Ops.ListForTenant(Tenant.TenantId) : Array.Empty<PortalOperation>();
+
+    private void Open(string link)
+    {
+        _open = false;
+        Nav.NavigateTo(link);
+    }
+
+    private static string StatusLine(PortalOperation op) => op.Status switch
+    {
+        PortalOperationStatus.Queued => $"queued {op.QueuedAt.ToLocalTime():HH:mm:ss}",
+        PortalOperationStatus.Running => $"running for {Elapsed(op.StartedAt ?? op.QueuedAt)}",
+        PortalOperationStatus.Succeeded => $"finished {op.FinishedAt?.ToLocalTime():HH:mm:ss} in {Duration(op)}",
+        PortalOperationStatus.Failed => $"failed {op.FinishedAt?.ToLocalTime():HH:mm:ss} after {Duration(op)}",
+        _ => "",
+    };
+
+    private static string Elapsed(DateTimeOffset since) => Fmt(DateTimeOffset.UtcNow - since);
+
+    private static string Duration(PortalOperation op)
+        => op.StartedAt is { } s && op.FinishedAt is { } f ? Fmt(f - s) : "—";
+
+    private static string Fmt(TimeSpan t)
+        => t.TotalHours >= 1 ? $"{(int)t.TotalHours}h {t.Minutes}m"
+         : t.TotalMinutes >= 1 ? $"{(int)t.TotalMinutes}m {t.Seconds}s"
+         : $"{Math.Max(0, t.Seconds)}s";
+
+    public void Dispose() => Ops.Changed -= OnOpsChanged;
+}

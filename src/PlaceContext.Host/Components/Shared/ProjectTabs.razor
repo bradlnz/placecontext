@@ -1,0 +1,45 @@
+@inject NavigationManager Nav
+
+@* The project's tab strip, shared by the project page and every sub-page (Jobs, Data, Analytics,
+   Vault, Events) so switching areas never loses the tabs — no "Back to project" round-trip.
+   In-page tabs (Overview/Board/Knowledge/Activity) only exist on the project page itself; from a
+   sub-page they navigate back to it with the requested tab in the fragment. *@
+<div class="dctabs" style="margin-bottom:16px">
+    <button class="dctab @(Active == "overview" ? "active" : "")" @onclick='@(() => GoLocal("overview"))'>Overview</button>
+    @if (BoardCount is { } n)
+    {
+        <button class="dctab @(Active == "board" ? "active" : "")" @onclick='@(() => GoLocal("board"))'>Board<span class="n">@n</span></button>
+    }
+    else
+    {
+        <button class="dctab" @onclick='@(() => GoLocal("board"))'>Board</button>
+    }
+    <button class="dctab @(Active == "knowledge" ? "active" : "")" @onclick='@(() => GoLocal("knowledge"))'>Knowledge</button>
+    <button class="dctab @(Active == "activity" ? "active" : "")" @onclick='@(() => GoLocal("activity"))'>Activity</button>
+    <button class="dctab @(Active == "jobs" ? "active" : "")" @onclick='@(() => Nav.NavigateTo($"/project/{ProjectId}/jobs"))'>Jobs</button>
+    <button class="dctab @(Active == "data" ? "active" : "")" @onclick='@(() => Nav.NavigateTo($"/project/{ProjectId}/data"))'>Data</button>
+    <button class="dctab @(Active == "analytics" ? "active" : "")" @onclick='@(() => Nav.NavigateTo($"/project/{ProjectId}/analytics"))'>Analytics</button>
+    <button class="dctab @(Active == "runtime" ? "active" : "")" @onclick='@(() => Nav.NavigateTo($"/project/{ProjectId}/runtime"))'>Runtime</button>
+    <button class="dctab @(Active == "vault" ? "active" : "")" @onclick='@(() => Nav.NavigateTo($"/project/{ProjectId}/secrets"))'>Vault</button>
+    <button class="dctab @(Active == "events" ? "active" : "")" @onclick='@(() => Nav.NavigateTo($"/project/{ProjectId}/events"))'>Events</button>
+</div>
+
+@code {
+    [Parameter] public Guid ProjectId { get; set; }
+
+    /// <summary>Which tab this page is: overview/board/knowledge/activity/jobs/data/analytics/vault/events.</summary>
+    [Parameter] public string Active { get; set; } = "overview";
+
+    /// <summary>Open-item count for the Board chip (project page only).</summary>
+    [Parameter] public int? BoardCount { get; set; }
+
+    /// <summary>Project-page-local tab switch; from sub-pages this navigates home carrying the tab.</summary>
+    [Parameter] public EventCallback<string> OnLocalTab { get; set; }
+
+    private Task GoLocal(string tab)
+    {
+        if (OnLocalTab.HasDelegate) return OnLocalTab.InvokeAsync(tab);
+        Nav.NavigateTo($"/project/{ProjectId}?tab={tab}");
+        return Task.CompletedTask;
+    }
+}

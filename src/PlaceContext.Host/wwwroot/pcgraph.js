@@ -22,7 +22,7 @@
     };
   }
 
-  function init(id, data) {
+  function init(id, data, dotnetRef) {
     destroy(id);
     const canvas = document.getElementById(id);
     if (!canvas || !data || !data.nodes || data.nodes.length === 0) return;
@@ -48,11 +48,18 @@
     for (const l of links) { neighbors.get(l.s).add(l.t); neighbors.get(l.t).add(l.s); }
 
     const st = {
-      canvas, ctx: canvas.getContext('2d'), nodes, links, neighbors,
+      canvas, ctx: canvas.getContext('2d'), nodes, links, neighbors, byId, dotnetRef,
       pan: { x: 0, y: 0 }, scale: 1, alpha: 1, col: colors(),
-      hover: null, drag: null, panning: null, raf: 0, w: 0, h: 0, dpr: 1,
+      hover: null, selected: null, drag: null, panning: null, raf: 0, w: 0, h: 0, dpr: 1,
     };
     instances.set(id, st);
+
+    // A click (mousedown+up without real movement) selects the node and tells Blazor, which
+    // shows the details overlay; clicking empty space clears the selection.
+    function notifySelected() {
+      if (!st.dotnetRef) return;
+      try { st.dotnetRef.invokeMethodAsync('OnNodeClick', st.selected ? st.selected.id : null); } catch (e) {}
+    }
 
     function resize() {
       const rect = canvas.getBoundingClientRect();
@@ -75,6 +82,7 @@
 
     st.onDown = e => {
       const m = mouse(e), w = toWorld(m.x, m.y), n = pick(w.x, w.y);
+      st.downAt = m;
       if (n) { st.drag = n; n.fixed = true; st.alpha = Math.max(st.alpha, 0.6); }
       else { st.panning = { x: m.x - st.pan.x, y: m.y - st.pan.y }; }
     };
@@ -84,7 +92,15 @@
       else if (st.panning) { st.pan.x = m.x - st.panning.x; st.pan.y = m.y - st.panning.y; }
       else { const w = toWorld(m.x, m.y); st.hover = pick(w.x, w.y); canvas.style.cursor = st.hover ? 'pointer' : 'default'; }
     };
-    st.onUp = () => { if (st.drag) st.drag.fixed = false; st.drag = null; st.panning = null; };
+    st.onUp = e => {
+      const moved = st.downAt && e && (() => { const m = mouse(e); return Math.hypot(m.x - st.downAt.x, m.y - st.downAt.y) > 4; })();
+      if (!moved && st.downAt) {
+        st.selected = st.drag || null; // clicked a node → select it; clicked empty space → clear
+        notifySelected();
+      }
+      if (st.drag) st.drag.fixed = false;
+      st.drag = null; st.panning = null; st.downAt = null;
+    };
     st.onWheel = e => {
       e.preventDefault();
       const m = mouse(e), w = toWorld(m.x, m.y);
@@ -131,7 +147,7 @@
       ctx.setTransform(st.dpr, 0, 0, st.dpr, 0, 0);
       ctx.clearRect(0, 0, st.w, st.h);
       ctx.translate(st.pan.x, st.pan.y); ctx.scale(st.scale, st.scale);
-      const hv = st.hover, nb = hv ? st.neighbors.get(hv) : null;
+      const hv = st.hover || st.selected, nb = hv ? st.neighbors.get(hv) : null;
 
       for (const l of links) {
         const lit = hv && (l.s === hv || l.t === hv);
@@ -149,7 +165,7 @@
         ctx.globalAlpha = dim ? 0.25 : 1;
         ctx.beginPath(); ctx.arc(n.x, n.y, n.r, 0, Math.PI * 2);
         ctx.fillStyle = n.god ? col.brand : col.node; ctx.fill();
-        if (n.god || n === hv) { ctx.lineWidth = 1.5 / st.scale; ctx.strokeStyle = col.brand2; ctx.stroke(); }
+        if (n.god || n === hv || n === st.selected) { ctx.lineWidth = 1.5 / st.scale; ctx.strokeStyle = col.brand2; ctx.stroke(); }
       }
       ctx.globalAlpha = 1;
 
@@ -168,6 +184,16 @@
     step();
   }
 
+  // Programmatic selection (the details overlay's neighbor links): highlight the node, nudge the
+  // sim so it settles visibly, and notify Blazor like a real click.
+  function select(id, nodeId) {
+    const st = instances.get(id);
+    if (!st) return;
+    st.selected = nodeId ? (st.byId.get(nodeId) || null) : null;
+    st.alpha = Math.max(st.alpha, 0.2);
+    if (st.dotnetRef) { try { st.dotnetRef.invokeMethodAsync('OnNodeClick', st.selected ? st.selected.id : null); } catch (e) {} }
+  }
+
   function destroy(id) {
     const st = instances.get(id);
     if (!st) return;
@@ -179,5 +205,5 @@
     instances.delete(id);
   }
 
-  window.pcgraph = { init, destroy };
+  window.pcgraph = { init, select, destroy };
 })();

@@ -2,7 +2,48 @@
 @inject IJSRuntime JS
 @implements IAsyncDisposable
 
-<canvas id="@_id" style="display:block; width:100%; height:@(Height)px"></canvas>
+<div style="position:relative">
+    <canvas id="@_id" style="display:block; width:100%; height:@(Height)px"></canvas>
+
+    @* Details for the clicked node: computed from the graph data already on the circuit, no extra
+       queries. Clicking a connection re-selects in the canvas too (pcgraph.select). *@
+    @if (_selected is { } sel)
+    {
+        <div class="dccard" style="position:absolute; top:10px; right:10px; width:280px; max-height:@(Height - 20)px; overflow-y:auto; padding:12px 14px; box-shadow:0 8px 24px rgba(0,0,0,.35)">
+            <div style="display:flex; align-items:start; gap:8px">
+                <div style="flex:1; min-width:0">
+                    <div style="font-size:12.5px; font-weight:600; word-break:break-all">@ShortLabel(sel.Label)</div>
+                    <div style="font-size:10.5px; color:var(--text-3); font-family:'Geist Mono',monospace; word-break:break-all; margin-top:2px">@sel.Id</div>
+                </div>
+                <button class="dcbtn" style="padding:1px 7px; font-size:11px; flex:none" @onclick="ClearAsync">×</button>
+            </div>
+            <div style="display:flex; gap:6px; margin-top:8px; flex-wrap:wrap">
+                @if (sel.IsGod)
+                {
+                    <span style="font-size:10px; padding:2px 7px; border-radius:4px; background:var(--brand); color:#fff">project hub</span>
+                }
+                <span style="font-size:10px; padding:2px 7px; border-radius:4px; background:var(--bg-2); color:var(--text-3)">@sel.Degree connection(s)</span>
+            </div>
+            @if (_selectedNeighbors.Count > 0)
+            {
+                <div style="font-size:10.5px; color:var(--text-3); margin:10px 0 4px; text-transform:uppercase; letter-spacing:.5px">Connected to</div>
+                <div style="display:flex; flex-direction:column; gap:3px">
+                    @foreach (var (node, ambiguous) in _selectedNeighbors)
+                    {
+                        <button style="border:none; background:none; padding:2px 0; cursor:pointer; text-align:left; font-size:11.5px; font-family:'Geist Mono',monospace; color:var(--brand-2); word-break:break-all"
+                                title="@node.Id" @onclick="@(() => SelectAsync(node.Id))">
+                            @ShortLabel(node.Label)@(ambiguous ? " ⇢" : "")
+                        </button>
+                    }
+                </div>
+                @if (_selectedNeighbors.Any(n => n.Ambiguous))
+                {
+                    <div style="font-size:10px; color:var(--warn); margin-top:6px">⇢ ambiguous link (low confidence)</div>
+                }
+            }
+        </div>
+    }
+</div>
 
 @code {
     [Parameter] public GraphVizView? Graph { get; set; }
@@ -11,10 +52,14 @@
     private readonly string _id = "pcgraph-" + Guid.NewGuid().ToString("N");
     private GraphVizView? _rendered;
     private bool _needsInit;
+    private DotNetObjectReference<GraphCanvas>? _selfRef;
+
+    private GraphNodeView? _selected;
+    private List<(GraphNodeView Node, bool Ambiguous)> _selectedNeighbors = new();
 
     protected override void OnParametersSet()
     {
-        if (!ReferenceEquals(_rendered, Graph)) { _rendered = Graph; _needsInit = true; }
+        if (!ReferenceEquals(_rendered, Graph)) { _rendered = Graph; _needsInit = true; _selected = null; }
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -27,11 +72,41 @@
             nodes = Graph.Nodes.Take(180).Select(n => new { id = n.Id, label = n.Label, degree = n.Degree, god = n.IsGod }),
             links = Graph.Links.Take(500).Select(l => new { source = l.Source, target = l.Target, confidence = l.Confidence }),
         };
-        await JS.InvokeVoidAsync("pcgraph.init", _id, payload);
+        _selfRef ??= DotNetObjectReference.Create(this);
+        await JS.InvokeVoidAsync("pcgraph.init", _id, payload, _selfRef);
+    }
+
+    [JSInvokable]
+    public Task OnNodeClick(string? nodeId)
+    {
+        _selected = nodeId is null ? null : Graph?.Nodes.FirstOrDefault(n => n.Id == nodeId);
+        _selectedNeighbors = _selected is null || Graph is null
+            ? new()
+            : Graph.Links
+                .Where(l => l.Source == _selected.Id || l.Target == _selected.Id)
+                .Select(l => (Other: l.Source == _selected.Id ? l.Target : l.Source, Ambiguous: l.Confidence == "Ambiguous"))
+                .Select(x => (Node: Graph.Nodes.FirstOrDefault(n => n.Id == x.Other), x.Ambiguous))
+                .Where(x => x.Node is not null)
+                .Select(x => (x.Node!, x.Ambiguous))
+                .DistinctBy(x => x.Item1.Id)
+                .OrderByDescending(x => x.Item1.Degree)
+                .ToList();
+        return InvokeAsync(StateHasChanged);
+    }
+
+    private Task SelectAsync(string nodeId) => JS.InvokeVoidAsync("pcgraph.select", _id, nodeId).AsTask();
+    private Task ClearAsync() => JS.InvokeVoidAsync("pcgraph.select", _id, null).AsTask();
+
+    private static string ShortLabel(string s)
+    {
+        var i = s.LastIndexOf('/');
+        var name = i >= 0 ? s[(i + 1)..] : s;
+        return name.Length > 40 ? name[..39] + "…" : name;
     }
 
     public async ValueTask DisposeAsync()
     {
         try { await JS.InvokeVoidAsync("pcgraph.destroy", _id); } catch { /* circuit gone */ }
+        _selfRef?.Dispose();
     }
 }

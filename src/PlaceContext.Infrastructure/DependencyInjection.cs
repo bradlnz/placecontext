@@ -142,6 +142,11 @@ public static class DependencyInjection
         // configured, deterministic signals otherwise) and queues "what to do next" as work items.
         services.AddHostedService<Scheduling.ProjectAgentSchedulerService>();
 
+
+        // Background portal operations (the notifications-pane ledger) + the analytics chart sweep
+        // worker (local-LLM generation takes minutes; the portal only enqueues and reads stored charts).
+        services.AddSingleton<Operations.OperationCenter>();
+
         // Each project's own database (Postgres schema + role isolation; Monaco SQL in the portal).
         services.AddScoped<IProjectDataStore, ProjectData.NpgsqlProjectDataStore>();
 
