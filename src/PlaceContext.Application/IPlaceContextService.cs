@@ -75,6 +75,7 @@ public interface IPlaceContextService
     Task<IReadOnlyList<Ports.ProjectColumnInfo>> ListProjectTableColumnsAsync(Guid projectId, string tableName, CancellationToken ct = default);
     Task AddProjectTableColumnAsync(Guid projectId, string tableName, Ports.ProjectColumnSpec column, CancellationToken ct = default);
     Task DropProjectTableColumnAsync(Guid projectId, string tableName, string columnName, CancellationToken ct = default);
+    Task<string> GenerateProjectChartAsync(Guid projectId, string tableName, string? instruction, CancellationToken ct = default);
     Task<IReadOnlyList<RunReportView>> ListRecentRunReportsAsync(int take = 24, CancellationToken ct = default);
     Task<JobView?> GetJobAsync(Guid jobId, CancellationToken ct = default);
     Task<JobView> UploadJobCodeAsync(UploadJobCodeCommand command, CancellationToken ct = default);

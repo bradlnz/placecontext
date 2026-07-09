@@ -1,0 +1,106 @@
+@page "/project/{ProjectId:guid}/analytics"
+@inject IPlaceContextService Svc
+@inject PortalUiState Ui
+@inject NavigationManager Nav
+@using PlaceContext.Application.Ports
+
+<PageTitle>PlaceContext — Analytics</PageTitle>
+
+<div style="padding:20px 24px 40px; max-width:1100px; margin:0 auto">
+
+    <button class="dcbtn" style="border:none; background:none; color:var(--text-3); padding:4px 0; margin-bottom:14px"
+            @onclick="@(() => Nav.NavigateTo($"/project/{ProjectId}"))">← Back to project</button>
+
+    <div style="display:flex; align-items:baseline; justify-content:space-between; margin-bottom:6px">
+        <h2 style="font-size:18px; font-weight:600; margin:0">Analytics</h2>
+        <span style="font-size:11.5px; color:var(--text-3)">charts drawn over this project's data by the local LLM</span>
+    </div>
+
+    @* ── Ask for a chart ────────────────────────────────────────────────────────────────── *@
+    <div class="dccard" style="padding:14px 16px; margin-top:12px; display:flex; gap:10px; align-items:end; flex-wrap:wrap">
+        <div>
+            <label style="display:block; font-size:11px; color:var(--text-3); margin-bottom:4px">Table</label>
+            <select @bind="_table" style="min-width:180px; padding:7px 9px; background:var(--bg); border:1px solid var(--border); border-radius:7px; color:var(--text); font-size:12.5px; font-family:'Geist Mono',monospace">
+                @if (_tables.Count == 0) { <option value="">(no tables)</option> }
+                @foreach (var t in _tables) { <option value="@t.Name">@t.Name (~@t.RowEstimate)</option> }
+            </select>
+        </div>
+        <div style="flex:1; min-width:260px">
+            <label style="display:block; font-size:11px; color:var(--text-3); margin-bottom:4px">What should the chart show? <span style="opacity:.6">(optional)</span></label>
+            <input @bind="_instruction" @bind:event="oninput" placeholder="e.g. total value per sensor, bookings per day"
+                   style="width:100%; padding:7px 10px; background:var(--bg); border:1px solid var(--border); border-radius:7px; color:var(--text); font-size:12.5px" />
+        </div>
+        <button class="dcbtn primary" disabled="@(_generating || string.IsNullOrEmpty(_table))" @onclick="GenerateAsync">
+            @(_generating ? "Drawing…" : "▶ Generate chart")
+        </button>
+    </div>
+    @if (_error is not null)
+    {
+        <div style="font-size:12px; color:var(--bad); margin-top:8px">@_error</div>
+    }
+    @if (_tables.Count == 0)
+    {
+        <div style="font-size:12px; color:var(--text-3); margin-top:10px">
+            No tables yet — create some on the <a href="@($"/project/{ProjectId}/data")" style="color:var(--accent)">Data</a> tab first.
+        </div>
+    }
+
+    @* ── The charts (newest first). Sandboxed srcdoc iframes: the generated document renders
+         but can never run script or reach the app — same posture as job chart artifacts. ──── *@
+    @foreach (var chart in _charts)
+    {
+        <div class="dccard" style="padding:12px 16px; margin-top:14px">
+            <div style="display:flex; align-items:center; gap:10px; margin-bottom:8px">
+                <span style="font-size:12.5px; font-weight:600; font-family:'Geist Mono',monospace">@chart.Table</span>
+                @if (!string.IsNullOrWhiteSpace(chart.Instruction))
+                {
+                    <span style="font-size:11.5px; color:var(--text-3); flex:1; min-width:0">@chart.Instruction</span>
+                }
+                else { <span style="flex:1"></span> }
+                <span style="font-size:10.5px; color:var(--text-3)">@chart.At.ToLocalTime().ToString("HH:mm:ss")</span>
+                <button class="dcbtn" style="padding:2px 8px; font-size:11px" @onclick="@(() => _charts.Remove(chart))">✕</button>
+            </div>
+            <iframe srcdoc="@chart.Html" sandbox="" loading="lazy"
+                    style="width:100%; height:380px; border:1px solid var(--border); border-radius:8px; background:var(--card)"></iframe>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public Guid ProjectId { get; set; }
+
+    private sealed record ChartCard(string Table, string? Instruction, string Html, DateTimeOffset At);
+
+    private IReadOnlyList<ProjectTableInfo> _tables = Array.Empty<ProjectTableInfo>();
+    private readonly List<ChartCard> _charts = new();
+    private string _table = "";
+    private string? _instruction;
+    private string? _error;
+    private bool _generating;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        Ui.Set("Analytics", "charts over the project's data");
+        try
+        {
+            _tables = await Svc.ListProjectDataTablesAsync(ProjectId);
+            if (string.IsNullOrEmpty(_table) && _tables.Count > 0) _table = _tables[0].Name;
+        }
+        catch (Exception ex) { _error = ex.Message; }
+    }
+
+    private async Task GenerateAsync()
+    {
+        if (string.IsNullOrEmpty(_table)) return;
+        _generating = true;
+        _error = null;
+        StateHasChanged();
+        try
+        {
+            var html = await Svc.GenerateProjectChartAsync(ProjectId, _table, _instruction);
+            _charts.Insert(0, new ChartCard(_table, _instruction, html, DateTimeOffset.UtcNow));
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _generating = false; }
+    }
+}

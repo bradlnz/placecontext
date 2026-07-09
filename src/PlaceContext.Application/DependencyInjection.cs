@@ -118,6 +118,7 @@ public static class DependencyInjection
         services.AddScoped<IQueryHandler<ListProjectTableColumnsQuery, IReadOnlyList<Ports.ProjectColumnInfo>>, ListProjectTableColumnsHandler>();
         services.AddScoped<ICommandHandler<AddProjectTableColumnCommand, bool>, AddProjectTableColumnHandler>();
         services.AddScoped<ICommandHandler<DropProjectTableColumnCommand, bool>, DropProjectTableColumnHandler>();
+        services.AddScoped<ICommandHandler<GenerateProjectChartCommand, string>, GenerateProjectChartHandler>();
 
         return services;
     }

@@ -36,6 +36,7 @@ else
             <button class="dctab @(_tab == "activity" ? "active" : "")" @onclick='@(() => _tab = "activity")'>Activity</button>
             <button class="dctab" @onclick="@(() => Nav.NavigateTo($"/project/{Id}/jobs"))">Jobs</button>
             <button class="dctab" @onclick="@(() => Nav.NavigateTo($"/project/{Id}/data"))">Data</button>
+            <button class="dctab" @onclick="@(() => Nav.NavigateTo($"/project/{Id}/analytics"))">Analytics</button>
             <button class="dctab" @onclick="@(() => Nav.NavigateTo($"/project/{Id}/secrets"))">Vault</button>
             <button class="dctab" @onclick="@(() => Nav.NavigateTo($"/project/{Id}/events"))">Events</button>
         </div>
