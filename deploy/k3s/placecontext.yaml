@@ -70,6 +70,9 @@ spec:
       containers:
         - name: host
           image: __IMAGE__
+          # The image is imported from the bundled tarball on every node (k3d image import /
+          # k3s ctr images import) — the :local tag has no registry to pull from.
+          imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 7700
           env:

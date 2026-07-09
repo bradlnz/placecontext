@@ -395,6 +395,8 @@ cmd_dev_add_node() {
   say "Adding $role node '$name' to cluster '$PCTL_CLUSTER'…"
   k3d node create "$name" --cluster "$PCTL_CLUSTER" --role "$role" --wait
   fix_host_dns
+  # The new node needs the local image before anything schedules onto it (no registry fallback).
+  [ -s "$PCTL_IMAGE_TAR" ] && cmd_image_import
   ok "Node '$name' joined."
 }
 
@@ -427,16 +429,34 @@ cmd_dev_down() {
 }
 
 cmd_image_import() {
-  have k3d || die "k3d not installed."
-  # -s: a truncated/empty tar (crashed build, disk event) must not be treated as an image.
-  if [ -s "$PCTL_IMAGE_TAR" ]; then
-    say "Importing image from $PCTL_IMAGE_TAR into '$PCTL_CLUSTER'…"
-    k3d image import "$PCTL_IMAGE_TAR" -c "$PCTL_CLUSTER"
+  # k3d (dev) when the dev cluster exists; plain k3s (prod node) otherwise. Either way the goal
+  # is the same: the bundled tarball is THE image source — installs must never depend on a
+  # registry pull of the :local tag.
+  if have k3d && dev_cluster_exists; then
+    # -s: a truncated/empty tar (crashed build, disk event) must not be treated as an image.
+    if [ -s "$PCTL_IMAGE_TAR" ]; then
+      say "Importing image from $PCTL_IMAGE_TAR into '$PCTL_CLUSTER'…"
+      k3d image import "$PCTL_IMAGE_TAR" -c "$PCTL_CLUSTER"
+    else
+      say "Importing image $PCTL_IMAGE into '$PCTL_CLUSTER'…"
+      k3d image import "$PCTL_IMAGE" -c "$PCTL_CLUSTER"
+    fi
+    ok "Image available in cluster."
+  elif have k3s; then
+    image_import_k3s
   else
-    say "Importing image $PCTL_IMAGE into '$PCTL_CLUSTER'…"
-    k3d image import "$PCTL_IMAGE" -c "$PCTL_CLUSTER"
+    die "no k3d dev cluster and no k3s — nothing to import into."
   fi
-  ok "Image available in cluster."
+}
+
+# Load the bundled image into this k3s node's containerd (server or agent). Run on every node:
+# pods schedule anywhere, and with the :local tag there is no registry to fall back to.
+image_import_k3s() {
+  [ -s "$PCTL_IMAGE_TAR" ] || { warn "no image tarball at $PCTL_IMAGE_TAR — skipping k3s import."; return 0; }
+  [ "$(id -u)" = 0 ] || die "importing into k3s containerd needs root — rerun with sudo."
+  say "Importing image from $PCTL_IMAGE_TAR into this node's containerd…"
+  k3s ctr images import "$PCTL_IMAGE_TAR"
+  ok "Image available on this node."
 }
 
 # ── autostart (boot persistence) ───────────────────────────────────────────────────────────────
@@ -512,6 +532,9 @@ cmd_ensure() {
   dev_cluster_start
   use_dev_kubeconfig
   dev_wait_api
+  # Re-import before applying: a rollout onto a node that missed the image (added later, wiped
+  # containerd, …) must find it locally, never reach for a registry.
+  [ -s "$PCTL_IMAGE_TAR" ] && cmd_image_import
   apply_manifests "$PCTL_IMAGE"
   wait_rollout
   ok "PlaceContext is up."
@@ -1075,6 +1098,9 @@ cmd_server_up() {
   say "Waiting for the control plane…"
   until kube get nodes >/dev/null 2>&1; do sleep 2; done
 
+  # The bundled tarball is the image source — never a ghcr pull of the :local tag.
+  image_import_k3s
+
   apply_manifests "$image"
   wait_rollout
   ok "Server node up. PlaceContext deploying to namespace '$PCTL_NAMESPACE'."
@@ -1128,6 +1154,8 @@ Pass --ts-authkey (or use a join code generated with one), or bring Tailscale up
 
   say "Joining this machine to $url as a worker…"
   curl -sfL https://get.k3s.io | K3S_URL="$url" K3S_TOKEN="$token" sh -s - agent "${exec_args[@]}"
+  # Pods schedule onto workers too — this node needs the local image just like the server.
+  image_import_k3s
   ok "Worker joined."
 }
 
