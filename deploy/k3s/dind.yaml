@@ -1,0 +1,92 @@
+# Docker-in-Docker — the per-project application runtime. Project apps run as containers inside
+# this daemon, labeled `placecontext.project=<project-guid>`; the portal's Runtime tab lists,
+# reads logs from, and restarts/stops a project's containers through the Host's DockerEngine
+# adapter (PlaceContext:Runtime:DockerEndpoint).
+#
+# Security posture: the daemon speaks plain TCP but ONLY on the cluster network — the Service is
+# ClusterIP and nothing routes it through the ingress. The pod is privileged (DinD requires it),
+# which is acceptable on the dev/self-hosted clusters this platform targets; container state lives
+# on a PVC so images and containers survive a pod restart.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: placecontext-dind-data
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 20Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: placecontext-dind
+spec:
+  replicas: 1
+  # One writer on the RWO volume — Recreate avoids two daemons fighting over /var/lib/docker.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels: { app: placecontext-dind }
+  template:
+    metadata:
+      labels: { app: placecontext-dind }
+    spec:
+      containers:
+        - name: dind
+          image: docker:27-dind
+          securityContext:
+            privileged: true
+          env:
+            # Plain TCP on the cluster network only (see header note); TLS would need cert plumbing
+            # that buys nothing between in-cluster peers here.
+            - name: DOCKER_TLS_CERTDIR
+              value: ""
+          args: ["--host=tcp://0.0.0.0:2375", "--host=unix:///var/run/docker.sock", "--tls=false"]
+          ports:
+            - containerPort: 2375
+          resources:
+            requests: { cpu: 250m, memory: 512Mi }
+            limits: { cpu: "2", memory: 4Gi }
+          volumeMounts:
+            - name: dind-data
+              mountPath: /var/lib/docker
+          readinessProbe:
+            exec:
+              command: ["docker", "info"]
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket: { port: 2375 }
+            periodSeconds: 15
+            failureThreshold: 4
+      volumes:
+        - name: dind-data
+          persistentVolumeClaim:
+            claimName: placecontext-dind-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: placecontext-dind
+spec:
+  selector:
+    app: placecontext-dind
+  ports:
+    - port: 2375
+      targetPort: 2375
+---
+# Headless twin of the service above: DNS resolves straight to the dind pod IP, so the Host's
+# /runtime reverse proxy can reach ANY port a project container publishes — a normal ClusterIP
+# service would need every app port enumerated up front.
+apiVersion: v1
+kind: Service
+metadata:
+  name: placecontext-dind-apps
+spec:
+  clusterIP: None
+  selector:
+    app: placecontext-dind
+  ports:
+    - port: 80
+      targetPort: 80

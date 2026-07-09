@@ -118,6 +118,14 @@ spec:
               value: "nomic-embed-text"
             - name: PlaceContext__Embeddings__Ollama__Dimensions
               value: "768"
+            # The DinD application runtime — the portal's per-project Runtime tab monitors the
+            # containers this daemon runs (label contract: placecontext.project=<project-guid>).
+            - name: PlaceContext__Runtime__DockerEndpoint
+              value: "http://placecontext-dind:2375"
+            # Where the runtime's published app ports are reachable (headless service → pod IP);
+            # the /runtime/{project}/{port} reverse proxy forwards here after an ownership check.
+            - name: PlaceContext__Runtime__AppHost
+              value: "placecontext-dind-apps"
           # Give the app time to run EF migrations on first boot before liveness/readiness apply.
           startupProbe:
             httpGet: { path: /, port: 7700 }

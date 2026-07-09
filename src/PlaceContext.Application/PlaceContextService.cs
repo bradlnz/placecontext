@@ -210,6 +210,18 @@ public sealed class PlaceContextService : IPlaceContextService
     public Task<IReadOnlyList<InboundSmsView>> ListInboundSmsAsync(int take = 50, CancellationToken ct = default)
         => _dispatcher.Query(new ListInboundSmsQuery(take), ct);
 
+    public Task<IReadOnlyList<Ports.ContainerInfo>> ListProjectContainersAsync(Guid projectId, CancellationToken ct = default)
+        => _dispatcher.Query(new ListProjectContainersQuery(projectId), ct);
+
+    public Task<string> GetContainerLogsAsync(Guid projectId, string containerId, int tail = 200, CancellationToken ct = default)
+        => _dispatcher.Query(new GetContainerLogsQuery(projectId, containerId, tail), ct);
+
+    public Task RestartProjectContainerAsync(Guid projectId, string containerId, CancellationToken ct = default)
+        => _dispatcher.Send(new RestartProjectContainerCommand(projectId, containerId), ct);
+
+    public Task StopProjectContainerAsync(Guid projectId, string containerId, CancellationToken ct = default)
+        => _dispatcher.Send(new StopProjectContainerCommand(projectId, containerId), ct);
+
     public Task<IReadOnlyList<RunReportView>> ListRecentRunReportsAsync(int take = 24, CancellationToken ct = default)
         => _dispatcher.Query(new ListRecentRunReportsQuery(take), ct);
 

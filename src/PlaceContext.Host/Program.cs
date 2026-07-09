@@ -208,6 +208,55 @@ app.MapPost("/ingest/{eventName}", async (HttpContext ctx, PlaceContext.Applicat
     return Results.Ok(new { result.Name, result.TriggeredRuns, result.OccurredAt });
 }).AllowAnonymous();
 
+// ---- Runtime app proxy ----
+// Reach an app running in the project's DinD runtime from the browser: the portal links to
+// /runtime/{project}/{port}/… and the Host forwards to the daemon's published port (headless
+// service → pod IP, PlaceContext:Runtime:AppHost). Requires a signed-in portal user (no
+// AllowAnonymous), and every request re-checks that the project has a RUNNING container
+// publishing that port — a guessed port or another tenant's project 404s. HTTP only (no
+// websockets) in this first cut.
+app.Map("/runtime/{projectId:guid}/{port:int}/{**path}", async (HttpContext ctx,
+    PlaceContext.Application.IPlaceContextService svc, IConfiguration config,
+    IHttpClientFactory httpFactory, Guid projectId, int port, string? path) =>
+{
+    var appHost = config["PlaceContext:Runtime:AppHost"];
+    if (string.IsNullOrWhiteSpace(appHost))
+        return Results.NotFound();
+
+    IReadOnlyList<PlaceContext.Application.Ports.ContainerInfo> containers;
+    try { containers = await svc.ListProjectContainersAsync(projectId, ctx.RequestAborted); }
+    catch (InvalidOperationException) { return Results.NotFound(); } // unknown project (or other tenant's)
+    if (!containers.Any(c => c.State == "running" && c.PublishedPorts.Contains(port)))
+        return Results.NotFound();
+
+    string[] hopByHop = { "Connection", "Keep-Alive", "Proxy-Authenticate", "Proxy-Authorization",
+        "TE", "Trailer", "Transfer-Encoding", "Upgrade", "Host" };
+
+    var client = httpFactory.CreateClient();
+    client.Timeout = TimeSpan.FromSeconds(100);
+    using var req = new HttpRequestMessage(
+        new HttpMethod(ctx.Request.Method),
+        $"http://{appHost}:{port}/{path}{ctx.Request.QueryString}");
+    if (ctx.Request.ContentLength is > 0 || ctx.Request.Headers.ContainsKey("Transfer-Encoding"))
+        req.Content = new StreamContent(ctx.Request.Body);
+    foreach (var h in ctx.Request.Headers)
+    {
+        if (hopByHop.Contains(h.Key, StringComparer.OrdinalIgnoreCase)) continue;
+        if (!req.Headers.TryAddWithoutValidation(h.Key, h.Value.ToArray()))
+            req.Content?.Headers.TryAddWithoutValidation(h.Key, h.Value.ToArray());
+    }
+
+    using var resp = await client.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ctx.RequestAborted);
+    ctx.Response.StatusCode = (int)resp.StatusCode;
+    foreach (var h in resp.Headers.Concat(resp.Content.Headers))
+    {
+        if (hopByHop.Contains(h.Key, StringComparer.OrdinalIgnoreCase)) continue;
+        ctx.Response.Headers[h.Key] = h.Value.ToArray();
+    }
+    await resp.Content.CopyToAsync(ctx.Response.Body, ctx.RequestAborted);
+    return Results.Empty;
+});
+
 // ---- Inbound SMS gateway ----
 // A delivery provider (Twilio-style form post) or any bridge (JSON) POSTs inbound texts here; the
 // tenant comes from the subdomain (same middleware as /ingest). The sender and body are encrypted
