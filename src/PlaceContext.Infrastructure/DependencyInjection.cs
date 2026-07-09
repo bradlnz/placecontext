@@ -112,6 +112,7 @@ public static class DependencyInjection
         services.AddSingleton<Application.Ports.IObjectStore, Storage.MinioObjectStore>();
         services.AddScoped<Domain.Repositories.IRunArtifactLinkRepository, Persistence.EfRunArtifactLinkRepository>();
         services.AddScoped<Domain.Repositories.IProjectChartRepository, Persistence.EfProjectChartRepository>();
+        services.AddScoped<Domain.Repositories.IInboundSmsRepository, Persistence.EfInboundSmsRepository>();
 
         // Job / JobRun repositories.
         services.AddScoped<IJobRepository, EfJobRepository>();

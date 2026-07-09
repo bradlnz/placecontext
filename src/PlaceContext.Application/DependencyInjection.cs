@@ -121,6 +121,8 @@ public static class DependencyInjection
         services.AddScoped<ICommandHandler<DropProjectTableColumnCommand, bool>, DropProjectTableColumnHandler>();
         services.AddScoped<ICommandHandler<GenerateProjectChartCommand, string>, GenerateProjectChartHandler>();
         services.AddScoped<IQueryHandler<ListProjectChartsQuery, IReadOnlyList<ProjectChartView>>, ListProjectChartsHandler>();
+        services.AddScoped<ICommandHandler<ReceiveInboundSmsCommand, InboundSmsView>, ReceiveInboundSmsHandler>();
+        services.AddScoped<IQueryHandler<ListInboundSmsQuery, IReadOnlyList<InboundSmsView>>, ListInboundSmsHandler>();
 
         return services;
     }

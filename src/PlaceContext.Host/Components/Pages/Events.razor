@@ -13,8 +13,7 @@ else
 {
     <div style="padding:20px 24px 40px; max-width:1100px; margin:0 auto">
 
-        <button class="dcbtn" style="border:none; background:none; color:var(--text-3); padding:4px 0; margin-bottom:14px"
-                @onclick="@(() => Nav.NavigateTo($"/project/{ProjectId}"))">← Back to project</button>
+    <ProjectTabs ProjectId="ProjectId" Active="events" />
 
         <h2 style="font-size:18px; font-weight:600; margin:0 0 4px">Events</h2>
         <div style="font-size:12.5px; color:var(--text-3); margin-bottom:18px">
@@ -95,6 +94,33 @@ else
                         }
                     </div>
                 }
+
+                @* ── Inbound SMS (gateway messages, decrypted here for authorized eyes only) ── *@
+                <div style="font-size:14px; font-weight:600; margin-top:8px">Inbound SMS</div>
+                @if (_sms is null || _sms.Count == 0)
+                {
+                    <div style="font-size:12px; color:var(--text-3)">
+                        No messages yet. Point your SMS provider's webhook at <code>POST /sms/inbound?key=…</code>
+                        (Twilio form posts or JSON <code>{from,to,body}</code>) — each message is stored encrypted
+                        and emits <code>sms.received</code> for triggers.
+                    </div>
+                }
+                else
+                {
+                    <div style="display:flex; flex-direction:column; gap:8px">
+                        @foreach (var m in _sms)
+                        {
+                            <div class="dccard" style="padding:10px 14px">
+                                <div style="display:flex; align-items:center; gap:8px">
+                                    <span style="font-size:12.5px; font-weight:600; font-family:'Geist Mono',monospace; flex:1">@m.From → @m.To</span>
+                                    <span style="font-size:10px; font-weight:600; padding:2px 6px; border-radius:4px; color:var(--text-2); background:var(--card-2)">@m.Provider</span>
+                                    <span style="font-size:11px; color:var(--text-3); font-family:'Geist Mono',monospace">@m.ReceivedAt.ToLocalTime().ToString("MM-dd HH:mm:ss")</span>
+                                </div>
+                                <div style="margin-top:6px; font-size:12px; color:var(--text-2); word-break:break-word">@m.Body</div>
+                            </div>
+                        }
+                    </div>
+                }
             </div>
         </div>
     </div>
@@ -133,6 +159,7 @@ else
 
     private IReadOnlyList<EventTypeView>? _types;
     private IReadOnlyList<EventOccurrenceView>? _log;
+    private IReadOnlyList<PlaceContext.Application.Features.InboundSmsView>? _sms;
     private bool _loading = true;
     private string? _message;
 
@@ -164,6 +191,7 @@ else
     {
         _types = await Svc.ListEventTypesAsync();
         _log = await Svc.ListEventOccurrencesAsync(50);
+        _sms = await Svc.ListInboundSmsAsync(20);
     }
 
     private async Task Define()

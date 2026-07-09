@@ -208,6 +208,64 @@ app.MapPost("/ingest/{eventName}", async (HttpContext ctx, PlaceContext.Applicat
     return Results.Ok(new { result.Name, result.TriggeredRuns, result.OccurredAt });
 }).AllowAnonymous();
 
+// ---- Inbound SMS gateway ----
+// A delivery provider (Twilio-style form post) or any bridge (JSON) POSTs inbound texts here; the
+// tenant comes from the subdomain (same middleware as /ingest). The sender and body are encrypted
+// before storage and a sms.received event fires (metadata only) for triggers. Gated by a shared
+// key (PlaceContext:Sms:InboundKey) passed as ?key= or X-Sms-Key; disabled when unconfigured.
+app.MapPost("/sms/inbound", async (HttpContext ctx, PlaceContext.Application.IPlaceContextService svc,
+    IConfiguration config, Guid? projectId) =>
+{
+    var configuredKey = config["PlaceContext:Sms:InboundKey"];
+    if (string.IsNullOrWhiteSpace(configuredKey))
+        return Results.StatusCode(StatusCodes.Status404NotFound);
+
+    var presented = ctx.Request.Headers["X-Sms-Key"].ToString();
+    if (string.IsNullOrEmpty(presented)) presented = ctx.Request.Query["key"].ToString();
+    if (!System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(
+            System.Text.Encoding.UTF8.GetBytes(presented),
+            System.Text.Encoding.UTF8.GetBytes(configuredKey)))
+        return Results.Unauthorized();
+
+    string from, to, body, provider;
+    string? externalId;
+    if (ctx.Request.HasFormContentType)
+    {
+        // Twilio-compatible form fields.
+        var form = await ctx.Request.ReadFormAsync(ctx.RequestAborted);
+        from = form["From"].ToString();
+        to = form["To"].ToString();
+        body = form["Body"].ToString();
+        externalId = form["MessageSid"].ToString() is { Length: > 0 } sid ? sid : null;
+        provider = "twilio";
+    }
+    else
+    {
+        using var doc = await System.Text.Json.JsonDocument.ParseAsync(ctx.Request.Body, cancellationToken: ctx.RequestAborted);
+        var root = doc.RootElement;
+        string Get(string name) => root.TryGetProperty(name, out var v) && v.ValueKind == System.Text.Json.JsonValueKind.String ? v.GetString()! : "";
+        from = Get("from"); to = Get("to"); body = Get("body");
+        externalId = Get("externalId") is { Length: > 0 } eid ? eid : null;
+        provider = Get("provider") is { Length: > 0 } p ? p : "generic";
+    }
+
+    try
+    {
+        await svc.ReceiveInboundSmsAsync(
+            new PlaceContext.Application.Features.ReceiveInboundSmsCommand(from, to, body, provider, externalId, projectId),
+            ctx.RequestAborted);
+    }
+    catch (ArgumentException ex)
+    {
+        return Results.BadRequest(new { error = ex.Message });
+    }
+
+    // Twilio expects TwiML back on form posts; an empty <Response/> means "received, no reply".
+    return ctx.Request.HasFormContentType
+        ? Results.Content("<?xml version=\"1.0\" encoding=\"UTF-8\"?><Response></Response>", "text/xml")
+        : Results.Ok(new { received = true });
+}).AllowAnonymous();
+
 // ---- Run artifacts (post-job outputs) — stream an artifact from the object store (MinIO) ----
 // The portal/TUI link here; the IRunArtifactLinkRepository tenant filter scopes the lookup to the
 // signed-in tenant, so one tenant can't read another's artifacts. HTML/SVG render inline; the rest

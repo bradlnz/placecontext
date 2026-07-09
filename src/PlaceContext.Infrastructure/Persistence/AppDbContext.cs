@@ -46,6 +46,7 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
     public DbSet<EventOccurrenceRow> EventOccurrences => Set<EventOccurrenceRow>();
     public DbSet<PendingRunRow> PendingRuns => Set<PendingRunRow>();
     public DbSet<ProjectChartRow> ProjectCharts => Set<ProjectChartRow>();
+    public DbSet<SmsMessageRow> SmsMessages => Set<SmsMessageRow>();
 
     Task<int> IUnitOfWork.SaveChangesAsync(CancellationToken ct) => SaveChangesAsync(ct);
 
@@ -209,6 +210,15 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
             e.ToTable("project_charts");
             e.HasKey(x => x.Id);
             e.HasIndex(x => new { x.ProjectId, x.TableName }).IsUnique();
+            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
+        });
+
+        b.Entity<SmsMessageRow>(e =>
+        {
+            e.ToTable("sms_messages");
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => x.ReceivedAt);
+            e.HasIndex(x => new { x.Provider, x.ExternalId });
             e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
         });
 
