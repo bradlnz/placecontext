@@ -1,60 +1,42 @@
 #!/usr/bin/env bash
 #
-# run.sh — start PlaceContext locally.
+# run.sh — set up and start PlaceContext locally with one command.
 #
-# Brings up the PostgreSQL dependency (via Docker), restores/builds, and runs the
-# Host: portal at http://localhost:7700 and MCP over Streamable HTTP at /mcp.
+# Runs ./setup.sh (idempotent: .NET 10 SDK, Docker check, PostgreSQL+pgvector
+# container, restore/build, dotnet-ef, migrations), then launches the Host:
+# portal at http://localhost:${PORT} and MCP over Streamable HTTP at /mcp.
+#
+# Usage:
+#   ./run.sh                 # full setup + run on port 7700
+#   PORT=7710 ./run.sh       # run on a different port (e.g. when the k3d
+#                            # dev cluster's load balancer holds 7700)
+#   ./run.sh --with-ollama   # also install Ollama + pull the local Gemma model
 #
 set -euo pipefail
 
 cd "$(dirname "$0")"
 
-DB_CONTAINER="placecontext-db"
-DB_PORT="5433"
+PORT="${PORT:-7700}"
 
-# --- PostgreSQL ------------------------------------------------------------
-# Matches PlaceContext:ConnectionString in src/PlaceContext.Host/appsettings.json
-if command -v docker >/dev/null 2>&1; then
-  if [ -z "$(docker ps -q -f "name=^${DB_CONTAINER}$")" ]; then
-    if [ -n "$(docker ps -aq -f "name=^${DB_CONTAINER}$")" ]; then
-      echo "Starting existing ${DB_CONTAINER} container..."
-      docker start "${DB_CONTAINER}" >/dev/null
-    else
-      echo "Creating ${DB_CONTAINER} PostgreSQL container on port ${DB_PORT}..."
-      docker run -d --name "${DB_CONTAINER}" \
-        -e POSTGRES_PASSWORD=postgres \
-        -e POSTGRES_USER=postgres \
-        -e POSTGRES_DB=placecontext \
-        -p "${DB_PORT}:5432" \
-        pgvector/pgvector:pg16 >/dev/null
-    fi
-  else
-    echo "${DB_CONTAINER} already running."
-  fi
+./setup.sh "$@"
 
-  echo -n "Waiting for PostgreSQL to be ready"
-  until docker exec "${DB_CONTAINER}" pg_isready -U postgres -d placecontext >/dev/null 2>&1; do
-    echo -n "."
-    sleep 1
-  done
-  echo " ready."
-else
-  echo "WARNING: docker not found — assuming PostgreSQL is reachable on localhost:${DB_PORT}." >&2
+# setup.sh may have installed the SDK to ~/.dotnet in its own shell; make sure
+# this shell can see it too.
+if ! command -v dotnet >/dev/null 2>&1 && [ -x "$HOME/.dotnet/dotnet" ]; then
+  export PATH="$HOME/.dotnet:$PATH"
 fi
 
-# --- Build & run -----------------------------------------------------------
-dotnet restore
-dotnet build --no-restore
+if ss -tln 2>/dev/null | awk '{print $4}' | grep -qE "[:.]${PORT}\$"; then
+  echo "ERROR: port ${PORT} is already in use (on this machine that is usually the" >&2
+  echo "k3d dev cluster's load balancer — check with: docker ps | grep ${PORT})." >&2
+  echo "Re-run on a free port, e.g.: PORT=7710 ./run.sh" >&2
+  exit 1
+fi
 
-# --- Database migrations ---------------------------------------------------
-# Apply EF Core migrations before launching. The Host also migrates on startup,
-# but running it here surfaces schema failures up front and keeps `dotnet ef`
-# (a local tool) available for ad-hoc migration work.
-echo "Applying database migrations..."
-dotnet tool restore
-dotnet ef database update \
-  --project src/PlaceContext.Infrastructure \
-  --startup-project src/PlaceContext.Host
-
-echo "Starting PlaceContext Host → http://localhost:7700 (MCP at /mcp)"
-exec dotnet run --no-build --project src/PlaceContext.Host
+# --no-launch-profile: launchSettings.json would otherwise override the bind
+# URL to localhost:5169 via ASPNETCORE_URLS. That also skips the profile's
+# ASPNETCORE_ENVIRONMENT=Development, so set it here (overridable).
+echo "Starting PlaceContext Host → http://localhost:${PORT} (MCP at /mcp)"
+export ASPNETCORE_URLS="http://localhost:${PORT}"
+export ASPNETCORE_ENVIRONMENT="${ASPNETCORE_ENVIRONMENT:-Development}"
+exec dotnet run --no-build --no-launch-profile --project src/PlaceContext.Host
