@@ -28,7 +28,7 @@ The fastest path is the guided wizard, which walks every step in this guide inte
 
 | Need | For |
 |------|-----|
-| Docker | the local dev cluster (k3d) and image builds |
+| Docker | the local dev cluster (k3d) and image builds — on macOS via Docker Desktop or colima |
 | `curl` | installers + Tailscale OAuth |
 | openssl | generating signing keys (portal/OAuth) |
 | Go (1.26+) | building the TUI (only if you run it from source) |
