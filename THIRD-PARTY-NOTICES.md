@@ -44,6 +44,7 @@ model card for whatever model you configure.
 | Component | License |
 |---|---|
 | [Monaco Editor](https://github.com/microsoft/monaco-editor) (loaded from jsDelivr CDN) | MIT |
+| [Chart.js](https://github.com/chartjs/Chart.js) (bundled at `wwwroot/vendor/`) | MIT |
 | [Geist / Geist Mono](https://vercel.com/font) typefaces (Google Fonts) | SIL OFL 1.1 |
 
 If you believe a required notice is missing, please open an issue.

@@ -2,6 +2,7 @@
 @implements IDisposable
 @inject IPlaceContextService Svc
 @inject PortalUiState Ui
+@inject IJSRuntime JS
 @inject PlaceContext.Infrastructure.Scheduling.AnalyticsRefreshQueue Queue
 @using PlaceContext.Application.Features
 @using PlaceContext.Application.Ports
@@ -72,8 +73,19 @@
 
                 @if (chart is not null)
                 {
-                    <iframe srcdoc="@chart.Html" sandbox="" loading="lazy"
-                            style="width:100%; height:340px; border:1px solid var(--border); border-radius:8px; background:var(--card)"></iframe>
+                    @if (IsSpec(chart))
+                    {
+                        @* Chart.js spec — rendered by pcchart.js with the validated palette + theme tokens. *@
+                        <div style="height:340px; padding:14px 10px 10px; border:1px solid var(--border); border-radius:8px; background:var(--card)">
+                            <canvas id="@CanvasId(table.Name)"></canvas>
+                        </div>
+                    }
+                    else
+                    {
+                        @* Legacy LLM-drawn HTML chart (pre-Chart.js rows keep rendering until redrawn). *@
+                        <iframe srcdoc="@chart.Html" sandbox="" loading="lazy"
+                                style="width:100%; height:340px; border:1px solid var(--border); border-radius:8px; background:var(--card)"></iframe>
+                    }
                 }
                 else
                 {
@@ -97,6 +109,32 @@
 
     private ProjectChartView? ChartFor(string table)
         => _charts.FirstOrDefault(c => string.Equals(c.TableName, table, StringComparison.OrdinalIgnoreCase));
+
+    // A stored spec is JSON ('{…}'); anything else is a legacy LLM-drawn HTML document.
+    private static bool IsSpec(ProjectChartView chart) => chart.Html.TrimStart().StartsWith('{');
+
+    // Stable, DOM-safe canvas id per table (names can hold chars invalid in element ids).
+    private static string CanvasId(string table)
+        => "pcchart-" + Convert.ToHexString(System.Security.Cryptography.MD5.HashData(
+               System.Text.Encoding.UTF8.GetBytes(table)))[..12];
+
+    // Track what each canvas last rendered so poll-driven re-renders only redraw changed charts.
+    private readonly Dictionary<string, DateTimeOffset> _rendered = new();
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        foreach (var chart in _charts.Where(IsSpec))
+        {
+            var id = CanvasId(chart.TableName);
+            if (_rendered.TryGetValue(id, out var at) && at == chart.GeneratedAt) continue;
+            try
+            {
+                await JS.InvokeVoidAsync("pcchart.render", id, chart.Html);
+                _rendered[id] = chart.GeneratedAt;
+            }
+            catch (JSException) { /* canvas not on screen yet — the next render pass retries */ }
+        }
+    }
 
     protected override async Task OnParametersSetAsync()
     {

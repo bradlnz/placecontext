@@ -9,9 +9,10 @@ using Xunit;
 namespace PlaceContext.Application.Tests;
 
 /// <summary>
-/// Analytics charts: the background sweep samples each table, sends the rows to the local LLM,
-/// and stores the themed chart; without an LLM (or when it misbehaves) the stored result is still
-/// a themed rendering of the data. Charts of dropped tables are pruned.
+/// Analytics charts: the background sweep samples each table, asks the local LLM for a chart SPEC
+/// (data only — Chart.js draws it in the portal), and stores it; without an LLM (or when it
+/// misbehaves) the deterministic builder shapes the spec from the data itself. Charts of dropped
+/// tables are pruned.
 /// </summary>
 public class ProjectAnalyticsTests
 {
@@ -55,7 +56,8 @@ public class ProjectAnalyticsTests
     private sealed class FakeLlm : ILlmGateway
     {
         public bool IsEnabled { get; set; } = true;
-        public string Reply { get; set; } = "<html><head></head><body><svg><text>chart</text></svg></body></html>";
+        public string Reply { get; set; } =
+            "{\"type\":\"bar\",\"title\":\"Readings\",\"labels\":[\"door\",\"window\"],\"series\":[{\"name\":\"value\",\"values\":[21.5,19.0]}]}";
         public string? SawSystem, SawUser;
         public bool Throws;
 
@@ -109,10 +111,12 @@ public class ProjectAnalyticsTests
         var llm = new FakeLlm();
         var handler = new GenerateProjectChartHandler(projects, Service(store, llm, new InMemoryChartRepository()));
 
-        var html = await handler.HandleAsync(new GenerateProjectChartCommand(project.Id.Value, "readings", "average per sensor"));
+        var stored = await handler.HandleAsync(new GenerateProjectChartCommand(project.Id.Value, "readings", "average per sensor"));
 
-        Assert.Contains("pc-chart-theme", html);       // themed for the portal
-        Assert.Contains("<svg>", html);                // the LLM's chart survived
+        var spec = ChartSpec.TryParse(stored);
+        Assert.NotNull(spec);                          // the LLM's spec survived, stored as JSON
+        Assert.Equal("bar", spec!.Type);
+        Assert.Equal(new[] { "door", "window" }, spec.Labels);
         Assert.Contains("readings", store.SawSql.Single()); // sampled the right table
         Assert.Contains("21.5", llm.SawUser!);         // the rows reached the model
         Assert.Contains("average per sensor", llm.SawUser!); // and so did the instruction
@@ -132,10 +136,11 @@ public class ProjectAnalyticsTests
         var html2 = await new GenerateProjectChartHandler(projects, Service(store, broken, new InMemoryChartRepository()))
             .HandleAsync(new GenerateProjectChartCommand(project.Id.Value, "readings", null));
 
-        foreach (var html in new[] { html1, html2 })
+        foreach (var stored in new[] { html1, html2 })
         {
-            Assert.Contains("pc-chart-theme", html);
-            Assert.Contains("21.5", html); // the data itself is visible
+            var spec = ChartSpec.TryParse(stored);
+            Assert.NotNull(spec);            // deterministic builder shaped a spec from the data
+            Assert.Contains(21.5, spec!.Series.SelectMany(s => s.Values)); // the data itself is charted
         }
     }
 
@@ -173,7 +178,7 @@ public class ProjectAnalyticsTests
 
         var stored = await charts.ListForProjectAsync(project.Id.Value);
         Assert.Equal(new[] { "bookings", "readings" }, stored.Select(c => c.TableName));
-        Assert.All(stored, c => Assert.Contains("pc-chart-theme", c.Html));
+        Assert.All(stored, c => Assert.NotNull(ChartSpec.TryParse(c.Html))); // specs, drawn by Chart.js
     }
 
     [Fact]

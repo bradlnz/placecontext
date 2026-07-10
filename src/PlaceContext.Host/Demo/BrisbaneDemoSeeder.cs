@@ -45,7 +45,12 @@ public sealed class BrisbaneDemoSeeder
 
         var tables = await _svc.ListProjectDataTablesAsync(project.Id, ct);
         if (tables.Any(t => t.Name == "suburbs"))
-            return (project.Id, true); // already seeded — don't duplicate rows
+        {
+            // Already seeded — don't duplicate rows, but do requeue the chart sweep so re-seeding
+            // is the supported way to redraw the demo's Analytics (e.g. after a renderer upgrade).
+            _charts.TryEnqueue(tenant, project.Id, ProjectName);
+            return (project.Id, true);
+        }
 
         await _svc.ExecuteProjectDataAsync(project.Id, SuburbsSql, ct);
         await _svc.ExecuteProjectDataAsync(project.Id, SitesSql, ct);

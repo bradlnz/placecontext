@@ -11,8 +11,9 @@ namespace PlaceContext.Application.Features;
 /// Draws analytics charts over a project's database with the local LLM. Generation on CPU takes
 /// minutes per chart, so the portal never calls this synchronously: the Host's background worker
 /// runs <see cref="RefreshProjectAsync"/> (all tables, stored via <see cref="IProjectChartRepository"/>)
-/// and the Analytics tab reads the stored results. Per table: sample rows → LLM → themed HTML;
-/// when the LLM is off or replies unusably the stored chart is a themed table of the data itself.
+/// and the Analytics tab reads the stored results. Per table: sample rows → LLM → a <see cref="ChartSpec"/>
+/// (data only; Chart.js draws it in the portal); when the LLM is off or replies unusably a deterministic
+/// builder shapes the spec from the data, and a table with nothing chartable stores a themed HTML table.
 /// </summary>
 public sealed class ProjectChartService
 {
@@ -37,18 +38,18 @@ public sealed class ProjectChartService
         _log = log;
     }
 
+    // The model shapes DATA, never drawing: it returns a compact chart spec and the portal renders
+    // it with Chart.js — reliable where model-drawn SVG was not.
     private const string SystemPrompt =
         "You are given rows sampled from one database table, as JSON with 'columns' and 'rows'. " +
-        "Produce a SINGLE, complete, self-contained HTML5 document whose body is ONE chart that best " +
-        "visualizes this data — a bar, line, or pie chart drawn as inline <svg> (use numeric fields, " +
-        "or counts of categorical values, whichever the data supports). If the request names a " +
-        "specific view of the data, chart that. Give it a title, label the axes or include a legend, " +
-        "and print the actual values as text on the chart. Use ONLY inline <svg> and minimal inline " +
-        "CSS: no external stylesheets, scripts, images, fonts, or CDNs. Be faithful to the data; do " +
-        "not invent values. If the data carries no chartable quantities, render a small summary table " +
-        "instead. Do NOT set a page background or text colour and do NOT use a serif font — the " +
-        "container themes those; just give bars/segments/slices distinct fill colours. " +
-        "Output ONLY the HTML — no markdown fences, no commentary before or after.";
+        "Choose the ONE chart that best visualizes this data and return ONLY a JSON object in exactly " +
+        "this shape: {\"type\":\"bar\"|\"line\"|\"pie\",\"title\":\"short title\",\"labels\":[\"...\"]," +
+        "\"series\":[{\"name\":\"...\",\"values\":[numbers]}]}. Rules: every series has exactly one " +
+        "value per label; use 'line' only when labels are ordered (dates, times, sequences); 'pie' " +
+        "has exactly one series and at most 8 labels; at most 24 labels and 3 series — aggregate the " +
+        "rest into an 'other' bucket; values must come from the data (sums, counts, or the values " +
+        "themselves) — never invent numbers. If the request names a specific view of the data, chart " +
+        "that. Output ONLY the JSON — no markdown fences, no commentary.";
 
     /// <summary>
     /// Regenerate the stored chart for every table in the project's database and prune charts of
@@ -109,16 +110,20 @@ public sealed class ProjectChartService
             try
             {
                 var raw = await _llm.GenerateAsync(SystemPrompt, LlmHtml.Truncate(payload, MaxPromptChars), ct);
-                var html = LlmHtml.ExtractHtml(raw);
-                if (LlmHtml.LooksLikeHtml(html))
-                    return LlmHtml.StyleChart(html);
-                _log?.LogWarning("Analytics chart for table {Table} wasn't usable HTML — falling back to the data table.", tableName);
+                if (ChartSpec.TryParse(raw) is { } spec)
+                    return spec.ToJson();
+                _log?.LogWarning("Analytics chart for table {Table} wasn't a usable spec — using the deterministic builder.", tableName);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
-                _log?.LogWarning(ex, "Analytics chart LLM call failed for table {Table} — falling back to the data table.", tableName);
+                _log?.LogWarning(ex, "Analytics chart LLM call failed for table {Table} — using the deterministic builder.", tableName);
             }
         }
+
+        // No LLM (or it misbehaved): build the spec from the data itself; a table with nothing
+        // chartable stores a themed HTML table so the tab always renders something.
+        if (ChartSpec.FromSample(tableName, result) is { } fallback)
+            return fallback.ToJson();
         return LlmHtml.StyleChart(FallbackTable(tableName, result));
     }
 
