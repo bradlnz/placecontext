@@ -22,8 +22,13 @@
                 {
                     <span style="font-size:10px; padding:2px 7px; border-radius:4px; background:var(--brand); color:#fff">project hub</span>
                 }
-                <span style="font-size:10px; padding:2px 7px; border-radius:4px; background:var(--bg-2); color:var(--text-3)">@sel.Degree connection(s)</span>
+                <span style="font-size:10px; padding:2px 7px; border-radius:4px; background:var(--card-2); color:var(--text-3)">@sel.Degree connection(s)</span>
             </div>
+            @if (!string.IsNullOrWhiteSpace(sel.Content))
+            {
+                @* The note behind the node — decision rationale, a change's why, or run-output text. *@
+                <div style="margin-top:10px; padding:9px 11px; background:var(--bg); border:1px solid var(--border); border-radius:7px; font-size:11.5px; color:var(--text-2); line-height:1.55; white-space:pre-wrap; word-break:break-word; max-height:160px; overflow-y:auto">@sel.Content</div>
+            }
             @if (_selectedNeighbors.Count > 0)
             {
                 <div style="font-size:10.5px; color:var(--text-3); margin:10px 0 4px; text-transform:uppercase; letter-spacing:.5px">Connected to</div>

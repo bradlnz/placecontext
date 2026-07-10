@@ -15,6 +15,8 @@ public sealed class DecisionTreeAssembler
     private const int HotspotThreshold = 3;
     private const int MaxHotspots = 25;
     private const int MaxLabel = 80;
+    /// <summary>Node content (rationale / run-output text) is clipped to this for the detail panel.</summary>
+    private const int MaxContent = 500;
 
     /// <summary>Two run-output nodes are linked when their embeddings are at least this cosine-similar.</summary>
     private const double SimilarityThreshold = 0.6;
@@ -29,13 +31,16 @@ public sealed class DecisionTreeAssembler
         IReadOnlyList<RunOutputNode>? runOutputs = null)
     {
         const string rootId = "root";
-        var specs = new List<(string Id, string Label, TreeNodeKind Kind)> { (rootId, projectName.Value, TreeNodeKind.Root) };
+        var specs = new List<(string Id, string Label, TreeNodeKind Kind, string? Content)>
+        {
+            (rootId, projectName.Value, TreeNodeKind.Root, null),
+        };
         var edges = new List<DecisionTreeEdge>();
         var seen = new HashSet<string> { rootId };
 
-        void AddNode(string id, string label, TreeNodeKind kind)
+        void AddNode(string id, string label, TreeNodeKind kind, string? content = null)
         {
-            if (seen.Add(id)) specs.Add((id, label, kind));
+            if (seen.Add(id)) specs.Add((id, label, kind, ClipContent(content)));
         }
 
         // Decisions branch off the root, oldest first, so a change can attach to the latest prior decision.
@@ -45,7 +50,7 @@ public sealed class DecisionTreeAssembler
         {
             var id = "decision:" + d.Id.Value.ToString("N")[..8];
             decisionIds[d.Id] = id;
-            AddNode(id, Clip($"{d.Question} → {d.Choice}"), TreeNodeKind.Decision);
+            AddNode(id, Clip($"{d.Question} → {d.Choice}"), TreeNodeKind.Decision, d.Rationale.Value);
             edges.Add(new DecisionTreeEdge(rootId, id, ConfidenceTag.Extracted));
         }
 
@@ -54,7 +59,8 @@ public sealed class DecisionTreeAssembler
         foreach (var c in ledger.Records.OrderBy(r => r.Sequence))
         {
             var changeId = "change:" + c.Sequence;
-            AddNode(changeId, Clip(string.IsNullOrWhiteSpace(c.Summary) ? $"change {c.Sequence}" : c.Summary), TreeNodeKind.Change);
+            AddNode(changeId, Clip(string.IsNullOrWhiteSpace(c.Summary) ? $"change {c.Sequence}" : c.Summary),
+                TreeNodeKind.Change, c.Rationale.Value);
 
             var parent = ordered.LastOrDefault(d => d.DecidedAt <= c.RecordedAt);
             var (parentId, conf) = parent is not null
@@ -99,7 +105,7 @@ public sealed class DecisionTreeAssembler
             .ToHashSet();
 
         var nodes = specs.Select(s => new DecisionTreeNode(
-            s.Id, s.Label, s.Kind, degree.GetValueOrDefault(s.Id), hotspotIds.Contains(s.Id))).ToList();
+            s.Id, s.Label, s.Kind, degree.GetValueOrDefault(s.Id), hotspotIds.Contains(s.Id), s.Content)).ToList();
 
         return DecisionTree.Of(nodes, edges);
     }
@@ -114,7 +120,7 @@ public sealed class DecisionTreeAssembler
         string rootId,
         List<DecisionTreeEdge> edges,
         HashSet<string> seen,
-        Action<string, string, TreeNodeKind> addNode)
+        Action<string, string, TreeNodeKind, string?> addNode)
     {
         if (runOutputs is not { Count: > 0 }) return;
 
@@ -125,7 +131,7 @@ public sealed class DecisionTreeAssembler
             var id = "runoutput:" + o.Id;
             if (!seen.Contains(id))
             {
-                addNode(id, Clip(CleanLabel(o.Label, id)), TreeNodeKind.JobRunOutput);
+                addNode(id, Clip(CleanLabel(o.Label, id)), TreeNodeKind.JobRunOutput, o.Label);
                 edges.Add(new DecisionTreeEdge(rootId, id, ConfidenceTag.Extracted));
                 outputs.Add((id, o.Vector.ToArray()));
             }
@@ -174,4 +180,12 @@ public sealed class DecisionTreeAssembler
     }
 
     private static string Clip(string s) => s.Length <= MaxLabel ? s : s[..(MaxLabel - 1)] + "…";
+
+    // Content is a readable snippet, not the whole document — keep it to a paragraph.
+    private static string? ClipContent(string? content)
+    {
+        if (string.IsNullOrWhiteSpace(content)) return null;
+        var t = content.Trim();
+        return t.Length <= MaxContent ? t : t[..(MaxContent - 1)] + "…";
+    }
 }

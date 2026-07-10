@@ -28,7 +28,7 @@ public sealed record DecisionTree
     /// <summary>Projects the tree onto the node/link view the deep-dive SVG renders.</summary>
     public GraphView ToGraphView()
         => GraphView.Of(
-            Nodes.Select(n => new GraphVizNode(n.Id, n.Label, n.Degree, n.IsHotspot)),
+            Nodes.Select(n => new GraphVizNode(n.Id, n.Label, n.Degree, n.IsHotspot, n.Content)),
             Edges.Select(e => new GraphVizLink(e.ParentId, e.ChildId, e.Confidence)));
 
     /// <summary>The churn hotspots — files/nodes touched by many changes — surfaced as god nodes.</summary>

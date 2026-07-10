@@ -18,7 +18,7 @@ public sealed class GetGraphVizHandler : IQueryHandler<GetGraphVizQuery, GraphVi
     {
         var tree = await _tree.BuildAsync(ProjectId.From(query.ProjectId), ct);
         var g = tree.ToGraphView();
-        var nodes = g.Nodes.Select(n => new GraphNodeView(n.Id, n.Label, n.Degree, n.IsGod)).ToList();
+        var nodes = g.Nodes.Select(n => new GraphNodeView(n.Id, n.Label, n.Degree, n.IsGod, n.Content)).ToList();
         var links = g.Links.Select(l => new GraphLinkView(l.Source, l.Target, l.Confidence.ToString())).ToList();
         return new GraphVizView(query.ProjectId, nodes.Count, links.Count, nodes, links);
     }
