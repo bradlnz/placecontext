@@ -37,6 +37,7 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
     private readonly IProjectSecretRepository? _secretRepo;
     private readonly ISecretProtector? _secretProtector;
     private readonly PostJobActionService? _postActions;
+    private readonly JobRunDataRecorder? _runData;
     private IReadOnlyDictionary<string, string> _runSecrets = new Dictionary<string, string>();
 
     public RunJobHandler(
@@ -53,11 +54,13 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
         IRunEmbeddingRepository? embeddingStore = null,
         IProjectSecretRepository? secretRepo = null,
         ISecretProtector? secretProtector = null,
-        PostJobActionService? postActions = null)
+        PostJobActionService? postActions = null,
+        JobRunDataRecorder? runData = null)
     {
         _secretRepo = secretRepo;
         _secretProtector = secretProtector;
         _postActions = postActions;
+        _runData = runData;
         _jobs = jobs;
         _runs = runs;
         _contexts = contexts;
@@ -120,6 +123,11 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
             try { await _postActions.RunAsync(job, run, ct); }
             catch { /* isolated inside the service too; belt-and-suspenders */ }
         }
+
+        // The run's results also land in the project's own database: appended to the read-only
+        // job_run_data table so they can be queried and charted from the Data tab. Best-effort.
+        if (_runData is not null)
+            await _runData.RecordAsync(job, run, ct);
 
         // Persist a Gemma-organized summary of the run into the project's context document and embed it
         // for search/the dependency graph. Slow + best-effort — isolated so it can't fail or stall the run.

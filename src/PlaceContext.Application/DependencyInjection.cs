@@ -35,6 +35,7 @@ public static class DependencyInjection
         services.AddScoped<EventDispatchService>();
         services.AddScoped<ScheduleScanService>();
         services.AddScoped<PostJobActionService>();
+        services.AddScoped<JobRunDataRecorder>();
         services.AddScoped<ProjectAgentService>();
         services.AddScoped<ProjectChartService>();
         services.AddScoped<ObsidianVaultImporter>();

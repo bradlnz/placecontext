@@ -124,9 +124,12 @@ public sealed class NpgsqlProjectDataStore : IProjectDataStore
         await conn.OpenAsync(ct);
         await EnsureProvisionedAsync(conn, schema, ct);
 
+        // A table the project role does not own is system-written and read-only for the project
+        // (the role holds SELECT at most — see AppendReadOnlyRowsAsync).
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = """
-            SELECT c.relname, GREATEST(c.reltuples, 0)::bigint
+            SELECT c.relname, GREATEST(c.reltuples, 0)::bigint,
+                   pg_get_userbyid(c.relowner) <> n.nspname
             FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
             WHERE n.nspname = @schema AND c.relkind = 'r'
             ORDER BY c.relname
@@ -135,7 +138,7 @@ public sealed class NpgsqlProjectDataStore : IProjectDataStore
         var tables = new List<ProjectTableInfo>();
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         while (await reader.ReadAsync(ct))
-            tables.Add(new ProjectTableInfo(reader.GetString(0), reader.GetInt64(1)));
+            tables.Add(new ProjectTableInfo(reader.GetString(0), reader.GetInt64(1), reader.GetBoolean(2)));
         return tables;
     }
 
@@ -242,6 +245,79 @@ public sealed class NpgsqlProjectDataStore : IProjectDataStore
             ? "\"" + s.Replace("\"", "\"\"") + "\""
             : s;
 
+    public async Task AppendReadOnlyRowsAsync(Guid projectId, string tableName, IReadOnlyList<ProjectColumnSpec> columns,
+        IReadOnlyList<IReadOnlyList<string?>> rows, CancellationToken ct = default)
+    {
+        Ident(tableName, "table name");
+        if (columns is null || columns.Count == 0)
+            throw new ArgumentException("A table needs at least one column.");
+        var pgTypes = new string[columns.Count];
+        for (var i = 0; i < columns.Count; i++)
+        {
+            Ident(columns[i].Name, "column name");
+            if (!AllowedTypes.TryGetValue(columns[i].Type, out var pgType))
+                throw new ArgumentException($"Unsupported column type '{columns[i].Type}'.");
+            pgTypes[i] = pgType;
+        }
+        if (rows.Any(r => r.Count != columns.Count))
+            throw new ArgumentException("Every row must have exactly one value per column.");
+
+        var schema = SchemaFor(projectId);
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+        await EnsureProvisionedAsync(conn, schema, ct);
+
+        // Everything runs as the PLATFORM user, not the project role: the platform owns the table,
+        // so the role cannot ALTER, DROP, or (after the revoke) write it — Postgres enforces the
+        // read-only contract, the UI merely reflects it.
+        await using var tx = await conn.BeginTransactionAsync(ct);
+
+        // A same-named table the project role owns is a user table — refuse rather than hijack it.
+        await using (var owner = conn.CreateCommand())
+        {
+            owner.Transaction = tx;
+            owner.CommandText = """
+                SELECT pg_get_userbyid(c.relowner)
+                FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+                WHERE n.nspname = @schema AND c.relname = @table AND c.relkind = 'r'
+                """;
+            owner.Parameters.AddWithValue("schema", schema);
+            owner.Parameters.AddWithValue("table", tableName);
+            if (await owner.ExecuteScalarAsync(ct) is string existingOwner && existingOwner == schema)
+                throw new InvalidOperationException(
+                    $"Table '{tableName}' already exists as a project-owned table — cannot repurpose it as a read-only system table.");
+        }
+
+        var qualified = $"\"{schema}\".{QuoteIdent(tableName)}";
+        await using (var create = conn.CreateCommand())
+        {
+            var defs = columns.Select((c, i) => $"{QuoteIdent(c.Name)} {pgTypes[i]}" + (c.NotNull ? " NOT NULL" : ""));
+            create.Transaction = tx;
+            // The revoke also undoes the schema's ALTER DEFAULT PRIVILEGES auto-grant on this table.
+            create.CommandText =
+                $"CREATE TABLE IF NOT EXISTS {qualified} ({string.Join(", ", defs)}); " +
+                $"REVOKE ALL ON TABLE {qualified} FROM \"{schema}\"; " +
+                $"GRANT SELECT ON TABLE {qualified} TO \"{schema}\"";
+            await create.ExecuteNonQueryAsync(ct);
+        }
+
+        // Values travel as text and are cast to each column's declared type server-side.
+        var cols = string.Join(", ", columns.Select(c => QuoteIdent(c.Name)));
+        var placeholders = string.Join(", ", columns.Select((_, i) => $"@p{i}::{pgTypes[i]}"));
+        foreach (var row in rows)
+        {
+            await using var insert = conn.CreateCommand();
+            insert.Transaction = tx;
+            insert.CommandText = $"INSERT INTO {qualified} ({cols}) VALUES ({placeholders})";
+            for (var i = 0; i < columns.Count; i++)
+                insert.Parameters.Add(new NpgsqlParameter($"p{i}", NpgsqlTypes.NpgsqlDbType.Text)
+                    { Value = (object?)row[i] ?? DBNull.Value });
+            await insert.ExecuteNonQueryAsync(ct);
+        }
+
+        await tx.CommitAsync(ct);
+    }
+
     // Run a single non-query statement inside the project's schema as its role (DDL helper).
     private async Task RunAsRoleAsync(Guid projectId, string statement, CancellationToken ct)
     {
@@ -268,6 +344,8 @@ public sealed class NpgsqlProjectDataStore : IProjectDataStore
     }
 
     // Idempotent: schema + NOLOGIN role, role owns full rights on its schema and nothing else.
+    // System tables (platform-owned, e.g. job_run_data) are clawed back to SELECT-only afterwards,
+    // because the blanket grant would otherwise re-open writes on every provisioning pass.
     private async Task EnsureProvisionedAsync(NpgsqlConnection conn, string schema, CancellationToken ct)
     {
         await using var cmd = conn.CreateCommand();
@@ -280,6 +358,15 @@ public sealed class NpgsqlProjectDataStore : IProjectDataStore
             ALTER DEFAULT PRIVILEGES IN SCHEMA "{schema}" GRANT ALL ON TABLES TO "{schema}";
             ALTER DEFAULT PRIVILEGES IN SCHEMA "{schema}" GRANT ALL ON SEQUENCES TO "{schema}";
             REVOKE ALL ON SCHEMA public FROM "{schema}";
+            DO $$ DECLARE t name;
+            BEGIN
+              FOR t IN SELECT c.relname FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+                       WHERE n.nspname = '{schema}' AND c.relkind = 'r' AND pg_get_userbyid(c.relowner) <> '{schema}'
+              LOOP
+                EXECUTE format('REVOKE ALL ON TABLE %I.%I FROM %I', '{schema}', t, '{schema}');
+                EXECUTE format('GRANT SELECT ON TABLE %I.%I TO %I', '{schema}', t, '{schema}');
+              END LOOP;
+            END $$;
             """;
         await cmd.ExecuteNonQueryAsync(ct);
     }

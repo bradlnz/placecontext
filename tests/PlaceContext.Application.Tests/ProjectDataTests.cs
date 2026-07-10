@@ -57,6 +57,12 @@ public class ProjectDataTests
 
         public Task DropColumnAsync(Guid projectId, string tableName, string columnName, CancellationToken ct = default)
         { SawProject = projectId; DroppedColumn = (tableName, columnName); return Task.CompletedTask; }
+
+        public (string Table, IReadOnlyList<ProjectColumnSpec> Columns, IReadOnlyList<IReadOnlyList<string?>> Rows)? Appended;
+
+        public Task AppendReadOnlyRowsAsync(Guid projectId, string tableName, IReadOnlyList<ProjectColumnSpec> columns,
+            IReadOnlyList<IReadOnlyList<string?>> rows, CancellationToken ct = default)
+        { SawProject = projectId; Appended = (tableName, columns, rows); return Task.CompletedTask; }
     }
 
     private static async Task<(InMemoryProjectRepository projects, Project project, FakeStore store)> WorldAsync()

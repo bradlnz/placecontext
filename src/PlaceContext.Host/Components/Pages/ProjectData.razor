@@ -41,13 +41,25 @@
                     <div style="display:flex; justify-content:space-between; align-items:baseline; cursor:pointer"
                          @onclick="@(() => SelectTableAsync(t.Name))" title="SELECT the first rows">
                         <span style="font-size:12px; font-family:'Geist Mono',monospace">@t.Name</span>
-                        <span style="font-size:10.5px; color:var(--text-3)">~@t.RowEstimate</span>
+                        <span style="font-size:10.5px; color:var(--text-3)">
+                            @if (t.ReadOnly)
+                            {
+                                <span title="System table — written by PlaceContext (job run results); query and export only." style="border:1px solid var(--border); border-radius:4px; padding:0 4px; margin-right:5px">read-only</span>
+                            }
+                            ~@t.RowEstimate
+                        </span>
                     </div>
                     <div style="display:flex; gap:10px; margin-top:5px">
-                        <button class="dclink" @onclick="@(() => StartEditAsync(t.Name))">edit</button>
-                        <button class="dclink" @onclick="@(() => StartRename(t.Name))">rename</button>
+                        @if (!t.ReadOnly)
+                        {
+                            <button class="dclink" @onclick="@(() => StartEditAsync(t.Name))">edit</button>
+                            <button class="dclink" @onclick="@(() => StartRename(t.Name))">rename</button>
+                        }
                         <button class="dclink" @onclick="@(() => ExportAsync(t.Name))">export</button>
-                        <button class="dclink" style="color:var(--bad)" @onclick="@(() => StartDrop(t.Name))">drop</button>
+                        @if (!t.ReadOnly)
+                        {
+                            <button class="dclink" style="color:var(--bad)" @onclick="@(() => StartDrop(t.Name))">drop</button>
+                        }
                     </div>
                     @if (_renaming == t.Name)
                     {

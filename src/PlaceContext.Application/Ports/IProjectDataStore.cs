@@ -1,7 +1,8 @@
 namespace PlaceContext.Application.Ports;
 
-/// <summary>One table in a project's own database.</summary>
-public sealed record ProjectTableInfo(string Name, long RowEstimate);
+/// <summary>One table in a project's own database. Read-only tables are system-written (e.g.
+/// job run results): the project can SELECT them but not modify, rename, or drop them.</summary>
+public sealed record ProjectTableInfo(string Name, long RowEstimate, bool ReadOnly = false);
 
 /// <summary>One column in a create-table request. Type is a Postgres type chosen from a safe allow-list.</summary>
 public sealed record ProjectColumnSpec(string Name, string Type, bool NotNull, bool PrimaryKey);
@@ -52,4 +53,13 @@ public interface IProjectDataStore
 
     /// <summary>Export a whole table as CSV (row-capped for safety); returns the CSV text.</summary>
     Task<string> ExportTableCsvAsync(Guid projectId, string tableName, CancellationToken ct = default);
+
+    /// <summary>
+    /// Append rows to a system-owned, read-only table in the project's database, creating the table
+    /// from the spec on first use. The project can SELECT the table but never write, alter, or drop
+    /// it — the store must enforce that, not just the UI. Row values are text; each is cast to its
+    /// column's declared type on insert (null stays null).
+    /// </summary>
+    Task AppendReadOnlyRowsAsync(Guid projectId, string tableName, IReadOnlyList<ProjectColumnSpec> columns,
+        IReadOnlyList<IReadOnlyList<string?>> rows, CancellationToken ct = default);
 }

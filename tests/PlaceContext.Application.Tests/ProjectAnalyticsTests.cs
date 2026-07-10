@@ -47,6 +47,9 @@ public class ProjectAnalyticsTests
             => Task.CompletedTask;
         public Task<string> ExportTableCsvAsync(Guid projectId, string tableName, CancellationToken ct = default)
             => Task.FromResult("");
+        public Task AppendReadOnlyRowsAsync(Guid projectId, string tableName, IReadOnlyList<ProjectColumnSpec> columns,
+            IReadOnlyList<IReadOnlyList<string?>> rows, CancellationToken ct = default)
+            => Task.CompletedTask;
     }
 
     private sealed class FakeLlm : ILlmGateway
@@ -219,5 +222,8 @@ public class ProjectAnalyticsTests
             => Task.CompletedTask;
         public Task<string> ExportTableCsvAsync(Guid projectId, string tableName, CancellationToken ct = default)
             => Task.FromResult("");
+        public Task AppendReadOnlyRowsAsync(Guid projectId, string tableName, IReadOnlyList<ProjectColumnSpec> columns,
+            IReadOnlyList<IReadOnlyList<string?>> rows, CancellationToken ct = default)
+            => Task.CompletedTask;
     }
 }
