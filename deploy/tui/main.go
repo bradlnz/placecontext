@@ -17,10 +17,10 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/charmbracelet/bubbles/spinner"
@@ -86,7 +86,6 @@ const (
 	viewDash view = iota
 	viewLogs
 	viewAction
-	viewMenu
 	viewMetrics
 	viewConfirm
 	viewMcp
@@ -94,17 +93,9 @@ const (
 	viewSettings
 	viewRuns      // run history for a selected job (list of runs)
 	viewRunDetail // one run's per-shard output, errors, and artifacts
-	viewChat      // encrypted node-to-node chat (PCSP over mutual TLS)
 	viewJoin      // connect this computer to an existing cluster with a join code
 	viewAbout     // who built PlaceContext + copyright
 )
-
-// menuItem is a choice in the "add node" (or any future) list picker.
-type menuItem struct {
-	label, desc string
-	verb        string   // label shown while running
-	args        []string // pctl args to run on select
-}
 
 type model struct {
 	w, h       int
@@ -125,11 +116,6 @@ type model struct {
 	// dashboard row selection
 	sel    []selItem
 	cursor int
-
-	// list picker (e.g. add node)
-	menuTitle  string
-	menu       []menuItem
-	menuCursor int
 
 	flash string // transient one-line notice under the health line
 
@@ -173,20 +159,82 @@ type model struct {
 	loading  bool // a data fetch (logs/mcp/metrics/search) is in flight → show a loading box
 	fetching bool // a dashboard state refresh is in flight → ticks skip re-dispatching
 
-	// encrypted node-to-node chat (see chat.go)
-	chatID      *chatIdentity
-	chatErr     string // identity/listener startup failure, shown in the chat view
-	chatPort    int
-	chatEvents  chan chatEvent
-	chatActive  *chatChannel
-	chatPending *chatChannel // incoming request awaiting the operator's permission (y/n)
-	chatPeers   []chatPeer   // nodes found by the LAN scan
-	chatSel     int          // selected row in chatPeers
-	chatLog     []chatLine
-	chatInput   string
-	chatStatus  string
+	projFilterID string // dashboard project filter ([f] cycles): "" = all projects
 
 	joinInput string // pasted cluster join code (viewJoin)
+}
+
+// projectList returns the distinct (id, name) project pairs present in the jobs list, name-sorted —
+// the cycle order for the [f] filter.
+func (m model) projectList() [][2]string {
+	seen := map[string]bool{}
+	var out [][2]string
+	for _, j := range m.state.jobs {
+		if j.projectID == "" || seen[j.projectID] {
+			continue
+		}
+		seen[j.projectID] = true
+		out = append(out, [2]string{j.projectID, j.projectName})
+	}
+	sort.Slice(out, func(a, b int) bool { return out[a][1] < out[b][1] })
+	return out
+}
+
+// visibleJobs is the jobs list after the project filter — everything the dashboard renders/selects.
+func (m model) visibleJobs() []jobRow {
+	if m.projFilterID == "" {
+		return m.state.jobs
+	}
+	var out []jobRow
+	for _, j := range m.state.jobs {
+		if j.projectID == m.projFilterID {
+			out = append(out, j)
+		}
+	}
+	return out
+}
+
+// rebuildSel recomputes the selectable rows (nodes → pods → filtered jobs) and clamps the cursor.
+func (m *model) rebuildSel() {
+	jobs := m.visibleJobs()
+	sel := make([]selItem, 0, len(m.state.nodes)+len(m.state.pods)+len(jobs))
+	for _, n := range m.state.nodes {
+		sel = append(sel, selItem{"node", n.Name, ""})
+	}
+	for _, p := range m.state.pods {
+		sel = append(sel, selItem{"pod", p.Name, p.Node})
+	}
+	for _, j := range jobs {
+		sel = append(sel, selItem{"job", j.name, ""})
+	}
+	m.sel = sel
+	if m.cursor >= len(sel) {
+		m.cursor = max(0, len(sel)-1)
+	}
+}
+
+// cycleProjectFilter advances the [f] filter: all → each project (name order) → all.
+func (m *model) cycleProjectFilter() string {
+	projects := m.projectList()
+	if len(projects) == 0 {
+		m.projFilterID = ""
+		return "project filter: all (no projects yet)"
+	}
+	next := 0 // from "all", start at the first project; from a project, advance past it
+	if m.projFilterID != "" {
+		for i, p := range projects {
+			if p[0] == m.projFilterID {
+				next = i + 1
+				break
+			}
+		}
+	}
+	if next >= len(projects) {
+		m.projFilterID = ""
+		return "project filter: all"
+	}
+	m.projFilterID = projects[next][0]
+	return "project filter: " + projects[next][1]
 }
 
 // ── messages ──────────────────────────────────────────────────────────────────────────────────
@@ -198,12 +246,7 @@ type actionDoneMsg struct {
 }
 
 type flashMsg string
-type chatMsg chatEvent
 
-// waitChat re-arms after every chat event so the listener/dialer goroutines can keep pumping.
-func waitChat(ch chan chatEvent) tea.Cmd {
-	return func() tea.Msg { return chatMsg(<-ch) }
-}
 type metricsMsg struct {
 	cpu, mem float64
 	err      string
@@ -323,15 +366,6 @@ func (m *model) armKill(it selItem) {
 	m.confirmArgs = []string{"kill", it.kind, it.name, "--yes"}
 }
 
-// addNodeMenu lists the "add node" choices (dev k3d nodes + the prod join command).
-func addNodeMenu() []menuItem {
-	return []menuItem{
-		{"k3d worker node (agent)", "Add a worker to the local dev cluster", "add k3d agent", []string{"dev", "add-node", "--role", "agent"}},
-		{"k3d server node (control-plane)", "Add a control-plane node to the dev cluster", "add k3d server", []string{"dev", "add-node", "--role", "server"}},
-		{"prod worker join command", "Print the k3s command to join a worker on another machine", "join-cmd", []string{"join-cmd"}},
-	}
-}
-
 // runAction streams `pctl <args...>` output into the action pane.
 func (m model) runAction(verb string, args ...string) tea.Cmd {
 	pctl := m.pctl
@@ -441,32 +475,12 @@ func initialModel() model {
 		logs:       viewport.New(80, 14),
 		clZoom:     1.0,
 		clSpin:     true,
-		chatPort:   chatDefaultPort,
-		chatEvents: make(chan chatEvent, 64),
-		chatStatus: "not connected",
-	}
-	if p, err := strconv.Atoi(os.Getenv("PCTL_CHAT_PORT")); err == nil && p > 0 {
-		m.chatPort = p
-	}
-	id, err := loadOrCreateChatIdentity()
-	if err != nil {
-		m.chatErr = "chat identity: " + err.Error()
-		return m
-	}
-	m.chatID = id
-	if _, err := startChatListener(id, m.chatPort, m.chatEvents, chatBusy.Load); err != nil {
-		m.chatErr = fmt.Sprintf("chat listener on :%d: %v", m.chatPort, err)
-	} else {
-		startChatResponder(id, m.chatPort) // answer other nodes' LAN scans
 	}
 	return m
 }
 
-// chatBusy mirrors "a conversation is open" for the listener goroutine, which cannot see the model.
-var chatBusy atomic.Bool
-
 func (m model) Init() tea.Cmd {
-	return tea.Batch(m.sp.Tick, m.fetchState(), tick(), clusterTick(), waitChat(m.chatEvents))
+	return tea.Batch(m.sp.Tick, m.fetchState(), tick(), clusterTick())
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -496,99 +510,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			default:
 				if len(key) == 1 { // a single printable rune
 					m.searchQuery += key
-				}
-			}
-			return m, nil
-		}
-
-		// Chat input also captures typing first. esc leaves the view (the conversation stays
-		// open); ctrl+d hangs up; enter dials (when disconnected) or sends (when connected).
-		if m.view == viewChat {
-			// A pending request is modal: the operator must answer before anything else.
-			if m.chatPending != nil {
-				switch key {
-				case "y", "Y":
-					m.chatActive = m.chatPending
-					m.chatPending = nil
-					m.chatActive.start(m.chatEvents)
-					m.chatStatus = "connected to " + m.chatActive.peerID
-					m.chatLog = append(m.chatLog, chatLine{text: "— accepted " + m.chatActive.peerID, at: time.Now()})
-				case "n", "N", "esc":
-					go m.chatPending.close("declined")
-					m.chatPending = nil
-					m.chatStatus = "declined"
-					chatBusy.Store(false)
-				case "ctrl+c":
-					m.quitting = true
-					return m, tea.Quit
-				}
-				return m, nil
-			}
-			switch key {
-			case "esc":
-				m.view = viewDash
-			case "ctrl+c":
-				m.quitting = true
-				return m, tea.Quit
-			case "tab":
-				if m.chatActive == nil && len(m.chatPeers) > 0 {
-					m.chatSel = (m.chatSel + 1) % len(m.chatPeers)
-				}
-			case "ctrl+r":
-				if m.chatID != nil && m.chatActive == nil {
-					m.chatStatus = "scanning…"
-					scanForPeers(m.chatID.nodeID, m.chatEvents)
-				}
-			case "ctrl+d":
-				if m.chatActive != nil {
-					ch := m.chatActive
-					go ch.close("closing")
-					m.chatActive = nil
-					m.chatStatus = "not connected"
-					m.chatLog = append(m.chatLog, chatLine{text: "— you hung up", at: time.Now()})
-					chatBusy.Store(false)
-				}
-			case "enter":
-				in := strings.TrimSpace(m.chatInput)
-				if in == "" {
-					// Empty ⏎ while disconnected dials the peer selected in the scan list.
-					if m.chatActive == nil && m.chatID != nil && m.chatSel < len(m.chatPeers) {
-						p := m.chatPeers[m.chatSel]
-						m.chatStatus = "dialing " + p.hostPort + " (asking permission)…"
-						dialChat(m.chatID, p.hostPort, p.nodeID, m.chatEvents)
-					}
-					return m, nil
-				}
-				if m.chatActive == nil {
-					if m.chatID == nil {
-						m.chatStatus = m.chatErr
-						return m, nil
-					}
-					hostPort, nodeID, err := parseChatTarget(in)
-					if err != nil {
-						m.chatStatus = err.Error()
-						return m, nil
-					}
-					m.chatStatus = "dialing " + hostPort + " (asking permission)…"
-					m.chatInput = ""
-					dialChat(m.chatID, hostPort, nodeID, m.chatEvents)
-				} else if err := m.chatActive.send(in); err != nil {
-					m.chatStatus = "send failed: " + err.Error()
-				} else {
-					m.chatLog = append(m.chatLog, chatLine{text: in, at: time.Now()}) // from=="" → you
-					m.chatInput = ""
-				}
-			case "backspace":
-				if r := []rune(m.chatInput); len(r) > 0 {
-					m.chatInput = string(r[:len(r)-1])
-				}
-			default:
-				// KeyRunes covers typing AND pasting (a paste arrives as one multi-rune msg —
-				// exactly how a copied "host:port NODEID" target gets here).
-				if msg.Type == tea.KeyRunes {
-					m.chatInput += string(msg.Runes)
-				} else if key == " " {
-					m.chatInput += " "
 				}
 			}
 			return m, nil
@@ -667,28 +588,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, m.runAction(m.confirmVerb, m.confirmArgs...)
 			case "n", "N":
 				m.view = m.prevView
-			}
-			return m, nil
-		}
-
-		// menu (list picker) navigation
-		if m.view == viewMenu {
-			switch key {
-			case "up", "k":
-				if m.menuCursor > 0 {
-					m.menuCursor--
-				}
-			case "down", "j":
-				if m.menuCursor < len(m.menu)-1 {
-					m.menuCursor++
-				}
-			case "enter":
-				if m.menuCursor < len(m.menu) {
-					it := m.menu[m.menuCursor]
-					m.busy, m.busyVerb, m.view = true, it.verb, viewAction
-					m.out.SetContent("")
-					return m, m.runAction(it.verb, it.args...)
-				}
 			}
 			return m, nil
 		}
@@ -827,14 +726,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, m.fetchLogsFor(it)
 			}
 			// (Runs-list ⏎ is handled in the viewRuns block above, which returns early.)
-		case "a":
-			// One keypress adds a worker computer to the cluster — no jargon, no choices.
-			if !m.busy {
-				m.busy, m.busyVerb, m.view = true, "adding a worker", viewAction
-				m.out.SetContent("")
-				return m, m.runAction("adding a worker", "dev", "add-node", "--role", "agent")
-			}
-			return m, nil
 		case "u":
 			// Pull the latest source from git, then rebuild and roll it out — bringing the
 			// cluster up first if it isn't running (pctl update --deploy handles all of it).
@@ -851,6 +742,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, tea.Batch(m.fetchMetrics(), metricsTick())
 			}
 			return m, nil
+		case "f": // cycle the project filter: all → each project → all
+			m.flash = m.cycleProjectFilter()
+			m.rebuildSel()
+			return m, nil
 		case "c":
 			themeIdx++
 			applyTheme(themeIdx)
@@ -862,17 +757,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.logs.SetContent("type a query (decisions · context · activity), then enter")
 			}
 			return m, nil
-		case "t":
-			// Encrypted chat with another node (see chat.go). Opening it scans the LAN
-			// for other nodes; each side must approve before a conversation starts.
-			if !m.busy {
-				m.view = viewChat
-				if m.chatID != nil && m.chatActive == nil && m.chatPending == nil {
-					m.chatStatus = "scanning…"
-					scanForPeers(m.chatID.nodeID, m.chatEvents)
-				}
-			}
-			return m, nil
 		case "i":
 			if m.view == viewDash && !m.busy {
 				m.view = viewAbout
@@ -880,8 +764,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		case "p":
 			return m, m.openPortal()
-		case "$":
-			return m, m.openBilling()
 		case "m":
 			if m.view == viewDash && !m.busy {
 				m.view, m.mcpCursor = viewMcp, 0
@@ -963,59 +845,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case flashMsg:
 		m.flash = string(msg)
 		return m, nil
-
-	case chatMsg:
-		e := chatEvent(msg)
-		switch e.kind {
-		case "connected": // an outgoing dial came up — no local permission needed, we initiated
-			if m.chatActive != nil && e.channel != m.chatActive {
-				go e.channel.close("busy: another chat is open")
-			} else {
-				m.chatActive = e.channel
-				m.chatStatus = "connected to " + e.channel.peerID
-				m.chatLog = append(m.chatLog, chatLine{text: "— connected to " + e.channel.peerID, at: time.Now()})
-				if m.view != viewChat {
-					m.flash = "chat: " + e.channel.peerID[:8] + "… connected — press [t]"
-				}
-			}
-		case "request": // an incoming caller — held unread until the operator says yes
-			if m.chatActive != nil || m.chatPending != nil {
-				go e.channel.close("busy: another chat is open")
-			} else {
-				m.chatPending = e.channel
-				m.chatStatus = e.channel.peerID[:8] + "… wants to chat — [y] accept, [n] decline"
-				if m.view != viewChat {
-					m.flash = "chat request from " + e.channel.peerID[:8] + "… — press [t]"
-				}
-			}
-		case "line":
-			if e.channel == m.chatActive {
-				m.chatLog = append(m.chatLog, e.line)
-				if m.view != viewChat {
-					m.flash = "chat message from " + e.line.from[:8] + "… — press [t]"
-				}
-			}
-		case "closed":
-			if e.channel == m.chatActive {
-				m.chatActive = nil
-				m.chatStatus = "not connected"
-				m.chatLog = append(m.chatLog, chatLine{text: "— " + e.info, at: time.Now()})
-			} else if e.channel == m.chatPending {
-				m.chatPending = nil
-				m.chatStatus = "caller hung up before you answered"
-			}
-		case "peers":
-			m.chatPeers, m.chatSel = e.peers, 0
-			if len(e.peers) == 0 {
-				m.chatStatus = "scan: no other nodes found"
-			} else {
-				m.chatStatus = fmt.Sprintf("scan: %d node(s) found — tab selects, ⏎ chats", len(e.peers))
-			}
-		case "error":
-			m.chatStatus = e.info
-		}
-		chatBusy.Store(m.chatActive != nil || m.chatPending != nil)
-		return m, waitChat(m.chatEvents)
 
 	case jobSettingMsg:
 		if msg.actions != "" {
@@ -1105,20 +934,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.fetching = false
 		m.state = clusterState(msg)
 		m.updated = time.Now()
-		sel := make([]selItem, 0, len(m.state.nodes)+len(m.state.pods)+len(m.state.jobs))
-		for _, n := range m.state.nodes {
-			sel = append(sel, selItem{"node", n.Name, ""})
-		}
-		for _, p := range m.state.pods {
-			sel = append(sel, selItem{"pod", p.Name, p.Node})
-		}
-		for _, j := range m.state.jobs {
-			sel = append(sel, selItem{"job", j.name, ""})
-		}
-		m.sel = sel
-		if m.cursor >= len(sel) {
-			m.cursor = max(0, len(sel)-1)
-		}
+		m.rebuildSel()
 		return m, nil
 
 	case logsMsg:
@@ -1205,8 +1021,6 @@ func (m model) View() string {
 		}
 		b.WriteString(head + "\n")
 		b.WriteString(boxStyle.Render(m.out.View()) + "\n")
-	case viewMenu:
-		b.WriteString(m.menuView())
 	case viewMetrics:
 		b.WriteString(m.metricsView())
 	case viewConfirm:
@@ -1215,8 +1029,6 @@ func (m model) View() string {
 		b.WriteString(m.mcpView())
 	case viewSearch:
 		b.WriteString(m.searchView())
-	case viewChat:
-		b.WriteString(m.chatView())
 	case viewJoin:
 		b.WriteString(m.joinView())
 	case viewSettings:
@@ -1321,7 +1133,6 @@ func (m model) setupGuide() string {
 	b.WriteString(step("[u]", "Create your cluster (one key — sets up everything locally)"))
 	b.WriteString(step("[j]", "Connect to an existing cluster (asks for a join code from the master)"))
 	b.WriteString(step("[p]", "Open the portal once it's up"))
-	b.WriteString(step("[$]", "Manage your subscription"))
 	b.WriteString(step("[q]", "Quit"))
 	b.WriteString("\n  " + dimStyle.Render("Tip: see docs/SETUP.md for the full guide.") + "\n")
 	return b.String()
@@ -1408,31 +1219,44 @@ func (m model) listBody() string {
 	b.WriteString("\n")
 
 	// jobs — a job's purpose is the artifacts it generates, so that column leads; open a
-	// job (⏎ → run → [o]) to get at the artifacts themselves.
-	b.WriteString("  " + headStyle.Render(pad("JOB", 28)+pad("ARTIFACTS", 11)+pad("SOURCE", 8)+pad("CONC", 5)+pad("EGRESS", 8)+"UPDATED") + "\n")
+	// job (⏎ → run → [o]) to get at the artifacts themselves. [f] filters by project.
+	head := pad("JOB", 22) + pad("PROJECT", 14) + pad("ARTIFACTS", 10) + pad("SOURCE", 8) + pad("CONC", 5) + pad("EGRESS", 7) + "UPDATED"
+	b.WriteString("  " + headStyle.Render(head))
+	if m.projFilterID != "" {
+		if jobs := m.visibleJobs(); len(jobs) > 0 {
+			b.WriteString("  " + titleStyle.Render("· "+jobs[0].projectName))
+		}
+	}
+	b.WriteString("\n")
+	jobs := m.visibleJobs()
 	if m.state.jobsErr != "" {
 		b.WriteString(dimStyle.Render("    "+m.state.jobsErr) + "\n")
-	} else if len(m.state.jobs) == 0 {
-		b.WriteString(dimStyle.Render("    (no jobs defined — jobs run code and generate artifacts: reports, charts, CSVs)") + "\n")
+	} else if len(jobs) == 0 {
+		if m.projFilterID != "" {
+			b.WriteString(dimStyle.Render("    (no jobs in this project — [f] cycles the project filter)") + "\n")
+		} else {
+			b.WriteString(dimStyle.Render("    (no jobs defined — jobs run code and generate artifacts: reports, charts, CSVs)") + "\n")
+		}
 	}
-	for _, j := range m.state.jobs {
+	for _, j := range jobs {
 		upd := j.updated
 		if len(upd) > 10 {
 			upd = upd[:10] // date is enough here; the run history has exact times
 		}
-		plain := pad(trunc(j.name, 27), 28) + pad(j.artifacts, 11) + pad(j.source, 8) + pad(j.conc, 5) + pad(j.egress, 8) + upd
+		proj := pad(trunc(j.projectName, 13), 14)
+		plain := pad(trunc(j.name, 21), 22) + proj + pad(j.artifacts, 10) + pad(j.source, 8) + pad(j.conc, 5) + pad(j.egress, 7) + upd
 		if m.selected(gi) {
 			b.WriteString(selStyle.Render("❯ "+plain) + "\n")
 		} else {
-			arts := dimStyle.Render(pad(j.artifacts, 11))
+			arts := dimStyle.Render(pad(j.artifacts, 10))
 			if j.artifacts != "-" {
-				arts = okStyle.Render(pad(j.artifacts, 11))
+				arts = okStyle.Render(pad(j.artifacts, 10))
 			}
-			eg := okStyle.Render(pad(j.egress, 8))
+			eg := okStyle.Render(pad(j.egress, 7))
 			if j.egress == "yes" {
-				eg = warnStyle.Render(pad(j.egress, 8))
+				eg = warnStyle.Render(pad(j.egress, 7))
 			}
-			b.WriteString("  " + pad(trunc(j.name, 27), 28) + arts + pad(j.source, 8) + pad(j.conc, 5) + eg + dimStyle.Render(upd) + "\n")
+			b.WriteString("  " + pad(trunc(j.name, 21), 22) + dimStyle.Render(proj) + arts + pad(j.source, 8) + pad(j.conc, 5) + eg + dimStyle.Render(upd) + "\n")
 		}
 		gi++
 	}
@@ -1447,19 +1271,6 @@ func (m model) confirmView() string {
 	b.WriteString("  " + warnStyle.Render(m.confirmText) + "\n\n")
 	b.WriteString("  " + keyStyle.Render("[y]") + dimStyle.Render(" yes, kill it     ") +
 		keyStyle.Render("[n]") + dimStyle.Render(" cancel") + "\n")
-	return b.String()
-}
-
-func (m model) menuView() string {
-	var b strings.Builder
-	b.WriteString(titleStyle.Render(" "+m.menuTitle+" ") + "\n\n")
-	for i, it := range m.menu {
-		if i == m.menuCursor {
-			b.WriteString(selStyle.Render("❯ "+pad(it.label, 34)) + "  " + dimStyle.Render(it.desc) + "\n")
-		} else {
-			b.WriteString("  " + pad(it.label, 34) + "  " + dimStyle.Render(it.desc) + "\n")
-		}
-	}
 	return b.String()
 }
 
@@ -1486,10 +1297,12 @@ func (m model) aboutView() string {
 	b.WriteString(titleStyle.Render(" about ") + "\n")
 	body := "PlaceContext — a context platform for AI\n\n" +
 		"A durable, structured home for project context — decisions, activity,\n" +
-		"knowledge graphs, jobs and their artifacts, data, and analytics —\n" +
+		"knowledge, jobs and their artifacts, data, and analytics —\n" +
 		"served over MCP, the portal, and this TUI.\n\n" +
-		"Built by Bradley Lietz of CTRL SIGNAL SOFTWARE PTY LTD.\n" +
-		"© " + time.Now().UTC().Format("2006") + " CTRL SIGNAL SOFTWARE PTY LTD. All rights reserved."
+		"Free and open source under the MIT License.\n" +
+		"github.com/bradlnz/placecontext\n\n" +
+		"Created by Bradley Lietz.\n" +
+		"© " + time.Now().UTC().Format("2006") + " Brad Lietz and PlaceContext contributors."
 	b.WriteString(boxStyle.Render(body) + "\n")
 	return b.String()
 }
@@ -1504,9 +1317,9 @@ func (m model) footer() string {
 		type kv struct{ key, label string }
 		items := []kv{
 			{"↑↓", "nav"}, {"⏎", "logs/runs"}, {"R", "run job"}, {"s", "settings"},
-			{"x", "kill job"}, {"/", "search"}, {"g", "metrics"}, {"m", "mcp"},
-			{"p", "portal"}, {"$", "subscribe"}, {"a", "add worker"}, {"u", "update+deploy"},
-			{"t", "chat"}, {"c", "theme"}, {"i", "about"}, {"r", "refresh"}, {"q", "quit"},
+			{"f", "project"}, {"x", "kill job"}, {"/", "search"}, {"g", "metrics"}, {"m", "mcp"},
+			{"p", "portal"}, {"u", "update+deploy"},
+			{"c", "theme"}, {"i", "about"}, {"r", "refresh"}, {"q", "quit"},
 		}
 		colW := 0
 		for _, it := range items {
@@ -1544,18 +1357,8 @@ func (m model) footer() string {
 		keys = []string{k("r", "refresh"), k("b", "back"), k("q", "quit")}
 	case viewSearch:
 		keys = []string{k("type", "query"), k("⏎", "search"), k("esc", "back")}
-	case viewChat:
-		if m.chatPending != nil {
-			keys = []string{k("y", "accept"), k("n", "decline")}
-		} else if m.chatActive != nil {
-			keys = []string{k("type", "message"), k("⏎", "send"), k("ctrl+d", "hang up"), k("esc", "back")}
-		} else {
-			keys = []string{k("tab", "select node"), k("⏎", "chat"), k("ctrl+r", "rescan"), k("type", "manual dial"), k("esc", "back")}
-		}
 	case viewJoin:
 		keys = []string{k("paste", "join code"), k("⏎", "join"), k("esc", "back")}
-	case viewMenu:
-		keys = []string{k("↑↓", "nav"), k("⏎", "select"), k("b", "back"), k("q", "quit")}
 	default:
 		keys = []string{k("r", "refresh"), k("b", "back"), k("q", "quit")}
 	}

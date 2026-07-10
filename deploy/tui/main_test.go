@@ -53,7 +53,6 @@ func TestKeyDispatchSwitchesViews(t *testing.T) {
 		want view
 	}{
 		{"g", viewMetrics},
-		{"a", viewAction}, // add worker runs an action directly (no menu)
 	}
 	for _, c := range cases {
 		if got := press(base, c.key).view; got != c.want {
@@ -211,5 +210,51 @@ func TestMetricsView(t *testing.T) {
 	out := m.metricsView()
 	if !strings.Contains(out, "CPU") || !strings.Contains(out, "Memory") {
 		t.Errorf("metrics view missing CPU/Memory charts:\n%s", out)
+	}
+}
+
+func TestProjectFilterCyclesAndFiltersJobs(t *testing.T) {
+	m := initialModel()
+	st := clusterState{
+		reach: true,
+		jobs: []jobRow{
+			{name: "etl", projectID: "p1", projectName: "alpha"},
+			{name: "report", projectID: "p2", projectName: "beta"},
+			{name: "sweep", projectID: "p1", projectName: "alpha"},
+		},
+	}
+	nm, _ := m.Update(stateMsg(st))
+	m = nm.(model)
+
+	if got := len(m.visibleJobs()); got != 3 {
+		t.Fatalf("unfiltered: %d jobs, want 3", got)
+	}
+
+	// all → alpha (name order) → beta → all
+	m.cycleProjectFilter()
+	if m.projFilterID != "p1" {
+		t.Fatalf("first cycle: filter = %q, want p1 (alpha)", m.projFilterID)
+	}
+	if got := len(m.visibleJobs()); got != 2 {
+		t.Errorf("alpha: %d jobs, want 2", got)
+	}
+	m.rebuildSel()
+	jobsInSel := 0
+	for _, s := range m.sel {
+		if s.kind == "job" {
+			jobsInSel++
+		}
+	}
+	if jobsInSel != 2 {
+		t.Errorf("sel after filter: %d job rows, want 2", jobsInSel)
+	}
+
+	m.cycleProjectFilter()
+	if m.projFilterID != "p2" {
+		t.Fatalf("second cycle: filter = %q, want p2 (beta)", m.projFilterID)
+	}
+	m.cycleProjectFilter()
+	if m.projFilterID != "" {
+		t.Fatalf("third cycle: filter = %q, want all", m.projFilterID)
 	}
 }

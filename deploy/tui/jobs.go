@@ -15,6 +15,7 @@ type jobRow struct {
 	id, tenant, name, source, conc, egress, updated, timeout string
 	postJobActions                                           string // JSON array, e.g. ["HtmlReport","Chart"]; empty = none
 	artifacts                                                string // artifacts produced across this job's runs — the job's raison d'être
+	projectID, projectName                                   string // owning project — the dashboard filters jobs by it ([f])
 }
 
 // uuidRe matches a canonical UUID. All ids/tenant ids interpolated into psql come from the jobs table
@@ -35,17 +36,20 @@ const querySection = "@@PC-SECTION@@"
 // ~1.5s dashboard refresh, so the batch is what keeps the jobs list feeling live.
 // Returns (rows, jobsErr, migrateWarn).
 func (m model) queryJobs(ctx context.Context) ([]jobRow, string, string) {
-	const base = `"Id", "TenantId", "Name", "MapSourceKind", "ConcurrencyLimit", "AllowNetworkEgress", "UpdatedAt"`
+	const base = `"Id", "TenantId", "Name", "MapSourceKind", "ConcurrencyLimit", "AllowNetworkEgress", "UpdatedAt", "ProjectId"`
 	run := func(sel string) ([]byte, error) {
 		// ON_ERROR_STOP makes psql abort at the first failing -c (surfacing it on stderr) while the
 		// earlier -c results are already printed — so a missing table only costs its own section.
 		// Section order puts the fallible artifact-count query LAST: on an old DB without that table
-		// the jobs list and the migration warning (the signal that explains it) still come through.
+		// the jobs list, the migration warning (the signal that explains it), and the project names
+		// still come through.
 		return m.kubectl(ctx, "-n", ns, "exec", "deploy/placecontext-db", "--",
 			"psql", "-U", "postgres", "-d", "placecontext", "-v", "ON_ERROR_STOP=1", "-At", "-F", "\t",
 			"-c", `SELECT `+sel+` FROM jobs ORDER BY "UpdatedAt" DESC LIMIT 100`,
 			"-c", `SELECT '`+querySection+`'`,
 			"-c", `SELECT coalesce(max("MigrationId"),'') FROM "__EFMigrationsHistory"`,
+			"-c", `SELECT '`+querySection+`'`,
+			"-c", `SELECT DISTINCT j."ProjectId", p."Name" FROM jobs j JOIN projects p ON p."Id" = j."ProjectId"`,
 			"-c", `SELECT '`+querySection+`'`,
 			"-c", `SELECT r."JobId", count(*) FROM job_run_artifacts a JOIN job_runs r ON a."RunId" = r."Id" GROUP BY r."JobId"`)
 	}
@@ -80,11 +84,21 @@ func (m model) queryJobs(ctx context.Context) ([]jobRow, string, string) {
 		applied = strings.TrimSpace(sections[1][0])
 	}
 
+	// Project names, keyed by project id — the dashboard shows and filters jobs by project.
+	projNames := map[string]string{}
+	if len(sections) > 2 {
+		for _, ln := range sections[2] {
+			if f := strings.Split(ln, "\t"); len(f) == 2 {
+				projNames[f[0]] = f[1]
+			}
+		}
+	}
+
 	// Jobs exist to generate artifacts — count what each job has produced so the list leads
 	// with output, not config. Older DBs without the artifacts table just show "-".
 	counts := map[string]string{}
-	if len(sections) > 2 {
-		for _, ln := range sections[2] {
+	if len(sections) > 3 {
+		for _, ln := range sections[3] {
 			if f := strings.Split(ln, "\t"); len(f) == 2 {
 				counts[f[0]] = f[1]
 			}
@@ -94,7 +108,7 @@ func (m model) queryJobs(ctx context.Context) ([]jobRow, string, string) {
 	var rows []jobRow
 	for _, ln := range sections[0] {
 		f := strings.Split(ln, "\t")
-		for len(f) < 9 {
+		for len(f) < 10 {
 			f = append(f, "")
 		}
 		eg := "no"
@@ -105,11 +119,16 @@ func (m model) queryJobs(ctx context.Context) ([]jobRow, string, string) {
 		if len(upd) > 19 {
 			upd = upd[:19]
 		}
-		to := f[7]
+		projID := f[7]
+		projName := projNames[projID]
+		if projName == "" && len(projID) >= 8 {
+			projName = projID[:8] // project row missing — show enough of the id to tell them apart
+		}
+		to := f[8]
 		if to == "" {
 			to = "300"
 		}
-		acts := f[8]
+		acts := f[9]
 		if strings.TrimSpace(acts) == "" {
 			acts = "[]"
 		}
@@ -117,7 +136,11 @@ func (m model) queryJobs(ctx context.Context) ([]jobRow, string, string) {
 		if arts == "" {
 			arts = "-"
 		}
-		rows = append(rows, jobRow{f[0], f[1], f[2], f[3], f[4], eg, upd, to, acts, arts})
+		rows = append(rows, jobRow{
+			id: f[0], tenant: f[1], name: f[2], source: f[3], conc: f[4],
+			egress: eg, updated: upd, timeout: to, postJobActions: acts, artifacts: arts,
+			projectID: projID, projectName: projName,
+		})
 	}
 	return rows, "", migrationWarning(applied)
 }
