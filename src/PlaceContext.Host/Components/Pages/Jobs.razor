@@ -226,40 +226,51 @@ else
     <div class="dcslide-scrim" @onclick="CloseEditor"></div>
     <div class="dcslide" style="width:620px">
         <div class="dcslide-head">
-            <span style="flex:1; font-size:14px; font-weight:600">@(_editJobId.HasValue ? "Edit job" : "New job")</span>
+            <div style="flex:1; min-width:0">
+                <div style="font-size:14px; font-weight:600">@(_editJobId.HasValue ? "Edit job" : "New job")</div>
+                <div style="font-size:11.5px; color:var(--text-3); margin-top:3px">
+                    A job fans its input payloads out as parallel shards and collects a JSON artifact from each.
+                </div>
+            </div>
             <button class="dcslide-x" @onclick="CloseEditor">×</button>
         </div>
-        <div class="dcslide-body" style="overflow-y:auto; max-height:calc(100vh - 80px); display:flex; flex-direction:column; gap:14px">
+        <div class="dcslide-body" style="flex:1; display:flex; flex-direction:column; gap:14px">
 
-            <div>
-                <label style="font-size:12px; color:var(--text-3); display:block; margin-bottom:4px">Name *</label>
-                <input class="dcinput" style="width:100%" @bind="_edName" placeholder="my-job" />
-            </div>
-            <div>
-                <label style="font-size:12px; color:var(--text-3); display:block; margin-bottom:4px">Description</label>
-                <input class="dcinput" style="width:100%" @bind="_edDescription" placeholder="(optional)" />
+            <div style="display:flex; gap:10px">
+                <div class="dcfield" style="flex:1">
+                    <label>Name <span class="req">*</span></label>
+                    <input class="dcinput" @bind="_edName" placeholder="my-job" />
+                </div>
+                <div class="dcfield" style="flex:1.4">
+                    <label>Description</label>
+                    <input class="dcinput" @bind="_edDescription" placeholder="What does this job do? (optional)" />
+                </div>
             </div>
 
-            <div>
-                <label style="font-size:12px; color:var(--text-3); display:block; margin-bottom:6px">Workload source</label>
-                <div style="display:flex; gap:8px; margin-bottom:10px">
-                    <button class="dcbtn @(_edMapSourceKind == "image" ? "primary" : "")"
-                            @onclick="@(() => _edMapSourceKind = "image")">Container image</button>
-                    <button class="dcbtn @(_edMapSourceKind == "code" ? "primary" : "")"
-                            @onclick="@(() => _edMapSourceKind = "code")">Inline code</button>
+            <div class="dcform-section">
+                <div style="display:flex; align-items:center; justify-content:space-between; gap:10px">
+                    <span class="dcform-title">Workload</span>
+                    <div class="dcseg">
+                        <button type="button" class="@(_edMapSourceKind == "image" ? "on" : "")"
+                                @onclick="@(() => _edMapSourceKind = "image")">Container image</button>
+                        <button type="button" class="@(_edMapSourceKind == "code" ? "on" : "")"
+                                @onclick="@(() => _edMapSourceKind = "code")">Inline code</button>
+                    </div>
                 </div>
 
                 @if (_edMapSourceKind == "image")
                 {
-                    <label style="font-size:12px; color:var(--text-3); display:block; margin-bottom:4px">Image *</label>
-                    <input class="dcinput" style="width:100%" @bind="_edMapImage" placeholder="myorg/worker:latest" />
+                    <div class="dcfield">
+                        <label>Image <span class="req">*</span></label>
+                        <input class="dcinput" style="font-family:'Geist Mono',monospace; font-size:12px" @bind="_edMapImage" placeholder="myorg/worker:latest" />
+                    </div>
                 }
                 else
                 {
-                    <div style="display:flex; gap:8px; margin-bottom:8px">
-                        <div style="flex:1">
-                            <label style="font-size:12px; color:var(--text-3); display:block; margin-bottom:4px">Runtime *</label>
-                            <select class="dcinput" style="width:100%" @bind="_edMapRuntimeId">
+                    <div style="display:flex; gap:10px">
+                        <div class="dcfield" style="flex:1">
+                            <label>Runtime <span class="req">*</span></label>
+                            <select class="dcinput" @bind="_edMapRuntimeId">
                                 <option value="">— select —</option>
                                 <option value="node">node</option>
                                 <option value="python">python</option>
@@ -268,139 +279,143 @@ else
                                 <option value="dotnet">.NET (C#)</option>
                             </select>
                         </div>
-                        <div style="flex:1">
-                            <label style="font-size:12px; color:var(--text-3); display:block; margin-bottom:4px">Entrypoint</label>
-                            <input class="dcinput" style="width:100%" @bind="_edMapEntrypoint"
+                        <div class="dcfield" style="flex:1">
+                            <label>Entrypoint</label>
+                            <input class="dcinput" style="font-family:'Geist Mono',monospace; font-size:12px" @bind="_edMapEntrypoint"
                                    placeholder="@DefaultEntrypointFor(_edMapRuntimeId)" />
                         </div>
                     </div>
-                    <label style="font-size:12px; color:var(--text-3); display:block; margin-bottom:4px">Source code *</label>
-                    <textarea class="dcinput" rows="12"
-                              style="width:100%; font-family:'Geist Mono',monospace; font-size:12px; resize:vertical"
-                              @bind="_edMapSource"
-                              placeholder="@SourcePlaceholderFor(_edMapRuntimeId)">
+                    <div class="dcfield">
+                        <label>Source code <span class="req">*</span></label>
+                        <textarea class="dcinput" rows="12"
+                                  style="font-family:'Geist Mono',monospace; font-size:12px; resize:vertical"
+                                  @bind="_edMapSource"
+                                  placeholder="@SourcePlaceholderFor(_edMapRuntimeId)">
+                        </textarea>
+                        <div class="dchint">
+                            Stdin: opaque JSON payload. Print the JSON artifact to <code>stdout</code>.
+                            Dependencies (npm install/pip install) are not supported in this pass — use the image path for dep-heavy jobs.
+                        </div>
+                    </div>
+                }
+            </div>
+
+            <div class="dcform-section">
+                <span class="dcform-title">Input</span>
+                <div class="dcfield">
+                    <label>Input payloads <span class="req">*</span> <span class="code" style="margin-left:5px">one JSON per line — each line becomes a shard</span></label>
+                    <textarea class="dcinput" rows="4"
+                              style="font-family:'Geist Mono',monospace; font-size:12px; resize:vertical"
+                              @bind="_edInputPayloadsRaw"
+                              placeholder="{&quot;key&quot;: &quot;value1&quot;}&#10;{&quot;key&quot;: &quot;value2&quot;}">
                     </textarea>
-                    <div style="font-size:11px; color:var(--text-3); margin-top:4px">
-                        Stdin: opaque JSON payload. Print the JSON artifact to <code>stdout</code>.
-                        Dependencies (npm install/pip install) are not supported in this pass — use the image path for dep-heavy jobs.
+                </div>
+                <div class="dcfield">
+                    <label>Run-form parameters <span class="code" style="margin-left:5px">one per line — name or name|Label</span></label>
+                    <textarea class="dcinput" rows="3"
+                              style="font-family:'Geist Mono',monospace; font-size:12px; resize:vertical"
+                              @bind="_edParametersRaw"
+                              placeholder="customerEmail|Customer email&#10;plan|Plan tier"></textarea>
+                    <div class="dchint">
+                        When set, clicking <strong>Run</strong> opens a form asking for these values (events supply them in the payload) —
+                        so the same job can run on demand with different inputs instead of the payloads above.
                     </div>
-                }
-            </div>
-
-            <div>
-                <label style="font-size:12px; color:var(--text-3); display:block; margin-bottom:4px">
-                    Input payloads (one JSON per line — one shard per line) *
-                </label>
-                <textarea class="dcinput" rows="4"
-                          style="width:100%; font-family:'Geist Mono',monospace; font-size:12px; resize:vertical"
-                          @bind="_edInputPayloadsRaw"
-                          placeholder="{&quot;key&quot;: &quot;value1&quot;}&#10;{&quot;key&quot;: &quot;value2&quot;}">
-                </textarea>
-            </div>
-
-            <div>
-                <label style="font-size:12px; color:var(--text-3); display:block; margin-bottom:4px">
-                    Environment variables (KEY=VALUE, one per line)
-                </label>
-                <textarea class="dcinput" rows="3"
-                          style="width:100%; font-family:'Geist Mono',monospace; font-size:12px; resize:vertical"
-                          @bind="_edMapEnvRaw"
-                          placeholder="MY_KEY=my_value">
-                </textarea>
-            </div>
-
-            @* Vault secrets are injected as env vars at run time (decrypted in-process), on top of the
-               plaintext vars above — names only; values are write-only and managed in the Vault. *@
-            <div style="background:var(--card); border-radius:8px; padding:10px 14px">
-                <div style="display:flex; align-items:baseline; justify-content:space-between; gap:10px; margin-bottom:6px">
-                    <span style="font-size:12px; color:var(--text-3)">Injected at run time (from Vault)</span>
-                    <button type="button" class="dcbtn" style="border:none; background:none; color:var(--accent); padding:0; font-size:12px"
-                            @onclick="@(() => Nav.NavigateTo($"/project/{ProjectId}/secrets"))">manage in Vault →</button>
                 </div>
-                @if (_vaultSecrets is { Count: > 0 })
-                {
-                    <div style="display:flex; flex-wrap:wrap; gap:6px">
-                        @foreach (var s in _vaultSecrets)
-                        {
-                            <span style="font-family:'Geist Mono',monospace; font-size:11.5px; background:var(--bg-2); border:1px solid var(--border); border-radius:6px; padding:2px 8px">@s.Name</span>
-                        }
+            </div>
+
+            <div class="dcform-section">
+                <span class="dcform-title">Environment</span>
+                <div class="dcfield">
+                    <label>Environment variables <span class="code" style="margin-left:5px">KEY=VALUE, one per line</span></label>
+                    <textarea class="dcinput" rows="3"
+                              style="font-family:'Geist Mono',monospace; font-size:12px; resize:vertical"
+                              @bind="_edMapEnvRaw"
+                              placeholder="MY_KEY=my_value">
+                    </textarea>
+                </div>
+
+                @* Vault secrets are injected as env vars at run time (decrypted in-process), on top of the
+                   plaintext vars above — names only; values are write-only and managed in the Vault. *@
+                <div style="background:var(--card); border:1px solid var(--border); border-radius:8px; padding:10px 14px">
+                    <div style="display:flex; align-items:baseline; justify-content:space-between; gap:10px; margin-bottom:6px">
+                        <span style="font-size:12px; color:var(--text-3)">Injected at run time (from Vault)</span>
+                        <button type="button" style="appearance:none; border:none; background:none; color:var(--brand-2); padding:0; font-size:12px; cursor:pointer; font-family:inherit"
+                                @onclick="@(() => Nav.NavigateTo($"/project/{ProjectId}/secrets"))">manage in Vault →</button>
                     </div>
-                    <div style="font-size:11px; color:var(--text-3); margin-top:6px">
-                        These encrypted secrets are added to every run's environment. A plaintext variable above with the same name overrides the vault value.
+                    @if (_vaultSecrets is { Count: > 0 })
+                    {
+                        <div style="display:flex; flex-wrap:wrap; gap:6px">
+                            @foreach (var s in _vaultSecrets)
+                            {
+                                <span style="font-family:'Geist Mono',monospace; font-size:11.5px; background:var(--card-2); border:1px solid var(--border); border-radius:6px; padding:2px 8px">@s.Name</span>
+                            }
+                        </div>
+                        <div class="dchint" style="margin-top:6px">
+                            These encrypted secrets are added to every run's environment. A plaintext variable above with the same name overrides the vault value.
+                        </div>
+                    }
+                    else
+                    {
+                        <div style="font-size:11.5px; color:var(--text-3)">No vault secrets yet — add API keys or passwords in the Vault and they'll be injected here automatically.</div>
+                    }
+                </div>
+            </div>
+
+            <div class="dcform-section">
+                <span class="dcform-title">Execution</span>
+                <div style="display:flex; gap:10px">
+                    <div class="dcfield" style="flex:1">
+                        <label>Concurrency</label>
+                        <input class="dcinput" type="number" min="1" max="32" @bind="_edConcurrency" />
                     </div>
-                }
-                else
-                {
-                    <div style="font-size:11.5px; color:var(--text-3)">No vault secrets yet — add API keys or passwords in the Vault and they'll be injected here automatically.</div>
-                }
-            </div>
-
-            <div style="display:flex; gap:10px">
-                <div style="flex:1">
-                    <label style="font-size:12px; color:var(--text-3); display:block; margin-bottom:4px">Concurrency</label>
-                    <input class="dcinput" type="number" min="1" max="32" style="width:100%" @bind="_edConcurrency" />
+                    <div class="dcfield" style="flex:1">
+                        <label>Success exit codes <span class="code" style="margin-left:5px">comma-separated</span></label>
+                        <input class="dcinput" @bind="_edSuccessCodesRaw" placeholder="0" />
+                    </div>
+                    <div class="dcfield" style="flex:1">
+                        <label>Partial exit codes</label>
+                        <input class="dcinput" @bind="_edPartialCodesRaw" placeholder="" />
+                    </div>
                 </div>
-                <div style="flex:1">
-                    <label style="font-size:12px; color:var(--text-3); display:block; margin-bottom:4px">Success exit codes (comma-separated)</label>
-                    <input class="dcinput" style="width:100%" @bind="_edSuccessCodesRaw" placeholder="0" />
-                </div>
-                <div style="flex:1">
-                    <label style="font-size:12px; color:var(--text-3); display:block; margin-bottom:4px">Partial exit codes</label>
-                    <input class="dcinput" style="width:100%" @bind="_edPartialCodesRaw" placeholder="" />
-                </div>
-            </div>
-
-            <div>
                 <label style="display:flex; align-items:center; gap:8px; font-size:12.5px; color:var(--text-2); cursor:pointer; user-select:none">
                     <input type="checkbox" @bind="_edAllowNetworkEgress"
                            style="width:16px; height:16px; accent-color:var(--brand-2); cursor:pointer" />
                     Allow network egress
-                    <span style="font-size:11px; color:var(--text-3)">(disables --network none sandbox; only enable for jobs that require outbound access)</span>
+                    <span class="dchint">(disables the --network none sandbox; only enable for jobs that require outbound access)</span>
                 </label>
             </div>
 
-            <div>
-                <label style="font-size:12px; color:var(--text-3); display:block; margin-bottom:4px">
-                    Input parameters (one per line — <code>name</code> or <code>name|Label</code>)
-                </label>
-                <textarea class="dcinput" rows="3"
-                          style="width:100%; font-family:'Geist Mono',monospace; font-size:12px; resize:vertical"
-                          @bind="_edParametersRaw"
-                          placeholder="customerEmail|Customer email&#10;plan|Plan tier"></textarea>
-                <div style="font-size:11px; color:var(--text-3); margin-top:4px">
-                    When set, running this job (manually or via an event) prompts for these and passes them as the input payload.
+            <div class="dcform-section">
+                <span class="dcform-title">Outputs</span>
+                <div class="dcfield">
+                    <label>Post-job actions</label>
+                    <div style="display:flex; flex-wrap:wrap; gap:14px; margin-top:2px">
+                        @foreach (var (kind, label) in PostJobActionChoices)
+                        {
+                            <label style="display:flex; align-items:center; gap:6px; font-size:12.5px; cursor:pointer; user-select:none">
+                                <input type="checkbox" checked="@_edPostJobActions.Contains(kind)"
+                                       style="width:15px; height:15px; accent-color:var(--brand-2); cursor:pointer"
+                                       @onchange="@(e => TogglePostJobAction(kind, (bool)e.Value!))" />
+                                @label
+                            </label>
+                        }
+                    </div>
+                    <div class="dchint">
+                        After each run, generate these from the run's artifacts and store them in the object store — they appear as links on the run.
+                    </div>
                 </div>
             </div>
+        </div>
 
-            @* ── Post-job actions ──────────────────────────────────────────────────────────────── *@
-            <div>
-                <label style="font-size:12px; color:var(--text-3); display:block; margin-bottom:4px">Post-job actions</label>
-                <div style="display:flex; flex-wrap:wrap; gap:14px">
-                    @foreach (var (kind, label) in PostJobActionChoices)
-                    {
-                        <label style="display:flex; align-items:center; gap:6px; font-size:12.5px; cursor:pointer">
-                            <input type="checkbox" checked="@_edPostJobActions.Contains(kind)"
-                                   @onchange="@(e => TogglePostJobAction(kind, (bool)e.Value!))" />
-                            @label
-                        </label>
-                    }
-                </div>
-                <div style="font-size:11px; color:var(--text-3); margin-top:4px">
-                    After each run, generate these from the run's artifacts and store them in the object store — they appear as links on the run.
-                </div>
-            </div>
-
+        <div class="dcslide-foot">
             @if (_editorError is not null)
             {
-                <div style="color:var(--bad); font-size:12px; padding:8px; background:var(--bad-bg); border-radius:6px">@_editorError</div>
+                <div style="flex:1; color:var(--bad); font-size:12px; min-width:0">@_editorError</div>
             }
-
-            <div style="display:flex; gap:8px; justify-content:flex-end; padding-top:6px">
-                <button class="dcbtn" @onclick="CloseEditor">Cancel</button>
-                <button class="dcbtn primary" disabled="@_saving" @onclick="SaveJob">
-                    @(_saving ? "Saving…" : "Save")
-                </button>
-            </div>
+            <button class="dcbtn" @onclick="CloseEditor">Cancel</button>
+            <button class="dcbtn primary" disabled="@_saving" @onclick="SaveJob">
+                @(_saving ? "Saving…" : _editJobId.HasValue ? "Save changes" : "Create job")
+            </button>
         </div>
     </div>
 }
@@ -535,33 +550,50 @@ else
 @* ── Run-input modal (prompts for a job's declared parameters) ────────────────────────── *@
 @if (_runPromptJob is not null)
 {
-    <div class="dcslide-scrim" @onclick="@(() => _runPromptJob = null)"></div>
-    <div class="dcslide" style="width:460px">
-        <div class="dcslide-head">
-            <span style="flex:1; font-size:14px; font-weight:600">Run @_runPromptJob.Name</span>
-            <button class="dcslide-x" @onclick="@(() => _runPromptJob = null)">×</button>
-        </div>
-        <div class="dcslide-body" style="display:flex; flex-direction:column; gap:12px">
-            <div style="font-size:12px; color:var(--text-3)">This job needs input before it runs. Values are passed as the run's payload.</div>
-            @foreach (var p in _runPromptJob.Parameters)
-            {
-                <div>
-                    <label style="font-size:12px; color:var(--text-3); display:block; margin-bottom:4px">
-                        @(p.Label ?? p.Name) @(p.Required ? "*" : "")
-                        <span style="font-family:'Geist Mono',monospace; color:var(--text-3)">(@p.Name)</span>
-                    </label>
-                    <input class="dcinput" style="width:100%" value="@GetArg(p.Name)"
-                           @oninput="@(e => SetArg(p.Name, e.Value?.ToString() ?? ""))" />
+    <div class="dcmodal-overlay" @onclick="@(() => _runPromptJob = null)">
+        <div class="dcmodal" style="width:440px" @onclick:stopPropagation="true">
+            <div class="dcmodal-head">
+                <div style="flex:1; min-width:0">
+                    <div style="font-size:14px; font-weight:600">Run @_runPromptJob.Name</div>
+                    <div style="font-size:11.5px; color:var(--text-3); margin-top:3px">
+                        This job takes input — the values below become the run's payload.
+                    </div>
                 </div>
-            }
-            @if (_runPromptError is not null)
-            {
-                <div style="color:var(--bad); font-size:12px">@_runPromptError</div>
-            }
-            <div style="display:flex; gap:8px; justify-content:flex-end">
+                <button class="dcslide-x" @onclick="@(() => _runPromptJob = null)">×</button>
+            </div>
+            <div class="dcmodal-body">
+                @foreach (var (p, i) in _runPromptJob.Parameters.Select((p, i) => (p, i)))
+                {
+                    <div class="dcfield">
+                        <label>
+                            @(p.Label ?? p.Name)
+                            @if (p.Required)
+                            {
+                                <span class="req">*</span>
+                            }
+                            <span class="code" style="margin-left:5px">@p.Name</span>
+                        </label>
+                        @if (i == 0)
+                        {
+                            <input class="dcinput" autofocus value="@GetArg(p.Name)"
+                                   @oninput="@(e => SetArg(p.Name, e.Value?.ToString() ?? ""))" />
+                        }
+                        else
+                        {
+                            <input class="dcinput" value="@GetArg(p.Name)"
+                                   @oninput="@(e => SetArg(p.Name, e.Value?.ToString() ?? ""))" />
+                        }
+                    </div>
+                }
+                @if (_runPromptError is not null)
+                {
+                    <div style="color:var(--bad); font-size:12px; padding:8px 10px; background:var(--bad-bg); border-radius:6px">@_runPromptError</div>
+                }
+            </div>
+            <div class="dcmodal-foot">
                 <button class="dcbtn" @onclick="@(() => _runPromptJob = null)">Cancel</button>
                 <button class="dcbtn primary" disabled="@(_runningJobId == _runPromptJob.Id)" @onclick="SubmitRunPrompt">
-                    @(_runningJobId == _runPromptJob.Id ? "running…" : "Run")
+                    @(_runningJobId == _runPromptJob.Id ? "Running…" : "▶ Run job")
                 </button>
             </div>
         </div>

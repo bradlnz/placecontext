@@ -106,7 +106,37 @@
         .dcslide-head { display:flex; align-items:center; gap:10px; padding:16px 18px; border-bottom:1px solid var(--border); }
         .dcslide-body { padding:18px; overflow-y:auto; }
         .dcslide-x { appearance:none; background:transparent; border:none; color:var(--text-3); font-size:18px; cursor:pointer; line-height:1; }
+        .dcslide-x:hover { color:var(--text); }
         .dcslide-label { font-size:10px; font-weight:600; letter-spacing:.5px; text-transform:uppercase; color:var(--text-3); margin:16px 0 6px; }
+        .dcslide-foot { display:flex; align-items:center; gap:8px; justify-content:flex-end; padding:13px 18px; border-top:1px solid var(--border); background:var(--panel); flex:none; }
+
+        .dcinput { appearance:none; background:var(--card-2); color:var(--text); border:1px solid var(--border); border-radius:7px;
+            padding:7px 10px; font-size:12.5px; font-family:inherit; outline:none; transition:border-color .12s, background .12s; }
+        .dcinput:hover { border-color:var(--border-2); }
+        .dcinput:focus { border-color:var(--brand); background:var(--card); }
+        .dcinput::placeholder { color:var(--text-3); }
+        select.dcinput { cursor:pointer; }
+        textarea.dcinput { line-height:1.55; }
+
+        .dcfield { display:flex; flex-direction:column; gap:5px; min-width:0; }
+        .dcfield > label { font-size:11.5px; font-weight:500; color:var(--text-2); }
+        .dcfield .req { color:var(--bad); }
+        .dcfield .code { font-family:'Geist Mono',monospace; font-size:10.5px; color:var(--text-3); }
+        .dchint { font-size:11px; color:var(--text-3); line-height:1.5; }
+        .dcform-section { border-top:1px solid var(--border); padding-top:14px; display:flex; flex-direction:column; gap:11px; }
+        .dcform-title { font-size:10px; font-weight:700; letter-spacing:.6px; text-transform:uppercase; color:var(--text-3); }
+        .dcseg { display:inline-flex; background:var(--card-2); border:1px solid var(--border); border-radius:8px; padding:3px; gap:2px; }
+        .dcseg button { appearance:none; border:none; background:transparent; color:var(--text-3); font-family:inherit; font-size:12px;
+            font-weight:500; padding:5px 12px; border-radius:6px; cursor:pointer; }
+        .dcseg button:hover { color:var(--text-2); }
+        .dcseg button.on { background:var(--panel); color:var(--text); box-shadow:0 1px 2px rgba(0,0,0,.25); }
+
+        .dcmodal-overlay { position:fixed; inset:0; background:rgba(0,0,0,.5); display:flex; align-items:center; justify-content:center; padding:20px; z-index:50; }
+        .dcmodal { width:480px; max-width:94vw; max-height:86vh; background:var(--panel); border:1px solid var(--border-2); border-radius:14px;
+            box-shadow:0 24px 70px rgba(0,0,0,.55); display:flex; flex-direction:column; overflow:hidden; }
+        .dcmodal-head { display:flex; align-items:flex-start; gap:10px; padding:15px 18px; border-bottom:1px solid var(--border); flex:none; }
+        .dcmodal-body { padding:18px; overflow-y:auto; display:flex; flex-direction:column; gap:13px; }
+        .dcmodal-foot { display:flex; align-items:center; gap:8px; justify-content:flex-end; padding:13px 18px; border-top:1px solid var(--border); background:var(--card); flex:none; }
 
         @@keyframes dcflashkf { 0% { background:var(--brand-bg); } 100% { background:transparent; } }
         .dcflash { animation:dcflashkf 1.6s ease-out; }
