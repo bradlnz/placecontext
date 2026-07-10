@@ -19,6 +19,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -169,7 +170,8 @@ type model struct {
 	runsErr   string   // sticky error for the runs list (e.g. query failed), shown in runsView
 	runLinks  []string // URLs found in the currently-open run detail, openable with [o]/[1-9]
 
-	loading bool // a data fetch (logs/mcp/metrics/search) is in flight → show a loading box
+	loading  bool // a data fetch (logs/mcp/metrics/search) is in flight → show a loading box
+	fetching bool // a dashboard state refresh is in flight → ticks skip re-dispatching
 
 	// encrypted node-to-node chat (see chat.go)
 	chatID      *chatIdentity
@@ -273,8 +275,17 @@ func (m model) fetchState() tea.Cmd {
 		}
 		st.reach = true
 		st.nodes = parseNodes(nb)
-		pb, err := mc.kubectl(ctx, "-n", ns, "get", "pods", "-o", "json")
-		if err == nil {
+
+		// Pods and the jobs/migration DB batch are independent — fetch them concurrently so a
+		// refresh costs one kubectl latency, not the sum of them (each write hits distinct fields).
+		var wg sync.WaitGroup
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			pb, err := mc.kubectl(ctx, "-n", ns, "get", "pods", "-o", "json")
+			if err != nil {
+				return
+			}
 			st.pods = parsePods(pb)
 			for _, p := range st.pods {
 				if strings.HasPrefix(p.Name, "placecontext-db") {
@@ -286,11 +297,14 @@ func (m model) fetchState() tea.Cmd {
 					}
 				}
 			}
-		}
-		// Always query jobs while the cluster is reachable (don't gate on dbUp detection, which can
-		// flicker) so a newly-added job shows up on the next ~1.5s refresh.
-		st.jobs, st.jobsErr = mc.queryJobs(ctx)
-		st.migrateWarn = mc.checkMigrations(ctx)
+		}()
+		go func() {
+			defer wg.Done()
+			// Always query jobs while the cluster is reachable (don't gate on dbUp detection, which
+			// can flicker) so a newly-added job shows up on the next ~1.5s refresh.
+			st.jobs, st.jobsErr, st.migrateWarn = mc.queryJobs(ctx)
+		}()
+		wg.Wait()
 		return stateMsg(st)
 	}
 }
@@ -937,7 +951,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tickMsg:
 		var cmd tea.Cmd
-		if m.view == viewDash {
+		// Skip the refresh while one is already in flight — a slow fetch (kubectl round trips) must
+		// not stack a new subprocess storm every 1.5s tick; the next tick after it lands refreshes.
+		if m.view == viewDash && !m.fetching {
+			m.fetching = true
 			cmd = m.fetchState()
 		}
 		m.flash = "" // flash lives for one tick (~3s)
@@ -1085,6 +1102,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// A completed state fetch always ends any loading state — backstop so the loader can never
 		// freeze on screen (some action paths dispatch fetchState and rely on this to clear it).
 		m.loading = false
+		m.fetching = false
 		m.state = clusterState(msg)
 		m.updated = time.Now()
 		sel := make([]selItem, 0, len(m.state.nodes)+len(m.state.pods)+len(m.state.jobs))

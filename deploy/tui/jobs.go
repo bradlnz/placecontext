@@ -26,34 +26,65 @@ var uuidRe = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[
 
 func validUUID(s string) bool { return uuidRe.MatchString(s) }
 
-func (m model) queryJobs(ctx context.Context) ([]jobRow, string) {
+// querySection separates the batched psql results below; it can never appear in real row data
+// (job names/ids contain no such marker and it occupies a whole line by itself).
+const querySection = "@@PC-SECTION@@"
+
+// queryJobs fetches the jobs list, the applied-migration id, and per-job artifact counts in ONE
+// kubectl exec — each exec is a full API-server round trip (hundreds of ms), and this runs on the
+// ~1.5s dashboard refresh, so the batch is what keeps the jobs list feeling live.
+// Returns (rows, jobsErr, migrateWarn).
+func (m model) queryJobs(ctx context.Context) ([]jobRow, string, string) {
 	const base = `"Id", "TenantId", "Name", "MapSourceKind", "ConcurrencyLimit", "AllowNetworkEgress", "UpdatedAt"`
 	run := func(sel string) ([]byte, error) {
-		q := `SELECT ` + sel + ` FROM jobs ORDER BY "UpdatedAt" DESC LIMIT 100`
+		// ON_ERROR_STOP makes psql abort at the first failing -c (surfacing it on stderr) while the
+		// earlier -c results are already printed — so a missing table only costs its own section.
+		// Section order puts the fallible artifact-count query LAST: on an old DB without that table
+		// the jobs list and the migration warning (the signal that explains it) still come through.
 		return m.kubectl(ctx, "-n", ns, "exec", "deploy/placecontext-db", "--",
-			"psql", "-U", "postgres", "-d", "placecontext", "-At", "-F", "\t", "-c", q)
+			"psql", "-U", "postgres", "-d", "placecontext", "-v", "ON_ERROR_STOP=1", "-At", "-F", "\t",
+			"-c", `SELECT `+sel+` FROM jobs ORDER BY "UpdatedAt" DESC LIMIT 100`,
+			"-c", `SELECT '`+querySection+`'`,
+			"-c", `SELECT coalesce(max("MigrationId"),'') FROM "__EFMigrationsHistory"`,
+			"-c", `SELECT '`+querySection+`'`,
+			"-c", `SELECT r."JobId", count(*) FROM job_run_artifacts a JOIN job_runs r ON a."RunId" = r."Id" GROUP BY r."JobId"`)
 	}
 	// TimeoutSeconds and PostJobActionsJson are newer columns; if the DB is behind the app code
 	// (migration not yet applied) fall back progressively so the jobs list still works — the
-	// migration banner (checkMigrations) tells the user to deploy.
+	// migration banner tells the user to deploy. Only a missing COLUMN retries; a missing
+	// relation (the artifact-counts table on an old DB) keeps the partial output.
 	b, err := run(base + `, "TimeoutSeconds", "PostJobActionsJson"`)
-	if err != nil && strings.Contains(err.Error(), "does not exist") {
+	if err != nil && strings.Contains(err.Error(), "column") && strings.Contains(err.Error(), "does not exist") {
 		b, err = run(base + `, "TimeoutSeconds"`)
-		if err != nil && strings.Contains(err.Error(), "does not exist") {
+		if err != nil && strings.Contains(err.Error(), "column") && strings.Contains(err.Error(), "does not exist") {
 			b, err = run(base) // 7 cols; the row padding below defaults the newer fields
 		}
 	}
-	if err != nil {
-		return nil, "could not query jobs: " + err.Error()
+
+	// Split the batched output into its sections: jobs rows / migration id / artifact counts.
+	sections := [][]string{{}}
+	for _, ln := range strings.Split(strings.TrimSpace(string(b)), "\n") {
+		switch {
+		case ln == querySection:
+			sections = append(sections, []string{})
+		case ln != "":
+			sections[len(sections)-1] = append(sections[len(sections)-1], ln)
+		}
+	}
+	if err != nil && len(sections[0]) == 0 {
+		return nil, "could not query jobs: " + err.Error(), ""
+	}
+
+	applied := ""
+	if len(sections) > 1 && len(sections[1]) > 0 {
+		applied = strings.TrimSpace(sections[1][0])
 	}
 
 	// Jobs exist to generate artifacts — count what each job has produced so the list leads
 	// with output, not config. Older DBs without the artifacts table just show "-".
 	counts := map[string]string{}
-	if cb, cerr := m.kubectl(ctx, "-n", ns, "exec", "deploy/placecontext-db", "--",
-		"psql", "-U", "postgres", "-d", "placecontext", "-At", "-F", "\t", "-c",
-		`SELECT r."JobId", count(*) FROM job_run_artifacts a JOIN job_runs r ON a."RunId" = r."Id" GROUP BY r."JobId"`); cerr == nil {
-		for _, ln := range strings.Split(strings.TrimSpace(string(cb)), "\n") {
+	if len(sections) > 2 {
+		for _, ln := range sections[2] {
 			if f := strings.Split(ln, "\t"); len(f) == 2 {
 				counts[f[0]] = f[1]
 			}
@@ -61,10 +92,7 @@ func (m model) queryJobs(ctx context.Context) ([]jobRow, string) {
 	}
 
 	var rows []jobRow
-	for _, ln := range strings.Split(strings.TrimSpace(string(b)), "\n") {
-		if ln == "" {
-			continue
-		}
+	for _, ln := range sections[0] {
 		f := strings.Split(ln, "\t")
 		for len(f) < 9 {
 			f = append(f, "")
@@ -91,7 +119,7 @@ func (m model) queryJobs(ctx context.Context) ([]jobRow, string) {
 		}
 		rows = append(rows, jobRow{f[0], f[1], f[2], f[3], f[4], eg, upd, to, acts, arts})
 	}
-	return rows, ""
+	return rows, "", migrationWarning(applied)
 }
 
 // expectedMigration is the newest EF migration id in the source tree at TUI build time, stamped via
@@ -99,23 +127,16 @@ func (m model) queryJobs(ctx context.Context) ([]jobRow, string) {
 // which case the migration check is skipped (no false warnings).
 var expectedMigration string
 
-// checkMigrations compares the newest migration applied to the live DB against the one this TUI was
-// built from. A DB that is behind means the deployed app image predates pending migrations and needs
-// (re)deploying — exactly the skew that makes newer columns (e.g. TimeoutSeconds) missing. Returns a
-// human-readable warning, or "" when up to date / not determinable.
-func (m model) checkMigrations(ctx context.Context) string {
-	if expectedMigration == "" {
+// migrationWarning compares the newest migration applied to the live DB (fetched in the queryJobs
+// batch) against the one this TUI was built from. A DB that is behind means the deployed app image
+// predates pending migrations and needs (re)deploying — exactly the skew that makes newer columns
+// (e.g. TimeoutSeconds) missing. Returns a human-readable warning, or "" when up to date / unknown.
+func migrationWarning(applied string) string {
+	if expectedMigration == "" || applied == "" {
 		return ""
 	}
-	b, err := m.kubectl(ctx, "-n", ns, "exec", "deploy/placecontext-db", "--",
-		"psql", "-U", "postgres", "-d", "placecontext", "-At", "-c",
-		`SELECT coalesce(max("MigrationId"),'') FROM "__EFMigrationsHistory"`)
-	if err != nil {
-		return "" // DB unreachable / not initialised — other alerts cover that
-	}
-	applied := strings.TrimSpace(string(b))
 	// Migration ids are timestamp-prefixed, so lexical order == chronological order.
-	if applied != "" && applied < expectedMigration {
+	if applied < expectedMigration {
 		return "DB schema is behind app code (applied " + shortMig(applied) +
 			", expected " + shortMig(expectedMigration) + ") — run `pctl deploy` to apply migrations"
 	}
