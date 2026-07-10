@@ -240,6 +240,12 @@ public sealed class PlaceContextService : IPlaceContextService
     public Task StopProjectContainerAsync(Guid projectId, string containerId, CancellationToken ct = default)
         => _dispatcher.Send(new StopProjectContainerCommand(projectId, containerId), ct);
 
+    public Task DeployContainerFromImageAsync(DeployContainerFromImageCommand command, CancellationToken ct = default)
+        => _dispatcher.Send(command, ct);
+
+    public Task DeployContainerFromGitHubAsync(DeployContainerFromGitHubCommand command, CancellationToken ct = default)
+        => _dispatcher.Send(command, ct);
+
     public Task<IReadOnlyList<RunReportView>> ListRecentRunReportsAsync(int take = 24, CancellationToken ct = default)
         => _dispatcher.Query(new ListRecentRunReportsQuery(take), ct);
 

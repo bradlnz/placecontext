@@ -80,6 +80,15 @@ public sealed class ProjectChartService
         }
     }
 
+    /// <summary>Regenerate one table's stored chart, optionally steered by an instruction.</summary>
+    public async Task RefreshTableAsync(Guid projectId, string tableName, string? instruction, CancellationToken ct = default)
+    {
+        var html = await GenerateChartHtmlAsync(projectId, tableName, instruction, ct);
+        await _charts.UpsertAsync(ProjectChart.Create(projectId, tableName, html, _clock.UtcNow), ct);
+        await _uow.SaveChangesAsync(ct);
+        _log?.LogInformation("Analytics: stored chart for {Table} (project {ProjectId}).", tableName, projectId);
+    }
+
     /// <summary>One chart, returned (not stored): sample the table, ask the LLM, theme the result.</summary>
     public async Task<string> GenerateChartHtmlAsync(Guid projectId, string tableName, string? instruction, CancellationToken ct = default)
     {

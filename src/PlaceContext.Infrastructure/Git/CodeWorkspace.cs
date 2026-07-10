@@ -74,6 +74,26 @@ public sealed class CodeWorkspace : ICodeWorkspace
         return dir;
     }
 
+    /// <summary>Tar a checked-out working tree as a docker build context; `.git` is history, not app.</summary>
+    public async Task<Stream> CreateBuildContextAsync(string path, CancellationToken ct = default)
+    {
+        if (!Directory.Exists(path)) throw new DirectoryNotFoundException($"No working tree at {path}.");
+        var buffer = new MemoryStream();
+        await using (var writer = new System.Formats.Tar.TarWriter(buffer, leaveOpen: true))
+        {
+            var root = Path.GetFullPath(path);
+            foreach (var file in Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories))
+            {
+                ct.ThrowIfCancellationRequested();
+                var rel = Path.GetRelativePath(root, file).Replace('\\', '/');
+                if (rel.StartsWith(".git/", StringComparison.Ordinal)) continue;
+                await writer.WriteEntryAsync(file, rel, ct);
+            }
+        }
+        buffer.Position = 0;
+        return buffer;
+    }
+
     private static string Sanitize(string s) => string.Concat(s.Where(c => char.IsLetterOrDigit(c) || c is '-' or '_' or '.'));
 
     private static async Task<(int Exit, string Stderr)> RunAsync(string workingDir, CancellationToken ct, params string[] args)

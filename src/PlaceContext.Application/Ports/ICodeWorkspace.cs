@@ -14,4 +14,7 @@ public interface ICodeWorkspace
     /// returns the local path. The adapter must refuse entries that escape the target directory.
     /// </summary>
     Task<string> ExtractArchiveAsync(string tenantSlug, string name, Stream zipStream, CancellationToken ct = default);
+
+    /// <summary>A checked-out working tree as a tar build context (`.git` excluded), for image builds.</summary>
+    Task<Stream> CreateBuildContextAsync(string path, CancellationToken ct = default);
 }

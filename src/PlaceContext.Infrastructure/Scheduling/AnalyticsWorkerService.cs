@@ -32,30 +32,32 @@ public sealed class AnalyticsWorkerService : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        await foreach (var (tenant, projectId, opId) in _queue.Reader.ReadAllAsync(stoppingToken))
+        await foreach (var req in _queue.Reader.ReadAllAsync(stoppingToken))
         {
-            CurrentTenant.Set(tenant);
-            _ops.MarkRunning(opId);
+            CurrentTenant.Set(req.Tenant);
+            _ops.MarkRunning(req.OpId);
             try
             {
-                _log.LogInformation("Analytics: refreshing charts for project {ProjectId} ({Tenant})…",
-                    projectId, tenant.Slug);
+                _log.LogInformation("Analytics: refreshing {Scope} for project {ProjectId} ({Tenant})…",
+                    req.TableName ?? "all tables", req.ProjectId, req.Tenant.Slug);
                 await using var scope = _scopes.CreateAsyncScope();
                 var charts = scope.ServiceProvider.GetRequiredService<ProjectChartService>();
-                await charts.RefreshProjectAsync(projectId, stoppingToken);
-                _log.LogInformation("Analytics: charts refreshed for project {ProjectId}.", projectId);
-                _ops.MarkDone(opId, "charts updated");
+                if (req.TableName is null)
+                    await charts.RefreshProjectAsync(req.ProjectId, stoppingToken);
+                else
+                    await charts.RefreshTableAsync(req.ProjectId, req.TableName, req.Instruction, stoppingToken);
+                _ops.MarkDone(req.OpId, req.TableName is null ? "charts updated" : $"{req.TableName} redrawn");
             }
-            catch (OperationCanceledException) { _ops.MarkFailed(opId, "cancelled — host shutting down"); throw; }
+            catch (OperationCanceledException) { _ops.MarkFailed(req.OpId, "cancelled — host shutting down"); throw; }
             catch (Exception ex)
             {
-                _log.LogError(ex, "Analytics: chart refresh failed for project {ProjectId}.", projectId);
-                _ops.MarkFailed(opId, ex.Message);
+                _log.LogError(ex, "Analytics: chart refresh failed for project {ProjectId}.", req.ProjectId);
+                _ops.MarkFailed(req.OpId, ex.Message);
             }
             finally
             {
                 CurrentTenant.Clear();
-                _queue.MarkDone(projectId);
+                _queue.MarkDone(req.ProjectId, req.TableName);
             }
         }
     }

@@ -1,6 +1,7 @@
 @page "/onboarding"
 @inject PortalUiState Ui
 @inject NavigationManager Nav
+@inject PlaceContext.Host.Demo.BrisbaneDemoSeeder Seeder
 
 <PageTitle>PlaceContext — Onboarding</PageTitle>
 
@@ -55,6 +56,27 @@
         </div>
     </div>
 
+    @* ── Demo workspace: everything populated in one click ─────────────────────────────── *@
+    <div class="dccard" style="padding:16px 20px; margin-bottom:14px">
+        <div style="display:flex; align-items:center; gap:12px">
+            <div style="flex:1">
+                <div style="font-size:13px; font-weight:600; margin-bottom:4px">Try it with the demo — Brisbane property feasibility</div>
+                <div style="font-size:12px; color:var(--text-3); line-height:1.6">
+                    Seeds a full project: suburb market data, candidate development sites, and costed feasibility
+                    scenarios in the Data tab, decisions and a work board, project context — and queues the
+                    Analytics charts. Safe to click twice (it finds the existing demo).
+                </div>
+            </div>
+            <button class="dcbtn primary" style="flex:none" disabled="@_seeding" @onclick="SeedDemoAsync">
+                @(_seeding ? "Seeding…" : "🌱 Seed demo")
+            </button>
+        </div>
+        @if (_seedError is not null)
+        {
+            <div style="font-size:12px; color:var(--bad); margin-top:8px">@_seedError</div>
+        }
+    </div>
+
     <div class="dccard" style="padding:16px 20px">
         <div style="font-size:13px; font-weight:600; margin-bottom:8px">How the authentication works</div>
         <ol style="margin:0; padding-left:18px; font-size:12.5px; color:var(--text-2); line-height:1.7">
@@ -71,5 +93,23 @@
     private string McpUrl => $"{Nav.BaseUri}mcp";
     private const string StepNum = "flex:none; width:24px; height:24px; border-radius:50%; background:var(--brand); color:#fff; display:inline-flex; align-items:center; justify-content:center; font-size:12px; font-weight:700";
 
+    private bool _seeding;
+    private string? _seedError;
+
     protected override void OnInitialized() => Ui.Set("Onboarding", "connect an agent and set up your workspace");
+
+    private async Task SeedDemoAsync()
+    {
+        _seeding = true;
+        _seedError = null;
+        try
+        {
+            var tenant = PlaceContext.Infrastructure.Tenancy.CurrentTenant.Current;
+            if (tenant is null) { _seedError = "No tenant resolved — sign in again."; return; }
+            var (projectId, _) = await Seeder.SeedAsync(tenant);
+            Nav.NavigateTo($"/project/{projectId}");
+        }
+        catch (Exception ex) { _seedError = ex.Message; }
+        finally { _seeding = false; }
+    }
 }

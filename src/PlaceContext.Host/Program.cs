@@ -37,6 +37,7 @@ PlaceContext.Host.Auth.OAuthKeys.Init(builder.Configuration["PlaceContext:OAuth:
 builder.Services.AddRazorComponents().AddInteractiveServerComponents();
 builder.Services.AddCascadingAuthenticationState();
 builder.Services.AddScoped<PlaceContext.Host.PortalUiState>();
+builder.Services.AddScoped<PlaceContext.Host.Demo.BrisbaneDemoSeeder>();
 
 // Share the Data Protection key ring across replicas (persisted in Postgres) and pin the application
 // name, so the auth cookie one replica issues can be decrypted by any other — otherwise a token sign-in
@@ -256,6 +257,29 @@ app.Map("/runtime/{projectId:guid}/{port:int}/{**path}", async (HttpContext ctx,
     await resp.Content.CopyToAsync(ctx.Response.Body, ctx.RequestAborted);
     return Results.Empty;
 });
+
+// ---- Demo seed ----
+// Seed the Brisbane property feasibility demo into the resolved tenant: project + Data tables +
+// decisions + work items + context, with the analytics sweep queued. Same gate as /ingest
+// (shared key, disabled when unconfigured); the Onboarding page has the same action as a button.
+app.MapPost("/seed/brisbane-demo", async (HttpContext ctx, IConfiguration config,
+    PlaceContext.Host.Demo.BrisbaneDemoSeeder seeder) =>
+{
+    var configuredKey = config["PlaceContext:Ingest:Key"];
+    if (string.IsNullOrWhiteSpace(configuredKey))
+        return Results.StatusCode(StatusCodes.Status404NotFound);
+    var presented = ctx.Request.Headers["X-Ingest-Key"].ToString();
+    if (!System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(
+            System.Text.Encoding.UTF8.GetBytes(presented),
+            System.Text.Encoding.UTF8.GetBytes(configuredKey)))
+        return Results.Unauthorized();
+
+    var tenant = PlaceContext.Infrastructure.Tenancy.CurrentTenant.Current;
+    if (tenant is null) return Results.BadRequest(new { error = "no tenant resolved" });
+
+    var (projectId, already) = await seeder.SeedAsync(tenant, ctx.RequestAborted);
+    return Results.Ok(new { projectId, alreadySeeded = already, project = $"/project/{projectId}" });
+}).AllowAnonymous();
 
 // ---- Inbound SMS gateway ----
 // A delivery provider (Twilio-style form post) or any bridge (JSON) POSTs inbound texts here; the

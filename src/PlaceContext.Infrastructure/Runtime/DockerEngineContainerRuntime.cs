@@ -103,6 +103,111 @@ public sealed class DockerEngineContainerRuntime : IContainerRuntime
             resp.EnsureSuccessStatusCode();
     }
 
+    public async Task DeployImageAsync(Guid projectId, ContainerRunSpec spec, CancellationToken ct = default)
+    {
+        await PullImageAsync(spec.Image, ct);
+        await ReplaceAndRunAsync(projectId, spec, ct);
+    }
+
+    public async Task DeployBuildAsync(Guid projectId, ContainerRunSpec spec, Stream buildContextTar, CancellationToken ct = default)
+    {
+        // Build inside the runtime daemon: the tar (repo working tree with a Dockerfile) is the context.
+        using var content = new StreamContent(buildContextTar);
+        content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/x-tar");
+        var client = Client();
+        client.Timeout = TimeSpan.FromMinutes(20); // real builds pull base layers + compile
+        using var resp = await client.PostAsync(
+            $"{_endpoint}/build?t={Uri.EscapeDataString(spec.Image)}", content, ct);
+        var log = await resp.Content.ReadAsStringAsync(ct);
+        if (!resp.IsSuccessStatusCode || log.Contains("\"errorDetail\""))
+            throw new InvalidOperationException("Image build failed: " + BuildError(log));
+        await ReplaceAndRunAsync(projectId, spec, ct);
+    }
+
+    private async Task PullImageAsync(string image, CancellationToken ct)
+    {
+        var client = Client();
+        client.Timeout = TimeSpan.FromMinutes(10);
+        using var resp = await client.PostAsync(
+            $"{_endpoint}/images/create?fromImage={Uri.EscapeDataString(image)}", content: null, ct);
+        var log = await resp.Content.ReadAsStringAsync(ct); // progress stream; read to completion
+        if (!resp.IsSuccessStatusCode || log.Contains("\"errorDetail\""))
+            throw new InvalidOperationException($"Image pull failed for '{image}': " + BuildError(log));
+    }
+
+    // Replace-or-create semantics: redeploying the same app name is the common loop. A same-name
+    // container is force-removed ONLY when it carries this project's label.
+    private async Task ReplaceAndRunAsync(Guid projectId, ContainerRunSpec spec, CancellationToken ct)
+    {
+        var name = SanitizeName(spec.Name);
+        var client = Client();
+
+        using (var existing = await client.GetAsync($"{_endpoint}/containers/{name}/json", ct))
+        {
+            if (existing.IsSuccessStatusCode)
+            {
+                await EnsureOwnedAsync(projectId, name, ct); // throws when another project holds the name
+                using var rm = await client.DeleteAsync($"{_endpoint}/containers/{name}?force=true", ct);
+                rm.EnsureSuccessStatusCode();
+            }
+        }
+
+        var env = spec.Env.Select(kv => $"{kv.Key}={kv.Value}").ToArray();
+        object hostConfig = spec.ContainerPort is { } cport
+            ? new
+            {
+                RestartPolicy = new { Name = "unless-stopped" },
+                PortBindings = new Dictionary<string, object[]>
+                {
+                    [$"{cport}/tcp"] = new object[] { new { HostPort = (spec.PublishPort ?? cport).ToString() } },
+                },
+            }
+            : new { RestartPolicy = new { Name = "unless-stopped" } };
+        var create = new
+        {
+            Image = spec.Image,
+            Env = env,
+            Labels = new Dictionary<string, string> { [ProjectLabel] = projectId.ToString("D") },
+            ExposedPorts = spec.ContainerPort is { } cp
+                ? new Dictionary<string, object> { [$"{cp}/tcp"] = new { } }
+                : null,
+            HostConfig = hostConfig,
+        };
+
+        using var created = await client.PostAsync(
+            $"{_endpoint}/containers/create?name={Uri.EscapeDataString(name)}",
+            new StringContent(JsonSerializer.Serialize(create, JsonOpts), Encoding.UTF8, "application/json"), ct);
+        if (!created.IsSuccessStatusCode)
+            throw new InvalidOperationException($"Container create failed: {await created.Content.ReadAsStringAsync(ct)}");
+        using var createdDoc = JsonDocument.Parse(await created.Content.ReadAsStringAsync(ct));
+        var id = createdDoc.RootElement.GetProperty("Id").GetString()!;
+
+        using var started = await client.PostAsync($"{_endpoint}/containers/{id}/start", content: null, ct);
+        if (!started.IsSuccessStatusCode && started.StatusCode != System.Net.HttpStatusCode.NotModified)
+            throw new InvalidOperationException($"Container start failed: {await started.Content.ReadAsStringAsync(ct)}");
+    }
+
+    private static readonly JsonSerializerOptions JsonOpts = new() { DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull };
+
+    internal static string SanitizeName(string name)
+    {
+        var clean = new string(name.Trim().Select(c => char.IsLetterOrDigit(c) || c is '-' or '_' or '.' ? c : '-').ToArray()).Trim('-', '.');
+        if (clean.Length == 0) throw new ArgumentException("Container name is required.", nameof(name));
+        return clean.Length > 60 ? clean[..60] : clean;
+    }
+
+    // The Docker progress stream reports failures as {"errorDetail":{"message":…}} lines.
+    private static string BuildError(string progressLog)
+    {
+        var idx = progressLog.LastIndexOf("\"errorDetail\"", StringComparison.Ordinal);
+        if (idx < 0) return Tail(progressLog);
+        var tail = progressLog[idx..];
+        var m = System.Text.RegularExpressions.Regex.Match(tail, "\"message\"\\s*:\\s*\"([^\"]*)\"");
+        return m.Success ? m.Groups[1].Value : Tail(tail);
+    }
+
+    private static string Tail(string s) => s.Length > 400 ? s[^400..] : s;
+
     // Inspect the container and require the requesting project's label — the second isolation wall
     // (the first is the list filter): a guessed/leaked container id from another project 404s here.
     private async Task EnsureOwnedAsync(Guid projectId, string containerId, CancellationToken ct)

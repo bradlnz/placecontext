@@ -38,6 +38,12 @@ public class ProjectRuntimeTests
 
         public Task StopAsync(Guid projectId, string containerId, CancellationToken ct = default)
         { SawProject = projectId; Stopped = containerId; return Task.CompletedTask; }
+
+        public Task DeployImageAsync(Guid projectId, ContainerRunSpec spec, CancellationToken ct = default)
+            => Task.CompletedTask;
+
+        public Task DeployBuildAsync(Guid projectId, ContainerRunSpec spec, Stream buildContextTar, CancellationToken ct = default)
+            => Task.CompletedTask;
     }
 
     private static async Task<(InMemoryProjectRepository projects, Project project)> WorldAsync()

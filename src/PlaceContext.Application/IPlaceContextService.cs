@@ -95,6 +95,8 @@ public interface IPlaceContextService
     Task<string> GetContainerLogsAsync(Guid projectId, string containerId, int tail = 200, CancellationToken ct = default);
     Task RestartProjectContainerAsync(Guid projectId, string containerId, CancellationToken ct = default);
     Task StopProjectContainerAsync(Guid projectId, string containerId, CancellationToken ct = default);
+    Task DeployContainerFromImageAsync(DeployContainerFromImageCommand command, CancellationToken ct = default);
+    Task DeployContainerFromGitHubAsync(DeployContainerFromGitHubCommand command, CancellationToken ct = default);
     Task<IReadOnlyList<RunReportView>> ListRecentRunReportsAsync(int take = 24, CancellationToken ct = default);
     Task<JobView?> GetJobAsync(Guid jobId, CancellationToken ct = default);
     Task<JobView> UploadJobCodeAsync(UploadJobCodeCommand command, CancellationToken ct = default);
