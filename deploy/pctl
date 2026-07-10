@@ -23,8 +23,15 @@ PCTL_AGENTS="${PCTL_AGENTS:-2}"                         # dev worker nodes
 PCTL_SERVERS="${PCTL_SERVERS:-1}"                       # dev server nodes
 PCTL_DB_CONTAINERS="${PCTL_DB_CONTAINERS:-placecontext-db devcontext-db}"  # dev docker pg to clean
 
-# Resolve repo root (this script lives in <root>/deploy).
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# Resolve repo root (this script lives in <root>/deploy). Follow symlinks first so
+# `ln -s <root>/deploy/pctl /usr/local/bin/pctl` still lands on the real tree.
+SELF="${BASH_SOURCE[0]}"
+while [ -L "$SELF" ]; do
+  link="$(readlink "$SELF")"
+  case "$link" in /*) SELF="$link";; *) SELF="$(dirname "$SELF")/$link";; esac
+done
+SELF="$(cd "$(dirname "$SELF")" && pwd)/$(basename "$SELF")"
+ROOT="$(cd "$(dirname "$SELF")/.." && pwd)"
 cd "$ROOT"
 K3S_DIR="deploy/k3s"
 
@@ -1420,13 +1427,18 @@ cmd_url() {
 # Launch the reactive Go TUI dashboard (builds it on first run, or when the source is newer —
 # e.g. right after `pctl update` pulled new TUI code).
 cmd_tui() {
-  local bin="deploy/tui/pctl-tui"
-  if [ ! -x "$bin" ] || [ -n "$(find deploy/tui -name '*.go' -newer "$bin" 2>/dev/null)" ]; then
+  local bin="$ROOT/deploy/tui/pctl-tui"
+  if [ ! -d "$ROOT/deploy/tui" ]; then
+    # pctl was copied out of its tree (e.g. straight into /usr/local/bin): use a pctl-tui
+    # installed alongside it instead of building from source.
+    bin="$(command -v pctl-tui || true)"
+    [ -n "$bin" ] || die "pctl-tui not found — copy deploy/tui/pctl-tui next to pctl, or symlink pctl instead: ln -s <tree>/deploy/pctl /usr/local/bin/pctl"
+  elif [ ! -x "$bin" ] || [ -n "$(find "$ROOT/deploy/tui" -name '*.go' -newer "$bin" 2>/dev/null)" ]; then
     have go || die "Go toolchain not found — install Go, then: make -C deploy/tui"
     say "Building the TUI…"
-    ( cd deploy/tui && CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o pctl-tui . ) || die "TUI build failed."
+    ( cd "$ROOT/deploy/tui" && CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o pctl-tui . ) || die "TUI build failed."
   fi
-  PCTL_BIN="$ROOT/deploy/pctl" exec "$bin"
+  PCTL_BIN="$SELF" exec "$bin"
 }
 
 # ── help ─────────────────────────────────────────────────────────────────────────────────────────
