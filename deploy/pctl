@@ -1160,19 +1160,24 @@ update_from_release() {
 cmd_release_apply() {
   local ver=""; [ -f "$ROOT/VERSION" ] && ver="$(tr -d '[:space:]' < "$ROOT/VERSION")"
   say "Rolling ${ver:-current} into the cluster…"
-  if have k3s && [ -d /etc/rancher/k3s ]; then
-    KUBECTL="k3s kubectl"
-    image_import_k3s
-  elif have k3d && dev_cluster_exists; then
+  # Prefer the k3d dev cluster when one exists — a dev box can have the k3s binary installed
+  # too, and the k3s path needs root; only take it when this machine actually serves k3s.
+  if have k3d && dev_cluster_exists; then
     dev_cluster_start
     use_dev_kubeconfig
     dev_wait_api
     cmd_image_import
+  elif have k3s && [ -d /etc/rancher/k3s ]; then
+    KUBECTL="k3s kubectl"
+    image_import_k3s
   else
     warn "no cluster on this machine — run ./install.sh (dev) or 'sudo ./deploy/pctl server up' (prod) first."
     return 0
   fi
   cmd_deploy
+  # Same-tag images don't change the pod spec, so an apply alone never rolls the pods — force it.
+  kube -n "$PCTL_NAMESPACE" rollout restart deploy/placecontext >/dev/null 2>&1 || true
+  kube -n "$PCTL_NAMESPACE" rollout status deploy/placecontext --timeout=300s || true
 }
 
 cmd_update() {
