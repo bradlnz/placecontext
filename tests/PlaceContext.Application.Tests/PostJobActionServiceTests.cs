@@ -90,6 +90,69 @@ public class PostJobActionServiceTests
         Assert.Contains("shard outcomes", chart);  // rejected the prose, used the fallback
     }
 
+    [Fact]
+    public async Task Html_returned_by_the_job_is_stored_as_an_artifact_without_any_action_configured()
+    {
+        var mapSpec = new MapSpec("img", new[] { "{}" }, new Dictionary<string, string>());
+        var job = Job.Create(Guid.NewGuid(), "html-job", null, mapSpec, null, 1,
+            new ExitCodePolicy(new[] { 0 }, Array.Empty<int>()), T0); // NO post-job actions
+        var run = JobRun.Start(job.Id, job.ProjectId, T0, WorkloadSnapshot.From(mapSpec, null, 1));
+        run.Complete(new[]
+        {
+            new ShardResult(0, 0, WorkloadOutcome.Succeeded, "<!doctype html><html><body><h1>hi</h1></body></html>", "ok"),
+        }, null, T0.AddSeconds(2));
+
+        var store = new FakeStore();
+        var links = new FakeLinks();
+        await new PostJobActionService(store, links, new FakeUow(), new FakeClock()).RunAsync(job, run);
+
+        var obj = Assert.Single(store.Objects, o => o.Key.EndsWith("shard-0.html"));
+        Assert.Contains("<h1>hi</h1>", Encoding.UTF8.GetString(obj.Content));
+        Assert.Equal(PostJobActionKind.HtmlOutput, Assert.Single(links.Links).Kind);
+    }
+
+    [Fact]
+    public async Task Json_artifacts_are_not_captured_as_html_even_when_they_contain_markup()
+    {
+        var (job, run) = Sample(); // JSON shard artifact, no actions
+        var store = new FakeStore();
+        await new PostJobActionService(store, new FakeLinks(), new FakeUow(), new FakeClock()).RunAsync(job, run);
+        Assert.Empty(store.Objects);
+
+        // JSON that carries an HTML snippet inside a string value stays JSON.
+        var mapSpec = new MapSpec("img", new[] { "{}" }, new Dictionary<string, string>());
+        var job2 = Job.Create(Guid.NewGuid(), "j", null, mapSpec, null, 1,
+            new ExitCodePolicy(new[] { 0 }, Array.Empty<int>()), T0);
+        var run2 = JobRun.Start(job2.Id, job2.ProjectId, T0, WorkloadSnapshot.From(mapSpec, null, 1));
+        run2.Complete(new[]
+        {
+            new ShardResult(0, 0, WorkloadOutcome.Succeeded, "{\"html\":\"<div>x</div>\"}", "ok"),
+        }, null, T0.AddSeconds(2));
+        var store2 = new FakeStore();
+        await new PostJobActionService(store2, new FakeLinks(), new FakeUow(), new FakeClock()).RunAsync(job2, run2);
+        Assert.Empty(store2.Objects);
+    }
+
+    [Fact]
+    public async Task Emitted_html_files_are_stored_per_shard_so_names_never_collide()
+    {
+        var mapSpec = new MapSpec("img", new[] { "{}", "{}" }, new Dictionary<string, string>());
+        var job = Job.Create(Guid.NewGuid(), "html-files", null, mapSpec, null, 1,
+            new ExitCodePolicy(new[] { 0 }, Array.Empty<int>()), T0);
+        var run = JobRun.Start(job.Id, job.ProjectId, T0, WorkloadSnapshot.From(mapSpec, null, 1));
+        run.Complete(new[]
+        {
+            new ShardResult(0, 0, WorkloadOutcome.Succeeded, "{}", "ok", new[] { new RunArtifact("page.html", "<h1>a</h1>") }),
+            new ShardResult(1, 0, WorkloadOutcome.Succeeded, "{}", "ok", new[] { new RunArtifact("page.html", "<h1>b</h1>") }),
+        }, null, T0.AddSeconds(2));
+
+        var store = new FakeStore();
+        await new PostJobActionService(store, new FakeLinks(), new FakeUow(), new FakeClock()).RunAsync(job, run);
+
+        Assert.Single(store.Objects, o => o.Key.EndsWith("out/0/page.html"));
+        Assert.Single(store.Objects, o => o.Key.EndsWith("out/1/page.html"));
+    }
+
     // ── fakes ───────────────────────────────────────────────────────────────────────────────────────
     private sealed class FakeLlm(string response) : ILlmGateway
     {
@@ -118,7 +181,12 @@ public class PostJobActionServiceTests
 
     private sealed class FakeLinks : IRunArtifactLinkRepository
     {
-        public Task AddAsync(RunArtifactLink link, CancellationToken ct = default) => Task.CompletedTask;
+        public List<RunArtifactLink> Links { get; } = new();
+        public Task AddAsync(RunArtifactLink link, CancellationToken ct = default)
+        {
+            Links.Add(link);
+            return Task.CompletedTask;
+        }
         public Task<IReadOnlyList<RunArtifactLink>> ListForRunAsync(Guid runId, CancellationToken ct = default)
             => Task.FromResult<IReadOnlyList<RunArtifactLink>>(Array.Empty<RunArtifactLink>());
         public Task<RunArtifactLink?> GetByIdAsync(Guid id, CancellationToken ct = default)

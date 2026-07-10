@@ -35,15 +35,25 @@ public sealed class PostJobActionService
 
     public async Task RunAsync(Job job, JobRun run, CancellationToken ct = default)
     {
-        if (job.PostJobActions.Count == 0) return;
         if (!_store.IsEnabled)
         {
-            _log?.LogWarning("Post-job actions configured for job {JobId} but the object store is disabled — skipping.", job.Id);
+            if (job.PostJobActions.Count > 0)
+                _log?.LogWarning("Post-job actions configured for job {JobId} but the object store is disabled — skipping.", job.Id);
             return;
         }
 
         var bucket = _store.ReportsBucket;
         var added = false;
+
+        // HTML the job itself returned is always captured — no configuration needed.
+        try
+        {
+            added |= await StoreJobHtmlOutputsAsync(job, run, bucket, ct);
+        }
+        catch (Exception ex)
+        {
+            _log?.LogWarning(ex, "Capturing job HTML outputs failed for run {RunId} (job {JobId}).", run.Id, job.Id);
+        }
 
         foreach (var action in job.PostJobActions)
         {
@@ -141,6 +151,46 @@ public sealed class PostJobActionService
         if (style is null) return file;
         return file with { Content = Encoding.UTF8.GetBytes(style(Encoding.UTF8.GetString(file.Content))) };
     }
+
+    // HTML returned by the job itself — a shard/reduce stdout artifact that is an HTML document, or an
+    // emitted .html output file — becomes a stored, openable artifact without any action configured.
+    // Emitted files go under out/ so they can never collide with action outputs (report.html, chart.html).
+    private async Task<bool> StoreJobHtmlOutputsAsync(Job job, JobRun run, string bucket, CancellationToken ct)
+    {
+        var added = false;
+
+        async Task StoreHtmlAsync(string fileName, string content, string title) =>
+            added |= await StoreAsync(job, run, PostJobActionKind.HtmlOutput,
+                new PostJobArtifacts.BuiltFile(fileName, Encoding.UTF8.GetBytes(content),
+                    "text/html; charset=utf-8", title), bucket, ct);
+
+        foreach (var shard in run.ShardResults)
+        {
+            if (shard.Artifact is { } a && IsHtmlDocument(a))
+                await StoreHtmlAsync($"shard-{shard.Index}.html", a, $"Shard {shard.Index} HTML output");
+            foreach (var f in shard.Artifacts.Where(IsHtmlFile))
+                await StoreHtmlAsync($"out/{shard.Index}/{f.Name}", f.Content, f.Name);
+        }
+
+        if (run.ReduceResult is { } reduce)
+        {
+            if (reduce.Artifact is { } r && IsHtmlDocument(r))
+                await StoreHtmlAsync("reduce.html", r, "Reduce HTML output");
+            foreach (var f in reduce.Artifacts.Where(IsHtmlFile))
+                await StoreHtmlAsync($"out/reduce/{f.Name}", f.Content, f.Name);
+        }
+
+        return added;
+    }
+
+    private static bool IsHtmlFile(RunArtifact f) =>
+        f.Name.EndsWith(".html", StringComparison.OrdinalIgnoreCase) ||
+        f.Name.EndsWith(".htm", StringComparison.OrdinalIgnoreCase);
+
+    // The whole artifact must BE an HTML document — a JSON artifact that merely contains markup in a
+    // string value stays JSON.
+    private static bool IsHtmlDocument(string s) =>
+        s.TrimStart().StartsWith("<", StringComparison.Ordinal) && LlmHtml.LooksLikeHtml(s);
 
     // The job's primary data: the reduce artifact when present (final aggregate), else the shard artifacts.
     private static string PrimaryData(JobRun run)

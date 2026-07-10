@@ -17,4 +17,8 @@ public enum PostJobActionKind
 
     /// <summary>Each named output file from the run, written to the store as-is for download.</summary>
     RawBundle,
+
+    /// <summary>HTML the job itself returned (an HTML stdout artifact or an emitted .html file),
+    /// captured automatically — HTML is meant to be opened, not read as an escaped string.</summary>
+    HtmlOutput,
 }
