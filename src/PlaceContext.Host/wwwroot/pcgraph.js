@@ -12,8 +12,8 @@
 
   function colors() {
     return {
-      brand: cssVar('--brand', '#8b7cff'),
-      brand2: cssVar('--brand-2', '#a99bff'),
+      brand: cssVar('--brand', '#0f766e'),
+      brand2: cssVar('--brand-2', '#2dd4bf'),
       node: cssVar('--text-2', '#98a2ad'),
       label: cssVar('--text-2', '#98a2ad'),
       link: cssVar('--border-2', '#2a323c'),

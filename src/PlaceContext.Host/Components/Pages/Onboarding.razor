@@ -8,7 +8,10 @@
 <div style="padding:24px 24px 40px; max-width:880px; margin:0 auto">
     <div style="margin-bottom:20px">
         <h2 style="font-size:15px; font-weight:600; margin:0 0 5px">Get started</h2>
-        <span style="font-size:12.5px; color:var(--text-3)">Connect an AI agent to this workspace and give it the context it needs.</span>
+        <span style="font-size:12.5px; color:var(--text-3)">
+            PlaceContext gives your AI agents a durable home for project context — and a job runner to do real work.
+            Four steps and you're productive.
+        </span>
     </div>
 
     <!-- Step 1: connect agent over MCP -->
@@ -17,42 +20,79 @@
             <span style="@StepNum">1</span>
             <div>
                 <div style="font-size:13.5px; font-weight:600">Connect your agent over MCP</div>
-                <div style="font-size:11.5px; color:var(--text-3)">Authenticates with OAuth — scoped to this workspace only.</div>
+                <div style="font-size:11.5px; color:var(--text-3)">Works with any MCP client — Claude Code, Claude Desktop, Cursor, or your own agent.</div>
             </div>
         </div>
         <div style="padding:16px 18px">
             <div style="font-size:10.5px; font-weight:600; letter-spacing:.5px; color:var(--text-3); text-transform:uppercase; margin-bottom:7px">Your MCP endpoint</div>
             <code style="display:block; font-family:'Geist Mono',monospace; font-size:13px; color:var(--text); background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:11px 13px; overflow:auto; margin-bottom:14px">@McpUrl</code>
-            <div style="font-size:12px; font-weight:600; margin-bottom:6px">Add it to Claude Code</div>
+            <div style="font-size:12px; font-weight:600; margin-bottom:6px">Claude Code (one command)</div>
             <code style="display:block; font-family:'Geist Mono',monospace; font-size:12.5px; color:var(--text); background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:11px 13px; white-space:pre-wrap">claude mcp add --transport http placecontext @McpUrl</code>
             <div style="font-size:12px; color:var(--text-2); margin-top:11px; line-height:1.6">
-                On first use the agent opens a browser to <strong>sign in to PlaceContext</strong> (the same login you used here)
-                and authorize access. It then receives a token scoped to <strong>@Host</strong> and can call the tools and prompts.
+                The first tool call opens a browser to <strong>sign in to PlaceContext</strong> (the same login you used here)
+                and authorize access. The agent receives a token scoped to <strong>@Host</strong>, and it renews automatically —
+                you won't be asked again while the agent stays active. Other MCP clients: point them at the endpoint above
+                with transport <code>http</code> (Streamable HTTP); OAuth is discovered automatically.
             </div>
         </div>
     </div>
 
     <!-- Step 2: bring in projects -->
     <div class="dccard" style="padding:0; overflow:hidden; margin-bottom:14px">
-        <div style="display:flex; align-items:center; gap:11px; padding:15px 18px">
+        <div style="display:flex; align-items:center; gap:11px; padding:15px 18px; border-bottom:1px solid var(--border)">
             <span style="@StepNum">2</span>
             <div style="flex:1">
                 <div style="font-size:13.5px; font-weight:600">Add a project</div>
-                <div style="font-size:11.5px; color:var(--text-3)">Import a repo from GitHub, or let the agent register one with <code>create_project</code>.</div>
+                <div style="font-size:11.5px; color:var(--text-3)">A project is the unit everything hangs off: context, jobs, data, analytics.</div>
             </div>
             <button class="dcbtn primary" @onclick="@(() => Nav.NavigateTo("/import"))">Import from GitHub</button>
         </div>
+        <div style="padding:14px 18px; font-size:12px; color:var(--text-2); line-height:1.7">
+            Two ways:
+            <ul style="margin:6px 0 0; padding-left:18px">
+                <li><strong>Import from GitHub</strong> — pulls the repo, backfills history, and seeds context from its docs.</li>
+                <li><strong>Let the agent do it</strong> — say <em>"onboard this project into PlaceContext"</em>; the
+                    <code>onboard</code> tool registers the repo, imports its git history, seeds context from
+                    README/AGENTS/CLAUDE docs, and scaffolds a local skill for the agent.</li>
+            </ul>
+        </div>
     </div>
 
-    <!-- Step 3: set the rules -->
+    <!-- Step 3: teach the agent the loop -->
     <div class="dccard" style="padding:0; overflow:hidden; margin-bottom:14px">
-        <div style="display:flex; align-items:center; gap:11px; padding:15px 18px">
+        <div style="display:flex; align-items:center; gap:11px; padding:15px 18px; border-bottom:1px solid var(--border)">
             <span style="@StepNum">3</span>
-            <div style="flex:1">
-                <div style="font-size:13.5px; font-weight:600">Set your requirements</div>
-                <div style="font-size:11.5px; color:var(--text-3)">The standards the review &amp; skill prompts hold the agent to.</div>
+            <div>
+                <div style="font-size:13.5px; font-weight:600">Teach the agent the loop</div>
+                <div style="font-size:11.5px; color:var(--text-3)">Context in, decisions recorded, work queued — so nothing lives only in a chat scrollback.</div>
             </div>
-            <button class="dcbtn" @onclick="@(() => Nav.NavigateTo("/requirements"))">Define requirements</button>
+        </div>
+        <div style="padding:14px 18px; font-size:12px; color:var(--text-2); line-height:1.7">
+            Ask the agent to call <code>get_context</code> at the start of a session, <code>record_activity</code> after
+            changes, and <code>add_decision</code> when a direction is chosen. For background work, have it call
+            <code>setup_hermes</code> once — that installs a playbook skill teaching the full job cycle:
+            author job code → <code>upload_job_code</code> → <code>run_job</code> → fetch artifacts, plus schedules,
+            event triggers, and multi-step <code>run_job_chain</code> pipelines.
+        </div>
+    </div>
+
+    <!-- Step 4: run something -->
+    <div class="dccard" style="padding:0; overflow:hidden; margin-bottom:14px">
+        <div style="display:flex; align-items:center; gap:11px; padding:15px 18px; border-bottom:1px solid var(--border)">
+            <span style="@StepNum">4</span>
+            <div>
+                <div style="font-size:13.5px; font-weight:600">Run your first job</div>
+                <div style="font-size:11.5px; color:var(--text-3)">Jobs run as sandboxed containers and produce artifacts — reports, charts, CSVs, HTML.</div>
+            </div>
+        </div>
+        <div style="padding:14px 18px; font-size:12px; color:var(--text-2); line-height:1.7">
+            Open a project's <strong>Jobs</strong> tab → <strong>+ New job</strong>, paste a script (Python, Node, Go,
+            Ruby, or C#) that reads JSON from stdin and prints JSON to stdout, and click <strong>Run</strong>. Declare
+            input parameters and Run opens a form, so the same job runs on demand with different values. Results land in
+            the run history; HTML output and post-job reports/charts are stored as clickable artifacts. Watch progress
+            from the bell in the header — runs keep going when you navigate away. Then explore
+            <strong>Data</strong> (each project's own SQL tables), <strong>Analytics</strong> (auto-generated charts),
+            the <strong>Wiki</strong>, and <strong>Events</strong> (react to <code>job.completed</code> and your own event types).
         </div>
     </div>
 
@@ -60,11 +100,11 @@
     <div class="dccard" style="padding:16px 20px; margin-bottom:14px">
         <div style="display:flex; align-items:center; gap:12px">
             <div style="flex:1">
-                <div style="font-size:13px; font-weight:600; margin-bottom:4px">Try it with the demo — Brisbane property feasibility</div>
+                <div style="font-size:13px; font-weight:600; margin-bottom:4px">Or skip ahead — seed the demo workspace</div>
                 <div style="font-size:12px; color:var(--text-3); line-height:1.6">
-                    Seeds a full project: suburb market data, candidate development sites, and costed feasibility
-                    scenarios in the Data tab, decisions and a work board, project context — and queues the
-                    Analytics charts. Safe to click twice (it finds the existing demo).
+                    Brisbane property feasibility: a full project with suburb market data, candidate development sites,
+                    costed scenarios in the Data tab, decisions, a work board, project context — and Analytics charts
+                    queued. Safe to click twice (it finds the existing demo).
                 </div>
             </div>
             <button class="dcbtn primary" style="flex:none" disabled="@_seeding" @onclick="SeedDemoAsync">
@@ -83,7 +123,7 @@
             <li>The agent calls the endpoint with no token and gets a <code>401</code> pointing to this workspace's OAuth server.</li>
             <li>It runs OAuth 2.1 (auth code + PKCE); you sign in and consent in the browser.</li>
             <li>It receives a tenant-scoped access token and sends it as a bearer on every MCP call.</li>
-            <li>The server rejects any token whose tenant doesn't match this subdomain.</li>
+            <li>Tokens renew silently via refresh-token rotation; the server rejects any token whose tenant doesn't match this subdomain.</li>
         </ol>
     </div>
 </div>
