@@ -36,6 +36,7 @@ public static class DependencyInjection
         services.AddScoped<IAuthService, Auth.AuthService>();
         services.AddScoped<IMembershipService, Auth.MembershipService>();
         services.AddScoped<IOAuthClientStore, Persistence.EfOAuthClientStore>();
+        services.AddScoped<IOAuthRefreshTokenStore, Persistence.EfOAuthRefreshTokenStore>();
 
         // EF Core code-first store. The DbContext is the request-scoped unit of work.
         var connectionString = configuration.GetSection("PlaceContext")["ConnectionString"]

@@ -6,7 +6,6 @@ using PlaceContext.Application.Ports;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Http.Extensions;
-using Microsoft.AspNetCore.Mvc;
 using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
 
@@ -48,7 +47,7 @@ public static class OAuthServer
                 ["registration_endpoint"] = $"{b}/connect/register",
                 ["jwks_uri"] = $"{b}/.well-known/jwks.json",
                 ["response_types_supported"] = new[] { "code" },
-                ["grant_types_supported"] = new[] { "authorization_code" },
+                ["grant_types_supported"] = new[] { "authorization_code", "refresh_token" },
                 ["code_challenge_methods_supported"] = new[] { "S256" },
                 ["token_endpoint_auth_methods_supported"] = new[] { "none" },
                 ["scopes_supported"] = new[] { "mcp" },
@@ -71,7 +70,7 @@ public static class OAuthServer
                 ["client_id"] = client.ClientId,
                 ["redirect_uris"] = client.RedirectUris,
                 ["token_endpoint_auth_method"] = "none",
-                ["grant_types"] = new[] { "authorization_code" },
+                ["grant_types"] = new[] { "authorization_code", "refresh_token" },
                 ["response_types"] = new[] { "code" },
             }, statusCode: 201);
         }).AllowAnonymous();
@@ -110,33 +109,53 @@ public static class OAuthServer
             return Results.Redirect(loc);
         }).AllowAnonymous();
 
-        // Token — exchanges code + PKCE verifier for a tenant-scoped JWT access token.
-        app.MapPost("/connect/token", ([FromForm] string grant_type, [FromForm] string code,
-            [FromForm] string redirect_uri, [FromForm] string client_id, [FromForm] string code_verifier,
-            HttpContext ctx, OAuthStore store) =>
+        // Token — authorization_code (code + PKCE verifier) or refresh_token (auto-renew). Both return
+        // a tenant-scoped JWT access token plus a rotated refresh token, so MCP clients renew for as
+        // long as they stay active — no hourly browser round-trip.
+        app.MapPost("/connect/token", async (HttpContext ctx, OAuthStore store, IOAuthRefreshTokenStore refreshTokens) =>
         {
-            if (grant_type != "authorization_code")
-                return Results.BadRequest(new { error = "unsupported_grant_type" });
+            var form = await ctx.Request.ReadFormAsync(ctx.RequestAborted);
+            string F(string key) => form.TryGetValue(key, out var v) ? v.ToString() : "";
 
-            var ac = store.TakeCode(code, DateTimeOffset.UtcNow);
-            if (ac is null || ac.ClientId != client_id || ac.RedirectUri != redirect_uri)
-                return Results.BadRequest(new { error = "invalid_grant" });
-            if (!VerifyPkce(code_verifier, ac.CodeChallenge))
-                return Results.BadRequest(new { error = "invalid_grant", error_description = "PKCE verification failed" });
-
-            return Results.Json(new Dictionary<string, object?>
+            switch (F("grant_type"))
             {
-                ["access_token"] = IssueToken(BaseUrl(ctx), ac),
-                ["token_type"] = "Bearer",
-                ["expires_in"] = 3600,
-                ["scope"] = ac.Scope,
-            });
+                case "authorization_code":
+                {
+                    var ac = store.TakeCode(F("code"), DateTimeOffset.UtcNow);
+                    if (ac is null || ac.ClientId != F("client_id") || ac.RedirectUri != F("redirect_uri"))
+                        return Results.BadRequest(new { error = "invalid_grant" });
+                    if (!VerifyPkce(F("code_verifier"), ac.CodeChallenge))
+                        return Results.BadRequest(new { error = "invalid_grant", error_description = "PKCE verification failed" });
+
+                    var grant = await refreshTokens.IssueAsync(ac.ClientId, ac.UserId, ac.TenantId, ac.Role, ac.Scope, ctx.RequestAborted);
+                    return TokenResponse(BaseUrl(ctx), grant);
+                }
+                case "refresh_token":
+                {
+                    var grant = await refreshTokens.RotateAsync(F("refresh_token"), F("client_id"), ctx.RequestAborted);
+                    if (grant is null)
+                        return Results.BadRequest(new { error = "invalid_grant", error_description = "Refresh token is expired, revoked, or already used." });
+                    return TokenResponse(BaseUrl(ctx), grant);
+                }
+                default:
+                    return Results.BadRequest(new { error = "unsupported_grant_type" });
+            }
         }).AllowAnonymous().DisableAntiforgery();
     }
 
     private static string BaseUrl(HttpContext ctx) => $"{ctx.Request.Scheme}://{ctx.Request.Host}";
 
-    private static string IssueToken(string issuer, AuthCode ac)
+    private static IResult TokenResponse(string issuer, OAuthRefreshGrant grant) =>
+        Results.Json(new Dictionary<string, object?>
+        {
+            ["access_token"] = IssueToken(issuer, grant),
+            ["token_type"] = "Bearer",
+            ["expires_in"] = 3600,
+            ["refresh_token"] = grant.Token,
+            ["scope"] = grant.Scope,
+        });
+
+    private static string IssueToken(string issuer, OAuthRefreshGrant grant)
     {
         var descriptor = new SecurityTokenDescriptor
         {
@@ -146,10 +165,10 @@ public static class OAuthServer
             SigningCredentials = OAuthKeys.SigningCredentials,
             Claims = new Dictionary<string, object>
             {
-                ["sub"] = ac.UserId.ToString(),
-                ["tenant"] = ac.TenantId.ToString(),
-                ["role"] = ac.Role,
-                ["scope"] = ac.Scope,
+                ["sub"] = grant.UserId.ToString(),
+                ["tenant"] = grant.TenantId.ToString(),
+                ["role"] = grant.Role,
+                ["scope"] = grant.Scope,
             },
         };
         return new JsonWebTokenHandler().CreateToken(descriptor);
