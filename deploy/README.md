@@ -4,13 +4,12 @@ One CLI for the whole cluster lifecycle, on a laptop or across a fleet.
 
 ```
 deploy/
-  install.sh      ← one-command installer: deps + global `placecontext` cmd + first-run setup
+  install.sh      ← one-command installer: deps + first-run cluster bring-up
   pctl            ← the engine (bash): all orchestration logic, idempotent
   tui/            ← reactive Go TUI dashboard (Bubble Tea), wraps the engine
-  k3s/            ← Kubernetes manifests (Postgres + PlaceContext Host + Ingress)
+  k3s/            ← Kubernetes manifests (Postgres + MinIO + Ollama + Host + Ingress)
   headscale/      ← self-hosted WireGuard mesh control plane (driven by `pctl mesh`)
-  terraform/      ← IaC to provision the Headscale mesh control droplet on DigitalOcean
-  selfhost.sh     ← deprecated shim → forwards to `pctl server up` / `pctl agent join`
+  terraform/      ← IaC to provision the Headscale mesh control droplet
 ```
 
 ## Install (one command)
@@ -19,32 +18,28 @@ deploy/
 # local dev (k3d on this machine):
 ./deploy/install.sh
 
-# production server (real k3s, activation enforced):
-sudo ./deploy/install.sh --prod --activation-key <KEY>
+# production master (real k3s):
+sudo ./deploy/install.sh --prod
 ```
 
-It installs the dependencies it can (k3d, kubectl → `~/.local/bin`), installs a global
-**`placecontext`** command (and `pctl`), then on this first run brings the cluster up,
-applies your activation key, and configures **autostart on boot** (a systemd *user*
-service runs `k3d cluster start` for dev; prod k3s already auto-starts via its own
-service). Afterwards just type **`placecontext`** anywhere to open the dashboard.
+It installs the dependencies it can (Docker, kubectl, k3d → `~/.local/bin`), brings the
+cluster up, and configures autostart on boot. Packaged releases carry the container image
+as a tarball and a prebuilt TUI — no registry access, no Go, no .NET needed on the node.
 
 ## Dashboard (TUI)
 
-`placecontext` (or `pctl tui`) opens a reactive full-screen dashboard:
+`./deploy/pctl tui` opens a reactive full-screen dashboard: cluster topology, live
+node/pod/job tables, run history with per-shard artifacts, MCP call log (`m`),
+metrics graphs (`g`), search (`s`), logs (`l`), join-a-cluster (`j`), portal (`p`).
 
-- **3D cluster topology** on the main page — control-plane + workers in a rotating ring,
-  pods linked to their node by lines, everything labelled. `←→↑↓` rotate · `+/-` zoom ·
-  `space` spin · `v` switch to the interactive list.
-- **List view** (`v`) — selectable nodes + pods + jobs; `⏎` logs/detail, `x` kill
-  (with an "are you sure?" gate), `a` add node.
-- **MCP calls** (`m`) — recent tool calls from `tool_calls`.
-- **Portal** (`p`) — opens the portal signed-in. **Brain** (`z`) — 3D dependency view.
+```bash
+make -C deploy/tui            # → deploy/tui/pctl-tui (static binary)
+make -C deploy/tui install    # → ~/.local/bin/pctl-tui
+```
 
 ## Local dev — a real 1-server + 2-agent cluster on one machine
 
-Uses [k3d](https://k3d.io) (k3s-in-Docker), so you get a genuine multi-node cluster
-without VMs. Activation enforcement is **off** for dev.
+Uses [k3d](https://k3d.io) (k3s-in-Docker): a genuine multi-node cluster without VMs.
 
 ```bash
 ./deploy/pctl dev up      # clean dev Docker, create cluster, import image, deploy
@@ -55,36 +50,42 @@ without VMs. Activation enforcement is **off** for dev.
 
 Portal + MCP: <http://localhost:7700/> (MCP at `/mcp`).
 
-### Reactive dashboard (TUI)
+## Production — k3s across machines, joined over Tailscale
 
 ```bash
-./deploy/pctl tui         # builds the binary on first run, then launches it
-# or build a static binary directly:
-make -C deploy/tui            # → deploy/tui/pctl-tui
-make -C deploy/tui install    # → ~/.local/bin/pctl-tui
-make -C deploy/tui fleet      # cross-compiled static binaries → deploy/tui/dist/
+# on the master (installs a systemd service; uses your saved Tailscale OAuth client):
+sudo ./deploy/pctl server up
+
+# print a one-line join code for new workers:
+sudo ./deploy/pctl join-code
+
+# on each worker (any Linux box, any network — nodes mesh over Tailscale):
+sudo ./deploy/pctl join <CODE>
 ```
 
-Full-screen, auto-refreshing: PlaceContext banner, health line, live node/pod tables,
-and keys `[u]`p `[d]`own `[r]`efresh `[l]`ogs `[q]`uit. It shells out to `pctl` for
-actions (single source of truth) and polls `kubectl` for the live view.
+Nodes connect over [Tailscale](https://tailscale.com) (`pctl ts-oauth` saves the OAuth
+client once; every join mints its own key) or a self-hosted
+[Headscale](https://headscale.net) mesh (`pctl mesh`). No port-forwarding, no static IPs.
 
-## Production — k3s across multiple machines
+## Releases & upgrades
 
-Real k3s with genuine separate nodes. Activation enforcement is **on**.
+CI publishes self-contained packages per platform on every `v*` tag
+(`.github/workflows/release.yml`): `pctl package` output — engine + TUI + manifests +
+the image tarball.
 
 ```bash
-# on the server machine (installs a systemd service):
-sudo ./deploy/pctl server up --activation-key <KEY> [--image <IMG>]
-
-# it prints the join command — run that on each worker machine:
-sudo ./deploy/pctl agent join --server-url https://<server-ip>:6443 --node-token <TOKEN>
+./deploy/pctl update             # git checkout: fast-forward pull
+./deploy/pctl update --deploy    # …and rebuild + roll into the cluster
+# packaged (non-git) installs: the same command fetches the latest GitHub release,
+# lays it over the install, and (--deploy) rolls the new image in.
+./deploy/pctl version            # what's installed
 ```
 
 ## Prereqs
 
-`pctl doctor` checks them. Dev needs `docker`, `k3d`, `kubectl` (+ `go` to build the TUI);
-prod nodes need `curl` (k3s is installed for you). Put `~/.local/bin` on your `PATH`.
+`pctl doctor` checks them. Dev needs `docker`, `k3d`, `kubectl` (+ `go` to build the TUI
+from source); prod nodes need only `curl` (k3s is installed for you). Put `~/.local/bin`
+on your `PATH`.
 
 ## Config (environment overrides)
 
@@ -96,3 +97,4 @@ prod nodes need `curl` (k3s is installed for you). Put `~/.local/bin` on your `P
 | `PCTL_AGENTS` | `2` | dev worker nodes |
 | `PCTL_IMAGE` | `ghcr.io/bradlnz/placecontext:local` | container image ref |
 | `PCTL_IMAGE_TAR` | `deploy/placecontext-local.tar` | image tarball to import |
+| `PCTL_REPO` | `bradlnz/placecontext` | GitHub repo used for release updates |
