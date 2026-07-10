@@ -39,12 +39,15 @@ public sealed class TriggerSchedulerService : BackgroundService
     private static readonly TimeSpan OrphanGrace = TimeSpan.FromHours(1);
 
     private readonly IServiceScopeFactory _scopes;
+    private readonly Operations.OperationCenter _opCenter;
     private readonly ILogger<TriggerSchedulerService> _log;
     private readonly string _instanceId = $"{Environment.MachineName}:{Guid.NewGuid():N}";
 
-    public TriggerSchedulerService(IServiceScopeFactory scopes, ILogger<TriggerSchedulerService> log)
+    public TriggerSchedulerService(IServiceScopeFactory scopes, Operations.OperationCenter opCenter,
+        ILogger<TriggerSchedulerService> log)
     {
         _scopes = scopes;
+        _opCenter = opCenter;
         _log = log;
     }
 
@@ -130,8 +133,27 @@ public sealed class TriggerSchedulerService : BackgroundService
                     try
                     {
                         await using var scope = _scopes.CreateAsyncScope();
-                        var dispatcher = scope.ServiceProvider.GetRequiredService<IDispatcher>();
-                        await dispatcher.Send(new RunJobCommand(run.JobId, run.Payload), ct);
+
+                        // Surface this run in the notifications bell (Track/Mark* — the external-worker
+                        // shape, like the analytics sweep) so trigger-fired and TUI-queued runs update
+                        // the pane live, exactly like a portal-started run.
+                        var job = await scope.ServiceProvider.GetRequiredService<Domain.Repositories.IJobRepository>()
+                            .GetByIdAsync(run.JobId, ct);
+                        var op = _opCenter.Track(tenant, job?.ProjectId,
+                            $"Run job — {job?.Name ?? "job"} · {run.TriggerName}",
+                            job is null ? null : $"/project/{job.ProjectId}/jobs");
+                        _opCenter.MarkRunning(op.Id);
+                        try
+                        {
+                            var dispatcher = scope.ServiceProvider.GetRequiredService<IDispatcher>();
+                            var result = await dispatcher.Send(new RunJobCommand(run.JobId, run.Payload), ct);
+                            _opCenter.MarkDone(op.Id, $"run finished — {result.Status}");
+                        }
+                        catch (Exception ex)
+                        {
+                            _opCenter.MarkFailed(op.Id, ex.Message);
+                            throw;
+                        }
                         _log.LogInformation("Trigger '{Trigger}' ran job {JobId} for tenant {Slug}.",
                             run.TriggerName, run.JobId, tenant.Slug);
                     }
