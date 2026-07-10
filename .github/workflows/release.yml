@@ -1,0 +1,45 @@
+name: Release
+
+# Tag a version (git tag v0.2.0 && git push --tags) and this builds the self-contained
+# operator packages — pctl + TUI + manifests + the container image as a tarball — for every
+# supported platform, and publishes them on the GitHub release. Installed nodes then upgrade
+# with `pctl update --deploy` (packaged installs pull exactly these assets).
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    name: Build release packages
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # pctl package stamps the version via `git describe --tags`
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: deploy/tui/go.mod
+
+      # qemu + binfmt so the linux/arm64 image cross-builds on the amd64 runner.
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Package linux/amd64
+        run: ./deploy/pctl package --os linux --arch amd64
+
+      - name: Package linux/arm64
+        run: ./deploy/pctl package --os linux --arch arm64
+
+      - name: Package darwin/arm64 (Apple Silicon; carries the linux image for the Docker VM)
+        run: ./deploy/pctl package --os darwin --arch arm64
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.tar.gz
+          generate_release_notes: true

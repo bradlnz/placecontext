@@ -1098,6 +1098,10 @@ no source tree, and no build step needed. Joining this machine to an existing
 cluster instead: run the TUI and press [j], then paste the master's join code.
 README
 
+  # Stamp the package version — `pctl version` reads it, and `pctl update` compares it against
+  # the latest GitHub release to know whether an installed (non-git) node is behind.
+  printf '%s\n' "$ver" > "$stage/VERSION"
+
   say "Compressing…"
   tar -C dist -czf "dist/$name.tar.gz" "$name"
   rm -rf "$stage"
@@ -1107,11 +1111,79 @@ README
 # ── update (pull the latest source from git) ───────────────────────────────────────────────────────
 # Fast-forwards the repo at ROOT to its upstream. Pull only by default; --deploy also rebuilds the
 # image and rolls it out, bringing the dev cluster up first if it isn't running. Used by the TUI's [u] key.
+# The GitHub repo releases are published from — override for forks.
+PCTL_REPO="${PCTL_REPO:-bradlnz/placecontext}"
+
+# Update a packaged (non-git) install from the latest GitHub release: compare the stamped VERSION,
+# download the matching platform tarball, lay it over ROOT, then optionally roll the new image out.
+update_from_release() {
+  local do_deploy="$1"
+  have curl || die "curl is required to update from releases."
+  local current="" latest os arch name url tmp src
+  [ -f "$ROOT/VERSION" ] && current="$(tr -d '[:space:]' < "$ROOT/VERSION")"
+
+  say "Checking the latest release of ${PCTL_REPO}…"
+  latest="$(curl -fsSL "https://api.github.com/repos/${PCTL_REPO}/releases/latest" 2>/dev/null \
+    | sed -n 's/.*"tag_name"[: ]*"\([^"]*\)".*/\1/p')"
+  [ -n "$latest" ] || die "could not resolve the latest release of ${PCTL_REPO} (offline? no releases yet?)"
+  if [ "$latest" = "$current" ]; then
+    ok "Already on the latest release ($current)."
+    return 0
+  fi
+
+  os="$(uname -s | tr '[:upper:]' '[:lower:]')"
+  arch="$(uname -m)"; [ "$arch" = x86_64 ] && arch=amd64; [ "$arch" = aarch64 ] && arch=arm64
+  name="placecontext-${latest}-${os}-${arch}.tar.gz"
+  url="https://github.com/${PCTL_REPO}/releases/download/${latest}/${name}"
+  tmp="$(mktemp -d)"
+  say "Downloading ${name}…"
+  curl -fL --progress-bar "$url" -o "$tmp/pkg.tar.gz" || { rm -rf "$tmp"; die "download failed: $url"; }
+  tar -xzf "$tmp/pkg.tar.gz" -C "$tmp" || { rm -rf "$tmp"; die "could not extract the package."; }
+  src="$(find "$tmp" -maxdepth 1 -mindepth 1 -type d | head -1)"
+  [ -n "$src" ] || { rm -rf "$tmp"; die "unexpected package layout."; }
+
+  say "Installing ${latest} over ${ROOT}…"
+  cp -a "$src"/. "$ROOT"/
+  rm -rf "$tmp"
+  ok "Updated ${current:-?} → $latest."
+
+  if [ "$do_deploy" = 1 ]; then
+    # Re-exec the NEW engine so the roll-out runs the code we just installed.
+    exec "$ROOT/deploy/pctl" release-apply
+  else
+    warn "Run '$ROOT/deploy/pctl release-apply' to roll the new image into the cluster."
+  fi
+}
+
+# Roll the currently-installed release into whatever cluster this machine runs: the bundled image
+# tarball is imported (k3s prod or k3d dev) and the manifests re-applied.
+cmd_release_apply() {
+  local ver=""; [ -f "$ROOT/VERSION" ] && ver="$(tr -d '[:space:]' < "$ROOT/VERSION")"
+  say "Rolling ${ver:-current} into the cluster…"
+  if have k3s && [ -d /etc/rancher/k3s ]; then
+    KUBECTL="k3s kubectl"
+    image_import_k3s
+  elif have k3d && dev_cluster_exists; then
+    dev_cluster_start
+    use_dev_kubeconfig
+    dev_wait_api
+    cmd_image_import
+  else
+    warn "no cluster on this machine — run ./install.sh (dev) or 'sudo ./deploy/pctl server up' (prod) first."
+    return 0
+  fi
+  cmd_deploy
+}
+
 cmd_update() {
   local do_deploy=0
   while [ $# -gt 0 ]; do case "$1" in --deploy) do_deploy=1; shift;; *) die "update: unknown arg $1";; esac; done
+  # Packaged installs (no git checkout) update from GitHub releases instead of git.
+  if [ ! -d .git ]; then
+    update_from_release "$do_deploy"
+    return
+  fi
   have git || die "git is required to update."
-  [ -d .git ] || die "not a git repository: $ROOT"
   local before after branch
   branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo '?')"
   before="$(git rev-parse HEAD 2>/dev/null || echo '')"
@@ -1585,7 +1657,9 @@ ${C_BOLD}ANYWHERE${C_RESET}
   build [--tag TAG]      Build the container image and export it to the tarball
   deploy [--image IMG] [--context CTX]
                          Apply the manifests to the current (or given) kube context
-  update [--deploy]      Pull the latest source from git (fast-forward); --deploy also rebuilds + rolls out (starts the dev cluster if needed)
+  update [--deploy]      Git checkout: pull + optionally rebuild/roll out. Packaged install: fetch
+                         the latest GitHub release, lay it over this install, and (--deploy) roll it in
+  release-apply          Import the bundled image into the local cluster (k3s or k3d) and re-deploy
   package [--no-image] [--arch amd64|arm64] [--os linux|darwin]
                          Build a self-contained release tarball (pctl + TUI + manifests + image)
                          in dist/; --arch/--os cross-build for the target machine (a darwin
@@ -1652,6 +1726,7 @@ main() {
     build)        cmd_build "$@";;
     deploy)       cmd_deploy "$@";;
     update)       cmd_update "$@";;
+    release-apply) cmd_release_apply "$@";;
     package)      cmd_package "$@";;
     status)       cmd_status "$@";;
     logs)         cmd_logs "$@";;
@@ -1663,7 +1738,9 @@ main() {
     setup)        cmd_setup "$@";;
     doctor)       cmd_doctor "$@";;
     help|-h|--help) cmd_help;;
-    version|--version) echo "pctl 0.1.0";;
+    version|--version)
+      if [ -f "$ROOT/VERSION" ]; then echo "pctl $(tr -d '[:space:]' < "$ROOT/VERSION")"
+      else echo "pctl $(git -C "$ROOT" describe --tags --always 2>/dev/null || echo dev)"; fi;;
     *) warn "unknown command: $cmd"; echo; cmd_help; exit 2;;
   esac
 }
