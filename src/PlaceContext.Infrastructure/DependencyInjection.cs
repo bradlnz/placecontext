@@ -146,10 +146,6 @@ public static class DependencyInjection
         // configured, deterministic signals otherwise) and queues "what to do next" as work items.
         services.AddHostedService<Scheduling.ProjectAgentSchedulerService>();
 
-        // The DinD application runtime (portal Runtime tab). The adapter self-disables when no
-        // endpoint is configured, so no Null implementation is needed.
-        services.AddSingleton<IContainerRuntime, Runtime.DockerEngineContainerRuntime>();
-
         // Background portal operations (the notifications-pane ledger) + the analytics chart sweep
         // worker (local-LLM generation takes minutes; the portal only enqueues and reads stored charts).
         services.AddSingleton<Operations.OperationCenter>();

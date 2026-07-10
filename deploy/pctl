@@ -102,9 +102,6 @@ apply_manifests() {
   say "Ollama + Gemma (local LLM)…"
   kube -n "$PCTL_NAMESPACE" apply -f "$K3S_DIR/ollama.yaml"
 
-  say "Docker-in-Docker (project app runtime)…"
-  kube -n "$PCTL_NAMESPACE" apply -f "$K3S_DIR/dind.yaml"
-
   say "PlaceContext Host (image: $image)…"
   sed -e "s|__IMAGE__|${image}|g" \
     "$K3S_DIR/placecontext.yaml" | kube -n "$PCTL_NAMESPACE" apply -f -
@@ -954,7 +951,7 @@ cmd_package() {
 # PlaceContext one-shot installer — sets up EVERYTHING the platform needs, then brings it up.
 #
 #   ./install.sh          local/dev: installs curl, Docker, kubectl, k3d as needed, then a full
-#                         k3d cluster (database, object store, local LLM, app runtime, portal)
+#                         k3d cluster (database, object store, local LLM, portal)
 #   sudo ./install.sh --prod
 #                         production master: installs k3s and deploys; add workers afterwards
 #                         with: sudo ./deploy/pctl join-code

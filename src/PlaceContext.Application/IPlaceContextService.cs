@@ -89,14 +89,6 @@ public interface IPlaceContextService
     // Inbound SMS gateway (encrypted at rest).
     Task<InboundSmsView> ReceiveInboundSmsAsync(ReceiveInboundSmsCommand command, CancellationToken ct = default);
     Task<IReadOnlyList<InboundSmsView>> ListInboundSmsAsync(int take = 50, CancellationToken ct = default);
-
-    // Application runtime (per-project containers in the DinD daemon).
-    Task<IReadOnlyList<Ports.ContainerInfo>> ListProjectContainersAsync(Guid projectId, CancellationToken ct = default);
-    Task<string> GetContainerLogsAsync(Guid projectId, string containerId, int tail = 200, CancellationToken ct = default);
-    Task RestartProjectContainerAsync(Guid projectId, string containerId, CancellationToken ct = default);
-    Task StopProjectContainerAsync(Guid projectId, string containerId, CancellationToken ct = default);
-    Task DeployContainerFromImageAsync(DeployContainerFromImageCommand command, CancellationToken ct = default);
-    Task DeployContainerFromGitHubAsync(DeployContainerFromGitHubCommand command, CancellationToken ct = default);
     Task<IReadOnlyList<RunReportView>> ListRecentRunReportsAsync(int take = 24, CancellationToken ct = default);
     Task<JobView?> GetJobAsync(Guid jobId, CancellationToken ct = default);
     Task<JobView> UploadJobCodeAsync(UploadJobCodeCommand command, CancellationToken ct = default);

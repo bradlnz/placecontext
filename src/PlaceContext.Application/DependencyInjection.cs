@@ -131,12 +131,6 @@ public static class DependencyInjection
         services.AddScoped<IQueryHandler<ListProjectChartsQuery, IReadOnlyList<ProjectChartView>>, ListProjectChartsHandler>();
         services.AddScoped<ICommandHandler<ReceiveInboundSmsCommand, InboundSmsView>, ReceiveInboundSmsHandler>();
         services.AddScoped<IQueryHandler<ListInboundSmsQuery, IReadOnlyList<InboundSmsView>>, ListInboundSmsHandler>();
-        services.AddScoped<IQueryHandler<ListProjectContainersQuery, IReadOnlyList<Ports.ContainerInfo>>, ListProjectContainersHandler>();
-        services.AddScoped<IQueryHandler<GetContainerLogsQuery, string>, GetContainerLogsHandler>();
-        services.AddScoped<ICommandHandler<RestartProjectContainerCommand, bool>, RestartProjectContainerHandler>();
-        services.AddScoped<ICommandHandler<StopProjectContainerCommand, bool>, StopProjectContainerHandler>();
-        services.AddScoped<ICommandHandler<DeployContainerFromImageCommand, bool>, DeployContainerFromImageHandler>();
-        services.AddScoped<ICommandHandler<DeployContainerFromGitHubCommand, bool>, DeployContainerFromGitHubHandler>();
 
         return services;
     }
