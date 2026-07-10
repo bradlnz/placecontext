@@ -153,6 +153,29 @@ public class PostJobActionServiceTests
         Assert.Single(store.Objects, o => o.Key.EndsWith("out/1/page.html"));
     }
 
+    [Fact]
+    public async Task Emitted_pdfs_are_stored_as_artifacts_like_html()
+    {
+        var mapSpec = new MapSpec("img", new[] { "{}" }, new Dictionary<string, string>());
+        var job = Job.Create(Guid.NewGuid(), "pdf-job", null, mapSpec, null, 1,
+            new ExitCodePolicy(new[] { 0 }, Array.Empty<int>()), T0); // NO post-job actions
+        var run = JobRun.Start(job.Id, job.ProjectId, T0, WorkloadSnapshot.From(mapSpec, null, 1));
+        run.Complete(new[]
+        {
+            new ShardResult(0, 0, WorkloadOutcome.Succeeded, "{}", "ok",
+                new[] { new RunArtifact("listings.pdf", "%PDF-1.4 fake"), new RunArtifact("notes.txt", "skip me") }),
+        }, null, T0.AddSeconds(2));
+
+        var store = new FakeStore();
+        var links = new FakeLinks();
+        await new PostJobActionService(store, links, new FakeUow(), new FakeClock()).RunAsync(job, run);
+
+        var obj = Assert.Single(store.Objects, o => o.Key.EndsWith("out/0/listings.pdf"));
+        Assert.StartsWith("%PDF-1.4", System.Text.Encoding.UTF8.GetString(obj.Content));
+        Assert.DoesNotContain(store.Objects, o => o.Key.EndsWith("notes.txt")); // plain text is not auto-stored
+        Assert.Equal(PostJobActionKind.RawBundle, Assert.Single(links.Links).Kind);
+    }
+
     // ── fakes ───────────────────────────────────────────────────────────────────────────────────────
     private sealed class FakeLlm(string response) : ILlmGateway
     {

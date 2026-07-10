@@ -45,7 +45,20 @@ public sealed class KubernetesWorkloadRunner : IWorkloadRunner
             var entrypoint = !string.IsNullOrWhiteSpace(request.Entrypoint) ? request.Entrypoint! : rt.DefaultEntrypoint;
             image = rt.BaseImage;
             var invoke = string.Join(" ", rt.InvokeCommand.Select(s => ShQuote(s.Replace("{entrypoint}", entrypoint))));
-            runShell = "cat /work/input.json | " + invoke;
+            // After the program runs, stream every /out file through the pod log with length-prefixed
+            // framing — a completed pod's filesystem is gone, so the log is the only channel back.
+            // The program's exit code is preserved. See SplitFramedLogs for the reader side.
+            runShell =
+                "mkdir -p /out\n" +
+                "cat /work/input.json | " + invoke + "\n" +
+                "rc=$?\n" +
+                $"echo\necho {ShQuote(ArtifactsMarker)}\n" +
+                "find /out -type f 2>/dev/null | while read -r f; do\n" +
+                "  printf '==PC-FILE== %s %s\\n' \"${f#/out/}\" \"$(wc -c < \"$f\" | tr -d ' \\t')\"\n" +
+                "  cat \"$f\"\n" +
+                "  printf '\\n'\n" +
+                "done\n" +
+                "exit $rc";
         }
         else
         {
@@ -203,12 +216,59 @@ public sealed class KubernetesWorkloadRunner : IWorkloadRunner
         {
             await using var stream = await client.CoreV1.ReadNamespacedPodLogAsync(pod.Metadata.Name, ns, container: "run", cancellationToken: ct);
             using var sr = new StreamReader(stream);
-            logs = (await sr.ReadToEndAsync(ct)).Trim();
+            logs = await sr.ReadToEndAsync(ct);
         }
         catch { /* logs best-effort */ }
 
-        // stdout is the artifact (the authoring contract); no separate stderr stream in-cluster.
-        return new WorkloadRunResult(exit, string.IsNullOrEmpty(logs) ? null : logs, logs, "");
+        // stdout is the artifact (the authoring contract); framed /out files ride behind the marker.
+        var (stdout, files) = SplitFramedLogs(logs);
+        return new WorkloadRunResult(exit, string.IsNullOrEmpty(stdout) ? null : stdout, stdout, "", files);
+    }
+
+    /// <summary>Marker line the in-pod wrapper prints between the program's stdout and its framed /out files.</summary>
+    public const string ArtifactsMarker = "---PC-ARTIFACTS-v1---";
+
+    /// <summary>
+    /// Splits a pod log into the program's stdout and the framed /out files behind
+    /// <see cref="ArtifactsMarker"/>. Frames are '==PC-FILE== name byteCount\n' + content + '\n';
+    /// the byte-length prefix makes content that *looks* like a frame header unambiguous. Logs from
+    /// image workloads (no wrapper, no marker) pass through unchanged.
+    /// </summary>
+    public static (string Stdout, List<WorkloadArtifact> Files) SplitFramedLogs(string logs)
+    {
+        var files = new List<WorkloadArtifact>();
+        if (string.IsNullOrEmpty(logs)) return ("", files);
+
+        var markerAt = logs.StartsWith(ArtifactsMarker, StringComparison.Ordinal)
+            ? 0
+            : logs.IndexOf("\n" + ArtifactsMarker, StringComparison.Ordinal) is var i and >= 0 ? i + 1 : -1;
+        if (markerAt < 0) return (logs.Trim(), files);
+
+        var stdout = logs[..markerAt].Trim();
+        var tailStart = markerAt + ArtifactsMarker.Length;
+        if (tailStart < logs.Length && logs[tailStart] == '\n') tailStart++;
+
+        // Byte-precise scan: the length prefix counts bytes, and content may be multi-byte UTF-8.
+        var tail = Encoding.UTF8.GetBytes(logs[tailStart..]);
+        var pos = 0;
+        while (pos < tail.Length)
+        {
+            var eol = Array.IndexOf(tail, (byte)'\n', pos);
+            if (eol < 0) break;
+            var header = Encoding.UTF8.GetString(tail, pos, eol - pos);
+            pos = eol + 1;
+            if (!header.StartsWith("==PC-FILE== ", StringComparison.Ordinal)) continue;
+
+            var sep = header.LastIndexOf(' ');
+            if (sep <= 12 || !int.TryParse(header[(sep + 1)..], out var size) || size < 0) continue;
+            var name = header[12..sep];
+            if (pos + size > tail.Length) break; // truncated log — drop the partial file
+
+            files.Add(new WorkloadArtifact(name, Encoding.UTF8.GetString(tail, pos, size)));
+            pos += size;
+            if (pos < tail.Length && tail[pos] == (byte)'\n') pos++; // the frame's trailing newline
+        }
+        return (stdout, files);
     }
 
     private static async Task CleanupAsync(Kubernetes client, string ns, string name, bool hadEgress)

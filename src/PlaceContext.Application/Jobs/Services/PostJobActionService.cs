@@ -152,32 +152,43 @@ public sealed class PostJobActionService
         return file with { Content = Encoding.UTF8.GetBytes(style(Encoding.UTF8.GetString(file.Content))) };
     }
 
-    // HTML returned by the job itself — a shard/reduce stdout artifact that is an HTML document, or an
-    // emitted .html output file — becomes a stored, openable artifact without any action configured.
+    // Documents returned by the job itself — a shard/reduce stdout artifact that is an HTML document,
+    // or an emitted .html/.pdf output file — become stored, openable artifacts without any action
+    // configured: documents are meant to be opened, not read as escaped strings in the run detail.
     // Emitted files go under out/ so they can never collide with action outputs (report.html, chart.html).
     private async Task<bool> StoreJobHtmlOutputsAsync(Job job, JobRun run, string bucket, CancellationToken ct)
     {
         var added = false;
 
-        async Task StoreHtmlAsync(string fileName, string content, string title) =>
-            added |= await StoreAsync(job, run, PostJobActionKind.HtmlOutput,
-                new PostJobArtifacts.BuiltFile(fileName, Encoding.UTF8.GetBytes(content),
-                    "text/html; charset=utf-8", title), bucket, ct);
+        async Task StoreDocAsync(string fileName, string content, string title, PostJobActionKind kind, string contentType) =>
+            added |= await StoreAsync(job, run, kind,
+                new PostJobArtifacts.BuiltFile(fileName, Encoding.UTF8.GetBytes(content), contentType, title), bucket, ct);
+
+        Task StoreHtmlAsync(string fileName, string content, string title) =>
+            StoreDocAsync(fileName, content, title, PostJobActionKind.HtmlOutput, "text/html; charset=utf-8");
+
+        async Task StoreFilesAsync(IEnumerable<RunArtifact> files, string prefix)
+        {
+            foreach (var f in files)
+            {
+                if (IsHtmlFile(f)) await StoreHtmlAsync($"{prefix}/{f.Name}", f.Content, f.Name);
+                else if (IsPdfFile(f)) await StoreDocAsync($"{prefix}/{f.Name}", f.Content, f.Name,
+                    PostJobActionKind.RawBundle, "application/pdf");
+            }
+        }
 
         foreach (var shard in run.ShardResults)
         {
             if (shard.Artifact is { } a && IsHtmlDocument(a))
                 await StoreHtmlAsync($"shard-{shard.Index}.html", a, $"Shard {shard.Index} HTML output");
-            foreach (var f in shard.Artifacts.Where(IsHtmlFile))
-                await StoreHtmlAsync($"out/{shard.Index}/{f.Name}", f.Content, f.Name);
+            await StoreFilesAsync(shard.Artifacts, $"out/{shard.Index}");
         }
 
         if (run.ReduceResult is { } reduce)
         {
             if (reduce.Artifact is { } r && IsHtmlDocument(r))
                 await StoreHtmlAsync("reduce.html", r, "Reduce HTML output");
-            foreach (var f in reduce.Artifacts.Where(IsHtmlFile))
-                await StoreHtmlAsync($"out/reduce/{f.Name}", f.Content, f.Name);
+            await StoreFilesAsync(reduce.Artifacts, "out/reduce");
         }
 
         return added;
@@ -186,6 +197,9 @@ public sealed class PostJobActionService
     private static bool IsHtmlFile(RunArtifact f) =>
         f.Name.EndsWith(".html", StringComparison.OrdinalIgnoreCase) ||
         f.Name.EndsWith(".htm", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsPdfFile(RunArtifact f) =>
+        f.Name.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase);
 
     // The whole artifact must BE an HTML document — a JSON artifact that merely contains markup in a
     // string value stays JSON.

@@ -1039,6 +1039,7 @@ else
             : a.Name.EndsWith(".json", StringComparison.OrdinalIgnoreCase) ? "application/json"
             : a.Name.EndsWith(".html", StringComparison.OrdinalIgnoreCase) ? "text/html"
             : a.Name.EndsWith(".svg", StringComparison.OrdinalIgnoreCase) ? "image/svg+xml"
+            : a.Name.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase) ? "application/pdf"
             : "text/plain";
         var b64 = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(a.Content));
         return $"data:{contentType};base64,{b64}";
