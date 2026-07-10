@@ -43,6 +43,7 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
     public DbSet<RunArtifactLinkRow> RunArtifacts => Set<RunArtifactLinkRow>();
     public DbSet<JobSecretRow> JobSecrets => Set<JobSecretRow>();
     public DbSet<JobTriggerRow> JobTriggers => Set<JobTriggerRow>();
+    public DbSet<JobChainRow> JobChains => Set<JobChainRow>();
     public DbSet<EventDefinitionRow> EventDefinitions => Set<EventDefinitionRow>();
     public DbSet<EventOccurrenceRow> EventOccurrences => Set<EventOccurrenceRow>();
     public DbSet<PendingRunRow> PendingRuns => Set<PendingRunRow>();
@@ -255,6 +256,14 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
             e.HasIndex(x => x.JobId);
             // Scheduler scans by (Enabled, Kind, NextRunAt) across tenants.
             e.HasIndex(x => new { x.Enabled, x.Kind, x.NextRunAt });
+            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
+        });
+
+        b.Entity<JobChainRow>(e =>
+        {
+            e.ToTable("job_chains");
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => x.ProjectId);
             e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
         });
 

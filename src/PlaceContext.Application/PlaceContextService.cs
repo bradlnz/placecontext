@@ -174,6 +174,21 @@ public sealed class PlaceContextService : IPlaceContextService
     public Task<IReadOnlyList<RunArtifactLinkView>> ListJobRunArtifactsAsync(Guid jobId, CancellationToken ct = default)
         => _dispatcher.Query(new ListJobRunArtifactsQuery(jobId), ct);
 
+    public Task<JobChainView> CreateJobChainAsync(Guid projectId, string name, string? description, IReadOnlyList<Guid> stepJobIds, CancellationToken ct = default)
+        => _dispatcher.Send(new CreateJobChainCommand(projectId, name, description, stepJobIds), ct);
+
+    public Task<JobChainView> UpdateJobChainAsync(Guid chainId, string name, string? description, IReadOnlyList<Guid> stepJobIds, CancellationToken ct = default)
+        => _dispatcher.Send(new UpdateJobChainCommand(chainId, name, description, stepJobIds), ct);
+
+    public Task<bool> DeleteJobChainAsync(Guid chainId, CancellationToken ct = default)
+        => _dispatcher.Send(new DeleteJobChainCommand(chainId), ct);
+
+    public Task<IReadOnlyList<JobChainView>> ListJobChainsAsync(Guid projectId, CancellationToken ct = default)
+        => _dispatcher.Query(new ListJobChainsQuery(projectId), ct);
+
+    public Task<ChainRunView> RunJobChainAsync(Guid chainId, string? inputPayload = null, CancellationToken ct = default)
+        => _dispatcher.Send(new RunJobChainCommand(chainId, inputPayload), ct);
+
     public Task<Ports.ProjectQueryResult> ExecuteProjectDataAsync(Guid projectId, string sql, CancellationToken ct = default)
         => _dispatcher.Send(new ExecuteProjectDataCommand(projectId, sql), ct);
 

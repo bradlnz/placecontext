@@ -357,6 +357,65 @@ public sealed class PlaceContextTools
         => Traced(log, "get_job_run", runId.ToString(), "get job run", new { runId },
             () => svc.GetJobRunAsync(runId));
 
+    // ── Job chains ────────────────────────────────────────────────────────────────────────────────
+
+    [Authorize(Policy = "Member")]
+    [McpServerTool(Name = "create_job_chain"), Description("Define a job chain: an ordered pipeline of existing jobs where each step's primary output (reduce artifact if present, else the shard artifacts) becomes the next step's stdin input payload. 'jobIdsJson' is a JSON array of job ids in run order, e.g. [\"<guid>\",\"<guid>\"] — the same job may appear more than once. All jobs must belong to the project. Use run_job_chain to execute it.")]
+    public static Task<string> CreateJobChain(IPlaceContextService svc, IToolCallLog log,
+        Guid projectId, string name,
+        [Description("JSON array of job ids, in run order")] string jobIdsJson,
+        string? description = null)
+    {
+        var steps = ParseJobIds(jobIdsJson);
+        return Traced(log, "create_job_chain", projectId.ToString(),
+            $"create chain '{name}' ({steps.Count} step(s))", new { projectId, name, steps, description },
+            () => svc.CreateJobChainAsync(projectId, name, description, steps));
+    }
+
+    [Authorize(Policy = "Member")]
+    [McpServerTool(Name = "update_job_chain"), Description("Replace a job chain's name, description, and ordered steps. 'jobIdsJson' is a JSON array of job ids in run order.")]
+    public static Task<string> UpdateJobChain(IPlaceContextService svc, IToolCallLog log,
+        Guid chainId, string name,
+        [Description("JSON array of job ids, in run order")] string jobIdsJson,
+        string? description = null)
+    {
+        var steps = ParseJobIds(jobIdsJson);
+        return Traced(log, "update_job_chain", chainId.ToString(),
+            $"update chain '{name}' ({steps.Count} step(s))", new { chainId, name, steps, description },
+            () => svc.UpdateJobChainAsync(chainId, name, description, steps));
+    }
+
+    [Authorize(Policy = "Member")]
+    [McpServerTool(Name = "list_job_chains"), Description("List a project's job chains with their ordered steps (job ids + names). Use this to discover chain ids before running one.")]
+    public static Task<string> ListJobChains(IPlaceContextService svc, IToolCallLog log, Guid projectId)
+        => Traced(log, "list_job_chains", projectId.ToString(), "list job chains", new { projectId },
+            () => svc.ListJobChainsAsync(projectId));
+
+    [Authorize(Policy = "Member")]
+    [McpServerTool(Name = "run_job_chain"), Description("Run a job chain now: executes each step's job in order, feeding every step's primary output into the next step as its input payload, and waits for completion. Stops at the first failed step (a Partial step continues but downgrades the chain status). Pass 'inputPayload' to feed the FIRST step; omit it to run the first job with its stored shard payloads. Returns the chain status, each executed step's run id + status (fetch full artifacts with get_job_run), and the final output — the last step's artifact, i.e. the chain's result.")]
+    public static Task<string> RunJobChain(IPlaceContextService svc, IToolCallLog log, Guid chainId,
+        [Description("Optional input payload for the first step (typically JSON)")] string? inputPayload = null)
+        => Traced(log, "run_job_chain", chainId.ToString(), "run job chain", new { chainId, inputPayload },
+            () => svc.RunJobChainAsync(chainId, inputPayload));
+
+    [Authorize(Policy = "Member")]
+    [McpServerTool(Name = "delete_job_chain"), Description("Permanently remove a job chain definition (the jobs and their run history are untouched). Returns true if it existed.")]
+    public static Task<string> DeleteJobChain(IPlaceContextService svc, IToolCallLog log, Guid chainId)
+        => Traced(log, "delete_job_chain", chainId.ToString(), "delete job chain", new { chainId },
+            () => svc.DeleteJobChainAsync(chainId));
+
+    private static List<Guid> ParseJobIds(string jobIdsJson)
+    {
+        try
+        {
+            return JsonSerializer.Deserialize<List<Guid>>(jobIdsJson) ?? new List<Guid>();
+        }
+        catch (JsonException e)
+        {
+            throw new ArgumentException($"jobIdsJson must be a JSON array of job ids (guids): {e.Message}");
+        }
+    }
+
     // ── Triggers ──────────────────────────────────────────────────────────────────────────────────
 
     [Authorize(Policy = "Member")]

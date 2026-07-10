@@ -121,6 +121,7 @@ public static class DependencyInjection
 
         // Trigger + event repositories.
         services.AddScoped<IJobTriggerRepository, EfJobTriggerRepository>();
+        services.AddScoped<IJobChainRepository, EfJobChainRepository>();
         services.AddScoped<IEventRepository, EfEventRepository>();
 
         // Embeddings, in priority order: Voyage AI when a key is configured; else a local Ollama embedding

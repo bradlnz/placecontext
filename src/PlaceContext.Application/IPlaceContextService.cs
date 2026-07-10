@@ -66,6 +66,13 @@ public interface IPlaceContextService
     Task<IReadOnlyList<RunArtifactLinkView>> ListRunArtifactsAsync(Guid runId, CancellationToken ct = default);
     Task<IReadOnlyList<RunArtifactLinkView>> ListJobRunArtifactsAsync(Guid jobId, CancellationToken ct = default);
 
+    // Job chains (ordered pipelines: each step's output feeds the next step's input).
+    Task<JobChainView> CreateJobChainAsync(Guid projectId, string name, string? description, IReadOnlyList<Guid> stepJobIds, CancellationToken ct = default);
+    Task<JobChainView> UpdateJobChainAsync(Guid chainId, string name, string? description, IReadOnlyList<Guid> stepJobIds, CancellationToken ct = default);
+    Task<bool> DeleteJobChainAsync(Guid chainId, CancellationToken ct = default);
+    Task<IReadOnlyList<JobChainView>> ListJobChainsAsync(Guid projectId, CancellationToken ct = default);
+    Task<ChainRunView> RunJobChainAsync(Guid chainId, string? inputPayload = null, CancellationToken ct = default);
+
     // Project data (each project's own database: tables + SQL).
     Task<Ports.ProjectQueryResult> ExecuteProjectDataAsync(Guid projectId, string sql, CancellationToken ct = default);
     Task<IReadOnlyList<Ports.ProjectTableInfo>> ListProjectDataTablesAsync(Guid projectId, CancellationToken ct = default);
