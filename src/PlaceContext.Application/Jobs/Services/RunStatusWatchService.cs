@@ -123,7 +123,7 @@ public sealed class RunStatusWatchService
 
             var key = JobRunKey(run.RunId);
             var title = $"Run job — {run.JobName}";
-            var link = $"/project/{run.ProjectId}/jobs";
+            var link = $"/observability?run={run.RunId}"; // deep-opens this run's detail
 
             if (run.Status is JobRunStatus.Running or JobRunStatus.Queued)
             {

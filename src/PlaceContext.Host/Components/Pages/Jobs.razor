@@ -918,7 +918,7 @@ else
         // watcher flips this entry the moment the run row commits — well before the awaited
         // handler returns from its slow best-effort enrichment.
         var runId = Guid.NewGuid();
-        OpCenter.Run(tenant, ProjectId, $"Run job — {jobName}", $"/project/{ProjectId}/jobs",
+        OpCenter.Run(tenant, ProjectId, $"Run job — {jobName}", $"/observability?run={runId}",
             async (sp, ct) =>
             {
                 var result = await sp.GetRequiredService<IPlaceContextService>().RunJobAsync(jobId, payload, runId, ct);

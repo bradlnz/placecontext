@@ -108,14 +108,14 @@ spec:
                   key: ACCESS_SECRET_KEY
           # Give the app time to run EF migrations on first boot before liveness/readiness apply.
           startupProbe:
-            httpGet: { path: /, port: 7700 }
+            httpGet: { path: /healthz, port: 7700 }
             periodSeconds: 5
             failureThreshold: 30   # up to ~150s to become healthy
           readinessProbe:
-            httpGet: { path: /, port: 7700 }
+            httpGet: { path: /healthz, port: 7700 }
             periodSeconds: 10
           livenessProbe:
-            httpGet: { path: /, port: 7700 }
+            httpGet: { path: /healthz, port: 7700 }
             periodSeconds: 15
             failureThreshold: 4
 ---

@@ -330,6 +330,10 @@ app.MapGet("/auth/portal", async (HttpContext ctx, IAuthService auth, PlaceConte
 // Auto-login: an unauthenticated request to a protected page (cookie LoginPath) signs straight in
 // as the operator's default workspace — the portal has no login screen. The cookie/tenant
 // machinery stays intact underneath, so tenant isolation, invites, and MCP OAuth keep working.
+// Probes need a cookieless 200 — auto-login turned "/" into a redirect dance that kubelet
+// treats as failure after 10 hops.
+app.MapGet("/healthz", () => Results.Ok("ok")).AllowAnonymous();
+
 app.MapGet("/locked", async (HttpContext ctx, IAuthService auth) =>
 {
     var operatorUser = await auth.GetOrCreateOperatorAsync(ctx.RequestAborted);
