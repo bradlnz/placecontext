@@ -93,6 +93,7 @@ const (
 	viewSettings
 	viewRuns      // run history for a selected job (list of runs)
 	viewRunDetail // one run's per-shard output, errors, and artifacts
+	viewJsonTree  // expandable tree over the open run's JSON artifacts ([v] from the detail)
 	viewJoin      // connect this computer to an existing cluster with a join code
 	viewAbout     // who built PlaceContext + copyright
 )
@@ -154,7 +155,9 @@ type model struct {
 	runs      []runRow
 	runCursor int
 	runsErr   string   // sticky error for the runs list (e.g. query failed), shown in runsView
-	runLinks  []string // URLs found in the currently-open run detail, openable with [o]/[1-9]
+	runLinks  []string  // URLs found in the currently-open run detail, openable with [o]/[1-9]
+	runDocs   []jsonDoc // JSON documents in the open run — the [v] tree viewer's input
+	jt        *jsonTree // the JSON tree viewer state (viewJsonTree)
 
 	loading  bool // a data fetch (logs/mcp/metrics/search) is in flight → show a loading box
 	fetching bool // a dashboard state refresh is in flight → ticks skip re-dispatching
@@ -541,17 +544,58 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		// In a run's detail, [o] opens the first discovered link and [1-9] opens the nth. Other keys
-		// fall through to scrolling, so paging still works.
-		if m.view == viewRunDetail && len(m.runLinks) > 0 {
-			if key == "o" {
-				return m, openURL(m.runLinks[0])
+		// In a run's detail, [o] opens the first discovered link and [1-9] opens the nth; [v] opens
+		// the run's JSON artifacts in the expandable tree. Other keys fall through to scrolling.
+		if m.view == viewRunDetail {
+			if key == "v" {
+				if len(m.runDocs) == 0 {
+					m.flash = "this run has no JSON artifacts to view"
+					return m, nil
+				}
+				m.jt = newJSONTree(m.runDocs)
+				m.view = viewJsonTree
+				return m, nil
 			}
-			if len(key) == 1 && key[0] >= '1' && key[0] <= '9' {
-				if idx := int(key[0] - '1'); idx < len(m.runLinks) {
-					return m, openURL(m.runLinks[idx])
+			if len(m.runLinks) > 0 {
+				if key == "o" {
+					return m, openURL(m.runLinks[0])
+				}
+				if len(key) == 1 && key[0] >= '1' && key[0] <= '9' {
+					if idx := int(key[0] - '1'); idx < len(m.runLinks) {
+						return m, openURL(m.runLinks[idx])
+					}
 				}
 			}
+		}
+
+		// JSON tree viewer — fold/unfold and navigate the open run's JSON documents.
+		if m.view == viewJsonTree && m.jt != nil {
+			switch key {
+			case "up", "k":
+				m.jt.move(-1)
+			case "down", "j":
+				m.jt.move(1)
+			case "pgup":
+				m.jt.move(-(m.logs.Height - 1))
+			case "pgdown":
+				m.jt.move(m.logs.Height - 1)
+			case "enter", " ":
+				m.jt.toggle()
+			case "e":
+				m.jt.setAll(true)
+			case "c":
+				m.jt.setAll(false)
+			case "tab":
+				if len(m.jt.docs) > 1 {
+					m.jt.nextDoc()
+				}
+			case "b", "esc":
+				m.view = viewRunDetail
+			case "q", "ctrl+c":
+				m.quitting = true
+				return m, tea.Quit
+			}
+			return m, nil
 		}
 
 		switch key {
@@ -880,7 +924,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.loading = false
 		m.logTitle = msg.title
 		m.runLinks = extractURLs(msg.body)
+		m.runDocs = msg.docs
+		m.jt = nil
 		body := msg.body
+		if len(m.runDocs) > 0 {
+			body += fmt.Sprintf("\n_press [v] to explore the run's JSON (%d doc(s)) in an expandable tree_\n", len(m.runDocs))
+		}
 		if len(m.runLinks) > 0 {
 			var b strings.Builder
 			b.WriteString(body)
@@ -1040,6 +1089,9 @@ func (m model) View() string {
 	case viewRunDetail:
 		b.WriteString(titleStyle.Render(" "+m.logTitle+" ") + dimStyle.Render("  job: "+m.runsJob.name) + "\n")
 		b.WriteString(boxStyle.Render(m.logs.View()) + "\n")
+	case viewJsonTree:
+		b.WriteString(titleStyle.Render(" json: "+m.jt.title()+" ") + dimStyle.Render("  "+m.logTitle+" · job: "+m.runsJob.name) + "\n")
+		b.WriteString(boxStyle.Render(m.jt.render(m.logs.Width, m.logs.Height)) + "\n")
 	default:
 		b.WriteString(m.dashboard())
 	}
@@ -1346,7 +1398,9 @@ func (m model) footer() string {
 	case viewRuns:
 		keys = []string{k("↑↓", "nav"), k("⏎", "open run"), k("r", "refresh"), k("b", "back"), k("q", "quit")}
 	case viewRunDetail:
-		keys = []string{k("↑↓", "scroll"), k("b", "back"), k("q", "quit")}
+		keys = []string{k("↑↓", "scroll"), k("v", "json tree"), k("b", "back"), k("q", "quit")}
+	case viewJsonTree:
+		keys = []string{k("↑↓", "nav"), k("⏎", "fold"), k("e/c", "all"), k("tab", "next doc"), k("b", "back"), k("q", "quit")}
 	case viewSettings:
 		keys = []string{k("↑↓", "nav"), k("space", "toggle"), k("←→", "timeout"), k("b", "back"), k("q", "quit")}
 	case viewConfirm:
