@@ -45,9 +45,11 @@ public sealed class KubernetesWorkloadRunner : IWorkloadRunner
             var entrypoint = !string.IsNullOrWhiteSpace(request.Entrypoint) ? request.Entrypoint! : rt.DefaultEntrypoint;
             image = rt.BaseImage;
             var invoke = string.Join(" ", rt.InvokeCommand.Select(s => ShQuote(s.Replace("{entrypoint}", entrypoint))));
-            // After the program runs, stream every /out file through the pod log with length-prefixed
-            // framing — a completed pod's filesystem is gone, so the log is the only channel back.
-            // The program's exit code is preserved. See SplitFramedLogs for the reader side.
+            // After the program runs, stream every /out file through the pod log with base64 framing —
+            // a completed pod's filesystem is gone, so the log is the only channel back, and the log
+            // pipeline (CRI → kubelet → API → UTF-8 string decode) is not binary-safe: base64 keeps the
+            // frames pure ASCII so PDFs and other binary files survive byte-exact. The header carries the
+            // raw byte count for integrity; the program's exit code is preserved. See SplitFramedLogs.
             runShell =
                 "mkdir -p /out\n" +
                 "cat /work/input.json | " + invoke + "\n" +
@@ -55,8 +57,8 @@ public sealed class KubernetesWorkloadRunner : IWorkloadRunner
                 $"echo\necho {ShQuote(ArtifactsMarker)}\n" +
                 "find /out -type f 2>/dev/null | while read -r f; do\n" +
                 "  printf '==PC-FILE== %s %s\\n' \"${f#/out/}\" \"$(wc -c < \"$f\" | tr -d ' \\t')\"\n" +
-                "  cat \"$f\"\n" +
-                "  printf '\\n'\n" +
+                $"  base64 < \"$f\"\n" +
+                $"  echo {ShQuote(FileEndMarker)}\n" +
                 "done\n" +
                 "exit $rc";
         }
@@ -226,13 +228,18 @@ public sealed class KubernetesWorkloadRunner : IWorkloadRunner
     }
 
     /// <summary>Marker line the in-pod wrapper prints between the program's stdout and its framed /out files.</summary>
-    public const string ArtifactsMarker = "---PC-ARTIFACTS-v1---";
+    public const string ArtifactsMarker = "---PC-ARTIFACTS-v2---";
+
+    /// <summary>Marker line the in-pod wrapper prints after each file's base64 payload.</summary>
+    public const string FileEndMarker = "==PC-FILE-END==";
 
     /// <summary>
     /// Splits a pod log into the program's stdout and the framed /out files behind
-    /// <see cref="ArtifactsMarker"/>. Frames are '==PC-FILE== name byteCount\n' + content + '\n';
-    /// the byte-length prefix makes content that *looks* like a frame header unambiguous. Logs from
-    /// image workloads (no wrapper, no marker) pass through unchanged.
+    /// <see cref="ArtifactsMarker"/>. Frames are '==PC-FILE== name rawByteCount\n' + base64 payload
+    /// (any line wrapping) + '<see cref="FileEndMarker"/>\n'. The payload being base64 makes frame
+    /// markers unambiguous (they can never appear inside it), and the raw byte count catches truncated
+    /// logs — a frame that fails to decode to exactly that many bytes is dropped rather than surfaced
+    /// corrupt. Logs from image workloads (no wrapper, no marker) pass through unchanged.
     /// </summary>
     public static (string Stdout, List<WorkloadArtifact> Files) SplitFramedLogs(string logs)
     {
@@ -245,28 +252,33 @@ public sealed class KubernetesWorkloadRunner : IWorkloadRunner
         if (markerAt < 0) return (logs.Trim(), files);
 
         var stdout = logs[..markerAt].Trim();
-        var tailStart = markerAt + ArtifactsMarker.Length;
-        if (tailStart < logs.Length && logs[tailStart] == '\n') tailStart++;
-
-        // Byte-precise scan: the length prefix counts bytes, and content may be multi-byte UTF-8.
-        var tail = Encoding.UTF8.GetBytes(logs[tailStart..]);
-        var pos = 0;
-        while (pos < tail.Length)
+        var lines = logs[(markerAt + ArtifactsMarker.Length)..].Split('\n');
+        for (var l = 0; l < lines.Length; l++)
         {
-            var eol = Array.IndexOf(tail, (byte)'\n', pos);
-            if (eol < 0) break;
-            var header = Encoding.UTF8.GetString(tail, pos, eol - pos);
-            pos = eol + 1;
+            var header = lines[l].TrimEnd('\r');
             if (!header.StartsWith("==PC-FILE== ", StringComparison.Ordinal)) continue;
-
             var sep = header.LastIndexOf(' ');
-            if (sep <= 12 || !int.TryParse(header[(sep + 1)..], out var size) || size < 0) continue;
+            if (sep <= 12 || !long.TryParse(header[(sep + 1)..], out var size) || size < 0) continue;
             var name = header[12..sep];
-            if (pos + size > tail.Length) break; // truncated log — drop the partial file
 
-            files.Add(new WorkloadArtifact(name, Encoding.UTF8.GetString(tail, pos, size)));
-            pos += size;
-            if (pos < tail.Length && tail[pos] == (byte)'\n') pos++; // the frame's trailing newline
+            // Collect the base64 payload up to the end marker; no marker ⇒ truncated log, drop the frame.
+            var payload = new StringBuilder();
+            var closed = false;
+            while (++l < lines.Length)
+            {
+                var line = lines[l].TrimEnd('\r');
+                if (line == FileEndMarker) { closed = true; break; }
+                payload.Append(line);
+            }
+            if (!closed) break;
+
+            try
+            {
+                var bytes = Convert.FromBase64String(payload.ToString());
+                if (bytes.LongLength == size)
+                    files.Add(WorkloadArtifact.FromBytes(name, bytes));
+            }
+            catch (FormatException) { /* mangled frame — drop it rather than surface corrupt content */ }
         }
         return (stdout, files);
     }

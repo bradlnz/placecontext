@@ -153,27 +153,27 @@ public sealed class PostJobActionService
     }
 
     // Documents returned by the job itself — a shard/reduce stdout artifact that is an HTML document,
-    // or an emitted .html/.pdf output file — become stored, openable artifacts without any action
+    // or an emitted .html/.pdf/image output file — become stored, openable artifacts without any action
     // configured: documents are meant to be opened, not read as escaped strings in the run detail.
     // Emitted files go under out/ so they can never collide with action outputs (report.html, chart.html).
     private async Task<bool> StoreJobHtmlOutputsAsync(Job job, JobRun run, string bucket, CancellationToken ct)
     {
         var added = false;
 
-        async Task StoreDocAsync(string fileName, string content, string title, PostJobActionKind kind, string contentType) =>
+        async Task StoreDocAsync(string fileName, byte[] content, string title, PostJobActionKind kind, string contentType) =>
             added |= await StoreAsync(job, run, kind,
-                new PostJobArtifacts.BuiltFile(fileName, Encoding.UTF8.GetBytes(content), contentType, title), bucket, ct);
+                new PostJobArtifacts.BuiltFile(fileName, content, contentType, title), bucket, ct);
 
         Task StoreHtmlAsync(string fileName, string content, string title) =>
-            StoreDocAsync(fileName, content, title, PostJobActionKind.HtmlOutput, "text/html; charset=utf-8");
+            StoreDocAsync(fileName, Encoding.UTF8.GetBytes(content), title, PostJobActionKind.HtmlOutput, "text/html; charset=utf-8");
 
         async Task StoreFilesAsync(IEnumerable<RunArtifact> files, string prefix)
         {
             foreach (var f in files)
             {
-                if (IsHtmlFile(f)) await StoreHtmlAsync($"{prefix}/{f.Name}", f.Content, f.Name);
-                else if (IsPdfFile(f)) await StoreDocAsync($"{prefix}/{f.Name}", f.Content, f.Name,
-                    PostJobActionKind.RawBundle, "application/pdf");
+                if (IsHtmlFile(f) && !f.IsBinary) await StoreHtmlAsync($"{prefix}/{f.Name}", f.Content, f.Name);
+                else if (DocContentType(f.Name) is { } contentType)
+                    await StoreDocAsync($"{prefix}/{f.Name}", f.GetBytes(), f.Name, PostJobActionKind.RawBundle, contentType);
             }
         }
 
@@ -198,8 +198,22 @@ public sealed class PostJobActionService
         f.Name.EndsWith(".html", StringComparison.OrdinalIgnoreCase) ||
         f.Name.EndsWith(".htm", StringComparison.OrdinalIgnoreCase);
 
-    private static bool IsPdfFile(RunArtifact f) =>
-        f.Name.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase);
+    // Emitted files that are documents to open (not data to read inline) — auto-stored with the
+    // content type the browser needs to render them. Returns null for everything else.
+    private static string? DocContentType(string name)
+    {
+        var ext = Path.GetExtension(name).ToLowerInvariant();
+        return ext switch
+        {
+            ".pdf" => "application/pdf",
+            ".png" => "image/png",
+            ".jpg" or ".jpeg" => "image/jpeg",
+            ".gif" => "image/gif",
+            ".webp" => "image/webp",
+            ".svg" => "image/svg+xml",
+            _ => null,
+        };
+    }
 
     // The whole artifact must BE an HTML document — a JSON artifact that merely contains markup in a
     // string value stays JSON.

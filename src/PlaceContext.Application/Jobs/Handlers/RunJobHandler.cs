@@ -378,7 +378,7 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
     private static IReadOnlyList<RunArtifact> MapArtifacts(IReadOnlyList<WorkloadArtifact>? artifacts)
         => artifacts is null or { Count: 0 }
             ? Array.Empty<RunArtifact>()
-            : artifacts.Select(a => new RunArtifact(a.Name, a.Content)).ToList();
+            : artifacts.Select(a => new RunArtifact(a.Name, a.Content, a.IsBinary)).ToList();
 
     private static string? CombineLog(string stdout, string stderr)
     {

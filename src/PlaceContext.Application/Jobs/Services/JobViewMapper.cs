@@ -66,7 +66,7 @@ internal static class JobViewMapper
         Snapshot: ToSnapshotView(run.Snapshot));
 
     private static IReadOnlyList<RunArtifactView> ToArtifactViews(IReadOnlyList<RunArtifact> artifacts)
-        => artifacts.Select(a => new RunArtifactView(a.Name, a.Content)).ToList();
+        => artifacts.Select(a => new RunArtifactView(a.Name, a.Content, a.IsBinary)).ToList();
 
     private static JobRunSnapshotView ToSnapshotView(WorkloadSnapshot snap) => new(
         MapSourceKind: SourceKind(snap.MapSource),

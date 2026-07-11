@@ -160,8 +160,9 @@ public sealed class DockerWorkloadRunner : IWorkloadRunner
 
     /// <summary>
     /// Captures every file written to <paramref name="hostOutDir"/> except the primary result.json, as named
-    /// text artifacts (e.g. report.csv). Names are relative paths within /out. Bounded for safety: skips
-    /// files larger than 5 MB and caps the set at 50 files.
+    /// artifacts (e.g. report.csv, listings.pdf). Names are relative paths within /out; binary files ride as
+    /// base64 (see <see cref="WorkloadArtifact.FromBytes"/>). Bounded for safety: skips files larger than
+    /// 5 MB and caps the set at 50 files.
     /// </summary>
     private async Task<List<WorkloadArtifact>> CaptureNamedArtifactsAsync(string hostOutDir, CancellationToken ct)
     {
@@ -179,10 +180,10 @@ public sealed class DockerWorkloadRunner : IWorkloadRunner
             try
             {
                 if (new FileInfo(path).Length > maxBytes) continue;
-                artifacts.Add(new WorkloadArtifact(name, await File.ReadAllTextAsync(path, ct)));
+                artifacts.Add(WorkloadArtifact.FromBytes(name, await File.ReadAllBytesAsync(path, ct)));
                 if (artifacts.Count >= maxFiles) break;
             }
-            catch { /* best-effort: skip unreadable/binary files */ }
+            catch { /* best-effort: skip unreadable files */ }
         }
 
         return artifacts;

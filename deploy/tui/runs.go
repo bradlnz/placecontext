@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"os/exec"
@@ -20,7 +21,10 @@ type runsMsg struct {
 	rows []runRow
 	err  string
 }
-type runDetailMsg struct{ title, body string }
+type runDetailMsg struct {
+	title, body string
+	docs        []jsonDoc // the run's JSON documents, viewable as an expandable tree with [v]
+}
 
 // fetchRuns reads the recent runs for a job (newest first) from job_runs via psql.
 func (m model) fetchRuns(j jobRow) tea.Cmd {
@@ -67,6 +71,8 @@ func (m model) fetchRuns(j jobRow) tea.Cmd {
 type artifactJson struct {
 	Name    string `json:"name"`
 	Content string `json:"content"`
+	// True for binary files (e.g. PDFs): content is base64, not printable text.
+	IsBinary bool `json:"isBinary"`
 }
 type shardJson struct {
 	Index     int            `json:"index"`
@@ -91,7 +97,7 @@ func (m model) fetchRunDetail(r runRow) tea.Cmd {
 	return func() tea.Msg {
 		title := "run " + shortID(r.id)
 		if !validUUID(r.id) {
-			return runDetailMsg{title, "invalid run id"}
+			return runDetailMsg{title: title, body: "invalid run id"}
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
@@ -100,7 +106,7 @@ func (m model) fetchRunDetail(r runRow) tea.Cmd {
 		b, err := mc.kubectl(ctx, "-n", ns, "exec", "deploy/placecontext-db", "--",
 			"psql", "-U", "postgres", "-d", "placecontext", "-At", "-F", "\x1f", "-c", q)
 		if err != nil {
-			return runDetailMsg{title, "could not load run: " + err.Error()}
+			return runDetailMsg{title: title, body: "could not load run: " + err.Error()}
 		}
 		parts := strings.SplitN(strings.TrimRight(string(b), "\n"), "\x1f", 2)
 		shardsJSON := ""
@@ -113,7 +119,7 @@ func (m model) fetchRunDetail(r runRow) tea.Cmd {
 		}
 		body := renderRunDetail(r, shardsJSON, reduceJSON)
 		body += mc.fetchRunArtifacts(ctx, r.id) // post-job outputs (MinIO) as openable links
-		return runDetailMsg{title, body}
+		return runDetailMsg{title: title, body: body, docs: collectRunJSONDocs(shardsJSON, reduceJSON)}
 	}
 }
 
@@ -208,6 +214,12 @@ func renderRunDetail(r runRow, shardsJSON, reduceJSON string) string {
 			b.WriteString(renderStream("artifact", s.Artifact))
 			b.WriteString(renderChart(s.Artifact))
 			for _, a := range s.Artifacts {
+				if a.IsBinary {
+					// Base64 blobs aren't worth a fenced dump — the portal serves the real file.
+					note := fmt.Sprintf("_(binary file, %d bytes — open it from the portal run page)_\n\n", base64.StdEncoding.DecodedLen(len(a.Content)))
+					b.WriteString("**file: " + a.Name + "**\n\n" + note)
+					continue
+				}
 				c := a.Content
 				b.WriteString(renderStream("file: "+a.Name, &c))
 				b.WriteString(renderChart(&c))

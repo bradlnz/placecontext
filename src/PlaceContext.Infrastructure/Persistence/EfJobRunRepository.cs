@@ -124,12 +124,12 @@ public sealed class EfJobRunRepository : IJobRunRepository
     // ── Artifact serialisation ────────────────────────────────────────────────────────────────────
 
     private static List<ArtifactJson> ToArtifactsJson(IReadOnlyList<RunArtifact> artifacts)
-        => artifacts.Select(a => new ArtifactJson { Name = a.Name, Content = a.Content }).ToList();
+        => artifacts.Select(a => new ArtifactJson { Name = a.Name, Content = a.Content, IsBinary = a.IsBinary ? true : null }).ToList();
 
     private static IReadOnlyList<RunArtifact> FromArtifactsJson(List<ArtifactJson>? artifacts)
         => artifacts is null or { Count: 0 }
             ? Array.Empty<RunArtifact>()
-            : artifacts.Select(a => new RunArtifact(a.Name, a.Content)).ToList();
+            : artifacts.Select(a => new RunArtifact(a.Name, a.Content, a.IsBinary ?? false)).ToList();
 
     // ── Snapshot serialisation ────────────────────────────────────────────────────────────────────
 
@@ -215,6 +215,8 @@ public sealed class EfJobRunRepository : IJobRunRepository
     {
         public string Name { get; set; } = "";
         public string Content { get; set; } = "";
+        // Null (absent in JSON) for text artifacts — pre-existing rows keep deserializing unchanged.
+        public bool? IsBinary { get; set; }
     }
 
     private sealed class SnapshotJson

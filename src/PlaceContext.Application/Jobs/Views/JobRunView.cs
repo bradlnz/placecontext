@@ -29,8 +29,11 @@ public sealed record ReduceResultView(
     string? Log,
     IReadOnlyList<RunArtifactView> Artifacts);
 
-/// <summary>Read model for a named output file (e.g. report.csv) produced by a run step.</summary>
-public sealed record RunArtifactView(string Name, string Content);
+/// <summary>
+/// Read model for a named output file (e.g. report.csv) produced by a run step.
+/// When <paramref name="IsBinary"/> is set, <paramref name="Content"/> is base64 of the file bytes.
+/// </summary>
+public sealed record RunArtifactView(string Name, string Content, bool IsBinary = false);
 
 /// <summary>Snapshot of the workload spec that was executed — for run history fidelity.</summary>
 public sealed record JobRunSnapshotView(

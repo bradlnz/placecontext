@@ -156,6 +156,9 @@ public class PostJobActionServiceTests
     [Fact]
     public async Task Emitted_pdfs_are_stored_as_artifacts_like_html()
     {
+        // A binary PDF (invalid UTF-8 bytes — what the old text pipeline corrupted) rides as base64
+        // in the RunArtifact and must land in the object store byte-identical.
+        var pdfBytes = new byte[] { 0x25, 0x50, 0x44, 0x46, 0x2D, 0x31, 0x2E, 0x34, 0x0A, 0x25, 0xE2, 0xE3, 0xCF, 0xD3, 0x00 };
         var mapSpec = new MapSpec("img", new[] { "{}" }, new Dictionary<string, string>());
         var job = Job.Create(Guid.NewGuid(), "pdf-job", null, mapSpec, null, 1,
             new ExitCodePolicy(new[] { 0 }, Array.Empty<int>()), T0); // NO post-job actions
@@ -163,7 +166,11 @@ public class PostJobActionServiceTests
         run.Complete(new[]
         {
             new ShardResult(0, 0, WorkloadOutcome.Succeeded, "{}", "ok",
-                new[] { new RunArtifact("listings.pdf", "%PDF-1.4 fake"), new RunArtifact("notes.txt", "skip me") }),
+                new[]
+                {
+                    new RunArtifact("listings.pdf", Convert.ToBase64String(pdfBytes), isBinary: true),
+                    new RunArtifact("notes.txt", "skip me"),
+                }),
         }, null, T0.AddSeconds(2));
 
         var store = new FakeStore();
@@ -171,9 +178,34 @@ public class PostJobActionServiceTests
         await new PostJobActionService(store, links, new FakeUow(), new FakeClock()).RunAsync(job, run);
 
         var obj = Assert.Single(store.Objects, o => o.Key.EndsWith("out/0/listings.pdf"));
-        Assert.StartsWith("%PDF-1.4", System.Text.Encoding.UTF8.GetString(obj.Content));
+        Assert.Equal(pdfBytes, obj.Content);
         Assert.DoesNotContain(store.Objects, o => o.Key.EndsWith("notes.txt")); // plain text is not auto-stored
-        Assert.Equal(PostJobActionKind.RawBundle, Assert.Single(links.Links).Kind);
+        var link = Assert.Single(links.Links);
+        Assert.Equal(PostJobActionKind.RawBundle, link.Kind);
+        Assert.Equal("application/pdf", link.ContentType);
+    }
+
+    [Fact]
+    public async Task Emitted_images_are_stored_with_their_image_content_type()
+    {
+        var pngBytes = new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00 };
+        var mapSpec = new MapSpec("img", new[] { "{}" }, new Dictionary<string, string>());
+        var job = Job.Create(Guid.NewGuid(), "img-job", null, mapSpec, null, 1,
+            new ExitCodePolicy(new[] { 0 }, Array.Empty<int>()), T0);
+        var run = JobRun.Start(job.Id, job.ProjectId, T0, WorkloadSnapshot.From(mapSpec, null, 1));
+        run.Complete(new[]
+        {
+            new ShardResult(0, 0, WorkloadOutcome.Succeeded, "{}", "ok",
+                new[] { new RunArtifact("chart.png", Convert.ToBase64String(pngBytes), isBinary: true) }),
+        }, null, T0.AddSeconds(2));
+
+        var store = new FakeStore();
+        var links = new FakeLinks();
+        await new PostJobActionService(store, links, new FakeUow(), new FakeClock()).RunAsync(job, run);
+
+        var obj = Assert.Single(store.Objects, o => o.Key.EndsWith("out/0/chart.png"));
+        Assert.Equal(pngBytes, obj.Content);
+        Assert.Equal("image/png", Assert.Single(links.Links).ContentType);
     }
 
     // ── fakes ───────────────────────────────────────────────────────────────────────────────────────

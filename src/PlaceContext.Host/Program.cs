@@ -292,8 +292,8 @@ app.MapPost("/sms/inbound", async (HttpContext ctx, PlaceContext.Application.IPl
 
 // ---- Run artifacts (post-job outputs) — stream an artifact from the object store (MinIO) ----
 // The portal/TUI link here; the IRunArtifactLinkRepository tenant filter scopes the lookup to the
-// signed-in tenant, so one tenant can't read another's artifacts. HTML/SVG render inline; the rest
-// download with their original filename.
+// signed-in tenant, so one tenant can't read another's artifacts. HTML, images, and PDFs render
+// inline (the browser previews them in the tab); the rest download with their original filename.
 app.MapGet("/runs/{runId:guid}/artifacts/{artifactId:guid}", async (
     Guid runId, Guid artifactId, HttpContext ctx,
     PlaceContext.Domain.Repositories.IRunArtifactLinkRepository links,
@@ -304,7 +304,8 @@ app.MapGet("/runs/{runId:guid}/artifacts/{artifactId:guid}", async (
     var obj = await store.OpenReadAsync(link.Bucket, link.ObjectKey, ctx.RequestAborted);
     if (obj is null) return Results.NotFound();
 
-    var inline = obj.ContentType.StartsWith("text/html") || obj.ContentType.StartsWith("image/svg");
+    var inline = obj.ContentType.StartsWith("text/html") || obj.ContentType.StartsWith("image/")
+        || obj.ContentType.StartsWith("application/pdf");
     var fileName = inline ? null : link.ObjectKey[(link.ObjectKey.LastIndexOf('/') + 1)..];
     return Results.Stream(obj.Content, obj.ContentType, fileDownloadName: fileName);
 }).RequireAuthorization();
