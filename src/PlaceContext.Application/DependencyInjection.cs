@@ -68,6 +68,8 @@ public static class DependencyInjection
         services.AddScoped<ICommandHandler<RunJobChainCommand, ChainRunView>, RunJobChainHandler>();
         services.AddScoped<ICommandHandler<SaveDataMappingCommand, DataMappingView>, SaveDataMappingHandler>();
         services.AddScoped<ICommandHandler<DeleteDataMappingCommand, bool>, DeleteDataMappingHandler>();
+        services.AddScoped<ICommandHandler<SaveSqlChartCommand, ProjectChartView>, SaveSqlChartHandler>();
+        services.AddScoped<ICommandHandler<DeleteSqlChartCommand, bool>, DeleteSqlChartHandler>();
         services.AddScoped<ICommandHandler<CreateTriggerCommand, TriggerView>, CreateTriggerHandler>();
         services.AddScoped<ICommandHandler<SetTriggerEnabledCommand, TriggerView>, SetTriggerEnabledHandler>();
         services.AddScoped<ICommandHandler<DeleteTriggerCommand, bool>, DeleteTriggerHandler>();

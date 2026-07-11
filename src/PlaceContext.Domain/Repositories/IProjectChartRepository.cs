@@ -11,6 +11,9 @@ public interface IProjectChartRepository
     /// <summary>All of a project's charts, table-name-sorted.</summary>
     Task<IReadOnlyList<ProjectChart>> ListForProjectAsync(Guid projectId, CancellationToken ct = default);
 
+    /// <summary>Remove one chart by its slot (table name or sql:{name}).</summary>
+    Task DeleteAsync(Guid projectId, string tableName, CancellationToken ct = default);
+
     /// <summary>Remove charts whose table no longer exists (table drops leave charts orphaned).</summary>
     Task DeleteForProjectAsync(Guid projectId, IReadOnlyCollection<string> keepTables, CancellationToken ct = default);
 }

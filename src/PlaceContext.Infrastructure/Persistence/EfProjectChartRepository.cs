@@ -33,10 +33,20 @@ public sealed class EfProjectChartRepository : IProjectChartRepository
         return rows.Select(ToDomain).ToList();
     }
 
+    public async Task DeleteAsync(Guid projectId, string tableName, CancellationToken ct = default)
+    {
+        var row = await _db.ProjectCharts
+            .FirstOrDefaultAsync(r => r.ProjectId == projectId && r.TableName == tableName, ct);
+        if (row is not null) _db.ProjectCharts.Remove(row);
+    }
+
     public async Task DeleteForProjectAsync(Guid projectId, IReadOnlyCollection<string> keepTables, CancellationToken ct = default)
     {
+        // "sql:{name}" slots are user-defined SQL charts, not table charts — the table sweep
+        // must never prune them.
         var stale = await _db.ProjectCharts
-            .Where(r => r.ProjectId == projectId && !keepTables.Contains(r.TableName))
+            .Where(r => r.ProjectId == projectId && !keepTables.Contains(r.TableName)
+                        && !r.TableName.StartsWith("sql:"))
             .ToListAsync(ct);
         _db.ProjectCharts.RemoveRange(stale);
     }
