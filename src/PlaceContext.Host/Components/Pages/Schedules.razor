@@ -3,6 +3,7 @@
 @using PlaceContext.Application.Features
 @inject IPlaceContextService Svc
 @inject PortalUiState Ui
+@inject PlaceContext.Application.Ports.ICurrentTenant Tenant
 
 <PageTitle>placecontext — Schedules</PageTitle>
 
@@ -14,7 +15,7 @@
         <div>
             <h2 style="font-size:18px; font-weight:600; margin:0">Schedules</h2>
             <div style="font-size:12px; color:var(--text-3); margin-top:3px">
-                Every trigger across this project's jobs — cron schedules and event hooks that run jobs while you're away.
+                Every trigger across this project's jobs — cron schedules and event hooks that run jobs while you're away. Cron fires in <span style="font-family:'IBM Plex Mono',monospace; color:var(--text-2)">@Tenant.TimeZoneId</span> (agents set it via <code>set_workspace_timezone</code>).
             </div>
         </div>
     </div>
@@ -50,7 +51,7 @@
         @if (_newKind == "Schedule")
         {
             <div class="dcfield" style="min-width:150px">
-                <label>Cron <span class="code" style="margin-left:4px">UTC</span></label>
+                <label>Cron <span class="code" style="margin-left:4px">@Tenant.TimeZoneId</span></label>
                 <input class="dcinput" style="font-family:'IBM Plex Mono',monospace" @bind="_newCron" placeholder="0 0 * * *" />
             </div>
         }

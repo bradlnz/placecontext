@@ -402,6 +402,20 @@ public sealed class PlaceContextTools
         }
     }
 
+    [Authorize(Policy = "Admin")]
+    [McpServerTool(Name = "set_workspace_timezone"), Description("Set the workspace's IANA timezone (e.g. 'Australia/Brisbane'). Schedule triggers evaluate their cron expressions in this timezone, and job/schedule times display in it. Agents should set this from the user's locale context before creating schedules.")]
+    public static Task<string> SetWorkspaceTimezone(IToolCallLog log,
+        PlaceContext.Infrastructure.Tenancy.ITenantStore tenants,
+        PlaceContext.Application.Ports.ICurrentTenant tenant,
+        [Description("IANA timezone id, e.g. 'Australia/Brisbane' or 'UTC'")] string timeZoneId)
+        => Traced(log, "set_workspace_timezone", null, timeZoneId, new { timeZoneId },
+            async () =>
+            {
+                _ = TimeZoneInfo.FindSystemTimeZoneById(timeZoneId); // throws on unknown ids
+                await tenants.SetTimeZoneAsync(tenant.TenantId, timeZoneId);
+                return new { timeZoneId, applied = true };
+            });
+
     // ── Triggers ──────────────────────────────────────────────────────────────────────────────────
 
     [Authorize(Policy = "Member")]
