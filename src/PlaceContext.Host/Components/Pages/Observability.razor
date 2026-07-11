@@ -1,0 +1,285 @@
+@page "/observability"
+@inject IPlaceContextService Svc
+@inject PortalUiState Ui
+@inject NavigationManager Nav
+
+<PageTitle>PlaceContext — Observability</PageTitle>
+
+@if (_loading)
+{
+    <div style="padding:24px; color:var(--text-3)">Loading…</div>
+}
+else
+{
+    <div style="padding:20px 24px 40px; max-width:1320px; margin:0 auto">
+
+        <div style="display:flex; align-items:baseline; justify-content:space-between; margin-bottom:14px">
+            <div>
+                <h2 style="font-size:18px; font-weight:600; margin:0">Observability</h2>
+                <div style="font-size:12px; color:var(--text-3); margin-top:3px">
+                    What ran, where, and how it went — across every project in the workspace.
+                </div>
+            </div>
+            <button class="dcbtn" @onclick="RefreshAsync">Refresh</button>
+        </div>
+
+        @* Global tab strip — Job history today; more lenses (events, triggers, costs) slot in here. *@
+        <div class="dctabs" style="margin-bottom:16px">
+            <button class="dctab @(_tab == "runs" ? "active" : "")" @onclick="@(() => _tab = "runs")">Job history<span class="n">@(_reports?.Count ?? 0)</span></button>
+        </div>
+
+        @if (_message is not null)
+        {
+            <div style="margin-bottom:12px; padding:10px 14px; border-radius:8px; background:var(--card); font-size:12.5px; color:var(--text-2)">@_message</div>
+        }
+
+        @if (_tab == "runs")
+        {
+            @if (_reports is null or { Count: 0 })
+            {
+                <div class="dccard" style="padding:24px; color:var(--text-3); font-size:13px; text-align:center">
+                    No job runs recorded yet — run a job from any project's Jobs tab and it appears here.
+                </div>
+            }
+            else
+            {
+                <div style="display:flex; flex-direction:column; gap:8px">
+                    @foreach (var rep in _reports)
+                    {
+                        var run = rep.Run;
+                        <div class="dccard" style="padding:12px 16px; cursor:pointer" @onclick="@(() => OpenRun(rep))">
+                            <div style="display:flex; align-items:center; gap:12px">
+                                <span style="font-size:11px; font-weight:600; padding:3px 8px; border-radius:5px; flex:none;
+                                      color:@StatusColor(run.Status); background:@StatusBg(run.Status)">@run.Status</span>
+                                <div style="flex:1; min-width:0">
+                                    <span style="font-size:13px; font-weight:600">@rep.JobName</span>
+                                    <span style="font-size:11.5px; color:var(--text-3); margin-left:8px">@rep.ProjectName</span>
+                                </div>
+                                <span style="font-size:11px; color:var(--text-3)">
+                                    ✓ @run.ShardResults.Count(s => s.Outcome == "Succeeded")
+                                    @(run.ShardResults.Any(s => s.Outcome == "Failed") ? $" ✗ {run.ShardResults.Count(s => s.Outcome == "Failed")}" : "")
+                                </span>
+                                <span style="font-family:'Geist Mono',monospace; font-size:11.5px; color:var(--text-2)">
+                                    @run.StartedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")
+                                </span>
+                                @if (run.FinishedAt.HasValue)
+                                {
+                                    <span style="font-size:11px; color:var(--text-3); font-family:'Geist Mono',monospace; width:52px; text-align:right">
+                                        @FormatDuration(run.StartedAt, run.FinishedAt.Value)
+                                    </span>
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+        }
+    </div>
+}
+
+@* ── Run detail slide-out: the full picture — shards, artifacts, charts, logs ─────────────── *@
+@if (_open is not null)
+{
+    var run = _open.Run;
+    <div class="dcslide-scrim" @onclick="CloseRun"></div>
+    <div class="dcslide" style="width:620px">
+        <div class="dcslide-head">
+            <div style="flex:1; min-width:0">
+                <div style="font-size:14px; font-weight:600">@_open.JobName</div>
+                <div style="font-size:11.5px; color:var(--text-3); margin-top:3px">
+                    @_open.ProjectName · run @run.Id.ToString("N")[..8] · @run.StartedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")
+                </div>
+            </div>
+            <button class="dcbtn" style="margin-right:10px"
+                    @onclick="@(() => Nav.NavigateTo($"/project/{run.ProjectId}/jobs"))">Open project →</button>
+            <button class="dcslide-x" @onclick="CloseRun">×</button>
+        </div>
+        <div class="dcslide-body" style="flex:1; overflow-y:auto">
+            <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px">
+                <span style="font-size:12px; font-weight:600; padding:3px 9px; border-radius:5px;
+                      color:@StatusColor(run.Status); background:@StatusBg(run.Status)">@run.Status</span>
+                <span style="font-size:11px; color:var(--text-3)">
+                    Ran as: <code>@run.Snapshot.MapSourceKind</code> · @run.Snapshot.MapSourceLabel
+                    · @run.Snapshot.ShardCount shard(s) · concurrency @run.Snapshot.ConcurrencyLimit
+                </span>
+            </div>
+
+            @if (_openArtifacts is { Count: > 0 })
+            {
+                <div class="dccard" style="padding:12px 16px; margin-bottom:14px">
+                    <div style="font-size:12.5px; font-weight:600; margin-bottom:8px">Post-job outputs</div>
+                    <div style="display:flex; flex-direction:column; gap:6px">
+                        @foreach (var art in _openArtifacts)
+                        {
+                            <div style="display:flex; align-items:center; gap:10px">
+                                <span style="font-size:10.5px; padding:1px 7px; border-radius:4px; background:var(--bg-2); color:var(--text-3)">@art.Kind</span>
+                                <a href="@($"/runs/{art.RunId}/artifacts/{art.Id}")" target="_blank" rel="noopener"
+                                   style="font-size:12.5px; color:var(--accent); text-decoration:none; flex:1; min-width:0">@art.Title ↗</a>
+                                <span style="font-size:10.5px; color:var(--text-3)">@FormatBytes(art.SizeBytes)</span>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+
+            @foreach (var shard in run.ShardResults)
+            {
+                <div style="margin-bottom:14px">
+                    <div style="font-size:12.5px; font-weight:600; margin-bottom:6px; display:flex; align-items:center; gap:8px">
+                        <span>Shard @shard.Index</span>
+                        <span style="font-size:11px; padding:2px 7px; border-radius:4px;
+                              color:@StatusColor(shard.Outcome); background:@StatusBg(shard.Outcome)">@shard.Outcome</span>
+                        <span style="font-size:11px; color:var(--text-3)">exit @shard.ExitCode</span>
+                    </div>
+                    @if (shard.Artifact is not null)
+                    {
+                        <pre style="background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:10px; font-size:11px; font-family:'Geist Mono',monospace; overflow-x:auto; white-space:pre-wrap; word-break:break-all; color:var(--text-2); max-height:240px; overflow-y:auto">@PrettyJson(shard.Artifact)</pre>
+                        @if (ArtifactChart.TrySvg(shard.Artifact, out var shardChart))
+                        {
+                            <div style="font-size:11px; color:var(--text-3); margin-top:8px">chart <span style="color:var(--text-3)">(from the artifact's JSON)</span></div>
+                            @((MarkupString)shardChart)
+                        }
+                    }
+                    @if (shard.Artifacts.Count > 0)
+                    {
+                        <div style="margin-top:6px; display:flex; flex-wrap:wrap; gap:8px">
+                            @foreach (var a in shard.Artifacts)
+                            {
+                                <a class="dcbtn" style="padding:3px 10px; font-size:11px; text-decoration:none"
+                                   href="@DataUri(a)" download="@a.Name">⬇ @a.Name</a>
+                            }
+                        </div>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(shard.Log))
+                    {
+                        <details style="margin-top:4px" open="@(shard.Outcome == "Failed")">
+                            <summary style="font-size:11px; color:var(--text-3); cursor:pointer">Log</summary>
+                            <pre style="font-size:10.5px; font-family:'Geist Mono',monospace; color:var(--text-3); white-space:pre-wrap; margin-top:4px; max-height:320px; overflow-y:auto">@shard.Log</pre>
+                        </details>
+                    }
+                </div>
+            }
+
+            @if (run.ReduceResult is { } reduce)
+            {
+                <div style="border-top:1px solid var(--border); padding-top:12px; margin-top:4px">
+                    <div style="font-size:12.5px; font-weight:600; margin-bottom:6px; display:flex; align-items:center; gap:8px">
+                        <span>Reduce step</span>
+                        <span style="font-size:11px; padding:2px 7px; border-radius:4px;
+                              color:@(reduce.Succeeded ? "var(--good)" : "var(--bad)"); background:@(reduce.Succeeded ? "var(--good-bg)" : "var(--bad-bg)")">
+                            @(reduce.Succeeded ? "succeeded" : "failed")
+                        </span>
+                        <span style="font-size:11px; color:var(--text-3)">exit @reduce.ExitCode</span>
+                    </div>
+                    @if (reduce.Artifact is not null)
+                    {
+                        <pre style="background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:10px; font-size:11px; font-family:'Geist Mono',monospace; overflow-x:auto; white-space:pre-wrap; word-break:break-all; color:var(--text-2); max-height:300px; overflow-y:auto">@PrettyJson(reduce.Artifact)</pre>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(reduce.Log))
+                    {
+                        <details style="margin-top:4px">
+                            <summary style="font-size:11px; color:var(--text-3); cursor:pointer">Log</summary>
+                            <pre style="font-size:10.5px; font-family:'Geist Mono',monospace; color:var(--text-3); white-space:pre-wrap; margin-top:4px; max-height:320px; overflow-y:auto">@reduce.Log</pre>
+                        </details>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    private IReadOnlyList<RunReportView>? _reports;
+    private RunReportView? _open;
+    private IReadOnlyList<RunArtifactLinkView>? _openArtifacts;
+    private string _tab = "runs";
+    private string? _message;
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await RefreshAsync();
+        Ui.Set("Observability", "cross-project job history");
+        _loading = false;
+    }
+
+    private async Task RefreshAsync()
+    {
+        _message = null;
+        try
+        {
+            _reports = await Svc.ListRecentRunReportsAsync(take: 50);
+        }
+        catch (Exception ex) { _message = ex.Message; }
+    }
+
+    private async Task OpenRun(RunReportView rep)
+    {
+        _open = rep;
+        _openArtifacts = null;
+        try
+        {
+            _openArtifacts = await Svc.ListRunArtifactsAsync(rep.Run.Id);
+        }
+        catch { /* stored outputs are an extra — the detail renders without them */ }
+    }
+
+    private void CloseRun()
+    {
+        _open = null;
+        _openArtifacts = null;
+    }
+
+    private static string StatusColor(string status) => status switch
+    {
+        "Succeeded" => "var(--good)",
+        "Failed" => "var(--bad)",
+        "Partial" => "var(--warn)",
+        "Running" => "var(--brand-2)",
+        _ => "var(--text-3)"
+    };
+
+    private static string StatusBg(string status) => status switch
+    {
+        "Succeeded" => "var(--good-bg)",
+        "Failed" => "var(--bad-bg)",
+        "Partial" => "var(--warn-bg)",
+        "Running" => "var(--brand-bg)",
+        _ => "var(--card-2)"
+    };
+
+    private static string FormatDuration(DateTimeOffset start, DateTimeOffset end)
+    {
+        var span = end - start;
+        if (span.TotalSeconds < 60) return $"{(int)span.TotalSeconds}s";
+        return $"{(int)span.TotalMinutes}m {span.Seconds}s";
+    }
+
+    private static string FormatBytes(long n) =>
+        n >= 1_048_576 ? $"{n / 1_048_576.0:0.#} MB" : n >= 1024 ? $"{n / 1024.0:0.#} KB" : $"{n} B";
+
+    private static string DataUri(RunArtifactView a)
+    {
+        var contentType = a.Name.EndsWith(".csv", StringComparison.OrdinalIgnoreCase) ? "text/csv"
+            : a.Name.EndsWith(".json", StringComparison.OrdinalIgnoreCase) ? "application/json"
+            : a.Name.EndsWith(".html", StringComparison.OrdinalIgnoreCase) ? "text/html"
+            : a.Name.EndsWith(".svg", StringComparison.OrdinalIgnoreCase) ? "image/svg+xml"
+            : a.Name.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase) ? "application/pdf"
+            : a.Name.EndsWith(".png", StringComparison.OrdinalIgnoreCase) ? "image/png"
+            : a.Name.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase) || a.Name.EndsWith(".jpeg", StringComparison.OrdinalIgnoreCase) ? "image/jpeg"
+            : "text/plain";
+        var b64 = a.IsBinary ? a.Content : Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(a.Content));
+        return $"data:{contentType};base64,{b64}";
+    }
+
+    private static string PrettyJson(string raw)
+    {
+        try
+        {
+            var doc = System.Text.Json.JsonDocument.Parse(raw);
+            return System.Text.Json.JsonSerializer.Serialize(doc.RootElement,
+                new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+        }
+        catch { return raw; }
+    }
+}

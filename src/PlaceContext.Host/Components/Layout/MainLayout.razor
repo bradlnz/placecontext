@@ -28,6 +28,7 @@
             <NavLink class="dcnav" href="/" Match="NavLinkMatch.All"><span class="bar"></span>@Icon("grid") Overview</NavLink>
             <NavLink class="dcnav" href="wiki"><span class="bar"></span>@Icon("ledger")<span style="flex:1">Wiki</span></NavLink>
             <NavLink class="dcnav" href="inspector"><span class="bar"></span>@Icon("inspector")<span style="flex:1">MCP Inspector</span><span style="width:7px; height:7px; border-radius:50%; background:var(--good); animation:dcpulse 1.8s ease-in-out infinite"></span></NavLink>
+            <NavLink class="dcnav" href="observability"><span class="bar"></span>@Icon("pulse")<span style="flex:1">Observability</span></NavLink>
 
             <div style="font-size:10px; font-weight:600; letter-spacing:.7px; color:var(--text-3); padding:14px 10px 6px; text-transform:uppercase">Settings</div>
             <NavLink class="dcnav" href="settings/github"><span class="bar"></span>@Icon("github")<span style="flex:1">GitHub</span></NavLink>
@@ -228,6 +229,7 @@
             "ledger" => "<circle cx='6' cy='6' r='2.4'></circle><circle cx='6' cy='18' r='2.4'></circle><path d='M6 8.5v7'></path><path d='M18 8.5a3.5 3.5 0 0 1-3.5 3.5H10'></path><circle cx='18' cy='6' r='2.4'></circle>",
             "rocket" => "<path d='M5 13c-1.5 1.3-2 5-2 5s3.7-.5 5-2'></path><path d='M9 11a14 14 0 0 1 7-8c2.6 0 4 1.4 4 4a14 14 0 0 1-8 7l-3-3z'></path><circle cx='14.5' cy='9.5' r='1.4'></circle>",
             "github" => "<path d='M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.3 4.3 0 0 0-.1-3.2s-1-.3-3.4 1.3a11.6 11.6 0 0 0-6 0C6.3 2.1 5.3 2.4 5.3 2.4a4.3 4.3 0 0 0-.1 3.2A4.6 4.6 0 0 0 3.9 8.8c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21'></path>",
+            "pulse" => "<path d='M3 12h4l2.5-6 4 12L16 12h5'></path>",
             _ => "<rect x='3' y='4' width='18' height='16' rx='2'></rect><path d='M7 9l3 2.5L7 14'></path><path d='M13 14.5h4'></path>"
         };
         builder.AddMarkupContent(0, $"<svg width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'>{path}</svg>");

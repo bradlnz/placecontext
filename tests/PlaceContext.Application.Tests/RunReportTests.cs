@@ -36,13 +36,14 @@ public class RunReportTests
         await runs.AddAsync(JobRun.Start(older.Id, older.ProjectId, T0, Snapshot()));
         await runs.AddAsync(JobRun.Start(newer.Id, newer.ProjectId, T0.AddMinutes(5), Snapshot()));
 
-        var handler = new ListRecentRunReportsHandler(runs, jobs);
+        var handler = new ListRecentRunReportsHandler(runs, jobs, new InMemoryProjectRepository());
         var reports = await handler.HandleAsync(new ListRecentRunReportsQuery(Take: 10));
 
         Assert.Equal(2, reports.Count);
         Assert.Equal("newer-job", reports[0].JobName);
         Assert.Equal("older-job", reports[1].JobName);
         Assert.Equal(newer.ProjectId, reports[0].Run.ProjectId);
+        Assert.Equal("(deleted project)", reports[0].ProjectName); // no project rows registered here
     }
 
     [Fact]
@@ -56,7 +57,7 @@ public class RunReportTests
             await runs.AddAsync(JobRun.Start(job.Id, job.ProjectId, T0.AddMinutes(i), Snapshot()));
         await runs.AddAsync(JobRun.Start(Guid.NewGuid(), Guid.NewGuid(), T0.AddMinutes(9), Snapshot())); // orphan
 
-        var handler = new ListRecentRunReportsHandler(runs, jobs);
+        var handler = new ListRecentRunReportsHandler(runs, jobs, new InMemoryProjectRepository());
         var reports = await handler.HandleAsync(new ListRecentRunReportsQuery(Take: 3));
 
         Assert.Equal(3, reports.Count);
