@@ -343,6 +343,8 @@ public class PostJobActionServiceTests
             => Task.FromResult<RunArtifactLink?>(null);
         public Task<IReadOnlyList<RunArtifactLink>> ListForJobAsync(Guid jobId, CancellationToken ct = default)
             => Task.FromResult<IReadOnlyList<RunArtifactLink>>(Array.Empty<RunArtifactLink>());
+        public Task<IReadOnlyList<RunArtifactLink>> ListRecentAsync(int take, CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<RunArtifactLink>>(Links.Take(take).ToList());
     }
 
     private sealed class FakeUow : IUnitOfWork
