@@ -27,6 +27,10 @@ dev cookie via `curl -c jar -L /`, POST `/connect/register` (token_endpoint_auth
 GET `/connect/authorize` with PKCE S256 + the cookie (302 back with code), POST `/connect/token`.
 Then MCP Streamable HTTP: initialize → grab `mcp-session-id` response header → notifications/initialized
 → tools/call. `create_project` takes `{name, path}` (the param is `path`, not `rootPath`).
+GOTCHA: with no configured signing key, local dev generates the OAuth RSA key per process — every
+host restart silently 401s old bearers (curl shows empty tool output). Re-run the oauth dance after
+each restart. Also: `dotnet run --no-build` serves STALE code unless you `dotnet build src/PlaceContext.Host`
+right before — `dotnet test` does NOT rebuild the Host project.
 
 ## Drive the portal (Blazor Server — needs a real browser)
 
