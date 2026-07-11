@@ -59,7 +59,7 @@ public interface IPlaceContextService
     // Job management.
     Task<JobView> CreateJobAsync(CreateJobCommand command, CancellationToken ct = default);
     Task<JobView> UpdateJobAsync(UpdateJobCommand command, CancellationToken ct = default);
-    Task<JobRunDetailView> RunJobAsync(Guid jobId, string? inputPayload = null, CancellationToken ct = default);
+    Task<JobRunDetailView> RunJobAsync(Guid jobId, string? inputPayload = null, Guid? runId = null, CancellationToken ct = default);
     Task<IReadOnlyList<JobView>> ListJobsAsync(Guid projectId, CancellationToken ct = default);
     Task<IReadOnlyList<JobRunView>> ListJobRunsAsync(Guid jobId, CancellationToken ct = default);
     Task<JobRunDetailView?> GetJobRunAsync(Guid runId, CancellationToken ct = default);
@@ -71,7 +71,7 @@ public interface IPlaceContextService
     Task<JobChainView> UpdateJobChainAsync(Guid chainId, string name, string? description, IReadOnlyList<Guid> stepJobIds, CancellationToken ct = default);
     Task<bool> DeleteJobChainAsync(Guid chainId, CancellationToken ct = default);
     Task<IReadOnlyList<JobChainView>> ListJobChainsAsync(Guid projectId, CancellationToken ct = default);
-    Task<ChainRunView> RunJobChainAsync(Guid chainId, string? inputPayload = null, CancellationToken ct = default);
+    Task<ChainRunView> RunJobChainAsync(Guid chainId, string? inputPayload = null, Guid? chainRunId = null, CancellationToken ct = default);
     Task<IReadOnlyList<ChainRunView>> ListChainRunsAsync(Guid chainId, int take = 20, CancellationToken ct = default);
     Task<ChainRunView?> GetChainRunAsync(Guid chainRunId, CancellationToken ct = default);
 

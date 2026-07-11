@@ -31,9 +31,10 @@ public static class DependencyInjection
         // Shared risk computation (used by recompute + project creation).
         services.AddScoped<RiskAssessmentService>();
 
-        // Trigger + event application services (event fan-out, schedule scanning).
+        // Trigger + event application services (event fan-out, schedule scanning, run watching).
         services.AddScoped<EventDispatchService>();
         services.AddScoped<ScheduleScanService>();
+        services.AddScoped<RunStatusWatchService>();
         services.AddScoped<PostJobActionService>();
         services.AddScoped<JobRunDataRecorder>();
         services.AddScoped<ProjectAgentService>();

@@ -51,16 +51,21 @@ public sealed class JobRun : AggregateRoot
     /// </summary>
     public WorkloadSnapshot Snapshot { get; }
 
-    /// <summary>Factory: creates a new run in the Running state, snapshotting the current job spec.</summary>
-    public static JobRun Start(Guid jobId, Guid projectId, DateTimeOffset startedAt, WorkloadSnapshot snapshot)
+    /// <summary>Factory: creates a new run in the Running state, snapshotting the current job spec.
+    /// Callers may pre-allocate <paramref name="id"/> so the run is addressable (progress
+    /// notifications, chain step links) before the handler returns.</summary>
+    public static JobRun Start(Guid jobId, Guid projectId, DateTimeOffset startedAt, WorkloadSnapshot snapshot,
+        Guid? id = null)
     {
         if (jobId == Guid.Empty)
             throw new ArgumentException("JobId must not be empty.", nameof(jobId));
         if (projectId == Guid.Empty)
             throw new ArgumentException("ProjectId must not be empty.", nameof(projectId));
+        if (id == Guid.Empty)
+            throw new ArgumentException("A pre-allocated run id must not be empty.", nameof(id));
         ArgumentNullException.ThrowIfNull(snapshot);
 
-        return new JobRun(Guid.NewGuid(), jobId, projectId, JobRunStatus.Running, startedAt, null, null, snapshot);
+        return new JobRun(id ?? Guid.NewGuid(), jobId, projectId, JobRunStatus.Running, startedAt, null, null, snapshot);
     }
 
     /// <summary>

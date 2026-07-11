@@ -136,18 +136,24 @@ public sealed class TriggerSchedulerService : BackgroundService
 
                         // Surface this run in the notifications bell (Track/Mark* — the external-worker
                         // shape, like the analytics sweep) so trigger-fired and TUI-queued runs update
-                        // the pane live, exactly like a portal-started run.
+                        // the pane live, exactly like a portal-started run. The run id is pre-allocated
+                        // and used as the op's correlation key, so the run-status watcher converges on
+                        // this entry (and flips it terminal the moment the row commits) instead of
+                        // waiting for the dispatcher to return behind the slow enrichment.
                         var job = await scope.ServiceProvider.GetRequiredService<Domain.Repositories.IJobRepository>()
                             .GetByIdAsync(run.JobId, ct);
+                        var runId = Guid.NewGuid();
                         var op = _opCenter.Track(tenant, job?.ProjectId,
                             $"Run job — {job?.Name ?? "job"} · {run.TriggerName}",
-                            job is null ? null : $"/project/{job.ProjectId}/jobs");
+                            job is null ? null : $"/project/{job.ProjectId}/jobs",
+                            correlationKey: RunStatusWatchService.JobRunKey(runId));
                         _opCenter.MarkRunning(op.Id);
                         try
                         {
                             var dispatcher = scope.ServiceProvider.GetRequiredService<IDispatcher>();
-                            var result = await dispatcher.Send(new RunJobCommand(run.JobId, run.Payload), ct);
-                            _opCenter.MarkDone(op.Id, $"run finished — {result.Status}");
+                            var result = await dispatcher.Send(new RunJobCommand(run.JobId, run.Payload, runId), ct);
+                            if (result.Status == "Failed") _opCenter.MarkFailed(op.Id, "run finished — Failed");
+                            else _opCenter.MarkDone(op.Id, $"run finished — {result.Status}");
                         }
                         catch (Exception ex)
                         {
@@ -204,6 +210,20 @@ public sealed class TriggerSchedulerService : BackgroundService
         var reaped = await cmd.ExecuteNonQueryAsync(ct);
         if (reaped > 0)
             _log.LogWarning("Reaped {Count} orphaned job run(s) stuck in Running → Failed.", reaped);
+
+        // Chain runs are orphaned the same way (the pipeline driver died between stage saves) and
+        // would otherwise show Running in the portal forever. Only the run's own status flips; the
+        // steps JSON keeps its last honest snapshot of how far the pipeline actually got.
+        await using var chainCmd = conn.CreateCommand();
+        chainCmd.CommandText = """
+            UPDATE chain_runs
+            SET "Status" = 'Failed', "FinishedAt" = now()
+            WHERE "Status" = 'Running' AND "StartedAt" < now() - make_interval(secs => @grace)
+            """;
+        chainCmd.Parameters.AddWithValue("grace", (int)OrphanGrace.TotalSeconds);
+        var reapedChains = await chainCmd.ExecuteNonQueryAsync(ct);
+        if (reapedChains > 0)
+            _log.LogWarning("Reaped {Count} orphaned chain run(s) stuck in Running → Failed.", reapedChains);
     }
 
     private async Task<List<ClaimedRun>> ClaimAsync(CancellationToken ct)

@@ -92,7 +92,7 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
         var snapshot = WorkloadSnapshot.From(effectiveMap, job.ReduceSpec, job.ConcurrencyLimit,
             job.AllowNetworkEgress);
         var startedAt = _clock.UtcNow;
-        var run = JobRun.Start(job.Id, job.ProjectId, startedAt, snapshot);
+        var run = JobRun.Start(job.Id, job.ProjectId, startedAt, snapshot, command.RunId);
         await _runs.AddAsync(run, ct);
         await _uow.SaveChangesAsync(ct);
 

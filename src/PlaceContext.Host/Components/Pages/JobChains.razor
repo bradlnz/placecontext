@@ -424,12 +424,16 @@ else
         // the moment it starts, so the Runs tab below picks it up and follows it live.
         var tenant = PlaceContext.Infrastructure.Tenancy.CurrentTenant.Current;
         if (tenant is null) { _message = "No tenant resolved — sign in again."; return; }
+        // Pre-allocated run id = the op's correlation key: the run-status watcher updates this
+        // entry live (step progress, prompt terminal status) straight from the persisted run.
+        var chainRunId = Guid.NewGuid();
         OpCenter.Run(tenant, ProjectId, $"Run chain — {chain.Name}", $"/project/{ProjectId}/chains",
             async (sp, ct) =>
             {
-                var result = await sp.GetRequiredService<IPlaceContextService>().RunJobChainAsync(chain.Id, payload, ct);
+                var result = await sp.GetRequiredService<IPlaceContextService>().RunJobChainAsync(chain.Id, payload, chainRunId, ct);
                 return $"chain finished — {result.Status} ({result.Steps.Count(s => s.Status != "Skipped")} step(s) ran)";
-            });
+            },
+            correlationKey: PlaceContext.Application.Features.RunStatusWatchService.ChainRunKey(chainRunId));
         _runPromptChain = null;
         _runPromptJob = null;
 

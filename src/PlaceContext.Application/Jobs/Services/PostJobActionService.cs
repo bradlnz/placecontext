@@ -8,13 +8,24 @@ using PlaceContext.Domain.ValueObjects;
 namespace PlaceContext.Application.Features;
 
 /// <summary>
-/// Runs a job's configured post-job actions after a run completes: builds each output (HTML report,
-/// chart, CSV, raw files) from the run's artifacts, stores it in the object store, and records a
-/// <see cref="RunArtifactLink"/> so the portal/TUI can surface it. Entirely best-effort — every action
-/// is isolated so one failure never fails the run or blocks the others.
+/// Runs a job's post-job actions after a run completes: builds each output (HTML report, chart,
+/// CSV, raw files) from the run's artifacts, stores it in the object store, and records a
+/// <see cref="RunArtifactLink"/> so the portal/TUI can surface it. Jobs with no explicitly
+/// configured actions get the default output set — every run yields openable artifacts without
+/// per-job setup; configuring actions replaces the defaults with exactly that selection.
+/// Entirely best-effort — every action is isolated so one failure never fails the run or blocks
+/// the others.
 /// </summary>
 public sealed class PostJobActionService
 {
+    /// <summary>What an unconfigured job produces: the report/chart/CSV trio. RawBundle stays
+    /// opt-in — raw artifacts are already visible inline, and emitted document files are
+    /// auto-stored regardless.</summary>
+    private static readonly IReadOnlyList<PostJobActionKind> DefaultActions = new[]
+    {
+        PostJobActionKind.HtmlReport, PostJobActionKind.Chart, PostJobActionKind.Csv,
+    };
+
     private readonly IObjectStore _store;
     private readonly IRunArtifactLinkRepository _links;
     private readonly IUnitOfWork _uow;
@@ -55,7 +66,8 @@ public sealed class PostJobActionService
             _log?.LogWarning(ex, "Capturing job HTML outputs failed for run {RunId} (job {JobId}).", run.Id, job.Id);
         }
 
-        foreach (var action in job.PostJobActions)
+        var actions = job.PostJobActions.Count > 0 ? job.PostJobActions : DefaultActions;
+        foreach (var action in actions)
         {
             try
             {

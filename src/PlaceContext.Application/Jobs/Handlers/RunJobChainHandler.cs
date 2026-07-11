@@ -45,7 +45,7 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
             stepJobs.Add(await _jobs.GetByIdAsync(jobId, ct));
         var names = stepJobs.Select((j, i) => j?.Name ?? "(deleted)").ToList();
 
-        var chainRun = ChainRun.Start(chain, names, _clock.UtcNow);
+        var chainRun = ChainRun.Start(chain, names, _clock.UtcNow, command.ChainRunId);
         await _runs.AddAsync(chainRun, ct);
         await _uow.SaveChangesAsync(ct);
 
@@ -61,10 +61,13 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
                 break;
             }
 
-            chainRun.MarkStepRunning(i, _clock.UtcNow);
+            // Pre-allocate the step's run id and record it before dispatching, so the live pipeline
+            // (and the run-status watcher) can address the step's run while it is still executing.
+            var stepRunId = Guid.NewGuid();
+            chainRun.MarkStepRunning(i, stepRunId, _clock.UtcNow);
             await SaveProgressAsync(chainRun, ct);
 
-            var run = await _dispatcher.Send(new RunJobCommand(chain.StepJobIds[i], payload), ct);
+            var run = await _dispatcher.Send(new RunJobCommand(chain.StepJobIds[i], payload, stepRunId), ct);
             chainRun.MarkStepFinished(i, run.Id, ParseStepOutcome(run.Status), _clock.UtcNow);
             await SaveProgressAsync(chainRun, ct);
 

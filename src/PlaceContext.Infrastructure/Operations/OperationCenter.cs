@@ -16,12 +16,20 @@ public sealed class PortalOperation
     public required string Title { get; init; }
     /// <summary>Where to go to see the result (e.g. the job's run history).</summary>
     public string? Link { get; init; }
+    /// <summary>Stable identity of the work this op tracks (e.g. <c>job-run:{id:N}</c>), so an
+    /// authoritative status source (the run-status watcher) converges on the same entry the
+    /// initiating page created instead of duplicating it.</summary>
+    public string? CorrelationKey { get; init; }
     public PortalOperationStatus Status { get; internal set; } = PortalOperationStatus.Queued;
     public DateTimeOffset QueuedAt { get; } = DateTimeOffset.UtcNow;
     public DateTimeOffset? StartedAt { get; internal set; }
     public DateTimeOffset? FinishedAt { get; internal set; }
     /// <summary>Short human outcome ("Run abc123 — Succeeded") or the failure message.</summary>
     public string? Outcome { get; internal set; }
+    /// <summary>Set when an authoritative Sync lands a terminal status: the persisted truth about
+    /// the work's outcome. Advisory Mark* calls (the in-process wrapper, which reports late and
+    /// can even report the wrong terminal state) no longer change a sealed operation.</summary>
+    internal bool Sealed { get; set; }
 }
 
 /// <summary>
@@ -71,9 +79,9 @@ public sealed class OperationCenter
     /// Returns immediately; the returned string (if any) becomes the operation's outcome line.
     /// </summary>
     public PortalOperation Run(TenantInfo tenant, Guid? projectId, string title, string? link,
-        Func<IServiceProvider, CancellationToken, Task<string?>> work)
+        Func<IServiceProvider, CancellationToken, Task<string?>> work, string? correlationKey = null)
     {
-        var op = Track(tenant, projectId, title, link);
+        var op = Track(tenant, projectId, title, link, correlationKey);
         _ = Task.Run(async () =>
         {
             MarkRunning(op.Id);
@@ -95,41 +103,105 @@ public sealed class OperationCenter
     }
 
     /// <summary>Register an operation whose lifecycle an external worker drives (e.g. the analytics sweep).</summary>
-    public PortalOperation Track(TenantInfo tenant, Guid? projectId, string title, string? link)
+    public PortalOperation Track(TenantInfo tenant, Guid? projectId, string title, string? link,
+        string? correlationKey = null)
     {
-        var op = new PortalOperation { TenantId = tenant.Id, ProjectId = projectId, Title = title, Link = link };
-        lock (_gate)
+        var op = new PortalOperation
         {
-            _ops.Add(op);
-            var tenantOps = _ops.Where(o => o.TenantId == tenant.Id).OrderByDescending(o => o.QueuedAt).ToList();
-            foreach (var stale in tenantOps.Skip(KeepPerTenant)
-                         .Where(o => o.Status is PortalOperationStatus.Succeeded or PortalOperationStatus.Failed))
-                _ops.Remove(stale);
-        }
+            TenantId = tenant.Id, ProjectId = projectId, Title = title, Link = link,
+            CorrelationKey = correlationKey,
+        };
+        lock (_gate) { AddAndTrim(op); }
         Notify();
         return op;
     }
 
-    public void MarkRunning(Guid opId) => Update(opId, o => { o.Status = PortalOperationStatus.Running; o.StartedAt = DateTimeOffset.UtcNow; });
+    /// <summary>
+    /// Upsert by (tenant, correlation key) from an authoritative source — the run-status watcher
+    /// reflecting persisted run state. Creates the operation when no page tracked it here (a run
+    /// queued by a trigger, started via MCP, or executed on another replica); otherwise converges
+    /// on the existing entry, keeping its (often richer) title. A terminal Sync seals the
+    /// operation: later advisory Mark* calls — which arrive minutes late behind best-effort
+    /// enrichment, or with the wrong status — can no longer change it.
+    /// </summary>
+    public void Sync(Guid tenantId, string correlationKey, PortalOperationStatus status, string title,
+        string? link, Guid? projectId, string? outcome, DateTimeOffset? startedAt, DateTimeOffset? finishedAt)
+    {
+        var terminal = status is PortalOperationStatus.Succeeded or PortalOperationStatus.Failed;
+        lock (_gate)
+        {
+            var op = _ops.FirstOrDefault(o => o.TenantId == tenantId && o.CorrelationKey == correlationKey);
+            if (op is null)
+            {
+                op = new PortalOperation
+                {
+                    TenantId = tenantId, ProjectId = projectId, Title = title, Link = link,
+                    CorrelationKey = correlationKey,
+                };
+                op.Status = status;
+                op.StartedAt = startedAt;
+                op.FinishedAt = finishedAt;
+                op.Outcome = outcome;
+                op.Sealed = terminal;
+                AddAndTrim(op);
+            }
+            else
+            {
+                if (op.Sealed) return;
+                op.Status = status;
+                op.StartedAt ??= startedAt;
+                op.FinishedAt = finishedAt ?? op.FinishedAt;
+                if (outcome is not null) op.Outcome = outcome;
+                op.Sealed = terminal;
+            }
+        }
+        Notify();
+    }
+
+    public void MarkRunning(Guid opId) => Update(opId, o =>
+    {
+        if (o.Sealed || o.Status is PortalOperationStatus.Succeeded or PortalOperationStatus.Failed) return false;
+        o.Status = PortalOperationStatus.Running;
+        o.StartedAt = DateTimeOffset.UtcNow;
+        return true;
+    });
 
     public void MarkDone(Guid opId, string? outcome = null)
-        => Update(opId, o => { o.Status = PortalOperationStatus.Succeeded; o.FinishedAt = DateTimeOffset.UtcNow; o.Outcome = outcome; });
+        => Update(opId, o =>
+        {
+            if (o.Sealed) return false;
+            o.Status = PortalOperationStatus.Succeeded;
+            o.FinishedAt = DateTimeOffset.UtcNow;
+            o.Outcome = outcome;
+            return true;
+        });
 
     public void MarkFailed(Guid opId, string error)
         => Update(opId, o =>
         {
+            if (o.Sealed) return false;
             o.Status = PortalOperationStatus.Failed;
             o.FinishedAt = DateTimeOffset.UtcNow;
             o.Outcome = error.Length > 300 ? error[..300] + "…" : error;
+            return true;
         });
 
-    private void Update(Guid opId, Action<PortalOperation> mutate)
+    /// <summary>Callers hold <see cref="_gate"/>.</summary>
+    private void AddAndTrim(PortalOperation op)
+    {
+        _ops.Add(op);
+        var tenantOps = _ops.Where(o => o.TenantId == op.TenantId).OrderByDescending(o => o.QueuedAt).ToList();
+        foreach (var stale in tenantOps.Skip(KeepPerTenant)
+                     .Where(o => o.Status is PortalOperationStatus.Succeeded or PortalOperationStatus.Failed))
+            _ops.Remove(stale);
+    }
+
+    private void Update(Guid opId, Func<PortalOperation, bool> mutate)
     {
         lock (_gate)
         {
             var op = _ops.FirstOrDefault(o => o.Id == opId);
-            if (op is null) return;
-            mutate(op);
+            if (op is null || !mutate(op)) return;
         }
         Notify();
     }

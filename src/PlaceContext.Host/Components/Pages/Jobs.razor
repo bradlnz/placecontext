@@ -600,6 +600,7 @@ else
                     </div>
                     <div class="dchint">
                         After each run, generate these from the run's artifacts and store them in the object store — they appear as links on the run.
+                        Nothing selected = automatic defaults (HTML report + chart + CSV); selecting actions replaces the defaults with exactly that set.
                     </div>
                 </div>
             </div>
@@ -867,12 +868,17 @@ else
         var tenant = PlaceContext.Infrastructure.Tenancy.CurrentTenant.Current;
         if (tenant is null) { _message = "No tenant resolved — sign in again."; return; }
         var jobName = _jobs?.FirstOrDefault(j => j.Id == jobId)?.Name ?? "job";
+        // The run id is pre-allocated and doubles as the op's correlation key, so the run-status
+        // watcher flips this entry the moment the run row commits — well before the awaited
+        // handler returns from its slow best-effort enrichment.
+        var runId = Guid.NewGuid();
         OpCenter.Run(tenant, ProjectId, $"Run job — {jobName}", $"/project/{ProjectId}/jobs",
             async (sp, ct) =>
             {
-                var result = await sp.GetRequiredService<IPlaceContextService>().RunJobAsync(jobId, payload, ct);
+                var result = await sp.GetRequiredService<IPlaceContextService>().RunJobAsync(jobId, payload, runId, ct);
                 return $"run finished — {result.Status}";
-            });
+            },
+            correlationKey: PlaceContext.Application.Features.RunStatusWatchService.JobRunKey(runId));
         _runPromptJob = null;
         _message = $"Run of {jobName} started in the background — follow it in the notifications bell.";
         if (_selectedJobId == jobId)

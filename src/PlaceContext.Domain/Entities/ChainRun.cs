@@ -41,19 +41,25 @@ public sealed class ChainRun : AggregateRoot
     public DateTimeOffset StartedAt { get; }
     public DateTimeOffset? FinishedAt { get; private set; }
 
-    /// <summary>Starts a run: every step pending, the run itself Running.</summary>
-    public static ChainRun Start(JobChain chain, IReadOnlyList<string> stepJobNames, DateTimeOffset now)
+    /// <summary>Starts a run: every step pending, the run itself Running. Callers may pre-allocate
+    /// <paramref name="id"/> so the run is addressable before the handler returns.</summary>
+    public static ChainRun Start(JobChain chain, IReadOnlyList<string> stepJobNames, DateTimeOffset now,
+        Guid? id = null)
     {
         if (stepJobNames.Count != chain.StepJobIds.Count)
             throw new ArgumentException("One job name per chain step is required.", nameof(stepJobNames));
+        if (id == Guid.Empty)
+            throw new ArgumentException("A pre-allocated run id must not be empty.", nameof(id));
         var steps = chain.StepJobIds
             .Select((jobId, i) => new ChainStepRun(i, jobId, stepJobNames[i], null, ChainStepStatus.Pending, null, null))
             .ToList();
-        return new ChainRun(Guid.NewGuid(), chain.Id, chain.ProjectId, chain.Name, ChainRunStatus.Running, steps, null, now, null);
+        return new ChainRun(id ?? Guid.NewGuid(), chain.Id, chain.ProjectId, chain.Name, ChainRunStatus.Running, steps, null, now, null);
     }
 
-    public void MarkStepRunning(int index, DateTimeOffset now)
-        => _steps[index] = _steps[index] with { Status = ChainStepStatus.Running, StartedAt = now };
+    /// <summary>Marks a step running. <paramref name="runId"/> is the step's pre-allocated job-run
+    /// id, recorded up front so a live pipeline can link to the run while it executes.</summary>
+    public void MarkStepRunning(int index, Guid? runId, DateTimeOffset now)
+        => _steps[index] = _steps[index] with { Status = ChainStepStatus.Running, RunId = runId, StartedAt = now };
 
     public void MarkStepFinished(int index, Guid? runId, ChainStepStatus outcome, DateTimeOffset now)
     {

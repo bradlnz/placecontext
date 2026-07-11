@@ -75,6 +75,22 @@ public class JobRunTests
         Assert.Throws<ArgumentException>(() => JobRun.Start(JobId, Guid.Empty, T0, DefaultSnapshot()));
     }
 
+    [Fact]
+    public void Start_honors_a_preallocated_run_id()
+    {
+        var id = Guid.NewGuid();
+
+        var run = JobRun.Start(JobId, ProjectId, T0, DefaultSnapshot(), id);
+
+        Assert.Equal(id, run.Id);
+    }
+
+    [Fact]
+    public void Start_rejects_an_empty_preallocated_run_id()
+    {
+        Assert.Throws<ArgumentException>(() => JobRun.Start(JobId, ProjectId, T0, DefaultSnapshot(), Guid.Empty));
+    }
+
     // ---- JobRun.Complete — status aggregation ----
 
     [Fact]

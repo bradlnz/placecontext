@@ -156,8 +156,8 @@ public sealed class PlaceContextService : IPlaceContextService
     public Task<JobView> UpdateJobAsync(UpdateJobCommand command, CancellationToken ct = default)
         => _dispatcher.Send(command, ct);
 
-    public Task<JobRunDetailView> RunJobAsync(Guid jobId, string? inputPayload = null, CancellationToken ct = default)
-        => _dispatcher.Send(new RunJobCommand(jobId, inputPayload), ct);
+    public Task<JobRunDetailView> RunJobAsync(Guid jobId, string? inputPayload = null, Guid? runId = null, CancellationToken ct = default)
+        => _dispatcher.Send(new RunJobCommand(jobId, inputPayload, runId), ct);
 
     public Task<IReadOnlyList<JobView>> ListJobsAsync(Guid projectId, CancellationToken ct = default)
         => _dispatcher.Query(new ListJobsQuery(projectId), ct);
@@ -186,8 +186,8 @@ public sealed class PlaceContextService : IPlaceContextService
     public Task<IReadOnlyList<JobChainView>> ListJobChainsAsync(Guid projectId, CancellationToken ct = default)
         => _dispatcher.Query(new ListJobChainsQuery(projectId), ct);
 
-    public Task<ChainRunView> RunJobChainAsync(Guid chainId, string? inputPayload = null, CancellationToken ct = default)
-        => _dispatcher.Send(new RunJobChainCommand(chainId, inputPayload), ct);
+    public Task<ChainRunView> RunJobChainAsync(Guid chainId, string? inputPayload = null, Guid? chainRunId = null, CancellationToken ct = default)
+        => _dispatcher.Send(new RunJobChainCommand(chainId, inputPayload, chainRunId), ct);
 
     public Task<IReadOnlyList<ChainRunView>> ListChainRunsAsync(Guid chainId, int take = 20, CancellationToken ct = default)
         => _dispatcher.Query(new ListChainRunsQuery(chainId, take), ct);

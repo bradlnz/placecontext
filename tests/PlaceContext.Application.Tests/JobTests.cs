@@ -261,6 +261,23 @@ public class JobTests
     }
 
     [Fact]
+    public async Task RunJob_honors_a_preallocated_run_id()
+    {
+        var (runHandler, jobs, runs, runner, _) = BuildRunHandler();
+        var createH = new CreateJobHandler(jobs, new RecordingUnitOfWork(), new FakeClock(T0));
+        var job = await createH.HandleAsync(ImageCmd(Guid.NewGuid(), "correlated"));
+        runner.EnqueueSuccessResults(1);
+
+        var runId = Guid.NewGuid();
+        var runResult = await runHandler.HandleAsync(new RunJobCommand(job.Id, null, runId));
+
+        // The caller's id names the run, so its tracking (bell op, chain step) correlates
+        // with the persisted row before the handler returns.
+        Assert.Equal(runId, runResult.Id);
+        Assert.NotNull(await runs.GetByIdAsync(runId));
+    }
+
+    [Fact]
     public async Task RunJob_uses_correct_image_and_payload_for_each_shard()
     {
         var (runHandler, jobRepo, _, runner, _) = BuildRunHandler();

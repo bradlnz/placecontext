@@ -14,4 +14,9 @@ namespace PlaceContext.Application.Features;
 /// declared parameters, or by an event source injecting form fields), it replaces the job's stored
 /// shard payloads with a single shard carrying this payload. Null = run the job's stored payloads.
 /// </param>
-public sealed record RunJobCommand(Guid JobId, string? InputPayload = null) : ICommand<JobRunDetailView>;
+/// <param name="RunId">
+/// Optional pre-allocated id for the run, letting the caller correlate its own tracking (a
+/// notification entry, a chain step) with the run row before the handler returns. Null = generated.
+/// </param>
+public sealed record RunJobCommand(Guid JobId, string? InputPayload = null, Guid? RunId = null)
+    : ICommand<JobRunDetailView>;

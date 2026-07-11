@@ -108,7 +108,36 @@ public class PostJobActionServiceTests
 
         var obj = Assert.Single(store.Objects, o => o.Key.EndsWith("shard-0.html"));
         Assert.Contains("<h1>hi</h1>", Encoding.UTF8.GetString(obj.Content));
-        Assert.Equal(PostJobActionKind.HtmlOutput, Assert.Single(links.Links).Kind);
+        Assert.Single(links.Links, l => l.Kind == PostJobActionKind.HtmlOutput);
+    }
+
+    [Fact]
+    public async Task Default_outputs_are_produced_automatically_when_no_actions_are_configured()
+    {
+        var (job, run) = Sample(); // no configured actions
+        var store = new FakeStore();
+        var links = new FakeLinks();
+
+        await new PostJobActionService(store, links, new FakeUow(), new FakeClock()).RunAsync(job, run);
+
+        // Every run yields the report/chart/CSV trio without per-job setup.
+        Assert.Single(store.Objects, o => o.Key.EndsWith("report.html"));
+        Assert.Single(store.Objects, o => o.Key.EndsWith("chart.html"));
+        Assert.Single(store.Objects, o => o.Key.EndsWith("run.csv"));
+        Assert.Equal(3, links.Links.Count);
+    }
+
+    [Fact]
+    public async Task Configured_actions_replace_the_default_outputs()
+    {
+        var (job, run) = Sample(PostJobActionKind.Csv);
+        var store = new FakeStore();
+
+        await new PostJobActionService(store, new FakeLinks(), new FakeUow(), new FakeClock()).RunAsync(job, run);
+
+        Assert.Single(store.Objects, o => o.Key.EndsWith("run.csv"));
+        Assert.DoesNotContain(store.Objects, o => o.Key.EndsWith("report.html"));
+        Assert.DoesNotContain(store.Objects, o => o.Key.EndsWith("chart.html"));
     }
 
     [Fact]
@@ -117,7 +146,7 @@ public class PostJobActionServiceTests
         var (job, run) = Sample(); // JSON shard artifact, no actions
         var store = new FakeStore();
         await new PostJobActionService(store, new FakeLinks(), new FakeUow(), new FakeClock()).RunAsync(job, run);
-        Assert.Empty(store.Objects);
+        Assert.DoesNotContain(store.Objects, o => o.Key.Contains("shard-")); // not captured as a document
 
         // JSON that carries an HTML snippet inside a string value stays JSON.
         var mapSpec = new MapSpec("img", new[] { "{}" }, new Dictionary<string, string>());
@@ -130,7 +159,7 @@ public class PostJobActionServiceTests
         }, null, T0.AddSeconds(2));
         var store2 = new FakeStore();
         await new PostJobActionService(store2, new FakeLinks(), new FakeUow(), new FakeClock()).RunAsync(job2, run2);
-        Assert.Empty(store2.Objects);
+        Assert.DoesNotContain(store2.Objects, o => o.Key.Contains("shard-"));
     }
 
     [Fact]
@@ -180,8 +209,7 @@ public class PostJobActionServiceTests
         var obj = Assert.Single(store.Objects, o => o.Key.EndsWith("out/0/listings.pdf"));
         Assert.Equal(pdfBytes, obj.Content);
         Assert.DoesNotContain(store.Objects, o => o.Key.EndsWith("notes.txt")); // plain text is not auto-stored
-        var link = Assert.Single(links.Links);
-        Assert.Equal(PostJobActionKind.RawBundle, link.Kind);
+        var link = Assert.Single(links.Links, l => l.Kind == PostJobActionKind.RawBundle);
         Assert.Equal("application/pdf", link.ContentType);
     }
 
@@ -205,7 +233,7 @@ public class PostJobActionServiceTests
 
         var obj = Assert.Single(store.Objects, o => o.Key.EndsWith("out/0/chart.png"));
         Assert.Equal(pngBytes, obj.Content);
-        Assert.Equal("image/png", Assert.Single(links.Links).ContentType);
+        Assert.Single(links.Links, l => l.ContentType == "image/png");
     }
 
     // ── fakes ───────────────────────────────────────────────────────────────────────────────────────

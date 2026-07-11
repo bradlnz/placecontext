@@ -153,6 +153,13 @@ public static class DependencyInjection
         services.AddSingleton<Scheduling.AnalyticsRefreshQueue>();
         services.AddHostedService<Scheduling.AnalyticsWorkerService>();
 
+        // Run-status watcher: syncs persisted job/chain run statuses into the notifications pane on
+        // a short tick, so the bell reflects finish/fail the moment the row commits — independent of
+        // the (slow, best-effort) in-process enrichment and of which replica executed the run.
+        services.AddScoped<IRunStatusReader, Persistence.DbRunStatusReader>();
+        services.AddSingleton<IRunStatusNotifier, Operations.OperationCenterRunStatusNotifier>();
+        services.AddHostedService<Scheduling.RunStatusWatcherService>();
+
         // Each project's own database (Postgres schema + role isolation; Monaco SQL in the portal).
         services.AddScoped<IProjectDataStore, ProjectData.NpgsqlProjectDataStore>();
 

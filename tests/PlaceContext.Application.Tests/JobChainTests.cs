@@ -139,6 +139,45 @@ public class JobChainTests
         Assert.Equal("[{\"n\":1},\"plain text\"]", dispatcher.Payloads[2]);  // shards → JSON array, text JSON-encoded
     }
 
+    [Fact]
+    public async Task Run_honors_a_preallocated_chain_run_id_and_preallocates_each_steps_run_id()
+    {
+        var jobs = new InMemoryJobRepository();
+        var a = MakeJob("extract"); var b = MakeJob("report");
+        await jobs.AddAsync(a); await jobs.AddAsync(b);
+        var chains = new InMemoryJobChainRepository();
+        var chain = JobChain.Create(ProjectId, "pipeline", null, new[] { a.Id, b.Id }, T0);
+        await chains.AddAsync(chain);
+
+        var dispatcher = new FakeRunDispatcher();
+        dispatcher.Results[a.Id] = Run(a.Id, "Succeeded", shardArtifacts: new[] { "{}" });
+        dispatcher.Results[b.Id] = Run(b.Id, "Succeeded", shardArtifacts: new[] { "{}" });
+
+        var chainRunId = Guid.NewGuid();
+        var view = await RunHandler(chains, jobs, dispatcher)
+            .HandleAsync(new RunJobChainCommand(chain.Id, null, chainRunId));
+
+        // The caller's id names the run (so its tracking can correlate before the handler returns)…
+        Assert.Equal(chainRunId, view.Id);
+        // …and every step's RunJobCommand carried a pre-allocated, distinct run id.
+        Assert.Equal(2, dispatcher.RunIds.Count);
+        Assert.All(dispatcher.RunIds, id => Assert.NotNull(id));
+        Assert.NotEqual(dispatcher.RunIds[0], dispatcher.RunIds[1]);
+    }
+
+    [Fact]
+    public void MarkStepRunning_records_the_steps_run_id_up_front()
+    {
+        var chain = JobChain.Create(ProjectId, "pipeline", null, new[] { Guid.NewGuid() }, T0);
+        var run = ChainRun.Start(chain, new[] { "extract" }, T0);
+        var stepRunId = Guid.NewGuid();
+
+        run.MarkStepRunning(0, stepRunId, T0.AddSeconds(1));
+
+        Assert.Equal(stepRunId, run.Steps[0].RunId); // a live pipeline can link to the running step
+        Assert.Equal(ChainStepStatus.Running, run.Steps[0].Status);
+    }
+
     // ── fakes ───────────────────────────────────────────────────────────────────────────────────────
 
     private static JobRunDetailView Run(Guid jobId, string status,
@@ -160,11 +199,13 @@ public class JobChainTests
     {
         public Dictionary<Guid, JobRunDetailView> Results { get; } = new();
         public List<string?> Payloads { get; } = new();
+        public List<Guid?> RunIds { get; } = new();
 
         public Task<TResult> Send<TResult>(ICommand<TResult> command, CancellationToken ct = default)
         {
             var run = (RunJobCommand)(object)command;
             Payloads.Add(run.InputPayload);
+            RunIds.Add(run.RunId);
             return Task.FromResult((TResult)(object)Results[run.JobId]);
         }
 
