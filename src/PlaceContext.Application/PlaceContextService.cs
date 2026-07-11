@@ -189,6 +189,12 @@ public sealed class PlaceContextService : IPlaceContextService
     public Task<ChainRunView> RunJobChainAsync(Guid chainId, string? inputPayload = null, CancellationToken ct = default)
         => _dispatcher.Send(new RunJobChainCommand(chainId, inputPayload), ct);
 
+    public Task<IReadOnlyList<ChainRunView>> ListChainRunsAsync(Guid chainId, int take = 20, CancellationToken ct = default)
+        => _dispatcher.Query(new ListChainRunsQuery(chainId, take), ct);
+
+    public Task<ChainRunView?> GetChainRunAsync(Guid chainRunId, CancellationToken ct = default)
+        => _dispatcher.Query(new GetChainRunQuery(chainRunId), ct);
+
     public Task<Ports.ProjectQueryResult> ExecuteProjectDataAsync(Guid projectId, string sql, CancellationToken ct = default)
         => _dispatcher.Send(new ExecuteProjectDataCommand(projectId, sql), ct);
 

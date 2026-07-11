@@ -1,24 +1,36 @@
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Dtos;
+using PlaceContext.Application.Ports;
+using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.Repositories;
+using PlaceContext.Domain.ValueObjects;
 
 namespace PlaceContext.Application.Features;
 
 /// <summary>
-/// Runs a chain: dispatches each step as a normal <see cref="RunJobCommand"/> and threads the
-/// previous run's primary output into the next step's input payload. Stops at the first failed step;
-/// a partial step downgrades the chain to Partial but the pipeline continues.
+/// Runs a chain as a staged pipeline: dispatches each step as a normal <see cref="RunJobCommand"/>
+/// and threads the previous run's primary output into the next step's input payload. Stops at the
+/// first failed step; a partial step downgrades the chain to Partial but the pipeline continues.
+/// The run is persisted the moment it starts and saved on every stage transition (pending →
+/// running → outcome), so the portal can watch the pipeline progress live and keep a history.
 /// </summary>
 public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, ChainRunView>
 {
     private readonly IJobChainRepository _chains;
     private readonly IJobRepository _jobs;
+    private readonly IChainRunRepository _runs;
+    private readonly IUnitOfWork _uow;
+    private readonly IClock _clock;
     private readonly IDispatcher _dispatcher;
 
-    public RunJobChainHandler(IJobChainRepository chains, IJobRepository jobs, IDispatcher dispatcher)
+    public RunJobChainHandler(IJobChainRepository chains, IJobRepository jobs, IChainRunRepository runs,
+        IUnitOfWork uow, IClock clock, IDispatcher dispatcher)
     {
         _chains = chains;
         _jobs = jobs;
+        _runs = runs;
+        _uow = uow;
+        _clock = clock;
         _dispatcher = dispatcher;
     }
 
@@ -27,35 +39,62 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
         var chain = await _chains.GetByIdAsync(command.ChainId, ct)
             ?? throw new InvalidOperationException($"Chain {command.ChainId} not found.");
 
-        var steps = new List<ChainStepRunView>(chain.StepJobIds.Count);
-        var status = "Succeeded";
+        // Snapshot the step jobs up front — names go on the run so its history stands alone.
+        var stepJobs = new List<Job?>(chain.StepJobIds.Count);
+        foreach (var jobId in chain.StepJobIds)
+            stepJobs.Add(await _jobs.GetByIdAsync(jobId, ct));
+        var names = stepJobs.Select((j, i) => j?.Name ?? "(deleted)").ToList();
+
+        var chainRun = ChainRun.Start(chain, names, _clock.UtcNow);
+        await _runs.AddAsync(chainRun, ct);
+        await _uow.SaveChangesAsync(ct);
+
+        var status = ChainRunStatus.Succeeded;
         var payload = command.InputPayload; // first step: caller's payload, or the job's stored shards
 
         for (var i = 0; i < chain.StepJobIds.Count; i++)
         {
-            var jobId = chain.StepJobIds[i];
-            var job = await _jobs.GetByIdAsync(jobId, ct);
-            if (job is null)
+            if (stepJobs[i] is null)
             {
-                steps.Add(new ChainStepRunView(i, jobId, "(deleted)", Guid.Empty, "Failed"));
-                status = "Failed";
+                chainRun.MarkStepFinished(i, runId: null, ChainStepStatus.Failed, _clock.UtcNow);
+                status = ChainRunStatus.Failed;
                 break;
             }
 
-            var run = await _dispatcher.Send(new RunJobCommand(jobId, payload), ct);
-            steps.Add(new ChainStepRunView(i, jobId, job.Name, run.Id, run.Status));
+            chainRun.MarkStepRunning(i, _clock.UtcNow);
+            await SaveProgressAsync(chainRun, ct);
+
+            var run = await _dispatcher.Send(new RunJobCommand(chain.StepJobIds[i], payload), ct);
+            chainRun.MarkStepFinished(i, run.Id, ParseStepOutcome(run.Status), _clock.UtcNow);
+            await SaveProgressAsync(chainRun, ct);
 
             if (run.Status == "Failed")
             {
-                status = "Failed";
+                status = ChainRunStatus.Failed;
                 break;
             }
-            if (run.Status == "Partial") status = "Partial";
+            if (run.Status == "Partial") status = ChainRunStatus.Partial;
             payload = PrimaryOutput(run);
         }
 
-        return new ChainRunView(chain.Id, chain.Name, status, steps, payload);
+        chainRun.Complete(status, payload, _clock.UtcNow);
+        await SaveProgressAsync(chainRun, ct);
+
+        return ChainRunMapper.ToView(chainRun);
     }
+
+    private async Task SaveProgressAsync(ChainRun run, CancellationToken ct)
+    {
+        await _runs.UpdateAsync(run, ct);
+        await _uow.SaveChangesAsync(ct);
+    }
+
+    private static ChainStepStatus ParseStepOutcome(string runStatus) => runStatus switch
+    {
+        "Succeeded" => ChainStepStatus.Succeeded,
+        "Partial" => ChainStepStatus.Partial,
+        _ => ChainStepStatus.Failed,
+    };
 
     /// <summary>The run's primary output, as the next step's stdin payload: the reduce artifact when
     /// present (the final aggregate), a lone shard's artifact as-is, else a JSON array of the shard

@@ -108,6 +108,8 @@ public static class DependencyInjection
         services.AddScoped<IQueryHandler<GetJobQuery, JobView?>, GetJobHandler>();
         services.AddScoped<IQueryHandler<ListTriggersQuery, IReadOnlyList<TriggerView>>, ListTriggersHandler>();
         services.AddScoped<IQueryHandler<ListJobChainsQuery, IReadOnlyList<JobChainView>>, ListJobChainsHandler>();
+        services.AddScoped<IQueryHandler<ListChainRunsQuery, IReadOnlyList<ChainRunView>>, ListChainRunsHandler>();
+        services.AddScoped<IQueryHandler<GetChainRunQuery, ChainRunView?>, GetChainRunHandler>();
         services.AddScoped<IQueryHandler<ListEventTypesQuery, IReadOnlyList<EventTypeView>>, ListEventTypesHandler>();
         services.AddScoped<IQueryHandler<ListEventOccurrencesQuery, IReadOnlyList<EventOccurrenceView>>, ListEventOccurrencesHandler>();
         services.AddScoped<IQueryHandler<SearchRunOutputsQuery, IReadOnlyList<RunOutputMatchView>>, SearchRunOutputsHandler>();

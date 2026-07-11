@@ -13,6 +13,10 @@ public class JobChainTests
     private static readonly DateTimeOffset T0 = new(2026, 7, 10, 12, 0, 0, TimeSpan.Zero);
     private static readonly Guid ProjectId = Guid.NewGuid();
 
+    private static RunJobChainHandler RunHandler(InMemoryJobChainRepository chains, InMemoryJobRepository jobs,
+        IDispatcher dispatcher, InMemoryChainRunRepository? runs = null)
+        => new(chains, jobs, runs ?? new InMemoryChainRunRepository(), new RecordingUnitOfWork(), new FakeClock(T0), dispatcher);
+
     private static Job MakeJob(string name, Guid? projectId = null)
     {
         var mapSpec = new MapSpec("img", new[] { "{}" }, new Dictionary<string, string>());
@@ -74,7 +78,7 @@ public class JobChainTests
         dispatcher.Results[a.Id] = Run(a.Id, "Succeeded", shardArtifacts: new[] { "{\"rows\":3}" });
         dispatcher.Results[b.Id] = Run(b.Id, "Succeeded", shardArtifacts: new[] { "{\"report\":\"done\"}" });
 
-        var view = await new RunJobChainHandler(chains, jobs, dispatcher)
+        var view = await RunHandler(chains, jobs, dispatcher)
             .HandleAsync(new RunJobChainCommand(chain.Id, "{\"from\":\"caller\"}"));
 
         Assert.Equal("Succeeded", view.Status);
@@ -100,11 +104,17 @@ public class JobChainTests
         dispatcher.Results[a.Id] = Run(a.Id, "Succeeded", shardArtifacts: new[] { "{}" });
         dispatcher.Results[b.Id] = Run(b.Id, "Failed");
 
-        var view = await new RunJobChainHandler(chains, jobs, dispatcher).HandleAsync(new RunJobChainCommand(chain.Id));
+        var runs = new InMemoryChainRunRepository();
+        var view = await RunHandler(chains, jobs, dispatcher, runs).HandleAsync(new RunJobChainCommand(chain.Id));
 
         Assert.Equal("Failed", view.Status);
-        Assert.Equal(2, view.Steps.Count); // step c never ran
+        Assert.Equal(3, view.Steps.Count);                 // every stage is on the run...
         Assert.Equal("Failed", view.Steps[1].Status);
+        Assert.Equal("Skipped", view.Steps[2].Status);     // ...steps after the failure are Skipped
+        // The persisted progression is what the portal's live pipeline view observes.
+        Assert.Contains("Running,Pending,Pending", runs.SavedStepSnapshots);
+        Assert.Contains("Succeeded,Running,Pending", runs.SavedStepSnapshots);
+        Assert.Equal("Succeeded,Failed,Skipped", runs.SavedStepSnapshots[^1]);
     }
 
     [Fact]
@@ -123,7 +133,7 @@ public class JobChainTests
         dispatcher.Results[b.Id] = Run(b.Id, "Succeeded", shardArtifacts: new[] { "{\"n\":1}", "plain text" });
         dispatcher.Results[c.Id] = Run(c.Id, "Succeeded", shardArtifacts: new[] { "{}" });
 
-        await new RunJobChainHandler(chains, jobs, dispatcher).HandleAsync(new RunJobChainCommand(chain.Id));
+        await RunHandler(chains, jobs, dispatcher).HandleAsync(new RunJobChainCommand(chain.Id));
 
         Assert.Equal("{\"total\":10}", dispatcher.Payloads[1]);              // reduce wins over shards
         Assert.Equal("[{\"n\":1},\"plain text\"]", dispatcher.Payloads[2]);  // shards → JSON array, text JSON-encoded

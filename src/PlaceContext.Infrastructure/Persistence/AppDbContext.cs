@@ -44,6 +44,7 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
     public DbSet<JobSecretRow> JobSecrets => Set<JobSecretRow>();
     public DbSet<JobTriggerRow> JobTriggers => Set<JobTriggerRow>();
     public DbSet<JobChainRow> JobChains => Set<JobChainRow>();
+    public DbSet<ChainRunRow> ChainRuns => Set<ChainRunRow>();
     public DbSet<EventDefinitionRow> EventDefinitions => Set<EventDefinitionRow>();
     public DbSet<EventOccurrenceRow> EventOccurrences => Set<EventOccurrenceRow>();
     public DbSet<PendingRunRow> PendingRuns => Set<PendingRunRow>();
@@ -263,6 +264,16 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
         {
             e.ToTable("job_chains");
             e.HasKey(x => x.Id);
+            e.HasIndex(x => x.ProjectId);
+            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
+        });
+
+        b.Entity<ChainRunRow>(e =>
+        {
+            e.ToTable("chain_runs");
+            e.HasKey(x => x.Id);
+            // The pipeline history is read newest-first per chain.
+            e.HasIndex(x => new { x.ChainId, x.StartedAt });
             e.HasIndex(x => x.ProjectId);
             e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
         });

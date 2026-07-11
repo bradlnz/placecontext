@@ -72,6 +72,8 @@ public interface IPlaceContextService
     Task<bool> DeleteJobChainAsync(Guid chainId, CancellationToken ct = default);
     Task<IReadOnlyList<JobChainView>> ListJobChainsAsync(Guid projectId, CancellationToken ct = default);
     Task<ChainRunView> RunJobChainAsync(Guid chainId, string? inputPayload = null, CancellationToken ct = default);
+    Task<IReadOnlyList<ChainRunView>> ListChainRunsAsync(Guid chainId, int take = 20, CancellationToken ct = default);
+    Task<ChainRunView?> GetChainRunAsync(Guid chainRunId, CancellationToken ct = default);
 
     // Project data (each project's own database: tables + SQL).
     Task<Ports.ProjectQueryResult> ExecuteProjectDataAsync(Guid projectId, string sql, CancellationToken ct = default);
