@@ -272,7 +272,12 @@ public sealed class PlaceContextTools
         - `go`    → base `golang:1.23-alpine`, default entrypoint `main.go`, invoked `go run /work/main.go`.
         - `ruby`  → base `ruby:3.3-slim`, default entrypoint `main.rb`, invoked `ruby /work/main.rb`.
         - `dotnet`→ base `mcr.microsoft.com/dotnet/sdk:10.0`, default entrypoint `main.cs`, invoked `dotnet run /work/main.cs` (.NET 10 file-based app).
-        Dependency-free by default (no install step) — vendor any libs into your file set.
+
+        ## Dependencies
+        Ship your runtime's manifest as an extra file and packages install before the entrypoint runs:
+        `requirements.txt` (pip), `package.json` (npm), `Gemfile` (bundler), `go.mod` (go modules).
+        Downloads need the job's network-egress policy set to allow — the sealed sandbox is never
+        relaxed implicitly. `dotnet` has no manifest step; stay dependency-free there.
 
         ## Environment variables & secrets
         Plain config goes in the job's `env`. **Secrets/credentials come from the encrypted vault** —
@@ -283,6 +288,14 @@ public sealed class PlaceContextTools
         Jobs exist to generate artifacts. Emit **JSON** on stdout, and when the result is a numeric
         series (e.g. `[{"day":"mon","total":12}, …]` or `{"mon":12,"tue":31}`) the portal and TUI
         chart it automatically — in the run detail and the global Reports view.
+
+        ## Files & binary artifacts (PDFs, images, CSVs)
+        Two channels, both binary-safe end to end:
+        - **Write files to `/out`** — every file is captured as a named artifact.
+        - **Embed them in your stdout JSON** — `"artifacts": [{"filename": "report.pdf",
+          "base64": "…"}]` (use `"content"` for text files). Use this when writing files isn't an
+          option (e.g. image workloads in-cluster).
+        Emitted PDFs, HTML, and images publish automatically as openable portal links on the run.
 
         ## Examples
         python `main.py` (the default runtime):

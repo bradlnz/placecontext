@@ -183,7 +183,8 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
             var outcome = job.ExitCodePolicy.Classify(result.ExitCode);
             var log = CombineLog(result.Stdout, result.Stderr);
 
-            return new ShardResult(index, result.ExitCode, outcome, result.Artifact, log, MapArtifacts(result.Artifacts));
+            return new ShardResult(index, result.ExitCode, outcome, result.Artifact, log,
+                CollectArtifacts(result.Artifact, result.Artifacts));
         }
         finally
         {
@@ -214,7 +215,8 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
         var succeeded = job.ExitCodePolicy.SuccessCodes.Contains(result.ExitCode);
         var log = CombineLog(result.Stdout, result.Stderr);
 
-        return new ReduceResult(result.ExitCode, succeeded, result.Artifact, log, MapArtifacts(result.Artifacts));
+        return new ReduceResult(result.ExitCode, succeeded, result.Artifact, log,
+            CollectArtifacts(result.Artifact, result.Artifacts));
     }
 
     // ---- WorkloadSource → WorkloadRunRequest ------------------------------------------------
@@ -379,6 +381,21 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
         => artifacts is null or { Count: 0 }
             ? Array.Empty<RunArtifact>()
             : artifacts.Select(a => new RunArtifact(a.Name, a.Content, a.IsBinary)).ToList();
+
+    /// <summary>
+    /// A step's named artifacts: the files captured from /out, plus any artifacts the job embedded
+    /// in its returned JSON (an "artifacts" array with filename + base64/content — the only channel
+    /// image workloads have in-cluster). A real /out file wins a name collision.
+    /// </summary>
+    private static IReadOnlyList<RunArtifact> CollectArtifacts(string? primaryArtifact, IReadOnlyList<WorkloadArtifact>? files)
+    {
+        var named = MapArtifacts(files);
+        var embedded = EmbeddedArtifacts.Extract(primaryArtifact);
+        if (embedded.Count == 0) return named;
+
+        var seen = named.Select(a => a.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return named.Concat(embedded.Where(e => seen.Add(e.Name))).ToList();
+    }
 
     private static string? CombineLog(string stdout, string stderr)
     {
