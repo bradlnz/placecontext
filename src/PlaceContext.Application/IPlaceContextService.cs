@@ -60,6 +60,7 @@ public interface IPlaceContextService
     Task<JobRunDetailView?> GetJobRunAsync(Guid runId, CancellationToken ct = default);
     Task<IReadOnlyList<RunArtifactLinkView>> ListRunArtifactsAsync(Guid runId, CancellationToken ct = default);
     Task<IReadOnlyList<RunArtifactLinkView>> ListJobRunArtifactsAsync(Guid jobId, CancellationToken ct = default);
+    Task<IReadOnlyList<Features.ArtifactFileView>> ListRecentArtifactsAsync(int take = 100, CancellationToken ct = default);
 
     // Job chains (ordered pipelines: each step's output feeds the next step's input).
     Task<JobChainView> CreateJobChainAsync(Guid projectId, string name, string? description, IReadOnlyList<Guid> stepJobIds, CancellationToken ct = default);

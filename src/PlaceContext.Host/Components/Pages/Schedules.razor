@@ -1,0 +1,179 @@
+@page "/project/{ProjectId:guid}/schedules"
+@using PlaceContext.Application.Dtos
+@using PlaceContext.Application.Features
+@inject IPlaceContextService Svc
+@inject PortalUiState Ui
+
+<PageTitle>placecontext — Schedules</PageTitle>
+
+<div style="padding:20px 24px 40px; max-width:1320px; margin:0 auto">
+
+    <ProjectTabs ProjectId="ProjectId" Active="schedules" />
+
+    <div style="display:flex; align-items:baseline; justify-content:space-between; margin-bottom:18px">
+        <div>
+            <h2 style="font-size:18px; font-weight:600; margin:0">Schedules</h2>
+            <div style="font-size:12px; color:var(--text-3); margin-top:3px">
+                Every trigger across this project's jobs — cron schedules and event hooks that run jobs while you're away.
+            </div>
+        </div>
+    </div>
+
+    @if (_message is not null)
+    {
+        <div style="margin-bottom:12px; padding:10px 14px; border-radius:8px; background:var(--card); font-size:12.5px; color:var(--text-2)">@_message</div>
+    }
+
+    @* ── Add trigger ──────────────────────────────────────────────────────────────────── *@
+    <div class="dccard" style="padding:14px 16px; margin-bottom:16px; display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap">
+        <div class="dcfield" style="min-width:180px">
+            <label>Job</label>
+            <select class="dcinput" @bind="_newJobId">
+                <option value="@Guid.Empty">— pick a job —</option>
+                @foreach (var j in _jobs ?? Array.Empty<JobView>())
+                {
+                    <option value="@j.Id">@j.Name</option>
+                }
+            </select>
+        </div>
+        <div class="dcfield" style="min-width:160px">
+            <label>Name</label>
+            <input class="dcinput" @bind="_newName" placeholder="nightly refresh" />
+        </div>
+        <div class="dcfield" style="min-width:110px">
+            <label>Kind</label>
+            <select class="dcinput" @bind="_newKind">
+                <option value="Schedule">Schedule</option>
+                <option value="Event">Event</option>
+            </select>
+        </div>
+        @if (_newKind == "Schedule")
+        {
+            <div class="dcfield" style="min-width:150px">
+                <label>Cron <span class="code" style="margin-left:4px">UTC</span></label>
+                <input class="dcinput" style="font-family:'IBM Plex Mono',monospace" @bind="_newCron" placeholder="0 0 * * *" />
+            </div>
+        }
+        else
+        {
+            <div class="dcfield" style="min-width:150px">
+                <label>Event</label>
+                <select class="dcinput" @bind="_newEvent">
+                    @foreach (var e in _eventTypes ?? Array.Empty<EventTypeView>())
+                    {
+                        <option value="@e.Name">@e.Name</option>
+                    }
+                </select>
+            </div>
+        }
+        <button class="dcbtn primary" disabled="@_busy" @onclick="AddTrigger">＋ Add trigger</button>
+        @if (_error is not null)
+        {
+            <span style="color:var(--bad); font-size:12px">@_error</span>
+        }
+    </div>
+
+    @* ── Trigger table ────────────────────────────────────────────────────────────────── *@
+    <div class="dccard" style="border-radius:8px; overflow:hidden">
+        <div style="display:grid; grid-template-columns:90px minmax(160px,1fr) minmax(150px,1fr) minmax(150px,1fr) 150px 150px 130px; gap:0 16px; padding:8px 16px; border-bottom:1px solid var(--border); font-size:10.5px; color:var(--text-3); letter-spacing:.08em; font-weight:500">
+            <span>STATE</span><span>TRIGGER</span><span>JOB</span><span>FIRES ON</span><span>NEXT RUN</span><span>LAST FIRED</span><span></span>
+        </div>
+        @if (_triggers is null or { Count: 0 })
+        {
+            <div style="padding:24px 16px; color:var(--text-3); font-size:13px; text-align:center">
+                No triggers yet — add a cron schedule or an event hook above.
+            </div>
+        }
+        else
+        {
+            @foreach (var t in _triggers)
+            {
+                <div style="display:grid; grid-template-columns:90px minmax(160px,1fr) minmax(150px,1fr) minmax(150px,1fr) 150px 150px 130px; gap:0 16px; align-items:center; padding:11px 16px; border-bottom:1px solid var(--border)">
+                    <span style="display:flex; align-items:center; gap:8px; font-family:'IBM Plex Mono',monospace; font-size:11px; color:@(t.Enabled ? "var(--good)" : "var(--text-3)")">
+                        <span style="width:7px; height:7px; border-radius:50%; background:@(t.Enabled ? "var(--good)" : "var(--border-2)")"></span>@(t.Enabled ? "ON" : "PAUSED")
+                    </span>
+                    <span style="font-size:12.5px; font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">@t.Name</span>
+                    <span style="font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:var(--human); overflow:hidden; text-overflow:ellipsis; white-space:nowrap">@JobName(t.JobId)</span>
+                    <span style="font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:var(--text-2)">
+                        @(t.Kind == "Schedule" ? $"cron {t.CronExpression}" : $"event {t.EventName}")
+                    </span>
+                    <span style="font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:var(--text-2)">@(t.NextRunAt?.ToLocalTime().ToString("MMM d · HH:mm") ?? "—")</span>
+                    <span style="font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:var(--text-3)">@(t.LastFiredAt?.ToLocalTime().ToString("MMM d · HH:mm") ?? "never")</span>
+                    <span style="display:flex; gap:6px; justify-content:flex-end">
+                        <button class="dcbtn" style="padding:3px 10px; font-size:11px" @onclick="@(() => Toggle(t))">@(t.Enabled ? "Pause" : "Resume")</button>
+                        <button class="dcbtn" style="padding:3px 10px; font-size:11px; color:var(--bad)" @onclick="@(() => Remove(t.Id))">Delete</button>
+                    </span>
+                </div>
+            }
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter] public Guid ProjectId { get; set; }
+
+    private IReadOnlyList<TriggerView>? _triggers;
+    private IReadOnlyList<JobView>? _jobs;
+    private IReadOnlyList<EventTypeView>? _eventTypes;
+    private string? _message, _error;
+    private bool _busy;
+
+    private Guid _newJobId;
+    private string _newName = "";
+    private string _newKind = "Schedule";
+    private string _newCron = "0 0 * * *";
+    private string _newEvent = "";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        try
+        {
+            _jobs = await Svc.ListJobsAsync(ProjectId);
+            _triggers = await Svc.ListTriggersAsync(ProjectId);
+            _eventTypes = await Svc.ListEventTypesAsync();
+            _newEvent = _eventTypes.FirstOrDefault()?.Name ?? "";
+            Ui.Set("Schedules", "cron + event triggers across this project");
+        }
+        catch (Exception ex) { _message = ex.Message; }
+    }
+
+    private string JobName(Guid jobId) => _jobs?.FirstOrDefault(j => j.Id == jobId)?.Name ?? "(deleted job)";
+
+    private async Task AddTrigger()
+    {
+        _error = null;
+        if (_newJobId == Guid.Empty) { _error = "Pick a job."; return; }
+        if (string.IsNullOrWhiteSpace(_newName)) { _error = "Name is required."; return; }
+        _busy = true;
+        try
+        {
+            var cron = _newKind == "Schedule" ? _newCron : null;
+            var evt = _newKind == "Event" ? _newEvent : null;
+            await Svc.CreateTriggerAsync(new CreateTriggerCommand(_newJobId, _newName.Trim(), _newKind, cron, evt));
+            _triggers = await Svc.ListTriggersAsync(ProjectId);
+            _newName = "";
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _busy = false; }
+    }
+
+    private async Task Toggle(TriggerView t)
+    {
+        try
+        {
+            await Svc.SetTriggerEnabledAsync(t.Id, !t.Enabled);
+            _triggers = await Svc.ListTriggersAsync(ProjectId);
+        }
+        catch (Exception ex) { _error = ex.Message; }
+    }
+
+    private async Task Remove(Guid id)
+    {
+        try
+        {
+            await Svc.DeleteTriggerAsync(id);
+            _triggers = await Svc.ListTriggersAsync(ProjectId);
+        }
+        catch (Exception ex) { _error = ex.Message; }
+    }
+}

@@ -38,6 +38,15 @@ public sealed class EfRunArtifactLinkRepository : IRunArtifactLinkRepository
         return rows.Select(ToDomain).ToList();
     }
 
+    public async Task<IReadOnlyList<RunArtifactLink>> ListRecentAsync(int take, CancellationToken ct = default)
+    {
+        var rows = await _db.RunArtifacts.AsNoTracking()
+            .OrderByDescending(r => r.CreatedAt)
+            .Take(Math.Clamp(take, 1, 500))
+            .ToListAsync(ct);
+        return rows.Select(ToDomain).ToList();
+    }
+
     private static RunArtifactLinkRow ToRow(RunArtifactLink l) => new()
     {
         Id = l.Id,

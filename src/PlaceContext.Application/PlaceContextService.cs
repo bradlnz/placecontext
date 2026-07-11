@@ -159,6 +159,9 @@ public sealed class PlaceContextService : IPlaceContextService
     public Task<IReadOnlyList<RunArtifactLinkView>> ListJobRunArtifactsAsync(Guid jobId, CancellationToken ct = default)
         => _dispatcher.Query(new ListJobRunArtifactsQuery(jobId), ct);
 
+    public Task<IReadOnlyList<ArtifactFileView>> ListRecentArtifactsAsync(int take = 100, CancellationToken ct = default)
+        => _dispatcher.Query(new ListRecentArtifactsQuery(take), ct);
+
     public Task<JobChainView> CreateJobChainAsync(Guid projectId, string name, string? description, IReadOnlyList<Guid> stepJobIds, CancellationToken ct = default)
         => _dispatcher.Send(new CreateJobChainCommand(projectId, name, description, stepJobIds), ct);
 

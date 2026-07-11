@@ -1,0 +1,110 @@
+@page "/artifacts"
+@using PlaceContext.Application.Features
+@inject IPlaceContextService Svc
+@inject PortalUiState Ui
+
+<PageTitle>placecontext — Artifacts</PageTitle>
+
+<div style="display:flex; height:100%; min-height:0">
+
+    @* ── File list ─────────────────────────────────────────────────────────────────────── *@
+    <div style="width:430px; flex:none; border-right:1px solid var(--border); display:flex; flex-direction:column; min-height:0">
+        <div style="padding:13px 16px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between">
+            <span style="font-size:13px; font-weight:600">Artifact files</span>
+            <input class="dcinput" style="width:170px; padding:4px 9px; font-size:12px" placeholder="filter…"
+                   @bind="_filter" @bind:event="oninput" />
+        </div>
+        <div style="flex:1; overflow-y:auto">
+            @if (Filtered() is { Count: 0 })
+            {
+                <div style="padding:18px 16px; color:var(--text-3); font-size:12.5px">
+                    No stored artifacts yet — every completed run generates one from its job's return type.
+                </div>
+            }
+            else
+            {
+                @foreach (var a in Filtered())
+                {
+                    var active = _active?.Id == a.Id;
+                    <div @onclick="@(() => _active = a)"
+                         style="display:flex; align-items:center; gap:11px; padding:11px 16px; border-bottom:1px solid var(--border); cursor:pointer; background:@(active ? "var(--card)" : "transparent"); border-left:2px solid @(active ? "var(--brand)" : "transparent")">
+                        <span style="font-size:15px; flex:none">@IconFor(a.ContentType)</span>
+                        <div style="flex:1; min-width:0">
+                            <div style="font-family:'IBM Plex Mono',monospace; font-size:12.5px; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis">@a.Title</div>
+                            <div style="font-size:10.5px; color:var(--text-3); margin-top:2px">
+                                @a.Kind · @FormatBytes(a.SizeBytes) · @a.CreatedAt.ToLocalTime().ToString("MMM d · HH:mm")
+                            </div>
+                        </div>
+                    </div>
+                }
+            }
+        </div>
+    </div>
+
+    @* ── Viewer ────────────────────────────────────────────────────────────────────────── *@
+    <div style="flex:1; min-width:0; display:flex; flex-direction:column; min-height:0; background:var(--bg)">
+        @if (_active is null)
+        {
+            <div style="flex:1; display:flex; align-items:center; justify-content:center; color:var(--text-3); font-size:12.5px">
+                Select a file to view it.
+            </div>
+        }
+        else
+        {
+            <div style="padding:11px 18px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:10px">
+                <span style="font-family:'IBM Plex Mono',monospace; font-size:13px; font-weight:600; flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis">@_active.Title</span>
+                <span style="font-size:10.5px; color:var(--text-3); font-family:'IBM Plex Mono',monospace">@_active.ContentType</span>
+                <a class="dcbtn" style="padding:4px 11px; font-size:11.5px; text-decoration:none" target="_blank" rel="noopener"
+                   href="@Url(_active)">Open ↗</a>
+            </div>
+            @if (Previewable(_active.ContentType))
+            {
+                <iframe src="@Url(_active)" style="flex:1; border:none; background:#fff" title="@_active.Title"></iframe>
+            }
+            else
+            {
+                <div style="flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; color:var(--text-3); font-size:12.5px">
+                    <span style="font-size:34px">@IconFor(_active.ContentType)</span>
+                    No inline preview for @_active.ContentType — use Open ↗ to download it.
+                </div>
+            }
+        }
+    </div>
+</div>
+
+@code {
+    private IReadOnlyList<ArtifactFileView> _files = Array.Empty<ArtifactFileView>();
+    private ArtifactFileView? _active;
+    private string _filter = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        Ui.Set("Artifacts", "every file your runs produced — click to view");
+        try { _files = await Svc.ListRecentArtifactsAsync(200); } catch { }
+        _active = _files.FirstOrDefault();
+    }
+
+    private IReadOnlyList<ArtifactFileView> Filtered() =>
+        string.IsNullOrWhiteSpace(_filter)
+            ? _files
+            : _files.Where(f => f.Title.Contains(_filter, StringComparison.OrdinalIgnoreCase)
+                             || f.Kind.Contains(_filter, StringComparison.OrdinalIgnoreCase)).ToList();
+
+    private static string Url(ArtifactFileView a) => $"/runs/{a.RunId}/artifacts/{a.Id}";
+
+    // The stream endpoint renders these inline; browsers also display text/JSON/CSV directly.
+    private static bool Previewable(string ct) =>
+        ct.StartsWith("text/") || ct.StartsWith("image/") || ct == "application/pdf"
+        || ct.StartsWith("application/json") || ct.Contains("svg") || ct.StartsWith("video/");
+
+    private static string IconFor(string ct) =>
+        ct.StartsWith("image/") ? "🖼" :
+        ct == "application/pdf" ? "📕" :
+        ct.StartsWith("video/") ? "🎬" :
+        ct.Contains("html") ? "🌐" :
+        ct.Contains("csv") ? "🧾" :
+        ct.Contains("json") ? "{}" : "📄";
+
+    private static string FormatBytes(long n) =>
+        n >= 1_048_576 ? $"{n / 1_048_576.0:0.#} MB" : n >= 1024 ? $"{n / 1024.0:0.#} KB" : $"{n} B";
+}

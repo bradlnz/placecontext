@@ -11,4 +11,7 @@ public interface IRunArtifactLinkRepository
 
     /// <summary>Every run's post-job outputs for one job (newest run first) — the run-history panel's charts.</summary>
     Task<IReadOnlyList<RunArtifactLink>> ListForJobAsync(Guid jobId, CancellationToken ct = default);
+
+    /// <summary>The newest stored artifacts across every project (the Artifacts file viewer).</summary>
+    Task<IReadOnlyList<RunArtifactLink>> ListRecentAsync(int take, CancellationToken ct = default);
 }

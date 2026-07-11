@@ -29,11 +29,12 @@
             {
                 <NavLink class="dcnav" href="@($"project/{pid}/jobs")"><span class="bar"></span>@Icon("box")<span style="flex:1">Jobs</span></NavLink>
                 <NavLink class="dcnav" href="@($"project/{pid}/chains")"><span class="bar"></span>@Icon("chain")<span style="flex:1">Chains</span></NavLink>
-                <NavLink class="dcnav" href="@($"project/{pid}/events")"><span class="bar"></span>@Icon("clock")<span style="flex:1">Schedules</span></NavLink>
+                <NavLink class="dcnav" href="@($"project/{pid}/schedules")"><span class="bar"></span>@Icon("clock")<span style="flex:1">Schedules</span></NavLink>
                 <NavLink class="dcnav" href="@($"project/{pid}/datamap")"><span class="bar"></span>@Icon("map")<span style="flex:1">Data map</span></NavLink>
                 <NavLink class="dcnav" href="@($"project/{pid}/secrets")"><span class="bar"></span>@Icon("key")<span style="flex:1">Vault</span></NavLink>
             }
-            <NavLink class="dcnav" href="observability"><span class="bar"></span>@Icon("file")<span style="flex:1">Artifacts</span></NavLink>
+            <NavLink class="dcnav" href="artifacts"><span class="bar"></span>@Icon("file")<span style="flex:1">Artifacts</span></NavLink>
+            <NavLink class="dcnav" href="observability"><span class="bar"></span>@Icon("pulse")<span style="flex:1">Runs</span></NavLink>
             <NavLink class="dcnav" href="inspector"><span class="bar"></span>@Icon("inspector")<span style="flex:1">MCP Server</span><span style="width:7px; height:7px; border-radius:50%; background:var(--good); animation:dcpulse 1.8s ease-in-out infinite"></span></NavLink>
 
             <div style="font-size:10px; font-weight:600; letter-spacing:.7px; color:var(--text-3); padding:14px 10px 6px; text-transform:uppercase">Workspace</div>
