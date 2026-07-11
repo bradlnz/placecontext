@@ -80,6 +80,12 @@ public sealed class DockerWorkloadRunner : IWorkloadRunner
             overrideCmd = runtime.InvokeCommand
                 .Select(seg => seg.Replace("{entrypoint}", entrypoint, StringComparison.Ordinal))
                 .ToArray();
+
+            // A job shipping its runtime's dependency manifest (requirements.txt, package.json,
+            // Gemfile, go.mod) gets its packages installed first. Downloads still need the job's
+            // AllowNetworkEgress — the sandbox is not relaxed.
+            if (WorkloadDependencies.For(runtimeId, request.CodeFiles) is { } recipe)
+                overrideCmd = WorkloadDependencies.WrapDockerCommand(recipe, overrideCmd);
         }
         else
         {
@@ -244,6 +250,15 @@ public sealed class DockerWorkloadRunner : IWorkloadRunner
             args.Add("--read-only");
             args.Add("--tmpfs");
             args.Add("/tmp:rw,noexec,nosuid,size=64m");
+        }
+
+        // ── Dependency installs: writable, exec-capable scratch ──────────────────────────────────
+        // The /tmp tmpfs above is deliberately noexec; dependency installs (node_modules native
+        // addons, pip wheels with .so files) need their own exec mount. Only when a recipe applies.
+        if (WorkloadDependencies.For(request.RuntimeId, request.CodeFiles) is not null)
+        {
+            args.Add("--tmpfs");
+            args.Add($"{WorkloadDependencies.DockerDepsRoot}:rw,exec,nosuid,size=512m");
         }
 
         // ── Sandbox: network isolation ────────────────────────────────────────────────────────────

@@ -45,6 +45,16 @@ public sealed class KubernetesWorkloadRunner : IWorkloadRunner
             var entrypoint = !string.IsNullOrWhiteSpace(request.Entrypoint) ? request.Entrypoint! : rt.DefaultEntrypoint;
             image = rt.BaseImage;
             var invoke = string.Join(" ", rt.InvokeCommand.Select(s => ShQuote(s.Replace("{entrypoint}", entrypoint))));
+
+            // A job shipping its runtime's dependency manifest (requirements.txt, package.json,
+            // Gemfile, go.mod) gets its packages installed first — /work is a writable emptyDir
+            // here, so installs land beside the code. Downloads still need AllowNetworkEgress.
+            var depsPreamble = "";
+            if (WorkloadDependencies.For(runtimeId, request.CodeFiles) is { } recipe)
+            {
+                depsPreamble = WorkloadDependencies.ShellPreamble(recipe);
+                if (recipe.InvokePrefix is not null) invoke = recipe.InvokePrefix + " " + invoke;
+            }
             // After the program runs, stream every /out file through the pod log with base64 framing —
             // a completed pod's filesystem is gone, so the log is the only channel back, and the log
             // pipeline (CRI → kubelet → API → UTF-8 string decode) is not binary-safe: base64 keeps the
@@ -52,6 +62,7 @@ public sealed class KubernetesWorkloadRunner : IWorkloadRunner
             // raw byte count for integrity; the program's exit code is preserved. See SplitFramedLogs.
             runShell =
                 "mkdir -p /out\n" +
+                depsPreamble +
                 "cat /work/input.json | " + invoke + "\n" +
                 "rc=$?\n" +
                 $"echo\necho {ShQuote(ArtifactsMarker)}\n" +
