@@ -145,12 +145,21 @@ public static class OAuthServer
 
     private static string BaseUrl(HttpContext ctx) => $"{ctx.Request.Scheme}://{ctx.Request.Host}";
 
+    /// <summary>
+    /// MCP access tokens are effectively non-expiring: a connected agent must never lose access
+    /// because a session crossed an hour boundary, and not every MCP client refreshes reliably.
+    /// This is safe here because expiry is not the revocation mechanism — the bearer pipeline
+    /// re-checks the user against the DB on every request (ghost tokens are rejected, roles
+    /// refreshed), so removing a member kills their tokens immediately regardless of lifetime.
+    /// </summary>
+    private static readonly TimeSpan AccessTokenLifetime = TimeSpan.FromDays(3650);
+
     private static IResult TokenResponse(string issuer, OAuthRefreshGrant grant) =>
         Results.Json(new Dictionary<string, object?>
         {
             ["access_token"] = IssueToken(issuer, grant),
             ["token_type"] = "Bearer",
-            ["expires_in"] = 3600,
+            ["expires_in"] = (long)AccessTokenLifetime.TotalSeconds,
             ["refresh_token"] = grant.Token,
             ["scope"] = grant.Scope,
         });
@@ -161,7 +170,7 @@ public static class OAuthServer
         {
             Issuer = issuer,
             Audience = $"{issuer}/mcp",
-            Expires = DateTime.UtcNow.AddHours(1),
+            Expires = DateTime.UtcNow.Add(AccessTokenLifetime),
             SigningCredentials = OAuthKeys.SigningCredentials,
             Claims = new Dictionary<string, object>
             {
