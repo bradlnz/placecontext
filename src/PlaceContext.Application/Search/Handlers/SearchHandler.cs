@@ -10,15 +10,19 @@ public sealed class SearchHandler : IQueryHandler<SearchQuery, SearchResultsView
     private readonly IActivityLogRepository _ledgers;
     private readonly IProjectContextRepository _contexts;
     private readonly IDecisionRepository _decisions;
+    private readonly IRunArtifactLinkRepository? _artifacts;
 
     public SearchHandler(
         IProjectRepository projects, IActivityLogRepository ledgers,
-        IProjectContextRepository contexts, IDecisionRepository decisions)
+        IProjectContextRepository contexts, IDecisionRepository decisions,
+        // Optional so existing tests construct the handler unchanged; DI always supplies it.
+        IRunArtifactLinkRepository? artifacts = null)
     {
         _projects = projects;
         _ledgers = ledgers;
         _contexts = contexts;
         _decisions = decisions;
+        _artifacts = artifacts;
     }
 
     public async Task<SearchResultsView> HandleAsync(SearchQuery query, CancellationToken ct = default)
@@ -30,6 +34,16 @@ public sealed class SearchHandler : IQueryHandler<SearchQuery, SearchResultsView
         bool Match(string? s) => s is not null && s.Contains(term, StringComparison.OrdinalIgnoreCase);
 
         var hits = new List<SearchHit>();
+
+        // Stored run artifacts: title/kind matches open straight in the file viewer's stream URL.
+        if (_artifacts is not null)
+        {
+            foreach (var a in (await _artifacts.ListRecentAsync(300, ct))
+                     .Where(a => Match(a.Title) || Match(a.Kind.ToString())).Take(8))
+                hits.Add(new SearchHit("artifact", a.ProjectId, a.Title,
+                    $"{a.Kind} · {a.CreatedAt.ToLocalTime():MMM d HH:mm}", $"/runs/{a.RunId}/artifacts/{a.Id}"));
+        }
+
         foreach (var p in await _projects.ListAsync(ct))
         {
             var url = $"/project/{p.Id.Value}";
