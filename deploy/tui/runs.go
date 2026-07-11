@@ -92,6 +92,9 @@ type reduceJson struct {
 
 // fetchRunDetail reads one run's shard + reduce results and formats them into a scrollable report:
 // per-shard exit code, outcome, the combined stdout/stderr (console logs + errors), and artifacts.
+// The run row AND its post-job outputs come back in a SINGLE kubectl-exec psql round-trip (two -c
+// statements) — each exec costs ~a second of API/attach latency, and two in sequence made opening
+// a run feel like a stall behind the full-screen loader.
 func (m model) fetchRunDetail(r runRow) tea.Cmd {
 	mc := m
 	return func() tea.Msg {
@@ -101,56 +104,41 @@ func (m model) fetchRunDetail(r runRow) tea.Cmd {
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		q := `SELECT coalesce("ShardResultsJson",'[]'), coalesce("ReduceResultJson",'') ` +
+		qRun := `SELECT 'R', coalesce("ShardResultsJson",'[]'), coalesce("ReduceResultJson",'') ` +
 			`FROM job_runs WHERE "Id"='` + r.id + `'`
+		// Post-job outputs (HTML report / chart / CSV / raw bundle stored in MinIO) as portal
+		// links — the detail view's link extractor picks them up, so they open with [o]/[1-9].
+		qArts := `SELECT 'A', "Kind" || ' — ' || "Title", "Id"::text ` +
+			`FROM job_run_artifacts WHERE "RunId"='` + r.id + `' ORDER BY "CreatedAt"`
 		b, err := mc.kubectl(ctx, "-n", ns, "exec", "deploy/placecontext-db", "--",
-			"psql", "-U", "postgres", "-d", "placecontext", "-At", "-F", "\x1f", "-c", q)
+			"psql", "-U", "postgres", "-d", "placecontext", "-At", "-F", "\x1f", "-c", qRun, "-c", qArts)
 		if err != nil {
 			return runDetailMsg{title: title, body: "could not load run: " + err.Error()}
 		}
-		parts := strings.SplitN(strings.TrimRight(string(b), "\n"), "\x1f", 2)
-		shardsJSON := ""
-		reduceJSON := ""
-		if len(parts) > 0 {
-			shardsJSON = parts[0]
+
+		// Each row is tagged by its statement ('R' run, 'A' artifact) — jsonb columns print as
+		// single lines under -At, so a line-based split is safe.
+		shardsJSON, reduceJSON := "", ""
+		var artLinks strings.Builder
+		for _, ln := range strings.Split(strings.TrimRight(string(b), "\n"), "\n") {
+			f := strings.SplitN(ln, "\x1f", 3)
+			if len(f) != 3 {
+				continue
+			}
+			switch f[0] {
+			case "R":
+				shardsJSON, reduceJSON = f[1], f[2]
+			case "A":
+				if artLinks.Len() == 0 {
+					artLinks.WriteString("\n## Post-job outputs\n\n")
+				}
+				artLinks.WriteString("- " + f[1] + ": " + portalURL() + "runs/" + r.id + "/artifacts/" + f[2] + "\n")
+			}
 		}
-		if len(parts) > 1 {
-			reduceJSON = parts[1]
-		}
-		body := renderRunDetail(r, shardsJSON, reduceJSON)
-		body += mc.fetchRunArtifacts(ctx, r.id) // post-job outputs (MinIO) as openable links
+
+		body := renderRunDetail(r, shardsJSON, reduceJSON) + artLinks.String()
 		return runDetailMsg{title: title, body: body, docs: collectRunJSONDocs(shardsJSON, reduceJSON)}
 	}
-}
-
-// fetchRunArtifacts queries the post-job outputs (HTML report / chart / CSV / raw bundle) stored in
-// MinIO for a run and renders them as a markdown section of portal links. The URLs are picked up by the
-// detail view's link extractor, so they open with [o]/[1-9]. Returns "" when there are none.
-func (m model) fetchRunArtifacts(ctx context.Context, runID string) string {
-	if !validUUID(runID) {
-		return ""
-	}
-	q := `SELECT "Kind","Title","Id" FROM job_run_artifacts WHERE "RunId"='` + runID + `' ORDER BY "CreatedAt"`
-	b, err := m.kubectl(ctx, "-n", ns, "exec", "deploy/placecontext-db", "--",
-		"psql", "-U", "postgres", "-d", "placecontext", "-At", "-F", "\t", "-c", q)
-	if err != nil {
-		return ""
-	}
-	var sb strings.Builder
-	for _, ln := range strings.Split(strings.TrimSpace(string(b)), "\n") {
-		if ln == "" {
-			continue
-		}
-		f := strings.Split(ln, "\t")
-		if len(f) < 3 {
-			continue
-		}
-		if sb.Len() == 0 {
-			sb.WriteString("\n## Post-job outputs\n\n")
-		}
-		sb.WriteString("- " + f[0] + " — " + f[1] + ": " + portalURL() + "runs/" + runID + "/artifacts/" + f[2] + "\n")
-	}
-	return sb.String()
 }
 
 // urlRe matches http(s) URLs in run output; trailing punctuation/brackets are trimmed by extractURLs.
