@@ -480,8 +480,20 @@ else
                         </textarea>
                         <div class="dchint">
                             Stdin: opaque JSON payload. Print the JSON artifact to <code>stdout</code>.
-                            Dependencies (npm install/pip install) are not supported in this pass — use the image path for dep-heavy jobs.
+                            Dependencies: add your runtime's manifest as an extra file (<code>requirements.txt</code>,
+                            <code>package.json</code>, <code>Gemfile</code>, <code>go.mod</code>) and packages install
+                            before the entrypoint runs — downloads need <strong>Allow network egress</strong> ticked.
                         </div>
+                        @if (_edMapFiles.Count > 1)
+                        {
+                            <div style="margin-top:6px; display:flex; flex-wrap:wrap; align-items:center; gap:6px; font-size:11.5px; color:var(--text-3)">
+                                <span>This job has @_edMapFiles.Count files — the editor above changes only the entrypoint; the rest are kept on save:</span>
+                                @foreach (var f in _edMapFiles.Where(f => f.Path != (_edMapEntrypoint == "" ? DefaultEntrypointFor(_edMapRuntimeId) : _edMapEntrypoint)))
+                                {
+                                    <span style="font-family:'Geist Mono',monospace; background:var(--card-2); border-radius:5px; padding:1px 7px">@f.Path</span>
+                                }
+                            </div>
+                        }
                     </div>
                 }
             </div>
@@ -722,6 +734,7 @@ else
     private string _edMapRuntimeId = "node";
     private string _edMapEntrypoint = "";
     private string _edMapSource = "";
+    private IReadOnlyList<CodeFileDto> _edMapFiles = Array.Empty<CodeFileDto>(); // full file set of a multi-file job
     private string _edInputPayloadsRaw = "{}";
     private string _edMapEnvRaw = "";
     private int _edConcurrency = 1;
@@ -909,6 +922,7 @@ else
         _edMapRuntimeId = "python";
         _edMapEntrypoint = "";
         _edMapSource = "";
+        _edMapFiles = Array.Empty<CodeFileDto>();
         _edInputPayloadsRaw = "{}";
         _edMapEnvRaw = "";
         _edConcurrency = 1;
@@ -932,6 +946,7 @@ else
         _edMapRuntimeId = job.MapRuntimeId ?? "node";
         _edMapEntrypoint = job.MapEntrypoint ?? "";
         _edMapSource = job.MapSource ?? "";
+        _edMapFiles = job.MapFiles;
         _edInputPayloadsRaw = string.Join("\n", job.InputPayloads);
         _edMapEnvRaw = string.Join("\n", job.MapEnv.Select(kv => $"{kv.Key}={kv.Value}"));
         _edConcurrency = job.ConcurrencyLimit;
@@ -1007,13 +1022,25 @@ else
         {
             if (_editJobId.HasValue)
             {
+                // Multi-file code jobs (authored via upload_job_code / the code editor): the form's
+                // single textarea edits only the entrypoint file — the rest of the file set
+                // (requirements.txt, package.json, libs) must survive a save, so send the full set
+                // with the entrypoint's content swapped in rather than a single MapSource.
+                IReadOnlyList<CodeFileDto>? mapFiles = null;
+                if (_edMapSourceKind == "code" && _edMapFiles.Count > 1)
+                {
+                    var entry = !string.IsNullOrWhiteSpace(_edMapEntrypoint) ? _edMapEntrypoint : DefaultEntrypointFor(_edMapRuntimeId);
+                    mapFiles = _edMapFiles.Select(f => f.Path == entry ? f with { Content = _edMapSource } : f).ToList();
+                }
+
                 var cmd = new UpdateJobCommand(
                     JobId: _editJobId.Value,
                     Name: _edName.Trim(),
                     Description: string.IsNullOrWhiteSpace(_edDescription) ? null : _edDescription.Trim(),
                     MapImage: _edMapSourceKind == "image" ? _edMapImage : null,
                     MapRuntimeId: _edMapSourceKind == "code" ? _edMapRuntimeId : null,
-                    MapSource: _edMapSourceKind == "code" ? _edMapSource : null,
+                    MapSource: _edMapSourceKind == "code" && mapFiles is null ? _edMapSource : null,
+                    MapFiles: mapFiles,
                     MapEntrypoint: _edMapSourceKind == "code" && !string.IsNullOrWhiteSpace(_edMapEntrypoint) ? _edMapEntrypoint : null,
                     InputPayloads: payloads,
                     MapEnv: env,
