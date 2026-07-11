@@ -1,0 +1,393 @@
+@page "/project/{ProjectId:guid}/chains"
+@inject IPlaceContextService Svc
+@inject PortalUiState Ui
+@inject NavigationManager Nav
+@inject PlaceContext.Infrastructure.Operations.OperationCenter OpCenter
+@using Microsoft.Extensions.DependencyInjection
+
+<PageTitle>PlaceContext — Job chains</PageTitle>
+
+@if (_loading)
+{
+    <div style="padding:24px; color:var(--text-3)">Loading…</div>
+}
+else
+{
+    <div style="padding:20px 24px 40px; max-width:1320px; margin:0 auto">
+
+    <ProjectTabs ProjectId="ProjectId" Active="chains" />
+
+        <div style="display:flex; align-items:baseline; justify-content:space-between; margin-bottom:18px">
+            <div>
+                <h2 style="font-size:18px; font-weight:600; margin:0">Job chains</h2>
+                <div style="font-size:12px; color:var(--text-3); margin-top:3px">
+                    Ordered pipelines — each step's primary output becomes the next step's input payload.
+                </div>
+            </div>
+            <button class="dcbtn primary" @onclick="NewChain">+ New chain</button>
+        </div>
+
+        @if (_message is not null)
+        {
+            <div style="margin-bottom:12px; padding:10px 14px; border-radius:8px; background:var(--card); font-size:12.5px; color:var(--text-2)">@_message</div>
+        }
+
+        @if (_chains is null || _chains.Count == 0)
+        {
+            <div class="dccard" style="padding:24px; color:var(--text-3); font-size:13px; text-align:center">
+                No chains defined for this project yet. Click <strong>+ New chain</strong> to link jobs into a pipeline.
+            </div>
+        }
+        else
+        {
+            <div style="display:flex; flex-direction:column; gap:10px">
+                @foreach (var chain in _chains)
+                {
+                    <div class="dccard" style="padding:14px 16px">
+                        <div style="display:flex; align-items:center; justify-content:space-between; gap:14px">
+                            <div style="min-width:0">
+                                <div style="font-size:14px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis">@chain.Name</div>
+                                @if (!string.IsNullOrWhiteSpace(chain.Description))
+                                {
+                                    <div style="font-size:12px; color:var(--text-3); margin-top:3px">@chain.Description</div>
+                                }
+                                <div style="display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin-top:8px; font-size:11.5px; font-family:'Geist Mono',monospace">
+                                    @foreach (var (step, i) in chain.Steps.Select((s, i) => (s, i)))
+                                    {
+                                        if (i > 0)
+                                        {
+                                            <span style="color:var(--text-3)">→</span>
+                                        }
+                                        <span style="padding:2px 8px; border-radius:6px; background:var(--card-2); color:@(step.JobName == "(deleted)" ? "var(--bad)" : "var(--brand-2)")">@step.JobName</span>
+                                    }
+                                </div>
+                            </div>
+                            <div style="display:flex; align-items:center; gap:8px; flex:none">
+                                <button class="dcbtn" @onclick="@(() => EditChain(chain))">Edit</button>
+                                @if (_confirmDeleteId == chain.Id)
+                                {
+                                    <button class="dcbtn" style="color:var(--bad)" @onclick="@(() => DeleteChain(chain.Id))">Confirm delete</button>
+                                    <button class="dcbtn" @onclick="@(() => _confirmDeleteId = null)">Keep</button>
+                                }
+                                else
+                                {
+                                    <button class="dcbtn" @onclick="@(() => _confirmDeleteId = chain.Id)">Delete</button>
+                                }
+                                <button class="dcbtn primary" @onclick="@(() => RunChain(chain))">▶ Run</button>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+}
+
+@if (_showEditor)
+{
+    <div class="dcslide-scrim" @onclick="CloseEditor"></div>
+    <div class="dcslide" style="width:560px">
+        <div class="dcslide-head">
+            <div style="flex:1; min-width:0">
+                <div style="font-size:14px; font-weight:600">@(_editChainId.HasValue ? "Edit chain" : "New chain")</div>
+                <div style="font-size:11.5px; color:var(--text-3); margin-top:3px">
+                    Steps run in order; a failed step stops the chain. The same job may appear more than once.
+                </div>
+            </div>
+            <button class="dcslide-x" @onclick="CloseEditor">×</button>
+        </div>
+        <div class="dcslide-body" style="flex:1; display:flex; flex-direction:column; gap:14px">
+
+            <div style="display:flex; gap:10px">
+                <div class="dcfield" style="flex:1">
+                    <label>Name <span class="req">*</span></label>
+                    <input class="dcinput" @bind="_edName" placeholder="my-pipeline" />
+                </div>
+                <div class="dcfield" style="flex:1.4">
+                    <label>Description</label>
+                    <input class="dcinput" @bind="_edDescription" placeholder="What does this chain produce? (optional)" />
+                </div>
+            </div>
+
+            <div class="dcform-section">
+                <span class="dcform-title">Steps <span class="req">*</span></span>
+
+                @if (_edSteps.Count == 0)
+                {
+                    <div style="padding:14px; border-radius:8px; background:var(--card-2); font-size:12px; color:var(--text-3); text-align:center">
+                        No steps yet — pick a job below and add it.
+                    </div>
+                }
+                else
+                {
+                    <div style="display:flex; flex-direction:column; gap:6px">
+                        @foreach (var (jobId, i) in _edSteps.Select((id, i) => (id, i)))
+                        {
+                            <div style="display:flex; align-items:center; gap:10px; padding:8px 10px; border-radius:8px; background:var(--card-2)">
+                                <span style="font-size:11px; color:var(--text-3); font-family:'Geist Mono',monospace; flex:none">@(i + 1).</span>
+                                <span style="flex:1; min-width:0; font-size:12.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis">@JobName(jobId)</span>
+                                <button class="dcbtn" style="padding:2px 8px" disabled="@(i == 0)" @onclick="@(() => MoveStep(i, -1))">↑</button>
+                                <button class="dcbtn" style="padding:2px 8px" disabled="@(i == _edSteps.Count - 1)" @onclick="@(() => MoveStep(i, +1))">↓</button>
+                                <button class="dcbtn" style="padding:2px 8px; color:var(--bad)" @onclick="@(() => _edSteps.RemoveAt(i))">×</button>
+                            </div>
+                        }
+                    </div>
+                }
+
+                <div style="display:flex; gap:8px; margin-top:4px">
+                    <select class="dcinput" style="flex:1" @bind="_edAddJobId">
+                        <option value="">— pick a job —</option>
+                        @foreach (var job in _jobs ?? Array.Empty<JobView>())
+                        {
+                            <option value="@job.Id">@job.Name</option>
+                        }
+                    </select>
+                    <button class="dcbtn" disabled="@(string.IsNullOrEmpty(_edAddJobId))" @onclick="AddStep">+ Add step</button>
+                </div>
+            </div>
+
+        </div>
+        <div class="dcslide-foot">
+            @if (_editorError is not null)
+            {
+                <div style="color:var(--bad); font-size:12px; flex:1">@_editorError</div>
+            }
+            <button class="dcbtn" @onclick="CloseEditor">Cancel</button>
+            <button class="dcbtn primary" disabled="@_saving" @onclick="SaveChain">
+                @(_saving ? "Saving…" : _editChainId.HasValue ? "Save chain" : "Create chain")
+            </button>
+        </div>
+    </div>
+}
+
+@if (_runPromptChain is not null && _runPromptJob is not null)
+{
+    <div class="dcmodal-overlay" @onclick="@(() => _runPromptChain = null)">
+        <div class="dcmodal" style="width:440px" @onclick:stopPropagation="true">
+            <div class="dcmodal-head">
+                <div style="flex:1; min-width:0">
+                    <div style="font-size:14px; font-weight:600">Run @_runPromptChain.Name</div>
+                    <div style="font-size:11.5px; color:var(--text-3); margin-top:3px">
+                        The first step (@_runPromptJob.Name) takes input — the values below become its payload.
+                    </div>
+                </div>
+                <button class="dcslide-x" @onclick="@(() => _runPromptChain = null)">×</button>
+            </div>
+            <div class="dcmodal-body">
+                @foreach (var (p, i) in _runPromptJob.Parameters.Select((p, i) => (p, i)))
+                {
+                    <div class="dcfield">
+                        <label>
+                            @(p.Label ?? p.Name)
+                            @if (p.Required)
+                            {
+                                <span class="req">*</span>
+                            }
+                            <span class="code" style="margin-left:5px">@p.Name</span>
+                        </label>
+                        @if (i == 0)
+                        {
+                            <input class="dcinput" autofocus value="@GetArg(p.Name)"
+                                   @oninput="@(e => SetArg(p.Name, e.Value?.ToString() ?? ""))" />
+                        }
+                        else
+                        {
+                            <input class="dcinput" value="@GetArg(p.Name)"
+                                   @oninput="@(e => SetArg(p.Name, e.Value?.ToString() ?? ""))" />
+                        }
+                    </div>
+                }
+                @if (_runPromptError is not null)
+                {
+                    <div style="color:var(--bad); font-size:12px; padding:8px 10px; background:var(--bad-bg); border-radius:6px">@_runPromptError</div>
+                }
+            </div>
+            <div class="dcmodal-foot">
+                <button class="dcbtn" @onclick="@(() => _runPromptChain = null)">Cancel</button>
+                <button class="dcbtn primary" @onclick="SubmitRunPrompt">▶ Run chain</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public Guid ProjectId { get; set; }
+
+    private IReadOnlyList<JobChainView>? _chains;
+    private IReadOnlyList<JobView>? _jobs;
+    private string? _message;
+    private bool _loading = true;
+    private Guid? _confirmDeleteId;
+
+    // ── Editor state ────────────────────────────────────────────────────────────────────────────
+    private bool _showEditor;
+    private bool _saving;
+    private Guid? _editChainId;
+    private string? _editorError;
+    private string _edName = "";
+    private string _edDescription = "";
+    private readonly List<Guid> _edSteps = new();
+    private string _edAddJobId = "";
+
+    // ── Run-input prompt state (only when the first step's job declares parameters) ──────────────
+    private JobChainView? _runPromptChain;
+    private JobView? _runPromptJob;
+    private Dictionary<string, string> _runArgs = new();
+    private string? _runPromptError;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _loading = true;
+        _message = null;
+        try
+        {
+            _chains = await Svc.ListJobChainsAsync(ProjectId);
+            _jobs = await Svc.ListJobsAsync(ProjectId);
+            Ui.Set("Job chains", "ordered job pipelines");
+        }
+        catch (Exception ex) { _message = ex.Message; }
+        finally { _loading = false; }
+    }
+
+    private string JobName(Guid jobId) =>
+        _jobs?.FirstOrDefault(j => j.Id == jobId)?.Name ?? "(deleted)";
+
+    // ── Run ───────────────────────────────────────────────────────────────────────────────────────
+
+    private async Task RunChain(JobChainView chain)
+    {
+        // Mirror the Jobs page: when the first step's job declares input parameters, prompt for
+        // them — that payload feeds the first step; later steps are fed by their predecessors.
+        var firstJob = chain.Steps.Count > 0 ? _jobs?.FirstOrDefault(j => j.Id == chain.Steps[0].JobId) : null;
+        if (firstJob is not null && firstJob.Parameters.Count > 0)
+        {
+            _runPromptChain = chain;
+            _runPromptJob = firstJob;
+            _runArgs = firstJob.Parameters.ToDictionary(p => p.Name, _ => "");
+            _runPromptError = null;
+            return;
+        }
+        await RunChainCore(chain, null);
+    }
+
+    private Task RunChainCore(JobChainView chain, string? payload)
+    {
+        _message = null;
+        // Chains execute as background portal operations — a multi-step pipeline can be slow, and
+        // leaving this page never interrupts one; progress and the outcome live in the notifications bell.
+        var tenant = PlaceContext.Infrastructure.Tenancy.CurrentTenant.Current;
+        if (tenant is null) { _message = "No tenant resolved — sign in again."; return Task.CompletedTask; }
+        OpCenter.Run(tenant, ProjectId, $"Run chain — {chain.Name}", $"/project/{ProjectId}/chains",
+            async (sp, ct) =>
+            {
+                var result = await sp.GetRequiredService<IPlaceContextService>().RunJobChainAsync(chain.Id, payload, ct);
+                return $"chain finished — {result.Status} ({result.Steps.Count} step(s) ran)";
+            });
+        _runPromptChain = null;
+        _runPromptJob = null;
+        _message = $"Run of {chain.Name} started in the background — follow it in the notifications bell.";
+        return Task.CompletedTask;
+    }
+
+    private string GetArg(string name) => _runArgs.TryGetValue(name, out var v) ? v : "";
+    private void SetArg(string name, string value) => _runArgs[name] = value;
+
+    private async Task SubmitRunPrompt()
+    {
+        if (_runPromptChain is null || _runPromptJob is null) return;
+        _runPromptError = null;
+
+        var missing = _runPromptJob.Parameters
+            .Where(p => p.Required && string.IsNullOrWhiteSpace(GetArg(p.Name)))
+            .Select(p => p.Label ?? p.Name)
+            .ToList();
+        if (missing.Count > 0) { _runPromptError = $"Required: {string.Join(", ", missing)}"; return; }
+
+        var payload = System.Text.Json.JsonSerializer.Serialize(
+            _runPromptJob.Parameters.ToDictionary(p => p.Name, p => GetArg(p.Name)));
+        await RunChainCore(_runPromptChain, payload);
+    }
+
+    // ── Editor ───────────────────────────────────────────────────────────────────────────────────
+
+    private void NewChain()
+    {
+        _editChainId = null;
+        _edName = "";
+        _edDescription = "";
+        _edSteps.Clear();
+        _edAddJobId = "";
+        _editorError = null;
+        _showEditor = true;
+    }
+
+    private void EditChain(JobChainView chain)
+    {
+        _editChainId = chain.Id;
+        _edName = chain.Name;
+        _edDescription = chain.Description ?? "";
+        _edSteps.Clear();
+        _edSteps.AddRange(chain.Steps.Select(s => s.JobId));
+        _edAddJobId = "";
+        _editorError = null;
+        _showEditor = true;
+    }
+
+    private void CloseEditor()
+    {
+        _showEditor = false;
+        _editorError = null;
+    }
+
+    private void AddStep()
+    {
+        if (Guid.TryParse(_edAddJobId, out var id)) _edSteps.Add(id);
+        _edAddJobId = "";
+    }
+
+    private void MoveStep(int index, int delta)
+    {
+        var target = index + delta;
+        if (target < 0 || target >= _edSteps.Count) return;
+        (_edSteps[index], _edSteps[target]) = (_edSteps[target], _edSteps[index]);
+    }
+
+    private async Task SaveChain()
+    {
+        _editorError = null;
+        if (string.IsNullOrWhiteSpace(_edName)) { _editorError = "Name is required."; return; }
+        if (_edSteps.Count == 0) { _editorError = "A chain needs at least one step."; return; }
+
+        _saving = true;
+        try
+        {
+            var description = string.IsNullOrWhiteSpace(_edDescription) ? null : _edDescription.Trim();
+            if (_editChainId is { } chainId)
+            {
+                await Svc.UpdateJobChainAsync(chainId, _edName.Trim(), description, _edSteps);
+                _message = $"Chain {_edName.Trim()} updated.";
+            }
+            else
+            {
+                await Svc.CreateJobChainAsync(ProjectId, _edName.Trim(), description, _edSteps);
+                _message = $"Chain {_edName.Trim()} created.";
+            }
+            _chains = await Svc.ListJobChainsAsync(ProjectId);
+            _showEditor = false;
+        }
+        catch (Exception ex) { _editorError = ex.Message; }
+        finally { _saving = false; }
+    }
+
+    private async Task DeleteChain(Guid chainId)
+    {
+        _confirmDeleteId = null;
+        try
+        {
+            await Svc.DeleteJobChainAsync(chainId);
+            _chains = await Svc.ListJobChainsAsync(ProjectId);
+            _message = "Chain deleted.";
+        }
+        catch (Exception ex) { _message = ex.Message; }
+    }
+}
