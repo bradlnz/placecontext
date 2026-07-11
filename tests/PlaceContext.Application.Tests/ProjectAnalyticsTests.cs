@@ -84,6 +84,12 @@ public class ProjectAnalyticsTests
             => Task.FromResult<IReadOnlyList<ProjectChart>>(
                 Charts.Values.Where(c => c.ProjectId == projectId).OrderBy(c => c.TableName).ToList());
 
+        public Task DeleteAsync(Guid projectId, string tableName, CancellationToken ct = default)
+        {
+            Charts.Remove((projectId, tableName));
+            return Task.CompletedTask;
+        }
+
         public Task DeleteForProjectAsync(Guid projectId, IReadOnlyCollection<string> keepTables, CancellationToken ct = default)
         {
             foreach (var key in Charts.Keys.Where(k => k.Item1 == projectId && !keepTables.Contains(k.Item2)).ToList())
