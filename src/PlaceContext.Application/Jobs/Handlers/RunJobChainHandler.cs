@@ -67,7 +67,10 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
             chainRun.MarkStepRunning(i, stepRunId, _clock.UtcNow);
             await SaveProgressAsync(chainRun, ct);
 
-            var run = await _dispatcher.Send(new RunJobCommand(chain.StepJobIds[i], payload, stepRunId), ct);
+            var stepPayload = command.StepPayloadOverrides is { } overrides && overrides.TryGetValue(i, out var args)
+                ? MergePayload(payload, args)
+                : payload;
+            var run = await _dispatcher.Send(new RunJobCommand(chain.StepJobIds[i], stepPayload, stepRunId), ct);
             chainRun.MarkStepFinished(i, run.Id, ParseStepOutcome(run.Status), _clock.UtcNow);
             await SaveProgressAsync(chainRun, ct);
 
@@ -84,6 +87,30 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
         await SaveProgressAsync(chainRun, ct);
 
         return ChainRunMapper.ToView(chainRun);
+    }
+
+    // Fold collected step parameters over the chained input: two JSON objects merge shallowly
+    // (parameter values win); anything else keeps the chained input under "previous" beside them.
+    private static string MergePayload(string? chained, string args)
+    {
+        if (string.IsNullOrWhiteSpace(chained)) return args;
+        try
+        {
+            var argsNode = System.Text.Json.Nodes.JsonNode.Parse(args) as System.Text.Json.Nodes.JsonObject
+                ?? throw new System.Text.Json.JsonException();
+            if (System.Text.Json.Nodes.JsonNode.Parse(chained) is System.Text.Json.Nodes.JsonObject prevObj)
+            {
+                foreach (var (k, v) in argsNode.ToList())
+                    prevObj[k] = v?.DeepClone();
+                return prevObj.ToJsonString();
+            }
+            argsNode["previous"] = System.Text.Json.Nodes.JsonNode.Parse(chained);
+            return argsNode.ToJsonString();
+        }
+        catch
+        {
+            return args; // unparseable input — the collected parameters win
+        }
     }
 
     private async Task SaveProgressAsync(ChainRun run, CancellationToken ct)

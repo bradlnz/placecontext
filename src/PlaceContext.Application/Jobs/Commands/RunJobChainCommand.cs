@@ -9,5 +9,9 @@ namespace PlaceContext.Application.Features;
 /// null the first job runs with its stored shard payloads. <paramref name="ChainRunId"/> optionally
 /// pre-allocates the run's id so the caller can correlate its own tracking with the run row.
 /// </summary>
-public sealed record RunJobChainCommand(Guid ChainId, string? InputPayload = null, Guid? ChainRunId = null)
+/// <param name="StepPayloadOverrides">Optional JSON-object payloads keyed by step index, collected
+/// from each step job's declared parameters. Merged over the step's chained input: object-over-object
+/// merges shallowly (override keys win); a non-object chained input is preserved under "previous".</param>
+public sealed record RunJobChainCommand(Guid ChainId, string? InputPayload = null, Guid? ChainRunId = null,
+    IReadOnlyDictionary<int, string>? StepPayloadOverrides = null)
     : ICommand<ChainRunView>;

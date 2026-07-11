@@ -297,40 +297,42 @@ else
     </div>
 }
 
-@if (_runPromptChain is not null && _runPromptJob is not null)
+@if (_runPromptChain is not null)
 {
     <div class="dcmodal-overlay" @onclick="@(() => _runPromptChain = null)">
-        <div class="dcmodal" style="width:440px" @onclick:stopPropagation="true">
+        <div class="dcmodal" style="width:520px; max-height:80vh; display:flex; flex-direction:column" @onclick:stopPropagation="true">
             <div class="dcmodal-head">
                 <div style="flex:1; min-width:0">
                     <div style="font-size:14px; font-weight:600">Run @_runPromptChain.Name</div>
                     <div style="font-size:11.5px; color:var(--text-3); margin-top:3px">
-                        The first step (@_runPromptJob.Name) takes input — the values below become its payload.
+                        Every step that takes input is listed below — values are prefilled from each job's stored payload.
                     </div>
                 </div>
                 <button class="dcslide-x" @onclick="@(() => _runPromptChain = null)">×</button>
             </div>
-            <div class="dcmodal-body">
-                @foreach (var (p, i) in _runPromptJob.Parameters.Select((p, i) => (p, i)))
+            <div class="dcmodal-body" style="overflow-y:auto">
+                @foreach (var step in _runPromptSteps)
                 {
-                    <div class="dcfield">
-                        <label>
-                            @(p.Label ?? p.Name)
-                            @if (p.Required)
-                            {
-                                <span class="req">*</span>
-                            }
-                            <span class="code" style="margin-left:5px">@p.Name</span>
-                        </label>
-                        @if (i == 0)
+                    <div style="margin-bottom:14px">
+                        <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px">
+                            <span style="font-family:'IBM Plex Mono',monospace; font-size:10.5px; padding:1px 7px; border-radius:5px; background:var(--card-2); color:var(--text-3)">step @(step.Index + 1)</span>
+                            <span style="font-size:12.5px; font-weight:600">@step.Job.Name</span>
+                        </div>
+                        @foreach (var p in step.Job.Parameters)
                         {
-                            <input class="dcinput" autofocus value="@GetArg(p.Name)"
-                                   @oninput="@(e => SetArg(p.Name, e.Value?.ToString() ?? ""))" />
-                        }
-                        else
-                        {
-                            <input class="dcinput" value="@GetArg(p.Name)"
-                                   @oninput="@(e => SetArg(p.Name, e.Value?.ToString() ?? ""))" />
+                            var key = ArgKey(step.Index, p.Name);
+                            <div class="dcfield">
+                                <label>
+                                    @(p.Label ?? p.Name)
+                                    @if (p.Required)
+                                    {
+                                        <span class="req">*</span>
+                                    }
+                                    <span class="code" style="margin-left:5px">@p.Name</span>
+                                </label>
+                                <input class="dcinput" value="@GetArg(key)"
+                                       @oninput="@(e => SetArg(key, e.Value?.ToString() ?? ""))" />
+                            </div>
                         }
                     </div>
                 }
@@ -376,9 +378,11 @@ else
 
     // ── Run-input prompt state (only when the first step's job declares parameters) ──────────────
     private JobChainView? _runPromptChain;
-    private JobView? _runPromptJob;
+    private List<(int Index, JobView Job)> _runPromptSteps = new();
     private Dictionary<string, string> _runArgs = new();
     private string? _runPromptError;
+
+    private static string ArgKey(int stepIndex, string param) => $"{stepIndex}:{param}";
 
     protected override void OnInitialized() => OpCenter.Changed += OnOpsChanged;
 
@@ -426,21 +430,45 @@ else
 
     private async Task RunChain(JobChainView chain)
     {
-        // Mirror the Jobs page: when the first step's job declares input parameters, prompt for
-        // them — that payload feeds the first step; later steps are fed by their predecessors.
-        var firstJob = chain.Steps.Count > 0 ? _jobs?.FirstOrDefault(j => j.Id == chain.Steps[0].JobId) : null;
-        if (firstJob is not null && firstJob.Parameters.Count > 0)
+        // Collect the declared parameters of EVERY step that takes input — the form groups them
+        // per step and each step's values merge over its chained input at run time.
+        _runPromptSteps = chain.Steps
+            .Select((step, i) => (Index: i, Job: _jobs?.FirstOrDefault(j => j.Id == step.JobId)))
+            .Where(x => x.Job is { Parameters.Count: > 0 })
+            .Select(x => (x.Index, x.Job!))
+            .ToList();
+        if (_runPromptSteps.Count > 0)
         {
             _runPromptChain = chain;
-            _runPromptJob = firstJob;
-            _runArgs = firstJob.Parameters.ToDictionary(p => p.Name, _ => "");
+            _runArgs = new Dictionary<string, string>();
+            foreach (var (index, job) in _runPromptSteps)
+            {
+                var defaults = StoredPayloadDefaults(job);
+                foreach (var p in job.Parameters)
+                    _runArgs[ArgKey(index, p.Name)] = defaults.GetValueOrDefault(p.Name, "");
+            }
             _runPromptError = null;
             return;
         }
         await RunChainCore(chain, null);
     }
 
-    private async Task RunChainCore(JobChainView chain, string? payload)
+    // Prefill from existing data: the job's stored input payload is its last-known-good shape.
+    private static Dictionary<string, string> StoredPayloadDefaults(JobView job)
+    {
+        try
+        {
+            if (job.InputPayloads.Count == 0) return new();
+            using var doc = System.Text.Json.JsonDocument.Parse(job.InputPayloads[0]);
+            if (doc.RootElement.ValueKind != System.Text.Json.JsonValueKind.Object) return new();
+            return doc.RootElement.EnumerateObject()
+                .Where(p => p.Value.ValueKind is not (System.Text.Json.JsonValueKind.Object or System.Text.Json.JsonValueKind.Array))
+                .ToDictionary(p => p.Name, p => p.Value.ValueKind == System.Text.Json.JsonValueKind.String ? p.Value.GetString() ?? "" : p.Value.ToString());
+        }
+        catch { return new(); }
+    }
+
+    private async Task RunChainCore(JobChainView chain, string? payload, IReadOnlyDictionary<int, string>? stepOverrides = null)
     {
         _message = null;
         // The pipeline executes as a background portal operation; the run row appears in the DB
@@ -453,12 +481,12 @@ else
         OpCenter.Run(tenant, ProjectId, $"Run chain — {chain.Name}", $"/project/{ProjectId}/chains",
             async (sp, ct) =>
             {
-                var result = await sp.GetRequiredService<IPlaceContextService>().RunJobChainAsync(chain.Id, payload, chainRunId, ct);
+                var result = await sp.GetRequiredService<IPlaceContextService>().RunJobChainAsync(chain.Id, payload, chainRunId, stepOverrides, ct);
                 return $"chain finished — {result.Status} ({result.Steps.Count(s => s.Status != "Skipped")} step(s) ran)";
             },
             correlationKey: PlaceContext.Application.Features.RunStatusWatchService.ChainRunKey(chainRunId));
         _runPromptChain = null;
-        _runPromptJob = null;
+        _runPromptSteps = new();
 
         // Land the user on the live pipeline: open this chain's Runs tab and follow the new run.
         // The background op needs a beat to persist the run row, so the poll loop latches onto
@@ -477,18 +505,23 @@ else
 
     private async Task SubmitRunPrompt()
     {
-        if (_runPromptChain is null || _runPromptJob is null) return;
+        if (_runPromptChain is null) return;
         _runPromptError = null;
 
-        var missing = _runPromptJob.Parameters
-            .Where(p => p.Required && string.IsNullOrWhiteSpace(GetArg(p.Name)))
-            .Select(p => p.Label ?? p.Name)
+        var missing = _runPromptSteps
+            .SelectMany(step => step.Job.Parameters
+                .Where(p => p.Required && string.IsNullOrWhiteSpace(GetArg(ArgKey(step.Index, p.Name))))
+                .Select(p => $"step {step.Index + 1}: {p.Label ?? p.Name}"))
             .ToList();
         if (missing.Count > 0) { _runPromptError = $"Required: {string.Join(", ", missing)}"; return; }
 
-        var payload = System.Text.Json.JsonSerializer.Serialize(
-            _runPromptJob.Parameters.ToDictionary(p => p.Name, p => GetArg(p.Name)));
-        await RunChainCore(_runPromptChain, payload);
+        // One JSON object per step; step 0's doubles as the chain's input payload.
+        var overrides = _runPromptSteps.ToDictionary(
+            step => step.Index,
+            step => System.Text.Json.JsonSerializer.Serialize(
+                step.Job.Parameters.ToDictionary(p => p.Name, p => GetArg(ArgKey(step.Index, p.Name)))));
+        var payload = overrides.GetValueOrDefault(0);
+        await RunChainCore(_runPromptChain, payload, overrides);
     }
 
     // ── Pipeline runs ─────────────────────────────────────────────────────────────────────────────
