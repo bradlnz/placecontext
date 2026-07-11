@@ -5,19 +5,27 @@
 @inject IPlaceContextService Svc
 @inject PlaceContext.Application.Ports.ICurrentTenant Tenant
 @inject PlaceContext.Infrastructure.Operations.OperationCenter OpCenter
+@inject PlaceContext.Host.Branding.BrandingService Branding
 @inject IJSRuntime JS
 @inject NavigationManager Nav
 
-<div id="dcshell" data-theme="dark" style="display:flex; height:100vh; width:100%; overflow:hidden; background:var(--bg)">
+<div id="dcshell" data-theme="dark" style="display:flex; height:100vh; width:100%; overflow:hidden; background:var(--bg); @_brand.CssOverrides()">
 
     <!-- SIDEBAR -->
     <aside style="width:236px; flex:none; display:flex; flex-direction:column; background:var(--panel); border-right:1px solid var(--border)">
         <div style="display:flex; align-items:center; gap:10px; padding:18px 18px 16px">
-            <div style="width:28px; height:28px; flex:none; border-radius:7px; background:var(--brand); display:flex; align-items:center; justify-content:center">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M5 8l3.5 4L5 16"></path><path d="M13 16h6"></path></svg>
-            </div>
+            @if (_brand.LogoDataUri is { } logo)
+            {
+                <img src="@logo" alt="logo" style="width:28px; height:28px; flex:none; border-radius:7px; object-fit:contain; background:var(--card-2)" />
+            }
+            else
+            {
+                <div style="width:28px; height:28px; flex:none; border-radius:7px; background:var(--brand); display:flex; align-items:center; justify-content:center">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M5 8l3.5 4L5 16"></path><path d="M13 16h6"></path></svg>
+                </div>
+            }
             <div style="display:flex; flex-direction:column; line-height:1.15">
-                <span style="font-size:14px; font-weight:600; letter-spacing:-.2px">placecontext</span>
+                <span style="font-size:14px; font-weight:600; letter-spacing:-.2px">@(_brand.ProductName ?? "placecontext")</span>
                 <span style="font-size:9.5px; color:var(--text-3); font-family:'IBM Plex Mono',monospace; letter-spacing:.06em">JOB ORCHESTRATION · @OrgName</span>
             </div>
         </div>
@@ -42,6 +50,7 @@
             <NavLink class="dcnav" href="onboarding"><span class="bar"></span>@Icon("rocket")<span style="flex:1">Onboarding</span></NavLink>
             <NavLink class="dcnav" href="wiki"><span class="bar"></span>@Icon("ledger")<span style="flex:1">Wiki</span></NavLink>
             <NavLink class="dcnav" href="settings/github"><span class="bar"></span>@Icon("github")<span style="flex:1">GitHub</span></NavLink>
+            <NavLink class="dcnav" href="settings/branding"><span class="bar"></span>@Icon("key")<span style="flex:1">Settings</span></NavLink>
             <NavLink class="dcnav" href="about"><span class="bar"></span>@Icon("grid")<span style="flex:1">About</span></NavLink>
         </div>
 
@@ -181,8 +190,11 @@
         Nav.LocationChanged += OnLocationChanged;
     }
 
+    private PlaceContext.Host.Branding.TenantBranding _brand = new();
+
     protected override async Task OnInitializedAsync()
     {
+        try { _brand = await Branding.GetAsync(); } catch { }
         try { _projects = await Svc.GetProjectsAsync(); } catch { _projects = Array.Empty<ProjectSummaryView>(); }
         // Default the switcher: the project in the current URL, else the first project.
         SyncProjectFromUrl(Nav.Uri);

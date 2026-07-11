@@ -37,6 +37,7 @@ PlaceContext.Host.Auth.OAuthKeys.Init(builder.Configuration["PlaceContext:OAuth:
 builder.Services.AddRazorComponents().AddInteractiveServerComponents();
 builder.Services.AddCascadingAuthenticationState();
 builder.Services.AddScoped<PlaceContext.Host.PortalUiState>();
+builder.Services.AddScoped<PlaceContext.Host.Branding.BrandingService>();
 builder.Services.AddScoped<PlaceContext.Host.Demo.BrisbaneDemoSeeder>();
 
 // Share the Data Protection key ring across replicas (persisted in Postgres) and pin the application

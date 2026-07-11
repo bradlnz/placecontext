@@ -473,12 +473,25 @@ else
                         </div>
                     </div>
                     <div class="dcfield">
-                        <label>Source code <span class="req">*</span></label>
-                        <textarea class="dcinput" rows="12"
-                                  style="font-family:'IBM Plex Mono',monospace; font-size:12px; resize:vertical"
-                                  @bind="_edMapSource"
-                                  placeholder="@SourcePlaceholderFor(_edMapRuntimeId)">
-                        </textarea>
+                        <label>Source code @(_editJobId.HasValue ? "" : "*")</label>
+                        @if (_editJobId is { } editingJobId)
+                        {
+                            @* Source lives in the code editor, not this pane — one place to edit,
+                               with Monaco, the file tree, and Test runs. *@
+                            <button class="dcbtn" style="align-self:flex-start; display:flex; align-items:center; gap:7px"
+                                    @onclick="@(() => Nav.NavigateTo($"/project/{ProjectId}/jobs/{editingJobId}"))">
+                                ⤷ Open code editor
+                                <span style="font-size:10.5px; color:var(--text-3)">@Math.Max(_edMapFiles.Count, 1) file(s)</span>
+                            </button>
+                        }
+                        else
+                        {
+                            <textarea class="dcinput" rows="12"
+                                      style="font-family:'IBM Plex Mono',monospace; font-size:12px; resize:vertical"
+                                      @bind="_edMapSource"
+                                      placeholder="@SourcePlaceholderFor(_edMapRuntimeId)">
+                            </textarea>
+                        }
                         <div class="dchint">
                             Stdin: opaque JSON payload. Print the JSON artifact to <code>stdout</code>.
                             Dependencies: add your runtime's manifest as an extra file (<code>requirements.txt</code>,
