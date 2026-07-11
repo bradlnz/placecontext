@@ -35,8 +35,8 @@ automatic refresh). No API keys to paste.
   multi-step pipeline in one MCP call.
 - **Schedules & events** — cron triggers and event triggers (`job.completed`, or your own event
   types via `emit_event`) run jobs while the agent is offline.
-- **Per-project data & analytics** — every project gets its own SQL tables; a local LLM
-  (Ollama — nothing leaves your machines) turns run output into reports and charts.
+- **Per-project data & analytics** — every project gets its own SQL tables; deterministic
+  renderers turn run output into reports and charts.
 - **On-demand runs with parameters** — declare job parameters and the portal prompts for them in a
   form; agents pass them as the input payload.
 
@@ -78,7 +78,7 @@ Everything deploys with **`pctl`** (bash) and its full-screen **TUI dashboard** 
   port-forwarding.
 - **Air-gap friendly**: images ship as tarballs inside cross-arch packages (`pctl package`) — no
   registry pulls on the nodes.
-- Postgres, MinIO, and Ollama run in-cluster; the portal, MCP endpoint, and job scheduler are one
+- Postgres and MinIO run in-cluster; the portal, MCP endpoint, and job scheduler are one
   process, scaled horizontally.
 
 See [`deploy/README.md`](deploy/README.md) for the full pctl reference.
@@ -92,7 +92,7 @@ inward only (enforced by `PlaceContext.Architecture.Tests`):
 src/
   PlaceContext.Domain          → entities/aggregates (Job, JobRun, JobChain, Project, …), no I/O
   PlaceContext.Application     → command/query handlers, ports, the dispatcher, views
-  PlaceContext.Infrastructure  → EF Core/PostgreSQL, Kubernetes runner, MinIO, Ollama, schedulers
+  PlaceContext.Infrastructure  → EF Core/PostgreSQL, Kubernetes runner, MinIO, schedulers
   PlaceContext.Host            → MCP tools (Streamable HTTP) + Blazor portal (composition root)
 deploy/
   pctl · tui/ · k3s/           → cluster lifecycle CLI, Go TUI, Kubernetes manifests
@@ -109,7 +109,6 @@ flowchart LR
         H[PlaceContext Host<br/>MCP + portal + scheduler]
         P[(PostgreSQL)]
         O[(MinIO)]
-        L[Ollama — local LLM]
         J[Job pods — sandboxed containers]
     end
     CC -- "MCP over HTTP + OAuth" --> H
@@ -117,7 +116,6 @@ flowchart LR
     T -- kubectl/psql --> cluster
     H --> P
     H --> O
-    H --> L
     H -- Kubernetes API --> J
 ```
 

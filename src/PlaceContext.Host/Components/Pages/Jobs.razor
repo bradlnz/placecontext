@@ -1,4 +1,5 @@
 @page "/project/{ProjectId:guid}/jobs"
+@implements IDisposable
 @inject IPlaceContextService Svc
 @inject PortalUiState Ui
 @inject NavigationManager Nav
@@ -48,7 +49,7 @@ else
                                 {
                                     <div style="font-size:12px; color:var(--text-3); margin-top:3px">@job.Description</div>
                                 }
-                                <div style="display:flex; gap:10px; margin-top:6px; font-size:11px; color:var(--text-3); font-family:'Geist Mono',monospace">
+                                <div style="display:flex; gap:10px; margin-top:6px; font-size:11px; color:var(--text-3); font-family:'IBM Plex Mono',monospace">
                                     @if (job.MapSourceKind == "code")
                                     {
                                         <span style="color:var(--brand-2)">[@job.MapRuntimeId]</span>
@@ -136,7 +137,7 @@ else
                                               color:@StatusColor(run.Status); background:@StatusBg(run.Status)">
                                             @run.Status
                                         </span>
-                                        <span style="font-family:'Geist Mono',monospace; font-size:11.5px; color:var(--text-2); flex:1">
+                                        <span style="font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:var(--text-2); flex:1">
                                             @run.StartedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")
                                         </span>
                                         <span style="font-size:11px; color:var(--text-3)">
@@ -144,7 +145,7 @@ else
                                         </span>
                                         @if (run.FinishedAt.HasValue)
                                         {
-                                            <span style="font-size:11px; color:var(--text-3); font-family:'Geist Mono',monospace">
+                                            <span style="font-size:11px; color:var(--text-3); font-family:'IBM Plex Mono',monospace">
                                                 @FormatDuration(run.StartedAt, run.FinishedAt.Value)
                                             </span>
                                         }
@@ -163,7 +164,7 @@ else
                               color:@StatusColor(_runDetail.Status); background:@StatusBg(_runDetail.Status)">
                             @_runDetail.Status
                         </span>
-                        <span style="font-size:11px; color:var(--text-3); font-family:'Geist Mono',monospace">@_runDetail.Id</span>
+                        <span style="font-size:11px; color:var(--text-3); font-family:'IBM Plex Mono',monospace">@_runDetail.Id</span>
                     </div>
 
                     @* Snapshot badge *@
@@ -208,7 +209,7 @@ else
                             </div>
                             @if (shard.Artifact is not null)
                             {
-                                <pre style="background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:10px; font-size:11px; font-family:'Geist Mono',monospace; overflow-x:auto; white-space:pre-wrap; word-break:break-all; color:var(--text-2); max-height:240px; overflow-y:auto">@PrettyJson(shard.Artifact)</pre>
+                                <pre style="background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:10px; font-size:11px; font-family:'IBM Plex Mono',monospace; overflow-x:auto; white-space:pre-wrap; word-break:break-all; color:var(--text-2); max-height:240px; overflow-y:auto">@PrettyJson(shard.Artifact)</pre>
                                 @if (ArtifactChart.TrySvg(shard.Artifact, out var shardChart))
                                 {
                                     <div style="font-size:11px; color:var(--text-3); margin-top:8px">chart <span style="color:var(--text-3)">(from the artifact's JSON)</span></div>
@@ -233,7 +234,7 @@ else
                             {
                                 <details style="margin-top:4px">
                                     <summary style="font-size:11px; color:var(--text-3); cursor:pointer">Log</summary>
-                                    <pre style="font-size:10.5px; font-family:'Geist Mono',monospace; color:var(--text-3); white-space:pre-wrap; margin-top:4px">@shard.Log</pre>
+                                    <pre style="font-size:10.5px; font-family:'IBM Plex Mono',monospace; color:var(--text-3); white-space:pre-wrap; margin-top:4px">@shard.Log</pre>
                                 </details>
                             }
                         </div>
@@ -252,7 +253,7 @@ else
                             </div>
                             @if (reduce.Artifact is not null)
                             {
-                                <pre style="background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:10px; font-size:11px; font-family:'Geist Mono',monospace; overflow-x:auto; white-space:pre-wrap; word-break:break-all; color:var(--text-2); max-height:300px; overflow-y:auto">@PrettyJson(reduce.Artifact)</pre>
+                                <pre style="background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:10px; font-size:11px; font-family:'IBM Plex Mono',monospace; overflow-x:auto; white-space:pre-wrap; word-break:break-all; color:var(--text-2); max-height:300px; overflow-y:auto">@PrettyJson(reduce.Artifact)</pre>
                                 @if (ArtifactChart.TrySvg(reduce.Artifact, out var reduceChart))
                                 {
                                     <div style="font-size:11px; color:var(--text-3); margin-top:8px">chart <span style="color:var(--text-3)">(from the artifact's JSON)</span></div>
@@ -323,7 +324,7 @@ else
                                      @onclick="@(() => OpenRunDetailFromTrigger(run.Id))">
                                     <span style="font-size:11px; font-weight:600; padding:3px 8px; border-radius:5px;
                                           color:@StatusColor(run.Status); background:@StatusBg(run.Status)">@run.Status</span>
-                                    <span style="font-family:'Geist Mono',monospace; font-size:11.5px; color:var(--text-2); flex:1">
+                                    <span style="font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:var(--text-2); flex:1">
                                         @run.StartedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")
                                     </span>
                                     <span style="font-size:11px; color:var(--text-3)">✓ @run.SucceededShards @(run.FailedShards > 0 ? $"✗ {run.FailedShards}" : "")</span>
@@ -346,7 +347,7 @@ else
                                 <div style="font-size:13px; font-weight:600">
                                     @t.Name <span style="font-size:11px; color:var(--text-3); font-weight:400">· @t.Kind</span>
                                 </div>
-                                <div style="font-size:11px; color:var(--text-3); font-family:'Geist Mono',monospace; margin-top:2px">
+                                <div style="font-size:11px; color:var(--text-3); font-family:'IBM Plex Mono',monospace; margin-top:2px">
                                     @if (t.Kind == "Schedule")
                                     {
                                         <span>@t.CronExpression</span>
@@ -448,7 +449,7 @@ else
                 {
                     <div class="dcfield">
                         <label>Image <span class="req">*</span></label>
-                        <input class="dcinput" style="font-family:'Geist Mono',monospace; font-size:12px" @bind="_edMapImage" placeholder="myorg/worker:latest" />
+                        <input class="dcinput" style="font-family:'IBM Plex Mono',monospace; font-size:12px" @bind="_edMapImage" placeholder="myorg/worker:latest" />
                     </div>
                 }
                 else
@@ -467,14 +468,14 @@ else
                         </div>
                         <div class="dcfield" style="flex:1">
                             <label>Entrypoint</label>
-                            <input class="dcinput" style="font-family:'Geist Mono',monospace; font-size:12px" @bind="_edMapEntrypoint"
+                            <input class="dcinput" style="font-family:'IBM Plex Mono',monospace; font-size:12px" @bind="_edMapEntrypoint"
                                    placeholder="@DefaultEntrypointFor(_edMapRuntimeId)" />
                         </div>
                     </div>
                     <div class="dcfield">
                         <label>Source code <span class="req">*</span></label>
                         <textarea class="dcinput" rows="12"
-                                  style="font-family:'Geist Mono',monospace; font-size:12px; resize:vertical"
+                                  style="font-family:'IBM Plex Mono',monospace; font-size:12px; resize:vertical"
                                   @bind="_edMapSource"
                                   placeholder="@SourcePlaceholderFor(_edMapRuntimeId)">
                         </textarea>
@@ -490,7 +491,7 @@ else
                                 <span>This job has @_edMapFiles.Count files — the editor above changes only the entrypoint; the rest are kept on save:</span>
                                 @foreach (var f in _edMapFiles.Where(f => f.Path != (_edMapEntrypoint == "" ? DefaultEntrypointFor(_edMapRuntimeId) : _edMapEntrypoint)))
                                 {
-                                    <span style="font-family:'Geist Mono',monospace; background:var(--card-2); border-radius:5px; padding:1px 7px">@f.Path</span>
+                                    <span style="font-family:'IBM Plex Mono',monospace; background:var(--card-2); border-radius:5px; padding:1px 7px">@f.Path</span>
                                 }
                             </div>
                         }
@@ -503,7 +504,7 @@ else
                 <div class="dcfield">
                     <label>Input payloads <span class="req">*</span> <span class="code" style="margin-left:5px">one JSON per line — each line becomes a shard</span></label>
                     <textarea class="dcinput" rows="4"
-                              style="font-family:'Geist Mono',monospace; font-size:12px; resize:vertical"
+                              style="font-family:'IBM Plex Mono',monospace; font-size:12px; resize:vertical"
                               @bind="_edInputPayloadsRaw"
                               placeholder="{&quot;key&quot;: &quot;value1&quot;}&#10;{&quot;key&quot;: &quot;value2&quot;}">
                     </textarea>
@@ -511,7 +512,7 @@ else
                 <div class="dcfield">
                     <label>Run-form parameters <span class="code" style="margin-left:5px">one per line — name or name|Label</span></label>
                     <textarea class="dcinput" rows="3"
-                              style="font-family:'Geist Mono',monospace; font-size:12px; resize:vertical"
+                              style="font-family:'IBM Plex Mono',monospace; font-size:12px; resize:vertical"
                               @bind="_edParametersRaw"
                               placeholder="customerEmail|Customer email&#10;plan|Plan tier"></textarea>
                     <div class="dchint">
@@ -526,7 +527,7 @@ else
                 <div class="dcfield">
                     <label>Environment variables <span class="code" style="margin-left:5px">KEY=VALUE, one per line</span></label>
                     <textarea class="dcinput" rows="3"
-                              style="font-family:'Geist Mono',monospace; font-size:12px; resize:vertical"
+                              style="font-family:'IBM Plex Mono',monospace; font-size:12px; resize:vertical"
                               @bind="_edMapEnvRaw"
                               placeholder="MY_KEY=my_value">
                     </textarea>
@@ -545,7 +546,7 @@ else
                         <div style="display:flex; flex-wrap:wrap; gap:6px">
                             @foreach (var s in _vaultSecrets)
                             {
-                                <span style="font-family:'Geist Mono',monospace; font-size:11.5px; background:var(--card-2); border:1px solid var(--border); border-radius:6px; padding:2px 8px">@s.Name</span>
+                                <span style="font-family:'IBM Plex Mono',monospace; font-size:11.5px; background:var(--card-2); border:1px solid var(--border); border-radius:6px; padding:2px 8px">@s.Name</span>
                             }
                         </div>
                         <div class="dchint" style="margin-top:6px">
@@ -586,7 +587,20 @@ else
             <div class="dcform-section">
                 <span class="dcform-title">Outputs</span>
                 <div class="dcfield">
-                    <label>Post-job actions</label>
+                    <label>Return type <span class="req">*</span></label>
+                    <select class="dcinput" @bind="_edReturnType" style="max-width:260px">
+                        @foreach (var (rt, label) in ReturnTypeChoices)
+                        {
+                            <option value="@rt">@label</option>
+                        }
+                    </select>
+                    <div class="dchint">
+                        What this job's code returns on stdout. Every run generates its primary artifact from this
+                        type — a run always yields at least one stored artifact.
+                    </div>
+                </div>
+                <div class="dcfield">
+                    <label>Extra post-job actions</label>
                     <div style="display:flex; flex-wrap:wrap; gap:14px; margin-top:2px">
                         @foreach (var (kind, label) in PostJobActionChoices)
                         {
@@ -599,8 +613,7 @@ else
                         }
                     </div>
                     <div class="dchint">
-                        After each run, generate these from the run's artifacts and store them in the object store — they appear as links on the run.
-                        Nothing selected = automatic defaults (HTML report + chart + CSV); selecting actions replaces the defaults with exactly that set.
+                        Additional outputs generated after each run on top of the return-type artifact — they appear as links on the run.
                     </div>
                 </div>
             </div>
@@ -744,11 +757,14 @@ else
     private bool _edAllowNetworkEgress;
     private string _edParametersRaw = "";
     private readonly List<PlaceContext.Domain.ValueObjects.PostJobActionKind> _edPostJobActions = new();
+    private PlaceContext.Domain.ValueObjects.JobReturnType _edReturnType = PlaceContext.Domain.ValueObjects.JobReturnType.Json;
 
     // ── Run-input prompt state ────────────────────────────────────────────────────────────────────
     private JobView? _runPromptJob;
     private Dictionary<string, string> _runArgs = new();
     private string? _runPromptError;
+
+    protected override void OnInitialized() => OpCenter.Changed += OnOpsChanged;
 
     protected override async Task OnParametersSetAsync()
     {
@@ -765,6 +781,36 @@ else
         catch (Exception ex) { _message = ex.Message; }
         finally { _loading = false; }
     }
+
+    // The OperationCenter raises Changed whenever any background operation transitions — the
+    // run-status watcher syncs persisted run states into it on a short tick, so subscribing here
+    // makes the run list and the expanded run detail flip live, with no manual refresh.
+    private void OnOpsChanged() => _ = InvokeAsync(RefreshRunsAsync);
+
+    private bool _refreshingRuns;
+
+    private async Task RefreshRunsAsync()
+    {
+        if (_refreshingRuns || _selectedJobId is not { } jobId) return;
+        _refreshingRuns = true;
+        try
+        {
+            var runs = await Svc.ListJobRunsAsync(jobId);
+            if (_runDetail is { } open
+                && runs.FirstOrDefault(r => r.Id == open.Id) is { } summary
+                && summary.Status != open.Status)
+            {
+                _runDetail = await Svc.GetJobRunAsync(open.Id);
+                _runArtifacts = await Svc.ListRunArtifactsAsync(open.Id);
+            }
+            _runs = runs;
+            StateHasChanged();
+        }
+        catch { /* live refresh is best-effort; the next change notification retries */ }
+        finally { _refreshingRuns = false; }
+    }
+
+    public void Dispose() => OpCenter.Changed -= OnOpsChanged;
 
     // ── Triggers ─────────────────────────────────────────────────────────────────────────────────
 
@@ -937,6 +983,7 @@ else
         _edAllowNetworkEgress = false;
         _edParametersRaw = "";
         _edPostJobActions.Clear();
+        _edReturnType = PlaceContext.Domain.ValueObjects.JobReturnType.Json;
         _editorError = null;
         _editorTab = "details";
         _showEditor = true;
@@ -962,6 +1009,7 @@ else
         _edParametersRaw = string.Join("\n", job.Parameters.Select(p => p.Label is null ? p.Name : $"{p.Name}|{p.Label}"));
         _edPostJobActions.Clear();
         _edPostJobActions.AddRange(job.PostJobActions);
+        _edReturnType = job.ReturnType;
         _editorError = null;
         _editorTab = "details";
         _selectedTriggerId = null;
@@ -983,6 +1031,19 @@ else
         (PlaceContext.Domain.ValueObjects.PostJobActionKind.Chart, "Chart"),
         (PlaceContext.Domain.ValueObjects.PostJobActionKind.Csv, "CSV export"),
         (PlaceContext.Domain.ValueObjects.PostJobActionKind.RawBundle, "Raw artifacts bundle"),
+    };
+
+    private static readonly (PlaceContext.Domain.ValueObjects.JobReturnType Type, string Label)[] ReturnTypeChoices =
+    {
+        (PlaceContext.Domain.ValueObjects.JobReturnType.Json, "JSON — stored as result.json"),
+        (PlaceContext.Domain.ValueObjects.JobReturnType.Table, "Table — rendered as an HTML report"),
+        (PlaceContext.Domain.ValueObjects.JobReturnType.Chart, "Chart — rendered as an SVG chart page"),
+        (PlaceContext.Domain.ValueObjects.JobReturnType.Html, "HTML — stored openable as-is"),
+        (PlaceContext.Domain.ValueObjects.JobReturnType.Csv, "CSV — flattened to a CSV export"),
+        (PlaceContext.Domain.ValueObjects.JobReturnType.Text, "Text — stored as result.txt"),
+        (PlaceContext.Domain.ValueObjects.JobReturnType.Pdf, "PDF — file emitted to /out, stored as-is"),
+        (PlaceContext.Domain.ValueObjects.JobReturnType.Image, "Image — file emitted to /out (png/jpg/svg/…)"),
+        (PlaceContext.Domain.ValueObjects.JobReturnType.Video, "Video — file emitted to /out (mp4/webm/…)"),
     };
 
     private void CloseEditor()
@@ -1060,7 +1121,8 @@ else
                     PartialExitCodes: partialCodes,
                     AllowNetworkEgress: _edAllowNetworkEgress,
                     Parameters: parameters,
-                    PostJobActions: _edPostJobActions.ToList());
+                    PostJobActions: _edPostJobActions.ToList(),
+                    ReturnType: _edReturnType);
 
                 await Svc.UpdateJobAsync(cmd);
                 _message = $"Job '{_edName.Trim()}' updated.";
@@ -1087,7 +1149,8 @@ else
                     PartialExitCodes: partialCodes,
                     AllowNetworkEgress: _edAllowNetworkEgress,
                     Parameters: parameters,
-                    PostJobActions: _edPostJobActions.ToList());
+                    PostJobActions: _edPostJobActions.ToList(),
+                    ReturnType: _edReturnType);
 
                 await Svc.CreateJobAsync(cmd);
                 _message = $"Job '{_edName.Trim()}' created.";

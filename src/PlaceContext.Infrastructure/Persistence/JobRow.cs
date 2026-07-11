@@ -55,6 +55,10 @@ public sealed class JobRow : ITenantOwned
     /// <summary>JSON array of post-job action kinds, e.g. ["HtmlReport","Chart"]. Empty = none.</summary>
     public string PostJobActionsJson { get; set; } = "[]";
 
+    /// <summary>Declared return type of the job's primary output ("Json", "Table", "Chart", …).
+    /// Drives the mandatory per-run artifact.</summary>
+    public string ReturnType { get; set; } = "Json";
+
     // ── Network policy ────────────────────────────────────────────────────────────────────────────
     /// <summary>True when containers may make outbound network calls. Default false (network-none sandbox).</summary>
     public bool AllowNetworkEgress { get; set; }

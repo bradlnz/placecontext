@@ -31,13 +31,13 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
     private readonly IUnitOfWork _uow;
     private readonly IClock _clock;
     private readonly EventDispatchService? _events;
-    private readonly ILlmGateway? _llm;
     private readonly IEmbeddingGateway? _embeddings;
     private readonly IRunEmbeddingRepository? _embeddingStore;
     private readonly IProjectSecretRepository? _secretRepo;
     private readonly ISecretProtector? _secretProtector;
     private readonly PostJobActionService? _postActions;
     private readonly JobRunDataRecorder? _runData;
+    private readonly DataMappingIngestionService? _dataMappings;
     private IReadOnlyDictionary<string, string> _runSecrets = new Dictionary<string, string>();
 
     public RunJobHandler(
@@ -47,20 +47,21 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
         IWorkloadRunner runner,
         IUnitOfWork uow,
         IClock clock,
-        // Optional so unit tests can construct the handler without the event/LLM/embedding/secret layers; DI always supplies them.
+        // Optional so unit tests can construct the handler without the event/embedding/secret layers; DI always supplies them.
         EventDispatchService? events = null,
-        ILlmGateway? llm = null,
         IEmbeddingGateway? embeddings = null,
         IRunEmbeddingRepository? embeddingStore = null,
         IProjectSecretRepository? secretRepo = null,
         ISecretProtector? secretProtector = null,
         PostJobActionService? postActions = null,
-        JobRunDataRecorder? runData = null)
+        JobRunDataRecorder? runData = null,
+        DataMappingIngestionService? dataMappings = null)
     {
         _secretRepo = secretRepo;
         _secretProtector = secretProtector;
         _postActions = postActions;
         _runData = runData;
+        _dataMappings = dataMappings;
         _jobs = jobs;
         _runs = runs;
         _contexts = contexts;
@@ -68,7 +69,6 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
         _uow = uow;
         _clock = clock;
         _events = events;
-        _llm = llm;
         _embeddings = embeddings;
         _embeddingStore = embeddingStore;
     }
@@ -129,8 +129,13 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
         if (_runData is not null)
             await _runData.RecordAsync(job, run, ct);
 
-        // Persist a Gemma-organized summary of the run into the project's context document and embed it
-        // for search/the dependency graph. Slow + best-effort — isolated so it can't fail or stall the run.
+        // The project's data map: mappings declared for this job extract records from the run's
+        // primary artifact and append them to their target tables. Best-effort.
+        if (_dataMappings is not null)
+            await _dataMappings.IngestAsync(job, run, ct);
+
+        // Persist a summary of the run into the project's context document and embed it for
+        // search/the dependency graph. Best-effort — isolated so it can't fail or stall the run.
         try
         {
             await AppendRunSummaryToProjectContextAsync(job, run, ct);
@@ -329,29 +334,7 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
             }
         }
 
-        var raw = sb.ToString().TrimEnd();
-
-        // When an LLM gateway is configured (local Ollama/Gemma or Anthropic), organize the raw run
-        // output into a clean structured summary before storing it; otherwise store the raw dump.
-        var toStore = raw;
-        if (_llm is { IsEnabled: true })
-        {
-            try
-            {
-                const string system =
-                    "You organize raw job-run output into a concise, well-structured Markdown summary. " +
-                    "Group related results, surface key values and any errors, and keep it faithful to the data. " +
-                    "Do not invent information.";
-                var organized = await _llm.GenerateAsync(system, raw, ct);
-                if (!string.IsNullOrWhiteSpace(organized))
-                    toStore = $"## Organized run output: {job.Name} [{run.Status}] — {run.FinishedAt:yyyy-MM-dd HH:mm} UTC\n\n{organized.Trim()}";
-            }
-            catch
-            {
-                // Organization is best-effort — fall back to the raw summary on any gateway failure.
-                toStore = raw;
-            }
-        }
+        var toStore = sb.ToString().TrimEnd();
 
         context.Append(toStore, _clock.UtcNow);
         await _contexts.SaveAsync(context, ct);

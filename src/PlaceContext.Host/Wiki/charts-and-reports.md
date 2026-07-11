@@ -62,21 +62,19 @@ for the nth (handy for opening a stored report or chart).
 ## Generate a report for a project
 
 The top of the **Reports** page builds a full written report for one project from everything it
-knows — its context, decisions, work items, activity, and risk.
+knows — its context, decisions, activity, and risk.
 
 1. Pick a **project** and a **template** (the built-in *Onboarding Brief*, or one your team has
    defined).
-2. Optionally tick **queue action plan as work items** to push the report's recommendations
-   straight onto the board.
-3. Click **Generate**. If the local AI model is available the prose is polished; otherwise you
+2. Click **Generate**. If the local AI model is available the prose is polished; otherwise you
    still get a clean, structured report.
 
 The report opens with a chart counting its recommended actions by severity (critical, high,
 medium, low, info), each one listed beneath, followed by the full write-up.
 
 You can also define your own report templates (from an agent) — give it a name, a description,
-and the sections to include, choosing from Overview, Context, Requirements, Decisions, Work
-items, Activity, Risk, Usage, and Action plan.
+and the sections to include, choosing from Overview, Context, Requirements, Decisions,
+Activity, Risk, Usage, and Action plan.
 
 ## Worked example: one result, four places
 

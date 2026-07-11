@@ -52,7 +52,7 @@ else
                                 {
                                     <div style="font-size:12px; color:var(--text-3); margin-top:3px">@chain.Description</div>
                                 }
-                                <div style="display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin-top:8px; font-size:11.5px; font-family:'Geist Mono',monospace">
+                                <div style="display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin-top:8px; font-size:11.5px; font-family:'IBM Plex Mono',monospace">
                                     @foreach (var (step, i) in chain.Steps.Select((s, i) => (s, i)))
                                     {
                                         if (i > 0)
@@ -127,7 +127,7 @@ else
                                 <div style="display:flex; align-items:center; gap:12px">
                                     <span style="font-size:11px; font-weight:600; padding:3px 8px; border-radius:5px;
                                           color:@StatusColor(run.Status); background:@StatusBg(run.Status)">@run.Status</span>
-                                    <span style="font-family:'Geist Mono',monospace; font-size:11.5px; color:var(--text-2); flex:1">
+                                    <span style="font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:var(--text-2); flex:1">
                                         @run.StartedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")
                                     </span>
                                     <span style="font-size:11px; color:var(--text-3)">
@@ -135,7 +135,7 @@ else
                                     </span>
                                     @if (run.FinishedAt.HasValue)
                                     {
-                                        <span style="font-size:11px; color:var(--text-3); font-family:'Geist Mono',monospace">
+                                        <span style="font-size:11px; color:var(--text-3); font-family:'IBM Plex Mono',monospace">
                                             @FormatDuration(run.StartedAt, run.FinishedAt.Value)
                                         </span>
                                     }
@@ -155,7 +155,7 @@ else
                     <div style="display:flex; align-items:center; gap:8px">
                         <span style="font-size:12px; font-weight:600; padding:3px 9px; border-radius:5px;
                               color:@StatusColor(_openRun.Status); background:@StatusBg(_openRun.Status)">@_openRun.Status</span>
-                        <span style="font-size:11px; color:var(--text-3); font-family:'Geist Mono',monospace">
+                        <span style="font-size:11px; color:var(--text-3); font-family:'IBM Plex Mono',monospace">
                             @_openRun.StartedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")
                             @(_openRun.FinishedAt.HasValue ? " · took " + FormatDuration(_openRun.StartedAt, _openRun.FinishedAt.Value) : " · live")
                         </span>
@@ -189,7 +189,7 @@ else
                     {
                         <div>
                             <div style="font-size:12px; font-weight:600; margin-bottom:4px">Pipeline output</div>
-                            <pre style="background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:10px; font-size:11px; font-family:'Geist Mono',monospace; white-space:pre-wrap; word-break:break-all; color:var(--text-2); max-height:200px; overflow-y:auto">@PrettyJson(_openRun.FinalOutput)</pre>
+                            <pre style="background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:10px; font-size:11px; font-family:'IBM Plex Mono',monospace; white-space:pre-wrap; word-break:break-all; color:var(--text-2); max-height:200px; overflow-y:auto">@PrettyJson(_openRun.FinalOutput)</pre>
                         </div>
                     }
 
@@ -210,13 +210,13 @@ else
                                     <div style="font-size:11px; color:var(--text-3); margin-bottom:3px">shard @shard.Index — @shard.Outcome (exit @shard.ExitCode)</div>
                                     @if (shard.Artifact is not null)
                                     {
-                                        <pre style="background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:8px; font-size:10.5px; font-family:'Geist Mono',monospace; white-space:pre-wrap; word-break:break-all; color:var(--text-2); max-height:160px; overflow-y:auto">@PrettyJson(shard.Artifact)</pre>
+                                        <pre style="background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:8px; font-size:10.5px; font-family:'IBM Plex Mono',monospace; white-space:pre-wrap; word-break:break-all; color:var(--text-2); max-height:160px; overflow-y:auto">@PrettyJson(shard.Artifact)</pre>
                                     }
                                     @if (!string.IsNullOrWhiteSpace(shard.Log))
                                     {
                                         <details style="margin-top:3px" open="@(shard.Outcome == "Failed")">
                                             <summary style="font-size:10.5px; color:var(--text-3); cursor:pointer">Log</summary>
-                                            <pre style="font-size:10px; font-family:'Geist Mono',monospace; color:var(--text-3); white-space:pre-wrap; margin-top:3px; max-height:220px; overflow-y:auto">@shard.Log</pre>
+                                            <pre style="font-size:10px; font-family:'IBM Plex Mono',monospace; color:var(--text-3); white-space:pre-wrap; margin-top:3px; max-height:220px; overflow-y:auto">@shard.Log</pre>
                                         </details>
                                     }
                                 </div>
@@ -256,7 +256,7 @@ else
                         @foreach (var (jobId, i) in _edSteps.Select((id, i) => (id, i)))
                         {
                             <div style="display:flex; align-items:center; gap:10px; padding:8px 10px; border-radius:8px; background:var(--card-2)">
-                                <span style="font-size:11px; color:var(--text-3); font-family:'Geist Mono',monospace; flex:none">@(i + 1).</span>
+                                <span style="font-size:11px; color:var(--text-3); font-family:'IBM Plex Mono',monospace; flex:none">@(i + 1).</span>
                                 <span style="flex:1; min-width:0; font-size:12.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis">@JobName(jobId)</span>
                                 <button class="dcbtn" style="padding:2px 8px" disabled="@(i == 0)" @onclick="@(() => MoveStep(i, -1))">↑</button>
                                 <button class="dcbtn" style="padding:2px 8px" disabled="@(i == _edSteps.Count - 1)" @onclick="@(() => MoveStep(i, +1))">↓</button>
@@ -380,6 +380,8 @@ else
     private Dictionary<string, string> _runArgs = new();
     private string? _runPromptError;
 
+    protected override void OnInitialized() => OpCenter.Changed += OnOpsChanged;
+
     protected override async Task OnParametersSetAsync()
     {
         _loading = true;
@@ -394,7 +396,28 @@ else
         finally { _loading = false; }
     }
 
-    public void Dispose() => StopPolling();
+    // Push updates for chains started elsewhere (MCP, triggers, another tab): the run-status
+    // watcher syncs chain/step transitions into the OperationCenter, so refresh the open runs tab
+    // on every change — the local poll loop only covers a run this page just dispatched.
+    private void OnOpsChanged() => _ = InvokeAsync(async () =>
+    {
+        if (_opRefreshing || _editChainId is not { } chainId || _editorTab != "runs") return;
+        _opRefreshing = true;
+        try
+        {
+            await RefreshRunsAsync(chainId, openNewest: false);
+            StateHasChanged();
+        }
+        finally { _opRefreshing = false; }
+    });
+
+    private bool _opRefreshing;
+
+    public void Dispose()
+    {
+        OpCenter.Changed -= OnOpsChanged;
+        StopPolling();
+    }
 
     private string JobName(Guid jobId) =>
         _jobs?.FirstOrDefault(j => j.Id == jobId)?.Name ?? "(deleted)";

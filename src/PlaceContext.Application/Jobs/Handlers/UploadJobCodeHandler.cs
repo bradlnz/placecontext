@@ -40,11 +40,11 @@ public sealed class UploadJobCodeHandler : ICommandHandler<UploadJobCodeCommand,
 
             var mapSpec = new MapSpec(codeSource, new[] { "{}" }, new Dictionary<string, string>());
             var policy = new ExitCodePolicy(new[] { 0 }, Array.Empty<int>());
-            // Jobs exist to generate artifacts: new jobs chart their output by default (the local
-            // LLM draws it after each run; the run-history panel and Reports surface it).
+            // Jobs exist to generate artifacts: editor-created jobs declare a Chart return type, so
+            // every run yields a chart artifact (the run-history panel and Reports surface it).
             job = Job.Create(projectId, command.JobName!, null, mapSpec, reduceSpec: null,
                 concurrencyLimit: 1, exitCodePolicy: policy, createdAt: _clock.UtcNow,
-                postJobActions: new[] { PostJobActionKind.Chart });
+                returnType: JobReturnType.Chart);
             await _jobs.AddAsync(job, ct);
         }
         else
@@ -52,7 +52,8 @@ public sealed class UploadJobCodeHandler : ICommandHandler<UploadJobCodeCommand,
             // Replace the map source, preserving everything else about the job.
             var mapSpec = new MapSpec(codeSource, job.MapSpec.InputPayloads, job.MapSpec.Env);
             job.Update(job.Name, job.Description, mapSpec, job.ReduceSpec, job.ConcurrencyLimit,
-                job.ExitCodePolicy, _clock.UtcNow, job.AllowNetworkEgress);
+                job.ExitCodePolicy, _clock.UtcNow, job.AllowNetworkEgress,
+                timeoutSeconds: job.TimeoutSeconds, returnType: job.ReturnType);
             await _jobs.UpdateAsync(job, ct);
         }
 

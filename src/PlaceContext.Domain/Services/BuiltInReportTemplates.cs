@@ -24,7 +24,6 @@ public static class BuiltInReportTemplates
                 new ReportSection("Context", ReportSourceKind.Context),
                 new ReportSection("Requirements", ReportSourceKind.Requirements),
                 new ReportSection("Key decisions", ReportSourceKind.Decisions),
-                new ReportSection("Open work", ReportSourceKind.WorkItems),
                 new ReportSection("Recent activity", ReportSourceKind.Activity),
                 new ReportSection("Risk", ReportSourceKind.Risk),
                 new ReportSection("Action plan", ReportSourceKind.ActionPlan,
@@ -39,7 +38,6 @@ public static class BuiltInReportTemplates
             {
                 new ReportSection("Overview", ReportSourceKind.Overview),
                 new ReportSection("Risk", ReportSourceKind.Risk),
-                new ReportSection("Open work", ReportSourceKind.WorkItems),
                 new ReportSection("Recent activity", ReportSourceKind.Activity),
                 new ReportSection("Cost", ReportSourceKind.Usage),
             }),

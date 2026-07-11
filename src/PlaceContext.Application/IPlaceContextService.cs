@@ -41,18 +41,13 @@ public interface IPlaceContextService
     Task<SearchResultsView> SearchAsync(string term, CancellationToken ct = default);
     Task<FocusView> GetFocusAsync(CancellationToken ct = default);
     Task<GraphVizView> GetBrainAsync(CancellationToken ct = default);
-    Task<WorkItemView> AddWorkItemAsync(Guid projectId, string title, string? detail, string priority, CancellationToken ct = default);
-    Task<WorkItemView?> NextWorkItemAsync(Guid projectId, CancellationToken ct = default);
-    Task<WorkItemView> CompleteWorkItemAsync(Guid workItemId, CancellationToken ct = default);
-    Task<WorkItemView> MoveWorkItemAsync(Guid workItemId, string status, CancellationToken ct = default);
-    Task<IReadOnlyList<WorkItemView>> GetWorkItemsAsync(Guid projectId, CancellationToken ct = default);
     Task<ImprovementsView> SuggestImprovementsAsync(Guid projectId, CancellationToken ct = default);
     Task<SkillScaffoldView> ScaffoldSkillAsync(Guid projectId, string skillName, string? description, CancellationToken ct = default);
     Task<SkillScaffoldView> SetupHermesAsync(Guid projectId, CancellationToken ct = default);
 
     // Report generation layer.
-    Task<ReportView> GenerateReportAsync(Guid projectId, string? templateName, bool createWorkItems, CancellationToken ct = default);
-    Task<ReportView> SynthesizeContextAsync(Guid projectId, bool createWorkItems, CancellationToken ct = default);
+    Task<ReportView> GenerateReportAsync(Guid projectId, string? templateName, CancellationToken ct = default);
+    Task<ReportView> SynthesizeContextAsync(Guid projectId, CancellationToken ct = default);
     Task<IReadOnlyList<ReportTemplateView>> ListReportTemplatesAsync(CancellationToken ct = default);
     Task<ReportTemplateView> DefineReportTemplateAsync(string name, string description, IReadOnlyList<string> sources, CancellationToken ct = default);
 
@@ -74,6 +69,11 @@ public interface IPlaceContextService
     Task<ChainRunView> RunJobChainAsync(Guid chainId, string? inputPayload = null, Guid? chainRunId = null, CancellationToken ct = default);
     Task<IReadOnlyList<ChainRunView>> ListChainRunsAsync(Guid chainId, int take = 20, CancellationToken ct = default);
     Task<ChainRunView?> GetChainRunAsync(Guid chainRunId, CancellationToken ct = default);
+
+    // Data map (declarative ingestion: job run results → project tables).
+    Task<DataMappingView> SaveDataMappingAsync(SaveDataMappingCommand command, CancellationToken ct = default);
+    Task<bool> DeleteDataMappingAsync(Guid mappingId, CancellationToken ct = default);
+    Task<IReadOnlyList<DataMappingView>> ListDataMappingsAsync(Guid projectId, CancellationToken ct = default);
 
     // Project data (each project's own database: tables + SQL).
     Task<Ports.ProjectQueryResult> ExecuteProjectDataAsync(Guid projectId, string sql, CancellationToken ct = default);

@@ -2,23 +2,16 @@
 
 @* The project's tab strip, shared by the project page and every sub-page (Jobs, Chains, Data,
    Analytics, Vault, Events) so switching areas never loses the tabs — no "Back to project" round-trip.
-   In-page tabs (Overview/Board/Knowledge/Activity) only exist on the project page itself; from a
+   In-page tabs (Overview/Knowledge/Activity) only exist on the project page itself; from a
    sub-page they navigate back to it with the requested tab in the fragment. *@
 <div class="dctabs" style="margin-bottom:16px">
     <button class="dctab @(Active == "overview" ? "active" : "")" @onclick='@(() => GoLocal("overview"))'>Overview</button>
-    @if (BoardCount is { } n)
-    {
-        <button class="dctab @(Active == "board" ? "active" : "")" @onclick='@(() => GoLocal("board"))'>Board<span class="n">@n</span></button>
-    }
-    else
-    {
-        <button class="dctab" @onclick='@(() => GoLocal("board"))'>Board</button>
-    }
     <button class="dctab @(Active == "knowledge" ? "active" : "")" @onclick='@(() => GoLocal("knowledge"))'>Knowledge</button>
     <button class="dctab @(Active == "activity" ? "active" : "")" @onclick='@(() => GoLocal("activity"))'>Activity</button>
     <button class="dctab @(Active == "jobs" ? "active" : "")" @onclick='@(() => Nav.NavigateTo($"/project/{ProjectId}/jobs"))'>Jobs</button>
     <button class="dctab @(Active == "chains" ? "active" : "")" @onclick='@(() => Nav.NavigateTo($"/project/{ProjectId}/chains"))'>Chains</button>
     <button class="dctab @(Active == "data" ? "active" : "")" @onclick='@(() => Nav.NavigateTo($"/project/{ProjectId}/data"))'>Data</button>
+    <button class="dctab @(Active == "datamap" ? "active" : "")" @onclick='@(() => Nav.NavigateTo($"/project/{ProjectId}/datamap"))'>Data map</button>
     <button class="dctab @(Active == "analytics" ? "active" : "")" @onclick='@(() => Nav.NavigateTo($"/project/{ProjectId}/analytics"))'>Analytics</button>
     <button class="dctab @(Active == "vault" ? "active" : "")" @onclick='@(() => Nav.NavigateTo($"/project/{ProjectId}/secrets"))'>Vault</button>
     <button class="dctab @(Active == "events" ? "active" : "")" @onclick='@(() => Nav.NavigateTo($"/project/{ProjectId}/events"))'>Events</button>
@@ -27,11 +20,8 @@
 @code {
     [Parameter] public Guid ProjectId { get; set; }
 
-    /// <summary>Which tab this page is: overview/board/knowledge/activity/jobs/chains/data/analytics/vault/events.</summary>
+    /// <summary>Which tab this page is: overview/knowledge/activity/jobs/chains/data/analytics/vault/events.</summary>
     [Parameter] public string Active { get; set; } = "overview";
-
-    /// <summary>Open-item count for the Board chip (project page only).</summary>
-    [Parameter] public int? BoardCount { get; set; }
 
     /// <summary>Project-page-local tab switch; from sub-pages this navigates home carrying the tab.</summary>
     [Parameter] public EventCallback<string> OnLocalTab { get; set; }

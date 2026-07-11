@@ -64,7 +64,6 @@ public class RunEmbeddingTests
         var runner = new FakeWorkloadRunner();
         var uow = new RecordingUnitOfWork();
         var clock = new FakeClock(T0);
-        var llm = new FakeLlmGateway(enabled: true);
         var gateway = new FakeEmbeddingGateway(dimensions: 3);
         var store = new InMemoryRunEmbeddingRepository();
 
@@ -73,7 +72,7 @@ public class RunEmbeddingTests
         await jobs.AddAsync(job);
 
         var handler = new RunJobHandler(jobs, runs, contexts, runner, uow, clock,
-            events: null, llm: llm, embeddings: gateway, embeddingStore: store);
+            events: null, embeddings: gateway, embeddingStore: store);
         await handler.HandleAsync(new RunJobCommand(job.Id));
 
         // The organized output was embedded (unknown text → zero vector is still length>0 here),

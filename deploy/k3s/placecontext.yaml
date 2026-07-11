@@ -90,14 +90,9 @@ spec:
                 secretKeyRef:
                   name: placecontext-oauth
                   key: key.pem
-            # In-cluster local LLM (Ollama + Gemma) for organizing job output / polishing reports. The
-            # gateway is best-effort: if Ollama is down the run still completes with the raw summary.
+            # No in-cluster LLM: the jobs pipeline is fully deterministic.
             - name: PlaceContext__Llm__Provider
-              value: "ollama"
-            - name: PlaceContext__Llm__Ollama__Endpoint
-              value: "http://ollama:11434"
-            - name: PlaceContext__Llm__Ollama__Model
-              value: "gemma3:4b"
+              value: "none"
             # Object store (MinIO) for post-job artifacts — HTML reports, charts, CSVs, raw bundles.
             - name: PlaceContext__ObjectStore__Endpoint
               value: "http://minio:9000"
@@ -111,16 +106,6 @@ spec:
                 secretKeyRef:
                   name: placecontext-minio
                   key: ACCESS_SECRET_KEY
-            # Local embeddings (Ollama nomic-embed-text) so run summaries are vectorized into the
-            # pgvector store — searchable + linkable in the dependency graph — with no external key.
-            - name: PlaceContext__Embeddings__Provider
-              value: "ollama"
-            - name: PlaceContext__Embeddings__Ollama__Endpoint
-              value: "http://ollama:11434"
-            - name: PlaceContext__Embeddings__Ollama__Model
-              value: "nomic-embed-text"
-            - name: PlaceContext__Embeddings__Ollama__Dimensions
-              value: "768"
           # Give the app time to run EF migrations on first boot before liveness/readiness apply.
           startupProbe:
             httpGet: { path: /, port: 7700 }

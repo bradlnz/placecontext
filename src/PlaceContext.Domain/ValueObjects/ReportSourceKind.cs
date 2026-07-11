@@ -10,7 +10,6 @@ public enum ReportSourceKind
     Context,
     Requirements,
     Decisions,
-    WorkItems,
     Activity,
     Risk,
     Usage,

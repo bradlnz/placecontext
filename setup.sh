@@ -9,11 +9,9 @@
 #   • PostgreSQL 16 + pgvector (pulled + started as the `placecontext-db` container on port 5433)
 #   • dotnet-ef local tool   (restored from the tool manifest)
 #   • EF Core migrations     (applied to the database)
-#   • (optional) Ollama + a small Gemma model for the local LLM provider  [--with-ollama]
 #
 # Usage:
 #   ./setup.sh                 # core setup
-#   ./setup.sh --with-ollama   # also install Ollama + pull the local Gemma model
 #
 # Safe to re-run: every step checks before acting.
 set -euo pipefail
@@ -22,12 +20,9 @@ cd "$(dirname "$0")"
 DOTNET_CHANNEL="10.0"
 DB_CONTAINER="placecontext-db"
 DB_PORT="5433"
-OLLAMA_MODEL="gemma3:4b"
-WITH_OLLAMA=0
 
 for arg in "$@"; do
   case "$arg" in
-    --with-ollama) WITH_OLLAMA=1 ;;
     -h|--help) grep '^#' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "Unknown option: $arg (try --help)" >&2; exit 2 ;;
   esac
@@ -98,22 +93,6 @@ dotnet ef database update \
   --project src/PlaceContext.Infrastructure \
   --startup-project src/PlaceContext.Host
 
-# ── Optional: Ollama + local Gemma model ───────────────────────────────────────────────────────
-if [ "$WITH_OLLAMA" -eq 1 ]; then
-  say "Setting up Ollama + the local model (${OLLAMA_MODEL})…"
-  if ! have ollama; then
-    echo "    Installing Ollama (official script)…"
-    curl -fsSL https://ollama.com/install.sh | sh
-  fi
-  if have ollama; then
-    echo "    Pulling ${OLLAMA_MODEL} (small enough for ~16GB RAM)…"
-    ollama pull "${OLLAMA_MODEL}" || warn "Could not pull ${OLLAMA_MODEL} — pull it manually with: ollama pull ${OLLAMA_MODEL}"
-    warn "To use the local model, set PlaceContext:Llm:Provider=ollama in appsettings (Ollama model: ${OLLAMA_MODEL})."
-  else
-    warn "Ollama install did not complete — see https://ollama.com/download"
-  fi
-fi
-
 # ── Done ───────────────────────────────────────────────────────────────────────────────────────
 say "Setup complete."
 cat <<'EOF'
@@ -121,7 +100,7 @@ cat <<'EOF'
 Next steps:
   • Start the app:        ./run.sh        → portal http://localhost:7700, MCP at /mcp
   • Configure the LLM:    edit src/PlaceContext.Host/appsettings.json → PlaceContext:Llm
-                          (Provider = none | anthropic | ollama)
+                          (Provider = none | anthropic)
   • Run the tests:        dotnet test
 
 EOF

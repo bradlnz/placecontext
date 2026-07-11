@@ -73,31 +73,6 @@ public sealed class PlaceContextTools
             () => svc.OnboardAsync(path, name, agent, backfillLimit));
 
     [Authorize(Policy = "Member")]
-    [McpServerTool(Name = "add_work_item"), Description("Queue a work item (a change to be done) for a project. Priority is Low, Normal, or High.")]
-    public static Task<string> AddWorkItem(IPlaceContextService svc, IToolCallLog log,
-        Guid projectId, string title, string? detail = null, string priority = "Normal")
-        => Traced(log, "add_work_item", projectId.ToString(), $"queue {title}", new { projectId, title, detail, priority },
-            () => svc.AddWorkItemAsync(projectId, title, detail, priority));
-
-    [Authorize(Policy = "Member")]
-    [McpServerTool(Name = "next_work_item"), Description("Claim the next queued work item for a project (highest priority, then oldest) and mark it in-progress. Returns null if the queue is empty. Use this to pick up what to work on next.")]
-    public static Task<string> NextWorkItem(IPlaceContextService svc, IToolCallLog log, Guid projectId)
-        => Traced(log, "next_work_item", projectId.ToString(), "claim next", new { projectId },
-            () => svc.NextWorkItemAsync(projectId));
-
-    [Authorize(Policy = "Member")]
-    [McpServerTool(Name = "complete_work_item"), Description("Mark a work item finished once the change is done (and recorded via record_activity).")]
-    public static Task<string> CompleteWorkItem(IPlaceContextService svc, IToolCallLog log, Guid workItemId)
-        => Traced(log, "complete_work_item", "—", "complete work item", new { workItemId },
-            () => svc.CompleteWorkItemAsync(workItemId));
-
-    [Authorize(Policy = "Member")]
-    [McpServerTool(Name = "list_work_items"), Description("List a project's work-queue items (queued, in-progress, and done).")]
-    public static Task<string> ListWorkItems(IPlaceContextService svc, IToolCallLog log, Guid projectId)
-        => Traced(log, "list_work_items", projectId.ToString(), "list work items", new { projectId },
-            () => svc.GetWorkItemsAsync(projectId));
-
-    [Authorize(Policy = "Member")]
     [McpServerTool(Name = "list_projects"), Description("List all projects PlaceContext is tracking, with their risk bands.")]
     public static Task<string> ListProjects(IPlaceContextService svc, IToolCallLog log)
         => Traced(log, "list_projects", "—", "list all projects", new { },
@@ -213,21 +188,19 @@ public sealed class PlaceContextTools
             () => svc.RecordUsageAsync(projectId, model, inputTokens, outputTokens, description));
 
     [Authorize(Policy = "Member")]
-    [McpServerTool(Name = "synthesize_context"), Description("Pull ALL of a project's accumulated context — context doc, requirements, decisions, work items, activity, and risk — organise it into a single structured brief, and end with a prioritised, actionable plan. Set createWorkItems=true to also queue the action plan as work items. This is the fast way to get oriented on a project.")]
+    [McpServerTool(Name = "synthesize_context"), Description("Pull ALL of a project's accumulated context — context doc, requirements, decisions, activity, and risk — organise it into a single structured brief, and end with a prioritised, actionable plan. This is the fast way to get oriented on a project.")]
     public static Task<string> SynthesizeContext(IPlaceContextService svc, IToolCallLog log,
-        Guid projectId,
-        [Description("Also queue the resulting action plan as work items")] bool createWorkItems = false)
-        => Traced(log, "synthesize_context", projectId.ToString(), "synthesize context", new { projectId, createWorkItems },
-            () => svc.SynthesizeContextAsync(projectId, createWorkItems));
+        Guid projectId)
+        => Traced(log, "synthesize_context", projectId.ToString(), "synthesize context", new { projectId },
+            () => svc.SynthesizeContextAsync(projectId));
 
     [Authorize(Policy = "Member")]
-    [McpServerTool(Name = "generate_report"), Description("Generate a defined report for a project from its accumulated data. Pass a templateName (see list_report_templates) or omit it to use the built-in Onboarding Brief. If an LLM is configured it polishes the prose; otherwise a deterministic Markdown report is returned. Set createWorkItems=true to queue the action plan.")]
+    [McpServerTool(Name = "generate_report"), Description("Generate a defined report for a project from its accumulated data. Pass a templateName (see list_report_templates) or omit it to use the built-in Onboarding Brief. If an LLM is configured it polishes the prose; otherwise a deterministic Markdown report is returned.")]
     public static Task<string> GenerateReport(IPlaceContextService svc, IToolCallLog log,
         Guid projectId,
-        [Description("Report template name; omit for the default Onboarding Brief")] string? templateName = null,
-        [Description("Also queue the resulting action plan as work items")] bool createWorkItems = false)
-        => Traced(log, "generate_report", projectId.ToString(), $"report {templateName ?? "Onboarding Brief"}", new { projectId, templateName, createWorkItems },
-            () => svc.GenerateReportAsync(projectId, templateName, createWorkItems));
+        [Description("Report template name; omit for the default Onboarding Brief")] string? templateName = null)
+        => Traced(log, "generate_report", projectId.ToString(), $"report {templateName ?? "Onboarding Brief"}", new { projectId, templateName },
+            () => svc.GenerateReportAsync(projectId, templateName));
 
     [Authorize(Policy = "Member")]
     [McpServerTool(Name = "list_report_templates"), Description("List the available report templates — the built-in defaults plus any this workspace has defined — and their sections.")]
@@ -236,7 +209,7 @@ public sealed class PlaceContextTools
             () => svc.ListReportTemplatesAsync());
 
     [Authorize(Policy = "Member")]
-    [McpServerTool(Name = "define_report_template"), Description("Define (or replace) a custom report template for this workspace. 'sources' is an ordered list of section kinds — choose from: Overview, Context, Requirements, Decisions, WorkItems, Activity, Risk, Usage, ActionPlan. Lets each domain shape its own defined reports.")]
+    [McpServerTool(Name = "define_report_template"), Description("Define (or replace) a custom report template for this workspace. 'sources' is an ordered list of section kinds — choose from: Overview, Context, Requirements, Decisions, Activity, Risk, Usage, ActionPlan. Lets each domain shape its own defined reports.")]
     public static Task<string> DefineReportTemplate(IPlaceContextService svc, IToolCallLog log,
         [Description("Unique template name")] string name,
         [Description("One-line description of what the report is for")] string description,

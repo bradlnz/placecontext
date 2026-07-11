@@ -62,10 +62,10 @@ public sealed class PlaceContextPrompts
 
         Make the skill obey the project's requirements, reuse its established tooling/commands, and bake
         in the PlaceContext workflow:
-        - **Pre-action**: load context (`get_context`), pull the next task (`next_work_item`), note starting tokens.
+        - **Pre-action**: load context (`get_context`), note starting tokens.
         - **Guardrails** every change must pass: rationale, checks, review, live verification.
-        - **Post-action**: `record_activity` (rationale/items/check deltas/guardrail flags), `record_usage`
-          (tokens spent on that change — cost per change), and `complete_work_item`.
+        - **Post-action**: `record_activity` (rationale/items/check deltas/guardrail flags) and `record_usage`
+          (tokens spent on that change — cost per change).
 
         ## Requirements
         {{requirements}}

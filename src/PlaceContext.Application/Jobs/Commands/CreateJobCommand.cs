@@ -53,5 +53,8 @@ public sealed record CreateJobCommand(
     IReadOnlyList<JobParameterDto>? Parameters = null,
 
     /// <summary>Post-job actions: turn the run's artifacts into stored outputs (report/chart/CSV/bundle).</summary>
-    IReadOnlyList<PlaceContext.Domain.ValueObjects.PostJobActionKind>? PostJobActions = null)
+    IReadOnlyList<PlaceContext.Domain.ValueObjects.PostJobActionKind>? PostJobActions = null,
+
+    /// <summary>Declared type of the job's primary return — drives the mandatory per-run artifact.</summary>
+    PlaceContext.Domain.ValueObjects.JobReturnType ReturnType = PlaceContext.Domain.ValueObjects.JobReturnType.Json)
     : ICommand<JobView>;

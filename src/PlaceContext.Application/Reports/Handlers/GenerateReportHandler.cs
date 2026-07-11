@@ -11,8 +11,8 @@ namespace PlaceContext.Application.Features;
 
 /// <summary>
 /// Hybrid report generator. Deterministically aggregates a project's stored data into the chosen
-/// template's sections, builds a prioritised action plan, optionally seeds work items from it, then —
-/// only when an <see cref="ILlmGateway"/> is configured — polishes the assembled Markdown into prose.
+/// template's sections, builds a prioritised action plan, then — only when an
+/// <see cref="ILlmGateway"/> is configured — polishes the assembled Markdown into prose.
 /// Falls back to the deterministic Markdown when no LLM is available, so it always returns a report.
 /// </summary>
 public sealed class GenerateReportHandler : ICommandHandler<GenerateReportCommand, ReportView>
@@ -21,34 +21,30 @@ public sealed class GenerateReportHandler : ICommandHandler<GenerateReportComman
     private readonly IProjectContextRepository _contexts;
     private readonly IRequirementsRepository _requirements;
     private readonly IDecisionRepository _decisions;
-    private readonly IWorkItemRepository _workItems;
     private readonly IActivityLogRepository _activity;
     private readonly IRiskAssessmentRepository _risk;
     private readonly IUsageRepository _usage;
     private readonly IReportTemplateRepository _templates;
     private readonly TokenCostCalculator _cost;
     private readonly ILlmGateway _llm;
-    private readonly IUnitOfWork _uow;
     private readonly IClock _clock;
 
     public GenerateReportHandler(
         IProjectRepository projects, IProjectContextRepository contexts, IRequirementsRepository requirements,
-        IDecisionRepository decisions, IWorkItemRepository workItems, IActivityLogRepository activity,
+        IDecisionRepository decisions, IActivityLogRepository activity,
         IRiskAssessmentRepository risk, IUsageRepository usage, IReportTemplateRepository templates,
-        TokenCostCalculator cost, ILlmGateway llm, IUnitOfWork uow, IClock clock)
+        TokenCostCalculator cost, ILlmGateway llm, IClock clock)
     {
         _projects = projects;
         _contexts = contexts;
         _requirements = requirements;
         _decisions = decisions;
-        _workItems = workItems;
         _activity = activity;
         _risk = risk;
         _usage = usage;
         _templates = templates;
         _cost = cost;
         _llm = llm;
-        _uow = uow;
         _clock = clock;
     }
 
@@ -65,12 +61,11 @@ public sealed class GenerateReportHandler : ICommandHandler<GenerateReportComman
         var globalReqs = await _requirements.GetGlobalAsync(ct);
         var projectReqs = await _requirements.GetForProjectAsync(projectId, ct);
         var decisions = await _decisions.ListForProjectAsync(projectId, ct);
-        var workItems = await _workItems.ListForProjectAsync(projectId, ct);
         var log = await _activity.GetForProjectAsync(projectId, ct);
         var latestRisk = await _risk.GetLatestAsync(projectId, ct);
         var usage = await _usage.ListForProjectAsync(projectId, ct);
 
-        var actions = BuildActions(project, context, log, latestRisk, workItems);
+        var actions = BuildActions(project, context, log, latestRisk);
 
         // Deterministic assembly.
         var now = _clock.UtcNow;
@@ -83,11 +78,10 @@ public sealed class GenerateReportHandler : ICommandHandler<GenerateReportComman
             md.AppendLine().Append("## ").AppendLine(section.Title);
             md.AppendLine(section.Source switch
             {
-                ReportSourceKind.Overview => Overview(project, log, decisions, workItems),
+                ReportSourceKind.Overview => Overview(project, log, decisions),
                 ReportSourceKind.Context => context is { IsEmpty: false } ? context.Markdown.Trim() : "_No context recorded yet._",
                 ReportSourceKind.Requirements => Requirements(globalReqs, projectReqs),
                 ReportSourceKind.Decisions => Decisions(decisions),
-                ReportSourceKind.WorkItems => WorkItems(workItems),
                 ReportSourceKind.Activity => Activity(log),
                 ReportSourceKind.Risk => Risk(latestRisk),
                 ReportSourceKind.Usage => Usage(usage),
@@ -97,19 +91,6 @@ public sealed class GenerateReportHandler : ICommandHandler<GenerateReportComman
         }
 
         var assembled = md.ToString().TrimEnd();
-
-        // Optionally seed work items from the action plan.
-        var created = new List<string>();
-        if (command.CreateWorkItems && actions.Count > 0)
-        {
-            foreach (var a in actions)
-            {
-                var priority = a.Severity switch { "high" => WorkItemPriority.High, "low" => WorkItemPriority.Low, _ => WorkItemPriority.Normal };
-                await _workItems.AddAsync(WorkItem.Queue(projectId, a.Title, a.Detail, priority, now), ct);
-                created.Add(a.Title);
-            }
-            await _uow.SaveChangesAsync(ct);
-        }
 
         // Hybrid: polish only when a backend is configured.
         var markdown = assembled;
@@ -133,7 +114,7 @@ public sealed class GenerateReportHandler : ICommandHandler<GenerateReportComman
 
         return new ReportView(
             project.Id.Value, project.Name.Value, template.Name, markdown,
-            actions, generatedByLlm, created, now);
+            actions, generatedByLlm, now);
     }
 
     private async Task<ReportTemplate> ResolveTemplateAsync(string? name, CancellationToken ct)
@@ -148,7 +129,7 @@ public sealed class GenerateReportHandler : ICommandHandler<GenerateReportComman
 
     // ---- Action plan (deterministic; mirrors the focus/suggest-improvements signals) ----
     private static IReadOnlyList<ReportActionView> BuildActions(
-        Project project, ProjectContext? context, ActivityLog log, RiskAssessment? risk, IReadOnlyList<WorkItem> workItems)
+        Project project, ProjectContext? context, ActivityLog log, RiskAssessment? risk)
     {
         var actions = new List<ReportActionView>();
 
@@ -170,11 +151,6 @@ public sealed class GenerateReportHandler : ICommandHandler<GenerateReportComman
             foreach (var s in risk.Signals.Where(s => (int)s.Severity >= 2).OrderByDescending(s => (int)s.Severity).Take(3))
                 actions.Add(new ReportActionView("medium", $"Risk signal: {s.Code}", s.Evidence));
 
-        var queued = workItems.Count(w => w.Status == WorkItemStatus.Queued);
-        if (queued > 0)
-            actions.Add(new ReportActionView("low", $"Clear {queued} queued work item(s)",
-                "Pick up the queue with next_work_item."));
-
         if (actions.Count == 0)
             actions.Add(new ReportActionView("low", "No issues detected",
                 "No missing context, unverified changes, or risk signals from the logged activity."));
@@ -185,15 +161,14 @@ public sealed class GenerateReportHandler : ICommandHandler<GenerateReportComman
     }
 
     // ---- Section renderers ----
-    private static string Overview(Project p, ActivityLog log, IReadOnlyList<Decision> decisions, IReadOnlyList<WorkItem> workItems)
+    private static string Overview(Project p, ActivityLog log, IReadOnlyList<Decision> decisions)
     {
         var sb = new StringBuilder();
         sb.Append("- **Status:** ").AppendLine(p.Status.ToString());
         sb.Append("- **Technical risk:** ").AppendLine(p.TechnicalRisk is { } t ? $"{t.Value:0.0} ({t.Band})" : "not assessed");
         sb.Append("- **Process risk:** ").AppendLine(p.ProcessRisk is { } pr ? $"{pr.Value:0.0} ({pr.Band})" : "not assessed");
         sb.Append("- **Recorded changes:** ").AppendLine(log.Records.Count.ToString());
-        sb.Append("- **Decisions:** ").AppendLine(decisions.Count.ToString());
-        sb.Append("- **Open work items:** ").Append(workItems.Count(w => w.Status != WorkItemStatus.Done).ToString());
+        sb.Append("- **Decisions:** ").Append(decisions.Count.ToString());
         return sb.ToString();
     }
 
@@ -215,17 +190,6 @@ public sealed class GenerateReportHandler : ICommandHandler<GenerateReportComman
             if (d.Rationale.IsPresent) sb.Append(" — _").Append(d.Rationale.Value).Append('_');
             sb.AppendLine();
         }
-        return sb.ToString().TrimEnd();
-    }
-
-    private static string WorkItems(IReadOnlyList<WorkItem> items)
-    {
-        var open = items.Where(w => w.Status != WorkItemStatus.Done)
-            .OrderByDescending(w => w.Priority).ThenBy(w => w.CreatedAt).ToList();
-        if (open.Count == 0) return "_No open work items._";
-        var sb = new StringBuilder();
-        foreach (var w in open.Take(20))
-            sb.Append("- [").Append(w.Priority).Append('/').Append(w.Status).Append("] ").AppendLine(w.Title);
         return sb.ToString().TrimEnd();
     }
 

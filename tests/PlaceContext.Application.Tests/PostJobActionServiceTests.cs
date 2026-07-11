@@ -12,11 +12,13 @@ public class PostJobActionServiceTests
 {
     private static readonly DateTimeOffset T0 = new(2026, 6, 26, 12, 0, 0, TimeSpan.Zero);
 
-    private static (Job job, JobRun run) Sample(params PostJobActionKind[] actions)
+    private static (Job job, JobRun run) Sample(
+        JobReturnType returnType = JobReturnType.Json, params PostJobActionKind[] actions)
     {
         var mapSpec = new MapSpec("img", new[] { "{}" }, new Dictionary<string, string>());
         var job = Job.Create(Guid.NewGuid(), "nightly-etl", null, mapSpec, null, 1,
-            new ExitCodePolicy(new[] { 0 }, Array.Empty<int>()), T0, postJobActions: actions);
+            new ExitCodePolicy(new[] { 0 }, Array.Empty<int>()), T0,
+            postJobActions: actions, returnType: returnType);
         var run = JobRun.Start(job.Id, job.ProjectId, T0, WorkloadSnapshot.From(mapSpec, null, 1));
         run.Complete(new[]
         {
@@ -25,77 +27,182 @@ public class PostJobActionServiceTests
         return (job, run);
     }
 
-    [Fact]
-    public async Task Chart_uses_the_llm_output_when_it_returns_usable_html()
-    {
-        var (job, run) = Sample(PostJobActionKind.Chart);
-        var store = new FakeStore();
-        var llm = new FakeLlm("```html\n<!doctype html><html><body><svg><rect/></svg></body></html>\n```");
-        var svc = new PostJobActionService(store, new FakeLinks(), new FakeUow(), new FakeClock(), llm);
+    private static PostJobActionService Service(FakeStore store, FakeLinks? links = null) =>
+        new(store, links ?? new FakeLinks(), new FakeUow(), new FakeClock());
 
-        await svc.RunAsync(job, run);
+    // ── The return type drives the mandatory primary artifact ────────────────────────────────────────
+
+    [Fact]
+    public async Task Json_return_type_stores_the_primary_result_verbatim()
+    {
+        var (job, run) = Sample(JobReturnType.Json);
+        var store = new FakeStore();
+        var links = new FakeLinks();
+
+        await Service(store, links).RunAsync(job, run);
+
+        var obj = Assert.Single(store.Objects, o => o.Key.EndsWith("result.json"));
+        Assert.Contains("\"rows\"", Encoding.UTF8.GetString(obj.Content));
+        Assert.Single(links.Links); // exactly the mandatory primary artifact, nothing else
+    }
+
+    [Fact]
+    public async Task Table_return_type_renders_the_html_report()
+    {
+        var (job, run) = Sample(JobReturnType.Table);
+        var store = new FakeStore();
+
+        await Service(store).RunAsync(job, run);
+
+        var report = Encoding.UTF8.GetString(Assert.Single(store.Objects, o => o.Key.EndsWith("report.html")).Content);
+        Assert.Contains("nightly-etl", report);
+    }
+
+    [Fact]
+    public async Task Chart_return_type_renders_the_deterministic_themed_chart()
+    {
+        var (job, run) = Sample(JobReturnType.Chart);
+        var store = new FakeStore();
+
+        await Service(store).RunAsync(job, run);
 
         var chart = Encoding.UTF8.GetString(Assert.Single(store.Objects, o => o.Key.EndsWith("chart.html")).Content);
-        Assert.Contains("<svg>", chart);          // the LLM's chart, fences stripped
-        Assert.DoesNotContain("shard outcomes", chart); // not the deterministic fallback
-        Assert.Contains("chart", llm.LastSystem!, StringComparison.OrdinalIgnoreCase); // chart-specific instruction used
-    }
-
-    [Fact]
-    public async Task Chart_falls_back_to_the_deterministic_svg_when_the_llm_is_off()
-    {
-        var (job, run) = Sample(PostJobActionKind.Chart);
-        var store = new FakeStore();
-        var svc = new PostJobActionService(store, new FakeLinks(), new FakeUow(), new FakeClock(), llm: null);
-
-        await svc.RunAsync(job, run);
-
-        var chart = Encoding.UTF8.GetString(Assert.Single(store.Objects).Content);
-        Assert.Contains("shard outcomes", chart);  // the deterministic outcome chart
+        Assert.Contains("shard outcomes", chart);
         Assert.Contains("<svg", chart);
+        Assert.Contains("pc-chart-theme", chart); // themed for the portal's run-history panel
+        Assert.Contains("--pc-bg", chart);
     }
 
     [Fact]
-    public async Task Chart_is_themed_for_the_portal_whether_llm_or_fallback()
+    public async Task Csv_return_type_flattens_the_run_to_csv()
     {
-        // LLM chart: our theme is injected even though the model set its own light background.
-        var (job, run) = Sample(PostJobActionKind.Chart);
+        var (job, run) = Sample(JobReturnType.Csv);
         var store = new FakeStore();
-        var llm = new FakeLlm("<!doctype html><html><head></head><body style=\"background:#fff\"><svg><rect/></svg></body></html>");
-        await new PostJobActionService(store, new FakeLinks(), new FakeUow(), new FakeClock(), llm).RunAsync(job, run);
-        var llmChart = Encoding.UTF8.GetString(Assert.Single(store.Objects).Content);
-        Assert.Contains("pc-chart-theme", llmChart);
-        Assert.Contains("--pc-bg", llmChart);
 
-        // Deterministic fallback chart is themed the same way.
-        var (job2, run2) = Sample(PostJobActionKind.Chart);
-        var store2 = new FakeStore();
-        await new PostJobActionService(store2, new FakeLinks(), new FakeUow(), new FakeClock(), llm: null).RunAsync(job2, run2);
-        var fallbackChart = Encoding.UTF8.GetString(Assert.Single(store2.Objects).Content);
-        Assert.Contains("pc-chart-theme", fallbackChart);
-        Assert.Contains("shard outcomes", fallbackChart); // still the deterministic chart underneath
+        await Service(store).RunAsync(job, run);
+
+        Assert.Single(store.Objects, o => o.Key.EndsWith("run.csv"));
     }
 
     [Fact]
-    public async Task Chart_falls_back_when_the_llm_returns_non_html()
+    public async Task Text_return_type_stores_the_primary_result_as_text()
     {
-        var (job, run) = Sample(PostJobActionKind.Chart);
+        var (job, run) = Sample(JobReturnType.Text);
         var store = new FakeStore();
-        var llm = new FakeLlm("I cannot draw a chart for this data.");
-        var svc = new PostJobActionService(store, new FakeLinks(), new FakeUow(), new FakeClock(), llm);
 
-        await svc.RunAsync(job, run);
+        await Service(store).RunAsync(job, run);
 
-        var chart = Encoding.UTF8.GetString(Assert.Single(store.Objects).Content);
-        Assert.Contains("shard outcomes", chart);  // rejected the prose, used the fallback
+        Assert.Single(store.Objects, o => o.Key.EndsWith("result.txt"));
     }
+
+    [Fact]
+    public async Task Html_return_type_stores_the_returned_document_openable_as_is()
+    {
+        var mapSpec = new MapSpec("img", new[] { "{}" }, new Dictionary<string, string>());
+        var job = Job.Create(Guid.NewGuid(), "html-job", null, mapSpec, null, 1,
+            new ExitCodePolicy(new[] { 0 }, Array.Empty<int>()), T0, returnType: JobReturnType.Html);
+        var run = JobRun.Start(job.Id, job.ProjectId, T0, WorkloadSnapshot.From(mapSpec, null, 1));
+        run.Complete(new[]
+        {
+            new ShardResult(0, 0, WorkloadOutcome.Succeeded, "<!doctype html><html><body><h1>hi</h1></body></html>", "ok"),
+        }, null, T0.AddSeconds(2));
+
+        var store = new FakeStore();
+        await Service(store).RunAsync(job, run);
+
+        var obj = Assert.Single(store.Objects, o => o.Key.EndsWith("output.html"));
+        Assert.Contains("<h1>hi</h1>", Encoding.UTF8.GetString(obj.Content));
+    }
+
+    [Fact]
+    public async Task Html_return_type_falls_back_to_the_report_when_the_job_returned_json()
+    {
+        var (job, run) = Sample(JobReturnType.Html); // shard artifact is JSON, not an HTML document
+        var store = new FakeStore();
+
+        await Service(store).RunAsync(job, run);
+
+        Assert.DoesNotContain(store.Objects, o => o.Key.EndsWith("output.html"));
+        Assert.Single(store.Objects, o => o.Key.EndsWith("report.html")); // mandatory artifact still exists
+    }
+
+    [Fact]
+    public async Task Pdf_return_type_stores_the_emitted_pdf_as_the_primary_artifact()
+    {
+        var pdfBytes = new byte[] { 0x25, 0x50, 0x44, 0x46, 0x2D, 0x31, 0x2E, 0x34, 0x00, 0xE2 };
+        var mapSpec = new MapSpec("img", new[] { "{}" }, new Dictionary<string, string>());
+        var job = Job.Create(Guid.NewGuid(), "pdf-return", null, mapSpec, null, 1,
+            new ExitCodePolicy(new[] { 0 }, Array.Empty<int>()), T0, returnType: JobReturnType.Pdf);
+        var run = JobRun.Start(job.Id, job.ProjectId, T0, WorkloadSnapshot.From(mapSpec, null, 1));
+        run.Complete(new[]
+        {
+            new ShardResult(0, 0, WorkloadOutcome.Succeeded, "{}", "ok",
+                new[] { new RunArtifact("report.pdf", Convert.ToBase64String(pdfBytes), isBinary: true) }),
+        }, null, T0.AddSeconds(2));
+
+        var store = new FakeStore();
+        var links = new FakeLinks();
+        await Service(store, links).RunAsync(job, run);
+
+        // Stored twice by design: auto-captured under out/ and as the typed primary artifact.
+        var primary = Assert.Single(store.Objects, o => o.Key.EndsWith($"runs/{run.Id:N}/report.pdf"));
+        Assert.Equal(pdfBytes, primary.Content);
+        Assert.Contains(links.Links, l => l.ContentType == "application/pdf");
+    }
+
+    [Fact]
+    public async Task Image_return_type_falls_back_to_the_report_when_no_image_was_emitted()
+    {
+        var (job, run) = Sample(JobReturnType.Image); // JSON artifact, no emitted files
+        var store = new FakeStore();
+
+        await Service(store).RunAsync(job, run);
+
+        Assert.Single(store.Objects, o => o.Key.EndsWith("report.html")); // mandatory artifact still exists
+    }
+
+    [Fact]
+    public async Task Every_run_yields_an_artifact_even_when_it_produced_no_data()
+    {
+        var mapSpec = new MapSpec("img", new[] { "{}" }, new Dictionary<string, string>());
+        var job = Job.Create(Guid.NewGuid(), "silent-job", null, mapSpec, null, 1,
+            new ExitCodePolicy(new[] { 0 }, Array.Empty<int>()), T0);
+        var run = JobRun.Start(job.Id, job.ProjectId, T0, WorkloadSnapshot.From(mapSpec, null, 1));
+        run.Complete(new[]
+        {
+            new ShardResult(0, 0, WorkloadOutcome.Succeeded, null, "ok"), // no artifact at all
+        }, null, T0.AddSeconds(2));
+
+        var store = new FakeStore();
+        var links = new FakeLinks();
+        await Service(store, links).RunAsync(job, run);
+
+        var obj = Assert.Single(store.Objects, o => o.Key.EndsWith("result.json"));
+        Assert.Equal("null", Encoding.UTF8.GetString(obj.Content)); // well-formed even when empty
+        Assert.Single(links.Links);
+    }
+
+    [Fact]
+    public async Task Configured_actions_are_additive_extras_on_top_of_the_primary_artifact()
+    {
+        var (job, run) = Sample(JobReturnType.Json, PostJobActionKind.Csv);
+        var store = new FakeStore();
+
+        await Service(store).RunAsync(job, run);
+
+        Assert.Single(store.Objects, o => o.Key.EndsWith("result.json")); // the return-type artifact
+        Assert.Single(store.Objects, o => o.Key.EndsWith("run.csv"));     // plus the configured extra
+        Assert.Equal(2, store.Objects.Count);
+    }
+
+    // ── Auto-captured documents the job emitted (unchanged behaviour) ─────────────────────────────────
 
     [Fact]
     public async Task Html_returned_by_the_job_is_stored_as_an_artifact_without_any_action_configured()
     {
         var mapSpec = new MapSpec("img", new[] { "{}" }, new Dictionary<string, string>());
         var job = Job.Create(Guid.NewGuid(), "html-job", null, mapSpec, null, 1,
-            new ExitCodePolicy(new[] { 0 }, Array.Empty<int>()), T0); // NO post-job actions
+            new ExitCodePolicy(new[] { 0 }, Array.Empty<int>()), T0); // Json return type, no actions
         var run = JobRun.Start(job.Id, job.ProjectId, T0, WorkloadSnapshot.From(mapSpec, null, 1));
         run.Complete(new[]
         {
@@ -104,7 +211,7 @@ public class PostJobActionServiceTests
 
         var store = new FakeStore();
         var links = new FakeLinks();
-        await new PostJobActionService(store, links, new FakeUow(), new FakeClock()).RunAsync(job, run);
+        await Service(store, links).RunAsync(job, run);
 
         var obj = Assert.Single(store.Objects, o => o.Key.EndsWith("shard-0.html"));
         Assert.Contains("<h1>hi</h1>", Encoding.UTF8.GetString(obj.Content));
@@ -112,40 +219,11 @@ public class PostJobActionServiceTests
     }
 
     [Fact]
-    public async Task Default_outputs_are_produced_automatically_when_no_actions_are_configured()
-    {
-        var (job, run) = Sample(); // no configured actions
-        var store = new FakeStore();
-        var links = new FakeLinks();
-
-        await new PostJobActionService(store, links, new FakeUow(), new FakeClock()).RunAsync(job, run);
-
-        // Every run yields the report/chart/CSV trio without per-job setup.
-        Assert.Single(store.Objects, o => o.Key.EndsWith("report.html"));
-        Assert.Single(store.Objects, o => o.Key.EndsWith("chart.html"));
-        Assert.Single(store.Objects, o => o.Key.EndsWith("run.csv"));
-        Assert.Equal(3, links.Links.Count);
-    }
-
-    [Fact]
-    public async Task Configured_actions_replace_the_default_outputs()
-    {
-        var (job, run) = Sample(PostJobActionKind.Csv);
-        var store = new FakeStore();
-
-        await new PostJobActionService(store, new FakeLinks(), new FakeUow(), new FakeClock()).RunAsync(job, run);
-
-        Assert.Single(store.Objects, o => o.Key.EndsWith("run.csv"));
-        Assert.DoesNotContain(store.Objects, o => o.Key.EndsWith("report.html"));
-        Assert.DoesNotContain(store.Objects, o => o.Key.EndsWith("chart.html"));
-    }
-
-    [Fact]
     public async Task Json_artifacts_are_not_captured_as_html_even_when_they_contain_markup()
     {
         var (job, run) = Sample(); // JSON shard artifact, no actions
         var store = new FakeStore();
-        await new PostJobActionService(store, new FakeLinks(), new FakeUow(), new FakeClock()).RunAsync(job, run);
+        await Service(store).RunAsync(job, run);
         Assert.DoesNotContain(store.Objects, o => o.Key.Contains("shard-")); // not captured as a document
 
         // JSON that carries an HTML snippet inside a string value stays JSON.
@@ -158,7 +236,7 @@ public class PostJobActionServiceTests
             new ShardResult(0, 0, WorkloadOutcome.Succeeded, "{\"html\":\"<div>x</div>\"}", "ok"),
         }, null, T0.AddSeconds(2));
         var store2 = new FakeStore();
-        await new PostJobActionService(store2, new FakeLinks(), new FakeUow(), new FakeClock()).RunAsync(job2, run2);
+        await Service(store2).RunAsync(job2, run2);
         Assert.DoesNotContain(store2.Objects, o => o.Key.Contains("shard-"));
     }
 
@@ -176,7 +254,7 @@ public class PostJobActionServiceTests
         }, null, T0.AddSeconds(2));
 
         var store = new FakeStore();
-        await new PostJobActionService(store, new FakeLinks(), new FakeUow(), new FakeClock()).RunAsync(job, run);
+        await Service(store).RunAsync(job, run);
 
         Assert.Single(store.Objects, o => o.Key.EndsWith("out/0/page.html"));
         Assert.Single(store.Objects, o => o.Key.EndsWith("out/1/page.html"));
@@ -204,13 +282,13 @@ public class PostJobActionServiceTests
 
         var store = new FakeStore();
         var links = new FakeLinks();
-        await new PostJobActionService(store, links, new FakeUow(), new FakeClock()).RunAsync(job, run);
+        await Service(store, links).RunAsync(job, run);
 
         var obj = Assert.Single(store.Objects, o => o.Key.EndsWith("out/0/listings.pdf"));
         Assert.Equal(pdfBytes, obj.Content);
         Assert.DoesNotContain(store.Objects, o => o.Key.EndsWith("notes.txt")); // plain text is not auto-stored
-        var link = Assert.Single(links.Links, l => l.Kind == PostJobActionKind.RawBundle);
-        Assert.Equal("application/pdf", link.ContentType);
+        var link = Assert.Single(links.Links, l => l.ContentType == "application/pdf");
+        Assert.Equal(PostJobActionKind.RawBundle, link.Kind);
     }
 
     [Fact]
@@ -229,7 +307,7 @@ public class PostJobActionServiceTests
 
         var store = new FakeStore();
         var links = new FakeLinks();
-        await new PostJobActionService(store, links, new FakeUow(), new FakeClock()).RunAsync(job, run);
+        await Service(store, links).RunAsync(job, run);
 
         var obj = Assert.Single(store.Objects, o => o.Key.EndsWith("out/0/chart.png"));
         Assert.Equal(pngBytes, obj.Content);
@@ -237,17 +315,6 @@ public class PostJobActionServiceTests
     }
 
     // ── fakes ───────────────────────────────────────────────────────────────────────────────────────
-    private sealed class FakeLlm(string response) : ILlmGateway
-    {
-        public bool IsEnabled => true;
-        public string? LastSystem { get; private set; }
-        public Task<string> GenerateAsync(string system, string user, CancellationToken ct = default)
-        {
-            LastSystem = system;
-            return Task.FromResult(response);
-        }
-    }
-
     private sealed class FakeStore : IObjectStore
     {
         public List<(string Key, byte[] Content)> Objects { get; } = new();

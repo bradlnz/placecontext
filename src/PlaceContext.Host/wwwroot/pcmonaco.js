@@ -49,7 +49,7 @@ window.pcmonaco = (function () {
         scrollBeyondLastLine: false,
         tabSize: 2,
         renderWhitespace: 'selection',
-        fontFamily: "'Geist Mono', ui-monospace, monospace",
+        fontFamily: "'IBM Plex Mono', ui-monospace, monospace",
       });
       editors.set(id, editor);
       return true;
@@ -65,7 +65,7 @@ window.pcmonaco = (function () {
         ta.style.cssText =
           'width:100%;height:100%;box-sizing:border-box;resize:none;border:none;outline:none;' +
           'background:#1e1e1e;color:#d4d4d4;padding:10px 12px;font-size:12.5px;line-height:1.5;' +
-          "font-family:'Geist Mono',ui-monospace,monospace;tab-size:2";
+          "font-family:'IBM Plex Mono',ui-monospace,monospace;tab-size:2";
         el.appendChild(ta);
         fallbacks.set(id, ta);
       }

@@ -30,7 +30,6 @@ Once connected, an agent can work a project the way you would:
 
 - **Set up a project** — create it, or onboard a git repo so it starts already knowing your
   recent history and docs.
-- **Work the board** — claim the next item, do the work, and mark it done.
 - **Record what it did** — every change goes into the project's history with the reasoning behind
   it, so the knowledge, risk scores, and reports all stay current. This is the one habit that
   matters most: a change that isn't recorded leaves the project blind.
@@ -51,20 +50,11 @@ properly.
 A well-behaved agent follows the same loop you would:
 
 1. Read the project's context so it knows what's already going on.
-2. Claim the next item off the board.
-3. Do the work.
-4. Record the change — with the reasoning, and honest notes on what was tested and verified.
-5. Mark the item done.
+2. Do the work.
+3. Record the change — with the reasoning, and honest notes on what was tested and verified.
 
 Because every step is recorded, the project's history, knowledge, risk scores, and reports all
 stay accurate on their own. You can watch the whole thing unfold in the MCP Inspector.
-
-## Let the project work on itself
-
-Separately from any agent you connect, each project has a **built-in agent** that reviews it on a
-schedule and adds up to three suggested next steps to the board — never repeating what's already
-there. So the loop closes on its own: the project proposes work, and your connected agent (or you)
-picks it up. See *Projects* for how to tune how often it runs.
 
 ## Walkthrough: an agent builds and runs a job
 

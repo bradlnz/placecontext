@@ -1,11 +1,11 @@
 # Projects
 
-*Create a project, fill its board with work, run jobs against it, and let a built-in agent keep suggesting what to do next.*
+*Create a project, run jobs against it, and let it accumulate the context, history, and data everything else builds on.*
 
 ## What a project is
 
 A **project** is the top-level thing everything hangs off — usually one code repository. Each
-project keeps its own context, history, work board, jobs, database, and secrets, all private
+project keeps its own context, history, jobs, database, and secrets, all private
 to it.
 
 Create one from the portal's **Overview** page (**+ New project**), or have an AI agent create
@@ -20,26 +20,11 @@ Open a project and you get:
 
 | Area | What it's for |
 |---|---|
-| **Board** | Your queue of work items — Low, Normal, or High priority |
 | **Jobs** | Code you run to produce results (see *Jobs and artifacts*) |
 | **Data** | The project's own private database with a SQL editor (see *Project data*) |
 | **Brain** | The context and knowledge about the project — what's known, what was decided |
 | **Activity Log** | The running history of every change: who did it, why, and whether it was verified |
 | **Vault** | Encrypted secrets (API keys, passwords) that jobs can use without you exposing them |
-
-## The work board
-
-The board is a simple, prioritised queue. Every item moves through three states:
-
-| State | Meaning |
-|---|---|
-| **Queued** | Waiting. Ordered by priority, then by age |
-| **In progress** | Someone (or an agent) has claimed it and is working on it |
-| **Done** | Finished, and the change was recorded in the activity log |
-
-Add items yourself, or let the built-in agent and your reports propose them. Closing items
-matters: the agent won't suggest something that's already on the board, so completing work is
-what lets fresh suggestions come through.
 
 ## Store secrets in the Vault
 
@@ -55,42 +40,6 @@ A project's jobs don't have to be run by hand. On the **Jobs** tab you can put a
 schedule (say, nightly), or have it fire whenever something happens — another job finishing, a
 change being recorded, or an event you define yourself. That's how a project keeps its data and
 charts fresh without anyone lifting a finger. See *Jobs and artifacts* for the details.
-
-## Let the project suggest its own next steps
-
-Every project has a **built-in agent** that quietly reviews where things stand and adds
-suggested next steps to the board for you. On each pass it looks at:
-
-- the most recent changes recorded in the activity log,
-- what's already open on the board, and
-- the project's most recent job runs.
-
-It then proposes at most **three** next steps, each with a title, some detail, and a priority.
-It never repeats a suggestion that's already open, so the board stays useful rather than noisy.
-Suggested items are labelled *"Proposed by the project agent"* so you always know where they
-came from.
-
-If the local AI model is turned off, the agent still surfaces the obvious, concrete signals:
-
-| It notices | It queues | Priority |
-|---|---|---|
-| Recent job runs failed | "Investigate N failed job run(s)" | High |
-| Nothing recorded yet | "Record the project's recent work in the activity log" | Normal |
-| More than 5 items waiting | "Triage the work queue" | Low |
-
-### Change how often it runs
-
-By default the agent reviews each project once an hour. To change the interval or turn it off,
-set these on the deployment:
-
-```bash
-kubectl -n placecontext set env deploy/placecontext \
-  PlaceContext__Agent__Enabled=true \
-  PlaceContext__Agent__IntervalMinutes=30
-```
-
-`Enabled` defaults to on; `IntervalMinutes` defaults to 60 and can be anywhere from 5 minutes
-to a full day.
 
 ## Your projects stay private from each other
 
@@ -119,14 +68,11 @@ the dashboard without opening the portal.
 ## A typical loop
 
 1. Create the project (or have an agent onboard your repo).
-2. Work gets claimed off the board, done, and recorded — so the history fills in with what
-   happened and why.
+2. Work gets done and recorded — so the history fills in with what happened and why.
 3. Jobs run on schedules or triggers and produce results; charts and reports build up over time.
-4. The built-in agent reviews everything each interval and keeps the board topped up with the
-   next most useful steps.
 
-The result is a project that documents itself: the history says what happened, the reports
-narrate it, and the board always shows what to do next.
+The result is a project that documents itself: the history says what happened and the reports
+narrate it.
 
 ## See everything at a glance
 

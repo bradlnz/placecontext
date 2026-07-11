@@ -56,13 +56,19 @@ public sealed class EfReportTemplateRepository : IReportTemplateRepository
 
     private static ReportTemplate ToDomain(ReportTemplateRow r)
     {
+        // The source kind is persisted as a string; rows may reference kinds that no longer exist
+        // (e.g. the retired "WorkItems"), so unknown values are skipped rather than throwing.
         var sections = (JsonSerializer.Deserialize<List<SectionDto>>(r.Sections, Json) ?? new())
-            .Select(s => new ReportSection(s.Title, s.Source, s.Instruction));
+            .Select(s => Enum.TryParse<ReportSourceKind>(s.Source, ignoreCase: true, out var kind)
+                ? new ReportSection(s.Title, kind, s.Instruction)
+                : null)
+            .Where(s => s is not null)
+            .Select(s => s!);
         return ReportTemplate.Rehydrate(r.Id, r.Name, r.Description, sections, r.CreatedAt, r.UpdatedAt);
     }
 
-    private sealed record SectionDto(string Title, ReportSourceKind Source, string? Instruction)
+    private sealed record SectionDto(string Title, string Source, string? Instruction)
     {
-        public static SectionDto From(ReportSection s) => new(s.Title, s.Source, s.Instruction);
+        public static SectionDto From(ReportSection s) => new(s.Title, s.Source.ToString(), s.Instruction);
     }
 }

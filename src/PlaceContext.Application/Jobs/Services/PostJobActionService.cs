@@ -8,39 +8,27 @@ using PlaceContext.Domain.ValueObjects;
 namespace PlaceContext.Application.Features;
 
 /// <summary>
-/// Runs a job's post-job actions after a run completes: builds each output (HTML report, chart,
-/// CSV, raw files) from the run's artifacts, stores it in the object store, and records a
-/// <see cref="RunArtifactLink"/> so the portal/TUI can surface it. Jobs with no explicitly
-/// configured actions get the default output set — every run yields openable artifacts without
-/// per-job setup; configuring actions replaces the defaults with exactly that selection.
-/// Entirely best-effort — every action is isolated so one failure never fails the run or blocks
-/// the others.
+/// Generates a run's stored artifacts after it completes. The job's declared
+/// <see cref="Job.ReturnType"/> drives the run's primary artifact — generated for EVERY run, with
+/// a raw-result fallback if the typed build fails, so a completed run always yields at least one
+/// openable artifact. Explicitly configured post-job actions are additive extras on top.
+/// Failures are isolated so artifact generation never fails the run itself.
 /// </summary>
 public sealed class PostJobActionService
 {
-    /// <summary>What an unconfigured job produces: the report/chart/CSV trio. RawBundle stays
-    /// opt-in — raw artifacts are already visible inline, and emitted document files are
-    /// auto-stored regardless.</summary>
-    private static readonly IReadOnlyList<PostJobActionKind> DefaultActions = new[]
-    {
-        PostJobActionKind.HtmlReport, PostJobActionKind.Chart, PostJobActionKind.Csv,
-    };
-
     private readonly IObjectStore _store;
     private readonly IRunArtifactLinkRepository _links;
     private readonly IUnitOfWork _uow;
     private readonly IClock _clock;
-    private readonly ILlmGateway? _llm;
     private readonly ILogger<PostJobActionService>? _log;
 
     public PostJobActionService(IObjectStore store, IRunArtifactLinkRepository links, IUnitOfWork uow, IClock clock,
-        ILlmGateway? llm = null, ILogger<PostJobActionService>? log = null)
+        ILogger<PostJobActionService>? log = null)
     {
         _store = store;
         _links = links;
         _uow = uow;
         _clock = clock;
-        _llm = llm;
         _log = log;
     }
 
@@ -48,8 +36,10 @@ public sealed class PostJobActionService
     {
         if (!_store.IsEnabled)
         {
-            if (job.PostJobActions.Count > 0)
-                _log?.LogWarning("Post-job actions configured for job {JobId} but the object store is disabled — skipping.", job.Id);
+            // Artifacts are mandatory (driven by the job's return type) — a disabled object store
+            // means none can be produced, which must be loudly visible, not a silent skip.
+            _log?.LogError("Object store disabled — cannot generate the {ReturnType} artifact for run {RunId} (job {JobId}).",
+                job.ReturnType, run.Id, job.Id);
             return;
         }
 
@@ -66,18 +56,21 @@ public sealed class PostJobActionService
             _log?.LogWarning(ex, "Capturing job HTML outputs failed for run {RunId} (job {JobId}).", run.Id, job.Id);
         }
 
-        var actions = job.PostJobActions.Count > 0 ? job.PostJobActions : DefaultActions;
-        foreach (var action in actions)
+        // The declared return type drives the run's primary artifact — generated for every run.
+        added |= await StorePrimaryArtifactAsync(job, run, bucket, ct);
+
+        // Explicitly configured actions are additive extras on top of the typed primary artifact.
+        foreach (var action in job.PostJobActions)
         {
             try
             {
                 switch (action)
                 {
                     case PostJobActionKind.HtmlReport:
-                        added |= await StoreAsync(job, run, action, await BuildHtmlReportAsync(job, run, ct), bucket, ct);
+                        added |= await StoreAsync(job, run, action, PostJobArtifacts.HtmlReport(job, run), bucket, ct);
                         break;
                     case PostJobActionKind.Chart:
-                        added |= await StoreAsync(job, run, action, await BuildChartAsync(job, run, ct), bucket, ct);
+                        added |= await StoreAsync(job, run, action, StyledChart(job, run), bucket, ct);
                         break;
                     case PostJobActionKind.Csv:
                         added |= await StoreAsync(job, run, action, PostJobArtifacts.Csv(run), bucket, ct);
@@ -100,68 +93,108 @@ public sealed class PostJobActionService
         if (added) await _uow.SaveChangesAsync(ct);
     }
 
-    private const string HtmlSystemPrompt =
-        "You are given the JSON output of a data job. Produce a SINGLE, complete, self-contained HTML5 " +
-        "document that presents this information clearly for a person — a title plus the records as a " +
-        "table or cards, with any URLs as clickable links. Use only minimal inline CSS: no external " +
-        "stylesheets, scripts, images, fonts, or CDNs. Be faithful to the data; do not invent values. " +
-        "Output ONLY the HTML — no markdown fences, no commentary before or after.";
+    // ── The mandatory, return-type-driven primary artifact ──────────────────────────────────────────
 
-    private const string ChartSystemPrompt =
-        "You are given the JSON output of a data job. Produce a SINGLE, complete, self-contained HTML5 " +
-        "document whose body is ONE chart that best visualizes the quantitative shape of this data — a " +
-        "bar, line, or pie chart drawn as inline <svg> (use numeric fields, or counts of categorical " +
-        "values, whichever the data supports). Give it a title, label the axes or include a legend, and " +
-        "print the actual values as text on the chart. Use ONLY inline <svg> and minimal inline CSS: no " +
-        "external stylesheets, scripts, images, fonts, or CDNs. Be faithful to the data; do not invent " +
-        "values. If the data carries no chartable quantities, render a small summary table instead. " +
-        "Do NOT set a page background or text colour and do NOT use a serif font — the container " +
-        "themes those; just give bars/segments/slices distinct fill colours. " +
-        "Output ONLY the HTML — no markdown fences, no commentary before or after.";
-
-    // The HTML report: let the local LLM (Gemma via Ollama) render the data into HTML; fall back to the
-    // deterministic data renderer when the LLM is disabled, errors, or returns something that isn't HTML.
-    private Task<PostJobArtifacts.BuiltFile> BuildHtmlReportAsync(Job job, JobRun run, CancellationToken ct) =>
-        BuildLlmHtmlAsync(HtmlSystemPrompt, run, "report.html", "HTML report",
-            () => PostJobArtifacts.HtmlReport(job, run), ct);
-
-    // The chart: let the LLM draw the data as an inline-SVG chart; fall back to the deterministic shard-
-    // outcome chart when the LLM is disabled, errors, or returns something that isn't HTML. Both are
-    // themed (LlmHtml.StyleChart) so they read correctly embedded in the portal's run-history panel.
-    private Task<PostJobArtifacts.BuiltFile> BuildChartAsync(Job job, JobRun run, CancellationToken ct) =>
-        BuildLlmHtmlAsync(ChartSystemPrompt, run, "chart.html", "Chart",
-            () => PostJobArtifacts.Chart(job, run), ct, LlmHtml.StyleChart);
-
-    // Shared LLM→HTML path: feed the run's primary data to the gateway under the given instruction, accept
-    // the response only if it extracts to usable HTML, and otherwise return the deterministic fallback.
-    private async Task<PostJobArtifacts.BuiltFile> BuildLlmHtmlAsync(string system, JobRun run,
-        string fileName, string title, Func<PostJobArtifacts.BuiltFile> fallback, CancellationToken ct,
-        Func<string, string>? style = null)
+    /// <summary>
+    /// Builds and stores the run's primary artifact as declared by the job's return type. Never
+    /// silently produces nothing: if the typed build fails, the raw result is stored instead, so a
+    /// completed run always has an artifact (short of the object store itself being down).
+    /// </summary>
+    private async Task<bool> StorePrimaryArtifactAsync(Job job, JobRun run, string bucket, CancellationToken ct)
     {
-        var data = PrimaryData(run);
-        if (_llm is { IsEnabled: true } && !string.IsNullOrWhiteSpace(data))
+        try
         {
+            var (kind, file) = BuildPrimaryArtifact(job, run);
+            return await StoreAsync(job, run, kind, file, bucket, ct);
+        }
+        catch (Exception ex)
+        {
+            _log?.LogWarning(ex, "Typed {ReturnType} artifact failed for run {RunId} (job {JobId}) — storing the raw result instead.",
+                job.ReturnType, run.Id, job.Id);
             try
             {
-                var raw = await _llm.GenerateAsync(system, LlmHtml.Truncate(data, 12000), ct);
-                var html = LlmHtml.ExtractHtml(raw);
-                if (LlmHtml.LooksLikeHtml(html))
-                {
-                    if (style is not null) html = style(html);
-                    return new PostJobArtifacts.BuiltFile(fileName, Encoding.UTF8.GetBytes(html),
-                        "text/html; charset=utf-8", title);
-                }
-                _log?.LogWarning("LLM {Title} for run {RunId} wasn't usable HTML (raw starts: {Raw}) — using the deterministic renderer.",
-                    title, run.Id, LlmHtml.Truncate(raw.Trim(), 200));
+                return await StoreAsync(job, run, PostJobActionKind.RawBundle, JsonResult(run), bucket, ct);
             }
-            catch (Exception ex)
+            catch (Exception fallbackEx)
             {
-                _log?.LogWarning(ex, "LLM {Title} failed for run {RunId} — using the deterministic renderer.", title, run.Id);
+                _log?.LogError(fallbackEx, "Mandatory artifact could not be stored for run {RunId} (job {JobId}).", run.Id, job.Id);
+                return false;
             }
         }
-        var file = fallback(); // reliable fallback — style it too, so a no-LLM chart matches the portal
-        if (style is null) return file;
-        return file with { Content = Encoding.UTF8.GetBytes(style(Encoding.UTF8.GetString(file.Content))) };
+    }
+
+    private (PostJobActionKind Kind, PostJobArtifacts.BuiltFile File) BuildPrimaryArtifact(
+        Job job, JobRun run) => job.ReturnType switch
+    {
+        JobReturnType.Table => (PostJobActionKind.HtmlReport, PostJobArtifacts.HtmlReport(job, run)),
+        JobReturnType.Chart => (PostJobActionKind.Chart, StyledChart(job, run)),
+        JobReturnType.Csv => (PostJobActionKind.Csv, PostJobArtifacts.Csv(run)),
+        JobReturnType.Html => (PostJobActionKind.HtmlOutput, HtmlResult(job, run)),
+        JobReturnType.Text => (PostJobActionKind.RawBundle, TextResult(run)),
+        JobReturnType.Pdf => (PostJobActionKind.RawBundle, FileResult(job, run, PdfExtensions)),
+        JobReturnType.Image => (PostJobActionKind.RawBundle, FileResult(job, run, ImageExtensions)),
+        JobReturnType.Video => (PostJobActionKind.RawBundle, FileResult(job, run, VideoExtensions)),
+        _ => (PostJobActionKind.RawBundle, JsonResult(run)), // Json
+    };
+
+    private static readonly string[] PdfExtensions = { ".pdf" };
+    private static readonly string[] ImageExtensions = { ".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg" };
+    private static readonly string[] VideoExtensions = { ".mp4", ".webm", ".mov", ".avi", ".mkv" };
+
+    // File return types (Pdf/Image/Video): the job emits its result as a file to /out, and the
+    // first matching file (reduce step wins over shards) is the run's primary artifact. When the
+    // job emitted no matching file, the deterministic report stands in so the mandatory artifact
+    // still exists (and the mismatch is logged).
+    private PostJobArtifacts.BuiltFile FileResult(Job job, JobRun run, string[] extensions)
+    {
+        var files = (run.ReduceResult?.Artifacts ?? Array.Empty<RunArtifact>())
+            .Concat(run.ShardResults.OrderBy(s => s.Index).SelectMany(s => s.Artifacts));
+        foreach (var f in files)
+        {
+            var ext = Path.GetExtension(f.Name).ToLowerInvariant();
+            if (!extensions.Contains(ext)) continue;
+            var contentType = DocContentType(f.Name) ?? "application/octet-stream";
+            return new PostJobArtifacts.BuiltFile(Path.GetFileName(f.Name), f.GetBytes(), contentType,
+                Path.GetFileName(f.Name));
+        }
+        _log?.LogWarning("Run {RunId} (job {JobId}) declares a {ReturnType} return type but emitted no matching file to /out — rendering a report instead.",
+            run.Id, job.Id, job.ReturnType);
+        return PostJobArtifacts.HtmlReport(job, run);
+    }
+
+    // The chart page is themed (LlmHtml.StyleChart) so it reads correctly embedded in the portal's
+    // run-history panel.
+    private static PostJobArtifacts.BuiltFile StyledChart(Job job, JobRun run)
+    {
+        var file = PostJobArtifacts.Chart(job, run);
+        return file with { Content = Encoding.UTF8.GetBytes(LlmHtml.StyleChart(Encoding.UTF8.GetString(file.Content))) };
+    }
+
+    // Even an empty return yields a well-formed artifact — mandatory generation has no
+    // "nothing to store" path.
+    private static PostJobArtifacts.BuiltFile JsonResult(JobRun run)
+    {
+        var data = PrimaryData(run);
+        if (string.IsNullOrWhiteSpace(data)) data = "null";
+        return new PostJobArtifacts.BuiltFile("result.json", Encoding.UTF8.GetBytes(data),
+            "application/json", "JSON result");
+    }
+
+    private static PostJobArtifacts.BuiltFile TextResult(JobRun run) =>
+        new("result.txt", Encoding.UTF8.GetBytes(PrimaryData(run)),
+            "text/plain; charset=utf-8", "Text result");
+
+    // A job declared Html must return an HTML document; when it doesn't, the deterministic report
+    // stands in so the mandatory artifact still exists (and the mismatch is logged).
+    private PostJobArtifacts.BuiltFile HtmlResult(Job job, JobRun run)
+    {
+        var data = PrimaryData(run);
+        if (IsHtmlDocument(data))
+            return new PostJobArtifacts.BuiltFile("output.html", Encoding.UTF8.GetBytes(data),
+                "text/html; charset=utf-8", "HTML output");
+        _log?.LogWarning("Run {RunId} (job {JobId}) declares an Html return type but did not return an HTML document — rendering a report instead.",
+            run.Id, job.Id);
+        return PostJobArtifacts.HtmlReport(job, run);
     }
 
     // Documents returned by the job itself — a shard/reduce stdout artifact that is an HTML document,
@@ -223,6 +256,11 @@ public sealed class PostJobActionService
             ".gif" => "image/gif",
             ".webp" => "image/webp",
             ".svg" => "image/svg+xml",
+            ".mp4" => "video/mp4",
+            ".webm" => "video/webm",
+            ".mov" => "video/quicktime",
+            ".avi" => "video/x-msvideo",
+            ".mkv" => "video/x-matroska",
             _ => null,
         };
     }

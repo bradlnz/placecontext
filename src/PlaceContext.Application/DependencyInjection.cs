@@ -37,7 +37,7 @@ public static class DependencyInjection
         services.AddScoped<RunStatusWatchService>();
         services.AddScoped<PostJobActionService>();
         services.AddScoped<JobRunDataRecorder>();
-        services.AddScoped<ProjectAgentService>();
+        services.AddScoped<DataMappingIngestionService>();
         services.AddScoped<ProjectChartService>();
         services.AddScoped<ObsidianVaultImporter>();
 
@@ -56,10 +56,6 @@ public static class DependencyInjection
         services.AddScoped<ICommandHandler<SetProjectRequirementsCommand, RequirementsView>, SetProjectRequirementsHandler>();
         services.AddScoped<ICommandHandler<RecordUsageCommand, UsageEntryView>, RecordUsageHandler>();
         services.AddScoped<ICommandHandler<OnboardCommand, OnboardResultView>, OnboardHandler>();
-        services.AddScoped<ICommandHandler<AddWorkItemCommand, WorkItemView>, AddWorkItemHandler>();
-        services.AddScoped<ICommandHandler<NextWorkItemCommand, WorkItemView?>, NextWorkItemHandler>();
-        services.AddScoped<ICommandHandler<CompleteWorkItemCommand, WorkItemView>, CompleteWorkItemHandler>();
-        services.AddScoped<ICommandHandler<MoveWorkItemCommand, WorkItemView>, MoveWorkItemHandler>();
         services.AddScoped<ICommandHandler<GenerateReportCommand, ReportView>, GenerateReportHandler>();
         services.AddScoped<ICommandHandler<DefineReportTemplateCommand, ReportTemplateView>, DefineReportTemplateHandler>();
         services.AddScoped<ICommandHandler<CreateJobCommand, JobView>, CreateJobHandler>();
@@ -70,6 +66,8 @@ public static class DependencyInjection
         services.AddScoped<ICommandHandler<UpdateJobChainCommand, JobChainView>, UpdateJobChainHandler>();
         services.AddScoped<ICommandHandler<DeleteJobChainCommand, bool>, DeleteJobChainHandler>();
         services.AddScoped<ICommandHandler<RunJobChainCommand, ChainRunView>, RunJobChainHandler>();
+        services.AddScoped<ICommandHandler<SaveDataMappingCommand, DataMappingView>, SaveDataMappingHandler>();
+        services.AddScoped<ICommandHandler<DeleteDataMappingCommand, bool>, DeleteDataMappingHandler>();
         services.AddScoped<ICommandHandler<CreateTriggerCommand, TriggerView>, CreateTriggerHandler>();
         services.AddScoped<ICommandHandler<SetTriggerEnabledCommand, TriggerView>, SetTriggerEnabledHandler>();
         services.AddScoped<ICommandHandler<DeleteTriggerCommand, bool>, DeleteTriggerHandler>();
@@ -93,7 +91,6 @@ public static class DependencyInjection
         services.AddScoped<IQueryHandler<SearchQuery, SearchResultsView>, SearchHandler>();
         services.AddScoped<IQueryHandler<GetFocusQuery, FocusView>, FocusHandler>();
         services.AddScoped<IQueryHandler<GetBrainQuery, GraphVizView>, BrainHandler>();
-        services.AddScoped<IQueryHandler<GetWorkItemsQuery, IReadOnlyList<WorkItemView>>, GetWorkItemsHandler>();
         services.AddScoped<IQueryHandler<ListReportTemplatesQuery, IReadOnlyList<ReportTemplateView>>, ListReportTemplatesHandler>();
 
         // Root-level read models (redesigned portal).
@@ -104,6 +101,7 @@ public static class DependencyInjection
         services.AddScoped<IQueryHandler<GetRecentToolCallsQuery, IReadOnlyList<ToolCallView>>, GetRecentToolCallsHandler>();
         services.AddScoped<IQueryHandler<ListJobsQuery, IReadOnlyList<JobView>>, ListJobsHandler>();
         services.AddScoped<IQueryHandler<ListJobRunsQuery, IReadOnlyList<JobRunView>>, ListJobRunsHandler>();
+        services.AddScoped<IQueryHandler<ListDataMappingsQuery, IReadOnlyList<DataMappingView>>, ListDataMappingsHandler>();
         services.AddScoped<IQueryHandler<GetJobRunQuery, JobRunDetailView?>, GetJobRunHandler>();
         services.AddScoped<IQueryHandler<ListRecentRunReportsQuery, IReadOnlyList<RunReportView>>, ListRecentRunReportsHandler>();
         services.AddScoped<IQueryHandler<GetJobQuery, JobView?>, GetJobHandler>();

@@ -7,7 +7,7 @@ deploy/
   install.sh      ← one-command installer: deps + first-run cluster bring-up
   pctl            ← the engine (bash): all orchestration logic, idempotent
   tui/            ← reactive Go TUI dashboard (Bubble Tea), wraps the engine
-  k3s/            ← Kubernetes manifests (Postgres + MinIO + Ollama + Host + Ingress)
+  k3s/            ← Kubernetes manifests (Postgres + MinIO + Host + Ingress)
   headscale/      ← self-hosted WireGuard mesh control plane (driven by `pctl mesh`)
   terraform/      ← IaC to provision the Headscale mesh control droplet
 ```

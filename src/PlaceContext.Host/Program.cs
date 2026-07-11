@@ -211,7 +211,7 @@ app.MapPost("/ingest/{eventName}", async (HttpContext ctx, PlaceContext.Applicat
 
 // ---- Demo seed ----
 // Seed the Brisbane property feasibility demo into the resolved tenant: project + Data tables +
-// decisions + work items + context, with the analytics sweep queued. Same gate as /ingest
+// decisions + context, with the analytics sweep queued. Same gate as /ingest
 // (shared key, disabled when unconfigured); the Onboarding page has the same action as a button.
 app.MapPost("/seed/brisbane-demo", async (HttpContext ctx, IConfiguration config,
     PlaceContext.Host.Demo.BrisbaneDemoSeeder seeder) =>
@@ -327,17 +327,14 @@ app.MapGet("/auth/portal", async (HttpContext ctx, IAuthService auth, PlaceConte
     return Results.Redirect(LocalOrHome(returnUrl));
 }).AllowAnonymous();
 
-// Shown when an unauthenticated request hits a protected page (cookie LoginPath). In dev it just
-// signs you in; otherwise it points the operator at the TUI.
+// Auto-login: an unauthenticated request to a protected page (cookie LoginPath) signs straight in
+// as the operator's default workspace — the portal has no login screen. The cookie/tenant
+// machinery stays intact underneath, so tenant isolation, invites, and MCP OAuth keep working.
 app.MapGet("/locked", async (HttpContext ctx, IAuthService auth) =>
 {
-    if (devAutoLogin)
-    {
-        var operatorUser = await auth.GetOrCreateOperatorAsync(ctx.RequestAborted);
-        await SignInAsync(ctx, operatorUser);
-        return Results.Redirect("/");
-    }
-    return Results.Content(AuthPages.Locked(), "text/html");
+    var operatorUser = await auth.GetOrCreateOperatorAsync(ctx.RequestAborted);
+    await SignInAsync(ctx, operatorUser);
+    return Results.Redirect("/");
 }).AllowAnonymous();
 
 // ---- Invite acceptance (join page) ----

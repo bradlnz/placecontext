@@ -118,21 +118,32 @@ starts its own run, and several runs can go at once.
 - **Prompted parameters** — instead of raw input, a job can declare named parameters. Running it
   then asks you for the values.
 
-## Generate extra outputs after each run
+## Every run generates an artifact — declared by the return type
 
-Turn on any of these to produce more from a run's result. They're saved and linked on the run,
-and a failing one never fails the run itself:
+Each job declares a **return type**: what its code prints on stdout. That type determines the
+artifact generated for every run — artifact generation is mandatory, so a completed run always
+has at least one stored, openable output (if the typed build ever fails, the raw result is stored
+instead):
 
-| Output | What you get |
+| Return type | The artifact every run gets |
 |---|---|
-| **Chart** | One chart that best shows the data — composed from the actual values |
-| **HTML report** | The run's data as a clean, self-contained web page |
+| **JSON** | The result stored verbatim as `result.json` |
+| **Table** | The result rendered as a clean, self-contained HTML report |
+| **Chart** | The result rendered as a chart page |
+| **HTML** | The returned document stored openable as-is |
 | **CSV** | The result flattened into a downloadable spreadsheet |
-| **Raw bundle** | Every file the run produced, stored as-is |
+| **Text** | The result stored verbatim as `result.txt` |
+| **PDF** | The PDF the job wrote to `/out`, stored openable as-is |
+| **Image** | The image the job wrote to `/out` (png/jpg/gif/webp/svg) |
+| **Video** | The video the job wrote to `/out` (mp4/webm/mov/…) |
 
-**Chart is on by default for new jobs** — jobs exist to produce results worth looking at. Tick
-the ones you want in the portal editor, or press **`[s]`** on a job in the TUI to toggle them
-(along with network access and the time limit).
+Pick the return type in the portal editor (Outputs section). Jobs an agent creates via code
+upload default to **Chart** — jobs exist to produce results worth looking at.
+
+On top of that, you can turn on extra post-run outputs (chart, HTML report, CSV, raw bundle of
+every produced file). They're saved and linked on the run, and a failing one never fails the run
+itself. Press **`[s]`** on a job in the TUI to toggle them (along with network access and the
+time limit).
 
 ## Read the results
 

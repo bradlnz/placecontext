@@ -25,6 +25,7 @@ public sealed class Job : AggregateRoot
         int timeoutSeconds,
         IReadOnlyList<JobParameter> parameters,
         IReadOnlyList<PostJobActionKind> postJobActions,
+        JobReturnType returnType,
         DateTimeOffset createdAt,
         DateTimeOffset updatedAt)
     {
@@ -40,6 +41,7 @@ public sealed class Job : AggregateRoot
         TimeoutSeconds = timeoutSeconds;
         Parameters = parameters;
         PostJobActions = postJobActions;
+        ReturnType = returnType;
         CreatedAt = createdAt;
         UpdatedAt = updatedAt;
     }
@@ -92,6 +94,13 @@ public sealed class Job : AggregateRoot
     /// </summary>
     public IReadOnlyList<PostJobActionKind> PostJobActions { get; private set; }
 
+    /// <summary>
+    /// The declared type of this job's primary return. Every job has one (default
+    /// <see cref="JobReturnType.Json"/>), and it determines the artifact generated for every run —
+    /// a run always yields at least one stored artifact of this shape.
+    /// </summary>
+    public JobReturnType ReturnType { get; private set; }
+
     public DateTimeOffset CreatedAt { get; }
     public DateTimeOffset UpdatedAt { get; private set; }
 
@@ -116,7 +125,8 @@ public sealed class Job : AggregateRoot
         bool allowNetworkEgress = false,
         IReadOnlyList<JobParameter>? parameters = null,
         int timeoutSeconds = DefaultTimeoutSeconds,
-        IReadOnlyList<PostJobActionKind>? postJobActions = null)
+        IReadOnlyList<PostJobActionKind>? postJobActions = null,
+        JobReturnType returnType = JobReturnType.Json)
     {
         if (projectId == Guid.Empty)
             throw new ArgumentException("ProjectId must not be empty.", nameof(projectId));
@@ -133,7 +143,7 @@ public sealed class Job : AggregateRoot
             Guid.NewGuid(), projectId, name.Trim(), description?.Trim(),
             mapSpec, reduceSpec, concurrencyLimit, exitCodePolicy,
             allowNetworkEgress, NormalizeTimeout(timeoutSeconds), parameters ?? Array.Empty<JobParameter>(),
-            DistinctActions(postJobActions), createdAt, createdAt);
+            DistinctActions(postJobActions), returnType, createdAt, createdAt);
     }
 
     // Post-job actions are a set (no duplicates) and order-stable for display.
@@ -159,10 +169,11 @@ public sealed class Job : AggregateRoot
         bool allowNetworkEgress = false,
         IReadOnlyList<JobParameter>? parameters = null,
         int timeoutSeconds = DefaultTimeoutSeconds,
-        IReadOnlyList<PostJobActionKind>? postJobActions = null)
+        IReadOnlyList<PostJobActionKind>? postJobActions = null,
+        JobReturnType returnType = JobReturnType.Json)
         => new(id, projectId, name, description, mapSpec, reduceSpec, concurrencyLimit, exitCodePolicy,
                allowNetworkEgress, NormalizeTimeout(timeoutSeconds), parameters ?? Array.Empty<JobParameter>(),
-               DistinctActions(postJobActions), createdAt, updatedAt);
+               DistinctActions(postJobActions), returnType, createdAt, updatedAt);
 
     // ── Behaviour ─────────────────────────────────────────────────────────────────────────────────
 
@@ -180,7 +191,8 @@ public sealed class Job : AggregateRoot
         bool allowNetworkEgress = false,
         IReadOnlyList<JobParameter>? parameters = null,
         int timeoutSeconds = DefaultTimeoutSeconds,
-        IReadOnlyList<PostJobActionKind>? postJobActions = null)
+        IReadOnlyList<PostJobActionKind>? postJobActions = null,
+        JobReturnType returnType = JobReturnType.Json)
     {
         if (string.IsNullOrWhiteSpace(name))
             throw new ArgumentException("Job name must not be empty.", nameof(name));
@@ -201,6 +213,7 @@ public sealed class Job : AggregateRoot
         TimeoutSeconds = NormalizeTimeout(timeoutSeconds);
         if (parameters is not null) Parameters = parameters;
         if (postJobActions is not null) PostJobActions = DistinctActions(postJobActions);
+        ReturnType = returnType;
         UpdatedAt = updatedAt;
     }
 

@@ -35,7 +35,6 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
     public DbSet<ProjectContextRow> ProjectContexts => Set<ProjectContextRow>();
     public DbSet<RequirementsRow> Requirements => Set<RequirementsRow>();
     public DbSet<UsageRow> UsageRecords => Set<UsageRow>();
-    public DbSet<WorkItemRow> WorkItems => Set<WorkItemRow>();
     public DbSet<ReportTemplateRow> ReportTemplates => Set<ReportTemplateRow>();
     public DbSet<ToolCallRow> ToolCalls => Set<ToolCallRow>();
     public DbSet<JobRow> Jobs => Set<JobRow>();
@@ -49,6 +48,7 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
     public DbSet<EventOccurrenceRow> EventOccurrences => Set<EventOccurrenceRow>();
     public DbSet<PendingRunRow> PendingRuns => Set<PendingRunRow>();
     public DbSet<ProjectChartRow> ProjectCharts => Set<ProjectChartRow>();
+    public DbSet<DataMappingRow> DataMappings => Set<DataMappingRow>();
     public DbSet<SmsMessageRow> SmsMessages => Set<SmsMessageRow>();
 
     Task<int> IUnitOfWork.SaveChangesAsync(CancellationToken ct) => SaveChangesAsync(ct);
@@ -167,14 +167,6 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
             e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
         });
 
-        b.Entity<WorkItemRow>(e =>
-        {
-            e.ToTable("work_items");
-            e.HasKey(x => x.Id);
-            e.HasIndex(x => new { x.ProjectId, x.Status });
-            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
-        });
-
         b.Entity<ReportTemplateRow>(e =>
         {
             e.ToTable("report_templates");
@@ -204,6 +196,7 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
             e.Property(x => x.TimeoutSeconds).HasDefaultValue(300);
             e.Property(x => x.ParametersJson).HasDefaultValue("[]");
             e.Property(x => x.PostJobActionsJson).HasDefaultValue("[]");
+            e.Property(x => x.ReturnType).HasDefaultValue("Json");
         });
 
         b.Entity<RunArtifactLinkRow>(e =>
@@ -221,6 +214,17 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
             e.HasKey(x => x.Id);
             e.HasIndex(x => new { x.ProjectId, x.TableName }).IsUnique();
             e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
+        });
+
+        b.Entity<DataMappingRow>(e =>
+        {
+            e.ToTable("data_mappings");
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => x.ProjectId);
+            e.HasIndex(x => x.JobId);
+            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
+            e.Property(x => x.FieldsJson).HasDefaultValue("[]");
+            e.Property(x => x.Enabled).HasDefaultValue(true);
         });
 
         b.Entity<SmsMessageRow>(e =>

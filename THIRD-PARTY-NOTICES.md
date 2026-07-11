@@ -32,12 +32,8 @@ used under the license noted. Version numbers track the manifests
 | [PostgreSQL](https://www.postgresql.org/) | PostgreSQL License |
 | [k3s](https://k3s.io/) / [k3d](https://k3d.io/) | Apache-2.0 |
 | [MinIO](https://min.io/) (object store, run unmodified as a service) | AGPL-3.0 |
-| [Ollama](https://ollama.com/) (local LLM runtime) | MIT |
 | [Docker Engine](https://www.docker.com/) / [kubectl](https://kubernetes.io/) | Apache-2.0 |
 | [Tailscale](https://tailscale.com/) client (optional mesh networking) | BSD-3-Clause |
-
-Model weights served by Ollama (e.g. Gemma) carry their own use terms — review the
-model card for whatever model you configure.
 
 ## Frontend assets
 

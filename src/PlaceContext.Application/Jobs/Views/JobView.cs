@@ -40,5 +40,7 @@ public sealed record JobView(
     IReadOnlyList<JobParameterDto> Parameters,
     /// <summary>Post-job actions that produce stored outputs after each run (empty = none).</summary>
     IReadOnlyList<PlaceContext.Domain.ValueObjects.PostJobActionKind> PostJobActions,
+    /// <summary>Declared type of the job's primary return — drives the mandatory per-run artifact.</summary>
+    PlaceContext.Domain.ValueObjects.JobReturnType ReturnType,
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt);

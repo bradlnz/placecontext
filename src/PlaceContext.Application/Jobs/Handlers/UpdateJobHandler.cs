@@ -49,7 +49,8 @@ public sealed class UpdateJobHandler : ICommandHandler<UpdateJobCommand, JobView
             _clock.UtcNow,
             allowNetworkEgress: command.AllowNetworkEgress,
             parameters: JobParameterMapper.ToDomain(command.Parameters),
-            postJobActions: command.PostJobActions);
+            postJobActions: command.PostJobActions,
+            returnType: command.ReturnType);
 
         await _jobs.UpdateAsync(job, ct);
         await _uow.SaveChangesAsync(ct);

@@ -46,6 +46,7 @@ public sealed class EfJobRepository : IJobRepository
         existing.AllowNetworkEgress = updated.AllowNetworkEgress;
         existing.TimeoutSeconds = updated.TimeoutSeconds;
         existing.PostJobActionsJson = updated.PostJobActionsJson;
+        existing.ReturnType = updated.ReturnType;
         existing.UpdatedAt = updated.UpdatedAt;
     }
 
@@ -82,6 +83,7 @@ public sealed class EfJobRepository : IJobRepository
             AllowNetworkEgress = job.AllowNetworkEgress,
             TimeoutSeconds = job.TimeoutSeconds,
             PostJobActionsJson = JsonSerializer.Serialize(job.PostJobActions.Select(a => a.ToString()).ToList(), Json),
+            ReturnType = job.ReturnType.ToString(),
             CreatedAt = job.CreatedAt,
             UpdatedAt = job.UpdatedAt,
         };
@@ -156,11 +158,14 @@ public sealed class EfJobRepository : IJobRepository
             .Where(k => k is not null).Select(k => k!.Value)
             .ToList();
 
+        var returnType = Enum.TryParse<JobReturnType>(row.ReturnType, out var rt) ? rt : JobReturnType.Json;
+
         return Job.Rehydrate(
             row.Id, row.ProjectId, row.Name, row.Description,
             mapSpec, reduceSpec, row.ConcurrencyLimit, policy, row.CreatedAt, row.UpdatedAt,
             allowNetworkEgress: row.AllowNetworkEgress, parameters: parameters,
-            timeoutSeconds: row.TimeoutSeconds, postJobActions: postJobActions);
+            timeoutSeconds: row.TimeoutSeconds, postJobActions: postJobActions,
+            returnType: returnType);
     }
 
     private static WorkloadSource DeserialiseSource(

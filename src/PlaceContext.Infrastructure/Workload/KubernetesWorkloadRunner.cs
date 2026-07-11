@@ -99,13 +99,14 @@ public sealed class KubernetesWorkloadRunner : IWorkloadRunner
             script.Append($"mkdir -p \"$(dirname {ShQuote(p)})\"\ncp /cm/{key} {ShQuote(p)}\n");
         }
 
-        await client.CoreV1.CreateNamespacedConfigMapAsync(
+        // The ConfigMap and (sealed sandbox: deny-all-egress unless the job opted in) NetworkPolicy
+        // are independent — create them concurrently. Both must exist before the Job below, so this
+        // is awaited before the Job create.
+        var createConfigMap = client.CoreV1.CreateNamespacedConfigMapAsync(
             new V1ConfigMap { Metadata = new V1ObjectMeta { Name = name }, Data = data }, ns, cancellationToken: ct);
-
-        // ── Sealed sandbox: deny all egress unless the job opted in ─────────────────────────────────
-        if (!request.AllowNetworkEgress)
-        {
-            await client.NetworkingV1.CreateNamespacedNetworkPolicyAsync(new V1NetworkPolicy
+        var createNetPolicy = request.AllowNetworkEgress
+            ? Task.CompletedTask
+            : client.NetworkingV1.CreateNamespacedNetworkPolicyAsync(new V1NetworkPolicy
             {
                 Metadata = new V1ObjectMeta { Name = name },
                 Spec = new V1NetworkPolicySpec
@@ -115,7 +116,7 @@ public sealed class KubernetesWorkloadRunner : IWorkloadRunner
                     Egress = new List<V1NetworkPolicyEgressRule>(), // empty ⇒ deny all egress
                 },
             }, ns, cancellationToken: ct);
-        }
+        await Task.WhenAll(createConfigMap, createNetPolicy);
 
         // ── The Job ─────────────────────────────────────────────────────────────────────────────
         var runContainer = new V1Container
@@ -208,13 +209,19 @@ public sealed class KubernetesWorkloadRunner : IWorkloadRunner
     {
         // Give the poller a small grace beyond the pod's own ActiveDeadlineSeconds so we observe the
         // Job's Failed status (deadline-exceeded) rather than timing out the poll first.
+        // Poll adaptively: short jobs are the common case, so start fast (200ms) and back off toward
+        // 1.5s for long runs — a quick shard completes in sub-second wall-clock instead of paying a
+        // fixed 1.5s tick, without hammering the API server on runs that take minutes.
         var deadline = DateTimeOffset.UtcNow.AddSeconds(timeoutSeconds + 30);
+        var delay = TimeSpan.FromMilliseconds(200);
         while (DateTimeOffset.UtcNow < deadline)
         {
             var job = await client.BatchV1.ReadNamespacedJobStatusAsync(name, ns, cancellationToken: ct);
             if ((job.Status?.Succeeded ?? 0) >= 1 || (job.Status?.Failed ?? 0) >= 1)
                 break;
-            await Task.Delay(1500, ct);
+            await Task.Delay(delay, ct);
+            if (delay < TimeSpan.FromMilliseconds(1500))
+                delay = TimeSpan.FromMilliseconds(Math.Min(delay.TotalMilliseconds * 1.5, 1500));
         }
 
         var pods = await client.CoreV1.ListNamespacedPodAsync(ns, labelSelector: "job-name=" + name, cancellationToken: ct);
@@ -294,13 +301,18 @@ public sealed class KubernetesWorkloadRunner : IWorkloadRunner
         return (stdout, files);
     }
 
-    private static async Task CleanupAsync(Kubernetes client, string ns, string name, bool hadEgress)
+    // The three deletes are independent — issue them concurrently so cleanup costs one API
+    // round-trip, not three, on every shard/reduce invocation.
+    private static Task CleanupAsync(Kubernetes client, string ns, string name, bool hadEgress)
     {
         var bg = new V1DeleteOptions { PropagationPolicy = "Background" };
-        try { await client.BatchV1.DeleteNamespacedJobAsync(name, ns, body: bg); } catch { }
-        try { await client.CoreV1.DeleteNamespacedConfigMapAsync(name, ns); } catch { }
-        if (!hadEgress)
-            try { await client.NetworkingV1.DeleteNamespacedNetworkPolicyAsync(name, ns); } catch { }
+        static async Task Best(Func<Task> delete) { try { await delete(); } catch { } }
+        return Task.WhenAll(
+            Best(() => client.BatchV1.DeleteNamespacedJobAsync(name, ns, body: bg)),
+            Best(() => client.CoreV1.DeleteNamespacedConfigMapAsync(name, ns)),
+            hadEgress
+                ? Task.CompletedTask
+                : Best(() => client.NetworkingV1.DeleteNamespacedNetworkPolicyAsync(name, ns)));
     }
 
     private V1ResourceRequirements ResourceLimits()

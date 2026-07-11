@@ -186,16 +186,16 @@ public static class ArtifactChart
 
             sb.Append("<g class=\"pcab\">")
               .Append($"<title>{Esc(label)}: {Fmt(value)}</title>")
-              .Append($"<text x=\"{labelPx}\" y=\"{y + barH - 3}\" text-anchor=\"end\" fill=\"var(--text-2)\" font-size=\"11\" font-family=\"'Geist',system-ui,sans-serif\">{Esc(display)}</text>");
+              .Append($"<text x=\"{labelPx}\" y=\"{y + barH - 3}\" text-anchor=\"end\" fill=\"var(--text-2)\" font-size=\"11\" font-family=\"'IBM Plex Sans',system-ui,sans-serif\">{Esc(display)}</text>");
             if (w >= 5)
                 sb.Append($"<path d=\"M{x0},{y} h{w - 4} a4,4 0 0 1 4,4 v{barH - 8} a4,4 0 0 1 -4,4 h-{w - 4} z\" fill=\"var(--brand)\"/>");
             else if (w > 0)
                 sb.Append($"<rect x=\"{x0}\" y=\"{y}\" width=\"{w}\" height=\"{barH}\" fill=\"var(--brand)\"/>");
-            sb.Append($"<text x=\"{x0 + w + 6}\" y=\"{y + barH - 3}\" fill=\"var(--text)\" font-size=\"11\" font-family=\"'Geist Mono',monospace\">{Fmt(value)}</text>")
+            sb.Append($"<text x=\"{x0 + w + 6}\" y=\"{y + barH - 3}\" fill=\"var(--text)\" font-size=\"11\" font-family=\"'IBM Plex Mono',monospace\">{Fmt(value)}</text>")
               .Append("</g>");
         }
         if (series.Count > shown)
-            sb.Append($"<text x=\"{labelPx + 6}\" y=\"{shown * rowPitch + 16}\" fill=\"var(--text-3)\" font-size=\"11\" font-family=\"'Geist',system-ui,sans-serif\">… {series.Count - shown} more</text>");
+            sb.Append($"<text x=\"{labelPx + 6}\" y=\"{shown * rowPitch + 16}\" fill=\"var(--text-3)\" font-size=\"11\" font-family=\"'IBM Plex Sans',system-ui,sans-serif\">… {series.Count - shown} more</text>");
         sb.Append("</svg>");
         return sb.ToString();
     }

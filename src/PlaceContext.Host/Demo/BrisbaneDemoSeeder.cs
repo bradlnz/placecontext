@@ -10,7 +10,7 @@ namespace PlaceContext.Host.Demo;
 /// <summary>
 /// Seeds the "Brisbane property feasibility" demo through the platform's own surfaces — a project,
 /// its Data-tab tables (suburb market stats, candidate development sites, feasibility scenarios),
-/// decisions, work items, and project context — then queues the analytics chart sweep, so every
+/// decisions, and project context — then queues the analytics chart sweep, so every
 /// portal feature has something real to show. Idempotent: an already-seeded tenant just gets the
 /// existing project back.
 /// </summary>
@@ -71,15 +71,6 @@ public sealed class BrisbaneDemoSeeder
             "Residual land value per allowable unit, then vacancy-adjusted rental yield as tiebreaker",
             "RLV/unit normalises across zonings (LMR vs MDR); the yield tiebreaker favours suburbs where " +
             "unsold stock can be held and rented without bleeding.", ct);
-
-        await _svc.AddWorkItemAsync(project.Id, "Shortlist top 3 sites by residual land value",
-            "Run the feasibility table ranking (Data tab) and confirm against the decision threshold (≥18% margin).", "High", ct);
-        await _svc.AddWorkItemAsync(project.Id, "Commission DA pre-lodgement advice for Woolloongabba site",
-            "Zoning MDR, 1,214 sqm — the Cross River Rail catchment uplift makes this the highest-RLV candidate.", "High", ct);
-        await _svc.AddWorkItemAsync(project.Id, "Refresh suburb stats after the next ABS/CoreLogic release",
-            "Re-run the Analytics sweep afterwards so the charts pick up the new medians.", "Normal", ct);
-        await _svc.AddWorkItemAsync(project.Id, "Model a 10% build-cost shock across all scenarios",
-            "Stress the feasibility table (margin_pct column) and flag any scenario falling under the 12% floor.", "Normal", ct);
 
         await _svc.SetContextAsync(project.Id, ContextMarkdown, ct);
 

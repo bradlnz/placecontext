@@ -99,29 +99,14 @@ public sealed class PlaceContextService : IPlaceContextService
     public Task<GraphVizView> GetBrainAsync(CancellationToken ct = default)
         => _dispatcher.Query(new GetBrainQuery(), ct);
 
-    public Task<WorkItemView> AddWorkItemAsync(Guid projectId, string title, string? detail, string priority, CancellationToken ct = default)
-        => _dispatcher.Send(new AddWorkItemCommand(projectId, title, detail, priority), ct);
-
-    public Task<WorkItemView?> NextWorkItemAsync(Guid projectId, CancellationToken ct = default)
-        => _dispatcher.Send(new NextWorkItemCommand(projectId), ct);
-
-    public Task<WorkItemView> CompleteWorkItemAsync(Guid workItemId, CancellationToken ct = default)
-        => _dispatcher.Send(new CompleteWorkItemCommand(workItemId), ct);
-
-    public Task<WorkItemView> MoveWorkItemAsync(Guid workItemId, string status, CancellationToken ct = default)
-        => _dispatcher.Send(new MoveWorkItemCommand(workItemId, status), ct);
-
-    public Task<IReadOnlyList<WorkItemView>> GetWorkItemsAsync(Guid projectId, CancellationToken ct = default)
-        => _dispatcher.Query(new GetWorkItemsQuery(projectId), ct);
-
     public Task<ImprovementsView> SuggestImprovementsAsync(Guid projectId, CancellationToken ct = default)
         => _dispatcher.Query(new SuggestImprovementsQuery(projectId), ct);
 
-    public Task<ReportView> GenerateReportAsync(Guid projectId, string? templateName, bool createWorkItems, CancellationToken ct = default)
-        => _dispatcher.Send(new GenerateReportCommand(projectId, templateName, createWorkItems), ct);
+    public Task<ReportView> GenerateReportAsync(Guid projectId, string? templateName, CancellationToken ct = default)
+        => _dispatcher.Send(new GenerateReportCommand(projectId, templateName), ct);
 
-    public Task<ReportView> SynthesizeContextAsync(Guid projectId, bool createWorkItems, CancellationToken ct = default)
-        => _dispatcher.Send(new GenerateReportCommand(projectId, Domain.Services.BuiltInReportTemplates.OnboardingBriefName, createWorkItems), ct);
+    public Task<ReportView> SynthesizeContextAsync(Guid projectId, CancellationToken ct = default)
+        => _dispatcher.Send(new GenerateReportCommand(projectId, Domain.Services.BuiltInReportTemplates.OnboardingBriefName), ct);
 
     public Task<IReadOnlyList<ReportTemplateView>> ListReportTemplatesAsync(CancellationToken ct = default)
         => _dispatcher.Query(new ListReportTemplatesQuery(), ct);
@@ -194,6 +179,15 @@ public sealed class PlaceContextService : IPlaceContextService
 
     public Task<ChainRunView?> GetChainRunAsync(Guid chainRunId, CancellationToken ct = default)
         => _dispatcher.Query(new GetChainRunQuery(chainRunId), ct);
+
+    public Task<DataMappingView> SaveDataMappingAsync(SaveDataMappingCommand command, CancellationToken ct = default)
+        => _dispatcher.Send(command, ct);
+
+    public Task<bool> DeleteDataMappingAsync(Guid mappingId, CancellationToken ct = default)
+        => _dispatcher.Send(new DeleteDataMappingCommand(mappingId), ct);
+
+    public Task<IReadOnlyList<DataMappingView>> ListDataMappingsAsync(Guid projectId, CancellationToken ct = default)
+        => _dispatcher.Query(new ListDataMappingsQuery(projectId), ct);
 
     public Task<Ports.ProjectQueryResult> ExecuteProjectDataAsync(Guid projectId, string sql, CancellationToken ct = default)
         => _dispatcher.Send(new ExecuteProjectDataCommand(projectId, sql), ct);

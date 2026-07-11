@@ -27,7 +27,9 @@ public sealed class TriggerSchedulerService : BackgroundService
     // Arbitrary fixed key identifying the schedule-scan advisory lock.
     private const long ScanLockKey = 0x504C4143_4378_7363L; // "PLAC...sc"
     private static readonly TimeSpan ScanInterval = TimeSpan.FromSeconds(20);
-    private static readonly TimeSpan DrainInterval = TimeSpan.FromSeconds(3);
+    // Queue pickup is the first hop of every TUI/trigger run — a short drain tick keeps queued runs
+    // from idling; the claim query is a cheap indexed SKIP LOCKED select, so 1s is safe.
+    private static readonly TimeSpan DrainInterval = TimeSpan.FromSeconds(1);
     private static readonly TimeSpan ReapInterval = TimeSpan.FromMinutes(2);
     private const int ClaimBatch = 16;
 

@@ -146,10 +146,9 @@ public sealed class OnboardHandler : ICommandHandler<OnboardCommand, OnboardResu
 
         ## At session start
         - Call `get_context` and `get_project_overview` to load what's known.
-        - Pull the next task with `next_work_item`; if none, ask what to work on.
 
         ## Before every change (pre-action)
-        - Confirm the change is in scope of the claimed work item and the requirements below.
+        - Confirm the change is in scope of the requirements below.
         - Note your current token usage so you can report the cost of this change afterward.
 
         ## Guardrails — every change must pass these
@@ -161,7 +160,6 @@ public sealed class OnboardHandler : ICommandHandler<OnboardCommand, OnboardResu
         ## After every change (post-action)
         - `record_activity` — rationale, touched items, check deltas, and only the guardrail flags you actually met.
         - `record_usage` — the input/output tokens spent on *this* change, so cost is tracked per change.
-        - `complete_work_item` — mark the work item done.
         - `add_context` / `add_decision` — capture anything durable you learned or decided.
 
         ## Requirements

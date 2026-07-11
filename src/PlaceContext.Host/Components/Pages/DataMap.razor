@@ -1,0 +1,412 @@
+@page "/project/{ProjectId:guid}/datamap"
+@using PlaceContext.Application.Dtos
+@using PlaceContext.Application.Features
+@inject IPlaceContextService Svc
+@inject PortalUiState Ui
+
+<PageTitle>PlaceContext — Data map</PageTitle>
+
+@if (_loading)
+{
+    <div style="padding:24px; color:var(--text-3)">Loading…</div>
+}
+else
+{
+    <div style="padding:20px 24px 40px; max-width:1320px; margin:0 auto">
+
+        <ProjectTabs ProjectId="ProjectId" Active="datamap" />
+
+        <div style="display:flex; align-items:baseline; justify-content:space-between; margin-bottom:18px">
+            <div>
+                <h2 style="font-size:18px; font-weight:600; margin:0">Data map</h2>
+                <div style="font-size:12px; color:var(--text-3); margin-top:3px">
+                    Jobs consolidate into your project tables — every completed run of a mapped job appends
+                    its records to the table, with run provenance.
+                </div>
+            </div>
+            <button class="dcbtn primary" @onclick="@(() => OpenEditor(null))">+ New mapping</button>
+        </div>
+
+        @if (_message is not null)
+        {
+            <div style="margin-bottom:12px; padding:10px 14px; border-radius:8px; background:var(--card); font-size:12.5px; color:var(--text-2)">@_message</div>
+        }
+
+        @* ── The canvas: one consolidation lane per target table ─────────────────────────── *@
+        @if (_mappings is null or { Count: 0 })
+        {
+            <div class="dccard" style="padding:28px; text-align:center; color:var(--text-3); font-size:13px">
+                No mappings yet. A mapping is an edge of the data map: pick a job, a target table, and which
+                fields of the job's result land in which columns — ingestion then runs after every completed run.
+            </div>
+        }
+        else
+        {
+            <div style="display:flex; flex-direction:column; gap:14px">
+                @foreach (var lane in _mappings.GroupBy(m => m.TargetTable, StringComparer.OrdinalIgnoreCase))
+                {
+                    <div class="dccard" style="padding:16px 18px; display:flex; align-items:center; gap:0">
+
+                        @* source job nodes *@
+                        <div style="display:flex; flex-direction:column; gap:8px; flex:1; min-width:0">
+                            @foreach (var m in lane)
+                            {
+                                <div style="display:flex; align-items:center; gap:10px; border:1px solid var(--border); border-radius:9px; padding:9px 12px; background:var(--card-2); cursor:pointer; opacity:@(m.Enabled ? "1" : ".45")"
+                                     @onclick="@(() => OpenEditor(m))" title="Edit mapping">
+                                    <span style="width:8px; height:8px; border-radius:50%; flex:none; background:var(--brand-2)"></span>
+                                    <div style="flex:1; min-width:0">
+                                        <div style="font-size:12.5px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis">@m.JobName</div>
+                                        <div style="font-size:10.5px; color:var(--text-3)">
+                                            @(m.RowsPath is null ? "artifact root" : $"at {m.RowsPath}") · @m.Fields.Count field(s)@(m.Enabled ? "" : " · paused")
+                                        </div>
+                                    </div>
+                                    <span style="font-size:10.5px; font-family:'IBM Plex Mono',monospace; color:var(--brand-2); background:var(--brand-bg); padding:1px 7px; border-radius:5px">@ReturnTypeOf(m.JobId)</span>
+                                </div>
+                            }
+                        </div>
+
+                        @* connector *@
+                        <div style="flex:none; width:64px; display:flex; align-items:center; justify-content:center; color:var(--text-3)">
+                            <svg width="64" height="24" viewBox="0 0 64 24">
+                                <line x1="2" y1="12" x2="52" y2="12" stroke="currentColor" stroke-width="1.5" stroke-dasharray="4 3" />
+                                <path d="M52 6 L62 12 L52 18 Z" fill="currentColor" />
+                            </svg>
+                        </div>
+
+                        @* target table node *@
+                        <div style="flex:1; min-width:0; border:1px solid var(--brand-2); border-radius:10px; padding:12px 14px; background:var(--brand-bg)">
+                            <div style="font-size:13px; font-weight:600; font-family:'IBM Plex Mono',monospace">@lane.Key</div>
+                            <div style="font-size:10.5px; color:var(--text-3); margin-top:2px">
+                                @(TableRows(lane.Key) is { } n ? $"{n:N0} rows · " : "created on first ingest · ")append-only · queryable on the Data tab
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+
+        @* ── Unmapped jobs: the loose leaves of the tree ─────────────────────────────────── *@
+        @if (UnmappedJobs() is { Count: > 0 } unmapped)
+        {
+            <div style="margin-top:22px">
+                <div style="font-size:11px; text-transform:uppercase; letter-spacing:.5px; color:var(--text-3); margin-bottom:8px">Unmapped jobs</div>
+                <div style="display:flex; flex-wrap:wrap; gap:8px">
+                    @foreach (var job in unmapped)
+                    {
+                        <button class="dcbtn" style="font-size:12px" @onclick="@(() => OpenEditorForJob(job))">@job.Name → map…</button>
+                    }
+                </div>
+            </div>
+        }
+    </div>
+}
+
+@* ── Mapping editor slide-out ─────────────────────────────────────────────────────────── *@
+@if (_showEditor)
+{
+    <div class="dcslide-scrim" @onclick="CloseEditor"></div>
+    <div class="dcslide" style="width:560px">
+        <div class="dcslide-head">
+            <div style="flex:1">
+                <div style="font-size:14px; font-weight:600">@(_editId.HasValue ? "Edit mapping" : "New mapping")</div>
+                <div style="font-size:11.5px; color:var(--text-3); margin-top:3px">Job result → project table, after every completed run.</div>
+            </div>
+            <button class="dcslide-x" @onclick="CloseEditor">×</button>
+        </div>
+        <div class="dcslide-body" style="flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:14px">
+
+            <div class="dcfield">
+                <label>Source job <span class="req">*</span></label>
+                <select class="dcinput" @bind="_edJobId">
+                    <option value="@Guid.Empty">— pick a job —</option>
+                    @foreach (var j in _jobs ?? Array.Empty<JobView>())
+                    {
+                        <option value="@j.Id">@j.Name (@j.ReturnType)</option>
+                    }
+                </select>
+            </div>
+
+            <div style="display:flex; gap:10px">
+                <div class="dcfield" style="flex:1">
+                    <label>Target table <span class="req">*</span></label>
+                    <input class="dcinput" @bind="_edTable" list="pc-datamap-tables" placeholder="listings" />
+                    <datalist id="pc-datamap-tables">
+                        @foreach (var t in _tables ?? Array.Empty<PlaceContext.Application.Ports.ProjectTableInfo>())
+                        {
+                            <option value="@t.Name" />
+                        }
+                    </datalist>
+                </div>
+                <div class="dcfield" style="flex:1">
+                    <label>Records at <span class="code" style="margin-left:5px">dot path, blank = root</span></label>
+                    <input class="dcinput" @bind="_edRowsPath" placeholder="rows" />
+                </div>
+            </div>
+
+            <div class="dcfield">
+                <div style="display:flex; align-items:center; justify-content:space-between">
+                    <label>Fields</label>
+                    <div style="display:flex; gap:6px">
+                        <button class="dcbtn" style="padding:3px 9px; font-size:11px" @onclick="SuggestFields"
+                                disabled="@(_edJobId == Guid.Empty)" title="Prefill from the job's latest run result">
+                            @(_suggesting ? "Reading last run…" : "Suggest from last run")
+                        </button>
+                        <button class="dcbtn" style="padding:3px 9px; font-size:11px" @onclick="AddField">+ field</button>
+                    </div>
+                </div>
+                <div style="display:flex; flex-direction:column; gap:6px; margin-top:6px">
+                    @for (var i = 0; i < _edFields.Count; i++)
+                    {
+                        var idx = i;
+                        <div style="display:flex; gap:6px; align-items:center">
+                            <input class="dcinput" style="flex:1.2; font-size:12px" placeholder="source path (e.g. price)"
+                                   @bind="_edFields[idx].SourcePath" />
+                            <span style="color:var(--text-3); flex:none">→</span>
+                            <input class="dcinput" style="flex:1; font-size:12px; font-family:'IBM Plex Mono',monospace" placeholder="column"
+                                   @bind="_edFields[idx].Column" />
+                            <select class="dcinput" style="flex:none; width:110px; font-size:12px" @bind="_edFields[idx].Type">
+                                @foreach (var t in ColumnTypes)
+                                {
+                                    <option value="@t">@t</option>
+                                }
+                            </select>
+                            <button class="dcbtn" style="padding:3px 8px; flex:none" title="Remove field" @onclick="@(() => _edFields.RemoveAt(idx))">×</button>
+                        </div>
+                    }
+                    @if (_edFields.Count == 0)
+                    {
+                        <div style="font-size:11.5px; color:var(--text-3)">No fields yet — add one, or suggest them from the job's latest run.</div>
+                    }
+                </div>
+            </div>
+
+            <label style="display:flex; align-items:center; gap:8px; font-size:12.5px; color:var(--text-2); cursor:pointer; user-select:none">
+                <input type="checkbox" @bind="_edEnabled" style="width:15px; height:15px; accent-color:var(--brand-2); cursor:pointer" />
+                Enabled — ingest after every completed run
+            </label>
+
+            <div class="dchint">
+                The table is created on first ingest as an append-only system table with
+                <code>ingested_at</code> and <code>run_id</code> provenance columns, queryable from the Data tab.
+            </div>
+        </div>
+        <div class="dcslide-foot">
+            @if (_editorError is not null)
+            {
+                <div style="flex:1; color:var(--bad); font-size:12px; min-width:0">@_editorError</div>
+            }
+            @if (_editId.HasValue)
+            {
+                <button class="dcbtn" style="color:var(--bad)" disabled="@_saving" @onclick="DeleteMapping">Delete</button>
+            }
+            <button class="dcbtn" @onclick="CloseEditor">Cancel</button>
+            <button class="dcbtn primary" disabled="@_saving" @onclick="SaveMapping">
+                @(_saving ? "Saving…" : _editId.HasValue ? "Save changes" : "Create mapping")
+            </button>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public Guid ProjectId { get; set; }
+
+    private static readonly string[] ColumnTypes = { "text", "integer", "bigint", "numeric", "boolean", "timestamptz", "date", "uuid", "jsonb" };
+
+    private IReadOnlyList<DataMappingView>? _mappings;
+    private IReadOnlyList<JobView>? _jobs;
+    private IReadOnlyList<PlaceContext.Application.Ports.ProjectTableInfo>? _tables;
+    private string? _message;
+    private bool _loading = true;
+
+    // ── Editor state ──────────────────────────────────────────────────────────────────────────────
+    private bool _showEditor;
+    private bool _saving;
+    private bool _suggesting;
+    private Guid? _editId;
+    private Guid _edJobId;
+    private string _edTable = "";
+    private string _edRowsPath = "";
+    private bool _edEnabled = true;
+    private string? _editorError;
+    private readonly List<FieldEdit> _edFields = new();
+
+    private sealed class FieldEdit
+    {
+        public string SourcePath = "";
+        public string Column = "";
+        public string Type = "text";
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _loading = true;
+        try
+        {
+            await ReloadAsync();
+            Ui.Set("Data map", "job results → project tables");
+        }
+        catch (Exception ex) { _message = ex.Message; }
+        finally { _loading = false; }
+    }
+
+    private async Task ReloadAsync()
+    {
+        _mappings = await Svc.ListDataMappingsAsync(ProjectId);
+        _jobs = await Svc.ListJobsAsync(ProjectId);
+        try { _tables = await Svc.ListProjectDataTablesAsync(ProjectId); }
+        catch { _tables = Array.Empty<PlaceContext.Application.Ports.ProjectTableInfo>(); }
+    }
+
+    private string ReturnTypeOf(Guid jobId)
+        => _jobs?.FirstOrDefault(j => j.Id == jobId)?.ReturnType.ToString() ?? "?";
+
+    private long? TableRows(string table)
+        => _tables?.FirstOrDefault(t => string.Equals(t.Name, table, StringComparison.OrdinalIgnoreCase))?.RowEstimate;
+
+    private IReadOnlyList<JobView> UnmappedJobs()
+        => (_jobs ?? Array.Empty<JobView>())
+            .Where(j => _mappings?.All(m => m.JobId != j.Id) ?? true)
+            .ToList();
+
+    // ── Editor ────────────────────────────────────────────────────────────────────────────────────
+
+    private void OpenEditorForJob(JobView job)
+    {
+        OpenEditor(null);
+        _edJobId = job.Id;
+        _edTable = Sanitize(job.Name);
+    }
+
+    private void OpenEditor(DataMappingView? m)
+    {
+        _editId = m?.Id;
+        _edJobId = m?.JobId ?? Guid.Empty;
+        _edTable = m?.TargetTable ?? "";
+        _edRowsPath = m?.RowsPath ?? "";
+        _edEnabled = m?.Enabled ?? true;
+        _edFields.Clear();
+        if (m is not null)
+            _edFields.AddRange(m.Fields.Select(f => new FieldEdit { SourcePath = f.SourcePath, Column = f.Column, Type = f.Type }));
+        _editorError = null;
+        _showEditor = true;
+    }
+
+    private void CloseEditor()
+    {
+        _showEditor = false;
+        _editorError = null;
+    }
+
+    private void AddField() => _edFields.Add(new FieldEdit());
+
+    private async Task SaveMapping()
+    {
+        _editorError = null;
+        if (_edJobId == Guid.Empty) { _editorError = "Pick a source job."; return; }
+        if (string.IsNullOrWhiteSpace(_edTable)) { _editorError = "Target table is required."; return; }
+        var fields = _edFields
+            .Where(f => !string.IsNullOrWhiteSpace(f.SourcePath) || !string.IsNullOrWhiteSpace(f.Column))
+            .Select(f => new DataFieldDto(f.SourcePath.Trim(), f.Column.Trim(), f.Type))
+            .ToList();
+        if (fields.Count == 0) { _editorError = "Add at least one field."; return; }
+
+        _saving = true;
+        try
+        {
+            await Svc.SaveDataMappingAsync(new SaveDataMappingCommand(
+                ProjectId, _edJobId, _edTable.Trim(),
+                string.IsNullOrWhiteSpace(_edRowsPath) ? null : _edRowsPath.Trim(),
+                fields, _edEnabled, _editId));
+            await ReloadAsync();
+            _showEditor = false;
+        }
+        catch (Exception ex) { _editorError = ex.Message; }
+        finally { _saving = false; }
+    }
+
+    private async Task DeleteMapping()
+    {
+        if (_editId is not { } id) return;
+        _saving = true;
+        try
+        {
+            await Svc.DeleteDataMappingAsync(id);
+            await ReloadAsync();
+            _showEditor = false;
+        }
+        catch (Exception ex) { _editorError = ex.Message; }
+        finally { _saving = false; }
+    }
+
+    // ── Field suggestion from the job's latest run ────────────────────────────────────────────────
+
+    private async Task SuggestFields()
+    {
+        if (_edJobId == Guid.Empty) return;
+        _suggesting = true;
+        _editorError = null;
+        try
+        {
+            var runs = await Svc.ListJobRunsAsync(_edJobId);
+            var last = runs.FirstOrDefault(r => r.Status is "Succeeded" or "Partial") ?? runs.FirstOrDefault();
+            if (last is null) { _editorError = "This job has no runs yet — run it once, then suggest."; return; }
+            var detail = await Svc.GetJobRunAsync(last.Id);
+            var artifact = detail?.ReduceResult?.Artifact
+                ?? detail?.ShardResults.FirstOrDefault(s => !string.IsNullOrWhiteSpace(s.Artifact))?.Artifact;
+            if (string.IsNullOrWhiteSpace(artifact)) { _editorError = "The latest run has no result to sample."; return; }
+
+            using var doc = System.Text.Json.JsonDocument.Parse(artifact);
+            var el = doc.RootElement;
+
+            // Follow the declared records path; else auto-detect: root array, or the first array property.
+            if (!string.IsNullOrWhiteSpace(_edRowsPath))
+            {
+                foreach (var seg in _edRowsPath.Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                {
+                    if (el.ValueKind != System.Text.Json.JsonValueKind.Object || !el.TryGetProperty(seg, out el))
+                    { _editorError = $"Path '{_edRowsPath}' not found in the latest result."; return; }
+                }
+            }
+            else if (el.ValueKind == System.Text.Json.JsonValueKind.Object)
+            {
+                var firstArray = el.EnumerateObject().FirstOrDefault(p => p.Value.ValueKind == System.Text.Json.JsonValueKind.Array);
+                if (firstArray.Value.ValueKind == System.Text.Json.JsonValueKind.Array)
+                {
+                    _edRowsPath = firstArray.Name;
+                    el = firstArray.Value;
+                }
+            }
+
+            var sample = el.ValueKind == System.Text.Json.JsonValueKind.Array
+                ? el.EnumerateArray().FirstOrDefault()
+                : el;
+            if (sample.ValueKind != System.Text.Json.JsonValueKind.Object)
+            { _editorError = "Couldn't find a record object to sample in the latest result."; return; }
+
+            _edFields.Clear();
+            foreach (var p in sample.EnumerateObject())
+                _edFields.Add(new FieldEdit { SourcePath = p.Name, Column = Sanitize(p.Name), Type = InferType(p.Value) });
+        }
+        catch (Exception ex) { _editorError = $"Couldn't sample the latest run: {ex.Message}"; }
+        finally { _suggesting = false; }
+    }
+
+    private static string InferType(System.Text.Json.JsonElement v) => v.ValueKind switch
+    {
+        System.Text.Json.JsonValueKind.Number => v.TryGetInt64(out _) ? "bigint" : "numeric",
+        System.Text.Json.JsonValueKind.True or System.Text.Json.JsonValueKind.False => "boolean",
+        System.Text.Json.JsonValueKind.Object or System.Text.Json.JsonValueKind.Array => "jsonb",
+        System.Text.Json.JsonValueKind.String when DateTimeOffset.TryParse(v.GetString(), out _) => "timestamptz",
+        _ => "text",
+    };
+
+    // Table/column identifiers: letters, digits, underscores; no leading digit.
+    private static string Sanitize(string name)
+    {
+        var s = new string(name.Trim().ToLowerInvariant()
+            .Select(c => char.IsLetterOrDigit(c) ? c : '_').ToArray()).Trim('_');
+        if (s.Length == 0) s = "col";
+        if (char.IsDigit(s[0])) s = "_" + s;
+        return s.Length > 63 ? s[..63] : s;
+    }
+}

@@ -13,7 +13,7 @@
             <div style="display:flex; align-items:start; gap:8px">
                 <div style="flex:1; min-width:0">
                     <div style="font-size:12.5px; font-weight:600; word-break:break-all">@ShortLabel(sel.Label)</div>
-                    <div style="font-size:10.5px; color:var(--text-3); font-family:'Geist Mono',monospace; word-break:break-all; margin-top:2px">@sel.Id</div>
+                    <div style="font-size:10.5px; color:var(--text-3); font-family:'IBM Plex Mono',monospace; word-break:break-all; margin-top:2px">@sel.Id</div>
                 </div>
                 <button class="dcbtn" style="padding:1px 7px; font-size:11px; flex:none" @onclick="ClearAsync">×</button>
             </div>
@@ -35,7 +35,7 @@
                 <div style="display:flex; flex-direction:column; gap:3px">
                     @foreach (var (node, ambiguous) in _selectedNeighbors)
                     {
-                        <button style="border:none; background:none; padding:2px 0; cursor:pointer; text-align:left; font-size:11.5px; font-family:'Geist Mono',monospace; color:var(--brand-2); word-break:break-all"
+                        <button style="border:none; background:none; padding:2px 0; cursor:pointer; text-align:left; font-size:11.5px; font-family:'IBM Plex Mono',monospace; color:var(--brand-2); word-break:break-all"
                                 title="@node.Id" @onclick="@(() => SelectAsync(node.Id))">
                             @ShortLabel(node.Label)@(ambiguous ? " ⇢" : "")
                         </button>

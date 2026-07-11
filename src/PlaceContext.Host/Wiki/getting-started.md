@@ -88,7 +88,7 @@ The left-hand nav holds the platform-wide pages:
 | **Wiki** | This documentation |
 | **MCP Inspector** | Watch, live, every action an AI agent takes |
 
-Open any project and you also get its own pages: a **work board**, **Jobs**, **Data** (the
+Open any project and you also get its own pages: **Jobs**, **Data** (the
 project's own database), and a **Vault** for its secrets.
 
 ## The operator console: `pctl tui`

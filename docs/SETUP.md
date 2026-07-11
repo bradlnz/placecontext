@@ -18,7 +18,6 @@ The fastest path is the guided wizard, which walks every step in this guide inte
 | **PlaceContext Host** | Portal (Blazor) + MCP server (Streamable HTTP at `/mcp`) + schedulers, 2 replicas |
 | **PostgreSQL (pgvector)** | The platform store — projects, ledger, jobs, charts, SMS, embeddings (RAG) |
 | **MinIO** | Object store for run artifacts (reports/charts/CSVs) + nightly DB dumps |
-| **Ollama (Gemma)** | Local LLM for analytics charts, report polish, and the project agent — no external API |
 | **Docker-in-Docker** | The per-project application runtime (portal **Runtime** tab) |
 | **k3d / k3s** | The cluster: k3d for one-machine dev, k3s for a real fleet |
 
@@ -86,7 +85,7 @@ A real 1-server + 2-agent k3s cluster in Docker — multi-node without VMs.
 Portal + MCP: <http://localhost:7700/>. First sign-in creates the tenant.
 
 Hacking on PlaceContext itself? `./run.sh` runs the Host directly against a Docker Postgres —
-but jobs, the DinD runtime, MinIO, and Ollama features need the cluster.
+but jobs, the DinD runtime, and MinIO features need the cluster.
 
 ---
 
@@ -156,7 +155,7 @@ never lose them.
 | **Event ingest webhook** | `PlaceContext:Ingest:Key` | External systems `POST /ingest/{event}` with `X-Ingest-Key`; disabled until set |
 | **Inbound SMS gateway** | `PlaceContext:Sms:InboundKey` | Twilio form posts or JSON to `POST /sms/inbound?key=…`; sender+body encrypted at rest; emits `sms.received` |
 | **GitHub import** | `PlaceContext:GitHub:ClientId` / `ClientSecret` | OAuth app; callback `{host}/auth/github/callback` |
-| **LLM provider** | `PlaceContext:Llm:Provider` | `ollama` (default in-cluster, private) or `anthropic` + `ApiKey` |
+| **LLM provider** | `PlaceContext:Llm:Provider` | `none` (default — the jobs pipeline is deterministic) or `anthropic` + `ApiKey` for report polish |
 | **App runtime** | `PlaceContext:Runtime:DockerEndpoint` / `AppHost` | Pre-wired to the bundled DinD in the manifests |
 
 ---

@@ -40,7 +40,7 @@
                 <div class="dccard" style="padding:8px 10px; margin-bottom:6px">
                     <div style="display:flex; justify-content:space-between; align-items:baseline; cursor:pointer"
                          @onclick="@(() => SelectTableAsync(t.Name))" title="SELECT the first rows">
-                        <span style="font-size:12px; font-family:'Geist Mono',monospace">@t.Name</span>
+                        <span style="font-size:12px; font-family:'IBM Plex Mono',monospace">@t.Name</span>
                         <span style="font-size:10.5px; color:var(--text-3)">
                             @if (t.ReadOnly)
                             {
@@ -64,7 +64,7 @@
                     @if (_renaming == t.Name)
                     {
                         <div style="display:flex; gap:6px; margin-top:6px">
-                            <input @bind="_renameTo" @bind:event="oninput" placeholder="new name" style="flex:1; min-width:0; padding:4px 7px; font-size:11.5px; background:var(--bg); border:1px solid var(--border); border-radius:5px; color:var(--text); font-family:'Geist Mono',monospace" />
+                            <input @bind="_renameTo" @bind:event="oninput" placeholder="new name" style="flex:1; min-width:0; padding:4px 7px; font-size:11.5px; background:var(--bg); border:1px solid var(--border); border-radius:5px; color:var(--text); font-family:'IBM Plex Mono',monospace" />
                             <button class="dcbtn" style="padding:3px 8px; font-size:11px" @onclick="ConfirmRename">✓</button>
                             <button class="dcbtn" style="padding:3px 8px; font-size:11px" @onclick="@(() => _renaming = null)">✕</button>
                         </div>
@@ -124,7 +124,7 @@
                                 <tr>
                                     @foreach (var cell in row)
                                     {
-                                        <td style="padding:6px 10px; border-bottom:1px solid var(--border); font-family:'Geist Mono',monospace; color:@(cell is null ? "var(--text-3)" : "var(--text-2)"); white-space:nowrap; max-width:340px; overflow:hidden; text-overflow:ellipsis">
+                                        <td style="padding:6px 10px; border-bottom:1px solid var(--border); font-family:'IBM Plex Mono',monospace; color:@(cell is null ? "var(--text-3)" : "var(--text-2)"); white-space:nowrap; max-width:340px; overflow:hidden; text-overflow:ellipsis">
                                             @(cell ?? "∅")
                                         </td>
                                     }
@@ -150,7 +150,7 @@
         <div style="padding:16px 18px">
             <label style="display:block; font-size:11.5px; color:var(--text-3); margin-bottom:4px">Table name</label>
             <input @bind="_newTable.Name" @bind:event="oninput" placeholder="e.g. readings"
-                   style="width:100%; padding:8px 10px; margin-bottom:14px; background:var(--bg); border:1px solid var(--border); border-radius:7px; color:var(--text); font-family:'Geist Mono',monospace" />
+                   style="width:100%; padding:8px 10px; margin-bottom:14px; background:var(--bg); border:1px solid var(--border); border-radius:7px; color:var(--text); font-family:'IBM Plex Mono',monospace" />
 
             <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px">
                 <span style="font-size:11.5px; color:var(--text-3)">Columns</span>
@@ -165,7 +165,7 @@
                 var idx = i;
                 <div style="display:grid; grid-template-columns:1fr 130px 52px 52px 24px; gap:6px; align-items:center; margin-bottom:6px">
                     <input @bind="col.Name" @bind:event="oninput" placeholder="column"
-                           style="padding:6px 8px; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); font-family:'Geist Mono',monospace; font-size:12px" />
+                           style="padding:6px 8px; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); font-family:'IBM Plex Mono',monospace; font-size:12px" />
                     <select @bind="col.Type" style="padding:6px 8px; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:12px">
                         @foreach (var t in ColumnTypes) { <option value="@t">@t</option> }
                     </select>
@@ -193,7 +193,7 @@
     <div class="dcslide-scrim" @onclick="CloseEdit"></div>
     <div class="dcslide" style="width:560px">
         <div class="dcslide-head">
-            <span style="font-size:13px; font-weight:600">Edit table — <span style="font-family:'Geist Mono',monospace">@_editTable</span></span>
+            <span style="font-size:13px; font-weight:600">Edit table — <span style="font-family:'IBM Plex Mono',monospace">@_editTable</span></span>
             <button class="dcslide-x" @onclick="CloseEdit">×</button>
         </div>
         <div style="padding:16px 18px">
@@ -203,7 +203,7 @@
             @foreach (var col in _editColumns)
             {
                 <div style="display:grid; grid-template-columns:1fr 170px 52px 34px 60px; gap:6px; align-items:center; margin-bottom:6px; font-size:12px">
-                    <span style="font-family:'Geist Mono',monospace; overflow:hidden; text-overflow:ellipsis">@col.Name</span>
+                    <span style="font-family:'IBM Plex Mono',monospace; overflow:hidden; text-overflow:ellipsis">@col.Name</span>
                     <span style="color:var(--text-2)">@col.Type</span>
                     <span style="text-align:center; color:var(--text-3)">@(col.NotNull ? "✓" : "")</span>
                     <span style="text-align:center; color:var(--text-3)">@(col.PrimaryKey ? "🔑" : "")</span>
@@ -229,7 +229,7 @@
             <div style="font-size:11.5px; color:var(--text-3); margin-bottom:6px">Add a column</div>
             <div style="display:grid; grid-template-columns:1fr 170px 52px 94px; gap:6px; align-items:center">
                 <input @bind="_addCol.Name" @bind:event="oninput" placeholder="column"
-                       style="padding:6px 8px; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); font-family:'Geist Mono',monospace; font-size:12px" />
+                       style="padding:6px 8px; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); font-family:'IBM Plex Mono',monospace; font-size:12px" />
                 <select @bind="_addCol.Type" style="padding:6px 8px; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:12px">
                     @foreach (var t in ColumnTypes) { <option value="@t">@t</option> }
                 </select>

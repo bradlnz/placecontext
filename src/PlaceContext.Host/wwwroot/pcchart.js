@@ -52,7 +52,7 @@ window.pcchart = (function () {
   }
 
   function config(spec, t) {
-    const font = { family: "'Geist', system-ui, sans-serif", size: 11 };
+    const font = { family: "'IBM Plex Sans', system-ui, sans-serif", size: 11 };
     const many = spec.type === 'pie' || spec.series.length > 1; // one series needs no legend — the title names it
     return {
       type: spec.type === 'pie' ? 'doughnut' : spec.type,

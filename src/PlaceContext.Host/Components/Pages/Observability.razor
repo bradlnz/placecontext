@@ -1,7 +1,9 @@
 @page "/observability"
+@implements IDisposable
 @inject IPlaceContextService Svc
 @inject PortalUiState Ui
 @inject NavigationManager Nav
+@inject PlaceContext.Infrastructure.Operations.OperationCenter OpCenter
 
 <PageTitle>PlaceContext — Observability</PageTitle>
 
@@ -59,12 +61,12 @@ else
                                     ✓ @run.ShardResults.Count(s => s.Outcome == "Succeeded")
                                     @(run.ShardResults.Any(s => s.Outcome == "Failed") ? $" ✗ {run.ShardResults.Count(s => s.Outcome == "Failed")}" : "")
                                 </span>
-                                <span style="font-family:'Geist Mono',monospace; font-size:11.5px; color:var(--text-2)">
+                                <span style="font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:var(--text-2)">
                                     @run.StartedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")
                                 </span>
                                 @if (run.FinishedAt.HasValue)
                                 {
-                                    <span style="font-size:11px; color:var(--text-3); font-family:'Geist Mono',monospace; width:52px; text-align:right">
+                                    <span style="font-size:11px; color:var(--text-3); font-family:'IBM Plex Mono',monospace; width:52px; text-align:right">
                                         @FormatDuration(run.StartedAt, run.FinishedAt.Value)
                                     </span>
                                 }
@@ -133,7 +135,7 @@ else
                     </div>
                     @if (shard.Artifact is not null)
                     {
-                        <pre style="background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:10px; font-size:11px; font-family:'Geist Mono',monospace; overflow-x:auto; white-space:pre-wrap; word-break:break-all; color:var(--text-2); max-height:240px; overflow-y:auto">@PrettyJson(shard.Artifact)</pre>
+                        <pre style="background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:10px; font-size:11px; font-family:'IBM Plex Mono',monospace; overflow-x:auto; white-space:pre-wrap; word-break:break-all; color:var(--text-2); max-height:240px; overflow-y:auto">@PrettyJson(shard.Artifact)</pre>
                         @if (ArtifactChart.TrySvg(shard.Artifact, out var shardChart))
                         {
                             <div style="font-size:11px; color:var(--text-3); margin-top:8px">chart <span style="color:var(--text-3)">(from the artifact's JSON)</span></div>
@@ -154,7 +156,7 @@ else
                     {
                         <details style="margin-top:4px" open="@(shard.Outcome == "Failed")">
                             <summary style="font-size:11px; color:var(--text-3); cursor:pointer">Log</summary>
-                            <pre style="font-size:10.5px; font-family:'Geist Mono',monospace; color:var(--text-3); white-space:pre-wrap; margin-top:4px; max-height:320px; overflow-y:auto">@shard.Log</pre>
+                            <pre style="font-size:10.5px; font-family:'IBM Plex Mono',monospace; color:var(--text-3); white-space:pre-wrap; margin-top:4px; max-height:320px; overflow-y:auto">@shard.Log</pre>
                         </details>
                     }
                 </div>
@@ -173,13 +175,13 @@ else
                     </div>
                     @if (reduce.Artifact is not null)
                     {
-                        <pre style="background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:10px; font-size:11px; font-family:'Geist Mono',monospace; overflow-x:auto; white-space:pre-wrap; word-break:break-all; color:var(--text-2); max-height:300px; overflow-y:auto">@PrettyJson(reduce.Artifact)</pre>
+                        <pre style="background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:10px; font-size:11px; font-family:'IBM Plex Mono',monospace; overflow-x:auto; white-space:pre-wrap; word-break:break-all; color:var(--text-2); max-height:300px; overflow-y:auto">@PrettyJson(reduce.Artifact)</pre>
                     }
                     @if (!string.IsNullOrWhiteSpace(reduce.Log))
                     {
                         <details style="margin-top:4px">
                             <summary style="font-size:11px; color:var(--text-3); cursor:pointer">Log</summary>
-                            <pre style="font-size:10.5px; font-family:'Geist Mono',monospace; color:var(--text-3); white-space:pre-wrap; margin-top:4px; max-height:320px; overflow-y:auto">@reduce.Log</pre>
+                            <pre style="font-size:10.5px; font-family:'IBM Plex Mono',monospace; color:var(--text-3); white-space:pre-wrap; margin-top:4px; max-height:320px; overflow-y:auto">@reduce.Log</pre>
                         </details>
                     }
                 </div>
@@ -198,10 +200,35 @@ else
 
     protected override async Task OnInitializedAsync()
     {
+        OpCenter.Changed += OnOpsChanged;
         await RefreshAsync();
         Ui.Set("Observability", "cross-project job history");
         _loading = false;
+
+        // Deep link from the dashboard: /observability?run={id} opens that run's detail directly.
+        var query = System.Web.HttpUtility.ParseQueryString(new Uri(Nav.Uri).Query);
+        if (Guid.TryParse(query["run"], out var runId)
+            && _reports?.FirstOrDefault(r => r.Run.Id == runId) is { } target)
+            await OpenRun(target);
     }
+
+    // Run/chain transitions land in the OperationCenter on a short tick — refresh the history
+    // live so runs appear and flip to terminal status without a manual reload.
+    private void OnOpsChanged() => _ = InvokeAsync(async () =>
+    {
+        if (_refreshing) return;
+        _refreshing = true;
+        try
+        {
+            await RefreshAsync();
+            StateHasChanged();
+        }
+        finally { _refreshing = false; }
+    });
+
+    private bool _refreshing;
+
+    public void Dispose() => OpCenter.Changed -= OnOpsChanged;
 
     private async Task RefreshAsync()
     {

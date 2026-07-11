@@ -99,9 +99,6 @@ apply_manifests() {
   say "Nightly DB dump (retention-pruned)…"
   kube -n "$PCTL_NAMESPACE" apply -f "$K3S_DIR/pg-backup.yaml"
 
-  say "Ollama + Gemma (local LLM)…"
-  kube -n "$PCTL_NAMESPACE" apply -f "$K3S_DIR/ollama.yaml"
-
   say "PlaceContext Host (image: $image)…"
   sed -e "s|__IMAGE__|${image}|g" \
     "$K3S_DIR/placecontext.yaml" | kube -n "$PCTL_NAMESPACE" apply -f -

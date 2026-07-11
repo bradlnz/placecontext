@@ -34,6 +34,7 @@ internal static class JobViewMapper
         AllowNetworkEgress: job.AllowNetworkEgress,
         Parameters: job.Parameters.Select(p => new JobParameterDto(p.Name, p.Label, p.Required)).ToList(),
         PostJobActions: job.PostJobActions.ToList(),
+        ReturnType: job.ReturnType,
         CreatedAt: job.CreatedAt,
         UpdatedAt: job.UpdatedAt);
 

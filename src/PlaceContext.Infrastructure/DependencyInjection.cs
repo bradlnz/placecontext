@@ -55,7 +55,6 @@ public static class DependencyInjection
         services.AddScoped<IProjectContextRepository, EfProjectContextRepository>();
         services.AddScoped<IRequirementsRepository, EfRequirementsRepository>();
         services.AddScoped<IUsageRepository, EfUsageRepository>();
-        services.AddScoped<IWorkItemRepository, EfWorkItemRepository>();
         services.AddScoped<IReportTemplateRepository, EfReportTemplateRepository>();
 
         // Git, metrics, skill scaffolding.
@@ -69,26 +68,18 @@ public static class DependencyInjection
         services.AddSingleton<IGitHubGateway, GitHub.GitHubGateway>();
         services.AddSingleton<ICodeWorkspace, Git.CodeWorkspace>();
 
-        // LLM gateway (report polish + job-output organization). Provider-configurable:
-        //   PlaceContext:Llm:Provider = "anthropic" | "ollama" | "none".
+        // LLM gateway (report polish only — the jobs pipeline is fully deterministic).
+        //   PlaceContext:Llm:Provider = "anthropic" | "none".
         // When unset, default to anthropic if an API key is present, else none (back-compat).
         var hasLlmKey = !string.IsNullOrWhiteSpace(configuration["PlaceContext:Llm:ApiKey"]);
         var llmProvider = (configuration["PlaceContext:Llm:Provider"] ?? "").Trim().ToLowerInvariant();
         if (string.IsNullOrEmpty(llmProvider))
             llmProvider = hasLlmKey ? "anthropic" : "none";
 
-        switch (llmProvider)
-        {
-            case "anthropic":
-                services.AddSingleton<ILlmGateway, Llm.AnthropicLlmGateway>();
-                break;
-            case "ollama":
-                services.AddSingleton<ILlmGateway, Llm.OllamaLlmGateway>();
-                break;
-            default:
-                services.AddSingleton<ILlmGateway, Llm.NullLlmGateway>();
-                break;
-        }
+        if (llmProvider == "anthropic")
+            services.AddSingleton<ILlmGateway, Llm.AnthropicLlmGateway>();
+        else
+            services.AddSingleton<ILlmGateway, Llm.NullLlmGateway>();
 
         // Risk strategies behind a factory (domain scorers come from AddApplication()).
         services.AddScoped<IRiskCalculator, TechnicalRiskCalculator>();
@@ -119,20 +110,19 @@ public static class DependencyInjection
         services.AddScoped<IJobRepository, EfJobRepository>();
         services.AddScoped<IJobRunRepository, EfJobRunRepository>();
 
+        // Data map (declarative job-result → project-table ingestion rules).
+        services.AddScoped<IDataMappingRepository, EfDataMappingRepository>();
+
         // Trigger + event repositories.
         services.AddScoped<IJobTriggerRepository, EfJobTriggerRepository>();
         services.AddScoped<IJobChainRepository, EfJobChainRepository>();
         services.AddScoped<IChainRunRepository, EfChainRunRepository>();
         services.AddScoped<IEventRepository, EfEventRepository>();
 
-        // Embeddings, in priority order: Voyage AI when a key is configured; else a local Ollama embedding
-        // model when PlaceContext:Embeddings:Provider=ollama (in-cluster, no external key); else a no-op.
+        // Embeddings: Voyage AI when a key is configured, else a no-op.
         // The pgvector-backed run-embedding store self-initializes lazily and degrades if unavailable.
-        var embedProvider = (configuration["PlaceContext:Embeddings:Provider"] ?? "").Trim().ToLowerInvariant();
         if (!string.IsNullOrWhiteSpace(configuration["PlaceContext:Voyage:ApiKey"]))
             services.AddSingleton<IEmbeddingGateway, Embeddings.VoyageEmbeddingGateway>();
-        else if (embedProvider == "ollama")
-            services.AddSingleton<IEmbeddingGateway, Embeddings.OllamaEmbeddingGateway>();
         else
             services.AddSingleton<IEmbeddingGateway, Embeddings.NullEmbeddingGateway>();
         services.AddScoped<IRunEmbeddingRepository, EfRunEmbeddingRepository>();
@@ -143,12 +133,8 @@ public static class DependencyInjection
         services.AddScoped<IJobRunQueue, Scheduling.DbJobRunQueue>();
         services.AddHostedService<Scheduling.TriggerSchedulerService>();
 
-        // The per-project agent: on an interval, reviews each project (local Ollama LLM when
-        // configured, deterministic signals otherwise) and queues "what to do next" as work items.
-        services.AddHostedService<Scheduling.ProjectAgentSchedulerService>();
-
         // Background portal operations (the notifications-pane ledger) + the analytics chart sweep
-        // worker (local-LLM generation takes minutes; the portal only enqueues and reads stored charts).
+        // worker (generation can be slow; the portal only enqueues and reads stored charts).
         services.AddSingleton<Operations.OperationCenter>();
         services.AddSingleton<Scheduling.AnalyticsRefreshQueue>();
         services.AddHostedService<Scheduling.AnalyticsWorkerService>();

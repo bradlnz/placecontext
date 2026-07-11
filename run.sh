@@ -10,7 +10,6 @@
 #   ./run.sh                 # full setup + run on port 7700
 #   PORT=7710 ./run.sh       # run on a different port (e.g. when the k3d
 #                            # dev cluster's load balancer holds 7700)
-#   ./run.sh --with-ollama   # also install Ollama + pull the local Gemma model
 #
 set -euo pipefail
 
