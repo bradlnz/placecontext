@@ -2,6 +2,7 @@
 @layout MainLayout
 @implements IDisposable
 @inject NavigationManager Nav
+@inject IPlaceContextService Svc
 
 @* The project area: a vertical menu on the left (replacing the old horizontal tab strip),
    second-level strips (like Data's Tables | Analytics | Data map) stay inside the pages. *@
@@ -14,6 +15,18 @@
                     @onclick="@(() => Nav.NavigateTo(UrlFor(item)))">
                 <span class="bar"></span>@item.Label
             </button>
+        }
+        @if (_entities.Count > 0)
+        {
+            <div style="font-size:10px; font-weight:600; letter-spacing:.7px; color:var(--text-3); padding:14px 10px 6px; text-transform:uppercase">Business</div>
+            @foreach (var e in _entities)
+            {
+                <button class="dcnav @(Nav.Uri.Contains($"/entity/{Uri.EscapeDataString(e)}", StringComparison.OrdinalIgnoreCase) ? "active" : "")"
+                        style="border:none; width:100%"
+                        @onclick="@(() => Nav.NavigateTo($"/project/{ProjectId()}/entity/{Uri.EscapeDataString(e)}"))">
+                    <span class="bar"></span>@e
+                </button>
+            }
         }
     </nav>
     <div style="flex:1; min-width:0; overflow-y:auto">
@@ -68,8 +81,27 @@
         return afterProject.Length == 0;
     }
 
-    protected override void OnInitialized() => Nav.LocationChanged += OnMoved;
+    // Tagged entities surface as custom menu items — the business views of ingested data.
+    private IReadOnlyList<string> _entities = Array.Empty<string>();
+    private Guid? _entitiesFor;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Nav.LocationChanged += OnMoved;
+        await LoadEntitiesAsync();
+    }
+
+    private async Task LoadEntitiesAsync()
+    {
+        var pid = ProjectId();
+        if (pid is null || pid == _entitiesFor) return;
+        _entitiesFor = pid;
+        try { _entities = (await Svc.ListDataEntitiesAsync(pid.Value)).Select(e => e.Name).ToList(); }
+        catch { _entities = Array.Empty<string>(); }
+    }
+
     private void OnMoved(object? s, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
-        => InvokeAsync(StateHasChanged);
+        => _ = InvokeAsync(async () => { await LoadEntitiesAsync(); StateHasChanged(); });
+
     public void Dispose() => Nav.LocationChanged -= OnMoved;
 }

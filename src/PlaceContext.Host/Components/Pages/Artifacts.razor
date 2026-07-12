@@ -202,6 +202,8 @@
     private async Task OpenAsync(ArtifactFileView a)
     {
         _active = a;
+        // Keep the URL shareable: every opened file lands in ?artifact= without growing history.
+        Nav.NavigateTo($"/artifacts?artifact={a.Id}", replace: true);
         _content = null;
         _csv = null;
         _rawText = null;

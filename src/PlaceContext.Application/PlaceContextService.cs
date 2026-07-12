@@ -237,6 +237,15 @@ public sealed class PlaceContextService : IPlaceContextService
     public Task<bool> DropProjectViewAsync(Guid projectId, string name, CancellationToken ct = default)
         => _dispatcher.Send(new DropProjectViewCommand(projectId, name), ct);
 
+    public Task<DataEntityView> SaveDataEntityAsync(SaveDataEntityCommand command, CancellationToken ct = default)
+        => _dispatcher.Send(command, ct);
+
+    public Task<bool> DeleteDataEntityAsync(Guid entityId, CancellationToken ct = default)
+        => _dispatcher.Send(new DeleteDataEntityCommand(entityId), ct);
+
+    public Task<IReadOnlyList<DataEntityView>> ListDataEntitiesAsync(Guid projectId, CancellationToken ct = default)
+        => _dispatcher.Query(new ListDataEntitiesQuery(projectId), ct);
+
     public Task<InboundSmsView> ReceiveInboundSmsAsync(ReceiveInboundSmsCommand command, CancellationToken ct = default)
         => _dispatcher.Send(command, ct);
 

@@ -49,6 +49,7 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
     public DbSet<PendingRunRow> PendingRuns => Set<PendingRunRow>();
     public DbSet<ProjectChartRow> ProjectCharts => Set<ProjectChartRow>();
     public DbSet<DataMappingRow> DataMappings => Set<DataMappingRow>();
+    public DbSet<DataEntityRow> DataEntities => Set<DataEntityRow>();
     public DbSet<SmsMessageRow> SmsMessages => Set<SmsMessageRow>();
 
     Task<int> IUnitOfWork.SaveChangesAsync(CancellationToken ct) => SaveChangesAsync(ct);
@@ -214,6 +215,15 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
             e.HasKey(x => x.Id);
             e.HasIndex(x => new { x.ProjectId, x.TableName }).IsUnique();
             e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
+        });
+
+        b.Entity<DataEntityRow>(e =>
+        {
+            e.ToTable("data_entities");
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => x.ProjectId);
+            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
+            e.Property(x => x.RelationsJson).HasDefaultValue("[]");
         });
 
         b.Entity<DataMappingRow>(e =>

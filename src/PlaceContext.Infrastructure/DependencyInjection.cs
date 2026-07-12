@@ -106,6 +106,7 @@ public static class DependencyInjection
 
         // Data map (declarative job-result → project-table ingestion rules).
         services.AddScoped<IDataMappingRepository, EfDataMappingRepository>();
+        services.AddScoped<IDataEntityRepository, EfDataEntityRepository>();
 
         // Trigger + event repositories.
         services.AddScoped<IJobTriggerRepository, EfJobTriggerRepository>();

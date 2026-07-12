@@ -1,0 +1,184 @@
+@page "/project/{ProjectId:guid}/entity/{EntityName}"
+@layout PlaceContext.Host.Components.Layout.ProjectLayout
+@using PlaceContext.Application.Features
+@inject IPlaceContextService Svc
+@inject PortalUiState Ui
+
+<PageTitle>placecontext — @EntityName</PageTitle>
+
+<div style="padding:20px 24px 40px; max-width:1320px; margin:0 auto">
+    @if (_entity is null)
+    {
+        <div style="padding:24px; color:var(--text-3)">Unknown entity “@EntityName”. Define it under Data → Entities.</div>
+    }
+    else
+    {
+        <div style="display:flex; align-items:baseline; justify-content:space-between; margin-bottom:14px">
+            <div>
+                <h2 style="font-size:18px; font-weight:600; margin:0">@_entity.Name</h2>
+                <div style="font-size:12px; color:var(--text-3); margin-top:3px">
+                    <span style="font-family:'IBM Plex Mono',monospace">@_entity.TableName</span>
+                    · @( _rows?.Rows.Count ?? 0) records
+                    @if (_entity.Relations.Count > 0)
+                    {
+                        <span> · related to @string.Join(", ", _entity.Relations.Select(r => r.TargetEntity))</span>
+                    }
+                </div>
+            </div>
+            <input class="dcinput" style="width:200px; padding:5px 10px; font-size:12px" placeholder="filter records…"
+                   @bind="_filter" @bind:event="oninput" />
+        </div>
+
+        @if (_error is not null)
+        {
+            <div style="margin-bottom:12px; padding:10px 14px; border-radius:8px; background:var(--bad-bg); color:var(--bad); font-size:12.5px">@_error</div>
+        }
+
+        @if (_rows is { } rows)
+        {
+            <div class="dccard" style="border-radius:8px; overflow:hidden">
+                <div style="overflow-x:auto">
+                    <table style="border-collapse:collapse; width:100%; font-size:12px">
+                        <thead>
+                            <tr>
+                                @foreach (var c in rows.Columns)
+                                {
+                                    <th style="text-align:left; padding:8px 14px; border-bottom:2px solid var(--border-2); color:var(--text-3); font-size:10.5px; letter-spacing:.06em; text-transform:uppercase; white-space:nowrap">@c</th>
+                                }
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var row in FilteredRows())
+                            {
+                                <tr style="cursor:pointer" class="dcdash-row" @onclick="@(() => OpenRecordAsync(row))">
+                                    @for (var i = 0; i < rows.Columns.Count; i++)
+                                    {
+                                        <td style="padding:7px 14px; border-bottom:1px solid var(--border); color:@(rows.Columns[i] == LabelCol() ? "var(--text)" : "var(--text-2)"); font-weight:@(rows.Columns[i] == LabelCol() ? "600" : "400"); max-width:280px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">@(i < row.Count ? row[i] : "")</td>
+                                    }
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        }
+    }
+</div>
+
+@* ── Record detail: the fields plus related records reached through the entity graph ────── *@
+@if (_open is not null && _entity is not null && _rows is not null)
+{
+    <div class="dcslide-scrim" @onclick="@(() => _open = null)"></div>
+    <div class="dcslide" style="width:560px">
+        <div class="dcslide-head">
+            <div style="flex:1; min-width:0">
+                <div style="font-size:14px; font-weight:600">@RecordLabel(_open)</div>
+                <div style="font-size:11.5px; color:var(--text-3); margin-top:3px">@_entity.Name record</div>
+            </div>
+            <button class="dcslide-x" @onclick="@(() => _open = null)">×</button>
+        </div>
+        <div class="dcslide-body" style="flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:14px">
+            <div class="dccard" style="padding:12px 16px">
+                <dl style="display:grid; grid-template-columns:auto 1fr; gap:4px 14px; margin:0; font-size:12.5px">
+                    @for (var i = 0; i < _rows.Columns.Count; i++)
+                    {
+                        <dt style="color:var(--text-3); font-family:'IBM Plex Mono',monospace; font-size:11px">@_rows.Columns[i]</dt>
+                        <dd style="margin:0; word-break:break-word">@(i < _open.Count ? _open[i] : "")</dd>
+                    }
+                </dl>
+            </div>
+
+            @foreach (var (relation, related) in _related)
+            {
+                <div>
+                    <div style="font-size:11px; font-weight:600; letter-spacing:.5px; color:var(--text-3); text-transform:uppercase; margin-bottom:6px">
+                        @relation.TargetEntity <span style="font-weight:400; text-transform:none">via @relation.Column ↔ @relation.TargetColumn</span>
+                    </div>
+                    @if (related.Rows.Count == 0)
+                    {
+                        <div style="font-size:12px; color:var(--text-3)">no related records</div>
+                    }
+                    else
+                    {
+                        @foreach (var r in related.Rows.Take(8))
+                        {
+                            <div class="dccard" style="padding:8px 12px; margin-bottom:5px; font-size:12px; display:flex; gap:10px; overflow:hidden">
+                                @for (var i = 0; i < Math.Min(related.Columns.Count, 4); i++)
+                                {
+                                    <span style="color:@(i == 0 ? "var(--text)" : "var(--text-3)"); white-space:nowrap; overflow:hidden; text-overflow:ellipsis">@(i < r.Count ? r[i] : "")</span>
+                                }
+                            </div>
+                        }
+                    }
+                </div>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public Guid ProjectId { get; set; }
+    [Parameter] public string EntityName { get; set; } = "";
+
+    private DataEntityView? _entity;
+    private IReadOnlyList<DataEntityView> _all = Array.Empty<DataEntityView>();
+    private PlaceContext.Application.Ports.ProjectQueryResult? _rows;
+    private IReadOnlyList<string?>? _open;
+    private readonly List<(EntityRelationDto Relation, PlaceContext.Application.Ports.ProjectQueryResult Rows)> _related = new();
+    private string _filter = "";
+    private string? _error;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _error = null;
+        _open = null;
+        try
+        {
+            _all = await Svc.ListDataEntitiesAsync(ProjectId);
+            _entity = _all.FirstOrDefault(e => string.Equals(e.Name, EntityName, StringComparison.OrdinalIgnoreCase));
+            if (_entity is null) return;
+            Ui.Set(_entity.Name, "business view · project data graph");
+            // Read through the project's isolated role; identifier comes from the registry, quoted.
+            _rows = await Svc.ExecuteProjectDataAsync(ProjectId, $"SELECT * FROM \"{_entity.TableName}\" LIMIT 500");
+        }
+        catch (Exception ex) { _error = ex.Message; }
+    }
+
+    private string? LabelCol() => _entity?.LabelColumn ?? _rows?.Columns.FirstOrDefault();
+
+    private string RecordLabel(IReadOnlyList<string?> row)
+    {
+        if (_rows is null) return _entity?.Name ?? "";
+        var idx = LabelCol() is { } c ? _rows.Columns.ToList().IndexOf(c) : 0;
+        return (idx >= 0 && idx < row.Count ? row[idx] : null) ?? _entity?.Name ?? "";
+    }
+
+    private IEnumerable<IReadOnlyList<string?>> FilteredRows()
+        => _rows is null
+            ? Array.Empty<IReadOnlyList<string?>>()
+            : string.IsNullOrWhiteSpace(_filter)
+                ? _rows.Rows
+                : _rows.Rows.Where(r => r.Any(v => v?.Contains(_filter, StringComparison.OrdinalIgnoreCase) == true));
+
+    private async Task OpenRecordAsync(IReadOnlyList<string?> row)
+    {
+        _open = row;
+        _related.Clear();
+        if (_entity is null || _rows is null) return;
+        foreach (var rel in _entity.Relations)
+        {
+            var target = _all.FirstOrDefault(e => string.Equals(e.Name, rel.TargetEntity, StringComparison.OrdinalIgnoreCase));
+            var colIdx = _rows.Columns.ToList().FindIndex(c => string.Equals(c, rel.Column, StringComparison.OrdinalIgnoreCase));
+            if (target is null || colIdx < 0 || colIdx >= row.Count || row[colIdx] is not { } value) continue;
+            try
+            {
+                // The graph hop: matching records on the related entity, value passed as a literal
+                // with quotes escaped (the query still runs as the isolated project role).
+                var related = await Svc.ExecuteProjectDataAsync(ProjectId,
+                    $"SELECT * FROM \"{target.TableName}\" WHERE \"{rel.TargetColumn}\"::text = '{value.Replace("'", "''")}' LIMIT 20");
+                _related.Add((rel, related));
+            }
+            catch { /* a broken relation must not break the record view */ }
+        }
+    }
+}
