@@ -18,7 +18,7 @@ public static class WikiLibrary
     private static readonly string[] Order =
     {
         "getting-started", "setup", "projects", "jobs-and-artifacts", "charts-and-reports",
-        "project-data", "cluster-and-nodes", "chat-and-nodes", "mcp-and-agents",
+        "project-data", "entities-and-insights", "cluster-and-nodes", "chat-and-nodes", "mcp-and-agents",
     };
 
     private static readonly MarkdownPipeline Pipeline =

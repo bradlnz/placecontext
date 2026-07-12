@@ -76,7 +76,7 @@ else
                     </div>
                     <div style="font-size:10px; color:var(--text-3); margin-top:3px; display:flex; justify-content:space-between">
                         <span>@(mapped ? "mapped" : "unmapped — drag ＋")</span>
-                        <span style="font-family:'IBM Plex Mono',monospace; color:var(--brand-2)">@j.ReturnType</span>
+                        <span style="font-family:var(--font-sans); color:var(--brand-2)">@j.ReturnType</span>
                     </div>
                 </div>
             }
@@ -97,7 +97,7 @@ else
                     </div>
                     <div style="font-size:10px; color:var(--text-3); margin-top:3px; display:flex; justify-content:space-between">
                         <span>@(mapped ? "mapped" : "unmapped — drag ＋")</span>
-                        <span style="font-family:'IBM Plex Mono',monospace; color:var(--human)">chain · @c.Steps.Count step(s)</span>
+                        <span style="font-family:var(--font-sans); color:var(--human)">chain · @c.Steps.Count step(s)</span>
                     </div>
                 </div>
             }
@@ -109,7 +109,7 @@ else
                 <div style="position:absolute; left:@(Pos(key).X)px; top:@(Pos(key).Y)px; width:210px; border:1px solid var(--brand-2); border-radius:10px; padding:9px 12px; background:var(--brand-bg); cursor:grab; box-shadow:var(--shadow)"
                      @onpointerdown="@(e => StartDrag(key, e))" @onpointerdown:stopPropagation="true"
                      @onpointerup="@(() => OnTableUp(t))" @onpointerup:stopPropagation="true">
-                    <div style="font-size:12.5px; font-weight:600; font-family:'IBM Plex Mono',monospace; white-space:nowrap; overflow:hidden; text-overflow:ellipsis" title="@t">@t</div>
+                    <div style="font-size:12.5px; font-weight:600; font-family:var(--font-sans); white-space:nowrap; overflow:hidden; text-overflow:ellipsis" title="@t">@t</div>
                     <div style="font-size:10px; color:var(--text-3); margin-top:2px">
                         @(TableRows(t) is { } n ? $"{n:N0} rows" : "created on first ingest") · append-only
                     </div>
@@ -202,7 +202,7 @@ else
                             <input class="dcinput" style="flex:1.2; font-size:12px" placeholder="source path (e.g. price)"
                                    @bind="_edFields[idx].SourcePath" />
                             <span style="color:var(--text-3); flex:none">→</span>
-                            <input class="dcinput" style="flex:1; font-size:12px; font-family:'IBM Plex Mono',monospace" placeholder="column"
+                            <input class="dcinput" style="flex:1; font-size:12px; font-family:var(--font-sans)" placeholder="column"
                                    @bind="_edFields[idx].Column" />
                             <select class="dcinput" style="flex:none; width:110px; font-size:12px" @bind="_edFields[idx].Type">
                                 @foreach (var t in ColumnTypes)

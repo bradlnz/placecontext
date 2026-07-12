@@ -5,8 +5,9 @@
 ## What you get
 
 PlaceContext runs on your own hardware and keeps everything there. It gives every project
-a place to store its context, run your code as jobs, keep its own database, and be worked on
-by an AI agent. It even runs a small AI model locally to draw charts and write summaries, so
+a place to run your code as jobs, keep its own database, tag and organise its data into
+business views, and be worked on by an AI agent. Every job run produces an openable
+**artifact**, and the portal draws charts straight from those results — so
 **nothing about your projects ever leaves your machines**.
 
 You drive it two ways:
@@ -76,20 +77,31 @@ opens the portal already signed in. From there, invite and manage your team unde
 
 ## Find your way around
 
-The left-hand nav holds the platform-wide pages:
+The left-hand nav has two parts. The top group is always there:
 
 | Page | What you do there |
 |---|---|
-| **Overview** | See all your projects at a glance, with their risk bands |
-| **Brain** | Explore what's known about a project — its decisions, context, and hot spots |
-| **Activity Log** | Read the running history of every change: who, what, and why |
-| **Reports** | Generate a report for a project, and see charts from recent job runs |
-| **Requirements** | Set the standards agents are held to when they work for you |
-| **Wiki** | This documentation |
-| **MCP Inspector** | Watch, live, every action an AI agent takes |
+| **Dashboard** | Live stats, recent runs, and pinned entity views for the current project |
+| **Artifacts** | A file viewer over every result any job has produced — JSON, tables, charts, PDFs — with version history |
+| **Observability** | Live job-run history and run detail, refreshed as runs progress |
+| **MCP Server** | Watch, live, every action an AI agent takes against your projects |
 
-Open any project and you also get its own pages: **Jobs**, **Data** (the
-project's own database), and a **Vault** for its secrets.
+Below that, a **Workspace** group: **Projects overview** (all projects at a glance),
+**Onboarding**, **Wiki** (this documentation), **Settings** (white-labelling and locality),
+and **About**.
+
+When a project is selected, its own pages appear at the top of the nav:
+
+| Project page | What you do there |
+|---|---|
+| **Jobs** | Author, edit, and run the project's jobs |
+| **Chains** | Wire jobs into multi-step pipelines that run in sequence |
+| **Schedules** | Cron and event triggers that fire jobs automatically |
+| **Data** | The project's own database — with **Tables**, **Analytics**, **Data map**, and **Entities** sub-tabs |
+| **Vault** | Encrypted secrets the jobs use at run time |
+
+Once you've tagged data into entities, each **business view** (e.g. *Sites*) also shows up
+as its own menu item under a **Business** heading — see *Entities and insights*.
 
 ## The operator console: `pctl tui`
 
@@ -133,5 +145,6 @@ PlaceContext on this machine, **`[j]`** joins one you already run.
 
 - **Projects** — the top-level unit everything hangs off.
 - **Jobs and artifacts** — write code, get results you can chart.
+- **Entities and insights** — tag your data so it organises itself into business views.
 - **Cluster and nodes** — grow from one laptop to a fleet of machines.
 - **MCP and agents** — connect Claude and let an agent do the work.

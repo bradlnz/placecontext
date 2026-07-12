@@ -13,7 +13,7 @@
         {
             <div style="padding:15px 16px; border-right:1px solid var(--border)">
                 <div style="font-size:10.5px; color:var(--text-3); text-transform:uppercase; letter-spacing:.5px; font-weight:600; margin-bottom:9px">@s.Label</div>
-                <div style="font-size:25px; font-weight:600; letter-spacing:-.6px; font-family:'IBM Plex Mono',monospace; color:@s.Color">@s.Value</div>
+                <div style="font-size:25px; font-weight:600; letter-spacing:-.6px; font-family:var(--font-sans); color:@s.Color">@s.Value</div>
                 <div style="font-size:11px; color:var(--text-3); margin-top:3px">@s.Sub</div>
             </div>
         }
@@ -26,7 +26,7 @@
             <span style="font-size:11px; color:var(--text-3)">what needs attention across your workspace</span>
             @if (_focus is { Items.Count: > 0 })
             {
-                <span style="margin-left:auto; font-size:11px; color:var(--text-3); font-family:'IBM Plex Mono',monospace; background:var(--card-2); border:1px solid var(--border); padding:1px 7px; border-radius:20px">@_focus.Items.Count</span>
+                <span style="margin-left:auto; font-size:11px; color:var(--text-3); font-family:var(--font-sans); background:var(--card-2); border:1px solid var(--border); padding:1px 7px; border-radius:20px">@_focus.Items.Count</span>
             }
         </div>
         @if (_focus is null)
@@ -56,7 +56,7 @@
     <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:13px">
         <div style="display:flex; align-items:center; gap:9px">
             <h2 style="font-size:14px; font-weight:600; margin:0; letter-spacing:-.2px">Projects</h2>
-            <span style="font-size:11px; color:var(--text-3); font-family:'IBM Plex Mono',monospace; background:var(--card); border:1px solid var(--border); padding:1px 7px; border-radius:20px">@(_projects?.Count ?? 0)</span>
+            <span style="font-size:11px; color:var(--text-3); font-family:var(--font-sans); background:var(--card); border:1px solid var(--border); padding:1px 7px; border-radius:20px">@(_projects?.Count ?? 0)</span>
         </div>
         <div style="display:flex; align-items:center; gap:8px">
             <button class="dcbtn primary" @onclick="Refresh" disabled="@_busy">@(_busy ? "Refreshing…" : "Refresh")</button>
@@ -87,7 +87,7 @@
                                 <span style="width:9px; height:9px; border-radius:2.5px; background:@Viz.LangColor(p.Path); flex:none"></span>
                                 <span style="font-size:14.5px; font-weight:600; letter-spacing:-.2px">@p.Name</span>
                             </div>
-                            <div style="font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--text-3); margin-top:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis">@p.Path</div>
+                            <div style="font-family:var(--font-sans); font-size:11px; color:var(--text-3); margin-top:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis">@p.Path</div>
                         </div>
                         <div style="display:flex; align-items:center; gap:5px; flex:none; padding:3px 8px 3px 7px; border-radius:20px; font-size:11px; font-weight:600; color:@Viz.BandColor(p.ProcessBand); background:@Viz.BandBg(p.ProcessBand)">
                             <span style="width:6px; height:6px; border-radius:50%; background:@Viz.BandColor(p.ProcessBand)"></span>
@@ -107,13 +107,13 @@
                                     <circle cx="@N(x)" cy="@N(y)" r="@(god ? "3" : "1.3")" fill="@(god ? "var(--brand)" : "var(--text-3)")"></circle>
                                 }
                             </svg>
-                            <span style="position:absolute; bottom:4px; right:5px; font-family:'IBM Plex Mono',monospace; font-size:8.5px; color:var(--text-3); background:var(--card-2); padding:0 3px; border-radius:3px">@p.GodNodeCount god</span>
+                            <span style="position:absolute; bottom:4px; right:5px; font-family:var(--font-sans); font-size:8.5px; color:var(--text-3); background:var(--card-2); padding:0 3px; border-radius:3px">@p.GodNodeCount god</span>
                         </div>
                     </div>
 
                     <div style="display:flex; align-items:center; justify-content:space-between; margin-top:15px; padding-top:13px; border-top:1px solid var(--border)">
                         <span style="font-size:11.5px; color:var(--text-3)">@(p.IsGraphified ? "graphified" : "not graphified")</span>
-                        <div style="display:flex; align-items:center; gap:13px; font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--text-3)">
+                        <div style="display:flex; align-items:center; gap:13px; font-family:var(--font-sans); font-size:11px; color:var(--text-3)">
                             <span>@p.NodeCount nodes</span>
                             <span style="color:var(--border-2)">·</span>
                             <span>@p.LinkCount links</span>

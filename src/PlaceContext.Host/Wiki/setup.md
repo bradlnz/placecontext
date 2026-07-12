@@ -37,12 +37,10 @@ cluster. Codes stay valid for an hour; the node itself is a durable tailnet devi
 |---|---|
 | Ingest key | External systems `POST /ingest/{event}` to fire event triggers |
 | SMS inbound key | Your SMS provider webhooks to `POST /sms/inbound` — messages stored encrypted, `sms.received` fires triggers |
-| GitHub OAuth app | Import repositories from the Import page |
 
 ## After setup
 
-- **First project**: portal → Onboarding, or import from GitHub / an Obsidian vault (`/import` —
-  notes and `[[wikilinks]]` become the project's graph).
-- **Agents**: connect MCP at `http://<host>:7700/mcp`; the `onboard` tool bootstraps a repo, and
-  `setup_hermes` installs the job-orchestration skill into the project.
+- **First project**: portal → **Onboarding**, or have an agent create one over MCP.
+- **Agents**: connect MCP at `http://<host>:7700/mcp` and let an agent author and run jobs
+  against the project (see *MCP and agents*).
 - **Dashboard**: `pctl tui` — the live cluster view.

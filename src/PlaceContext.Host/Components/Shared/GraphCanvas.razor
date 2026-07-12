@@ -18,7 +18,7 @@
                             {
                                 <div @onclick="@(() => JumpAsync(m.Id))"
                                      style="padding:6px 9px; border-radius:6px; cursor:pointer; font-size:12px" class="dcdash-row">
-                                    <div style="font-family:'IBM Plex Mono',monospace; white-space:nowrap; overflow:hidden; text-overflow:ellipsis">@ShortLabel(m.Label)</div>
+                                    <div style="font-family:var(--font-sans); white-space:nowrap; overflow:hidden; text-overflow:ellipsis">@ShortLabel(m.Label)</div>
                                     @if (!string.IsNullOrWhiteSpace(m.Content))
                                     {
                                         <div style="font-size:10.5px; color:var(--text-3); white-space:nowrap; overflow:hidden; text-overflow:ellipsis">@m.Content</div>
@@ -48,7 +48,7 @@
             <div style="display:flex; align-items:start; gap:8px">
                 <div style="flex:1; min-width:0">
                     <div style="font-size:12.5px; font-weight:600; word-break:break-all">@ShortLabel(sel.Label)</div>
-                    <div style="font-size:10.5px; color:var(--text-3); font-family:'IBM Plex Mono',monospace; word-break:break-all; margin-top:2px">@sel.Id</div>
+                    <div style="font-size:10.5px; color:var(--text-3); font-family:var(--font-sans); word-break:break-all; margin-top:2px">@sel.Id</div>
                 </div>
                 <button class="dcbtn" style="padding:1px 7px; font-size:11px; flex:none" @onclick="ClearAsync">×</button>
             </div>
@@ -77,7 +77,7 @@
                     @foreach (var (node, hops) in _reachableArtifacts)
                     {
                         <a href="@(NodeUrl?.Invoke(node) ?? "#")"
-                           style="display:flex; align-items:center; gap:8px; padding:5px 9px; border:1px solid var(--good); border-radius:7px; background:var(--good-bg); font-size:11.5px; font-family:'IBM Plex Mono',monospace; color:var(--good); text-decoration:none">
+                           style="display:flex; align-items:center; gap:8px; padding:5px 9px; border:1px solid var(--good); border-radius:7px; background:var(--good-bg); font-size:11.5px; font-family:var(--font-sans); color:var(--good); text-decoration:none">
                             <span style="flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">@ShortLabel(node.Label)</span>
                             @if (hops > 1)
                             {
@@ -95,7 +95,7 @@
                     @foreach (var (node, ambiguous) in _selectedNeighbors.Where(x => x.Node.Kind != "good"))
                     {
                         <div style="display:flex; align-items:center; gap:6px">
-                            <button style="border:none; background:none; padding:2px 0; cursor:pointer; text-align:left; font-size:11.5px; font-family:'IBM Plex Mono',monospace; color:var(--brand-2); word-break:break-all; flex:1; min-width:0"
+                            <button style="border:none; background:none; padding:2px 0; cursor:pointer; text-align:left; font-size:11.5px; font-family:var(--font-sans); color:var(--brand-2); word-break:break-all; flex:1; min-width:0"
                                     title="@node.Id" @onclick="@(() => SelectAsync(node.Id))">
                                 @ShortLabel(node.Label)@(ambiguous ? " ⇢" : "")
                             </button>

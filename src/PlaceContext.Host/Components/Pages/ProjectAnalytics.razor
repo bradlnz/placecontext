@@ -47,7 +47,7 @@
             {
                 <textarea @bind="_sqlQuery" rows="4" spellcheck="false"
                           placeholder="SELECT city, avg(price) FROM listings GROUP BY city ORDER BY 2 DESC"
-                          style="width:100%; padding:9px 11px; background:var(--bg); border:1px solid var(--border); border-radius:7px; color:var(--text); font-size:12px; font-family:'IBM Plex Mono',monospace; resize:vertical"></textarea>
+                          style="width:100%; padding:9px 11px; background:var(--bg); border:1px solid var(--border); border-radius:7px; color:var(--text); font-size:12px; font-family:var(--font-sans); resize:vertical"></textarea>
             }
             <div style="display:flex; align-items:center; gap:10px">
                 <select class="dcinput" style="width:90px; font-size:12px" @bind="_sqlType">
@@ -77,7 +77,7 @@
             {
                 <div class="dccard" style="padding:12px 16px">
                     <div style="display:flex; align-items:center; gap:10px; margin-bottom:8px">
-                        <span style="font-size:12.5px; font-weight:600; font-family:'IBM Plex Mono',monospace">@chart.TableName["sql:".Length..]</span>
+                        <span style="font-size:12.5px; font-weight:600; font-family:var(--font-sans)">@chart.TableName["sql:".Length..]</span>
                         <span style="font-size:10px; padding:1px 7px; border-radius:5px; background:var(--brand-bg); color:var(--brand-2)">SQL</span>
                         <span style="display:flex; gap:2px; margin-left:4px">
                             @foreach (var t in new[] { "bar", "line", "pie" })
@@ -121,7 +121,7 @@
             var pending = Queue.IsPending(ProjectId, table.Name);
             <div class="dccard" style="padding:12px 16px">
                 <div style="display:flex; align-items:center; gap:10px; margin-bottom:8px">
-                    <span style="font-size:12.5px; font-weight:600; font-family:'IBM Plex Mono',monospace">@table.Name</span>
+                    <span style="font-size:12.5px; font-weight:600; font-family:var(--font-sans)">@table.Name</span>
                     <span style="font-size:10.5px; color:var(--text-3)">~@table.RowEstimate rows</span>
                     <span style="flex:1"></span>
                     @if (pending)

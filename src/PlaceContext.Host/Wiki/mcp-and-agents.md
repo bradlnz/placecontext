@@ -16,8 +16,8 @@ claude mcp add --transport http placecontext http://localhost:7700/mcp
 Then finish signing in when the browser prompts you. That's it — the agent now has real tools it
 can use against your projects.
 
-Everything the agent does is visible to you, live: watch it in the portal's **MCP Inspector**, or
-in the TUI with **`[m]`** (`↑↓` to move, `⏎` to open a call's full request and response). That
+Everything the agent does is visible to you, live: watch it in the portal's **MCP Server** page,
+or in the TUI with **`[m]`** (`↑↓` to move, `⏎` to open a call's full request and response). That
 trace is your audit trail.
 
 If the agent's changes are unexpectedly rejected, it's almost always a stale sign-in from an old
@@ -28,33 +28,18 @@ again.
 
 Once connected, an agent can work a project the way you would:
 
-- **Set up a project** — create it, or onboard a git repo so it starts already knowing your
-  recent history and docs.
-- **Record what it did** — every change goes into the project's history with the reasoning behind
-  it, so the knowledge, risk scores, and reports all stay current. This is the one habit that
-  matters most: a change that isn't recorded leaves the project blind.
-- **Build and run jobs** — write a job, upload it, run it, and put it on a schedule or trigger.
-- **Manage knowledge** — read and update the project's context, record decisions, and ask
-  structured questions about where the risk and churn are.
-- **Generate reports** — produce a written report from everything the project knows.
-- **Get oriented fast** — pull all of a project's accumulated context into one brief with a
-  prioritised action plan, or ask for a ranked list of suggested improvements.
+- **Set up a project** — create it by name and path; creating the same one twice just returns it.
+- **Build and run jobs** — write a job, upload it, run it, and put it on a schedule, an event
+  trigger, or a chain.
+- **Query the project's data** — run safe, **SELECT-only** queries against the project's own
+  database (it can never write, or reach another project's tables).
+- **Build charts** — save SQL-backed charts over any table, which then appear on the Analytics
+  tab and the Dashboard.
+- **Tag and organise data** — define entities so tagged records, artifacts, and runs link
+  together into the business views (see *Entities and insights*).
 
-You don't need to memorize tool names — the agent discovers them. The server also offers ready-made
-guidance the agent can pull in so it works to your standards: how to start a session grounded in
-your project, how to review its work against your requirements, and how to record a change
-properly.
-
-### A good session, start to finish
-
-A well-behaved agent follows the same loop you would:
-
-1. Read the project's context so it knows what's already going on.
-2. Do the work.
-3. Record the change — with the reasoning, and honest notes on what was tested and verified.
-
-Because every step is recorded, the project's history, knowledge, risk scores, and reports all
-stay accurate on their own. You can watch the whole thing unfold in the MCP Inspector.
+You don't need to memorize tool names — the agent discovers them. Everything runs locally; there
+is no cloud model in the loop, and jobs never call out to an LLM.
 
 ## Walkthrough: an agent builds and runs a job
 
@@ -75,13 +60,13 @@ for item in data.get("items", []):
 print(json.dumps(counts))          # a map of numbers — charts automatically
 ```
 
-**3. It uploads the job.** A brand-new job comes with sensible defaults and charting turned on,
-so it produces a chart from its very first run. Uploading again to an existing job just replaces
-the code and keeps all its settings.
+**3. It uploads the job.** A brand-new job comes with sensible defaults and a **Chart** return
+type, so it produces a chart from its very first run. Uploading again to an existing job just
+replaces the code and keeps all its settings.
 
 **4. It runs the job** with some input and gets the full result back — each run's outcome, its
 result, and its log. Because the result is a series of numbers, it charts everywhere: in the run
-detail, in the run history, on the Reports page, and as ASCII in the TUI.
+detail, in the Artifacts viewer, and as ASCII in the TUI.
 
 From there the agent can put the job on a schedule, or wire it to fire on an event.
 
@@ -102,14 +87,13 @@ change is recorded, or whenever risk is recalculated.
 
 ## Good habits for agents
 
-- **Start grounded** — read the project's context before touching anything.
-- **Record everything** — with honest notes on whether tests were added and whether the change
-  was actually verified. Those flags feed the project's risk scores.
+- **Return a typed artifact** — declare the job's return type so every run stores an openable
+  result; print pure JSON (or write the file to `/out`) and keep diagnostics on standard error.
 - **Never put secrets in job code** — reference the project Vault's secret names; the real values
   are supplied at run time.
-- **Log usage** — model names and token counts only (never your code or prompts) so the cost
-  dashboards stay accurate.
-- **Remember it's all visible** — every action shows up in the MCP Inspector.
+- **Keep queries SELECT-only** — the data and chart tools refuse anything that writes; aggregate
+  rather than dumping raw rows.
+- **Remember it's all visible** — every action shows up on the MCP Server page.
 
 ## Any MCP client works
 

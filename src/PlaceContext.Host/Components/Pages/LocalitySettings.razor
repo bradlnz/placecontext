@@ -18,7 +18,7 @@
     <div class="dccard" style="padding:18px; display:flex; flex-direction:column; gap:12px">
         <div class="dcfield" style="max-width:340px">
             <label>Workspace timezone <span class="code" style="margin-left:4px">IANA</span></label>
-            <input class="dcinput" list="pc-tz" style="font-family:'IBM Plex Mono',monospace" @bind="_tz" />
+            <input class="dcinput" list="pc-tz" style="font-family:var(--font-sans)" @bind="_tz" />
             <datalist id="pc-tz">
                 @foreach (var z in CommonZones)
                 {
@@ -27,8 +27,8 @@
             </datalist>
         </div>
         <div style="font-size:12px; color:var(--text-2)">
-            Now in <span style="font-family:'IBM Plex Mono',monospace">@_tz</span>:
-            <span style="font-family:'IBM Plex Mono',monospace; color:var(--brand-2)">@PreviewNow()</span>
+            Now in <span style="font-family:var(--font-sans)">@_tz</span>:
+            <span style="font-family:var(--font-sans); color:var(--brand-2)">@PreviewNow()</span>
         </div>
         <div style="display:flex; gap:10px; align-items:center">
             <button class="dcbtn primary" disabled="@_busy" @onclick="SaveAsync">@(_busy ? "Saving…" : "Save timezone")</button>

@@ -67,7 +67,7 @@ Give it this input:
 ```
 
 and the artifact is `{"totals": {"mon": 17, "tue": 31}}` — which shows up as a bar chart in the
-run detail, in the run history, and on the Reports page.
+run detail, in the run history, and in the **Artifacts** viewer.
 
 ## Create a job
 
@@ -103,11 +103,13 @@ from their very first run.
 |---|---|
 | **Portal** | The **Run** button on the job card. The run then shows up in the run history below |
 | **TUI** | Select the job and press **`[R]`**. Press `⏎` to drill into the run history and any run's detail |
-| **On a schedule** | Add a schedule trigger with a cron expression, e.g. `0 0 * * *` for daily at midnight |
-| **On an event** | Add an event trigger so the job fires whenever something happens — another job finishing, a change being recorded, or an event you define yourself |
+| **On a schedule** | Add a trigger on the **Schedules** tab — pick a date and time, or switch to advanced cron (e.g. `0 0 * * *` for daily at midnight) |
+| **On an event** | Add an event trigger so the job fires whenever something happens — another job finishing, an ingested event, or an event you define yourself |
+| **As part of a chain** | Add the job to a **chain** so it runs in sequence after earlier steps, receiving their output |
 
-Schedules and event triggers are managed on the **Jobs** tab (add, pause, delete). Each firing
-starts its own run, and several runs can go at once.
+Schedules and event triggers live on the project's dedicated **Schedules** tab (add, pause,
+delete). Times honour your workspace timezone (set in **Settings**), not the server clock. Each
+firing starts its own run, and several runs can go at once.
 
 ## Run more with shards and reduce
 
@@ -148,9 +150,10 @@ time limit).
 ## Read the results
 
 A run records, for each copy: whether it succeeded, the artifact it produced, and its log — plus
-the combined reduce result if you used one. The portal pretty-prints JSON artifacts, charts any
-numbers, and lists the extra outputs (report, chart, CSV, bundle) as links. In the TUI, the same
-run shows the numbers as an ASCII chart, and `[o]` / `[1–9]` open any links in the output.
+the combined reduce result if you used one. The portal pretty-prints JSON artifacts, renders CSV
+as a table, and opens charts and documents as-is. In the TUI, the same run shows the numbers as
+an ASCII chart, and `[o]` / `[1–9]` open any links in the output.
 
-To find an old result by meaning rather than date, search across a project's run outputs from an
-agent — it does a semantic search over everything your jobs have produced.
+Every artifact any job has ever produced is collected in the workspace-wide **Artifacts** viewer,
+grouped by job with a version dropdown — and the workspace search (**⌘K**) finds them by title,
+opening straight into the viewer.

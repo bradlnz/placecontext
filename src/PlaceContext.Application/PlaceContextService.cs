@@ -96,9 +96,6 @@ public sealed class PlaceContextService : IPlaceContextService
     public Task<FocusView> GetFocusAsync(CancellationToken ct = default)
         => _dispatcher.Query(new GetFocusQuery(), ct);
 
-    public Task<GraphVizView> GetBrainAsync(CancellationToken ct = default)
-        => _dispatcher.Query(new GetBrainQuery(), ct);
-
     public Task<ImprovementsView> SuggestImprovementsAsync(Guid projectId, CancellationToken ct = default)
         => _dispatcher.Query(new SuggestImprovementsQuery(projectId), ct);
 

@@ -97,7 +97,6 @@ public static class DependencyInjection
         services.AddScoped<IQueryHandler<GetRootCostQuery, RootCostView>, GetRootCostHandler>();
         services.AddScoped<IQueryHandler<SearchQuery, SearchResultsView>, SearchHandler>();
         services.AddScoped<IQueryHandler<GetFocusQuery, FocusView>, FocusHandler>();
-        services.AddScoped<IQueryHandler<GetBrainQuery, GraphVizView>, BrainHandler>();
         services.AddScoped<IQueryHandler<ListReportTemplatesQuery, IReadOnlyList<ReportTemplateView>>, ListReportTemplatesHandler>();
 
         // Root-level read models (redesigned portal).

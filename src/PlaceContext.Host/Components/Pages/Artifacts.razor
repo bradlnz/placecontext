@@ -46,7 +46,7 @@
                              style="display:flex; align-items:center; gap:11px; padding:11px 16px; cursor:pointer; background:@(active ? "var(--card)" : "transparent")">
                             <span style="flex:none; color:var(--text-3); display:flex">@FileIcon(latest.ContentType, 16)</span>
                             <div style="flex:1; min-width:0">
-                                <div style="font-family:'IBM Plex Mono',monospace; font-size:12.5px; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis">@latest.Title</div>
+                                <div style="font-family:var(--font-sans); font-size:12.5px; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis">@latest.Title</div>
                                 <div style="font-size:10.5px; color:var(--text-3); margin-top:2px">
                                     @ProjectName(latest.ProjectId) · @latest.Kind · @FormatBytes(latest.SizeBytes) · @latest.CreatedAt.ToWorkspaceTime().ToString("MMM d · HH:mm")
                                 </div>
@@ -54,7 +54,7 @@
                             @if (group.Count > 1)
                             {
                                 <button title="@(group.Count) versions — show history"
-                                        style="flex:none; border:1px solid var(--border-2); background:var(--card-2); color:var(--brand-2); border-radius:5px; padding:1px 7px; font-size:10px; font-family:'IBM Plex Mono',monospace; cursor:pointer"
+                                        style="flex:none; border:1px solid var(--border-2); background:var(--card-2); color:var(--brand-2); border-radius:5px; padding:1px 7px; font-size:10px; font-family:var(--font-sans); cursor:pointer"
                                         @onclick:stopPropagation="true"
                                         @onclick="@(() => _expanded = _expanded == groupKey ? null : groupKey)">
                                     v@(group.Count) @(_expanded == groupKey ? "▴" : "▾")
@@ -68,7 +68,7 @@
                                 var vActive = _active?.Id == v.Id;
                                 <div @onclick="@(() => OpenAsync(v))"
                                      style="display:flex; align-items:center; gap:10px; padding:7px 16px 7px 43px; cursor:pointer; background:@(vActive ? "var(--card)" : "transparent")">
-                                    <span style="font-size:10px; font-family:'IBM Plex Mono',monospace; color:var(--text-3); flex:none">v@(n)</span>
+                                    <span style="font-size:10px; font-family:var(--font-sans); color:var(--text-3); flex:none">v@(n)</span>
                                     <span style="flex:1; font-size:11px; color:var(--text-3)">@v.CreatedAt.ToWorkspaceTime().ToString("MMM d · HH:mm")</span>
                                     <span style="font-size:10px; color:var(--text-3)">@FormatBytes(v.SizeBytes)</span>
                                 </div>
@@ -92,8 +92,8 @@
         else
         {
             <div style="padding:11px 18px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:10px">
-                <span style="font-family:'IBM Plex Mono',monospace; font-size:13px; font-weight:600; flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis">@_active.Title</span>
-                <span style="font-size:10.5px; color:var(--text-3); font-family:'IBM Plex Mono',monospace">@_active.ContentType</span>
+                <span style="font-family:var(--font-sans); font-size:13px; font-weight:600; flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis">@_active.Title</span>
+                <span style="font-size:10.5px; color:var(--text-3); font-family:var(--font-sans)">@_active.ContentType</span>
                 <a class="dcbtn" style="padding:4px 11px; font-size:11.5px; text-decoration:none" target="_blank" rel="noopener"
                    href="@Url(_active)">Open ↗</a>
             </div>
@@ -107,7 +107,7 @@
             }
             else if (IsJson(_active.ContentType))
             {
-                <div style="flex:1; overflow:auto; padding:14px 18px; font-family:'IBM Plex Mono',monospace; font-size:12px; line-height:1.65">
+                <div style="flex:1; overflow:auto; padding:14px 18px; font-family:var(--font-sans); font-size:12px; line-height:1.65">
                     @if (_loading)
                     {
                         <Skeleton Kind="text" Rows="8" />
@@ -136,7 +136,7 @@
                     }
                     else
                     {
-                        <table style="border-collapse:collapse; font-size:12px; font-family:'IBM Plex Mono',monospace">
+                        <table style="border-collapse:collapse; font-size:12px; font-family:var(--font-sans)">
                             <thead>
                                 <tr>
                                     @foreach (var h in _csv.Value.Header)

@@ -1,30 +1,31 @@
 # Projects
 
-*Create a project, run jobs against it, and let it accumulate the context, history, and data everything else builds on.*
+*Create a project, run jobs against it, and let it accumulate the data and results everything else builds on.*
 
 ## What a project is
 
 A **project** is the top-level thing everything hangs off — usually one code repository. Each
-project keeps its own context, history, jobs, database, and secrets, all private
+project keeps its own jobs, database, tagged entities, artifacts, and secrets, all private
 to it.
 
-Create one from the portal's **Overview** page (**+ New project**), or have an AI agent create
-it for you (see *MCP and agents*). Creating the same project twice is safe — you just get the
-existing one back. If you point PlaceContext at a git repo, an agent can also **onboard** it in
-one step: it reads your recent commits and your README/AGENTS/CLAUDE docs to seed the project's
-context and history, so it starts out already knowing something about your code.
+Create one from the portal's **Projects overview** page (**+ New project**), or have an AI agent
+create it for you (see *MCP and agents*). Creating the same project twice is safe — you just get
+the existing one back.
 
 ## What's inside a project
 
-Open a project and you get:
+Select a project and its pages appear in the nav:
 
 | Area | What it's for |
 |---|---|
 | **Jobs** | Code you run to produce results (see *Jobs and artifacts*) |
-| **Data** | The project's own private database with a SQL editor (see *Project data*) |
-| **Brain** | The context and knowledge about the project — what's known, what was decided |
-| **Activity Log** | The running history of every change: who did it, why, and whether it was verified |
+| **Chains** | Multi-step pipelines that run several jobs in sequence, passing results along |
+| **Schedules** | Cron and event triggers that fire jobs automatically |
+| **Data** | The project's own private database, plus Analytics, Data map, and Entities (see *Project data* and *Entities and insights*) |
 | **Vault** | Encrypted secrets (API keys, passwords) that jobs can use without you exposing them |
+
+Every result those jobs produce is collected in the workspace-wide **Artifacts** viewer, and
+each run's progress is visible under **Observability**.
 
 ## Store secrets in the Vault
 
@@ -51,31 +52,24 @@ other's projects.
 If an agent's changes are unexpectedly rejected, it's almost always a stale sign-in from an old
 session. Signing out and back in, then reconnecting the agent, mints a fresh one.
 
-## Explore what's known: the Brain
+## Turn data into business views
 
-The **Brain** page is where a project's durable knowledge lives:
-
-- **Context** — a living document describing the project. It's the first thing an agent reads
-  before touching anything, and you can edit it directly.
-- **Decisions** — a lightweight record of important choices: the question, the choice made, and
-  why.
-- **The knowledge map** — built from your recorded activity, it answers questions like *where is
-  the churn concentrated?*, *what did we decide?*, and *what shipped without being verified?*
-
-The TUI's `/` search runs over this same knowledge, so you can find a decision or a note from
-the dashboard without opening the portal.
+As jobs load data and produce results, you tag it into **entities** — *Sites*, *Feasibility*,
+whatever your domain calls for. Each tagged entity becomes its own business view in the nav,
+with records, a relationship graph, and SQL-backed analytics. This is how a project turns raw
+job output into something the business can read at a glance — see *Entities and insights*.
 
 ## A typical loop
 
-1. Create the project (or have an agent onboard your repo).
-2. Work gets done and recorded — so the history fills in with what happened and why.
-3. Jobs run on schedules or triggers and produce results; charts and reports build up over time.
+1. Create the project (or have an agent create it for you).
+2. Jobs run on schedules or triggers, load data into the project's tables, and produce artifacts.
+3. Tag that data into entities; the business views, graphs, and charts build themselves.
 
-The result is a project that documents itself: the history says what happened and the reports
-narrate it.
+The result is a project that organises itself: the jobs supply the data, and the entity layer
+turns it into insight.
 
 ## See everything at a glance
 
-The **Overview** page lists all your projects together, each with a risk band derived from its
-history — how much churn it's seen, what shipped without being verified, and where the gaps are.
-It's the fastest way to spot which project needs attention before you dive in.
+The **Projects overview** page lists all your projects together and their recent activity —
+the fastest way to spot which project needs attention before you dive in. The **Dashboard**
+shows the current project's live run stats and pinned entity views.

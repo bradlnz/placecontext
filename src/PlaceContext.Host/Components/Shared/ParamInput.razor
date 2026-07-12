@@ -13,7 +13,7 @@
         </select>
         break;
     case "number":
-        <input class="dcinput" type="number" style="font-family:'IBM Plex Mono',monospace" value="@Value"
+        <input class="dcinput" type="number" style="font-family:var(--font-sans)" value="@Value"
                @oninput="@(e => ValueChanged.InvokeAsync(e.Value?.ToString() ?? ""))" />
         break;
     case "checkbox":

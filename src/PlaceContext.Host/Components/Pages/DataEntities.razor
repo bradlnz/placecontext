@@ -30,14 +30,14 @@
                     <div @onclick="@(() => OpenEditor(e))"
                          style="border:1px solid var(--brand-2); border-radius:9px; padding:9px 14px; background:var(--brand-bg); cursor:pointer">
                         <div style="font-size:12.5px; font-weight:600">@e.Name</div>
-                        <div style="font-size:10px; color:var(--text-3); font-family:'IBM Plex Mono',monospace">@e.TableName</div>
+                        <div style="font-size:10px; color:var(--text-3); font-family:var(--font-sans)">@e.TableName</div>
                     </div>
                     @foreach (var r in e.Relations)
                     {
                         <div style="display:flex; align-items:center; gap:6px; font-size:10.5px; color:var(--text-3)">
-                            <span style="font-family:'IBM Plex Mono',monospace">@r.Column</span>
+                            <span style="font-family:var(--font-sans)">@r.Column</span>
                             <svg width="34" height="12" viewBox="0 0 34 12"><line x1="1" y1="6" x2="26" y2="6" stroke="currentColor" stroke-dasharray="3 2"/><path d="M26 2l7 4-7 4Z" fill="currentColor"/></svg>
-                            <span style="font-family:'IBM Plex Mono',monospace; color:var(--human)">@r.TargetEntity.@r.TargetColumn</span>
+                            <span style="font-family:var(--font-sans); color:var(--human)">@r.TargetEntity.@r.TargetColumn</span>
                         </div>
                     }
                 </div>
@@ -84,7 +84,7 @@
             </div>
             <div class="dcfield" style="max-width:250px">
                 <label>Label column <span class="code" style="margin-left:4px">names a record</span></label>
-                <input class="dcinput" style="font-family:'IBM Plex Mono',monospace" @bind="_edLabel" placeholder="name" />
+                <input class="dcinput" style="font-family:var(--font-sans)" @bind="_edLabel" placeholder="name" />
             </div>
             <div class="dcfield">
                 <div style="display:flex; align-items:center; justify-content:space-between">
@@ -96,7 +96,7 @@
                     {
                         var idx = i;
                         <div style="display:flex; gap:6px; align-items:center">
-                            <input class="dcinput" style="flex:1; font-size:12px; font-family:'IBM Plex Mono',monospace" placeholder="column" @bind="_edRelations[idx].Column" />
+                            <input class="dcinput" style="flex:1; font-size:12px; font-family:var(--font-sans)" placeholder="column" @bind="_edRelations[idx].Column" />
                             <span style="color:var(--text-3)">↔</span>
                             <select class="dcinput" style="flex:1; font-size:12px" @bind="_edRelations[idx].TargetEntity">
                                 <option value="">— entity —</option>
@@ -105,7 +105,7 @@
                                     <option value="@e.Name">@e.Name</option>
                                 }
                             </select>
-                            <input class="dcinput" style="flex:1; font-size:12px; font-family:'IBM Plex Mono',monospace" placeholder="their column (default: same)" @bind="_edRelations[idx].TargetColumn" />
+                            <input class="dcinput" style="flex:1; font-size:12px; font-family:var(--font-sans)" placeholder="their column (default: same)" @bind="_edRelations[idx].TargetColumn" />
                             <button class="dcbtn" style="padding:3px 8px" @onclick="@(() => _edRelations.RemoveAt(idx))">×</button>
                         </div>
                     }

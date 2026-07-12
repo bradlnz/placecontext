@@ -7,7 +7,7 @@
     <title>PlaceContext — codebase visibility</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
     <HeadOutlet @rendermode="InteractiveServer" />
     <style>
         #dcshell {
@@ -20,6 +20,8 @@
             --bad:#e5534b; --bad-bg:rgba(229,83,75,0.13);
             --human:#58a6ff; --human-bg:rgba(88,166,255,0.13);
             --shadow:0 1px 2px rgba(0,0,0,0.4), 0 8px 24px rgba(0,0,0,0.22);
+            --font-sans:'Inter',system-ui,-apple-system,sans-serif;
+            --font-mono:'JetBrains Mono',ui-monospace,'SFMono-Regular',Menlo,monospace;
         }
         #dcshell[data-theme="light"] {
             --bg:#f5f6f8; --panel:#ffffff; --card:#ffffff; --card-2:#f4f6f8; --hover:#eef1f4;
@@ -34,8 +36,8 @@
         }
         * { box-sizing:border-box; }
         html, body { margin:0; padding:0; height:100%; }
-        body { font-family:'IBM Plex Sans',system-ui,sans-serif; background:#0a0b0d; -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility; }
-        #dcshell { font-family:'IBM Plex Sans',system-ui,sans-serif; color:var(--text); }
+        body { font-family:var(--font-sans); background:#0a0b0d; -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility; }
+        #dcshell { font-family:var(--font-sans); color:var(--text); font-variant-numeric:tabular-nums; letter-spacing:-0.006em; }
         a { color:inherit; text-decoration:none; }
         ::selection { background:var(--brand-bg); }
         ::-webkit-scrollbar { width:10px; height:10px; }
@@ -74,7 +76,7 @@
 
         .dcsearch-trigger { display:flex; align-items:center; gap:7px; padding:6px 11px; background:var(--card); border:1px solid var(--border); border-radius:7px; color:var(--text-3); font-size:12.5px; min-width:200px; cursor:pointer; }
         .dcsearch-trigger:hover { border-color:var(--border-2); color:var(--text-2); }
-        .dcsearch-trigger kbd { margin-left:auto; font-family:'IBM Plex Mono',monospace; font-size:10.5px; color:var(--text-3); border:1px solid var(--border); border-radius:4px; padding:0 4px; }
+        .dcsearch-trigger kbd { margin-left:auto; font-family:var(--font-sans); font-size:10.5px; color:var(--text-3); border:1px solid var(--border); border-radius:4px; padding:0 4px; }
         .dcsearch-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.5); display:flex; align-items:flex-start; justify-content:center; padding-top:12vh; z-index:50; }
         .dcsearch-modal { width:560px; max-width:92vw; background:var(--panel); border:1px solid var(--border-2); border-radius:14px; overflow:hidden; box-shadow:0 24px 70px rgba(0,0,0,.55); }
         .dcsearch-input { width:100%; border:none; border-bottom:1px solid var(--border); background:transparent; color:var(--text); font-size:15px; padding:16px 18px; outline:none; }
@@ -96,14 +98,14 @@
         .dcfocus-row.sev-medium .dcfocus-box { border-color:var(--warn); }
         .dcfocus-title { font-size:13px; color:var(--text); font-weight:500; }
         .dcfocus-detail { font-size:11.5px; color:var(--text-3); margin-top:2px; }
-        .dcfocus-proj { margin-left:auto; flex:none; font-size:11px; color:var(--text-3); font-family:'IBM Plex Mono',monospace; padding-top:1px; }
+        .dcfocus-proj { margin-left:auto; flex:none; font-size:11px; color:var(--text-3); font-family:var(--font-sans); padding-top:1px; }
         .dcfocus-clear { padding:22px 16px; text-align:center; color:var(--good); font-size:13px; }
 
         .dctabs { display:flex; gap:4px; border-bottom:1px solid var(--border); margin-bottom:18px; }
         .dctab { appearance:none; background:transparent; border:none; border-bottom:2px solid transparent; color:var(--text-3); font-size:13px; font-weight:500; padding:9px 13px; cursor:pointer; margin-bottom:-1px; }
         .dctab:hover { color:var(--text-2); }
         .dctab.active { color:var(--text); border-bottom-color:var(--brand); }
-        .dctab .n { font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--text-3); margin-left:6px; }
+        .dctab .n { font-family:var(--font-sans); font-size:11px; color:var(--text-3); margin-left:6px; }
         .dcslide-scrim { position:fixed; inset:0; background:rgba(0,0,0,.4); z-index:40; }
         .dcslide { position:fixed; top:0; right:0; height:100vh; width:420px; max-width:92vw; background:var(--panel); border-left:1px solid var(--border-2); box-shadow:-16px 0 50px rgba(0,0,0,.4); z-index:41; display:flex; flex-direction:column; }
         .dcslide-head { display:flex; align-items:center; gap:10px; padding:16px 18px; border-bottom:1px solid var(--border); }
@@ -124,7 +126,7 @@
         .dcfield { display:flex; flex-direction:column; gap:5px; min-width:0; }
         .dcfield > label { font-size:11.5px; font-weight:500; color:var(--text-2); }
         .dcfield .req { color:var(--bad); }
-        .dcfield .code { font-family:'IBM Plex Mono',monospace; font-size:10.5px; color:var(--text-3); }
+        .dcfield .code { font-family:var(--font-sans); font-size:10.5px; color:var(--text-3); }
         .dchint { font-size:11px; color:var(--text-3); line-height:1.5; }
         .dcform-section { border-top:1px solid var(--border); padding-top:14px; display:flex; flex-direction:column; gap:11px; }
         .dcform-title { font-size:10px; font-weight:700; letter-spacing:.6px; text-transform:uppercase; color:var(--text-3); }

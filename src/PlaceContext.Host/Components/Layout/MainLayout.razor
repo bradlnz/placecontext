@@ -26,7 +26,7 @@
             }
             <div style="display:flex; flex-direction:column; line-height:1.15">
                 <span style="font-size:14px; font-weight:600; letter-spacing:-.2px">@(_brand.ProductName ?? "placecontext")</span>
-                <span style="font-size:9.5px; color:var(--text-3); font-family:'IBM Plex Mono',monospace; letter-spacing:.06em">@OrgName</span>
+                <span style="font-size:9.5px; color:var(--text-3); font-family:var(--font-sans); letter-spacing:.06em">@OrgName</span>
             </div>
         </div>
 
@@ -58,7 +58,7 @@
             <div @onclick="ToggleSwitcher"
                  style="display:flex; align-items:center; gap:8px; padding:8px 10px; border-radius:6px; background:var(--card); border:1px solid var(--border-2); cursor:pointer">
                 <span style="width:7px; height:7px; flex:none; border-radius:50%; background:var(--good); box-shadow:0 0 8px rgba(67,214,117,.6)"></span>
-                <span style="font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:var(--text-2); flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis">
+                <span style="font-family:var(--font-sans); font-size:11.5px; color:var(--text-2); flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis">
                     @(Ui.CurrentProjectName ?? "select project")
                 </span>
                 <span style="color:var(--text-3); font-size:10px">▾</span>
@@ -71,7 +71,7 @@
                         <div @onclick="@(() => SwitchProject(p))"
                              style="display:flex; align-items:center; gap:8px; padding:7px 9px; border-radius:6px; cursor:pointer; background:@(p.Id == Ui.CurrentProjectId ? "var(--card-2)" : "transparent")">
                             <span style="width:6px; height:6px; flex:none; border-radius:50%; background:@(p.Id == Ui.CurrentProjectId ? "var(--good)" : "var(--border-2)")"></span>
-                            <span style="font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:var(--text-2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis">@p.Name</span>
+                            <span style="font-family:var(--font-sans); font-size:11.5px; color:var(--text-2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis">@p.Name</span>
                         </div>
                     }
                     @if (_projects.Count == 0)
@@ -86,7 +86,7 @@
             <AuthorizeView>
                 <Authorized>
                     <div style="display:flex; align-items:center; gap:8px; min-width:0">
-                        <div style="width:26px; height:26px; flex:none; border-radius:6px; background:var(--card-2); border:1px solid var(--border); display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:600; color:var(--text-2); font-family:'IBM Plex Mono',monospace">@Initials(context.User.Identity?.Name)</div>
+                        <div style="width:26px; height:26px; flex:none; border-radius:6px; background:var(--card-2); border:1px solid var(--border); display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:600; color:var(--text-2); font-family:var(--font-sans)">@Initials(context.User.Identity?.Name)</div>
                         <div style="min-width:0">
                             <div style="font-size:12px; color:var(--text-2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis">@context.User.Identity?.Name</div>
                             <div style="font-size:10px; color:var(--text-3)">@context.User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value</div>
@@ -115,7 +115,7 @@
         <header style="height:54px; flex:none; display:flex; align-items:center; justify-content:space-between; padding:0 24px; border-bottom:1px solid var(--border); background:var(--panel)">
             <div style="display:flex; align-items:center; gap:10px; min-width:0">
                 <span style="font-size:14px; font-weight:600; letter-spacing:-.2px">@Ui.Title</span>
-                <span style="font-size:12px; color:var(--text-3); font-family:'IBM Plex Mono',monospace; white-space:nowrap; overflow:hidden; text-overflow:ellipsis">@Ui.Sub</span>
+                <span style="font-size:12px; color:var(--text-3); font-family:var(--font-sans); white-space:nowrap; overflow:hidden; text-overflow:ellipsis">@Ui.Sub</span>
             </div>
             <div style="display:flex; align-items:center; gap:10px; flex:none">
                 <button class="dcsearch-trigger" @onclick="OpenSearch">
@@ -123,7 +123,7 @@
                     Search context, files, changes
                     <kbd>/</kbd>
                 </button>
-                <div style="display:flex; align-items:center; gap:7px; padding:6px 11px; background:var(--good-bg); border-radius:7px; color:var(--good); font-size:11.5px; font-weight:500; font-family:'IBM Plex Mono',monospace">
+                <div style="display:flex; align-items:center; gap:7px; padding:6px 11px; background:var(--good-bg); border-radius:7px; color:var(--good); font-size:11.5px; font-weight:500; font-family:var(--font-sans)">
                     <span style="width:6px; height:6px; border-radius:50%; background:var(--good); animation:dcpulse 1.6s ease-in-out infinite"></span>
                     @_runningCount running
                 </div>

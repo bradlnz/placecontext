@@ -16,7 +16,7 @@
             <h1 style="margin:0; font-size:20px; font-weight:600; letter-spacing:-.01em">Dashboard</h1>
             <p style="margin:4px 0 0; color:var(--text-2); font-size:13px">
                 Jobs across
-                <span style="font-family:'IBM Plex Mono',monospace; color:var(--text)">@(Ui.CurrentProjectName ?? "the workspace")</span>
+                <span style="font-family:var(--font-sans); color:var(--text)">@(Ui.CurrentProjectName ?? "the workspace")</span>
                 · every run yields an artifact
             </p>
         </div>
@@ -31,28 +31,28 @@
         <div class="dccard" style="padding:14px 16px; border-radius:8px">
             <div style="font-size:11px; color:var(--text-3); letter-spacing:.08em; font-weight:500">RUNNING</div>
             <div style="display:flex; align-items:baseline; gap:8px; margin-top:6px">
-                <span style="font-family:'IBM Plex Mono',monospace; font-size:26px; font-weight:600; color:var(--good)">@_running</span>
+                <span style="font-family:var(--font-sans); font-size:26px; font-weight:600; color:var(--good)">@_running</span>
                 <span style="font-size:12px; color:var(--text-3)">jobs</span>
             </div>
         </div>
         <div class="dccard" style="padding:14px 16px; border-radius:8px">
             <div style="font-size:11px; color:var(--text-3); letter-spacing:.08em; font-weight:500">QUEUED</div>
             <div style="display:flex; align-items:baseline; gap:8px; margin-top:6px">
-                <span style="font-family:'IBM Plex Mono',monospace; font-size:26px; font-weight:600; color:var(--warn)">@_queued</span>
+                <span style="font-family:var(--font-sans); font-size:26px; font-weight:600; color:var(--warn)">@_queued</span>
                 <span style="font-size:12px; color:var(--text-3)">waiting to start</span>
             </div>
         </div>
         <div class="dccard" style="padding:14px 16px; border-radius:8px">
             <div style="font-size:11px; color:var(--text-3); letter-spacing:.08em; font-weight:500">FAILED · 24H</div>
             <div style="display:flex; align-items:baseline; gap:8px; margin-top:6px">
-                <span style="font-family:'IBM Plex Mono',monospace; font-size:26px; font-weight:600; color:var(--bad)">@_failed24</span>
+                <span style="font-family:var(--font-sans); font-size:26px; font-weight:600; color:var(--bad)">@_failed24</span>
                 <span style="font-size:12px; color:var(--text-3)">needs attention</span>
             </div>
         </div>
         <div class="dccard" style="padding:14px 16px; border-radius:8px">
             <div style="font-size:11px; color:var(--text-3); letter-spacing:.08em; font-weight:500">SUCCEEDED · 24H</div>
             <div style="display:flex; align-items:baseline; gap:8px; margin-top:6px">
-                <span style="font-family:'IBM Plex Mono',monospace; font-size:26px; font-weight:600; color:var(--text)">@_succeeded24</span>
+                <span style="font-family:var(--font-sans); font-size:26px; font-weight:600; color:var(--text)">@_succeeded24</span>
                 <span style="font-size:12px; color:var(--text-3)">artifacts generated</span>
             </div>
         </div>
@@ -68,7 +68,7 @@
                    class="dccard dcdash-row" style="padding:13px 16px; border-radius:8px; text-decoration:none; color:var(--text); display:block; border-left:2px solid var(--brand-2)">
                     <div style="display:flex; align-items:baseline; justify-content:space-between; gap:8px">
                         <span style="font-size:13.5px; font-weight:600">@e.Name</span>
-                        <span style="font-family:'IBM Plex Mono',monospace; font-size:16px; color:var(--brand-2)">@EntityCount(e)</span>
+                        <span style="font-family:var(--font-sans); font-size:16px; color:var(--brand-2)">@EntityCount(e)</span>
                     </div>
                     @if (_entityCharts.TryGetValue(e.Id, out var chart) && chart.Bars.Count > 0)
                     {
@@ -81,14 +81,14 @@
                                     <span style="flex:1; height:6px; border-radius:4px; background:var(--card-2); overflow:hidden">
                                         <span style="display:block; height:100%; width:@(frac)%; background:var(--brand-2)"></span>
                                     </span>
-                                    <span style="font-family:'IBM Plex Mono',monospace; color:var(--text-3)">@count</span>
+                                    <span style="font-family:var(--font-sans); color:var(--text-3)">@count</span>
                                 </div>
                             }
                         </div>
                     }
                     else
                     {
-                        <div style="font-size:10.5px; color:var(--text-3); margin-top:3px; font-family:'IBM Plex Mono',monospace">@e.TableName</div>
+                        <div style="font-size:10.5px; color:var(--text-3); margin-top:3px; font-family:var(--font-sans)">@e.TableName</div>
                     }
                 </a>
             }
@@ -110,7 +110,7 @@
             {
                 <div class="dccard" style="padding:12px 16px; border-radius:8px">
                     <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px">
-                        <span style="font-size:12px; font-weight:600; font-family:'IBM Plex Mono',monospace">@chart.TableName["sql:".Length..]</span>
+                        <span style="font-size:12px; font-weight:600; font-family:var(--font-sans)">@chart.TableName["sql:".Length..]</span>
                         <span style="flex:1"></span>
                         <span style="font-size:10px; color:var(--text-3)">@chart.GeneratedAt.ToWorkspaceTime().ToString("MM-dd HH:mm")</span>
                     </div>
@@ -130,7 +130,7 @@
                 @foreach (var f in new[] { "all", "running", "failed" })
                 {
                     <span @onclick="@(() => _filter = f)"
-                          style="font-family:'IBM Plex Mono',monospace; font-size:11px; padding:3px 9px; border-radius:99px; cursor:pointer;
+                          style="font-family:var(--font-sans); font-size:11px; padding:3px 9px; border-radius:99px; cursor:pointer;
                                  background:@(_filter == f ? "var(--card-2)" : "transparent");
                                  border:1px solid @(_filter == f ? "var(--border-2)" : "transparent");
                                  color:@(_filter == f ? "var(--text)" : "var(--text-3)")">@f</span>
@@ -159,17 +159,17 @@
                     <div @onclick="@(() => Nav.NavigateTo($"/observability?run={run.Id}"))"
                          class="dcdash-row"
                          style="display:grid; grid-template-columns:110px minmax(180px,1.4fr) minmax(140px,1fr) 90px 90px 130px 100px; gap:0 16px; align-items:center; padding:11px 16px; border-bottom:1px solid var(--border); cursor:pointer; min-width:880px">
-                        <span style="display:flex; align-items:center; gap:8px; font-family:'IBM Plex Mono',monospace; font-size:11px; color:@StatusColor(run.Status)">
+                        <span style="display:flex; align-items:center; gap:8px; font-family:var(--font-sans); font-size:11px; color:@StatusColor(run.Status)">
                             <span style="width:7px; height:7px; flex:none; border-radius:50%; background:@StatusColor(run.Status); animation:@(run.Status == "Running" ? "dcpulse 1.6s ease-in-out infinite" : "none")"></span>@run.Status.ToUpperInvariant()
                         </span>
-                        <span style="font-family:'IBM Plex Mono',monospace; font-size:12.5px; color:var(--text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap">@rep.JobName</span>
-                        <span style="font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:var(--human); overflow:hidden; text-overflow:ellipsis; white-space:nowrap">@rep.ProjectName</span>
-                        <span style="font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:var(--text-2)">
+                        <span style="font-family:var(--font-sans); font-size:12.5px; color:var(--text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap">@rep.JobName</span>
+                        <span style="font-family:var(--font-sans); font-size:11.5px; color:var(--human); overflow:hidden; text-overflow:ellipsis; white-space:nowrap">@rep.ProjectName</span>
+                        <span style="font-family:var(--font-sans); font-size:11.5px; color:var(--text-2)">
                             ✓@run.ShardResults.Count(s => s.Outcome == "Succeeded")@(run.ShardResults.Any(s => s.Outcome == "Failed") ? $" ✗{run.ShardResults.Count(s => s.Outcome == "Failed")}" : "")
                         </span>
-                        <span style="font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:var(--text-2)">@Duration(run)</span>
+                        <span style="font-family:var(--font-sans); font-size:11.5px; color:var(--text-2)">@Duration(run)</span>
                         <span style="font-size:12px; color:var(--text-2)">@run.StartedAt.ToWorkspaceTime().ToString("HH:mm · MMM d")</span>
-                        <span style="font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:var(--text-3)">@(run.Snapshot.MapSourceKind)</span>
+                        <span style="font-family:var(--font-sans); font-size:11.5px; color:var(--text-3)">@(run.Snapshot.MapSourceKind)</span>
                     </div>
                 }
             }

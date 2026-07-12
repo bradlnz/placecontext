@@ -49,7 +49,7 @@ else
                                 {
                                     <div style="font-size:12px; color:var(--text-3); margin-top:3px">@job.Description</div>
                                 }
-                                <div style="display:flex; gap:10px; margin-top:6px; font-size:11px; color:var(--text-3); font-family:'IBM Plex Mono',monospace">
+                                <div style="display:flex; gap:10px; margin-top:6px; font-size:11px; color:var(--text-3); font-family:var(--font-sans)">
                                     @if (job.MapSourceKind == "code")
                                     {
                                         <span style="color:var(--brand-2)">[@job.MapRuntimeId]</span>
@@ -137,7 +137,7 @@ else
                                               color:@StatusColor(run.Status); background:@StatusBg(run.Status)">
                                             @run.Status
                                         </span>
-                                        <span style="font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:var(--text-2); flex:1">
+                                        <span style="font-family:var(--font-sans); font-size:11.5px; color:var(--text-2); flex:1">
                                             @run.StartedAt.ToWorkspaceTime().ToString("yyyy-MM-dd HH:mm")
                                         </span>
                                         <span style="font-size:11px; color:var(--text-3)">
@@ -145,7 +145,7 @@ else
                                         </span>
                                         @if (run.FinishedAt.HasValue)
                                         {
-                                            <span style="font-size:11px; color:var(--text-3); font-family:'IBM Plex Mono',monospace">
+                                            <span style="font-size:11px; color:var(--text-3); font-family:var(--font-sans)">
                                                 @FormatDuration(run.StartedAt, run.FinishedAt.Value)
                                             </span>
                                         }
@@ -164,7 +164,7 @@ else
                               color:@StatusColor(_runDetail.Status); background:@StatusBg(_runDetail.Status)">
                             @_runDetail.Status
                         </span>
-                        <span style="font-size:11px; color:var(--text-3); font-family:'IBM Plex Mono',monospace">@_runDetail.Id</span>
+                        <span style="font-size:11px; color:var(--text-3); font-family:var(--font-sans)">@_runDetail.Id</span>
                     </div>
 
                     @* Snapshot badge *@
@@ -209,7 +209,7 @@ else
                             </div>
                             @if (shard.Artifact is not null)
                             {
-                                <pre style="background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:10px; font-size:11px; font-family:'IBM Plex Mono',monospace; overflow-x:auto; white-space:pre-wrap; word-break:break-all; color:var(--text-2); max-height:240px; overflow-y:auto">@PrettyJson(shard.Artifact)</pre>
+                                <pre style="background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:10px; font-size:11px; font-family:var(--font-mono); overflow-x:auto; white-space:pre-wrap; word-break:break-all; color:var(--text-2); max-height:240px; overflow-y:auto">@PrettyJson(shard.Artifact)</pre>
                                 @if (ArtifactChart.TrySvg(shard.Artifact, out var shardChart))
                                 {
                                     <div style="font-size:11px; color:var(--text-3); margin-top:8px">chart <span style="color:var(--text-3)">(from the artifact's JSON)</span></div>
@@ -234,7 +234,7 @@ else
                             {
                                 <details style="margin-top:4px">
                                     <summary style="font-size:11px; color:var(--text-3); cursor:pointer">Log</summary>
-                                    <pre style="font-size:10.5px; font-family:'IBM Plex Mono',monospace; color:var(--text-3); white-space:pre-wrap; margin-top:4px">@shard.Log</pre>
+                                    <pre style="font-size:10.5px; font-family:var(--font-mono); color:var(--text-3); white-space:pre-wrap; margin-top:4px">@shard.Log</pre>
                                 </details>
                             }
                         </div>
@@ -253,7 +253,7 @@ else
                             </div>
                             @if (reduce.Artifact is not null)
                             {
-                                <pre style="background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:10px; font-size:11px; font-family:'IBM Plex Mono',monospace; overflow-x:auto; white-space:pre-wrap; word-break:break-all; color:var(--text-2); max-height:300px; overflow-y:auto">@PrettyJson(reduce.Artifact)</pre>
+                                <pre style="background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:10px; font-size:11px; font-family:var(--font-mono); overflow-x:auto; white-space:pre-wrap; word-break:break-all; color:var(--text-2); max-height:300px; overflow-y:auto">@PrettyJson(reduce.Artifact)</pre>
                                 @if (ArtifactChart.TrySvg(reduce.Artifact, out var reduceChart))
                                 {
                                     <div style="font-size:11px; color:var(--text-3); margin-top:8px">chart <span style="color:var(--text-3)">(from the artifact's JSON)</span></div>
@@ -324,7 +324,7 @@ else
                                      @onclick="@(() => OpenRunDetailFromTrigger(run.Id))">
                                     <span style="font-size:11px; font-weight:600; padding:3px 8px; border-radius:5px;
                                           color:@StatusColor(run.Status); background:@StatusBg(run.Status)">@run.Status</span>
-                                    <span style="font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:var(--text-2); flex:1">
+                                    <span style="font-family:var(--font-sans); font-size:11.5px; color:var(--text-2); flex:1">
                                         @run.StartedAt.ToWorkspaceTime().ToString("yyyy-MM-dd HH:mm")
                                     </span>
                                     <span style="font-size:11px; color:var(--text-3)">✓ @run.SucceededShards @(run.FailedShards > 0 ? $"✗ {run.FailedShards}" : "")</span>
@@ -347,7 +347,7 @@ else
                                 <div style="font-size:13px; font-weight:600">
                                     @t.Name <span style="font-size:11px; color:var(--text-3); font-weight:400">· @t.Kind</span>
                                 </div>
-                                <div style="font-size:11px; color:var(--text-3); font-family:'IBM Plex Mono',monospace; margin-top:2px">
+                                <div style="font-size:11px; color:var(--text-3); font-family:var(--font-sans); margin-top:2px">
                                     @if (t.Kind == "Schedule")
                                     {
                                         <span>@t.CronExpression</span>
@@ -449,7 +449,7 @@ else
                 {
                     <div class="dcfield">
                         <label>Image <span class="req">*</span></label>
-                        <input class="dcinput" style="font-family:'IBM Plex Mono',monospace; font-size:12px" @bind="_edMapImage" placeholder="myorg/worker:latest" />
+                        <input class="dcinput" style="font-family:var(--font-sans); font-size:12px" @bind="_edMapImage" placeholder="myorg/worker:latest" />
                     </div>
                 }
                 else
@@ -468,7 +468,7 @@ else
                         </div>
                         <div class="dcfield" style="flex:1">
                             <label>Entrypoint</label>
-                            <input class="dcinput" style="font-family:'IBM Plex Mono',monospace; font-size:12px" @bind="_edMapEntrypoint"
+                            <input class="dcinput" style="font-family:var(--font-sans); font-size:12px" @bind="_edMapEntrypoint"
                                    placeholder="@DefaultEntrypointFor(_edMapRuntimeId)" />
                         </div>
                     </div>
@@ -487,7 +487,7 @@ else
                         else
                         {
                             <textarea class="dcinput" rows="12"
-                                      style="font-family:'IBM Plex Mono',monospace; font-size:12px; resize:vertical"
+                                      style="font-family:var(--font-sans); font-size:12px; resize:vertical"
                                       @bind="_edMapSource"
                                       placeholder="@SourcePlaceholderFor(_edMapRuntimeId)">
                             </textarea>
@@ -504,7 +504,7 @@ else
                                 <span>This job has @_edMapFiles.Count files — the editor above changes only the entrypoint; the rest are kept on save:</span>
                                 @foreach (var f in _edMapFiles.Where(f => f.Path != (_edMapEntrypoint == "" ? DefaultEntrypointFor(_edMapRuntimeId) : _edMapEntrypoint)))
                                 {
-                                    <span style="font-family:'IBM Plex Mono',monospace; background:var(--card-2); border-radius:5px; padding:1px 7px">@f.Path</span>
+                                    <span style="font-family:var(--font-sans); background:var(--card-2); border-radius:5px; padding:1px 7px">@f.Path</span>
                                 }
                             </div>
                         }
@@ -551,7 +551,7 @@ else
                     else
                     {
                         <textarea class="dcinput" rows="4"
-                                  style="font-family:'IBM Plex Mono',monospace; font-size:12px; resize:vertical"
+                                  style="font-family:var(--font-sans); font-size:12px; resize:vertical"
                                   @bind="_edInputPayloadsRaw"
                                   placeholder="{&quot;key&quot;: &quot;value1&quot;}&#10;{&quot;key&quot;: &quot;value2&quot;}">
                         </textarea>
@@ -567,7 +567,7 @@ else
                         {
                             var idx = i;
                             <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap">
-                                <input class="dcinput" style="width:130px; font-size:12px; font-family:'IBM Plex Mono',monospace" placeholder="name" @bind="_edParams[idx].Name" />
+                                <input class="dcinput" style="width:130px; font-size:12px; font-family:var(--font-sans)" placeholder="name" @bind="_edParams[idx].Name" />
                                 <input class="dcinput" style="flex:1; min-width:120px; font-size:12px" placeholder="Label (optional)" @bind="_edParams[idx].Label" />
                                 <select class="dcinput" style="width:104px; font-size:12px" @bind="_edParams[idx].Type">
                                     <option value="text">text</option>
@@ -577,7 +577,7 @@ else
                                 </select>
                                 @if (_edParams[idx].Type == "select")
                                 {
-                                    <input class="dcinput" style="flex:1; min-width:140px; font-size:12px; font-family:'IBM Plex Mono',monospace"
+                                    <input class="dcinput" style="flex:1; min-width:140px; font-size:12px; font-family:var(--font-sans)"
                                            placeholder="options, comma-separated" @bind="_edParams[idx].OptionsRaw" />
                                 }
                                 <label style="display:flex; align-items:center; gap:4px; font-size:11.5px; color:var(--text-2); cursor:pointer">
@@ -599,7 +599,7 @@ else
                 <div class="dcfield">
                     <label>Environment variables <span class="code" style="margin-left:5px">KEY=VALUE, one per line</span></label>
                     <textarea class="dcinput" rows="3"
-                              style="font-family:'IBM Plex Mono',monospace; font-size:12px; resize:vertical"
+                              style="font-family:var(--font-sans); font-size:12px; resize:vertical"
                               @bind="_edMapEnvRaw"
                               placeholder="MY_KEY=my_value">
                     </textarea>
@@ -618,7 +618,7 @@ else
                         <div style="display:flex; flex-wrap:wrap; gap:6px">
                             @foreach (var s in _vaultSecrets)
                             {
-                                <span style="font-family:'IBM Plex Mono',monospace; font-size:11.5px; background:var(--card-2); border:1px solid var(--border); border-radius:6px; padding:2px 8px">@s.Name</span>
+                                <span style="font-family:var(--font-sans); font-size:11.5px; background:var(--card-2); border:1px solid var(--border); border-radius:6px; padding:2px 8px">@s.Name</span>
                             }
                         </div>
                         <div class="dchint" style="margin-top:6px">
@@ -676,7 +676,7 @@ else
                     {
                         <div class="dcfield" style="max-width:280px; margin-top:8px">
                             <label>Output file name <span class="code" style="margin-left:5px">in /out</span></label>
-                            <input class="dcinput" style="font-family:'IBM Plex Mono',monospace" @bind="_edReturnFileName"
+                            <input class="dcinput" style="font-family:var(--font-sans)" @bind="_edReturnFileName"
                                    placeholder="report.pdf" />
                             <div class="dchint">The named file becomes the run's artifact; blank = first file matching the type.</div>
                         </div>
