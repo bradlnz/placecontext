@@ -65,6 +65,14 @@ public sealed class EfEntityTagStore : IEntityTagStore
             .Take(Math.Clamp(take, 1, 100))
             .ToListAsync(ct);
 
+    public async Task<IReadOnlyList<EntityTagPair>> PairsForEntityAsync(Guid entityId, int take = 60, CancellationToken ct = default)
+        => await _db.EntityTags.AsNoTracking()
+            .Where(t => t.EntityId == entityId)
+            .OrderByDescending(t => t.CreatedAt)
+            .Take(Math.Clamp(take, 1, 200))
+            .Select(t => new EntityTagPair(t.Key, t.RunId, t.JobId))
+            .ToListAsync(ct);
+
     public async Task<IReadOnlyList<Guid>> RunsForKeyAsync(Guid entityId, string key, int take = 20, CancellationToken ct = default)
         => await _db.EntityTags.AsNoTracking()
             .Where(t => t.EntityId == entityId && t.Key == key)

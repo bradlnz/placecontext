@@ -9,6 +9,9 @@ namespace PlaceContext.Application.Features;
 /// <summary>One edge of the run↔entity relation tree: this run's output carried this entity key.</summary>
 public sealed record EntityTag(Guid ProjectId, Guid EntityId, string EntityName, string Key, Guid RunId, Guid JobId);
 
+/// <summary>A persisted tag edge, as consumed by graph views: key value ⇄ run (and its job).</summary>
+public sealed record EntityTagPair(string Key, Guid RunId, Guid JobId);
+
 /// <summary>Persistence port for entity tags (a link store, not an aggregate — like the tool-call log).</summary>
 public interface IEntityTagStore
 {
@@ -20,6 +23,9 @@ public interface IEntityTagStore
 
     /// <summary>All run ids tagged against this entity, any key (newest first).</summary>
     Task<IReadOnlyList<Guid>> RunsForEntityAsync(Guid entityId, int take = 20, CancellationToken ct = default);
+
+    /// <summary>The tag pairs for an entity — which key value each run was linked through.</summary>
+    Task<IReadOnlyList<EntityTagPair>> PairsForEntityAsync(Guid entityId, int take = 60, CancellationToken ct = default);
 }
 
 /// <summary>
@@ -159,4 +165,17 @@ public sealed class EntityRunsHandler : Cqrs.IQueryHandler<EntityRunsQuery, IRea
 
     public Task<IReadOnlyList<Guid>> HandleAsync(EntityRunsQuery query, CancellationToken ct = default)
         => _tags.RunsForEntityAsync(query.EntityId);
+}
+
+/// <summary>The entity's tag pairs — the concrete edges between its records and runs.</summary>
+public sealed record EntityTagPairsQuery(Guid EntityId) : Cqrs.IQuery<IReadOnlyList<EntityTagPair>>;
+
+public sealed class EntityTagPairsHandler : Cqrs.IQueryHandler<EntityTagPairsQuery, IReadOnlyList<EntityTagPair>>
+{
+    private readonly IEntityTagStore _tags;
+
+    public EntityTagPairsHandler(IEntityTagStore tags) => _tags = tags;
+
+    public Task<IReadOnlyList<EntityTagPair>> HandleAsync(EntityTagPairsQuery query, CancellationToken ct = default)
+        => _tags.PairsForEntityAsync(query.EntityId);
 }

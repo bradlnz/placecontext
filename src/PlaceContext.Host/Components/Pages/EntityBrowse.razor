@@ -372,71 +372,148 @@
 
     private string? _sectionGraph;
 
-    // Section-level graph: this entity with everything related — entities linked by declared
-    // relations (either direction) and the runs/artifacts its records were tagged into.
+    // The entity's DATA graph: every record as a node, joined to its actual related records
+    // (bulk join per declared relation), the runs tagged with its key values, and each run's
+    // artifacts — all concrete, all clickable. Capped per column to stay readable.
     private async Task BuildSectionGraphAsync()
     {
         _sectionGraph = null;
-        if (_entity is null) return;
+        if (_entity is null || _rows is null || _rows.Rows.Count == 0) return;
         try
         {
-            var outgoing = _entity.Relations
-                .Select(r => (Entity: r.TargetEntity, Via: $"{r.Column} ↔ {r.TargetColumn}"));
-            var incoming = _all
-                .Where(e => e.Id != _entity.Id)
-                .SelectMany(e => e.Relations
-                    .Where(r => string.Equals(r.TargetEntity, _entity.Name, StringComparison.OrdinalIgnoreCase))
-                    .Select(r => (Entity: e.Name, Via: $"{r.TargetColumn} ↔ {r.Column}")));
-            var neighbours = outgoing.Concat(incoming)
-                .DistinctBy(x => x.Entity, StringComparer.OrdinalIgnoreCase).Take(6).ToList();
+            const int maxRecords = 12;
+            var cols = _rows.Columns.ToList();
+            var labelIdx = LabelCol() is { } lc ? Math.Max(0, cols.FindIndex(c => string.Equals(c, lc, StringComparison.OrdinalIgnoreCase))) : 0;
+            var records = _rows.Rows.Take(maxRecords)
+                .Select(r => labelIdx < r.Count ? r[labelIdx] ?? "—" : "—").ToList();
 
-            var runIds = await Svc.ListEntityRunsAsync(_entity.Id);
-            var artifactCount = 0;
-            foreach (var runId in runIds.Take(6))
+            // Which key values identify each record (label + relation columns) — mirrors the tagger.
+            var keyToRecord = new Dictionary<string, int>(StringComparer.Ordinal);
+            var keyCols = new List<int> { labelIdx };
+            foreach (var rel in _entity.Relations)
             {
-                try { artifactCount += (await Svc.ListRunArtifactsAsync(runId)).Count; }
+                var ci = cols.FindIndex(c => string.Equals(c, rel.Column, StringComparison.OrdinalIgnoreCase));
+                if (ci >= 0) keyCols.Add(ci);
+            }
+            for (var i = 0; i < Math.Min(maxRecords, _rows.Rows.Count); i++)
+            {
+                foreach (var ci in keyCols.Distinct())
+                    if (ci < _rows.Rows[i].Count && _rows.Rows[i][ci] is { Length: > 2 } v)
+                        keyToRecord.TryAdd(v, i);
+            }
+
+            // Related records per relation, bulk-joined once (isolated role, capped).
+            var relatedNodes = new List<(string Entity, string Label)>();
+            var relEdges = new List<(int Record, int Related)>();
+            foreach (var rel in _entity.Relations.Take(2))
+            {
+                var target = _all.FirstOrDefault(e => string.Equals(e.Name, rel.TargetEntity, StringComparison.OrdinalIgnoreCase));
+                if (target is null) continue;
+                var tLabel = target.LabelColumn ?? rel.TargetColumn;
+                try
+                {
+                    var join = await Svc.ExecuteProjectDataAsync(ProjectId,
+                        $"SELECT a.\"{rel.Column}\"::text, b.\"{tLabel.Replace("\"", "")}\"::text FROM \"{_entity.TableName.Replace("\"", "")}\" a JOIN \"{target.TableName.Replace("\"", "")}\" b ON a.\"{rel.Column}\"::text = b.\"{rel.TargetColumn.Replace("\"", "")}\"::text LIMIT 40");
+                    foreach (var row in join.Rows)
+                    {
+                        if (row.Count < 2 || row[0] is not { } k || row[1] is not { } lbl) continue;
+                        if (!keyToRecord.TryGetValue(k, out var recIdx)) continue;
+                        var ni = relatedNodes.FindIndex(n => n.Entity == target.Name && n.Label == lbl);
+                        if (ni < 0) { relatedNodes.Add((target.Name, lbl)); ni = relatedNodes.Count - 1; }
+                        if (relatedNodes.Count > maxRecords) break;
+                        if (!relEdges.Contains((recIdx, ni))) relEdges.Add((recIdx, ni));
+                    }
+                }
                 catch { }
             }
 
-            if (neighbours.Count == 0 && runIds.Count == 0) return;
-
-            var height = Math.Max(150.0, Math.Max(neighbours.Count * 46, 100) + 46);
-            var cy = height / 2.0;
-            var sb = new System.Text.StringBuilder();
-            sb.Append(FormattableString.Invariant(
-                $"<svg viewBox=\"0 0 900 {height}\" style=\"width:100%; border:1px solid var(--border); border-radius:10px; background:var(--card); background-image:radial-gradient(var(--border-2) 1px, transparent 1px); background-size:22px 22px\">"));
-
-            for (var i = 0; i < neighbours.Count; i++)
+            // Tagged runs joined to records via the persisted key pairs; artifacts per run.
+            var pairs = await Svc.ListEntityTagPairsAsync(_entity.Id);
+            var runNodes = new List<Guid>();
+            var runEdges = new List<(int Record, int Run)>();
+            foreach (var pair in pairs)
             {
-                var y = 30 + i * 46;
-                sb.Append(FormattableString.Invariant($"<line x1='240' y1='{y}' x2='372' y2='{cy}' stroke='var(--human)' stroke-width='1.3' stroke-dasharray='5 4' opacity='.7'/>"));
-                sb.Append($"<a href='/project/{ProjectId}/entity/{Uri.EscapeDataString(neighbours[i].Entity)}'>");
-                sb.Append(FormattableString.Invariant($"<rect x='70' y='{y - 17}' width='170' height='34' rx='8' fill='var(--human-bg)' stroke='var(--human)' style='cursor:pointer'/>"));
-                sb.Append(FormattableString.Invariant($"<text x='84' y='{y - 2}' font-size='11.5' font-weight='600' fill='var(--text)' style='cursor:pointer'>{E(Trunc(neighbours[i].Entity, 20))}</text>"));
-                sb.Append(FormattableString.Invariant($"<text x='84' y='{y + 10}' font-size='8.5' fill='var(--text-3)' font-family='IBM Plex Mono'>{E(Trunc(neighbours[i].Via, 26))}</text>"));
-                sb.Append("</a>");
+                if (!keyToRecord.TryGetValue(pair.Key, out var recIdx)) continue;
+                var ri = runNodes.IndexOf(pair.RunId);
+                if (ri < 0)
+                {
+                    if (runNodes.Count >= 8) continue;
+                    runNodes.Add(pair.RunId);
+                    ri = runNodes.Count - 1;
+                }
+                if (!runEdges.Contains((recIdx, ri))) runEdges.Add((recIdx, ri));
+            }
+            var artNodes = new List<(int Run, RunArtifactLinkView Art)>();
+            for (var ri = 0; ri < runNodes.Count; ri++)
+            {
+                try
+                {
+                    foreach (var a in (await Svc.ListRunArtifactsAsync(runNodes[ri])).Take(3))
+                        if (artNodes.Count < 14) artNodes.Add((ri, a));
+                }
+                catch { }
             }
 
-            sb.Append(FormattableString.Invariant($"<rect x='372' y='{cy - 24}' width='170' height='48' rx='10' fill='var(--brand-bg)' stroke='var(--brand-2)' stroke-width='1.6'/>"));
-            sb.Append(FormattableString.Invariant($"<text x='457' y='{cy - 3}' font-size='13' font-weight='600' fill='var(--text)' text-anchor='middle'>{E(_entity.Name)}</text>"));
-            sb.Append(FormattableString.Invariant($"<text x='457' y='{cy + 12}' font-size='9' fill='var(--text-3)' text-anchor='middle' font-family='IBM Plex Mono'>{_rows?.Rows.Count ?? 0} records · {E(_entity.TableName)}</text>"));
-
-            if (runIds.Count > 0)
-            {
-                sb.Append(FormattableString.Invariant($"<line x1='542' y1='{cy}' x2='648' y2='{cy - 26}' stroke='var(--border-2)' stroke-width='1.3' stroke-dasharray='4 3'/>"));
-                sb.Append(FormattableString.Invariant($"<rect x='648' y='{cy - 43}' width='160' height='34' rx='8' fill='var(--card-2)' stroke='var(--border-2)'/>"));
-                sb.Append(FormattableString.Invariant($"<text x='662' y='{cy - 28}' font-size='11.5' font-weight='600' fill='var(--text)'>{runIds.Count} tagged run(s)</text>"));
-                sb.Append(FormattableString.Invariant($"<text x='662' y='{cy - 16}' font-size='8.5' fill='var(--text-3)' font-family='IBM Plex Mono'>output mentioned these records</text>"));
-                sb.Append(FormattableString.Invariant($"<line x1='542' y1='{cy}' x2='648' y2='{cy + 26}' stroke='var(--good)' stroke-width='1.3' stroke-dasharray='4 3' opacity='.7'/>"));
-                sb.Append(FormattableString.Invariant($"<rect x='648' y='{cy + 9}' width='160' height='34' rx='8' fill='var(--good-bg)' stroke='var(--good)'/>"));
-                sb.Append(FormattableString.Invariant($"<text x='662' y='{cy + 24}' font-size='11.5' font-weight='600' fill='var(--good)'>{artifactCount} artifact(s)</text>"));
-                sb.Append(FormattableString.Invariant($"<text x='662' y='{cy + 36}' font-size='8.5' fill='var(--text-3)' font-family='IBM Plex Mono'>open a record to view them</text>"));
-            }
-
-            sb.Append("</svg>");
-            _sectionGraph = sb.ToString();
+            _sectionGraph = DrawDataGraph(records, relatedNodes, relEdges, runNodes, runEdges, artNodes);
         }
         catch { /* the graph is derived sugar — the view renders without it */ }
+    }
+
+    private string DrawDataGraph(
+        List<string?> records,
+        List<(string Entity, string Label)> related,
+        List<(int Record, int Related)> relEdges,
+        List<Guid> runs,
+        List<(int Record, int Run)> runEdges,
+        List<(int Run, RunArtifactLinkView Art)> arts)
+    {
+        const double xRel = 20, xRec = 250, xRun = 500, xArt = 720, w = 170, rh = 30, gap = 10;
+        double Y(int i) => 24 + i * (rh + gap);
+        var height = Math.Max(Math.Max(records.Count, related.Count), Math.Max(runs.Count, arts.Count)) * (rh + gap) + 44;
+        var sb = new System.Text.StringBuilder();
+        sb.Append(FormattableString.Invariant(
+            $"<svg viewBox=\"0 0 910 {height}\" style=\"width:100%; border:1px solid var(--border); border-radius:10px; background:var(--card); background-image:radial-gradient(var(--border-2) 1px, transparent 1px); background-size:22px 22px\">"));
+
+        foreach (var col in new[] { (xRel, "related"), (xRec, _entity?.Name.ToLowerInvariant() ?? "records"), (xRun, "tagged runs"), (xArt, "artifacts") })
+            sb.Append(FormattableString.Invariant($"<text x='{col.Item1 + 4}' y='14' font-size='8.5' fill='var(--text-3)' letter-spacing='1' font-family='IBM Plex Mono'>{E(col.Item2.ToUpperInvariant())}</text>"));
+
+        foreach (var (rec, rel) in relEdges)
+            sb.Append(FormattableString.Invariant($"<line x1='{xRel + w}' y1='{Y(rel) + rh / 2}' x2='{xRec}' y2='{Y(rec) + rh / 2}' stroke='var(--human)' stroke-width='1' stroke-dasharray='4 3' opacity='.6'/>"));
+        foreach (var (rec, run) in runEdges)
+            sb.Append(FormattableString.Invariant($"<line x1='{xRec + w}' y1='{Y(rec) + rh / 2}' x2='{xRun}' y2='{Y(run) + rh / 2}' stroke='var(--border-2)' stroke-width='1' stroke-dasharray='4 3'/>"));
+        for (var i = 0; i < arts.Count; i++)
+            sb.Append(FormattableString.Invariant($"<line x1='{xRun + w}' y1='{Y(arts[i].Run) + rh / 2}' x2='{xArt}' y2='{Y(i) + rh / 2}' stroke='var(--good)' stroke-width='1' stroke-dasharray='4 3' opacity='.6'/>"));
+
+        for (var i = 0; i < related.Count; i++)
+        {
+            sb.Append($"<a href='/project/{ProjectId}/entity/{Uri.EscapeDataString(related[i].Entity)}'>");
+            sb.Append(FormattableString.Invariant($"<rect x='{xRel}' y='{Y(i)}' width='{w}' height='{rh}' rx='7' fill='var(--human-bg)' stroke='var(--human)' style='cursor:pointer'/>"));
+            sb.Append(FormattableString.Invariant($"<text x='{xRel + 9}' y='{Y(i) + 13}' font-size='9.5' font-weight='600' fill='var(--text)' style='cursor:pointer'>{E(Trunc(related[i].Label, 24))}</text>"));
+            sb.Append(FormattableString.Invariant($"<text x='{xRel + 9}' y='{Y(i) + 24}' font-size='8' fill='var(--human)' font-family='IBM Plex Mono'>{E(related[i].Entity)}</text>"));
+            sb.Append("</a>");
+        }
+        for (var i = 0; i < records.Count; i++)
+        {
+            sb.Append(FormattableString.Invariant($"<rect x='{xRec}' y='{Y(i)}' width='{w}' height='{rh}' rx='7' fill='var(--brand-bg)' stroke='var(--brand-2)'/>"));
+            sb.Append(FormattableString.Invariant($"<text x='{xRec + 9}' y='{Y(i) + 19}' font-size='10' font-weight='600' fill='var(--text)'>{E(Trunc(records[i], 24))}</text>"));
+        }
+        for (var i = 0; i < runs.Count; i++)
+        {
+            sb.Append($"<a href='/observability?run={runs[i]}'>");
+            sb.Append(FormattableString.Invariant($"<rect x='{xRun}' y='{Y(i)}' width='{w}' height='{rh}' rx='7' fill='var(--card-2)' stroke='var(--border-2)' style='cursor:pointer'/>"));
+            sb.Append(FormattableString.Invariant($"<text x='{xRun + 9}' y='{Y(i) + 19}' font-size='9' fill='var(--text-2)' font-family='IBM Plex Mono' style='cursor:pointer'>run {runs[i].ToString("N")[..8]} ↗</text>"));
+            sb.Append("</a>");
+        }
+        for (var i = 0; i < arts.Count; i++)
+        {
+            sb.Append($"<a href='/artifacts?artifact={arts[i].Art.Id}'>");
+            sb.Append(FormattableString.Invariant($"<rect x='{xArt}' y='{Y(i)}' width='{w}' height='{rh}' rx='7' fill='var(--good-bg)' stroke='var(--good)' style='cursor:pointer'/>"));
+            sb.Append(FormattableString.Invariant($"<text x='{xArt + 9}' y='{Y(i) + 19}' font-size='9' fill='var(--good)' font-family='IBM Plex Mono' style='cursor:pointer'>{E(Trunc(arts[i].Art.Title, 22))} ↗</text>"));
+            sb.Append("</a>");
+        }
+
+        sb.Append("</svg>");
+        return sb.ToString();
     }
 
     // The record's link graph as inline SVG (built in C# — razor's <text> tag shadows SVG's).
