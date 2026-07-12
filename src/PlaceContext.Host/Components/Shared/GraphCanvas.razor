@@ -68,16 +68,21 @@
                 @* The note behind the node — decision rationale, a change's why, or run-output text. *@
                 <div style="margin-top:10px; padding:9px 11px; background:var(--bg); border:1px solid var(--border); border-radius:7px; font-size:11.5px; color:var(--text-2); line-height:1.55; white-space:pre-wrap; word-break:break-word; max-height:160px; overflow-y:auto">@sel.Content</div>
             }
-            @if (_selectedNeighbors.Any(x => x.Node.Kind == "good"))
+            @if (_reachableArtifacts.Count > 0)
             {
-                @* Related artifacts lead — highlighted in the canvas, openable from here. *@
+                @* Related artifacts — including ones reached by stepping UP the tree from an
+                   outer node (record → run → artifact), with the hop distance shown. *@
                 <div style="font-size:10.5px; color:var(--text-3); margin:10px 0 4px; text-transform:uppercase; letter-spacing:.5px">Related artifacts</div>
                 <div style="display:flex; flex-direction:column; gap:4px">
-                    @foreach (var (node, _) in _selectedNeighbors.Where(x => x.Node.Kind == "good"))
+                    @foreach (var (node, hops) in _reachableArtifacts)
                     {
                         <a href="@(NodeUrl?.Invoke(node) ?? "#")"
                            style="display:flex; align-items:center; gap:8px; padding:5px 9px; border:1px solid var(--good); border-radius:7px; background:var(--good-bg); font-size:11.5px; font-family:'IBM Plex Mono',monospace; color:var(--good); text-decoration:none">
                             <span style="flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">@ShortLabel(node.Label)</span>
+                            @if (hops > 1)
+                            {
+                                <span style="flex:none; font-size:9.5px; color:var(--text-3)">@hops hops</span>
+                            }
                             <span style="flex:none">↗</span>
                         </a>
                     }
@@ -150,10 +155,46 @@
         await JS.InvokeVoidAsync("pcgraph.init", _id, payload, _selfRef);
     }
 
+    private List<(GraphNodeView Node, int Hops)> _reachableArtifacts = new();
+
+    // Step up the tree from the selected node: breadth-first over the links, collecting every
+    // artifact within a few hops (an outer record reaches its runs' artifacts transitively).
+    private List<(GraphNodeView, int)> WalkToArtifacts(string fromId)
+    {
+        if (Graph is null) return new();
+        var adjacency = new Dictionary<string, List<string>>();
+        foreach (var l in Graph.Links)
+        {
+            (adjacency.TryGetValue(l.Source, out var a) ? a : adjacency[l.Source] = new()).Add(l.Target);
+            (adjacency.TryGetValue(l.Target, out var b) ? b : adjacency[l.Target] = new()).Add(l.Source);
+        }
+        var byId = Graph.Nodes.ToDictionary(n => n.Id);
+        var found = new List<(GraphNodeView, int)>();
+        var visited = new HashSet<string> { fromId };
+        var frontier = new Queue<(string Id, int Hops)>();
+        frontier.Enqueue((fromId, 0));
+        while (frontier.Count > 0 && found.Count < 10)
+        {
+            var (id, hops) = frontier.Dequeue();
+            if (hops >= 4) continue;
+            foreach (var next in adjacency.GetValueOrDefault(id) ?? new List<string>())
+            {
+                if (!visited.Add(next)) continue;
+                if (byId.TryGetValue(next, out var node) && node.Kind == "good")
+                    found.Add((node, hops + 1));
+                frontier.Enqueue((next, hops + 1));
+            }
+        }
+        return found.OrderBy(x => x.Item2).ToList();
+    }
+
     [JSInvokable]
     public Task OnNodeClick(string? nodeId)
     {
         _selected = nodeId is null ? null : Graph?.Nodes.FirstOrDefault(n => n.Id == nodeId);
+        _reachableArtifacts = _selected is null || _selected.Kind == "good"
+            ? new List<(GraphNodeView, int)>()
+            : WalkToArtifacts(_selected.Id);
         _selectedNeighbors = _selected is null || Graph is null
             ? new()
             : Graph.Links
