@@ -111,9 +111,16 @@
                 <div style="font-size:14px; font-weight:600">@RecordLabel(_open)</div>
                 <div style="font-size:11.5px; color:var(--text-3); margin-top:3px">@_entity.Name record</div>
             </div>
+            <button class="dcbtn" style="margin-right:10px; padding:4px 11px; font-size:11.5px; @(_showGraph ? "color:var(--brand-2); border-color:var(--brand-2)" : "")"
+                    @onclick="@(() => _showGraph = !_showGraph)">◉ Graph</button>
             <button class="dcslide-x" @onclick="@(() => _open = null)">×</button>
         </div>
         <div class="dcslide-body" style="flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:14px">
+            @if (_showGraph)
+            {
+                @* ── The link graph: every relation this record participates in, as nodes/edges. ── *@
+                @((MarkupString)GraphSvg())
+            }
             <div class="dccard" style="padding:12px 16px">
                 <dl style="display:grid; grid-template-columns:auto 1fr; gap:4px 14px; margin:0; font-size:12.5px">
                     @for (var i = 0; i < _rows.Columns.Count; i++)
@@ -215,12 +222,18 @@
                 : _rows.Rows.Where(r => r.Any(v => v?.Contains(_filter, StringComparison.OrdinalIgnoreCase) == true));
 
     private readonly List<RunArtifactLinkView> _artifacts = new();
+    private readonly List<Guid> _linkedRuns = new();
+    private readonly Dictionary<Guid, List<RunArtifactLinkView>> _runArtifacts = new();
+    private bool _showGraph;
 
     private async Task OpenRecordAsync(IReadOnlyList<string?> row)
     {
         _open = row;
         _related.Clear();
         _artifacts.Clear();
+        _linkedRuns.Clear();
+        _runArtifacts.Clear();
+        _showGraph = false;
         if (_entity is null || _rows is null) return;
         await LoadLinkedArtifactsAsync(row);
         foreach (var rel in _entity.Relations)
@@ -288,8 +301,14 @@
 
         foreach (var runId in runIds.Take(8))
         {
-            try { _artifacts.AddRange(await Svc.ListRunArtifactsAsync(runId)); }
-            catch { }
+            _linkedRuns.Add(runId);
+            try
+            {
+                var arts = (await Svc.ListRunArtifactsAsync(runId)).ToList();
+                _runArtifacts[runId] = arts;
+                _artifacts.AddRange(arts);
+            }
+            catch { _runArtifacts[runId] = new List<RunArtifactLinkView>(); }
         }
     }
 
@@ -343,6 +362,63 @@
         }
         catch { /* insights are derived sugar — the records table always renders */ }
     }
+
+    // The record's link graph as inline SVG (built in C# — razor's <text> tag shadows SVG's).
+    private string GraphSvg()
+    {
+        var sb = new System.Text.StringBuilder();
+        var relNodes = _related
+            .SelectMany(r => r.Rows.Rows.Take(3).Select(row => (r.Relation.TargetEntity, Label: row.FirstOrDefault() ?? "—")))
+            .Take(6).ToList();
+        var right = _linkedRuns.Sum(r => 44 + (_runArtifacts.GetValueOrDefault(r)?.Count ?? 0) * 26);
+        var height = Math.Max(160.0, Math.Max(right, relNodes.Count * 44) + 56);
+        var cy = height / 2.0;
+
+        sb.Append(FormattableString.Invariant(
+            $"<svg viewBox=\"0 0 520 {height}\" style=\"width:100%; border:1px solid var(--border); border-radius:8px; background:var(--card)\">"));
+
+        for (var i = 0; i < relNodes.Count; i++)
+        {
+            var y = 28 + i * 44;
+            sb.Append(FormattableString.Invariant($"<line x1='150' y1='{y}' x2='216' y2='{cy}' stroke='var(--border-2)' stroke-width='1.2'/>"));
+            sb.Append(FormattableString.Invariant($"<rect x='8' y='{y - 14}' width='142' height='28' rx='7' fill='var(--human-bg)' stroke='var(--human)'/>"));
+            sb.Append(FormattableString.Invariant($"<text x='16' y='{y - 1}' font-size='9.5' fill='var(--human)' font-family='IBM Plex Mono'>{E(relNodes[i].TargetEntity)}</text>"));
+            sb.Append(FormattableString.Invariant($"<text x='16' y='{y + 10}' font-size='9' fill='var(--text-2)'>{E(Trunc(relNodes[i].Label, 22))}</text>"));
+        }
+
+        sb.Append(FormattableString.Invariant($"<rect x='216' y='{cy - 17}' width='120' height='34' rx='8' fill='var(--brand-bg)' stroke='var(--brand-2)' stroke-width='1.4'/>"));
+        sb.Append(FormattableString.Invariant($"<text x='276' y='{cy - 2}' font-size='10' font-weight='600' fill='var(--text)' text-anchor='middle'>{E(Trunc(_open is null ? "" : RecordLabel(_open), 18))}</text>"));
+        sb.Append(FormattableString.Invariant($"<text x='276' y='{cy + 10}' font-size='8.5' fill='var(--text-3)' text-anchor='middle'>{E(_entity?.Name ?? "")} record</text>"));
+
+        var yCursor = 28.0;
+        foreach (var runId in _linkedRuns)
+        {
+            var arts = _runArtifacts.GetValueOrDefault(runId) ?? new List<RunArtifactLinkView>();
+            var y = yCursor;
+            sb.Append(FormattableString.Invariant($"<line x1='336' y1='{cy}' x2='376' y2='{y}' stroke='var(--border-2)' stroke-width='1.2' stroke-dasharray='4 3'/>"));
+            sb.Append($"<a href='/observability?run={runId}'>");
+            sb.Append(FormattableString.Invariant($"<rect x='376' y='{y - 13}' width='132' height='26' rx='7' fill='var(--card-2)' stroke='var(--border-2)' style='cursor:pointer'/>"));
+            sb.Append(FormattableString.Invariant($"<text x='384' y='{y + 3}' font-size='9' fill='var(--text-2)' font-family='IBM Plex Mono' style='cursor:pointer'>run {runId.ToString("N")[..8]} ↗</text>"));
+            sb.Append("</a>");
+            for (var k = 0; k < arts.Count; k++)
+            {
+                var ay = y + 26 + k * 26;
+                sb.Append(FormattableString.Invariant($"<line x1='442' y1='{y + 13}' x2='442' y2='{ay - 11}' stroke='var(--border-2)'/>"));
+                sb.Append($"<a href='/artifacts?artifact={arts[k].Id}'>");
+                sb.Append(FormattableString.Invariant($"<rect x='396' y='{ay - 11}' width='112' height='22' rx='6' fill='var(--good-bg)' stroke='var(--good)' style='cursor:pointer'/>"));
+                sb.Append(FormattableString.Invariant($"<text x='403' y='{ay + 3}' font-size='8.5' fill='var(--good)' font-family='IBM Plex Mono' style='cursor:pointer'>{E(Trunc(arts[k].Title, 17))} ↗</text>"));
+                sb.Append("</a>");
+            }
+            yCursor += 44 + arts.Count * 26;
+        }
+
+        sb.Append("</svg>");
+        return sb.ToString();
+    }
+
+    private static string E(string s) => s.Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;").Replace("'", "&#39;");
+
+    private static string Trunc(string? s, int n) => string.IsNullOrEmpty(s) ? "—" : s.Length <= n ? s : s[..n] + "…";
 
     private static bool IsNumeric(string type) =>
         type.Contains("int") || type.Contains("numeric") || type.Contains("double") || type.Contains("real");
