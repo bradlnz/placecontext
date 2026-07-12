@@ -79,7 +79,20 @@ else
                     <div class="dcfile @(isActive ? "active" : "")"
                          style="display:flex; align-items:center; gap:6px; padding:5px 8px; border-radius:5px; cursor:pointer; font-size:12.5px; font-family:'IBM Plex Mono',monospace; @(isActive ? "background:var(--card-2); color:var(--text-1)" : "color:var(--text-2)")"
                          @onclick="@(() => SwitchFileAsync(idx))">
-                        <span style="flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis" title="@file.Path">@file.Path</span>
+                        @if (idx == _renamingIdx)
+                        {
+                            <input class="dcinput" style="flex:1; min-width:0; font-size:12px; padding:2px 6px"
+                                   @bind="_renameValue" @bind:event="oninput" @onkeydown="RenameKey"
+                                   @onclick:stopPropagation="true" @ref="_renameInput" />
+                            <button class="dcfile-act" title="Confirm rename" style="border:none; background:none; color:var(--good); cursor:pointer; font-size:12px; padding:0"
+                                    @onclick:stopPropagation="true" @onclick="ConfirmRenameAsync">✓</button>
+                        }
+                        else
+                        {
+                            <span style="flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis" title="@file.Path">@file.Path</span>
+                            <button class="dcfile-act" title="Rename file" style="border:none; background:none; color:var(--text-3); cursor:pointer; font-size:11px; padding:0"
+                                    @onclick:stopPropagation="true" @onclick="@(() => StartRenameAsync(idx))">✎</button>
+                        }
                         @if (isEntry)
                         {
                             <span title="Entry point" style="color:var(--brand-2); font-size:11px">★</span>
@@ -304,6 +317,47 @@ else
     }
 
     private void SetEntry(string path) => _entrypoint = path;
+
+    private int _renamingIdx = -1;
+    private string _renameValue = "";
+    private ElementReference _renameInput;
+
+    private async Task StartRenameAsync(int idx)
+    {
+        _renamingIdx = idx;
+        _renameValue = _files[idx].Path;
+        _message = null;
+        StateHasChanged();
+        await Task.Yield();
+        try { await _renameInput.FocusAsync(); } catch { /* not yet rendered */ }
+    }
+
+    private async Task RenameKey(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await ConfirmRenameAsync();
+        else if (e.Key == "Escape") _renamingIdx = -1;
+    }
+
+    private async Task ConfirmRenameAsync()
+    {
+        if (_renamingIdx < 0 || _renamingIdx >= _files.Count) { _renamingIdx = -1; return; }
+        var idx = _renamingIdx;
+        var name = _renameValue.Trim().Replace('\\', '/').TrimStart('/');
+        var old = _files[idx].Path;
+        if (string.IsNullOrWhiteSpace(name) || name == old) { _renamingIdx = -1; return; }
+        if (_files.Any(f => f.Path == name)) { _message = $"'{name}' already exists."; return; }
+
+        _files[idx].Path = name;
+        if (_entrypoint == old) _entrypoint = name;
+        _renamingIdx = -1;
+
+        // A changed extension can change the language of the file that's on screen.
+        if (idx == _active && Language(name) != Language(old))
+        {
+            await SyncActiveAsync();
+            await JS.InvokeVoidAsync("pcmonaco.setValue", _editorId, _files[idx].Content, Language(name));
+        }
+    }
 
     // ── Deploy / Test ────────────────────────────────────────────────────────────────────────────
 
