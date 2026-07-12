@@ -31,26 +31,8 @@
             </div>
             <div style="display:flex; gap:6px; margin-bottom:10px">
                 <button class="dcbtn primary" style="flex:1; font-size:12px" @onclick="StartNewTable">+ Table</button>
-                <button class="dcbtn" style="flex:1; font-size:12px" @onclick="@(() => _showNewView = !_showNewView)">+ View</button>
+                <button class="dcbtn" style="flex:1; font-size:12px" @onclick="OpenNewView">+ View</button>
             </div>
-            @if (_showNewView)
-            {
-                <div class="dccard" style="padding:10px; margin-bottom:10px; display:flex; flex-direction:column; gap:6px">
-                    <input @bind="_newViewName" placeholder="view name (e.g. sales_by_city)"
-                           style="padding:5px 8px; font-size:11.5px; background:var(--bg); border:1px solid var(--border); border-radius:5px; color:var(--text); font-family:'IBM Plex Mono',monospace" />
-                    <textarea @bind="_newViewSql" rows="4" spellcheck="false"
-                              placeholder="SELECT l.city, avg(l.price) FROM listings l JOIN suburbs s ON s.name = l.city GROUP BY 1"
-                              style="padding:6px 8px; font-size:11.5px; background:var(--bg); border:1px solid var(--border); border-radius:5px; color:var(--text); font-family:'IBM Plex Mono',monospace; resize:vertical"></textarea>
-                    <div style="display:flex; gap:6px; align-items:center">
-                        <button class="dcbtn primary" style="padding:4px 10px; font-size:11px" @onclick="SaveViewAsync">Create view</button>
-                        <span style="font-size:10.5px; color:var(--text-3)">SELECT-only; joins welcome</span>
-                    </div>
-                    @if (_viewError is not null)
-                    {
-                        <span style="font-size:11px; color:var(--bad)">@_viewError</span>
-                    }
-                </div>
-            }
             @if (_tables.Count == 0)
             {
                 <div style="font-size:11.5px; color:var(--text-3); line-height:1.5">
@@ -282,6 +264,54 @@
     .dclink:hover { text-decoration:underline; }
 </style>
 
+@* ── New-view slide-out: name + a Monaco SQL editor for the defining SELECT ────────────── *@
+@if (_showNewView)
+{
+    <div class="dcslide-scrim" @onclick="CloseNewView"></div>
+    <div class="dcslide" style="width:560px">
+        <div class="dcslide-head">
+            <div style="flex:1; min-width:0">
+                <div style="font-size:14px; font-weight:600">New view</div>
+                <div style="font-size:11.5px; color:var(--text-3); margin-top:3px">
+                    A saved SELECT over this project's tables — joins welcome. Views are queryable
+                    like tables, chartable, and always read-only.
+                </div>
+            </div>
+            <button class="dcslide-x" @onclick="CloseNewView">×</button>
+        </div>
+        <div class="dcslide-body" style="flex:1; display:flex; flex-direction:column; gap:12px">
+            <div class="dcfield" style="max-width:320px">
+                <label>View name <span class="req">*</span></label>
+                <input class="dcinput" style="font-family:'IBM Plex Mono',monospace" @bind="_newViewName"
+                       placeholder="sales_by_city" />
+            </div>
+            <div class="dcfield" style="flex:1; display:flex; flex-direction:column; min-height:0">
+                <label>Defining query <span class="code" style="margin-left:5px">SELECT-only</span></label>
+                @if (_viewMonaco)
+                {
+                    <div id="@ViewEditorId" style="flex:1; min-height:220px; border:1px solid var(--border); border-radius:8px; overflow:hidden"></div>
+                }
+                else
+                {
+                    <textarea @bind="_newViewSql" rows="10" spellcheck="false"
+                              placeholder="SELECT l.city, avg(l.price) FROM listings l JOIN suburbs s ON s.name = l.city GROUP BY 1"
+                              style="flex:1; padding:8px 10px; font-size:12px; background:var(--bg); border:1px solid var(--border); border-radius:8px; color:var(--text); font-family:'IBM Plex Mono',monospace; resize:vertical"></textarea>
+                }
+                <div class="dchint">One statement, starting with SELECT — writes and DDL are rejected, and the
+                    view runs as this project's isolated database role.</div>
+            </div>
+        </div>
+        <div class="dcslide-foot">
+            @if (_viewError is not null)
+            {
+                <div style="flex:1; color:var(--bad); font-size:12px; min-width:0">@_viewError</div>
+            }
+            <button class="dcbtn" @onclick="CloseNewView">Cancel</button>
+            <button class="dcbtn primary" @onclick="SaveViewAsync">Create view</button>
+        </div>
+    </div>
+}
+
 @code {
     [Parameter] public Guid ProjectId { get; set; }
 
@@ -310,12 +340,31 @@
     private string _newViewName = "";
     private string _newViewSql = "";
     private string? _viewError;
+    private bool _viewMonaco = true;   // degrade to the textarea when the Monaco CDN is unreachable
+    private bool _viewMonacoReady;
+    private const string ViewEditorId = "pcmonaco-newview";
+
+    private void OpenNewView()
+    {
+        _showNewView = true;
+        _viewMonacoReady = false;
+        _viewError = null;
+    }
+
+    private void CloseNewView() => _showNewView = false;
+
+    private async Task SyncViewSqlAsync()
+    {
+        if (!_viewMonaco || !_viewMonacoReady) return;
+        try { _newViewSql = await JS.InvokeAsync<string>("pcmonaco.getValue", ViewEditorId); } catch { }
+    }
 
     private async Task SaveViewAsync()
     {
         _viewError = null;
         try
         {
+            await SyncViewSqlAsync();
             await Svc.SaveProjectViewAsync(ProjectId, _newViewName, _newViewSql);
             _showNewView = false;
             _newViewName = "";
@@ -348,6 +397,18 @@
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        // The new-view pane mounts its own Monaco instance each time it opens.
+        if (_showNewView && _viewMonaco && !_viewMonacoReady)
+        {
+            _viewMonacoReady = true;
+            try
+            {
+                var richView = await JS.InvokeAsync<bool>("pcmonaco.init", ViewEditorId, _newViewSql, "sql", "vs-dark");
+                if (!richView) { _viewMonaco = false; StateHasChanged(); }
+            }
+            catch { _viewMonaco = false; StateHasChanged(); }
+        }
+
         if (_monacoReady) return;
         _monacoReady = true;
         try
