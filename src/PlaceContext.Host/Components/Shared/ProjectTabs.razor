@@ -11,8 +11,6 @@
     <button class="dctab @(Active == "jobs" ? "active" : "")" @onclick='@(() => Nav.NavigateTo($"/project/{ProjectId}/jobs"))'>Jobs</button>
     <button class="dctab @(Active == "chains" ? "active" : "")" @onclick='@(() => Nav.NavigateTo($"/project/{ProjectId}/chains"))'>Chains</button>
     <button class="dctab @(Active == "data" ? "active" : "")" @onclick='@(() => Nav.NavigateTo($"/project/{ProjectId}/data"))'>Data</button>
-    <button class="dctab @(Active == "datamap" ? "active" : "")" @onclick='@(() => Nav.NavigateTo($"/project/{ProjectId}/datamap"))'>Data map</button>
-    <button class="dctab @(Active == "analytics" ? "active" : "")" @onclick='@(() => Nav.NavigateTo($"/project/{ProjectId}/analytics"))'>Analytics</button>
     <button class="dctab @(Active == "vault" ? "active" : "")" @onclick='@(() => Nav.NavigateTo($"/project/{ProjectId}/secrets"))'>Vault</button>
     <button class="dctab @(Active == "events" ? "active" : "")" @onclick='@(() => Nav.NavigateTo($"/project/{ProjectId}/events"))'>Events</button>
     <button class="dctab @(Active == "schedules" ? "active" : "")" @onclick='@(() => Nav.NavigateTo($"/project/{ProjectId}/schedules"))'>Schedules</button>

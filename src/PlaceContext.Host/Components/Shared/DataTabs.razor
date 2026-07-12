@@ -1,0 +1,15 @@
+@inject NavigationManager Nav
+
+@* Second-level strip under the project's Data tab: Tables | Analytics | Data map. *@
+<div class="dctabs" style="margin:-6px 0 16px">
+    <button class="dctab @(Active == "tables" ? "active" : "")" @onclick='@(() => Nav.NavigateTo($"/project/{ProjectId}/data"))'>Tables</button>
+    <button class="dctab @(Active == "analytics" ? "active" : "")" @onclick='@(() => Nav.NavigateTo($"/project/{ProjectId}/analytics"))'>Analytics</button>
+    <button class="dctab @(Active == "datamap" ? "active" : "")" @onclick='@(() => Nav.NavigateTo($"/project/{ProjectId}/datamap"))'>Data map</button>
+</div>
+
+@code {
+    [Parameter] public Guid ProjectId { get; set; }
+
+    /// <summary>Which sub-tab this page is: tables/analytics/datamap.</summary>
+    [Parameter] public string Active { get; set; } = "tables";
+}
