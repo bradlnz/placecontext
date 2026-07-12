@@ -16,7 +16,10 @@ public sealed class CronosCronSchedule : ICronSchedule
     {
         if (!TryParse(cronExpression, out var expr)) return null;
         var tz = ResolveZone(timeZoneId);
-        return expr!.GetNextOccurrence(after, tz);
+        // Normalize to UTC: Cronos answers in the zone's own offset (e.g. +10:00), and Npgsql
+        // refuses to write any non-UTC DateTimeOffset to timestamptz — a zoned value here made
+        // every scan tick throw and silently stopped ALL schedules for the tenant.
+        return expr!.GetNextOccurrence(after, tz)?.ToUniversalTime();
     }
 
     private static bool TryParse(string cronExpression, out CronExpression? expr)

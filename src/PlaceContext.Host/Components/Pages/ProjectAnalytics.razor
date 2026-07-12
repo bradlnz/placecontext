@@ -29,9 +29,9 @@
         <div style="font-size:12px; color:var(--bad); margin-top:8px">@_error</div>
     }
 
-    @* ── SQL charts: user-defined queries → charts (isolated to this project's schema/role) ── *@
+    @* ── Charts: user-defined queries → charts (isolated to this project's schema/role) ── *@
     <div style="display:flex; align-items:center; justify-content:space-between; margin:18px 0 4px">
-        <span style="font-size:13px; font-weight:600">SQL charts</span>
+        <span style="font-size:13px; font-weight:600">Charts</span>
         <button class="dcbtn" style="padding:4px 11px; font-size:11.5px" @onclick="ToggleSqlEditor">＋ SQL chart</button>
     </div>
 
@@ -279,7 +279,7 @@
         return Task.CompletedTask;
     }
 
-    // ── SQL charts ────────────────────────────────────────────────────────────────────────────────
+    // ── Charts ────────────────────────────────────────────────────────────────────────────────
     private bool _showSqlEditor, _sqlBusy;
     private bool _sqlMonaco = true;      // degrade to the textarea when the Monaco CDN is unreachable
     private bool _sqlMonacoReady;

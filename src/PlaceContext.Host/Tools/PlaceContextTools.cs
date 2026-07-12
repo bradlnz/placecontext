@@ -402,6 +402,59 @@ public sealed class PlaceContextTools
         }
     }
 
+    [Authorize(Policy = "Member")]
+    [McpServerTool(Name = "query_project_data"), Description("Run a read-only SELECT against the project's own database and get columns + rows back. STRICTLY SELECT-ONLY: any other statement kind, multiple statements, or write/DDL keywords are rejected. The query executes as the project's isolated database role — it can only ever see this project's tables. Use list_project_tables/table names from the Data tab to explore, then build informative SQL charts with save_sql_chart.")]
+    public static Task<string> QueryProjectData(IPlaceContextService svc, IToolCallLog log,
+        [Description("The project whose database to query")] Guid projectId,
+        [Description("A single SELECT statement (no semicolons, no writes)")] string sql)
+        => Traced(log, "query_project_data", projectId.ToString(), Truncate(sql, 120), new { projectId, sql },
+            async () =>
+            {
+                EnsureSelectOnly(sql);
+                var result = await svc.ExecuteProjectDataAsync(projectId, sql);
+                return new
+                {
+                    result.Columns,
+                    Rows = result.Rows.Take(200).ToList(),
+                    result.Truncated,
+                    capped = result.Rows.Count > 200,
+                };
+            });
+
+    [Authorize(Policy = "Member")]
+    [McpServerTool(Name = "save_sql_chart"), Description("Create or update a named SQL chart on the project's Analytics tab (also shown read-only on the Dashboard). The SELECT runs isolated inside the project's database; its first text column becomes the labels and numeric columns become series, rendered as the given chart type. STRICTLY SELECT-ONLY — writes and DDL are rejected. Re-saving the same name replaces the chart, so agents can iterate.")]
+    public static Task<string> SaveSqlChart(IPlaceContextService svc, IToolCallLog log,
+        [Description("The project the chart belongs to")] Guid projectId,
+        [Description("Chart name (re-save the same name to update)")] string name,
+        [Description("A single SELECT statement shaping labels + numeric series")] string sql,
+        [Description("'bar', 'line', or 'pie'")] string chartType = "bar")
+        => Traced(log, "save_sql_chart", projectId.ToString(), name, new { projectId, name, sql, chartType },
+            async () =>
+            {
+                EnsureSelectOnly(sql);
+                return await svc.SaveSqlChartAsync(projectId, name, sql, chartType);
+            });
+
+    // SELECT-only gate for the data tools: one statement, starting with SELECT, with no write/DDL
+    // keywords anywhere. Belt and braces on top of the per-project role isolation — the role can
+    // write its own tables, and these tools must not.
+    private static void EnsureSelectOnly(string sql)
+    {
+        var trimmed = (sql ?? "").Trim().TrimEnd(';').Trim();
+        if (trimmed.Length == 0)
+            throw new ArgumentException("A SELECT statement is required.");
+        if (trimmed.Contains(';'))
+            throw new ArgumentException("Only a single statement is allowed — remove the semicolons.");
+        if (!trimmed.StartsWith("select", StringComparison.OrdinalIgnoreCase))
+            throw new ArgumentException("Only SELECT statements are allowed here.");
+        if (System.Text.RegularExpressions.Regex.IsMatch(trimmed,
+                @"\b(insert|update|delete|drop|alter|create|truncate|grant|revoke|copy|vacuum|call|do|comment|reindex|cluster|refresh|listen|notify|prepare|deallocate|import|merge)\b",
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+            throw new ArgumentException("Only read-only SELECT statements are allowed — write/DDL keywords are rejected.");
+    }
+
+    private static string Truncate(string s, int n) => s.Length <= n ? s : s[..n] + "…";
+
     [Authorize(Policy = "Admin")]
     [McpServerTool(Name = "set_workspace_timezone"), Description("Set the workspace's IANA timezone (e.g. 'Australia/Brisbane'). Schedule triggers evaluate their cron expressions in this timezone, and job/schedule times display in it. Agents should set this from the user's locale context before creating schedules.")]
     public static Task<string> SetWorkspaceTimezone(IToolCallLog log,

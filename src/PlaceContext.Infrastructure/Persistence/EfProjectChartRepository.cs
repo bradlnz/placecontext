@@ -42,7 +42,7 @@ public sealed class EfProjectChartRepository : IProjectChartRepository
 
     public async Task DeleteForProjectAsync(Guid projectId, IReadOnlyCollection<string> keepTables, CancellationToken ct = default)
     {
-        // "sql:{name}" slots are user-defined SQL charts, not table charts — the table sweep
+        // "sql:{name}" slots are user-defined Charts, not table charts — the table sweep
         // must never prune them.
         var stale = await _db.ProjectCharts
             .Where(r => r.ProjectId == projectId && !keepTables.Contains(r.TableName)

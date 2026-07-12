@@ -45,6 +45,16 @@ public class CronosCronScheduleTests
     }
 
     [Fact]
+    public void Next_returns_utc_even_for_offset_timezones()
+    {
+        // Npgsql only writes UTC DateTimeOffsets to timestamptz — a +10:00 answer from Cronos
+        // made every schedule scan throw. The port must always answer in UTC.
+        var next = _cron.Next("48 11 * * *", T0, "Australia/Brisbane");
+        Assert.NotNull(next);
+        Assert.Equal(TimeSpan.Zero, next!.Value.Offset);
+    }
+
+    [Fact]
     public void Next_returns_null_for_invalid_expression()
         => Assert.Null(_cron.Next("garbage", T0, "UTC"));
 }

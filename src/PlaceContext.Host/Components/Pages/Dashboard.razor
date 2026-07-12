@@ -58,11 +58,11 @@
         </div>
     </div>
 
-    @* ── SQL charts (read-only copies from the current project's Analytics) ───────────── *@
+    @* ── Charts (read-only copies from the current project's Analytics) ───────────── *@
     @if (SqlCharts() is { Count: > 0 } sqlCharts)
     {
         <div style="display:flex; align-items:baseline; justify-content:space-between; margin-bottom:8px">
-            <span style="font-size:13px; font-weight:600">SQL charts</span>
+            <span style="font-size:13px; font-weight:600">Charts</span>
             @if (Ui.CurrentProjectId is { } chartsPid)
             {
                 <a href="@($"/project/{chartsPid}/analytics")" style="font-size:11.5px; color:var(--human)">edit in Analytics →</a>
