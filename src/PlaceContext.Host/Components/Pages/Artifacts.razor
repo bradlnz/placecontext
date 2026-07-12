@@ -1,7 +1,10 @@
 @page "/artifacts"
 @using PlaceContext.Application.Features
+@using PlaceContext.Application.Dtos
 @inject IPlaceContextService Svc
 @inject PortalUiState Ui
+@inject PlaceContext.Application.Ports.IObjectStore Store
+@inject PlaceContext.Domain.Repositories.IRunArtifactLinkRepository Links
 
 <PageTitle>placecontext — Artifacts</PageTitle>
 
@@ -9,16 +12,25 @@
 
     @* ── File list ─────────────────────────────────────────────────────────────────────── *@
     <div style="width:430px; flex:none; border-right:1px solid var(--border); display:flex; flex-direction:column; min-height:0">
-        <div style="padding:13px 16px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between">
-            <span style="font-size:13px; font-weight:600">Artifact files</span>
-            <input class="dcinput" style="width:170px; padding:4px 9px; font-size:12px" placeholder="filter…"
-                   @bind="_filter" @bind:event="oninput" />
+        <div style="padding:11px 16px; border-bottom:1px solid var(--border); display:flex; flex-direction:column; gap:8px">
+            <div style="display:flex; align-items:center; justify-content:space-between">
+                <span style="font-size:13px; font-weight:600">Artifact files</span>
+                <input class="dcinput" style="width:150px; padding:4px 9px; font-size:12px" placeholder="filter…"
+                       @bind="_filter" @bind:event="oninput" />
+            </div>
+            <select class="dcinput" style="font-size:12px" value="@_projectFilter" @onchange="OnProjectFilter">
+                <option value="">All projects</option>
+                @foreach (var p in _projects)
+                {
+                    <option value="@p.Id">@p.Name</option>
+                }
+            </select>
         </div>
         <div style="flex:1; overflow-y:auto">
             @if (Filtered() is { Count: 0 })
             {
                 <div style="padding:18px 16px; color:var(--text-3); font-size:12.5px">
-                    No stored artifacts yet — every completed run generates one from its job's return type.
+                    No stored artifacts here yet — every completed run generates one from its job's return type.
                 </div>
             }
             else
@@ -26,13 +38,13 @@
                 @foreach (var a in Filtered())
                 {
                     var active = _active?.Id == a.Id;
-                    <div @onclick="@(() => _active = a)"
+                    <div @onclick="@(() => OpenAsync(a))"
                          style="display:flex; align-items:center; gap:11px; padding:11px 16px; border-bottom:1px solid var(--border); cursor:pointer; background:@(active ? "var(--card)" : "transparent"); border-left:2px solid @(active ? "var(--brand)" : "transparent")">
                         <span style="font-size:15px; flex:none">@IconFor(a.ContentType)</span>
                         <div style="flex:1; min-width:0">
                             <div style="font-family:'IBM Plex Mono',monospace; font-size:12.5px; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis">@a.Title</div>
                             <div style="font-size:10.5px; color:var(--text-3); margin-top:2px">
-                                @a.Kind · @FormatBytes(a.SizeBytes) · @a.CreatedAt.ToLocalTime().ToString("MMM d · HH:mm")
+                                @ProjectName(a.ProjectId) · @a.Kind · @FormatBytes(a.SizeBytes) · @a.CreatedAt.ToLocalTime().ToString("MMM d · HH:mm")
                             </div>
                         </div>
                     </div>
@@ -45,8 +57,9 @@
     <div style="flex:1; min-width:0; display:flex; flex-direction:column; min-height:0; background:var(--bg)">
         @if (_active is null)
         {
-            <div style="flex:1; display:flex; align-items:center; justify-content:center; color:var(--text-3); font-size:12.5px">
-                Select a file to view it.
+            <div style="flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; color:var(--text-3); font-size:12.5px">
+                <span style="font-size:30px">📄</span>
+                Select a file on the left to view it.
             </div>
         }
         else
@@ -57,7 +70,57 @@
                 <a class="dcbtn" style="padding:4px 11px; font-size:11.5px; text-decoration:none" target="_blank" rel="noopener"
                    href="@Url(_active)">Open ↗</a>
             </div>
-            @if (Previewable(_active.ContentType))
+            @if (IsJson(_active.ContentType))
+            {
+                <div style="flex:1; overflow:auto; padding:14px 18px; font-family:'IBM Plex Mono',monospace; font-size:12px; line-height:1.65">
+                    @if (_content is null)
+                    {
+                        <span style="color:var(--text-3)">loading…</span>
+                    }
+                    else
+                    {
+                        @JsonTree(_content)
+                    }
+                </div>
+            }
+            else if (IsCsv(_active.ContentType))
+            {
+                <div style="flex:1; overflow:auto; padding:14px 18px">
+                    @if (_csv is null)
+                    {
+                        <span style="color:var(--text-3); font-size:12px">loading…</span>
+                    }
+                    else
+                    {
+                        <table style="border-collapse:collapse; font-size:12px; font-family:'IBM Plex Mono',monospace">
+                            <thead>
+                                <tr>
+                                    @foreach (var h in _csv.Value.Header)
+                                    {
+                                        <th style="text-align:left; padding:6px 12px; border-bottom:2px solid var(--border-2); color:var(--text-3); font-size:10.5px; letter-spacing:.06em; text-transform:uppercase; position:sticky; top:0; background:var(--bg)">@h</th>
+                                    }
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var row in _csv.Value.Rows)
+                                {
+                                    <tr>
+                                        @foreach (var cell in row)
+                                        {
+                                            <td style="padding:5px 12px; border-bottom:1px solid var(--border); color:var(--text-2); max-width:340px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">@cell</td>
+                                        }
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                        @if (_truncated)
+                        {
+                            <div style="font-size:11px; color:var(--text-3); margin-top:8px">Showing the first rows — Open ↗ for the full file.</div>
+                        }
+                    }
+                </div>
+            }
+            else if (Previewable(_active.ContentType))
             {
                 <iframe src="@Url(_active)" style="flex:1; border:none; background:#fff" title="@_active.Title"></iframe>
             }
@@ -74,28 +137,181 @@
 
 @code {
     private IReadOnlyList<ArtifactFileView> _files = Array.Empty<ArtifactFileView>();
+    private IReadOnlyList<ProjectSummaryView> _projects = Array.Empty<ProjectSummaryView>();
     private ArtifactFileView? _active;
     private string _filter = "";
+    private string _projectFilter = "";
+    private System.Text.Json.JsonElement? _content;
+    private (IReadOnlyList<string> Header, IReadOnlyList<IReadOnlyList<string>> Rows)? _csv;
+    private bool _truncated;
+
+    private const int MaxInlineBytes = 2 * 1024 * 1024;
+    private const int MaxCsvRows = 500;
 
     protected override async Task OnInitializedAsync()
     {
         Ui.Set("Artifacts", "every file your runs produced — click to view");
-        try { _files = await Svc.ListRecentArtifactsAsync(200); } catch { }
-        _active = _files.FirstOrDefault();
+        try { _projects = await Svc.GetProjectsAsync(); } catch { }
+        try { _files = await Svc.ListRecentArtifactsAsync(300); } catch { }
+        // Default the filter to the project the sidebar is on; nothing is opened until clicked.
+        if (Ui.CurrentProjectId is { } pid && _files.Any(f => f.ProjectId == pid))
+            _projectFilter = pid.ToString();
     }
 
-    private IReadOnlyList<ArtifactFileView> Filtered() =>
-        string.IsNullOrWhiteSpace(_filter)
-            ? _files
-            : _files.Where(f => f.Title.Contains(_filter, StringComparison.OrdinalIgnoreCase)
-                             || f.Kind.Contains(_filter, StringComparison.OrdinalIgnoreCase)).ToList();
+    private void OnProjectFilter(ChangeEventArgs e) => _projectFilter = e.Value?.ToString() ?? "";
+
+    private string ProjectName(Guid id) => _projects.FirstOrDefault(p => p.Id == id)?.Name ?? "—";
+
+    private IReadOnlyList<ArtifactFileView> Filtered()
+    {
+        IEnumerable<ArtifactFileView> q = _files;
+        if (Guid.TryParse(_projectFilter, out var pid)) q = q.Where(f => f.ProjectId == pid);
+        if (!string.IsNullOrWhiteSpace(_filter))
+            q = q.Where(f => f.Title.Contains(_filter, StringComparison.OrdinalIgnoreCase)
+                          || f.Kind.Contains(_filter, StringComparison.OrdinalIgnoreCase));
+        return q.ToList();
+    }
+
+    private async Task OpenAsync(ArtifactFileView a)
+    {
+        _active = a;
+        _content = null;
+        _csv = null;
+        _truncated = false;
+        if (!IsJson(a.ContentType) && !IsCsv(a.ContentType)) return;
+
+        var text = await ReadTextAsync(a);
+        if (text is null) return;
+        if (IsJson(a.ContentType))
+        {
+            try { _content = System.Text.Json.JsonDocument.Parse(text).RootElement.Clone(); }
+            catch { _content = null; }
+        }
+        else
+        {
+            _csv = ParseCsv(text);
+        }
+    }
+
+    // Server-side fetch through the tenant-scoped link → object store (same objects the stream
+    // endpoint serves), capped so a huge file can't balloon the circuit.
+    private async Task<string?> ReadTextAsync(ArtifactFileView a)
+    {
+        try
+        {
+            var link = await Links.GetByIdAsync(a.Id);
+            if (link is null) return null;
+            var obj = await Store.OpenReadAsync(link.Bucket, link.ObjectKey);
+            if (obj is null) return null;
+            await using var stream = obj.Content;
+            using var ms = new MemoryStream();
+            var buffer = new byte[81920];
+            int read, total = 0;
+            while ((read = await stream.ReadAsync(buffer)) > 0)
+            {
+                total += read;
+                if (total > MaxInlineBytes) { _truncated = true; break; }
+                ms.Write(buffer, 0, read);
+            }
+            return System.Text.Encoding.UTF8.GetString(ms.ToArray());
+        }
+        catch { return null; }
+    }
+
+    // ── JSON tree viewer ──────────────────────────────────────────────────────────────────────────
+    private RenderFragment JsonTree(System.Text.Json.JsonElement? el) => builder =>
+        builder.AddMarkupContent(0, RenderJson(el!.Value, 0));
+
+    private static string RenderJson(System.Text.Json.JsonElement el, int depth)
+    {
+        var sb = new System.Text.StringBuilder();
+        switch (el.ValueKind)
+        {
+            case System.Text.Json.JsonValueKind.Object:
+                sb.Append($"<details {(depth < 2 ? "open" : "")} style=\"margin-left:{(depth == 0 ? 0 : 14)}px\"><summary style=\"cursor:pointer; color:var(--text-3)\">{{…}} <span style=\"font-size:10px\">({el.EnumerateObject().Count()})</span></summary>");
+                foreach (var p in el.EnumerateObject())
+                {
+                    sb.Append($"<div style=\"margin-left:14px\"><span style=\"color:var(--human)\">\"{Esc(p.Name)}\"</span>: ");
+                    sb.Append(p.Value.ValueKind is System.Text.Json.JsonValueKind.Object or System.Text.Json.JsonValueKind.Array
+                        ? RenderJson(p.Value, depth + 1) : Scalar(p.Value));
+                    sb.Append("</div>");
+                }
+                sb.Append("</details>");
+                break;
+            case System.Text.Json.JsonValueKind.Array:
+                sb.Append($"<details {(depth < 2 ? "open" : "")} style=\"margin-left:{(depth == 0 ? 0 : 14)}px\"><summary style=\"cursor:pointer; color:var(--text-3)\">[…] <span style=\"font-size:10px\">({el.GetArrayLength()})</span></summary>");
+                var i = 0;
+                foreach (var item in el.EnumerateArray())
+                {
+                    if (i++ >= 200) { sb.Append("<div style=\"margin-left:14px; color:var(--text-3)\">…</div>"); break; }
+                    sb.Append("<div style=\"margin-left:14px\">");
+                    sb.Append(item.ValueKind is System.Text.Json.JsonValueKind.Object or System.Text.Json.JsonValueKind.Array
+                        ? RenderJson(item, depth + 1) : Scalar(item));
+                    sb.Append("</div>");
+                }
+                sb.Append("</details>");
+                break;
+            default:
+                sb.Append(Scalar(el));
+                break;
+        }
+        return sb.ToString();
+    }
+
+    private static string Scalar(System.Text.Json.JsonElement v) => v.ValueKind switch
+    {
+        System.Text.Json.JsonValueKind.String => $"<span style=\"color:var(--good)\">\"{Esc(v.GetString() ?? "")}\"</span>",
+        System.Text.Json.JsonValueKind.Number => $"<span style=\"color:var(--warn)\">{v.GetRawText()}</span>",
+        System.Text.Json.JsonValueKind.True or System.Text.Json.JsonValueKind.False => $"<span style=\"color:var(--brand-2)\">{v.GetRawText()}</span>",
+        _ => "<span style=\"color:var(--text-3)\">null</span>",
+    };
+
+    private static string Esc(string s) => s.Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;");
+
+    // ── CSV table ─────────────────────────────────────────────────────────────────────────────────
+    private (IReadOnlyList<string>, IReadOnlyList<IReadOnlyList<string>>) ParseCsv(string text)
+    {
+        var lines = text.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        var header = lines.Length > 0 ? SplitCsvLine(lines[0]) : Array.Empty<string>();
+        var rows = new List<IReadOnlyList<string>>();
+        foreach (var line in lines.Skip(1))
+        {
+            if (rows.Count >= MaxCsvRows) { _truncated = true; break; }
+            rows.Add(SplitCsvLine(line));
+        }
+        return (header, rows);
+    }
+
+    private static IReadOnlyList<string> SplitCsvLine(string line)
+    {
+        var cells = new List<string>();
+        var sb = new System.Text.StringBuilder();
+        var quoted = false;
+        for (var i = 0; i < line.Length; i++)
+        {
+            var c = line[i];
+            if (quoted)
+            {
+                if (c == '"' && i + 1 < line.Length && line[i + 1] == '"') { sb.Append('"'); i++; }
+                else if (c == '"') quoted = false;
+                else sb.Append(c);
+            }
+            else if (c == '"') quoted = true;
+            else if (c == ',') { cells.Add(sb.ToString()); sb.Clear(); }
+            else if (c != '\r') sb.Append(c);
+        }
+        cells.Add(sb.ToString());
+        return cells;
+    }
 
     private static string Url(ArtifactFileView a) => $"/runs/{a.RunId}/artifacts/{a.Id}";
 
-    // The stream endpoint renders these inline; browsers also display text/JSON/CSV directly.
+    private static bool IsJson(string ct) => ct.Contains("json", StringComparison.OrdinalIgnoreCase);
+    private static bool IsCsv(string ct) => ct.Contains("csv", StringComparison.OrdinalIgnoreCase);
+
     private static bool Previewable(string ct) =>
         ct.StartsWith("text/") || ct.StartsWith("image/") || ct == "application/pdf"
-        || ct.StartsWith("application/json") || ct.Contains("svg") || ct.StartsWith("video/");
+        || ct.Contains("svg") || ct.StartsWith("video/");
 
     private static string IconFor(string ct) =>
         ct.StartsWith("image/") ? "🖼" :

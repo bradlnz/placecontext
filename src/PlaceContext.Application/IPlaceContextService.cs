@@ -88,7 +88,7 @@ public interface IPlaceContextService
     Task DropProjectTableColumnAsync(Guid projectId, string tableName, string columnName, CancellationToken ct = default);
     Task<string> GenerateProjectChartAsync(Guid projectId, string tableName, string? instruction, CancellationToken ct = default);
     Task<IReadOnlyList<ProjectChartView>> ListProjectChartsAsync(Guid projectId, CancellationToken ct = default);
-    Task<ProjectChartView> SaveSqlChartAsync(Guid projectId, string name, string sql, CancellationToken ct = default);
+    Task<ProjectChartView> SaveSqlChartAsync(Guid projectId, string name, string sql, string chartType = "bar", CancellationToken ct = default);
     Task<bool> DeleteSqlChartAsync(Guid projectId, string name, CancellationToken ct = default);
 
     // Inbound SMS gateway (encrypted at rest).

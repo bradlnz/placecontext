@@ -13,7 +13,7 @@ namespace PlaceContext.Application.Features;
 /// numeric columns = series) and stored under the reserved <c>sql:{name}</c> chart slot with the
 /// query embedded, so it can be re-run and edited later.
 /// </summary>
-public sealed record SaveSqlChartCommand(Guid ProjectId, string Name, string Sql) : ICommand<ProjectChartView>;
+public sealed record SaveSqlChartCommand(Guid ProjectId, string Name, string Sql, string ChartType = "bar") : ICommand<ProjectChartView>;
 
 /// <summary>Removes a user-defined SQL chart.</summary>
 public sealed record DeleteSqlChartCommand(Guid ProjectId, string Name) : ICommand<bool>;
@@ -51,8 +51,13 @@ public sealed class SaveSqlChartHandler : ICommandHandler<SaveSqlChartCommand, P
                 "The query result isn't chartable — return at least one label column and one numeric column.");
 
         // Embed the query in the stored spec (extra JSON properties are ignored by the renderer)
-        // so the chart stays editable and refreshable.
+        // so the chart stays editable and refreshable, and honour the requested form — switching
+        // a chart from bar to pie is a re-save with the same SQL and a different type.
+        var chartType = (command.ChartType ?? "bar").Trim().ToLowerInvariant();
+        if (chartType is not ("bar" or "line" or "pie"))
+            throw new ArgumentException("Chart type must be bar, line, or pie.");
         var node = JsonNode.Parse(spec.ToJson())!;
+        node["type"] = chartType;
         node["sql"] = command.Sql;
 
         var slot = Prefix + name;

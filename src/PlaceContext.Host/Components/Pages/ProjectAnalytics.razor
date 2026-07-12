@@ -42,6 +42,11 @@
                       placeholder="SELECT city, avg(price) FROM listings GROUP BY city ORDER BY 2 DESC"
                       style="width:100%; padding:9px 11px; background:var(--bg); border:1px solid var(--border); border-radius:7px; color:var(--text); font-size:12px; font-family:'IBM Plex Mono',monospace; resize:vertical"></textarea>
             <div style="display:flex; align-items:center; gap:10px">
+                <select class="dcinput" style="width:90px; font-size:12px" @bind="_sqlType">
+                    <option value="bar">bar</option>
+                    <option value="line">line</option>
+                    <option value="pie">pie</option>
+                </select>
                 <button class="dcbtn primary" style="padding:5px 14px; font-size:12px" disabled="@_sqlBusy" @onclick="SaveSqlAsync">
                     @(_sqlBusy ? "Running…" : "▶ Run & save")
                 </button>
@@ -66,6 +71,13 @@
                     <div style="display:flex; align-items:center; gap:10px; margin-bottom:8px">
                         <span style="font-size:12.5px; font-weight:600; font-family:'IBM Plex Mono',monospace">@chart.TableName["sql:".Length..]</span>
                         <span style="font-size:10px; padding:1px 7px; border-radius:5px; background:var(--brand-bg); color:var(--brand-2)">SQL</span>
+                        <span style="display:flex; gap:2px; margin-left:4px">
+                            @foreach (var t in new[] { "bar", "line", "pie" })
+                            {
+                                <button class="dcbtn" style="padding:2px 8px; font-size:10.5px; @(StoredType(chart) == t ? "color:var(--brand-2); border-color:var(--brand-2)" : "")"
+                                        title="Switch to @t" @onclick="@(() => SwitchTypeAsync(chart, t))">@t</button>
+                            }
+                        </span>
                         <span style="flex:1"></span>
                         <span style="font-size:10.5px; color:var(--text-3)">@chart.GeneratedAt.ToLocalTime().ToString("MM-dd HH:mm")</span>
                         <button class="dcbtn" style="padding:3px 10px; font-size:11px" @onclick="@(() => RefreshSqlAsync(chart))">↻ refresh</button>
@@ -250,7 +262,7 @@
 
     // ── SQL charts ────────────────────────────────────────────────────────────────────────────────
     private bool _showSqlEditor, _sqlBusy;
-    private string _sqlName = "", _sqlQuery = "";
+    private string _sqlName = "", _sqlQuery = "", _sqlType = "bar";
     private string? _sqlError;
 
     private IReadOnlyList<ProjectChartView> SqlCharts()
@@ -268,7 +280,7 @@
         _sqlBusy = true;
         try
         {
-            await Svc.SaveSqlChartAsync(ProjectId, _sqlName, _sqlQuery);
+            await Svc.SaveSqlChartAsync(ProjectId, _sqlName, _sqlQuery, _sqlType);
             await LoadAsync();
             _showSqlEditor = false;
             _sqlName = "";
@@ -283,7 +295,26 @@
         _showSqlEditor = true;
         _sqlName = chart.TableName["sql:".Length..];
         _sqlQuery = StoredSql(chart) ?? "";
+        _sqlType = StoredType(chart);
         _sqlError = null;
+    }
+
+    // Re-save with the same SQL and a different form — bar ⇄ line ⇄ pie.
+    private async Task SwitchTypeAsync(ProjectChartView chart, string type)
+    {
+        if (StoredSql(chart) is not { } sql || StoredType(chart) == type) return;
+        try
+        {
+            await Svc.SaveSqlChartAsync(ProjectId, chart.TableName["sql:".Length..], sql, type);
+            await LoadAsync();
+        }
+        catch (Exception ex) { _error = ex.Message; }
+    }
+
+    private static string StoredType(ProjectChartView chart)
+    {
+        try { return System.Text.Json.Nodes.JsonNode.Parse(chart.Html)?["type"]?.GetValue<string>() ?? "bar"; }
+        catch { return "bar"; }
     }
 
     private async Task RefreshSqlAsync(ProjectChartView chart)
@@ -291,7 +322,7 @@
         if (StoredSql(chart) is not { } sql) return;
         try
         {
-            await Svc.SaveSqlChartAsync(ProjectId, chart.TableName["sql:".Length..], sql);
+            await Svc.SaveSqlChartAsync(ProjectId, chart.TableName["sql:".Length..], sql, StoredType(chart));
             await LoadAsync();
         }
         catch (Exception ex) { _error = ex.Message; }

@@ -225,8 +225,8 @@ public sealed class PlaceContextService : IPlaceContextService
     public Task<IReadOnlyList<ProjectChartView>> ListProjectChartsAsync(Guid projectId, CancellationToken ct = default)
         => _dispatcher.Query(new ListProjectChartsQuery(projectId), ct);
 
-    public Task<ProjectChartView> SaveSqlChartAsync(Guid projectId, string name, string sql, CancellationToken ct = default)
-        => _dispatcher.Send(new SaveSqlChartCommand(projectId, name, sql), ct);
+    public Task<ProjectChartView> SaveSqlChartAsync(Guid projectId, string name, string sql, string chartType = "bar", CancellationToken ct = default)
+        => _dispatcher.Send(new SaveSqlChartCommand(projectId, name, sql, chartType), ct);
 
     public Task<bool> DeleteSqlChartAsync(Guid projectId, string name, CancellationToken ct = default)
         => _dispatcher.Send(new DeleteSqlChartCommand(projectId, name), ct);
