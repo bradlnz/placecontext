@@ -397,13 +397,23 @@ else
         }
     }
 
-    // Released on a table while connecting: prefill both ends of the new edge.
-    private void OnTableUp(string table)
+    // Released on a table: while connecting, prefill both ends of the new edge. The node stops
+    // pointerup propagation (so the canvas handler can't see it), which means it must ALSO finish
+    // any in-flight drag — otherwise the node stays glued to the pointer after a plain click.
+    private async Task OnTableUp(string table)
     {
-        if (_connectJob is not { } job) return;
-        _connectJob = null;
-        OpenEditorForJob(job);
-        _edTable = table;
+        if (_connectJob is { } job)
+        {
+            _connectJob = null;
+            OpenEditorForJob(job);
+            _edTable = table;
+            return;
+        }
+        if (_dragKey is not null)
+        {
+            _dragKey = null;
+            await SavePositionsAsync();
+        }
     }
 
     // Cubic bezier from the job node's right edge to the table node's left edge.
