@@ -54,8 +54,15 @@
             {
                 <div class="dccard" style="padding:14px 16px; margin-bottom:12px; display:flex; flex-direction:column; gap:8px">
                     <input class="dcinput" style="max-width:300px" placeholder="chart name (e.g. price by suburb)" @bind="_chartName" />
-                    <textarea @bind="_chartSql" rows="4" spellcheck="false"
-                              style="width:100%; padding:9px 11px; background:var(--bg); border:1px solid var(--border); border-radius:7px; color:var(--text); font-size:12px; font-family:'IBM Plex Mono',monospace; resize:vertical"></textarea>
+                    @if (_chartMonaco)
+                    {
+                        <div id="@ChartEditorId" style="height:130px; border:1px solid var(--border); border-radius:7px; overflow:hidden"></div>
+                    }
+                    else
+                    {
+                        <textarea @bind="_chartSql" rows="4" spellcheck="false"
+                                  style="width:100%; padding:9px 11px; background:var(--bg); border:1px solid var(--border); border-radius:7px; color:var(--text); font-size:12px; font-family:'IBM Plex Mono',monospace; resize:vertical"></textarea>
+                    }
                     <div style="display:flex; align-items:center; gap:10px">
                         <select class="dcinput" style="width:90px; font-size:12px" @bind="_chartType">
                             <option value="bar">bar</option>
@@ -310,6 +317,9 @@
     private bool _showChartEditor, _chartBusy;
     private string _chartName = "", _chartSql = "", _chartType = "bar";
     private string? _chartError;
+    private bool _chartMonaco = true;   // degrade to the textarea when the Monaco CDN is unreachable
+    private bool _chartMonacoReady;
+    private const string ChartEditorId = "pcmonaco-entchart";
     private readonly Dictionary<string, DateTimeOffset> _renderedCharts = new();
 
     private string ChartPrefix => $"sql:{_entity?.Name} · ";
@@ -318,6 +328,9 @@
     private async Task OpenAnalyticsAsync()
     {
         _viewTab = "analytics";
+        // Leaving the tab destroys the canvases, so the render cache must not survive re-entry.
+        _renderedCharts.Clear();
+        _chartMonacoReady = false;
         await EnsureDefaultChartsAsync();
     }
 
@@ -379,6 +392,7 @@
     private void ToggleChartEditor()
     {
         _showChartEditor = !_showChartEditor;
+        _chartMonacoReady = false;   // the editor div remounts each time the pane opens
         _chartError = null;
         if (_showChartEditor && string.IsNullOrWhiteSpace(_chartSql) && _entity is not null)
             _chartSql = $"SELECT \"{LabelCol()}\", count(*) FROM \"{_entity.TableName}\" GROUP BY 1 ORDER BY 2 DESC LIMIT 10";
@@ -387,6 +401,10 @@
     private async Task SaveEntityChartAsync()
     {
         if (_entity is null) return;
+        if (_chartMonaco && _chartMonacoReady)
+        {
+            try { _chartSql = await JS.InvokeAsync<string>("pcmonaco.getValue", ChartEditorId); } catch { }
+        }
         _chartError = null;
         if (string.IsNullOrWhiteSpace(_chartName)) { _chartError = "Give the chart a name."; return; }
         _chartBusy = true;
@@ -448,6 +466,16 @@
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (_viewTab != "analytics") return;
+        if (_showChartEditor && _chartMonaco && !_chartMonacoReady)
+        {
+            _chartMonacoReady = true;
+            try
+            {
+                var rich = await JS.InvokeAsync<bool>("pcmonaco.init", ChartEditorId, _chartSql, "sql", "vs-dark");
+                if (!rich) { _chartMonaco = false; StateHasChanged(); }
+            }
+            catch { _chartMonaco = false; StateHasChanged(); }
+        }
         foreach (var chart in EntityCharts().Where(c => c.Html.TrimStart().StartsWith('{')))
         {
             var id = ChartCanvasId(chart.TableName);
