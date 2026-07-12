@@ -7,8 +7,8 @@ namespace PlaceContext.Infrastructure.Embeddings;
 
 /// <summary>
 /// Voyage AI-backed <see cref="IEmbeddingGateway"/>. Registered only when <c>PlaceContext:Voyage:ApiKey</c>
-/// is set; otherwise the Null gateway is used. Mirrors <see cref="Llm.AnthropicLlmGateway"/> (an
-/// <see cref="IHttpClientFactory"/> + config). Model and dimensions are configurable.
+/// is set; otherwise the Null gateway is used. Uses an <see cref="IHttpClientFactory"/> + config;
+/// model and dimensions are configurable.
 /// </summary>
 public sealed class VoyageEmbeddingGateway : IEmbeddingGateway
 {

@@ -57,8 +57,6 @@ public static class DependencyInjection
         services.AddScoped<ICommandHandler<SetProjectRequirementsCommand, RequirementsView>, SetProjectRequirementsHandler>();
         services.AddScoped<ICommandHandler<RecordUsageCommand, UsageEntryView>, RecordUsageHandler>();
         services.AddScoped<ICommandHandler<OnboardCommand, OnboardResultView>, OnboardHandler>();
-        services.AddScoped<ICommandHandler<GenerateReportCommand, ReportView>, GenerateReportHandler>();
-        services.AddScoped<ICommandHandler<DefineReportTemplateCommand, ReportTemplateView>, DefineReportTemplateHandler>();
         services.AddScoped<ICommandHandler<CreateJobCommand, JobView>, CreateJobHandler>();
         services.AddScoped<ICommandHandler<UpdateJobCommand, JobView>, UpdateJobHandler>();
         services.AddScoped<ICommandHandler<RunJobCommand, JobRunDetailView>, RunJobHandler>();
@@ -97,7 +95,6 @@ public static class DependencyInjection
         services.AddScoped<IQueryHandler<GetRootCostQuery, RootCostView>, GetRootCostHandler>();
         services.AddScoped<IQueryHandler<SearchQuery, SearchResultsView>, SearchHandler>();
         services.AddScoped<IQueryHandler<GetFocusQuery, FocusView>, FocusHandler>();
-        services.AddScoped<IQueryHandler<ListReportTemplatesQuery, IReadOnlyList<ReportTemplateView>>, ListReportTemplatesHandler>();
 
         // Root-level read models (redesigned portal).
         services.AddScoped<IQueryHandler<GetRootStatsQuery, RootStatsView>, GetRootStatsHandler>();

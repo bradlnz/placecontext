@@ -2,8 +2,8 @@ namespace PlaceContext.Application.Ports;
 
 /// <summary>
 /// Turns text into embedding vectors. Implemented in Infrastructure (Voyage AI) with a Null fallback
-/// when no API key is configured, mirroring <see cref="ILlmGateway"/>. Used to vectorize organized job
-/// output so runs become semantically searchable and linkable in the dependency graph.
+/// when no API key is configured. Used to vectorize job output so runs become semantically
+/// searchable and linkable in the dependency graph.
 /// </summary>
 public interface IEmbeddingGateway
 {

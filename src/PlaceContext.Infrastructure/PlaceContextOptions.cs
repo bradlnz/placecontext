@@ -10,7 +10,4 @@ public sealed class PlaceContextOptions
     /// <summary>Root folder under which tenant repositories are cloned (one subfolder per tenant).</summary>
     public string WorkspaceRoot { get; set; } =
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".placecontext", "workspaces");
-
-    /// <summary>GitHub OAuth app settings for importing repositories.</summary>
-    public GitHubOptions GitHub { get; set; } = new();
 }

@@ -370,35 +370,6 @@ app.MapPost("/auth/logout", async (HttpContext ctx) =>
     return Results.Redirect("/locked");
 }).AllowAnonymous();
 
-// ---- GitHub OAuth (repo import) — requires a logged-in user (covered by the fallback policy) ----
-app.MapGet("/auth/github/login", (HttpContext ctx, IGitHubGateway gh) =>
-{
-    if (!gh.IsConfigured)
-        return Results.Content("GitHub OAuth is not configured. Set PlaceContext:GitHub:ClientId and ClientSecret.", "text/plain");
-
-    var redirectUri = $"{ctx.Request.Scheme}://{ctx.Request.Host}/auth/github/callback";
-    var state = Guid.NewGuid().ToString("N");
-    ctx.Response.Cookies.Append("gh_state", state, new CookieOptions { HttpOnly = true, SameSite = SameSiteMode.Lax });
-    return Results.Redirect(gh.BuildAuthorizeUrl(redirectUri, state));
-});
-
-app.MapGet("/auth/github/callback", async (HttpContext ctx, IGitHubGateway gh, ITenantStore tenants, ICurrentTenant tenant, string? code, string? state) =>
-{
-    var expected = ctx.Request.Cookies["gh_state"];
-    if (string.IsNullOrEmpty(code) || string.IsNullOrEmpty(state) || !string.Equals(state, expected, StringComparison.Ordinal))
-        return Results.BadRequest("Invalid OAuth state.");
-
-    var redirectUri = $"{ctx.Request.Scheme}://{ctx.Request.Host}/auth/github/callback";
-    var token = await gh.ExchangeCodeAsync(code, redirectUri, ctx.RequestAborted);
-    if (token is null)
-        return Results.BadRequest("GitHub token exchange failed.");
-
-    var user = await gh.GetUserAsync(token, ctx.RequestAborted);
-    await tenants.SaveGitHubAsync(tenant.TenantId, user?.Login ?? string.Empty, token, ctx.RequestAborted);
-    ctx.Response.Cookies.Delete("gh_state");
-    return Results.Redirect("/import");
-});
-
 await app.RunAsync();
 
 // Signs the user into the cookie scheme with their identity + tenant + role claims.

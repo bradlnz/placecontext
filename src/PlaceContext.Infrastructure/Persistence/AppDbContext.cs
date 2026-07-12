@@ -35,7 +35,6 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
     public DbSet<ProjectContextRow> ProjectContexts => Set<ProjectContextRow>();
     public DbSet<RequirementsRow> Requirements => Set<RequirementsRow>();
     public DbSet<UsageRow> UsageRecords => Set<UsageRow>();
-    public DbSet<ReportTemplateRow> ReportTemplates => Set<ReportTemplateRow>();
     public DbSet<ToolCallRow> ToolCalls => Set<ToolCallRow>();
     public DbSet<JobRow> Jobs => Set<JobRow>();
     public DbSet<JobRunRow> JobRuns => Set<JobRunRow>();
@@ -166,14 +165,6 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
             e.ToTable("usage_records");
             e.HasKey(x => x.Id);
             e.HasIndex(x => new { x.ProjectId, x.RecordedAt });
-            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
-        });
-
-        b.Entity<ReportTemplateRow>(e =>
-        {
-            e.ToTable("report_templates");
-            e.HasKey(x => x.Id);
-            e.HasIndex(x => new { x.TenantId, x.Name }).IsUnique(); // name unique within a tenant
             e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
         });
 

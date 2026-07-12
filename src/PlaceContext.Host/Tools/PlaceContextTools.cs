@@ -188,36 +188,6 @@ public sealed class PlaceContextTools
             () => svc.RecordUsageAsync(projectId, model, inputTokens, outputTokens, description));
 
     [Authorize(Policy = "Member")]
-    [McpServerTool(Name = "synthesize_context"), Description("Pull ALL of a project's accumulated context — context doc, requirements, decisions, activity, and risk — organise it into a single structured brief, and end with a prioritised, actionable plan. This is the fast way to get oriented on a project.")]
-    public static Task<string> SynthesizeContext(IPlaceContextService svc, IToolCallLog log,
-        Guid projectId)
-        => Traced(log, "synthesize_context", projectId.ToString(), "synthesize context", new { projectId },
-            () => svc.SynthesizeContextAsync(projectId));
-
-    [Authorize(Policy = "Member")]
-    [McpServerTool(Name = "generate_report"), Description("Generate a defined report for a project from its accumulated data. Pass a templateName (see list_report_templates) or omit it to use the built-in Onboarding Brief. If an LLM is configured it polishes the prose; otherwise a deterministic Markdown report is returned.")]
-    public static Task<string> GenerateReport(IPlaceContextService svc, IToolCallLog log,
-        Guid projectId,
-        [Description("Report template name; omit for the default Onboarding Brief")] string? templateName = null)
-        => Traced(log, "generate_report", projectId.ToString(), $"report {templateName ?? "Onboarding Brief"}", new { projectId, templateName },
-            () => svc.GenerateReportAsync(projectId, templateName));
-
-    [Authorize(Policy = "Member")]
-    [McpServerTool(Name = "list_report_templates"), Description("List the available report templates — the built-in defaults plus any this workspace has defined — and their sections.")]
-    public static Task<string> ListReportTemplates(IPlaceContextService svc, IToolCallLog log)
-        => Traced(log, "list_report_templates", "—", "list report templates", new { },
-            () => svc.ListReportTemplatesAsync());
-
-    [Authorize(Policy = "Member")]
-    [McpServerTool(Name = "define_report_template"), Description("Define (or replace) a custom report template for this workspace. 'sources' is an ordered list of section kinds — choose from: Overview, Context, Requirements, Decisions, Activity, Risk, Usage, ActionPlan. Lets each domain shape its own defined reports.")]
-    public static Task<string> DefineReportTemplate(IPlaceContextService svc, IToolCallLog log,
-        [Description("Unique template name")] string name,
-        [Description("One-line description of what the report is for")] string description,
-        [Description("Ordered section source kinds, e.g. ['Overview','Risk','ActionPlan']")] string[] sources)
-        => Traced(log, "define_report_template", "—", $"define {name}", new { name, description, sources },
-            () => svc.DefineReportTemplateAsync(name, description, sources));
-
-    [Authorize(Policy = "Member")]
     [McpServerTool(Name = "job_authoring_guide"), Description("Return instructions for structuring PlaceContext job code: the sandbox contract (stdin input, /work entrypoint, stdout output, exit codes), available runtimes, how environment variables/secrets are provided, and the next step (upload_job_code). Call this BEFORE writing a job so the code matches the runtime contract.")]
     public static string JobAuthoringGuide() => JobGuide;
 

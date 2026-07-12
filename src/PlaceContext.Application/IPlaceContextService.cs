@@ -44,12 +44,6 @@ public interface IPlaceContextService
     Task<SkillScaffoldView> ScaffoldSkillAsync(Guid projectId, string skillName, string? description, CancellationToken ct = default);
     Task<SkillScaffoldView> SetupHermesAsync(Guid projectId, CancellationToken ct = default);
 
-    // Report generation layer.
-    Task<ReportView> GenerateReportAsync(Guid projectId, string? templateName, CancellationToken ct = default);
-    Task<ReportView> SynthesizeContextAsync(Guid projectId, CancellationToken ct = default);
-    Task<IReadOnlyList<ReportTemplateView>> ListReportTemplatesAsync(CancellationToken ct = default);
-    Task<ReportTemplateView> DefineReportTemplateAsync(string name, string description, IReadOnlyList<string> sources, CancellationToken ct = default);
-
     // Job management.
     Task<JobView> CreateJobAsync(CreateJobCommand command, CancellationToken ct = default);
     Task<JobView> UpdateJobAsync(UpdateJobCommand command, CancellationToken ct = default);

@@ -54,31 +54,14 @@ public static class DependencyInjection
         services.AddScoped<IProjectContextRepository, EfProjectContextRepository>();
         services.AddScoped<IRequirementsRepository, EfRequirementsRepository>();
         services.AddScoped<IUsageRepository, EfUsageRepository>();
-        services.AddScoped<IReportTemplateRepository, EfReportTemplateRepository>();
 
         // Git, metrics, skill scaffolding.
         services.AddSingleton<IGitPort, CliGitAdapter>();
         services.AddSingleton<ICodeMetricsProbe, FileScanCodeMetricsProbe>();
         services.AddSingleton<ISkillScaffolder, FileSkillScaffolder>();
         services.AddSingleton<IRepoFiles, Files.FileRepoFiles>();
-
-        // GitHub OAuth + repo import.
         services.AddHttpClient();
-        services.AddSingleton<IGitHubGateway, GitHub.GitHubGateway>();
         services.AddSingleton<ICodeWorkspace, Git.CodeWorkspace>();
-
-        // LLM gateway (report polish only — the jobs pipeline is fully deterministic).
-        //   PlaceContext:Llm:Provider = "anthropic" | "none".
-        // When unset, default to anthropic if an API key is present, else none (back-compat).
-        var hasLlmKey = !string.IsNullOrWhiteSpace(configuration["PlaceContext:Llm:ApiKey"]);
-        var llmProvider = (configuration["PlaceContext:Llm:Provider"] ?? "").Trim().ToLowerInvariant();
-        if (string.IsNullOrEmpty(llmProvider))
-            llmProvider = hasLlmKey ? "anthropic" : "none";
-
-        if (llmProvider == "anthropic")
-            services.AddSingleton<ILlmGateway, Llm.AnthropicLlmGateway>();
-        else
-            services.AddSingleton<ILlmGateway, Llm.NullLlmGateway>();
 
         // Generic workload runner. In-cluster (the Host pod has KUBERNETES_SERVICE_HOST) we run jobs as
         // Kubernetes Jobs via the API + the Host's ServiceAccount/RBAC; otherwise (local dev) Docker.

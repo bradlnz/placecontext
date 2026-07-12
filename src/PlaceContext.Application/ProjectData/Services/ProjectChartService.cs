@@ -8,48 +8,31 @@ using PlaceContext.Domain.Repositories;
 namespace PlaceContext.Application.Features;
 
 /// <summary>
-/// Draws analytics charts over a project's database with the local LLM. Generation on CPU takes
-/// minutes per chart, so the portal never calls this synchronously: the Host's background worker
-/// runs <see cref="RefreshProjectAsync"/> (all tables, stored via <see cref="IProjectChartRepository"/>)
-/// and the Analytics tab reads the stored results. Per table: sample rows → LLM → a <see cref="ChartSpec"/>
-/// (data only; Chart.js draws it in the portal); when the LLM is off or replies unusably a deterministic
-/// builder shapes the spec from the data, and a table with nothing chartable stores a themed HTML table.
+/// Draws one analytics chart per table in a project's database, deterministically from the data:
+/// sample rows → a <see cref="ChartSpec"/> (data only; Chart.js draws it in the portal). A table
+/// with nothing chartable stores a themed HTML table so the tab always renders something. The
+/// Host's background worker runs <see cref="RefreshProjectAsync"/> and the Analytics tab reads the
+/// stored results.
 /// </summary>
 public sealed class ProjectChartService
 {
-    private const int SampleRows = 200;   // enough shape for a chart, bounded for the model
-    private const int MaxPromptChars = 12000;
+    private const int SampleRows = 200;   // enough shape for a chart, bounded
 
     private readonly IProjectDataStore _store;
     private readonly IProjectChartRepository _charts;
-    private readonly ILlmGateway _llm;
     private readonly IUnitOfWork _uow;
     private readonly IClock _clock;
     private readonly ILogger<ProjectChartService>? _log;
 
-    public ProjectChartService(IProjectDataStore store, IProjectChartRepository charts, ILlmGateway llm,
+    public ProjectChartService(IProjectDataStore store, IProjectChartRepository charts,
         IUnitOfWork uow, IClock clock, ILogger<ProjectChartService>? log = null)
     {
         _store = store;
         _charts = charts;
-        _llm = llm;
         _uow = uow;
         _clock = clock;
         _log = log;
     }
-
-    // The model shapes DATA, never drawing: it returns a compact chart spec and the portal renders
-    // it with Chart.js — reliable where model-drawn SVG was not.
-    private const string SystemPrompt =
-        "You are given rows sampled from one database table, as JSON with 'columns' and 'rows'. " +
-        "Choose the ONE chart that best visualizes this data and return ONLY a JSON object in exactly " +
-        "this shape: {\"type\":\"bar\"|\"line\"|\"pie\",\"title\":\"short title\",\"labels\":[\"...\"]," +
-        "\"series\":[{\"name\":\"...\",\"values\":[numbers]}]}. Rules: every series has exactly one " +
-        "value per label; use 'line' only when labels are ordered (dates, times, sequences); 'pie' " +
-        "has exactly one series and at most 8 labels; at most 24 labels and 3 series — aggregate the " +
-        "rest into an 'other' bucket; values must come from the data (sums, counts, or the values " +
-        "themselves) — never invent numbers. If the request names a specific view of the data, chart " +
-        "that. Output ONLY the JSON — no markdown fences, no commentary.";
 
     /// <summary>
     /// Regenerate the stored chart for every table in the project's database and prune charts of
@@ -97,42 +80,21 @@ public sealed class ProjectChartService
         var table = tableName.Replace("\"", "\"\"");
         var result = await _store.ExecuteAsync(projectId, $"SELECT * FROM \"{table}\" LIMIT {SampleRows}", ct);
 
-        var payload = JsonSerializer.Serialize(new
-        {
-            table = tableName,
-            request = string.IsNullOrWhiteSpace(instruction) ? null : instruction!.Trim(),
-            columns = result.Columns,
-            rows = result.Rows,
-        });
+        _ = instruction; // reserved for future steering; the spec is derived from the data itself
 
-        if (_llm.IsEnabled)
-        {
-            try
-            {
-                var raw = await _llm.GenerateAsync(SystemPrompt, LlmHtml.Truncate(payload, MaxPromptChars), ct);
-                if (ChartSpec.TryParse(raw) is { } spec)
-                    return spec.ToJson();
-                _log?.LogWarning("Analytics chart for table {Table} wasn't a usable spec — using the deterministic builder.", tableName);
-            }
-            catch (Exception ex) when (ex is not OperationCanceledException)
-            {
-                _log?.LogWarning(ex, "Analytics chart LLM call failed for table {Table} — using the deterministic builder.", tableName);
-            }
-        }
-
-        // No LLM (or it misbehaved): build the spec from the data itself; a table with nothing
-        // chartable stores a themed HTML table so the tab always renders something.
+        // Build the spec from the data itself; a table with nothing chartable stores a themed HTML
+        // table so the tab always renders something.
         if (ChartSpec.FromSample(tableName, result) is { } fallback)
             return fallback.ToJson();
         return LlmHtml.StyleChart(FallbackTable(tableName, result));
     }
 
-    // No LLM (or it misbehaved): the data itself, as a plain themed table, so the tab always renders.
+    // Nothing chartable: the data itself, as a plain themed table, so the tab always renders.
     private static string FallbackTable(string tableName, ProjectQueryResult result)
     {
         var sb = new StringBuilder("<html><head></head><body>");
         sb.Append("<h1>").Append(Escape(tableName)).Append("</h1>");
-        sb.Append("<p>The local LLM is not available, so here is the sampled data itself.</p><table><thead><tr>");
+        sb.Append("<p>Nothing chartable in this table — here is the sampled data itself.</p><table><thead><tr>");
         foreach (var col in result.Columns) sb.Append("<th>").Append(Escape(col)).Append("</th>");
         sb.Append("</tr></thead><tbody>");
         foreach (var row in result.Rows.Take(50))

@@ -99,18 +99,6 @@ public sealed class PlaceContextService : IPlaceContextService
     public Task<ImprovementsView> SuggestImprovementsAsync(Guid projectId, CancellationToken ct = default)
         => _dispatcher.Query(new SuggestImprovementsQuery(projectId), ct);
 
-    public Task<ReportView> GenerateReportAsync(Guid projectId, string? templateName, CancellationToken ct = default)
-        => _dispatcher.Send(new GenerateReportCommand(projectId, templateName), ct);
-
-    public Task<ReportView> SynthesizeContextAsync(Guid projectId, CancellationToken ct = default)
-        => _dispatcher.Send(new GenerateReportCommand(projectId, Domain.Services.BuiltInReportTemplates.OnboardingBriefName), ct);
-
-    public Task<IReadOnlyList<ReportTemplateView>> ListReportTemplatesAsync(CancellationToken ct = default)
-        => _dispatcher.Query(new ListReportTemplatesQuery(), ct);
-
-    public Task<ReportTemplateView> DefineReportTemplateAsync(string name, string description, IReadOnlyList<string> sources, CancellationToken ct = default)
-        => _dispatcher.Send(new DefineReportTemplateCommand(name, description, sources), ct);
-
     public Task<SkillScaffoldView> ScaffoldSkillAsync(Guid projectId, string skillName, string? description, CancellationToken ct = default)
         => _dispatcher.Send(new ScaffoldSkillCommand(projectId, skillName, description), ct);
 

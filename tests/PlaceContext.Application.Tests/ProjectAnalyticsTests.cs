@@ -9,10 +9,9 @@ using Xunit;
 namespace PlaceContext.Application.Tests;
 
 /// <summary>
-/// Analytics charts: the background sweep samples each table, asks the local LLM for a chart SPEC
-/// (data only — Chart.js draws it in the portal), and stores it; without an LLM (or when it
-/// misbehaves) the deterministic builder shapes the spec from the data itself. Charts of dropped
-/// tables are pruned.
+/// Analytics charts: the background sweep samples each table and the deterministic builder shapes a
+/// chart SPEC from the data itself (data only — Chart.js draws it in the portal); a table with
+/// nothing chartable stores a themed HTML table instead. Charts of dropped tables are pruned.
 /// </summary>
 public class ProjectAnalyticsTests
 {
@@ -53,23 +52,6 @@ public class ProjectAnalyticsTests
             => Task.CompletedTask;
     }
 
-    private sealed class FakeLlm : ILlmGateway
-    {
-        public bool IsEnabled { get; set; } = true;
-        public string Reply { get; set; } =
-            "{\"type\":\"bar\",\"title\":\"Readings\",\"labels\":[\"door\",\"window\"],\"series\":[{\"name\":\"value\",\"values\":[21.5,19.0]}]}";
-        public string? SawSystem, SawUser;
-        public bool Throws;
-
-        public Task<string> GenerateAsync(string system, string user, CancellationToken ct = default)
-        {
-            if (Throws) throw new InvalidOperationException("llm down");
-            SawSystem = system;
-            SawUser = user;
-            return Task.FromResult(Reply);
-        }
-    }
-
     private sealed class InMemoryChartRepository : IProjectChartRepository
     {
         public readonly Dictionary<(Guid, string), ProjectChart> Charts = new();
@@ -106,64 +88,33 @@ public class ProjectAnalyticsTests
         return (projects, project);
     }
 
-    private static ProjectChartService Service(FakeStore store, FakeLlm llm, InMemoryChartRepository charts)
-        => new(store, charts, llm, new RecordingUnitOfWork(), new FakeClock(T0));
+    private static ProjectChartService Service(IProjectDataStore store, InMemoryChartRepository charts)
+        => new(store, charts, new RecordingUnitOfWork(), new FakeClock(T0));
 
     [Fact]
-    public async Task Llm_chart_is_returned_themed_and_fed_the_table_rows()
+    public async Task Chart_spec_is_built_deterministically_from_the_table_rows()
     {
         var (projects, project) = await WorldAsync();
         var store = new FakeStore();
-        var llm = new FakeLlm();
-        var handler = new GenerateProjectChartHandler(projects, Service(store, llm, new InMemoryChartRepository()));
+        var handler = new GenerateProjectChartHandler(projects, Service(store, new InMemoryChartRepository()));
 
-        var stored = await handler.HandleAsync(new GenerateProjectChartCommand(project.Id.Value, "readings", "average per sensor"));
+        var stored = await handler.HandleAsync(new GenerateProjectChartCommand(project.Id.Value, "readings", null));
 
         var spec = ChartSpec.TryParse(stored);
-        Assert.NotNull(spec);                          // the LLM's spec survived, stored as JSON
-        Assert.Equal("bar", spec!.Type);
-        Assert.Equal(new[] { "door", "window" }, spec.Labels);
-        Assert.Contains("readings", store.SawSql.Single()); // sampled the right table
-        Assert.Contains("21.5", llm.SawUser!);         // the rows reached the model
-        Assert.Contains("average per sensor", llm.SawUser!); // and so did the instruction
+        Assert.NotNull(spec);                          // a spec built from the data, stored as JSON
+        Assert.Equal(new[] { "door", "window" }, spec!.Labels);
+        Assert.Contains(21.5, spec.Series.SelectMany(s => s.Values)); // the data itself is charted
+        Assert.Contains("readings", store.SawSql.Single());           // sampled the right table
     }
 
     [Fact]
-    public async Task Without_an_llm_or_when_it_fails_the_fallback_still_renders_the_data()
+    public async Task Unknown_projects_are_rejected()
     {
-        var (projects, project) = await WorldAsync();
+        var (projects, _) = await WorldAsync();
         var store = new FakeStore();
-
-        var disabled = new FakeLlm { IsEnabled = false };
-        var html1 = await new GenerateProjectChartHandler(projects, Service(store, disabled, new InMemoryChartRepository()))
-            .HandleAsync(new GenerateProjectChartCommand(project.Id.Value, "readings", null));
-
-        var broken = new FakeLlm { Throws = true };
-        var html2 = await new GenerateProjectChartHandler(projects, Service(store, broken, new InMemoryChartRepository()))
-            .HandleAsync(new GenerateProjectChartCommand(project.Id.Value, "readings", null));
-
-        foreach (var stored in new[] { html1, html2 })
-        {
-            var spec = ChartSpec.TryParse(stored);
-            Assert.NotNull(spec);            // deterministic builder shaped a spec from the data
-            Assert.Contains(21.5, spec!.Series.SelectMany(s => s.Values)); // the data itself is charted
-        }
-    }
-
-    [Fact]
-    public async Task Non_html_llm_replies_fall_back_and_unknown_projects_are_rejected()
-    {
-        var (projects, project) = await WorldAsync();
-        var store = new FakeStore();
-        var chatty = new FakeLlm { Reply = "Sure! Here is a description of your data with no markup at all." };
-
-        var html = await new GenerateProjectChartHandler(projects, Service(store, chatty, new InMemoryChartRepository()))
-            .HandleAsync(new GenerateProjectChartCommand(project.Id.Value, "readings", null));
-        Assert.Contains("21.5", html); // fallback table, not the chatty reply
-        Assert.DoesNotContain("Sure!", html);
 
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            new GenerateProjectChartHandler(projects, Service(store, chatty, new InMemoryChartRepository()))
+            new GenerateProjectChartHandler(projects, Service(store, new InMemoryChartRepository()))
                 .HandleAsync(new GenerateProjectChartCommand(Guid.NewGuid(), "readings", null)));
     }
 
@@ -180,7 +131,7 @@ public class ProjectAnalyticsTests
         charts.Charts[(project.Id.Value, "dropped_table")] =
             ProjectChart.Create(project.Id.Value, "dropped_table", "<html>old</html>", T0);
 
-        await Service(store, new FakeLlm(), charts).RefreshProjectAsync(project.Id.Value);
+        await Service(store, charts).RefreshProjectAsync(project.Id.Value);
 
         var stored = await charts.ListForProjectAsync(project.Id.Value);
         Assert.Equal(new[] { "bookings", "readings" }, stored.Select(c => c.TableName));
@@ -197,15 +148,12 @@ public class ProjectAnalyticsTests
         };
         var charts = new InMemoryChartRepository();
 
-        // The LLM never sees "bad" (its SELECT throws); "good" still gets a stored chart.
-        await Service2(store, new FakeLlm(), charts).RefreshProjectAsync(project.Id.Value);
+        // "bad" (its SELECT throws) is skipped; "good" still gets a stored chart.
+        await Service(store, charts).RefreshProjectAsync(project.Id.Value);
 
         var stored = await charts.ListForProjectAsync(project.Id.Value);
         Assert.Equal(new[] { "good" }, stored.Select(c => c.TableName));
     }
-
-    private static ProjectChartService Service2(IProjectDataStore store, FakeLlm llm, InMemoryChartRepository charts)
-        => new(store, charts, llm, new RecordingUnitOfWork(), new FakeClock(T0));
 
     private sealed class FailOnFirstStore : IProjectDataStore
     {
