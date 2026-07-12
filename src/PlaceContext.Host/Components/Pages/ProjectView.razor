@@ -33,6 +33,13 @@ else
         @if (_message is not null) { <div style="color:var(--text-3); font-size:12px; margin-bottom:10px">@_message</div> }
 
 
+        <div class="dctabs" style="margin-bottom:16px">
+            @foreach (var (key, label) in new[] { ("overview", "Overview"), ("knowledge", "Knowledge"), ("activity", "Activity") })
+            {
+                <button class="dctab @(_tab == key ? "active" : "")" @onclick="@(() => { _tab = key; StateHasChanged(); })">@label</button>
+            }
+        </div>
+
         @if (_tab == "overview")
         {
         <!-- graph (full width) -->

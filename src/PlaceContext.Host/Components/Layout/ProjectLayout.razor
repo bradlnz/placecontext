@@ -29,8 +29,6 @@
     private static readonly Item[] Items =
     {
         new("Overview", "overview", ""),
-        new("Knowledge", "knowledge", ""),
-        new("Activity", "activity", ""),
         new("Jobs", "jobs", "jobs"),
         new("Chains", "chains", "chains"),
         new("Schedules", "schedules", "schedules"),
@@ -65,9 +63,9 @@
             if (item.Key == "data" && afterProject is "analytics" or "datamap") return true;
             return afterProject == item.Path;
         }
-        if (afterProject.Length > 0) return false;
-        var tab = System.Web.HttpUtility.ParseQueryString(uri.Query)["tab"] ?? "overview";
-        return tab == item.Key;
+        // The single Overview item owns the project page (its Overview/Knowledge/Activity
+        // tabs are an in-page strip).
+        return afterProject.Length == 0;
     }
 
     protected override void OnInitialized() => Nav.LocationChanged += OnMoved;
