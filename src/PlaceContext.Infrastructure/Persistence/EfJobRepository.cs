@@ -47,6 +47,7 @@ public sealed class EfJobRepository : IJobRepository
         existing.TimeoutSeconds = updated.TimeoutSeconds;
         existing.PostJobActionsJson = updated.PostJobActionsJson;
         existing.ReturnType = updated.ReturnType;
+        existing.ReturnFileName = updated.ReturnFileName;
         existing.UpdatedAt = updated.UpdatedAt;
     }
 
@@ -84,6 +85,7 @@ public sealed class EfJobRepository : IJobRepository
             TimeoutSeconds = job.TimeoutSeconds,
             PostJobActionsJson = JsonSerializer.Serialize(job.PostJobActions.Select(a => a.ToString()).ToList(), Json),
             ReturnType = job.ReturnType.ToString(),
+            ReturnFileName = job.ReturnFileName,
             CreatedAt = job.CreatedAt,
             UpdatedAt = job.UpdatedAt,
         };
@@ -165,7 +167,7 @@ public sealed class EfJobRepository : IJobRepository
             mapSpec, reduceSpec, row.ConcurrencyLimit, policy, row.CreatedAt, row.UpdatedAt,
             allowNetworkEgress: row.AllowNetworkEgress, parameters: parameters,
             timeoutSeconds: row.TimeoutSeconds, postJobActions: postJobActions,
-            returnType: returnType);
+            returnType: returnType, returnFileName: row.ReturnFileName);
     }
 
     private static WorkloadSource DeserialiseSource(

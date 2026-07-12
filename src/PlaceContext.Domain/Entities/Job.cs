@@ -26,6 +26,7 @@ public sealed class Job : AggregateRoot
         IReadOnlyList<JobParameter> parameters,
         IReadOnlyList<PostJobActionKind> postJobActions,
         JobReturnType returnType,
+        string? returnFileName,
         DateTimeOffset createdAt,
         DateTimeOffset updatedAt)
     {
@@ -42,6 +43,7 @@ public sealed class Job : AggregateRoot
         Parameters = parameters;
         PostJobActions = postJobActions;
         ReturnType = returnType;
+        ReturnFileName = string.IsNullOrWhiteSpace(returnFileName) ? null : returnFileName.Trim();
         CreatedAt = createdAt;
         UpdatedAt = updatedAt;
     }
@@ -101,6 +103,10 @@ public sealed class Job : AggregateRoot
     /// </summary>
     public JobReturnType ReturnType { get; private set; }
 
+    /// <summary>For file return types (Pdf/Image/Video): the expected /out file name. Null = the
+    /// first file matching the type's extensions.</summary>
+    public string? ReturnFileName { get; private set; }
+
     public DateTimeOffset CreatedAt { get; }
     public DateTimeOffset UpdatedAt { get; private set; }
 
@@ -126,7 +132,8 @@ public sealed class Job : AggregateRoot
         IReadOnlyList<JobParameter>? parameters = null,
         int timeoutSeconds = DefaultTimeoutSeconds,
         IReadOnlyList<PostJobActionKind>? postJobActions = null,
-        JobReturnType returnType = JobReturnType.Json)
+        JobReturnType returnType = JobReturnType.Json,
+        string? returnFileName = null)
     {
         if (projectId == Guid.Empty)
             throw new ArgumentException("ProjectId must not be empty.", nameof(projectId));
@@ -143,7 +150,7 @@ public sealed class Job : AggregateRoot
             Guid.NewGuid(), projectId, name.Trim(), description?.Trim(),
             mapSpec, reduceSpec, concurrencyLimit, exitCodePolicy,
             allowNetworkEgress, NormalizeTimeout(timeoutSeconds), parameters ?? Array.Empty<JobParameter>(),
-            DistinctActions(postJobActions), returnType, createdAt, createdAt);
+            DistinctActions(postJobActions), returnType, returnFileName, createdAt, createdAt);
     }
 
     // Post-job actions are a set (no duplicates) and order-stable for display.
@@ -170,10 +177,11 @@ public sealed class Job : AggregateRoot
         IReadOnlyList<JobParameter>? parameters = null,
         int timeoutSeconds = DefaultTimeoutSeconds,
         IReadOnlyList<PostJobActionKind>? postJobActions = null,
-        JobReturnType returnType = JobReturnType.Json)
+        JobReturnType returnType = JobReturnType.Json,
+        string? returnFileName = null)
         => new(id, projectId, name, description, mapSpec, reduceSpec, concurrencyLimit, exitCodePolicy,
                allowNetworkEgress, NormalizeTimeout(timeoutSeconds), parameters ?? Array.Empty<JobParameter>(),
-               DistinctActions(postJobActions), returnType, createdAt, updatedAt);
+               DistinctActions(postJobActions), returnType, returnFileName, createdAt, updatedAt);
 
     // ── Behaviour ─────────────────────────────────────────────────────────────────────────────────
 
@@ -192,7 +200,8 @@ public sealed class Job : AggregateRoot
         IReadOnlyList<JobParameter>? parameters = null,
         int timeoutSeconds = DefaultTimeoutSeconds,
         IReadOnlyList<PostJobActionKind>? postJobActions = null,
-        JobReturnType returnType = JobReturnType.Json)
+        JobReturnType returnType = JobReturnType.Json,
+        string? returnFileName = null)
     {
         if (string.IsNullOrWhiteSpace(name))
             throw new ArgumentException("Job name must not be empty.", nameof(name));
@@ -214,6 +223,7 @@ public sealed class Job : AggregateRoot
         if (parameters is not null) Parameters = parameters;
         if (postJobActions is not null) PostJobActions = DistinctActions(postJobActions);
         ReturnType = returnType;
+        ReturnFileName = string.IsNullOrWhiteSpace(returnFileName) ? null : returnFileName.Trim();
         UpdatedAt = updatedAt;
     }
 

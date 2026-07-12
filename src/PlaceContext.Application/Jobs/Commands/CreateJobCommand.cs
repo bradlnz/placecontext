@@ -56,5 +56,8 @@ public sealed record CreateJobCommand(
     IReadOnlyList<PlaceContext.Domain.ValueObjects.PostJobActionKind>? PostJobActions = null,
 
     /// <summary>Declared type of the job's primary return — drives the mandatory per-run artifact.</summary>
-    PlaceContext.Domain.ValueObjects.JobReturnType ReturnType = PlaceContext.Domain.ValueObjects.JobReturnType.Json)
+    PlaceContext.Domain.ValueObjects.JobReturnType ReturnType = PlaceContext.Domain.ValueObjects.JobReturnType.Json,
+
+    /// <summary>Expected /out file name for file return types (Pdf/Image/Video).</summary>
+    string? ReturnFileName = null)
     : ICommand<JobView>;

@@ -49,7 +49,8 @@ public sealed class CreateJobHandler : ICommandHandler<CreateJobCommand, JobView
             allowNetworkEgress: command.AllowNetworkEgress,
             parameters: JobParameterMapper.ToDomain(command.Parameters),
             postJobActions: command.PostJobActions,
-            returnType: command.ReturnType);
+            returnType: command.ReturnType,
+            returnFileName: command.ReturnFileName);
 
         await _jobs.AddAsync(job, ct);
         await _uow.SaveChangesAsync(ct);

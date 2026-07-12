@@ -42,5 +42,7 @@ public sealed record JobView(
     IReadOnlyList<PlaceContext.Domain.ValueObjects.PostJobActionKind> PostJobActions,
     /// <summary>Declared type of the job's primary return — drives the mandatory per-run artifact.</summary>
     PlaceContext.Domain.ValueObjects.JobReturnType ReturnType,
+    /// <summary>Expected /out file name for file return types.</summary>
+    string? ReturnFileName,
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt);

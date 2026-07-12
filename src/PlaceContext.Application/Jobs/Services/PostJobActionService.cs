@@ -148,7 +148,18 @@ public sealed class PostJobActionService
     private PostJobArtifacts.BuiltFile FileResult(Job job, JobRun run, string[] extensions)
     {
         var files = (run.ReduceResult?.Artifacts ?? Array.Empty<RunArtifact>())
-            .Concat(run.ShardResults.OrderBy(s => s.Index).SelectMany(s => s.Artifacts));
+            .Concat(run.ShardResults.OrderBy(s => s.Index).SelectMany(s => s.Artifacts))
+            .ToList();
+        // The declared file name wins outright (exact or basename match) before extension scanning.
+        if (job.ReturnFileName is { Length: > 0 } declared)
+        {
+            var named = files.FirstOrDefault(f =>
+                string.Equals(f.Name, declared, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(Path.GetFileName(f.Name), declared, StringComparison.OrdinalIgnoreCase));
+            if (named is not null)
+                return new PostJobArtifacts.BuiltFile(Path.GetFileName(named.Name), named.GetBytes(),
+                    DocContentType(named.Name) ?? "application/octet-stream", Path.GetFileName(named.Name));
+        }
         foreach (var f in files)
         {
             var ext = Path.GetExtension(f.Name).ToLowerInvariant();

@@ -670,6 +670,17 @@ else
                         What this job's code returns on stdout. Every run generates its primary artifact from this
                         type — a run always yields at least one stored artifact.
                     </div>
+                    @if (_edReturnType is PlaceContext.Domain.ValueObjects.JobReturnType.Pdf
+                        or PlaceContext.Domain.ValueObjects.JobReturnType.Image
+                        or PlaceContext.Domain.ValueObjects.JobReturnType.Video)
+                    {
+                        <div class="dcfield" style="max-width:280px; margin-top:8px">
+                            <label>Output file name <span class="code" style="margin-left:5px">in /out</span></label>
+                            <input class="dcinput" style="font-family:'IBM Plex Mono',monospace" @bind="_edReturnFileName"
+                                   placeholder="report.pdf" />
+                            <div class="dchint">The named file becomes the run's artifact; blank = first file matching the type.</div>
+                        </div>
+                    }
                 </div>
                 <div class="dcfield">
                     <label>Extra post-job actions</label>
@@ -848,6 +859,7 @@ else
     }
     private readonly List<PlaceContext.Domain.ValueObjects.PostJobActionKind> _edPostJobActions = new();
     private PlaceContext.Domain.ValueObjects.JobReturnType _edReturnType = PlaceContext.Domain.ValueObjects.JobReturnType.Json;
+    private string _edReturnFileName = "";
 
     // ── Run-input prompt state ────────────────────────────────────────────────────────────────────
     private JobView? _runPromptJob;
@@ -1074,6 +1086,7 @@ else
         _edParams.Clear();
         _edPostJobActions.Clear();
         _edReturnType = PlaceContext.Domain.ValueObjects.JobReturnType.Json;
+        _edReturnFileName = "";
         _editorError = null;
         _editorTab = "details";
         _showEditor = true;
@@ -1101,6 +1114,7 @@ else
         _edPostJobActions.Clear();
         _edPostJobActions.AddRange(job.PostJobActions);
         _edReturnType = job.ReturnType;
+        _edReturnFileName = job.ReturnFileName ?? "";
         _editorError = null;
         _editorTab = "details";
         _selectedTriggerId = null;
@@ -1257,7 +1271,8 @@ else
                     AllowNetworkEgress: _edAllowNetworkEgress,
                     Parameters: parameters,
                     PostJobActions: _edPostJobActions.ToList(),
-                    ReturnType: _edReturnType);
+                    ReturnType: _edReturnType,
+                    ReturnFileName: string.IsNullOrWhiteSpace(_edReturnFileName) ? null : _edReturnFileName.Trim());
 
                 await Svc.UpdateJobAsync(cmd);
                 _message = $"Job '{_edName.Trim()}' updated.";
@@ -1285,7 +1300,8 @@ else
                     AllowNetworkEgress: _edAllowNetworkEgress,
                     Parameters: parameters,
                     PostJobActions: _edPostJobActions.ToList(),
-                    ReturnType: _edReturnType);
+                    ReturnType: _edReturnType,
+                    ReturnFileName: string.IsNullOrWhiteSpace(_edReturnFileName) ? null : _edReturnFileName.Trim());
 
                 await Svc.CreateJobAsync(cmd);
                 _message = $"Job '{_edName.Trim()}' created.";

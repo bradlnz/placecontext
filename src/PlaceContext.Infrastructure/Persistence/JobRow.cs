@@ -59,6 +59,9 @@ public sealed class JobRow : ITenantOwned
     /// Drives the mandatory per-run artifact.</summary>
     public string ReturnType { get; set; } = "Json";
 
+    /// <summary>Expected /out file name for file return types (Pdf/Image/Video). Null = by extension.</summary>
+    public string? ReturnFileName { get; set; }
+
     // ── Network policy ────────────────────────────────────────────────────────────────────────────
     /// <summary>True when containers may make outbound network calls. Default false (network-none sandbox).</summary>
     public bool AllowNetworkEgress { get; set; }
