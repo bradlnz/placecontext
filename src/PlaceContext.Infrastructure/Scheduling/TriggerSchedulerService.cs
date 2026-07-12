@@ -30,15 +30,15 @@ public sealed class TriggerSchedulerService : BackgroundService
     // Queue pickup is the first hop of every TUI/trigger run — a short drain tick keeps queued runs
     // from idling; the claim query is a cheap indexed SKIP LOCKED select, so 1s is safe.
     private static readonly TimeSpan DrainInterval = TimeSpan.FromSeconds(1);
-    private static readonly TimeSpan ReapInterval = TimeSpan.FromMinutes(2);
+    private static readonly TimeSpan ReapInterval = TimeSpan.FromSeconds(30);
     private const int ClaimBatch = 16;
 
-    // A run only stays "Running" while a live in-process driver executes it — every shard pod is bounded
-    // by ActiveDeadlineSeconds and the handler awaits completion. A run still Running long past any
-    // legitimate duration is therefore orphaned: its driving replica died mid-run (crash/restart/deploy)
-    // and no pod backs it any more. The grace must exceed the longest real run, so it is deliberately
-    // generous (per-job timeouts here are minutes, not hours). Reaped runs are marked Failed.
-    private static readonly TimeSpan OrphanGrace = TimeSpan.FromHours(1);
+    // A run only stays "Running" while a live in-process driver executes it — every shard pod is
+    // bounded by the job's own TimeoutSeconds. A run still Running beyond that (plus slack) is
+    // orphaned or stuck and is marked Failed against ITS OWN declared timeout (default 300s), not
+    // a blanket hour. Chains span multiple runs, so they keep a generous fixed grace.
+    private const int ReapSlackSeconds = 60;
+    private static readonly TimeSpan ChainOrphanGrace = TimeSpan.FromHours(1);
 
     private readonly IServiceScopeFactory _scopes;
     private readonly Operations.OperationCenter _opCenter;
@@ -147,7 +147,7 @@ public sealed class TriggerSchedulerService : BackgroundService
                         var runId = Guid.NewGuid();
                         var op = _opCenter.Track(tenant, job?.ProjectId,
                             $"Run job — {job?.Name ?? "job"} · {run.TriggerName}",
-                            job is null ? null : $"/project/{job.ProjectId}/jobs",
+                            $"/observability?run={runId}",
                             correlationKey: RunStatusWatchService.JobRunKey(runId));
                         _opCenter.MarkRunning(op.Id);
                         try
@@ -190,7 +190,7 @@ public sealed class TriggerSchedulerService : BackgroundService
     }
 
     /// <summary>
-    /// Marks runs stuck in <c>Running</c> past <see cref="OrphanGrace"/> as <c>Failed</c> — these were
+    /// Marks runs stuck in <c>Running</c> past their job's own timeout (+slack) as <c>Failed</c> — these were
     /// abandoned when their driving replica died mid-run, so no pod backs them and they would otherwise
     /// stay Running forever. Cross-tenant by design and idempotent, so every replica can run it safely
     /// (the UPDATE is atomic; concurrent runs just no-op on already-reaped rows).
@@ -203,12 +203,19 @@ public sealed class TriggerSchedulerService : BackgroundService
         if (conn.State != System.Data.ConnectionState.Open) await conn.OpenAsync(ct);
 
         await using var cmd = conn.CreateCommand();
+        // Each run reaps against its own job's timeout (+slack); runs whose job is gone fall back
+        // to the default 300s bound.
         cmd.CommandText = """
-            UPDATE job_runs
+            UPDATE job_runs r
             SET "Status" = 'Failed', "FinishedAt" = now()
-            WHERE "Status" = 'Running' AND "StartedAt" < now() - make_interval(secs => @grace)
+            FROM (SELECT r2."Id", COALESCE(j."TimeoutSeconds", 300) AS timeout_s
+                  FROM job_runs r2 LEFT JOIN jobs j ON j."Id" = r2."JobId"
+                  WHERE r2."Status" = 'Running') bounds
+            WHERE r."Id" = bounds."Id"
+              AND r."Status" = 'Running'
+              AND r."StartedAt" < now() - make_interval(secs => bounds.timeout_s + @slack)
             """;
-        cmd.Parameters.AddWithValue("grace", (int)OrphanGrace.TotalSeconds);
+        cmd.Parameters.AddWithValue("slack", ReapSlackSeconds);
         var reaped = await cmd.ExecuteNonQueryAsync(ct);
         if (reaped > 0)
             _log.LogWarning("Reaped {Count} orphaned job run(s) stuck in Running → Failed.", reaped);
@@ -222,7 +229,7 @@ public sealed class TriggerSchedulerService : BackgroundService
             SET "Status" = 'Failed', "FinishedAt" = now()
             WHERE "Status" = 'Running' AND "StartedAt" < now() - make_interval(secs => @grace)
             """;
-        chainCmd.Parameters.AddWithValue("grace", (int)OrphanGrace.TotalSeconds);
+        chainCmd.Parameters.AddWithValue("grace", (int)ChainOrphanGrace.TotalSeconds);
         var reapedChains = await chainCmd.ExecuteNonQueryAsync(ct);
         if (reapedChains > 0)
             _log.LogWarning("Reaped {Count} orphaned chain run(s) stuck in Running → Failed.", reapedChains);

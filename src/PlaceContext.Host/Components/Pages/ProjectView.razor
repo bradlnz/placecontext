@@ -63,7 +63,7 @@ else
                     }
                     else
                     {
-                        <GraphCanvas Graph="_graph" Height="420" Searchable="true" AllowFullscreen="true" />
+                        <GraphCanvas Graph="_graph" Height="420" Searchable="true" AllowFullscreen="true" NodeUrl="OverviewNodeUrl" />
                     }
                 </div>
         </div>
@@ -216,8 +216,13 @@ else
     // The dependency graph carries ALL the related data: on top of the knowledge graph, every
     // entity joins as a hub with sampled records, entity↔entity relations, tagged runs, and the
     // latest version of each artifact — one brain for the whole project.
+    private readonly Dictionary<string, string> _overviewNodeUrls = new();
+
+    private string? OverviewNodeUrl(GraphNodeView node) => _overviewNodeUrls.GetValueOrDefault(node.Id);
+
     private async Task<GraphVizView?> MergeDataGraphAsync(GraphVizView? graph)
     {
+        _overviewNodeUrls.Clear();
         try
         {
             var entities = await Svc.ListDataEntitiesAsync(Id);
@@ -238,6 +243,7 @@ else
                 var eId = $"entity:{entity.Id}";
                 nodes.Add(new GraphNodeView(eId, entity.Name, 0, IsGod: true,
                     Content: $"business entity · {entity.TableName}"));
+                _overviewNodeUrls[eId] = $"/project/{Id}/entity/{Uri.EscapeDataString(entity.Name)}";
 
                 foreach (var rel in entity.Relations)
                 {
@@ -261,6 +267,7 @@ else
                         var label = labelIdx < rows.Rows[r].Count ? rows.Rows[r][labelIdx] ?? "—" : "—";
                         var rid = $"record:{entity.Id}:{r}";
                         nodes.Add(new GraphNodeView(rid, label, 0, false, Content: $"{entity.Name} record", Kind: "human"));
+                        _overviewNodeUrls[rid] = $"/project/{Id}/entity/{Uri.EscapeDataString(entity.Name)}?record={Uri.EscapeDataString(label ?? "")}";
                         Link(eId, rid);
                     }
                 }
@@ -275,7 +282,10 @@ else
                     {
                         var rid = $"run:{runId}";
                         if (nodes.All(n => n.Id != rid))
+                        {
                             nodes.Add(new GraphNodeView(rid, $"run {runId.ToString("N")[..8]}", 0, false, Content: "tagged job run"));
+                            _overviewNodeUrls[rid] = $"/observability?run={runId}";
+                        }
                         Link(eId, rid);
                         try { arts.AddRange(await Svc.ListRunArtifactsAsync(runId)); } catch { }
                     }
@@ -285,8 +295,11 @@ else
                         var aid = $"art:{latest.Id}";
                         var label = g.Count() > 1 ? $"{latest.Title} · v{g.Count()}" : latest.Title;
                         if (nodes.All(n => n.Id != aid))
+                        {
                             nodes.Add(new GraphNodeView(aid, label, 0, false,
                                 Content: $"artifact · {latest.Kind}", Kind: "good", Labeled: true));
+                            _overviewNodeUrls[aid] = $"/artifacts?artifact={latest.Id}";
+                        }
                         Link($"run:{latest.RunId}", aid);
                     }
                 }
