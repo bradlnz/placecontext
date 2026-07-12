@@ -231,6 +231,12 @@ public sealed class PlaceContextService : IPlaceContextService
     public Task<bool> DeleteSqlChartAsync(Guid projectId, string name, CancellationToken ct = default)
         => _dispatcher.Send(new DeleteSqlChartCommand(projectId, name), ct);
 
+    public Task<bool> SaveProjectViewAsync(Guid projectId, string name, string selectSql, CancellationToken ct = default)
+        => _dispatcher.Send(new SaveProjectViewCommand(projectId, name, selectSql), ct);
+
+    public Task<bool> DropProjectViewAsync(Guid projectId, string name, CancellationToken ct = default)
+        => _dispatcher.Send(new DropProjectViewCommand(projectId, name), ct);
+
     public Task<InboundSmsView> ReceiveInboundSmsAsync(ReceiveInboundSmsCommand command, CancellationToken ct = default)
         => _dispatcher.Send(command, ct);
 

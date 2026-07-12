@@ -29,7 +29,28 @@
                 <span style="font-size:11px; text-transform:uppercase; letter-spacing:.5px; color:var(--text-3)">Tables</span>
                 <button class="dcbtn" style="padding:2px 8px; font-size:11px" @onclick="RefreshTablesAsync" title="Refresh">↻</button>
             </div>
-            <button class="dcbtn primary" style="width:100%; margin-bottom:10px; font-size:12px" @onclick="StartNewTable">+ New table</button>
+            <div style="display:flex; gap:6px; margin-bottom:10px">
+                <button class="dcbtn primary" style="flex:1; font-size:12px" @onclick="StartNewTable">+ Table</button>
+                <button class="dcbtn" style="flex:1; font-size:12px" @onclick="@(() => _showNewView = !_showNewView)">+ View</button>
+            </div>
+            @if (_showNewView)
+            {
+                <div class="dccard" style="padding:10px; margin-bottom:10px; display:flex; flex-direction:column; gap:6px">
+                    <input @bind="_newViewName" placeholder="view name (e.g. sales_by_city)"
+                           style="padding:5px 8px; font-size:11.5px; background:var(--bg); border:1px solid var(--border); border-radius:5px; color:var(--text); font-family:'IBM Plex Mono',monospace" />
+                    <textarea @bind="_newViewSql" rows="4" spellcheck="false"
+                              placeholder="SELECT l.city, avg(l.price) FROM listings l JOIN suburbs s ON s.name = l.city GROUP BY 1"
+                              style="padding:6px 8px; font-size:11.5px; background:var(--bg); border:1px solid var(--border); border-radius:5px; color:var(--text); font-family:'IBM Plex Mono',monospace; resize:vertical"></textarea>
+                    <div style="display:flex; gap:6px; align-items:center">
+                        <button class="dcbtn primary" style="padding:4px 10px; font-size:11px" @onclick="SaveViewAsync">Create view</button>
+                        <span style="font-size:10.5px; color:var(--text-3)">SELECT-only; joins welcome</span>
+                    </div>
+                    @if (_viewError is not null)
+                    {
+                        <span style="font-size:11px; color:var(--bad)">@_viewError</span>
+                    }
+                </div>
+            }
             @if (_tables.Count == 0)
             {
                 <div style="font-size:11.5px; color:var(--text-3); line-height:1.5">
@@ -43,21 +64,29 @@
                          @onclick="@(() => SelectTableAsync(t.Name))" title="SELECT the first rows">
                         <span style="font-size:12px; font-family:'IBM Plex Mono',monospace">@t.Name</span>
                         <span style="font-size:10.5px; color:var(--text-3)">
-                            @if (t.ReadOnly)
+                            @if (t.IsView)
+                            {
+                                <span title="A saved SELECT over the project's tables — query it like a table." style="border:1px solid var(--brand-2); color:var(--brand-2); border-radius:4px; padding:0 4px; margin-right:5px">view</span>
+                            }
+                            else if (t.ReadOnly)
                             {
                                 <span title="System table — written by PlaceContext (job run results); query and export only." style="border:1px solid var(--border); border-radius:4px; padding:0 4px; margin-right:5px">read-only</span>
                             }
-                            ~@t.RowEstimate
+                            @(t.IsView ? "" : $"~{t.RowEstimate}")
                         </span>
                     </div>
                     <div style="display:flex; gap:10px; margin-top:5px">
-                        @if (!t.ReadOnly)
+                        @if (!t.ReadOnly && !t.IsView)
                         {
                             <button class="dclink" @onclick="@(() => StartEditAsync(t.Name))">edit</button>
                             <button class="dclink" @onclick="@(() => StartRename(t.Name))">rename</button>
                         }
                         <button class="dclink" @onclick="@(() => ExportAsync(t.Name))">export</button>
-                        @if (!t.ReadOnly)
+                        @if (t.IsView)
+                        {
+                            <button class="dclink" style="color:var(--bad)" @onclick="@(() => DropViewAsync(t.Name))">drop</button>
+                        }
+                        else if (!t.ReadOnly)
                         {
                             <button class="dclink" style="color:var(--bad)" @onclick="@(() => StartDrop(t.Name))">drop</button>
                         }
@@ -275,6 +304,36 @@
         "--   SELECT sensor, avg(value) FROM readings GROUP BY sensor;\n\n";
 
     private IReadOnlyList<ProjectTableInfo> _tables = Array.Empty<ProjectTableInfo>();
+
+    // ── Views (saved SELECTs over the project's tables) ──────────────────────────────────────────
+    private bool _showNewView;
+    private string _newViewName = "";
+    private string _newViewSql = "";
+    private string? _viewError;
+
+    private async Task SaveViewAsync()
+    {
+        _viewError = null;
+        try
+        {
+            await Svc.SaveProjectViewAsync(ProjectId, _newViewName, _newViewSql);
+            _showNewView = false;
+            _newViewName = "";
+            _newViewSql = "";
+            await RefreshTablesAsync();
+        }
+        catch (Exception ex) { _viewError = ex.Message; }
+    }
+
+    private async Task DropViewAsync(string name)
+    {
+        try
+        {
+            await Svc.DropProjectViewAsync(ProjectId, name);
+            await RefreshTablesAsync();
+        }
+        catch (Exception ex) { _viewError = ex.Message; }
+    }
     private ProjectQueryResult? _result;
     private string? _error;
     private bool _running;

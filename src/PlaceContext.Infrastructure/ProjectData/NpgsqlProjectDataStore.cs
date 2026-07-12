@@ -129,16 +129,17 @@ public sealed class NpgsqlProjectDataStore : IProjectDataStore
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = """
             SELECT c.relname, GREATEST(c.reltuples, 0)::bigint,
-                   pg_get_userbyid(c.relowner) <> n.nspname
+                   pg_get_userbyid(c.relowner) <> n.nspname,
+                   c.relkind = 'v'
             FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
-            WHERE n.nspname = @schema AND c.relkind = 'r'
+            WHERE n.nspname = @schema AND c.relkind IN ('r', 'v')
             ORDER BY c.relname
             """;
         cmd.Parameters.AddWithValue("schema", schema);
         var tables = new List<ProjectTableInfo>();
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         while (await reader.ReadAsync(ct))
-            tables.Add(new ProjectTableInfo(reader.GetString(0), reader.GetInt64(1), reader.GetBoolean(2)));
+            tables.Add(new ProjectTableInfo(reader.GetString(0), reader.GetInt64(1), reader.GetBoolean(2), reader.GetBoolean(3)));
         return tables;
     }
 

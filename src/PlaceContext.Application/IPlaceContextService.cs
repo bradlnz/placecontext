@@ -90,6 +90,8 @@ public interface IPlaceContextService
     Task<IReadOnlyList<ProjectChartView>> ListProjectChartsAsync(Guid projectId, CancellationToken ct = default);
     Task<ProjectChartView> SaveSqlChartAsync(Guid projectId, string name, string sql, string chartType = "bar", CancellationToken ct = default);
     Task<bool> DeleteSqlChartAsync(Guid projectId, string name, CancellationToken ct = default);
+    Task<bool> SaveProjectViewAsync(Guid projectId, string name, string selectSql, CancellationToken ct = default);
+    Task<bool> DropProjectViewAsync(Guid projectId, string name, CancellationToken ct = default);
 
     // Inbound SMS gateway (encrypted at rest).
     Task<InboundSmsView> ReceiveInboundSmsAsync(ReceiveInboundSmsCommand command, CancellationToken ct = default);
