@@ -4,6 +4,7 @@
 @using PlaceContext.Application.Features
 @inject IPlaceContextService Svc
 @inject PortalUiState Ui
+@inject IJSRuntime JS
 
 <PageTitle>PlaceContext — Data map</PageTitle>
 
@@ -21,8 +22,8 @@ else
             <div>
                 <h2 style="font-size:18px; font-weight:600; margin:0">Data map</h2>
                 <div style="font-size:12px; color:var(--text-3); margin-top:3px">
-                    Jobs consolidate into your project tables — every completed run of a mapped job appends
-                    its records to the table, with run provenance.
+                    The data flow, live: drag nodes to arrange, click an edge to edit its mapping,
+                    drag a job's ＋ onto a table to connect them.
                 </div>
             </div>
             <button class="dcbtn primary" @onclick="@(() => OpenEditor(null))">+ New mapping</button>
@@ -33,72 +34,67 @@ else
             <div style="margin-bottom:12px; padding:10px 14px; border-radius:8px; background:var(--card); font-size:12.5px; color:var(--text-2)">@_message</div>
         }
 
-        @* ── The canvas: one consolidation lane per target table ─────────────────────────── *@
-        @if (_mappings is null or { Count: 0 })
-        {
-            <div class="dccard" style="padding:28px; text-align:center; color:var(--text-3); font-size:13px">
-                No mappings yet. A mapping is an edge of the data map: pick a job, a target table, and which
-                fields of the job's result land in which columns — ingestion then runs after every completed run.
-            </div>
-        }
-        else
-        {
-            <div style="display:flex; flex-direction:column; gap:14px">
-                @foreach (var lane in _mappings.GroupBy(m => m.TargetTable, StringComparer.OrdinalIgnoreCase))
+        @* ── Interactive canvas: nodes drag, edges edit, ＋ drags a new connection ──────────── *@
+        <div style="position:relative; height:65vh; min-height:480px; border:1px solid var(--border); border-radius:10px; overflow:hidden; background:var(--card); background-image:radial-gradient(var(--border-2) 1px, transparent 1px); background-size:22px 22px; user-select:none; touch-action:none"
+             @onpointermove="OnCanvasMove" @onpointerup="OnCanvasUp">
+
+            <svg style="position:absolute; inset:0; width:100%; height:100%; pointer-events:none">
+                <defs>
+                    <marker id="pcarrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                        <path d="M0 0 L10 5 L0 10 Z" fill="var(--brand-2)" />
+                    </marker>
+                </defs>
+                @foreach (var m in _mappings ?? Array.Empty<DataMappingView>())
                 {
-                    <div class="dccard" style="padding:16px 18px; display:flex; align-items:center; gap:0">
-
-                        @* source job nodes *@
-                        <div style="display:flex; flex-direction:column; gap:8px; flex:1; min-width:0">
-                            @foreach (var m in lane)
-                            {
-                                <div style="display:flex; align-items:center; gap:10px; border:1px solid var(--border); border-radius:9px; padding:9px 12px; background:var(--card-2); cursor:pointer; opacity:@(m.Enabled ? "1" : ".45")"
-                                     @onclick="@(() => OpenEditor(m))" title="Edit mapping">
-                                    <span style="width:8px; height:8px; border-radius:50%; flex:none; background:var(--brand-2)"></span>
-                                    <div style="flex:1; min-width:0">
-                                        <div style="font-size:12.5px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis">@m.JobName</div>
-                                        <div style="font-size:10.5px; color:var(--text-3)">
-                                            @(m.RowsPath is null ? "artifact root" : $"at {m.RowsPath}") · @m.Fields.Count field(s)@(m.Enabled ? "" : " · paused")
-                                        </div>
-                                    </div>
-                                    <span style="font-size:10.5px; font-family:'IBM Plex Mono',monospace; color:var(--brand-2); background:var(--brand-bg); padding:1px 7px; border-radius:5px">@ReturnTypeOf(m.JobId)</span>
-                                </div>
-                            }
-                        </div>
-
-                        @* connector *@
-                        <div style="flex:none; width:64px; display:flex; align-items:center; justify-content:center; color:var(--text-3)">
-                            <svg width="64" height="24" viewBox="0 0 64 24">
-                                <line x1="2" y1="12" x2="52" y2="12" stroke="currentColor" stroke-width="1.5" stroke-dasharray="4 3" />
-                                <path d="M52 6 L62 12 L52 18 Z" fill="currentColor" />
-                            </svg>
-                        </div>
-
-                        @* target table node *@
-                        <div style="flex:1; min-width:0; border:1px solid var(--brand-2); border-radius:10px; padding:12px 14px; background:var(--brand-bg)">
-                            <div style="font-size:13px; font-weight:600; font-family:'IBM Plex Mono',monospace">@lane.Key</div>
-                            <div style="font-size:10.5px; color:var(--text-3); margin-top:2px">
-                                @(TableRows(lane.Key) is { } n ? $"{n:N0} rows · " : "created on first ingest · ")append-only · queryable on the Data tab
-                            </div>
-                        </div>
-                    </div>
+                    var mp = m;
+                    <path d="@EdgePath(mp)" fill="none" stroke="var(--brand-2)" stroke-width="1.6"
+                          stroke-dasharray="@(mp.Enabled ? "none" : "5 4")" opacity="@(mp.Enabled ? "0.9" : "0.4")"
+                          marker-end="url(#pcarrow)" style="pointer-events:stroke; cursor:pointer"
+                          @onclick="@(() => OpenEditor(mp))">
+                        <title>@mp.JobName → @mp.TargetTable (@mp.Fields.Count field(s)) — click to edit</title>
+                    </path>
                 }
-            </div>
-        }
+                @if (_connectJob is not null)
+                {
+                    <path d="@ConnectPath()" fill="none" stroke="var(--human)" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#pcarrow)" />
+                }
+            </svg>
 
-        @* ── Unmapped jobs: the loose leaves of the tree ─────────────────────────────────── *@
-        @if (UnmappedJobs() is { Count: > 0 } unmapped)
-        {
-            <div style="margin-top:22px">
-                <div style="font-size:11px; text-transform:uppercase; letter-spacing:.5px; color:var(--text-3); margin-bottom:8px">Unmapped jobs</div>
-                <div style="display:flex; flex-wrap:wrap; gap:8px">
-                    @foreach (var job in unmapped)
-                    {
-                        <button class="dcbtn" style="font-size:12px" @onclick="@(() => OpenEditorForJob(job))">@job.Name → map…</button>
-                    }
+            @foreach (var job in _jobs ?? Array.Empty<JobView>())
+            {
+                var j = job;
+                var key = "job:" + j.Id;
+                var mapped = _mappings?.Any(m => m.JobId == j.Id) ?? false;
+                <div style="position:absolute; left:@(Pos(key).X)px; top:@(Pos(key).Y)px; width:190px; border:1px @(mapped ? "solid var(--border-2)" : "dashed var(--border-2)"); border-radius:9px; padding:8px 10px; background:var(--card-2); cursor:grab; box-shadow:var(--shadow)"
+                     @onpointerdown="@(e => StartDrag(key, e))" @onpointerdown:stopPropagation="true">
+                    <div style="display:flex; align-items:center; gap:7px">
+                        <span style="width:7px; height:7px; border-radius:50%; flex:none; background:@(mapped ? "var(--brand-2)" : "var(--border-2)")"></span>
+                        <span style="flex:1; min-width:0; font-size:12px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis" title="@j.Name">@j.Name</span>
+                        <span title="Drag onto a table to map this job's output into it"
+                              style="flex:none; width:18px; height:18px; border-radius:50%; background:var(--brand); color:var(--brand-fg,#07130b); display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700; cursor:crosshair"
+                              @onpointerdown="@(e => StartConnect(j, e))" @onpointerdown:stopPropagation="true">＋</span>
+                    </div>
+                    <div style="font-size:10px; color:var(--text-3); margin-top:3px; display:flex; justify-content:space-between">
+                        <span>@(mapped ? "mapped" : "unmapped — drag ＋")</span>
+                        <span style="font-family:'IBM Plex Mono',monospace; color:var(--brand-2)">@j.ReturnType</span>
+                    </div>
                 </div>
-            </div>
-        }
+            }
+
+            @foreach (var table in TableNodes())
+            {
+                var t = table;
+                var key = "table:" + t;
+                <div style="position:absolute; left:@(Pos(key).X)px; top:@(Pos(key).Y)px; width:210px; border:1px solid var(--brand-2); border-radius:10px; padding:9px 12px; background:var(--brand-bg); cursor:grab; box-shadow:var(--shadow)"
+                     @onpointerdown="@(e => StartDrag(key, e))" @onpointerdown:stopPropagation="true"
+                     @onpointerup="@(() => OnTableUp(t))" @onpointerup:stopPropagation="true">
+                    <div style="font-size:12.5px; font-weight:600; font-family:'IBM Plex Mono',monospace; white-space:nowrap; overflow:hidden; text-overflow:ellipsis" title="@t">@t</div>
+                    <div style="font-size:10px; color:var(--text-3); margin-top:2px">
+                        @(TableRows(t) is { } n ? $"{n:N0} rows" : "created on first ingest") · append-only
+                    </div>
+                </div>
+            }
+        </div>
     </div>
 }
 
@@ -270,6 +266,164 @@ else
             .ToList();
 
     // ── Editor ────────────────────────────────────────────────────────────────────────────────────
+
+    // ── Canvas state: positions (persisted per project in the browser), drag + connect ───────────
+    private readonly Dictionary<string, (double X, double Y)> _pos = new();
+    private bool _posLoaded;
+    private string? _dragKey;
+    private string? _connectJobId;
+    private JobView? _connectJob;
+    private (double X, double Y) _connectEnd;
+    private double _lastX, _lastY;
+    private bool _moved;
+
+    private (double X, double Y) Pos(string key) => _pos.TryGetValue(key, out var p) ? p : (24, 24);
+
+    private IReadOnlyList<string> TableNodes()
+    {
+        var mapped = (_mappings ?? Array.Empty<DataMappingView>()).Select(m => m.TargetTable);
+        var real = (_tables ?? Array.Empty<PlaceContext.Application.Ports.ProjectTableInfo>())
+            .Where(t => !t.IsView).Select(t => t.Name);
+        return mapped.Concat(real).Distinct(StringComparer.OrdinalIgnoreCase).Take(14).ToList();
+    }
+
+    // Default layout: jobs stacked on the left, tables on the right — then every drag is remembered.
+    private void EnsureLayout()
+    {
+        var yJ = 24d;
+        foreach (var j in _jobs ?? Array.Empty<JobView>())
+        {
+            _pos.TryAdd("job:" + j.Id, (30, yJ));
+            yJ += 84;
+        }
+        var yT = 24d;
+        foreach (var t in TableNodes())
+        {
+            _pos.TryAdd("table:" + t, (660, yT));
+            yT += 96;
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_posLoaded || _loading) return;
+        _posLoaded = true;
+        try
+        {
+            var json = await JS.InvokeAsync<string?>("localStorage.getItem", $"pc-datamap-{ProjectId}");
+            if (!string.IsNullOrEmpty(json))
+            {
+                var saved = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, double[]>>(json);
+                if (saved is not null)
+                    foreach (var (k, v) in saved.Where(kv => kv.Value.Length == 2))
+                        _pos[k] = (v[0], v[1]);
+            }
+        }
+        catch { /* fresh browser — defaults apply */ }
+        EnsureLayout();
+        StateHasChanged();
+    }
+
+    private async Task SavePositionsAsync()
+    {
+        try
+        {
+            var payload = System.Text.Json.JsonSerializer.Serialize(
+                _pos.ToDictionary(kv => kv.Key, kv => new[] { kv.Value.X, kv.Value.Y }));
+            await JS.InvokeVoidAsync("localStorage.setItem", $"pc-datamap-{ProjectId}", payload);
+        }
+        catch { /* layout persistence is a nicety */ }
+    }
+
+    private void StartDrag(string key, PointerEventArgs e)
+    {
+        _dragKey = key;
+        _lastX = e.ClientX;
+        _lastY = e.ClientY;
+        _moved = false;
+    }
+
+    private void StartConnect(JobView job, PointerEventArgs e)
+    {
+        _connectJob = job;
+        _connectJobId = "job:" + job.Id;
+        var p = Pos(_connectJobId);
+        _connectEnd = (p.X + 190, p.Y + 22);
+        _lastX = e.ClientX;
+        _lastY = e.ClientY;
+    }
+
+    private void OnCanvasMove(PointerEventArgs e)
+    {
+        var dx = e.ClientX - _lastX;
+        var dy = e.ClientY - _lastY;
+        if (_dragKey is { } key)
+        {
+            var p = Pos(key);
+            _pos[key] = (Math.Max(0, p.X + dx), Math.Max(0, p.Y + dy));
+            if (Math.Abs(dx) + Math.Abs(dy) > 1) _moved = true;
+        }
+        else if (_connectJob is not null)
+        {
+            _connectEnd = (_connectEnd.X + dx, _connectEnd.Y + dy);
+        }
+        else
+        {
+            return;
+        }
+        _lastX = e.ClientX;
+        _lastY = e.ClientY;
+    }
+
+    private async Task OnCanvasUp()
+    {
+        if (_dragKey is not null)
+        {
+            var clickedJob = !_moved && _dragKey.StartsWith("job:") ? _dragKey["job:".Length..] : null;
+            _dragKey = null;
+            await SavePositionsAsync();
+            // A click (no movement) on a job opens its mapping — or the editor to create one.
+            if (clickedJob is not null && Guid.TryParse(clickedJob, out var jobId))
+            {
+                if (_mappings?.FirstOrDefault(m => m.JobId == jobId) is { } existing) OpenEditor(existing);
+                else if (_jobs?.FirstOrDefault(j => j.Id == jobId) is { } job) OpenEditorForJob(job);
+            }
+        }
+        else if (_connectJob is { } job)
+        {
+            // Released on empty canvas: open the editor with just the job prefilled.
+            _connectJob = null;
+            OpenEditorForJob(job);
+        }
+    }
+
+    // Released on a table while connecting: prefill both ends of the new edge.
+    private void OnTableUp(string table)
+    {
+        if (_connectJob is not { } job) return;
+        _connectJob = null;
+        OpenEditorForJob(job);
+        _edTable = table;
+    }
+
+    // Cubic bezier from the job node's right edge to the table node's left edge.
+    private string EdgePath(DataMappingView m)
+    {
+        var from = Pos("job:" + m.JobId);
+        var to = Pos("table:" + m.TargetTable);
+        var x1 = from.X + 190; var y1 = from.Y + 26;
+        var x2 = to.X; var y2 = to.Y + 26;
+        var bend = Math.Max(40, (x2 - x1) / 2);
+        return FormattableString.Invariant($"M {x1} {y1} C {x1 + bend} {y1}, {x2 - bend} {y2}, {x2} {y2}");
+    }
+
+    private string ConnectPath()
+    {
+        if (_connectJobId is null) return "";
+        var from = Pos(_connectJobId);
+        var x1 = from.X + 190; var y1 = from.Y + 22;
+        return FormattableString.Invariant($"M {x1} {y1} L {_connectEnd.X} {_connectEnd.Y}");
+    }
 
     private void OpenEditorForJob(JobView job)
     {

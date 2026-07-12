@@ -88,6 +88,23 @@
                 </dl>
             </div>
 
+            @if (_artifacts.Count > 0)
+            {
+                <div>
+                    <div style="font-size:11px; font-weight:600; letter-spacing:.5px; color:var(--text-3); text-transform:uppercase; margin-bottom:6px">
+                        Artifacts <span style="font-weight:400; text-transform:none">from runs tagged with this record</span>
+                    </div>
+                    @foreach (var a in _artifacts)
+                    {
+                        <a href="@($"/artifacts?artifact={a.Id}")"
+                           style="display:flex; align-items:center; gap:10px; padding:8px 12px; margin-bottom:5px; border:1px solid var(--border); border-radius:8px; background:var(--card-2); font-size:12px; color:var(--text); text-decoration:none">
+                            <span style="font-family:'IBM Plex Mono',monospace; flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis">@a.Title</span>
+                            <span style="font-size:10.5px; color:var(--text-3)">@a.Kind · @a.CreatedAt.ToWorkspaceTime().ToString("MMM d · HH:mm")</span>
+                        </a>
+                    }
+                </div>
+            }
+
             @foreach (var (relation, related) in _related)
             {
                 <div>
@@ -160,11 +177,15 @@
                 ? _rows.Rows
                 : _rows.Rows.Where(r => r.Any(v => v?.Contains(_filter, StringComparison.OrdinalIgnoreCase) == true));
 
+    private readonly List<RunArtifactLinkView> _artifacts = new();
+
     private async Task OpenRecordAsync(IReadOnlyList<string?> row)
     {
         _open = row;
         _related.Clear();
+        _artifacts.Clear();
         if (_entity is null || _rows is null) return;
+        await LoadLinkedArtifactsAsync(row);
         foreach (var rel in _entity.Relations)
         {
             var target = _all.FirstOrDefault(e => string.Equals(e.Name, rel.TargetEntity, StringComparison.OrdinalIgnoreCase));
@@ -179,6 +200,46 @@
                 _related.Add((rel, related));
             }
             catch { /* a broken relation must not break the record view */ }
+        }
+    }
+
+    // Artifacts join the graph through shared key values: any run whose recorded output mentions
+    // this record's label or relation-key values (searched in the project's own job_run_data
+    // table, as the isolated role) contributes its stored artifacts to the record.
+    private async Task LoadLinkedArtifactsAsync(IReadOnlyList<string?> row)
+    {
+        if (_entity is null || _rows is null) return;
+        var cols = _rows.Columns.ToList();
+        var keys = new List<string>();
+        if (LabelCol() is { } label)
+        {
+            var li = cols.FindIndex(c => string.Equals(c, label, StringComparison.OrdinalIgnoreCase));
+            if (li >= 0 && li < row.Count && row[li] is { Length: > 2 } lv) keys.Add(lv);
+        }
+        foreach (var rel in _entity.Relations)
+        {
+            var ci = cols.FindIndex(c => string.Equals(c, rel.Column, StringComparison.OrdinalIgnoreCase));
+            if (ci >= 0 && ci < row.Count && row[ci] is { Length: > 2 } cv) keys.Add(cv);
+        }
+
+        var runIds = new HashSet<Guid>();
+        foreach (var key in keys.Distinct().Take(3))
+        {
+            try
+            {
+                var hits = await Svc.ExecuteProjectDataAsync(ProjectId,
+                    $"SELECT DISTINCT run_id::text FROM job_run_data WHERE artifact ILIKE '%{key.Replace("'", "''")}%' LIMIT 10");
+                foreach (var r in hits.Rows)
+                    if (r.Count > 0 && Guid.TryParse(r[0], out var id))
+                        runIds.Add(id);
+            }
+            catch { /* no job_run_data yet, or the value trips the query — links are best-effort */ }
+        }
+
+        foreach (var runId in runIds.Take(8))
+        {
+            try { _artifacts.AddRange(await Svc.ListRunArtifactsAsync(runId)); }
+            catch { }
         }
     }
 }
