@@ -3,6 +3,7 @@
 @using PlaceContext.Application.Features
 @inject IPlaceContextService Svc
 @inject PortalUiState Ui
+@inject NavigationManager Nav
 
 <PageTitle>placecontext — @EntityName</PageTitle>
 
@@ -34,15 +35,29 @@
             <div style="margin-bottom:12px; padding:10px 14px; border-radius:8px; background:var(--bad-bg); color:var(--bad); font-size:12.5px">@_error</div>
         }
 
-        @* ── The entity's graph: related entities (both directions) + its tagged runs/artifacts. ── *@
-        @if (_sectionGraph is not null)
+        <div class="dctabs" style="margin-bottom:14px">
+            <button class="dctab @(_viewTab == "records" ? "active" : "")" @onclick="@(() => _viewTab = "records")">Records</button>
+            <button class="dctab @(_viewTab == "graph" ? "active" : "")" @onclick="@(() => _viewTab = "graph")">Graph</button>
+        </div>
+
+        @* ── Graph tab: the full data graph — records, relations, runs, artifacts. ── *@
+        @if (_viewTab == "graph")
         {
-            <div style="margin-bottom:14px">@((MarkupString)_sectionGraph)</div>
+            @if (_sectionGraph is not null)
+            {
+                <div style="margin-bottom:14px">@((MarkupString)_sectionGraph)</div>
+            }
+            else
+            {
+                <div class="dccard" style="padding:24px; text-align:center; color:var(--text-3); font-size:13px">
+                    Nothing linked yet — run a job whose output mentions these records and the graph fills in.
+                </div>
+            }
         }
 
         @* ── Insights: organized automatically from the entity's tags — numeric columns roll up,
              relation keys show their distribution. No configuration, just the graph. ── *@
-        @if (_insights.Count > 0)
+        @if (_viewTab == "records" && _insights.Count > 0)
         {
             <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(210px, 1fr)); gap:10px; margin-bottom:14px">
                 @foreach (var ins in _insights)
@@ -76,7 +91,7 @@
             </div>
         }
 
-        @if (_rows is { } rows)
+        @if (_viewTab == "records" && _rows is { } rows)
         {
             <div class="dccard" style="border-radius:8px; overflow:hidden">
                 <div style="overflow-x:auto">
@@ -193,6 +208,7 @@
     private readonly List<(EntityRelationDto Relation, PlaceContext.Application.Ports.ProjectQueryResult Rows)> _related = new();
     private string _filter = "";
     private string? _error;
+    private string _viewTab = "records";
 
     protected override async Task OnParametersSetAsync()
     {
@@ -206,13 +222,48 @@
             Ui.Set(_entity.Name, "business view · project data graph");
             // Read through the project's isolated role; identifier comes from the registry, quoted.
             _rows = await Svc.ExecuteProjectDataAsync(ProjectId, $"SELECT * FROM \"{_entity.TableName}\" LIMIT 500");
+
+            // Search deep link: /entity/{name}?record={key} lands on that record, graph and all.
+            var query = System.Web.HttpUtility.ParseQueryString(new Uri(Nav.Uri).Query);
+            if (query["record"] is { Length: > 0 } recordKey && _rows is not null)
+            {
+                var match = _rows.Rows.FirstOrDefault(r => r.Any(v => string.Equals(v, recordKey, StringComparison.OrdinalIgnoreCase)));
+                if (match is not null)
+                {
+                    await BuildInsightsAsync();
+                    await BuildSectionGraphAsync();
+                    await OpenRecordAsync(match);
+                    return;
+                }
+            }
             await BuildInsightsAsync();
             await BuildSectionGraphAsync();
         }
         catch (Exception ex) { _error = ex.Message; }
     }
 
-    private string? LabelCol() => _entity?.LabelColumn ?? _rows?.Columns.FirstOrDefault();
+    // The record label: the configured column when it exists; otherwise the first column that
+    // looks like text (skipping ids and provenance) — a lost label config must never reduce the
+    // graph to row numbers.
+    private string? LabelCol()
+    {
+        if (_rows is null) return _entity?.LabelColumn;
+        var cols = _rows.Columns;
+        if (_entity?.LabelColumn is { Length: > 0 } configured
+            && cols.FirstOrDefault(c => string.Equals(c, configured, StringComparison.OrdinalIgnoreCase)) is { } exact)
+            return exact;
+        for (var i = 0; i < cols.Count; i++)
+        {
+            var c = cols[i];
+            if (string.Equals(c, "id", StringComparison.OrdinalIgnoreCase)
+                || c.EndsWith("_id", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(c, "ingested_at", StringComparison.OrdinalIgnoreCase)) continue;
+            var v = _rows.Rows.FirstOrDefault() is { } first && i < first.Count ? first[i] : null;
+            if (v is null || double.TryParse(v, out _)) continue;
+            return c;
+        }
+        return cols.FirstOrDefault();
+    }
 
     private string RecordLabel(IReadOnlyList<string?> row)
     {

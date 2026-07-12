@@ -73,6 +73,15 @@ public sealed class EfEntityTagStore : IEntityTagStore
             .Select(t => new EntityTagPair(t.Key, t.RunId, t.JobId))
             .ToListAsync(ct);
 
+    public async Task<IReadOnlyList<EntityTagHit>> SearchKeysAsync(string term, int take = 10, CancellationToken ct = default)
+        => await _db.EntityTags.AsNoTracking()
+            .Where(t => EF.Functions.ILike(t.Key, $"%{term}%"))
+            .OrderByDescending(t => t.CreatedAt)
+            .Select(t => new EntityTagHit(t.ProjectId, t.EntityName, t.Key))
+            .Distinct()
+            .Take(Math.Clamp(take, 1, 50))
+            .ToListAsync(ct);
+
     public async Task<IReadOnlyList<Guid>> RunsForKeyAsync(Guid entityId, string key, int take = 20, CancellationToken ct = default)
         => await _db.EntityTags.AsNoTracking()
             .Where(t => t.EntityId == entityId && t.Key == key)

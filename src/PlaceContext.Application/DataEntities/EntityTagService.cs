@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using PlaceContext.Application.Ports;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.Repositories;
+using PlaceContext.Domain.ValueObjects;
 
 namespace PlaceContext.Application.Features;
 
@@ -11,6 +12,9 @@ public sealed record EntityTag(Guid ProjectId, Guid EntityId, string EntityName,
 
 /// <summary>A persisted tag edge, as consumed by graph views: key value ⇄ run (and its job).</summary>
 public sealed record EntityTagPair(string Key, Guid RunId, Guid JobId);
+
+/// <summary>A tag-index search hit: an entity record key somewhere in the workspace's data graph.</summary>
+public sealed record EntityTagHit(Guid ProjectId, string EntityName, string Key);
 
 /// <summary>Persistence port for entity tags (a link store, not an aggregate — like the tool-call log).</summary>
 public interface IEntityTagStore
@@ -26,6 +30,9 @@ public interface IEntityTagStore
 
     /// <summary>The tag pairs for an entity — which key value each run was linked through.</summary>
     Task<IReadOnlyList<EntityTagPair>> PairsForEntityAsync(Guid entityId, int take = 60, CancellationToken ct = default);
+
+    /// <summary>Search the tag index: key values containing the term, as graph nodes.</summary>
+    Task<IReadOnlyList<EntityTagHit>> SearchKeysAsync(string term, int take = 10, CancellationToken ct = default);
 }
 
 /// <summary>
@@ -59,7 +66,8 @@ public sealed class EntityTagService
         try
         {
             var artifactValues = CollectStrings(run);
-            if (artifactValues.Count == 0) return;
+            var corpus = BuildDocumentCorpus(run);
+            if (artifactValues.Count == 0 && corpus.Length == 0) return;
 
             var entities = await _entities.ListForProjectAsync(run.ProjectId, ct);
             if (entities.Count == 0) return;
@@ -81,7 +89,10 @@ public sealed class EntityTagService
                     foreach (var row in rows)
                     {
                         if (row.Count == 0 || row[0] is not { Length: > 2 } key) continue;
-                        if (artifactValues.Contains(key))
+                        // Exact match against the JSON output's values, or a substring hit inside
+                        // emitted documents (a PDF/HTML report that mentions a known address).
+                        if (artifactValues.Contains(key)
+                            || (key.Length > 3 && corpus.Contains(key, StringComparison.Ordinal)))
                             found.Add(new EntityTag(run.ProjectId, entity.Id, entity.Name, key, run.Id, job.Id));
                     }
                 }
@@ -105,6 +116,84 @@ public sealed class EntityTagService
         if (entity.LabelColumn is { Length: > 0 } label) yield return label;
         foreach (var rel in entity.Relations)
             yield return rel.Column;
+    }
+
+    private const int MaxCorpusChars = 1_000_000;
+
+    // Text pulled out of the run's DOCUMENT artifacts — HTML with tags stripped, PDFs via their
+    // content streams — so documents participate in tagging, not just the JSON output.
+    private static string BuildDocumentCorpus(JobRun run)
+    {
+        var sb = new System.Text.StringBuilder();
+        foreach (var artifact in run.ShardResults.SelectMany(s => s.Artifacts)
+                     .Concat(run.ReduceResult?.Artifacts ?? (IReadOnlyList<RunArtifact>)Array.Empty<RunArtifact>()))
+        {
+            if (sb.Length >= MaxCorpusChars) break;
+            var name = artifact.Name.ToLowerInvariant();
+            try
+            {
+                if (!artifact.IsBinary && (name.EndsWith(".html") || name.EndsWith(".htm")
+                    || name.EndsWith(".txt") || name.EndsWith(".md") || name.EndsWith(".csv")))
+                {
+                    sb.Append('\n').Append(StripTags(artifact.Content));
+                }
+                else if (name.EndsWith(".pdf"))
+                {
+                    sb.Append('\n').Append(PdfText(artifact.GetBytes()));
+                }
+            }
+            catch { /* one unreadable document never blocks the tag pass */ }
+        }
+        return sb.Length > MaxCorpusChars ? sb.ToString(0, MaxCorpusChars) : sb.ToString();
+    }
+
+    private static string StripTags(string html)
+        => System.Text.RegularExpressions.Regex.Replace(html, "<[^>]+>", " ");
+
+    /// <summary>
+    /// Zero-dependency PDF text sniff: inflate each FlateDecode content stream (PDF streams are
+    /// zlib) and pull out the literal show-strings — enough to find entity keys in reports from
+    /// reportlab and similar generators. Best-effort by design; exotic encodings simply don't match.
+    /// </summary>
+    internal static string PdfText(byte[] pdf)
+    {
+        var sb = new System.Text.StringBuilder();
+        var span = pdf.AsSpan();
+        var streamMarker = "stream"u8;
+        var endMarker = "endstream"u8;
+        var pos = 0;
+        while (pos < span.Length && sb.Length < MaxCorpusChars)
+        {
+            var start = span[pos..].IndexOf(streamMarker);
+            if (start < 0) break;
+            start = pos + start + streamMarker.Length;
+            while (start < span.Length && (span[start] == (byte)'\r' || span[start] == (byte)'\n')) start++;
+            var end = span[start..].IndexOf(endMarker);
+            if (end < 0) break;
+            var body = pdf.AsSpan(start, end).ToArray();
+            pos = start + end + endMarker.Length;
+
+            byte[] text = body;
+            if (body.Length > 2 && body[0] == 0x78) // zlib header — FlateDecode
+            {
+                try
+                {
+                    using var input = new MemoryStream(body, 2, body.Length - 2);
+                    using var deflate = new System.IO.Compression.DeflateStream(input, System.IO.Compression.CompressionMode.Decompress);
+                    using var output = new MemoryStream();
+                    deflate.CopyTo(output, 81920);
+                    text = output.ToArray();
+                }
+                catch { continue; }
+            }
+
+            // PDF literal show-strings live in parentheses: (233 Gympie Rd) Tj
+            var decoded = System.Text.Encoding.Latin1.GetString(text);
+            foreach (System.Text.RegularExpressions.Match m in
+                     System.Text.RegularExpressions.Regex.Matches(decoded, @"\(((?:[^()\\]|\\.)*)\)"))
+                sb.Append(m.Groups[1].Value.Replace("\\(", "(").Replace("\\)", ")")).Append(' ');
+        }
+        return sb.ToString();
     }
 
     // Every string value in the run's primary artifact JSON (capped) — what the run "mentioned".

@@ -11,18 +11,21 @@ public sealed class SearchHandler : IQueryHandler<SearchQuery, SearchResultsView
     private readonly IProjectContextRepository _contexts;
     private readonly IDecisionRepository _decisions;
     private readonly IRunArtifactLinkRepository? _artifacts;
+    private readonly IEntityTagStore? _tagIndex;
 
     public SearchHandler(
         IProjectRepository projects, IActivityLogRepository ledgers,
         IProjectContextRepository contexts, IDecisionRepository decisions,
         // Optional so existing tests construct the handler unchanged; DI always supplies it.
-        IRunArtifactLinkRepository? artifacts = null)
+        IRunArtifactLinkRepository? artifacts = null,
+        IEntityTagStore? tagIndex = null)
     {
         _projects = projects;
         _ledgers = ledgers;
         _contexts = contexts;
         _decisions = decisions;
         _artifacts = artifacts;
+        _tagIndex = tagIndex;
     }
 
     public async Task<SearchResultsView> HandleAsync(SearchQuery query, CancellationToken ct = default)
@@ -34,6 +37,15 @@ public sealed class SearchHandler : IQueryHandler<SearchQuery, SearchResultsView
         bool Match(string? s) => s is not null && s.Contains(term, StringComparison.OrdinalIgnoreCase);
 
         var hits = new List<SearchHit>();
+
+        // The tag index: every tagged piece of data is searchable, answered as graph nodes —
+        // hits land on the record inside its entity's business view.
+        if (_tagIndex is not null)
+        {
+            foreach (var t in await _tagIndex.SearchKeysAsync(term, 8, ct))
+                hits.Add(new SearchHit("entity", t.ProjectId, t.Key, $"{t.EntityName} · data graph",
+                    $"/project/{t.ProjectId}/entity/{Uri.EscapeDataString(t.EntityName)}?record={Uri.EscapeDataString(t.Key)}"));
+        }
 
         // Stored run artifacts: title/kind matches open straight in the file viewer's stream URL.
         if (_artifacts is not null)
