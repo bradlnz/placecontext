@@ -46,7 +46,7 @@
             @if (_brainGraph is { Nodes.Count: > 0 })
             {
                 <div class="dccard" style="border-radius:10px; overflow:hidden; margin-bottom:14px">
-                    <GraphCanvas Graph="_brainGraph" Height="520" NodeUrl="NodeUrl" />
+                    <GraphCanvas Graph="_brainGraph" Height="520" NodeUrl="NodeUrl" Searchable="true" AllowFullscreen="true" />
                 </div>
                 @if (_focusKey is not null)
                 {

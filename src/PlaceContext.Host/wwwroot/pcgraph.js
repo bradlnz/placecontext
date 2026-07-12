@@ -193,6 +193,10 @@
     const st = instances.get(id);
     if (!st) return;
     st.selected = nodeId ? (st.byId.get(nodeId) || null) : null;
+    if (st.selected) { // centre the view on the node — search/card jumps land where you look
+      st.pan.x = st.w / 2 - st.selected.x * st.scale;
+      st.pan.y = st.h / 2 - st.selected.y * st.scale;
+    }
     st.alpha = Math.max(st.alpha, 0.2);
     if (st.dotnetRef) { try { st.dotnetRef.invokeMethodAsync('OnNodeClick', st.selected ? st.selected.id : null); } catch (e) {} }
   }

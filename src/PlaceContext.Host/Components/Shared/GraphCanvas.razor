@@ -2,8 +2,43 @@
 @inject IJSRuntime JS
 @implements IAsyncDisposable
 
-<div style="position:relative">
-    <canvas id="@_id" style="display:block; width:100%; height:@(Height)px"></canvas>
+<div style="@(_fullscreen ? "position:fixed; inset:0; z-index:200; background:var(--bg); padding:14px; display:flex; flex-direction:column" : "position:relative")">
+    @if (Searchable || AllowFullscreen)
+    {
+        <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px; @(_fullscreen ? "" : "position:absolute; top:8px; left:10px; right:10px; z-index:5")">
+            @if (Searchable)
+            {
+                <div style="position:relative; width:280px">
+                    <input class="dcinput" style="width:100%; padding:5px 10px; font-size:12px" placeholder="search nodes…"
+                           value="@_search" @oninput="OnSearchInput" />
+                    @if (_matches.Count > 0)
+                    {
+                        <div style="position:absolute; top:calc(100% + 4px); left:0; right:0; background:var(--card); border:1px solid var(--border-2); border-radius:8px; box-shadow:var(--shadow); z-index:10; padding:4px; max-height:260px; overflow-y:auto">
+                            @foreach (var m in _matches)
+                            {
+                                <div @onclick="@(() => JumpAsync(m.Id))"
+                                     style="padding:6px 9px; border-radius:6px; cursor:pointer; font-size:12px" class="dcdash-row">
+                                    <div style="font-family:'IBM Plex Mono',monospace; white-space:nowrap; overflow:hidden; text-overflow:ellipsis">@ShortLabel(m.Label)</div>
+                                    @if (!string.IsNullOrWhiteSpace(m.Content))
+                                    {
+                                        <div style="font-size:10.5px; color:var(--text-3); white-space:nowrap; overflow:hidden; text-overflow:ellipsis">@m.Content</div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+            <span style="flex:1"></span>
+            @if (AllowFullscreen)
+            {
+                <button class="dcbtn" style="padding:4px 11px; font-size:11.5px" @onclick="ToggleFullscreenAsync">
+                    @(_fullscreen ? "✕ Exit full screen" : "⛶ Full screen")
+                </button>
+            }
+        </div>
+    }
+    <canvas id="@_id" style="display:block; width:100%; @(_fullscreen ? "flex:1; min-height:0" : $"height:{Height}px")"></canvas>
 
     @* Details for the clicked node: computed from the graph data already on the circuit, no extra
        queries. Clicking a connection re-selects in the canvas too (pcgraph.select). *@
@@ -82,6 +117,12 @@
     /// <summary>Optional: resolves a node to a destination — the details card then offers Open ↗.</summary>
     [Parameter] public Func<GraphNodeView, string?>? NodeUrl { get; set; }
 
+    /// <summary>Show the node-search box (matches labels and content, jump-selects).</summary>
+    [Parameter] public bool Searchable { get; set; }
+
+    /// <summary>Offer the full-screen toggle.</summary>
+    [Parameter] public bool AllowFullscreen { get; set; }
+
     private readonly string _id = "pcgraph-" + Guid.NewGuid().ToString("N");
     private GraphVizView? _rendered;
     private bool _needsInit;
@@ -129,6 +170,42 @@
     }
 
     private Task SelectAsync(string nodeId) => JS.InvokeVoidAsync("pcgraph.select", _id, nodeId).AsTask();
+
+    // ── Search + fullscreen chrome ────────────────────────────────────────────────────────────────
+    private bool _fullscreen;
+    private string _search = "";
+    private List<GraphNodeView> _matches = new();
+
+    private void OnSearchInput(ChangeEventArgs e)
+    {
+        _search = e.Value?.ToString() ?? "";
+        var term = _search.Trim();
+        _matches = term.Length < 2 || Graph is null
+            ? new List<GraphNodeView>()
+            : Graph.Nodes
+                .Where(n => n.Label.Contains(term, StringComparison.OrdinalIgnoreCase)
+                         || (n.Content?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false))
+                .OrderByDescending(n => n.Label.Contains(term, StringComparison.OrdinalIgnoreCase))
+                .ThenByDescending(n => n.Degree)
+                .Take(8)
+                .ToList();
+    }
+
+    private async Task JumpAsync(string nodeId)
+    {
+        _matches.Clear();
+        _search = "";
+        await SelectAsync(nodeId); // centres the view and opens the connections card
+    }
+
+    private async Task ToggleFullscreenAsync()
+    {
+        _fullscreen = !_fullscreen;
+        // The canvas element resizes with the container; pcgraph's ResizeObserver re-fits, and a
+        // nudge keeps the selected node centred in the new viewport.
+        await Task.Yield();
+        if (_selected is { } sel) await SelectAsync(sel.Id);
+    }
     private Task ClearAsync() => JS.InvokeVoidAsync("pcgraph.select", _id, null).AsTask();
 
     private static string ShortLabel(string s)
