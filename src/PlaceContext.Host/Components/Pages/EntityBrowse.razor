@@ -43,9 +43,16 @@
         @* ── Graph tab: the full data graph — records, relations, runs, artifacts. ── *@
         @if (_viewTab == "graph")
         {
-            @if (_sectionGraph is not null)
+            @if (_brainGraph is { Nodes.Count: > 0 })
             {
-                <div style="margin-bottom:14px">@((MarkupString)_sectionGraph)</div>
+                <div class="dccard" style="border-radius:10px; overflow:hidden; margin-bottom:14px">
+                    <GraphCanvas Graph="_brainGraph" Height="520" />
+                </div>
+                <div style="font-size:11px; color:var(--text-3); display:flex; gap:16px; margin-bottom:14px">
+                    <span><span style="color:var(--brand-2)">●</span> @_entity.Name records</span>
+                    <span><span style="color:var(--text-2)">●</span> related records · runs</span>
+                    <span>drag to arrange · click a node for its connections · scroll to zoom</span>
+                </div>
             }
             else
             {
@@ -183,12 +190,15 @@
                     {
                         @foreach (var r in related.Rows.Take(8))
                         {
-                            <div class="dccard" style="padding:8px 12px; margin-bottom:5px; font-size:12px; display:flex; gap:10px; overflow:hidden">
+                            var recordKey = r.FirstOrDefault(v => !string.IsNullOrWhiteSpace(v)) ?? "";
+                            <a href="@($"/project/{ProjectId}/entity/{Uri.EscapeDataString(relation.TargetEntity)}?record={Uri.EscapeDataString(recordKey)}")"
+                               class="dccard dcdash-row" style="padding:8px 12px; margin-bottom:5px; font-size:12px; display:flex; gap:10px; overflow:hidden; text-decoration:none; color:inherit">
                                 @for (var i = 0; i < Math.Min(related.Columns.Count, 4); i++)
                                 {
                                     <span style="color:@(i == 0 ? "var(--text)" : "var(--text-3)"); white-space:nowrap; overflow:hidden; text-overflow:ellipsis">@(i < r.Count ? r[i] : "")</span>
                                 }
-                            </div>
+                                <span style="margin-left:auto; color:var(--human); flex:none">→</span>
+                            </a>
                         }
                     }
                 </div>
@@ -421,14 +431,14 @@
         catch { /* insights are derived sugar — the records table always renders */ }
     }
 
-    private string? _sectionGraph;
+    private PlaceContext.Application.Dtos.GraphVizView? _brainGraph;
 
     // The entity's DATA graph: every record as a node, joined to its actual related records
     // (bulk join per declared relation), the runs tagged with its key values, and each run's
     // artifacts — all concrete, all clickable. Capped per column to stay readable.
     private async Task BuildSectionGraphAsync()
     {
-        _sectionGraph = null;
+        _brainGraph = null;
         if (_entity is null || _rows is null || _rows.Rows.Count == 0) return;
         try
         {
@@ -505,12 +515,14 @@
                 catch { }
             }
 
-            _sectionGraph = DrawDataGraph(records, relatedNodes, relEdges, runNodes, runEdges, artNodes);
+            _brainGraph = BuildBrain(records, relatedNodes, relEdges, runNodes, runEdges, artNodes);
         }
         catch { /* the graph is derived sugar — the view renders without it */ }
     }
 
-    private string DrawDataGraph(
+    // Fold the collected data into the force-directed brain's shape: records are the hubs,
+    // related records / runs / artifacts orbit them via their concrete edges.
+    private PlaceContext.Application.Dtos.GraphVizView BuildBrain(
         List<string?> records,
         List<(string Entity, string Label)> related,
         List<(int Record, int Related)> relEdges,
@@ -518,53 +530,36 @@
         List<(int Record, int Run)> runEdges,
         List<(int Run, RunArtifactLinkView Art)> arts)
     {
-        const double xRel = 20, xRec = 250, xRun = 500, xArt = 720, w = 170, rh = 30, gap = 10;
-        double Y(int i) => 24 + i * (rh + gap);
-        var height = Math.Max(Math.Max(records.Count, related.Count), Math.Max(runs.Count, arts.Count)) * (rh + gap) + 44;
-        var sb = new System.Text.StringBuilder();
-        sb.Append(FormattableString.Invariant(
-            $"<svg viewBox=\"0 0 910 {height}\" style=\"width:100%; border:1px solid var(--border); border-radius:10px; background:var(--card); background-image:radial-gradient(var(--border-2) 1px, transparent 1px); background-size:22px 22px\">"));
+        var nodes = new List<PlaceContext.Application.Dtos.GraphNodeView>();
+        var links = new List<PlaceContext.Application.Dtos.GraphLinkView>();
+        var degree = new Dictionary<string, int>();
 
-        foreach (var col in new[] { (xRel, "related"), (xRec, _entity?.Name.ToLowerInvariant() ?? "records"), (xRun, "tagged runs"), (xArt, "artifacts") })
-            sb.Append(FormattableString.Invariant($"<text x='{col.Item1 + 4}' y='14' font-size='8.5' fill='var(--text-3)' letter-spacing='1' font-family='IBM Plex Mono'>{E(col.Item2.ToUpperInvariant())}</text>"));
-
-        foreach (var (rec, rel) in relEdges)
-            sb.Append(FormattableString.Invariant($"<line x1='{xRel + w}' y1='{Y(rel) + rh / 2}' x2='{xRec}' y2='{Y(rec) + rh / 2}' stroke='var(--human)' stroke-width='1' stroke-dasharray='4 3' opacity='.6'/>"));
-        foreach (var (rec, run) in runEdges)
-            sb.Append(FormattableString.Invariant($"<line x1='{xRec + w}' y1='{Y(rec) + rh / 2}' x2='{xRun}' y2='{Y(run) + rh / 2}' stroke='var(--border-2)' stroke-width='1' stroke-dasharray='4 3'/>"));
-        for (var i = 0; i < arts.Count; i++)
-            sb.Append(FormattableString.Invariant($"<line x1='{xRun + w}' y1='{Y(arts[i].Run) + rh / 2}' x2='{xArt}' y2='{Y(i) + rh / 2}' stroke='var(--good)' stroke-width='1' stroke-dasharray='4 3' opacity='.6'/>"));
-
-        for (var i = 0; i < related.Count; i++)
+        void Link(string a, string b)
         {
-            sb.Append($"<a href='/project/{ProjectId}/entity/{Uri.EscapeDataString(related[i].Entity)}'>");
-            sb.Append(FormattableString.Invariant($"<rect x='{xRel}' y='{Y(i)}' width='{w}' height='{rh}' rx='7' fill='var(--human-bg)' stroke='var(--human)' style='cursor:pointer'/>"));
-            sb.Append(FormattableString.Invariant($"<text x='{xRel + 9}' y='{Y(i) + 13}' font-size='9.5' font-weight='600' fill='var(--text)' style='cursor:pointer'>{E(Trunc(related[i].Label, 24))}</text>"));
-            sb.Append(FormattableString.Invariant($"<text x='{xRel + 9}' y='{Y(i) + 24}' font-size='8' fill='var(--human)' font-family='IBM Plex Mono'>{E(related[i].Entity)}</text>"));
-            sb.Append("</a>");
+            links.Add(new PlaceContext.Application.Dtos.GraphLinkView(a, b, "Direct"));
+            degree[a] = degree.GetValueOrDefault(a) + 1;
+            degree[b] = degree.GetValueOrDefault(b) + 1;
         }
+
         for (var i = 0; i < records.Count; i++)
-        {
-            sb.Append(FormattableString.Invariant($"<rect x='{xRec}' y='{Y(i)}' width='{w}' height='{rh}' rx='7' fill='var(--brand-bg)' stroke='var(--brand-2)'/>"));
-            sb.Append(FormattableString.Invariant($"<text x='{xRec + 9}' y='{Y(i) + 19}' font-size='10' font-weight='600' fill='var(--text)'>{E(Trunc(records[i], 24))}</text>"));
-        }
+            nodes.Add(new PlaceContext.Application.Dtos.GraphNodeView($"rec:{i}", records[i] ?? "—", 0, IsGod: true,
+                Content: $"{_entity?.Name} record"));
+        for (var i = 0; i < related.Count; i++)
+            nodes.Add(new PlaceContext.Application.Dtos.GraphNodeView($"rel:{i}", related[i].Label, 0, false,
+                Content: $"{related[i].Entity} record (related)"));
         for (var i = 0; i < runs.Count; i++)
-        {
-            sb.Append($"<a href='/observability?run={runs[i]}'>");
-            sb.Append(FormattableString.Invariant($"<rect x='{xRun}' y='{Y(i)}' width='{w}' height='{rh}' rx='7' fill='var(--card-2)' stroke='var(--border-2)' style='cursor:pointer'/>"));
-            sb.Append(FormattableString.Invariant($"<text x='{xRun + 9}' y='{Y(i) + 19}' font-size='9' fill='var(--text-2)' font-family='IBM Plex Mono' style='cursor:pointer'>run {runs[i].ToString("N")[..8]} ↗</text>"));
-            sb.Append("</a>");
-        }
+            nodes.Add(new PlaceContext.Application.Dtos.GraphNodeView($"run:{i}", $"run {runs[i].ToString("N")[..8]}", 0, false,
+                Content: "tagged job run — its output mentioned the connected records"));
         for (var i = 0; i < arts.Count; i++)
-        {
-            sb.Append($"<a href='/artifacts?artifact={arts[i].Art.Id}'>");
-            sb.Append(FormattableString.Invariant($"<rect x='{xArt}' y='{Y(i)}' width='{w}' height='{rh}' rx='7' fill='var(--good-bg)' stroke='var(--good)' style='cursor:pointer'/>"));
-            sb.Append(FormattableString.Invariant($"<text x='{xArt + 9}' y='{Y(i) + 19}' font-size='9' fill='var(--good)' font-family='IBM Plex Mono' style='cursor:pointer'>{E(Trunc(arts[i].Art.Title, 22))} ↗</text>"));
-            sb.Append("</a>");
-        }
+            nodes.Add(new PlaceContext.Application.Dtos.GraphNodeView($"art:{i}", arts[i].Art.Title, 0, false,
+                Content: $"artifact · {arts[i].Art.Kind} · open via the record pane"));
 
-        sb.Append("</svg>");
-        return sb.ToString();
+        foreach (var (rec, rel) in relEdges) Link($"rec:{rec}", $"rel:{rel}");
+        foreach (var (rec, run) in runEdges) Link($"rec:{rec}", $"run:{run}");
+        for (var i = 0; i < arts.Count; i++) Link($"run:{arts[i].Run}", $"art:{i}");
+
+        nodes = nodes.Select(n => n with { Degree = degree.GetValueOrDefault(n.Id) }).ToList();
+        return new PlaceContext.Application.Dtos.GraphVizView(ProjectId, nodes.Count, links.Count, nodes, links);
     }
 
     // The record's link graph as inline SVG (built in C# — razor's <text> tag shadows SVG's).
