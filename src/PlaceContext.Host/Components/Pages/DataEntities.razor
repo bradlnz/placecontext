@@ -31,6 +31,15 @@
                          style="border:1px solid var(--brand-2); border-radius:9px; padding:9px 14px; background:var(--brand-bg); cursor:pointer">
                         <div style="font-size:12.5px; font-weight:600">@e.Name</div>
                         <div style="font-size:10px; color:var(--text-3); font-family:var(--font-sans)">@e.TableName</div>
+                        @if (e.Tags.Count > 0)
+                        {
+                            <div style="display:flex; flex-wrap:wrap; gap:4px; margin-top:5px">
+                                @foreach (var tag in e.Tags)
+                                {
+                                    <span style="font-size:9.5px; background:var(--card-2); color:var(--text-2); border-radius:20px; padding:1px 7px">@tag</span>
+                                }
+                            </div>
+                        }
                     </div>
                     @foreach (var r in e.Relations)
                     {
@@ -87,6 +96,23 @@
                 <input class="dcinput" style="font-family:var(--font-sans)" @bind="_edLabel" placeholder="name" />
             </div>
             <div class="dcfield">
+                <label>Tags <span class="code" style="margin-left:4px">extra keys a run's output maps this entity to</span></label>
+                <div style="display:flex; flex-wrap:wrap; gap:6px; align-items:center; padding:6px 8px; background:var(--card-2); border:1px solid var(--border); border-radius:7px; min-height:38px">
+                    @foreach (var tag in _edTags)
+                    {
+                        var t = tag;
+                        <span style="display:inline-flex; align-items:center; gap:6px; background:var(--brand-bg); color:var(--brand-2); border:1px solid var(--brand-2); border-radius:20px; padding:2px 6px 2px 10px; font-size:12px">
+                            @t
+                            <button class="dcslide-x" style="width:16px; height:16px; font-size:14px; line-height:1; padding:0; color:var(--brand-2)"
+                                    title="Remove tag" @onclick="@(() => _edTags.Remove(t))">×</button>
+                        </span>
+                    }
+                    <input class="dcinput" style="flex:1; min-width:120px; border:none; background:transparent; padding:2px 4px; font-family:var(--font-sans)"
+                           placeholder="type a tag, press Enter" @bind="_tagInput" @bind:event="oninput" @onkeydown="TagKey" />
+                </div>
+                <div style="font-size:10.5px; color:var(--text-3); margin-top:4px">Enter or comma adds; a run whose output or documents mention a tag links to this entity.</div>
+            </div>
+            <div class="dcfield">
                 <div style="display:flex; align-items:center; justify-content:space-between">
                     <label>Relations <span class="code" style="margin-left:4px">this column ↔ that entity's column</span></label>
                     <button class="dcbtn" style="padding:3px 9px; font-size:11px" @onclick="@(() => _edRelations.Add(new RelEdit()))">+ relation</button>
@@ -137,6 +163,8 @@
     private string _edName = "", _edTable = "", _edLabel = "";
     private string? _error;
     private readonly List<RelEdit> _edRelations = new();
+    private readonly List<string> _edTags = new();
+    private string _tagInput = "";
 
     private sealed class RelEdit
     {
@@ -170,8 +198,21 @@
         _edRelations.Clear();
         if (e is not null)
             _edRelations.AddRange(e.Relations.Select(r => new RelEdit { Column = r.Column, TargetEntity = r.TargetEntity, TargetColumn = r.TargetColumn }));
+        _edTags.Clear();
+        if (e is not null) _edTags.AddRange(e.Tags);
+        _tagInput = "";
         _error = null;
         _showEditor = true;
+    }
+
+    // Enter or comma commits the typed tag; a duplicate (case-insensitive) is ignored.
+    private void TagKey(KeyboardEventArgs e)
+    {
+        if (e.Key is not ("Enter" or ",")) return;
+        var tag = _tagInput.Trim().TrimEnd(',').Trim();
+        if (tag.Length > 0 && !_edTags.Contains(tag, StringComparer.OrdinalIgnoreCase))
+            _edTags.Add(tag);
+        _tagInput = "";
     }
 
     private async Task SaveAsync()
@@ -185,8 +226,12 @@
             var relations = _edRelations
                 .Select(r => new EntityRelationDto(r.Column, r.TargetEntity, r.TargetColumn))
                 .ToList();
+            // A tag left in the input box (never Enter-committed) should still be saved.
+            var tags = _edTags.ToList();
+            var pending = _tagInput.Trim().TrimEnd(',').Trim();
+            if (pending.Length > 0 && !tags.Contains(pending, StringComparer.OrdinalIgnoreCase)) tags.Add(pending);
             await Svc.SaveDataEntityAsync(new SaveDataEntityCommand(
-                ProjectId, _edName, _edTable, _edLabel, relations, _editId));
+                ProjectId, _edName, _edTable, _edLabel, relations, tags, _editId));
             await ReloadAsync();
             _showEditor = false;
         }

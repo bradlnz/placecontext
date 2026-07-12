@@ -11,6 +11,8 @@ public sealed class DataEntityRow : ITenantOwned
     public string? LabelColumn { get; set; }
     /// <summary>JSON array of {Column, TargetEntity, TargetColumn} relations.</summary>
     public string RelationsJson { get; set; } = "[]";
+    /// <summary>JSON array of literal tag strings this entity also maps against.</summary>
+    public string TagsJson { get; set; } = "[]";
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
 }

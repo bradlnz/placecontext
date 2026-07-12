@@ -24,6 +24,7 @@ public sealed class EfDataEntityRepository : IDataEntityRepository
         existing.TableName = entity.TableName;
         existing.LabelColumn = entity.LabelColumn;
         existing.RelationsJson = SerializeRelations(entity.Relations);
+        existing.TagsJson = SerializeTags(entity.Tags);
         existing.UpdatedAt = entity.UpdatedAt;
     }
 
@@ -53,6 +54,7 @@ public sealed class EfDataEntityRepository : IDataEntityRepository
         TableName = e.TableName,
         LabelColumn = e.LabelColumn,
         RelationsJson = SerializeRelations(e.Relations),
+        TagsJson = SerializeTags(e.Tags),
         CreatedAt = e.CreatedAt,
         UpdatedAt = e.UpdatedAt,
     };
@@ -62,12 +64,16 @@ public sealed class EfDataEntityRepository : IDataEntityRepository
         var relations = (JsonSerializer.Deserialize<List<RelationJson>>(row.RelationsJson, Json) ?? new())
             .Select(r => new EntityRelation(r.Column, r.TargetEntity, r.TargetColumn))
             .ToList();
+        var tags = JsonSerializer.Deserialize<List<string>>(row.TagsJson, Json) ?? new();
         return DataEntity.Rehydrate(row.Id, row.ProjectId, row.Name, row.TableName, row.LabelColumn,
-            relations, row.CreatedAt, row.UpdatedAt);
+            relations, tags, row.CreatedAt, row.UpdatedAt);
     }
 
     private static string SerializeRelations(IReadOnlyList<EntityRelation> relations)
         => JsonSerializer.Serialize(relations.Select(r => new RelationJson(r.Column, r.TargetEntity, r.TargetColumn)).ToList(), Json);
+
+    private static string SerializeTags(IReadOnlyList<string> tags)
+        => JsonSerializer.Serialize(tags, Json);
 
     private sealed record RelationJson(string Column, string TargetEntity, string TargetColumn);
 }

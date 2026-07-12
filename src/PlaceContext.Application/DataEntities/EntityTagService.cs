@@ -77,6 +77,16 @@ public sealed class EntityTagService
             var found = new List<EntityTag>();
             foreach (var entity in entities)
             {
+                // Literal tags declared on the entity map the same way its column values do: an
+                // exact hit in the JSON output, or a substring inside an emitted document.
+                foreach (var tag in entity.Tags)
+                {
+                    if (tag.Length < 2) continue;
+                    if (artifactValues.Contains(tag)
+                        || (tag.Length > 3 && corpus.Contains(tag, StringComparison.OrdinalIgnoreCase)))
+                        found.Add(new EntityTag(run.ProjectId, entity.Id, entity.Name, tag, run.Id, job.Id));
+                }
+
                 foreach (var column in KeyColumns(entity))
                 {
                     IReadOnlyList<IReadOnlyList<string?>> rows;

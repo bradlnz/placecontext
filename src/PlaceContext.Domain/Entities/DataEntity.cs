@@ -13,7 +13,8 @@ namespace PlaceContext.Domain.Entities;
 public sealed class DataEntity : AggregateRoot
 {
     private DataEntity(Guid id, Guid projectId, string name, string tableName, string? labelColumn,
-        IReadOnlyList<EntityRelation> relations, DateTimeOffset createdAt, DateTimeOffset updatedAt)
+        IReadOnlyList<EntityRelation> relations, IReadOnlyList<string> tags,
+        DateTimeOffset createdAt, DateTimeOffset updatedAt)
     {
         Id = id;
         ProjectId = projectId;
@@ -21,6 +22,7 @@ public sealed class DataEntity : AggregateRoot
         TableName = tableName;
         LabelColumn = labelColumn;
         Relations = relations;
+        Tags = tags;
         CreatedAt = createdAt;
         UpdatedAt = updatedAt;
     }
@@ -40,34 +42,52 @@ public sealed class DataEntity : AggregateRoot
     /// <summary>How records relate to other entities (this column ↔ that entity's column).</summary>
     public IReadOnlyList<EntityRelation> Relations { get; private set; }
 
+    /// <summary>
+    /// Extra literal keys this entity maps against, beyond its own column values — so a job output
+    /// (or document) that merely mentions one of these tags links itself to the entity. Normalised:
+    /// trimmed, de-duplicated case-insensitively, empties dropped.
+    /// </summary>
+    public IReadOnlyList<string> Tags { get; private set; }
+
     public DateTimeOffset CreatedAt { get; }
     public DateTimeOffset UpdatedAt { get; private set; }
 
     public static DataEntity Create(Guid projectId, string name, string tableName, string? labelColumn,
-        IReadOnlyList<EntityRelation> relations, DateTimeOffset createdAt)
+        IReadOnlyList<EntityRelation> relations, DateTimeOffset createdAt,
+        IReadOnlyList<string>? tags = null)
     {
         if (projectId == Guid.Empty)
             throw new ArgumentException("ProjectId must not be empty.", nameof(projectId));
         Validate(name, tableName);
         return new DataEntity(Guid.NewGuid(), projectId, name.Trim(), tableName.Trim(), Trim(labelColumn),
-            relations, createdAt, createdAt);
+            relations, NormalizeTags(tags), createdAt, createdAt);
     }
 
     public static DataEntity Rehydrate(Guid id, Guid projectId, string name, string tableName,
-        string? labelColumn, IReadOnlyList<EntityRelation> relations,
+        string? labelColumn, IReadOnlyList<EntityRelation> relations, IReadOnlyList<string> tags,
         DateTimeOffset createdAt, DateTimeOffset updatedAt)
-        => new(id, projectId, name, tableName, labelColumn, relations, createdAt, updatedAt);
+        => new(id, projectId, name, tableName, labelColumn, relations, NormalizeTags(tags), createdAt, updatedAt);
 
     public void Update(string name, string tableName, string? labelColumn,
-        IReadOnlyList<EntityRelation> relations, DateTimeOffset updatedAt)
+        IReadOnlyList<EntityRelation> relations, DateTimeOffset updatedAt,
+        IReadOnlyList<string>? tags = null)
     {
         Validate(name, tableName);
         Name = name.Trim();
         TableName = tableName.Trim();
         LabelColumn = Trim(labelColumn);
         Relations = relations;
+        Tags = NormalizeTags(tags);
         UpdatedAt = updatedAt;
     }
+
+    private static IReadOnlyList<string> NormalizeTags(IReadOnlyList<string>? tags)
+        => tags is null
+            ? Array.Empty<string>()
+            : tags.Select(t => t?.Trim() ?? "")
+                  .Where(t => t.Length > 0)
+                  .Distinct(StringComparer.OrdinalIgnoreCase)
+                  .ToList();
 
     private static void Validate(string name, string tableName)
     {

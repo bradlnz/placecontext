@@ -234,6 +234,7 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
             e.HasIndex(x => x.ProjectId);
             e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
             e.Property(x => x.RelationsJson).HasDefaultValue("[]");
+            e.Property(x => x.TagsJson).HasDefaultValue("[]");
         });
 
         b.Entity<DataMappingRow>(e =>

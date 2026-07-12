@@ -17,6 +17,7 @@ public sealed record DataEntityView(
     string TableName,
     string? LabelColumn,
     IReadOnlyList<EntityRelationDto> Relations,
+    IReadOnlyList<string> Tags,
     DateTimeOffset UpdatedAt);
 
 /// <summary>
@@ -26,7 +27,8 @@ public sealed record DataEntityView(
 /// </summary>
 public sealed record SaveDataEntityCommand(
     Guid ProjectId, string Name, string TableName, string? LabelColumn,
-    IReadOnlyList<EntityRelationDto> Relations, Guid? EntityId = null) : ICommand<DataEntityView>;
+    IReadOnlyList<EntityRelationDto> Relations, IReadOnlyList<string>? Tags = null,
+    Guid? EntityId = null) : ICommand<DataEntityView>;
 
 public sealed record DeleteDataEntityCommand(Guid EntityId) : ICommand<bool>;
 
@@ -53,18 +55,20 @@ public sealed class SaveDataEntityHandler : ICommandHandler<SaveDataEntityComman
                 string.IsNullOrWhiteSpace(r.TargetColumn) ? r.Column.Trim() : r.TargetColumn.Trim()))
             .ToList();
 
+        var tags = command.Tags ?? Array.Empty<string>();
+
         DataEntity entity;
         if (command.EntityId is { } id)
         {
             entity = await _entities.GetByIdAsync(id, ct)
                 ?? throw new InvalidOperationException($"Entity {id} not found.");
-            entity.Update(command.Name, command.TableName, command.LabelColumn, relations, _clock.UtcNow);
+            entity.Update(command.Name, command.TableName, command.LabelColumn, relations, _clock.UtcNow, tags);
             await _entities.UpdateAsync(entity, ct);
         }
         else
         {
             entity = DataEntity.Create(command.ProjectId, command.Name, command.TableName,
-                command.LabelColumn, relations, _clock.UtcNow);
+                command.LabelColumn, relations, _clock.UtcNow, tags);
             await _entities.AddAsync(entity, ct);
         }
         await _uow.SaveChangesAsync(ct);
@@ -106,5 +110,6 @@ internal static class DataEntityMapper
     public static DataEntityView ToView(DataEntity e) => new(
         e.Id, e.ProjectId, e.Name, e.TableName, e.LabelColumn,
         e.Relations.Select(r => new EntityRelationDto(r.Column, r.TargetEntity, r.TargetColumn)).ToList(),
+        e.Tags,
         e.UpdatedAt);
 }
