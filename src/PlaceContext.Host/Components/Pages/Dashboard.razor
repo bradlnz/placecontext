@@ -3,6 +3,7 @@
 @inject IPlaceContextService Svc
 @inject PortalUiState Ui
 @inject NavigationManager Nav
+@inject IJSRuntime JS
 @inject PlaceContext.Application.Ports.ICurrentTenant Tenant
 @inject PlaceContext.Infrastructure.Operations.OperationCenter OpCenter
 
@@ -56,6 +57,33 @@
             </div>
         </div>
     </div>
+
+    @* ── SQL charts (read-only copies from the current project's Analytics) ───────────── *@
+    @if (SqlCharts() is { Count: > 0 } sqlCharts)
+    {
+        <div style="display:flex; align-items:baseline; justify-content:space-between; margin-bottom:8px">
+            <span style="font-size:13px; font-weight:600">SQL charts</span>
+            @if (Ui.CurrentProjectId is { } chartsPid)
+            {
+                <a href="@($"/project/{chartsPid}/analytics")" style="font-size:11.5px; color:var(--human)">edit in Analytics →</a>
+            }
+        </div>
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(380px, 1fr)); gap:12px; margin-bottom:24px">
+            @foreach (var chart in sqlCharts)
+            {
+                <div class="dccard" style="padding:12px 16px; border-radius:8px">
+                    <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px">
+                        <span style="font-size:12px; font-weight:600; font-family:'IBM Plex Mono',monospace">@chart.TableName["sql:".Length..]</span>
+                        <span style="flex:1"></span>
+                        <span style="font-size:10px; color:var(--text-3)">@chart.GeneratedAt.ToLocalTime().ToString("MM-dd HH:mm")</span>
+                    </div>
+                    <div style="height:230px; padding:8px 6px 4px">
+                        <canvas id="@CanvasId(chart.TableName)"></canvas>
+                    </div>
+                </div>
+            }
+        </div>
+    }
 
     @* ── Recent jobs table ──────────────────────────────────────────────────────────────── *@
     <div class="dccard" style="border-radius:8px; overflow:hidden">
@@ -116,11 +144,37 @@
     private string _filter = "all";
     private bool _refreshing;
 
+    private IReadOnlyList<ProjectChartView> _charts = Array.Empty<ProjectChartView>();
+    private readonly Dictionary<string, DateTimeOffset> _rendered = new();
+
     protected override async Task OnInitializedAsync()
     {
         OpCenter.Changed += OnOpsChanged;
         Ui.Set("Dashboard", "jobs · runs · artifacts");
         await RefreshAsync();
+    }
+
+    private IReadOnlyList<ProjectChartView> SqlCharts()
+        => _charts.Where(c => c.TableName.StartsWith("sql:", StringComparison.Ordinal)
+                              && c.Html.TrimStart().StartsWith('{')).ToList();
+
+    private static string CanvasId(string slot)
+        => "pcdash-" + Convert.ToHexString(System.Security.Cryptography.MD5.HashData(
+               System.Text.Encoding.UTF8.GetBytes(slot)))[..12];
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        foreach (var chart in SqlCharts())
+        {
+            var id = CanvasId(chart.TableName);
+            if (_rendered.TryGetValue(id, out var at) && at == chart.GeneratedAt) continue;
+            try
+            {
+                await JS.InvokeVoidAsync("pcchart.render", id, chart.Html);
+                _rendered[id] = chart.GeneratedAt;
+            }
+            catch (JSException) { /* canvas not on screen yet — the next render pass retries */ }
+        }
     }
 
     // The run-status watcher feeds the OperationCenter on a short tick — every transition
@@ -137,6 +191,10 @@
     private async Task RefreshAsync()
     {
         try { _reports = await Svc.ListRecentRunReportsAsync(take: 50); } catch { }
+        if (Ui.CurrentProjectId is { } chartPid)
+        {
+            try { _charts = await Svc.ListProjectChartsAsync(chartPid); } catch { }
+        }
 
         var dayAgo = DateTimeOffset.UtcNow.AddHours(-24);
         _running = _reports.Count(r => r.Run.Status == "Running");

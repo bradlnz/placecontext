@@ -73,9 +73,11 @@
             </div>
             @if (_loadFailed)
             {
-                @* Server-side fetch failed (object store unreachable?) — the HTTP stream endpoint
-                   may still serve it, so fall back to the browser before giving up. *@
-                <iframe src="@Url(_active)" style="flex:1; border:none; background:var(--card)" title="@_active.Title"></iframe>
+                <div style="flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; color:var(--text-3); font-size:12.5px; padding:0 40px; text-align:center">
+                    <span style="color:var(--warn); display:flex">@FileIcon(_active.ContentType, 34)</span>
+                    Couldn't load the preview — @(_loadError ?? "unknown error").
+                    <span>Use <strong>Open ↗</strong> to fetch the file directly.</span>
+                </div>
             }
             else if (IsJson(_active.ContentType))
             {
@@ -86,7 +88,8 @@
                     }
                     else if (_content is null)
                     {
-                        <span style="color:var(--text-3)">This file isn't valid JSON — use Open ↗ to view it raw.</span>
+                        <div style="color:var(--text-3); margin-bottom:8px">Not valid JSON — showing the raw content:</div>
+                        <pre style="margin:0; white-space:pre-wrap; word-break:break-word; color:var(--text-2)">@_rawText</pre>
                     }
                     else
                     {
@@ -153,10 +156,12 @@
     private string _filter = "";
     private string _projectFilter = "";
     private System.Text.Json.JsonElement? _content;
+    private string? _rawText;
     private (IReadOnlyList<string> Header, IReadOnlyList<IReadOnlyList<string>> Rows)? _csv;
     private bool _truncated;
     private bool _loading;
     private bool _loadFailed;
+    private string? _loadError;
 
     private const int MaxInlineBytes = 2 * 1024 * 1024;
     private const int MaxCsvRows = 500;
@@ -199,6 +204,7 @@
         _active = a;
         _content = null;
         _csv = null;
+        _rawText = null;
         _truncated = false;
         _loadFailed = false;
         if (!IsJson(a.ContentType) && !IsCsv(a.ContentType)) return;
@@ -207,11 +213,14 @@
         try
         {
             var text = await ReadTextAsync(a);
-            if (text is null) { _loadFailed = true; return; }
+            if (text is null) { _loadFailed = true; _loadError ??= "the object store returned nothing for this file"; return; }
+            _rawText = text;
             if (IsJson(a.ContentType))
             {
+                // Not all *.json artifacts hold valid JSON (raw bundles keep whatever the run
+                // printed) — parse failure falls back to the raw text, not an error.
                 try { _content = System.Text.Json.JsonDocument.Parse(text).RootElement.Clone(); }
-                catch { _loadFailed = true; }
+                catch { _content = null; }
             }
             else
             {
@@ -225,12 +234,13 @@
     // endpoint serves), capped so a huge file can't balloon the circuit.
     private async Task<string?> ReadTextAsync(ArtifactFileView a)
     {
+        _loadError = null;
         try
         {
             var link = await Links.GetByIdAsync(a.Id);
-            if (link is null) return null;
+            if (link is null) { _loadError = "artifact link not found for this workspace"; return null; }
             var obj = await Store.OpenReadAsync(link.Bucket, link.ObjectKey);
-            if (obj is null) return null;
+            if (obj is null) { _loadError = "object missing from the store"; return null; }
             await using var stream = obj.Content;
             using var ms = new MemoryStream();
             var buffer = new byte[81920];
@@ -243,7 +253,11 @@
             }
             return System.Text.Encoding.UTF8.GetString(ms.ToArray());
         }
-        catch { return null; }
+        catch (Exception ex)
+        {
+            _loadError = ex.Message;
+            return null;
+        }
     }
 
     // ── JSON tree viewer ──────────────────────────────────────────────────────────────────────────
