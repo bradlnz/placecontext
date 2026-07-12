@@ -32,16 +32,33 @@ window.pcmonaco = (function () {
   // textarea (CDN unreachable — offline/self-hosted network). NEVER throws: an exception
   // here would propagate through JS interop and terminate the Blazor circuit, freezing
   // the page on "Loading…".
+  // The editor follows the portal's theme: light shells get Monaco's white 'vs', dark get
+  // 'vs-dark' — and a toggle mid-session re-themes every mounted editor live.
+  function shellTheme() {
+    const shell = document.getElementById('dcshell');
+    return shell && shell.getAttribute('data-theme') === 'light' ? 'vs' : 'vs-dark';
+  }
+
+  let themeWatcher = null;
+  function watchTheme(monaco) {
+    if (themeWatcher) return;
+    const shell = document.getElementById('dcshell');
+    if (!shell) return;
+    themeWatcher = new MutationObserver(() => monaco.editor.setTheme(shellTheme()));
+    themeWatcher.observe(shell, { attributes: true, attributeFilter: ['data-theme'] });
+  }
+
   async function init(id, value, language, theme) {
     try {
       const monaco = await loadMonaco();
       const el = document.getElementById(id);
       if (!el) return true;
       destroy(id);
+      watchTheme(monaco);
       const editor = monaco.editor.create(el, {
         value: value || '',
         language: language || 'plaintext',
-        theme: theme || 'vs-dark',
+        theme: shellTheme(),
         automaticLayout: true,
         minimap: { enabled: true },
         fontSize: 12.5,
