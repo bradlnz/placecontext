@@ -339,7 +339,8 @@ app.MapGet("/locked", async (HttpContext ctx, IAuthService auth) =>
 {
     var operatorUser = await auth.GetOrCreateOperatorAsync(ctx.RequestAborted);
     await SignInAsync(ctx, operatorUser);
-    return Results.Redirect("/");
+    // Honour the cookie middleware's ReturnUrl so deep links survive the auto-login round trip.
+    return Results.Redirect(LocalOrHome(ctx.Request.Query["ReturnUrl"]));
 }).AllowAnonymous();
 
 // ---- Invite acceptance (join page) ----
