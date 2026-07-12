@@ -90,6 +90,34 @@ window.pcchart = (function () {
     charts[id] = new Chart(el, config(spec, tokens()));
   }
 
+  // Lazy mount: render() may fire before the canvas is committed to the DOM (Blazor applies its
+  // diff after the interop call) or before Chart.js finishes loading. Retry until the element
+  // exists, then defer the actual draw until it scrolls into view — a hidden or zero-size canvas
+  // would otherwise paint blank and never recover.
+  const pending = {}; // canvas id → retry timer
+  const io = window.IntersectionObserver
+    ? new IntersectionObserver(entries => {
+        for (const e of entries) {
+          if (!e.isIntersecting) continue;
+          io.unobserve(e.target);
+          draw(e.target.id);
+        }
+      }, { rootMargin: '200px' })
+    : null;
+
+  function mount(id, attempt) {
+    delete pending[id];
+    if (!specs[id]) return; // destroyed while waiting
+    const el = document.getElementById(id);
+    if (!el || typeof Chart === 'undefined') {
+      if (attempt < 40) // ~1s of fast polls, then 500ms — gives CDN-slow Chart.js ~16s
+        pending[id] = setTimeout(() => mount(id, attempt + 1), attempt < 10 ? 100 : 500);
+      return;
+    }
+    if (io) io.observe(el);
+    else draw(id);
+  }
+
   // Theme flips re-render every live chart with the new tokens (dark is its own selected palette,
   // not an automatic flip of the light one).
   const shell = document.getElementById('dcshell');
@@ -102,10 +130,13 @@ window.pcchart = (function () {
     render(id, specJson) {
       try { specs[id] = typeof specJson === 'string' ? JSON.parse(specJson) : specJson; }
       catch { return; }
-      draw(id);
+      if (pending[id]) { clearTimeout(pending[id]); delete pending[id]; }
+      mount(id, 0);
     },
     destroy(id) {
+      if (pending[id]) { clearTimeout(pending[id]); delete pending[id]; }
       if (charts[id]) { charts[id].destroy(); delete charts[id]; }
+      if (io) { const el = document.getElementById(id); if (el) io.unobserve(el); }
       delete specs[id];
     },
   };
