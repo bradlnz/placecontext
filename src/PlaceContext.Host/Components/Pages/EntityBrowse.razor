@@ -46,12 +46,14 @@
             @if (_brainGraph is { Nodes.Count: > 0 })
             {
                 <div class="dccard" style="border-radius:10px; overflow:hidden; margin-bottom:14px">
-                    <GraphCanvas Graph="_brainGraph" Height="520" />
+                    <GraphCanvas Graph="_brainGraph" Height="520" NodeUrl="NodeUrl" />
                 </div>
                 <div style="font-size:11px; color:var(--text-3); display:flex; gap:16px; margin-bottom:14px">
                     <span><span style="color:var(--brand-2)">●</span> @_entity.Name records</span>
-                    <span><span style="color:var(--text-2)">●</span> related records · runs</span>
-                    <span>drag to arrange · click a node for its connections · scroll to zoom</span>
+                    <span><span style="color:var(--human)">●</span> related records</span>
+                    <span><span style="color:var(--good)">●</span> artifacts</span>
+                    <span><span style="color:var(--text-2)">●</span> runs</span>
+                    <span>click a node → Open ↗ jumps to it</span>
                 </div>
             }
             else
@@ -432,6 +434,10 @@
     }
 
     private PlaceContext.Application.Dtos.GraphVizView? _brainGraph;
+    private readonly Dictionary<string, string> _nodeUrls = new();
+
+    private string? NodeUrl(PlaceContext.Application.Dtos.GraphNodeView node)
+        => _nodeUrls.GetValueOrDefault(node.Id);
 
     // The entity's DATA graph: every record as a node, joined to its actual related records
     // (bulk join per declared relation), the runs tagged with its key values, and each run's
@@ -544,15 +550,25 @@
         for (var i = 0; i < records.Count; i++)
             nodes.Add(new PlaceContext.Application.Dtos.GraphNodeView($"rec:{i}", records[i] ?? "—", 0, IsGod: true,
                 Content: $"{_entity?.Name} record"));
+        _nodeUrls.Clear();
         for (var i = 0; i < related.Count; i++)
+        {
             nodes.Add(new PlaceContext.Application.Dtos.GraphNodeView($"rel:{i}", related[i].Label, 0, false,
-                Content: $"{related[i].Entity} record (related)"));
+                Content: $"{related[i].Entity} record (related)", Kind: "human"));
+            _nodeUrls[$"rel:{i}"] = $"/project/{ProjectId}/entity/{Uri.EscapeDataString(related[i].Entity)}?record={Uri.EscapeDataString(related[i].Label)}";
+        }
         for (var i = 0; i < runs.Count; i++)
+        {
             nodes.Add(new PlaceContext.Application.Dtos.GraphNodeView($"run:{i}", $"run {runs[i].ToString("N")[..8]}", 0, false,
                 Content: "tagged job run — its output mentioned the connected records"));
+            _nodeUrls[$"run:{i}"] = $"/observability?run={runs[i]}";
+        }
         for (var i = 0; i < arts.Count; i++)
+        {
             nodes.Add(new PlaceContext.Application.Dtos.GraphNodeView($"art:{i}", arts[i].Art.Title, 0, false,
-                Content: $"artifact · {arts[i].Art.Kind} · open via the record pane"));
+                Content: $"artifact · {arts[i].Art.Kind}", Kind: "good", Labeled: true));
+            _nodeUrls[$"art:{i}"] = $"/artifacts?artifact={arts[i].Art.Id}";
+        }
 
         foreach (var (rec, rel) in relEdges) Link($"rec:{rec}", $"rel:{rel}");
         foreach (var (rec, run) in runEdges) Link($"rec:{rec}", $"run:{run}");

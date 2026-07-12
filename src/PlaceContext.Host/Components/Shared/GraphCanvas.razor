@@ -17,6 +17,10 @@
                 </div>
                 <button class="dcbtn" style="padding:1px 7px; font-size:11px; flex:none" @onclick="ClearAsync">×</button>
             </div>
+            @if (NodeUrl?.Invoke(sel) is { Length: > 0 } url)
+            {
+                <a class="dcbtn" href="@url" style="display:inline-flex; margin-top:8px; padding:4px 11px; font-size:11.5px; text-decoration:none">Open ↗</a>
+            }
             <div style="display:flex; gap:6px; margin-top:8px; flex-wrap:wrap">
                 @if (sel.IsGod)
                 {
@@ -54,6 +58,9 @@
     [Parameter] public GraphVizView? Graph { get; set; }
     [Parameter] public int Height { get; set; } = 340;
 
+    /// <summary>Optional: resolves a node to a destination — the details card then offers Open ↗.</summary>
+    [Parameter] public Func<GraphNodeView, string?>? NodeUrl { get; set; }
+
     private readonly string _id = "pcgraph-" + Guid.NewGuid().ToString("N");
     private GraphVizView? _rendered;
     private bool _needsInit;
@@ -74,7 +81,7 @@
 
         var payload = new
         {
-            nodes = Graph.Nodes.Take(180).Select(n => new { id = n.Id, label = n.Label, degree = n.Degree, god = n.IsGod }),
+            nodes = Graph.Nodes.Take(180).Select(n => new { id = n.Id, label = n.Label, degree = n.Degree, god = n.IsGod, kind = n.Kind, labeled = n.Labeled }),
             links = Graph.Links.Take(500).Select(l => new { source = l.Source, target = l.Target, confidence = l.Confidence }),
         };
         _selfRef ??= DotNetObjectReference.Create(this);

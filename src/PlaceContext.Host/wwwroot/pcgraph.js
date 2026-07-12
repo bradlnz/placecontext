@@ -19,6 +19,8 @@
       link: cssVar('--border-2', '#2a323c'),
       amb: cssVar('--warn', '#e0a458'),
       card: cssVar('--card', '#111418'),
+      good: cssVar('--good', '#43d675'),
+      human: cssVar('--human', '#58a6ff'),
     };
   }
 
@@ -32,6 +34,7 @@
       const angle = (i / data.nodes.length) * Math.PI * 2;
       const node = {
         id: n.id, label: n.label || n.id, degree: n.degree | 0, god: !!n.god,
+        kind: n.kind || null, labeled: !!n.labeled,
         x: Math.cos(angle) * 120 + (Math.random() - 0.5) * 40,
         y: Math.sin(angle) * 120 + (Math.random() - 0.5) * 40,
         vx: 0, vy: 0, fixed: false,
@@ -164,7 +167,7 @@
         const dim = hv && n !== hv && !(nb && nb.has(n));
         ctx.globalAlpha = dim ? 0.25 : 1;
         ctx.beginPath(); ctx.arc(n.x, n.y, n.r, 0, Math.PI * 2);
-        ctx.fillStyle = n.god ? col.brand : col.node; ctx.fill();
+        ctx.fillStyle = n.kind === 'good' ? col.good : n.kind === 'human' ? col.human : (n.god ? col.brand : col.node); ctx.fill();
         if (n.god || n === hv || n === st.selected) { ctx.lineWidth = 1.5 / st.scale; ctx.strokeStyle = col.brand2; ctx.stroke(); }
       }
       ctx.globalAlpha = 1;
@@ -172,7 +175,7 @@
       ctx.font = `${11 / st.scale}px ui-monospace, monospace`;
       ctx.fillStyle = col.label; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
       for (const n of nodes) {
-        if (!n.god && n !== hv && !(nb && nb.has(n))) continue;
+        if (!n.god && !n.labeled && n !== hv && !(nb && nb.has(n))) continue;
         ctx.globalAlpha = n === hv ? 1 : 0.85;
         ctx.fillText(short(n.label), n.x + n.r + 3 / st.scale, n.y);
       }
