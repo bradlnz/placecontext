@@ -34,6 +34,42 @@
             <div style="margin-bottom:12px; padding:10px 14px; border-radius:8px; background:var(--bad-bg); color:var(--bad); font-size:12.5px">@_error</div>
         }
 
+        @* ── Insights: organized automatically from the entity's tags — numeric columns roll up,
+             relation keys show their distribution. No configuration, just the graph. ── *@
+        @if (_insights.Count > 0)
+        {
+            <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(210px, 1fr)); gap:10px; margin-bottom:14px">
+                @foreach (var ins in _insights)
+                {
+                    <div class="dccard" style="padding:12px 14px; border-radius:8px">
+                        <div style="font-size:10.5px; color:var(--text-3); letter-spacing:.06em; text-transform:uppercase">@ins.Title</div>
+                        @if (ins.Big is not null)
+                        {
+                            <div style="display:flex; align-items:baseline; gap:7px; margin-top:5px">
+                                <span style="font-family:'IBM Plex Mono',monospace; font-size:22px; font-weight:600; color:var(--brand-2)">@ins.Big</span>
+                                <span style="font-size:11px; color:var(--text-3)">@ins.Sub</span>
+                            </div>
+                        }
+                        else
+                        {
+                            <div style="display:flex; flex-direction:column; gap:3px; margin-top:6px">
+                                @foreach (var (label, count, frac) in ins.Bars)
+                                {
+                                    <div style="display:flex; align-items:center; gap:8px; font-size:11px">
+                                        <span style="width:86px; flex:none; color:var(--text-2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis" title="@label">@label</span>
+                                        <span style="flex:1; height:7px; border-radius:4px; background:var(--card-2); overflow:hidden">
+                                            <span style="display:block; height:100%; width:@(frac)%; background:var(--brand-2)"></span>
+                                        </span>
+                                        <span style="font-family:'IBM Plex Mono',monospace; color:var(--text-3)">@count</span>
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        }
+
         @if (_rows is { } rows)
         {
             <div class="dccard" style="border-radius:8px; overflow:hidden">
@@ -157,6 +193,7 @@
             Ui.Set(_entity.Name, "business view · project data graph");
             // Read through the project's isolated role; identifier comes from the registry, quoted.
             _rows = await Svc.ExecuteProjectDataAsync(ProjectId, $"SELECT * FROM \"{_entity.TableName}\" LIMIT 500");
+            await BuildInsightsAsync();
         }
         catch (Exception ex) { _error = ex.Message; }
     }
@@ -242,4 +279,58 @@
             catch { }
         }
     }
+
+    // ── Auto-insights: the intelligence layer over tagged data. Column types come from the
+    // schema, relation keys from the entity graph; every aggregate runs as the isolated role.
+    private sealed record Insight(string Title, string? Big, string? Sub,
+        IReadOnlyList<(string Label, string Count, int Frac)> Bars);
+
+    private readonly List<Insight> _insights = new();
+
+    private async Task BuildInsightsAsync()
+    {
+        _insights.Clear();
+        if (_entity is null) return;
+        var table = _entity.TableName.Replace("\"", "");
+        try
+        {
+            var columns = await Svc.ListProjectTableColumnsAsync(ProjectId, _entity.TableName);
+
+            _insights.Add(new Insight($"{_entity.Name} total",
+                (_rows?.Rows.Count ?? 0).ToString("N0"), "records", Array.Empty<(string, string, int)>()));
+
+            // Numeric columns → average + range.
+            foreach (var col in columns.Where(c => IsNumeric(c.Type)).Take(3))
+            {
+                var r = await Svc.ExecuteProjectDataAsync(ProjectId,
+                    $"SELECT round(avg(\"{col.Name}\")::numeric, 1), min(\"{col.Name}\"), max(\"{col.Name}\") FROM \"{table}\"");
+                if (r.Rows.Count == 1 && r.Rows[0][0] is { } avg)
+                    _insights.Add(new Insight($"avg {col.Name}", avg,
+                        $"range {r.Rows[0][1]} – {r.Rows[0][2]}", Array.Empty<(string, string, int)>()));
+            }
+
+            // Relation keys (plus label-ish text columns) → top-5 distribution bars.
+            var keyCols = _entity.Relations.Select(rel => rel.Column)
+                .Concat(columns.Where(c => c.Type.Contains("text") || c.Type.Contains("char")).Select(c => c.Name))
+                .Where(c => !string.Equals(c, _entity.LabelColumn, StringComparison.OrdinalIgnoreCase))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Take(2);
+            foreach (var col in keyCols)
+            {
+                var r = await Svc.ExecuteProjectDataAsync(ProjectId,
+                    $"SELECT \"{col}\"::text, count(*) FROM \"{table}\" GROUP BY 1 ORDER BY 2 DESC LIMIT 5");
+                if (r.Rows.Count == 0) continue;
+                var max = r.Rows.Max(x => long.TryParse(x[1], out var n) ? n : 0);
+                var bars = r.Rows
+                    .Select(x => (x[0] ?? "—", x[1] ?? "0",
+                        max > 0 && long.TryParse(x[1], out var n) ? (int)(n * 100 / max) : 0))
+                    .ToList();
+                _insights.Add(new Insight($"by {col}", null, null, bars));
+            }
+        }
+        catch { /* insights are derived sugar — the records table always renders */ }
+    }
+
+    private static bool IsNumeric(string type) =>
+        type.Contains("int") || type.Contains("numeric") || type.Contains("double") || type.Contains("real");
 }
