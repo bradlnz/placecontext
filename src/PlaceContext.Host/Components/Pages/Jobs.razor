@@ -515,12 +515,45 @@ else
             <div class="dcform-section">
                 <span class="dcform-title">Input</span>
                 <div class="dcfield">
-                    <label>Input payloads <span class="req">*</span> <span class="code" style="margin-left:5px">one JSON per line — each line becomes a shard</span></label>
-                    <textarea class="dcinput" rows="4"
-                              style="font-family:'IBM Plex Mono',monospace; font-size:12px; resize:vertical"
-                              @bind="_edInputPayloadsRaw"
-                              placeholder="{&quot;key&quot;: &quot;value1&quot;}&#10;{&quot;key&quot;: &quot;value2&quot;}">
-                    </textarea>
+                    <label>
+                        Input payloads <span class="req">*</span>
+                        @if (DeclaredParams().Count > 0)
+                        {
+                            <span style="margin-left:8px; display:inline-flex; gap:4px">
+                                <button type="button" class="dcbtn" style="padding:1px 8px; font-size:10.5px; @(_edPayloadMode == "form" ? "color:var(--brand-2); border-color:var(--brand-2)" : "")"
+                                        @onclick="@(() => SwitchPayloadMode("form"))">form</button>
+                                <button type="button" class="dcbtn" style="padding:1px 8px; font-size:10.5px; @(_edPayloadMode == "raw" ? "color:var(--brand-2); border-color:var(--brand-2)" : "")"
+                                        @onclick="@(() => SwitchPayloadMode("raw"))">raw JSON</button>
+                            </span>
+                        }
+                        else
+                        {
+                            <span class="code" style="margin-left:5px">one JSON per line — each line becomes a shard</span>
+                        }
+                    </label>
+                    @if (_edPayloadMode == "form" && DeclaredParams().Count > 0)
+                    {
+                        @* The declared inputs render as a form; the values compose the payload JSON. *@
+                        @foreach (var p in DeclaredParams())
+                        {
+                            <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px">
+                                <span style="width:150px; flex:none; font-size:12px; color:var(--text-2)">
+                                    @(p.Label ?? p.Name)@(p.Required ? " *" : "")
+                                </span>
+                                <input class="dcinput" style="flex:1; font-size:12px" value="@PayloadFormValue(p.Name)"
+                                       @oninput="@(e => SetPayloadFormValue(p.Name, e.Value?.ToString() ?? ""))" />
+                            </div>
+                        }
+                        <div class="dchint">Composes a single-shard payload from the declared inputs — switch to raw JSON for multi-shard fan-out.</div>
+                    }
+                    else
+                    {
+                        <textarea class="dcinput" rows="4"
+                                  style="font-family:'IBM Plex Mono',monospace; font-size:12px; resize:vertical"
+                                  @bind="_edInputPayloadsRaw"
+                                  placeholder="{&quot;key&quot;: &quot;value1&quot;}&#10;{&quot;key&quot;: &quot;value2&quot;}">
+                        </textarea>
+                    }
                 </div>
                 <div class="dcfield">
                     <label>Run-form parameters <span class="code" style="margin-left:5px">one per line — name or name|Label</span></label>
@@ -763,6 +796,8 @@ else
     private string _edMapSource = "";
     private IReadOnlyList<CodeFileDto> _edMapFiles = Array.Empty<CodeFileDto>(); // full file set of a multi-file job
     private string _edInputPayloadsRaw = "{}";
+    private string _edPayloadMode = "raw";                 // "form" composes JSON from declared inputs
+    private Dictionary<string, string> _edPayloadForm = new();
     private string _edMapEnvRaw = "";
     private int _edConcurrency = 1;
     private string _edSuccessCodesRaw = "0";
@@ -1028,6 +1063,50 @@ else
         _selectedTriggerId = null;
         _showEditor = true;
     }
+
+    // ── Payload form (declared inputs → payload JSON) ─────────────────────────────────────────────
+    private IReadOnlyList<JobParameterDto> DeclaredParams() => ParseParameters(_edParametersRaw);
+
+    private void SwitchPayloadMode(string mode)
+    {
+        if (mode == "form")
+        {
+            // Prefill the form from the first raw payload line when it's a flat JSON object.
+            _edPayloadForm = new Dictionary<string, string>();
+            try
+            {
+                var first = _edInputPayloadsRaw.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).FirstOrDefault();
+                if (first is not null)
+                {
+                    using var doc = System.Text.Json.JsonDocument.Parse(first);
+                    if (doc.RootElement.ValueKind == System.Text.Json.JsonValueKind.Object)
+                        foreach (var prop in doc.RootElement.EnumerateObject())
+                            if (prop.Value.ValueKind is not (System.Text.Json.JsonValueKind.Object or System.Text.Json.JsonValueKind.Array))
+                                _edPayloadForm[prop.Name] = prop.Value.ValueKind == System.Text.Json.JsonValueKind.String
+                                    ? prop.Value.GetString() ?? "" : prop.Value.ToString();
+                }
+            }
+            catch { /* raw payload isn't a flat object — start blank */ }
+        }
+        else if (_edPayloadMode == "form")
+        {
+            ComposePayloadFromForm();
+        }
+        _edPayloadMode = mode;
+    }
+
+    private string PayloadFormValue(string name) => _edPayloadForm.GetValueOrDefault(name, "");
+
+    private void SetPayloadFormValue(string name, string value)
+    {
+        _edPayloadForm[name] = value;
+        ComposePayloadFromForm();
+    }
+
+    // The form always keeps the raw payload in sync, so SaveJob needs no special casing.
+    private void ComposePayloadFromForm()
+        => _edInputPayloadsRaw = System.Text.Json.JsonSerializer.Serialize(
+            DeclaredParams().ToDictionary(p => p.Name, p => (object)PayloadFormValue(p.Name)));
 
     private void TogglePostJobAction(PlaceContext.Domain.ValueObjects.PostJobActionKind kind, bool on)
     {

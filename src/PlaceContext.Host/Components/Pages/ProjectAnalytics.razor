@@ -38,9 +38,16 @@
     {
         <div class="dccard" style="padding:14px 16px; margin-bottom:12px; display:flex; flex-direction:column; gap:8px">
             <input class="dcinput" style="max-width:320px" placeholder="chart name (e.g. sales per city)" @bind="_sqlName" />
-            <textarea @bind="_sqlQuery" rows="4" spellcheck="false"
-                      placeholder="SELECT city, avg(price) FROM listings GROUP BY city ORDER BY 2 DESC"
-                      style="width:100%; padding:9px 11px; background:var(--bg); border:1px solid var(--border); border-radius:7px; color:var(--text); font-size:12px; font-family:'IBM Plex Mono',monospace; resize:vertical"></textarea>
+            @if (_sqlMonaco)
+            {
+                <div id="@SqlEditorId" style="height:120px; border:1px solid var(--border); border-radius:7px; overflow:hidden"></div>
+            }
+            else
+            {
+                <textarea @bind="_sqlQuery" rows="4" spellcheck="false"
+                          placeholder="SELECT city, avg(price) FROM listings GROUP BY city ORDER BY 2 DESC"
+                          style="width:100%; padding:9px 11px; background:var(--bg); border:1px solid var(--border); border-radius:7px; color:var(--text); font-size:12px; font-family:'IBM Plex Mono',monospace; resize:vertical"></textarea>
+            }
             <div style="display:flex; align-items:center; gap:10px">
                 <select class="dcinput" style="width:90px; font-size:12px" @bind="_sqlType">
                     <option value="bar">bar</option>
@@ -189,6 +196,17 @@
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        if (_showSqlEditor && _sqlMonaco && !_sqlMonacoReady)
+        {
+            _sqlMonacoReady = true;
+            try
+            {
+                var rich = await JS.InvokeAsync<bool>("pcmonaco.init", SqlEditorId, _sqlQuery, "sql", "vs-dark");
+                if (!rich) { _sqlMonaco = false; StateHasChanged(); }
+            }
+            catch { _sqlMonaco = false; StateHasChanged(); }
+        }
+
         foreach (var chart in _charts.Where(IsSpec))
         {
             var id = CanvasId(chart.TableName);
@@ -262,6 +280,9 @@
 
     // ── SQL charts ────────────────────────────────────────────────────────────────────────────────
     private bool _showSqlEditor, _sqlBusy;
+    private bool _sqlMonaco = true;      // degrade to the textarea when the Monaco CDN is unreachable
+    private bool _sqlMonacoReady;
+    private const string SqlEditorId = "pcmonaco-sqlchart";
     private string _sqlName = "", _sqlQuery = "", _sqlType = "bar";
     private string? _sqlError;
 
@@ -271,7 +292,14 @@
     private void ToggleSqlEditor()
     {
         _showSqlEditor = !_showSqlEditor;
+        _sqlMonacoReady = false;
         _sqlError = null;
+    }
+
+    private async Task SyncSqlFromMonacoAsync()
+    {
+        if (!_sqlMonaco || !_sqlMonacoReady) return;
+        try { _sqlQuery = await JS.InvokeAsync<string>("pcmonaco.getValue", SqlEditorId); } catch { }
     }
 
     private async Task SaveSqlAsync()
@@ -280,6 +308,7 @@
         _sqlBusy = true;
         try
         {
+            await SyncSqlFromMonacoAsync();
             await Svc.SaveSqlChartAsync(ProjectId, _sqlName, _sqlQuery, _sqlType);
             await LoadAsync();
             _showSqlEditor = false;
@@ -290,13 +319,19 @@
         finally { _sqlBusy = false; }
     }
 
-    private void EditSql(ProjectChartView chart)
+    private async Task EditSql(ProjectChartView chart)
     {
         _showSqlEditor = true;
+        _sqlMonacoReady = false;
         _sqlName = chart.TableName["sql:".Length..];
         _sqlQuery = StoredSql(chart) ?? "";
         _sqlType = StoredType(chart);
         _sqlError = null;
+        // If Monaco is already mounted from a previous open, push the loaded query into it.
+        if (_sqlMonaco)
+        {
+            try { await JS.InvokeVoidAsync("pcmonaco.setValue", SqlEditorId, _sqlQuery, "sql"); } catch { }
+        }
     }
 
     // Re-save with the same SQL and a different form — bar ⇄ line ⇄ pie.
