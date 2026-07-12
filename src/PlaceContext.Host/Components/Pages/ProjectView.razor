@@ -1,4 +1,5 @@
 @page "/project/{Id:guid}"
+@layout PlaceContext.Host.Components.Layout.ProjectLayout
 @inject IPlaceContextService Svc
 @inject PortalUiState Ui
 @inject NavigationManager Nav
@@ -31,8 +32,6 @@ else
 
         @if (_message is not null) { <div style="color:var(--text-3); font-size:12px; margin-bottom:10px">@_message</div> }
 
-        <ProjectTabs ProjectId="Id" Active="@_tab"
-                     OnLocalTab="@(t => { _tab = t; StateHasChanged(); })" />
 
         @if (_tab == "overview")
         {

@@ -1,0 +1,77 @@
+@inherits LayoutComponentBase
+@layout MainLayout
+@implements IDisposable
+@inject NavigationManager Nav
+
+@* The project area: a vertical menu on the left (replacing the old horizontal tab strip),
+   second-level strips (like Data's Tables | Analytics | Data map) stay inside the pages. *@
+<div style="display:flex; height:100%; min-height:0">
+    <nav style="width:168px; flex:none; border-right:1px solid var(--border); background:var(--panel); padding:14px 10px; display:flex; flex-direction:column; gap:2px; overflow-y:auto">
+        <div style="font-size:10px; font-weight:600; letter-spacing:.7px; color:var(--text-3); padding:0 10px 8px; text-transform:uppercase">Project</div>
+        @foreach (var item in Items)
+        {
+            <button class="dcnav @(IsActive(item) ? "active" : "")" style="border:none; width:100%"
+                    @onclick="@(() => Nav.NavigateTo(UrlFor(item)))">
+                <span class="bar"></span>@item.Label
+            </button>
+        }
+    </nav>
+    <div style="flex:1; min-width:0; overflow-y:auto">
+        @Body
+    </div>
+</div>
+
+@code {
+    private sealed record Item(string Label, string Key, string Path);
+
+    // Overview/Knowledge/Activity are the project page's own tabs (carried in ?tab=); the rest
+    // are sub-pages. "data" is the parent of the Tables | Analytics | Data map strip.
+    private static readonly Item[] Items =
+    {
+        new("Overview", "overview", ""),
+        new("Knowledge", "knowledge", ""),
+        new("Activity", "activity", ""),
+        new("Jobs", "jobs", "jobs"),
+        new("Chains", "chains", "chains"),
+        new("Schedules", "schedules", "schedules"),
+        new("Data", "data", "data"),
+        new("Vault", "vault", "secrets"),
+        new("Events", "events", "events"),
+    };
+
+    private Guid? ProjectId()
+    {
+        var m = System.Text.RegularExpressions.Regex.Match(Nav.Uri, @"/project/([0-9a-fA-F-]{36})");
+        return m.Success && Guid.TryParse(m.Groups[1].Value, out var id) ? id : null;
+    }
+
+    private string UrlFor(Item item)
+    {
+        var pid = ProjectId();
+        if (pid is null) return "/";
+        return item.Path.Length == 0
+            ? $"/project/{pid}?tab={item.Key}"
+            : $"/project/{pid}/{item.Path}";
+    }
+
+    private bool IsActive(Item item)
+    {
+        var uri = new Uri(Nav.Uri);
+        var path = uri.AbsolutePath.TrimEnd('/');
+        var afterProject = System.Text.RegularExpressions.Regex.Match(path, @"/project/[0-9a-fA-F-]{36}(?:/([a-z]+))?").Groups[1].Value;
+        if (item.Path.Length > 0)
+        {
+            // Analytics + Data map live under the Data parent.
+            if (item.Key == "data" && afterProject is "analytics" or "datamap") return true;
+            return afterProject == item.Path;
+        }
+        if (afterProject.Length > 0) return false;
+        var tab = System.Web.HttpUtility.ParseQueryString(uri.Query)["tab"] ?? "overview";
+        return tab == item.Key;
+    }
+
+    protected override void OnInitialized() => Nav.LocationChanged += OnMoved;
+    private void OnMoved(object? s, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
+        => InvokeAsync(StateHasChanged);
+    public void Dispose() => Nav.LocationChanged -= OnMoved;
+}
