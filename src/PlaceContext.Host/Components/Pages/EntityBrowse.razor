@@ -39,7 +39,7 @@
         <div class="dctabs" style="margin-bottom:14px">
             <button class="dctab @(_viewTab == "records" ? "active" : "")" @onclick="@(() => _viewTab = "records")">Records</button>
             <button class="dctab @(_viewTab == "graph" ? "active" : "")" @onclick="@(() => _viewTab = "graph")">Graph</button>
-            <button class="dctab @(_viewTab == "analytics" ? "active" : "")" @onclick="@(() => _viewTab = "analytics")">Analytics</button>
+            <button class="dctab @(_viewTab == "analytics" ? "active" : "")" @onclick="OpenAnalyticsAsync">Analytics</button>
         </div>
 
         @* ── Analytics tab: SQL-backed charts scoped to this entity (same engine as Data → Analytics). ── *@
@@ -313,6 +313,59 @@
     private readonly Dictionary<string, DateTimeOffset> _renderedCharts = new();
 
     private string ChartPrefix => $"sql:{_entity?.Name} · ";
+    private bool _defaultsTried;
+
+    private async Task OpenAnalyticsAsync()
+    {
+        _viewTab = "analytics";
+        await EnsureDefaultChartsAsync();
+    }
+
+    // Default charts: when an entity has none, seed a few sensible ones straight from its schema —
+    // a count distribution, a numeric average per category, and a relation-key pie. They persist
+    // as ordinary SQL charts, so they're editable, refreshable, and deletable like any other.
+    private async Task EnsureDefaultChartsAsync()
+    {
+        if (_defaultsTried || _entity is null || EntityCharts().Count > 0) return;
+        _defaultsTried = true;
+        try
+        {
+            var table = _entity.TableName.Replace("\"", "");
+            var columns = await Svc.ListProjectTableColumnsAsync(ProjectId, _entity.TableName);
+            var categorical = _entity.Relations.Select(r => r.Column)
+                .Concat(columns.Where(c => (c.Type.Contains("text") || c.Type.Contains("char"))
+                    && !string.Equals(c.Name, _entity.LabelColumn, StringComparison.OrdinalIgnoreCase)).Select(c => c.Name))
+                .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            var numeric = columns.Where(c => (c.Type.Contains("int") || c.Type.Contains("numeric") || c.Type.Contains("double") || c.Type.Contains("real"))
+                    && !string.Equals(c.Name, "id", StringComparison.OrdinalIgnoreCase))
+                .Select(c => c.Name).ToList();
+
+            async Task Seed(string name, string sql, string type)
+            {
+                try { await Svc.SaveSqlChartAsync(ProjectId, $"{_entity.Name} · {name}", sql, type); } catch { }
+            }
+
+            if (categorical.FirstOrDefault() is { } cat)
+            {
+                await Seed($"records by {cat}",
+                    $"SELECT \"{cat}\"::text, count(*) FROM \"{table}\" GROUP BY 1 ORDER BY 2 DESC LIMIT 10", "bar");
+                if (numeric.FirstOrDefault() is { } num)
+                    await Seed($"avg {num} by {cat}",
+                        $"SELECT \"{cat}\"::text, round(avg(\"{num}\")::numeric, 1) FROM \"{table}\" GROUP BY 1 ORDER BY 2 DESC LIMIT 10", "bar");
+                if (categorical.Skip(1).FirstOrDefault() is { } cat2)
+                    await Seed($"share by {cat2}",
+                        $"SELECT \"{cat2}\"::text, count(*) FROM \"{table}\" GROUP BY 1 ORDER BY 2 DESC LIMIT 8", "pie");
+            }
+            else if (numeric.FirstOrDefault() is { } num && LabelCol() is { } label)
+            {
+                await Seed($"{num} by {label}",
+                    $"SELECT \"{label.Replace("\"", "")}\"::text, \"{num}\" FROM \"{table}\" ORDER BY 2 DESC LIMIT 12", "bar");
+            }
+
+            _charts = await Svc.ListProjectChartsAsync(ProjectId);
+        }
+        catch { /* defaults are a convenience — the tab still works empty */ }
+    }
 
     private IReadOnlyList<ProjectChartView> EntityCharts()
         => _charts.Where(c => c.TableName.StartsWith(ChartPrefix, StringComparison.OrdinalIgnoreCase)).ToList();
