@@ -16,5 +16,7 @@ public sealed record SaveDataMappingCommand(
     string? RowsPath,
     IReadOnlyList<DataFieldDto> Fields,
     bool Enabled = true,
-    Guid? MappingId = null)
+    Guid? MappingId = null,
+    /// <summary>"job" (per-run primary artifact) or "chain" (the pipeline's final output).</summary>
+    string SourceKind = "job")
     : ICommand<DataMappingView>;

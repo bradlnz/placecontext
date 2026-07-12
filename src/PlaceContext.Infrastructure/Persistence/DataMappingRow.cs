@@ -7,6 +7,8 @@ public sealed class DataMappingRow : ITenantOwned
     public Guid TenantId { get; set; }
     public Guid ProjectId { get; set; }
     public Guid JobId { get; set; }
+    /// <summary>"job" | "chain" — what JobId points at.</summary>
+    public string SourceKind { get; set; } = "job";
     public string TargetTable { get; set; } = "";
     /// <summary>Dot-path to the record array inside the run's primary artifact. Null = root.</summary>
     public string? RowsPath { get; set; }

@@ -54,7 +54,7 @@ else
                         <title>@mp.JobName → @mp.TargetTable (@mp.Fields.Count field(s)) — click to edit</title>
                     </path>
                 }
-                @if (_connectJob is not null)
+                @if (_connectJob is not null || _connectChain is not null)
                 {
                     <path d="@ConnectPath()" fill="none" stroke="var(--human)" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#pcarrow)" />
                 }
@@ -77,6 +77,27 @@ else
                     <div style="font-size:10px; color:var(--text-3); margin-top:3px; display:flex; justify-content:space-between">
                         <span>@(mapped ? "mapped" : "unmapped — drag ＋")</span>
                         <span style="font-family:'IBM Plex Mono',monospace; color:var(--brand-2)">@j.ReturnType</span>
+                    </div>
+                </div>
+            }
+
+            @foreach (var chain in _chains ?? Array.Empty<JobChainView>())
+            {
+                var c = chain;
+                var key = "chain:" + c.Id;
+                var mapped = _mappings?.Any(m => m.SourceKind == "chain" && m.JobId == c.Id) ?? false;
+                <div style="position:absolute; left:@(Pos(key).X)px; top:@(Pos(key).Y)px; width:190px; border:1px @(mapped ? "solid var(--human)" : "dashed var(--human)"); border-radius:9px; padding:8px 10px; background:var(--human-bg); cursor:grab; box-shadow:var(--shadow)"
+                     @onpointerdown="@(e => StartDrag(key, e))" @onpointerdown:stopPropagation="true">
+                    <div style="display:flex; align-items:center; gap:7px">
+                        <span style="width:7px; height:7px; border-radius:50%; flex:none; background:var(--human)"></span>
+                        <span style="flex:1; min-width:0; font-size:12px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis" title="@c.Name">@c.Name</span>
+                        <span title="Drag onto a table to map this chain's final output into it"
+                              style="flex:none; width:18px; height:18px; border-radius:50%; background:var(--human); color:#fff; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700; cursor:crosshair"
+                              @onpointerdown="@(e => StartConnectChain(c, e))" @onpointerdown:stopPropagation="true">＋</span>
+                    </div>
+                    <div style="font-size:10px; color:var(--text-3); margin-top:3px; display:flex; justify-content:space-between">
+                        <span>@(mapped ? "mapped" : "unmapped — drag ＋")</span>
+                        <span style="font-family:'IBM Plex Mono',monospace; color:var(--human)">chain · @c.Steps.Count step(s)</span>
                     </div>
                 </div>
             }
@@ -113,7 +134,28 @@ else
         <div class="dcslide-body" style="flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:14px">
 
             <div class="dcfield">
-                <label>Source job <span class="req">*</span></label>
+                <label>
+                    Source <span class="req">*</span>
+                    <span style="margin-left:8px; display:inline-flex; gap:4px">
+                        @foreach (var kind in new[] { "job", "chain" })
+                        {
+                            <button type="button" class="dcbtn" style="padding:1px 8px; font-size:10.5px; @(_edSourceKind == kind ? "color:var(--brand-2); border-color:var(--brand-2)" : "")"
+                                    @onclick="@(() => { _edSourceKind = kind; _edJobId = Guid.Empty; })">@kind</button>
+                        }
+                    </span>
+                </label>
+                @if (_edSourceKind == "chain")
+                {
+                    <select class="dcinput" @bind="_edJobId">
+                        <option value="@Guid.Empty">— pick a chain (its final output ingests) —</option>
+                        @foreach (var c in _chains ?? Array.Empty<JobChainView>())
+                        {
+                            <option value="@c.Id">@c.Name</option>
+                        }
+                    </select>
+                }
+                else
+                {
                 <select class="dcinput" @bind="_edJobId">
                     <option value="@Guid.Empty">— pick a job —</option>
                     @foreach (var j in _jobs ?? Array.Empty<JobView>())
@@ -121,6 +163,7 @@ else
                         <option value="@j.Id">@j.Name (@j.ReturnType)</option>
                     }
                 </select>
+                }
             </div>
 
             <div style="display:flex; gap:10px">
@@ -145,7 +188,7 @@ else
                     <label>Fields</label>
                     <div style="display:flex; gap:6px">
                         <button class="dcbtn" style="padding:3px 9px; font-size:11px" @onclick="SuggestFields"
-                                disabled="@(_edJobId == Guid.Empty)" title="Prefill from the job's latest run result">
+                                disabled="@(_edJobId == Guid.Empty || _edSourceKind == "chain")" title="Prefill from the job's latest run result (jobs only)">
                             @(_suggesting ? "Reading last run…" : "Suggest from last run")
                         </button>
                         <button class="dcbtn" style="padding:3px 9px; font-size:11px" @onclick="AddField">+ field</button>
@@ -221,6 +264,8 @@ else
     private bool _suggesting;
     private Guid? _editId;
     private Guid _edJobId;
+    private string _edSourceKind = "job";
+    private IReadOnlyList<JobChainView>? _chains;
     private string _edTable = "";
     private string _edRowsPath = "";
     private bool _edEnabled = true;
@@ -250,6 +295,7 @@ else
     {
         _mappings = await Svc.ListDataMappingsAsync(ProjectId);
         _jobs = await Svc.ListJobsAsync(ProjectId);
+        _chains = await Svc.ListJobChainsAsync(ProjectId);
         try { _tables = await Svc.ListProjectDataTablesAsync(ProjectId); }
         catch { _tables = Array.Empty<PlaceContext.Application.Ports.ProjectTableInfo>(); }
     }
@@ -294,6 +340,11 @@ else
         foreach (var j in _jobs ?? Array.Empty<JobView>())
         {
             _pos.TryAdd("job:" + j.Id, (30, yJ));
+            yJ += 84;
+        }
+        foreach (var c in _chains ?? Array.Empty<JobChainView>())
+        {
+            _pos.TryAdd("chain:" + c.Id, (30, yJ));
             yJ += 84;
         }
         var yT = 24d;
@@ -343,6 +394,18 @@ else
         _moved = false;
     }
 
+    private JobChainView? _connectChain;
+
+    private void StartConnectChain(JobChainView chain, PointerEventArgs e)
+    {
+        _connectChain = chain;
+        _connectJobId = "chain:" + chain.Id;
+        var cp = Pos(_connectJobId);
+        _connectEnd = (cp.X + 190, cp.Y + 22);
+        _lastX = e.ClientX;
+        _lastY = e.ClientY;
+    }
+
     private void StartConnect(JobView job, PointerEventArgs e)
     {
         _connectJob = job;
@@ -363,7 +426,7 @@ else
             _pos[key] = (Math.Max(0, p.X + dx), Math.Max(0, p.Y + dy));
             if (Math.Abs(dx) + Math.Abs(dy) > 1) _moved = true;
         }
-        else if (_connectJob is not null)
+        else if (_connectJob is not null || _connectChain is not null)
         {
             _connectEnd = (_connectEnd.X + dx, _connectEnd.Y + dy);
         }
@@ -395,6 +458,19 @@ else
             _connectJob = null;
             OpenEditorForJob(job);
         }
+        else if (_connectChain is { } chain)
+        {
+            _connectChain = null;
+            OpenEditorForChain(chain);
+        }
+    }
+
+    private void OpenEditorForChain(JobChainView chain)
+    {
+        OpenEditor(null);
+        _edSourceKind = "chain";
+        _edJobId = chain.Id;
+        _edTable = Sanitize(chain.Name);
     }
 
     // Released on a table: while connecting, prefill both ends of the new edge. The node stops
@@ -409,6 +485,13 @@ else
             _edTable = table;
             return;
         }
+        if (_connectChain is { } chain)
+        {
+            _connectChain = null;
+            OpenEditorForChain(chain);
+            _edTable = table;
+            return;
+        }
         if (_dragKey is not null)
         {
             _dragKey = null;
@@ -419,7 +502,7 @@ else
     // Cubic bezier from the job node's right edge to the table node's left edge.
     private string EdgePath(DataMappingView m)
     {
-        var from = Pos("job:" + m.JobId);
+        var from = Pos((m.SourceKind == "chain" ? "chain:" : "job:") + m.JobId);
         var to = Pos("table:" + m.TargetTable);
         var x1 = from.X + 190; var y1 = from.Y + 26;
         var x2 = to.X; var y2 = to.Y + 26;
@@ -438,6 +521,7 @@ else
     private void OpenEditorForJob(JobView job)
     {
         OpenEditor(null);
+        _edSourceKind = "job";
         _edJobId = job.Id;
         _edTable = Sanitize(job.Name);
     }
@@ -446,6 +530,7 @@ else
     {
         _editId = m?.Id;
         _edJobId = m?.JobId ?? Guid.Empty;
+        _edSourceKind = m?.SourceKind ?? "job";
         _edTable = m?.TargetTable ?? "";
         _edRowsPath = m?.RowsPath ?? "";
         _edEnabled = m?.Enabled ?? true;
@@ -467,7 +552,7 @@ else
     private async Task SaveMapping()
     {
         _editorError = null;
-        if (_edJobId == Guid.Empty) { _editorError = "Pick a source job."; return; }
+        if (_edJobId == Guid.Empty) { _editorError = _edSourceKind == "chain" ? "Pick a source chain." : "Pick a source job."; return; }
         if (string.IsNullOrWhiteSpace(_edTable)) { _editorError = "Target table is required."; return; }
         var fields = _edFields
             .Where(f => !string.IsNullOrWhiteSpace(f.SourcePath) || !string.IsNullOrWhiteSpace(f.Column))
@@ -481,7 +566,8 @@ else
             await Svc.SaveDataMappingAsync(new SaveDataMappingCommand(
                 ProjectId, _edJobId, _edTable.Trim(),
                 string.IsNullOrWhiteSpace(_edRowsPath) ? null : _edRowsPath.Trim(),
-                fields, _edEnabled, _editId));
+                fields, _edEnabled, _editId,
+                SourceKind: _edSourceKind));
             await ReloadAsync();
             _showEditor = false;
         }

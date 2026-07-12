@@ -50,7 +50,7 @@ public sealed class DataMappingIngestionService
             return;
         }
 
-        foreach (var mapping in mappings.Where(m => m.Enabled))
+        foreach (var mapping in mappings.Where(m => m.Enabled && m.SourceKind == "job"))
         {
             try
             {
@@ -64,6 +64,36 @@ public sealed class DataMappingIngestionService
         }
     }
 
+    /// <summary>
+    /// The chain flavour: mappings whose source is the chain ingest its FINAL output (what the last
+    /// step produced) with the chain run's id as provenance. Same extraction, same isolation.
+    /// </summary>
+    public async Task IngestChainOutputAsync(Guid chainId, Guid chainRunId, Guid projectId,
+        string? finalOutput, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(finalOutput)) return;
+        IReadOnlyList<DataMapping> mappings;
+        try { mappings = await _mappings.ListForJobAsync(chainId, ct); }
+        catch (Exception ex)
+        {
+            _log?.LogWarning(ex, "Loading data mappings for chain {ChainId} failed.", chainId);
+            return;
+        }
+
+        foreach (var mapping in mappings.Where(m => m.Enabled && m.SourceKind == "chain"))
+        {
+            try
+            {
+                await IngestPayloadAsync(mapping, chainRunId, projectId, finalOutput, ct);
+            }
+            catch (Exception ex)
+            {
+                _log?.LogWarning(ex, "Chain data mapping {MappingId} → table '{Table}' failed for run {RunId}.",
+                    mapping.Id, mapping.TargetTable, chainRunId);
+            }
+        }
+    }
+
     private async Task IngestOneAsync(DataMapping mapping, JobRun run, CancellationToken ct)
     {
         var primary = PrimaryArtifact(run);
@@ -73,7 +103,12 @@ public sealed class DataMappingIngestionService
                 run.Id, mapping.Id);
             return;
         }
+        await IngestPayloadAsync(mapping, run.Id, run.ProjectId, primary, ct);
+    }
 
+    private async Task IngestPayloadAsync(DataMapping mapping, Guid runId, Guid projectId,
+        string primary, CancellationToken ct)
+    {
         using var doc = JsonDocument.Parse(primary);
         var root = Navigate(doc.RootElement, mapping.RowsPath);
         if (root is not { } records) return;
@@ -88,16 +123,16 @@ public sealed class DataMappingIngestionService
         {
             var row = new string?[columns.Count];
             row[0] = now;
-            row[1] = run.Id.ToString();
+            row[1] = runId.ToString();
             for (var i = 0; i < mapping.Fields.Count; i++)
                 row[i + 2] = ValueText(Navigate(record, mapping.Fields[i].SourcePath));
             rows.Add(row);
         }
         if (rows.Count == 0) return;
 
-        await _store.AppendReadOnlyRowsAsync(run.ProjectId, mapping.TargetTable, columns, rows, ct);
+        await _store.AppendReadOnlyRowsAsync(projectId, mapping.TargetTable, columns, rows, ct);
         _log?.LogInformation("Ingested {Count} row(s) from run {RunId} into '{Table}'.",
-            rows.Count, run.Id, mapping.TargetTable);
+            rows.Count, runId, mapping.TargetTable);
     }
 
     // The run's primary data: the reduce artifact (final aggregate) when present, else the lone

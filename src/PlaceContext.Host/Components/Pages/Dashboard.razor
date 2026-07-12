@@ -58,6 +58,24 @@
         </div>
     </div>
 
+    @* ── Pinned entities: one-click access to the business views of tagged data ────────── *@
+    @if (_entities.Count > 0)
+    {
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:12px; margin-bottom:24px">
+            @foreach (var e in _entities)
+            {
+                <a href="@($"/project/{e.ProjectId}/entity/{Uri.EscapeDataString(e.Name)}")"
+                   class="dccard dcdash-row" style="padding:13px 16px; border-radius:8px; text-decoration:none; color:var(--text); display:block; border-left:2px solid var(--brand-2)">
+                    <div style="display:flex; align-items:baseline; justify-content:space-between; gap:8px">
+                        <span style="font-size:13.5px; font-weight:600">@e.Name</span>
+                        <span style="font-family:'IBM Plex Mono',monospace; font-size:16px; color:var(--brand-2)">@EntityCount(e)</span>
+                    </div>
+                    <div style="font-size:10.5px; color:var(--text-3); margin-top:3px; font-family:'IBM Plex Mono',monospace">@e.TableName</div>
+                </a>
+            }
+        </div>
+    }
+
     @* ── Charts (read-only copies from the current project's Analytics) ───────────── *@
     @if (SqlCharts() is { Count: > 0 } sqlCharts)
     {
@@ -145,6 +163,12 @@
     private bool _refreshing;
 
     private IReadOnlyList<ProjectChartView> _charts = Array.Empty<ProjectChartView>();
+    private IReadOnlyList<DataEntityView> _entities = Array.Empty<DataEntityView>();
+    private IReadOnlyList<PlaceContext.Application.Ports.ProjectTableInfo> _entityTables = Array.Empty<PlaceContext.Application.Ports.ProjectTableInfo>();
+
+    private string EntityCount(DataEntityView e)
+        => _entityTables.FirstOrDefault(t => string.Equals(t.Name, e.TableName, StringComparison.OrdinalIgnoreCase))
+            is { } t ? t.RowEstimate.ToString("N0") : "—";
     private readonly Dictionary<string, DateTimeOffset> _rendered = new();
 
     protected override async Task OnInitializedAsync()
@@ -194,6 +218,13 @@
         if (Ui.CurrentProjectId is { } chartPid)
         {
             try { _charts = await Svc.ListProjectChartsAsync(chartPid); } catch { }
+            try
+            {
+                _entities = await Svc.ListDataEntitiesAsync(chartPid);
+                if (_entities.Count > 0)
+                    _entityTables = await Svc.ListProjectDataTablesAsync(chartPid);
+            }
+            catch { }
         }
 
         var dayAgo = DateTimeOffset.UtcNow.AddHours(-24);

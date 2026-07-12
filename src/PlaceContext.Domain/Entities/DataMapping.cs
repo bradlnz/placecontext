@@ -16,6 +16,7 @@ public sealed class DataMapping : AggregateRoot
         Guid id,
         Guid projectId,
         Guid jobId,
+        string sourceKind,
         string targetTable,
         string? rowsPath,
         IReadOnlyList<DataFieldMapping> fields,
@@ -26,6 +27,7 @@ public sealed class DataMapping : AggregateRoot
         Id = id;
         ProjectId = projectId;
         JobId = jobId;
+        SourceKind = sourceKind;
         TargetTable = targetTable;
         RowsPath = rowsPath;
         Fields = fields;
@@ -37,8 +39,11 @@ public sealed class DataMapping : AggregateRoot
     public Guid Id { get; }
     public Guid ProjectId { get; }
 
-    /// <summary>The source job whose run results feed this mapping.</summary>
+    /// <summary>The source job OR chain whose results feed this mapping (see <see cref="SourceKind"/>).</summary>
     public Guid JobId { get; }
+
+    /// <summary>"job" (per-run primary artifact) or "chain" (the pipeline's final output).</summary>
+    public string SourceKind { get; }
 
     /// <summary>The project-database table rows are appended to (created on first ingest).</summary>
     public string TargetTable { get; private set; }
@@ -67,14 +72,17 @@ public sealed class DataMapping : AggregateRoot
         string? rowsPath,
         IReadOnlyList<DataFieldMapping> fields,
         DateTimeOffset createdAt,
-        bool enabled = true)
+        bool enabled = true,
+        string sourceKind = "job")
     {
+        if (sourceKind is not ("job" or "chain"))
+            throw new ArgumentException("SourceKind must be 'job' or 'chain'.", nameof(sourceKind));
         if (projectId == Guid.Empty)
             throw new ArgumentException("ProjectId must not be empty.", nameof(projectId));
         if (jobId == Guid.Empty)
             throw new ArgumentException("JobId must not be empty.", nameof(jobId));
         Validate(targetTable, fields);
-        return new DataMapping(Guid.NewGuid(), projectId, jobId, targetTable.Trim(),
+        return new DataMapping(Guid.NewGuid(), projectId, jobId, sourceKind, targetTable.Trim(),
             Normalize(rowsPath), fields, enabled, createdAt, createdAt);
     }
 
@@ -83,13 +91,14 @@ public sealed class DataMapping : AggregateRoot
         Guid id,
         Guid projectId,
         Guid jobId,
+        string sourceKind,
         string targetTable,
         string? rowsPath,
         IReadOnlyList<DataFieldMapping> fields,
         bool enabled,
         DateTimeOffset createdAt,
         DateTimeOffset updatedAt)
-        => new(id, projectId, jobId, targetTable, Normalize(rowsPath), fields, enabled, createdAt, updatedAt);
+        => new(id, projectId, jobId, sourceKind, targetTable, Normalize(rowsPath), fields, enabled, createdAt, updatedAt);
 
     /// <summary>Updates the mapping's target and fields. Validates the same invariants as Create.</summary>
     public void Update(string targetTable, string? rowsPath, IReadOnlyList<DataFieldMapping> fields,

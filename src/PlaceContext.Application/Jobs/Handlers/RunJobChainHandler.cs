@@ -24,8 +24,11 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
     private readonly IDispatcher _dispatcher;
 
     public RunJobChainHandler(IJobChainRepository chains, IJobRepository jobs, IChainRunRepository runs,
-        IUnitOfWork uow, IClock clock, IDispatcher dispatcher)
+        IUnitOfWork uow, IClock clock, IDispatcher dispatcher,
+        // Optional so unit tests construct the handler unchanged; DI always supplies it.
+        DataMappingIngestionService? dataMappings = null)
     {
+        _dataMappings = dataMappings;
         _chains = chains;
         _jobs = jobs;
         _runs = runs;
@@ -33,6 +36,8 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
         _clock = clock;
         _dispatcher = dispatcher;
     }
+
+    private readonly DataMappingIngestionService? _dataMappings;
 
     public async Task<ChainRunView> HandleAsync(RunJobChainCommand command, CancellationToken ct = default)
     {
@@ -85,6 +90,14 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
 
         chainRun.Complete(status, payload, _clock.UtcNow);
         await SaveProgressAsync(chainRun, ct);
+
+        // The data map's chain edges: the pipeline's final output flows into its mapped tables.
+        // Best-effort — ingestion must never fail the chain.
+        if (_dataMappings is not null)
+        {
+            try { await _dataMappings.IngestChainOutputAsync(chain.Id, chainRun.Id, chain.ProjectId, payload, ct); }
+            catch { /* isolated inside the service too */ }
+        }
 
         return ChainRunMapper.ToView(chainRun);
     }

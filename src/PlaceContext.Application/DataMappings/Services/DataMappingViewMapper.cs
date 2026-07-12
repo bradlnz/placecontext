@@ -10,6 +10,7 @@ internal static class DataMappingViewMapper
         ProjectId: m.ProjectId,
         JobId: m.JobId,
         JobName: jobName,
+        SourceKind: m.SourceKind,
         TargetTable: m.TargetTable,
         RowsPath: m.RowsPath,
         Fields: m.Fields.Select(f => new DataFieldDto(f.SourcePath, f.Column, f.Type)).ToList(),

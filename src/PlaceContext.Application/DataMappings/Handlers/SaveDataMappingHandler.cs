@@ -11,23 +11,41 @@ public sealed class SaveDataMappingHandler : ICommandHandler<SaveDataMappingComm
 {
     private readonly IDataMappingRepository _mappings;
     private readonly IJobRepository _jobs;
+    private readonly IJobChainRepository _chains;
     private readonly IUnitOfWork _uow;
     private readonly IClock _clock;
 
-    public SaveDataMappingHandler(IDataMappingRepository mappings, IJobRepository jobs, IUnitOfWork uow, IClock clock)
+    public SaveDataMappingHandler(IDataMappingRepository mappings, IJobRepository jobs,
+        IJobChainRepository chains, IUnitOfWork uow, IClock clock)
     {
         _mappings = mappings;
         _jobs = jobs;
+        _chains = chains;
         _uow = uow;
         _clock = clock;
     }
 
     public async Task<DataMappingView> HandleAsync(SaveDataMappingCommand command, CancellationToken ct = default)
     {
-        var job = await _jobs.GetByIdAsync(command.JobId, ct)
-            ?? throw new InvalidOperationException($"Job {command.JobId} not found.");
-        if (job.ProjectId != command.ProjectId)
-            throw new InvalidOperationException("The mapping's job must belong to the same project.");
+        // The source is a job's runs or a chain's final output — either way it must exist in
+        // this project.
+        string sourceName;
+        if (command.SourceKind == "chain")
+        {
+            var chain = await _chains.GetByIdAsync(command.JobId, ct)
+                ?? throw new InvalidOperationException($"Chain {command.JobId} not found.");
+            if (chain.ProjectId != command.ProjectId)
+                throw new InvalidOperationException("The mapping's chain must belong to the same project.");
+            sourceName = chain.Name;
+        }
+        else
+        {
+            var job = await _jobs.GetByIdAsync(command.JobId, ct)
+                ?? throw new InvalidOperationException($"Job {command.JobId} not found.");
+            if (job.ProjectId != command.ProjectId)
+                throw new InvalidOperationException("The mapping's job must belong to the same project.");
+            sourceName = job.Name;
+        }
 
         var fields = command.Fields
             .Select(f => new DataFieldMapping(f.SourcePath.Trim(), f.Column.Trim(), f.Type.Trim()).ThrowIfInvalid())
@@ -44,11 +62,11 @@ public sealed class SaveDataMappingHandler : ICommandHandler<SaveDataMappingComm
         else
         {
             mapping = DataMapping.Create(command.ProjectId, command.JobId, command.TargetTable,
-                command.RowsPath, fields, _clock.UtcNow, command.Enabled);
+                command.RowsPath, fields, _clock.UtcNow, command.Enabled, command.SourceKind);
             await _mappings.AddAsync(mapping, ct);
         }
 
         await _uow.SaveChangesAsync(ct);
-        return DataMappingViewMapper.ToView(mapping, job.Name);
+        return DataMappingViewMapper.ToView(mapping, sourceName);
     }
 }

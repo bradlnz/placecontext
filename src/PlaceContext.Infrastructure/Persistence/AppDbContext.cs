@@ -235,6 +235,7 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
             e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
             e.Property(x => x.FieldsJson).HasDefaultValue("[]");
             e.Property(x => x.Enabled).HasDefaultValue(true);
+            e.Property(x => x.SourceKind).HasDefaultValue("job");
         });
 
         b.Entity<SmsMessageRow>(e =>

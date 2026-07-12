@@ -47,7 +47,7 @@ public sealed class EfDataMappingRepository : IDataMappingRepository
 
     public async Task<IReadOnlyList<DataMapping>> ListForJobAsync(Guid jobId, CancellationToken ct = default)
         => (await _db.DataMappings.AsNoTracking()
-            .Where(m => m.JobId == jobId)
+            .Where(m => m.JobId == jobId) // job OR chain — the id spaces never collide
             .OrderBy(m => m.CreatedAt)
             .ToListAsync(ct)).Select(ToDomain).ToList();
 
@@ -56,6 +56,7 @@ public sealed class EfDataMappingRepository : IDataMappingRepository
         Id = m.Id,
         ProjectId = m.ProjectId,
         JobId = m.JobId,
+        SourceKind = m.SourceKind,
         TargetTable = m.TargetTable,
         RowsPath = m.RowsPath,
         FieldsJson = SerializeFields(m.Fields),
@@ -69,7 +70,7 @@ public sealed class EfDataMappingRepository : IDataMappingRepository
         var fields = (JsonSerializer.Deserialize<List<FieldJson>>(row.FieldsJson, Json) ?? new List<FieldJson>())
             .Select(f => new DataFieldMapping(f.SourcePath, f.Column, f.Type))
             .ToList();
-        return DataMapping.Rehydrate(row.Id, row.ProjectId, row.JobId, row.TargetTable, row.RowsPath,
+        return DataMapping.Rehydrate(row.Id, row.ProjectId, row.JobId, row.SourceKind, row.TargetTable, row.RowsPath,
             fields, row.Enabled, row.CreatedAt, row.UpdatedAt);
     }
 
