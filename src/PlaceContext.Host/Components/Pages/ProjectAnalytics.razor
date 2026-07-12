@@ -87,7 +87,7 @@
                             }
                         </span>
                         <span style="flex:1"></span>
-                        <span style="font-size:10.5px; color:var(--text-3)">@chart.GeneratedAt.ToLocalTime().ToString("MM-dd HH:mm")</span>
+                        <span style="font-size:10.5px; color:var(--text-3)">@chart.GeneratedAt.ToWorkspaceTime().ToString("MM-dd HH:mm")</span>
                         <button class="dcbtn" style="padding:3px 10px; font-size:11px" @onclick="@(() => RefreshSqlAsync(chart))">↻ refresh</button>
                         <button class="dcbtn" style="padding:3px 10px; font-size:11px" @onclick="@(() => EditSql(chart))">edit</button>
                         <button class="dcbtn" style="padding:3px 10px; font-size:11px; color:var(--bad)" @onclick="@(() => DeleteSqlAsync(chart))">✕</button>
@@ -126,7 +126,7 @@
                     }
                     else if (chart is not null)
                     {
-                        <span style="font-size:10.5px; color:var(--text-3)">@chart.GeneratedAt.ToLocalTime().ToString("MM-dd HH:mm")</span>
+                        <span style="font-size:10.5px; color:var(--text-3)">@chart.GeneratedAt.ToWorkspaceTime().ToString("MM-dd HH:mm")</span>
                     }
                     <button class="dcbtn" style="padding:3px 10px; font-size:11px" disabled="@pending"
                             @onclick="@(() => ToggleRedraw(table.Name))">

@@ -1,0 +1,86 @@
+@page "/settings/locality"
+@layout PlaceContext.Host.Components.Layout.SettingsLayout
+@inject PlaceContext.Infrastructure.Tenancy.ITenantStore Tenants
+@inject PlaceContext.Application.Ports.ICurrentTenant Tenant
+@inject PortalUiState Ui
+@inject NavigationManager Nav
+
+<PageTitle>placecontext — Locality</PageTitle>
+
+<div style="padding:24px; max-width:640px">
+    <h2 style="font-size:18px; font-weight:600; margin:0 0 4px">Locality</h2>
+    <div style="font-size:12px; color:var(--text-3); margin-bottom:18px">
+        The workspace timezone drives everything time-shaped: cron schedules fire in it, and every
+        timestamp the portal shows is converted to it. Agents can also set it via the
+        <code>set_workspace_timezone</code> MCP tool.
+    </div>
+
+    <div class="dccard" style="padding:18px; display:flex; flex-direction:column; gap:12px">
+        <div class="dcfield" style="max-width:340px">
+            <label>Workspace timezone <span class="code" style="margin-left:4px">IANA</span></label>
+            <input class="dcinput" list="pc-tz" style="font-family:'IBM Plex Mono',monospace" @bind="_tz" />
+            <datalist id="pc-tz">
+                @foreach (var z in CommonZones)
+                {
+                    <option value="@z" />
+                }
+            </datalist>
+        </div>
+        <div style="font-size:12px; color:var(--text-2)">
+            Now in <span style="font-family:'IBM Plex Mono',monospace">@_tz</span>:
+            <span style="font-family:'IBM Plex Mono',monospace; color:var(--brand-2)">@PreviewNow()</span>
+        </div>
+        <div style="display:flex; gap:10px; align-items:center">
+            <button class="dcbtn primary" disabled="@_busy" @onclick="SaveAsync">@(_busy ? "Saving…" : "Save timezone")</button>
+            @if (_message is not null)
+            {
+                <span style="font-size:12px; color:var(--text-3)">@_message</span>
+            }
+        </div>
+        <div class="dchint">
+            Existing schedules keep their already-computed next fire time until they next run; new
+            and re-saved schedules use the new zone immediately.
+        </div>
+    </div>
+</div>
+
+@code {
+    private static readonly string[] CommonZones =
+    {
+        "UTC", "Australia/Brisbane", "Australia/Sydney", "Australia/Melbourne", "Australia/Perth",
+        "Pacific/Auckland", "Asia/Singapore", "Asia/Tokyo", "Europe/London", "Europe/Berlin",
+        "America/New_York", "America/Chicago", "America/Los_Angeles",
+    };
+
+    private string _tz = "UTC";
+    private bool _busy;
+    private string? _message;
+
+    protected override void OnInitialized()
+    {
+        Ui.Set("Locality", "workspace timezone — schedules and displayed times obey it");
+        _tz = Tenant.TimeZoneId;
+    }
+
+    private string PreviewNow()
+    {
+        try { return TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, TimeZoneInfo.FindSystemTimeZoneById(_tz)).ToString("ddd HH:mm"); }
+        catch { return "unknown timezone"; }
+    }
+
+    private async Task SaveAsync()
+    {
+        _busy = true;
+        _message = null;
+        try
+        {
+            _ = TimeZoneInfo.FindSystemTimeZoneById(_tz.Trim()); // throws on unknown ids
+            await Tenants.SetTimeZoneAsync(Tenant.TenantId, _tz.Trim());
+            _message = "Saved — reloading…";
+            Nav.NavigateTo("/settings/locality", forceLoad: true);
+        }
+        catch (TimeZoneNotFoundException) { _message = $"Unknown timezone id '{_tz}'."; }
+        catch (Exception ex) { _message = ex.Message; }
+        finally { _busy = false; }
+    }
+}

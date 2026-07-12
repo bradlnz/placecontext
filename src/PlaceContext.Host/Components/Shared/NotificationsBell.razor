@@ -91,10 +91,10 @@
 
     private static string StatusLine(PortalOperation op) => op.Status switch
     {
-        PortalOperationStatus.Queued => $"queued {op.QueuedAt.ToLocalTime():HH:mm:ss}",
+        PortalOperationStatus.Queued => $"queued {op.QueuedAt.ToWorkspaceTime():HH:mm:ss}",
         PortalOperationStatus.Running => $"running for {Elapsed(op.StartedAt ?? op.QueuedAt)}",
-        PortalOperationStatus.Succeeded => $"finished {op.FinishedAt?.ToLocalTime():HH:mm:ss} in {Duration(op)}",
-        PortalOperationStatus.Failed => $"failed {op.FinishedAt?.ToLocalTime():HH:mm:ss} after {Duration(op)}",
+        PortalOperationStatus.Succeeded => $"finished {op.FinishedAt?.ToWorkspaceTime():HH:mm:ss} in {Duration(op)}",
+        PortalOperationStatus.Failed => $"failed {op.FinishedAt?.ToWorkspaceTime():HH:mm:ss} after {Duration(op)}",
         _ => "",
     };
 
