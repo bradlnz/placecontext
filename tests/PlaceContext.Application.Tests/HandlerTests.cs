@@ -15,7 +15,7 @@ public class HandlerTests
 
     private static RiskAssessmentService Risk(IClock clock, IRiskAssessmentRepository assessments) => new(
         new InMemoryActivityLogRepository(), assessments, new FakeDecisionTreeProvider(),
-        new FakeCodeMetricsProbe(), new FakeRiskCalculatorFactory(), new RiskScoreCalculator(), clock);
+        new FakeCodeMetricsProbe(), new TechnicalRiskScorer(), new ProcessRiskScorer(), new RiskScoreCalculator(), clock);
 
     [Fact]
     public async Task CreateProject_registers_a_new_project_and_assesses_its_risk()

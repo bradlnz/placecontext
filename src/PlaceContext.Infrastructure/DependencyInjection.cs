@@ -1,6 +1,5 @@
 using PlaceContext.Application.Ports;
 using PlaceContext.Domain.Repositories;
-using PlaceContext.Infrastructure.Risk;
 using PlaceContext.Infrastructure.Git;
 using PlaceContext.Infrastructure.Metrics;
 using PlaceContext.Infrastructure.Persistence;
@@ -80,11 +79,6 @@ public static class DependencyInjection
             services.AddSingleton<ILlmGateway, Llm.AnthropicLlmGateway>();
         else
             services.AddSingleton<ILlmGateway, Llm.NullLlmGateway>();
-
-        // Risk strategies behind a factory (domain scorers come from AddApplication()).
-        services.AddScoped<IRiskCalculator, TechnicalRiskCalculator>();
-        services.AddScoped<IRiskCalculator, ProcessRiskCalculator>();
-        services.AddScoped<IRiskCalculatorFactory, RiskCalculatorFactory>();
 
         // Generic workload runner. In-cluster (the Host pod has KUBERNETES_SERVICE_HOST) we run jobs as
         // Kubernetes Jobs via the API + the Host's ServiceAccount/RBAC; otherwise (local dev) Docker.

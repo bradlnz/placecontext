@@ -12,7 +12,7 @@ public class OnboardTests
 
     private static RiskAssessmentService Risk(IClock clock) => new(
         new InMemoryActivityLogRepository(), new InMemoryRiskAssessmentRepository(), new FakeDecisionTreeProvider(),
-        new FakeCodeMetricsProbe(), new FakeRiskCalculatorFactory(), new RiskScoreCalculator(), clock);
+        new FakeCodeMetricsProbe(), new TechnicalRiskScorer(), new ProcessRiskScorer(), new RiskScoreCalculator(), clock);
 
     private static (OnboardHandler handler, InMemoryProjectRepository projects, InMemoryActivityLogRepository ledgers, FakeRepoFiles files)
         Build(FakeGitPort git, FakeRepoFiles files)

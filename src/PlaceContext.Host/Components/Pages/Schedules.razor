@@ -50,10 +50,56 @@
         </div>
         @if (_newKind == "Schedule")
         {
-            <div class="dcfield" style="min-width:150px">
-                <label>Cron <span class="code" style="margin-left:4px">@Tenant.TimeZoneId</span></label>
-                <input class="dcinput" style="font-family:'IBM Plex Mono',monospace" @bind="_newCron" placeholder="0 0 * * *" />
-            </div>
+            @if (_advancedCron)
+            {
+                <div class="dcfield" style="min-width:170px">
+                    <label>Cron <span class="code" style="margin-left:4px">@Tenant.TimeZoneId</span></label>
+                    <input class="dcinput" style="font-family:'IBM Plex Mono',monospace" @bind="_newCron" placeholder="0 0 * * *" />
+                </div>
+            }
+            else
+            {
+                <div class="dcfield" style="min-width:110px">
+                    <label>Every</label>
+                    <select class="dcinput" @bind="_pickFrequency">
+                        <option value="day">day</option>
+                        <option value="weekday">weekday</option>
+                        <option value="week">week</option>
+                        <option value="month">month</option>
+                        <option value="hour">hour</option>
+                    </select>
+                </div>
+                @if (_pickFrequency == "week")
+                {
+                    <div class="dcfield" style="min-width:110px">
+                        <label>On</label>
+                        <select class="dcinput" @bind="_pickWeekday">
+                            <option value="1">Monday</option><option value="2">Tuesday</option>
+                            <option value="3">Wednesday</option><option value="4">Thursday</option>
+                            <option value="5">Friday</option><option value="6">Saturday</option>
+                            <option value="0">Sunday</option>
+                        </select>
+                    </div>
+                }
+                @if (_pickFrequency == "month")
+                {
+                    <div class="dcfield" style="min-width:80px">
+                        <label>Day</label>
+                        <input class="dcinput" type="number" min="1" max="28" @bind="_pickDay" />
+                    </div>
+                }
+                @if (_pickFrequency != "hour")
+                {
+                    <div class="dcfield" style="min-width:110px">
+                        <label>At <span class="code" style="margin-left:4px">@Tenant.TimeZoneId</span></label>
+                        <input class="dcinput" type="time" @bind="_pickTime" />
+                    </div>
+                }
+            }
+            <button type="button" class="dcbtn" style="padding:4px 10px; font-size:11px; align-self:flex-end; margin-bottom:2px"
+                    @onclick="@(() => _advancedCron = !_advancedCron)">
+                @(_advancedCron ? "◂ simple" : "cron ▸")
+            </button>
         }
         else
         {
@@ -125,6 +171,22 @@
     private string _newCron = "0 0 * * *";
     private string _newEvent = "";
 
+    // Simple picker (the default): frequency + time compose the cron; advanced users type it raw.
+    private bool _advancedCron;
+    private string _pickFrequency = "day";
+    private string _pickWeekday = "1";
+    private int _pickDay = 1;
+    private TimeOnly _pickTime = new(9, 0);
+
+    private string ComposedCron() => _pickFrequency switch
+    {
+        "hour" => "0 * * * *",
+        "weekday" => $"{_pickTime.Minute} {_pickTime.Hour} * * 1-5",
+        "week" => $"{_pickTime.Minute} {_pickTime.Hour} * * {_pickWeekday}",
+        "month" => $"{_pickTime.Minute} {_pickTime.Hour} {Math.Clamp(_pickDay, 1, 28)} * *",
+        _ => $"{_pickTime.Minute} {_pickTime.Hour} * * *",
+    };
+
     protected override async Task OnParametersSetAsync()
     {
         try
@@ -148,7 +210,7 @@
         _busy = true;
         try
         {
-            var cron = _newKind == "Schedule" ? _newCron : null;
+            var cron = _newKind == "Schedule" ? (_advancedCron ? _newCron : ComposedCron()) : null;
             var evt = _newKind == "Event" ? _newEvent : null;
             await Svc.CreateTriggerAsync(new CreateTriggerCommand(_newJobId, _newName.Trim(), _newKind, cron, evt));
             _triggers = await Svc.ListTriggersAsync(ProjectId);

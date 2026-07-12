@@ -22,19 +22,22 @@ public sealed class RiskAssessmentService
     private readonly IRiskAssessmentRepository _assessments;
     private readonly IDecisionTreeProvider _tree;
     private readonly ICodeMetricsProbe _codeMetrics;
-    private readonly IRiskCalculatorFactory _factory;
+    private readonly TechnicalRiskScorer _technical;
+    private readonly ProcessRiskScorer _process;
     private readonly RiskScoreCalculator _calculator;
     private readonly IClock _clock;
 
     public RiskAssessmentService(
         IActivityLogRepository ledgers, IRiskAssessmentRepository assessments, IDecisionTreeProvider tree,
-        ICodeMetricsProbe codeMetrics, IRiskCalculatorFactory factory, RiskScoreCalculator calculator, IClock clock)
+        ICodeMetricsProbe codeMetrics, TechnicalRiskScorer technical, ProcessRiskScorer process,
+        RiskScoreCalculator calculator, IClock clock)
     {
         _ledgers = ledgers;
         _assessments = assessments;
         _tree = tree;
         _codeMetrics = codeMetrics;
-        _factory = factory;
+        _technical = technical;
+        _process = process;
         _calculator = calculator;
         _clock = clock;
     }
@@ -51,9 +54,14 @@ public sealed class RiskAssessmentService
         var codeMetrics = await _codeMetrics.ProbeAsync(project.Path, ct);
         var ledger = await _ledgers.GetForProjectAsync(project.Id, ct);
 
-        var inputs = new RiskInputs(graphMetrics, codeMetrics, godNodes, ledger, ReTouchWindow);
-
-        var signals = _factory.All().SelectMany(c => c.Compute(inputs)).ToList();
+        // The pure domain scorers, called directly (the strategy-behind-factory indirection is gone):
+        // technical risk from graph+code metrics, process risk by replaying the recent change window.
+        var signals = new List<RiskSignal>(_technical.Score(graphMetrics, codeMetrics));
+        foreach (var change in ledger.RecentWindow(ReTouchWindow))
+        {
+            var reTouched = ledger.TouchesWithin(change.TouchedNodes, ReTouchWindow, change.Sequence);
+            signals.AddRange(_process.Score(change, godNodes, reTouched));
+        }
         var technical = _calculator.Calculate(signals.Where(s => s.Kind == RiskKind.Technical));
         var process = _calculator.Calculate(signals.Where(s => s.Kind == RiskKind.Process));
 
