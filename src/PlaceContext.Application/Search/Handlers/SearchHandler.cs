@@ -51,9 +51,9 @@ public sealed class SearchHandler : IQueryHandler<SearchQuery, SearchResultsView
         if (_artifacts is not null)
         {
             foreach (var a in (await _artifacts.ListRecentAsync(300, ct))
-                     .Where(a => Match(a.Title) || Match(a.Kind.ToString())).Take(8))
+                     .Where(a => Match(a.Title) || Match(a.Kind.ToString()) || Match(a.ContentType)).Take(8))
                 hits.Add(new SearchHit("artifact", a.ProjectId, a.Title,
-                    $"{a.Kind} · {a.CreatedAt.ToLocalTime():MMM d HH:mm}", $"/runs/{a.RunId}/artifacts/{a.Id}"));
+                    $"{a.Kind} · {a.ContentType}", $"/artifacts?artifact={a.Id}"));
         }
 
         foreach (var p in await _projects.ListAsync(ct))

@@ -108,6 +108,7 @@ public static class DependencyInjection
         services.AddScoped<IDataMappingRepository, EfDataMappingRepository>();
         services.AddScoped<IDataEntityRepository, EfDataEntityRepository>();
         services.AddScoped<Application.Features.IEntityTagStore, Persistence.EfEntityTagStore>();
+        services.AddSingleton<IDocumentTextExtractor, Documents.PdfPigTextExtractor>();
 
         // Trigger + event repositories.
         services.AddScoped<IJobTriggerRepository, EfJobTriggerRepository>();

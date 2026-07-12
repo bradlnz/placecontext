@@ -33,6 +33,7 @@ used under the license noted. Version numbers track the manifests
 | [k3s](https://k3s.io/) / [k3d](https://k3d.io/) | Apache-2.0 |
 | [MinIO](https://min.io/) (object store, run unmodified as a service) | AGPL-3.0 |
 | [Docker Engine](https://www.docker.com/) / [kubectl](https://kubernetes.io/) | Apache-2.0 |
+| [PdfPig](https://github.com/UglyToad/PdfPig) (PDF text extraction for entity tagging) | Apache-2.0 |
 | [Tailscale](https://tailscale.com/) client (optional mesh networking) | BSD-3-Clause |
 
 ## Frontend assets

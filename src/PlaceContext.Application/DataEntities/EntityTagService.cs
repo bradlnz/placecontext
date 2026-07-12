@@ -50,14 +50,16 @@ public sealed class EntityTagService
     private readonly IDataEntityRepository _entities;
     private readonly IProjectDataStore _store;
     private readonly IEntityTagStore _tags;
+    private readonly IDocumentTextExtractor? _docText;
     private readonly ILogger<EntityTagService>? _log;
 
     public EntityTagService(IDataEntityRepository entities, IProjectDataStore store, IEntityTagStore tags,
-        ILogger<EntityTagService>? log = null)
+        IDocumentTextExtractor? docText = null, ILogger<EntityTagService>? log = null)
     {
         _entities = entities;
         _store = store;
         _tags = tags;
+        _docText = docText;
         _log = log;
     }
 
@@ -66,7 +68,7 @@ public sealed class EntityTagService
         try
         {
             var artifactValues = CollectStrings(run);
-            var corpus = BuildDocumentCorpus(run);
+            var corpus = BuildDocumentCorpus(run, _docText);
             if (artifactValues.Count == 0 && corpus.Length == 0) return;
 
             var entities = await _entities.ListForProjectAsync(run.ProjectId, ct);
@@ -122,7 +124,7 @@ public sealed class EntityTagService
 
     // Text pulled out of the run's DOCUMENT artifacts — HTML with tags stripped, PDFs via their
     // content streams — so documents participate in tagging, not just the JSON output.
-    private static string BuildDocumentCorpus(JobRun run)
+    private static string BuildDocumentCorpus(JobRun run, IDocumentTextExtractor? docText)
     {
         var sb = new System.Text.StringBuilder();
         foreach (var artifact in run.ShardResults.SelectMany(s => s.Artifacts)
@@ -139,7 +141,10 @@ public sealed class EntityTagService
                 }
                 else if (name.EndsWith(".pdf"))
                 {
-                    sb.Append('\n').Append(PdfText(artifact.GetBytes()));
+                    // The real extractor decodes compressed/subsetted PDFs (reportlab et al.);
+                    // the byte-level sniff below only covers uncompressed literals.
+                    var bytes = artifact.GetBytes();
+                    sb.Append('\n').Append(docText?.ExtractText(bytes, artifact.Name) ?? PdfText(bytes));
                 }
             }
             catch { /* one unreadable document never blocks the tag pass */ }
