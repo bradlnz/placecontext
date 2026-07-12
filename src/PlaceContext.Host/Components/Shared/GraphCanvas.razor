@@ -33,16 +33,37 @@
                 @* The note behind the node — decision rationale, a change's why, or run-output text. *@
                 <div style="margin-top:10px; padding:9px 11px; background:var(--bg); border:1px solid var(--border); border-radius:7px; font-size:11.5px; color:var(--text-2); line-height:1.55; white-space:pre-wrap; word-break:break-word; max-height:160px; overflow-y:auto">@sel.Content</div>
             }
-            @if (_selectedNeighbors.Count > 0)
+            @if (_selectedNeighbors.Any(x => x.Node.Kind == "good"))
+            {
+                @* Related artifacts lead — highlighted in the canvas, openable from here. *@
+                <div style="font-size:10.5px; color:var(--text-3); margin:10px 0 4px; text-transform:uppercase; letter-spacing:.5px">Related artifacts</div>
+                <div style="display:flex; flex-direction:column; gap:4px">
+                    @foreach (var (node, _) in _selectedNeighbors.Where(x => x.Node.Kind == "good"))
+                    {
+                        <a href="@(NodeUrl?.Invoke(node) ?? "#")"
+                           style="display:flex; align-items:center; gap:8px; padding:5px 9px; border:1px solid var(--good); border-radius:7px; background:var(--good-bg); font-size:11.5px; font-family:'IBM Plex Mono',monospace; color:var(--good); text-decoration:none">
+                            <span style="flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">@ShortLabel(node.Label)</span>
+                            <span style="flex:none">↗</span>
+                        </a>
+                    }
+                </div>
+            }
+            @if (_selectedNeighbors.Any(x => x.Node.Kind != "good"))
             {
                 <div style="font-size:10.5px; color:var(--text-3); margin:10px 0 4px; text-transform:uppercase; letter-spacing:.5px">Connected to</div>
                 <div style="display:flex; flex-direction:column; gap:3px">
-                    @foreach (var (node, ambiguous) in _selectedNeighbors)
+                    @foreach (var (node, ambiguous) in _selectedNeighbors.Where(x => x.Node.Kind != "good"))
                     {
-                        <button style="border:none; background:none; padding:2px 0; cursor:pointer; text-align:left; font-size:11.5px; font-family:'IBM Plex Mono',monospace; color:var(--brand-2); word-break:break-all"
-                                title="@node.Id" @onclick="@(() => SelectAsync(node.Id))">
-                            @ShortLabel(node.Label)@(ambiguous ? " ⇢" : "")
-                        </button>
+                        <div style="display:flex; align-items:center; gap:6px">
+                            <button style="border:none; background:none; padding:2px 0; cursor:pointer; text-align:left; font-size:11.5px; font-family:'IBM Plex Mono',monospace; color:var(--brand-2); word-break:break-all; flex:1; min-width:0"
+                                    title="@node.Id" @onclick="@(() => SelectAsync(node.Id))">
+                                @ShortLabel(node.Label)@(ambiguous ? " ⇢" : "")
+                            </button>
+                            @if (NodeUrl?.Invoke(node) is { Length: > 0 } nurl)
+                            {
+                                <a href="@nurl" style="flex:none; font-size:11px; color:var(--text-3); text-decoration:none" title="Open">↗</a>
+                            }
+                        </div>
                     }
                 </div>
                 @if (_selectedNeighbors.Any(n => n.Ambiguous))
@@ -101,7 +122,8 @@
                 .Where(x => x.Node is not null)
                 .Select(x => (x.Node!, x.Ambiguous))
                 .DistinctBy(x => x.Item1.Id)
-                .OrderByDescending(x => x.Item1.Degree)
+                .OrderByDescending(x => x.Item1.Kind == "good")
+                .ThenByDescending(x => x.Item1.Degree)
                 .ToList();
         return InvokeAsync(StateHasChanged);
     }

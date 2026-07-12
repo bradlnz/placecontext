@@ -46,11 +46,13 @@ public class SearchTests
     }
 
     [Fact]
-    public async Task Stripe_matches_both_context_and_decision()
+    public async Task Context_documents_are_not_searched()
     {
+        // Context markdown is agent-facing prose — search answers with data nodes, decisions,
+        // changes, and artifacts instead.
         var results = await (await SeedAsync()).HandleAsync(new SearchQuery("Stripe"));
         var kinds = results.Hits.Select(h => h.Kind).ToHashSet();
-        Assert.Contains("context", kinds);
+        Assert.DoesNotContain("context", kinds);
         Assert.Contains("decision", kinds);
     }
 

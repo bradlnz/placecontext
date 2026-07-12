@@ -48,6 +48,14 @@
                 <div class="dccard" style="border-radius:10px; overflow:hidden; margin-bottom:14px">
                     <GraphCanvas Graph="_brainGraph" Height="520" NodeUrl="NodeUrl" />
                 </div>
+                @if (_focusKey is not null)
+                {
+                    <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px; font-size:12px">
+                        <span style="padding:3px 10px; border-radius:99px; background:var(--brand-bg); color:var(--brand-2); font-family:'IBM Plex Mono',monospace">focused: @_focusKey</span>
+                        <button class="dcbtn" style="padding:3px 10px; font-size:11px"
+                                @onclick="@(async () => { _focusKey = null; await BuildSectionGraphAsync(); })">show whole graph</button>
+                    </div>
+                }
                 <div style="font-size:11px; color:var(--text-3); display:flex; gap:16px; margin-bottom:14px">
                     <span><span style="color:var(--brand-2)">●</span> @_entity.Name records</span>
                     <span><span style="color:var(--human)">●</span> related records</span>
@@ -167,11 +175,15 @@
                     <div style="font-size:11px; font-weight:600; letter-spacing:.5px; color:var(--text-3); text-transform:uppercase; margin-bottom:6px">
                         Artifacts <span style="font-weight:400; text-transform:none">from runs tagged with this record</span>
                     </div>
-                    @foreach (var a in _artifacts)
+                    @foreach (var (a, versions) in _artifacts)
                     {
                         <a href="@($"/artifacts?artifact={a.Id}")"
                            style="display:flex; align-items:center; gap:10px; padding:8px 12px; margin-bottom:5px; border:1px solid var(--border); border-radius:8px; background:var(--card-2); font-size:12px; color:var(--text); text-decoration:none">
                             <span style="font-family:'IBM Plex Mono',monospace; flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis">@a.Title</span>
+                            @if (versions > 1)
+                            {
+                                <span title="@versions versions — this is the latest" style="font-size:10px; padding:1px 6px; border-radius:4px; background:var(--brand-bg); color:var(--brand-2); font-family:'IBM Plex Mono',monospace">v@(versions)</span>
+                            }
                             <span style="font-size:10.5px; color:var(--text-3)">@a.Kind · @a.CreatedAt.ToWorkspaceTime().ToString("MMM d · HH:mm")</span>
                         </a>
                     }
@@ -221,6 +233,7 @@
     private string _filter = "";
     private string? _error;
     private string _viewTab = "records";
+    private string? _focusKey;   // set by search deep links: the graph renders only this record's neighbourhood
 
     protected override async Task OnParametersSetAsync()
     {
@@ -235,18 +248,15 @@
             // Read through the project's isolated role; identifier comes from the registry, quoted.
             _rows = await Svc.ExecuteProjectDataAsync(ProjectId, $"SELECT * FROM \"{_entity.TableName}\" LIMIT 500");
 
-            // Search deep link: /entity/{name}?record={key} lands on that record, graph and all.
+            // Search deep link: /entity/{name}?record={key} lands on the GRAPH, scoped to just
+            // that record's neighbourhood — the search result IS the node.
             var query = System.Web.HttpUtility.ParseQueryString(new Uri(Nav.Uri).Query);
-            if (query["record"] is { Length: > 0 } recordKey && _rows is not null)
+            if (query["record"] is { Length: > 0 } recordKey
+                && _rows is not null
+                && _rows.Rows.Any(r => r.Any(v => string.Equals(v, recordKey, StringComparison.OrdinalIgnoreCase))))
             {
-                var match = _rows.Rows.FirstOrDefault(r => r.Any(v => string.Equals(v, recordKey, StringComparison.OrdinalIgnoreCase)));
-                if (match is not null)
-                {
-                    await BuildInsightsAsync();
-                    await BuildSectionGraphAsync();
-                    await OpenRecordAsync(match);
-                    return;
-                }
+                _focusKey = recordKey;
+                _viewTab = "graph";
             }
             await BuildInsightsAsync();
             await BuildSectionGraphAsync();
@@ -291,7 +301,7 @@
                 ? _rows.Rows
                 : _rows.Rows.Where(r => r.Any(v => v?.Contains(_filter, StringComparison.OrdinalIgnoreCase) == true));
 
-    private readonly List<RunArtifactLinkView> _artifacts = new();
+    private readonly List<(RunArtifactLinkView Art, int Versions)> _artifacts = new();
     private readonly List<Guid> _linkedRuns = new();
     private readonly Dictionary<Guid, List<RunArtifactLinkView>> _runArtifacts = new();
     private bool _showGraph;
@@ -369,6 +379,7 @@
             catch { /* no job_run_data yet, or the value trips the query — links are best-effort */ }
         }
 
+        var collected = new List<RunArtifactLinkView>();
         foreach (var runId in runIds.Take(8))
         {
             _linkedRuns.Add(runId);
@@ -376,10 +387,16 @@
             {
                 var arts = (await Svc.ListRunArtifactsAsync(runId)).ToList();
                 _runArtifacts[runId] = arts;
-                _artifacts.AddRange(arts);
+                collected.AddRange(arts);
             }
             catch { _runArtifacts[runId] = new List<RunArtifactLinkView>(); }
         }
+        // Versioning: the same job re-running produces the same logical file — show only the
+        // newest per (kind, title), with the version count as its history.
+        _artifacts.AddRange(collected
+            .GroupBy(a => (a.Kind, a.Title))
+            .Select(g => (g.OrderByDescending(a => a.CreatedAt).First(), g.Count()))
+            .OrderByDescending(x => x.Item1.CreatedAt));
     }
 
     // ── Auto-insights: the intelligence layer over tagged data. Column types come from the
@@ -450,8 +467,12 @@
         {
             const int maxRecords = 12;
             var cols = _rows.Columns.ToList();
+            // A focused graph (from search) keeps only the matched record's neighbourhood.
+            var sourceRows = _focusKey is { } focus
+                ? _rows.Rows.Where(r => r.Any(v => string.Equals(v, focus, StringComparison.OrdinalIgnoreCase))).ToList()
+                : _rows.Rows;
             var labelIdx = LabelCol() is { } lc ? Math.Max(0, cols.FindIndex(c => string.Equals(c, lc, StringComparison.OrdinalIgnoreCase))) : 0;
-            var records = _rows.Rows.Take(maxRecords)
+            var records = sourceRows.Take(maxRecords)
                 .Select(r => labelIdx < r.Count ? r[labelIdx] ?? "—" : "—").ToList();
 
             // Which key values identify each record (label + relation columns) — mirrors the tagger.
@@ -462,10 +483,10 @@
                 var ci = cols.FindIndex(c => string.Equals(c, rel.Column, StringComparison.OrdinalIgnoreCase));
                 if (ci >= 0) keyCols.Add(ci);
             }
-            for (var i = 0; i < Math.Min(maxRecords, _rows.Rows.Count); i++)
+            for (var i = 0; i < Math.Min(maxRecords, sourceRows.Count); i++)
             {
                 foreach (var ci in keyCols.Distinct())
-                    if (ci < _rows.Rows[i].Count && _rows.Rows[i][ci] is { Length: > 2 } v)
+                    if (ci < sourceRows[i].Count && sourceRows[i][ci] is { Length: > 2 } v)
                         keyToRecord.TryAdd(v, i);
             }
 
@@ -510,16 +531,25 @@
                 }
                 if (!runEdges.Contains((recIdx, ri))) runEdges.Add((recIdx, ri));
             }
-            var artNodes = new List<(int Run, RunArtifactLinkView Art)>();
+            // Versioning: the newest artifact per (kind, title) wins; its version count rides
+            // along so the graph shows one node per logical file, not one per run.
+            var allArts = new List<(int Run, RunArtifactLinkView Art)>();
             for (var ri = 0; ri < runNodes.Count; ri++)
             {
                 try
                 {
-                    foreach (var a in (await Svc.ListRunArtifactsAsync(runNodes[ri])).Take(3))
-                        if (artNodes.Count < 14) artNodes.Add((ri, a));
+                    foreach (var a in await Svc.ListRunArtifactsAsync(runNodes[ri]))
+                        allArts.Add((ri, a));
                 }
                 catch { }
             }
+            var artNodes = allArts
+                .GroupBy(x => (x.Art.Kind, x.Art.Title))
+                .Select(g => (g.OrderByDescending(x => x.Art.CreatedAt).First(), Versions: g.Count()))
+                .OrderByDescending(x => x.Item1.Art.CreatedAt)
+                .Take(14)
+                .Select(x => (x.Item1.Run, x.Item1.Art, x.Versions))
+                .ToList();
 
             _brainGraph = BuildBrain(records, relatedNodes, relEdges, runNodes, runEdges, artNodes);
         }
@@ -534,7 +564,7 @@
         List<(int Record, int Related)> relEdges,
         List<Guid> runs,
         List<(int Record, int Run)> runEdges,
-        List<(int Run, RunArtifactLinkView Art)> arts)
+        List<(int Run, RunArtifactLinkView Art, int Versions)> arts)
     {
         var nodes = new List<PlaceContext.Application.Dtos.GraphNodeView>();
         var links = new List<PlaceContext.Application.Dtos.GraphLinkView>();
@@ -565,8 +595,11 @@
         }
         for (var i = 0; i < arts.Count; i++)
         {
-            nodes.Add(new PlaceContext.Application.Dtos.GraphNodeView($"art:{i}", arts[i].Art.Title, 0, false,
-                Content: $"artifact · {arts[i].Art.Kind}", Kind: "good", Labeled: true));
+            nodes.Add(new PlaceContext.Application.Dtos.GraphNodeView($"art:{i}",
+                arts[i].Versions > 1 ? $"{arts[i].Art.Title} · v{arts[i].Versions}" : arts[i].Art.Title, 0, false,
+                Content: arts[i].Versions > 1
+                    ? $"artifact · {arts[i].Art.Kind} · latest of {arts[i].Versions} versions"
+                    : $"artifact · {arts[i].Art.Kind}", Kind: "good", Labeled: true));
             _nodeUrls[$"art:{i}"] = $"/artifacts?artifact={arts[i].Art.Id}";
         }
 

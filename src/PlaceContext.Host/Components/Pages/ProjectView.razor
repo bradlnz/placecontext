@@ -212,6 +212,95 @@ else
 
     private ProjectOverviewView? _overview;
     private GraphVizView? _graph;
+
+    // The dependency graph carries ALL the related data: on top of the knowledge graph, every
+    // entity joins as a hub with sampled records, entity↔entity relations, tagged runs, and the
+    // latest version of each artifact — one brain for the whole project.
+    private async Task<GraphVizView?> MergeDataGraphAsync(GraphVizView? graph)
+    {
+        try
+        {
+            var entities = await Svc.ListDataEntitiesAsync(Id);
+            if (entities.Count == 0) return graph;
+
+            var nodes = new List<GraphNodeView>(graph?.Nodes ?? Array.Empty<GraphNodeView>());
+            var links = new List<GraphLinkView>(graph?.Links ?? Array.Empty<GraphLinkView>());
+            var degree = new Dictionary<string, int>();
+            void Link(string a, string b)
+            {
+                links.Add(new GraphLinkView(a, b, "Direct"));
+                degree[a] = degree.GetValueOrDefault(a) + 1;
+                degree[b] = degree.GetValueOrDefault(b) + 1;
+            }
+
+            foreach (var entity in entities)
+            {
+                var eId = $"entity:{entity.Id}";
+                nodes.Add(new GraphNodeView(eId, entity.Name, 0, IsGod: true,
+                    Content: $"business entity · {entity.TableName}"));
+
+                foreach (var rel in entity.Relations)
+                {
+                    var target = entities.FirstOrDefault(x => string.Equals(x.Name, rel.TargetEntity, StringComparison.OrdinalIgnoreCase));
+                    if (target is not null) Link(eId, $"entity:{target.Id}");
+                }
+
+                // A sample of records under each entity hub (first text-looking column labels them).
+                try
+                {
+                    var rows = await Svc.ExecuteProjectDataAsync(Id, $"SELECT * FROM \"{entity.TableName.Replace("\"", "")}\" LIMIT 8");
+                    var labelIdx = 0;
+                    for (var c = 0; c < rows.Columns.Count; c++)
+                    {
+                        var v = rows.Rows.FirstOrDefault() is { } fr && c < fr.Count ? fr[c] : null;
+                        if (!string.Equals(rows.Columns[c], "id", StringComparison.OrdinalIgnoreCase)
+                            && v is not null && !double.TryParse(v, out _)) { labelIdx = c; break; }
+                    }
+                    for (var r = 0; r < rows.Rows.Count; r++)
+                    {
+                        var label = labelIdx < rows.Rows[r].Count ? rows.Rows[r][labelIdx] ?? "—" : "—";
+                        var rid = $"record:{entity.Id}:{r}";
+                        nodes.Add(new GraphNodeView(rid, label, 0, false, Content: $"{entity.Name} record", Kind: "human"));
+                        Link(eId, rid);
+                    }
+                }
+                catch { }
+
+                // Tagged runs + the latest version of each artifact.
+                try
+                {
+                    var runIds = (await Svc.ListEntityRunsAsync(entity.Id)).Take(5).ToList();
+                    var arts = new List<PlaceContext.Application.Features.RunArtifactLinkView>();
+                    foreach (var runId in runIds)
+                    {
+                        var rid = $"run:{runId}";
+                        if (nodes.All(n => n.Id != rid))
+                            nodes.Add(new GraphNodeView(rid, $"run {runId.ToString("N")[..8]}", 0, false, Content: "tagged job run"));
+                        Link(eId, rid);
+                        try { arts.AddRange(await Svc.ListRunArtifactsAsync(runId)); } catch { }
+                    }
+                    foreach (var g in arts.GroupBy(a => (a.Kind, a.Title)))
+                    {
+                        var latest = g.OrderByDescending(a => a.CreatedAt).First();
+                        var aid = $"art:{latest.Id}";
+                        var label = g.Count() > 1 ? $"{latest.Title} · v{g.Count()}" : latest.Title;
+                        if (nodes.All(n => n.Id != aid))
+                            nodes.Add(new GraphNodeView(aid, label, 0, false,
+                                Content: $"artifact · {latest.Kind}", Kind: "good", Labeled: true));
+                        Link($"run:{latest.RunId}", aid);
+                    }
+                }
+                catch { }
+            }
+
+            nodes = nodes.Select(n => degree.TryGetValue(n.Id, out var d) ? n with { Degree = n.Degree + d } : n).ToList();
+            return new GraphVizView(Id, nodes.Count, links.Count, nodes, links);
+        }
+        catch
+        {
+            return graph; // the knowledge graph alone is still a fine overview
+        }
+    }
     private ActivityTimelineView? _timeline;
     private IReadOnlyList<DecisionView>? _decisions;
 
@@ -250,6 +339,7 @@ else
         _overview = await Svc.GetProjectOverviewAsync(Id);
         Ui.Set(_overview.Name, $"{_overview.Path} · {_overview.Status}");
         _graph = await Svc.GetGraphVizAsync(Id);
+        _graph = await MergeDataGraphAsync(_graph);
         _timeline = await Svc.GetTimelineAsync(Id, 8);
         _context = await Svc.GetContextAsync(Id);
         _contextDraft = _contextSaved = _context.Markdown;

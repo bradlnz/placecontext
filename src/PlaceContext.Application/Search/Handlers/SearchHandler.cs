@@ -68,10 +68,6 @@ public sealed class SearchHandler : IQueryHandler<SearchQuery, SearchResultsView
             foreach (var r in ledger.Records.Where(r => Match(r.Summary)).Take(5))
                 hits.Add(new SearchHit("change", p.Id.Value, r.Summary, $"{name} · change #{r.Sequence}", $"{url}#changes"));
 
-            var context = await _contexts.GetForProjectAsync(p.Id, ct);
-            if (context is not null && Match(context.Markdown))
-                hits.Add(new SearchHit("context", p.Id.Value, Snippet(context.Markdown, term), $"{name} · context", $"{url}#context"));
-
             foreach (var d in (await _decisions.ListForProjectAsync(p.Id, ct)).Where(d => Match(d.Question) || Match(d.Choice)).Take(3))
                 hits.Add(new SearchHit("decision", p.Id.Value, d.Question, $"{name} · {d.Choice}", $"{url}#decision-{d.Id.Value}"));
         }

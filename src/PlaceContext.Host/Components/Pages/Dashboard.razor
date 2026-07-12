@@ -70,7 +70,26 @@
                         <span style="font-size:13.5px; font-weight:600">@e.Name</span>
                         <span style="font-family:'IBM Plex Mono',monospace; font-size:16px; color:var(--brand-2)">@EntityCount(e)</span>
                     </div>
-                    <div style="font-size:10.5px; color:var(--text-3); margin-top:3px; font-family:'IBM Plex Mono',monospace">@e.TableName</div>
+                    @if (_entityCharts.TryGetValue(e.Id, out var chart) && chart.Bars.Count > 0)
+                    {
+                        <div style="font-size:9.5px; color:var(--text-3); margin:8px 0 4px; text-transform:uppercase; letter-spacing:.06em">by @chart.Column</div>
+                        <div style="display:flex; flex-direction:column; gap:3px">
+                            @foreach (var (label, count, frac) in chart.Bars)
+                            {
+                                <div style="display:flex; align-items:center; gap:7px; font-size:10.5px">
+                                    <span style="width:78px; flex:none; color:var(--text-2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis" title="@label">@label</span>
+                                    <span style="flex:1; height:6px; border-radius:4px; background:var(--card-2); overflow:hidden">
+                                        <span style="display:block; height:100%; width:@(frac)%; background:var(--brand-2)"></span>
+                                    </span>
+                                    <span style="font-family:'IBM Plex Mono',monospace; color:var(--text-3)">@count</span>
+                                </div>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <div style="font-size:10.5px; color:var(--text-3); margin-top:3px; font-family:'IBM Plex Mono',monospace">@e.TableName</div>
+                    }
                 </a>
             }
         </div>
@@ -166,6 +185,37 @@
     private IReadOnlyList<DataEntityView> _entities = Array.Empty<DataEntityView>();
     private IReadOnlyList<PlaceContext.Application.Ports.ProjectTableInfo> _entityTables = Array.Empty<PlaceContext.Application.Ports.ProjectTableInfo>();
 
+    private sealed record EntityChart(string Column, IReadOnlyList<(string Label, string Count, int Frac)> Bars);
+    private readonly Dictionary<Guid, EntityChart> _entityCharts = new();
+
+    // One mini distribution per pinned entity — charted from the data itself (isolated SELECT),
+    // preferring a relation-key column, else the first categorical column.
+    private async Task LoadEntityChartsAsync()
+    {
+        foreach (var e in _entities.Take(6))
+        {
+            if (_entityCharts.ContainsKey(e.Id)) continue;
+            try
+            {
+                var columns = await Svc.ListProjectTableColumnsAsync(e.ProjectId, e.TableName);
+                var col = e.Relations.Select(r => r.Column)
+                    .Concat(columns.Where(c => (c.Type.Contains("text") || c.Type.Contains("char"))
+                        && !string.Equals(c.Name, e.LabelColumn, StringComparison.OrdinalIgnoreCase)).Select(c => c.Name))
+                    .FirstOrDefault();
+                if (col is null) continue;
+                var r = await Svc.ExecuteProjectDataAsync(e.ProjectId,
+                    $"SELECT \"{col.Replace("\"", "")}\"::text, count(*) FROM \"{e.TableName.Replace("\"", "")}\" GROUP BY 1 ORDER BY 2 DESC LIMIT 4");
+                if (r.Rows.Count == 0) continue;
+                var max = r.Rows.Max(x => long.TryParse(x[1], out var n) ? n : 0);
+                _entityCharts[e.Id] = new EntityChart(col, r.Rows
+                    .Select(x => (x[0] ?? "—", x[1] ?? "0",
+                        max > 0 && long.TryParse(x[1], out var n) ? (int)(n * 100 / max) : 0))
+                    .ToList());
+            }
+            catch { /* an unchartable entity keeps its plain card */ }
+        }
+    }
+
     private string EntityCount(DataEntityView e)
         => _entityTables.FirstOrDefault(t => string.Equals(t.Name, e.TableName, StringComparison.OrdinalIgnoreCase))
             is { } t ? t.RowEstimate.ToString("N0") : "—";
@@ -222,7 +272,10 @@
             {
                 _entities = await Svc.ListDataEntitiesAsync(chartPid);
                 if (_entities.Count > 0)
+                {
                     _entityTables = await Svc.ListProjectDataTablesAsync(chartPid);
+                    await LoadEntityChartsAsync();
+                }
             }
             catch { }
         }
