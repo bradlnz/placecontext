@@ -8,13 +8,18 @@ namespace PlaceContext.Domain.ValueObjects;
 /// </summary>
 public sealed record JobParameter
 {
-    public JobParameter(string name, string? label = null, bool required = true)
+    public JobParameter(string name, string? label = null, bool required = true,
+        string type = "text", IReadOnlyList<string>? options = null)
     {
         if (string.IsNullOrWhiteSpace(name))
             throw new ArgumentException("Parameter name must not be empty.", nameof(name));
         Name = name.Trim();
         Label = string.IsNullOrWhiteSpace(label) ? null : label.Trim();
         Required = required;
+        Type = type is "number" or "select" or "checkbox" ? type : "text";
+        Options = Type == "select"
+            ? (options ?? Array.Empty<string>()).Where(o => !string.IsNullOrWhiteSpace(o)).Select(o => o.Trim()).ToList()
+            : Array.Empty<string>();
     }
 
     /// <summary>Field key used in the assembled payload JSON, e.g. "customerEmail".</summary>
@@ -25,4 +30,10 @@ public sealed record JobParameter
 
     /// <summary>Whether a value must be supplied before the job can run.</summary>
     public bool Required { get; }
+
+    /// <summary>Input kind rendered in run forms: "text" | "number" | "select" | "checkbox".</summary>
+    public string Type { get; }
+
+    /// <summary>The choices offered when <see cref="Type"/> is "select"; empty otherwise.</summary>
+    public IReadOnlyList<string> Options { get; }
 }

@@ -9,5 +9,5 @@ internal static class JobParameterMapper
     public static IReadOnlyList<JobParameter> ToDomain(IReadOnlyList<JobParameterDto>? parameters)
         => parameters is null
             ? Array.Empty<JobParameter>()
-            : parameters.Select(p => new JobParameter(p.Name, p.Label, p.Required)).ToList();
+            : parameters.Select(p => new JobParameter(p.Name, p.Label, p.Required, p.Type, p.Options)).ToList();
 }

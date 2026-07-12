@@ -330,8 +330,8 @@ else
                                     }
                                     <span class="code" style="margin-left:5px">@p.Name</span>
                                 </label>
-                                <input class="dcinput" value="@GetArg(key)"
-                                       @oninput="@(e => SetArg(key, e.Value?.ToString() ?? ""))" />
+                                <ParamInput Parameter="p" Value="@GetArg(key)"
+                                            ValueChanged="@(v => SetArg(key, v))" />
                             </div>
                         }
                     </div>

@@ -28,7 +28,7 @@
             </select>
         </div>
         <div style="flex:1; overflow-y:auto">
-            @if (Filtered() is { Count: 0 })
+            @if (Grouped() is { Count: 0 })
             {
                 <div style="padding:18px 16px; color:var(--text-3); font-size:12.5px">
                     No stored artifacts here yet — every completed run generates one from its job's return type.
@@ -36,18 +36,44 @@
             }
             else
             {
-                @foreach (var a in Filtered())
+                @foreach (var group in Grouped())
                 {
-                    var active = _active?.Id == a.Id;
-                    <div @onclick="@(() => OpenAsync(a))"
-                         style="display:flex; align-items:center; gap:11px; padding:11px 16px; border-bottom:1px solid var(--border); cursor:pointer; background:@(active ? "var(--card)" : "transparent"); border-left:2px solid @(active ? "var(--brand)" : "transparent")">
-                        <span style="flex:none; color:var(--text-3); display:flex">@FileIcon(a.ContentType, 16)</span>
-                        <div style="flex:1; min-width:0">
-                            <div style="font-family:'IBM Plex Mono',monospace; font-size:12.5px; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis">@a.Title</div>
-                            <div style="font-size:10.5px; color:var(--text-3); margin-top:2px">
-                                @ProjectName(a.ProjectId) · @a.Kind · @FormatBytes(a.SizeBytes) · @a.CreatedAt.ToWorkspaceTime().ToString("MMM d · HH:mm")
+                    var latest = group[0];
+                    var groupKey = GroupKey(latest);
+                    var active = _active is { } act && group.Any(v => v.Id == act.Id);
+                    <div style="border-bottom:1px solid var(--border); border-left:2px solid @(active ? "var(--brand)" : "transparent")">
+                        <div @onclick="@(() => OpenAsync(latest))"
+                             style="display:flex; align-items:center; gap:11px; padding:11px 16px; cursor:pointer; background:@(active ? "var(--card)" : "transparent")">
+                            <span style="flex:none; color:var(--text-3); display:flex">@FileIcon(latest.ContentType, 16)</span>
+                            <div style="flex:1; min-width:0">
+                                <div style="font-family:'IBM Plex Mono',monospace; font-size:12.5px; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis">@latest.Title</div>
+                                <div style="font-size:10.5px; color:var(--text-3); margin-top:2px">
+                                    @ProjectName(latest.ProjectId) · @latest.Kind · @FormatBytes(latest.SizeBytes) · @latest.CreatedAt.ToWorkspaceTime().ToString("MMM d · HH:mm")
+                                </div>
                             </div>
+                            @if (group.Count > 1)
+                            {
+                                <button title="@(group.Count) versions — show history"
+                                        style="flex:none; border:1px solid var(--border-2); background:var(--card-2); color:var(--brand-2); border-radius:5px; padding:1px 7px; font-size:10px; font-family:'IBM Plex Mono',monospace; cursor:pointer"
+                                        @onclick:stopPropagation="true"
+                                        @onclick="@(() => _expanded = _expanded == groupKey ? null : groupKey)">
+                                    v@(group.Count) @(_expanded == groupKey ? "▴" : "▾")
+                                </button>
+                            }
                         </div>
+                        @if (_expanded == groupKey && group.Count > 1)
+                        {
+                            @foreach (var (v, n) in group.Skip(1).Select((v, n) => (v, group.Count - 1 - n)))
+                            {
+                                var vActive = _active?.Id == v.Id;
+                                <div @onclick="@(() => OpenAsync(v))"
+                                     style="display:flex; align-items:center; gap:10px; padding:7px 16px 7px 43px; cursor:pointer; background:@(vActive ? "var(--card)" : "transparent")">
+                                    <span style="font-size:10px; font-family:'IBM Plex Mono',monospace; color:var(--text-3); flex:none">v@(n)</span>
+                                    <span style="flex:1; font-size:11px; color:var(--text-3)">@v.CreatedAt.ToWorkspaceTime().ToString("MMM d · HH:mm")</span>
+                                    <span style="font-size:10px; color:var(--text-3)">@FormatBytes(v.SizeBytes)</span>
+                                </div>
+                            }
+                        }
                     </div>
                 }
             }
@@ -150,6 +176,8 @@
 </div>
 
 @code {
+    [SupplyParameterFromQuery(Name = "artifact")] public string? ArtifactId { get; set; }
+
     private IReadOnlyList<ArtifactFileView> _files = Array.Empty<ArtifactFileView>();
     private IReadOnlyList<ProjectSummaryView> _projects = Array.Empty<ProjectSummaryView>();
     private ArtifactFileView? _active;
@@ -175,10 +203,17 @@
         if (Ui.CurrentProjectId is { } pid && _files.Any(f => f.ProjectId == pid))
             _projectFilter = pid.ToString();
 
-        // Deep link: /artifacts?artifact={id} opens that file directly (chain output links here).
-        var query = System.Web.HttpUtility.ParseQueryString(new Uri(Nav.Uri).Query);
-        if (Guid.TryParse(query["artifact"], out var artifactId)
-            && _files.FirstOrDefault(f => f.Id == artifactId) is { } target)
+        await ApplyDeepLinkAsync();
+    }
+
+    // Supplied from the query: re-fires on same-page navigation (search hits, graph links).
+    protected override async Task OnParametersSetAsync() => await ApplyDeepLinkAsync();
+
+    private async Task ApplyDeepLinkAsync()
+    {
+        if (!Guid.TryParse(ArtifactId, out var artifactId)) return;
+        if (_active?.Id == artifactId) return;
+        if (_files.FirstOrDefault(f => f.Id == artifactId) is { } target)
         {
             _projectFilter = target.ProjectId.ToString(); // make sure it's visible in the list
             await OpenAsync(target);
@@ -188,6 +223,19 @@
     private void OnProjectFilter(ChangeEventArgs e) => _projectFilter = e.Value?.ToString() ?? "";
 
     private string ProjectName(Guid id) => _projects.FirstOrDefault(p => p.Id == id)?.Name ?? "—";
+
+    private string? _expanded;
+
+    private static string GroupKey(ArtifactFileView a) => $"{a.ProjectId}|{a.Kind}|{a.Title}";
+
+    // Versioning: the same logical file (project + kind + title) groups newest-first; the list
+    // shows the latest with the history behind the vN dropdown.
+    private IReadOnlyList<IReadOnlyList<ArtifactFileView>> Grouped()
+        => Filtered()
+            .GroupBy(GroupKey)
+            .Select(g => (IReadOnlyList<ArtifactFileView>)g.OrderByDescending(a => a.CreatedAt).ToList())
+            .OrderByDescending(g => g[0].CreatedAt)
+            .ToList();
 
     private IReadOnlyList<ArtifactFileView> Filtered()
     {

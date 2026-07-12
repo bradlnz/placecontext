@@ -1,0 +1,36 @@
+@using PlaceContext.Application.Dtos
+
+@* One declared job input, rendered by its type — the same control everywhere a run form appears. *@
+@switch (Parameter.Type)
+{
+    case "select":
+        <select class="dcinput" value="@Value" @onchange="@(e => ValueChanged.InvokeAsync(e.Value?.ToString() ?? ""))">
+            <option value="">— pick —</option>
+            @foreach (var o in Parameter.Options ?? Array.Empty<string>())
+            {
+                <option value="@o">@o</option>
+            }
+        </select>
+        break;
+    case "number":
+        <input class="dcinput" type="number" style="font-family:'IBM Plex Mono',monospace" value="@Value"
+               @oninput="@(e => ValueChanged.InvokeAsync(e.Value?.ToString() ?? ""))" />
+        break;
+    case "checkbox":
+        <label style="display:flex; align-items:center; gap:7px; font-size:12.5px; color:var(--text-2); cursor:pointer; padding:6px 0">
+            <input type="checkbox" checked="@(Value == "true")" style="width:15px; height:15px; accent-color:var(--brand-2); cursor:pointer"
+                   @onchange="@(e => ValueChanged.InvokeAsync(e.Value is true ? "true" : "false"))" />
+            @(Parameter.Label ?? Parameter.Name)
+        </label>
+        break;
+    default:
+        <input class="dcinput" value="@Value"
+               @oninput="@(e => ValueChanged.InvokeAsync(e.Value?.ToString() ?? ""))" />
+        break;
+}
+
+@code {
+    [Parameter, EditorRequired] public JobParameterDto Parameter { get; set; } = default!;
+    [Parameter] public string Value { get; set; } = "";
+    [Parameter] public EventCallback<string> ValueChanged { get; set; }
+}

@@ -79,7 +79,7 @@ public sealed class EfJobRepository : IJobRepository
             PartialCodesJson = JsonSerializer.Serialize(job.ExitCodePolicy.PartialCodes.ToList(), Json),
             ConcurrencyLimit = job.ConcurrencyLimit,
             ParametersJson = JsonSerializer.Serialize(
-                job.Parameters.Select(p => new JobParameterJson(p.Name, p.Label, p.Required)).ToList(), Json),
+                job.Parameters.Select(p => new JobParameterJson(p.Name, p.Label, p.Required, p.Type, p.Options.ToList())).ToList(), Json),
             AllowNetworkEgress = job.AllowNetworkEgress,
             TimeoutSeconds = job.TimeoutSeconds,
             PostJobActionsJson = JsonSerializer.Serialize(job.PostJobActions.Select(a => a.ToString()).ToList(), Json),
@@ -149,7 +149,7 @@ public sealed class EfJobRepository : IJobRepository
 
         var parameters = (JsonSerializer.Deserialize<List<JobParameterJson>>(row.ParametersJson, Json)
                 ?? new List<JobParameterJson>())
-            .Select(p => new JobParameter(p.Name, p.Label, p.Required))
+            .Select(p => new JobParameter(p.Name, p.Label, p.Required, p.Type, p.Options))
             .ToList();
 
         var postJobActions = (JsonSerializer.Deserialize<List<string>>(row.PostJobActionsJson, Json)
@@ -205,5 +205,5 @@ public sealed class EfJobRepository : IJobRepository
     }
 
     private sealed record CodeFileJson(string Path, string Content);
-    private sealed record JobParameterJson(string Name, string? Label, bool Required);
+    private sealed record JobParameterJson(string Name, string? Label, bool Required, string Type = "text", List<string>? Options = null);
 }

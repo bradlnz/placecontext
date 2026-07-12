@@ -225,6 +225,10 @@
     [Parameter] public Guid ProjectId { get; set; }
     [Parameter] public string EntityName { get; set; } = "";
 
+    /// <summary>Search deep link: focuses the graph on this record. Supplied from the query so
+    /// clicking a search hit while already on the page re-applies without a manual refresh.</summary>
+    [SupplyParameterFromQuery(Name = "record")] public string? RecordKey { get; set; }
+
     private DataEntityView? _entity;
     private IReadOnlyList<DataEntityView> _all = Array.Empty<DataEntityView>();
     private PlaceContext.Application.Ports.ProjectQueryResult? _rows;
@@ -250,8 +254,8 @@
 
             // Search deep link: /entity/{name}?record={key} lands on the GRAPH, scoped to just
             // that record's neighbourhood — the search result IS the node.
-            var query = System.Web.HttpUtility.ParseQueryString(new Uri(Nav.Uri).Query);
-            if (query["record"] is { Length: > 0 } recordKey
+            _focusKey = null;
+            if (RecordKey is { Length: > 0 } recordKey
                 && _rows is not null
                 && _rows.Rows.Any(r => r.Any(v => string.Equals(v, recordKey, StringComparison.OrdinalIgnoreCase))))
             {

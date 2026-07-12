@@ -191,6 +191,8 @@ else
 }
 
 @code {
+    [SupplyParameterFromQuery(Name = "run")] public string? RunId { get; set; }
+
     private IReadOnlyList<RunReportView>? _reports;
     private RunReportView? _open;
     private IReadOnlyList<RunArtifactLinkView>? _openArtifacts;
@@ -205,10 +207,16 @@ else
         Ui.Set("Observability", "cross-project job history");
         _loading = false;
 
-        // Deep link from the dashboard: /observability?run={id} opens that run's detail directly.
-        var query = System.Web.HttpUtility.ParseQueryString(new Uri(Nav.Uri).Query);
-        if (Guid.TryParse(query["run"], out var runId)
-            && _reports?.FirstOrDefault(r => r.Run.Id == runId) is { } target)
+        await ApplyDeepLinkAsync();
+    }
+
+    protected override async Task OnParametersSetAsync() => await ApplyDeepLinkAsync();
+
+    // Supplied from the query so dashboard/graph/bell links re-open the run without a refresh.
+    private async Task ApplyDeepLinkAsync()
+    {
+        if (!Guid.TryParse(RunId, out var runId) || _open?.Run.Id == runId) return;
+        if (_reports?.FirstOrDefault(r => r.Run.Id == runId) is { } target)
             await OpenRun(target);
     }
 
@@ -221,6 +229,17 @@ else
         try
         {
             await RefreshAsync();
+            // A live view into the open run: while it's on screen, swap in the fresh report each
+            // sweep so status, steps, shard results, and logs appear as they persist.
+            if (_open is { } open && _reports?.FirstOrDefault(r => r.Run.Id == open.Run.Id) is { } fresh
+                && !ReferenceEquals(fresh, open))
+            {
+                _open = fresh;
+                if (fresh.Run.Status is not "Running")
+                {
+                    try { _openArtifacts = await Svc.ListRunArtifactsAsync(fresh.Run.Id); } catch { }
+                }
+            }
             StateHasChanged();
         }
         finally { _refreshing = false; }

@@ -540,8 +540,10 @@ else
                                 <span style="width:150px; flex:none; font-size:12px; color:var(--text-2)">
                                     @(p.Label ?? p.Name)@(p.Required ? " *" : "")
                                 </span>
-                                <input class="dcinput" style="flex:1; font-size:12px" value="@PayloadFormValue(p.Name)"
-                                       @oninput="@(e => SetPayloadFormValue(p.Name, e.Value?.ToString() ?? ""))" />
+                                <div style="flex:1">
+                                    <ParamInput Parameter="p" Value="@PayloadFormValue(p.Name)"
+                                                ValueChanged="@(v => SetPayloadFormValue(p.Name, v))" />
+                                </div>
                             </div>
                         }
                         <div class="dchint">Composes a single-shard payload from the declared inputs — switch to raw JSON for multi-shard fan-out.</div>
@@ -556,11 +558,35 @@ else
                     }
                 </div>
                 <div class="dcfield">
-                    <label>Run-form parameters <span class="code" style="margin-left:5px">one per line — name or name|Label</span></label>
-                    <textarea class="dcinput" rows="3"
-                              style="font-family:'IBM Plex Mono',monospace; font-size:12px; resize:vertical"
-                              @bind="_edParametersRaw"
-                              placeholder="customerEmail|Customer email&#10;plan|Plan tier"></textarea>
+                    <div style="display:flex; align-items:center; justify-content:space-between">
+                        <label>Run-form parameters</label>
+                        <button type="button" class="dcbtn" style="padding:2px 9px; font-size:11px" @onclick="@(() => _edParams.Add(new ParamEdit()))">+ input</button>
+                    </div>
+                    <div style="display:flex; flex-direction:column; gap:6px; margin-top:4px">
+                        @for (var i = 0; i < _edParams.Count; i++)
+                        {
+                            var idx = i;
+                            <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap">
+                                <input class="dcinput" style="width:130px; font-size:12px; font-family:'IBM Plex Mono',monospace" placeholder="name" @bind="_edParams[idx].Name" />
+                                <input class="dcinput" style="flex:1; min-width:120px; font-size:12px" placeholder="Label (optional)" @bind="_edParams[idx].Label" />
+                                <select class="dcinput" style="width:104px; font-size:12px" @bind="_edParams[idx].Type">
+                                    <option value="text">text</option>
+                                    <option value="number">number</option>
+                                    <option value="select">select</option>
+                                    <option value="checkbox">checkbox</option>
+                                </select>
+                                @if (_edParams[idx].Type == "select")
+                                {
+                                    <input class="dcinput" style="flex:1; min-width:140px; font-size:12px; font-family:'IBM Plex Mono',monospace"
+                                           placeholder="options, comma-separated" @bind="_edParams[idx].OptionsRaw" />
+                                }
+                                <label style="display:flex; align-items:center; gap:4px; font-size:11.5px; color:var(--text-2); cursor:pointer">
+                                    <input type="checkbox" @bind="_edParams[idx].Required" style="accent-color:var(--brand-2)" /> required
+                                </label>
+                                <button type="button" class="dcbtn" style="padding:2px 8px" @onclick="@(() => _edParams.RemoveAt(idx))">×</button>
+                            </div>
+                        }
+                    </div>
                     <div class="dchint">
                         When set, clicking <strong>Run</strong> opens a form asking for these values (events supply them in the payload) —
                         so the same job can run on demand with different inputs instead of the payloads above.
@@ -708,16 +734,8 @@ else
                             }
                             <span class="code" style="margin-left:5px">@p.Name</span>
                         </label>
-                        @if (i == 0)
-                        {
-                            <input class="dcinput" autofocus value="@GetArg(p.Name)"
-                                   @oninput="@(e => SetArg(p.Name, e.Value?.ToString() ?? ""))" />
-                        }
-                        else
-                        {
-                            <input class="dcinput" value="@GetArg(p.Name)"
-                                   @oninput="@(e => SetArg(p.Name, e.Value?.ToString() ?? ""))" />
-                        }
+                        <ParamInput Parameter="p" Value="@GetArg(p.Name)"
+                                    ValueChanged="@(v => SetArg(p.Name, v))" />
                     </div>
                 }
                 @if (_runPromptError is not null)
@@ -803,7 +821,31 @@ else
     private string _edSuccessCodesRaw = "0";
     private string _edPartialCodesRaw = "";
     private bool _edAllowNetworkEgress;
-    private string _edParametersRaw = "";
+    private readonly List<ParamEdit> _edParams = new();
+
+    private sealed class ParamEdit
+    {
+        public string Name = "";
+        public string Label = "";
+        public string Type = "text";
+        public string OptionsRaw = "";
+        public bool Required = true;
+
+        public JobParameterDto ToDto() => new(Name.Trim(),
+            string.IsNullOrWhiteSpace(Label) ? null : Label.Trim(), Required, Type,
+            Type == "select"
+                ? OptionsRaw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                : null);
+
+        public static ParamEdit From(JobParameterDto p) => new()
+        {
+            Name = p.Name,
+            Label = p.Label ?? "",
+            Type = p.Type,
+            OptionsRaw = string.Join(", ", p.Options ?? Array.Empty<string>()),
+            Required = p.Required,
+        };
+    }
     private readonly List<PlaceContext.Domain.ValueObjects.PostJobActionKind> _edPostJobActions = new();
     private PlaceContext.Domain.ValueObjects.JobReturnType _edReturnType = PlaceContext.Domain.ValueObjects.JobReturnType.Json;
 
@@ -1029,7 +1071,7 @@ else
         _edSuccessCodesRaw = "0";
         _edPartialCodesRaw = "";
         _edAllowNetworkEgress = false;
-        _edParametersRaw = "";
+        _edParams.Clear();
         _edPostJobActions.Clear();
         _edReturnType = PlaceContext.Domain.ValueObjects.JobReturnType.Json;
         _editorError = null;
@@ -1054,7 +1096,8 @@ else
         _edSuccessCodesRaw = string.Join(",", job.SuccessExitCodes);
         _edPartialCodesRaw = string.Join(",", job.PartialExitCodes);
         _edAllowNetworkEgress = job.AllowNetworkEgress;
-        _edParametersRaw = string.Join("\n", job.Parameters.Select(p => p.Label is null ? p.Name : $"{p.Name}|{p.Label}"));
+        _edParams.Clear();
+        _edParams.AddRange(job.Parameters.Select(ParamEdit.From));
         _edPostJobActions.Clear();
         _edPostJobActions.AddRange(job.PostJobActions);
         _edReturnType = job.ReturnType;
@@ -1065,7 +1108,8 @@ else
     }
 
     // ── Payload form (declared inputs → payload JSON) ─────────────────────────────────────────────
-    private IReadOnlyList<JobParameterDto> DeclaredParams() => ParseParameters(_edParametersRaw);
+    private IReadOnlyList<JobParameterDto> DeclaredParams()
+        => _edParams.Where(p => !string.IsNullOrWhiteSpace(p.Name)).Select(p => p.ToDto()).ToList();
 
     private void SwitchPayloadMode(string mode)
     {
@@ -1173,8 +1217,7 @@ else
         var partialCodes = ParseInts(_edPartialCodesRaw, out var parErr);
         if (parErr is not null) { _editorError = $"Partial codes: {parErr}"; return; }
 
-        // Parse parameters — one per line, "name" or "name|Label".
-        var parameters = ParseParameters(_edParametersRaw);
+        var parameters = DeclaredParams();
 
         _saving = true;
         try
@@ -1259,20 +1302,6 @@ else
         {
             _saving = false;
         }
-    }
-
-    private static List<JobParameterDto> ParseParameters(string raw)
-    {
-        var result = new List<JobParameterDto>();
-        foreach (var line in raw.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-        {
-            var pipe = line.IndexOf('|');
-            if (pipe > 0)
-                result.Add(new JobParameterDto(line[..pipe].Trim(), line[(pipe + 1)..].Trim()));
-            else
-                result.Add(new JobParameterDto(line.Trim()));
-        }
-        return result;
     }
 
     private static int[] ParseInts(string raw, out string? error)
