@@ -1,0 +1,116 @@
+@* Reusable skeleton loader. Pick a Kind that mirrors the component's real layout so the swap to
+   loaded content doesn't shift the page:
+     "card-grid" — responsive grid of cards (dashboards, chart walls, entity tiles)
+     "table"     — header + rows (data tables, run lists)
+     "list"      — stacked rows with an avatar dot + two lines (jobs, chains, reports, schedules)
+     "detail"    — a title bar + paragraph lines (slide-outs, run/artifact detail)
+     "chart"     — a single chart card with bars
+     "text"      — bare shimmer lines (inline placeholders)
+   Rows/Columns/Cards tune the count; Padded wraps the block in page padding. *@
+
+@switch (Kind)
+{
+    case "card-grid":
+        <div class="dcskel-grid" style="@Wrap">
+            @for (var i = 0; i < Cards; i++)
+            {
+                <div class="dccard dcskel-card">
+                    <div class="dcskel dcskel-line lg" style="width:@Pct(38 + (i * 13) % 34)%"></div>
+                    <div class="dcskel" style="height:96px; border-radius:8px"></div>
+                    <div class="dcskel dcskel-line sm" style="width:@Pct(50 + (i * 7) % 30)%"></div>
+                </div>
+            }
+        </div>
+        break;
+
+    case "chart":
+        <div class="dccard dcskel-card" style="@Wrap">
+            <div class="dcskel dcskel-line lg" style="width:40%"></div>
+            <div style="display:flex; align-items:flex-end; gap:10px; height:180px; padding-top:10px">
+                @foreach (var h in new[] { 62, 88, 45, 74, 96, 58, 80, 50 })
+                {
+                    <div class="dcskel" style="flex:1; height:@(h)%; border-radius:6px 6px 0 0"></div>
+                }
+            </div>
+        </div>
+        break;
+
+    case "table":
+        <div class="dccard" style="overflow:hidden; @Wrap">
+            <div class="dcskel-row" style="padding:12px 16px; background:var(--card-2)">
+                @for (var c = 0; c < Columns; c++)
+                {
+                    <div class="dcskel dcskel-line sm" style="flex:1; max-width:@(c == 0 ? "160px" : "110px")"></div>
+                }
+            </div>
+            @for (var r = 0; r < Rows; r++)
+            {
+                <div class="dcskel-row" style="padding:12px 16px">
+                    @for (var c = 0; c < Columns; c++)
+                    {
+                        <div class="dcskel dcskel-line" style="flex:1; max-width:@(c == 0 ? "180px" : "130px"); width:@Pct(40 + ((r + c) * 11) % 45)%"></div>
+                    }
+                </div>
+            }
+        </div>
+        break;
+
+    case "detail":
+        <div style="display:flex; flex-direction:column; gap:14px; @Wrap">
+            <div class="dcskel dcskel-line lg" style="width:52%"></div>
+            <div class="dcskel dcskel-line sm" style="width:34%"></div>
+            <div class="dcskel" style="height:1px; margin:2px 0"></div>
+            @for (var i = 0; i < Rows; i++)
+            {
+                <div class="dcskel dcskel-line" style="width:@Pct(60 + (i * 9) % 38)%"></div>
+            }
+        </div>
+        break;
+
+    case "list":
+        <div class="dcskel-rows" style="@Wrap">
+            @for (var i = 0; i < Rows; i++)
+            {
+                <div class="dcskel-row">
+                    <div class="dcskel circle" style="width:34px; height:34px; flex:none"></div>
+                    <div style="flex:1; display:flex; flex-direction:column; gap:7px">
+                        <div class="dcskel dcskel-line" style="width:@Pct(30 + (i * 13) % 40)%"></div>
+                        <div class="dcskel dcskel-line sm" style="width:@Pct(48 + (i * 9) % 34)%"></div>
+                    </div>
+                    <div class="dcskel dcskel-line sm" style="width:64px; flex:none"></div>
+                </div>
+            }
+        </div>
+        break;
+
+    default: // "text"
+        <div style="display:flex; flex-direction:column; gap:9px; @Wrap">
+            @for (var i = 0; i < Rows; i++)
+            {
+                <div class="dcskel dcskel-line" style="width:@Pct(55 + (i * 11) % 40)%"></div>
+            }
+        </div>
+        break;
+}
+
+@code {
+    /// <summary>Layout shape: card-grid | chart | table | detail | list | text.</summary>
+    [Parameter] public string Kind { get; set; } = "text";
+
+    /// <summary>Row count for table/list/detail/text shapes.</summary>
+    [Parameter] public int Rows { get; set; } = 5;
+
+    /// <summary>Column count for the table shape.</summary>
+    [Parameter] public int Columns { get; set; } = 4;
+
+    /// <summary>Card count for the card-grid shape.</summary>
+    [Parameter] public int Cards { get; set; } = 6;
+
+    /// <summary>Wrap the skeleton in the standard page padding (top-level loading branches).</summary>
+    [Parameter] public bool Padded { get; set; }
+
+    private string Wrap => Padded ? "padding:24px" : "";
+
+    // Deterministic widths — no Random (would re-roll each render and jitter the layout).
+    private static string Pct(int v) => v.ToString();
+}

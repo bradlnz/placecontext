@@ -43,6 +43,21 @@
         ::-webkit-scrollbar-track { background:transparent; }
         @@keyframes dcpulse { 0%,100% { opacity:1; transform:scale(1); } 50% { opacity:.35; transform:scale(.82); } }
         @@keyframes dcgrow { from { transform:scaleX(0); } to { transform:scaleX(1); } }
+        /* ── Skeleton loaders: a shimmering placeholder block. .dcskel is the primitive; the shape
+           helpers below compose it into the page's real layout so the swap to content is seamless. */
+        @@keyframes dcshimmer { 100% { background-position:-200% 0; } }
+        .dcskel { position:relative; border-radius:6px; background:linear-gradient(90deg,
+            var(--card-2) 25%, var(--hover) 37%, var(--card-2) 63%); background-size:200% 100%;
+            animation:dcshimmer 1.25s ease-in-out infinite; }
+        .dcskel.circle { border-radius:50%; }
+        .dcskel-line { height:11px; }
+        .dcskel-line.sm { height:9px; }
+        .dcskel-line.lg { height:15px; }
+        .dcskel-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(260px, 1fr)); gap:14px; }
+        .dcskel-card { padding:16px; display:flex; flex-direction:column; gap:11px; }
+        .dcskel-rows { display:flex; flex-direction:column; }
+        .dcskel-row { display:flex; align-items:center; gap:12px; padding:12px 4px; border-bottom:1px solid var(--border); }
+        @@media (prefers-reduced-motion: reduce) { .dcskel { animation-duration:2.4s; } }
         .dcbar { height:100%; width:0; border-radius:99px; transition:width .6s cubic-bezier(.4,0,.2,1); }
         .dcnav { position:relative; display:flex; align-items:center; gap:10px; padding:8px 10px; border:none; cursor:pointer;
             border-radius:7px; font-size:13px; font-weight:500; font-family:inherit; text-align:left; transition:background .12s;

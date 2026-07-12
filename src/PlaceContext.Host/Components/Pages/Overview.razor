@@ -31,7 +31,7 @@
         </div>
         @if (_focus is null)
         {
-            <div class="dcfocus-clear" style="color:var(--text-3)">Loading…</div>
+            <div style="padding:8px 16px"><Skeleton Kind="list" Rows="3" /></div>
         }
         else if (_focus.Items.Count == 0)
         {
@@ -65,7 +65,7 @@
 
     @if (_projects is null)
     {
-        <p style="color:var(--text-3)">Loading…</p>
+        <Skeleton Kind="card-grid" Cards="6" />
     }
     else if (_projects.Count == 0)
     {

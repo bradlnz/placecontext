@@ -110,7 +110,7 @@
                 <div style="flex:1; overflow:auto; padding:14px 18px; font-family:'IBM Plex Mono',monospace; font-size:12px; line-height:1.65">
                     @if (_loading)
                     {
-                        <span style="color:var(--text-3)">loading…</span>
+                        <Skeleton Kind="text" Rows="8" />
                     }
                     else if (_content is null)
                     {
@@ -126,9 +126,13 @@
             else if (IsCsv(_active.ContentType))
             {
                 <div style="flex:1; overflow:auto; padding:14px 18px">
-                    @if (_loading || _csv is null)
+                    @if (_loading)
                     {
-                        <span style="color:var(--text-3); font-size:12px">@(_loading ? "loading…" : "Couldn't parse this CSV — use Open ↗.")</span>
+                        <Skeleton Kind="table" Rows="8" Columns="5" />
+                    }
+                    else if (_csv is null)
+                    {
+                        <span style="color:var(--text-3); font-size:12px">Couldn't parse this CSV — use Open ↗.</span>
                     }
                     else
                     {

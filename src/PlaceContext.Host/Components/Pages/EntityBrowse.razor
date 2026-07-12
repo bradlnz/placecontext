@@ -9,7 +9,11 @@
 <PageTitle>placecontext — @EntityName</PageTitle>
 
 <div style="padding:20px 24px 40px; max-width:1320px; margin:0 auto">
-    @if (_entity is null)
+    @if (!_loaded)
+    {
+        <Skeleton Kind="detail" Rows="7" />
+    }
+    else if (_entity is null)
     {
         <div style="padding:24px; color:var(--text-3)">Unknown entity “@EntityName”. Define it under Data → Entities.</div>
     }
@@ -182,6 +186,11 @@
             </div>
         }
 
+        @if (_viewTab == "records" && _rows is null)
+        {
+            <Skeleton Kind="table" Rows="8" Columns="4" />
+        }
+
         @if (_viewTab == "records" && _rows is { } rows)
         {
             <div class="dccard" style="border-radius:8px; overflow:hidden">
@@ -311,6 +320,7 @@
     private string _filter = "";
     private string? _error;
     private string _viewTab = "records";
+    private bool _loaded;   // entity list resolved — gates the load skeleton vs the not-found message
 
     // ── Entity analytics: SQL charts namespaced "{Entity} · {name}" on the shared chart engine. ──
     private IReadOnlyList<ProjectChartView> _charts = Array.Empty<ProjectChartView>();
@@ -494,6 +504,7 @@
     {
         _error = null;
         _open = null;
+        _loaded = false;
         try
         {
             _all = await Svc.ListDataEntitiesAsync(ProjectId);
@@ -518,6 +529,7 @@
             await BuildSectionGraphAsync();
         }
         catch (Exception ex) { _error = ex.Message; }
+        finally { _loaded = true; }
     }
 
     // The record label: the configured column when it exists; otherwise the first column that

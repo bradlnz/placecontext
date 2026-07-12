@@ -33,7 +33,11 @@
                 <button class="dcbtn primary" style="flex:1; font-size:12px" @onclick="StartNewTable">+ Table</button>
                 <button class="dcbtn" style="flex:1; font-size:12px" @onclick="OpenNewView">+ View</button>
             </div>
-            @if (_tables.Count == 0)
+            @if (!_tablesReady)
+            {
+                <Skeleton Kind="text" Rows="5" />
+            }
+            else if (_tables.Count == 0)
             {
                 <div style="font-size:11.5px; color:var(--text-3); line-height:1.5">
                     No tables yet — click <b>New table</b> or run a <code>CREATE TABLE …</code>.
@@ -334,6 +338,7 @@
         "--   SELECT sensor, avg(value) FROM readings GROUP BY sensor;\n\n";
 
     private IReadOnlyList<ProjectTableInfo> _tables = Array.Empty<ProjectTableInfo>();
+    private bool _tablesReady;   // first table list loaded — gates the sidebar skeleton
 
     // ── Views (saved SELECTs over the project's tables) ──────────────────────────────────────────
     private bool _showNewView;
@@ -423,6 +428,7 @@
     {
         try { _tables = await Svc.ListProjectDataTablesAsync(ProjectId); }
         catch (Exception ex) { _error = ex.Message; }
+        finally { _tablesReady = true; }
     }
 
     private async Task RunAsync()

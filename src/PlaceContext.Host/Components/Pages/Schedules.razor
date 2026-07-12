@@ -125,7 +125,11 @@
         <div style="display:grid; grid-template-columns:90px minmax(160px,1fr) minmax(150px,1fr) minmax(150px,1fr) 150px 150px 130px; gap:0 16px; padding:8px 16px; border-bottom:1px solid var(--border); font-size:10.5px; color:var(--text-3); letter-spacing:.08em; font-weight:500">
             <span>STATE</span><span>TRIGGER</span><span>JOB</span><span>FIRES ON</span><span>NEXT RUN</span><span>LAST FIRED</span><span></span>
         </div>
-        @if (_triggers is null or { Count: 0 })
+        @if (_triggers is null)
+        {
+            <div style="padding:4px 16px"><Skeleton Kind="text" Rows="4" /></div>
+        }
+        else if (_triggers.Count == 0)
         {
             <div style="padding:24px 16px; color:var(--text-3); font-size:13px; text-align:center">
                 No triggers yet — add a cron schedule or an event hook above.

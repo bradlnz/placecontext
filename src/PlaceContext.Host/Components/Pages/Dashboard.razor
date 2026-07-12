@@ -141,7 +141,11 @@
             <div style="display:grid; grid-template-columns:110px minmax(180px,1.4fr) minmax(140px,1fr) 90px 90px 130px 100px; gap:0 16px; padding:8px 16px; border-bottom:1px solid var(--border); font-size:10.5px; color:var(--text-3); letter-spacing:.08em; font-weight:500; min-width:880px">
                 <span>STATUS</span><span>JOB</span><span>PROJECT</span><span>SHARDS</span><span>DURATION</span><span>STARTED</span><span>RETURN</span>
             </div>
-            @if (Filtered() is { Count: 0 })
+            @if (!_ready)
+            {
+                <div style="padding:6px 16px; min-width:880px"><Skeleton Kind="text" Rows="6" /></div>
+            }
+            else if (Filtered() is { Count: 0 })
             {
                 <div style="padding:24px 16px; color:var(--text-3); font-size:13px; text-align:center; min-width:880px">
                     No runs yet — submit a job and its run appears here live.
@@ -176,6 +180,7 @@
 <style>.dcdash-row:hover { background:var(--hover); }</style>
 
 @code {
+    private bool _ready;   // first data load complete — gates the skeleton
     private IReadOnlyList<RunReportView> _reports = Array.Empty<RunReportView>();
     private int _running, _queued, _failed24, _succeeded24;
     private string _filter = "all";
@@ -287,6 +292,7 @@
         _queued = Tenant.IsResolved
             ? OpCenter.ListForTenant(Tenant.TenantId).Count(o => o.Status == PlaceContext.Infrastructure.Operations.PortalOperationStatus.Queued)
             : 0;
+        _ready = true;
     }
 
     private IReadOnlyList<RunReportView> Filtered() => _filter switch
