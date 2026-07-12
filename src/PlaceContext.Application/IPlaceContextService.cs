@@ -96,6 +96,7 @@ public interface IPlaceContextService
     Task<bool> DeleteDataEntityAsync(Guid entityId, CancellationToken ct = default);
     Task<IReadOnlyList<Features.DataEntityView>> ListDataEntitiesAsync(Guid projectId, CancellationToken ct = default);
     Task<IReadOnlyList<Guid>> ListTaggedRunsAsync(Guid entityId, string key, CancellationToken ct = default);
+    Task<IReadOnlyList<Guid>> ListEntityRunsAsync(Guid entityId, CancellationToken ct = default);
 
     // Inbound SMS gateway (encrypted at rest).
     Task<InboundSmsView> ReceiveInboundSmsAsync(ReceiveInboundSmsCommand command, CancellationToken ct = default);

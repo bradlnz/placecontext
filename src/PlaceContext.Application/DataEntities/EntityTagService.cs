@@ -17,6 +17,9 @@ public interface IEntityTagStore
 
     /// <summary>Run ids whose output was tagged with this entity key (newest first).</summary>
     Task<IReadOnlyList<Guid>> RunsForKeyAsync(Guid entityId, string key, int take = 20, CancellationToken ct = default);
+
+    /// <summary>All run ids tagged against this entity, any key (newest first).</summary>
+    Task<IReadOnlyList<Guid>> RunsForEntityAsync(Guid entityId, int take = 20, CancellationToken ct = default);
 }
 
 /// <summary>
@@ -143,4 +146,17 @@ public sealed class TaggedRunsHandler : Cqrs.IQueryHandler<TaggedRunsQuery, IRea
 
     public Task<IReadOnlyList<Guid>> HandleAsync(TaggedRunsQuery query, CancellationToken ct = default)
         => _tags.RunsForKeyAsync(query.EntityId, query.Key);
+}
+
+/// <summary>Every run tagged against an entity — the section-level rollup of its relation tree.</summary>
+public sealed record EntityRunsQuery(Guid EntityId) : Cqrs.IQuery<IReadOnlyList<Guid>>;
+
+public sealed class EntityRunsHandler : Cqrs.IQueryHandler<EntityRunsQuery, IReadOnlyList<Guid>>
+{
+    private readonly IEntityTagStore _tags;
+
+    public EntityRunsHandler(IEntityTagStore tags) => _tags = tags;
+
+    public Task<IReadOnlyList<Guid>> HandleAsync(EntityRunsQuery query, CancellationToken ct = default)
+        => _tags.RunsForEntityAsync(query.EntityId);
 }

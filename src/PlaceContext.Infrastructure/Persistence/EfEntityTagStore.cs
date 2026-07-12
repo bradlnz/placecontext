@@ -56,6 +56,15 @@ public sealed class EfEntityTagStore : IEntityTagStore
         await _db.SaveChangesAsync(ct);
     }
 
+    public async Task<IReadOnlyList<Guid>> RunsForEntityAsync(Guid entityId, int take = 20, CancellationToken ct = default)
+        => await _db.EntityTags.AsNoTracking()
+            .Where(t => t.EntityId == entityId)
+            .OrderByDescending(t => t.CreatedAt)
+            .Select(t => t.RunId)
+            .Distinct()
+            .Take(Math.Clamp(take, 1, 100))
+            .ToListAsync(ct);
+
     public async Task<IReadOnlyList<Guid>> RunsForKeyAsync(Guid entityId, string key, int take = 20, CancellationToken ct = default)
         => await _db.EntityTags.AsNoTracking()
             .Where(t => t.EntityId == entityId && t.Key == key)
