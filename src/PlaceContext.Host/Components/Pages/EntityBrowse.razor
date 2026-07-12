@@ -260,7 +260,20 @@
         }
 
         var runIds = new HashSet<Guid>();
+
+        // The persisted relation tree first: tags written when runs completed.
         foreach (var key in keys.Distinct().Take(3))
+        {
+            try
+            {
+                foreach (var id in await Svc.ListTaggedRunsAsync(_entity.Id, key))
+                    runIds.Add(id);
+            }
+            catch { }
+        }
+
+        // Fallback for runs that predate tagging: scan the recorded run outputs.
+        foreach (var key in runIds.Count > 0 ? Enumerable.Empty<string>() : keys.Distinct().Take(3))
         {
             try
             {

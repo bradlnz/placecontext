@@ -38,6 +38,7 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
     private readonly PostJobActionService? _postActions;
     private readonly JobRunDataRecorder? _runData;
     private readonly DataMappingIngestionService? _dataMappings;
+    private readonly EntityTagService? _entityTags;
     private IReadOnlyDictionary<string, string> _runSecrets = new Dictionary<string, string>();
 
     public RunJobHandler(
@@ -55,13 +56,15 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
         ISecretProtector? secretProtector = null,
         PostJobActionService? postActions = null,
         JobRunDataRecorder? runData = null,
-        DataMappingIngestionService? dataMappings = null)
+        DataMappingIngestionService? dataMappings = null,
+        EntityTagService? entityTags = null)
     {
         _secretRepo = secretRepo;
         _secretProtector = secretProtector;
         _postActions = postActions;
         _runData = runData;
         _dataMappings = dataMappings;
+        _entityTags = entityTags;
         _jobs = jobs;
         _runs = runs;
         _contexts = contexts;
@@ -133,6 +136,11 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
         // primary artifact and append them to their target tables. Best-effort.
         if (_dataMappings is not null)
             await _dataMappings.IngestAsync(job, run, ct);
+
+        // The relation tree: values in this run's output that match entity keys (a site's address,
+        // say) persist run ⇄ entity tags, linking the job and its artifacts to those records.
+        if (_entityTags is not null)
+            await _entityTags.TagRunAsync(job, run, ct);
 
         // Persist a summary of the run into the project's context document and embed it for
         // search/the dependency graph. Best-effort — isolated so it can't fail or stall the run.
