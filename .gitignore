@@ -42,3 +42,8 @@ deploy/terraform-app/*.tfplan
 
 # agent worktrees (isolated, never commit)
 .claude/worktrees/
+
+# Local Go build outputs (never ship)
+deploy/tui/placecontext
+deploy/tui/placecontext-tui
+tools/legacy-tui/pctl-tui
