@@ -43,3 +43,18 @@ public sealed class ListJobRunTelemetryHandler
     public Task<IReadOnlyList<JobRunTelemetry>> HandleAsync(ListJobRunTelemetryQuery query, CancellationToken ct = default)
         => Task.FromResult(_reader.RunsForJob(query.JobId, query.Take));
 }
+
+/// <summary>The most recent chain-run traces across the workspace, newest first — the Cluster/
+/// Observability pages' chain lens.</summary>
+public sealed record ListRecentChainRunTelemetryQuery(int Take = 50) : IQuery<IReadOnlyList<ChainRunTelemetry>>;
+
+public sealed class ListRecentChainRunTelemetryHandler
+    : IQueryHandler<ListRecentChainRunTelemetryQuery, IReadOnlyList<ChainRunTelemetry>>
+{
+    private readonly IJobTelemetryReader _reader;
+
+    public ListRecentChainRunTelemetryHandler(IJobTelemetryReader reader) => _reader = reader;
+
+    public Task<IReadOnlyList<ChainRunTelemetry>> HandleAsync(ListRecentChainRunTelemetryQuery query, CancellationToken ct = default)
+        => Task.FromResult(_reader.RecentChainRuns(query.Take));
+}

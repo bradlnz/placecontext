@@ -152,6 +152,59 @@ else
                 }
             </div>
         }
+
+        @* ── Chain telemetry ────────────────────────────────────────────────────────────────── *@
+        <h3 class="section-title-tele">Job chain telemetry</h3>
+
+        <div class="tile-row">
+            @foreach (var tile in ChainStatTiles())
+            {
+                <div class="dccard stat-tile">
+                    <div class="tile-label">@tile.Label</div>
+                    <div class="tile-value-row">
+                        <span class="tile-value" style="color:@tile.Color">@tile.Value</span>
+                    </div>
+                    @if (tile.Sub is not null)
+                    {
+                        <div class="tile-sub">@tile.Sub</div>
+                    }
+                </div>
+            }
+        </div>
+
+        <div class="runs-title">Recent chain traces</div>
+        @if (_recentChainRuns is null or { Count: 0 })
+        {
+            <div class="dccard runs-empty">
+                No chain runs captured yet by this replica — run a job chain and it appears here.
+            </div>
+        }
+        else
+        {
+            <div class="runs-list">
+                @foreach (var run in _recentChainRuns)
+                {
+                    <a href="@($"/observability?chainRun={run.ChainRunId}")" class="run-link">
+                        <div class="dccard run-card">
+                            <div class="run-row">
+                                <span class="run-status"
+                                      style="color:@StatusColor(run.Status); background:@StatusBg(run.Status)">@(run.Status ?? "Running")</span>
+                                <div class="run-main">
+                                    <span class="run-name">@(run.ChainName ?? run.ChainId.ToString("N")[..8])</span>
+                                </div>
+                                <span class="run-shards">@run.Steps.Count step(s)</span>
+                                <span class="run-started">
+                                    @run.StartedAt.ToWorkspaceTime().ToString("yyyy-MM-dd HH:mm")
+                                </span>
+                                <span class="run-duration">
+                                    @FormatMs(run.DurationMs)
+                                </span>
+                            </div>
+                        </div>
+                    </a>
+                }
+            </div>
+        }
     </div>
 }
 
@@ -159,6 +212,7 @@ else
     private ClusterInfo? _cluster;
     private JobTelemetrySnapshot? _snapshot;
     private IReadOnlyList<JobRunTelemetry>? _recentRuns;
+    private IReadOnlyList<ChainRunTelemetry>? _recentChainRuns;
     private string? _message;
     private bool _loading = true;
 
@@ -192,6 +246,7 @@ else
             _cluster = await Svc.GetClusterInfoAsync();
             _snapshot = await Svc.GetJobTelemetrySnapshotAsync();
             _recentRuns = await Svc.ListRecentJobRunTelemetryAsync(50);
+            _recentChainRuns = await Svc.ListRecentChainRunTelemetryAsync(50);
         }
         catch (Exception ex) { _message = ex.Message; }
     }
@@ -210,6 +265,17 @@ else
 
         if (_snapshot?.ShardDuration is { } sd)
             yield return new Tile("SHARD DURATION", FormatMs(sd.AvgMs) ?? "—", $"avg · min {FormatMs(sd.MinMs)} · max {FormatMs(sd.MaxMs)}", "var(--text)");
+    }
+
+    private IEnumerable<Tile> ChainStatTiles()
+    {
+        yield return new Tile("CHAINS STARTED", (_snapshot?.ChainsStarted ?? 0).ToString(), "since this replica booted", "var(--text)");
+
+        foreach (var (status, count) in (_snapshot?.ChainsCompletedByStatus ?? new Dictionary<string, long>()).OrderByDescending(kv => kv.Value))
+            yield return new Tile($"COMPLETED · {status.ToUpperInvariant()}", count.ToString(), "chain runs", StatusColor(status));
+
+        if (_snapshot?.ChainDuration is { } cd)
+            yield return new Tile("CHAIN DURATION", FormatMs(cd.AvgMs) ?? "—", $"avg · min {FormatMs(cd.MinMs)} · max {FormatMs(cd.MaxMs)}", "var(--text)");
     }
 
     private static string? FormatMs(double? ms) => ms switch

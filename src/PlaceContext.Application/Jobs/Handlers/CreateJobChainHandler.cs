@@ -3,6 +3,7 @@ using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Ports;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.Repositories;
+using PlaceContext.Domain.ValueObjects;
 
 namespace PlaceContext.Application.Features;
 
@@ -23,13 +24,17 @@ public sealed class CreateJobChainHandler : ICommandHandler<CreateJobChainComman
 
     public async Task<JobChainView> HandleAsync(CreateJobChainCommand command, CancellationToken ct = default)
     {
-        var chain = JobChain.Create(command.ProjectId, command.Name, command.Description,
-            command.StepJobIds, _clock.UtcNow);
+        var chain = command.Stages is { Count: > 0 } stages
+            ? JobChain.Create(command.ProjectId, command.Name, command.Description, ToStages(stages), _clock.UtcNow)
+            : JobChain.Create(command.ProjectId, command.Name, command.Description, command.StepJobIds, _clock.UtcNow);
         await ValidateStepsAsync(_jobs, chain, ct);
         await _chains.AddAsync(chain, ct);
         await _uow.SaveChangesAsync(ct);
         return await JobChainMapper.ToViewAsync(chain, _jobs, ct);
     }
+
+    internal static List<ChainStage> ToStages(IReadOnlyList<IReadOnlyList<Guid>> stages)
+        => stages.Select(s => new ChainStage(s)).ToList();
 
     /// <summary>Every step must reference an existing job in the chain's project — a typo'd or foreign
     /// job id should fail at definition time, not at run time.</summary>

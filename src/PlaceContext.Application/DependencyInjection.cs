@@ -162,6 +162,8 @@ public static class DependencyInjection
         services.AddScoped<IQueryHandler<GetJobTelemetrySnapshotQuery, Ports.JobTelemetrySnapshot>, GetJobTelemetrySnapshotHandler>();
         services.AddScoped<IQueryHandler<ListRecentJobRunTelemetryQuery, IReadOnlyList<Ports.JobRunTelemetry>>, ListRecentJobRunTelemetryHandler>();
         services.AddScoped<IQueryHandler<ListJobRunTelemetryQuery, IReadOnlyList<Ports.JobRunTelemetry>>, ListJobRunTelemetryHandler>();
+        services.AddScoped<IQueryHandler<ListRecentChainRunTelemetryQuery, IReadOnlyList<Ports.ChainRunTelemetry>>, ListRecentChainRunTelemetryHandler>();
+        services.AddScoped<IQueryHandler<ListRecentChainRunsQuery, IReadOnlyList<ChainRunReportView>>, ListRecentChainRunsHandler>();
 
         return services;
     }

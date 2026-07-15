@@ -1,0 +1,80 @@
+@* Shared left-to-right pipeline stage visualization for a chain run: one column per stage, stage
+   boxes flow with "──▶" between columns. A stage with more than one step (a parallel fan-out group)
+   renders as stacked boxes within its column; the join is simply the next column. Used by both the
+   per-project JobChains page and the cross-project Observability "Chains" lens so the two stay
+   visually identical. Clicking a step (once it has a run id) raises OnStepClick — callers decide
+   whether that opens an inline detail panel or deep-links to the run's OTel trace. *@
+
+<div class="pipeline">
+    @foreach (var (stage, colIndex) in Run.StepsByStage.Select((s, i) => (s, i)))
+    {
+        if (colIndex > 0)
+        {
+            <span class="pipe-arrow">──▶</span>
+        }
+        <div class="stage-col">
+            @foreach (var step in stage)
+            {
+                <div class="stage" style="border:1.5px solid @StepBorder(step.Status); background:@StatusBg(step.Status); @(step.RunId is not null ? "cursor:pointer" : "")"
+                     @onclick="@(() => OnStepClick.InvokeAsync(step))">
+                    <div class="stage-title" style="color:@StatusColor(step.Status)">
+                        <span>@StepIcon(step.Status)</span><span>@step.JobName</span>
+                    </div>
+                    <div class="stage-sub">
+                        @(step.Status == "Running" ? "running…"
+                            : step.StartedAt.HasValue && step.FinishedAt.HasValue
+                                ? step.Status + " " + FormatDuration(step.StartedAt.Value, step.FinishedAt.Value)
+                                : step.Status.ToLowerInvariant())
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public ChainRunView Run { get; set; } = null!;
+    [Parameter] public EventCallback<ChainStepRunView> OnStepClick { get; set; }
+
+    private static string StepIcon(string status) => status switch
+    {
+        "Succeeded" => "✓",
+        "Failed" => "✗",
+        "Partial" => "~",
+        "Running" => "●",
+        "Skipped" => "⏭",
+        _ => "○"
+    };
+
+    private static string StepBorder(string status) => status switch
+    {
+        "Running" => "var(--brand-2)",
+        "Pending" or "Skipped" => "var(--border)",
+        _ => StatusColor(status)
+    };
+
+    private static string StatusColor(string status) => status switch
+    {
+        "Succeeded" => "var(--good)",
+        "Failed" => "var(--bad)",
+        "Partial" => "var(--warn)",
+        "Running" => "var(--brand-2)",
+        _ => "var(--text-3)"
+    };
+
+    private static string StatusBg(string status) => status switch
+    {
+        "Succeeded" => "var(--good-bg)",
+        "Failed" => "var(--bad-bg)",
+        "Partial" => "var(--warn-bg)",
+        "Running" => "var(--brand-bg)",
+        _ => "var(--card-2)"
+    };
+
+    private static string FormatDuration(DateTimeOffset start, DateTimeOffset end)
+    {
+        var span = end - start;
+        if (span.TotalSeconds < 60) return $"{(int)span.TotalSeconds}s";
+        return $"{(int)span.TotalMinutes}m {span.Seconds}s";
+    }
+}

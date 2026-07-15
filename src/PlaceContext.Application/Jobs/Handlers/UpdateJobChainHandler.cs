@@ -24,7 +24,10 @@ public sealed class UpdateJobChainHandler : ICommandHandler<UpdateJobChainComman
     {
         var chain = await _chains.GetByIdAsync(command.ChainId, ct)
             ?? throw new InvalidOperationException($"Chain {command.ChainId} not found.");
-        chain.Update(command.Name, command.Description, command.StepJobIds, _clock.UtcNow);
+        if (command.Stages is { Count: > 0 } stages)
+            chain.Update(command.Name, command.Description, CreateJobChainHandler.ToStages(stages), _clock.UtcNow);
+        else
+            chain.Update(command.Name, command.Description, command.StepJobIds, _clock.UtcNow);
         await CreateJobChainHandler.ValidateStepsAsync(_jobs, chain, ct);
         await _chains.UpdateAsync(chain, ct);
         await _uow.SaveChangesAsync(ct);

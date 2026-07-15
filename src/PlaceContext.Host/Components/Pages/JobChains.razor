@@ -22,7 +22,8 @@ else
             <div>
                 <h2 class="page-title">Job chains</h2>
                 <div class="sub-note">
-                    Ordered pipelines — each step's primary output becomes the next step's input payload.
+                    Ordered pipelines — each stage's primary output becomes the next stage's input payload. A
+                    stage with more than one job (chips joined with "+") is a parallel fan-out group.
                 </div>
             </div>
             <button class="dcbtn primary" @onclick="NewChain">+ New chain</button>
@@ -53,13 +54,29 @@ else
                                     <div class="sub-note">@chain.Description</div>
                                 }
                                 <div class="step-chips">
-                                    @foreach (var (step, i) in chain.Steps.Select((s, i) => (s, i)))
+                                    @foreach (var (stage, i) in chain.Stages.Select((s, i) => (s, i)))
                                     {
                                         if (i > 0)
                                         {
                                             <span class="chip-arrow">→</span>
                                         }
-                                        <span class="step-chip" style="color:@(step.JobName == "(deleted)" ? "var(--bad)" : "var(--brand-2)")">@step.JobName</span>
+                                        @if (stage.IsParallel)
+                                        {
+                                            <span class="stage-group" title="parallel fan-out — all run at once">
+                                                @foreach (var (job, j) in stage.Jobs.Select((s, j) => (s, j)))
+                                                {
+                                                    if (j > 0)
+                                                    {
+                                                        <span class="chip-plus">+</span>
+                                                    }
+                                                    <span class="step-chip" style="color:@(job.JobName == "(deleted)" ? "var(--bad)" : "var(--brand-2)")">@job.JobName</span>
+                                                }
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <span class="step-chip" style="color:@(stage.Jobs[0].JobName == "(deleted)" ? "var(--bad)" : "var(--brand-2)")">@stage.Jobs[0].JobName</span>
+                                        }
                                     }
                                 </div>
                             </div>
@@ -92,7 +109,9 @@ else
             <div class="flex-min">
                 <div class="title-14">@(_editChainId.HasValue ? _edName : "New chain")</div>
                 <div class="sub-115">
-                    Steps run in order; a failed step stops the chain. The same job may appear more than once.
+                    Stages run in order; a stage with more than one job runs them all in parallel — every job
+                    in it must succeed for the chain to continue. A failed job stops the whole chain. The same
+                    job may appear more than once.
                 </div>
             </div>
             @if (_editChainId.HasValue && _chains?.FirstOrDefault(c => c.Id == _editChainId) is { } runnable)
@@ -159,28 +178,9 @@ else
                         </span>
                     </div>
 
-                    @* ── The pipeline: stage chips flowing left to right ───────────────────────── *@
-                    <div class="pipeline">
-                        @foreach (var (step, i) in _openRun.Steps.Select((s, i) => (s, i)))
-                        {
-                            if (i > 0)
-                            {
-                                <span class="pipe-arrow">──▶</span>
-                            }
-                            <div class="stage" style="border:1.5px solid @StepBorder(step.Status); background:@StatusBg(step.Status); @(step.RunId is not null ? "cursor:pointer" : "")"
-                                 @onclick="@(() => OpenStepRun(step))">
-                                <div class="stage-title" style="color:@StatusColor(step.Status)">
-                                    <span>@StepIcon(step.Status)</span><span>@step.JobName</span>
-                                </div>
-                                <div class="stage-sub">
-                                    @(step.Status == "Running" ? "running…"
-                                        : step.StartedAt.HasValue && step.FinishedAt.HasValue
-                                            ? step.Status + " " + FormatDuration(step.StartedAt.Value, step.FinishedAt.Value)
-                                            : step.Status.ToLowerInvariant())
-                                </div>
-                            </div>
-                        }
-                    </div>
+                    @* ── The pipeline: stage boxes flowing left to right; a fan-out stage stacks its
+                       branches in one column and the join is simply the next column ────────────── *@
+                    <ChainPipeline Run="_openRun" OnStepClick="OpenStepRun" />
 
                     @if (_openRun.FinalOutput is { Length: > 0 })
                     {
@@ -239,25 +239,40 @@ else
             </div>
 
             <div class="dcform-section">
-                <span class="dcform-title">Steps <span class="req">*</span></span>
+                <span class="dcform-title">Stages <span class="req">*</span></span>
+                <div class="sub-note mb-8">
+                    A stage with more than one job runs them all in parallel (a fan-out group) — every job in
+                    it must succeed for the chain to continue to the next stage, which acts as the join.
+                </div>
 
-                @if (_edSteps.Count == 0)
+                @if (_edStages.Count == 0)
                 {
                     <div class="empty-steps">
-                        No steps yet — pick a job below and add it.
+                        No stages yet — pick a job below and add it.
                     </div>
                 }
                 else
                 {
                     <div class="step-list">
-                        @foreach (var (jobId, i) in _edSteps.Select((id, i) => (id, i)))
+                        @foreach (var (stage, i) in _edStages.Select((s, i) => (s, i)))
                         {
-                            <div class="step-item">
+                            <div class="step-item stage-item">
                                 <span class="step-num">@(i + 1).</span>
-                                <span class="step-jobname">@JobName(jobId)</span>
-                                <button class="dcbtn btn-2-8" disabled="@(i == 0)" @onclick="@(() => MoveStep(i, -1))">↑</button>
-                                <button class="dcbtn btn-2-8" disabled="@(i == _edSteps.Count - 1)" @onclick="@(() => MoveStep(i, +1))">↓</button>
-                                <button class="dcbtn btn-2-8-del" @onclick="@(() => _edSteps.RemoveAt(i))">×</button>
+                                <div class="stage-jobs">
+                                    @foreach (var (jobId, j) in stage.Select((id, j) => (id, j)))
+                                    {
+                                        <span class="stage-job-chip">
+                                            @JobName(jobId)
+                                            <button class="dcbtn btn-2-8-del" title="Remove this job from the stage"
+                                                    @onclick="@(() => RemoveBranch(i, j))">×</button>
+                                        </span>
+                                    }
+                                </div>
+                                <button class="dcbtn btn-2-8" title="Add the picked job as a parallel branch of this stage"
+                                        disabled="@(string.IsNullOrEmpty(_edAddJobId))" @onclick="@(() => AddBranch(i))">+ branch</button>
+                                <button class="dcbtn btn-2-8" disabled="@(i == 0)" @onclick="@(() => MoveStage(i, -1))">↑</button>
+                                <button class="dcbtn btn-2-8" disabled="@(i == _edStages.Count - 1)" @onclick="@(() => MoveStage(i, +1))">↓</button>
+                                <button class="dcbtn btn-2-8-del" @onclick="@(() => _edStages.RemoveAt(i))">×</button>
                             </div>
                         }
                     </div>
@@ -271,7 +286,7 @@ else
                             <option value="@job.Id">@job.Name</option>
                         }
                     </select>
-                    <button class="dcbtn" disabled="@(string.IsNullOrEmpty(_edAddJobId))" @onclick="AddStep">+ Add step</button>
+                    <button class="dcbtn" disabled="@(string.IsNullOrEmpty(_edAddJobId))" @onclick="AddStage">+ Add step</button>
                 </div>
             </div>
 
@@ -363,7 +378,8 @@ else
     private string _editorTab = "details"; // details | runs
     private string _edName = "";
     private string _edDescription = "";
-    private readonly List<Guid> _edSteps = new();
+    // Each entry is one stage's job ids; a stage with more than one id is a parallel fan-out group.
+    private readonly List<List<Guid>> _edStages = new();
     private string _edAddJobId = "";
 
     // ── Pipeline runs state ───────────────────────────────────────────────────────────────────────
@@ -618,7 +634,7 @@ else
         _editChainId = null;
         _edName = "";
         _edDescription = "";
-        _edSteps.Clear();
+        _edStages.Clear();
         _edAddJobId = "";
         _editorError = null;
         _editorTab = "details";
@@ -636,8 +652,8 @@ else
         _editChainId = chain.Id;
         _edName = chain.Name;
         _edDescription = chain.Description ?? "";
-        _edSteps.Clear();
-        _edSteps.AddRange(chain.Steps.Select(s => s.JobId));
+        _edStages.Clear();
+        _edStages.AddRange(chain.Stages.Select(s => s.Jobs.Select(j => j.JobId).ToList()));
         _edAddJobId = "";
         _editorError = null;
         _editorTab = "details";
@@ -657,37 +673,54 @@ else
         StopPolling();
     }
 
-    private void AddStep()
+    /// <summary>Adds the picked job as a whole new (ordinary sequential) stage.</summary>
+    private void AddStage()
     {
-        if (Guid.TryParse(_edAddJobId, out var id)) _edSteps.Add(id);
+        if (Guid.TryParse(_edAddJobId, out var id)) _edStages.Add(new List<Guid> { id });
         _edAddJobId = "";
     }
 
-    private void MoveStep(int index, int delta)
+    /// <summary>Adds the picked job as a parallel branch of an existing stage, turning it (or keeping
+    /// it) a fan-out group.</summary>
+    private void AddBranch(int stageIndex)
+    {
+        if (Guid.TryParse(_edAddJobId, out var id)) _edStages[stageIndex].Add(id);
+        _edAddJobId = "";
+    }
+
+    /// <summary>Removes one job from a stage; an emptied stage is dropped entirely.</summary>
+    private void RemoveBranch(int stageIndex, int branchIndex)
+    {
+        _edStages[stageIndex].RemoveAt(branchIndex);
+        if (_edStages[stageIndex].Count == 0) _edStages.RemoveAt(stageIndex);
+    }
+
+    private void MoveStage(int index, int delta)
     {
         var target = index + delta;
-        if (target < 0 || target >= _edSteps.Count) return;
-        (_edSteps[index], _edSteps[target]) = (_edSteps[target], _edSteps[index]);
+        if (target < 0 || target >= _edStages.Count) return;
+        (_edStages[index], _edStages[target]) = (_edStages[target], _edStages[index]);
     }
 
     private async Task SaveChain()
     {
         _editorError = null;
         if (string.IsNullOrWhiteSpace(_edName)) { _editorError = "Name is required."; return; }
-        if (_edSteps.Count == 0) { _editorError = "A chain needs at least one step."; return; }
+        if (_edStages.Count == 0) { _editorError = "A chain needs at least one stage."; return; }
 
         _saving = true;
         try
         {
             var description = string.IsNullOrWhiteSpace(_edDescription) ? null : _edDescription.Trim();
+            var flat = _edStages.SelectMany(s => s).ToList();
             if (_editChainId is { } chainId)
             {
-                await Svc.UpdateJobChainAsync(chainId, _edName.Trim(), description, _edSteps);
+                await Svc.UpdateJobChainAsync(chainId, _edName.Trim(), description, flat, _edStages);
                 _message = $"Chain {_edName.Trim()} updated.";
             }
             else
             {
-                await Svc.CreateJobChainAsync(ProjectId, _edName.Trim(), description, _edSteps);
+                await Svc.CreateJobChainAsync(ProjectId, _edName.Trim(), description, flat, _edStages);
                 _message = $"Chain {_edName.Trim()} created.";
             }
             _chains = await Svc.ListJobChainsAsync(ProjectId);
@@ -710,23 +743,6 @@ else
     }
 
     // ── Presentation helpers ─────────────────────────────────────────────────────────────────────
-
-    private static string StepIcon(string status) => status switch
-    {
-        "Succeeded" => "✓",
-        "Failed" => "✗",
-        "Partial" => "~",
-        "Running" => "●",
-        "Skipped" => "⏭",
-        _ => "○"
-    };
-
-    private static string StepBorder(string status) => status switch
-    {
-        "Running" => "var(--brand-2)",
-        "Pending" or "Skipped" => "var(--border)",
-        _ => StatusColor(status)
-    };
 
     private static string StatusColor(string status) => status switch
     {

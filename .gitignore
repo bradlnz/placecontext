@@ -39,3 +39,6 @@ deploy/terraform-app/*.tfstate.*
 deploy/terraform-app/*.tfvars
 deploy/terraform-app/*.tfplan
 !deploy/terraform-app/*.tfvars.example
+
+# agent worktrees (isolated, never commit)
+.claude/worktrees/

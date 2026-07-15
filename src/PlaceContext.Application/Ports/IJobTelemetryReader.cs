@@ -21,6 +21,35 @@ public sealed record JobRunTelemetry(
 /// <summary>Count + min/max/avg summary of a histogram instrument since process start.</summary>
 public sealed record DurationSummary(long Count, double MinMs, double MaxMs, double AvgMs);
 
+/// <summary>One step captured from a <c>job.chain</c> activity's step summary — the job that ran at
+/// a stage/branch position, its run id (once dispatched) and outcome/timing. Mirrors <see
+/// cref="PlaceContext.Application.Dtos.ChainStepRunView"/> but sourced purely from OTel, like the
+/// rest of this reader.</summary>
+public sealed record ChainRunStepTelemetry(
+    int StageIndex,
+    int BranchIndex,
+    Guid JobId,
+    string? JobName,
+    Guid? RunId,
+    string? Status,
+    double? DurationMs);
+
+/// <summary>
+/// One chain run captured from the OTel <c>job.chain</c> activity, reduced to the fields the UI
+/// wants. <see cref="Steps"/> is the chain's own step summary (stage/branch position, run id,
+/// outcome) attached to the activity as a tag when the chain finishes — see
+/// <c>RunJobChainHandler</c> and the Infrastructure collector for how it's captured.
+/// </summary>
+public sealed record ChainRunTelemetry(
+    Guid ChainRunId,
+    Guid ChainId,
+    string? ChainName,
+    Guid? ProjectId,
+    string? Status,
+    DateTimeOffset StartedAt,
+    double? DurationMs,
+    IReadOnlyList<ChainRunStepTelemetry> Steps);
+
 /// <summary>
 /// Aggregate jobs-pipeline metrics since this process started — the Cluster page's stat tiles.
 /// Counters are keyed by their OTel tag value (e.g. run status, shard outcome).
@@ -30,7 +59,10 @@ public sealed record JobTelemetrySnapshot(
     IReadOnlyDictionary<string, long> RunsCompletedByStatus,
     IReadOnlyDictionary<string, long> ShardsCompletedByOutcome,
     DurationSummary? RunDuration,
-    DurationSummary? ShardDuration);
+    DurationSummary? ShardDuration,
+    long ChainsStarted,
+    IReadOnlyDictionary<string, long> ChainsCompletedByStatus,
+    DurationSummary? ChainDuration);
 
 /// <summary>
 /// In-process reader over the jobs pipeline's OpenTelemetry instruments (see
@@ -49,4 +81,7 @@ public interface IJobTelemetryReader
 
     /// <summary>The most recent job-run traces for one job, newest first.</summary>
     IReadOnlyList<JobRunTelemetry> RunsForJob(Guid jobId, int take = 20);
+
+    /// <summary>The most recent chain-run traces across the whole process, newest first.</summary>
+    IReadOnlyList<ChainRunTelemetry> RecentChainRuns(int take = 50);
 }

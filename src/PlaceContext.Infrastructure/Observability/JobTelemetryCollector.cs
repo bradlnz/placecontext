@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
+using System.Text.Json;
 using PlaceContext.Application.Observability;
 using PlaceContext.Application.Ports;
 
@@ -24,9 +25,13 @@ namespace PlaceContext.Infrastructure.Observability;
 public sealed class JobTelemetryCollector : IJobTelemetryReader, IDisposable
 {
     private const int MaxRuns = 200;
+    private const int MaxChainRuns = 200;
 
     private readonly object _runsGate = new();
     private readonly LinkedList<JobRunTelemetry> _runs = new(); // newest at the front
+
+    private readonly object _chainRunsGate = new();
+    private readonly LinkedList<ChainRunTelemetry> _chainRuns = new(); // newest at the front
 
     private readonly ConcurrentDictionary<Guid, ConcurrentBag<ShardTelemetry>> _pendingShards = new();
 
@@ -35,6 +40,10 @@ public sealed class JobTelemetryCollector : IJobTelemetryReader, IDisposable
     private readonly ConcurrentDictionary<string, long> _shardsCompletedByOutcome = new();
     private readonly DurationAccumulator _runDuration = new();
     private readonly DurationAccumulator _shardDuration = new();
+
+    private long _chainsStarted;
+    private readonly ConcurrentDictionary<string, long> _chainsCompletedByStatus = new();
+    private readonly DurationAccumulator _chainDuration = new();
 
     private readonly ActivityListener _activityListener;
     private readonly MeterListener _meterListener;
@@ -70,6 +79,7 @@ public sealed class JobTelemetryCollector : IJobTelemetryReader, IDisposable
         {
             case "job.shard": CaptureShard(activity); break;
             case "job.run": CaptureRun(activity); break;
+            case "job.chain": CaptureChain(activity); break;
         }
     }
 
@@ -110,6 +120,58 @@ public sealed class JobTelemetryCollector : IJobTelemetryReader, IDisposable
         }
     }
 
+    /// <summary>
+    /// Captures a finished <c>job.chain</c> activity. Its step breakdown (stage/branch position, run
+    /// id, outcome) isn't correlated from the child <c>job.run</c> activities' own tags — that data
+    /// only <c>RunJobChainHandler</c> has, and reaching into <c>RunJobHandler</c> to tag it there is
+    /// out of scope for this change — so the chain publishes its own step summary as a single
+    /// <c>chain.steps.json</c> tag when it finishes, and this just parses it back.
+    /// </summary>
+    private void CaptureChain(Activity activity)
+    {
+        var chainRunId = TagGuid(activity, "chain.run.id") ?? Guid.Empty;
+        var chainId = TagGuid(activity, "chain.id") ?? Guid.Empty;
+        var chainName = TagString(activity, "chain.name");
+        var projectId = TagGuid(activity, "project.id");
+        var status = TagString(activity, "status");
+
+        IReadOnlyList<ChainRunStepTelemetry> steps = Array.Empty<ChainRunStepTelemetry>();
+        if (TagString(activity, "chain.steps.json") is { Length: > 0 } stepsJson)
+        {
+            try { steps = ParseSteps(stepsJson); }
+            catch (JsonException) { /* malformed tag — keep the chain telemetry without step detail */ }
+        }
+
+        var telemetry = new ChainRunTelemetry(
+            chainRunId, chainId, chainName, projectId, status,
+            new DateTimeOffset(activity.StartTimeUtc, TimeSpan.Zero),
+            activity.Duration.TotalMilliseconds, steps);
+
+        lock (_chainRunsGate)
+        {
+            _chainRuns.AddFirst(telemetry);
+            while (_chainRuns.Count > MaxChainRuns) _chainRuns.RemoveLast();
+        }
+    }
+
+    private static IReadOnlyList<ChainRunStepTelemetry> ParseSteps(string stepsJson)
+    {
+        using var doc = JsonDocument.Parse(stepsJson);
+        var steps = new List<ChainRunStepTelemetry>();
+        foreach (var el in doc.RootElement.EnumerateArray())
+        {
+            steps.Add(new ChainRunStepTelemetry(
+                StageIndex: el.TryGetProperty("stageIndex", out var st) ? st.GetInt32() : 0,
+                BranchIndex: el.TryGetProperty("branchIndex", out var br) ? br.GetInt32() : 0,
+                JobId: el.TryGetProperty("jobId", out var ji) && ji.GetGuid() is var g ? g : Guid.Empty,
+                JobName: el.TryGetProperty("jobName", out var jn) ? jn.GetString() : null,
+                RunId: el.TryGetProperty("runId", out var ri) && ri.ValueKind != JsonValueKind.Null ? ri.GetGuid() : null,
+                Status: el.TryGetProperty("status", out var s) ? s.GetString() : null,
+                DurationMs: el.TryGetProperty("durationMs", out var d) && d.ValueKind != JsonValueKind.Null ? d.GetDouble() : null));
+        }
+        return steps;
+    }
+
     private static Guid? TagGuid(Activity activity, string key)
         => Guid.TryParse(activity.GetTagItem(key)?.ToString(), out var g) ? g : null;
 
@@ -131,6 +193,12 @@ public sealed class JobTelemetryCollector : IJobTelemetryReader, IDisposable
             case "placecontext.jobs.shards.completed":
                 Increment(_shardsCompletedByOutcome, TagValue(tags, "outcome"), measurement);
                 break;
+            case "placecontext.jobs.chains.started":
+                Interlocked.Add(ref _chainsStarted, measurement);
+                break;
+            case "placecontext.jobs.chains.completed":
+                Increment(_chainsCompletedByStatus, TagValue(tags, "status"), measurement);
+                break;
         }
     }
 
@@ -141,6 +209,7 @@ public sealed class JobTelemetryCollector : IJobTelemetryReader, IDisposable
         {
             case "placecontext.jobs.run.duration": _runDuration.Record(measurement); break;
             case "placecontext.jobs.shard.duration": _shardDuration.Record(measurement); break;
+            case "placecontext.jobs.chain.duration": _chainDuration.Record(measurement); break;
         }
     }
 
@@ -161,7 +230,10 @@ public sealed class JobTelemetryCollector : IJobTelemetryReader, IDisposable
         new Dictionary<string, long>(_runsCompletedByStatus),
         new Dictionary<string, long>(_shardsCompletedByOutcome),
         _runDuration.ToSummary(),
-        _shardDuration.ToSummary());
+        _shardDuration.ToSummary(),
+        Interlocked.Read(ref _chainsStarted),
+        new Dictionary<string, long>(_chainsCompletedByStatus),
+        _chainDuration.ToSummary());
 
     public IReadOnlyList<JobRunTelemetry> RecentRuns(int take = 50)
     {
@@ -171,6 +243,11 @@ public sealed class JobTelemetryCollector : IJobTelemetryReader, IDisposable
     public IReadOnlyList<JobRunTelemetry> RunsForJob(Guid jobId, int take = 20)
     {
         lock (_runsGate) return _runs.Where(r => r.JobId == jobId).Take(take).ToList();
+    }
+
+    public IReadOnlyList<ChainRunTelemetry> RecentChainRuns(int take = 50)
+    {
+        lock (_chainRunsGate) return _chainRuns.Take(take).ToList();
     }
 
     public void Dispose()

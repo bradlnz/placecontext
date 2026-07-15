@@ -12,7 +12,9 @@ internal static class ChainRunMapper
         ChainName: run.ChainName,
         Status: run.Status.ToString(),
         Steps: run.Steps
-            .Select(s => new ChainStepRunView(s.Index, s.JobId, s.JobName, s.RunId, s.Status.ToString(), s.StartedAt, s.FinishedAt))
+            .Select(s => new ChainStepRunView(
+                s.Index, s.StageIndex, s.BranchIndex, s.JobId, s.JobName, s.RunId,
+                s.Status.ToString(), s.StartedAt, s.FinishedAt))
             .ToList(),
         FinalOutput: run.FinalOutput,
         StartedAt: run.StartedAt,

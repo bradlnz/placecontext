@@ -37,6 +37,12 @@ public sealed class InMemoryChainRunRepository : IChainRunRepository
             .Take(take)
             .ToList());
 
+    public Task<IReadOnlyList<ChainRun>> ListRecentAsync(int take, CancellationToken ct = default)
+        => Task.FromResult<IReadOnlyList<ChainRun>>(_runs.Values
+            .OrderByDescending(r => r.StartedAt)
+            .Take(take)
+            .ToList());
+
     private static string Snapshot(ChainRun run)
         => string.Join(",", run.Steps.Select(s => s.Status.ToString()));
 }
