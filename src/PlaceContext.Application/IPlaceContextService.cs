@@ -71,6 +71,8 @@ public interface IPlaceContextService
     Task<ChainRunView> RunJobChainAsync(Guid chainId, string? inputPayload = null, Guid? chainRunId = null, IReadOnlyDictionary<int, string>? stepPayloadOverrides = null, CancellationToken ct = default);
     Task<IReadOnlyList<ChainRunView>> ListChainRunsAsync(Guid chainId, int take = 20, CancellationToken ct = default);
     Task<ChainRunView?> GetChainRunAsync(Guid chainRunId, CancellationToken ct = default);
+    /// <summary>Cross-project chain run history, newest first — Observability's "Chains" tab.</summary>
+    Task<IReadOnlyList<ChainRunReportView>> ListRecentChainRunsAsync(int take = 24, CancellationToken ct = default);
 
     // Data map (declarative ingestion: job run results → project tables).
     Task<DataMappingView> SaveDataMappingAsync(SaveDataMappingCommand command, CancellationToken ct = default);
@@ -143,4 +145,5 @@ public interface IPlaceContextService
     Task<Ports.JobTelemetrySnapshot> GetJobTelemetrySnapshotAsync(CancellationToken ct = default);
     Task<IReadOnlyList<Ports.JobRunTelemetry>> ListRecentJobRunTelemetryAsync(int take = 50, CancellationToken ct = default);
     Task<IReadOnlyList<Ports.JobRunTelemetry>> ListJobRunTelemetryAsync(Guid jobId, int take = 20, CancellationToken ct = default);
+    Task<IReadOnlyList<Ports.ChainRunTelemetry>> ListRecentChainRunTelemetryAsync(int take = 50, CancellationToken ct = default);
 }

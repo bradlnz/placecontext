@@ -44,6 +44,15 @@ public sealed class EfChainRunRepository : IChainRunRepository
         return rows.Select(ToDomain).ToList();
     }
 
+    public async Task<IReadOnlyList<ChainRun>> ListRecentAsync(int take, CancellationToken ct = default)
+    {
+        var rows = await _db.ChainRuns.AsNoTracking()
+            .OrderByDescending(r => r.StartedAt)
+            .Take(Math.Clamp(take, 1, 200))
+            .ToListAsync(ct);
+        return rows.Select(ToDomain).ToList();
+    }
+
     private static ChainRunRow ToRow(ChainRun r) => new()
     {
         Id = r.Id,

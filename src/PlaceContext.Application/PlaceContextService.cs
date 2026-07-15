@@ -186,6 +186,9 @@ public sealed class PlaceContextService : IPlaceContextService
     public Task<ChainRunView?> GetChainRunAsync(Guid chainRunId, CancellationToken ct = default)
         => _dispatcher.Query(new GetChainRunQuery(chainRunId), ct);
 
+    public Task<IReadOnlyList<ChainRunReportView>> ListRecentChainRunsAsync(int take = 24, CancellationToken ct = default)
+        => _dispatcher.Query(new ListRecentChainRunsQuery(take), ct);
+
     public Task<DataMappingView> SaveDataMappingAsync(SaveDataMappingCommand command, CancellationToken ct = default)
         => _dispatcher.Send(command, ct);
 
@@ -344,4 +347,7 @@ public sealed class PlaceContextService : IPlaceContextService
 
     public Task<IReadOnlyList<Ports.JobRunTelemetry>> ListJobRunTelemetryAsync(Guid jobId, int take = 20, CancellationToken ct = default)
         => _dispatcher.Query(new Observability.ListJobRunTelemetryQuery(jobId, take), ct);
+
+    public Task<IReadOnlyList<Ports.ChainRunTelemetry>> ListRecentChainRunTelemetryAsync(int take = 50, CancellationToken ct = default)
+        => _dispatcher.Query(new Observability.ListRecentChainRunTelemetryQuery(take), ct);
 }
