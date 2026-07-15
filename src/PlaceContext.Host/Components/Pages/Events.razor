@@ -12,83 +12,83 @@
 }
 else
 {
-    <div style="padding:20px 24px 40px; max-width:1100px; margin:0 auto">
+    <div class="page">
 
 
-        <h2 style="font-size:18px; font-weight:600; margin:0 0 4px">Events</h2>
-        <div style="font-size:12.5px; color:var(--text-3); margin-bottom:18px">
+        <h2 class="page-title">Events</h2>
+        <div class="page-sub">
             Define event types, emit them, and watch the log. Event triggers on a job fire whenever a matching event is emitted.
         </div>
 
         @if (_message is not null)
         {
-            <div style="margin-bottom:12px; padding:10px 14px; border-radius:8px; background:var(--card); font-size:12.5px; color:var(--text-2)">@_message</div>
+            <div class="message-bar">@_message</div>
         }
 
-        <div style="display:flex; gap:16px; flex-wrap:wrap; align-items:flex-start">
+        <div class="columns">
 
             @* ── Event types ─────────────────────────────────────────────── *@
-            <div style="flex:1; min-width:340px; display:flex; flex-direction:column; gap:12px">
-                <div style="font-size:14px; font-weight:600">Event types</div>
+            <div class="column">
+                <div class="column-title">Event types</div>
 
-                <div style="display:flex; flex-direction:column; gap:8px">
+                <div class="stack">
                     @foreach (var e in _types ?? Array.Empty<EventTypeView>())
                     {
-                        <div class="dccard" style="padding:12px 16px">
-                            <div style="display:flex; align-items:center; gap:8px">
-                                <span style="font-size:13px; font-weight:600; font-family:var(--font-sans)">@e.Name</span>
+                        <div class="dccard type-card">
+                            <div class="card-row">
+                                <span class="type-name">@e.Name</span>
                                 @if (e.IsBuiltIn)
                                 {
-                                    <span style="font-size:10px; font-weight:600; padding:2px 6px; border-radius:4px; color:var(--brand-2); background:var(--brand-bg)">built-in</span>
+                                    <span class="builtin-badge">built-in</span>
                                 }
                             </div>
                             @if (!string.IsNullOrWhiteSpace(e.Description))
                             {
-                                <div style="font-size:12px; color:var(--text-3); margin-top:3px">@e.Description</div>
+                                <div class="type-desc">@e.Description</div>
                             }
-                            <button class="dcbtn" style="margin-top:8px; padding:3px 10px; font-size:11px"
+                            <button class="dcbtn btn-emit"
                                     @onclick="@(() => Emit(e.Name))">Emit</button>
                         </div>
                     }
                 </div>
 
-                <div class="dccard" style="padding:14px 16px; display:flex; flex-direction:column; gap:10px">
-                    <div style="font-size:12.5px; font-weight:600">Define event type</div>
+                <div class="dccard define-card">
+                    <div class="define-title">Define event type</div>
                     <input class="dcinput" @bind="_defName" placeholder="deploy.finished" />
                     <input class="dcinput" @bind="_defDescription" placeholder="Description (optional)" />
-                    <textarea class="dcinput" rows="2" style="resize:vertical; font-family:var(--font-sans); font-size:12px"
+                    <textarea class="dcinput va-textarea" rows="2"
                               @bind="_defSchema" placeholder="Payload fields (optional freetext/JSON)"></textarea>
                     @if (_defError is not null)
                     {
-                        <div style="color:var(--bad); font-size:12px">@_defError</div>
+                        <div class="error-inline">@_defError</div>
                     }
-                    <button class="dcbtn primary" disabled="@_defBusy" style="align-self:flex-start" @onclick="Define">Define</button>
+                    <button class="dcbtn primary btn-self-start" disabled="@_defBusy" @onclick="Define">Define</button>
                 </div>
             </div>
 
             @* ── Event log ───────────────────────────────────────────────── *@
-            <div style="flex:1; min-width:340px; display:flex; flex-direction:column; gap:12px">
-                <div style="font-size:14px; font-weight:600">Recent events</div>
+            <div class="column">
+                <div class="column-title">Recent events</div>
 
                 @if (_log is null || _log.Count == 0)
                 {
-                    <div style="font-size:12px; color:var(--text-3)">No events emitted yet.</div>
+                    <div class="hint">No events emitted yet.</div>
                 }
                 else
                 {
-                    <div style="display:flex; flex-direction:column; gap:8px">
+                    <div class="stack">
                         @foreach (var o in _log)
                         {
-                            <div class="dccard" style="padding:10px 14px">
-                                <div style="display:flex; align-items:center; gap:8px">
-                                    <span style="font-size:12.5px; font-weight:600; font-family:var(--font-sans); flex:1">@o.Name</span>
-                                    <span style="font-size:10px; font-weight:600; padding:2px 6px; border-radius:4px;
-                                          color:@(o.Source == "Domain" ? "var(--brand-2)" : "var(--text-2)"); background:var(--card-2)">@o.Source</span>
-                                    <span style="font-size:11px; color:var(--text-3); font-family:var(--font-sans)">@o.OccurredAt.ToWorkspaceTime().ToString("MM-dd HH:mm:ss")</span>
+                            <div class="dccard log-card">
+                                <div class="card-row">
+                                    <span class="log-name">@o.Name</span>
+                                    <span class="source-badge"
+                                          style="color:@(o.Source == "Domain" ? "var(--brand-2)" : "var(--text-2)")">@o.Source</span>
+                                    <span class="log-time">@o.OccurredAt.ToWorkspaceTime().ToString("MM-dd HH:mm:ss")</span>
                                 </div>
                                 @if (!string.IsNullOrWhiteSpace(o.Payload))
                                 {
-                                    <pre style="margin-top:6px; background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:8px; font-size:10.5px; font-family:var(--font-mono); white-space:pre-wrap; word-break:break-all; color:var(--text-3); max-height:120px; overflow-y:auto">@o.Payload</pre>
+                                    <pre class="payload-pre">@o.Payload</pre>
                                 }
                             </div>
                         }
@@ -96,10 +96,10 @@ else
                 }
 
                 @* ── Inbound SMS (gateway messages, decrypted here for authorized eyes only) ── *@
-                <div style="font-size:14px; font-weight:600; margin-top:8px">Inbound SMS</div>
+                <div class="column-title-mt">Inbound SMS</div>
                 @if (_sms is null || _sms.Count == 0)
                 {
-                    <div style="font-size:12px; color:var(--text-3)">
+                    <div class="hint">
                         No messages yet. Point your SMS provider's webhook at <code>POST /sms/inbound?key=…</code>
                         (Twilio form posts or JSON <code>{from,to,body}</code>) — each message is stored encrypted
                         and emits <code>sms.received</code> for triggers.
@@ -107,16 +107,16 @@ else
                 }
                 else
                 {
-                    <div style="display:flex; flex-direction:column; gap:8px">
+                    <div class="stack">
                         @foreach (var m in _sms)
                         {
-                            <div class="dccard" style="padding:10px 14px">
-                                <div style="display:flex; align-items:center; gap:8px">
-                                    <span style="font-size:12.5px; font-weight:600; font-family:var(--font-sans); flex:1">@m.From → @m.To</span>
-                                    <span style="font-size:10px; font-weight:600; padding:2px 6px; border-radius:4px; color:var(--text-2); background:var(--card-2)">@m.Provider</span>
-                                    <span style="font-size:11px; color:var(--text-3); font-family:var(--font-sans)">@m.ReceivedAt.ToWorkspaceTime().ToString("MM-dd HH:mm:ss")</span>
+                            <div class="dccard log-card">
+                                <div class="card-row">
+                                    <span class="log-name">@m.From → @m.To</span>
+                                    <span class="provider-badge">@m.Provider</span>
+                                    <span class="log-time">@m.ReceivedAt.ToWorkspaceTime().ToString("MM-dd HH:mm:ss")</span>
                                 </div>
-                                <div style="margin-top:6px; font-size:12px; color:var(--text-2); word-break:break-word">@m.Body</div>
+                                <div class="sms-body">@m.Body</div>
                             </div>
                         }
                     </div>
@@ -130,23 +130,23 @@ else
 @if (_emitName is not null)
 {
     <div class="dcslide-scrim" @onclick="@(() => _emitName = null)"></div>
-    <div class="dcslide" style="width:460px">
+    <div class="dcslide emit-slide">
         <div class="dcslide-head">
-            <span style="flex:1; font-size:14px; font-weight:600">Emit @_emitName</span>
+            <span class="emit-title">Emit @_emitName</span>
             <button class="dcslide-x" @onclick="@(() => _emitName = null)">×</button>
         </div>
-        <div class="dcslide-body" style="display:flex; flex-direction:column; gap:12px">
-            <div style="font-size:12px; color:var(--text-3)">
+        <div class="dcslide-body emit-body">
+            <div class="hint">
                 Every enabled event trigger subscribed to <code>@_emitName</code> will fire; the payload is passed through as run parameters.
             </div>
-            <label style="font-size:12px; color:var(--text-3)">Payload (optional JSON)</label>
-            <textarea class="dcinput" rows="6" style="resize:vertical; font-family:var(--font-sans); font-size:12px"
+            <label class="hint">Payload (optional JSON)</label>
+            <textarea class="dcinput va-textarea" rows="6"
                       @bind="_emitPayload" placeholder="{&quot;customerEmail&quot;: &quot;a@b.com&quot;}"></textarea>
             @if (_emitError is not null)
             {
-                <div style="color:var(--bad); font-size:12px">@_emitError</div>
+                <div class="error-inline">@_emitError</div>
             }
-            <div style="display:flex; gap:8px; justify-content:flex-end">
+            <div class="emit-actions">
                 <button class="dcbtn" @onclick="@(() => _emitName = null)">Cancel</button>
                 <button class="dcbtn primary" disabled="@_emitBusy" @onclick="DoEmit">Emit</button>
             </div>

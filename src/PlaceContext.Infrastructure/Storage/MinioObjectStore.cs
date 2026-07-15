@@ -76,5 +76,18 @@ public sealed class MinioObjectStore : IObjectStore, IDisposable
         }
     }
 
+    public async Task DeleteAsync(string bucket, string key, CancellationToken ct = default)
+    {
+        if (_client is null) return;                 // store disabled — nothing was ever written
+        try
+        {
+            await _client.DeleteObjectAsync(new DeleteObjectRequest { BucketName = bucket, Key = key }, ct);
+        }
+        catch (AmazonS3Exception ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            // Already gone — deletion is idempotent.
+        }
+    }
+
     public void Dispose() => _client?.Dispose();
 }

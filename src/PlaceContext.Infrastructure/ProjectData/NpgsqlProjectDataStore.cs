@@ -319,6 +319,69 @@ public sealed class NpgsqlProjectDataStore : IProjectDataStore
         await tx.CommitAsync(ct);
     }
 
+    public async Task<int> ImportRowsAsync(Guid projectId, string tableName, IReadOnlyList<ProjectColumnSpec> columns,
+        IReadOnlyList<IReadOnlyList<string?>> rows, bool createTable, CancellationToken ct = default)
+    {
+        Ident(tableName, "table name");
+        if (columns is null || columns.Count == 0)
+            throw new ArgumentException("A table needs at least one column.");
+        var pgTypes = new string[columns.Count];
+        for (var i = 0; i < columns.Count; i++)
+        {
+            Ident(columns[i].Name, "column name");
+            if (!AllowedTypes.TryGetValue(columns[i].Type, out var pgType))
+                throw new ArgumentException($"Unsupported column type '{columns[i].Type}'.");
+            pgTypes[i] = pgType;
+        }
+        if (rows.Any(r => r.Count != columns.Count))
+            throw new ArgumentException("Every row must have exactly one value per column.");
+
+        var schema = SchemaFor(projectId);
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+        await EnsureProvisionedAsync(conn, schema, ct);
+
+        // Runs as the PROJECT ROLE inside its schema, so the created table is project-owned and stays
+        // fully writable/alterable/droppable — the CSV import produces a normal user table, not a
+        // locked-down system one. Same isolation as ExecuteAsync/CreateTableAsync.
+        await using var tx = await conn.BeginTransactionAsync(ct);
+        await using (var setup = conn.CreateCommand())
+        {
+            setup.Transaction = tx;
+            setup.CommandText =
+                $"SET LOCAL ROLE \"{schema}\"; SET LOCAL search_path TO \"{schema}\"; " +
+                $"SET LOCAL statement_timeout = '{StatementTimeout}'";
+            await setup.ExecuteNonQueryAsync(ct);
+        }
+
+        if (createTable)
+        {
+            var defs = columns.Select((c, i) => $"{QuoteIdent(c.Name)} {pgTypes[i]}" + (c.NotNull ? " NOT NULL" : ""));
+            await using var create = conn.CreateCommand();
+            create.Transaction = tx;
+            create.CommandText = $"CREATE TABLE IF NOT EXISTS {QuoteIdent(tableName)} ({string.Join(", ", defs)})";
+            await create.ExecuteNonQueryAsync(ct);
+        }
+
+        // Values travel as text and are cast to each column's declared type server-side.
+        var cols = string.Join(", ", columns.Select(c => QuoteIdent(c.Name)));
+        var placeholders = string.Join(", ", columns.Select((_, i) => $"@p{i}::{pgTypes[i]}"));
+        var inserted = 0;
+        foreach (var row in rows)
+        {
+            await using var insert = conn.CreateCommand();
+            insert.Transaction = tx;
+            insert.CommandText = $"INSERT INTO {QuoteIdent(tableName)} ({cols}) VALUES ({placeholders})";
+            for (var i = 0; i < columns.Count; i++)
+                insert.Parameters.Add(new NpgsqlParameter($"p{i}", NpgsqlTypes.NpgsqlDbType.Text)
+                    { Value = (object?)row[i] ?? DBNull.Value });
+            inserted += await insert.ExecuteNonQueryAsync(ct);
+        }
+
+        await tx.CommitAsync(ct);
+        return inserted;
+    }
+
     // Run a single non-query statement inside the project's schema as its role (DDL helper).
     private async Task RunAsRoleAsync(Guid projectId, string statement, CancellationToken ct)
     {

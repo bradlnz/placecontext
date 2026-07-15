@@ -68,6 +68,7 @@ public sealed class MembershipService : IMembershipService
             Email = invite.Email,
             DisplayName = string.IsNullOrWhiteSpace(displayName) ? invite.Email.Split('@')[0] : displayName.Trim(),
             PasswordHash = PasswordHasher.Hash(password),
+            PasswordSet = true, // a human chose this password
             Role = invite.Role,
             CreatedAt = DateTimeOffset.UtcNow,
         };

@@ -6,31 +6,42 @@
 @inject NavigationManager Nav
 @inject PlaceContext.Application.Ports.IObjectStore Store
 @inject PlaceContext.Domain.Repositories.IRunArtifactLinkRepository Links
+@inject IPermissionService Permissions
 
 <PageTitle>placecontext — Artifacts</PageTitle>
 
-<div style="display:flex; height:100%; min-height:0">
+<div class="page">
 
     @* ── File list ─────────────────────────────────────────────────────────────────────── *@
-    <div style="width:430px; flex:none; border-right:1px solid var(--border); display:flex; flex-direction:column; min-height:0">
-        <div style="padding:11px 16px; border-bottom:1px solid var(--border); display:flex; flex-direction:column; gap:8px">
-            <div style="display:flex; align-items:center; justify-content:space-between">
-                <span style="font-size:13px; font-weight:600">Artifact files</span>
-                <input class="dcinput" style="width:150px; padding:4px 9px; font-size:12px" placeholder="filter…"
+    <div class="file-panel">
+        <div class="file-panel-head">
+            <div class="head-row">
+                <span class="panel-title">Artifact files</span>
+                <input class="dcinput filter-input" placeholder="filter…"
                        @bind="_filter" @bind:event="oninput" />
             </div>
-            <select class="dcinput" style="font-size:12px" value="@_projectFilter" @onchange="OnProjectFilter">
+            <select class="dcinput project-select" value="@_projectFilter" @onchange="OnProjectFilter">
                 <option value="">All projects</option>
                 @foreach (var p in _projects)
                 {
                     <option value="@p.Id">@p.Name</option>
                 }
             </select>
+            @if (_canDelete && _selected.Count > 0)
+            {
+                <div class="bulk-bar">
+                    <span class="selected-count">@_selected.Count selected</span>
+                    <button class="dcbtn bulk-delete-btn" disabled="@_bulkDeleting"
+                            @onclick="DeleteSelectedAsync">@(_bulkDeleting ? "Deleting…" : "Delete selected")</button>
+                    <button class="dcbtn bulk-clear-btn" disabled="@_bulkDeleting"
+                            @onclick="@(() => _selected.Clear())">Clear</button>
+                </div>
+            }
         </div>
-        <div style="flex:1; overflow-y:auto">
+        <div class="file-list">
             @if (Grouped() is { Count: 0 })
             {
-                <div style="padding:18px 16px; color:var(--text-3); font-size:12.5px">
+                <div class="empty-note">
                     No stored artifacts here yet — every completed run generates one from its job's return type.
                 </div>
             }
@@ -41,20 +52,27 @@
                     var latest = group[0];
                     var groupKey = GroupKey(latest);
                     var active = _active is { } act && group.Any(v => v.Id == act.Id);
-                    <div style="border-bottom:1px solid var(--border); border-left:2px solid @(active ? "var(--brand)" : "transparent")">
+                    <div class="file-group" style="border-left:2px solid @(active ? "var(--brand)" : "transparent")">
                         <div @onclick="@(() => OpenAsync(latest))"
-                             style="display:flex; align-items:center; gap:11px; padding:11px 16px; cursor:pointer; background:@(active ? "var(--card)" : "transparent")">
-                            <span style="flex:none; color:var(--text-3); display:flex">@FileIcon(latest.ContentType, 16)</span>
-                            <div style="flex:1; min-width:0">
-                                <div style="font-family:var(--font-sans); font-size:12.5px; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis">@latest.Title</div>
-                                <div style="font-size:10.5px; color:var(--text-3); margin-top:2px">
+                             class="file-row" style="background:@(active ? "var(--card)" : "transparent")">
+                            @if (_canDelete)
+                            {
+                                <input type="checkbox" checked="@GroupAllSelected(group)" title="Select for delete"
+                                       @onclick:stopPropagation="true"
+                                       @onchange="@(e => ToggleGroup(group, (bool)(e.Value ?? false)))"
+                                       class="select-check" />
+                            }
+                            <span class="file-icon">@FileIcon(latest.ContentType, 16)</span>
+                            <div class="file-meta">
+                                <div class="file-title">@latest.Title</div>
+                                <div class="file-sub">
                                     @ProjectName(latest.ProjectId) · @latest.Kind · @FormatBytes(latest.SizeBytes) · @latest.CreatedAt.ToWorkspaceTime().ToString("MMM d · HH:mm")
                                 </div>
                             </div>
                             @if (group.Count > 1)
                             {
                                 <button title="@(group.Count) versions — show history"
-                                        style="flex:none; border:1px solid var(--border-2); background:var(--card-2); color:var(--brand-2); border-radius:5px; padding:1px 7px; font-size:10px; font-family:var(--font-sans); cursor:pointer"
+                                        class="version-btn"
                                         @onclick:stopPropagation="true"
                                         @onclick="@(() => _expanded = _expanded == groupKey ? null : groupKey)">
                                     v@(group.Count) @(_expanded == groupKey ? "▴" : "▾")
@@ -67,10 +85,17 @@
                             {
                                 var vActive = _active?.Id == v.Id;
                                 <div @onclick="@(() => OpenAsync(v))"
-                                     style="display:flex; align-items:center; gap:10px; padding:7px 16px 7px 43px; cursor:pointer; background:@(vActive ? "var(--card)" : "transparent")">
-                                    <span style="font-size:10px; font-family:var(--font-sans); color:var(--text-3); flex:none">v@(n)</span>
-                                    <span style="flex:1; font-size:11px; color:var(--text-3)">@v.CreatedAt.ToWorkspaceTime().ToString("MMM d · HH:mm")</span>
-                                    <span style="font-size:10px; color:var(--text-3)">@FormatBytes(v.SizeBytes)</span>
+                                     class="version-row" style="background:@(vActive ? "var(--card)" : "transparent")">
+                                    @if (_canDelete)
+                                    {
+                                        <input type="checkbox" checked="@_selected.Contains(v.Id)"
+                                               @onclick:stopPropagation="true"
+                                               @onchange="@(e => ToggleOne(v.Id, (bool)(e.Value ?? false)))"
+                                               class="select-check" />
+                                    }
+                                    <span class="version-tag">v@(n)</span>
+                                    <span class="version-date">@v.CreatedAt.ToWorkspaceTime().ToString("MMM d · HH:mm")</span>
+                                    <span class="version-size">@FormatBytes(v.SizeBytes)</span>
                                 </div>
                             }
                         }
@@ -81,41 +106,53 @@
     </div>
 
     @* ── Viewer ────────────────────────────────────────────────────────────────────────── *@
-    <div style="flex:1; min-width:0; display:flex; flex-direction:column; min-height:0; background:var(--bg)">
+    <div class="viewer">
         @if (_active is null)
         {
-            <div style="flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; color:var(--text-3); font-size:12.5px">
-                <span style="color:var(--border-2); display:flex">@FileIcon("", 40)</span>
+            <div class="viewer-empty">
+                <span class="icon-placeholder">@FileIcon("", 40)</span>
                 Select a file on the left to view it.
             </div>
         }
         else
         {
-            <div style="padding:11px 18px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:10px">
-                <span style="font-family:var(--font-sans); font-size:13px; font-weight:600; flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis">@_active.Title</span>
-                <span style="font-size:10.5px; color:var(--text-3); font-family:var(--font-sans)">@_active.ContentType</span>
-                <a class="dcbtn" style="padding:4px 11px; font-size:11.5px; text-decoration:none" target="_blank" rel="noopener"
+            <div class="viewer-head">
+                <span class="viewer-title">@_active.Title</span>
+                <span class="viewer-ct">@_active.ContentType</span>
+                <a class="dcbtn viewer-open-btn" target="_blank" rel="noopener"
                    href="@Url(_active)">Open ↗</a>
+                @if (_canDelete && _confirmDelete)
+                {
+                    <button class="dcbtn viewer-btn-danger"
+                            disabled="@_deleting" @onclick="DeleteActiveAsync">@(_deleting ? "Deleting…" : "Confirm delete")</button>
+                    <button class="dcbtn viewer-btn" disabled="@_deleting"
+                            @onclick="@(() => _confirmDelete = false)">Keep</button>
+                }
+                else if (_canDelete)
+                {
+                    <button class="dcbtn viewer-btn" title="Permanently delete this artifact"
+                            @onclick="@(() => _confirmDelete = true)">Delete</button>
+                }
             </div>
             @if (_loadFailed)
             {
-                <div style="flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; color:var(--text-3); font-size:12.5px; padding:0 40px; text-align:center">
-                    <span style="color:var(--warn); display:flex">@FileIcon(_active.ContentType, 34)</span>
+                <div class="viewer-error">
+                    <span class="icon-warn">@FileIcon(_active.ContentType, 34)</span>
                     Couldn't load the preview — @(_loadError ?? "unknown error").
                     <span>Use <strong>Open ↗</strong> to fetch the file directly.</span>
                 </div>
             }
             else if (IsJson(_active.ContentType))
             {
-                <div style="flex:1; overflow:auto; padding:14px 18px; font-family:var(--font-sans); font-size:12px; line-height:1.65">
+                <div class="json-view">
                     @if (_loading)
                     {
                         <Skeleton Kind="text" Rows="8" />
                     }
                     else if (_content is null)
                     {
-                        <div style="color:var(--text-3); margin-bottom:8px">Not valid JSON — showing the raw content:</div>
-                        <pre style="margin:0; white-space:pre-wrap; word-break:break-word; color:var(--text-2)">@_rawText</pre>
+                        <div class="raw-note">Not valid JSON — showing the raw content:</div>
+                        <pre class="raw-pre">@_rawText</pre>
                     }
                     else
                     {
@@ -125,23 +162,23 @@
             }
             else if (IsCsv(_active.ContentType))
             {
-                <div style="flex:1; overflow:auto; padding:14px 18px">
+                <div class="csv-view">
                     @if (_loading)
                     {
                         <Skeleton Kind="table" Rows="8" Columns="5" />
                     }
                     else if (_csv is null)
                     {
-                        <span style="color:var(--text-3); font-size:12px">Couldn't parse this CSV — use Open ↗.</span>
+                        <span class="csv-error">Couldn't parse this CSV — use Open ↗.</span>
                     }
                     else
                     {
-                        <table style="border-collapse:collapse; font-size:12px; font-family:var(--font-sans)">
+                        <table class="csv-table">
                             <thead>
                                 <tr>
                                     @foreach (var h in _csv.Value.Header)
                                     {
-                                        <th style="text-align:left; padding:6px 12px; border-bottom:2px solid var(--border-2); color:var(--text-3); font-size:10.5px; letter-spacing:.06em; text-transform:uppercase; position:sticky; top:0; background:var(--bg)">@h</th>
+                                        <th class="csv-th">@h</th>
                                     }
                                 </tr>
                             </thead>
@@ -151,7 +188,7 @@
                                     <tr>
                                         @foreach (var cell in row)
                                         {
-                                            <td style="padding:5px 12px; border-bottom:1px solid var(--border); color:var(--text-2); max-width:340px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">@cell</td>
+                                            <td class="csv-td">@cell</td>
                                         }
                                     </tr>
                                 }
@@ -159,19 +196,19 @@
                         </table>
                         @if (_truncated)
                         {
-                            <div style="font-size:11px; color:var(--text-3); margin-top:8px">Showing the first rows — Open ↗ for the full file.</div>
+                            <div class="truncated-note">Showing the first rows — Open ↗ for the full file.</div>
                         }
                     }
                 </div>
             }
             else if (Previewable(_active.ContentType))
             {
-                <iframe src="@Url(_active)" style="flex:1; border:none; background:#fff" title="@_active.Title"></iframe>
+                <iframe src="@Url(_active)" class="preview-frame" title="@_active.Title"></iframe>
             }
             else
             {
-                <div style="flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; color:var(--text-3); font-size:12.5px">
-                    <span style="color:var(--border-2); display:flex">@FileIcon(_active.ContentType, 40)</span>
+                <div class="viewer-none">
+                    <span class="icon-placeholder">@FileIcon(_active.ContentType, 40)</span>
                     No inline preview for @_active.ContentType — use Open ↗ to download it.
                 </div>
             }
@@ -194,6 +231,13 @@
     private bool _loading;
     private bool _loadFailed;
     private string? _loadError;
+    private bool _confirmDelete;
+    private bool _deleting;
+    private readonly HashSet<Guid> _selected = new();
+    private bool _bulkDeleting;
+    // UI-level hiding only — the actual DeleteArtifact(s) commands are also gated server-side (the
+    // dispatcher rejects them for a caller lacking artifacts.delete regardless of what the UI shows).
+    private bool _canDelete;
 
     private const int MaxInlineBytes = 2 * 1024 * 1024;
     private const int MaxCsvRows = 500;
@@ -201,13 +245,27 @@
     protected override async Task OnInitializedAsync()
     {
         Ui.Set("Artifacts", "every file your runs produced — click to view");
+        _canDelete = await Permissions.HasAsync(Permission.ArtifactsDelete);
         try { _projects = await Svc.GetProjectsAsync(); } catch { }
-        try { _files = await Svc.ListRecentArtifactsAsync(300); } catch { }
-        // Default the filter to the project the sidebar is on; nothing is opened until clicked.
-        if (Ui.CurrentProjectId is { } pid && _files.Any(f => f.ProjectId == pid))
-            _projectFilter = pid.ToString();
+        // Default the filter to the project the sidebar is on; a project-scoped load pulls ALL of
+        // that project's artifacts, so older files aren't hidden behind a global "recent" cap.
+        if (Ui.CurrentProjectId is { } pid) _projectFilter = pid.ToString();
+        await LoadFilesAsync();
 
         await ApplyDeepLinkAsync();
+    }
+
+    // Loads the file list for the current filter: project-scoped (complete) when a project is
+    // selected, else the recent feed across all projects.
+    private async Task LoadFilesAsync()
+    {
+        try
+        {
+            _files = Guid.TryParse(_projectFilter, out var pid)
+                ? await Svc.ListProjectArtifactsAsync(pid)
+                : await Svc.ListRecentArtifactsAsync(1000);
+        }
+        catch { _files = Array.Empty<ArtifactFileView>(); }
     }
 
     // Supplied from the query: re-fires on same-page navigation (search hits, graph links).
@@ -217,14 +275,60 @@
     {
         if (!Guid.TryParse(ArtifactId, out var artifactId)) return;
         if (_active?.Id == artifactId) return;
-        if (_files.FirstOrDefault(f => f.Id == artifactId) is { } target)
+        var target = _files.FirstOrDefault(f => f.Id == artifactId);
+        if (target is null)
+        {
+            // The deep-linked artifact may belong to a different project than the current filter —
+            // fall back to the recent global feed to locate it.
+            try { _files = await Svc.ListRecentArtifactsAsync(1000); } catch { }
+            target = _files.FirstOrDefault(f => f.Id == artifactId);
+        }
+        if (target is { })
         {
             _projectFilter = target.ProjectId.ToString(); // make sure it's visible in the list
+            await LoadFilesAsync();
+            target = _files.FirstOrDefault(f => f.Id == artifactId) ?? target;
             await OpenAsync(target);
         }
     }
 
-    private void OnProjectFilter(ChangeEventArgs e) => _projectFilter = e.Value?.ToString() ?? "";
+    private async Task OnProjectFilter(ChangeEventArgs e)
+    {
+        _projectFilter = e.Value?.ToString() ?? "";
+        _active = null;
+        _confirmDelete = false;
+        _selected.Clear();
+        await LoadFilesAsync();
+    }
+
+    // ── Multi-select for bulk delete ────────────────────────────────────────────────────────────
+    private void ToggleOne(Guid id, bool on) { if (on) _selected.Add(id); else _selected.Remove(id); }
+
+    private void ToggleGroup(IReadOnlyList<ArtifactFileView> group, bool on)
+    {
+        foreach (var v in group) { if (on) _selected.Add(v.Id); else _selected.Remove(v.Id); }
+    }
+
+    private bool GroupAllSelected(IReadOnlyList<ArtifactFileView> group)
+        => group.Count > 0 && group.All(v => _selected.Contains(v.Id));
+
+    private async Task DeleteSelectedAsync()
+    {
+        if (_selected.Count == 0 || _bulkDeleting) return;
+        _bulkDeleting = true;
+        var ids = _selected.ToList();
+        try { await Svc.DeleteArtifactsAsync(ids); }
+        catch { }
+        finally { _bulkDeleting = false; }
+        var idSet = ids.ToHashSet();
+        _files = _files.Where(f => !idSet.Contains(f.Id)).ToList();
+        _selected.Clear();
+        if (_active is { } a && idSet.Contains(a.Id))
+        {
+            _active = null;
+            Nav.NavigateTo("/artifacts", replace: true);
+        }
+    }
 
     private string ProjectName(Guid id) => _projects.FirstOrDefault(p => p.Id == id)?.Name ?? "—";
 
@@ -261,6 +365,7 @@
         _rawText = null;
         _truncated = false;
         _loadFailed = false;
+        _confirmDelete = false;
         if (!IsJson(a.ContentType) && !IsCsv(a.ContentType)) return;
 
         _loading = true;
@@ -398,6 +503,21 @@
         }
         cells.Add(sb.ToString());
         return cells;
+    }
+
+    private async Task DeleteActiveAsync()
+    {
+        if (_active is null || _deleting) return;
+        var id = _active.Id;
+        _deleting = true;
+        try { await Svc.DeleteArtifactAsync(id); }
+        catch { }
+        finally { _deleting = false; }
+        _files = _files.Where(f => f.Id != id).ToList();
+        _active = null;
+        _confirmDelete = false;
+        // Drop the ?artifact= deep link so a refresh doesn't try to reopen the deleted file.
+        Nav.NavigateTo("/artifacts", replace: true);
     }
 
     private static string Url(ArtifactFileView a) => $"/runs/{a.RunId}/artifacts/{a.Id}";

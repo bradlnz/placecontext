@@ -27,7 +27,25 @@ public sealed class ListRecentArtifactsHandler : IQueryHandler<ListRecentArtifac
 
     public async Task<IReadOnlyList<ArtifactFileView>> HandleAsync(ListRecentArtifactsQuery query, CancellationToken ct = default)
         => (await _links.ListRecentAsync(query.Take, ct))
-            .Select(l => new ArtifactFileView(l.Id, l.RunId, l.JobId, l.ProjectId, l.Kind.ToString(),
-                l.Title, l.ContentType, l.SizeBytes, l.CreatedAt))
+            .Select(Map)
+            .ToList();
+
+    internal static ArtifactFileView Map(Domain.Entities.RunArtifactLink l) => new(
+        l.Id, l.RunId, l.JobId, l.ProjectId, l.Kind.ToString(),
+        l.Title, l.ContentType, l.SizeBytes, l.CreatedAt);
+}
+
+/// <summary>Every stored artifact for one project — the project-scoped file viewer (no global cap hiding older files).</summary>
+public sealed record ListProjectArtifactsQuery(Guid ProjectId, int Take = 2000) : IQuery<IReadOnlyList<ArtifactFileView>>;
+
+public sealed class ListProjectArtifactsHandler : IQueryHandler<ListProjectArtifactsQuery, IReadOnlyList<ArtifactFileView>>
+{
+    private readonly IRunArtifactLinkRepository _links;
+
+    public ListProjectArtifactsHandler(IRunArtifactLinkRepository links) => _links = links;
+
+    public async Task<IReadOnlyList<ArtifactFileView>> HandleAsync(ListProjectArtifactsQuery query, CancellationToken ct = default)
+        => (await _links.ListForProjectAsync(query.ProjectId, query.Take, ct))
+            .Select(ListRecentArtifactsHandler.Map)
             .ToList();
 }

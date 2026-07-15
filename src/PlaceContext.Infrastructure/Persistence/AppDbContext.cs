@@ -28,6 +28,7 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
     public DbSet<OAuthRefreshTokenRow> OAuthRefreshTokens => Set<OAuthRefreshTokenRow>();
     public DbSet<UserRow> Users => Set<UserRow>();
     public DbSet<InviteRow> Invites => Set<InviteRow>();
+    public DbSet<UserPermissionGrantRow> UserPermissionGrants => Set<UserPermissionGrantRow>();
     public DbSet<ProjectRow> Projects => Set<ProjectRow>();
     public DbSet<ActivityRecordRow> ActivityRecords => Set<ActivityRecordRow>();
     public DbSet<DecisionRow> Decisions => Set<DecisionRow>();
@@ -103,6 +104,7 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
             e.HasKey(x => x.Id);
             e.HasIndex(x => new { x.TenantId, x.Email }).IsUnique(); // email unique within a tenant
             e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
+            e.Property(x => x.PasswordSet).HasDefaultValue(false);
         });
 
         b.Entity<InviteRow>(e =>
@@ -110,6 +112,14 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
             e.ToTable("invites");
             e.HasKey(x => x.Id);
             e.HasIndex(x => x.Token).IsUnique();
+            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
+        });
+
+        b.Entity<UserPermissionGrantRow>(e =>
+        {
+            e.ToTable("user_permission_grants");
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => new { x.TenantId, x.UserId, x.Permission }).IsUnique(); // one override per (user, permission)
             e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
         });
 

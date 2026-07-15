@@ -1189,6 +1189,33 @@ namespace PlaceContext.Infrastructure.Migrations
                     b.ToTable("usage_records", (string)null);
                 });
 
+            modelBuilder.Entity("PlaceContext.Infrastructure.Persistence.UserPermissionGrantRow", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("Allowed")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Permission")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "UserId", "Permission")
+                        .IsUnique();
+
+                    b.ToTable("user_permission_grants", (string)null);
+                });
+
             modelBuilder.Entity("PlaceContext.Infrastructure.Persistence.UserRow", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1209,6 +1236,11 @@ namespace PlaceContext.Infrastructure.Migrations
                     b.Property<string>("PasswordHash")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<bool>("PasswordSet")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
 
                     b.Property<string>("Role")
                         .IsRequired()

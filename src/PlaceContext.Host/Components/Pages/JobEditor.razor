@@ -14,11 +14,11 @@
 }
 else if (_job is null)
 {
-    <div style="padding:24px; color:var(--text-3)">Job not found. <a href="/project/@ProjectId/jobs">Back to jobs</a></div>
+    <div class="notice">Job not found. <a href="/project/@ProjectId/jobs">Back to jobs</a></div>
 }
 else if (_job.MapSourceKind != "code")
 {
-    <div style="padding:24px; color:var(--text-3)">
+    <div class="notice">
         This job runs a container image (<code>@_job.MapImage</code>), not inline code — there is nothing to edit here.
         <a href="/project/@ProjectId/jobs">Back to jobs</a>
     </div>
@@ -26,22 +26,22 @@ else if (_job.MapSourceKind != "code")
 else
 {
     @* ── Toolbar ─────────────────────────────────────────────────────────────────────────── *@
-    <div style="display:flex; align-items:center; gap:12px; padding:10px 16px; border-bottom:1px solid var(--border); background:var(--card)">
-        <button class="dcbtn" style="border:none; background:none; color:var(--text-3); padding:4px"
+    <div class="toolbar">
+        <button class="dcbtn toolbar-back"
                 @onclick="@(() => Nav.NavigateTo($"/project/{ProjectId}/jobs"))">←</button>
-        <span style="font-size:14px; font-weight:600">@_job.Name</span>
-        <span style="font-size:11px; font-family:var(--font-sans); color:var(--brand-2); background:var(--brand-bg); padding:2px 8px; border-radius:5px">@_runtimeId</span>
+        <span class="job-name">@_job.Name</span>
+        <span class="runtime-badge">@_runtimeId</span>
         @if (_monacoLite)
         {
-            <span style="font-size:11px; color:var(--warn); background:var(--warn-bg); padding:2px 8px; border-radius:5px"
+            <span class="editor-warn"
                   title="The Monaco editor's CDN was unreachable — editing still works in a plain editor.">
                 basic editor (CDN unreachable)
             </span>
         }
-        <span style="flex:1"></span>
+        <span class="flex-spacer"></span>
         @if (_message is not null)
         {
-            <span style="font-size:12px; color:var(--text-3)">@_message</span>
+            <span class="text-12-3">@_message</span>
         }
         <button class="dcbtn" disabled="@_busy" @onclick="RunAsync">
             @(_running ? "Testing…" : "▶ Test")
@@ -51,113 +51,113 @@ else
         </button>
     </div>
 
-    <div style="display:flex; height:calc(100vh - 53px)">
+    <div class="workspace">
 
         @* ── File tree ───────────────────────────────────────────────────────────────────── *@
-        <div style="width:240px; flex:none; border-right:1px solid var(--border); background:var(--card); display:flex; flex-direction:column">
-            <div style="display:flex; align-items:center; justify-content:space-between; padding:10px 12px; font-size:11px; text-transform:uppercase; letter-spacing:.5px; color:var(--text-3)">
+        <div class="file-tree">
+            <div class="file-tree-head">
                 <span>Files</span>
-                <button class="dcbtn" style="padding:2px 7px; font-size:12px" @onclick="StartAddFile" title="Add file">+</button>
+                <button class="dcbtn add-file-btn" @onclick="StartAddFile" title="Add file">+</button>
             </div>
 
             @if (_addingFile)
             {
-                <div style="padding:4px 10px; display:flex; gap:6px">
-                    <input class="dcinput" style="flex:1; font-size:12px; padding:4px 7px" placeholder="path/name.js"
+                <div class="add-file-row">
+                    <input class="dcinput add-file-input" placeholder="path/name.js"
                            @bind="_newFileName" @bind:event="oninput" @onkeydown="AddFileKey" @ref="_newFileInput" />
-                    <button class="dcbtn" style="padding:2px 7px" @onclick="ConfirmAddFile">✓</button>
+                    <button class="dcbtn add-file-confirm" @onclick="ConfirmAddFile">✓</button>
                 </div>
             }
 
-            <div style="overflow-y:auto; flex:1; padding:2px 6px">
+            <div class="file-list">
                 @for (var i = 0; i < _files.Count; i++)
                 {
                     var idx = i;
                     var file = _files[idx];
                     var isActive = idx == _active;
                     var isEntry = file.Path == _entrypoint;
-                    <div class="dcfile @(isActive ? "active" : "")"
-                         style="display:flex; align-items:center; gap:6px; padding:5px 8px; border-radius:5px; cursor:pointer; font-size:12.5px; font-family:var(--font-sans); @(isActive ? "background:var(--card-2); color:var(--text-1)" : "color:var(--text-2)")"
+                    <div class="dcfile file-row @(isActive ? "active" : "")"
+                         style="@(isActive ? "background:var(--card-2); color:var(--text-1)" : "color:var(--text-2)")"
                          @onclick="@(() => SwitchFileAsync(idx))">
                         @if (idx == _renamingIdx)
                         {
-                            <input class="dcinput" style="flex:1; min-width:0; font-size:12px; padding:2px 6px"
+                            <input class="dcinput rename-input"
                                    @bind="_renameValue" @bind:event="oninput" @onkeydown="RenameKey"
                                    @onclick:stopPropagation="true" @ref="_renameInput" />
-                            <button class="dcfile-act" title="Confirm rename" style="border:none; background:none; color:var(--good); cursor:pointer; font-size:12px; padding:0"
+                            <button class="dcfile-act file-act-confirm" title="Confirm rename"
                                     @onclick:stopPropagation="true" @onclick="ConfirmRenameAsync">✓</button>
                         }
                         else
                         {
-                            <span style="flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis" title="@file.Path">@file.Path</span>
-                            <button class="dcfile-act" title="Rename file" style="border:none; background:none; color:var(--text-3); cursor:pointer; font-size:11px; padding:0"
+                            <span class="file-name" title="@file.Path">@file.Path</span>
+                            <button class="dcfile-act file-act" title="Rename file"
                                     @onclick:stopPropagation="true" @onclick="@(() => StartRenameAsync(idx))">✎</button>
                         }
                         @if (isEntry)
                         {
-                            <span title="Entry point" style="color:var(--brand-2); font-size:11px">★</span>
+                            <span title="Entry point" class="entry-star">★</span>
                         }
                         else
                         {
-                            <button class="dcfile-act" title="Set as entry point" style="border:none; background:none; color:var(--text-3); cursor:pointer; font-size:11px; padding:0"
+                            <button class="dcfile-act file-act" title="Set as entry point"
                                     @onclick:stopPropagation="true" @onclick="@(() => SetEntry(file.Path))">☆</button>
                         }
                         @if (_files.Count > 1)
                         {
-                            <button class="dcfile-act" title="Delete file" style="border:none; background:none; color:var(--text-3); cursor:pointer; font-size:13px; padding:0"
+                            <button class="dcfile-act file-act-del" title="Delete file"
                                     @onclick:stopPropagation="true" @onclick="@(() => DeleteFileAsync(idx))">×</button>
                         }
                     </div>
                 }
             </div>
 
-            <div style="padding:8px 12px; border-top:1px solid var(--border); font-size:11px; color:var(--text-3)">
-                Entry: <code style="color:var(--brand-2)">@(_entrypoint ?? "(runtime default)")</code>
+            <div class="entry-foot">
+                Entry: <code class="entry-code">@(_entrypoint ?? "(runtime default)")</code>
             </div>
         </div>
 
         @* ── Editor + results ────────────────────────────────────────────────────────────── *@
-        <div style="flex:1; min-width:0; display:flex; flex-direction:column">
-            <div id="@_editorId" style="flex:1; min-height:0"></div>
+        <div class="editor-pane">
+            <div id="@_editorId" class="editor-host"></div>
 
             @* Results panel *@
-            <div style="height:@(_panelOpen ? "240px" : "34px"); flex:none; border-top:1px solid var(--border); background:var(--card); display:flex; flex-direction:column; transition:height .12s">
-                <div style="display:flex; align-items:center; gap:10px; padding:7px 14px; cursor:pointer; user-select:none" @onclick="@(() => _panelOpen = !_panelOpen)">
-                    <span style="font-size:11px; text-transform:uppercase; letter-spacing:.5px; color:var(--text-3)">Execution results</span>
+            <div class="results-panel" style="height:@(_panelOpen ? "240px" : "34px")">
+                <div class="results-bar" @onclick="@(() => _panelOpen = !_panelOpen)">
+                    <span class="section-label">Execution results</span>
                     @if (_lastRun is not null)
                     {
-                        <span style="font-size:11px; font-weight:600; padding:2px 8px; border-radius:5px; color:@StatusColor(_lastRun.Status); background:@StatusBg(_lastRun.Status)">@_lastRun.Status</span>
+                        <span class="status-badge" style="color:@StatusColor(_lastRun.Status); background:@StatusBg(_lastRun.Status)">@_lastRun.Status</span>
                     }
-                    <span style="flex:1"></span>
-                    <span style="font-size:12px; color:var(--text-3)">@(_panelOpen ? "▾" : "▴")</span>
+                    <span class="flex-spacer"></span>
+                    <span class="text-12-3">@(_panelOpen ? "▾" : "▴")</span>
                 </div>
 
                 @if (_panelOpen)
                 {
-                    <div style="overflow-y:auto; flex:1; padding:6px 14px 14px">
+                    <div class="results-body">
                         @if (_lastRun is null)
                         {
-                            <div style="font-size:12px; color:var(--text-3)">Click <strong>Test</strong> to deploy and run this job. Shard artifacts and logs appear here.</div>
+                            <div class="text-12-3">Click <strong>Test</strong> to deploy and run this job. Shard artifacts and logs appear here.</div>
                         }
                         else
                         {
                             @foreach (var shard in _lastRun.ShardResults)
                             {
-                                <div style="margin-bottom:12px">
-                                    <div style="font-size:12px; font-weight:600; margin-bottom:4px; display:flex; align-items:center; gap:8px">
+                                <div class="shard">
+                                    <div class="shard-head">
                                         <span>Shard @shard.Index</span>
-                                        <span style="font-size:10.5px; padding:1px 6px; border-radius:4px; color:@StatusColor(shard.Outcome); background:@StatusBg(shard.Outcome)">@shard.Outcome</span>
-                                        <span style="font-size:10.5px; color:var(--text-3)">exit @shard.ExitCode</span>
+                                        <span class="shard-badge" style="color:@StatusColor(shard.Outcome); background:@StatusBg(shard.Outcome)">@shard.Outcome</span>
+                                        <span class="shard-exit">exit @shard.ExitCode</span>
                                     </div>
                                     @if (shard.Artifact is not null)
                                     {
-                                        <pre style="background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:8px; font-size:10.5px; font-family:var(--font-mono); white-space:pre-wrap; word-break:break-all; color:var(--text-2); max-height:120px; overflow:auto; margin:0">@PrettyJson(shard.Artifact)</pre>
+                                        <pre class="shard-artifact">@PrettyJson(shard.Artifact)</pre>
                                     }
                                     @if (!string.IsNullOrWhiteSpace(shard.Log))
                                     {
-                                        <details style="margin-top:3px">
-                                            <summary style="font-size:10.5px; color:var(--text-3); cursor:pointer">Log</summary>
-                                            <pre style="font-size:10px; font-family:var(--font-mono); color:var(--text-3); white-space:pre-wrap; margin:3px 0 0">@shard.Log</pre>
+                                        <details class="shard-log-details">
+                                            <summary class="shard-log-summary">Log</summary>
+                                            <pre class="shard-log">@shard.Log</pre>
                                         </details>
                                     }
                                 </div>

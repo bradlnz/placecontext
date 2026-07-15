@@ -1,0 +1,217 @@
+@page "/settings/access"
+@layout PlaceContext.Host.Components.Layout.SettingsLayout
+@attribute [Authorize(Policy = Permission.MembersManage)]
+@inject IMembershipService Members
+@inject IPlaceContextService Svc
+@inject PortalUiState Ui
+@inject NavigationManager Nav
+
+<PageTitle>placecontext — Access</PageTitle>
+
+@if (_loading)
+{
+    <Skeleton Kind="list" Rows="4" Padded />
+}
+else
+{
+    <div class="page">
+        <h2 class="page-title">Access</h2>
+        <div class="page-sub">
+            Members, their role, and fine-grained permission overrides on top of that role's defaults.
+            An override always wins over the role default — Allow grants a permission the role wouldn't
+            otherwise have, Revoke removes one it would.
+        </div>
+
+        @if (_message is not null)
+        {
+            <div class="message">@_message</div>
+        }
+
+        @* ── Invite ────────────────────────────────────────────────────────────────────────── *@
+        <div class="dccard invite-card">
+            <div class="invite-title">Invite a member</div>
+            <div class="invite-row">
+                <div class="invite-email">
+                    <label class="field-label">Email</label>
+                    <input class="dcinput input-full-sans" @bind="_inviteEmail" placeholder="name@example.com" />
+                </div>
+                <div class="invite-role">
+                    <label class="field-label">Role</label>
+                    <select class="dcinput input-full" @bind="_inviteRole">
+                        @foreach (var r in Roles)
+                        {
+                            <option value="@r">@r</option>
+                        }
+                    </select>
+                </div>
+                <button class="dcbtn primary" disabled="@_inviting" @onclick="InviteAsync">@(_inviting ? "Inviting…" : "Send invite")</button>
+            </div>
+            @if (_inviteLink is not null)
+            {
+                <div class="dchint">Invite link (share it — single use): <span class="code">@_inviteLink</span></div>
+            }
+            @if (_inviteError is not null)
+            {
+                <div class="err-text">@_inviteError</div>
+            }
+        </div>
+
+        @* ── Members ───────────────────────────────────────────────────────────────────────── *@
+        @if (_members.Count == 0)
+        {
+            <div class="dccard empty-note">
+                No members yet — invite one above.
+            </div>
+        }
+        else
+        {
+            <div class="member-list">
+                @foreach (var m in _members)
+                {
+                    <div class="dccard member-card">
+                        <div class="member-row">
+                            <div class="member-info">
+                                <div class="member-name">
+                                    @m.DisplayName <span class="member-email">· @m.Email</span>
+                                </div>
+                                <div class="note-11">member since @m.CreatedAt.ToWorkspaceTime().ToString("yyyy-MM-dd")</div>
+                            </div>
+                            <select class="dcinput role-select" value="@m.Role" disabled="@_busy"
+                                    @onchange="@(e => SetRoleAsync(m.Id, e.Value?.ToString() ?? m.Role))">
+                                @foreach (var r in Roles)
+                                {
+                                    <option value="@r">@r</option>
+                                }
+                            </select>
+                            <button class="dcbtn perm-toggle" @onclick="@(() => ToggleMatrixAsync(m.Id))">
+                                @(_expanded == m.Id ? "Hide permissions" : "Permissions")
+                            </button>
+                        </div>
+                        @if (_expanded == m.Id)
+                        {
+                            <div class="matrix">
+                                @if (_matrix is null)
+                                {
+                                    <div class="matrix-loading">Loading…</div>
+                                }
+                                else
+                                {
+                                    <div class="note-11">
+                                        Role default shown in parentheses; Inherit clears the override and follows the role.
+                                    </div>
+                                    @foreach (var g in _matrix.Permissions)
+                                    {
+                                        <div class="perm-row">
+                                            <span class="perm-name">
+                                                @g.Permission <span class="muted">(default: @(g.DefaultAllowed ? "allow" : "deny"))</span>
+                                            </span>
+                                            <div class="perm-btns">
+                                                <button class="dcbtn @(g.Override == true ? "primary" : "") perm-btn"
+                                                        disabled="@_busy" @onclick="@(() => SetOverrideAsync(m.Id, g.Permission, true))">Allow</button>
+                                                <button class="dcbtn perm-btn" style="@(g.Override == false ? "color:var(--bad); border-color:var(--bad)" : "")"
+                                                        disabled="@_busy" @onclick="@(() => SetOverrideAsync(m.Id, g.Permission, false))">Revoke</button>
+                                                <button class="dcbtn perm-btn" disabled="@(_busy || g.Override is null)"
+                                                        @onclick="@(() => SetOverrideAsync(m.Id, g.Permission, null))">Inherit</button>
+                                            </div>
+                                            <span class="perm-status" style="color:@(g.Effective ? "var(--good)" : "var(--text-3)")">@(g.Effective ? "granted" : "denied")</span>
+                                        </div>
+                                    }
+                                }
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        }
+    </div>
+}
+
+@code {
+    private static readonly string[] Roles = Enum.GetNames<UserRole>();
+
+    private IReadOnlyList<MemberView> _members = Array.Empty<MemberView>();
+    private bool _loading = true;
+    private bool _busy;
+    private string? _message;
+
+    private string _inviteEmail = "";
+    private string _inviteRole = nameof(UserRole.Member);
+    private bool _inviting;
+    private string? _inviteLink;
+    private string? _inviteError;
+
+    private Guid? _expanded;
+    private UserPermissionsView? _matrix;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Ui.Set("Access", "members, roles, and fine-grained permission overrides");
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try { _members = await Members.ListMembersAsync(); }
+        finally { _loading = false; }
+    }
+
+    private async Task InviteAsync()
+    {
+        _inviteError = null;
+        _inviteLink = null;
+        if (string.IsNullOrWhiteSpace(_inviteEmail) || !_inviteEmail.Contains('@'))
+        {
+            _inviteError = "Enter a valid email.";
+            return;
+        }
+        _inviting = true;
+        try
+        {
+            var role = Enum.Parse<UserRole>(_inviteRole);
+            var invite = await Members.CreateInviteAsync(_inviteEmail.Trim(), role);
+            _inviteLink = $"{Nav.BaseUri.TrimEnd('/')}/join?token={invite.Token}";
+            _inviteEmail = "";
+            _message = $"Invite sent for {invite.Email}.";
+        }
+        catch (Exception ex) { _inviteError = ex.Message; }
+        finally { _inviting = false; }
+    }
+
+    private async Task SetRoleAsync(Guid userId, string role)
+    {
+        if (!Enum.TryParse<UserRole>(role, out var parsed)) return;
+        _busy = true;
+        try
+        {
+            await Members.SetRoleAsync(userId, parsed);
+            await LoadAsync();
+            if (_expanded == userId) await LoadMatrixAsync(userId);
+            _message = "Role updated.";
+        }
+        catch (Exception ex) { _message = ex.Message; }
+        finally { _busy = false; }
+    }
+
+    private async Task ToggleMatrixAsync(Guid userId)
+    {
+        if (_expanded == userId) { _expanded = null; _matrix = null; return; }
+        _expanded = userId;
+        await LoadMatrixAsync(userId);
+    }
+
+    private async Task LoadMatrixAsync(Guid userId)
+    {
+        _matrix = null;
+        try { _matrix = await Svc.GetUserPermissionsAsync(userId); }
+        catch (Exception ex) { _message = ex.Message; }
+    }
+
+    private async Task SetOverrideAsync(Guid userId, string permission, bool? allowed)
+    {
+        _busy = true;
+        try { _matrix = await Svc.SetUserPermissionOverrideAsync(userId, permission, allowed); }
+        catch (Exception ex) { _message = ex.Message; }
+        finally { _busy = false; }
+    }
+}

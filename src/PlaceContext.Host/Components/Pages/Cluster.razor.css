@@ -1,0 +1,296 @@
+.page {
+    padding: 20px 24px 40px;
+    max-width: 1320px;
+    margin: 0 auto;
+}
+
+.page-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 14px;
+}
+
+.page-title {
+    font-size: 18px;
+    font-weight: 600;
+    margin: 0;
+}
+
+.page-sub {
+    font-size: 12px;
+    color: var(--text-3);
+    margin-top: 3px;
+}
+
+.message-bar {
+    margin-bottom: 12px;
+    padding: 10px 14px;
+    border-radius: 8px;
+    background: var(--card);
+    font-size: 12.5px;
+    color: var(--text-2);
+}
+
+.section-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.section-title {
+    font-size: 13.5px;
+    font-weight: 600;
+    margin: 0;
+}
+
+.section-title-tele {
+    font-size: 13.5px;
+    font-weight: 600;
+    margin: 0 0 10px;
+}
+
+.node-count-badge {
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 5px;
+    background: var(--card-2);
+    color: var(--text-3);
+}
+
+.node-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 10px;
+    margin-bottom: 26px;
+}
+
+.node-card {
+    padding: 13px 16px;
+}
+
+.node-card-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.node-name-row {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    min-width: 0;
+}
+
+.node-name {
+    font-size: 13px;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.this-node-badge {
+    font-size: 9.5px;
+    padding: 1px 6px;
+    border-radius: 4px;
+    background: var(--brand-bg);
+    color: var(--brand-2);
+    flex: none;
+}
+
+.node-status {
+    font-size: 10.5px;
+    font-weight: 600;
+    padding: 2px 7px;
+    border-radius: 5px;
+    flex: none;
+}
+
+.node-roles {
+    font-size: 11px;
+    color: var(--text-3);
+    margin-top: 6px;
+}
+
+.node-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    margin-top: 10px;
+    font-size: 11px;
+    color: var(--text-2);
+}
+
+.text-3 {
+    color: var(--text-3);
+}
+
+.font-sans {
+    font-family: var(--font-sans);
+}
+
+.tele-note {
+    font-size: 11px;
+    color: var(--text-3);
+    margin: -6px 0 10px;
+}
+
+.tile-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 22px;
+}
+
+.stat-tile {
+    padding: 14px 16px;
+    border-radius: 8px;
+    flex: 1;
+    min-width: 150px;
+}
+
+.tile-label {
+    font-size: 11px;
+    color: var(--text-3);
+    letter-spacing: .08em;
+    font-weight: 500;
+}
+
+.tile-value-row {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    margin-top: 6px;
+}
+
+.tile-value {
+    font-family: var(--font-sans);
+    font-size: 22px;
+    font-weight: 600;
+}
+
+.tile-sub {
+    font-size: 11px;
+    color: var(--text-3);
+    margin-top: 3px;
+}
+
+.outcomes-card {
+    padding: 12px 16px;
+    margin-bottom: 22px;
+}
+
+.outcomes-title {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-3);
+    letter-spacing: .06em;
+    margin-bottom: 8px;
+}
+
+.outcomes-row {
+    display: flex;
+    gap: 18px;
+    flex-wrap: wrap;
+}
+
+.outcome-item {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+}
+
+.outcome-count {
+    font-family: var(--font-sans);
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.outcome-label {
+    font-size: 11.5px;
+    color: var(--text-3);
+}
+
+.runs-title {
+    font-size: 12.5px;
+    font-weight: 600;
+    margin-bottom: 8px;
+}
+
+.runs-empty {
+    padding: 24px;
+    color: var(--text-3);
+    font-size: 13px;
+    text-align: center;
+}
+
+.runs-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.run-link {
+    text-decoration: none;
+    color: inherit;
+}
+
+.run-card {
+    padding: 12px 16px;
+    cursor: pointer;
+}
+
+.run-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.run-status {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: 5px;
+    flex: none;
+}
+
+.run-main {
+    flex: 1;
+    min-width: 0;
+}
+
+.run-name {
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.replay-badge {
+    font-size: 10.5px;
+    padding: 1px 6px;
+    border-radius: 4px;
+    background: var(--card-2);
+    color: var(--text-3);
+    margin-left: 6px;
+}
+
+.run-shards {
+    font-size: 11px;
+    color: var(--text-3);
+}
+
+.run-started {
+    font-family: var(--font-sans);
+    font-size: 11.5px;
+    color: var(--text-2);
+}
+
+.run-duration {
+    font-size: 11px;
+    color: var(--text-3);
+    font-family: var(--font-sans);
+    width: 56px;
+    text-align: right;
+}

@@ -1,5 +1,7 @@
 # PlaceContext Host deployment — portal + MCP + trigger scheduler.
-# __IMAGE__ is substituted by the `pctl` CLI with the container image ref.
+# __IMAGE__ is substituted by the `pctl` CLI with the container image ref; __NAMESPACE__ with
+# $PCTL_NAMESPACE (needed by the cluster-scoped ClusterRoleBinding below, which — unlike every other
+# resource here — isn't implicitly scoped by `kubectl apply -n`).
 # (Subscriptions/billing are handled by a separate web portal — no activation key here.)
 #
 # The scheduler is safe to scale: a Postgres advisory lock elects one replica to scan schedules, and the
@@ -40,6 +42,33 @@ subjects:
 roleRef:
   kind: Role
   name: placecontext-jobs
+  apiGroup: rbac.authorization.k8s.io
+---
+# Cluster page: node inventory (KubernetesClusterInfoProvider lists nodes for the fleet view).
+# `nodes` is a cluster-scoped resource — a namespaced Role can't grant it, so this needs a
+# ClusterRole/ClusterRoleBinding even though every other Host permission stays namespace-scoped.
+# The provider also best-effort reads its own pod (to mark "this node") which the namespaced
+# placecontext-jobs Role above already covers via pods:get.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: placecontext-nodes
+rules:
+  - apiGroups: [""]
+    resources: ["nodes"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: placecontext-nodes
+subjects:
+  - kind: ServiceAccount
+    name: placecontext
+    namespace: __NAMESPACE__
+roleRef:
+  kind: ClusterRole
+  name: placecontext-nodes
   apiGroup: rbac.authorization.k8s.io
 ---
 apiVersion: apps/v1

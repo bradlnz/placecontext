@@ -63,6 +63,9 @@ public class ProjectDataTests
         public Task AppendReadOnlyRowsAsync(Guid projectId, string tableName, IReadOnlyList<ProjectColumnSpec> columns,
             IReadOnlyList<IReadOnlyList<string?>> rows, CancellationToken ct = default)
         { SawProject = projectId; Appended = (tableName, columns, rows); return Task.CompletedTask; }
+        public Task<int> ImportRowsAsync(Guid projectId, string tableName, IReadOnlyList<ProjectColumnSpec> columns,
+            IReadOnlyList<IReadOnlyList<string?>> rows, bool createTable, CancellationToken ct = default)
+        { SawProject = projectId; Appended = (tableName, columns, rows); return Task.FromResult(rows.Count); }
     }
 
     private static async Task<(InMemoryProjectRepository projects, Project project, FakeStore store)> WorldAsync()

@@ -1,0 +1,11 @@
+@* Pre-auth shell for /setup and /login: no sidebar, no tenant-scoped data — just the dcshell CSS
+   variable scope (so dcbtn/dcinput/dcfield/dccard resolve the same colors as the rest of the portal)
+   around a single centered card. Deliberately does NOT nest under MainLayout, which assumes an
+   authenticated user (project switcher, member avatar, nav). *@
+@inherits LayoutComponentBase
+
+<div id="dcshell" data-theme="dark" class="auth-shell">
+    <div class="auth-wrap">
+        @Body
+    </div>
+</div>

@@ -9,101 +9,106 @@
 @inject IJSRuntime JS
 @inject NavigationManager Nav
 
-<div id="dcshell" data-theme="dark" style="display:flex; height:100vh; width:100%; overflow:hidden; background:var(--bg); @_brand.CssOverrides()">
+<div id="dcshell" data-theme="dark" class="shell" style="@_brand.CssOverrides()">
 
     <!-- SIDEBAR -->
-    <aside style="width:236px; flex:none; display:flex; flex-direction:column; background:var(--panel); border-right:1px solid var(--border)">
-        <div style="display:flex; align-items:center; gap:10px; padding:18px 18px 16px">
+    <aside class="sidebar">
+        <div class="brand-row">
             @if (_brand.LogoDataUri is { } logo)
             {
-                <img src="@logo" alt="logo" style="width:28px; height:28px; flex:none; border-radius:7px; object-fit:contain; background:var(--card-2)" />
+                <img src="@logo" alt="logo" class="brand-logo" />
             }
             else
             {
-                <div style="width:28px; height:28px; flex:none; border-radius:7px; background:var(--brand); display:flex; align-items:center; justify-content:center">
+                <div class="brand-mark">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M5 8l3.5 4L5 16"></path><path d="M13 16h6"></path></svg>
                 </div>
             }
-            <div style="display:flex; flex-direction:column; line-height:1.15">
-                <span style="font-size:14px; font-weight:600; letter-spacing:-.2px">@(_brand.ProductName ?? "placecontext")</span>
-                <span style="font-size:9.5px; color:var(--text-3); font-family:var(--font-sans); letter-spacing:.06em">@OrgName</span>
+            <div class="brand-text">
+                <span class="title-14">@(_brand.ProductName ?? "placecontext")</span>
+                <span class="org-name">@OrgName</span>
             </div>
         </div>
 
-        <div style="padding:6px 12px; display:flex; flex-direction:column; gap:2px; flex:1; overflow-y:auto">
-            <NavLink class="dcnav" href="/" Match="NavLinkMatch.All"><span class="bar"></span>@Icon("grid")<span style="flex:1">Dashboard</span></NavLink>
+        <div class="nav-list">
+            <NavLink class="dcnav" href="/" Match="NavLinkMatch.All"><span class="bar"></span>@Icon("grid")<span class="nav-label">Dashboard</span></NavLink>
 
             @if (Ui.CurrentProjectId is { } pid)
             {
-                <NavLink class="dcnav" href="@($"project/{pid}/jobs")"><span class="bar"></span>@Icon("box")<span style="flex:1">Jobs</span></NavLink>
-                <NavLink class="dcnav" href="@($"project/{pid}/chains")"><span class="bar"></span>@Icon("chain")<span style="flex:1">Chains</span></NavLink>
-                <NavLink class="dcnav" href="@($"project/{pid}/schedules")"><span class="bar"></span>@Icon("clock")<span style="flex:1">Schedules</span></NavLink>
-                <NavLink class="dcnav" href="@($"project/{pid}/data")"><span class="bar"></span>@Icon("map")<span style="flex:1">Data</span></NavLink>
-                <NavLink class="dcnav" href="@($"project/{pid}/secrets")"><span class="bar"></span>@Icon("key")<span style="flex:1">Vault</span></NavLink>
+                <NavLink class="dcnav" href="@($"project/{pid}/jobs")"><span class="bar"></span>@Icon("box")<span class="nav-label">Jobs</span></NavLink>
+                <NavLink class="dcnav" href="@($"project/{pid}/chains")"><span class="bar"></span>@Icon("chain")<span class="nav-label">Chains</span></NavLink>
+                <NavLink class="dcnav" href="@($"project/{pid}/schedules")"><span class="bar"></span>@Icon("clock")<span class="nav-label">Schedules</span></NavLink>
+                <NavLink class="dcnav" href="@($"project/{pid}/data")"><span class="bar"></span>@Icon("map")<span class="nav-label">Data</span></NavLink>
+                <NavLink class="dcnav" href="@($"project/{pid}/secrets")"><span class="bar"></span>@Icon("key")<span class="nav-label">Vault</span></NavLink>
             }
-            <NavLink class="dcnav" href="artifacts"><span class="bar"></span>@Icon("file")<span style="flex:1">Artifacts</span></NavLink>
-            <NavLink class="dcnav" href="observability"><span class="bar"></span>@Icon("pulse")<span style="flex:1">Observability</span></NavLink>
-            <NavLink class="dcnav" href="inspector"><span class="bar"></span>@Icon("inspector")<span style="flex:1">MCP Server</span><span style="width:7px; height:7px; border-radius:50%; background:var(--good); animation:dcpulse 1.8s ease-in-out infinite"></span></NavLink>
+            <NavLink class="dcnav" href="artifacts"><span class="bar"></span>@Icon("file")<span class="nav-label">Artifacts</span></NavLink>
+            <NavLink class="dcnav" href="observability"><span class="bar"></span>@Icon("pulse")<span class="nav-label">Observability</span></NavLink>
+            <AuthorizeView Policy="@Permission.SettingsManage">
+                <Authorized>
+                    <NavLink class="dcnav" href="cluster"><span class="bar"></span>@Icon("grid")<span class="nav-label">Cluster</span></NavLink>
+                </Authorized>
+            </AuthorizeView>
+            <NavLink class="dcnav" href="inspector"><span class="bar"></span>@Icon("inspector")<span class="nav-label">MCP Server</span><span class="mcp-dot"></span></NavLink>
 
-            <div style="font-size:10px; font-weight:600; letter-spacing:.7px; color:var(--text-3); padding:14px 10px 6px; text-transform:uppercase">Workspace</div>
-            <NavLink class="dcnav" href="overview"><span class="bar"></span>@Icon("pulse")<span style="flex:1">Projects overview</span></NavLink>
-            <NavLink class="dcnav" href="onboarding"><span class="bar"></span>@Icon("rocket")<span style="flex:1">Onboarding</span></NavLink>
-            <NavLink class="dcnav" href="wiki"><span class="bar"></span>@Icon("ledger")<span style="flex:1">Wiki</span></NavLink>
-            <NavLink class="dcnav" href="settings/branding"><span class="bar"></span>@Icon("key")<span style="flex:1">Settings</span></NavLink>
-            <NavLink class="dcnav" href="about"><span class="bar"></span>@Icon("grid")<span style="flex:1">About</span></NavLink>
+            <div class="nav-section">Workspace</div>
+            <NavLink class="dcnav" href="overview"><span class="bar"></span>@Icon("pulse")<span class="nav-label">Projects overview</span></NavLink>
+            <NavLink class="dcnav" href="onboarding"><span class="bar"></span>@Icon("rocket")<span class="nav-label">Onboarding</span></NavLink>
+            <NavLink class="dcnav" href="wiki"><span class="bar"></span>@Icon("ledger")<span class="nav-label">Wiki</span></NavLink>
+            <NavLink class="dcnav" href="settings/branding"><span class="bar"></span>@Icon("key")<span class="nav-label">Settings</span></NavLink>
+            <NavLink class="dcnav" href="about"><span class="bar"></span>@Icon("grid")<span class="nav-label">About</span></NavLink>
         </div>
 
         @* ── Project switcher — the design's context pill; nav above scopes to this project ── *@
-        <div style="padding:12px 10px 6px; border-top:1px solid var(--border); position:relative">
+        <div class="switcher-wrap">
             <div @onclick="ToggleSwitcher"
-                 style="display:flex; align-items:center; gap:8px; padding:8px 10px; border-radius:6px; background:var(--card); border:1px solid var(--border-2); cursor:pointer">
-                <span style="width:7px; height:7px; flex:none; border-radius:50%; background:var(--good); box-shadow:0 0 8px rgba(67,214,117,.6)"></span>
-                <span style="font-family:var(--font-sans); font-size:11.5px; color:var(--text-2); flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis">
+                 class="switcher-pill">
+                <span class="switcher-dot"></span>
+                <span class="switcher-name">
                     @(Ui.CurrentProjectName ?? "select project")
                 </span>
-                <span style="color:var(--text-3); font-size:10px">▾</span>
+                <span class="switcher-caret">▾</span>
             </div>
             @if (_switcherOpen)
             {
-                <div style="position:absolute; left:10px; right:10px; bottom:calc(100% + 4px); max-height:260px; overflow-y:auto; background:var(--card); border:1px solid var(--border-2); border-radius:8px; box-shadow:var(--shadow); z-index:60; padding:4px">
+                <div class="switcher-menu">
                     @foreach (var p in _projects)
                     {
                         <div @onclick="@(() => SwitchProject(p))"
-                             style="display:flex; align-items:center; gap:8px; padding:7px 9px; border-radius:6px; cursor:pointer; background:@(p.Id == Ui.CurrentProjectId ? "var(--card-2)" : "transparent")">
-                            <span style="width:6px; height:6px; flex:none; border-radius:50%; background:@(p.Id == Ui.CurrentProjectId ? "var(--good)" : "var(--border-2)")"></span>
-                            <span style="font-family:var(--font-sans); font-size:11.5px; color:var(--text-2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis">@p.Name</span>
+                             class="switcher-item" style="background:@(p.Id == Ui.CurrentProjectId ? "var(--card-2)" : "transparent")">
+                            <span class="switcher-item-dot" style="background:@(p.Id == Ui.CurrentProjectId ? "var(--good)" : "var(--border-2)")"></span>
+                            <span class="switcher-item-name">@p.Name</span>
                         </div>
                     }
                     @if (_projects.Count == 0)
                     {
-                        <div style="padding:8px 10px; font-size:11.5px; color:var(--text-3)">No projects yet — start with Onboarding.</div>
+                        <div class="switcher-empty">No projects yet — start with Onboarding.</div>
                     }
                 </div>
             }
         </div>
 
-        <div style="padding:8px 12px 12px; display:flex; align-items:center; justify-content:space-between">
+        <div class="user-bar">
             <AuthorizeView>
                 <Authorized>
-                    <div style="display:flex; align-items:center; gap:8px; min-width:0">
-                        <div style="width:26px; height:26px; flex:none; border-radius:6px; background:var(--card-2); border:1px solid var(--border); display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:600; color:var(--text-2); font-family:var(--font-sans)">@Initials(context.User.Identity?.Name)</div>
-                        <div style="min-width:0">
-                            <div style="font-size:12px; color:var(--text-2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis">@context.User.Identity?.Name</div>
-                            <div style="font-size:10px; color:var(--text-3)">@context.User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value</div>
+                    <div class="user-info">
+                        <div class="user-avatar">@Initials(context.User.Identity?.Name)</div>
+                        <div class="user-detail">
+                            <div class="user-name">@context.User.Identity?.Name</div>
+                            <div class="user-role">@context.User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value</div>
                         </div>
                     </div>
                 </Authorized>
                 <NotAuthorized>
-                    <span style="font-size:12px; color:var(--text-3)">Not signed in</span>
+                    <span class="not-signed-in">Not signed in</span>
                 </NotAuthorized>
             </AuthorizeView>
-            <div style="display:flex; align-items:center; gap:6px; flex:none">
-                <form method="post" action="/auth/logout" style="margin:0">
-                    <button type="submit" title="Sign out" style="width:30px; height:30px; border-radius:7px; border:1px solid var(--border); background:var(--card); cursor:pointer; display:flex; align-items:center; justify-content:center; color:var(--text-2)">
+            <div class="user-actions">
+                <form method="post" action="/auth/logout" class="logout-form">
+                    <button type="submit" title="Sign out" class="icon-btn">
                         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><path d="M16 17l5-5-5-5"></path><path d="M21 12H9"></path></svg>
                     </button>
                 </form>
-                <button @onclick="ToggleTheme" title="Toggle theme" style="width:30px; height:30px; border-radius:7px; border:1px solid var(--border); background:var(--card); cursor:pointer; display:flex; align-items:center; justify-content:center; color:var(--text-2)">
+                <button @onclick="ToggleTheme" title="Toggle theme" class="icon-btn">
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5L19 19M19 5l-1.5 1.5M6.5 17.5L5 19"></path></svg>
                 </button>
             </div>
@@ -111,20 +116,20 @@
     </aside>
 
     <!-- MAIN -->
-    <main style="flex:1; min-width:0; display:flex; flex-direction:column; overflow:hidden">
-        <header style="height:54px; flex:none; display:flex; align-items:center; justify-content:space-between; padding:0 24px; border-bottom:1px solid var(--border); background:var(--panel)">
-            <div style="display:flex; align-items:center; gap:10px; min-width:0">
-                <span style="font-size:14px; font-weight:600; letter-spacing:-.2px">@Ui.Title</span>
-                <span style="font-size:12px; color:var(--text-3); font-family:var(--font-sans); white-space:nowrap; overflow:hidden; text-overflow:ellipsis">@Ui.Sub</span>
+    <main class="main">
+        <header class="topbar">
+            <div class="topbar-left">
+                <span class="title-14">@Ui.Title</span>
+                <span class="topbar-sub">@Ui.Sub</span>
             </div>
-            <div style="display:flex; align-items:center; gap:10px; flex:none">
+            <div class="topbar-right">
                 <button class="dcsearch-trigger" @onclick="OpenSearch">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path></svg>
                     Search context, files, changes
                     <kbd>/</kbd>
                 </button>
-                <div style="display:flex; align-items:center; gap:7px; padding:6px 11px; background:var(--good-bg); border-radius:7px; color:var(--good); font-size:11.5px; font-weight:500; font-family:var(--font-sans)">
-                    <span style="width:6px; height:6px; border-radius:50%; background:var(--good); animation:dcpulse 1.6s ease-in-out infinite"></span>
+                <div class="running-badge">
+                    <span class="running-dot"></span>
                     @_runningCount running
                 </div>
                 <NotificationsBell />
@@ -132,7 +137,7 @@
         </header>
 
 
-        <div style="flex:1; overflow-y:auto; overflow-x:hidden">
+        <div class="body-scroll">
             @Body
         </div>
     </main>

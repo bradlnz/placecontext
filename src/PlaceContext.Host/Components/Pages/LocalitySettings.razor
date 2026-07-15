@@ -1,5 +1,6 @@
 @page "/settings/locality"
 @layout PlaceContext.Host.Components.Layout.SettingsLayout
+@attribute [Authorize(Policy = Permission.SettingsManage)]
 @inject PlaceContext.Infrastructure.Tenancy.ITenantStore Tenants
 @inject PlaceContext.Application.Ports.ICurrentTenant Tenant
 @inject PortalUiState Ui
@@ -7,18 +8,18 @@
 
 <PageTitle>placecontext — Locality</PageTitle>
 
-<div style="padding:24px; max-width:640px">
-    <h2 style="font-size:18px; font-weight:600; margin:0 0 4px">Locality</h2>
-    <div style="font-size:12px; color:var(--text-3); margin-bottom:18px">
+<div class="page">
+    <h2 class="title">Locality</h2>
+    <div class="intro">
         The workspace timezone drives everything time-shaped: cron schedules fire in it, and every
         timestamp the portal shows is converted to it. Agents can also set it via the
         <code>set_workspace_timezone</code> MCP tool.
     </div>
 
-    <div class="dccard" style="padding:18px; display:flex; flex-direction:column; gap:12px">
-        <div class="dcfield" style="max-width:340px">
-            <label>Workspace timezone <span class="code" style="margin-left:4px">IANA</span></label>
-            <input class="dcinput" list="pc-tz" style="font-family:var(--font-sans)" @bind="_tz" />
+    <div class="dccard card">
+        <div class="dcfield tz-field">
+            <label>Workspace timezone <span class="code code-gap">IANA</span></label>
+            <input class="dcinput tz-input" list="pc-tz" @bind="_tz" />
             <datalist id="pc-tz">
                 @foreach (var z in CommonZones)
                 {
@@ -26,15 +27,15 @@
                 }
             </datalist>
         </div>
-        <div style="font-size:12px; color:var(--text-2)">
-            Now in <span style="font-family:var(--font-sans)">@_tz</span>:
-            <span style="font-family:var(--font-sans); color:var(--brand-2)">@PreviewNow()</span>
+        <div class="now-row">
+            Now in <span class="mono">@_tz</span>:
+            <span class="mono-accent">@PreviewNow()</span>
         </div>
-        <div style="display:flex; gap:10px; align-items:center">
+        <div class="actions">
             <button class="dcbtn primary" disabled="@_busy" @onclick="SaveAsync">@(_busy ? "Saving…" : "Save timezone")</button>
             @if (_message is not null)
             {
-                <span style="font-size:12px; color:var(--text-3)">@_message</span>
+                <span class="msg">@_message</span>
             }
         </div>
         <div class="dchint">

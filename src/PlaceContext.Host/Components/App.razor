@@ -8,6 +8,9 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+    @* Blazor scoped-CSS bundle: per-component <Name>.razor.css files compile into this. Component
+       classes resolve --var() values from the #dcshell ancestor's cascade below. *@
+    <link rel="stylesheet" href="PlaceContext.Host.styles.css" />
     <HeadOutlet @rendermode="InteractiveServer" />
     <style>
         #dcshell {

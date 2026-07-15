@@ -1,0 +1,142 @@
+@page "/settings/backup"
+@layout PlaceContext.Host.Components.Layout.SettingsLayout
+@attribute [Authorize(Policy = Permission.BackupManage)]
+@inject IPlaceContextService Svc
+@inject PortalUiState Ui
+@inject NavigationManager Nav
+
+<PageTitle>placecontext — Backup</PageTitle>
+
+<div class="page">
+    <h2 class="title">Backup & restore</h2>
+    <div class="intro">
+        Export this workspace's settings and job definitions to a single JSON manifest, or import one to
+        bring a workspace up to date. Run history and vault secrets are never included — see the
+        manifest's own <span class="code">notes</span> field.
+    </div>
+
+    <div class="dccard card-export">
+        <div class="card-title">Export backup</div>
+        <div class="card-desc">
+            Downloads projects, jobs, chains, triggers, event types, data mappings, and workspace
+            settings (timezone, branding, GitHub login) as one JSON file.
+        </div>
+        <div>
+            <a class="dcbtn primary link-btn" href="/backup/export">Download backup</a>
+        </div>
+    </div>
+
+    <div class="dccard card-import">
+        <div class="card-title">Import backup</div>
+        <div class="card-desc">
+            Merges a manifest into this workspace: creates anything missing, updates anything matching by
+            name/path, and never duplicates — re-importing the same file is safe.
+        </div>
+        <div class="dcfield file-field">
+            <InputFile OnChange="OnFileSelected" accept="application/json" class="dcinput" style="padding:6px" />
+        </div>
+        @if (_pending is not null)
+        {
+            <div class="card-desc">
+                Loaded <span class="code">@_fileName</span> — @_pending.Projects.Count project(s),
+                @_pending.Jobs.Count job(s), @_pending.JobChains.Count chain(s), @_pending.Triggers.Count trigger(s),
+                @_pending.EventDefinitions.Count event type(s), @_pending.DataMappings.Count data mapping(s).
+            </div>
+            @if (_confirming)
+            {
+                <div class="confirm-row">
+                    <button class="dcbtn primary" disabled="@_busy" @onclick="ImportAsync">@(_busy ? "Importing…" : "Confirm import")</button>
+                    <button class="dcbtn" disabled="@_busy" @onclick="@(() => _confirming = false)">Cancel</button>
+                </div>
+            }
+            else
+            {
+                <div>
+                    <button class="dcbtn" @onclick="@(() => _confirming = true)">Import into this workspace</button>
+                </div>
+            }
+        }
+        @if (_message is not null)
+        {
+            <div class="message">@_message</div>
+        }
+        @if (_result is not null)
+        {
+            <div class="dchint">
+                Projects: @_result.ProjectsCreated created / @_result.ProjectsUpdated updated ·
+                Jobs: @_result.JobsCreated created / @_result.JobsUpdated updated / @_result.JobsSkipped skipped ·
+                Chains: @_result.JobChainsCreated created / @_result.JobChainsUpdated updated / @_result.JobChainsSkipped skipped ·
+                Triggers: @_result.TriggersCreated created / @_result.TriggersUpdated updated / @_result.TriggersSkipped skipped ·
+                Event types: @_result.EventDefinitionsCreated created / @_result.EventDefinitionsUpdated updated ·
+                Data mappings: @_result.DataMappingsCreated created / @_result.DataMappingsUpdated updated / @_result.DataMappingsSkipped skipped
+                @if (_result.Warnings.Count > 0)
+                {
+                    <div class="warnings">
+                        @foreach (var w in _result.Warnings)
+                        {
+                            <div>⚠ @w</div>
+                        }
+                    </div>
+                }
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    private BackupManifest? _pending;
+    private string? _fileName;
+    private bool _confirming;
+    private bool _busy;
+    private string? _message;
+    private ImportResultView? _result;
+
+    protected override void OnInitialized()
+        => Ui.Set("Backup", "export/import this workspace's settings and job definitions");
+
+    private async Task OnFileSelected(InputFileChangeEventArgs e)
+    {
+        _message = null;
+        _result = null;
+        _confirming = false;
+        _pending = null;
+
+        var file = e.File;
+        const long maxBytes = 20 * 1024 * 1024; // manifests are text JSON — 20 MB is generous
+        if (file.Size > maxBytes)
+        {
+            _message = "File too large — a manifest should be well under 20 MB.";
+            return;
+        }
+
+        try
+        {
+            using var stream = file.OpenReadStream(maxBytes);
+            _pending = await System.Text.Json.JsonSerializer.DeserializeAsync<BackupManifest>(stream)
+                ?? throw new InvalidOperationException("Empty or invalid manifest.");
+            _fileName = file.Name;
+        }
+        catch (Exception ex)
+        {
+            _message = $"Couldn't read that file as a backup manifest: {ex.Message}";
+        }
+    }
+
+    private async Task ImportAsync()
+    {
+        if (_pending is null) return;
+        _busy = true;
+        _message = null;
+        try
+        {
+            _result = await Svc.ImportManifestAsync(_pending);
+            _message = "Import complete.";
+            _confirming = false;
+        }
+        catch (Exception ex)
+        {
+            _message = $"Import failed: {ex.Message}";
+        }
+        finally { _busy = false; }
+    }
+}

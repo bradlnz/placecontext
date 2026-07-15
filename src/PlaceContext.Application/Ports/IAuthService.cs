@@ -17,4 +17,28 @@ public interface IAuthService
     /// presents a valid portal token is signed in as this user.
     /// </summary>
     Task<AuthUser> GetOrCreateOperatorAsync(CancellationToken ct = default);
+
+    /// <summary>
+    /// True when this tenant has no Owner with a real, operator-chosen password — i.e. first run. The
+    /// machine-provisioned row behind <see cref="GetOrCreateOperatorAsync"/> never counts (its password
+    /// hash is an unusable random placeholder — see that method's remarks), so a workspace that has only
+    /// ever been reached via the HMAC portal token still requires interactive setup before password login
+    /// works. Drives the /setup vs /login redirect for unauthenticated portal requests.
+    /// </summary>
+    Task<bool> IsUnconfiguredAsync(CancellationToken ct = default);
+
+    /// <summary>
+    /// Creates the tenant's first admin (Owner, real password) from the first-run setup form. Fails
+    /// closed: returns null if the tenant is already configured (<see cref="IsUnconfiguredAsync"/> is
+    /// false) or the email is already taken, so the setup endpoint can never be replayed into a second
+    /// admin — the caller should redirect to /login instead of retrying.
+    /// </summary>
+    Task<AuthUser?> CreateFirstAdminAsync(string email, string displayName, string password, CancellationToken ct = default);
+
+    /// <summary>
+    /// Verifies email + password for the password-login page. Returns null on any mismatch — unknown
+    /// email, wrong password, or a member with no real password set — so the caller can show one generic
+    /// "invalid email or password" message without revealing which part was wrong (no user enumeration).
+    /// </summary>
+    Task<AuthUser?> ValidateCredentialsAsync(string email, string password, CancellationToken ct = default);
 }

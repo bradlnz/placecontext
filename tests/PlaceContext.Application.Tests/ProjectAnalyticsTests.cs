@@ -50,6 +50,9 @@ public class ProjectAnalyticsTests
         public Task AppendReadOnlyRowsAsync(Guid projectId, string tableName, IReadOnlyList<ProjectColumnSpec> columns,
             IReadOnlyList<IReadOnlyList<string?>> rows, CancellationToken ct = default)
             => Task.CompletedTask;
+        public Task<int> ImportRowsAsync(Guid projectId, string tableName, IReadOnlyList<ProjectColumnSpec> columns,
+            IReadOnlyList<IReadOnlyList<string?>> rows, bool createTable, CancellationToken ct = default)
+            => Task.FromResult(rows.Count);
     }
 
     private sealed class InMemoryChartRepository : IProjectChartRepository
@@ -184,5 +187,8 @@ public class ProjectAnalyticsTests
         public Task AppendReadOnlyRowsAsync(Guid projectId, string tableName, IReadOnlyList<ProjectColumnSpec> columns,
             IReadOnlyList<IReadOnlyList<string?>> rows, CancellationToken ct = default)
             => Task.CompletedTask;
+        public Task<int> ImportRowsAsync(Guid projectId, string tableName, IReadOnlyList<ProjectColumnSpec> columns,
+            IReadOnlyList<IReadOnlyList<string?>> rows, bool createTable, CancellationToken ct = default)
+            => Task.FromResult(rows.Count);
     }
 }

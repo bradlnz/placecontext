@@ -15,13 +15,13 @@
 }
 else
 {
-    <div style="padding:20px 24px 40px; max-width:1320px; margin:0 auto">
+    <div class="page-wrap">
 
 
-        <div style="display:flex; align-items:baseline; justify-content:space-between; margin-bottom:18px">
+        <div class="header-row">
             <div>
-                <h2 style="font-size:18px; font-weight:600; margin:0">Job chains</h2>
-                <div style="font-size:12px; color:var(--text-3); margin-top:3px">
+                <h2 class="page-title">Job chains</h2>
+                <div class="sub-note">
                     Ordered pipelines — each step's primary output becomes the next step's input payload.
                 </div>
             </div>
@@ -30,43 +30,43 @@ else
 
         @if (_message is not null)
         {
-            <div style="margin-bottom:12px; padding:10px 14px; border-radius:8px; background:var(--card); font-size:12.5px; color:var(--text-2)">@_message</div>
+            <div class="message-banner">@_message</div>
         }
 
         @if (_chains is null or { Count: 0 })
         {
-            <div class="dccard" style="padding:24px; color:var(--text-3); font-size:13px; text-align:center">
+            <div class="dccard empty-card">
                 No chains defined for this project yet. Click <strong>+ New chain</strong> to link jobs into a pipeline.
             </div>
         }
         else
         {
-            <div style="display:flex; flex-direction:column; gap:10px">
+            <div class="chain-list">
                 @foreach (var chain in _chains)
                 {
-                    <div class="dccard" style="padding:14px 16px; cursor:pointer" @onclick="@(() => OpenChain(chain))">
-                        <div style="display:flex; align-items:center; justify-content:space-between; gap:14px">
-                            <div style="min-width:0">
-                                <div style="font-size:14px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis">@chain.Name</div>
+                    <div class="dccard chain-card" @onclick="@(() => OpenChain(chain))">
+                        <div class="chain-row">
+                            <div class="min0">
+                                <div class="chain-name">@chain.Name</div>
                                 @if (!string.IsNullOrWhiteSpace(chain.Description))
                                 {
-                                    <div style="font-size:12px; color:var(--text-3); margin-top:3px">@chain.Description</div>
+                                    <div class="sub-note">@chain.Description</div>
                                 }
-                                <div style="display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin-top:8px; font-size:11.5px; font-family:var(--font-sans)">
+                                <div class="step-chips">
                                     @foreach (var (step, i) in chain.Steps.Select((s, i) => (s, i)))
                                     {
                                         if (i > 0)
                                         {
-                                            <span style="color:var(--text-3)">→</span>
+                                            <span class="chip-arrow">→</span>
                                         }
-                                        <span style="padding:2px 8px; border-radius:6px; background:var(--card-2); color:@(step.JobName == "(deleted)" ? "var(--bad)" : "var(--brand-2)")">@step.JobName</span>
+                                        <span class="step-chip" style="color:@(step.JobName == "(deleted)" ? "var(--bad)" : "var(--brand-2)")">@step.JobName</span>
                                     }
                                 </div>
                             </div>
-                            <div style="display:flex; align-items:center; gap:8px; flex:none">
+                            <div class="chain-actions">
                                 @if (_confirmDeleteId == chain.Id)
                                 {
-                                    <button class="dcbtn" style="color:var(--bad)" @onclick:stopPropagation="true" @onclick="@(() => DeleteChain(chain.Id))">Confirm delete</button>
+                                    <button class="dcbtn c-bad" @onclick:stopPropagation="true" @onclick="@(() => DeleteChain(chain.Id))">Confirm delete</button>
                                     <button class="dcbtn" @onclick:stopPropagation="true" @onclick="@(() => _confirmDeleteId = null)">Keep</button>
                                 }
                                 else
@@ -87,24 +87,24 @@ else
 @if (_showEditor)
 {
     <div class="dcslide-scrim" @onclick="CloseEditor"></div>
-    <div class="dcslide" style="width:640px">
+    <div class="dcslide slide-640">
         <div class="dcslide-head">
-            <div style="flex:1; min-width:0">
-                <div style="font-size:14px; font-weight:600">@(_editChainId.HasValue ? _edName : "New chain")</div>
-                <div style="font-size:11.5px; color:var(--text-3); margin-top:3px">
+            <div class="flex-min">
+                <div class="title-14">@(_editChainId.HasValue ? _edName : "New chain")</div>
+                <div class="sub-115">
                     Steps run in order; a failed step stops the chain. The same job may appear more than once.
                 </div>
             </div>
             @if (_editChainId.HasValue && _chains?.FirstOrDefault(c => c.Id == _editChainId) is { } runnable)
             {
-                <button class="dcbtn primary" style="margin-right:10px" @onclick="@(() => RunChain(runnable))">▶ Run</button>
+                <button class="dcbtn primary mr-10" @onclick="@(() => RunChain(runnable))">▶ Run</button>
             }
             <button class="dcslide-x" @onclick="CloseEditor">×</button>
         </div>
 
         @if (_editChainId.HasValue)
         {
-            <div class="dctabs" style="margin:0; padding:0 18px; border-bottom:1px solid var(--border)">
+            <div class="dctabs editor-tabs">
                 <button class="dctab @(_editorTab == "details" ? "active" : "")" @onclick="@(() => _editorTab = "details")">Details</button>
                 <button class="dctab @(_editorTab == "runs" ? "active" : "")" @onclick="SwitchToRunsTab">Runs<span class="n">@(_chainRuns?.Count ?? 0)</span></button>
             </div>
@@ -112,36 +112,35 @@ else
 
         @if (_editorTab == "runs" && _editChainId.HasValue)
         {
-            <div class="dcslide-body" style="flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:12px">
+            <div class="dcslide-body runs-body">
                 @if (_openRun is null)
                 {
                     @if (_chainRuns is null or { Count: 0 })
                     {
-                        <div style="color:var(--text-3); font-size:13px; padding:14px 0">No runs yet — click ▶ Run to start the pipeline.</div>
+                        <div class="no-runs">No runs yet — click ▶ Run to start the pipeline.</div>
                     }
                     else
                     {
                         @foreach (var run in _chainRuns)
                         {
-                            <div class="dccard" style="padding:12px 16px; cursor:pointer" @onclick="@(() => OpenChainRun(run))">
-                                <div style="display:flex; align-items:center; gap:12px">
-                                    <span style="font-size:11px; font-weight:600; padding:3px 8px; border-radius:5px;
-                                          color:@StatusColor(run.Status); background:@StatusBg(run.Status)">@run.Status</span>
-                                    <span style="font-family:var(--font-sans); font-size:11.5px; color:var(--text-2); flex:1">
+                            <div class="dccard run-card" @onclick="@(() => OpenChainRun(run))">
+                                <div class="run-row">
+                                    <span class="status-chip" style="color:@StatusColor(run.Status); background:@StatusBg(run.Status)">@run.Status</span>
+                                    <span class="run-time">
                                         @run.StartedAt.ToWorkspaceTime().ToString("yyyy-MM-dd HH:mm:ss")
                                     </span>
-                                    <span style="font-size:11px; color:var(--text-3)">
+                                    <span class="meta-11">
                                         @run.Steps.Count(s => s.Status == "Succeeded")/@run.Steps.Count steps
                                     </span>
                                     @if (run.FinishedAt.HasValue)
                                     {
-                                        <span style="font-size:11px; color:var(--text-3); font-family:var(--font-sans)">
+                                        <span class="dur-meta">
                                             @FormatDuration(run.StartedAt, run.FinishedAt.Value)
                                         </span>
                                     }
                                     else
                                     {
-                                        <span style="font-size:11px; color:var(--brand-2)">running…</span>
+                                        <span class="running-note">running…</span>
                                     }
                                 </div>
                             </div>
@@ -150,32 +149,30 @@ else
                 }
                 else
                 {
-                    <button class="dcbtn" style="align-self:flex-start" @onclick="@(() => { _openRun = null; _stepRunDetail = null; })">← All runs</button>
+                    <button class="dcbtn btn-start" @onclick="@(() => { _openRun = null; _stepRunDetail = null; })">← All runs</button>
 
-                    <div style="display:flex; align-items:center; gap:8px">
-                        <span style="font-size:12px; font-weight:600; padding:3px 9px; border-radius:5px;
-                              color:@StatusColor(_openRun.Status); background:@StatusBg(_openRun.Status)">@_openRun.Status</span>
-                        <span style="font-size:11px; color:var(--text-3); font-family:var(--font-sans)">
+                    <div class="status-row">
+                        <span class="status-chip-lg" style="color:@StatusColor(_openRun.Status); background:@StatusBg(_openRun.Status)">@_openRun.Status</span>
+                        <span class="dur-meta">
                             @_openRun.StartedAt.ToWorkspaceTime().ToString("yyyy-MM-dd HH:mm:ss")
                             @(_openRun.FinishedAt.HasValue ? " · took " + FormatDuration(_openRun.StartedAt, _openRun.FinishedAt.Value) : " · live")
                         </span>
                     </div>
 
                     @* ── The pipeline: stage chips flowing left to right ───────────────────────── *@
-                    <div style="display:flex; flex-wrap:wrap; align-items:center; gap:8px; padding:14px; border-radius:10px; background:var(--card)">
+                    <div class="pipeline">
                         @foreach (var (step, i) in _openRun.Steps.Select((s, i) => (s, i)))
                         {
                             if (i > 0)
                             {
-                                <span style="color:var(--text-3); font-size:15px">──▶</span>
+                                <span class="pipe-arrow">──▶</span>
                             }
-                            <div style="display:flex; flex-direction:column; gap:2px; padding:8px 12px; border-radius:8px; border:1.5px solid @StepBorder(step.Status);
-                                        background:@StatusBg(step.Status); @(step.RunId is not null ? "cursor:pointer" : "")"
+                            <div class="stage" style="border:1.5px solid @StepBorder(step.Status); background:@StatusBg(step.Status); @(step.RunId is not null ? "cursor:pointer" : "")"
                                  @onclick="@(() => OpenStepRun(step))">
-                                <div style="display:flex; align-items:center; gap:6px; font-size:12.5px; font-weight:600; color:@StatusColor(step.Status)">
+                                <div class="stage-title" style="color:@StatusColor(step.Status)">
                                     <span>@StepIcon(step.Status)</span><span>@step.JobName</span>
                                 </div>
-                                <div style="font-size:10.5px; color:var(--text-3)">
+                                <div class="stage-sub">
                                     @(step.Status == "Running" ? "running…"
                                         : step.StartedAt.HasValue && step.FinishedAt.HasValue
                                             ? step.Status + " " + FormatDuration(step.StartedAt.Value, step.FinishedAt.Value)
@@ -188,35 +185,35 @@ else
                     @if (_openRun.FinalOutput is { Length: > 0 })
                     {
                         <div>
-                            <div style="font-size:12px; font-weight:600; margin-bottom:4px">Pipeline output</div>
-                            <pre style="background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:10px; font-size:11px; font-family:var(--font-mono); white-space:pre-wrap; word-break:break-all; color:var(--text-2); max-height:200px; overflow-y:auto">@PrettyJson(_openRun.FinalOutput)</pre>
+                            <div class="out-label">Pipeline output</div>
+                            <pre class="json-pre">@PrettyJson(_openRun.FinalOutput)</pre>
                         </div>
                     }
 
                     @* Compact detail of a clicked stage's job run — artifact + logs without leaving the pipeline. *@
                     @if (_stepRunDetail is { } d)
                     {
-                        <div style="border-top:1px solid var(--border); padding-top:10px">
-                            <div style="font-size:12px; font-weight:600; margin-bottom:6px; display:flex; align-items:center; gap:8px">
+                        <div class="stage-detail">
+                            <div class="stage-detail-head">
                                 <span>Stage run — @(_openRun.Steps.FirstOrDefault(s => s.RunId == d.Id)?.JobName)</span>
-                                <span style="font-size:11px; padding:2px 7px; border-radius:4px; color:@StatusColor(d.Status); background:@StatusBg(d.Status)">@d.Status</span>
-                                <span style="flex:1"></span>
-                                <button class="dcbtn" style="padding:2px 10px; font-size:11px"
+                                <span class="status-chip-sm" style="color:@StatusColor(d.Status); background:@StatusBg(d.Status)">@d.Status</span>
+                                <span class="flex-1"></span>
+                                <button class="dcbtn btn-xs"
                                         @onclick="@(() => Nav.NavigateTo($"/project/{ProjectId}/jobs"))">open in Jobs →</button>
                             </div>
                             @foreach (var shard in d.ShardResults)
                             {
-                                <div style="margin-bottom:8px">
-                                    <div style="font-size:11px; color:var(--text-3); margin-bottom:3px">shard @shard.Index — @shard.Outcome (exit @shard.ExitCode)</div>
+                                <div class="mb-8">
+                                    <div class="shard-head">shard @shard.Index — @shard.Outcome (exit @shard.ExitCode)</div>
                                     @if (shard.Artifact is not null)
                                     {
-                                        <pre style="background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:8px; font-size:10.5px; font-family:var(--font-mono); white-space:pre-wrap; word-break:break-all; color:var(--text-2); max-height:160px; overflow-y:auto">@PrettyJson(shard.Artifact)</pre>
+                                        <pre class="artifact-pre">@PrettyJson(shard.Artifact)</pre>
                                     }
                                     @if (!string.IsNullOrWhiteSpace(shard.Log))
                                     {
-                                        <details style="margin-top:3px" open="@(shard.Outcome == "Failed")">
-                                            <summary style="font-size:10.5px; color:var(--text-3); cursor:pointer">Log</summary>
-                                            <pre style="font-size:10px; font-family:var(--font-mono); color:var(--text-3); white-space:pre-wrap; margin-top:3px; max-height:220px; overflow-y:auto">@shard.Log</pre>
+                                        <details class="log-details" open="@(shard.Outcome == "Failed")">
+                                            <summary class="log-summary">Log</summary>
+                                            <pre class="log-pre">@shard.Log</pre>
                                         </details>
                                     }
                                 </div>
@@ -228,14 +225,14 @@ else
         }
         else
         {
-        <div class="dcslide-body" style="flex:1; display:flex; flex-direction:column; gap:14px">
+        <div class="dcslide-body editor-body">
 
-            <div style="display:flex; gap:10px">
-                <div class="dcfield" style="flex:1">
+            <div class="field-row">
+                <div class="dcfield flex-1">
                     <label>Name <span class="req">*</span></label>
                     <input class="dcinput" @bind="_edName" placeholder="my-pipeline" />
                 </div>
-                <div class="dcfield" style="flex:1.4">
+                <div class="dcfield flex-14">
                     <label>Description</label>
                     <input class="dcinput" @bind="_edDescription" placeholder="What does this chain produce? (optional)" />
                 </div>
@@ -246,28 +243,28 @@ else
 
                 @if (_edSteps.Count == 0)
                 {
-                    <div style="padding:14px; border-radius:8px; background:var(--card-2); font-size:12px; color:var(--text-3); text-align:center">
+                    <div class="empty-steps">
                         No steps yet — pick a job below and add it.
                     </div>
                 }
                 else
                 {
-                    <div style="display:flex; flex-direction:column; gap:6px">
+                    <div class="step-list">
                         @foreach (var (jobId, i) in _edSteps.Select((id, i) => (id, i)))
                         {
-                            <div style="display:flex; align-items:center; gap:10px; padding:8px 10px; border-radius:8px; background:var(--card-2)">
-                                <span style="font-size:11px; color:var(--text-3); font-family:var(--font-sans); flex:none">@(i + 1).</span>
-                                <span style="flex:1; min-width:0; font-size:12.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis">@JobName(jobId)</span>
-                                <button class="dcbtn" style="padding:2px 8px" disabled="@(i == 0)" @onclick="@(() => MoveStep(i, -1))">↑</button>
-                                <button class="dcbtn" style="padding:2px 8px" disabled="@(i == _edSteps.Count - 1)" @onclick="@(() => MoveStep(i, +1))">↓</button>
-                                <button class="dcbtn" style="padding:2px 8px; color:var(--bad)" @onclick="@(() => _edSteps.RemoveAt(i))">×</button>
+                            <div class="step-item">
+                                <span class="step-num">@(i + 1).</span>
+                                <span class="step-jobname">@JobName(jobId)</span>
+                                <button class="dcbtn btn-2-8" disabled="@(i == 0)" @onclick="@(() => MoveStep(i, -1))">↑</button>
+                                <button class="dcbtn btn-2-8" disabled="@(i == _edSteps.Count - 1)" @onclick="@(() => MoveStep(i, +1))">↓</button>
+                                <button class="dcbtn btn-2-8-del" @onclick="@(() => _edSteps.RemoveAt(i))">×</button>
                             </div>
                         }
                     </div>
                 }
 
-                <div style="display:flex; gap:8px; margin-top:4px">
-                    <select class="dcinput" style="flex:1" @bind="_edAddJobId">
+                <div class="add-row">
+                    <select class="dcinput flex-1" @bind="_edAddJobId">
                         <option value="">— pick a job —</option>
                         @foreach (var job in _jobs ?? Array.Empty<JobView>())
                         {
@@ -286,7 +283,7 @@ else
             <div class="dcslide-foot">
                 @if (_editorError is not null)
                 {
-                    <div style="color:var(--bad); font-size:12px; flex:1">@_editorError</div>
+                    <div class="editor-err">@_editorError</div>
                 }
                 <button class="dcbtn" @onclick="CloseEditor">Cancel</button>
                 <button class="dcbtn primary" disabled="@_saving" @onclick="SaveChain">
@@ -300,23 +297,23 @@ else
 @if (_runPromptChain is not null)
 {
     <div class="dcmodal-overlay" @onclick="@(() => _runPromptChain = null)">
-        <div class="dcmodal" style="width:520px; max-height:80vh; display:flex; flex-direction:column" @onclick:stopPropagation="true">
+        <div class="dcmodal run-modal" @onclick:stopPropagation="true">
             <div class="dcmodal-head">
-                <div style="flex:1; min-width:0">
-                    <div style="font-size:14px; font-weight:600">Run @_runPromptChain.Name</div>
-                    <div style="font-size:11.5px; color:var(--text-3); margin-top:3px">
+                <div class="flex-min">
+                    <div class="title-14">Run @_runPromptChain.Name</div>
+                    <div class="sub-115">
                         Every step that takes input is listed below — values are prefilled from each job's stored payload.
                     </div>
                 </div>
                 <button class="dcslide-x" @onclick="@(() => _runPromptChain = null)">×</button>
             </div>
-            <div class="dcmodal-body" style="overflow-y:auto">
+            <div class="dcmodal-body modal-body-scroll">
                 @foreach (var step in _runPromptSteps)
                 {
-                    <div style="margin-bottom:14px">
-                        <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px">
-                            <span style="font-family:var(--font-sans); font-size:10.5px; padding:1px 7px; border-radius:5px; background:var(--card-2); color:var(--text-3)">step @(step.Index + 1)</span>
-                            <span style="font-size:12.5px; font-weight:600">@step.Job.Name</span>
+                    <div class="prompt-step">
+                        <div class="prompt-step-head">
+                            <span class="step-badge">step @(step.Index + 1)</span>
+                            <span class="step-jobtitle">@step.Job.Name</span>
                         </div>
                         @foreach (var p in step.Job.Parameters)
                         {
@@ -328,7 +325,7 @@ else
                                     {
                                         <span class="req">*</span>
                                     }
-                                    <span class="code" style="margin-left:5px">@p.Name</span>
+                                    <span class="code ml-5">@p.Name</span>
                                 </label>
                                 <ParamInput Parameter="p" Value="@GetArg(key)"
                                             ValueChanged="@(v => SetArg(key, v))" />
@@ -338,7 +335,7 @@ else
                 }
                 @if (_runPromptError is not null)
                 {
-                    <div style="color:var(--bad); font-size:12px; padding:8px 10px; background:var(--bad-bg); border-radius:6px">@_runPromptError</div>
+                    <div class="prompt-err">@_runPromptError</div>
                 }
             </div>
             <div class="dcmodal-foot">

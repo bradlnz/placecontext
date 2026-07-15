@@ -1,0 +1,257 @@
+.page {
+    padding: 24px 24px 40px;
+    max-width: 1320px;
+    margin: 0 auto;
+}
+
+.stat-strip {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 0;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    margin-bottom: 22px;
+}
+
+.stat-cell {
+    padding: 15px 16px;
+    border-right: 1px solid var(--border);
+}
+
+.stat-label {
+    font-size: 10.5px;
+    color: var(--text-3);
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    font-weight: 600;
+    margin-bottom: 9px;
+}
+
+.stat-value {
+    font-size: 25px;
+    font-weight: 600;
+    letter-spacing: -.6px;
+    font-family: var(--font-sans);
+}
+
+.stat-sub {
+    font-size: 11px;
+    color: var(--text-3);
+    margin-top: 3px;
+}
+
+.focus-card {
+    overflow: hidden;
+    margin-bottom: 22px;
+}
+
+.focus-head {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 13px 16px;
+    border-bottom: 1px solid var(--border);
+}
+
+.section-title {
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.section-hint {
+    font-size: 11px;
+    color: var(--text-3);
+}
+
+.focus-count {
+    margin-left: auto;
+    font-size: 11px;
+    color: var(--text-3);
+    font-family: var(--font-sans);
+    background: var(--card-2);
+    border: 1px solid var(--border);
+    padding: 1px 7px;
+    border-radius: 20px;
+}
+
+.focus-skeleton {
+    padding: 8px 16px;
+}
+
+.projects-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 13px;
+}
+
+.projects-title-group {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+}
+
+.projects-title {
+    font-size: 14px;
+    font-weight: 600;
+    margin: 0;
+    letter-spacing: -.2px;
+}
+
+.projects-count {
+    font-size: 11px;
+    color: var(--text-3);
+    font-family: var(--font-sans);
+    background: var(--card);
+    border: 1px solid var(--border);
+    padding: 1px 7px;
+    border-radius: 20px;
+}
+
+.projects-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.empty-card {
+    padding: 30px;
+    text-align: center;
+    color: var(--text-3);
+}
+
+.projects-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+    gap: 14px;
+}
+
+.project-card {
+    padding: 16px;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+}
+
+.project-card-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.min-w-0 {
+    min-width: 0;
+}
+
+.project-name-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.lang-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 2.5px;
+    flex: none;
+}
+
+.project-name {
+    font-size: 14.5px;
+    font-weight: 600;
+    letter-spacing: -.2px;
+}
+
+.project-path {
+    font-family: var(--font-sans);
+    font-size: 11px;
+    color: var(--text-3);
+    margin-top: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.status-badge {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    flex: none;
+    padding: 3px 8px 3px 7px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.status-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+}
+
+.risk-row {
+    display: flex;
+    gap: 14px;
+    margin-top: 16px;
+    align-items: center;
+}
+
+.risk-bars {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 11px;
+}
+
+.minimap {
+    width: 96px;
+    height: 72px;
+    flex: none;
+    border-radius: 8px;
+    background: var(--card-2);
+    border: 1px solid var(--border);
+    overflow: hidden;
+    position: relative;
+}
+
+.minimap-badge {
+    position: absolute;
+    bottom: 4px;
+    right: 5px;
+    font-family: var(--font-sans);
+    font-size: 8.5px;
+    color: var(--text-3);
+    background: var(--card-2);
+    padding: 0 3px;
+    border-radius: 3px;
+}
+
+.project-foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 15px;
+    padding-top: 13px;
+    border-top: 1px solid var(--border);
+}
+
+.foot-graphified {
+    font-size: 11.5px;
+    color: var(--text-3);
+}
+
+.foot-stats {
+    display: flex;
+    align-items: center;
+    gap: 13px;
+    font-family: var(--font-sans);
+    font-size: 11px;
+    color: var(--text-3);
+}
+
+.foot-sep {
+    color: var(--border-2);
+}

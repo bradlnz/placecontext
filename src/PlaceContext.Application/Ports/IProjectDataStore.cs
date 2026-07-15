@@ -62,4 +62,14 @@ public interface IProjectDataStore
     /// </summary>
     Task AppendReadOnlyRowsAsync(Guid projectId, string tableName, IReadOnlyList<ProjectColumnSpec> columns,
         IReadOnlyList<IReadOnlyList<string?>> rows, CancellationToken ct = default);
+
+    /// <summary>
+    /// Bulk-insert text rows into a project-OWNED (writable) table — the CSV-import path. When
+    /// <paramref name="createTable"/> is true the table is created from the spec on first use; the
+    /// table is owned by the project role, so the project can keep editing it (unlike a read-only
+    /// system table). Row values are text, each cast to its column's declared type on insert.
+    /// Returns the number of rows inserted.
+    /// </summary>
+    Task<int> ImportRowsAsync(Guid projectId, string tableName, IReadOnlyList<ProjectColumnSpec> columns,
+        IReadOnlyList<IReadOnlyList<string?>> rows, bool createTable, CancellationToken ct = default);
 }

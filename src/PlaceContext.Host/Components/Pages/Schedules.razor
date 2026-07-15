@@ -8,26 +8,26 @@
 
 <PageTitle>placecontext — Schedules</PageTitle>
 
-<div style="padding:20px 24px 40px; max-width:1320px; margin:0 auto">
+<div class="page">
 
 
-    <div style="display:flex; align-items:baseline; justify-content:space-between; margin-bottom:18px">
+    <div class="page-head">
         <div>
-            <h2 style="font-size:18px; font-weight:600; margin:0">Schedules</h2>
-            <div style="font-size:12px; color:var(--text-3); margin-top:3px">
-                Every trigger across this project's jobs — cron schedules and event hooks that run jobs while you're away. Cron fires in <span style="font-family:var(--font-sans); color:var(--text-2)">@Tenant.TimeZoneId</span> (agents set it via <code>set_workspace_timezone</code>).
+            <h2 class="page-title">Schedules</h2>
+            <div class="page-sub">
+                Every trigger across this project's jobs — cron schedules and event hooks that run jobs while you're away. Cron fires in <span class="tz">@Tenant.TimeZoneId</span> (agents set it via <code>set_workspace_timezone</code>).
             </div>
         </div>
     </div>
 
     @if (_message is not null)
     {
-        <div style="margin-bottom:12px; padding:10px 14px; border-radius:8px; background:var(--card); font-size:12.5px; color:var(--text-2)">@_message</div>
+        <div class="message">@_message</div>
     }
 
     @* ── Add trigger ──────────────────────────────────────────────────────────────────── *@
-    <div class="dccard" style="padding:14px 16px; margin-bottom:16px; display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap">
-        <div class="dcfield" style="min-width:180px">
+    <div class="dccard add-bar">
+        <div class="dcfield field-job">
             <label>Job</label>
             <select class="dcinput" @bind="_newJobId">
                 <option value="@Guid.Empty">— pick a job —</option>
@@ -37,11 +37,11 @@
                 }
             </select>
         </div>
-        <div class="dcfield" style="min-width:160px">
+        <div class="dcfield field-name">
             <label>Name</label>
             <input class="dcinput" @bind="_newName" placeholder="nightly refresh" />
         </div>
-        <div class="dcfield" style="min-width:110px">
+        <div class="dcfield field-sm">
             <label>Kind</label>
             <select class="dcinput" @bind="_newKind">
                 <option value="Schedule">Schedule</option>
@@ -52,14 +52,14 @@
         {
             @if (_advancedCron)
             {
-                <div class="dcfield" style="min-width:170px">
-                    <label>Cron <span class="code" style="margin-left:4px">@Tenant.TimeZoneId</span></label>
-                    <input class="dcinput" style="font-family:var(--font-sans)" @bind="_newCron" placeholder="0 0 * * *" />
+                <div class="dcfield field-cron">
+                    <label>Cron <span class="code code-hint">@Tenant.TimeZoneId</span></label>
+                    <input class="dcinput sans" @bind="_newCron" placeholder="0 0 * * *" />
                 </div>
             }
             else
             {
-                <div class="dcfield" style="min-width:110px">
+                <div class="dcfield field-sm">
                     <label>Every</label>
                     <select class="dcinput" @bind="_pickFrequency">
                         <option value="day">day</option>
@@ -71,7 +71,7 @@
                 </div>
                 @if (_pickFrequency == "week")
                 {
-                    <div class="dcfield" style="min-width:110px">
+                    <div class="dcfield field-sm">
                         <label>On</label>
                         <select class="dcinput" @bind="_pickWeekday">
                             <option value="1">Monday</option><option value="2">Tuesday</option>
@@ -83,27 +83,27 @@
                 }
                 @if (_pickFrequency == "month")
                 {
-                    <div class="dcfield" style="min-width:80px">
+                    <div class="dcfield field-day">
                         <label>Day</label>
                         <input class="dcinput" type="number" min="1" max="28" @bind="_pickDay" />
                     </div>
                 }
                 @if (_pickFrequency != "hour")
                 {
-                    <div class="dcfield" style="min-width:110px">
-                        <label>At <span class="code" style="margin-left:4px">@Tenant.TimeZoneId</span></label>
+                    <div class="dcfield field-sm">
+                        <label>At <span class="code code-hint">@Tenant.TimeZoneId</span></label>
                         <input class="dcinput" type="time" @bind="_pickTime" />
                     </div>
                 }
             }
-            <button type="button" class="dcbtn" style="padding:4px 10px; font-size:11px; align-self:flex-end; margin-bottom:2px"
+            <button type="button" class="dcbtn cron-toggle"
                     @onclick="@(() => _advancedCron = !_advancedCron)">
                 @(_advancedCron ? "◂ simple" : "cron ▸")
             </button>
         }
         else
         {
-            <div class="dcfield" style="min-width:150px">
+            <div class="dcfield field-event">
                 <label>Event</label>
                 <select class="dcinput" @bind="_newEvent">
                     @foreach (var e in _eventTypes ?? Array.Empty<EventTypeView>())
@@ -116,22 +116,22 @@
         <button class="dcbtn primary" disabled="@_busy" @onclick="AddTrigger">＋ Add trigger</button>
         @if (_error is not null)
         {
-            <span style="color:var(--bad); font-size:12px">@_error</span>
+            <span class="err-text">@_error</span>
         }
     </div>
 
     @* ── Trigger table ────────────────────────────────────────────────────────────────── *@
-    <div class="dccard" style="border-radius:8px; overflow:hidden">
-        <div style="display:grid; grid-template-columns:90px minmax(160px,1fr) minmax(150px,1fr) minmax(150px,1fr) 150px 150px 130px; gap:0 16px; padding:8px 16px; border-bottom:1px solid var(--border); font-size:10.5px; color:var(--text-3); letter-spacing:.08em; font-weight:500">
+    <div class="dccard table-card">
+        <div class="trigger-grid table-head">
             <span>STATE</span><span>TRIGGER</span><span>JOB</span><span>FIRES ON</span><span>NEXT RUN</span><span>LAST FIRED</span><span></span>
         </div>
         @if (_triggers is null)
         {
-            <div style="padding:4px 16px"><Skeleton Kind="text" Rows="4" /></div>
+            <div class="skeleton-pad"><Skeleton Kind="text" Rows="4" /></div>
         }
         else if (_triggers.Count == 0)
         {
-            <div style="padding:24px 16px; color:var(--text-3); font-size:13px; text-align:center">
+            <div class="empty-note">
                 No triggers yet — add a cron schedule or an event hook above.
             </div>
         }
@@ -139,20 +139,20 @@
         {
             @foreach (var t in _triggers)
             {
-                <div style="display:grid; grid-template-columns:90px minmax(160px,1fr) minmax(150px,1fr) minmax(150px,1fr) 150px 150px 130px; gap:0 16px; align-items:center; padding:11px 16px; border-bottom:1px solid var(--border)">
-                    <span style="display:flex; align-items:center; gap:8px; font-family:var(--font-sans); font-size:11px; color:@(t.Enabled ? "var(--good)" : "var(--text-3)")">
-                        <span style="width:7px; height:7px; border-radius:50%; background:@(t.Enabled ? "var(--good)" : "var(--border-2)")"></span>@(t.Enabled ? "ON" : "PAUSED")
+                <div class="trigger-grid trigger-row">
+                    <span class="state-cell" style="color:@(t.Enabled ? "var(--good)" : "var(--text-3)")">
+                        <span class="state-dot" style="background:@(t.Enabled ? "var(--good)" : "var(--border-2)")"></span>@(t.Enabled ? "ON" : "PAUSED")
                     </span>
-                    <span style="font-size:12.5px; font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">@t.Name</span>
-                    <span style="font-family:var(--font-sans); font-size:11.5px; color:var(--human); overflow:hidden; text-overflow:ellipsis; white-space:nowrap">@JobName(t.JobId)</span>
-                    <span style="font-family:var(--font-sans); font-size:11.5px; color:var(--text-2)">
+                    <span class="trigger-name">@t.Name</span>
+                    <span class="cell-job">@JobName(t.JobId)</span>
+                    <span class="cell-2">
                         @(t.Kind == "Schedule" ? $"cron {t.CronExpression}" : $"event {t.EventName}")
                     </span>
-                    <span style="font-family:var(--font-sans); font-size:11.5px; color:var(--text-2)">@(t.NextRunAt?.ToWorkspaceTime().ToString("MMM d · HH:mm") ?? "—")</span>
-                    <span style="font-family:var(--font-sans); font-size:11.5px; color:var(--text-3)">@(t.LastFiredAt?.ToWorkspaceTime().ToString("MMM d · HH:mm") ?? "never")</span>
-                    <span style="display:flex; gap:6px; justify-content:flex-end">
-                        <button class="dcbtn" style="padding:3px 10px; font-size:11px" @onclick="@(() => Toggle(t))">@(t.Enabled ? "Pause" : "Resume")</button>
-                        <button class="dcbtn" style="padding:3px 10px; font-size:11px; color:var(--bad)" @onclick="@(() => Remove(t.Id))">Delete</button>
+                    <span class="cell-2">@(t.NextRunAt?.ToWorkspaceTime().ToString("MMM d · HH:mm") ?? "—")</span>
+                    <span class="cell-3">@(t.LastFiredAt?.ToWorkspaceTime().ToString("MMM d · HH:mm") ?? "never")</span>
+                    <span class="row-actions">
+                        <button class="dcbtn btn-sm" @onclick="@(() => Toggle(t))">@(t.Enabled ? "Pause" : "Resume")</button>
+                        <button class="dcbtn btn-sm btn-danger" @onclick="@(() => Remove(t.Id))">Delete</button>
                     </span>
                 </div>
             }

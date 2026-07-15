@@ -1,0 +1,240 @@
+@page "/cluster"
+@attribute [Authorize(Policy = Permission.SettingsManage)]
+@implements IDisposable
+@inject IPlaceContextService Svc
+@inject PortalUiState Ui
+@inject NavigationManager Nav
+@inject PlaceContext.Infrastructure.Operations.OperationCenter OpCenter
+
+<PageTitle>PlaceContext — Cluster</PageTitle>
+
+@if (_loading)
+{
+    <Skeleton Kind="list" Rows="6" Padded />
+}
+else
+{
+    <div class="page">
+
+        <div class="page-head">
+            <div>
+                <h2 class="page-title">Cluster</h2>
+                <div class="page-sub">
+                    The machines running PlaceContext, and a live read of the jobs pipeline's OpenTelemetry data.
+                </div>
+            </div>
+            <button class="dcbtn" @onclick="RefreshAsync">Refresh</button>
+        </div>
+
+        @if (_message is not null)
+        {
+            <div class="message-bar">@_message</div>
+        }
+
+        @* ── Nodes ──────────────────────────────────────────────────────────────────────────── *@
+        <div class="section-head">
+            <h3 class="section-title">Nodes</h3>
+            <span class="node-count-badge">
+                @(_cluster?.IsRealCluster == true ? $"{_cluster.NodeCount} node(s)" : "local single-node (Docker runner)")
+            </span>
+        </div>
+
+        <div class="node-grid">
+            @foreach (var node in _cluster?.Nodes ?? Array.Empty<ClusterNode>())
+            {
+                <div class="dccard node-card" style="@(node.IsSelf ? "border-left:2px solid var(--brand-2)" : "")">
+                    <div class="node-card-head">
+                        <div class="node-name-row">
+                            <span class="node-name">@node.Name</span>
+                            @if (node.IsSelf)
+                            {
+                                <span class="this-node-badge">this node</span>
+                            }
+                        </div>
+                        <span class="node-status"
+                              style="color:@(node.Ready ? "var(--good)" : "var(--bad)"); background:@(node.Ready ? "var(--good-bg)" : "var(--bad-bg)")">
+                            @(node.Ready ? "Ready" : "Not ready")
+                        </span>
+                    </div>
+                    <div class="node-roles">@string.Join(", ", node.Roles)</div>
+                    <div class="node-meta">
+                        <div>kubelet <span class="text-3">@node.KubeletVersion</span></div>
+                        <div>@node.OperatingSystem</div>
+                        @if (node.CpuCapacity is not null || node.MemoryCapacity is not null)
+                        {
+                            <div>@node.CpuCapacity @(node.CpuCapacity is not null && node.MemoryCapacity is not null ? "·" : "") @node.MemoryCapacity</div>
+                        }
+                        @if (node.InternalIp is not null)
+                        {
+                            <div class="font-sans">@node.InternalIp</div>
+                        }
+                        @if (node.CreatedAt is { } created)
+                        {
+                            <div class="text-3">joined @created.ToWorkspaceTime().ToString("yyyy-MM-dd")</div>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+
+        @* ── Telemetry ──────────────────────────────────────────────────────────────────────── *@
+        <h3 class="section-title-tele">Jobs pipeline telemetry</h3>
+        <div class="tele-note">
+            Collected in-process from the <code>PlaceContext.Jobs</code> OpenTelemetry source/meter since this replica started — no external collector required.
+        </div>
+
+        <div class="tile-row">
+            @foreach (var tile in StatTiles())
+            {
+                <div class="dccard stat-tile">
+                    <div class="tile-label">@tile.Label</div>
+                    <div class="tile-value-row">
+                        <span class="tile-value" style="color:@tile.Color">@tile.Value</span>
+                    </div>
+                    @if (tile.Sub is not null)
+                    {
+                        <div class="tile-sub">@tile.Sub</div>
+                    }
+                </div>
+            }
+        </div>
+
+        @if (_snapshot?.ShardsCompletedByOutcome is { Count: > 0 } outcomes)
+        {
+            <div class="dccard outcomes-card">
+                <div class="outcomes-title">SHARDS BY OUTCOME</div>
+                <div class="outcomes-row">
+                    @foreach (var (outcome, count) in outcomes.OrderByDescending(kv => kv.Value))
+                    {
+                        <div class="outcome-item">
+                            <span class="outcome-count" style="color:@StatusColor(outcome)">@count</span>
+                            <span class="outcome-label">@outcome</span>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+
+        <div class="runs-title">Recent run traces</div>
+        @if (_recentRuns is null or { Count: 0 })
+        {
+            <div class="dccard runs-empty">
+                No job runs captured yet by this replica — run a job and it appears here.
+            </div>
+        }
+        else
+        {
+            <div class="runs-list">
+                @foreach (var run in _recentRuns)
+                {
+                    <a href="@($"/observability?run={run.RunId}")" class="run-link">
+                        <div class="dccard run-card">
+                            <div class="run-row">
+                                <span class="run-status"
+                                      style="color:@StatusColor(run.Status); background:@StatusBg(run.Status)">@(run.Status ?? "Running")</span>
+                                <div class="run-main">
+                                    <span class="run-name">@(run.JobName ?? run.JobId.ToString("N")[..8])</span>
+                                    @if (run.Replay)
+                                    {
+                                        <span class="replay-badge">replay</span>
+                                    }
+                                </div>
+                                <span class="run-shards">@run.Shards.Count shard(s)</span>
+                                <span class="run-started">
+                                    @run.StartedAt.ToWorkspaceTime().ToString("yyyy-MM-dd HH:mm")
+                                </span>
+                                <span class="run-duration">
+                                    @FormatMs(run.DurationMs)
+                                </span>
+                            </div>
+                        </div>
+                    </a>
+                }
+            </div>
+        }
+    </div>
+}
+
+@code {
+    private ClusterInfo? _cluster;
+    private JobTelemetrySnapshot? _snapshot;
+    private IReadOnlyList<JobRunTelemetry>? _recentRuns;
+    private string? _message;
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        OpCenter.Changed += OnOpsChanged;
+        await RefreshAsync();
+        Ui.Set("Cluster", "nodes + jobs pipeline telemetry");
+        _loading = false;
+    }
+
+    // Job runs finishing lands in the OperationCenter on a short tick — refresh the telemetry feed
+    // live so completed runs (and their metrics) appear without a manual reload.
+    private void OnOpsChanged() => _ = InvokeAsync(async () =>
+    {
+        if (_refreshing) return;
+        _refreshing = true;
+        try { await RefreshAsync(); StateHasChanged(); }
+        finally { _refreshing = false; }
+    });
+
+    private bool _refreshing;
+
+    public void Dispose() => OpCenter.Changed -= OnOpsChanged;
+
+    private async Task RefreshAsync()
+    {
+        _message = null;
+        try
+        {
+            _cluster = await Svc.GetClusterInfoAsync();
+            _snapshot = await Svc.GetJobTelemetrySnapshotAsync();
+            _recentRuns = await Svc.ListRecentJobRunTelemetryAsync(50);
+        }
+        catch (Exception ex) { _message = ex.Message; }
+    }
+
+    private sealed record Tile(string Label, string Value, string? Sub, string Color);
+
+    private IEnumerable<Tile> StatTiles()
+    {
+        yield return new Tile("RUNS STARTED", (_snapshot?.RunsStarted ?? 0).ToString(), "since this replica booted", "var(--text)");
+
+        foreach (var (status, count) in (_snapshot?.RunsCompletedByStatus ?? new Dictionary<string, long>()).OrderByDescending(kv => kv.Value))
+            yield return new Tile($"COMPLETED · {status.ToUpperInvariant()}", count.ToString(), "runs", StatusColor(status));
+
+        if (_snapshot?.RunDuration is { } rd)
+            yield return new Tile("RUN DURATION", FormatMs(rd.AvgMs) ?? "—", $"avg · min {FormatMs(rd.MinMs)} · max {FormatMs(rd.MaxMs)}", "var(--text)");
+
+        if (_snapshot?.ShardDuration is { } sd)
+            yield return new Tile("SHARD DURATION", FormatMs(sd.AvgMs) ?? "—", $"avg · min {FormatMs(sd.MinMs)} · max {FormatMs(sd.MaxMs)}", "var(--text)");
+    }
+
+    private static string? FormatMs(double? ms) => ms switch
+    {
+        null => null,
+        < 1000 => $"{ms:0}ms",
+        < 60000 => $"{ms / 1000:0.#}s",
+        _ => $"{ms / 60000:0.#}m",
+    };
+
+    private static string StatusColor(string? status) => status switch
+    {
+        "Succeeded" => "var(--good)",
+        "Failed" => "var(--bad)",
+        "Partial" => "var(--warn)",
+        "Running" => "var(--brand-2)",
+        _ => "var(--text-3)"
+    };
+
+    private static string StatusBg(string? status) => status switch
+    {
+        "Succeeded" => "var(--good-bg)",
+        "Failed" => "var(--bad-bg)",
+        "Partial" => "var(--warn-bg)",
+        "Running" => "var(--brand-bg)",
+        _ => "var(--card-2)"
+    };
+}

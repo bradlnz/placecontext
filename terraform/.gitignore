@@ -1,0 +1,24 @@
+# Built provider binary
+terraform-provider-placecontext
+/dist/
+
+# Go
+*.test
+*.out
+/vendor/
+
+# Terraform working files
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+*.tfvars
+!examples/*.tfvars.example
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraformrc
+terraform.rc

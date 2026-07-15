@@ -9,51 +9,51 @@
 
 <PageTitle>placecontext — Dashboard</PageTitle>
 
-<div style="padding:28px 28px 40px; max-width:1320px; margin:0 auto">
+<div class="page">
 
-    <div style="display:flex; align-items:flex-end; justify-content:space-between; margin-bottom:22px">
+    <div class="page-head">
         <div>
-            <h1 style="margin:0; font-size:20px; font-weight:600; letter-spacing:-.01em">Dashboard</h1>
-            <p style="margin:4px 0 0; color:var(--text-2); font-size:13px">
+            <h1 class="page-title">Dashboard</h1>
+            <p class="page-sub">
                 Jobs across
-                <span style="font-family:var(--font-sans); color:var(--text)">@(Ui.CurrentProjectName ?? "the workspace")</span>
+                <span class="page-sub-project">@(Ui.CurrentProjectName ?? "the workspace")</span>
                 · every run yields an artifact
             </p>
         </div>
-        <button class="dcbtn primary" style="display:flex; align-items:center; gap:8px; padding:8px 14px; font-size:13px"
+        <button class="dcbtn primary submit-btn"
                 @onclick="NewJob">
-            <span style="font-size:15px; line-height:1">＋</span> Submit job
+            <span class="submit-plus">＋</span> Submit job
         </button>
     </div>
 
     @* ── Stat cards ─────────────────────────────────────────────────────────────────────── *@
-    <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:24px">
-        <div class="dccard" style="padding:14px 16px; border-radius:8px">
-            <div style="font-size:11px; color:var(--text-3); letter-spacing:.08em; font-weight:500">RUNNING</div>
-            <div style="display:flex; align-items:baseline; gap:8px; margin-top:6px">
-                <span style="font-family:var(--font-sans); font-size:26px; font-weight:600; color:var(--good)">@_running</span>
-                <span style="font-size:12px; color:var(--text-3)">jobs</span>
+    <div class="stat-grid">
+        <div class="dccard stat-card">
+            <div class="stat-label">RUNNING</div>
+            <div class="stat-figure">
+                <span class="stat-num tone-good">@_running</span>
+                <span class="stat-unit">jobs</span>
             </div>
         </div>
-        <div class="dccard" style="padding:14px 16px; border-radius:8px">
-            <div style="font-size:11px; color:var(--text-3); letter-spacing:.08em; font-weight:500">QUEUED</div>
-            <div style="display:flex; align-items:baseline; gap:8px; margin-top:6px">
-                <span style="font-family:var(--font-sans); font-size:26px; font-weight:600; color:var(--warn)">@_queued</span>
-                <span style="font-size:12px; color:var(--text-3)">waiting to start</span>
+        <div class="dccard stat-card">
+            <div class="stat-label">QUEUED</div>
+            <div class="stat-figure">
+                <span class="stat-num tone-warn">@_queued</span>
+                <span class="stat-unit">waiting to start</span>
             </div>
         </div>
-        <div class="dccard" style="padding:14px 16px; border-radius:8px">
-            <div style="font-size:11px; color:var(--text-3); letter-spacing:.08em; font-weight:500">FAILED · 24H</div>
-            <div style="display:flex; align-items:baseline; gap:8px; margin-top:6px">
-                <span style="font-family:var(--font-sans); font-size:26px; font-weight:600; color:var(--bad)">@_failed24</span>
-                <span style="font-size:12px; color:var(--text-3)">needs attention</span>
+        <div class="dccard stat-card">
+            <div class="stat-label">FAILED · 24H</div>
+            <div class="stat-figure">
+                <span class="stat-num tone-bad">@_failed24</span>
+                <span class="stat-unit">needs attention</span>
             </div>
         </div>
-        <div class="dccard" style="padding:14px 16px; border-radius:8px">
-            <div style="font-size:11px; color:var(--text-3); letter-spacing:.08em; font-weight:500">SUCCEEDED · 24H</div>
-            <div style="display:flex; align-items:baseline; gap:8px; margin-top:6px">
-                <span style="font-family:var(--font-sans); font-size:26px; font-weight:600; color:var(--text)">@_succeeded24</span>
-                <span style="font-size:12px; color:var(--text-3)">artifacts generated</span>
+        <div class="dccard stat-card">
+            <div class="stat-label">SUCCEEDED · 24H</div>
+            <div class="stat-figure">
+                <span class="stat-num tone-text">@_succeeded24</span>
+                <span class="stat-unit">artifacts generated</span>
             </div>
         </div>
     </div>
@@ -61,34 +61,34 @@
     @* ── Pinned entities: one-click access to the business views of tagged data ────────── *@
     @if (_entities.Count > 0)
     {
-        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:12px; margin-bottom:24px">
+        <div class="entity-grid">
             @foreach (var e in _entities)
             {
                 <a href="@($"/project/{e.ProjectId}/entity/{Uri.EscapeDataString(e.Name)}")"
-                   class="dccard dcdash-row" style="padding:13px 16px; border-radius:8px; text-decoration:none; color:var(--text); display:block; border-left:2px solid var(--brand-2)">
-                    <div style="display:flex; align-items:baseline; justify-content:space-between; gap:8px">
-                        <span style="font-size:13.5px; font-weight:600">@e.Name</span>
-                        <span style="font-family:var(--font-sans); font-size:16px; color:var(--brand-2)">@EntityCount(e)</span>
+                   class="dccard dcdash-row entity-card">
+                    <div class="entity-head">
+                        <span class="entity-name">@e.Name</span>
+                        <span class="entity-count">@EntityCount(e)</span>
                     </div>
                     @if (_entityCharts.TryGetValue(e.Id, out var chart) && chart.Bars.Count > 0)
                     {
-                        <div style="font-size:9.5px; color:var(--text-3); margin:8px 0 4px; text-transform:uppercase; letter-spacing:.06em">by @chart.Column</div>
-                        <div style="display:flex; flex-direction:column; gap:3px">
+                        <div class="entity-chart-label">by @chart.Column</div>
+                        <div class="entity-bars">
                             @foreach (var (label, count, frac) in chart.Bars)
                             {
-                                <div style="display:flex; align-items:center; gap:7px; font-size:10.5px">
-                                    <span style="width:78px; flex:none; color:var(--text-2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis" title="@label">@label</span>
-                                    <span style="flex:1; height:6px; border-radius:4px; background:var(--card-2); overflow:hidden">
-                                        <span style="display:block; height:100%; width:@(frac)%; background:var(--brand-2)"></span>
+                                <div class="entity-bar-row">
+                                    <span class="entity-bar-label" title="@label">@label</span>
+                                    <span class="entity-bar-track">
+                                        <span class="entity-bar-fill" style="width:@(frac)%"></span>
                                     </span>
-                                    <span style="font-family:var(--font-sans); color:var(--text-3)">@count</span>
+                                    <span class="entity-bar-count">@count</span>
                                 </div>
                             }
                         </div>
                     }
                     else
                     {
-                        <div style="font-size:10.5px; color:var(--text-3); margin-top:3px; font-family:var(--font-sans)">@e.TableName</div>
+                        <div class="entity-table">@e.TableName</div>
                     }
                 </a>
             }
@@ -98,23 +98,23 @@
     @* ── Charts (read-only copies from the current project's Analytics) ───────────── *@
     @if (SqlCharts() is { Count: > 0 } sqlCharts)
     {
-        <div style="display:flex; align-items:baseline; justify-content:space-between; margin-bottom:8px">
-            <span style="font-size:13px; font-weight:600">Charts</span>
+        <div class="charts-head">
+            <span class="section-title">Charts</span>
             @if (Ui.CurrentProjectId is { } chartsPid)
             {
-                <a href="@($"/project/{chartsPid}/analytics")" style="font-size:11.5px; color:var(--human)">edit in Analytics →</a>
+                <a href="@($"/project/{chartsPid}/analytics")" class="charts-edit-link">edit in Analytics →</a>
             }
         </div>
-        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(380px, 1fr)); gap:12px; margin-bottom:24px">
+        <div class="charts-grid">
             @foreach (var chart in sqlCharts)
             {
-                <div class="dccard" style="padding:12px 16px; border-radius:8px">
-                    <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px">
-                        <span style="font-size:12px; font-weight:600; font-family:var(--font-sans)">@chart.TableName["sql:".Length..]</span>
-                        <span style="flex:1"></span>
-                        <span style="font-size:10px; color:var(--text-3)">@chart.GeneratedAt.ToWorkspaceTime().ToString("MM-dd HH:mm")</span>
+                <div class="dccard chart-card">
+                    <div class="chart-card-head">
+                        <span class="chart-title">@chart.TableName["sql:".Length..]</span>
+                        <span class="spacer"></span>
+                        <span class="chart-time">@chart.GeneratedAt.ToWorkspaceTime().ToString("MM-dd HH:mm")</span>
                     </div>
-                    <div style="height:230px; padding:8px 6px 4px">
+                    <div class="chart-canvas-wrap">
                         <canvas id="@CanvasId(chart.TableName)"></canvas>
                     </div>
                 </div>
@@ -123,31 +123,31 @@
     }
 
     @* ── Recent jobs table ──────────────────────────────────────────────────────────────── *@
-    <div class="dccard" style="border-radius:8px; overflow:hidden">
-        <div style="display:flex; align-items:center; justify-content:space-between; padding:12px 16px; border-bottom:1px solid var(--border)">
-            <span style="font-weight:600; font-size:13.5px">Recent jobs</span>
-            <div style="display:flex; gap:6px">
+    <div class="dccard jobs-card">
+        <div class="jobs-head">
+            <span class="jobs-title">Recent jobs</span>
+            <div class="jobs-filters">
                 @foreach (var f in new[] { "all", "running", "failed" })
                 {
                     <span @onclick="@(() => _filter = f)"
-                          style="font-family:var(--font-sans); font-size:11px; padding:3px 9px; border-radius:99px; cursor:pointer;
-                                 background:@(_filter == f ? "var(--card-2)" : "transparent");
+                          class="jobs-filter"
+                          style="background:@(_filter == f ? "var(--card-2)" : "transparent");
                                  border:1px solid @(_filter == f ? "var(--border-2)" : "transparent");
                                  color:@(_filter == f ? "var(--text)" : "var(--text-3)")">@f</span>
                 }
             </div>
         </div>
-        <div style="overflow-x:auto">
-            <div style="display:grid; grid-template-columns:110px minmax(180px,1.4fr) minmax(140px,1fr) 90px 90px 130px 100px; gap:0 16px; padding:8px 16px; border-bottom:1px solid var(--border); font-size:10.5px; color:var(--text-3); letter-spacing:.08em; font-weight:500; min-width:880px">
+        <div class="jobs-scroll">
+            <div class="jobs-grid-head">
                 <span>STATUS</span><span>JOB</span><span>PROJECT</span><span>SHARDS</span><span>DURATION</span><span>STARTED</span><span>RETURN</span>
             </div>
             @if (!_ready)
             {
-                <div style="padding:6px 16px; min-width:880px"><Skeleton Kind="text" Rows="6" /></div>
+                <div class="jobs-loading"><Skeleton Kind="text" Rows="6" /></div>
             }
             else if (Filtered() is { Count: 0 })
             {
-                <div style="padding:24px 16px; color:var(--text-3); font-size:13px; text-align:center; min-width:880px">
+                <div class="jobs-empty">
                     No runs yet — submit a job and its run appears here live.
                 </div>
             }
@@ -157,19 +157,18 @@
                 {
                     var run = rep.Run;
                     <div @onclick="@(() => Nav.NavigateTo($"/observability?run={run.Id}"))"
-                         class="dcdash-row"
-                         style="display:grid; grid-template-columns:110px minmax(180px,1.4fr) minmax(140px,1fr) 90px 90px 130px 100px; gap:0 16px; align-items:center; padding:11px 16px; border-bottom:1px solid var(--border); cursor:pointer; min-width:880px">
-                        <span style="display:flex; align-items:center; gap:8px; font-family:var(--font-sans); font-size:11px; color:@StatusColor(run.Status)">
-                            <span style="width:7px; height:7px; flex:none; border-radius:50%; background:@StatusColor(run.Status); animation:@(run.Status == "Running" ? "dcpulse 1.6s ease-in-out infinite" : "none")"></span>@run.Status.ToUpperInvariant()
+                         class="dcdash-row jobs-row">
+                        <span class="job-status" style="color:@StatusColor(run.Status)">
+                            <span class="job-status-dot" style="background:@StatusColor(run.Status); animation:@(run.Status == "Running" ? "dcpulse 1.6s ease-in-out infinite" : "none")"></span>@run.Status.ToUpperInvariant()
                         </span>
-                        <span style="font-family:var(--font-sans); font-size:12.5px; color:var(--text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap">@rep.JobName</span>
-                        <span style="font-family:var(--font-sans); font-size:11.5px; color:var(--human); overflow:hidden; text-overflow:ellipsis; white-space:nowrap">@rep.ProjectName</span>
-                        <span style="font-family:var(--font-sans); font-size:11.5px; color:var(--text-2)">
+                        <span class="job-name">@rep.JobName</span>
+                        <span class="job-project">@rep.ProjectName</span>
+                        <span class="job-cell">
                             ✓@run.ShardResults.Count(s => s.Outcome == "Succeeded")@(run.ShardResults.Any(s => s.Outcome == "Failed") ? $" ✗{run.ShardResults.Count(s => s.Outcome == "Failed")}" : "")
                         </span>
-                        <span style="font-family:var(--font-sans); font-size:11.5px; color:var(--text-2)">@Duration(run)</span>
-                        <span style="font-size:12px; color:var(--text-2)">@run.StartedAt.ToWorkspaceTime().ToString("HH:mm · MMM d")</span>
-                        <span style="font-family:var(--font-sans); font-size:11.5px; color:var(--text-3)">@(run.Snapshot.MapSourceKind)</span>
+                        <span class="job-cell">@Duration(run)</span>
+                        <span class="job-started">@run.StartedAt.ToWorkspaceTime().ToString("HH:mm · MMM d")</span>
+                        <span class="job-return">@(run.Snapshot.MapSourceKind)</span>
                     </div>
                 }
             }

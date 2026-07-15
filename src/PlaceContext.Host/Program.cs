@@ -18,6 +18,9 @@ using Microsoft.AspNetCore.Components.Server.Circuits;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Resources;
+using OpenTelemetry.Trace;
 
 // PlaceContext is a single hosted web app on http://localhost:7700, serving two surfaces from one
 // process and the same Postgres store:
@@ -31,10 +34,40 @@ builder.Logging.AddConsole();
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
 
+// OpenTelemetry: traces + metrics for the jobs pipeline (and ASP.NET/runtime), giving a realtime,
+// exportable view into runs. Emits over OTLP to the endpoint in PlaceContext:Otel:Endpoint (or the
+// standard OTEL_EXPORTER_OTLP_ENDPOINT). With no endpoint configured the SDK still collects but has
+// nowhere to push, so the instrumentation is effectively free until a collector is pointed at it.
+{
+    var otlpEndpoint = builder.Configuration["PlaceContext:Otel:Endpoint"]
+        ?? builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"];
+    var serviceName = builder.Configuration["PlaceContext:Otel:ServiceName"] ?? "placecontext";
+    var otel = builder.Services.AddOpenTelemetry()
+        .ConfigureResource(r => r.AddService(serviceName))
+        .WithTracing(t =>
+        {
+            t.AddSource(PlaceContext.Application.Observability.JobTelemetry.SourceName)
+             .AddAspNetCoreInstrumentation();
+            if (!string.IsNullOrWhiteSpace(otlpEndpoint))
+                t.AddOtlpExporter(o => o.Endpoint = new Uri(otlpEndpoint));
+        })
+        .WithMetrics(m =>
+        {
+            m.AddMeter(PlaceContext.Application.Observability.JobTelemetry.SourceName)
+             .AddAspNetCoreInstrumentation()
+             .AddRuntimeInstrumentation();
+            if (!string.IsNullOrWhiteSpace(otlpEndpoint))
+                m.AddOtlpExporter(o => o.Endpoint = new Uri(otlpEndpoint));
+        });
+}
+
 // Load the shared OAuth signing key (so every replica signs/verifies MCP tokens with the same RSA key).
 PlaceContext.Host.Auth.OAuthKeys.Init(builder.Configuration["PlaceContext:OAuth:SigningKeyPem"]);
 
 builder.Services.AddRazorComponents().AddInteractiveServerComponents();
+// The former minimal-API endpoints (ingest, backup, auth, artifacts, health) now live as controllers
+// under Controllers/ — attribute-routed, same paths/auth, wired below with MapControllers().
+builder.Services.AddControllers();
 builder.Services.AddCascadingAuthenticationState();
 builder.Services.AddScoped<PlaceContext.Host.PortalUiState>();
 builder.Services.AddScoped<PlaceContext.Host.Branding.BrandingService>();
@@ -125,7 +158,12 @@ builder.Services
                 }
             },
         };
-    });
+    })
+    // Machine-facing "ApiKey" scheme for the /api/v1/* management API (the Terraform provider and other
+    // IaC/CI clients). Deliberately opt-in per endpoint via [Authorize(AuthenticationSchemes = "ApiKey")]
+    // — it never becomes the ambient default, so it can't accidentally widen the portal or MCP surfaces.
+    .AddScheme<PlaceContext.Host.Auth.ApiKeyAuthenticationOptions, PlaceContext.Host.Auth.ApiKeyAuthenticationHandler>(
+        PlaceContext.Host.Auth.ApiKeyAuthenticationHandler.SchemeName, _ => { });
 builder.Services.AddAuthorization(o =>
 {
     // Any authenticated member can read (Viewer+).
@@ -134,7 +172,16 @@ builder.Services.AddAuthorization(o =>
     o.AddPolicy("Member", p => p.RequireAuthenticatedUser().RequireAssertion(c => RoleAtLeast(c.User, UserRole.Member)));
     o.AddPolicy("Admin", p => p.RequireAuthenticatedUser().RequireAssertion(c => RoleAtLeast(c.User, UserRole.Admin)));
     o.AddPolicy("Owner", p => p.RequireAuthenticatedUser().RequireAssertion(c => RoleAtLeast(c.User, UserRole.Owner)));
+    // Fine-grained permission policies — the policy name IS the permission string (see the Permission
+    // catalog), so gating a new sensitive tool/endpoint/page is just [Authorize(Policy = Permission.X)].
+    // Backed by PermissionAuthorizationHandler, which resolves role defaults + tenant-scoped overrides.
+    foreach (var permission in PlaceContext.Application.Ports.Permission.All)
+        o.AddPolicy(permission, p => p.RequireAuthenticatedUser()
+            .AddRequirements(new PlaceContext.Host.Auth.PermissionRequirement(permission)));
 });
+// Scoped, not singleton: it depends on the scoped IPermissionService (which in turn depends on the
+// scoped IUserPermissionGrantRepository / DbContext).
+builder.Services.AddScoped<IAuthorizationHandler, PlaceContext.Host.Auth.PermissionAuthorizationHandler>();
 builder.Services.AddSingleton<OAuthStore>();
 builder.Services.AddSingleton<PlaceContext.Host.Auth.PortalToken>();
 
@@ -144,6 +191,11 @@ builder.Services.AddHttpContextAccessor();
 // Tenancy: per-request/circuit holder + a circuit handler that keeps interactive renders tenant-scoped.
 builder.Services.AddScoped<TenantHolder>();
 builder.Services.AddScoped<CircuitHandler, TenantCircuitHandler>();
+
+// Granular RBAC: per-request/circuit holder + a circuit handler that keeps interactive renders
+// resolved to the right caller (mirrors the tenant holder/handler pair above).
+builder.Services.AddScoped<PlaceContext.Host.Auth.UserHolder>();
+builder.Services.AddScoped<CircuitHandler, PlaceContext.Host.Auth.UserCircuitHandler>();
 
 // MCP over Streamable HTTP, exposed below at /mcp.
 builder.Services
@@ -171,6 +223,8 @@ app.UseStaticFiles();
 app.UseMiddleware<TenantResolutionMiddleware>(); // resolve {user}.placecontext.ai → tenant, before any data access
 app.UseAuthentication();
 app.UseAuthorization();
+// After UseAuthorization deliberately — see UserResolutionMiddleware for why.
+app.UseMiddleware<PlaceContext.Host.Auth.UserResolutionMiddleware>();
 app.UseAntiforgery();
 
 app.MapRazorComponents<App>().AddInteractiveServerRenderMode();
@@ -181,213 +235,11 @@ app.MapMcp("/mcp").RequireAuthorization(new AuthorizeAttribute { AuthenticationS
 // First-party OAuth 2.1 authorization server (authorize/token/register/jwks + metadata).
 app.MapOAuthServer();
 
-// ---- External event ingress ----
-// An external source (a form on a site, a Cloudflare Queue consumer, a webhook) POSTs an event here;
-// it is emitted into this tenant (resolved by subdomain) and fires any subscribed event-triggers, with
-// the JSON body injected as the triggered runs' input payload. Gated by a shared ingest key
-// (PlaceContext:Ingest:Key); disabled when no key is configured to avoid an open relay.
-app.MapPost("/ingest/{eventName}", async (HttpContext ctx, PlaceContext.Application.IPlaceContextService svc,
-    IConfiguration config, string eventName, Guid? projectId) =>
-{
-    var configuredKey = config["PlaceContext:Ingest:Key"];
-    if (string.IsNullOrWhiteSpace(configuredKey))
-        return Results.StatusCode(StatusCodes.Status404NotFound);
-
-    var presented = ctx.Request.Headers["X-Ingest-Key"].ToString();
-    if (!System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(
-            System.Text.Encoding.UTF8.GetBytes(presented),
-            System.Text.Encoding.UTF8.GetBytes(configuredKey)))
-        return Results.Unauthorized();
-
-    string? payload = null;
-    if (ctx.Request.ContentLength is > 0)
-    {
-        using var reader = new StreamReader(ctx.Request.Body);
-        payload = await reader.ReadToEndAsync(ctx.RequestAborted);
-    }
-
-    var result = await svc.EmitEventAsync(eventName, projectId, payload, ctx.RequestAborted);
-    return Results.Ok(new { result.Name, result.TriggeredRuns, result.OccurredAt });
-}).AllowAnonymous();
-
-// ---- Demo seed ----
-// Seed the Brisbane property feasibility demo into the resolved tenant: project + Data tables +
-// decisions + context, with the analytics sweep queued. Same gate as /ingest
-// (shared key, disabled when unconfigured); the Onboarding page has the same action as a button.
-app.MapPost("/seed/brisbane-demo", async (HttpContext ctx, IConfiguration config,
-    PlaceContext.Host.Demo.BrisbaneDemoSeeder seeder) =>
-{
-    var configuredKey = config["PlaceContext:Ingest:Key"];
-    if (string.IsNullOrWhiteSpace(configuredKey))
-        return Results.StatusCode(StatusCodes.Status404NotFound);
-    var presented = ctx.Request.Headers["X-Ingest-Key"].ToString();
-    if (!System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(
-            System.Text.Encoding.UTF8.GetBytes(presented),
-            System.Text.Encoding.UTF8.GetBytes(configuredKey)))
-        return Results.Unauthorized();
-
-    var tenant = PlaceContext.Infrastructure.Tenancy.CurrentTenant.Current;
-    if (tenant is null) return Results.BadRequest(new { error = "no tenant resolved" });
-
-    var (projectId, already) = await seeder.SeedAsync(tenant, ctx.RequestAborted);
-    return Results.Ok(new { projectId, alreadySeeded = already, project = $"/project/{projectId}" });
-}).AllowAnonymous();
-
-// ---- Inbound SMS gateway ----
-// A delivery provider (Twilio-style form post) or any bridge (JSON) POSTs inbound texts here; the
-// tenant comes from the subdomain (same middleware as /ingest). The sender and body are encrypted
-// before storage and a sms.received event fires (metadata only) for triggers. Gated by a shared
-// key (PlaceContext:Sms:InboundKey) passed as ?key= or X-Sms-Key; disabled when unconfigured.
-app.MapPost("/sms/inbound", async (HttpContext ctx, PlaceContext.Application.IPlaceContextService svc,
-    IConfiguration config, Guid? projectId) =>
-{
-    var configuredKey = config["PlaceContext:Sms:InboundKey"];
-    if (string.IsNullOrWhiteSpace(configuredKey))
-        return Results.StatusCode(StatusCodes.Status404NotFound);
-
-    var presented = ctx.Request.Headers["X-Sms-Key"].ToString();
-    if (string.IsNullOrEmpty(presented)) presented = ctx.Request.Query["key"].ToString();
-    if (!System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(
-            System.Text.Encoding.UTF8.GetBytes(presented),
-            System.Text.Encoding.UTF8.GetBytes(configuredKey)))
-        return Results.Unauthorized();
-
-    string from, to, body, provider;
-    string? externalId;
-    if (ctx.Request.HasFormContentType)
-    {
-        // Twilio-compatible form fields.
-        var form = await ctx.Request.ReadFormAsync(ctx.RequestAborted);
-        from = form["From"].ToString();
-        to = form["To"].ToString();
-        body = form["Body"].ToString();
-        externalId = form["MessageSid"].ToString() is { Length: > 0 } sid ? sid : null;
-        provider = "twilio";
-    }
-    else
-    {
-        using var doc = await System.Text.Json.JsonDocument.ParseAsync(ctx.Request.Body, cancellationToken: ctx.RequestAborted);
-        var root = doc.RootElement;
-        string Get(string name) => root.TryGetProperty(name, out var v) && v.ValueKind == System.Text.Json.JsonValueKind.String ? v.GetString()! : "";
-        from = Get("from"); to = Get("to"); body = Get("body");
-        externalId = Get("externalId") is { Length: > 0 } eid ? eid : null;
-        provider = Get("provider") is { Length: > 0 } p ? p : "generic";
-    }
-
-    try
-    {
-        await svc.ReceiveInboundSmsAsync(
-            new PlaceContext.Application.Features.ReceiveInboundSmsCommand(from, to, body, provider, externalId, projectId),
-            ctx.RequestAborted);
-    }
-    catch (ArgumentException ex)
-    {
-        return Results.BadRequest(new { error = ex.Message });
-    }
-
-    // Twilio expects TwiML back on form posts; an empty <Response/> means "received, no reply".
-    return ctx.Request.HasFormContentType
-        ? Results.Content("<?xml version=\"1.0\" encoding=\"UTF-8\"?><Response></Response>", "text/xml")
-        : Results.Ok(new { received = true });
-}).AllowAnonymous();
-
-// ---- Run artifacts (post-job outputs) — stream an artifact from the object store (MinIO) ----
-// The portal/TUI link here; the IRunArtifactLinkRepository tenant filter scopes the lookup to the
-// signed-in tenant, so one tenant can't read another's artifacts. HTML, images, and PDFs render
-// inline (the browser previews them in the tab); the rest download with their original filename.
-app.MapGet("/runs/{runId:guid}/artifacts/{artifactId:guid}", async (
-    Guid runId, Guid artifactId, HttpContext ctx,
-    PlaceContext.Domain.Repositories.IRunArtifactLinkRepository links,
-    PlaceContext.Application.Ports.IObjectStore store) =>
-{
-    var link = await links.GetByIdAsync(artifactId, ctx.RequestAborted);
-    if (link is null || link.RunId != runId) return Results.NotFound();
-    var obj = await store.OpenReadAsync(link.Bucket, link.ObjectKey, ctx.RequestAborted);
-    if (obj is null) return Results.NotFound();
-
-    var inline = obj.ContentType.StartsWith("text/html") || obj.ContentType.StartsWith("image/")
-        || obj.ContentType.StartsWith("application/pdf");
-    var fileName = inline ? null : link.ObjectKey[(link.ObjectKey.LastIndexOf('/') + 1)..];
-    return Results.Stream(obj.Content, obj.ContentType, fileDownloadName: fileName);
-}).RequireAuthorization();
-
-// ---- Token sign-in (self-hosted; the pctl TUI mints the token and opens /auth/portal) ----
-// The portal has no password login. A valid short-lived token (HMAC-signed with the shared
-// PlaceContext:Portal:SigningKey) signs the cluster operator into the cookie. In Development with no
-// key configured, sign-in is automatic so `./run.sh` + opening localhost just works with no cluster.
-var portalSigningKey = builder.Configuration["PlaceContext:Portal:SigningKey"];
-var devAutoLogin = app.Environment.IsDevelopment() && string.IsNullOrWhiteSpace(portalSigningKey);
-
-app.MapGet("/auth/portal", async (HttpContext ctx, IAuthService auth, PlaceContext.Host.Auth.PortalToken portal,
-    string? token, string? returnUrl) =>
-{
-    if (!devAutoLogin && !portal.TryValidate(token, portalSigningKey, DateTimeOffset.UtcNow))
-        return Results.Redirect("/locked");
-    var operatorUser = await auth.GetOrCreateOperatorAsync(ctx.RequestAborted);
-    await SignInAsync(ctx, operatorUser);
-    return Results.Redirect(LocalOrHome(returnUrl));
-}).AllowAnonymous();
-
-// Auto-login: an unauthenticated request to a protected page (cookie LoginPath) signs straight in
-// as the operator's default workspace — the portal has no login screen. The cookie/tenant
-// machinery stays intact underneath, so tenant isolation, invites, and MCP OAuth keep working.
-// Probes need a cookieless 200 — auto-login turned "/" into a redirect dance that kubelet
-// treats as failure after 10 hops.
-app.MapGet("/healthz", () => Results.Ok("ok")).AllowAnonymous();
-
-app.MapGet("/locked", async (HttpContext ctx, IAuthService auth) =>
-{
-    var operatorUser = await auth.GetOrCreateOperatorAsync(ctx.RequestAborted);
-    await SignInAsync(ctx, operatorUser);
-    // Honour the cookie middleware's ReturnUrl so deep links survive the auto-login round trip.
-    return Results.Redirect(LocalOrHome(ctx.Request.Query["ReturnUrl"]));
-}).AllowAnonymous();
-
-// ---- Invite acceptance (join page) ----
-app.MapGet("/join", async (HttpContext ctx, IAntiforgery af, IMembershipService members, string? token, string? error) =>
-{
-    var info = string.IsNullOrEmpty(token) ? null : await members.GetInviteAsync(token, ctx.RequestAborted);
-    if (info is null)
-        return Results.Content(AuthPages.JoinInvalid(), "text/html");
-    return Results.Content(AuthPages.Join(af.GetAndStoreTokens(ctx), token!, info, error), "text/html");
-}).AllowAnonymous();
-
-app.MapPost("/auth/accept-invite", async (HttpContext ctx, IMembershipService members,
-    [FromForm] string token, [FromForm] string password, [FromForm] string? displayName) =>
-{
-    if ((password?.Length ?? 0) < 8)
-        return Results.Redirect($"/join?token={Uri.EscapeDataString(token)}&error=" + Uri.EscapeDataString("Choose a password of at least 8 characters."));
-    var user = await members.AcceptInviteAsync(token, displayName ?? "", password!, ctx.RequestAborted);
-    if (user is null)
-        return Results.Redirect($"/join?token={Uri.EscapeDataString(token)}&error=" + Uri.EscapeDataString("This invite is invalid, used, or the email is already a member."));
-    await SignInAsync(ctx, user);
-    return Results.Redirect("/");
-}).AllowAnonymous();
-
-app.MapPost("/auth/logout", async (HttpContext ctx) =>
-{
-    await ctx.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
-    return Results.Redirect("/locked");
-}).AllowAnonymous();
+// Ingest/backup/artifact/auth/health endpoints now live as attribute-routed controllers under
+// Controllers/ (same paths, same [Authorize]/[AllowAnonymous] as the minimal APIs they replace).
+app.MapControllers();
 
 await app.RunAsync();
-
-// Signs the user into the cookie scheme with their identity + tenant + role claims.
-static Task SignInAsync(HttpContext ctx, AuthUser user)
-{
-    var claims = new[]
-    {
-        new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
-        new Claim(ClaimTypes.Email, user.Email),
-        new Claim(ClaimTypes.Name, user.DisplayName),
-        new Claim("tenant", user.TenantId.ToString()),
-        new Claim(ClaimTypes.Role, user.Role.ToString()),
-        new Claim("role", user.Role.ToString()),
-    };
-    var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
-    return ctx.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme,
-        new ClaimsPrincipal(identity), new AuthenticationProperties { IsPersistent = true });
-}
 
 // Reads the principal's role (from either the cookie's ClaimTypes.Role or the JWT's "role" claim) and
 // returns whether it meets the minimum. Backs the Member/Admin/Owner authorization policies.
@@ -396,11 +248,3 @@ static bool RoleAtLeast(ClaimsPrincipal user, UserRole min)
     var value = user.FindFirst(ClaimTypes.Role)?.Value ?? user.FindFirst("role")?.Value;
     return Enum.TryParse<UserRole>(value, out var role) && role >= min;
 }
-
-// Guards against open redirects: only a same-site relative path (e.g. "/connect/authorize?…") is
-// honoured as a post-login destination; anything absolute or protocol-relative falls back to home.
-static string LocalOrHome(string? returnUrl) =>
-    !string.IsNullOrEmpty(returnUrl)
-        && Uri.TryCreate(returnUrl, UriKind.Relative, out _)
-        && returnUrl.StartsWith('/') && !returnUrl.StartsWith("//") && !returnUrl.StartsWith("/\\")
-            ? returnUrl : "/";

@@ -1,0 +1,74 @@
+.auth-card {
+    padding: 28px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.auth-brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.auth-mark {
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+    background: var(--brand);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+}
+
+.auth-brand-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-2);
+    letter-spacing: -0.01em;
+}
+
+.auth-title {
+    font-size: 19px;
+    font-weight: 600;
+    margin: 4px 0 0;
+}
+
+.auth-sub {
+    font-size: 12.5px;
+    color: var(--text-3);
+    line-height: 1.5;
+    margin: 0;
+}
+
+.auth-form {
+    display: flex;
+    flex-direction: column;
+    gap: 13px;
+}
+
+.auth-error {
+    font-size: 12.5px;
+    color: var(--bad);
+    background: var(--bad-bg);
+    border: 1px solid var(--bad);
+    border-radius: 7px;
+    padding: 8px 11px;
+    line-height: 1.5;
+}
+
+.auth-submit {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 10px 12px;
+    font-size: 13px;
+    margin-top: 2px;
+    text-align: center;
+    /* 44px-ish tap target, comfortably above the 44px minimum with the surrounding line-height. */
+    min-height: 40px;
+}
+
+a.auth-submit {
+    display: block;
+}

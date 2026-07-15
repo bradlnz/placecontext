@@ -18,6 +18,9 @@ public interface IObjectStore
 
     /// <summary>Opens an object for reading, or null if it doesn't exist. Caller disposes the result.</summary>
     Task<ObjectDownload?> OpenReadAsync(string bucket, string key, CancellationToken ct = default);
+
+    /// <summary>Deletes an object. Idempotent — a missing object is not an error. No-op when disabled.</summary>
+    Task DeleteAsync(string bucket, string key, CancellationToken ct = default);
 }
 
 /// <summary>A readable object: its content stream plus the stored content type. Dispose to release.</summary>

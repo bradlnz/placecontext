@@ -108,6 +108,10 @@ public class DataMappingIngestionTests
             return Task.CompletedTask;
         }
 
+        public Task<int> ImportRowsAsync(Guid projectId, string tableName, IReadOnlyList<ProjectColumnSpec> columns,
+            IReadOnlyList<IReadOnlyList<string?>> rows, bool createTable, CancellationToken ct = default)
+            => Task.FromResult(rows.Count);
+
         public Task<ProjectQueryResult> ExecuteAsync(Guid projectId, string sql, CancellationToken ct = default)
             => throw new NotSupportedException();
         public Task<IReadOnlyList<ProjectTableInfo>> ListTablesAsync(Guid projectId, CancellationToken ct = default)

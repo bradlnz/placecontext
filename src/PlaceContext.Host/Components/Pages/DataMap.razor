@@ -35,8 +35,8 @@ else
         }
 
         @* ── Interactive canvas: nodes drag, edges edit, ＋ drags a new connection ──────────── *@
-        <div style="position:relative; height:65vh; min-height:480px; border:1px solid var(--border); border-radius:10px; overflow:hidden; background:var(--card); background-image:radial-gradient(var(--border-2) 1px, transparent 1px); background-size:22px 22px; user-select:none; touch-action:none"
-             @onpointermove="OnCanvasMove" @onpointerup="OnCanvasUp">
+        <div style="position:relative; height:65vh; min-height:480px; border:1px solid var(--border); border-radius:10px; overflow:hidden; background:var(--card); background-image:radial-gradient(var(--border-2) 1px, transparent 1px); background-size:22px 22px; background-position:@(_panX)px @(_panY)px; user-select:none; touch-action:none; cursor:@(_panning ? "grabbing" : "grab")"
+             @onpointerdown="OnCanvasDown" @onpointermove="OnCanvasMove" @onpointerup="OnCanvasUp">
 
             <svg style="position:absolute; inset:0; width:100%; height:100%; pointer-events:none">
                 <defs>
@@ -65,7 +65,7 @@ else
                 var j = job;
                 var key = "job:" + j.Id;
                 var mapped = _mappings?.Any(m => m.JobId == j.Id) ?? false;
-                <div style="position:absolute; left:@(Pos(key).X)px; top:@(Pos(key).Y)px; width:190px; border:1px @(mapped ? "solid var(--border-2)" : "dashed var(--border-2)"); border-radius:9px; padding:8px 10px; background:var(--card-2); cursor:grab; box-shadow:var(--shadow)"
+                <div style="position:absolute; left:@(Pos(key).X + _panX)px; top:@(Pos(key).Y + _panY)px; width:190px; border:1px @(mapped ? "solid var(--border-2)" : "dashed var(--border-2)"); border-radius:9px; padding:8px 10px; background:var(--card-2); cursor:grab; box-shadow:var(--shadow)"
                      @onpointerdown="@(e => StartDrag(key, e))" @onpointerdown:stopPropagation="true">
                     <div style="display:flex; align-items:center; gap:7px">
                         <span style="width:7px; height:7px; border-radius:50%; flex:none; background:@(mapped ? "var(--brand-2)" : "var(--border-2)")"></span>
@@ -86,7 +86,7 @@ else
                 var c = chain;
                 var key = "chain:" + c.Id;
                 var mapped = _mappings?.Any(m => m.SourceKind == "chain" && m.JobId == c.Id) ?? false;
-                <div style="position:absolute; left:@(Pos(key).X)px; top:@(Pos(key).Y)px; width:190px; border:1px @(mapped ? "solid var(--human)" : "dashed var(--human)"); border-radius:9px; padding:8px 10px; background:var(--human-bg); cursor:grab; box-shadow:var(--shadow)"
+                <div style="position:absolute; left:@(Pos(key).X + _panX)px; top:@(Pos(key).Y + _panY)px; width:190px; border:1px @(mapped ? "solid var(--human)" : "dashed var(--human)"); border-radius:9px; padding:8px 10px; background:var(--human-bg); cursor:grab; box-shadow:var(--shadow)"
                      @onpointerdown="@(e => StartDrag(key, e))" @onpointerdown:stopPropagation="true">
                     <div style="display:flex; align-items:center; gap:7px">
                         <span style="width:7px; height:7px; border-radius:50%; flex:none; background:var(--human)"></span>
@@ -106,7 +106,7 @@ else
             {
                 var t = table;
                 var key = "table:" + t;
-                <div style="position:absolute; left:@(Pos(key).X)px; top:@(Pos(key).Y)px; width:210px; border:1px solid var(--brand-2); border-radius:10px; padding:9px 12px; background:var(--brand-bg); cursor:grab; box-shadow:var(--shadow)"
+                <div style="position:absolute; left:@(Pos(key).X + _panX)px; top:@(Pos(key).Y + _panY)px; width:210px; border:1px solid var(--brand-2); border-radius:10px; padding:9px 12px; background:var(--brand-bg); cursor:grab; box-shadow:var(--shadow)"
                      @onpointerdown="@(e => StartDrag(key, e))" @onpointerdown:stopPropagation="true"
                      @onpointerup="@(() => OnTableUp(t))" @onpointerup:stopPropagation="true">
                     <div style="font-size:12.5px; font-weight:600; font-family:var(--font-sans); white-space:nowrap; overflow:hidden; text-overflow:ellipsis" title="@t">@t</div>
@@ -317,6 +317,8 @@ else
     private readonly Dictionary<string, (double X, double Y)> _pos = new();
     private bool _posLoaded;
     private string? _dragKey;
+    private double _panX, _panY;   // board pan offset — drag empty canvas to reach overflowed nodes
+    private bool _panning;
     private string? _connectJobId;
     private JobView? _connectJob;
     private (double X, double Y) _connectEnd;
@@ -394,6 +396,15 @@ else
         _moved = false;
     }
 
+    // Pointer-down on empty canvas (node/edge handlers stop propagation) pans the whole board, so
+    // nodes laid out beyond the fixed-height viewport stay reachable.
+    private void OnCanvasDown(PointerEventArgs e)
+    {
+        _panning = true;
+        _lastX = e.ClientX;
+        _lastY = e.ClientY;
+    }
+
     private JobChainView? _connectChain;
 
     private void StartConnectChain(JobChainView chain, PointerEventArgs e)
@@ -430,6 +441,11 @@ else
         {
             _connectEnd = (_connectEnd.X + dx, _connectEnd.Y + dy);
         }
+        else if (_panning)
+        {
+            _panX += dx;
+            _panY += dy;
+        }
         else
         {
             return;
@@ -440,6 +456,11 @@ else
 
     private async Task OnCanvasUp()
     {
+        if (_panning)
+        {
+            _panning = false;
+            return;
+        }
         if (_dragKey is not null)
         {
             var clickedJob = !_moved && _dragKey.StartsWith("job:") ? _dragKey["job:".Length..] : null;
@@ -504,8 +525,8 @@ else
     {
         var from = Pos((m.SourceKind == "chain" ? "chain:" : "job:") + m.JobId);
         var to = Pos("table:" + m.TargetTable);
-        var x1 = from.X + 190; var y1 = from.Y + 26;
-        var x2 = to.X; var y2 = to.Y + 26;
+        var x1 = from.X + 190 + _panX; var y1 = from.Y + 26 + _panY;
+        var x2 = to.X + _panX; var y2 = to.Y + 26 + _panY;
         var bend = Math.Max(40, (x2 - x1) / 2);
         return FormattableString.Invariant($"M {x1} {y1} C {x1 + bend} {y1}, {x2 - bend} {y2}, {x2} {y2}");
     }
@@ -514,8 +535,8 @@ else
     {
         if (_connectJobId is null) return "";
         var from = Pos(_connectJobId);
-        var x1 = from.X + 190; var y1 = from.Y + 22;
-        return FormattableString.Invariant($"M {x1} {y1} L {_connectEnd.X} {_connectEnd.Y}");
+        var x1 = from.X + 190 + _panX; var y1 = from.Y + 22 + _panY;
+        return FormattableString.Invariant($"M {x1} {y1} L {_connectEnd.X + _panX} {_connectEnd.Y + _panY}");
     }
 
     private void OpenEditorForJob(JobView job)

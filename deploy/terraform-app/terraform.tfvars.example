@@ -1,0 +1,35 @@
+# Copy to terraform.tfvars and fill in. terraform.tfvars is gitignored (it can hold the API token
+# and the mesh pre-auth key).
+
+# DigitalOcean API token (or export DIGITALOCEAN_TOKEN and leave this unset).
+# do_token = "dop_v1_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+
+# Public keys granted root on the droplet (so you can operate/debug the edge over SSH).
+ssh_public_keys = [
+  "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAA... you@laptop",
+]
+
+# ── Mesh join (Headscale) ─────────────────────────────────────────────────────────────────────────
+# The control server provisioned by deploy/terraform/ (its `domain`), and a pre-auth key minted there
+# with:  pctl mesh authkey --tenant <id>
+mesh_control_url = "https://mesh.example.com"
+mesh_authkey     = "REPLACE_WITH_pctl_mesh_authkey_OUTPUT"
+
+# ── Upstream: the app on your LOCAL cluster, as reachable over the tailnet (host:port, NO scheme) ──
+# Find the local node's tailnet IP/hostname (`tailscale ip -4` / `tailscale status` on the local box);
+# the ingress usually serves :80 (prod k3s) — for k3d dev it's the mapped port (e.g. :7700).
+app_upstream = "100.64.0.5:80"     # or e.g. "placecontext-local:7700"
+
+# ── Public hostname / TLS (optional) ──────────────────────────────────────────────────────────────
+# Set a domain to get automatic HTTPS from Caddy (must resolve to the reserved IP).
+# domain     = "app.example.com"
+# manage_dns = false               # true if the apex is hosted in DigitalOcean DNS (A record made for you)
+
+# ── Optional overrides (defaults shown) ───────────────────────────────────────────────────────────
+# name              = "placecontext-edge"
+# region            = "nyc3"
+# droplet_size      = "s-2vcpu-2gb"   # ≈ $20/mo; s-1vcpu-1gb (≈ $6/mo) is plenty for a pure edge
+# mesh_hostname     = "placecontext-edge"
+# ssh_allowed_cidrs = ["0.0.0.0/0", "::/0"]   # tighten to your admin IPs
+# enable_backups    = false
+# monitoring        = true

@@ -8,22 +8,22 @@
 
 <PageTitle>placecontext — @EntityName</PageTitle>
 
-<div style="padding:20px 24px 40px; max-width:1320px; margin:0 auto">
+<div class="page-wrap">
     @if (!_loaded)
     {
         <Skeleton Kind="detail" Rows="7" />
     }
     else if (_entity is null)
     {
-        <div style="padding:24px; color:var(--text-3)">Unknown entity “@EntityName”. Define it under Data → Entities.</div>
+        <div class="unknown-entity">Unknown entity “@EntityName”. Define it under Data → Entities.</div>
     }
     else
     {
-        <div style="display:flex; align-items:baseline; justify-content:space-between; margin-bottom:14px">
+        <div class="header-row">
             <div>
-                <h2 style="font-size:18px; font-weight:600; margin:0">@_entity.Name</h2>
-                <div style="font-size:12px; color:var(--text-3); margin-top:3px">
-                    <span style="font-family:var(--font-sans)">@_entity.TableName</span>
+                <h2 class="page-title">@_entity.Name</h2>
+                <div class="page-sub">
+                    <span class="mono">@_entity.TableName</span>
                     · @( _rows?.Rows.Count ?? 0) records
                     @if (_entity.Relations.Count > 0)
                     {
@@ -31,16 +31,16 @@
                     }
                 </div>
             </div>
-            <input class="dcinput" style="width:200px; padding:5px 10px; font-size:12px" placeholder="filter records…"
+            <input class="dcinput filter-input" placeholder="filter records…"
                    @bind="_filter" @bind:event="oninput" />
         </div>
 
         @if (_error is not null)
         {
-            <div style="margin-bottom:12px; padding:10px 14px; border-radius:8px; background:var(--bad-bg); color:var(--bad); font-size:12.5px">@_error</div>
+            <div class="error-banner">@_error</div>
         }
 
-        <div class="dctabs" style="margin-bottom:14px">
+        <div class="dctabs tabs-mb">
             <button class="dctab @(_viewTab == "records" ? "active" : "")" @onclick="@(() => _viewTab = "records")">Records</button>
             <button class="dctab @(_viewTab == "graph" ? "active" : "")" @onclick="@(() => _viewTab = "graph")">Graph</button>
             <button class="dctab @(_viewTab == "analytics" ? "active" : "")" @onclick="OpenAnalyticsAsync">Analytics</button>
@@ -49,36 +49,36 @@
         @* ── Analytics tab: SQL-backed charts scoped to this entity (same engine as Data → Analytics). ── *@
         @if (_viewTab == "analytics")
         {
-            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px">
-                <span style="font-size:12px; color:var(--text-3)">Charts over <span style="font-family:var(--font-sans)">@_entity.TableName</span> — SELECT-only, isolated to this project.</span>
-                <button class="dcbtn" style="padding:4px 11px; font-size:11.5px" @onclick="ToggleChartEditor">＋ SQL chart</button>
+            <div class="analytics-head">
+                <span class="note-12">Charts over <span class="mono">@_entity.TableName</span> — SELECT-only, isolated to this project.</span>
+                <button class="dcbtn sql-chart-btn" @onclick="ToggleChartEditor">＋ SQL chart</button>
             </div>
 
             @if (_showChartEditor)
             {
-                <div class="dccard" style="padding:14px 16px; margin-bottom:12px; display:flex; flex-direction:column; gap:8px">
-                    <input class="dcinput" style="max-width:300px" placeholder="chart name (e.g. price by suburb)" @bind="_chartName" />
+                <div class="dccard chart-editor">
+                    <input class="dcinput chart-name-input" placeholder="chart name (e.g. price by suburb)" @bind="_chartName" />
                     @if (_chartMonaco)
                     {
-                        <div id="@ChartEditorId" style="height:130px; border:1px solid var(--border); border-radius:7px; overflow:hidden"></div>
+                        <div id="@ChartEditorId" class="monaco-box"></div>
                     }
                     else
                     {
                         <textarea @bind="_chartSql" rows="4" spellcheck="false"
-                                  style="width:100%; padding:9px 11px; background:var(--bg); border:1px solid var(--border); border-radius:7px; color:var(--text); font-size:12px; font-family:var(--font-sans); resize:vertical"></textarea>
+                                  class="sql-textarea"></textarea>
                     }
-                    <div style="display:flex; align-items:center; gap:10px">
-                        <select class="dcinput" style="width:90px; font-size:12px" @bind="_chartType">
+                    <div class="editor-controls">
+                        <select class="dcinput chart-type-select" @bind="_chartType">
                             <option value="bar">bar</option>
                             <option value="line">line</option>
                             <option value="pie">pie</option>
                         </select>
-                        <button class="dcbtn primary" style="padding:5px 14px; font-size:12px" disabled="@_chartBusy" @onclick="SaveEntityChartAsync">
+                        <button class="dcbtn primary run-save-btn" disabled="@_chartBusy" @onclick="SaveEntityChartAsync">
                             @(_chartBusy ? "Running…" : "▶ Run & save")
                         </button>
                         @if (_chartError is not null)
                         {
-                            <span style="color:var(--bad); font-size:12px">@_chartError</span>
+                            <span class="chart-err">@_chartError</span>
                         }
                     </div>
                 </div>
@@ -86,30 +86,30 @@
 
             @if (EntityCharts() is { Count: 0 })
             {
-                <div class="dccard" style="padding:24px; text-align:center; color:var(--text-3); font-size:13px">
+                <div class="dccard empty-card">
                     No charts yet — the first text column labels, numeric columns become series.
                 </div>
             }
             else
             {
-                <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(440px, 1fr)); gap:14px">
+                <div class="charts-grid">
                     @foreach (var chart in EntityCharts())
                     {
-                        <div class="dccard" style="padding:12px 16px">
-                            <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px">
-                                <span style="font-size:12.5px; font-weight:600; font-family:var(--font-sans)">@ChartShortName(chart)</span>
-                                <span style="display:flex; gap:2px; margin-left:4px">
+                        <div class="dccard card-pad">
+                            <div class="chart-head">
+                                <span class="chart-name">@ChartShortName(chart)</span>
+                                <span class="chart-type-group">
                                     @foreach (var t in new[] { "bar", "line", "pie" })
                                     {
-                                        <button class="dcbtn" style="padding:2px 8px; font-size:10.5px; @(StoredType(chart) == t ? "color:var(--brand-2); border-color:var(--brand-2)" : "")"
+                                        <button class="dcbtn chart-type-btn" style="@(StoredType(chart) == t ? "color:var(--brand-2); border-color:var(--brand-2)" : "")"
                                                 @onclick="@(() => SwitchChartTypeAsync(chart, t))">@t</button>
                                     }
                                 </span>
-                                <span style="flex:1"></span>
-                                <button class="dcbtn" style="padding:3px 10px; font-size:11px" @onclick="@(() => RefreshChartAsync(chart))">↻</button>
-                                <button class="dcbtn" style="padding:3px 10px; font-size:11px; color:var(--bad)" @onclick="@(() => DeleteChartAsync(chart))">✕</button>
+                                <span class="flex-1"></span>
+                                <button class="dcbtn btn-11" @onclick="@(() => RefreshChartAsync(chart))">↻</button>
+                                <button class="dcbtn btn-11-del" @onclick="@(() => DeleteChartAsync(chart))">✕</button>
                             </div>
-                            <div style="height:300px; padding:10px 8px 6px">
+                            <div class="chart-canvas-box">
                                 <canvas id="@ChartCanvasId(chart.TableName)"></canvas>
                             </div>
                         </div>
@@ -123,28 +123,28 @@
         {
             @if (_brainGraph is { Nodes.Count: > 0 })
             {
-                <div class="dccard" style="border-radius:10px; overflow:hidden; margin-bottom:14px">
+                <div class="dccard graph-card">
                     <GraphCanvas Graph="_brainGraph" Height="520" NodeUrl="NodeUrl" Searchable="true" AllowFullscreen="true" />
                 </div>
                 @if (_focusKey is not null)
                 {
-                    <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px; font-size:12px">
-                        <span style="padding:3px 10px; border-radius:99px; background:var(--brand-bg); color:var(--brand-2); font-family:var(--font-sans)">focused: @_focusKey</span>
-                        <button class="dcbtn" style="padding:3px 10px; font-size:11px"
+                    <div class="focus-row">
+                        <span class="focus-chip">focused: @_focusKey</span>
+                        <button class="dcbtn btn-11"
                                 @onclick="@(async () => { _focusKey = null; await BuildSectionGraphAsync(); })">show whole graph</button>
                     </div>
                 }
-                <div style="font-size:11px; color:var(--text-3); display:flex; gap:16px; margin-bottom:14px">
-                    <span><span style="color:var(--brand-2)">●</span> @_entity.Name records</span>
-                    <span><span style="color:var(--human)">●</span> related records</span>
-                    <span><span style="color:var(--good)">●</span> artifacts</span>
-                    <span><span style="color:var(--text-2)">●</span> runs</span>
+                <div class="legend">
+                    <span><span class="dot-brand">●</span> @_entity.Name records</span>
+                    <span><span class="dot-human">●</span> related records</span>
+                    <span><span class="dot-good">●</span> artifacts</span>
+                    <span><span class="dot-run">●</span> runs</span>
                     <span>click a node → Open ↗ jumps to it</span>
                 </div>
             }
             else
             {
-                <div class="dccard" style="padding:24px; text-align:center; color:var(--text-3); font-size:13px">
+                <div class="dccard empty-card">
                     Nothing linked yet — run a job whose output mentions these records and the graph fills in.
                 </div>
             }
@@ -154,29 +154,29 @@
              relation keys show their distribution. No configuration, just the graph. ── *@
         @if (_viewTab == "records" && _insights.Count > 0)
         {
-            <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(210px, 1fr)); gap:10px; margin-bottom:14px">
+            <div class="insights-grid">
                 @foreach (var ins in _insights)
                 {
-                    <div class="dccard" style="padding:12px 14px; border-radius:8px">
-                        <div style="font-size:10.5px; color:var(--text-3); letter-spacing:.06em; text-transform:uppercase">@ins.Title</div>
+                    <div class="dccard insight-card">
+                        <div class="insight-title">@ins.Title</div>
                         @if (ins.Big is not null)
                         {
-                            <div style="display:flex; align-items:baseline; gap:7px; margin-top:5px">
-                                <span style="font-family:var(--font-sans); font-size:22px; font-weight:600; color:var(--brand-2)">@ins.Big</span>
-                                <span style="font-size:11px; color:var(--text-3)">@ins.Sub</span>
+                            <div class="insight-big-row">
+                                <span class="insight-big">@ins.Big</span>
+                                <span class="insight-sub">@ins.Sub</span>
                             </div>
                         }
                         else
                         {
-                            <div style="display:flex; flex-direction:column; gap:3px; margin-top:6px">
+                            <div class="insight-bars">
                                 @foreach (var (label, count, frac) in ins.Bars)
                                 {
-                                    <div style="display:flex; align-items:center; gap:8px; font-size:11px">
-                                        <span style="width:86px; flex:none; color:var(--text-2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis" title="@label">@label</span>
-                                        <span style="flex:1; height:7px; border-radius:4px; background:var(--card-2); overflow:hidden">
-                                            <span style="display:block; height:100%; width:@(frac)%; background:var(--brand-2)"></span>
+                                    <div class="bar-row">
+                                        <span class="bar-label" title="@label">@label</span>
+                                        <span class="bar-track">
+                                            <span class="bar-fill" style="width:@(frac)%"></span>
                                         </span>
-                                        <span style="font-family:var(--font-sans); color:var(--text-3)">@count</span>
+                                        <span class="bar-count">@count</span>
                                     </div>
                                 }
                             </div>
@@ -193,24 +193,24 @@
 
         @if (_viewTab == "records" && _rows is { } rows)
         {
-            <div class="dccard" style="border-radius:8px; overflow:hidden">
-                <div style="overflow-x:auto">
-                    <table style="border-collapse:collapse; width:100%; font-size:12px">
+            <div class="dccard table-card">
+                <div class="table-scroll">
+                    <table class="data-table">
                         <thead>
                             <tr>
                                 @foreach (var c in rows.Columns)
                                 {
-                                    <th style="text-align:left; padding:8px 14px; border-bottom:2px solid var(--border-2); color:var(--text-3); font-size:10.5px; letter-spacing:.06em; text-transform:uppercase; white-space:nowrap">@c</th>
+                                    <th class="data-th">@c</th>
                                 }
                             </tr>
                         </thead>
                         <tbody>
                             @foreach (var row in FilteredRows())
                             {
-                                <tr style="cursor:pointer" class="dcdash-row" @onclick="@(() => OpenRecordAsync(row))">
+                                <tr class="dcdash-row clickable" @onclick="@(() => OpenRecordAsync(row))">
                                     @for (var i = 0; i < rows.Columns.Count; i++)
                                     {
-                                        <td style="padding:7px 14px; border-bottom:1px solid var(--border); color:@(rows.Columns[i] == LabelCol() ? "var(--text)" : "var(--text-2)"); font-weight:@(rows.Columns[i] == LabelCol() ? "600" : "400"); max-width:280px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">@(i < row.Count ? row[i] : "")</td>
+                                        <td class="data-cell" style="color:@(rows.Columns[i] == LabelCol() ? "var(--text)" : "var(--text-2)"); font-weight:@(rows.Columns[i] == LabelCol() ? "600" : "400")">@(i < row.Count ? row[i] : "")</td>
                                     }
                                 </tr>
                             }
@@ -226,28 +226,28 @@
 @if (_open is not null && _entity is not null && _rows is not null)
 {
     <div class="dcslide-scrim" @onclick="@(() => _open = null)"></div>
-    <div class="dcslide" style="width:560px">
+    <div class="dcslide slide-560">
         <div class="dcslide-head">
-            <div style="flex:1; min-width:0">
-                <div style="font-size:14px; font-weight:600">@RecordLabel(_open)</div>
-                <div style="font-size:11.5px; color:var(--text-3); margin-top:3px">@_entity.Name record</div>
+            <div class="flex-min">
+                <div class="title-14">@RecordLabel(_open)</div>
+                <div class="sub-115">@_entity.Name record</div>
             </div>
-            <button class="dcbtn" style="margin-right:10px; padding:4px 11px; font-size:11.5px; @(_showGraph ? "color:var(--brand-2); border-color:var(--brand-2)" : "")"
+            <button class="dcbtn graph-toggle-btn" style="@(_showGraph ? "color:var(--brand-2); border-color:var(--brand-2)" : "")"
                     @onclick="@(() => _showGraph = !_showGraph)">◉ Graph</button>
             <button class="dcslide-x" @onclick="@(() => _open = null)">×</button>
         </div>
-        <div class="dcslide-body" style="flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:14px">
+        <div class="dcslide-body record-body">
             @if (_showGraph)
             {
                 @* ── The link graph: every relation this record participates in, as nodes/edges. ── *@
                 @((MarkupString)GraphSvg())
             }
-            <div class="dccard" style="padding:12px 16px">
-                <dl style="display:grid; grid-template-columns:auto 1fr; gap:4px 14px; margin:0; font-size:12.5px">
+            <div class="dccard card-pad">
+                <dl class="field-dl">
                     @for (var i = 0; i < _rows.Columns.Count; i++)
                     {
-                        <dt style="color:var(--text-3); font-family:var(--font-sans); font-size:11px">@_rows.Columns[i]</dt>
-                        <dd style="margin:0; word-break:break-word">@(i < _open.Count ? _open[i] : "")</dd>
+                        <dt class="field-dt">@_rows.Columns[i]</dt>
+                        <dd class="field-dd">@(i < _open.Count ? _open[i] : "")</dd>
                     }
                 </dl>
             </div>
@@ -255,19 +255,19 @@
             @if (_artifacts.Count > 0)
             {
                 <div>
-                    <div style="font-size:11px; font-weight:600; letter-spacing:.5px; color:var(--text-3); text-transform:uppercase; margin-bottom:6px">
-                        Artifacts <span style="font-weight:400; text-transform:none">from runs tagged with this record</span>
+                    <div class="section-label">
+                        Artifacts <span class="label-normal">from runs tagged with this record</span>
                     </div>
                     @foreach (var (a, versions) in _artifacts)
                     {
                         <a href="@($"/artifacts?artifact={a.Id}")"
-                           style="display:flex; align-items:center; gap:10px; padding:8px 12px; margin-bottom:5px; border:1px solid var(--border); border-radius:8px; background:var(--card-2); font-size:12px; color:var(--text); text-decoration:none">
-                            <span style="font-family:var(--font-sans); flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis">@a.Title</span>
+                           class="artifact-link">
+                            <span class="artifact-title">@a.Title</span>
                             @if (versions > 1)
                             {
-                                <span title="@versions versions — this is the latest" style="font-size:10px; padding:1px 6px; border-radius:4px; background:var(--brand-bg); color:var(--brand-2); font-family:var(--font-sans)">v@(versions)</span>
+                                <span title="@versions versions — this is the latest" class="version-badge">v@(versions)</span>
                             }
-                            <span style="font-size:10.5px; color:var(--text-3)">@a.Kind · @a.CreatedAt.ToWorkspaceTime().ToString("MMM d · HH:mm")</span>
+                            <span class="artifact-meta">@a.Kind · @a.CreatedAt.ToWorkspaceTime().ToString("MMM d · HH:mm")</span>
                         </a>
                     }
                 </div>
@@ -276,12 +276,12 @@
             @foreach (var (relation, related) in _related)
             {
                 <div>
-                    <div style="font-size:11px; font-weight:600; letter-spacing:.5px; color:var(--text-3); text-transform:uppercase; margin-bottom:6px">
-                        @relation.TargetEntity <span style="font-weight:400; text-transform:none">via @relation.Column ↔ @relation.TargetColumn</span>
+                    <div class="section-label">
+                        @relation.TargetEntity <span class="label-normal">via @relation.Column ↔ @relation.TargetColumn</span>
                     </div>
                     @if (related.Rows.Count == 0)
                     {
-                        <div style="font-size:12px; color:var(--text-3)">no related records</div>
+                        <div class="note-12">no related records</div>
                     }
                     else
                     {
@@ -289,12 +289,12 @@
                         {
                             var recordKey = r.FirstOrDefault(v => !string.IsNullOrWhiteSpace(v)) ?? "";
                             <a href="@($"/project/{ProjectId}/entity/{Uri.EscapeDataString(relation.TargetEntity)}?record={Uri.EscapeDataString(recordKey)}")"
-                               class="dccard dcdash-row" style="padding:8px 12px; margin-bottom:5px; font-size:12px; display:flex; gap:10px; overflow:hidden; text-decoration:none; color:inherit">
+                               class="dccard dcdash-row related-link">
                                 @for (var i = 0; i < Math.Min(related.Columns.Count, 4); i++)
                                 {
-                                    <span style="color:@(i == 0 ? "var(--text)" : "var(--text-3)"); white-space:nowrap; overflow:hidden; text-overflow:ellipsis">@(i < r.Count ? r[i] : "")</span>
+                                    <span class="ellipsis" style="color:@(i == 0 ? "var(--text)" : "var(--text-3)")">@(i < r.Count ? r[i] : "")</span>
                                 }
-                                <span style="margin-left:auto; color:var(--human); flex:none">→</span>
+                                <span class="related-arrow">→</span>
                             </a>
                         }
                     }

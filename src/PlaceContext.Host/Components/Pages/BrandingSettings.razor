@@ -1,5 +1,6 @@
 @page "/settings/branding"
 @layout PlaceContext.Host.Components.Layout.SettingsLayout
+@attribute [Authorize(Policy = Permission.SettingsManage)]
 @using PlaceContext.Host.Branding
 @inject BrandingService Branding
 @inject PortalUiState Ui
@@ -7,43 +8,43 @@
 
 <PageTitle>placecontext — Branding</PageTitle>
 
-<div style="padding:24px; max-width:760px; margin:0 auto">
-    <h2 style="font-size:18px; font-weight:600; margin:0 0 4px">Whitelabel branding</h2>
-    <div style="font-size:12px; color:var(--text-3); margin-bottom:18px">
+<div class="page">
+    <h2 class="title">Whitelabel branding</h2>
+    <div class="intro">
         Make the portal yours — a name, a logo, and the shell colors. Applies to everyone in this workspace;
         leave a field empty to keep the default.
     </div>
 
-    <div class="dccard" style="padding:18px; display:flex; flex-direction:column; gap:14px">
-        <div style="display:flex; gap:12px">
-            <div class="dcfield" style="flex:1">
+    <div class="dccard card">
+        <div class="row">
+            <div class="dcfield grow">
                 <label>Product name</label>
                 <input class="dcinput" @bind="_name" placeholder="placecontext" />
             </div>
-            <div class="dcfield" style="flex:1">
-                <label>Logo <span class="code" style="margin-left:4px">png/svg, ≤200 KB</span></label>
+            <div class="dcfield grow">
+                <label>Logo <span class="code code-gap">png/svg, ≤200 KB</span></label>
                 <InputFile OnChange="OnLogo" accept="image/png,image/svg+xml,image/jpeg,image/webp" class="dcinput" style="padding:6px" />
             </div>
         </div>
         @if (!string.IsNullOrEmpty(_logo))
         {
-            <div style="display:flex; align-items:center; gap:10px">
-                <img src="@_logo" alt="logo" style="height:34px; border-radius:6px; background:var(--card-2); padding:4px" />
-                <button class="dcbtn" style="padding:3px 10px; font-size:11px" @onclick="@(() => _logo = null)">remove logo</button>
+            <div class="logo-row">
+                <img src="@_logo" alt="logo" class="logo-preview" />
+                <button class="dcbtn btn-sm" @onclick="@(() => _logo = null)">remove logo</button>
             </div>
         }
-        <div style="display:flex; gap:12px; flex-wrap:wrap">
-            <div class="dcfield"><label>Background</label><input type="color" class="dcinput" style="height:36px; padding:3px" @bind="_bg" /></div>
-            <div class="dcfield"><label>Panels & cards</label><input type="color" class="dcinput" style="height:36px; padding:3px" @bind="_panel" /></div>
-            <div class="dcfield"><label>Text</label><input type="color" class="dcinput" style="height:36px; padding:3px" @bind="_text" /></div>
-            <div class="dcfield"><label>Accent</label><input type="color" class="dcinput" style="height:36px; padding:3px" @bind="_accent" /></div>
+        <div class="color-row">
+            <div class="dcfield"><label>Background</label><input type="color" class="dcinput color-input" @bind="_bg" /></div>
+            <div class="dcfield"><label>Panels & cards</label><input type="color" class="dcinput color-input" @bind="_panel" /></div>
+            <div class="dcfield"><label>Text</label><input type="color" class="dcinput color-input" @bind="_text" /></div>
+            <div class="dcfield"><label>Accent</label><input type="color" class="dcinput color-input" @bind="_accent" /></div>
         </div>
-        <div style="display:flex; gap:10px; align-items:center">
+        <div class="actions">
             <button class="dcbtn primary" disabled="@_busy" @onclick="SaveAsync">@(_busy ? "Saving…" : "Save branding")</button>
             <button class="dcbtn" disabled="@_busy" @onclick="ResetAsync">Reset to default</button>
             @if (_message is not null)
             {
-                <span style="font-size:12px; color:var(--text-3)">@_message</span>
+                <span class="msg">@_message</span>
             }
         </div>
         <div class="dchint">Changes apply on the next page load. Colors override the dark theme's shell variables.</div>

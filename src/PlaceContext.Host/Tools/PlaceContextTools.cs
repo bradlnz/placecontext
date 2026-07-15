@@ -412,7 +412,9 @@ public sealed class PlaceContextTools
 
     private static string Truncate(string s, int n) => s.Length <= n ? s : s[..n] + "…";
 
-    [Authorize(Policy = "Admin")]
+    // Fine-grained permission gate — settings.manage (Admin/Owner by default; a Member can be granted
+    // it via an override). Follow this pattern for a new sensitive tool: [Authorize(Policy = Permission.X)].
+    [Authorize(Policy = Permission.SettingsManage)]
     [McpServerTool(Name = "set_workspace_timezone"), Description("Set the workspace's IANA timezone (e.g. 'Australia/Brisbane'). Schedule triggers evaluate their cron expressions in this timezone, and job/schedule times display in it. Agents should set this from the user's locale context before creating schedules.")]
     public static Task<string> SetWorkspaceTimezone(IToolCallLog log,
         PlaceContext.Infrastructure.Tenancy.ITenantStore tenants,

@@ -6,19 +6,18 @@
 
 <PageTitle>PlaceContext — Wiki: @(_article?.Title ?? "Docs")</PageTitle>
 
-<div style="display:flex; gap:22px; padding:22px 24px 48px; max-width:1180px; margin:0 auto">
+<div class="page">
 
     @* ── Contents ───────────────────────────────────────────────────────────────────────── *@
-    <nav style="width:240px; flex:none">
-        <div style="font-size:10px; font-weight:600; letter-spacing:.7px; color:var(--text-3); text-transform:uppercase; margin-bottom:10px">
+    <nav class="toc">
+        <div class="toc-head">
             Documentation
         </div>
         @foreach (var a in WikiLibrary.Articles)
         {
             var active = a.Slug == _article?.Slug;
-            <a href="@($"/wiki/{a.Slug}")"
-               style="display:block; padding:8px 10px; margin-bottom:3px; border-radius:7px; font-size:12.5px; line-height:1.35;
-                      color:@(active ? "var(--text)" : "var(--text-2)");
+            <a href="@($"/wiki/{a.Slug}")" class="toc-link"
+               style="color:@(active ? "var(--text)" : "var(--text-2)");
                       background:@(active ? "var(--hover)" : "transparent");
                       border-left:2px solid @(active ? "var(--brand)" : "transparent")">
                 @a.Title
@@ -27,16 +26,16 @@
     </nav>
 
     @* ── Article ────────────────────────────────────────────────────────────────────────── *@
-    <article style="flex:1; min-width:0">
+    <article class="article">
         @if (_article is null)
         {
-            <div style="font-size:13px; color:var(--text-3)">
-                Article not found. <a href="/wiki" style="color:var(--brand)">Back to the docs home →</a>
+            <div class="not-found">
+                Article not found. <a href="/wiki" class="link">Back to the docs home →</a>
             </div>
         }
         else
         {
-            <div style="font-size:11px; color:var(--text-3); margin-bottom:6px">@_article.Summary</div>
+            <div class="summary">@_article.Summary</div>
             <div class="pcwiki">
                 @((MarkupString)_article.Html)
             </div>

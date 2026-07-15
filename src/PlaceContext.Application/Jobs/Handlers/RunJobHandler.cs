@@ -1,6 +1,8 @@
+using System.Diagnostics;
 using System.Text;
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Dtos;
+using PlaceContext.Application.Observability;
 using PlaceContext.Application.Ports;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.Repositories;
@@ -81,32 +83,67 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
         var job = await _jobs.GetByIdAsync(command.JobId, ct)
             ?? throw new InvalidOperationException($"Job {command.JobId} not found.");
 
+        // OpenTelemetry: one span (and a started/completed metric pair) per run — the realtime,
+        // exportable view into the jobs pipeline. Inert unless the Host wired an exporter.
+        using var runSpan = JobTelemetry.Activity.StartActivity("job.run", ActivityKind.Internal);
+        runSpan?.SetTag("job.id", job.Id);
+        runSpan?.SetTag("job.name", job.Name);
+        runSpan?.SetTag("project.id", job.ProjectId);
+        runSpan?.SetTag("job.replay", command.ReplayOfRunId is not null);
+        JobTelemetry.RunsStarted.Add(1,
+            new("job.id", job.Id.ToString()), new("project.id", job.ProjectId.ToString()),
+            new("replay", command.ReplayOfRunId is not null));
+
         // Load the project's vault secrets (decrypted) for injection as env into each sandbox. Never
         // persisted to the run snapshot — only merged into the live WorkloadRunRequest below.
         _runSecrets = await LoadSecretsAsync(job.ProjectId, ct);
 
-        // An input override (modal-collected parameters or event-injected fields) replaces the stored
-        // shard payloads with a single shard carrying the supplied payload.
-        var effectiveMap = command.InputPayload is { } p
-            ? new MapSpec(job.MapSpec.Source, new[] { p }, job.MapSpec.Env)
-            : job.MapSpec;
+        // Resolve the execution plan: replaying a prior run reproduces its captured snapshot verbatim,
+        // otherwise we run the job's current spec (optionally with a single-shard input override).
+        MapSpec effectiveMap;
+        ReduceSpec? effectiveReduce;
+        int concurrency;
+        bool allowEgress;
+        if (command.ReplayOfRunId is { } replayId)
+        {
+            var prior = await _runs.GetByIdAsync(replayId, ct)
+                ?? throw new InvalidOperationException($"Run {replayId} not found — cannot replay.");
+            var s = prior.Snapshot;
+            effectiveMap = new MapSpec(s.MapSource, s.InputPayloads, s.MapEnv);
+            effectiveReduce = s.ReduceSource is not null
+                ? new ReduceSpec(s.ReduceSource, s.ReduceEnv ?? new Dictionary<string, string>())
+                : null;
+            concurrency = s.ConcurrencyLimit;
+            allowEgress = s.AllowNetworkEgress;
+        }
+        else
+        {
+            // An input override (modal-collected parameters or event-injected fields) replaces the
+            // stored shard payloads with a single shard carrying the supplied payload.
+            effectiveMap = command.InputPayload is { } p
+                ? new MapSpec(job.MapSpec.Source, new[] { p }, job.MapSpec.Env)
+                : job.MapSpec;
+            effectiveReduce = job.ReduceSpec;
+            concurrency = job.ConcurrencyLimit;
+            allowEgress = job.AllowNetworkEgress;
+        }
 
         // Snapshot the effective spec onto the run at start-time (captures AllowNetworkEgress too).
-        var snapshot = WorkloadSnapshot.From(effectiveMap, job.ReduceSpec, job.ConcurrencyLimit,
-            job.AllowNetworkEgress);
+        var snapshot = WorkloadSnapshot.From(effectiveMap, effectiveReduce, concurrency, allowEgress);
         var startedAt = _clock.UtcNow;
         var run = JobRun.Start(job.Id, job.ProjectId, startedAt, snapshot, command.RunId);
+        runSpan?.SetTag("run.id", run.Id);
         await _runs.AddAsync(run, ct);
         await _uow.SaveChangesAsync(ct);
 
         // ---- MAP PHASE: fan-out shards with bounded concurrency ----
-        var shardResults = await RunMapShardsAsync(job, effectiveMap.InputPayloads, run.Id, ct);
+        var shardResults = await RunMapShardsAsync(job, effectiveMap, concurrency, allowEgress, run.Id, ct);
 
         // ---- REDUCE PHASE (optional) ----
         ReduceResult? reduceResult = null;
-        if (job.HasReduceStep && job.ReduceSpec is { } reduceSpec)
+        if (effectiveReduce is { } reduceSpec)
         {
-            reduceResult = await RunReduceStepAsync(job, run.Id, shardResults, reduceSpec, ct);
+            reduceResult = await RunReduceStepAsync(job, run.Id, shardResults, reduceSpec, allowEgress, ct);
         }
 
         // ---- AGGREGATE + PERSIST ----
@@ -117,6 +154,15 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
         run.Complete(shardResults, reduceResult, finishedAt);
         await _runs.UpdateAsync(run, ct);
         await _uow.SaveChangesAsync(ct);
+
+        // Record the terminal status + wall-clock as OTel metrics and span tags.
+        var status = run.Status.ToString();
+        runSpan?.SetTag("run.status", status);
+        runSpan?.SetTag("run.shards", run.ShardResults.Count);
+        runSpan?.SetStatus(run.Status == Domain.Entities.JobRunStatus.Failed ? ActivityStatusCode.Error : ActivityStatusCode.Ok);
+        JobTelemetry.RunsCompleted.Add(1, new("status", status), new("job.id", job.Id.ToString()));
+        JobTelemetry.RunDuration.Record((finishedAt - startedAt).TotalMilliseconds,
+            new("status", status), new("job.id", job.Id.ToString()));
 
         // Post-job actions: turn this run's artifacts into stored outputs (HTML report / chart / CSV /
         // raw bundle) surfaced as links. Done before the slow LLM enrichment so links appear promptly.
@@ -164,9 +210,9 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
     // ---- MAP PHASE ----
 
     private async Task<List<ShardResult>> RunMapShardsAsync(
-        Job job, IReadOnlyList<string> payloads, Guid runId, CancellationToken ct)
+        Job job, MapSpec map, int concurrency, bool allowEgress, Guid runId, CancellationToken ct)
     {
-        var concurrency = job.ConcurrencyLimit;
+        var payloads = map.InputPayloads;
         var semaphore = new SemaphoreSlim(concurrency, concurrency);
         var tasks = new Task<ShardResult>[payloads.Count];
 
@@ -174,7 +220,7 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
         {
             var index = i;
             var payload = payloads[i];
-            tasks[index] = RunShardAsync(job, runId, index, payload, semaphore, ct);
+            tasks[index] = RunShardAsync(job, map, allowEgress, runId, index, payload, semaphore, ct);
         }
 
         var results = await Task.WhenAll(tasks);
@@ -182,19 +228,33 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
     }
 
     private async Task<ShardResult> RunShardAsync(
-        Job job, Guid runId, int index, string payload,
+        Job job, MapSpec map, bool allowEgress, Guid runId, int index, string payload,
         SemaphoreSlim semaphore, CancellationToken ct)
     {
         await semaphore.WaitAsync(ct);
+        using var shardSpan = JobTelemetry.Activity.StartActivity("job.shard", ActivityKind.Internal);
+        shardSpan?.SetTag("run.id", runId);
+        shardSpan?.SetTag("shard.index", index);
+        var sw = Stopwatch.StartNew();
         try
         {
             var correlationId = $"{runId:N}-map-{index}";
-            var request = BuildRequest(job.MapSpec.Source, payload, MergeSecrets(job.MapSpec.Env),
-                Array.Empty<(string, string)>(), correlationId, job.AllowNetworkEgress, job.TimeoutSeconds);
+            // Source/env/egress come from the effective plan (job spec or a replayed snapshot); the
+            // exit-code policy and timeout are job metadata not captured in the snapshot.
+            var request = BuildRequest(map.Source, payload, MergeSecrets(map.Env),
+                Array.Empty<(string, string)>(), correlationId, allowEgress, job.TimeoutSeconds);
 
             var result = await _runner.RunAsync(request, ct);
             var outcome = job.ExitCodePolicy.Classify(result.ExitCode);
             var log = CombineLog(result.Stdout, result.Stderr);
+
+            sw.Stop();
+            var outcomeLabel = outcome.ToString();
+            shardSpan?.SetTag("shard.outcome", outcomeLabel);
+            shardSpan?.SetTag("shard.exit_code", result.ExitCode);
+            var shardTags = new TagList { { "outcome", outcomeLabel } };
+            JobTelemetry.ShardDuration.Record(sw.Elapsed.TotalMilliseconds, shardTags);
+            JobTelemetry.ShardsCompleted.Add(1, shardTags);
 
             return new ShardResult(index, result.ExitCode, outcome, result.Artifact, log,
                 CollectArtifacts(result.Artifact, result.Artifacts));
@@ -211,6 +271,7 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
         Job job, Guid runId,
         List<ShardResult> shardResults,
         ReduceSpec reduceSpec,
+        bool allowEgress,
         CancellationToken ct)
     {
         // Build artifact mounts: each shard's artifact content is passed to the runner which
@@ -222,7 +283,7 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
 
         var correlationId = $"{runId:N}-reduce";
         var request = BuildRequest(reduceSpec.Source, "{}", MergeSecrets(reduceSpec.Env),
-            artifactMounts, correlationId, job.AllowNetworkEgress, job.TimeoutSeconds);
+            artifactMounts, correlationId, allowEgress, job.TimeoutSeconds);
 
         var result = await _runner.RunAsync(request, ct);
         var succeeded = job.ExitCodePolicy.SuccessCodes.Contains(result.ExitCode);

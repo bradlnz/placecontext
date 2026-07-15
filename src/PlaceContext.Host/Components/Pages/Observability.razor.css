@@ -1,0 +1,314 @@
+.page {
+    padding: 20px 24px 40px;
+    max-width: 1320px;
+    margin: 0 auto;
+}
+
+.page-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 14px;
+}
+
+.page-title {
+    font-size: 18px;
+    font-weight: 600;
+    margin: 0;
+}
+
+.page-sub {
+    font-size: 12px;
+    color: var(--text-3);
+    margin-top: 3px;
+}
+
+.tabs-strip {
+    margin-bottom: 16px;
+}
+
+.message-banner {
+    margin-bottom: 12px;
+    padding: 10px 14px;
+    border-radius: 8px;
+    background: var(--card);
+    font-size: 12.5px;
+    color: var(--text-2);
+}
+
+.empty-card {
+    padding: 24px;
+    color: var(--text-3);
+    font-size: 13px;
+    text-align: center;
+}
+
+.run-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.run-row {
+    padding: 12px 16px;
+    cursor: pointer;
+}
+
+.run-row-inner {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.status-pill {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: 5px;
+    flex: none;
+}
+
+.flex-fill {
+    flex: 1;
+    min-width: 0;
+}
+
+.job-name {
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.project-name {
+    font-size: 11.5px;
+    color: var(--text-3);
+    margin-left: 8px;
+}
+
+.note-sm {
+    font-size: 11px;
+    color: var(--text-3);
+}
+
+.run-time {
+    font-family: var(--font-sans);
+    font-size: 11.5px;
+    color: var(--text-2);
+}
+
+.run-duration {
+    font-size: 11px;
+    color: var(--text-3);
+    font-family: var(--font-sans);
+    width: 52px;
+    text-align: right;
+}
+
+.slide-wide {
+    width: 620px;
+}
+
+.slide-title {
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.slide-sub {
+    font-size: 11.5px;
+    color: var(--text-3);
+    margin-top: 3px;
+}
+
+.btn-replay {
+    margin-right: 8px;
+}
+
+.btn-open-project {
+    margin-right: 10px;
+}
+
+.slide-body-scroll {
+    flex: 1;
+    overflow-y: auto;
+}
+
+.status-line {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.status-pill-lg {
+    font-size: 12px;
+    font-weight: 600;
+    padding: 3px 9px;
+    border-radius: 5px;
+}
+
+.panel-card {
+    padding: 12px 16px;
+    margin-bottom: 14px;
+}
+
+.panel-title {
+    font-size: 12.5px;
+    font-weight: 600;
+    margin-bottom: 8px;
+}
+
+.output-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.output-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.kind-tag {
+    font-size: 10.5px;
+    padding: 1px 7px;
+    border-radius: 4px;
+    background: var(--bg-2);
+    color: var(--text-3);
+}
+
+.output-link {
+    font-size: 12.5px;
+    color: var(--accent);
+    text-decoration: none;
+    flex: 1;
+    min-width: 0;
+}
+
+.size-note {
+    font-size: 10.5px;
+    color: var(--text-3);
+}
+
+.panel-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+}
+
+.card-title {
+    font-size: 12.5px;
+    font-weight: 600;
+}
+
+.shard-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.shard-chip {
+    font-size: 10.5px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    background: var(--bg-2);
+    color: var(--text-2);
+}
+
+.shard-block {
+    margin-bottom: 14px;
+}
+
+.shard-title {
+    font-size: 12.5px;
+    font-weight: 600;
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.outcome-pill {
+    font-size: 11px;
+    padding: 2px 7px;
+    border-radius: 4px;
+}
+
+.shard-json {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px;
+    font-size: 11px;
+    font-family: var(--font-mono);
+    overflow-x: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+    color: var(--text-2);
+    max-height: 240px;
+    overflow-y: auto;
+}
+
+.chart-label {
+    font-size: 11px;
+    color: var(--text-3);
+    margin-top: 8px;
+}
+
+.text-dim {
+    color: var(--text-3);
+}
+
+.artifact-dl-row {
+    margin-top: 6px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.dl-btn {
+    padding: 3px 10px;
+    font-size: 11px;
+    text-decoration: none;
+}
+
+.log-details {
+    margin-top: 4px;
+}
+
+.log-summary {
+    font-size: 11px;
+    color: var(--text-3);
+    cursor: pointer;
+}
+
+.log-pre {
+    font-size: 10.5px;
+    font-family: var(--font-mono);
+    color: var(--text-3);
+    white-space: pre-wrap;
+    margin-top: 4px;
+    max-height: 320px;
+    overflow-y: auto;
+}
+
+.reduce-block {
+    border-top: 1px solid var(--border);
+    padding-top: 12px;
+    margin-top: 4px;
+}
+
+.reduce-json {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px;
+    font-size: 11px;
+    font-family: var(--font-mono);
+    overflow-x: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+    color: var(--text-2);
+    max-height: 300px;
+    overflow-y: auto;
+}

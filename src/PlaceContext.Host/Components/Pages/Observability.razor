@@ -13,12 +13,12 @@
 }
 else
 {
-    <div style="padding:20px 24px 40px; max-width:1320px; margin:0 auto">
+    <div class="page">
 
-        <div style="display:flex; align-items:baseline; justify-content:space-between; margin-bottom:14px">
+        <div class="page-head">
             <div>
-                <h2 style="font-size:18px; font-weight:600; margin:0">Observability</h2>
-                <div style="font-size:12px; color:var(--text-3); margin-top:3px">
+                <h2 class="page-title">Observability</h2>
+                <div class="page-sub">
                     What ran, where, and how it went — across every project in the workspace.
                 </div>
             </div>
@@ -26,47 +26,46 @@ else
         </div>
 
         @* Global tab strip — Job history today; more lenses (events, triggers, costs) slot in here. *@
-        <div class="dctabs" style="margin-bottom:16px">
+        <div class="dctabs tabs-strip">
             <button class="dctab @(_tab == "runs" ? "active" : "")" @onclick="@(() => _tab = "runs")">Job history<span class="n">@(_reports?.Count ?? 0)</span></button>
         </div>
 
         @if (_message is not null)
         {
-            <div style="margin-bottom:12px; padding:10px 14px; border-radius:8px; background:var(--card); font-size:12.5px; color:var(--text-2)">@_message</div>
+            <div class="message-banner">@_message</div>
         }
 
         @if (_tab == "runs")
         {
             @if (_reports is null or { Count: 0 })
             {
-                <div class="dccard" style="padding:24px; color:var(--text-3); font-size:13px; text-align:center">
+                <div class="dccard empty-card">
                     No job runs recorded yet — run a job from any project's Jobs tab and it appears here.
                 </div>
             }
             else
             {
-                <div style="display:flex; flex-direction:column; gap:8px">
+                <div class="run-list">
                     @foreach (var rep in _reports)
                     {
                         var run = rep.Run;
-                        <div class="dccard" style="padding:12px 16px; cursor:pointer" @onclick="@(() => OpenRun(rep))">
-                            <div style="display:flex; align-items:center; gap:12px">
-                                <span style="font-size:11px; font-weight:600; padding:3px 8px; border-radius:5px; flex:none;
-                                      color:@StatusColor(run.Status); background:@StatusBg(run.Status)">@run.Status</span>
-                                <div style="flex:1; min-width:0">
-                                    <span style="font-size:13px; font-weight:600">@rep.JobName</span>
-                                    <span style="font-size:11.5px; color:var(--text-3); margin-left:8px">@rep.ProjectName</span>
+                        <div class="dccard run-row" @onclick="@(() => OpenRun(rep))">
+                            <div class="run-row-inner">
+                                <span class="status-pill" style="color:@StatusColor(run.Status); background:@StatusBg(run.Status)">@run.Status</span>
+                                <div class="flex-fill">
+                                    <span class="job-name">@rep.JobName</span>
+                                    <span class="project-name">@rep.ProjectName</span>
                                 </div>
-                                <span style="font-size:11px; color:var(--text-3)">
+                                <span class="note-sm">
                                     ✓ @run.ShardResults.Count(s => s.Outcome == "Succeeded")
                                     @(run.ShardResults.Any(s => s.Outcome == "Failed") ? $" ✗ {run.ShardResults.Count(s => s.Outcome == "Failed")}" : "")
                                 </span>
-                                <span style="font-family:var(--font-sans); font-size:11.5px; color:var(--text-2)">
+                                <span class="run-time">
                                     @run.StartedAt.ToWorkspaceTime().ToString("yyyy-MM-dd HH:mm")
                                 </span>
                                 @if (run.FinishedAt.HasValue)
                                 {
-                                    <span style="font-size:11px; color:var(--text-3); font-family:var(--font-sans); width:52px; text-align:right">
+                                    <span class="run-duration">
                                         @FormatDuration(run.StartedAt, run.FinishedAt.Value)
                                     </span>
                                 }
@@ -84,23 +83,24 @@ else
 {
     var run = _open.Run;
     <div class="dcslide-scrim" @onclick="CloseRun"></div>
-    <div class="dcslide" style="width:620px">
+    <div class="dcslide slide-wide">
         <div class="dcslide-head">
-            <div style="flex:1; min-width:0">
-                <div style="font-size:14px; font-weight:600">@_open.JobName</div>
-                <div style="font-size:11.5px; color:var(--text-3); margin-top:3px">
+            <div class="flex-fill">
+                <div class="slide-title">@_open.JobName</div>
+                <div class="slide-sub">
                     @_open.ProjectName · run @run.Id.ToString("N")[..8] · @run.StartedAt.ToWorkspaceTime().ToString("yyyy-MM-dd HH:mm")
                 </div>
             </div>
-            <button class="dcbtn" style="margin-right:10px"
+            <button class="dcbtn btn-replay" title="Re-run this run's exact captured inputs"
+                    @onclick="@(() => ReplayRun(run.Id, run.ProjectId))">↻ Replay</button>
+            <button class="dcbtn btn-open-project"
                     @onclick="@(() => Nav.NavigateTo($"/project/{run.ProjectId}/jobs"))">Open project →</button>
             <button class="dcslide-x" @onclick="CloseRun">×</button>
         </div>
-        <div class="dcslide-body" style="flex:1; overflow-y:auto">
-            <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px">
-                <span style="font-size:12px; font-weight:600; padding:3px 9px; border-radius:5px;
-                      color:@StatusColor(run.Status); background:@StatusBg(run.Status)">@run.Status</span>
-                <span style="font-size:11px; color:var(--text-3)">
+        <div class="dcslide-body slide-body-scroll">
+            <div class="status-line">
+                <span class="status-pill-lg" style="color:@StatusColor(run.Status); background:@StatusBg(run.Status)">@run.Status</span>
+                <span class="note-sm">
                     Ran as: <code>@run.Snapshot.MapSourceKind</code> · @run.Snapshot.MapSourceLabel
                     · @run.Snapshot.ShardCount shard(s) · concurrency @run.Snapshot.ConcurrencyLimit
                 </span>
@@ -108,55 +108,82 @@ else
 
             @if (_openArtifacts is { Count: > 0 })
             {
-                <div class="dccard" style="padding:12px 16px; margin-bottom:14px">
-                    <div style="font-size:12.5px; font-weight:600; margin-bottom:8px">Post-job outputs</div>
-                    <div style="display:flex; flex-direction:column; gap:6px">
+                <div class="dccard panel-card">
+                    <div class="panel-title">Post-job outputs</div>
+                    <div class="output-list">
                         @foreach (var art in _openArtifacts)
                         {
-                            <div style="display:flex; align-items:center; gap:10px">
-                                <span style="font-size:10.5px; padding:1px 7px; border-radius:4px; background:var(--bg-2); color:var(--text-3)">@art.Kind</span>
+                            <div class="output-row">
+                                <span class="kind-tag">@art.Kind</span>
                                 <a href="@($"/runs/{art.RunId}/artifacts/{art.Id}")" target="_blank" rel="noopener"
-                                   style="font-size:12.5px; color:var(--accent); text-decoration:none; flex:1; min-width:0">@art.Title ↗</a>
-                                <span style="font-size:10.5px; color:var(--text-3)">@FormatBytes(art.SizeBytes)</span>
+                                   class="output-link">@art.Title ↗</a>
+                                <span class="size-note">@FormatBytes(art.SizeBytes)</span>
                             </div>
                         }
                     </div>
                 </div>
             }
 
+            @* ── OTel trace for this run: total + per-shard timings, captured in-process from the
+               `PlaceContext.Jobs` ActivitySource — see IJobTelemetryReader. Absent when this replica
+               didn't execute the run (e.g. a different pod, or before this process started). ── *@
+            @if (_openTelemetry is { } tel)
+            {
+                <div class="dccard panel-card">
+                    <div class="panel-head">
+                        <div class="card-title">OpenTelemetry trace</div>
+                        <div class="note-sm">
+                            @FormatMs(tel.DurationMs) total @(tel.Replay ? "· replay" : "")
+                        </div>
+                    </div>
+                    @if (tel.Shards.Count > 0)
+                    {
+                        <div class="shard-chips">
+                            @foreach (var shard in tel.Shards.OrderBy(s => s.Index))
+                            {
+                                <span class="shard-chip">
+                                    shard @shard.Index
+                                    <span style="color:@StatusColor(shard.Outcome ?? "")">@shard.Outcome</span>
+                                    · @FormatMs(shard.DurationMs)
+                                </span>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+
             @foreach (var shard in run.ShardResults)
             {
-                <div style="margin-bottom:14px">
-                    <div style="font-size:12.5px; font-weight:600; margin-bottom:6px; display:flex; align-items:center; gap:8px">
+                <div class="shard-block">
+                    <div class="shard-title">
                         <span>Shard @shard.Index</span>
-                        <span style="font-size:11px; padding:2px 7px; border-radius:4px;
-                              color:@StatusColor(shard.Outcome); background:@StatusBg(shard.Outcome)">@shard.Outcome</span>
-                        <span style="font-size:11px; color:var(--text-3)">exit @shard.ExitCode</span>
+                        <span class="outcome-pill" style="color:@StatusColor(shard.Outcome); background:@StatusBg(shard.Outcome)">@shard.Outcome</span>
+                        <span class="note-sm">exit @shard.ExitCode</span>
                     </div>
                     @if (shard.Artifact is not null)
                     {
-                        <pre style="background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:10px; font-size:11px; font-family:var(--font-mono); overflow-x:auto; white-space:pre-wrap; word-break:break-all; color:var(--text-2); max-height:240px; overflow-y:auto">@PrettyJson(shard.Artifact)</pre>
+                        <pre class="shard-json">@PrettyJson(shard.Artifact)</pre>
                         @if (ArtifactChart.TrySvg(shard.Artifact, out var shardChart))
                         {
-                            <div style="font-size:11px; color:var(--text-3); margin-top:8px">chart <span style="color:var(--text-3)">(from the artifact's JSON)</span></div>
+                            <div class="chart-label">chart <span class="text-dim">(from the artifact's JSON)</span></div>
                             @((MarkupString)shardChart)
                         }
                     }
                     @if (shard.Artifacts.Count > 0)
                     {
-                        <div style="margin-top:6px; display:flex; flex-wrap:wrap; gap:8px">
+                        <div class="artifact-dl-row">
                             @foreach (var a in shard.Artifacts)
                             {
-                                <a class="dcbtn" style="padding:3px 10px; font-size:11px; text-decoration:none"
+                                <a class="dcbtn dl-btn"
                                    href="@DataUri(a)" download="@a.Name">⬇ @a.Name</a>
                             }
                         </div>
                     }
                     @if (!string.IsNullOrWhiteSpace(shard.Log))
                     {
-                        <details style="margin-top:4px" open="@(shard.Outcome == "Failed")">
-                            <summary style="font-size:11px; color:var(--text-3); cursor:pointer">Log</summary>
-                            <pre style="font-size:10.5px; font-family:var(--font-mono); color:var(--text-3); white-space:pre-wrap; margin-top:4px; max-height:320px; overflow-y:auto">@shard.Log</pre>
+                        <details class="log-details" open="@(shard.Outcome == "Failed")">
+                            <summary class="log-summary">Log</summary>
+                            <pre class="log-pre">@shard.Log</pre>
                         </details>
                     }
                 </div>
@@ -164,24 +191,23 @@ else
 
             @if (run.ReduceResult is { } reduce)
             {
-                <div style="border-top:1px solid var(--border); padding-top:12px; margin-top:4px">
-                    <div style="font-size:12.5px; font-weight:600; margin-bottom:6px; display:flex; align-items:center; gap:8px">
+                <div class="reduce-block">
+                    <div class="shard-title">
                         <span>Reduce step</span>
-                        <span style="font-size:11px; padding:2px 7px; border-radius:4px;
-                              color:@(reduce.Succeeded ? "var(--good)" : "var(--bad)"); background:@(reduce.Succeeded ? "var(--good-bg)" : "var(--bad-bg)")">
+                        <span class="outcome-pill" style="color:@(reduce.Succeeded ? "var(--good)" : "var(--bad)"); background:@(reduce.Succeeded ? "var(--good-bg)" : "var(--bad-bg)")">
                             @(reduce.Succeeded ? "succeeded" : "failed")
                         </span>
-                        <span style="font-size:11px; color:var(--text-3)">exit @reduce.ExitCode</span>
+                        <span class="note-sm">exit @reduce.ExitCode</span>
                     </div>
                     @if (reduce.Artifact is not null)
                     {
-                        <pre style="background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:10px; font-size:11px; font-family:var(--font-mono); overflow-x:auto; white-space:pre-wrap; word-break:break-all; color:var(--text-2); max-height:300px; overflow-y:auto">@PrettyJson(reduce.Artifact)</pre>
+                        <pre class="reduce-json">@PrettyJson(reduce.Artifact)</pre>
                     }
                     @if (!string.IsNullOrWhiteSpace(reduce.Log))
                     {
-                        <details style="margin-top:4px">
-                            <summary style="font-size:11px; color:var(--text-3); cursor:pointer">Log</summary>
-                            <pre style="font-size:10.5px; font-family:var(--font-mono); color:var(--text-3); white-space:pre-wrap; margin-top:4px; max-height:320px; overflow-y:auto">@reduce.Log</pre>
+                        <details class="log-details">
+                            <summary class="log-summary">Log</summary>
+                            <pre class="log-pre">@reduce.Log</pre>
                         </details>
                     }
                 </div>
@@ -196,6 +222,7 @@ else
     private IReadOnlyList<RunReportView>? _reports;
     private RunReportView? _open;
     private IReadOnlyList<RunArtifactLinkView>? _openArtifacts;
+    private JobRunTelemetry? _openTelemetry;
     private string _tab = "runs";
     private string? _message;
     private bool _loading = true;
@@ -263,17 +290,53 @@ else
     {
         _open = rep;
         _openArtifacts = null;
+        _openTelemetry = null;
         try
         {
             _openArtifacts = await Svc.ListRunArtifactsAsync(rep.Run.Id);
         }
         catch { /* stored outputs are an extra — the detail renders without them */ }
+        try
+        {
+            var jobTelemetry = await Svc.ListJobRunTelemetryAsync(rep.JobId);
+            _openTelemetry = jobTelemetry.FirstOrDefault(t => t.RunId == rep.Run.Id);
+        }
+        catch { /* OTel trace is a nicety — the detail renders without it */ }
     }
 
     private void CloseRun()
     {
         _open = null;
         _openArtifacts = null;
+        _openTelemetry = null;
+    }
+
+    // OTel run/shard duration formatting for the trace panel.
+    private static string FormatMs(double? ms) => ms switch
+    {
+        null => "—",
+        < 1000 => $"{ms:0}ms",
+        < 60000 => $"{ms / 1000:0.#}s",
+        _ => $"{ms / 60000:0.#}m",
+    };
+
+    // Replay = re-execute the run's captured workload snapshot verbatim, as a background portal op
+    // (same pattern as launching a job), so it appears in the bell and streams into the history.
+    private void ReplayRun(Guid runId, Guid projectId)
+    {
+        var jobName = _open?.JobName ?? "job";
+        var tenant = PlaceContext.Infrastructure.Tenancy.CurrentTenant.Current;
+        if (tenant is null) { _message = "No tenant resolved — sign in again."; return; }
+        var newRunId = Guid.NewGuid();
+        OpCenter.Run(tenant, projectId, $"Replay — {jobName}", $"/observability?run={newRunId}",
+            async (sp, ct) =>
+            {
+                var result = await sp.GetRequiredService<IPlaceContextService>().ReplayRunAsync(runId, newRunId, ct);
+                return $"replay finished — {result.Status}";
+            },
+            correlationKey: PlaceContext.Application.Features.RunStatusWatchService.JobRunKey(newRunId));
+        _message = $"Replay of {jobName} started in the background — follow it in the notifications bell.";
+        CloseRun();
     }
 
     private static string StatusColor(string status) => status switch

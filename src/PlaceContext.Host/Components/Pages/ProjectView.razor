@@ -15,25 +15,25 @@
 }
 else
 {
-    <div style="padding:20px 24px 40px; max-width:1320px; margin:0 auto">
-        <button class="dcbtn" style="border:none; background:none; color:var(--text-3); padding:4px 0; margin-bottom:14px" @onclick="@(() => Nav.NavigateTo("/"))">← All projects</button>
+    <div class="page">
+        <button class="dcbtn back-btn" @onclick="@(() => Nav.NavigateTo("/"))">← All projects</button>
 
-        <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:16px; margin-bottom:20px">
+        <div class="header-row">
             <div>
-                <div style="display:flex; align-items:center; gap:10px">
-                    <span style="width:11px; height:11px; border-radius:3px; background:@Viz.LangColor(_overview.Path)"></span>
-                    <h1 style="font-size:21px; font-weight:600; margin:0; letter-spacing:-.4px">@_overview.Name</h1>
-                    <span style="font-size:11px; font-weight:600; color:@Viz.BandColor(_overview.Risk.ProcessBand); background:@Viz.BandBg(_overview.Risk.ProcessBand); padding:3px 9px; border-radius:20px">@_overview.Status</span>
+                <div class="title-row">
+                    <span class="lang-dot" style="background:@Viz.LangColor(_overview.Path)"></span>
+                    <h1 class="project-title">@_overview.Name</h1>
+                    <span class="status-pill" style="color:@Viz.BandColor(_overview.Risk.ProcessBand); background:@Viz.BandBg(_overview.Risk.ProcessBand)">@_overview.Status</span>
                 </div>
-                <div style="font-family:var(--font-sans); font-size:12px; color:var(--text-3); margin-top:7px">@_overview.Path</div>
+                <div class="project-path">@_overview.Path</div>
             </div>
             <button class="dcbtn" @onclick="Rebuild" disabled="@_busy">@(_busy ? "running…" : "rebuild tree")</button>
         </div>
 
-        @if (_message is not null) { <div style="color:var(--text-3); font-size:12px; margin-bottom:10px">@_message</div> }
+        @if (_message is not null) { <div class="message">@_message</div> }
 
 
-        <div class="dctabs" style="margin-bottom:16px">
+        <div class="dctabs tabs">
             @foreach (var (key, label) in new[] { ("overview", "Overview"), ("knowledge", "Knowledge"), ("activity", "Activity") })
             {
                 <button class="dctab @(_tab == key ? "active" : "")" @onclick="@(() => { _tab = key; StateHasChanged(); })">@label</button>
@@ -43,22 +43,22 @@ else
         @if (_tab == "overview")
         {
         <!-- graph (full width) -->
-        <div class="dccard" style="overflow:hidden">
-                <div style="display:flex; align-items:center; justify-content:space-between; padding:13px 15px; border-bottom:1px solid var(--border)">
-                    <div style="display:flex; align-items:center; gap:8px">
-                        <span style="font-size:13px; font-weight:600">Dependency graph</span>
-                        <span style="font-family:var(--font-sans); font-size:11px; color:var(--text-3)">@(_graph?.NodeCount ?? 0) nodes · @(_graph?.LinkCount ?? 0) links</span>
+        <div class="dccard graph-card">
+                <div class="card-head">
+                    <div class="head-title-group">
+                        <span class="card-title">Dependency graph</span>
+                        <span class="meta-mono">@(_graph?.NodeCount ?? 0) nodes · @(_graph?.LinkCount ?? 0) links</span>
                     </div>
-                    <div style="display:flex; align-items:center; gap:12px; font-size:10.5px; color:var(--text-3)">
-                        <span style="display:flex; align-items:center; gap:5px"><span style="width:8px; height:8px; border-radius:50%; background:var(--brand)"></span>god-node</span>
-                        <span style="display:flex; align-items:center; gap:5px"><span style="width:14px; height:0; border-top:1.5px dashed var(--warn)"></span>ambiguous</span>
+                    <div class="graph-legend">
+                        <span class="legend-item"><span class="legend-dot"></span>god-node</span>
+                        <span class="legend-item"><span class="legend-dash"></span>ambiguous</span>
                     </div>
                 </div>
-                <div style="padding:8px; background:var(--bg)">
+                <div class="graph-body">
                     @if (_graph is null || _graph.NodeCount == 0)
                     {
-                        <div style="height:320px; display:flex; align-items:center; justify-content:center; color:var(--text-3); font-size:12.5px; text-align:center">
-                            No tree yet — click <code style="margin:0 5px">rebuild tree</code> to build it from logged activity.
+                        <div class="graph-empty">
+                            No tree yet — click <code class="inline-code">rebuild tree</code> to build it from logged activity.
                         </div>
                     }
                     else
@@ -69,33 +69,33 @@ else
         </div>
 
         <!-- risk + god-nodes -->
-        <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px; align-items:start; margin-top:14px">
-                <div class="dccard" style="padding:15px">
-                    <div style="font-size:13px; font-weight:600; margin-bottom:14px">Risk profile</div>
-                    <div style="display:flex; gap:14px">
+        <div class="two-col">
+                <div class="dccard pad-card">
+                    <div class="risk-title">Risk profile</div>
+                    <div class="risk-rings">
                         @RiskRing("Process risk", Viz.Pct(_overview.Risk.Process))
                         @RiskRing("Technical risk", Viz.Pct(_overview.Risk.Technical))
                     </div>
                 </div>
 
-                <div class="dccard" style="padding:15px">
-                    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px">
-                        <span style="font-size:13px; font-weight:600">God-nodes</span>
-                        <span style="font-size:11px; color:var(--text-3); font-family:var(--font-sans)">top degree</span>
+                <div class="dccard pad-card">
+                    <div class="god-head">
+                        <span class="card-title">God-nodes</span>
+                        <span class="meta-mono">top degree</span>
                     </div>
                     @if (_overview.GodNodes.Count == 0)
                     {
-                        <div style="color:var(--text-3); font-size:12px">None detected.</div>
+                        <div class="muted-note">None detected.</div>
                     }
                     else
                     {
-                        <div style="display:flex; flex-direction:column; gap:9px">
+                        <div class="god-list">
                             @foreach (var g in _overview.GodNodes)
                             {
-                                <div style="display:flex; align-items:center; gap:10px">
-                                    <span style="width:8px; height:8px; border-radius:2px; background:var(--brand); flex:none"></span>
-                                    <span style="font-family:var(--font-sans); font-size:11.5px; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex:1">@g.Label</span>
-                                    <span style="font-family:var(--font-sans); font-size:11px; color:var(--text-3); flex:none">@g.Degree edges</span>
+                                <div class="god-row">
+                                    <span class="god-dot"></span>
+                                    <span class="god-label">@g.Label</span>
+                                    <span class="god-degree">@g.Degree edges</span>
                                 </div>
                             }
                         </div>
@@ -107,46 +107,46 @@ else
         @if (_tab == "knowledge")
         {
         <!-- context -->
-        <div id="context" class="dccard" style="margin-top:14px; overflow:hidden">
-            <div style="display:flex; align-items:center; justify-content:space-between; padding:13px 15px; border-bottom:1px solid var(--border)">
-                <div style="display:flex; align-items:center; gap:8px">
-                    <span style="font-size:13px; font-weight:600">Context</span>
-                    <span style="font-family:var(--font-sans); font-size:11px; color:var(--text-3)">the knowledge agents read before working</span>
+        <div id="context" class="dccard section-card">
+            <div class="card-head">
+                <div class="head-title-group">
+                    <span class="card-title">Context</span>
+                    <span class="meta-mono">the knowledge agents read before working</span>
                 </div>
-                <div style="display:flex; align-items:center; gap:11px">
+                <div class="head-actions">
                     @if (_context?.UpdatedAt is { } ts)
                     {
-                        <span style="font-size:11px; color:var(--text-3); font-family:var(--font-sans)">updated @ts.ToWorkspaceTime().ToString("yyyy-MM-dd HH:mm")</span>
+                        <span class="meta-mono">updated @ts.ToWorkspaceTime().ToString("yyyy-MM-dd HH:mm")</span>
                     }
                     <button class="dcbtn primary" @onclick="SaveContext" disabled="@(_savingContext || !ContextDirty)">@(_savingContext ? "saving…" : "Save context")</button>
                 </div>
             </div>
-            <div style="padding:12px 15px">
+            <div class="card-body">
                 <textarea @bind="_contextDraft" spellcheck="false"
                     placeholder="Project context in Markdown — goals, conventions, gotchas, key decisions agents should know."
-                    style="width:100%; min-height:200px; resize:vertical; box-sizing:border-box; background:var(--bg); border:1px solid var(--border); border-radius:8px; color:var(--text); padding:12px; font-family:var(--font-sans); font-size:12.5px; line-height:1.55"></textarea>
+                    class="editor editor-context"></textarea>
             </div>
         </div>
 
         <!-- project requirements -->
-        <div class="dccard" style="margin-top:14px; overflow:hidden">
-            <div style="display:flex; align-items:center; justify-content:space-between; padding:13px 15px; border-bottom:1px solid var(--border)">
-                <div style="display:flex; align-items:center; gap:8px">
-                    <span style="font-size:13px; font-weight:600">Requirements</span>
-                    <span style="font-family:var(--font-sans); font-size:11px; color:var(--text-3)">project-specific · added on top of the global requirements</span>
+        <div class="dccard section-card">
+            <div class="card-head">
+                <div class="head-title-group">
+                    <span class="card-title">Requirements</span>
+                    <span class="meta-mono">project-specific · added on top of the global requirements</span>
                 </div>
-                <div style="display:flex; align-items:center; gap:11px">
+                <div class="head-actions">
                     @if (_requirements?.UpdatedAt is { } rts)
                     {
-                        <span style="font-size:11px; color:var(--text-3); font-family:var(--font-sans)">updated @rts.ToWorkspaceTime().ToString("yyyy-MM-dd HH:mm")</span>
+                        <span class="meta-mono">updated @rts.ToWorkspaceTime().ToString("yyyy-MM-dd HH:mm")</span>
                     }
                     <button class="dcbtn primary" @onclick="SaveRequirements" disabled="@(_savingReq || !RequirementsDirty)">@(_savingReq ? "saving…" : "Save requirements")</button>
                 </div>
             </div>
-            <div style="padding:12px 15px">
+            <div class="card-body">
                 <textarea @bind="_reqDraft" spellcheck="false"
                     placeholder="Requirements specific to this project (Markdown) — frameworks, patterns, constraints the review &amp; skill prompts should enforce here."
-                    style="width:100%; min-height:160px; resize:vertical; box-sizing:border-box; background:var(--bg); border:1px solid var(--border); border-radius:8px; color:var(--text); padding:12px; font-family:var(--font-sans); font-size:12.5px; line-height:1.55"></textarea>
+                    class="editor editor-req"></textarea>
             </div>
         </div>
         }
@@ -154,25 +154,25 @@ else
         @if (_tab == "activity")
         {
         <!-- decisions -->
-        <div id="decisions" class="dccard" style="margin-top:14px; overflow:hidden">
-            <div style="padding:13px 15px; border-bottom:1px solid var(--border); font-size:13px; font-weight:600">Decisions</div>
+        <div id="decisions" class="dccard section-card">
+            <div class="card-head-title">Decisions</div>
             @if (_decisions is null || _decisions.Count == 0)
             {
-                <div style="padding:14px 15px; color:var(--text-3); font-size:12.5px">No decisions recorded yet — they flow in through the <code>add_decision</code> MCP tool.</div>
+                <div class="empty-note">No decisions recorded yet — they flow in through the <code>add_decision</code> MCP tool.</div>
             }
             else
             {
                 @foreach (var d in _decisions)
                 {
-                    <div id="@($"decision-{d.Id}")" class="dcflashable" style="padding:13px 15px; border-bottom:1px solid var(--border)">
-                        <div style="display:flex; align-items:baseline; gap:10px">
-                            <span style="font-size:13px; font-weight:600; flex:1">@d.Question</span>
-                            <span style="font-size:11px; color:var(--text-3); font-family:var(--font-sans)">@d.DecidedAt.ToWorkspaceTime().ToString("yyyy-MM-dd")</span>
+                    <div id="@($"decision-{d.Id}")" class="dcflashable decision-row">
+                        <div class="decision-head">
+                            <span class="decision-q">@d.Question</span>
+                            <span class="meta-mono">@d.DecidedAt.ToWorkspaceTime().ToString("yyyy-MM-dd")</span>
                         </div>
-                        <div style="font-size:12.5px; color:var(--brand-2); margin-top:4px">→ @d.Choice</div>
+                        <div class="decision-choice">→ @d.Choice</div>
                         @if (!string.IsNullOrWhiteSpace(d.Rationale) && d.Rationale != "(none)")
                         {
-                            <div style="font-size:12px; color:var(--text-2); margin-top:5px; line-height:1.5">@d.Rationale</div>
+                            <div class="decision-rationale">@d.Rationale</div>
                         }
                     </div>
                 }
@@ -183,21 +183,21 @@ else
         @if (_tab == "activity")
         {
         <!-- recent changes -->
-        <div id="changes" class="dccard" style="margin-top:14px; overflow:hidden">
-            <div style="padding:13px 15px; border-bottom:1px solid var(--border); font-size:13px; font-weight:600">Recent changes</div>
+        <div id="changes" class="dccard section-card">
+            <div class="card-head-title">Recent changes</div>
             @if (_timeline is null || _timeline.Changes.Count == 0)
             {
-                <div style="padding:14px 15px; color:var(--text-3); font-size:12.5px">No changes recorded yet — they flow in through the <code>record_activity</code> MCP tool.</div>
+                <div class="empty-note">No changes recorded yet — they flow in through the <code>record_activity</code> MCP tool.</div>
             }
             else
             {
                 @foreach (var c in _timeline.Changes)
                 {
-                    <div style="display:flex; align-items:center; gap:13px; padding:12px 15px; border-bottom:1px solid var(--border)">
-                        <span style="font-family:var(--font-sans); font-size:11px; color:var(--text-3); flex:none; width:30px">#@c.Sequence</span>
-                        <span style="display:inline-flex; align-items:center; padding:2px 7px; border-radius:5px; font-weight:600; font-size:10px; color:@Viz.AuthorColor(c.Kind); background:@Viz.AuthorBg(c.Kind); flex:none">@c.Kind.ToLower()</span>
-                        <span style="font-size:13px; flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis">@c.Title</span>
-                        <span style="font-family:var(--font-sans); font-size:11px; color:var(--text-3); flex:none">@(c.Commit ?? "—")</span>
+                    <div class="change-row">
+                        <span class="change-seq">#@c.Sequence</span>
+                        <span class="change-kind" style="color:@Viz.AuthorColor(c.Kind); background:@Viz.AuthorBg(c.Kind)">@c.Kind.ToLower()</span>
+                        <span class="change-title">@c.Title</span>
+                        <span class="meta-mono">@(c.Commit ?? "—")</span>
                     </div>
                 }
             }

@@ -19,6 +19,12 @@ public sealed class InMemoryJobRepository : IJobRepository
         return Task.CompletedTask;
     }
 
+    public Task RemoveAsync(Guid jobId, CancellationToken ct = default)
+    {
+        _store.RemoveAll(j => j.Id == jobId);
+        return Task.CompletedTask;
+    }
+
     public Task<Job?> GetByIdAsync(Guid jobId, CancellationToken ct = default)
         => Task.FromResult(_store.FirstOrDefault(j => j.Id == jobId));
 

@@ -19,6 +19,7 @@ public interface IPlaceContextService
     Task<DecisionView> AddDecisionAsync(Guid projectId, string question, string choice, string? rationale, CancellationToken ct = default);
 
     Task<IReadOnlyList<ProjectSummaryView>> GetProjectsAsync(CancellationToken ct = default);
+    Task<ProjectSummaryView?> GetProjectByIdAsync(Guid projectId, CancellationToken ct = default);
     Task<ProjectOverviewView> GetProjectOverviewAsync(Guid projectId, CancellationToken ct = default);
     Task<ActivityTimelineView> GetTimelineAsync(Guid projectId, int take = 50, CancellationToken ct = default);
     Task<RiskDashboardView> GetRiskDashboardAsync(Guid projectId, CancellationToken ct = default);
@@ -48,12 +49,17 @@ public interface IPlaceContextService
     Task<JobView> CreateJobAsync(CreateJobCommand command, CancellationToken ct = default);
     Task<JobView> UpdateJobAsync(UpdateJobCommand command, CancellationToken ct = default);
     Task<JobRunDetailView> RunJobAsync(Guid jobId, string? inputPayload = null, Guid? runId = null, CancellationToken ct = default);
+    Task<JobRunDetailView> ReplayRunAsync(Guid runId, Guid? newRunId = null, CancellationToken ct = default);
     Task<IReadOnlyList<JobView>> ListJobsAsync(Guid projectId, CancellationToken ct = default);
     Task<IReadOnlyList<JobRunView>> ListJobRunsAsync(Guid jobId, CancellationToken ct = default);
     Task<JobRunDetailView?> GetJobRunAsync(Guid runId, CancellationToken ct = default);
     Task<IReadOnlyList<RunArtifactLinkView>> ListRunArtifactsAsync(Guid runId, CancellationToken ct = default);
     Task<IReadOnlyList<RunArtifactLinkView>> ListJobRunArtifactsAsync(Guid jobId, CancellationToken ct = default);
+    Task<bool> DeleteJobAsync(Guid jobId, CancellationToken ct = default);
     Task<IReadOnlyList<Features.ArtifactFileView>> ListRecentArtifactsAsync(int take = 100, CancellationToken ct = default);
+    Task<IReadOnlyList<Features.ArtifactFileView>> ListProjectArtifactsAsync(Guid projectId, int take = 2000, CancellationToken ct = default);
+    Task<bool> DeleteArtifactAsync(Guid artifactId, CancellationToken ct = default);
+    Task<int> DeleteArtifactsAsync(IReadOnlyList<Guid> artifactIds, CancellationToken ct = default);
 
     // Job chains (ordered pipelines: each step's output feeds the next step's input).
     Task<JobChainView> CreateJobChainAsync(Guid projectId, string name, string? description, IReadOnlyList<Guid> stepJobIds, CancellationToken ct = default);
@@ -73,6 +79,8 @@ public interface IPlaceContextService
     Task<Ports.ProjectQueryResult> ExecuteProjectDataAsync(Guid projectId, string sql, CancellationToken ct = default);
     Task<IReadOnlyList<Ports.ProjectTableInfo>> ListProjectDataTablesAsync(Guid projectId, CancellationToken ct = default);
     Task CreateProjectTableAsync(Guid projectId, string tableName, IReadOnlyList<Ports.ProjectColumnSpec> columns, CancellationToken ct = default);
+    Task<int> ImportCsvToProjectTableAsync(Guid projectId, string tableName, IReadOnlyList<Ports.ProjectColumnSpec> columns,
+        IReadOnlyList<IReadOnlyList<string?>> rows, bool createTable, CancellationToken ct = default);
     Task RenameProjectTableAsync(Guid projectId, string from, string to, CancellationToken ct = default);
     Task DropProjectTableAsync(Guid projectId, string tableName, CancellationToken ct = default);
     Task<string> ExportProjectTableCsvAsync(Guid projectId, string tableName, CancellationToken ct = default);
@@ -104,6 +112,7 @@ public interface IPlaceContextService
     Task<TriggerView> SetTriggerEnabledAsync(Guid triggerId, bool enabled, CancellationToken ct = default);
     Task<bool> DeleteTriggerAsync(Guid triggerId, CancellationToken ct = default);
     Task<IReadOnlyList<TriggerView>> ListTriggersAsync(Guid projectId, CancellationToken ct = default);
+    Task<TriggerView?> GetTriggerAsync(Guid triggerId, CancellationToken ct = default);
     Task<EventTypeView> DefineEventTypeAsync(string name, string? description, string? payloadSchema, CancellationToken ct = default);
     Task<EventOccurrenceView> EmitEventAsync(string name, Guid? projectId, string? payload, CancellationToken ct = default);
     Task<IReadOnlyList<EventTypeView>> ListEventTypesAsync(CancellationToken ct = default);
@@ -116,4 +125,18 @@ public interface IPlaceContextService
     Task<RootActivityView> GetRootActivityAsync(int take = 40, CancellationToken ct = default);
     Task<GraphVizView> GetGraphVizAsync(Guid projectId, CancellationToken ct = default);
     Task<IReadOnlyList<ToolCallView>> GetRecentToolCallsAsync(int take = 100, CancellationToken ct = default);
+
+    // Backup/restore (tenant settings + job definitions → a portable manifest).
+    Task<BackupManifest> ExportManifestAsync(CancellationToken ct = default);
+    Task<ImportResultView> ImportManifestAsync(BackupManifest manifest, ImportMode mode = ImportMode.Merge, CancellationToken ct = default);
+
+    // Granular RBAC: a member's permission matrix (role defaults + overrides) and editing an override.
+    Task<UserPermissionsView> GetUserPermissionsAsync(Guid userId, CancellationToken ct = default);
+    Task<UserPermissionsView> SetUserPermissionOverrideAsync(Guid userId, string permission, bool? allowed, CancellationToken ct = default);
+
+    // Cluster page: node inventory + in-process OpenTelemetry read model for the jobs pipeline.
+    Task<Ports.ClusterInfo> GetClusterInfoAsync(CancellationToken ct = default);
+    Task<Ports.JobTelemetrySnapshot> GetJobTelemetrySnapshotAsync(CancellationToken ct = default);
+    Task<IReadOnlyList<Ports.JobRunTelemetry>> ListRecentJobRunTelemetryAsync(int take = 50, CancellationToken ct = default);
+    Task<IReadOnlyList<Ports.JobRunTelemetry>> ListJobRunTelemetryAsync(Guid jobId, int take = 20, CancellationToken ct = default);
 }

@@ -6,30 +6,29 @@
 
 @* The project area: a vertical menu on the left (replacing the old horizontal tab strip),
    second-level strips (like Data's Tables | Analytics | Data map) stay inside the pages. *@
-<div style="display:flex; height:100%; min-height:0">
-    <nav style="width:168px; flex:none; border-right:1px solid var(--border); background:var(--panel); padding:14px 10px; display:flex; flex-direction:column; gap:2px; overflow-y:auto">
-        <div style="font-size:10px; font-weight:600; letter-spacing:.7px; color:var(--text-3); padding:0 10px 8px; text-transform:uppercase">Project</div>
+<div class="shell">
+    <nav class="side">
+        <div class="side-head">Project</div>
         @foreach (var item in Items)
         {
-            <button class="dcnav @(IsActive(item) ? "active" : "")" style="border:none; width:100%"
+            <button class="dcnav nav-btn @(IsActive(item) ? "active" : "")"
                     @onclick="@(() => Nav.NavigateTo(UrlFor(item)))">
                 <span class="bar"></span>@item.Label
             </button>
         }
         @if (_entities.Count > 0)
         {
-            <div style="font-size:10px; font-weight:600; letter-spacing:.7px; color:var(--text-3); padding:14px 10px 6px; text-transform:uppercase">Business</div>
+            <div class="side-head-2">Business</div>
             @foreach (var e in _entities)
             {
-                <button class="dcnav @(Nav.Uri.Contains($"/entity/{Uri.EscapeDataString(e)}", StringComparison.OrdinalIgnoreCase) ? "active" : "")"
-                        style="border:none; width:100%"
+                <button class="dcnav nav-btn @(Nav.Uri.Contains($"/entity/{Uri.EscapeDataString(e)}", StringComparison.OrdinalIgnoreCase) ? "active" : "")"
                         @onclick="@(() => Nav.NavigateTo($"/project/{ProjectId()}/entity/{Uri.EscapeDataString(e)}"))">
                     <span class="bar"></span>@e
                 </button>
             }
         }
     </nav>
-    <div style="flex:1; min-width:0; overflow-y:auto">
+    <div class="body">
         @Body
     </div>
 </div>

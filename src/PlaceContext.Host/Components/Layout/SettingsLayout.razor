@@ -3,18 +3,18 @@
 @inject NavigationManager Nav
 
 @* The settings area mirrors the project area: a vertical menu, tabs inside the pages. *@
-<div style="display:flex; height:100%; min-height:0">
-    <nav style="width:168px; flex:none; border-right:1px solid var(--border); background:var(--panel); padding:14px 10px; display:flex; flex-direction:column; gap:2px">
-        <div style="font-size:10px; font-weight:600; letter-spacing:.7px; color:var(--text-3); padding:0 10px 8px; text-transform:uppercase">Settings</div>
+<div class="shell">
+    <nav class="side">
+        <div class="side-head">Settings</div>
         @foreach (var (label, path) in Items)
         {
-            <button class="dcnav @(Nav.Uri.Contains($"/settings/{path}") ? "active" : "")" style="border:none; width:100%"
+            <button class="dcnav nav-btn @(Nav.Uri.Contains($"/settings/{path}") ? "active" : "")"
                     @onclick="@(() => Nav.NavigateTo($"/settings/{path}"))">
                 <span class="bar"></span>@label
             </button>
         }
     </nav>
-    <div style="flex:1; min-width:0; overflow-y:auto">
+    <div class="body">
         @Body
     </div>
 </div>
@@ -25,5 +25,7 @@
         ("Branding", "branding"),
         ("Locality", "locality"),
         ("GitHub", "github"),
+        ("Backup", "backup"),
+        ("Access", "access"),
     };
 }

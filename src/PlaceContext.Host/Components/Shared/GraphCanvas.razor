@@ -5,23 +5,23 @@
 <div style="@(_fullscreen ? "position:fixed; inset:0; z-index:200; background:var(--bg); padding:14px; display:flex; flex-direction:column" : "position:relative")">
     @if (Searchable || AllowFullscreen)
     {
-        <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px; @(_fullscreen ? "" : "position:absolute; top:8px; left:10px; right:10px; z-index:5")">
+        <div class="chrome-bar" style="@(_fullscreen ? "" : "position:absolute; top:8px; left:10px; right:10px; z-index:5")">
             @if (Searchable)
             {
-                <div style="position:relative; width:280px">
-                    <input class="dcinput" style="width:100%; padding:5px 10px; font-size:12px" placeholder="search nodes…"
+                <div class="search-wrap">
+                    <input class="dcinput search-input" placeholder="search nodes…"
                            value="@_search" @oninput="OnSearchInput" />
                     @if (_matches.Count > 0)
                     {
-                        <div style="position:absolute; top:calc(100% + 4px); left:0; right:0; background:var(--card); border:1px solid var(--border-2); border-radius:8px; box-shadow:var(--shadow); z-index:10; padding:4px; max-height:260px; overflow-y:auto">
+                        <div class="search-drop">
                             @foreach (var m in _matches)
                             {
                                 <div @onclick="@(() => JumpAsync(m.Id))"
-                                     style="padding:6px 9px; border-radius:6px; cursor:pointer; font-size:12px" class="dcdash-row">
-                                    <div style="font-family:var(--font-sans); white-space:nowrap; overflow:hidden; text-overflow:ellipsis">@ShortLabel(m.Label)</div>
+                                     class="dcdash-row search-item">
+                                    <div class="search-item-label">@ShortLabel(m.Label)</div>
                                     @if (!string.IsNullOrWhiteSpace(m.Content))
                                     {
-                                        <div style="font-size:10.5px; color:var(--text-3); white-space:nowrap; overflow:hidden; text-overflow:ellipsis">@m.Content</div>
+                                        <div class="search-item-sub">@m.Content</div>
                                     }
                                 </div>
                             }
@@ -29,86 +29,86 @@
                     }
                 </div>
             }
-            <span style="flex:1"></span>
+            <span class="flex-1"></span>
             @if (AllowFullscreen)
             {
-                <button class="dcbtn" style="padding:4px 11px; font-size:11.5px" @onclick="ToggleFullscreenAsync">
+                <button class="dcbtn btn-fs" @onclick="ToggleFullscreenAsync">
                     @(_fullscreen ? "✕ Exit full screen" : "⛶ Full screen")
                 </button>
             }
         </div>
     }
-    <canvas id="@_id" style="display:block; width:100%; @(_fullscreen ? "flex:1; min-height:0" : $"height:{Height}px")"></canvas>
+    <canvas id="@_id" class="graph-canvas" style="@(_fullscreen ? "flex:1; min-height:0" : $"height:{Height}px")"></canvas>
 
     @* Details for the clicked node: computed from the graph data already on the circuit, no extra
        queries. Clicking a connection re-selects in the canvas too (pcgraph.select). *@
     @if (_selected is { } sel)
     {
-        <div class="dccard" style="position:absolute; top:10px; right:10px; width:280px; max-height:@(Height - 20)px; overflow-y:auto; padding:12px 14px; box-shadow:0 8px 24px rgba(0,0,0,.35)">
-            <div style="display:flex; align-items:start; gap:8px">
-                <div style="flex:1; min-width:0">
-                    <div style="font-size:12.5px; font-weight:600; word-break:break-all">@ShortLabel(sel.Label)</div>
-                    <div style="font-size:10.5px; color:var(--text-3); font-family:var(--font-sans); word-break:break-all; margin-top:2px">@sel.Id</div>
+        <div class="dccard detail-card" style="max-height:@(Height - 20)px">
+            <div class="card-head">
+                <div class="flex-min">
+                    <div class="sel-label">@ShortLabel(sel.Label)</div>
+                    <div class="sel-id">@sel.Id</div>
                 </div>
-                <button class="dcbtn" style="padding:1px 7px; font-size:11px; flex:none" @onclick="ClearAsync">×</button>
+                <button class="dcbtn card-x" @onclick="ClearAsync">×</button>
             </div>
             @if (NodeUrl?.Invoke(sel) is { Length: > 0 } url)
             {
-                <a class="dcbtn" href="@url" style="display:inline-flex; margin-top:8px; padding:4px 11px; font-size:11.5px; text-decoration:none">Open ↗</a>
+                <a class="dcbtn open-link" href="@url">Open ↗</a>
             }
-            <div style="display:flex; gap:6px; margin-top:8px; flex-wrap:wrap">
+            <div class="badge-row">
                 @if (sel.IsGod)
                 {
-                    <span style="font-size:10px; padding:2px 7px; border-radius:4px; background:var(--brand); color:#fff">project hub</span>
+                    <span class="badge-hub">project hub</span>
                 }
-                <span style="font-size:10px; padding:2px 7px; border-radius:4px; background:var(--card-2); color:var(--text-3)">@sel.Degree connection(s)</span>
+                <span class="badge-deg">@sel.Degree connection(s)</span>
             </div>
             @if (!string.IsNullOrWhiteSpace(sel.Content))
             {
                 @* The note behind the node — decision rationale, a change's why, or run-output text. *@
-                <div style="margin-top:10px; padding:9px 11px; background:var(--bg); border:1px solid var(--border); border-radius:7px; font-size:11.5px; color:var(--text-2); line-height:1.55; white-space:pre-wrap; word-break:break-word; max-height:160px; overflow-y:auto">@sel.Content</div>
+                <div class="sel-content">@sel.Content</div>
             }
             @if (_reachableArtifacts.Count > 0)
             {
                 @* Related artifacts — including ones reached by stepping UP the tree from an
                    outer node (record → run → artifact), with the hop distance shown. *@
-                <div style="font-size:10.5px; color:var(--text-3); margin:10px 0 4px; text-transform:uppercase; letter-spacing:.5px">Related artifacts</div>
-                <div style="display:flex; flex-direction:column; gap:4px">
+                <div class="section-cap">Related artifacts</div>
+                <div class="col-4">
                     @foreach (var (node, hops) in _reachableArtifacts)
                     {
                         <a href="@(NodeUrl?.Invoke(node) ?? "#")"
-                           style="display:flex; align-items:center; gap:8px; padding:5px 9px; border:1px solid var(--good); border-radius:7px; background:var(--good-bg); font-size:11.5px; font-family:var(--font-sans); color:var(--good); text-decoration:none">
-                            <span style="flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">@ShortLabel(node.Label)</span>
+                           class="artifact-link">
+                            <span class="ellipsis-flex">@ShortLabel(node.Label)</span>
                             @if (hops > 1)
                             {
-                                <span style="flex:none; font-size:9.5px; color:var(--text-3)">@hops hops</span>
+                                <span class="hops">@hops hops</span>
                             }
-                            <span style="flex:none">↗</span>
+                            <span class="flex-none">↗</span>
                         </a>
                     }
                 </div>
             }
             @if (_selectedNeighbors.Any(x => x.Node.Kind != "good"))
             {
-                <div style="font-size:10.5px; color:var(--text-3); margin:10px 0 4px; text-transform:uppercase; letter-spacing:.5px">Connected to</div>
-                <div style="display:flex; flex-direction:column; gap:3px">
+                <div class="section-cap">Connected to</div>
+                <div class="col-3">
                     @foreach (var (node, ambiguous) in _selectedNeighbors.Where(x => x.Node.Kind != "good"))
                     {
-                        <div style="display:flex; align-items:center; gap:6px">
-                            <button style="border:none; background:none; padding:2px 0; cursor:pointer; text-align:left; font-size:11.5px; font-family:var(--font-sans); color:var(--brand-2); word-break:break-all; flex:1; min-width:0"
+                        <div class="neighbor-row">
+                            <button class="neighbor-btn"
                                     title="@node.Id" @onclick="@(() => SelectAsync(node.Id))">
                                 @ShortLabel(node.Label)@(ambiguous ? " ⇢" : "")
                             </button>
                             @if (NodeUrl?.Invoke(node) is { Length: > 0 } nurl)
                             {
-                                <a href="@nurl" style="flex:none; font-size:11px; color:var(--text-3); text-decoration:none" title="Open">↗</a>
+                                <a href="@nurl" class="neighbor-link" title="Open">↗</a>
                             }
                         </div>
                     }
                 </div>
                 @if (_selectedNeighbors.Any(n => n.Ambiguous))
                 {
-                    <div style="font-size:10px; color:var(--warn); margin-top:6px">⇢ ambiguous link (low confidence)</div>
+                    <div class="ambiguous-note">⇢ ambiguous link (low confidence)</div>
                 }
             }
         </div>

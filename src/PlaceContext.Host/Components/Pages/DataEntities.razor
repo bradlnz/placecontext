@@ -6,13 +6,13 @@
 
 <PageTitle>placecontext — Entities</PageTitle>
 
-<div style="padding:20px 24px 40px; max-width:1320px; margin:0 auto">
+<div class="page">
     <DataTabs ProjectId="ProjectId" Active="entities" />
 
-    <div style="display:flex; align-items:baseline; justify-content:space-between; margin-bottom:14px">
+    <div class="page-head">
         <div>
-            <h2 style="font-size:18px; font-weight:600; margin:0">Entities</h2>
-            <div style="font-size:12px; color:var(--text-3); margin-top:3px">
+            <h2 class="page-title">Entities</h2>
+            <div class="page-sub">
                 Tag ingested tables as business entities and relate them to each other — the entity graph
                 below. Each entity becomes a menu item with its own business view.
             </div>
@@ -23,30 +23,30 @@
     @* ── The entity graph: nodes = entities, edges = declared relations ─────────────────── *@
     @if (_entities.Count > 0)
     {
-        <div class="dccard" style="padding:16px 18px; margin-bottom:16px; display:flex; flex-wrap:wrap; gap:26px; align-items:center">
+        <div class="dccard entity-graph">
             @foreach (var e in _entities)
             {
-                <div style="display:flex; align-items:center; gap:10px">
+                <div class="entity-row">
                     <div @onclick="@(() => OpenEditor(e))"
-                         style="border:1px solid var(--brand-2); border-radius:9px; padding:9px 14px; background:var(--brand-bg); cursor:pointer">
-                        <div style="font-size:12.5px; font-weight:600">@e.Name</div>
-                        <div style="font-size:10px; color:var(--text-3); font-family:var(--font-sans)">@e.TableName</div>
+                         class="entity-node">
+                        <div class="entity-node-name">@e.Name</div>
+                        <div class="entity-node-table">@e.TableName</div>
                         @if (e.Tags.Count > 0)
                         {
-                            <div style="display:flex; flex-wrap:wrap; gap:4px; margin-top:5px">
+                            <div class="entity-tags">
                                 @foreach (var tag in e.Tags)
                                 {
-                                    <span style="font-size:9.5px; background:var(--card-2); color:var(--text-2); border-radius:20px; padding:1px 7px">@tag</span>
+                                    <span class="entity-tag">@tag</span>
                                 }
                             </div>
                         }
                     </div>
                     @foreach (var r in e.Relations)
                     {
-                        <div style="display:flex; align-items:center; gap:6px; font-size:10.5px; color:var(--text-3)">
-                            <span style="font-family:var(--font-sans)">@r.Column</span>
+                        <div class="entity-rel">
+                            <span class="sans">@r.Column</span>
                             <svg width="34" height="12" viewBox="0 0 34 12"><line x1="1" y1="6" x2="26" y2="6" stroke="currentColor" stroke-dasharray="3 2"/><path d="M26 2l7 4-7 4Z" fill="currentColor"/></svg>
-                            <span style="font-family:var(--font-sans); color:var(--human)">@r.TargetEntity.@r.TargetColumn</span>
+                            <span class="rel-target">@r.TargetEntity.@r.TargetColumn</span>
                         </div>
                     }
                 </div>
@@ -55,7 +55,7 @@
     }
     else
     {
-        <div class="dccard" style="padding:24px; text-align:center; color:var(--text-3); font-size:13px">
+        <div class="dccard empty-note">
             No entities yet — tag your first ingested table (e.g. <b>sites</b>) and it appears in the
             project menu as a business view.
         </div>
@@ -66,21 +66,21 @@
 @if (_showEditor)
 {
     <div class="dcslide-scrim" @onclick="@(() => _showEditor = false)"></div>
-    <div class="dcslide" style="width:540px">
+    <div class="dcslide editor-slide">
         <div class="dcslide-head">
-            <div style="flex:1">
-                <div style="font-size:14px; font-weight:600">@(_editId.HasValue ? "Edit entity" : "New entity")</div>
-                <div style="font-size:11.5px; color:var(--text-3); margin-top:3px">A named business view over an ingested table, related to other entities.</div>
+            <div class="flex-1">
+                <div class="slide-title">@(_editId.HasValue ? "Edit entity" : "New entity")</div>
+                <div class="slide-sub">A named business view over an ingested table, related to other entities.</div>
             </div>
             <button class="dcslide-x" @onclick="@(() => _showEditor = false)">×</button>
         </div>
-        <div class="dcslide-body" style="flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:12px">
-            <div style="display:flex; gap:10px">
-                <div class="dcfield" style="flex:1">
-                    <label>Name <span class="req">*</span> <span class="code" style="margin-left:4px">menu label</span></label>
+        <div class="dcslide-body editor-body">
+            <div class="field-row">
+                <div class="dcfield flex-1">
+                    <label>Name <span class="req">*</span> <span class="code code-hint">menu label</span></label>
                     <input class="dcinput" @bind="_edName" placeholder="Sites" />
                 </div>
-                <div class="dcfield" style="flex:1">
+                <div class="dcfield flex-1">
                     <label>Source table / view <span class="req">*</span></label>
                     <select class="dcinput" @bind="_edTable">
                         <option value="">— pick —</option>
@@ -91,48 +91,48 @@
                     </select>
                 </div>
             </div>
-            <div class="dcfield" style="max-width:250px">
-                <label>Label column <span class="code" style="margin-left:4px">names a record</span></label>
-                <input class="dcinput" style="font-family:var(--font-sans)" @bind="_edLabel" placeholder="name" />
+            <div class="dcfield field-narrow">
+                <label>Label column <span class="code code-hint">names a record</span></label>
+                <input class="dcinput sans" @bind="_edLabel" placeholder="name" />
             </div>
             <div class="dcfield">
-                <label>Tags <span class="code" style="margin-left:4px">extra keys a run's output maps this entity to</span></label>
-                <div style="display:flex; flex-wrap:wrap; gap:6px; align-items:center; padding:6px 8px; background:var(--card-2); border:1px solid var(--border); border-radius:7px; min-height:38px">
+                <label>Tags <span class="code code-hint">extra keys a run's output maps this entity to</span></label>
+                <div class="tag-input-box">
                     @foreach (var tag in _edTags)
                     {
                         var t = tag;
-                        <span style="display:inline-flex; align-items:center; gap:6px; background:var(--brand-bg); color:var(--brand-2); border:1px solid var(--brand-2); border-radius:20px; padding:2px 6px 2px 10px; font-size:12px">
+                        <span class="tag-chip">
                             @t
-                            <button class="dcslide-x" style="width:16px; height:16px; font-size:14px; line-height:1; padding:0; color:var(--brand-2)"
+                            <button class="dcslide-x tag-chip-x"
                                     title="Remove tag" @onclick="@(() => _edTags.Remove(t))">×</button>
                         </span>
                     }
-                    <input class="dcinput" style="flex:1; min-width:120px; border:none; background:transparent; padding:2px 4px; font-family:var(--font-sans)"
+                    <input class="dcinput tag-input"
                            placeholder="type a tag, press Enter" @bind="_tagInput" @bind:event="oninput" @onkeydown="TagKey" />
                 </div>
-                <div style="font-size:10.5px; color:var(--text-3); margin-top:4px">Enter or comma adds; a run whose output or documents mention a tag links to this entity.</div>
+                <div class="field-hint">Enter or comma adds; a run whose output or documents mention a tag links to this entity.</div>
             </div>
             <div class="dcfield">
-                <div style="display:flex; align-items:center; justify-content:space-between">
-                    <label>Relations <span class="code" style="margin-left:4px">this column ↔ that entity's column</span></label>
-                    <button class="dcbtn" style="padding:3px 9px; font-size:11px" @onclick="@(() => _edRelations.Add(new RelEdit()))">+ relation</button>
+                <div class="flex-between">
+                    <label>Relations <span class="code code-hint">this column ↔ that entity's column</span></label>
+                    <button class="dcbtn rel-add-btn" @onclick="@(() => _edRelations.Add(new RelEdit()))">+ relation</button>
                 </div>
-                <div style="display:flex; flex-direction:column; gap:6px; margin-top:6px">
+                <div class="rel-list">
                     @for (var i = 0; i < _edRelations.Count; i++)
                     {
                         var idx = i;
-                        <div style="display:flex; gap:6px; align-items:center">
-                            <input class="dcinput" style="flex:1; font-size:12px; font-family:var(--font-sans)" placeholder="column" @bind="_edRelations[idx].Column" />
-                            <span style="color:var(--text-3)">↔</span>
-                            <select class="dcinput" style="flex:1; font-size:12px" @bind="_edRelations[idx].TargetEntity">
+                        <div class="rel-edit-row">
+                            <input class="dcinput rel-input-mono" placeholder="column" @bind="_edRelations[idx].Column" />
+                            <span class="rel-sep">↔</span>
+                            <select class="dcinput rel-select" @bind="_edRelations[idx].TargetEntity">
                                 <option value="">— entity —</option>
                                 @foreach (var e in _entities.Where(x => x.Id != _editId))
                                 {
                                     <option value="@e.Name">@e.Name</option>
                                 }
                             </select>
-                            <input class="dcinput" style="flex:1; font-size:12px; font-family:var(--font-sans)" placeholder="their column (default: same)" @bind="_edRelations[idx].TargetColumn" />
-                            <button class="dcbtn" style="padding:3px 8px" @onclick="@(() => _edRelations.RemoveAt(idx))">×</button>
+                            <input class="dcinput rel-input-mono" placeholder="their column (default: same)" @bind="_edRelations[idx].TargetColumn" />
+                            <button class="dcbtn rel-del-btn" @onclick="@(() => _edRelations.RemoveAt(idx))">×</button>
                         </div>
                     }
                 </div>
@@ -141,11 +141,11 @@
         <div class="dcslide-foot">
             @if (_error is not null)
             {
-                <div style="flex:1; color:var(--bad); font-size:12px">@_error</div>
+                <div class="foot-error">@_error</div>
             }
             @if (_editId.HasValue)
             {
-                <button class="dcbtn" style="color:var(--bad)" @onclick="DeleteAsync">Delete</button>
+                <button class="dcbtn btn-danger" @onclick="DeleteAsync">Delete</button>
             }
             <button class="dcbtn" @onclick="@(() => _showEditor = false)">Cancel</button>
             <button class="dcbtn primary" disabled="@_busy" @onclick="SaveAsync">@(_busy ? "Saving…" : "Save entity")</button>

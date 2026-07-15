@@ -30,12 +30,19 @@ public static class DependencyInjection
         // Multi-tenancy: ambient current-tenant (AsyncLocal singleton) + the tenant registry.
         services.AddSingleton<ICurrentTenant, CurrentTenant>();
         services.AddScoped<ITenantStore, EfTenantStore>();
+        services.AddScoped<ITenantSettingsPort, EfTenantSettingsPort>();
 
         // Portal authentication (tenant-scoped users) + persisted OAuth clients.
         services.AddScoped<IAuthService, Auth.AuthService>();
         services.AddScoped<IMembershipService, Auth.MembershipService>();
         services.AddScoped<IOAuthClientStore, Persistence.EfOAuthClientStore>();
         services.AddScoped<IOAuthRefreshTokenStore, Persistence.EfOAuthRefreshTokenStore>();
+
+        // Granular RBAC: ambient current-user (mirrors ICurrentTenant) + role-default/override
+        // permission resolution + the tenant-scoped override store.
+        services.AddSingleton<ICurrentUser, CurrentUser>();
+        services.AddScoped<Domain.Repositories.IUserPermissionGrantRepository, Persistence.EfUserPermissionGrantRepository>();
+        services.AddScoped<IPermissionService, Auth.PermissionService>();
 
         // EF Core code-first store. The DbContext is the request-scoped unit of work.
         var connectionString = configuration.GetSection("PlaceContext")["ConnectionString"]
@@ -128,6 +135,17 @@ public static class DependencyInjection
 
         // Each project's own database (Postgres schema + role isolation; Monaco SQL in the portal).
         services.AddScoped<IProjectDataStore, ProjectData.NpgsqlProjectDataStore>();
+
+        // Cluster page: node inventory (same in-cluster/local detection as the workload runner above)
+        // + the in-process OpenTelemetry reader for the jobs pipeline (no external collector needed).
+        if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("KUBERNETES_SERVICE_HOST")))
+            services.AddSingleton<Application.Ports.IClusterInfoProvider, Cluster.KubernetesClusterInfoProvider>();
+        else
+            services.AddSingleton<Application.Ports.IClusterInfoProvider, Cluster.LocalClusterInfoProvider>();
+
+        services.AddSingleton<Observability.JobTelemetryCollector>();
+        services.AddSingleton<Application.Ports.IJobTelemetryReader>(sp => sp.GetRequiredService<Observability.JobTelemetryCollector>());
+        services.AddHostedService<Observability.JobTelemetryCollectorStartup>();
 
         return services;
     }

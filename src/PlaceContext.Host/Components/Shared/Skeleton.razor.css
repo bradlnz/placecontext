@@ -1,0 +1,16 @@
+.skel-block { height:96px; border-radius:8px; }
+.skel-chart-title { width:40%; }
+.skel-chart-bars { display:flex; align-items:flex-end; gap:10px; height:180px; padding-top:10px; }
+.skel-bar { flex:1; border-radius:6px 6px 0 0; }
+.skel-table { overflow:hidden; }
+.skel-table-head { padding:12px 16px; background:var(--card-2); }
+.skel-table-row { padding:12px 16px; }
+.skel-cell { flex:1; }
+.skel-detail { display:flex; flex-direction:column; gap:14px; }
+.skel-detail-title { width:52%; }
+.skel-detail-sub { width:34%; }
+.skel-divider { height:1px; margin:2px 0; }
+.skel-avatar { width:34px; height:34px; flex:none; }
+.skel-list-lines { flex:1; display:flex; flex-direction:column; gap:7px; }
+.skel-list-meta { width:64px; flex:none; }
+.skel-text { display:flex; flex-direction:column; gap:9px; }

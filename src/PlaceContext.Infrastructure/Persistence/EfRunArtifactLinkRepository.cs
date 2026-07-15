@@ -42,9 +42,27 @@ public sealed class EfRunArtifactLinkRepository : IRunArtifactLinkRepository
     {
         var rows = await _db.RunArtifacts.AsNoTracking()
             .OrderByDescending(r => r.CreatedAt)
-            .Take(Math.Clamp(take, 1, 500))
+            .Take(Math.Clamp(take, 1, 5000))
             .ToListAsync(ct);
         return rows.Select(ToDomain).ToList();
+    }
+
+    public async Task<IReadOnlyList<RunArtifactLink>> ListForProjectAsync(Guid projectId, int take, CancellationToken ct = default)
+    {
+        var rows = await _db.RunArtifacts.AsNoTracking()
+            .Where(r => r.ProjectId == projectId)
+            .OrderByDescending(r => r.CreatedAt)
+            .Take(Math.Clamp(take, 1, 20000))
+            .ToListAsync(ct);
+        return rows.Select(ToDomain).ToList();
+    }
+
+    public async Task RemoveAsync(Guid id, CancellationToken ct = default)
+    {
+        // Query (not FindAsync) so the tenant global filter applies — a caller can only delete
+        // an artifact that belongs to its own workspace.
+        var row = await _db.RunArtifacts.FirstOrDefaultAsync(r => r.Id == id, ct);
+        if (row is not null) _db.RunArtifacts.Remove(row);
     }
 
     private static RunArtifactLinkRow ToRow(RunArtifactLink l) => new()

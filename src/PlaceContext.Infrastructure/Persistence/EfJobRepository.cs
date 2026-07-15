@@ -51,6 +51,12 @@ public sealed class EfJobRepository : IJobRepository
         existing.UpdatedAt = updated.UpdatedAt;
     }
 
+    public async Task RemoveAsync(Guid jobId, CancellationToken ct = default)
+    {
+        var existing = await _db.Jobs.FindAsync(new object[] { jobId }, ct);
+        if (existing is not null) _db.Jobs.Remove(existing);
+    }
+
     public async Task<Job?> GetByIdAsync(Guid jobId, CancellationToken ct = default)
     {
         var row = await _db.Jobs.AsNoTracking().FirstOrDefaultAsync(j => j.Id == jobId, ct);

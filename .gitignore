@@ -32,3 +32,10 @@ deploy/terraform/*.tfstate.*
 deploy/terraform/*.tfvars
 deploy/terraform/*.tfplan
 !deploy/terraform/*.tfvars.example
+deploy/terraform-app/.terraform/
+deploy/terraform-app/.terraform.lock.hcl
+deploy/terraform-app/*.tfstate
+deploy/terraform-app/*.tfstate.*
+deploy/terraform-app/*.tfvars
+deploy/terraform-app/*.tfplan
+!deploy/terraform-app/*.tfvars.example

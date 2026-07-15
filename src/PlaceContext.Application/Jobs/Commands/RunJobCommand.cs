@@ -18,5 +18,16 @@ namespace PlaceContext.Application.Features;
 /// Optional pre-allocated id for the run, letting the caller correlate its own tracking (a
 /// notification entry, a chain step) with the run row before the handler returns. Null = generated.
 /// </param>
-public sealed record RunJobCommand(Guid JobId, string? InputPayload = null, Guid? RunId = null)
+/// <param name="ReplayOfRunId">
+/// Optional id of a prior run to replay. When supplied, the new run executes that run's captured
+/// <see cref="PlaceContext.Domain.ValueObjects.WorkloadSnapshot"/> verbatim — the exact source, input
+/// payloads, env, concurrency, and network policy it ran with — rather than the job's current spec,
+/// so the run reproduces faithfully regardless of later job edits. <paramref name="InputPayload"/> is
+/// ignored when replaying. The job's exit-code policy and timeout (not captured in the snapshot) are
+/// taken from the current job.
+/// </param>
+public sealed record RunJobCommand(Guid JobId, string? InputPayload = null, Guid? RunId = null, Guid? ReplayOfRunId = null)
     : ICommand<JobRunDetailView>;
+
+/// <summary>Replay a prior run: re-execute the exact workload snapshot it captured. Returns the new run.</summary>
+public sealed record ReplayRunCommand(Guid RunId, Guid? NewRunId = null) : ICommand<JobRunDetailView>;

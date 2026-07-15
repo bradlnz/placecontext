@@ -1,0 +1,783 @@
+/* ── Page layout ─────────────────────────────────────────────── */
+.jobs-page {
+    padding: 20px 24px 40px;
+    max-width: 1320px;
+    margin: 0 auto;
+}
+
+.page-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 18px;
+}
+
+.page-title {
+    font-size: 18px;
+    font-weight: 600;
+    margin: 0;
+}
+
+.status-message {
+    margin-bottom: 12px;
+    padding: 10px 14px;
+    border-radius: 8px;
+    background: var(--card);
+    font-size: 12.5px;
+    color: var(--text-2);
+}
+
+.empty-state {
+    padding: 24px;
+    color: var(--text-3);
+    font-size: 13px;
+    text-align: center;
+}
+
+/* ── Jobs list ───────────────────────────────────────────────── */
+.jobs-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.job-card {
+    padding: 14px 16px;
+    cursor: pointer;
+}
+
+.job-card-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+}
+
+.job-name {
+    font-size: 14px;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.job-desc {
+    font-size: 12px;
+    color: var(--text-3);
+    margin-top: 3px;
+}
+
+.job-meta {
+    display: flex;
+    gap: 10px;
+    margin-top: 6px;
+    font-size: 11px;
+    color: var(--text-3);
+    font-family: var(--font-sans);
+}
+
+.job-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: none;
+}
+
+.brand-2-text {
+    color: var(--brand-2);
+}
+
+/* ── Slide-out shell ─────────────────────────────────────────── */
+.slide-620 {
+    width: 620px;
+}
+
+.mr-10 {
+    margin-right: 10px;
+}
+
+.job-tabs {
+    margin: 0;
+    padding: 0 18px;
+    border-bottom: 1px solid var(--border);
+}
+
+.slide-body-scroll {
+    flex: 1;
+    overflow-y: auto;
+}
+
+.slide-body-col {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.slide-body-form {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+/* ── OTel panel ──────────────────────────────────────────────── */
+.otel-card {
+    padding: 12px 16px;
+    margin-bottom: 12px;
+}
+
+.otel-title {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-3);
+    letter-spacing: .06em;
+    margin-bottom: 8px;
+}
+
+.otel-bars {
+    display: flex;
+    align-items: flex-end;
+    gap: 4px;
+    height: 44px;
+}
+
+.otel-bar {
+    flex: 1;
+    max-width: 14px;
+    border-radius: 2px 2px 0 0;
+}
+
+.otel-legend {
+    display: flex;
+    gap: 14px;
+    margin-top: 8px;
+    font-size: 11px;
+    color: var(--text-3);
+}
+
+/* ── Runs list & detail ──────────────────────────────────────── */
+.empty-note {
+    color: var(--text-3);
+    font-size: 13px;
+    padding: 14px 0;
+}
+
+.col-gap-8 {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.col-gap-6 {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.card-pad {
+    padding: 12px 16px;
+}
+
+.run-row-head {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    cursor: pointer;
+}
+
+.status-badge-sm {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: 5px;
+}
+
+.status-badge-lg {
+    font-size: 12px;
+    font-weight: 600;
+    padding: 3px 9px;
+    border-radius: 5px;
+}
+
+.shard-badge {
+    font-size: 11px;
+    padding: 2px 7px;
+    border-radius: 4px;
+}
+
+.run-time {
+    font-family: var(--font-sans);
+    font-size: 11.5px;
+    color: var(--text-2);
+    flex: 1;
+}
+
+.meta-11 {
+    font-size: 11px;
+    color: var(--text-3);
+}
+
+.meta-mono {
+    font-size: 11px;
+    color: var(--text-3);
+    font-family: var(--font-sans);
+}
+
+.mb-12 {
+    margin-bottom: 12px;
+}
+
+.mb-14 {
+    margin-bottom: 14px;
+}
+
+.run-detail-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 14px;
+}
+
+.snapshot-line {
+    margin-bottom: 12px;
+    font-size: 11px;
+    color: var(--text-3);
+}
+
+.egress-flag {
+    margin-left: 6px;
+    color: var(--warn);
+    font-weight: 600;
+}
+
+.outputs-card {
+    padding: 12px 16px;
+    margin-bottom: 14px;
+}
+
+.outputs-title {
+    font-size: 12.5px;
+    font-weight: 600;
+    margin-bottom: 8px;
+}
+
+.output-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.output-kind {
+    font-size: 10.5px;
+    padding: 1px 7px;
+    border-radius: 4px;
+    background: var(--bg-2);
+    color: var(--text-3);
+}
+
+.output-link {
+    font-size: 12.5px;
+    color: var(--accent);
+    text-decoration: none;
+    flex: 1;
+    min-width: 0;
+}
+
+.hint-10-5 {
+    font-size: 10.5px;
+    color: var(--text-3);
+}
+
+.shard-head {
+    font-size: 12.5px;
+    font-weight: 600;
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.artifact-pre {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px;
+    font-size: 11px;
+    font-family: var(--font-mono);
+    overflow-x: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+    color: var(--text-2);
+    max-height: 240px;
+    overflow-y: auto;
+}
+
+.artifact-pre-lg {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px;
+    font-size: 11px;
+    font-family: var(--font-mono);
+    overflow-x: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+    color: var(--text-2);
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.chart-label {
+    font-size: 11px;
+    color: var(--text-3);
+    margin-top: 8px;
+}
+
+.text-3 {
+    color: var(--text-3);
+}
+
+.text-3-12 {
+    font-size: 12px;
+    color: var(--text-3);
+}
+
+.artifact-links {
+    margin-top: 6px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.artifact-dl {
+    padding: 3px 10px;
+    font-size: 11px;
+    text-decoration: none;
+}
+
+.mt-4 {
+    margin-top: 4px;
+}
+
+.log-summary {
+    font-size: 11px;
+    color: var(--text-3);
+    cursor: pointer;
+}
+
+.log-pre {
+    font-size: 10.5px;
+    font-family: var(--font-mono);
+    color: var(--text-3);
+    white-space: pre-wrap;
+    margin-top: 4px;
+}
+
+.reduce-section {
+    border-top: 1px solid var(--border);
+    padding-top: 12px;
+    margin-top: 4px;
+}
+
+/* ── Triggers tab ────────────────────────────────────────────── */
+.self-start {
+    align-self: flex-start;
+}
+
+.row-center-8 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.title-14 {
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.title-13 {
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.subtitle-11-5 {
+    font-size: 11.5px;
+    color: var(--text-3);
+    margin-top: 3px;
+}
+
+.flex-1 {
+    flex: 1;
+}
+
+.flex-fill-min {
+    flex: 1;
+    min-width: 0;
+}
+
+.min-w-0 {
+    min-width: 0;
+}
+
+.text-bad {
+    color: var(--bad);
+}
+
+.trigger-detail-card {
+    padding: 12px 16px;
+    font-size: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.section-label-mt4 {
+    font-size: 12.5px;
+    font-weight: 600;
+    margin-top: 4px;
+}
+
+.run-row {
+    padding: 10px 14px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    cursor: pointer;
+}
+
+.trigger-row {
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    cursor: pointer;
+}
+
+.trigger-kind {
+    font-size: 11px;
+    color: var(--text-3);
+    font-weight: 400;
+}
+
+.trigger-meta {
+    font-size: 11px;
+    color: var(--text-3);
+    font-family: var(--font-sans);
+    margin-top: 2px;
+}
+
+.ml-8 {
+    margin-left: 8px;
+}
+
+.add-trigger-card {
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.subhead {
+    font-size: 12.5px;
+    font-weight: 600;
+}
+
+.trigger-form-row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: flex-end;
+}
+
+.field-150 {
+    flex: 1;
+    min-width: 150px;
+}
+
+.field-label {
+    font-size: 12px;
+    color: var(--text-3);
+    display: block;
+    margin-bottom: 4px;
+}
+
+.w-full {
+    width: 100%;
+}
+
+.error-12 {
+    color: var(--bad);
+    font-size: 12px;
+}
+
+/* ── Details form ────────────────────────────────────────────── */
+.row-gap-10 {
+    display: flex;
+    gap: 10px;
+}
+
+.workload-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.flex-1-4 {
+    flex: 1.4;
+}
+
+.input-sans-12 {
+    font-family: var(--font-sans);
+    font-size: 12px;
+}
+
+.font-sans {
+    font-family: var(--font-sans);
+}
+
+.open-editor-btn {
+    align-self: flex-start;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+}
+
+.textarea-sans {
+    font-family: var(--font-sans);
+    font-size: 12px;
+    resize: vertical;
+}
+
+.files-note {
+    margin-top: 6px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    font-size: 11.5px;
+    color: var(--text-3);
+}
+
+.file-chip {
+    font-family: var(--font-sans);
+    background: var(--card-2);
+    border-radius: 5px;
+    padding: 1px 7px;
+}
+
+.payload-mode-toggle {
+    margin-left: 8px;
+    display: inline-flex;
+    gap: 4px;
+}
+
+.mode-btn {
+    padding: 1px 8px;
+    font-size: 10.5px;
+}
+
+.ml-5 {
+    margin-left: 5px;
+}
+
+.param-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+}
+
+.param-name-label {
+    width: 150px;
+    flex: none;
+    font-size: 12px;
+    color: var(--text-2);
+}
+
+.row-between {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.btn-2-9 {
+    padding: 2px 9px;
+    font-size: 11px;
+}
+
+.param-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 4px;
+}
+
+.param-edit-row {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.param-name-input {
+    width: 130px;
+    font-size: 12px;
+    font-family: var(--font-sans);
+}
+
+.param-label-input {
+    flex: 1;
+    min-width: 120px;
+    font-size: 12px;
+}
+
+.param-type-select {
+    width: 104px;
+    font-size: 12px;
+}
+
+.param-options-input {
+    flex: 1;
+    min-width: 140px;
+    font-size: 12px;
+    font-family: var(--font-sans);
+}
+
+.param-required-label {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11.5px;
+    color: var(--text-2);
+    cursor: pointer;
+}
+
+.accent-brand {
+    accent-color: var(--brand-2);
+}
+
+.btn-2-8 {
+    padding: 2px 8px;
+}
+
+.vault-box {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 14px;
+}
+
+.vault-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 6px;
+}
+
+.link-btn {
+    appearance: none;
+    border: none;
+    background: none;
+    color: var(--brand-2);
+    padding: 0;
+    font-size: 12px;
+    cursor: pointer;
+    font-family: inherit;
+}
+
+.chip-wrap {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.secret-chip {
+    font-family: var(--font-sans);
+    font-size: 11.5px;
+    background: var(--card-2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 2px 8px;
+}
+
+.mt-6 {
+    margin-top: 6px;
+}
+
+.text-3-11-5 {
+    font-size: 11.5px;
+    color: var(--text-3);
+}
+
+.egress-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12.5px;
+    color: var(--text-2);
+    cursor: pointer;
+    user-select: none;
+}
+
+.checkbox-16 {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--brand-2);
+    cursor: pointer;
+}
+
+.checkbox-15 {
+    width: 15px;
+    height: 15px;
+    accent-color: var(--brand-2);
+    cursor: pointer;
+}
+
+.mw-260 {
+    max-width: 260px;
+}
+
+.mw-280-mt8 {
+    max-width: 280px;
+    margin-top: 8px;
+}
+
+.actions-wrap {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    margin-top: 2px;
+}
+
+.action-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12.5px;
+    cursor: pointer;
+    user-select: none;
+}
+
+.foot-error {
+    flex: 1;
+    color: var(--bad);
+    font-size: 12px;
+    min-width: 0;
+}
+
+/* ── Run-input modal ─────────────────────────────────────────── */
+.modal-440 {
+    width: 440px;
+}
+
+.prompt-error {
+    color: var(--bad);
+    font-size: 12px;
+    padding: 8px 10px;
+    background: var(--bad-bg);
+    border-radius: 6px;
+}

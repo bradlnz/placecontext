@@ -1,0 +1,324 @@
+.shell {
+    display: flex;
+    height: 100vh;
+    width: 100%;
+    overflow: hidden;
+    background: var(--bg);
+}
+
+.sidebar {
+    width: 236px;
+    flex: none;
+    display: flex;
+    flex-direction: column;
+    background: var(--panel);
+    border-right: 1px solid var(--border);
+}
+
+.brand-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 18px 18px 16px;
+}
+
+.brand-logo {
+    width: 28px;
+    height: 28px;
+    flex: none;
+    border-radius: 7px;
+    object-fit: contain;
+    background: var(--card-2);
+}
+
+.brand-mark {
+    width: 28px;
+    height: 28px;
+    flex: none;
+    border-radius: 7px;
+    background: var(--brand);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.brand-text {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.15;
+}
+
+.title-14 {
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: -.2px;
+}
+
+.org-name {
+    font-size: 9.5px;
+    color: var(--text-3);
+    font-family: var(--font-sans);
+    letter-spacing: .06em;
+}
+
+.nav-list {
+    padding: 6px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1;
+    overflow-y: auto;
+}
+
+.nav-label {
+    flex: 1;
+}
+
+.mcp-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--good);
+    animation: dcpulse 1.8s ease-in-out infinite;
+}
+
+.nav-section {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: .7px;
+    color: var(--text-3);
+    padding: 14px 10px 6px;
+    text-transform: uppercase;
+}
+
+.switcher-wrap {
+    padding: 12px 10px 6px;
+    border-top: 1px solid var(--border);
+    position: relative;
+}
+
+.switcher-pill {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    border-radius: 6px;
+    background: var(--card);
+    border: 1px solid var(--border-2);
+    cursor: pointer;
+}
+
+.switcher-dot {
+    width: 7px;
+    height: 7px;
+    flex: none;
+    border-radius: 50%;
+    background: var(--good);
+    box-shadow: 0 0 8px rgba(67, 214, 117, .6);
+}
+
+.switcher-name {
+    font-family: var(--font-sans);
+    font-size: 11.5px;
+    color: var(--text-2);
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.switcher-caret {
+    color: var(--text-3);
+    font-size: 10px;
+}
+
+.switcher-menu {
+    position: absolute;
+    left: 10px;
+    right: 10px;
+    bottom: calc(100% + 4px);
+    max-height: 260px;
+    overflow-y: auto;
+    background: var(--card);
+    border: 1px solid var(--border-2);
+    border-radius: 8px;
+    box-shadow: var(--shadow);
+    z-index: 60;
+    padding: 4px;
+}
+
+.switcher-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 9px;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+.switcher-item-dot {
+    width: 6px;
+    height: 6px;
+    flex: none;
+    border-radius: 50%;
+}
+
+.switcher-item-name {
+    font-family: var(--font-sans);
+    font-size: 11.5px;
+    color: var(--text-2);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.switcher-empty {
+    padding: 8px 10px;
+    font-size: 11.5px;
+    color: var(--text-3);
+}
+
+.user-bar {
+    padding: 8px 12px 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.user-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+.user-avatar {
+    width: 26px;
+    height: 26px;
+    flex: none;
+    border-radius: 6px;
+    background: var(--card-2);
+    border: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-2);
+    font-family: var(--font-sans);
+}
+
+.user-detail {
+    min-width: 0;
+}
+
+.user-name {
+    font-size: 12px;
+    color: var(--text-2);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.user-role {
+    font-size: 10px;
+    color: var(--text-3);
+}
+
+.not-signed-in {
+    font-size: 12px;
+    color: var(--text-3);
+}
+
+.user-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: none;
+}
+
+.logout-form {
+    margin: 0;
+}
+
+.icon-btn {
+    width: 30px;
+    height: 30px;
+    border-radius: 7px;
+    border: 1px solid var(--border);
+    background: var(--card);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-2);
+}
+
+.main {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.topbar {
+    height: 54px;
+    flex: none;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 24px;
+    border-bottom: 1px solid var(--border);
+    background: var(--panel);
+}
+
+.topbar-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+}
+
+.topbar-sub {
+    font-size: 12px;
+    color: var(--text-3);
+    font-family: var(--font-sans);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.topbar-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: none;
+}
+
+.running-badge {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 6px 11px;
+    background: var(--good-bg);
+    border-radius: 7px;
+    color: var(--good);
+    font-size: 11.5px;
+    font-weight: 500;
+    font-family: var(--font-sans);
+}
+
+.running-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--good);
+    animation: dcpulse 1.6s ease-in-out infinite;
+}
+
+.body-scroll {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+}

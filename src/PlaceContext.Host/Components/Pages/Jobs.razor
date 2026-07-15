@@ -15,44 +15,44 @@
 }
 else
 {
-    <div style="padding:20px 24px 40px; max-width:1320px; margin:0 auto">
+    <div class="jobs-page">
 
 
-        <div style="display:flex; align-items:baseline; justify-content:space-between; margin-bottom:18px">
-            <h2 style="font-size:18px; font-weight:600; margin:0">Jobs</h2>
+        <div class="page-header">
+            <h2 class="page-title">Jobs</h2>
             <button class="dcbtn primary" @onclick="NewJob">+ New job</button>
         </div>
 
         @if (_message is not null)
         {
-            <div style="margin-bottom:12px; padding:10px 14px; border-radius:8px; background:var(--card); font-size:12.5px; color:var(--text-2)">@_message</div>
+            <div class="status-message">@_message</div>
         }
 
         @if (_jobs is null || _jobs.Count == 0)
         {
-            <div class="dccard" style="padding:24px; color:var(--text-3); font-size:13px; text-align:center">
+            <div class="dccard empty-state">
                 No jobs defined for this project yet. Click <strong>+ New job</strong> to create one.
             </div>
         }
         else
         {
-            <div style="display:flex; flex-direction:column; gap:10px">
+            <div class="jobs-list">
                 @foreach (var job in _jobs)
                 {
                     var isSelected = _selectedJobId == job.Id;
-                    <div class="dccard @(isSelected ? "selected" : "")" style="padding:14px 16px; cursor:pointer"
+                    <div class="dccard @(isSelected ? "selected" : "") job-card"
                          @onclick="@(() => OpenJob(job))">
-                        <div style="display:flex; align-items:center; justify-content:space-between; gap:14px">
-                            <div style="min-width:0">
-                                <div style="font-size:14px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis">@job.Name</div>
+                        <div class="job-card-row">
+                            <div class="min-w-0">
+                                <div class="job-name">@job.Name</div>
                                 @if (!string.IsNullOrWhiteSpace(job.Description))
                                 {
-                                    <div style="font-size:12px; color:var(--text-3); margin-top:3px">@job.Description</div>
+                                    <div class="job-desc">@job.Description</div>
                                 }
-                                <div style="display:flex; gap:10px; margin-top:6px; font-size:11px; color:var(--text-3); font-family:var(--font-sans)">
+                                <div class="job-meta">
                                     @if (job.MapSourceKind == "code")
                                     {
-                                        <span style="color:var(--brand-2)">[@job.MapRuntimeId]</span>
+                                        <span class="brand-2-text">[@job.MapRuntimeId]</span>
                                     }
                                     else
                                     {
@@ -62,11 +62,11 @@ else
                                     <span>concurrency @job.ConcurrencyLimit</span>
                                     @if (job.ReduceSourceKind is not null)
                                     {
-                                        <span style="color:var(--brand-2)">+ reduce</span>
+                                        <span class="brand-2-text">+ reduce</span>
                                     }
                                 </div>
                             </div>
-                            <div style="display:flex; align-items:center; gap:8px; flex:none">
+                            <div class="job-actions">
                                 @if (job.MapSourceKind == "code")
                                 {
                                     <button class="dcbtn" @onclick:stopPropagation="true"
@@ -91,17 +91,17 @@ else
 @if (_showEditor)
 {
     <div class="dcslide-scrim" @onclick="CloseEditor"></div>
-    <div class="dcslide" style="width:620px">
+    <div class="dcslide slide-620">
         <div class="dcslide-head">
-            <div style="flex:1; min-width:0">
-                <div style="font-size:14px; font-weight:600">@(_editJobId.HasValue ? _edName : "New job")</div>
-                <div style="font-size:11.5px; color:var(--text-3); margin-top:3px">
+            <div class="flex-fill-min">
+                <div class="title-14">@(_editJobId.HasValue ? _edName : "New job")</div>
+                <div class="subtitle-11-5">
                     A job fans its input payloads out as parallel shards and collects a JSON artifact from each.
                 </div>
             </div>
             @if (_editJobId is { } runnableId)
             {
-                <button class="dcbtn primary" style="margin-right:10px" disabled="@(_runningJobId == runnableId)"
+                <button class="dcbtn primary mr-10" disabled="@(_runningJobId == runnableId)"
                         @onclick="@(() => RunJob(runnableId))">▶ Run</button>
             }
             <button class="dcslide-x" @onclick="CloseEditor">×</button>
@@ -109,7 +109,7 @@ else
 
         @if (_editJobId.HasValue)
         {
-            <div class="dctabs" style="margin:0; padding:0 18px; border-bottom:1px solid var(--border)">
+            <div class="dctabs job-tabs">
                 <button class="dctab @(_editorTab == "details" ? "active" : "")" @onclick="@(() => _editorTab = "details")">Details</button>
                 <button class="dctab @(_editorTab == "runs" ? "active" : "")" @onclick="@(() => SwitchToRunsTab())">Runs<span class="n">@(_runs?.Count ?? 0)</span></button>
                 <button class="dctab @(_editorTab == "triggers" ? "active" : "")" @onclick="@(() => { _editorTab = "triggers"; _selectedTriggerId = null; })">Triggers<span class="n">@JobTriggers().Count()</span></button>
@@ -119,33 +119,60 @@ else
         @if (_editorTab == "runs" && _editJobId.HasValue)
         {
             @* ── Runs tab: execution results, with a run's full detail inline ─────────────────── *@
-            <div class="dcslide-body" style="flex:1; overflow-y:auto">
+            <div class="dcslide-body slide-body-scroll">
                 @if (_runDetail is null)
                 {
+                    @* ── OTel panel: this job's recent run/shard timings, captured in-process (no
+                       external collector) — see IJobTelemetryReader. A quick "is this job healthy and
+                       fast" read before diving into a specific run. ── *@
+                    @if (_jobTelemetry is { Count: > 0 })
+                    {
+                        <div class="dccard otel-card">
+                            <div class="otel-title">RECENT RUN DURATIONS (OTEL)</div>
+                            <div class="otel-bars">
+                                @{ var maxMs = _jobTelemetry.Max(t => t.DurationMs ?? 0); }
+                                @foreach (var t in _jobTelemetry.Reverse().TakeLast(24))
+                                {
+                                    var pct = maxMs > 0 ? Math.Max(6, (t.DurationMs ?? 0) / maxMs * 100) : 6;
+                                    <div title="@(t.Status ?? "running") · @FormatMs(t.DurationMs)"
+                                         class="otel-bar" style="height:@(pct)%; background:@StatusColor(t.Status)"></div>
+                                }
+                            </div>
+                            <div class="otel-legend">
+                                @foreach (var (outcome, count) in _jobTelemetry.SelectMany(t => t.Shards)
+                                    .GroupBy(s => s.Outcome ?? "unknown")
+                                    .Select(g => (Outcome: g.Key, Count: g.Count()))
+                                    .OrderByDescending(g => g.Count))
+                                {
+                                    <span style="color:@StatusColor(outcome)">@count @outcome shard(s)</span>
+                                }
+                            </div>
+                        </div>
+                    }
+
                     @if (_runs is null or { Count: 0 })
                     {
-                        <div style="color:var(--text-3); font-size:13px; padding:14px 0">No runs yet — click ▶ Run to start one.</div>
+                        <div class="empty-note">No runs yet — click ▶ Run to start one.</div>
                     }
                     else
                     {
-                        <div style="display:flex; flex-direction:column; gap:8px">
+                        <div class="col-gap-8">
                             @foreach (var run in _runs)
                             {
-                                <div class="dccard" style="padding:12px 16px">
-                                    <div style="display:flex; align-items:center; gap:12px; cursor:pointer" @onclick="@(() => OpenRunDetail(run.Id))">
-                                        <span style="font-size:11px; font-weight:600; padding:3px 8px; border-radius:5px;
-                                              color:@StatusColor(run.Status); background:@StatusBg(run.Status)">
+                                <div class="dccard card-pad">
+                                    <div class="run-row-head" @onclick="@(() => OpenRunDetail(run.Id))">
+                                        <span class="status-badge-sm" style="color:@StatusColor(run.Status); background:@StatusBg(run.Status)">
                                             @run.Status
                                         </span>
-                                        <span style="font-family:var(--font-sans); font-size:11.5px; color:var(--text-2); flex:1">
+                                        <span class="run-time">
                                             @run.StartedAt.ToWorkspaceTime().ToString("yyyy-MM-dd HH:mm")
                                         </span>
-                                        <span style="font-size:11px; color:var(--text-3)">
+                                        <span class="meta-11">
                                             ✓ @run.SucceededShards  @(run.PartialShards > 0 ? $"~ {run.PartialShards}" : "")  @(run.FailedShards > 0 ? $"✗ {run.FailedShards}" : "")
                                         </span>
                                         @if (run.FinishedAt.HasValue)
                                         {
-                                            <span style="font-size:11px; color:var(--text-3); font-family:var(--font-sans)">
+                                            <span class="meta-mono">
                                                 @FormatDuration(run.StartedAt, run.FinishedAt.Value)
                                             </span>
                                         }
@@ -157,39 +184,38 @@ else
                 }
                 else
                 {
-                    <button class="dcbtn" style="margin-bottom:12px" @onclick="@(() => _runDetail = null)">← All runs</button>
+                    <button class="dcbtn mb-12" @onclick="@(() => _runDetail = null)">← All runs</button>
 
-                    <div style="display:flex; align-items:center; gap:8px; margin-bottom:14px">
-                        <span style="font-size:12px; font-weight:600; padding:3px 9px; border-radius:5px;
-                              color:@StatusColor(_runDetail.Status); background:@StatusBg(_runDetail.Status)">
+                    <div class="run-detail-head">
+                        <span class="status-badge-lg" style="color:@StatusColor(_runDetail.Status); background:@StatusBg(_runDetail.Status)">
                             @_runDetail.Status
                         </span>
-                        <span style="font-size:11px; color:var(--text-3); font-family:var(--font-sans)">@_runDetail.Id</span>
+                        <span class="meta-mono">@_runDetail.Id</span>
                     </div>
 
                     @* Snapshot badge *@
-                    <div style="margin-bottom:12px; font-size:11px; color:var(--text-3)">
+                    <div class="snapshot-line">
                         Ran as: <code>@_runDetail.Snapshot.MapSourceKind</code> · @_runDetail.Snapshot.MapSourceLabel
                         · @_runDetail.Snapshot.ShardCount shard(s) · concurrency @_runDetail.Snapshot.ConcurrencyLimit
                         @if (_runDetail.Snapshot.AllowNetworkEgress)
                         {
-                            <span style="margin-left:6px; color:var(--warn); font-weight:600">[network egress allowed]</span>
+                            <span class="egress-flag">[network egress allowed]</span>
                         }
                     </div>
 
                     @* ── Post-job outputs (reports / charts / CSVs / raw files stored in MinIO) ───────── *@
                     @if (_runArtifacts is { Count: > 0 })
                     {
-                        <div class="dccard" style="padding:12px 16px; margin-bottom:14px">
-                            <div style="font-size:12.5px; font-weight:600; margin-bottom:8px">Post-job outputs</div>
-                            <div style="display:flex; flex-direction:column; gap:6px">
+                        <div class="dccard outputs-card">
+                            <div class="outputs-title">Post-job outputs</div>
+                            <div class="col-gap-6">
                                 @foreach (var art in _runArtifacts)
                                 {
-                                    <div style="display:flex; align-items:center; gap:10px">
-                                        <span style="font-size:10.5px; padding:1px 7px; border-radius:4px; background:var(--bg-2); color:var(--text-3)">@art.Kind</span>
+                                    <div class="output-row">
+                                        <span class="output-kind">@art.Kind</span>
                                         <a href="@($"/runs/{art.RunId}/artifacts/{art.Id}")" target="_blank" rel="noopener"
-                                           style="font-size:12.5px; color:var(--accent); text-decoration:none; flex:1; min-width:0">@art.Title ↗</a>
-                                        <span style="font-size:10.5px; color:var(--text-3)">@FormatBytes(art.SizeBytes)</span>
+                                           class="output-link">@art.Title ↗</a>
+                                        <span class="hint-10-5">@FormatBytes(art.SizeBytes)</span>
                                     </div>
                                 }
                             </div>
@@ -198,43 +224,42 @@ else
 
                     @foreach (var shard in _runDetail.ShardResults)
                     {
-                        <div style="margin-bottom:14px">
-                            <div style="font-size:12.5px; font-weight:600; margin-bottom:6px; display:flex; align-items:center; gap:8px">
+                        <div class="mb-14">
+                            <div class="shard-head">
                                 <span>Shard @shard.Index</span>
-                                <span style="font-size:11px; padding:2px 7px; border-radius:4px;
-                                      color:@StatusColor(shard.Outcome); background:@StatusBg(shard.Outcome)">
+                                <span class="shard-badge" style="color:@StatusColor(shard.Outcome); background:@StatusBg(shard.Outcome)">
                                     @shard.Outcome
                                 </span>
-                                <span style="font-size:11px; color:var(--text-3)">exit @shard.ExitCode</span>
+                                <span class="meta-11">exit @shard.ExitCode</span>
                             </div>
                             @if (shard.Artifact is not null)
                             {
-                                <pre style="background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:10px; font-size:11px; font-family:var(--font-mono); overflow-x:auto; white-space:pre-wrap; word-break:break-all; color:var(--text-2); max-height:240px; overflow-y:auto">@PrettyJson(shard.Artifact)</pre>
+                                <pre class="artifact-pre">@PrettyJson(shard.Artifact)</pre>
                                 @if (ArtifactChart.TrySvg(shard.Artifact, out var shardChart))
                                 {
-                                    <div style="font-size:11px; color:var(--text-3); margin-top:8px">chart <span style="color:var(--text-3)">(from the artifact's JSON)</span></div>
+                                    <div class="chart-label">chart <span class="text-3">(from the artifact's JSON)</span></div>
                                     @((MarkupString)shardChart)
                                 }
                             }
                             else
                             {
-                                <div style="font-size:12px; color:var(--text-3)">_(no artifact)_</div>
+                                <div class="text-3-12">_(no artifact)_</div>
                             }
                             @if (shard.Artifacts.Count > 0)
                             {
-                                <div style="margin-top:6px; display:flex; flex-wrap:wrap; gap:8px">
+                                <div class="artifact-links">
                                     @foreach (var a in shard.Artifacts)
                                     {
-                                        <a class="dcbtn" style="padding:3px 10px; font-size:11px; text-decoration:none"
+                                        <a class="dcbtn artifact-dl"
                                            href="@DataUri(a)" download="@a.Name">⬇ @a.Name</a>
                                     }
                                 </div>
                             }
                             @if (!string.IsNullOrWhiteSpace(shard.Log))
                             {
-                                <details style="margin-top:4px">
-                                    <summary style="font-size:11px; color:var(--text-3); cursor:pointer">Log</summary>
-                                    <pre style="font-size:10.5px; font-family:var(--font-mono); color:var(--text-3); white-space:pre-wrap; margin-top:4px">@shard.Log</pre>
+                                <details class="mt-4">
+                                    <summary class="log-summary">Log</summary>
+                                    <pre class="log-pre">@shard.Log</pre>
                                 </details>
                             }
                         </div>
@@ -242,30 +267,29 @@ else
 
                     @if (_runDetail.ReduceResult is { } reduce)
                     {
-                        <div style="border-top:1px solid var(--border); padding-top:12px; margin-top:4px">
-                            <div style="font-size:12.5px; font-weight:600; margin-bottom:6px; display:flex; align-items:center; gap:8px">
+                        <div class="reduce-section">
+                            <div class="shard-head">
                                 <span>Reduce step</span>
-                                <span style="font-size:11px; padding:2px 7px; border-radius:4px;
-                                      color:@(reduce.Succeeded ? "var(--good)" : "var(--bad)"); background:@(reduce.Succeeded ? "var(--good-bg)" : "var(--bad-bg)")">
+                                <span class="shard-badge" style="color:@(reduce.Succeeded ? "var(--good)" : "var(--bad)"); background:@(reduce.Succeeded ? "var(--good-bg)" : "var(--bad-bg)")">
                                     @(reduce.Succeeded ? "succeeded" : "failed")
                                 </span>
-                                <span style="font-size:11px; color:var(--text-3)">exit @reduce.ExitCode</span>
+                                <span class="meta-11">exit @reduce.ExitCode</span>
                             </div>
                             @if (reduce.Artifact is not null)
                             {
-                                <pre style="background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:10px; font-size:11px; font-family:var(--font-mono); overflow-x:auto; white-space:pre-wrap; word-break:break-all; color:var(--text-2); max-height:300px; overflow-y:auto">@PrettyJson(reduce.Artifact)</pre>
+                                <pre class="artifact-pre-lg">@PrettyJson(reduce.Artifact)</pre>
                                 @if (ArtifactChart.TrySvg(reduce.Artifact, out var reduceChart))
                                 {
-                                    <div style="font-size:11px; color:var(--text-3); margin-top:8px">chart <span style="color:var(--text-3)">(from the artifact's JSON)</span></div>
+                                    <div class="chart-label">chart <span class="text-3">(from the artifact's JSON)</span></div>
                                     @((MarkupString)reduceChart)
                                 }
                             }
                             @if (reduce.Artifacts.Count > 0)
                             {
-                                <div style="margin-top:6px; display:flex; flex-wrap:wrap; gap:8px">
+                                <div class="artifact-links">
                                     @foreach (var a in reduce.Artifacts)
                                     {
-                                        <a class="dcbtn" style="padding:3px 10px; font-size:11px; text-decoration:none"
+                                        <a class="dcbtn artifact-dl"
                                            href="@DataUri(a)" download="@a.Name">⬇ @a.Name</a>
                                     }
                                 </div>
@@ -278,56 +302,54 @@ else
         else if (_editorTab == "triggers" && _editJobId.HasValue)
         {
             @* ── Triggers tab: this job's triggers, a trigger's detail inline, and the add form ── *@
-            <div class="dcslide-body" style="flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:12px">
+            <div class="dcslide-body slide-body-col">
                 @if (SelectedTrigger() is { } sel)
                 {
-                    <button class="dcbtn" style="align-self:flex-start" @onclick="@(() => _selectedTriggerId = null)">← All triggers</button>
+                    <button class="dcbtn self-start" @onclick="@(() => _selectedTriggerId = null)">← All triggers</button>
 
-                    <div style="display:flex; align-items:center; gap:8px">
-                        <span style="font-size:12px; font-weight:600; padding:3px 9px; border-radius:5px;
-                              color:@(sel.Enabled ? "var(--good)" : "var(--text-3)"); background:@(sel.Enabled ? "var(--good-bg)" : "var(--card-2)")">
+                    <div class="row-center-8">
+                        <span class="status-badge-lg" style="color:@(sel.Enabled ? "var(--good)" : "var(--text-3)"); background:@(sel.Enabled ? "var(--good-bg)" : "var(--card-2)")">
                             @(sel.Enabled ? "on" : "paused")
                         </span>
-                        <span style="font-size:14px; font-weight:600">@sel.Name</span>
-                        <span style="flex:1"></span>
+                        <span class="title-14">@sel.Name</span>
+                        <span class="flex-1"></span>
                         <button class="dcbtn" @onclick="@(() => ToggleTrigger(sel))">@(sel.Enabled ? "Pause" : "Enable")</button>
-                        <button class="dcbtn" style="color:var(--bad)" @onclick="@(() => RemoveTrigger(sel.Id))">Delete</button>
+                        <button class="dcbtn text-bad" @onclick="@(() => RemoveTrigger(sel.Id))">Delete</button>
                     </div>
 
-                    <div class="dccard" style="padding:12px 16px; font-size:12px; display:flex; flex-direction:column; gap:6px">
-                        <div><span style="color:var(--text-3)">Kind:</span> @sel.Kind</div>
+                    <div class="dccard trigger-detail-card">
+                        <div><span class="text-3">Kind:</span> @sel.Kind</div>
                         @if (sel.Kind == "Schedule")
                         {
-                            <div><span style="color:var(--text-3)">Cron:</span> <code>@sel.CronExpression</code></div>
-                            <div><span style="color:var(--text-3)">Next run:</span> @(sel.NextRunAt?.ToWorkspaceTime().ToString("yyyy-MM-dd HH:mm") ?? "—")</div>
+                            <div><span class="text-3">Cron:</span> <code>@sel.CronExpression</code></div>
+                            <div><span class="text-3">Next run:</span> @(sel.NextRunAt?.ToWorkspaceTime().ToString("yyyy-MM-dd HH:mm") ?? "—")</div>
                         }
                         else
                         {
-                            <div><span style="color:var(--text-3)">Event:</span> <code>@sel.EventName</code></div>
+                            <div><span class="text-3">Event:</span> <code>@sel.EventName</code></div>
                         }
-                        <div><span style="color:var(--text-3)">Last fired:</span> @(sel.LastFiredAt?.ToWorkspaceTime().ToString("yyyy-MM-dd HH:mm") ?? "never")</div>
-                        <div><span style="color:var(--text-3)">Created:</span> @sel.CreatedAt.ToWorkspaceTime().ToString("yyyy-MM-dd HH:mm")</div>
+                        <div><span class="text-3">Last fired:</span> @(sel.LastFiredAt?.ToWorkspaceTime().ToString("yyyy-MM-dd HH:mm") ?? "never")</div>
+                        <div><span class="text-3">Created:</span> @sel.CreatedAt.ToWorkspaceTime().ToString("yyyy-MM-dd HH:mm")</div>
                     </div>
 
                     @* Execution results: runs of this job (trigger-started runs land here). *@
-                    <div style="font-size:12.5px; font-weight:600; margin-top:4px">Execution results</div>
+                    <div class="section-label-mt4">Execution results</div>
                     @if (_runs is null or { Count: 0 })
                     {
-                        <div style="color:var(--text-3); font-size:12px">This job has no runs yet.</div>
+                        <div class="text-3-12">This job has no runs yet.</div>
                     }
                     else
                     {
-                        <div style="display:flex; flex-direction:column; gap:6px">
+                        <div class="col-gap-6">
                             @foreach (var run in _runs)
                             {
-                                <div class="dccard" style="padding:10px 14px; display:flex; align-items:center; gap:12px; cursor:pointer"
+                                <div class="dccard run-row"
                                      @onclick="@(() => OpenRunDetailFromTrigger(run.Id))">
-                                    <span style="font-size:11px; font-weight:600; padding:3px 8px; border-radius:5px;
-                                          color:@StatusColor(run.Status); background:@StatusBg(run.Status)">@run.Status</span>
-                                    <span style="font-family:var(--font-sans); font-size:11.5px; color:var(--text-2); flex:1">
+                                    <span class="status-badge-sm" style="color:@StatusColor(run.Status); background:@StatusBg(run.Status)">@run.Status</span>
+                                    <span class="run-time">
                                         @run.StartedAt.ToWorkspaceTime().ToString("yyyy-MM-dd HH:mm")
                                     </span>
-                                    <span style="font-size:11px; color:var(--text-3)">✓ @run.SucceededShards @(run.FailedShards > 0 ? $"✗ {run.FailedShards}" : "")</span>
+                                    <span class="meta-11">✓ @run.SucceededShards @(run.FailedShards > 0 ? $"✗ {run.FailedShards}" : "")</span>
                                 </div>
                             }
                         </div>
@@ -337,23 +359,22 @@ else
                 {
                     @foreach (var t in JobTriggers())
                     {
-                        <div class="dccard" style="padding:12px 16px; display:flex; align-items:center; gap:12px; cursor:pointer"
+                        <div class="dccard trigger-row"
                              @onclick="@(() => _selectedTriggerId = t.Id)">
-                            <span style="font-size:11px; font-weight:600; padding:3px 8px; border-radius:5px;
-                                  color:@(t.Enabled ? "var(--good)" : "var(--text-3)"); background:@(t.Enabled ? "var(--good-bg)" : "var(--card-2)")">
+                            <span class="status-badge-sm" style="color:@(t.Enabled ? "var(--good)" : "var(--text-3)"); background:@(t.Enabled ? "var(--good-bg)" : "var(--card-2)")">
                                 @(t.Enabled ? "on" : "paused")
                             </span>
-                            <div style="flex:1; min-width:0">
-                                <div style="font-size:13px; font-weight:600">
-                                    @t.Name <span style="font-size:11px; color:var(--text-3); font-weight:400">· @t.Kind</span>
+                            <div class="flex-fill-min">
+                                <div class="title-13">
+                                    @t.Name <span class="trigger-kind">· @t.Kind</span>
                                 </div>
-                                <div style="font-size:11px; color:var(--text-3); font-family:var(--font-sans); margin-top:2px">
+                                <div class="trigger-meta">
                                     @if (t.Kind == "Schedule")
                                     {
                                         <span>@t.CronExpression</span>
                                         @if (t.NextRunAt.HasValue)
                                         {
-                                            <span style="margin-left:8px">next @t.NextRunAt.Value.ToWorkspaceTime().ToString("yyyy-MM-dd HH:mm")</span>
+                                            <span class="ml-8">next @t.NextRunAt.Value.ToWorkspaceTime().ToString("yyyy-MM-dd HH:mm")</span>
                                         }
                                     }
                                     else
@@ -362,7 +383,7 @@ else
                                     }
                                     @if (t.LastFiredAt.HasValue)
                                     {
-                                        <span style="margin-left:8px">last @t.LastFiredAt.Value.ToWorkspaceTime().ToString("MM-dd HH:mm")</span>
+                                        <span class="ml-8">last @t.LastFiredAt.Value.ToWorkspaceTime().ToString("MM-dd HH:mm")</span>
                                     }
                                 </div>
                             </div>
@@ -372,18 +393,18 @@ else
                     }
                     @if (!JobTriggers().Any())
                     {
-                        <div style="font-size:12px; color:var(--text-3)">No triggers — add one below to run this job automatically.</div>
+                        <div class="text-3-12">No triggers — add one below to run this job automatically.</div>
                     }
 
-                    <div class="dccard" style="padding:14px 16px; display:flex; flex-direction:column; gap:10px">
-                        <div style="font-size:12.5px; font-weight:600">Add trigger</div>
-                        <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:flex-end">
-                            <div style="flex:1; min-width:150px">
-                                <label style="font-size:12px; color:var(--text-3); display:block; margin-bottom:4px">Name</label>
-                                <input class="dcinput" style="width:100%" @bind="_trName" placeholder="nightly" />
+                    <div class="dccard add-trigger-card">
+                        <div class="subhead">Add trigger</div>
+                        <div class="trigger-form-row">
+                            <div class="field-150">
+                                <label class="field-label">Name</label>
+                                <input class="dcinput w-full" @bind="_trName" placeholder="nightly" />
                             </div>
                             <div>
-                                <label style="font-size:12px; color:var(--text-3); display:block; margin-bottom:4px">Kind</label>
+                                <label class="field-label">Kind</label>
                                 <select class="dcinput" @bind="_trKind">
                                     <option value="Schedule">Schedule</option>
                                     <option value="Event">Event</option>
@@ -391,16 +412,16 @@ else
                             </div>
                             @if (_trKind == "Schedule")
                             {
-                                <div style="flex:1; min-width:150px">
-                                    <label style="font-size:12px; color:var(--text-3); display:block; margin-bottom:4px">Cron</label>
-                                    <input class="dcinput" style="width:100%" @bind="_trCron" placeholder="0 0 * * *" />
+                                <div class="field-150">
+                                    <label class="field-label">Cron</label>
+                                    <input class="dcinput w-full" @bind="_trCron" placeholder="0 0 * * *" />
                                 </div>
                             }
                             else
                             {
-                                <div style="flex:1; min-width:150px">
-                                    <label style="font-size:12px; color:var(--text-3); display:block; margin-bottom:4px">Event</label>
-                                    <input class="dcinput" style="width:100%" list="evt-names" @bind="_trEvent" placeholder="deploy.finished" />
+                                <div class="field-150">
+                                    <label class="field-label">Event</label>
+                                    <input class="dcinput w-full" list="evt-names" @bind="_trEvent" placeholder="deploy.finished" />
                                     <datalist id="evt-names">
                                         @foreach (var e in _eventTypes ?? Array.Empty<EventTypeView>())
                                         {
@@ -413,7 +434,7 @@ else
                         </div>
                         @if (_trError is not null)
                         {
-                            <div style="color:var(--bad); font-size:12px">@_trError</div>
+                            <div class="error-12">@_trError</div>
                         }
                     </div>
                 }
@@ -421,21 +442,21 @@ else
         }
         else
         {
-        <div class="dcslide-body" style="flex:1; display:flex; flex-direction:column; gap:14px">
+        <div class="dcslide-body slide-body-form">
 
-            <div style="display:flex; gap:10px">
-                <div class="dcfield" style="flex:1">
+            <div class="row-gap-10">
+                <div class="dcfield flex-1">
                     <label>Name <span class="req">*</span></label>
                     <input class="dcinput" @bind="_edName" placeholder="my-job" />
                 </div>
-                <div class="dcfield" style="flex:1.4">
+                <div class="dcfield flex-1-4">
                     <label>Description</label>
                     <input class="dcinput" @bind="_edDescription" placeholder="What does this job do? (optional)" />
                 </div>
             </div>
 
             <div class="dcform-section">
-                <div style="display:flex; align-items:center; justify-content:space-between; gap:10px">
+                <div class="workload-head">
                     <span class="dcform-title">Workload</span>
                     <div class="dcseg">
                         <button type="button" class="@(_edMapSourceKind == "image" ? "on" : "")"
@@ -449,13 +470,13 @@ else
                 {
                     <div class="dcfield">
                         <label>Image <span class="req">*</span></label>
-                        <input class="dcinput" style="font-family:var(--font-sans); font-size:12px" @bind="_edMapImage" placeholder="myorg/worker:latest" />
+                        <input class="dcinput input-sans-12" @bind="_edMapImage" placeholder="myorg/worker:latest" />
                     </div>
                 }
                 else
                 {
-                    <div style="display:flex; gap:10px">
-                        <div class="dcfield" style="flex:1">
+                    <div class="row-gap-10">
+                        <div class="dcfield flex-1">
                             <label>Runtime <span class="req">*</span></label>
                             <select class="dcinput" @bind="_edMapRuntimeId">
                                 <option value="">— select —</option>
@@ -466,9 +487,9 @@ else
                                 <option value="dotnet">.NET (C#)</option>
                             </select>
                         </div>
-                        <div class="dcfield" style="flex:1">
+                        <div class="dcfield flex-1">
                             <label>Entrypoint</label>
-                            <input class="dcinput" style="font-family:var(--font-sans); font-size:12px" @bind="_edMapEntrypoint"
+                            <input class="dcinput input-sans-12" @bind="_edMapEntrypoint"
                                    placeholder="@DefaultEntrypointFor(_edMapRuntimeId)" />
                         </div>
                     </div>
@@ -478,16 +499,15 @@ else
                         {
                             @* Source lives in the code editor, not this pane — one place to edit,
                                with Monaco, the file tree, and Test runs. *@
-                            <button class="dcbtn" style="align-self:flex-start; display:flex; align-items:center; gap:7px"
+                            <button class="dcbtn open-editor-btn"
                                     @onclick="@(() => Nav.NavigateTo($"/project/{ProjectId}/jobs/{editingJobId}"))">
                                 ⤷ Open code editor
-                                <span style="font-size:10.5px; color:var(--text-3)">@Math.Max(_edMapFiles.Count, 1) file(s)</span>
+                                <span class="hint-10-5">@Math.Max(_edMapFiles.Count, 1) file(s)</span>
                             </button>
                         }
                         else
                         {
-                            <textarea class="dcinput" rows="12"
-                                      style="font-family:var(--font-sans); font-size:12px; resize:vertical"
+                            <textarea class="dcinput textarea-sans" rows="12"
                                       @bind="_edMapSource"
                                       placeholder="@SourcePlaceholderFor(_edMapRuntimeId)">
                             </textarea>
@@ -500,11 +520,11 @@ else
                         </div>
                         @if (_edMapFiles.Count > 1)
                         {
-                            <div style="margin-top:6px; display:flex; flex-wrap:wrap; align-items:center; gap:6px; font-size:11.5px; color:var(--text-3)">
+                            <div class="files-note">
                                 <span>This job has @_edMapFiles.Count files — the editor above changes only the entrypoint; the rest are kept on save:</span>
                                 @foreach (var f in _edMapFiles.Where(f => f.Path != (_edMapEntrypoint == "" ? DefaultEntrypointFor(_edMapRuntimeId) : _edMapEntrypoint)))
                                 {
-                                    <span style="font-family:var(--font-sans); background:var(--card-2); border-radius:5px; padding:1px 7px">@f.Path</span>
+                                    <span class="file-chip">@f.Path</span>
                                 }
                             </div>
                         }
@@ -519,16 +539,16 @@ else
                         Input payloads <span class="req">*</span>
                         @if (DeclaredParams().Count > 0)
                         {
-                            <span style="margin-left:8px; display:inline-flex; gap:4px">
-                                <button type="button" class="dcbtn" style="padding:1px 8px; font-size:10.5px; @(_edPayloadMode == "form" ? "color:var(--brand-2); border-color:var(--brand-2)" : "")"
+                            <span class="payload-mode-toggle">
+                                <button type="button" class="dcbtn mode-btn" style="@(_edPayloadMode == "form" ? "color:var(--brand-2); border-color:var(--brand-2)" : "")"
                                         @onclick="@(() => SwitchPayloadMode("form"))">form</button>
-                                <button type="button" class="dcbtn" style="padding:1px 8px; font-size:10.5px; @(_edPayloadMode == "raw" ? "color:var(--brand-2); border-color:var(--brand-2)" : "")"
+                                <button type="button" class="dcbtn mode-btn" style="@(_edPayloadMode == "raw" ? "color:var(--brand-2); border-color:var(--brand-2)" : "")"
                                         @onclick="@(() => SwitchPayloadMode("raw"))">raw JSON</button>
                             </span>
                         }
                         else
                         {
-                            <span class="code" style="margin-left:5px">one JSON per line — each line becomes a shard</span>
+                            <span class="code ml-5">one JSON per line — each line becomes a shard</span>
                         }
                     </label>
                     @if (_edPayloadMode == "form" && DeclaredParams().Count > 0)
@@ -536,11 +556,11 @@ else
                         @* The declared inputs render as a form; the values compose the payload JSON. *@
                         @foreach (var p in DeclaredParams())
                         {
-                            <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px">
-                                <span style="width:150px; flex:none; font-size:12px; color:var(--text-2)">
+                            <div class="param-row">
+                                <span class="param-name-label">
                                     @(p.Label ?? p.Name)@(p.Required ? " *" : "")
                                 </span>
-                                <div style="flex:1">
+                                <div class="flex-1">
                                     <ParamInput Parameter="p" Value="@PayloadFormValue(p.Name)"
                                                 ValueChanged="@(v => SetPayloadFormValue(p.Name, v))" />
                                 </div>
@@ -550,26 +570,25 @@ else
                     }
                     else
                     {
-                        <textarea class="dcinput" rows="4"
-                                  style="font-family:var(--font-sans); font-size:12px; resize:vertical"
+                        <textarea class="dcinput textarea-sans" rows="4"
                                   @bind="_edInputPayloadsRaw"
                                   placeholder="{&quot;key&quot;: &quot;value1&quot;}&#10;{&quot;key&quot;: &quot;value2&quot;}">
                         </textarea>
                     }
                 </div>
                 <div class="dcfield">
-                    <div style="display:flex; align-items:center; justify-content:space-between">
+                    <div class="row-between">
                         <label>Run-form parameters</label>
-                        <button type="button" class="dcbtn" style="padding:2px 9px; font-size:11px" @onclick="@(() => _edParams.Add(new ParamEdit()))">+ input</button>
+                        <button type="button" class="dcbtn btn-2-9" @onclick="@(() => _edParams.Add(new ParamEdit()))">+ input</button>
                     </div>
-                    <div style="display:flex; flex-direction:column; gap:6px; margin-top:4px">
+                    <div class="param-list">
                         @for (var i = 0; i < _edParams.Count; i++)
                         {
                             var idx = i;
-                            <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap">
-                                <input class="dcinput" style="width:130px; font-size:12px; font-family:var(--font-sans)" placeholder="name" @bind="_edParams[idx].Name" />
-                                <input class="dcinput" style="flex:1; min-width:120px; font-size:12px" placeholder="Label (optional)" @bind="_edParams[idx].Label" />
-                                <select class="dcinput" style="width:104px; font-size:12px" @bind="_edParams[idx].Type">
+                            <div class="param-edit-row">
+                                <input class="dcinput param-name-input" placeholder="name" @bind="_edParams[idx].Name" />
+                                <input class="dcinput param-label-input" placeholder="Label (optional)" @bind="_edParams[idx].Label" />
+                                <select class="dcinput param-type-select" @bind="_edParams[idx].Type">
                                     <option value="text">text</option>
                                     <option value="number">number</option>
                                     <option value="select">select</option>
@@ -577,13 +596,13 @@ else
                                 </select>
                                 @if (_edParams[idx].Type == "select")
                                 {
-                                    <input class="dcinput" style="flex:1; min-width:140px; font-size:12px; font-family:var(--font-sans)"
+                                    <input class="dcinput param-options-input"
                                            placeholder="options, comma-separated" @bind="_edParams[idx].OptionsRaw" />
                                 }
-                                <label style="display:flex; align-items:center; gap:4px; font-size:11.5px; color:var(--text-2); cursor:pointer">
-                                    <input type="checkbox" @bind="_edParams[idx].Required" style="accent-color:var(--brand-2)" /> required
+                                <label class="param-required-label">
+                                    <input type="checkbox" @bind="_edParams[idx].Required" class="accent-brand" /> required
                                 </label>
-                                <button type="button" class="dcbtn" style="padding:2px 8px" @onclick="@(() => _edParams.RemoveAt(idx))">×</button>
+                                <button type="button" class="dcbtn btn-2-8" @onclick="@(() => _edParams.RemoveAt(idx))">×</button>
                             </div>
                         }
                     </div>
@@ -597,9 +616,8 @@ else
             <div class="dcform-section">
                 <span class="dcform-title">Environment</span>
                 <div class="dcfield">
-                    <label>Environment variables <span class="code" style="margin-left:5px">KEY=VALUE, one per line</span></label>
-                    <textarea class="dcinput" rows="3"
-                              style="font-family:var(--font-sans); font-size:12px; resize:vertical"
+                    <label>Environment variables <span class="code ml-5">KEY=VALUE, one per line</span></label>
+                    <textarea class="dcinput textarea-sans" rows="3"
                               @bind="_edMapEnvRaw"
                               placeholder="MY_KEY=my_value">
                     </textarea>
@@ -607,50 +625,50 @@ else
 
                 @* Vault secrets are injected as env vars at run time (decrypted in-process), on top of the
                    plaintext vars above — names only; values are write-only and managed in the Vault. *@
-                <div style="background:var(--card); border:1px solid var(--border); border-radius:8px; padding:10px 14px">
-                    <div style="display:flex; align-items:baseline; justify-content:space-between; gap:10px; margin-bottom:6px">
-                        <span style="font-size:12px; color:var(--text-3)">Injected at run time (from Vault)</span>
-                        <button type="button" style="appearance:none; border:none; background:none; color:var(--brand-2); padding:0; font-size:12px; cursor:pointer; font-family:inherit"
+                <div class="vault-box">
+                    <div class="vault-head">
+                        <span class="text-3-12">Injected at run time (from Vault)</span>
+                        <button type="button" class="link-btn"
                                 @onclick="@(() => Nav.NavigateTo($"/project/{ProjectId}/secrets"))">manage in Vault →</button>
                     </div>
                     @if (_vaultSecrets is { Count: > 0 })
                     {
-                        <div style="display:flex; flex-wrap:wrap; gap:6px">
+                        <div class="chip-wrap">
                             @foreach (var s in _vaultSecrets)
                             {
-                                <span style="font-family:var(--font-sans); font-size:11.5px; background:var(--card-2); border:1px solid var(--border); border-radius:6px; padding:2px 8px">@s.Name</span>
+                                <span class="secret-chip">@s.Name</span>
                             }
                         </div>
-                        <div class="dchint" style="margin-top:6px">
+                        <div class="dchint mt-6">
                             These encrypted secrets are added to every run's environment. A plaintext variable above with the same name overrides the vault value.
                         </div>
                     }
                     else
                     {
-                        <div style="font-size:11.5px; color:var(--text-3)">No vault secrets yet — add API keys or passwords in the Vault and they'll be injected here automatically.</div>
+                        <div class="text-3-11-5">No vault secrets yet — add API keys or passwords in the Vault and they'll be injected here automatically.</div>
                     }
                 </div>
             </div>
 
             <div class="dcform-section">
                 <span class="dcform-title">Execution</span>
-                <div style="display:flex; gap:10px">
-                    <div class="dcfield" style="flex:1">
+                <div class="row-gap-10">
+                    <div class="dcfield flex-1">
                         <label>Concurrency</label>
                         <input class="dcinput" type="number" min="1" max="32" @bind="_edConcurrency" />
                     </div>
-                    <div class="dcfield" style="flex:1">
-                        <label>Success exit codes <span class="code" style="margin-left:5px">comma-separated</span></label>
+                    <div class="dcfield flex-1">
+                        <label>Success exit codes <span class="code ml-5">comma-separated</span></label>
                         <input class="dcinput" @bind="_edSuccessCodesRaw" placeholder="0" />
                     </div>
-                    <div class="dcfield" style="flex:1">
+                    <div class="dcfield flex-1">
                         <label>Partial exit codes</label>
                         <input class="dcinput" @bind="_edPartialCodesRaw" placeholder="" />
                     </div>
                 </div>
-                <label style="display:flex; align-items:center; gap:8px; font-size:12.5px; color:var(--text-2); cursor:pointer; user-select:none">
+                <label class="egress-label">
                     <input type="checkbox" @bind="_edAllowNetworkEgress"
-                           style="width:16px; height:16px; accent-color:var(--brand-2); cursor:pointer" />
+                           class="checkbox-16" />
                     Allow network egress
                     <span class="dchint">(disables the --network none sandbox; only enable for jobs that require outbound access)</span>
                 </label>
@@ -660,7 +678,7 @@ else
                 <span class="dcform-title">Outputs</span>
                 <div class="dcfield">
                     <label>Return type <span class="req">*</span></label>
-                    <select class="dcinput" @bind="_edReturnType" style="max-width:260px">
+                    <select class="dcinput mw-260" @bind="_edReturnType">
                         @foreach (var (rt, label) in ReturnTypeChoices)
                         {
                             <option value="@rt">@label</option>
@@ -674,9 +692,9 @@ else
                         or PlaceContext.Domain.ValueObjects.JobReturnType.Image
                         or PlaceContext.Domain.ValueObjects.JobReturnType.Video)
                     {
-                        <div class="dcfield" style="max-width:280px; margin-top:8px">
-                            <label>Output file name <span class="code" style="margin-left:5px">in /out</span></label>
-                            <input class="dcinput" style="font-family:var(--font-sans)" @bind="_edReturnFileName"
+                        <div class="dcfield mw-280-mt8">
+                            <label>Output file name <span class="code ml-5">in /out</span></label>
+                            <input class="dcinput font-sans" @bind="_edReturnFileName"
                                    placeholder="report.pdf" />
                             <div class="dchint">The named file becomes the run's artifact; blank = first file matching the type.</div>
                         </div>
@@ -684,12 +702,12 @@ else
                 </div>
                 <div class="dcfield">
                     <label>Extra post-job actions</label>
-                    <div style="display:flex; flex-wrap:wrap; gap:14px; margin-top:2px">
+                    <div class="actions-wrap">
                         @foreach (var (kind, label) in PostJobActionChoices)
                         {
-                            <label style="display:flex; align-items:center; gap:6px; font-size:12.5px; cursor:pointer; user-select:none">
+                            <label class="action-label">
                                 <input type="checkbox" checked="@_edPostJobActions.Contains(kind)"
-                                       style="width:15px; height:15px; accent-color:var(--brand-2); cursor:pointer"
+                                       class="checkbox-15"
                                        @onchange="@(e => TogglePostJobAction(kind, (bool)e.Value!))" />
                                 @label
                             </label>
@@ -708,7 +726,7 @@ else
             <div class="dcslide-foot">
                 @if (_editorError is not null)
                 {
-                    <div style="flex:1; color:var(--bad); font-size:12px; min-width:0">@_editorError</div>
+                    <div class="foot-error">@_editorError</div>
                 }
                 <button class="dcbtn" @onclick="CloseEditor">Cancel</button>
                 <button class="dcbtn primary" disabled="@_saving" @onclick="SaveJob">
@@ -723,11 +741,11 @@ else
 @if (_runPromptJob is not null)
 {
     <div class="dcmodal-overlay" @onclick="@(() => _runPromptJob = null)">
-        <div class="dcmodal" style="width:440px" @onclick:stopPropagation="true">
+        <div class="dcmodal modal-440" @onclick:stopPropagation="true">
             <div class="dcmodal-head">
-                <div style="flex:1; min-width:0">
-                    <div style="font-size:14px; font-weight:600">Run @_runPromptJob.Name</div>
-                    <div style="font-size:11.5px; color:var(--text-3); margin-top:3px">
+                <div class="flex-fill-min">
+                    <div class="title-14">Run @_runPromptJob.Name</div>
+                    <div class="subtitle-11-5">
                         This job takes input — the values below become the run's payload.
                     </div>
                 </div>
@@ -743,7 +761,7 @@ else
                             {
                                 <span class="req">*</span>
                             }
-                            <span class="code" style="margin-left:5px">@p.Name</span>
+                            <span class="code ml-5">@p.Name</span>
                         </label>
                         <ParamInput Parameter="p" Value="@GetArg(p.Name)"
                                     ValueChanged="@(v => SetArg(p.Name, v))" />
@@ -751,7 +769,7 @@ else
                 }
                 @if (_runPromptError is not null)
                 {
-                    <div style="color:var(--bad); font-size:12px; padding:8px 10px; background:var(--bad-bg); border-radius:6px">@_runPromptError</div>
+                    <div class="prompt-error">@_runPromptError</div>
                 }
             </div>
             <div class="dcmodal-foot">
@@ -793,6 +811,7 @@ else
     private IReadOnlyList<JobRunView>? _runs;
     private JobRunDetailView? _runDetail;
     private IReadOnlyList<RunArtifactLinkView>? _runArtifacts; // MinIO post-job outputs for the open run
+    private IReadOnlyList<JobRunTelemetry>? _jobTelemetry; // in-process OTel read model — this job's recent run/shard timings
     private Guid? _selectedJobId;
     private Guid? _runningJobId;
     private string? _message;
@@ -972,6 +991,7 @@ else
             _runs = await Svc.ListJobRunsAsync(job.Id);
         }
         catch (Exception ex) { _message = ex.Message; }
+        await LoadJobTelemetryAsync(job.Id);
     }
 
     private async Task SwitchToRunsTab()
@@ -981,7 +1001,15 @@ else
         if (_editJobId is { } jobId)
         {
             try { _runs = await Svc.ListJobRunsAsync(jobId); } catch { /* keep the last list on refresh failure */ }
+            await LoadJobTelemetryAsync(jobId);
         }
+    }
+
+    // Best-effort — the OTel panel is a nicety over the durable run list above it, never a blocker.
+    private async Task LoadJobTelemetryAsync(Guid jobId)
+    {
+        try { _jobTelemetry = await Svc.ListJobRunTelemetryAsync(jobId); }
+        catch { _jobTelemetry = null; }
     }
 
     private TriggerView? SelectedTrigger() =>
@@ -1335,7 +1363,7 @@ else
 
     // ── Utilities ────────────────────────────────────────────────────────────────────────────────
 
-    private static string StatusColor(string status) => status switch
+    private static string StatusColor(string? status) => status switch
     {
         "Succeeded" => "var(--good)",
         "Partial" => "var(--warn)",
@@ -1344,7 +1372,7 @@ else
         _ => "var(--text-3)"
     };
 
-    private static string StatusBg(string status) => status switch
+    private static string StatusBg(string? status) => status switch
     {
         "Succeeded" => "var(--good-bg)",
         "Partial" => "var(--warn-bg)",
@@ -1359,6 +1387,15 @@ else
         if (span.TotalSeconds < 60) return $"{(int)span.TotalSeconds}s";
         return $"{(int)span.TotalMinutes}m {span.Seconds}s";
     }
+
+    // OTel run-duration formatting for the per-job telemetry panel (RECENT RUN DURATIONS).
+    private static string FormatMs(double? ms) => ms switch
+    {
+        null => "—",
+        < 1000 => $"{ms:0}ms",
+        < 60000 => $"{ms / 1000:0.#}s",
+        _ => $"{ms / 60000:0.#}m",
+    };
 
     private static string DataUri(RunArtifactView a)
     {

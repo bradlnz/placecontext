@@ -1,0 +1,72 @@
+.page-wrap { padding:20px 24px 40px; max-width:1320px; margin:0 auto }
+.header-row { display:flex; align-items:baseline; justify-content:space-between; margin-bottom:18px }
+.page-title { font-size:18px; font-weight:600; margin:0 }
+.sub-note { font-size:12px; color:var(--text-3); margin-top:3px }
+.message-banner { margin-bottom:12px; padding:10px 14px; border-radius:8px; background:var(--card); font-size:12.5px; color:var(--text-2) }
+.empty-card { padding:24px; color:var(--text-3); font-size:13px; text-align:center }
+.chain-list { display:flex; flex-direction:column; gap:10px }
+.chain-card { padding:14px 16px; cursor:pointer }
+.chain-row { display:flex; align-items:center; justify-content:space-between; gap:14px }
+.min0 { min-width:0 }
+.chain-name { font-size:14px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+.step-chips { display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin-top:8px; font-size:11.5px; font-family:var(--font-sans) }
+.chip-arrow { color:var(--text-3) }
+.step-chip { padding:2px 8px; border-radius:6px; background:var(--card-2) }
+.chain-actions { display:flex; align-items:center; gap:8px; flex:none }
+.c-bad { color:var(--bad) }
+.slide-640 { width:640px }
+.flex-min { flex:1; min-width:0 }
+.title-14 { font-size:14px; font-weight:600 }
+.sub-115 { font-size:11.5px; color:var(--text-3); margin-top:3px }
+.mr-10 { margin-right:10px }
+.editor-tabs { margin:0; padding:0 18px; border-bottom:1px solid var(--border) }
+.runs-body { flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:12px }
+.no-runs { color:var(--text-3); font-size:13px; padding:14px 0 }
+.run-card { padding:12px 16px; cursor:pointer }
+.run-row { display:flex; align-items:center; gap:12px }
+.status-chip { font-size:11px; font-weight:600; padding:3px 8px; border-radius:5px }
+.run-time { font-family:var(--font-sans); font-size:11.5px; color:var(--text-2); flex:1 }
+.meta-11 { font-size:11px; color:var(--text-3) }
+.dur-meta { font-size:11px; color:var(--text-3); font-family:var(--font-sans) }
+.running-note { font-size:11px; color:var(--brand-2) }
+.btn-start { align-self:flex-start }
+.status-row { display:flex; align-items:center; gap:8px }
+.status-chip-lg { font-size:12px; font-weight:600; padding:3px 9px; border-radius:5px }
+.pipeline { display:flex; flex-wrap:wrap; align-items:center; gap:8px; padding:14px; border-radius:10px; background:var(--card) }
+.pipe-arrow { color:var(--text-3); font-size:15px }
+.stage { display:flex; flex-direction:column; gap:2px; padding:8px 12px; border-radius:8px }
+.stage-title { display:flex; align-items:center; gap:6px; font-size:12.5px; font-weight:600 }
+.stage-sub { font-size:10.5px; color:var(--text-3) }
+.out-label { font-size:12px; font-weight:600; margin-bottom:4px }
+.json-pre { background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:10px; font-size:11px; font-family:var(--font-mono); white-space:pre-wrap; word-break:break-all; color:var(--text-2); max-height:200px; overflow-y:auto }
+.stage-detail { border-top:1px solid var(--border); padding-top:10px }
+.stage-detail-head { font-size:12px; font-weight:600; margin-bottom:6px; display:flex; align-items:center; gap:8px }
+.status-chip-sm { font-size:11px; padding:2px 7px; border-radius:4px }
+.flex-1 { flex:1 }
+.btn-xs { padding:2px 10px; font-size:11px }
+.mb-8 { margin-bottom:8px }
+.shard-head { font-size:11px; color:var(--text-3); margin-bottom:3px }
+.artifact-pre { background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:8px; font-size:10.5px; font-family:var(--font-mono); white-space:pre-wrap; word-break:break-all; color:var(--text-2); max-height:160px; overflow-y:auto }
+.log-details { margin-top:3px }
+.log-summary { font-size:10.5px; color:var(--text-3); cursor:pointer }
+.log-pre { font-size:10px; font-family:var(--font-mono); color:var(--text-3); white-space:pre-wrap; margin-top:3px; max-height:220px; overflow-y:auto }
+.editor-body { flex:1; display:flex; flex-direction:column; gap:14px }
+.field-row { display:flex; gap:10px }
+.flex-14 { flex:1.4 }
+.empty-steps { padding:14px; border-radius:8px; background:var(--card-2); font-size:12px; color:var(--text-3); text-align:center }
+.step-list { display:flex; flex-direction:column; gap:6px }
+.step-item { display:flex; align-items:center; gap:10px; padding:8px 10px; border-radius:8px; background:var(--card-2) }
+.step-num { font-size:11px; color:var(--text-3); font-family:var(--font-sans); flex:none }
+.step-jobname { flex:1; min-width:0; font-size:12.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+.btn-2-8 { padding:2px 8px }
+.btn-2-8-del { padding:2px 8px; color:var(--bad) }
+.add-row { display:flex; gap:8px; margin-top:4px }
+.editor-err { color:var(--bad); font-size:12px; flex:1 }
+.run-modal { width:520px; max-height:80vh; display:flex; flex-direction:column }
+.modal-body-scroll { overflow-y:auto }
+.prompt-step { margin-bottom:14px }
+.prompt-step-head { display:flex; align-items:center; gap:8px; margin-bottom:6px }
+.step-badge { font-family:var(--font-sans); font-size:10.5px; padding:1px 7px; border-radius:5px; background:var(--card-2); color:var(--text-3) }
+.step-jobtitle { font-size:12.5px; font-weight:600 }
+.ml-5 { margin-left:5px }
+.prompt-err { color:var(--bad); font-size:12px; padding:8px 10px; background:var(--bad-bg); border-radius:6px }

@@ -34,6 +34,9 @@ public class JobRunDataRecorderTests
         public Task AppendReadOnlyRowsAsync(Guid projectId, string tableName, IReadOnlyList<ProjectColumnSpec> columns,
             IReadOnlyList<IReadOnlyList<string?>> rows, CancellationToken ct = default)
         { SawProject = projectId; Table = tableName; Columns = columns; Rows = rows; return Task.CompletedTask; }
+        public Task<int> ImportRowsAsync(Guid projectId, string tableName, IReadOnlyList<ProjectColumnSpec> columns,
+            IReadOnlyList<IReadOnlyList<string?>> rows, bool createTable, CancellationToken ct = default)
+            => Task.FromResult(rows.Count);
 
         public Task<ProjectQueryResult> ExecuteAsync(Guid projectId, string sql, CancellationToken ct = default)
             => throw new NotSupportedException();
@@ -119,6 +122,9 @@ public class JobRunDataRecorderTests
     {
         public Task AppendReadOnlyRowsAsync(Guid projectId, string tableName, IReadOnlyList<ProjectColumnSpec> columns,
             IReadOnlyList<IReadOnlyList<string?>> rows, CancellationToken ct = default)
+            => throw new InvalidOperationException("db down");
+        public Task<int> ImportRowsAsync(Guid projectId, string tableName, IReadOnlyList<ProjectColumnSpec> columns,
+            IReadOnlyList<IReadOnlyList<string?>> rows, bool createTable, CancellationToken ct = default)
             => throw new InvalidOperationException("db down");
         public Task<ProjectQueryResult> ExecuteAsync(Guid projectId, string sql, CancellationToken ct = default)
             => throw new NotSupportedException();

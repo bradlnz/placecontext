@@ -100,7 +100,7 @@ apply_manifests() {
   kube -n "$PCTL_NAMESPACE" apply -f "$K3S_DIR/pg-backup.yaml"
 
   say "PlaceContext Host (image: $image)…"
-  sed -e "s|__IMAGE__|${image}|g" \
+  sed -e "s|__IMAGE__|${image}|g" -e "s|__NAMESPACE__|${PCTL_NAMESPACE}|g" \
     "$K3S_DIR/placecontext.yaml" | kube -n "$PCTL_NAMESPACE" apply -f -
 
   apply_platform_keys

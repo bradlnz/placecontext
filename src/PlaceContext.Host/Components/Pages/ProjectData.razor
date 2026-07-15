@@ -5,63 +5,71 @@
 @inject NavigationManager Nav
 @inject IJSRuntime JS
 @using PlaceContext.Application.Ports
+@using Microsoft.AspNetCore.Components.Forms
 
 <PageTitle>PlaceContext — Data</PageTitle>
 
-<div style="padding:20px 24px 40px; max-width:1320px; margin:0 auto">
+<div class="page">
 
     <DataTabs ProjectId="ProjectId" Active="tables" />
 
-    <div style="display:flex; align-items:baseline; justify-content:space-between; margin-bottom:6px">
-        <h2 style="font-size:18px; font-weight:600; margin:0">Data</h2>
-        <span style="font-size:11.5px; color:var(--text-3)">this project's own database — create tables, store data, query it with SQL</span>
+    <div class="head-row">
+        <h2 class="head-title">Data</h2>
+        <span class="head-sub">this project's own database — create tables, store data, query it with SQL</span>
     </div>
     @if (_monacoLite)
     {
-        <div style="font-size:11px; color:var(--warn); margin-bottom:6px">basic editor (Monaco CDN unreachable) — SQL still runs.</div>
+        <div class="monaco-lite-note">basic editor (Monaco CDN unreachable) — SQL still runs.</div>
     }
 
-    <div style="display:flex; gap:14px; margin-top:12px">
+    <div class="cols">
 
         @* ── Tables ─────────────────────────────────────────────────────────────────────── *@
-        <div style="width:250px; flex:none">
-            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px">
-                <span style="font-size:11px; text-transform:uppercase; letter-spacing:.5px; color:var(--text-3)">Tables</span>
-                <button class="dcbtn" style="padding:2px 8px; font-size:11px" @onclick="RefreshTablesAsync" title="Refresh">↻</button>
+        <div class="tables-col">
+            <div class="tables-head">
+                <span class="col-label">Tables</span>
+                <button class="dcbtn btn-refresh" @onclick="RefreshTablesAsync" title="Refresh">↻</button>
             </div>
-            <div style="display:flex; gap:6px; margin-bottom:10px">
-                <button class="dcbtn primary" style="flex:1; font-size:12px" @onclick="StartNewTable">+ Table</button>
-                <button class="dcbtn" style="flex:1; font-size:12px" @onclick="OpenNewView">+ View</button>
+            <div class="new-btns">
+                <button class="dcbtn primary new-btn" @onclick="StartNewTable">+ Table</button>
+                <button class="dcbtn new-btn" @onclick="OpenNewView">+ View</button>
             </div>
+            <InputFile OnChange="OnCsvSelected" accept=".csv,text/csv" id="pccsv-input" style="display:none" />
+            <label for="pccsv-input" class="dcbtn import-csv-label"
+                   title="Create a table from a CSV file">⬆ Import CSV</label>
+            @if (_csvError is not null && _csvImport is null)
+            {
+                <div class="csv-error">@_csvError</div>
+            }
             @if (!_tablesReady)
             {
                 <Skeleton Kind="text" Rows="5" />
             }
             else if (_tables.Count == 0)
             {
-                <div style="font-size:11.5px; color:var(--text-3); line-height:1.5">
+                <div class="empty-tables">
                     No tables yet — click <b>New table</b> or run a <code>CREATE TABLE …</code>.
                 </div>
             }
             @foreach (var t in _tables)
             {
-                <div class="dccard" style="padding:8px 10px; margin-bottom:6px">
-                    <div style="display:flex; justify-content:space-between; align-items:baseline; cursor:pointer"
+                <div class="dccard table-card">
+                    <div class="table-row"
                          @onclick="@(() => SelectTableAsync(t.Name))" title="SELECT the first rows">
-                        <span style="font-size:12px; font-family:var(--font-sans)">@t.Name</span>
-                        <span style="font-size:10.5px; color:var(--text-3)">
+                        <span class="table-name">@t.Name</span>
+                        <span class="table-meta">
                             @if (t.IsView)
                             {
-                                <span title="A saved SELECT over the project's tables — query it like a table." style="border:1px solid var(--brand-2); color:var(--brand-2); border-radius:4px; padding:0 4px; margin-right:5px">view</span>
+                                <span title="A saved SELECT over the project's tables — query it like a table." class="tag-view">view</span>
                             }
                             else if (t.ReadOnly)
                             {
-                                <span title="System table — written by PlaceContext (job run results); query and export only." style="border:1px solid var(--border); border-radius:4px; padding:0 4px; margin-right:5px">read-only</span>
+                                <span title="System table — written by PlaceContext (job run results); query and export only." class="tag-readonly">read-only</span>
                             }
                             @(t.IsView ? "" : $"~{t.RowEstimate}")
                         </span>
                     </div>
-                    <div style="display:flex; gap:10px; margin-top:5px">
+                    <div class="table-actions">
                         @if (!t.ReadOnly && !t.IsView)
                         {
                             <button class="dclink" @onclick="@(() => StartEditAsync(t.Name))">edit</button>
@@ -70,27 +78,27 @@
                         <button class="dclink" @onclick="@(() => ExportAsync(t.Name))">export</button>
                         @if (t.IsView)
                         {
-                            <button class="dclink" style="color:var(--bad)" @onclick="@(() => DropViewAsync(t.Name))">drop</button>
+                            <button class="dclink link-bad" @onclick="@(() => DropViewAsync(t.Name))">drop</button>
                         }
                         else if (!t.ReadOnly)
                         {
-                            <button class="dclink" style="color:var(--bad)" @onclick="@(() => StartDrop(t.Name))">drop</button>
+                            <button class="dclink link-bad" @onclick="@(() => StartDrop(t.Name))">drop</button>
                         }
                     </div>
                     @if (_renaming == t.Name)
                     {
-                        <div style="display:flex; gap:6px; margin-top:6px">
-                            <input @bind="_renameTo" @bind:event="oninput" placeholder="new name" style="flex:1; min-width:0; padding:4px 7px; font-size:11.5px; background:var(--bg); border:1px solid var(--border); border-radius:5px; color:var(--text); font-family:var(--font-sans)" />
-                            <button class="dcbtn" style="padding:3px 8px; font-size:11px" @onclick="ConfirmRename">✓</button>
-                            <button class="dcbtn" style="padding:3px 8px; font-size:11px" @onclick="@(() => _renaming = null)">✕</button>
+                        <div class="rename-row">
+                            <input @bind="_renameTo" @bind:event="oninput" placeholder="new name" class="rename-input" />
+                            <button class="dcbtn btn-sm" @onclick="ConfirmRename">✓</button>
+                            <button class="dcbtn btn-sm" @onclick="@(() => _renaming = null)">✕</button>
                         </div>
                     }
                     @if (_dropping == t.Name)
                     {
-                        <div style="display:flex; align-items:center; gap:8px; margin-top:6px; font-size:11px; color:var(--bad)">
+                        <div class="drop-row">
                             drop @t.Name?
-                            <button class="dcbtn" style="padding:3px 8px; font-size:11px" @onclick="ConfirmDrop">yes</button>
-                            <button class="dcbtn" style="padding:3px 8px; font-size:11px" @onclick="@(() => _dropping = null)">no</button>
+                            <button class="dcbtn btn-sm" @onclick="ConfirmDrop">yes</button>
+                            <button class="dcbtn btn-sm" @onclick="@(() => _dropping = null)">no</button>
                         </div>
                     }
                 </div>
@@ -98,25 +106,25 @@
         </div>
 
         @* ── Query + results ────────────────────────────────────────────────────────────── *@
-        <div style="flex:1; min-width:0">
-            <div id="@EditorId" style="height:220px; border:1px solid var(--border); border-radius:8px; overflow:hidden"></div>
-            <div style="display:flex; align-items:center; gap:10px; margin:10px 0 14px">
+        <div class="flex-min">
+            <div id="@EditorId" class="sql-editor"></div>
+            <div class="run-bar">
                 <button class="dcbtn primary" disabled="@_running" @onclick="RunAsync">@(_running ? "Running…" : "▶ Run (SQL)")</button>
                 @if (_result is { Columns.Count: > 0, Rows.Count: > 0 })
                 {
-                    <a class="dcbtn" style="font-size:12px; text-decoration:none" href="@ResultCsvUri()" download="query-result.csv">⬇ Export CSV</a>
+                    <a class="dcbtn export-link" href="@ResultCsvUri()" download="query-result.csv">⬇ Export CSV</a>
                 }
                 @if (_error is not null)
                 {
-                    <span style="font-size:12px; color:var(--bad)">@_error</span>
+                    <span class="msg-bad">@_error</span>
                 }
                 else if (_result is not null && _result.Columns.Count == 0)
                 {
-                    <span style="font-size:12px; color:var(--good)">OK — @_result.AffectedRows row(s) affected.</span>
+                    <span class="msg-good">OK — @_result.AffectedRows row(s) affected.</span>
                 }
                 else if (_result is not null)
                 {
-                    <span style="font-size:12px; color:var(--text-3)">
+                    <span class="msg-muted">
                         @_result.Rows.Count row(s)@(_result.Truncated ? " (truncated at 500)" : "")@(_result.AffectedRows > 0 ? $" · {_result.AffectedRows} affected" : "")
                     </span>
                 }
@@ -124,13 +132,13 @@
 
             @if (_result is { Columns.Count: > 0 })
             {
-                <div style="overflow:auto; max-height:480px; border:1px solid var(--border); border-radius:8px">
-                    <table style="border-collapse:collapse; width:100%; font-size:12px">
+                <div class="result-scroll">
+                    <table class="result-table">
                         <thead>
                             <tr>
                                 @foreach (var c in _result.Columns)
                                 {
-                                    <th style="position:sticky; top:0; background:var(--card-2); text-align:left; padding:7px 10px; font-weight:600; border-bottom:1px solid var(--border); white-space:nowrap">@c</th>
+                                    <th class="result-th">@c</th>
                                 }
                             </tr>
                         </thead>
@@ -140,7 +148,7 @@
                                 <tr>
                                     @foreach (var cell in row)
                                     {
-                                        <td style="padding:6px 10px; border-bottom:1px solid var(--border); font-family:var(--font-sans); color:@(cell is null ? "var(--text-3)" : "var(--text-2)"); white-space:nowrap; max-width:340px; overflow:hidden; text-overflow:ellipsis">
+                                        <td class="result-td" style="color:@(cell is null ? "var(--text-3)" : "var(--text-2)")">
                                             @(cell ?? "∅")
                                         </td>
                                     }
@@ -158,47 +166,128 @@
 @if (_newTable is not null)
 {
     <div class="dcslide-scrim" @onclick="@(() => _newTable = null)"></div>
-    <div class="dcslide" style="width:560px">
+    <div class="dcslide slide-560">
         <div class="dcslide-head">
-            <span style="font-size:13px; font-weight:600">New table</span>
+            <span class="slide-title-13">New table</span>
             <button class="dcslide-x" @onclick="@(() => _newTable = null)">×</button>
         </div>
-        <div style="padding:16px 18px">
-            <label style="display:block; font-size:11.5px; color:var(--text-3); margin-bottom:4px">Table name</label>
+        <div class="slide-pad">
+            <label class="field-label">Table name</label>
             <input @bind="_newTable.Name" @bind:event="oninput" placeholder="e.g. readings"
-                   style="width:100%; padding:8px 10px; margin-bottom:14px; background:var(--bg); border:1px solid var(--border); border-radius:7px; color:var(--text); font-family:var(--font-sans)" />
+                   class="table-name-input" />
 
-            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px">
-                <span style="font-size:11.5px; color:var(--text-3)">Columns</span>
-                <button class="dcbtn" style="padding:2px 9px; font-size:11px" @onclick="AddColumn">+ column</button>
+            <div class="columns-head">
+                <span class="field-sub">Columns</span>
+                <button class="dcbtn btn-add-col" @onclick="AddColumn">+ column</button>
             </div>
-            <div style="display:grid; grid-template-columns:1fr 130px 52px 52px 24px; gap:6px; align-items:center; font-size:10.5px; color:var(--text-3); margin-bottom:4px">
-                <span>name</span><span>type</span><span style="text-align:center">not null</span><span style="text-align:center">PK</span><span></span>
+            <div class="col-grid-head">
+                <span>name</span><span>type</span><span class="center">not null</span><span class="center">PK</span><span></span>
             </div>
             @for (var i = 0; i < _newTable.Columns.Count; i++)
             {
                 var col = _newTable.Columns[i];
                 var idx = i;
-                <div style="display:grid; grid-template-columns:1fr 130px 52px 52px 24px; gap:6px; align-items:center; margin-bottom:6px">
+                <div class="col-grid-row">
                     <input @bind="col.Name" @bind:event="oninput" placeholder="column"
-                           style="padding:6px 8px; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); font-family:var(--font-sans); font-size:12px" />
-                    <select @bind="col.Type" style="padding:6px 8px; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:12px">
+                           class="col-input" />
+                    <select @bind="col.Type" class="col-select">
                         @foreach (var t in ColumnTypes) { <option value="@t">@t</option> }
                     </select>
-                    <input type="checkbox" @bind="col.NotNull" style="justify-self:center" />
-                    <input type="checkbox" @bind="col.PrimaryKey" style="justify-self:center" />
-                    <button class="dclink" style="color:var(--bad)" @onclick="@(() => _newTable.Columns.RemoveAt(idx))">✕</button>
+                    <input type="checkbox" @bind="col.NotNull" class="center-self" />
+                    <input type="checkbox" @bind="col.PrimaryKey" class="center-self" />
+                    <button class="dclink link-bad" @onclick="@(() => _newTable.Columns.RemoveAt(idx))">✕</button>
                 </div>
             }
 
             @if (_newTableError is not null)
             {
-                <div style="font-size:12px; color:var(--bad); margin-top:8px">@_newTableError</div>
+                <div class="error-mt8">@_newTableError</div>
             }
-            <div style="display:flex; gap:8px; margin-top:16px">
+            <div class="slide-actions">
                 <button class="dcbtn primary" disabled="@_creating" @onclick="CreateTableAsync">@(_creating ? "Creating…" : "Create table")</button>
                 <button class="dcbtn" @onclick="@(() => _newTable = null)">Cancel</button>
             </div>
+        </div>
+    </div>
+}
+
+@* ── CSV import preview ─────────────────────────────────────────────────────────────────── *@
+@if (_csvImport is not null)
+{
+    <div class="dcslide-scrim" @onclick="@(() => _csvImport = null)"></div>
+    <div class="dcslide slide-680">
+        <div class="dcslide-head">
+            <div class="flex-min">
+                <div class="slide-title-14">Import CSV</div>
+                <div class="csv-meta">
+                    @_csvImport.FileName · @_csvImport.DataRowCount row(s) · @_csvImport.Columns.Count column(s)
+                </div>
+            </div>
+            <button class="dcslide-x" @onclick="@(() => _csvImport = null)">×</button>
+        </div>
+        <div class="slide-pad-scroll">
+            <div class="csv-name-row">
+                <div class="flex-1">
+                    <label class="field-label">New table name</label>
+                    <input @bind="_csvImport.TableName" @bind:event="oninput" placeholder="e.g. contacts"
+                           class="csv-name-input" />
+                </div>
+                <label class="header-check-label">
+                    <input type="checkbox" checked="@_csvImport.HasHeader" @onchange="OnHeaderToggled" /> First row is a header
+                </label>
+            </div>
+
+            <div class="field-sub-mb6">Columns &amp; types (inferred — adjust as needed)</div>
+            <div class="csv-grid-head">
+                <span>name</span><span>type</span>
+            </div>
+            @foreach (var col in _csvImport.Columns)
+            {
+                <div class="csv-grid-row">
+                    <input @bind="col.Name" @bind:event="oninput"
+                           class="col-input" />
+                    <select @bind="col.Type" class="col-select">
+                        @foreach (var t in ColumnTypes) { <option value="@t">@t</option> }
+                    </select>
+                </div>
+            }
+
+            <div class="preview-label">Preview</div>
+            <div class="preview-scroll">
+                <table class="preview-table">
+                    <thead>
+                        <tr>
+                            @foreach (var col in _csvImport.Columns)
+                            {
+                                <th class="preview-th">@col.Name</th>
+                            }
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var r in _csvImport.PreviewRows())
+                        {
+                            <tr>
+                                @for (var i = 0; i < _csvImport.Columns.Count; i++)
+                                {
+                                    var cell = i < r.Length ? r[i] : null;
+                                    <td class="preview-td">@(string.IsNullOrEmpty(cell) ? "∅" : cell)</td>
+                                }
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            @if (_csvError is not null)
+            {
+                <div class="error-mt10">@_csvError</div>
+            }
+        </div>
+        <div class="dcslide-foot">
+            <div class="foot-note">
+                Creates a new table. Empty cells import as NULL; blank/leading-zero codes may need type <code>text</code>.
+            </div>
+            <button class="dcbtn" @onclick="@(() => _csvImport = null)">Cancel</button>
+            <button class="dcbtn primary" disabled="@_importing" @onclick="RunImportAsync">@(_importing ? "Importing…" : "Import")</button>
         </div>
     </div>
 }
@@ -207,57 +296,57 @@
 @if (_editTable is not null)
 {
     <div class="dcslide-scrim" @onclick="CloseEdit"></div>
-    <div class="dcslide" style="width:560px">
+    <div class="dcslide slide-560">
         <div class="dcslide-head">
-            <span style="font-size:13px; font-weight:600">Edit table — <span style="font-family:var(--font-sans)">@_editTable</span></span>
+            <span class="slide-title-13">Edit table — <span class="font-sans">@_editTable</span></span>
             <button class="dcslide-x" @onclick="CloseEdit">×</button>
         </div>
-        <div style="padding:16px 18px">
-            <div style="display:grid; grid-template-columns:1fr 170px 52px 34px 60px; gap:6px; align-items:center; font-size:10.5px; color:var(--text-3); margin-bottom:4px">
-                <span>name</span><span>type</span><span style="text-align:center">not null</span><span style="text-align:center">PK</span><span></span>
+        <div class="slide-pad">
+            <div class="edit-grid-head">
+                <span>name</span><span>type</span><span class="center">not null</span><span class="center">PK</span><span></span>
             </div>
             @foreach (var col in _editColumns)
             {
-                <div style="display:grid; grid-template-columns:1fr 170px 52px 34px 60px; gap:6px; align-items:center; margin-bottom:6px; font-size:12px">
-                    <span style="font-family:var(--font-sans); overflow:hidden; text-overflow:ellipsis">@col.Name</span>
-                    <span style="color:var(--text-2)">@col.Type</span>
-                    <span style="text-align:center; color:var(--text-3)">@(col.NotNull ? "✓" : "")</span>
-                    <span style="text-align:center; color:var(--text-3)">@(col.PrimaryKey ? "🔑" : "")</span>
+                <div class="edit-grid-row">
+                    <span class="edit-col-name">@col.Name</span>
+                    <span class="text-2">@col.Type</span>
+                    <span class="center-3">@(col.NotNull ? "✓" : "")</span>
+                    <span class="center-3">@(col.PrimaryKey ? "🔑" : "")</span>
                     @if (col.PrimaryKey)
                     {
                         <span></span>
                     }
                     else if (_confirmDropColumn == col.Name)
                     {
-                        <span style="display:flex; gap:4px; justify-content:end">
-                            <button class="dclink" style="color:var(--bad)" @onclick="@(() => DropColumnAsync(col.Name))">yes</button>
+                        <span class="confirm-drop-col">
+                            <button class="dclink link-bad" @onclick="@(() => DropColumnAsync(col.Name))">yes</button>
                             <button class="dclink" @onclick="@(() => _confirmDropColumn = null)">no</button>
                         </span>
                     }
                     else
                     {
-                        <button class="dclink" style="color:var(--bad); justify-self:end" @onclick="@(() => _confirmDropColumn = col.Name)">✕ remove</button>
+                        <button class="dclink link-bad-end" @onclick="@(() => _confirmDropColumn = col.Name)">✕ remove</button>
                     }
                 </div>
             }
 
-            <div style="border-top:1px solid var(--border); margin:12px 0 10px"></div>
-            <div style="font-size:11.5px; color:var(--text-3); margin-bottom:6px">Add a column</div>
-            <div style="display:grid; grid-template-columns:1fr 170px 52px 94px; gap:6px; align-items:center">
+            <div class="divider"></div>
+            <div class="field-sub-mb6">Add a column</div>
+            <div class="add-col-grid">
                 <input @bind="_addCol.Name" @bind:event="oninput" placeholder="column"
-                       style="padding:6px 8px; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); font-family:var(--font-sans); font-size:12px" />
-                <select @bind="_addCol.Type" style="padding:6px 8px; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:12px">
+                       class="col-input" />
+                <select @bind="_addCol.Type" class="col-select">
                     @foreach (var t in ColumnTypes) { <option value="@t">@t</option> }
                 </select>
-                <input type="checkbox" @bind="_addCol.NotNull" style="justify-self:center" title="NOT NULL — fails if the table already has rows" />
-                <button class="dcbtn primary" style="padding:5px 10px; font-size:12px" disabled="@_alteringColumn" @onclick="AddColumnToTableAsync">
+                <input type="checkbox" @bind="_addCol.NotNull" class="center-self" title="NOT NULL — fails if the table already has rows" />
+                <button class="dcbtn primary btn-add" disabled="@_alteringColumn" @onclick="AddColumnToTableAsync">
                     @(_alteringColumn ? "…" : "+ Add")
                 </button>
             </div>
 
             @if (_editError is not null)
             {
-                <div style="font-size:12px; color:var(--bad); margin-top:10px">@_editError</div>
+                <div class="error-mt10">@_editError</div>
             }
         </div>
     </div>
@@ -272,34 +361,34 @@
 @if (_showNewView)
 {
     <div class="dcslide-scrim" @onclick="CloseNewView"></div>
-    <div class="dcslide" style="width:560px">
+    <div class="dcslide slide-560">
         <div class="dcslide-head">
-            <div style="flex:1; min-width:0">
-                <div style="font-size:14px; font-weight:600">New view</div>
-                <div style="font-size:11.5px; color:var(--text-3); margin-top:3px">
+            <div class="flex-min">
+                <div class="slide-title-14">New view</div>
+                <div class="field-sub-mt3">
                     A saved SELECT over this project's tables — joins welcome. Views are queryable
                     like tables, chartable, and always read-only.
                 </div>
             </div>
             <button class="dcslide-x" @onclick="CloseNewView">×</button>
         </div>
-        <div class="dcslide-body" style="flex:1; display:flex; flex-direction:column; gap:12px">
-            <div class="dcfield" style="max-width:320px">
+        <div class="dcslide-body new-view-body">
+            <div class="dcfield field-320">
                 <label>View name <span class="req">*</span></label>
-                <input class="dcinput" style="font-family:var(--font-sans)" @bind="_newViewName"
+                <input class="dcinput font-sans" @bind="_newViewName"
                        placeholder="sales_by_city" />
             </div>
-            <div class="dcfield" style="flex:1; display:flex; flex-direction:column; min-height:0">
-                <label>Defining query <span class="code" style="margin-left:5px">SELECT-only</span></label>
+            <div class="dcfield view-query-field">
+                <label>Defining query <span class="code select-only-tag">SELECT-only</span></label>
                 @if (_viewMonaco)
                 {
-                    <div id="@ViewEditorId" style="flex:1; min-height:220px; border:1px solid var(--border); border-radius:8px; overflow:hidden"></div>
+                    <div id="@ViewEditorId" class="view-editor"></div>
                 }
                 else
                 {
                     <textarea @bind="_newViewSql" rows="10" spellcheck="false"
                               placeholder="SELECT l.city, avg(l.price) FROM listings l JOIN suburbs s ON s.name = l.city GROUP BY 1"
-                              style="flex:1; padding:8px 10px; font-size:12px; background:var(--bg); border:1px solid var(--border); border-radius:8px; color:var(--text); font-family:var(--font-sans); resize:vertical"></textarea>
+                              class="view-textarea"></textarea>
                 }
                 <div class="dchint">One statement, starting with SELECT — writes and DDL are rejected, and the
                     view runs as this project's isolated database role.</div>
@@ -308,7 +397,7 @@
         <div class="dcslide-foot">
             @if (_viewError is not null)
             {
-                <div style="flex:1; color:var(--bad); font-size:12px; min-width:0">@_viewError</div>
+                <div class="view-error">@_viewError</div>
             }
             <button class="dcbtn" @onclick="CloseNewView">Cancel</button>
             <button class="dcbtn primary" @onclick="SaveViewAsync">Create view</button>
@@ -483,6 +572,174 @@
         }
         catch (Exception ex) { _newTableError = Trim(ex.Message); }
         finally { _creating = false; }
+    }
+
+    // ── CSV import ──────────────────────────────────────────────────────────────────────────────
+    private sealed class CsvImportDraft
+    {
+        public string FileName = "";
+        public string TableName = "";
+        public bool HasHeader = true;
+        public List<ColumnDraft> Columns = new();
+        public List<string[]> Records = new();   // every parsed record, header row included
+
+        public IEnumerable<string[]> DataRecords => HasHeader ? Records.Skip(1) : Records;
+        public int DataRowCount => Math.Max(0, HasHeader ? Records.Count - 1 : Records.Count);
+        public IEnumerable<string[]> PreviewRows() => DataRecords.Take(8);
+    }
+
+    private CsvImportDraft? _csvImport;
+    private string? _csvError;
+    private bool _importing;
+
+    private const long MaxCsvBytes = 15L * 1024 * 1024;   // 15 MB upload cap
+
+    private async Task OnCsvSelected(InputFileChangeEventArgs e)
+    {
+        _csvError = null;
+        _csvImport = null;
+        var file = e.File;
+        if (file is null) return;
+        try
+        {
+            using var reader = new StreamReader(file.OpenReadStream(MaxCsvBytes));
+            var text = await reader.ReadToEndAsync();
+            var records = ParseCsvRecords(text).Where(r => r.Any(f => !string.IsNullOrEmpty(f))).ToList();
+            if (records.Count == 0) { _csvError = "The CSV appears to be empty."; return; }
+
+            var draft = new CsvImportDraft
+            {
+                FileName = file.Name,
+                HasHeader = true,
+                Records = records,
+                TableName = SanitizeIdent(System.IO.Path.GetFileNameWithoutExtension(file.Name), 0),
+            };
+            BuildColumns(draft);
+            _csvImport = draft;
+        }
+        catch (Exception ex) { _csvError = Trim(ex.Message); }
+    }
+
+    // Derive the column list (names + inferred types) from the parsed records, honouring HasHeader.
+    private static void BuildColumns(CsvImportDraft d)
+    {
+        var width = d.Records.Max(r => r.Length);
+        var header = d.Records[0];
+        var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var cols = new List<ColumnDraft>();
+        for (var c = 0; c < width; c++)
+        {
+            var raw = d.HasHeader && c < header.Length ? header[c] : $"col{c + 1}";
+            var name = SanitizeIdent(raw, c);
+            var baseName = name;
+            var n = 2;
+            while (!used.Add(name)) name = $"{baseName}_{n++}";
+            var sample = d.DataRecords.Take(200).Select(r => c < r.Length ? r[c] : null);
+            cols.Add(new ColumnDraft { Name = name, Type = InferType(sample) });
+        }
+        d.Columns = cols;
+    }
+
+    private void OnHeaderToggled(ChangeEventArgs e)
+    {
+        if (_csvImport is null) return;
+        _csvImport.HasHeader = e.Value is bool b ? b : bool.TryParse(e.Value?.ToString(), out var pb) && pb;
+        BuildColumns(_csvImport);
+    }
+
+    private async Task RunImportAsync()
+    {
+        if (_csvImport is null) return;
+        _csvError = null;
+        var d = _csvImport;
+        if (string.IsNullOrWhiteSpace(d.TableName)) { _csvError = "Give the table a name."; return; }
+        if (d.Columns.Any(c => string.IsNullOrWhiteSpace(c.Name))) { _csvError = "Every column needs a name."; return; }
+
+        _importing = true;
+        try
+        {
+            var specs = d.Columns.Select(c => new ProjectColumnSpec(c.Name.Trim(), c.Type, NotNull: false, PrimaryKey: false)).ToList();
+            var count = d.Columns.Count;
+            var rows = d.DataRecords
+                .Select(r => (IReadOnlyList<string?>)Enumerable.Range(0, count)
+                    .Select(i => i < r.Length && !string.IsNullOrEmpty(r[i]) ? r[i] : null).ToList())
+                .ToList();
+            var table = d.TableName.Trim();
+            await Svc.ImportCsvToProjectTableAsync(ProjectId, table, specs, rows, createTable: true);
+            _csvImport = null;
+            await RefreshTablesAsync();
+            await SelectTableAsync(table);
+        }
+        catch (Exception ex) { _csvError = Trim(ex.Message); }
+        finally { _importing = false; }
+    }
+
+    // A minimal RFC-4180-ish parser: honours "quoted" fields, "" escapes, and newlines inside quotes.
+    private static List<string[]> ParseCsvRecords(string text)
+    {
+        var records = new List<string[]>();
+        var field = new System.Text.StringBuilder();
+        var row = new List<string>();
+        var inQuotes = false;
+        for (var i = 0; i < text.Length; i++)
+        {
+            var c = text[i];
+            if (inQuotes)
+            {
+                if (c == '"')
+                {
+                    if (i + 1 < text.Length && text[i + 1] == '"') { field.Append('"'); i++; }
+                    else inQuotes = false;
+                }
+                else field.Append(c);
+            }
+            else
+            {
+                switch (c)
+                {
+                    case '"': inQuotes = true; break;
+                    case ',': row.Add(field.ToString()); field.Clear(); break;
+                    case '\r': break;
+                    case '\n':
+                        row.Add(field.ToString()); field.Clear();
+                        records.Add(row.ToArray()); row = new List<string>();
+                        break;
+                    default: field.Append(c); break;
+                }
+            }
+        }
+        if (field.Length > 0 || row.Count > 0)
+        {
+            row.Add(field.ToString());
+            records.Add(row.ToArray());
+        }
+        return records;
+    }
+
+    // Pick the narrowest Postgres type from the allow-list that fits every sampled non-empty value.
+    private static string InferType(IEnumerable<string?> values)
+    {
+        var ci = System.Globalization.CultureInfo.InvariantCulture;
+        var sample = values.Where(v => !string.IsNullOrWhiteSpace(v)).Select(v => v!.Trim()).ToList();
+        if (sample.Count == 0) return "text";
+        bool All(Func<string, bool> f) => sample.All(f);
+        if (All(v => v is "true" or "false" or "TRUE" or "FALSE" or "True" or "False")) return "boolean";
+        if (All(v => long.TryParse(v, System.Globalization.NumberStyles.Integer, ci, out _))) return "bigint";
+        if (All(v => decimal.TryParse(v, System.Globalization.NumberStyles.Number, ci, out _))) return "numeric";
+        if (All(v => Guid.TryParse(v, out _))) return "uuid";
+        if (All(v => DateTime.TryParse(v, ci, System.Globalization.DateTimeStyles.None, out _))) return "timestamptz";
+        return "text";
+    }
+
+    // Fold an arbitrary CSV header into a safe Postgres identifier (lowercase, underscores, ≤63).
+    private static string SanitizeIdent(string raw, int ordinal)
+    {
+        var lowered = (raw ?? "").Trim().ToLowerInvariant();
+        var chars = lowered.Select(ch => char.IsLetterOrDigit(ch) ? ch : '_').ToArray();
+        var s = System.Text.RegularExpressions.Regex.Replace(new string(chars), "_+", "_").Trim('_');
+        if (string.IsNullOrEmpty(s)) return $"col{ordinal + 1}";
+        if (!char.IsLetter(s[0]) && s[0] != '_') s = "c_" + s;
+        return s.Length > 63 ? s[..63] : s;
     }
 
     // ── Edit table (add / remove columns) ────────────────────────────────────────────────────

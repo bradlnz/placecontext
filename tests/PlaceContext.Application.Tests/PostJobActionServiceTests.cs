@@ -327,6 +327,11 @@ public class PostJobActionServiceTests
         }
         public Task<ObjectDownload?> OpenReadAsync(string bucket, string key, CancellationToken ct = default)
             => Task.FromResult<ObjectDownload?>(null);
+        public Task DeleteAsync(string bucket, string key, CancellationToken ct = default)
+        {
+            Objects.RemoveAll(o => o.Key == key);
+            return Task.CompletedTask;
+        }
     }
 
     private sealed class FakeLinks : IRunArtifactLinkRepository
@@ -345,6 +350,13 @@ public class PostJobActionServiceTests
             => Task.FromResult<IReadOnlyList<RunArtifactLink>>(Array.Empty<RunArtifactLink>());
         public Task<IReadOnlyList<RunArtifactLink>> ListRecentAsync(int take, CancellationToken ct = default)
             => Task.FromResult<IReadOnlyList<RunArtifactLink>>(Links.Take(take).ToList());
+        public Task<IReadOnlyList<RunArtifactLink>> ListForProjectAsync(Guid projectId, int take, CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<RunArtifactLink>>(Links.Where(l => l.ProjectId == projectId).Take(take).ToList());
+        public Task RemoveAsync(Guid id, CancellationToken ct = default)
+        {
+            Links.RemoveAll(l => l.Id == id);
+            return Task.CompletedTask;
+        }
     }
 
     private sealed class FakeUow : IUnitOfWork

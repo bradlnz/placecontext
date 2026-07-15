@@ -16,7 +16,7 @@
             {
                 <div class="dccard dcskel-card">
                     <div class="dcskel dcskel-line lg" style="width:@Pct(38 + (i * 13) % 34)%"></div>
-                    <div class="dcskel" style="height:96px; border-radius:8px"></div>
+                    <div class="dcskel skel-block"></div>
                     <div class="dcskel dcskel-line sm" style="width:@Pct(50 + (i * 7) % 30)%"></div>
                 </div>
             }
@@ -25,30 +25,30 @@
 
     case "chart":
         <div class="dccard dcskel-card" style="@Wrap">
-            <div class="dcskel dcskel-line lg" style="width:40%"></div>
-            <div style="display:flex; align-items:flex-end; gap:10px; height:180px; padding-top:10px">
+            <div class="dcskel dcskel-line lg skel-chart-title"></div>
+            <div class="skel-chart-bars">
                 @foreach (var h in new[] { 62, 88, 45, 74, 96, 58, 80, 50 })
                 {
-                    <div class="dcskel" style="flex:1; height:@(h)%; border-radius:6px 6px 0 0"></div>
+                    <div class="dcskel skel-bar" style="height:@(h)%"></div>
                 }
             </div>
         </div>
         break;
 
     case "table":
-        <div class="dccard" style="overflow:hidden; @Wrap">
-            <div class="dcskel-row" style="padding:12px 16px; background:var(--card-2)">
+        <div class="dccard skel-table" style="@Wrap">
+            <div class="dcskel-row skel-table-head">
                 @for (var c = 0; c < Columns; c++)
                 {
-                    <div class="dcskel dcskel-line sm" style="flex:1; max-width:@(c == 0 ? "160px" : "110px")"></div>
+                    <div class="dcskel dcskel-line sm skel-cell" style="max-width:@(c == 0 ? "160px" : "110px")"></div>
                 }
             </div>
             @for (var r = 0; r < Rows; r++)
             {
-                <div class="dcskel-row" style="padding:12px 16px">
+                <div class="dcskel-row skel-table-row">
                     @for (var c = 0; c < Columns; c++)
                     {
-                        <div class="dcskel dcskel-line" style="flex:1; max-width:@(c == 0 ? "180px" : "130px"); width:@Pct(40 + ((r + c) * 11) % 45)%"></div>
+                        <div class="dcskel dcskel-line skel-cell" style="max-width:@(c == 0 ? "180px" : "130px"); width:@Pct(40 + ((r + c) * 11) % 45)%"></div>
                     }
                 </div>
             }
@@ -56,10 +56,10 @@
         break;
 
     case "detail":
-        <div style="display:flex; flex-direction:column; gap:14px; @Wrap">
-            <div class="dcskel dcskel-line lg" style="width:52%"></div>
-            <div class="dcskel dcskel-line sm" style="width:34%"></div>
-            <div class="dcskel" style="height:1px; margin:2px 0"></div>
+        <div class="skel-detail" style="@Wrap">
+            <div class="dcskel dcskel-line lg skel-detail-title"></div>
+            <div class="dcskel dcskel-line sm skel-detail-sub"></div>
+            <div class="dcskel skel-divider"></div>
             @for (var i = 0; i < Rows; i++)
             {
                 <div class="dcskel dcskel-line" style="width:@Pct(60 + (i * 9) % 38)%"></div>
@@ -72,19 +72,19 @@
             @for (var i = 0; i < Rows; i++)
             {
                 <div class="dcskel-row">
-                    <div class="dcskel circle" style="width:34px; height:34px; flex:none"></div>
-                    <div style="flex:1; display:flex; flex-direction:column; gap:7px">
+                    <div class="dcskel circle skel-avatar"></div>
+                    <div class="skel-list-lines">
                         <div class="dcskel dcskel-line" style="width:@Pct(30 + (i * 13) % 40)%"></div>
                         <div class="dcskel dcskel-line sm" style="width:@Pct(48 + (i * 9) % 34)%"></div>
                     </div>
-                    <div class="dcskel dcskel-line sm" style="width:64px; flex:none"></div>
+                    <div class="dcskel dcskel-line sm skel-list-meta"></div>
                 </div>
             }
         </div>
         break;
 
     default: // "text"
-        <div style="display:flex; flex-direction:column; gap:9px; @Wrap">
+        <div class="skel-text" style="@Wrap">
             @for (var i = 0; i < Rows; i++)
             {
                 <div class="dcskel dcskel-line" style="width:@Pct(55 + (i * 11) % 40)%"></div>
