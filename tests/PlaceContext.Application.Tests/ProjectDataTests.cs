@@ -66,6 +66,19 @@ public class ProjectDataTests
         public Task<int> ImportRowsAsync(Guid projectId, string tableName, IReadOnlyList<ProjectColumnSpec> columns,
             IReadOnlyList<IReadOnlyList<string?>> rows, bool createTable, CancellationToken ct = default)
         { SawProject = projectId; Appended = (tableName, columns, rows); return Task.FromResult(rows.Count); }
+
+        public string? SawSearch;
+        public (int Page, int PageSize)? SawPaging;
+
+        public Task<ProjectTablePageResult> QueryTablePageAsync(Guid projectId, string tableName, string? search,
+            int page, int pageSize, CancellationToken ct = default)
+        {
+            SawProject = projectId;
+            SawSearch = search;
+            SawPaging = (page, pageSize);
+            return Task.FromResult(new ProjectTablePageResult(
+                new[] { "id", "name" }, new[] { new string?[] { "1", "alice" } }, 1, page, pageSize));
+        }
     }
 
     private static async Task<(InMemoryProjectRepository projects, Project project, FakeStore store)> WorldAsync()
@@ -173,5 +186,32 @@ public class ProjectDataTests
             new CreateProjectTableHandler(projects, store).HandleAsync(
                 new CreateProjectTableCommand(Guid.NewGuid(), "t", new[] { new ProjectColumnSpec("id", "uuid", true, true) })));
         Assert.Null(store.CreatedTable);
+    }
+
+    [Fact]
+    public async Task Table_page_query_passes_search_and_paging_through_to_the_store()
+    {
+        var (projects, project, store) = await WorldAsync();
+        var handler = new QueryProjectTablePageHandler(projects, store);
+
+        var page = await handler.HandleAsync(new QueryProjectTablePageQuery(project.Id.Value, "readings", "alice", 2, 50));
+
+        Assert.Equal(project.Id.Value, store.SawProject);
+        Assert.Equal("alice", store.SawSearch);
+        Assert.Equal((2, 50), store.SawPaging);
+        Assert.Equal(1, page.TotalCount);
+        Assert.Equal(2, page.Page);
+        Assert.Equal(50, page.PageSize);
+        Assert.Equal(new[] { "id", "name" }, page.Columns);
+    }
+
+    [Fact]
+    public async Task Table_page_query_rejects_an_unknown_project()
+    {
+        var (projects, _, store) = await WorldAsync();
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            new QueryProjectTablePageHandler(projects, store).HandleAsync(
+                new QueryProjectTablePageQuery(Guid.NewGuid(), "readings", null, 1, 50)));
+        Assert.Null(store.SawSearch);
     }
 }

@@ -15,8 +15,10 @@ public interface IRunArtifactLinkRepository
     /// <summary>The newest stored artifacts across every project (the Artifacts file viewer).</summary>
     Task<IReadOnlyList<RunArtifactLink>> ListRecentAsync(int take, CancellationToken ct = default);
 
-    /// <summary>Every stored artifact for one project (newest first) — the project-scoped file viewer.</summary>
-    Task<IReadOnlyList<RunArtifactLink>> ListForProjectAsync(Guid projectId, int take, CancellationToken ct = default);
+    /// <summary>Every stored artifact for one project (newest first) — the project-scoped file viewer.
+    /// <paramref name="search"/>, when given, keeps only artifacts whose Title or Kind contains it
+    /// (case-insensitive) — applied before the version-grouping the UI does client-side.</summary>
+    Task<IReadOnlyList<RunArtifactLink>> ListForProjectAsync(Guid projectId, int take, string? search = null, CancellationToken ct = default);
 
     /// <summary>Permanently removes an artifact link row (the object bytes are deleted separately).</summary>
     Task RemoveAsync(Guid id, CancellationToken ct = default);

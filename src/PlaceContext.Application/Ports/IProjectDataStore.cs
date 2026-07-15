@@ -21,6 +21,18 @@ public sealed record ProjectQueryResult(
     bool Truncated);
 
 /// <summary>
+/// One page of a project table's rows, optionally filtered by a case-insensitive search across
+/// every column (each cast to text). <see cref="TotalCount"/> is the count over the WHERE clause
+/// (i.e. matching the search, not the whole table) so "showing X–Y of Z" is always accurate.
+/// </summary>
+public sealed record ProjectTablePageResult(
+    IReadOnlyList<string> Columns,
+    IReadOnlyList<IReadOnlyList<string?>> Rows,
+    long TotalCount,
+    int Page,
+    int PageSize);
+
+/// <summary>
 /// Each project's own database: a private, isolated namespace of tables the project can create,
 /// fill, and query with SQL. Isolation is the store's job — a project's SQL must never be able to
 /// see another project's tables or the platform's own.
@@ -29,6 +41,14 @@ public interface IProjectDataStore
 {
     /// <summary>Execute SQL (DDL or DML — multiple statements allowed) inside the project's database.</summary>
     Task<ProjectQueryResult> ExecuteAsync(Guid projectId, string sql, CancellationToken ct = default);
+
+    /// <summary>
+    /// A server-side paginated, searchable page of one table's rows — the entity Records tab.
+    /// <paramref name="search"/> (when non-empty) is bound as a query parameter and matched
+    /// case-insensitively against every column cast to text; it is never concatenated into SQL.
+    /// </summary>
+    Task<ProjectTablePageResult> QueryTablePageAsync(Guid projectId, string tableName, string? search,
+        int page, int pageSize, CancellationToken ct = default);
 
     /// <summary>The project's tables with an approximate row count, name-sorted.</summary>
     Task<IReadOnlyList<ProjectTableInfo>> ListTablesAsync(Guid projectId, CancellationToken ct = default);

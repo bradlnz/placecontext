@@ -56,6 +56,9 @@ public class JobRunDataRecorderTests
             => throw new NotSupportedException();
         public Task<string> ExportTableCsvAsync(Guid projectId, string tableName, CancellationToken ct = default)
             => throw new NotSupportedException();
+        public Task<ProjectTablePageResult> QueryTablePageAsync(Guid projectId, string tableName, string? search,
+            int page, int pageSize, CancellationToken ct = default)
+            => throw new NotSupportedException();
     }
 
     private sealed class FakeClock : IClock
@@ -143,6 +146,9 @@ public class JobRunDataRecorderTests
         public Task DropTableAsync(Guid projectId, string tableName, CancellationToken ct = default)
             => throw new NotSupportedException();
         public Task<string> ExportTableCsvAsync(Guid projectId, string tableName, CancellationToken ct = default)
+            => throw new NotSupportedException();
+        public Task<ProjectTablePageResult> QueryTablePageAsync(Guid projectId, string tableName, string? search,
+            int page, int pageSize, CancellationToken ct = default)
             => throw new NotSupportedException();
     }
 }

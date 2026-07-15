@@ -156,8 +156,8 @@ public sealed class PlaceContextService : IPlaceContextService
     public Task<IReadOnlyList<ArtifactFileView>> ListRecentArtifactsAsync(int take = 100, CancellationToken ct = default)
         => _dispatcher.Query(new ListRecentArtifactsQuery(take), ct);
 
-    public Task<IReadOnlyList<ArtifactFileView>> ListProjectArtifactsAsync(Guid projectId, int take = 2000, CancellationToken ct = default)
-        => _dispatcher.Query(new ListProjectArtifactsQuery(projectId, take), ct);
+    public Task<IReadOnlyList<ArtifactFileView>> ListProjectArtifactsAsync(Guid projectId, int take = 2000, string? search = null, CancellationToken ct = default)
+        => _dispatcher.Query(new ListProjectArtifactsQuery(projectId, take, search), ct);
 
     public Task<bool> DeleteArtifactAsync(Guid artifactId, CancellationToken ct = default)
         => _dispatcher.Send(new DeleteArtifactCommand(artifactId), ct);
@@ -200,6 +200,10 @@ public sealed class PlaceContextService : IPlaceContextService
 
     public Task<IReadOnlyList<Ports.ProjectTableInfo>> ListProjectDataTablesAsync(Guid projectId, CancellationToken ct = default)
         => _dispatcher.Query(new ListProjectDataTablesQuery(projectId), ct);
+
+    public Task<Ports.ProjectTablePageResult> QueryProjectTablePageAsync(Guid projectId, string tableName, string? search,
+        int page, int pageSize, CancellationToken ct = default)
+        => _dispatcher.Query(new QueryProjectTablePageQuery(projectId, tableName, search, page, pageSize), ct);
 
     public Task CreateProjectTableAsync(Guid projectId, string tableName, IReadOnlyList<Ports.ProjectColumnSpec> columns, CancellationToken ct = default)
         => _dispatcher.Send(new CreateProjectTableCommand(projectId, tableName, columns), ct);

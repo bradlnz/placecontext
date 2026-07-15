@@ -55,6 +55,12 @@
 .data-th { text-align:left; padding:8px 14px; border-bottom:2px solid var(--border-2); color:var(--text-3); font-size:10.5px; letter-spacing:.06em; text-transform:uppercase; white-space:nowrap }
 .clickable { cursor:pointer }
 .data-cell { padding:7px 14px; border-bottom:1px solid var(--border); max-width:280px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+.no-rows-cell { color:var(--text-3); text-align:center; white-space:normal; cursor:default }
+.pager-row { display:flex; align-items:center; justify-content:space-between; padding:10px 14px; border-top:1px solid var(--border) }
+.pager-info { font-size:11.5px; color:var(--text-3) }
+.pager-controls { display:flex; align-items:center; gap:10px }
+.pager-btn { padding:4px 11px; font-size:11.5px }
+.pager-page { font-size:11.5px; color:var(--text-2); font-family:var(--font-sans) }
 .slide-560 { width:560px }
 .flex-min { flex:1; min-width:0 }
 .title-14 { font-size:14px; font-weight:600 }

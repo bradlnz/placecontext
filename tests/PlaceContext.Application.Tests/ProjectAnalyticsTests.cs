@@ -53,6 +53,9 @@ public class ProjectAnalyticsTests
         public Task<int> ImportRowsAsync(Guid projectId, string tableName, IReadOnlyList<ProjectColumnSpec> columns,
             IReadOnlyList<IReadOnlyList<string?>> rows, bool createTable, CancellationToken ct = default)
             => Task.FromResult(rows.Count);
+        public Task<ProjectTablePageResult> QueryTablePageAsync(Guid projectId, string tableName, string? search,
+            int page, int pageSize, CancellationToken ct = default)
+            => throw new NotSupportedException();
     }
 
     private sealed class InMemoryChartRepository : IProjectChartRepository
@@ -190,5 +193,8 @@ public class ProjectAnalyticsTests
         public Task<int> ImportRowsAsync(Guid projectId, string tableName, IReadOnlyList<ProjectColumnSpec> columns,
             IReadOnlyList<IReadOnlyList<string?>> rows, bool createTable, CancellationToken ct = default)
             => Task.FromResult(rows.Count);
+        public Task<ProjectTablePageResult> QueryTablePageAsync(Guid projectId, string tableName, string? search,
+            int page, int pageSize, CancellationToken ct = default)
+            => throw new NotSupportedException();
     }
 }

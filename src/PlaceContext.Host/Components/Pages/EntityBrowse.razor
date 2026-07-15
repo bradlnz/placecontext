@@ -1,5 +1,6 @@
 @page "/project/{ProjectId:guid}/entity/{EntityName}"
 @layout PlaceContext.Host.Components.Layout.ProjectLayout
+@implements IDisposable
 @using PlaceContext.Application.Features
 @inject IPlaceContextService Svc
 @inject PortalUiState Ui
@@ -24,15 +25,15 @@
                 <h2 class="page-title">@_entity.Name</h2>
                 <div class="page-sub">
                     <span class="mono">@_entity.TableName</span>
-                    · @( _rows?.Rows.Count ?? 0) records
+                    · @(_page?.TotalCount ?? 0) records
                     @if (_entity.Relations.Count > 0)
                     {
                         <span> · related to @string.Join(", ", _entity.Relations.Select(r => r.TargetEntity))</span>
                     }
                 </div>
             </div>
-            <input class="dcinput filter-input" placeholder="filter records…"
-                   @bind="_filter" @bind:event="oninput" />
+            <input class="dcinput filter-input" placeholder="search records…"
+                   value="@_search" @oninput="OnSearchInput" />
         </div>
 
         @if (_error is not null)
@@ -186,36 +187,63 @@
             </div>
         }
 
-        @if (_viewTab == "records" && _rows is null)
+        @if (_viewTab == "records" && _page is null)
         {
             <Skeleton Kind="table" Rows="8" Columns="4" />
         }
 
-        @if (_viewTab == "records" && _rows is { } rows)
+        @if (_viewTab == "records" && _page is { } pg)
         {
             <div class="dccard table-card">
                 <div class="table-scroll">
                     <table class="data-table">
                         <thead>
                             <tr>
-                                @foreach (var c in rows.Columns)
+                                @foreach (var c in pg.Columns)
                                 {
                                     <th class="data-th">@c</th>
                                 }
                             </tr>
                         </thead>
                         <tbody>
-                            @foreach (var row in FilteredRows())
+                            @if (pg.Rows.Count == 0)
+                            {
+                                <tr>
+                                    <td class="data-cell no-rows-cell" colspan="@Math.Max(1, pg.Columns.Count)">
+                                        @(string.IsNullOrWhiteSpace(_search) ? "No records yet." : "No records match your search.")
+                                    </td>
+                                </tr>
+                            }
+                            @foreach (var row in pg.Rows)
                             {
                                 <tr class="dcdash-row clickable" @onclick="@(() => OpenRecordAsync(row))">
-                                    @for (var i = 0; i < rows.Columns.Count; i++)
+                                    @for (var i = 0; i < pg.Columns.Count; i++)
                                     {
-                                        <td class="data-cell" style="color:@(rows.Columns[i] == LabelCol() ? "var(--text)" : "var(--text-2)"); font-weight:@(rows.Columns[i] == LabelCol() ? "600" : "400")">@(i < row.Count ? row[i] : "")</td>
+                                        <td class="data-cell" style="color:@(pg.Columns[i] == LabelCol() ? "var(--text)" : "var(--text-2)"); font-weight:@(pg.Columns[i] == LabelCol() ? "600" : "400")">@(i < row.Count ? row[i] : "")</td>
                                     }
                                 </tr>
                             }
                         </tbody>
                     </table>
+                </div>
+                <div class="pager-row">
+                    <span class="pager-info">
+                        @if (pg.TotalCount == 0)
+                        {
+                            <text>0 records</text>
+                        }
+                        else
+                        {
+                            <text>Showing @(((pg.Page - 1) * pg.PageSize) + 1)–@(Math.Min((long)pg.Page * pg.PageSize, pg.TotalCount)) of @pg.TotalCount</text>
+                        }
+                    </span>
+                    <div class="pager-controls">
+                        <button class="dcbtn pager-btn" disabled="@(pg.Page <= 1)"
+                                @onclick="@(() => GoToPageAsync(pg.Page - 1))">‹ Prev</button>
+                        <span class="pager-page">Page @pg.Page of @TotalPages(pg)</span>
+                        <button class="dcbtn pager-btn" disabled="@((long)pg.Page * pg.PageSize >= pg.TotalCount)"
+                                @onclick="@(() => GoToPageAsync(pg.Page + 1))">Next ›</button>
+                    </div>
                 </div>
             </div>
         }
@@ -317,8 +345,15 @@
     private PlaceContext.Application.Ports.ProjectQueryResult? _rows;
     private IReadOnlyList<string?>? _open;
     private readonly List<(EntityRelationDto Relation, PlaceContext.Application.Ports.ProjectQueryResult Rows)> _related = new();
-    private string _filter = "";
     private string? _error;
+
+    // ── Records tab: server-side pagination + search over the entity's table (the store binds the
+    // search term as a parameter — see NpgsqlProjectDataStore.QueryTablePageAsync). ──
+    private PlaceContext.Application.Ports.ProjectTablePageResult? _page;
+    private string _search = "";
+    private int _pageNum = 1;
+    private const int RecordsPageSize = 50;
+    private CancellationTokenSource? _searchDebounce;
     private string _viewTab = "records";
     private bool _loaded;   // entity list resolved — gates the load skeleton vs the not-found message
 
@@ -527,9 +562,62 @@
             }
             await BuildInsightsAsync();
             await BuildSectionGraphAsync();
+
+            // A new entity (or a fresh navigation to the same one) always starts unfiltered on page 1.
+            _search = "";
+            _pageNum = 1;
+            await LoadRecordsPageAsync();
         }
         catch (Exception ex) { _error = ex.Message; }
         finally { _loaded = true; }
+    }
+
+    // ── Records tab: server-side pagination + search ────────────────────────────────────────────
+    private async Task LoadRecordsPageAsync()
+    {
+        if (_entity is null) return;
+        try
+        {
+            _page = await Svc.QueryProjectTablePageAsync(ProjectId, _entity.TableName, _search, _pageNum, RecordsPageSize);
+        }
+        catch (Exception ex) { _error = ex.Message; }
+    }
+
+    private static int TotalPages(PlaceContext.Application.Ports.ProjectTablePageResult page)
+        => Math.Max(1, (int)Math.Ceiling(page.TotalCount / (double)Math.Max(1, page.PageSize)));
+
+    private async Task GoToPageAsync(int page)
+    {
+        if (_page is null) return;
+        var target = Math.Clamp(page, 1, TotalPages(_page));
+        if (target == _pageNum) return;
+        _pageNum = target;
+        await LoadRecordsPageAsync();
+    }
+
+    // Debounced so every keystroke doesn't fire a round trip — only the last one, ~300ms after typing stops.
+    private async Task OnSearchInput(ChangeEventArgs e)
+    {
+        _search = e.Value?.ToString() ?? "";
+        _pageNum = 1;
+        _searchDebounce?.Cancel();
+        _searchDebounce?.Dispose();
+        var cts = new CancellationTokenSource();
+        _searchDebounce = cts;
+        try
+        {
+            await Task.Delay(300, cts.Token);
+        }
+        catch (TaskCanceledException) { return; }
+        if (cts.IsCancellationRequested) return;
+        await LoadRecordsPageAsync();
+        StateHasChanged();
+    }
+
+    public void Dispose()
+    {
+        _searchDebounce?.Cancel();
+        _searchDebounce?.Dispose();
     }
 
     // The record label: the configured column when it exists; otherwise the first column that
@@ -561,13 +649,6 @@
         var idx = LabelCol() is { } c ? _rows.Columns.ToList().IndexOf(c) : 0;
         return (idx >= 0 && idx < row.Count ? row[idx] : null) ?? _entity?.Name ?? "";
     }
-
-    private IEnumerable<IReadOnlyList<string?>> FilteredRows()
-        => _rows is null
-            ? Array.Empty<IReadOnlyList<string?>>()
-            : string.IsNullOrWhiteSpace(_filter)
-                ? _rows.Rows
-                : _rows.Rows.Where(r => r.Any(v => v?.Contains(_filter, StringComparison.OrdinalIgnoreCase) == true));
 
     private readonly List<(RunArtifactLinkView Art, int Versions)> _artifacts = new();
     private readonly List<Guid> _linkedRuns = new();

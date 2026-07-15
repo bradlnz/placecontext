@@ -130,6 +130,9 @@ public class DataMappingIngestionTests
             => Task.CompletedTask;
         public Task<string> ExportTableCsvAsync(Guid projectId, string tableName, CancellationToken ct = default)
             => Task.FromResult("");
+        public Task<ProjectTablePageResult> QueryTablePageAsync(Guid projectId, string tableName, string? search,
+            int page, int pageSize, CancellationToken ct = default)
+            => throw new NotSupportedException();
     }
 
     private sealed class FakeClock : IClock

@@ -1,4 +1,5 @@
 @page "/artifacts"
+@implements IDisposable
 @using PlaceContext.Application.Features
 @using PlaceContext.Application.Dtos
 @inject IPlaceContextService Svc
@@ -17,8 +18,8 @@
         <div class="file-panel-head">
             <div class="head-row">
                 <span class="panel-title">Artifact files</span>
-                <input class="dcinput filter-input" placeholder="filter…"
-                       @bind="_filter" @bind:event="oninput" />
+                <input class="dcinput filter-input" placeholder="search files…"
+                       value="@_filter" @oninput="OnFilterInputAsync" />
             </div>
             <select class="dcinput project-select" value="@_projectFilter" @onchange="OnProjectFilter">
                 <option value="">All projects</option>
@@ -37,17 +38,32 @@
                             @onclick="@(() => _selected.Clear())">Clear</button>
                 </div>
             }
+            @if (_loadMayBeIncomplete)
+            {
+                <div class="cap-note">
+                    Showing the newest @_files.Count loaded files — older ones may not be listed yet. Pick a project or narrow the search to see more.
+                </div>
+            }
         </div>
+        @{
+            var groups = Grouped();
+            var totalGroups = groups.Count;
+            var maxFilesPage = Math.Max(1, (int)Math.Ceiling(totalGroups / (double)FilesPageSize));
+            if (_filesPage > maxFilesPage) _filesPage = maxFilesPage;
+            var pageGroups = groups.Skip((_filesPage - 1) * FilesPageSize).Take(FilesPageSize).ToList();
+        }
         <div class="file-list">
-            @if (Grouped() is { Count: 0 })
+            @if (totalGroups == 0)
             {
                 <div class="empty-note">
-                    No stored artifacts here yet — every completed run generates one from its job's return type.
+                    @(string.IsNullOrWhiteSpace(_filter)
+                        ? "No stored artifacts here yet — every completed run generates one from its job's return type."
+                        : "No files match your search.")
                 </div>
             }
             else
             {
-                @foreach (var group in Grouped())
+                @foreach (var group in pageGroups)
                 {
                     var latest = group[0];
                     var groupKey = GroupKey(latest);
@@ -103,6 +119,21 @@
                 }
             }
         </div>
+        @if (totalGroups > 0)
+        {
+            <div class="pager-row">
+                <span class="pager-info">
+                    Showing @(((_filesPage - 1) * FilesPageSize) + 1)–@(Math.Min(_filesPage * FilesPageSize, totalGroups)) of @totalGroups files
+                </span>
+                <div class="pager-controls">
+                    <button class="dcbtn pager-btn" disabled="@(_filesPage <= 1)"
+                            @onclick="@(() => GoToFilesPage(_filesPage - 1))">‹ Prev</button>
+                    <span class="pager-page">Page @_filesPage of @maxFilesPage</span>
+                    <button class="dcbtn pager-btn" disabled="@(_filesPage >= maxFilesPage)"
+                            @onclick="@(() => GoToFilesPage(_filesPage + 1))">Next ›</button>
+                </div>
+            </div>
+        }
     </div>
 
     @* ── Viewer ────────────────────────────────────────────────────────────────────────── *@
@@ -242,6 +273,17 @@
     private const int MaxInlineBytes = 2 * 1024 * 1024;
     private const int MaxCsvRows = 500;
 
+    // ── Pagination over the grouped (version-stacked) file list ─────────────────────────────────
+    private const int FilesPageSize = 25;
+    private int _filesPage = 1;
+    private CancellationTokenSource? _searchDebounce;
+
+    // The per-project/recent load is capped — this flags when the returned count hit that cap, so
+    // the UI can say "there may be more" instead of silently acting as if the list is complete.
+    private const int ProjectArtifactsCap = 2000;
+    private const int RecentArtifactsCap = 1000;
+    private bool _loadMayBeIncomplete;
+
     protected override async Task OnInitializedAsync()
     {
         Ui.Set("Artifacts", "every file your runs produced — click to view");
@@ -255,17 +297,26 @@
         await ApplyDeepLinkAsync();
     }
 
-    // Loads the file list for the current filter: project-scoped (complete) when a project is
-    // selected, else the recent feed across all projects.
+    // Loads the file list for the current filter: project-scoped (complete, and search-widened —
+    // the ILIKE runs server-side on Title/Kind) when a project is selected, else the recent feed
+    // across all projects (client-filtered only, since the recent feed has no project to scope to).
     private async Task LoadFilesAsync()
     {
         try
         {
-            _files = Guid.TryParse(_projectFilter, out var pid)
-                ? await Svc.ListProjectArtifactsAsync(pid)
-                : await Svc.ListRecentArtifactsAsync(1000);
+            if (Guid.TryParse(_projectFilter, out var pid))
+            {
+                var search = string.IsNullOrWhiteSpace(_filter) ? null : _filter;
+                _files = await Svc.ListProjectArtifactsAsync(pid, ProjectArtifactsCap, search);
+                _loadMayBeIncomplete = _files.Count >= ProjectArtifactsCap;
+            }
+            else
+            {
+                _files = await Svc.ListRecentArtifactsAsync(RecentArtifactsCap);
+                _loadMayBeIncomplete = _files.Count >= RecentArtifactsCap;
+            }
         }
-        catch { _files = Array.Empty<ArtifactFileView>(); }
+        catch { _files = Array.Empty<ArtifactFileView>(); _loadMayBeIncomplete = false; }
     }
 
     // Supplied from the query: re-fires on same-page navigation (search hits, graph links).
@@ -280,7 +331,7 @@
         {
             // The deep-linked artifact may belong to a different project than the current filter —
             // fall back to the recent global feed to locate it.
-            try { _files = await Svc.ListRecentArtifactsAsync(1000); } catch { }
+            try { _files = await Svc.ListRecentArtifactsAsync(RecentArtifactsCap); } catch { }
             target = _files.FirstOrDefault(f => f.Id == artifactId);
         }
         if (target is { })
@@ -298,7 +349,37 @@
         _active = null;
         _confirmDelete = false;
         _selected.Clear();
+        _filesPage = 1;
         await LoadFilesAsync();
+    }
+
+    // Debounced so a search widens the server-side query only once typing pauses (~300ms), not on
+    // every keystroke; the client-side group+paginate step re-runs immediately for instant feedback
+    // on the "All projects" feed, which is filtered client-side only.
+    private async Task OnFilterInputAsync(ChangeEventArgs e)
+    {
+        _filter = e.Value?.ToString() ?? "";
+        _filesPage = 1;
+        _searchDebounce?.Cancel();
+        _searchDebounce?.Dispose();
+        var cts = new CancellationTokenSource();
+        _searchDebounce = cts;
+        try
+        {
+            await Task.Delay(300, cts.Token);
+        }
+        catch (TaskCanceledException) { return; }
+        if (cts.IsCancellationRequested) return;
+        await LoadFilesAsync();
+        StateHasChanged();
+    }
+
+    private void GoToFilesPage(int page) => _filesPage = Math.Max(1, page);
+
+    public void Dispose()
+    {
+        _searchDebounce?.Cancel();
+        _searchDebounce?.Dispose();
     }
 
     // ── Multi-select for bulk delete ────────────────────────────────────────────────────────────

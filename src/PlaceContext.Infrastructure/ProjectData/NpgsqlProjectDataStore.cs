@@ -117,6 +117,103 @@ public sealed class NpgsqlProjectDataStore : IProjectDataStore
         return new ProjectQueryResult(columns, rows, affected, truncated);
     }
 
+    // ── Pagination math + predicate building, split out as pure static helpers so they're testable
+    // without a live Postgres connection (see NpgsqlProjectDataStorePagingTests). ──
+    internal const int MaxPageSize = 200;
+
+    internal static int ClampPage(int page) => Math.Max(1, page);
+
+    internal static int ClampPageSize(int pageSize) => Math.Clamp(pageSize, 1, MaxPageSize);
+
+    internal static long OffsetFor(int page, int pageSize) => (long)(ClampPage(page) - 1) * ClampPageSize(pageSize);
+
+    /// <summary>
+    /// The "search every column" WHERE clause (each column already quoted/validated) — null when
+    /// there's no search term or the table has no columns. The clause never embeds the search
+    /// term itself; callers bind it as the <c>@search</c> parameter.
+    /// </summary>
+    internal static string? BuildSearchWhereClause(IReadOnlyList<string> columns, string? search)
+    {
+        if (string.IsNullOrWhiteSpace(search) || columns.Count == 0) return null;
+        var predicates = columns.Select(c => $"{QuoteIdent(c)}::text ILIKE @search");
+        return " WHERE " + string.Join(" OR ", predicates);
+    }
+
+    public async Task<ProjectTablePageResult> QueryTablePageAsync(Guid projectId, string tableName, string? search,
+        int page, int pageSize, CancellationToken ct = default)
+    {
+        Ident(tableName, "table name");
+        page = ClampPage(page);
+        pageSize = ClampPageSize(pageSize);
+
+        var schema = SchemaFor(projectId);
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+        await EnsureProvisionedAsync(conn, schema, ct);
+
+        await using var tx = await conn.BeginTransactionAsync(ct);
+        await using (var setup = conn.CreateCommand())
+        {
+            setup.Transaction = tx;
+            setup.CommandText =
+                $"SET LOCAL ROLE \"{schema}\"; " +
+                $"SET LOCAL search_path TO \"{schema}\"; " +
+                $"SET LOCAL statement_timeout = '{StatementTimeout}'";
+            await setup.ExecuteNonQueryAsync(ct);
+        }
+
+        var quoted = QuoteIdent(tableName);
+
+        // Column names come straight off the result set's own schema (no untrusted input here),
+        // then get re-quoted below — used to build the "search every column" predicate.
+        var columns = new List<string>();
+        await using (var colCmd = conn.CreateCommand())
+        {
+            colCmd.Transaction = tx;
+            colCmd.CommandText = $"SELECT * FROM {quoted} LIMIT 0";
+            await using var colReader = await colCmd.ExecuteReaderAsync(ct);
+            for (var i = 0; i < colReader.FieldCount; i++)
+                columns.Add(colReader.GetName(i));
+        }
+
+        var whereSql = BuildSearchWhereClause(columns, search) ?? "";
+        var hasSearch = whereSql.Length > 0;
+
+        long total;
+        await using (var countCmd = conn.CreateCommand())
+        {
+            countCmd.Transaction = tx;
+            countCmd.CommandText = $"SELECT count(*) FROM {quoted}{whereSql}";
+            // The search term is always bound as a parameter — never interpolated into the SQL text.
+            if (hasSearch) countCmd.Parameters.AddWithValue("search", $"%{search}%");
+            total = Convert.ToInt64(await countCmd.ExecuteScalarAsync(ct) ?? 0L);
+        }
+
+        var rows = new List<IReadOnlyList<string?>>();
+        var offset = OffsetFor(page, pageSize);
+        await using (var pageCmd = conn.CreateCommand())
+        {
+            pageCmd.Transaction = tx;
+            // ORDER BY 1 keeps paging stable/deterministic across requests (the table has no
+            // guaranteed primary key visible here — the first column is the best available anchor).
+            pageCmd.CommandText = $"SELECT * FROM {quoted}{whereSql} ORDER BY 1 LIMIT @take OFFSET @skip";
+            if (hasSearch) pageCmd.Parameters.AddWithValue("search", $"%{search}%");
+            pageCmd.Parameters.AddWithValue("take", pageSize);
+            pageCmd.Parameters.AddWithValue("skip", offset);
+            await using var reader = await pageCmd.ExecuteReaderAsync(ct);
+            while (await reader.ReadAsync(ct))
+            {
+                var row = new string?[reader.FieldCount];
+                for (var i = 0; i < reader.FieldCount; i++)
+                    row[i] = await reader.IsDBNullAsync(i, ct) ? null : reader.GetValue(i).ToString();
+                rows.Add(row);
+            }
+        }
+
+        await tx.CommitAsync(ct);
+        return new ProjectTablePageResult(columns, rows, total, page, pageSize);
+    }
+
     public async Task<IReadOnlyList<ProjectTableInfo>> ListTablesAsync(Guid projectId, CancellationToken ct = default)
     {
         var schema = SchemaFor(projectId);

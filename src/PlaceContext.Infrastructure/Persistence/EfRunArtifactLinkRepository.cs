@@ -47,10 +47,16 @@ public sealed class EfRunArtifactLinkRepository : IRunArtifactLinkRepository
         return rows.Select(ToDomain).ToList();
     }
 
-    public async Task<IReadOnlyList<RunArtifactLink>> ListForProjectAsync(Guid projectId, int take, CancellationToken ct = default)
+    public async Task<IReadOnlyList<RunArtifactLink>> ListForProjectAsync(Guid projectId, int take, string? search = null, CancellationToken ct = default)
     {
-        var rows = await _db.RunArtifacts.AsNoTracking()
-            .Where(r => r.ProjectId == projectId)
+        var query = _db.RunArtifacts.AsNoTracking().Where(r => r.ProjectId == projectId);
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            // EF translates Contains to ILIKE/LOWER LIKE against Postgres — parameterized, never
+            // string-concatenated into SQL.
+            query = query.Where(r => EF.Functions.ILike(r.Title, $"%{search}%") || EF.Functions.ILike(r.Kind, $"%{search}%"));
+        }
+        var rows = await query
             .OrderByDescending(r => r.CreatedAt)
             .Take(Math.Clamp(take, 1, 20000))
             .ToListAsync(ct);

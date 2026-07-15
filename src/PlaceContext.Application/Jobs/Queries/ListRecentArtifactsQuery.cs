@@ -35,8 +35,10 @@ public sealed class ListRecentArtifactsHandler : IQueryHandler<ListRecentArtifac
         l.Title, l.ContentType, l.SizeBytes, l.CreatedAt);
 }
 
-/// <summary>Every stored artifact for one project — the project-scoped file viewer (no global cap hiding older files).</summary>
-public sealed record ListProjectArtifactsQuery(Guid ProjectId, int Take = 2000) : IQuery<IReadOnlyList<ArtifactFileView>>;
+/// <summary>Every stored artifact for one project — the project-scoped file viewer (no global cap hiding
+/// older files). <paramref name="Search"/>, when given, keeps only Title/Kind matches server-side, so a
+/// search widens coverage beyond whatever this project's load happened to cap at.</summary>
+public sealed record ListProjectArtifactsQuery(Guid ProjectId, int Take = 2000, string? Search = null) : IQuery<IReadOnlyList<ArtifactFileView>>;
 
 public sealed class ListProjectArtifactsHandler : IQueryHandler<ListProjectArtifactsQuery, IReadOnlyList<ArtifactFileView>>
 {
@@ -45,7 +47,7 @@ public sealed class ListProjectArtifactsHandler : IQueryHandler<ListProjectArtif
     public ListProjectArtifactsHandler(IRunArtifactLinkRepository links) => _links = links;
 
     public async Task<IReadOnlyList<ArtifactFileView>> HandleAsync(ListProjectArtifactsQuery query, CancellationToken ct = default)
-        => (await _links.ListForProjectAsync(query.ProjectId, query.Take, ct))
+        => (await _links.ListForProjectAsync(query.ProjectId, query.Take, query.Search, ct))
             .Select(ListRecentArtifactsHandler.Map)
             .ToList();
 }

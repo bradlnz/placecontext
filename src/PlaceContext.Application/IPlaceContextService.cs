@@ -57,7 +57,7 @@ public interface IPlaceContextService
     Task<IReadOnlyList<RunArtifactLinkView>> ListJobRunArtifactsAsync(Guid jobId, CancellationToken ct = default);
     Task<bool> DeleteJobAsync(Guid jobId, CancellationToken ct = default);
     Task<IReadOnlyList<Features.ArtifactFileView>> ListRecentArtifactsAsync(int take = 100, CancellationToken ct = default);
-    Task<IReadOnlyList<Features.ArtifactFileView>> ListProjectArtifactsAsync(Guid projectId, int take = 2000, CancellationToken ct = default);
+    Task<IReadOnlyList<Features.ArtifactFileView>> ListProjectArtifactsAsync(Guid projectId, int take = 2000, string? search = null, CancellationToken ct = default);
     Task<bool> DeleteArtifactAsync(Guid artifactId, CancellationToken ct = default);
     Task<int> DeleteArtifactsAsync(IReadOnlyList<Guid> artifactIds, CancellationToken ct = default);
 
@@ -78,6 +78,8 @@ public interface IPlaceContextService
     // Project data (each project's own database: tables + SQL).
     Task<Ports.ProjectQueryResult> ExecuteProjectDataAsync(Guid projectId, string sql, CancellationToken ct = default);
     Task<IReadOnlyList<Ports.ProjectTableInfo>> ListProjectDataTablesAsync(Guid projectId, CancellationToken ct = default);
+    Task<Ports.ProjectTablePageResult> QueryProjectTablePageAsync(Guid projectId, string tableName, string? search,
+        int page, int pageSize, CancellationToken ct = default);
     Task CreateProjectTableAsync(Guid projectId, string tableName, IReadOnlyList<Ports.ProjectColumnSpec> columns, CancellationToken ct = default);
     Task<int> ImportCsvToProjectTableAsync(Guid projectId, string tableName, IReadOnlyList<Ports.ProjectColumnSpec> columns,
         IReadOnlyList<IReadOnlyList<string?>> rows, bool createTable, CancellationToken ct = default);
