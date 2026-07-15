@@ -47,7 +47,10 @@ public sealed class JobRow : ITenantOwned
     /// <summary>JSON array of int exit codes that map to Partial.</summary>
     public string PartialCodesJson { get; set; } = "[]";
 
-    public int ConcurrencyLimit { get; set; } = 1;
+    /// <summary>Default max concurrent map shards for a new/unspecified job. Raised from 1 → 4 so
+    /// multi-shard jobs parallelize their shards by default (throughput fix); jobs with an explicit
+    /// persisted value are unaffected — this only governs rows built without setting the property.</summary>
+    public int ConcurrencyLimit { get; set; } = 4;
 
     /// <summary>JSON array of declared input parameters [{Name,Label,Required}]. Empty = no prompt.</summary>
     public string ParametersJson { get; set; } = "[]";
