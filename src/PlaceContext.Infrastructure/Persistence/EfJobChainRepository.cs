@@ -1,6 +1,7 @@
 using System.Text.Json;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.Repositories;
+using PlaceContext.Domain.ValueObjects;
 using Microsoft.EntityFrameworkCore;
 
 namespace PlaceContext.Infrastructure.Persistence;
@@ -21,7 +22,7 @@ public sealed class EfJobChainRepository : IJobChainRepository
 
         existing.Name = chain.Name;
         existing.Description = chain.Description;
-        existing.StepJobIdsJson = JsonSerializer.Serialize(chain.StepJobIds);
+        existing.StagesJson = SerializeStages(chain.Stages);
         existing.UpdatedAt = chain.UpdatedAt;
     }
 
@@ -52,13 +53,33 @@ public sealed class EfJobChainRepository : IJobChainRepository
         ProjectId = c.ProjectId,
         Name = c.Name,
         Description = c.Description,
-        StepJobIdsJson = JsonSerializer.Serialize(c.StepJobIds),
+        StagesJson = SerializeStages(c.Stages),
         CreatedAt = c.CreatedAt,
         UpdatedAt = c.UpdatedAt,
     };
 
+    private static string SerializeStages(IReadOnlyList<ChainStage> stages)
+        => JsonSerializer.Serialize(stages.Select(s => s.JobIds));
+
     private static JobChain ToDomain(JobChainRow r) => JobChain.Rehydrate(
-        r.Id, r.ProjectId, r.Name, r.Description,
-        JsonSerializer.Deserialize<List<Guid>>(r.StepJobIdsJson) ?? new List<Guid>(),
-        r.CreatedAt, r.UpdatedAt);
+        r.Id, r.ProjectId, r.Name, r.Description, DeserializeStages(r.StagesJson), r.CreatedAt, r.UpdatedAt);
+
+    /// <summary>
+    /// Reads the stages JSON array-of-arrays. Tolerates a legacy flat array of job ids too (rows
+    /// written before fan-out existed, or a not-yet-migrated <c>StepJobIdsJson</c> value carried
+    /// over verbatim) by treating each id as its own size-1 stage.
+    /// </summary>
+    private static List<ChainStage> DeserializeStages(string stagesJson)
+    {
+        using var doc = JsonDocument.Parse(string.IsNullOrWhiteSpace(stagesJson) ? "[]" : stagesJson);
+        var root = doc.RootElement;
+        var stages = new List<ChainStage>();
+        foreach (var element in root.EnumerateArray())
+        {
+            stages.Add(element.ValueKind == JsonValueKind.Array
+                ? new ChainStage(element.EnumerateArray().Select(e => e.GetGuid()))
+                : ChainStage.Of(element.GetGuid())); // legacy flat shape: one job id per element
+        }
+        return stages;
+    }
 }

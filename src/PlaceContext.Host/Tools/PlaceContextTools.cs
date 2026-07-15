@@ -316,39 +316,41 @@ public sealed class PlaceContextTools
     // ── Job chains ────────────────────────────────────────────────────────────────────────────────
 
     [Authorize(Policy = "Member")]
-    [McpServerTool(Name = "create_job_chain"), Description("Define a job chain: an ordered pipeline of existing jobs where each step's primary output (reduce artifact if present, else the shard artifacts) becomes the next step's stdin input payload. 'jobIdsJson' is a JSON array of job ids in run order, e.g. [\"<guid>\",\"<guid>\"] — the same job may appear more than once. All jobs must belong to the project. Use run_job_chain to execute it.")]
+    [McpServerTool(Name = "create_job_chain"), Description("Define a job chain: an ordered pipeline of stages of existing jobs, where each stage's primary output becomes the next stage's stdin input payload. 'jobIdsJson' is a JSON array where each element is either a single job id (an ordinary sequential stage) or a JSON array of job ids (a stage that fans out — every job in it runs in parallel; the NEXT stage is the join and receives every branch's output as a JSON array). Example: [\"<guidA>\", [\"<guidB1>\",\"<guidB2>\"], \"<guidJoin>\"] runs A, then B1+B2 in parallel, then Join once both finish — Join fails the whole chain if either B1 or B2 fails. A plain flat array like [\"<guid>\",\"<guid>\"] is an ordinary linear chain (every stage size 1). The same job id may appear more than once. All jobs must belong to the project. Use run_job_chain to execute it.")]
     public static Task<string> CreateJobChain(IPlaceContextService svc, IToolCallLog log,
         Guid projectId, string name,
-        [Description("JSON array of job ids, in run order")] string jobIdsJson,
+        [Description("JSON array of job ids and/or job-id arrays (for a parallel fan-out stage), in run order")] string jobIdsJson,
         string? description = null)
     {
-        var steps = ParseJobIds(jobIdsJson);
+        var stages = ParseChainStages(jobIdsJson);
+        var flat = stages.SelectMany(s => s).ToList();
         return Traced(log, "create_job_chain", projectId.ToString(),
-            $"create chain '{name}' ({steps.Count} step(s))", new { projectId, name, steps, description },
-            () => svc.CreateJobChainAsync(projectId, name, description, steps));
+            $"create chain '{name}' ({stages.Count} stage(s), {flat.Count} step(s))", new { projectId, name, stages, description },
+            () => svc.CreateJobChainAsync(projectId, name, description, flat, stages));
     }
 
     [Authorize(Policy = "Member")]
-    [McpServerTool(Name = "update_job_chain"), Description("Replace a job chain's name, description, and ordered steps. 'jobIdsJson' is a JSON array of job ids in run order.")]
+    [McpServerTool(Name = "update_job_chain"), Description("Replace a job chain's name, description, and stages. 'jobIdsJson' follows the same shape as create_job_chain: a flat array of job ids for a linear chain, or a mix of single ids and job-id arrays to author fan-out stages.")]
     public static Task<string> UpdateJobChain(IPlaceContextService svc, IToolCallLog log,
         Guid chainId, string name,
-        [Description("JSON array of job ids, in run order")] string jobIdsJson,
+        [Description("JSON array of job ids and/or job-id arrays (for a parallel fan-out stage), in run order")] string jobIdsJson,
         string? description = null)
     {
-        var steps = ParseJobIds(jobIdsJson);
+        var stages = ParseChainStages(jobIdsJson);
+        var flat = stages.SelectMany(s => s).ToList();
         return Traced(log, "update_job_chain", chainId.ToString(),
-            $"update chain '{name}' ({steps.Count} step(s))", new { chainId, name, steps, description },
-            () => svc.UpdateJobChainAsync(chainId, name, description, steps));
+            $"update chain '{name}' ({stages.Count} stage(s), {flat.Count} step(s))", new { chainId, name, stages, description },
+            () => svc.UpdateJobChainAsync(chainId, name, description, flat, stages));
     }
 
     [Authorize(Policy = "Member")]
-    [McpServerTool(Name = "list_job_chains"), Description("List a project's job chains with their ordered steps (job ids + names). Use this to discover chain ids before running one.")]
+    [McpServerTool(Name = "list_job_chains"), Description("List a project's job chains with their stages (job ids + names; a stage with more than one job is a parallel fan-out group). Use this to discover chain ids before running one.")]
     public static Task<string> ListJobChains(IPlaceContextService svc, IToolCallLog log, Guid projectId)
         => Traced(log, "list_job_chains", projectId.ToString(), "list job chains", new { projectId },
             () => svc.ListJobChainsAsync(projectId));
 
     [Authorize(Policy = "Member")]
-    [McpServerTool(Name = "run_job_chain"), Description("Run a job chain now: executes each step's job in order, feeding every step's primary output into the next step as its input payload, and waits for completion. Stops at the first failed step (a Partial step continues but downgrades the chain status). Pass 'inputPayload' to feed the FIRST step; omit it to run the first job with its stored shard payloads. Returns the chain status, each executed step's run id + status (fetch full artifacts with get_job_run), and the final output — the last step's artifact, i.e. the chain's result.")]
+    [McpServerTool(Name = "run_job_chain"), Description("Run a job chain now: executes every stage in order, waiting for completion. A stage with more than one job runs them all in parallel (a fan-out group) and is all-or-nothing — it only advances once every job in it finishes, and if any of them fails the whole chain fails and every later stage (including the join that would follow the fan-out) is skipped; a Partial job continues but downgrades the chain status. Each stage's primary output feeds the next stage's input (a fan-out group's branches are combined into one JSON array for the join). Pass 'inputPayload' to feed the FIRST stage; omit it to run the first job with its stored shard payloads. Returns the chain status, each executed step's run id + status (fetch full artifacts with get_job_run), and the final output — the last stage's output, i.e. the chain's result.")]
     public static Task<string> RunJobChain(IPlaceContextService svc, IToolCallLog log, Guid chainId,
         [Description("Optional input payload for the first step (typically JSON)")] string? inputPayload = null)
         => Traced(log, "run_job_chain", chainId.ToString(), "run job chain", new { chainId, inputPayload },
@@ -360,16 +362,42 @@ public sealed class PlaceContextTools
         => Traced(log, "delete_job_chain", chainId.ToString(), "delete job chain", new { chainId },
             () => svc.DeleteJobChainAsync(chainId));
 
-    private static List<Guid> ParseJobIds(string jobIdsJson)
+    /// <summary>
+    /// Parses a chain's stages from the tool's 'jobIdsJson' argument: each top-level element is
+    /// either a job id string (its own size-1, ordinary sequential stage) or a JSON array of job id
+    /// strings (a parallel fan-out stage). A purely flat array — every existing caller's shape — is
+    /// therefore exactly a chain whose every stage is size 1, unchanged from before fan-out existed.
+    /// </summary>
+    private static List<List<Guid>> ParseChainStages(string jobIdsJson)
     {
+        JsonElement root;
         try
         {
-            return JsonSerializer.Deserialize<List<Guid>>(jobIdsJson) ?? new List<Guid>();
+            root = JsonDocument.Parse(jobIdsJson).RootElement;
         }
         catch (JsonException e)
         {
-            throw new ArgumentException($"jobIdsJson must be a JSON array of job ids (guids): {e.Message}");
+            throw new ArgumentException(
+                $"jobIdsJson must be a JSON array of job ids (guids), optionally with nested arrays for a parallel fan-out stage: {e.Message}");
         }
+        if (root.ValueKind != JsonValueKind.Array)
+            throw new ArgumentException("jobIdsJson must be a JSON array.");
+
+        var stages = new List<List<Guid>>();
+        foreach (var element in root.EnumerateArray())
+        {
+            stages.Add(element.ValueKind == JsonValueKind.Array
+                ? element.EnumerateArray().Select(ParseJobIdElement).ToList()
+                : new List<Guid> { ParseJobIdElement(element) });
+        }
+        return stages;
+    }
+
+    private static Guid ParseJobIdElement(JsonElement element)
+    {
+        if (element.ValueKind == JsonValueKind.String && Guid.TryParse(element.GetString(), out var id))
+            return id;
+        throw new ArgumentException("jobIdsJson entries (and fan-out stage entries) must be job id guids, as strings.");
     }
 
     [Authorize(Policy = "Member")]

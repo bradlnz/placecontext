@@ -165,11 +165,11 @@ public sealed class PlaceContextService : IPlaceContextService
     public Task<int> DeleteArtifactsAsync(IReadOnlyList<Guid> artifactIds, CancellationToken ct = default)
         => _dispatcher.Send(new DeleteArtifactsCommand(artifactIds), ct);
 
-    public Task<JobChainView> CreateJobChainAsync(Guid projectId, string name, string? description, IReadOnlyList<Guid> stepJobIds, CancellationToken ct = default)
-        => _dispatcher.Send(new CreateJobChainCommand(projectId, name, description, stepJobIds), ct);
+    public Task<JobChainView> CreateJobChainAsync(Guid projectId, string name, string? description, IReadOnlyList<Guid> stepJobIds, IReadOnlyList<IReadOnlyList<Guid>>? stages = null, CancellationToken ct = default)
+        => _dispatcher.Send(new CreateJobChainCommand(projectId, name, description, stepJobIds, stages), ct);
 
-    public Task<JobChainView> UpdateJobChainAsync(Guid chainId, string name, string? description, IReadOnlyList<Guid> stepJobIds, CancellationToken ct = default)
-        => _dispatcher.Send(new UpdateJobChainCommand(chainId, name, description, stepJobIds), ct);
+    public Task<JobChainView> UpdateJobChainAsync(Guid chainId, string name, string? description, IReadOnlyList<Guid> stepJobIds, IReadOnlyList<IReadOnlyList<Guid>>? stages = null, CancellationToken ct = default)
+        => _dispatcher.Send(new UpdateJobChainCommand(chainId, name, description, stepJobIds, stages), ct);
 
     public Task<bool> DeleteJobChainAsync(Guid chainId, CancellationToken ct = default)
         => _dispatcher.Send(new DeleteJobChainCommand(chainId), ct);

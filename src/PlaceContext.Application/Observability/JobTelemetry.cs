@@ -38,4 +38,16 @@ public static class JobTelemetry
     /// <summary>Wall-clock duration of a single map shard, milliseconds.</summary>
     public static readonly Histogram<double> ShardDuration =
         Meter.CreateHistogram<double>("placecontext.jobs.shard.duration", unit: "ms", description: "Single map-shard duration.");
+
+    /// <summary>Chain runs started (tagged chain.id, project.id).</summary>
+    public static readonly Counter<long> ChainsStarted =
+        Meter.CreateCounter<long>("placecontext.jobs.chains.started", unit: "{chain_run}", description: "Job chain runs started.");
+
+    /// <summary>Chain runs completed (tagged status: Succeeded/Partial/Failed).</summary>
+    public static readonly Counter<long> ChainsCompleted =
+        Meter.CreateCounter<long>("placecontext.jobs.chains.completed", unit: "{chain_run}", description: "Job chain runs completed, by terminal status.");
+
+    /// <summary>Wall-clock duration of a whole chain run, milliseconds.</summary>
+    public static readonly Histogram<double> ChainDuration =
+        Meter.CreateHistogram<double>("placecontext.jobs.chain.duration", unit: "ms", description: "End-to-end chain run duration.");
 }

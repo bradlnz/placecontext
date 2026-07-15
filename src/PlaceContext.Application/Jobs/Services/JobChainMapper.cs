@@ -8,12 +8,17 @@ internal static class JobChainMapper
 {
     public static async Task<JobChainView> ToViewAsync(JobChain chain, IJobRepository jobs, CancellationToken ct)
     {
-        var steps = new List<JobChainStepView>(chain.StepJobIds.Count);
-        foreach (var jobId in chain.StepJobIds)
+        var stages = new List<JobChainStageView>(chain.Stages.Count);
+        foreach (var stage in chain.Stages)
         {
-            var job = await jobs.GetByIdAsync(jobId, ct);
-            steps.Add(new JobChainStepView(jobId, job?.Name ?? "(deleted)"));
+            var stepViews = new List<JobChainStepView>(stage.JobIds.Count);
+            foreach (var jobId in stage.JobIds)
+            {
+                var job = await jobs.GetByIdAsync(jobId, ct);
+                stepViews.Add(new JobChainStepView(jobId, job?.Name ?? "(deleted)"));
+            }
+            stages.Add(new JobChainStageView(stepViews));
         }
-        return new JobChainView(chain.Id, chain.ProjectId, chain.Name, chain.Description, steps, chain.UpdatedAt);
+        return new JobChainView(chain.Id, chain.ProjectId, chain.Name, chain.Description, stages, chain.UpdatedAt);
     }
 }

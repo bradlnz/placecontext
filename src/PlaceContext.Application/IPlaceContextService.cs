@@ -61,9 +61,11 @@ public interface IPlaceContextService
     Task<bool> DeleteArtifactAsync(Guid artifactId, CancellationToken ct = default);
     Task<int> DeleteArtifactsAsync(IReadOnlyList<Guid> artifactIds, CancellationToken ct = default);
 
-    // Job chains (ordered pipelines: each step's output feeds the next step's input).
-    Task<JobChainView> CreateJobChainAsync(Guid projectId, string name, string? description, IReadOnlyList<Guid> stepJobIds, CancellationToken ct = default);
-    Task<JobChainView> UpdateJobChainAsync(Guid chainId, string name, string? description, IReadOnlyList<Guid> stepJobIds, CancellationToken ct = default);
+    // Job chains (staged pipelines: each stage's output feeds the next stage's input; a stage with
+    // more than one job id is a parallel fan-out group, and the stage right after it is the join).
+    // `stages`, when supplied, wins over the backward-compatible flat `stepJobIds` (one job per stage).
+    Task<JobChainView> CreateJobChainAsync(Guid projectId, string name, string? description, IReadOnlyList<Guid> stepJobIds, IReadOnlyList<IReadOnlyList<Guid>>? stages = null, CancellationToken ct = default);
+    Task<JobChainView> UpdateJobChainAsync(Guid chainId, string name, string? description, IReadOnlyList<Guid> stepJobIds, IReadOnlyList<IReadOnlyList<Guid>>? stages = null, CancellationToken ct = default);
     Task<bool> DeleteJobChainAsync(Guid chainId, CancellationToken ct = default);
     Task<IReadOnlyList<JobChainView>> ListJobChainsAsync(Guid projectId, CancellationToken ct = default);
     Task<ChainRunView> RunJobChainAsync(Guid chainId, string? inputPayload = null, Guid? chainRunId = null, IReadOnlyDictionary<int, string>? stepPayloadOverrides = null, CancellationToken ct = default);

@@ -178,6 +178,170 @@ public class JobChainTests
         Assert.Equal(ChainStepStatus.Running, run.Steps[0].Status);
     }
 
+    // ── fan-out / fan-in ────────────────────────────────────────────────────────────────────────────
+
+    private static JobChain FanOutJoinChain(Guid a, Guid b1, Guid b2, Guid join)
+        => JobChain.Create(ProjectId, "fan-out-join", null,
+            new[] { ChainStage.Of(a), new ChainStage(new[] { b1, b2 }), ChainStage.Of(join) }, T0);
+
+    [Fact]
+    public async Task Run_dispatches_a_fan_out_stages_branches_concurrently()
+    {
+        var jobs = new InMemoryJobRepository();
+        var a = MakeJob("a"); var b1 = MakeJob("b1"); var b2 = MakeJob("b2"); var join = MakeJob("join");
+        await jobs.AddAsync(a); await jobs.AddAsync(b1); await jobs.AddAsync(b2); await jobs.AddAsync(join);
+        var chains = new InMemoryJobChainRepository();
+        var chain = FanOutJoinChain(a.Id, b1.Id, b2.Id, join.Id);
+        await chains.AddAsync(chain);
+
+        var dispatcher = new FakeRunDispatcher();
+        dispatcher.Results[a.Id] = Run(a.Id, "Succeeded", shardArtifacts: new[] { "{}" });
+        // Both branches sleep briefly so their execution windows overlap if — and only if — they
+        // were genuinely dispatched concurrently rather than one after another.
+        dispatcher.Delays[b1.Id] = TimeSpan.FromMilliseconds(60);
+        dispatcher.Delays[b2.Id] = TimeSpan.FromMilliseconds(60);
+        dispatcher.Results[b1.Id] = Run(b1.Id, "Succeeded", shardArtifacts: new[] { "{\"b\":1}" });
+        dispatcher.Results[b2.Id] = Run(b2.Id, "Succeeded", shardArtifacts: new[] { "{\"b\":2}" });
+        dispatcher.Results[join.Id] = Run(join.Id, "Succeeded", shardArtifacts: new[] { "{\"joined\":true}" });
+
+        var view = await RunHandler(chains, jobs, dispatcher).HandleAsync(new RunJobChainCommand(chain.Id));
+
+        Assert.Equal("Succeeded", view.Status);
+        Assert.True(dispatcher.MaxObservedConcurrency >= 2, "the fan-out branches should overlap in flight");
+    }
+
+    [Fact]
+    public async Task Run_caps_fan_out_concurrency_at_a_conservative_bound()
+    {
+        var jobs = new InMemoryJobRepository();
+        var a = MakeJob("a");
+        var branchJobs = Enumerable.Range(0, 8).Select(i => MakeJob($"b{i}")).ToList();
+        var join = MakeJob("join");
+        await jobs.AddAsync(a);
+        foreach (var b in branchJobs) await jobs.AddAsync(b);
+        await jobs.AddAsync(join);
+
+        var chains = new InMemoryJobChainRepository();
+        var chain = JobChain.Create(ProjectId, "wide-fan-out", null,
+            new[] { ChainStage.Of(a.Id), new ChainStage(branchJobs.Select(b => b.Id)), ChainStage.Of(join.Id) }, T0);
+        await chains.AddAsync(chain);
+
+        var dispatcher = new FakeRunDispatcher();
+        dispatcher.Results[a.Id] = Run(a.Id, "Succeeded", shardArtifacts: new[] { "{}" });
+        foreach (var b in branchJobs)
+        {
+            dispatcher.Delays[b.Id] = TimeSpan.FromMilliseconds(40);
+            dispatcher.Results[b.Id] = Run(b.Id, "Succeeded", shardArtifacts: new[] { "{}" });
+        }
+        dispatcher.Results[join.Id] = Run(join.Id, "Succeeded", shardArtifacts: new[] { "{}" });
+
+        await RunHandler(chains, jobs, dispatcher).HandleAsync(new RunJobChainCommand(chain.Id));
+
+        Assert.InRange(dispatcher.MaxObservedConcurrency, 2, 4); // bounded, not unlimited fan-out
+    }
+
+    [Fact]
+    public async Task Run_threads_every_branchs_output_into_the_join()
+    {
+        var jobs = new InMemoryJobRepository();
+        var a = MakeJob("a"); var b1 = MakeJob("b1"); var b2 = MakeJob("b2"); var join = MakeJob("join");
+        await jobs.AddAsync(a); await jobs.AddAsync(b1); await jobs.AddAsync(b2); await jobs.AddAsync(join);
+        var chains = new InMemoryJobChainRepository();
+        var chain = FanOutJoinChain(a.Id, b1.Id, b2.Id, join.Id);
+        await chains.AddAsync(chain);
+
+        var dispatcher = new FakeRunDispatcher();
+        dispatcher.Results[a.Id] = Run(a.Id, "Succeeded", shardArtifacts: new[] { "{}" });
+        dispatcher.Results[b1.Id] = Run(b1.Id, "Succeeded", shardArtifacts: new[] { "{\"branch\":1}" });
+        dispatcher.Results[b2.Id] = Run(b2.Id, "Succeeded", shardArtifacts: new[] { "{\"branch\":2}" });
+        dispatcher.Results[join.Id] = Run(join.Id, "Succeeded", shardArtifacts: new[] { "{\"joined\":true}" });
+
+        var view = await RunHandler(chains, jobs, dispatcher).HandleAsync(new RunJobChainCommand(chain.Id));
+
+        Assert.Equal("Succeeded", view.Status);
+        // The join (4th dispatched job) received a JSON array of both branches' outputs, in branch order.
+        var joinPayload = dispatcher.Payloads[dispatcher.DispatchedJobIds.IndexOf(join.Id)];
+        Assert.Equal("[{\"branch\":1},{\"branch\":2}]", joinPayload);
+        Assert.Equal("{\"joined\":true}", view.FinalOutput);
+    }
+
+    [Fact]
+    public async Task Run_any_branch_failure_fails_the_chain_and_skips_the_join()
+    {
+        var jobs = new InMemoryJobRepository();
+        var a = MakeJob("a"); var b1 = MakeJob("b1"); var b2 = MakeJob("b2"); var join = MakeJob("join");
+        await jobs.AddAsync(a); await jobs.AddAsync(b1); await jobs.AddAsync(b2); await jobs.AddAsync(join);
+        var chains = new InMemoryJobChainRepository();
+        var chain = FanOutJoinChain(a.Id, b1.Id, b2.Id, join.Id);
+        await chains.AddAsync(chain);
+
+        var dispatcher = new FakeRunDispatcher();
+        dispatcher.Results[a.Id] = Run(a.Id, "Succeeded", shardArtifacts: new[] { "{}" });
+        dispatcher.Results[b1.Id] = Run(b1.Id, "Succeeded", shardArtifacts: new[] { "{}" });
+        dispatcher.Results[b2.Id] = Run(b2.Id, "Failed");
+        // No result registered for `join` — if it were dispatched anyway, the lookup would throw.
+
+        var view = await RunHandler(chains, jobs, dispatcher).HandleAsync(new RunJobChainCommand(chain.Id));
+
+        Assert.Equal("Failed", view.Status);
+        Assert.DoesNotContain(join.Id, dispatcher.DispatchedJobIds); // the join never ran
+        var byId = view.Steps.ToDictionary(s => s.JobId);
+        Assert.Equal("Succeeded", byId[a.Id].Status);
+        Assert.Equal("Succeeded", byId[b1.Id].Status);
+        Assert.Equal("Failed", byId[b2.Id].Status);
+        Assert.Equal("Skipped", byId[join.Id].Status);
+        // Every step of the fan-out stage shares a stage index; the join is the very next stage.
+        Assert.Equal(view.Steps.First(s => s.JobId == b1.Id).StageIndex, view.Steps.First(s => s.JobId == b2.Id).StageIndex);
+        Assert.Equal(view.Steps.First(s => s.JobId == b1.Id).StageIndex + 1, view.Steps.First(s => s.JobId == join.Id).StageIndex);
+    }
+
+    [Fact]
+    public async Task Run_a_partial_branch_downgrades_the_chain_but_the_join_still_runs()
+    {
+        var jobs = new InMemoryJobRepository();
+        var a = MakeJob("a"); var b1 = MakeJob("b1"); var b2 = MakeJob("b2"); var join = MakeJob("join");
+        await jobs.AddAsync(a); await jobs.AddAsync(b1); await jobs.AddAsync(b2); await jobs.AddAsync(join);
+        var chains = new InMemoryJobChainRepository();
+        var chain = FanOutJoinChain(a.Id, b1.Id, b2.Id, join.Id);
+        await chains.AddAsync(chain);
+
+        var dispatcher = new FakeRunDispatcher();
+        dispatcher.Results[a.Id] = Run(a.Id, "Succeeded", shardArtifacts: new[] { "{}" });
+        dispatcher.Results[b1.Id] = Run(b1.Id, "Partial", shardArtifacts: new[] { "{}" });
+        dispatcher.Results[b2.Id] = Run(b2.Id, "Succeeded", shardArtifacts: new[] { "{}" });
+        dispatcher.Results[join.Id] = Run(join.Id, "Succeeded", shardArtifacts: new[] { "{\"joined\":true}" });
+
+        var view = await RunHandler(chains, jobs, dispatcher).HandleAsync(new RunJobChainCommand(chain.Id));
+
+        Assert.Equal("Partial", view.Status);
+        Assert.Contains(join.Id, dispatcher.DispatchedJobIds); // a Partial branch doesn't halt the chain
+        Assert.Equal("Succeeded", view.Steps.First(s => s.JobId == join.Id).Status);
+    }
+
+    [Fact]
+    public async Task Run_a_linear_chain_is_every_stage_size_one_and_behaves_exactly_as_before()
+    {
+        // A chain authored via the flat (pre-fan-out) API is indistinguishable at run time from one
+        // built out of explicit size-1 stages — the backward-compatibility guarantee.
+        var jobs = new InMemoryJobRepository();
+        var a = MakeJob("extract"); var b = MakeJob("report");
+        await jobs.AddAsync(a); await jobs.AddAsync(b);
+        var chains = new InMemoryJobChainRepository();
+        var chain = JobChain.Create(ProjectId, "pipeline", null, new[] { a.Id, b.Id }, T0);
+        await chains.AddAsync(chain);
+        Assert.All(chain.Stages, s => Assert.False(s.IsParallel));
+
+        var dispatcher = new FakeRunDispatcher();
+        dispatcher.Results[a.Id] = Run(a.Id, "Succeeded", shardArtifacts: new[] { "{\"rows\":3}" });
+        dispatcher.Results[b.Id] = Run(b.Id, "Succeeded", shardArtifacts: new[] { "{\"report\":\"done\"}" });
+
+        var view = await RunHandler(chains, jobs, dispatcher).HandleAsync(new RunJobChainCommand(chain.Id));
+
+        Assert.Equal("Succeeded", view.Status);
+        Assert.All(view.Steps, s => Assert.Equal(s.Index, s.StageIndex)); // every step is its own stage
+        Assert.All(view.Steps, s => Assert.Equal(0, s.BranchIndex));
+    }
+
     // ── fakes ───────────────────────────────────────────────────────────────────────────────────────
 
     private static JobRunDetailView Run(Guid jobId, string status,
@@ -194,19 +358,46 @@ public class JobChainTests
     }
 
     /// <summary>Dispatcher that answers RunJobCommand from a canned per-job result and records the
-    /// payload each step received — the seam that lets chain logic be tested without a runner.</summary>
+    /// payload each step received — the seam that lets chain logic be tested without a runner.
+    /// Thread-safe (locked list mutations) and supports an optional artificial per-job delay so
+    /// fan-out tests can force genuine overlap and observe how many branches were in flight at once
+    /// — the same guarantee the real <c>Dispatcher</c> gives every dispatched command its own DI
+    /// scope, so concurrent branches never contend on shared state.</summary>
     private sealed class FakeRunDispatcher : IDispatcher
     {
+        private readonly object _gate = new();
+        private int _active;
+
         public Dictionary<Guid, JobRunDetailView> Results { get; } = new();
+        public Dictionary<Guid, TimeSpan> Delays { get; } = new();
         public List<string?> Payloads { get; } = new();
         public List<Guid?> RunIds { get; } = new();
+        public List<Guid> DispatchedJobIds { get; } = new();
+        public int MaxObservedConcurrency { get; private set; }
 
-        public Task<TResult> Send<TResult>(ICommand<TResult> command, CancellationToken ct = default)
+        public async Task<TResult> Send<TResult>(ICommand<TResult> command, CancellationToken ct = default)
         {
             var run = (RunJobCommand)(object)command;
-            Payloads.Add(run.InputPayload);
-            RunIds.Add(run.RunId);
-            return Task.FromResult((TResult)(object)Results[run.JobId]);
+            lock (_gate)
+            {
+                Payloads.Add(run.InputPayload);
+                RunIds.Add(run.RunId);
+                DispatchedJobIds.Add(run.JobId);
+            }
+
+            var active = Interlocked.Increment(ref _active);
+            lock (_gate) { if (active > MaxObservedConcurrency) MaxObservedConcurrency = active; }
+            try
+            {
+                if (Delays.TryGetValue(run.JobId, out var delay)) await Task.Delay(delay, ct);
+                JobRunDetailView result;
+                lock (_gate) result = Results[run.JobId];
+                return (TResult)(object)result;
+            }
+            finally
+            {
+                Interlocked.Decrement(ref _active);
+            }
         }
 
         public Task<TResult> Query<TResult>(IQuery<TResult> query, CancellationToken ct = default)

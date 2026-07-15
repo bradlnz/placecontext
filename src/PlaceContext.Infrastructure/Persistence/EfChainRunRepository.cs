@@ -66,9 +66,18 @@ public sealed class EfChainRunRepository : IChainRunRepository
             Enum.Parse<ChainRunStatus>(r.Status), steps, r.FinalOutput, r.StartedAt, r.FinishedAt);
     }
 
+    /// <summary>
+    /// Wire shape of one persisted step. <c>StageIndex</c>/<c>BranchIndex</c> are nullable so rows
+    /// written before fan-out existed (every step its own stage, no branch concept) still deserialize
+    /// — <see cref="ToDomain"/> falls back to <c>StageIndex == Index, BranchIndex == 0</c>, exactly
+    /// what a migrated linear chain's steps look like anyway. New rows always carry both explicitly
+    /// (see the <c>AddChainRunStageIndex</c> migration, which also backfills existing rows).
+    /// </summary>
     private sealed class StepJson
     {
         public int Index { get; set; }
+        public int? StageIndex { get; set; }
+        public int? BranchIndex { get; set; }
         public Guid JobId { get; set; }
         public string JobName { get; set; } = "";
         public Guid? RunId { get; set; }
@@ -79,6 +88,8 @@ public sealed class EfChainRunRepository : IChainRunRepository
         public static StepJson From(ChainStepRun s) => new()
         {
             Index = s.Index,
+            StageIndex = s.StageIndex,
+            BranchIndex = s.BranchIndex,
             JobId = s.JobId,
             JobName = s.JobName,
             RunId = s.RunId,
@@ -88,6 +99,7 @@ public sealed class EfChainRunRepository : IChainRunRepository
         };
 
         public ChainStepRun ToDomain() => new(
-            Index, JobId, JobName, RunId, Enum.Parse<ChainStepStatus>(Status), StartedAt, FinishedAt);
+            Index, StageIndex ?? Index, BranchIndex ?? 0, JobId, JobName, RunId,
+            Enum.Parse<ChainStepStatus>(Status), StartedAt, FinishedAt);
     }
 }
