@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Text;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Configuration;
@@ -19,9 +20,24 @@ public sealed class NpgsqlProjectDataStore : IProjectDataStore
 {
     private const int MaxRows = 500;
     private const string StatementTimeout = "10s";
+    private const int ProvisioningMaxAttempts = 3;
 
     private readonly string _connectionString;
     private readonly ILogger<NpgsqlProjectDataStore>? _log;
+
+    // Schemas this process has already provisioned successfully. Once a schema lands here,
+    // EnsureProvisionedAsync short-circuits the DDL batch entirely — this is what removes the
+    // vast majority of concurrent GRANT/REVOKE/CREATE SCHEMA catalog-tuple races (Postgres
+    // "tuple concurrently updated", SQLSTATE XX000) that fire when many requests hit an
+    // already-provisioned schema at once (e.g. the paginated/debounced-search Records tab).
+    // Populated ONLY after a successful provisioning pass — a failed attempt is never cached.
+    private static readonly ConcurrentDictionary<string, byte> ProvisionedSchemas = new();
+
+    /// <summary>Test hook: true once <paramref name="schema"/> has been provisioned in this process.</summary>
+    internal static bool IsProvisionedInProcess(string schema) => ProvisionedSchemas.ContainsKey(schema);
+
+    /// <summary>Test hook: clears the in-process provisioning cache so tests don't leak state.</summary>
+    internal static void ResetProvisioningCacheForTests() => ProvisionedSchemas.Clear();
 
     public NpgsqlProjectDataStore(IConfiguration config, ILogger<NpgsqlProjectDataStore>? log = null)
     {
@@ -400,6 +416,13 @@ public sealed class NpgsqlProjectDataStore : IProjectDataStore
         }
 
         var qualified = $"\"{schema}\".{QuoteIdent(tableName)}";
+
+        // Same advisory lock, same key as EnsureProvisionedAsync: this CREATE/REVOKE/GRANT batch
+        // mutates the same shared-catalog rows (pg_class.relacl etc.) as schema provisioning, so
+        // the background job writer must serialize against a concurrent browser-triggered
+        // provisioning pass on the same schema rather than race it.
+        await AcquireSchemaAdvisoryLockAsync(conn, tx, schema, ct);
+
         await using (var create = conn.CreateCommand())
         {
             var defs = columns.Select((c, i) => $"{QuoteIdent(c.Name)} {pgTypes[i]}" + (c.NotNull ? " NOT NULL" : ""));
@@ -523,28 +546,85 @@ public sealed class NpgsqlProjectDataStore : IProjectDataStore
     // Idempotent: schema + NOLOGIN role, role owns full rights on its schema and nothing else.
     // System tables (platform-owned, e.g. job_run_data) are clawed back to SELECT-only afterwards,
     // because the blanket grant would otherwise re-open writes on every provisioning pass.
+    //
+    // Three layers of defense against Postgres "tuple concurrently updated" (SQLSTATE XX000),
+    // which the GRANT/REVOKE/ALTER DEFAULT PRIVILEGES/CREATE SCHEMA statements below can hit when
+    // two sessions provision the same schema at once (the catalog rows they touch — pg_namespace,
+    // pg_class.relacl, pg_default_acl — aren't protected by normal row-level serialization):
+    //   1. an in-process "already provisioned" cache, so a hot schema only pays for this once;
+    //   2. a Postgres advisory lock (same transaction as the DDL) so two sessions that both miss
+    //      the cache for the same schema serialize instead of racing each other's DDL;
+    //   3. a short retry backstop for the residual XX000 / 40001 / 40P01 races.
     private async Task EnsureProvisionedAsync(NpgsqlConnection conn, string schema, CancellationToken ct)
     {
-        await using var cmd = conn.CreateCommand();
-        cmd.CommandText = $"""
-            CREATE SCHEMA IF NOT EXISTS "{schema}";
-            DO $$ BEGIN CREATE ROLE "{schema}" NOLOGIN; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
-            GRANT USAGE, CREATE ON SCHEMA "{schema}" TO "{schema}";
-            GRANT ALL ON ALL TABLES IN SCHEMA "{schema}" TO "{schema}";
-            GRANT ALL ON ALL SEQUENCES IN SCHEMA "{schema}" TO "{schema}";
-            ALTER DEFAULT PRIVILEGES IN SCHEMA "{schema}" GRANT ALL ON TABLES TO "{schema}";
-            ALTER DEFAULT PRIVILEGES IN SCHEMA "{schema}" GRANT ALL ON SEQUENCES TO "{schema}";
-            REVOKE ALL ON SCHEMA public FROM "{schema}";
-            DO $$ DECLARE t name;
-            BEGIN
-              FOR t IN SELECT c.relname FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
-                       WHERE n.nspname = '{schema}' AND c.relkind = 'r' AND pg_get_userbyid(c.relowner) <> '{schema}'
-              LOOP
-                EXECUTE format('REVOKE ALL ON TABLE %I.%I FROM %I', '{schema}', t, '{schema}');
-                EXECUTE format('GRANT SELECT ON TABLE %I.%I TO %I', '{schema}', t, '{schema}');
-              END LOOP;
-            END $$;
-            """;
-        await cmd.ExecuteNonQueryAsync(ct);
+        if (ProvisionedSchemas.ContainsKey(schema))
+            return;
+
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                await using var tx = await conn.BeginTransactionAsync(ct);
+
+                // Serializes concurrent first-time provisioning of the SAME schema. Sessions
+                // provisioning DIFFERENT schemas don't contend (different lock keys).
+                await AcquireSchemaAdvisoryLockAsync(conn, tx, schema, ct);
+
+                await using (var cmd = conn.CreateCommand())
+                {
+                    cmd.Transaction = tx;
+                    cmd.CommandText = $"""
+                        CREATE SCHEMA IF NOT EXISTS "{schema}";
+                        DO $$ BEGIN CREATE ROLE "{schema}" NOLOGIN; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+                        GRANT USAGE, CREATE ON SCHEMA "{schema}" TO "{schema}";
+                        GRANT ALL ON ALL TABLES IN SCHEMA "{schema}" TO "{schema}";
+                        GRANT ALL ON ALL SEQUENCES IN SCHEMA "{schema}" TO "{schema}";
+                        ALTER DEFAULT PRIVILEGES IN SCHEMA "{schema}" GRANT ALL ON TABLES TO "{schema}";
+                        ALTER DEFAULT PRIVILEGES IN SCHEMA "{schema}" GRANT ALL ON SEQUENCES TO "{schema}";
+                        REVOKE ALL ON SCHEMA public FROM "{schema}";
+                        DO $$ DECLARE t name;
+                        BEGIN
+                          FOR t IN SELECT c.relname FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+                                   WHERE n.nspname = '{schema}' AND c.relkind = 'r' AND pg_get_userbyid(c.relowner) <> '{schema}'
+                          LOOP
+                            EXECUTE format('REVOKE ALL ON TABLE %I.%I FROM %I', '{schema}', t, '{schema}');
+                            EXECUTE format('GRANT SELECT ON TABLE %I.%I TO %I', '{schema}', t, '{schema}');
+                          END LOOP;
+                        END $$;
+                        """;
+                    await cmd.ExecuteNonQueryAsync(ct);
+                }
+
+                await tx.CommitAsync(ct);
+
+                // Only cache on success — a failed/rolled-back attempt must re-run next time.
+                ProvisionedSchemas.TryAdd(schema, 0);
+                return;
+            }
+            catch (PostgresException ex) when (attempt < ProvisioningMaxAttempts && IsTransientConcurrencyError(ex))
+            {
+                _log?.LogWarning(ex,
+                    "Transient catalog contention provisioning schema {Schema} (attempt {Attempt}/{MaxAttempts}); retrying.",
+                    schema, attempt, ProvisioningMaxAttempts);
+                await Task.Delay(TimeSpan.FromMilliseconds(50 * attempt), ct);
+            }
+        }
     }
+
+    // pg_advisory_xact_lock auto-releases at transaction end (commit or rollback) — no explicit
+    // unlock needed. hashtextextended folds the schema name to a stable 64-bit lock key.
+    private static async Task AcquireSchemaAdvisoryLockAsync(NpgsqlConnection conn, NpgsqlTransaction tx, string schema, CancellationToken ct)
+    {
+        await using var lockCmd = conn.CreateCommand();
+        lockCmd.Transaction = tx;
+        lockCmd.CommandText = "SELECT pg_advisory_xact_lock(hashtextextended(@schema, 0))";
+        lockCmd.Parameters.AddWithValue("schema", schema);
+        await lockCmd.ExecuteNonQueryAsync(ct);
+    }
+
+    // XX000 = internal_error (Postgres's generic bucket for "tuple concurrently updated" on shared
+    // catalog rows), 40001 = serialization_failure, 40P01 = deadlock_detected. All three are safe
+    // to retry: the DDL is idempotent and nothing has committed.
+    private static bool IsTransientConcurrencyError(PostgresException ex) =>
+        ex.SqlState is "XX000" or "40001" or "40P01";
 }
