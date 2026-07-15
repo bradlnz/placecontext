@@ -1,7 +1,6 @@
 @page "/onboarding"
 @inject PortalUiState Ui
 @inject NavigationManager Nav
-@inject PlaceContext.Host.Demo.BrisbaneDemoSeeder Seeder
 
 <PageTitle>PlaceContext — Onboarding</PageTitle>
 
@@ -93,27 +92,6 @@
         </div>
     </div>
 
-    @* ── Demo workspace: everything populated in one click ─────────────────────────────── *@
-    <div class="dccard demo-card">
-        <div class="demo-row">
-            <div class="flex-1">
-                <div class="demo-title">Or skip ahead — seed the demo workspace</div>
-                <div class="demo-desc">
-                    Brisbane property feasibility: a full project with suburb market data, candidate development sites,
-                    costed scenarios in the Data tab, decisions, project context — and Analytics charts
-                    queued. Safe to click twice (it finds the existing demo).
-                </div>
-            </div>
-            <button class="dcbtn primary btn-none" disabled="@_seeding" @onclick="SeedDemoAsync">
-                @(_seeding ? "Seeding…" : "🌱 Seed demo")
-            </button>
-        </div>
-        @if (_seedError is not null)
-        {
-            <div class="error-msg">@_seedError</div>
-        }
-    </div>
-
     <div class="dccard auth-card">
         <div class="auth-title">How the authentication works</div>
         <ol class="auth-list">
@@ -130,23 +108,5 @@
     private string McpUrl => $"{Nav.BaseUri}mcp";
     private const string StepNum = "flex:none; width:24px; height:24px; border-radius:50%; background:var(--brand); color:#fff; display:inline-flex; align-items:center; justify-content:center; font-size:12px; font-weight:700";
 
-    private bool _seeding;
-    private string? _seedError;
-
     protected override void OnInitialized() => Ui.Set("Onboarding", "connect an agent and set up your workspace");
-
-    private async Task SeedDemoAsync()
-    {
-        _seeding = true;
-        _seedError = null;
-        try
-        {
-            var tenant = PlaceContext.Infrastructure.Tenancy.CurrentTenant.Current;
-            if (tenant is null) { _seedError = "No tenant resolved — sign in again."; return; }
-            var (projectId, _) = await Seeder.SeedAsync(tenant);
-            Nav.NavigateTo($"/project/{projectId}");
-        }
-        catch (Exception ex) { _seedError = ex.Message; }
-        finally { _seeding = false; }
-    }
 }

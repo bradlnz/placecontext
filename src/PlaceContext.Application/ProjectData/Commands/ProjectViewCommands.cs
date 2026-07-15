@@ -46,12 +46,14 @@ public sealed class SaveProjectViewHandler : ICommandHandler<SaveProjectViewComm
         return trimmed;
     }
 
-    /// <summary>Identifier gate matching the store's rules (letters/digits/underscores, ≤63).</summary>
+    /// <summary>Identifier gate matching the store's rules (letters/digits/underscores, ≤63)
+    /// plus the reserved-name set for the <c>/api/v1</c> entity surface.</summary>
     public static string Ident(string name)
     {
         var n = (name ?? "").Trim();
         if (!System.Text.RegularExpressions.Regex.IsMatch(n, @"^[A-Za-z_][A-Za-z0-9_]{0,62}$"))
             throw new ArgumentException("View names use letters, digits and underscores (max 63, no leading digit).");
+        ProjectDataReservedNames.EnsureAllowed(n, "view name");
         return n;
     }
 }

@@ -71,14 +71,29 @@ builder.Services.AddControllers();
 builder.Services.AddCascadingAuthenticationState();
 builder.Services.AddScoped<PlaceContext.Host.PortalUiState>();
 builder.Services.AddScoped<PlaceContext.Host.Branding.BrandingService>();
-builder.Services.AddScoped<PlaceContext.Host.Demo.BrisbaneDemoSeeder>();
 
 // Share the Data Protection key ring across replicas (persisted in Postgres) and pin the application
 // name, so the auth cookie one replica issues can be decrypted by any other — otherwise a token sign-in
 // handled by pod A produces a cookie pod B can't read, bouncing the operator back to /locked.
-builder.Services.AddDataProtection()
-    .SetApplicationName("placecontext")
-    .PersistKeysToDbContext<PlaceContext.Infrastructure.Persistence.AppDbContext>();
+// When PlaceContext:DataProtection:Key is set, the ring is encrypted at rest with that passphrase so a
+// DB dump alone cannot decrypt vault secrets or auth cookies.
+{
+    var dpBuilder = builder.Services.AddDataProtection()
+        .SetApplicationName("placecontext")
+        .PersistKeysToDbContext<PlaceContext.Infrastructure.Persistence.AppDbContext>();
+    var dpKey = builder.Configuration["PlaceContext:DataProtection:Key"];
+    if (!string.IsNullOrWhiteSpace(dpKey))
+    {
+        var encryptor = new PlaceContext.Infrastructure.Security.PassphraseXmlEncryptor(dpKey);
+        dpBuilder.Services.AddSingleton<Microsoft.AspNetCore.DataProtection.XmlEncryption.IXmlEncryptor>(encryptor);
+        dpBuilder.Services.AddSingleton<Microsoft.AspNetCore.DataProtection.XmlEncryption.IXmlDecryptor>(encryptor);
+        // Wire the encryptor into the key management options.
+        dpBuilder.Services.Configure<Microsoft.AspNetCore.DataProtection.KeyManagement.KeyManagementOptions>(o =>
+        {
+            o.XmlEncryptor = encryptor;
+        });
+    }
+}
 
 // Cookie authentication. The portal requires a logged-in user (fallback policy); /login, /register,
 // the auth endpoints, and /mcp opt out explicitly.
@@ -87,6 +102,9 @@ builder.Services
     .AddCookie(o =>
     {
         o.Cookie.Name = "placecontext_auth";
+        o.Cookie.HttpOnly = true;
+        o.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+        o.Cookie.SameSite = SameSiteMode.Lax;
         // No password login: an unauthenticated request is sent to /locked, which tells the operator to
         // open the portal from the pctl TUI (the TUI mints a token and signs them in via /auth/portal).
         o.LoginPath = "/locked";
@@ -163,7 +181,10 @@ builder.Services
     // IaC/CI clients). Deliberately opt-in per endpoint via [Authorize(AuthenticationSchemes = "ApiKey")]
     // — it never becomes the ambient default, so it can't accidentally widen the portal or MCP surfaces.
     .AddScheme<PlaceContext.Host.Auth.ApiKeyAuthenticationOptions, PlaceContext.Host.Auth.ApiKeyAuthenticationHandler>(
-        PlaceContext.Host.Auth.ApiKeyAuthenticationHandler.SchemeName, _ => { });
+        PlaceContext.Host.Auth.ApiKeyAuthenticationHandler.SchemeName, _ => { })
+    // Personal user API tokens (Settings → API tokens), used by the entity data API at /api/v1/data/*.
+    .AddScheme<PlaceContext.Host.Auth.UserApiTokenAuthenticationOptions, PlaceContext.Host.Auth.UserApiTokenAuthenticationHandler>(
+        PlaceContext.Host.Auth.UserApiTokenAuthenticationHandler.SchemeName, _ => { });
 builder.Services.AddAuthorization(o =>
 {
     // Any authenticated member can read (Viewer+).
@@ -220,7 +241,18 @@ PlaceContext.Infrastructure.DependencyInjection.MigrateDatabase(app.Services);
 // product is no longer gated by an activation key.
 
 app.UseStaticFiles();
+app.Use(async (ctx, next) =>
+{
+    // Baseline security headers for every response (portal, API, MCP).
+    ctx.Response.Headers.TryAdd("X-Content-Type-Options", "nosniff");
+    ctx.Response.Headers.TryAdd("X-Frame-Options", "DENY");
+    ctx.Response.Headers.TryAdd("Referrer-Policy", "no-referrer");
+    ctx.Response.Headers.TryAdd("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+    await next();
+});
 app.UseMiddleware<TenantResolutionMiddleware>(); // resolve {user}.placecontext.ai → tenant, before any data access
+// Project for the entity data API: X-Project-Id / X-Project (optional; entity routes require it).
+app.UseMiddleware<PlaceContext.Host.Tenancy.ProjectResolutionMiddleware>();
 app.UseAuthentication();
 app.UseAuthorization();
 // After UseAuthorization deliberately — see UserResolutionMiddleware for why.

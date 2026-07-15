@@ -9,5 +9,7 @@ public sealed class InviteRow : ITenantOwned
     public string Role { get; set; } = "Member";   // UserRole name
     public string Token { get; set; } = "";
     public DateTimeOffset CreatedAt { get; set; }
+    /// <summary>When set, the invite is invalid after this instant (null = legacy non-expiring rows).</summary>
+    public DateTimeOffset? ExpiresAt { get; set; }
     public DateTimeOffset? AcceptedAt { get; set; }
 }

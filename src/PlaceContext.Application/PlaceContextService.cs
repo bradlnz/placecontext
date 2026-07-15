@@ -266,12 +266,6 @@ public sealed class PlaceContextService : IPlaceContextService
     public Task<IReadOnlyList<EntityTagPair>> ListEntityTagPairsAsync(Guid entityId, CancellationToken ct = default)
         => _dispatcher.Query(new EntityTagPairsQuery(entityId), ct);
 
-    public Task<InboundSmsView> ReceiveInboundSmsAsync(ReceiveInboundSmsCommand command, CancellationToken ct = default)
-        => _dispatcher.Send(command, ct);
-
-    public Task<IReadOnlyList<InboundSmsView>> ListInboundSmsAsync(int take = 50, CancellationToken ct = default)
-        => _dispatcher.Query(new ListInboundSmsQuery(take), ct);
-
     public Task<IReadOnlyList<RunReportView>> ListRecentRunReportsAsync(int take = 24, CancellationToken ct = default)
         => _dispatcher.Query(new ListRecentRunReportsQuery(take), ct);
 

@@ -10,7 +10,7 @@ public sealed class FileRepoFiles : IRepoFiles
     {
         foreach (var rel in candidates)
         {
-            var full = Path.Combine(repo.Value, rel);
+            if (!TryResolve(repo.Value, rel, out var full)) continue;
             if (File.Exists(full))
                 return await File.ReadAllTextAsync(full, ct);
         }
@@ -19,7 +19,8 @@ public sealed class FileRepoFiles : IRepoFiles
 
     public async Task<string> WriteAsync(ProjectPath repo, string relativePath, string content, CancellationToken ct = default)
     {
-        var full = Path.Combine(repo.Value, relativePath);
+        if (!TryResolve(repo.Value, relativePath, out var full))
+            throw new InvalidOperationException($"Refusing to write file outside the project tree: '{relativePath}'.");
         Directory.CreateDirectory(Path.GetDirectoryName(full)!);
         await File.WriteAllTextAsync(full, content, ct);
         return full;
@@ -41,7 +42,30 @@ public sealed class FileRepoFiles : IRepoFiles
 
     public async Task<string?> ReadAsync(ProjectPath repo, string relativePath, CancellationToken ct = default)
     {
-        var full = Path.Combine(repo.Value, relativePath);
+        if (!TryResolve(repo.Value, relativePath, out var full))
+            return null;
         return File.Exists(full) ? await File.ReadAllTextAsync(full, ct) : null;
+    }
+
+    /// <summary>Resolves <paramref name="relativePath"/> under <paramref name="repoRoot"/>, rejecting
+    /// path traversal that would escape the project tree.</summary>
+    private static bool TryResolve(string repoRoot, string relativePath, out string fullPath)
+    {
+        fullPath = "";
+        if (string.IsNullOrWhiteSpace(relativePath)) return false;
+        var root = Path.GetFullPath(repoRoot);
+        if (!root.EndsWith(Path.DirectorySeparatorChar))
+            root += Path.DirectorySeparatorChar;
+        var candidate = Path.GetFullPath(Path.Combine(repoRoot, relativePath));
+        // Exact root match or under root/
+        if (candidate.Equals(Path.GetFullPath(repoRoot), StringComparison.Ordinal))
+        {
+            fullPath = candidate;
+            return true;
+        }
+        if (!candidate.StartsWith(root, StringComparison.Ordinal))
+            return false;
+        fullPath = candidate;
+        return true;
     }
 }

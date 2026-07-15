@@ -6,6 +6,10 @@ IaC/CI client). It is separate from the Blazor portal (cookie auth) and the MCP 
 (OAuth bearer auth): the management API uses its own single-key **ApiKey** authentication scheme and
 speaks plain JSON over HTTP, no protocol framing.
 
+There is also a **personal entity data API** at `/api/v1/{entity-name}` (project via
+`X-Project-Id` / `X-Project` middleware) authenticated with user API tokens from
+**Settings → API tokens** (`pct_…`). See the end of this document.
+
 - Base URL: `https://{your-workspace}.placecontext.ai/api/v1` (or `http://{workspace}.localhost:7700/api/v1`
   in local dev — the workspace is resolved from the subdomain, same as the portal/MCP).
 - All request/response bodies are JSON, `camelCase` field names.
@@ -390,3 +394,50 @@ Every non-2xx response with a body uses:
   MCP for run history.
 - Project **deletion** — see the note under Projects above.
 - Changing a schedule's cron/name/event in place — see the note under `PUT /api/v1/schedules/{id}`.
+
+---
+
+## Entity data API (`/api/v1/{entity-name}`)
+
+Auto-built from the workspace's registered **data entities** (portal: project → Entities). The
+**project is not in the path** — `ProjectResolutionMiddleware` reads it from headers (or query):
+
+```
+X-Project-Id: 8f14e45f-ceea-4b3e-8c7a-6a5b6b6d8a10
+# or
+X-Project: storefront-api
+```
+
+(Query fallbacks: `?projectId=` / `?project=`.)
+
+Authenticate with a **personal API token** from **Settings → API tokens** (prefix `pct_`), or the
+workspace admin `PlaceContext:Api:Key`:
+
+```
+Authorization: Bearer pct_…
+# or
+X-Api-Key: pct_…
+```
+
+Personal tokens act as the minting user (same role + fine-grained permissions). Requires `data.read`.
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/v1/entities` | Entity registry for the resolved project (name, slug, table, relations) |
+| `GET` | `/api/v1/{entity-name}` | Paginated rows (`?page=&pageSize=&search=`) |
+| `GET` | `/api/v1/{entity-name}/{key}` | Rows whose label column matches `key` |
+
+`{entity-name}` matches the entity's display name, table name, or slug (e.g. `Sites` → `sites`).
+Reserved segments used by the management API (`projects`, `jobs`, `schedules`, `entities`) never
+resolve as entity names — and **project data will not let you create tables, views, or entities
+with those names** (enforced in the store and on entity save).
+
+Records are served from the project's isolated Postgres schema (same sandbox as the Data tab).
+
+Example:
+
+```bash
+curl -H "Authorization: Bearer pct_…" \
+     -H "X-Project: storefront-api" \
+     https://ws.placecontext.ai/api/v1/sites
+```

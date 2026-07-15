@@ -127,7 +127,9 @@ else
 }
 
 @code {
-    private static readonly string[] Roles = Enum.GetNames<UserRole>();
+    // Owner is not assignable via invite/role dropdown — ownership transfer is a separate path.
+    private static readonly string[] Roles = Enum.GetNames<UserRole>()
+        .Where(r => r != nameof(UserRole.Owner)).ToArray();
 
     private IReadOnlyList<MemberView> _members = Array.Empty<MemberView>();
     private bool _loading = true;

@@ -173,11 +173,24 @@ public sealed class AuthController : ControllerBase
     [HttpPost("/auth/accept-invite")]
     public async Task<IActionResult> AcceptInvite([FromForm] string token, [FromForm] string password, [FromForm] string? displayName)
     {
-        if ((password?.Length ?? 0) < 8)
-            return Redirect($"/join?token={Uri.EscapeDataString(token)}&error=" + Uri.EscapeDataString("Choose a password of at least 8 characters."));
-        var user = await _members.AcceptInviteAsync(token, displayName ?? "", password!, HttpContext.RequestAborted);
+        if (!await ValidAntiforgeryAsync())
+            return Redirect($"/join?token={Uri.EscapeDataString(token ?? "")}&error=" + Uri.EscapeDataString("Your session expired — please try again."));
+
+        var policyError = PasswordPolicy.Validate(password);
+        if (policyError is not null)
+            return Redirect($"/join?token={Uri.EscapeDataString(token)}&error=" + Uri.EscapeDataString(policyError));
+
+        AuthUser? user;
+        try
+        {
+            user = await _members.AcceptInviteAsync(token, displayName ?? "", password!, HttpContext.RequestAborted);
+        }
+        catch (ArgumentException ex)
+        {
+            return Redirect($"/join?token={Uri.EscapeDataString(token)}&error=" + Uri.EscapeDataString(ex.Message));
+        }
         if (user is null)
-            return Redirect($"/join?token={Uri.EscapeDataString(token)}&error=" + Uri.EscapeDataString("This invite is invalid, used, or the email is already a member."));
+            return Redirect($"/join?token={Uri.EscapeDataString(token)}&error=" + Uri.EscapeDataString("This invite is invalid, used, expired, or the email is already a member."));
         await SignInAsync(HttpContext, user);
         return Redirect("/");
     }

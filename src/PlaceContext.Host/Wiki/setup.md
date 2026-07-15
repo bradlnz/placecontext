@@ -19,7 +19,7 @@ magic. The long-form version of this journey lives in the repo at `docs/SETUP.md
 3. **Tailscale** — fleet nodes connect via Tailscale. Paste an OAuth client once
    (`pctl ts-oauth`); every join afterwards mints its own single-use tailnet key —
    you never handle keys again.
-4. **Platform keys** — generate the event-ingest key and the inbound-SMS key (or skip).
+4. **Platform keys** — generate the event-ingest key (or skip).
    They're kept in a local overlay that every deploy re-applies, so redeploys never
    silently disable the gateways.
 5. **Bring-up** — `dev up`, `server up`, or `join --code …` for the chosen mode.
@@ -36,7 +36,6 @@ cluster. Codes stay valid for an hour; the node itself is a durable tailnet devi
 | Key | Feature |
 |---|---|
 | Ingest key | External systems `POST /ingest/{event}` to fire event triggers |
-| SMS inbound key | Your SMS provider webhooks to `POST /sms/inbound` — messages stored encrypted, `sms.received` fires triggers |
 
 ## After setup
 

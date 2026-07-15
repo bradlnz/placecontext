@@ -49,6 +49,11 @@ public sealed class SaveDataEntityHandler : ICommandHandler<SaveDataEntityComman
 
     public async Task<DataEntityView> HandleAsync(SaveDataEntityCommand command, CancellationToken ct = default)
     {
+        // Entity display name and source table both surface as /api/v1/{entity-name} — reject
+        // collisions with the management API's reserved path segments.
+        ProjectDataReservedNames.EnsureAllowed(command.Name, "entity name");
+        ProjectDataReservedNames.EnsureAllowed(command.TableName, "table name");
+
         var relations = command.Relations
             .Where(r => !string.IsNullOrWhiteSpace(r.Column) && !string.IsNullOrWhiteSpace(r.TargetEntity))
             .Select(r => new EntityRelation(r.Column.Trim(), r.TargetEntity.Trim(),

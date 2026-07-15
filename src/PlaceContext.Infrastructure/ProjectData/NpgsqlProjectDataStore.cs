@@ -58,6 +58,18 @@ public sealed class NpgsqlProjectDataStore : IProjectDataStore
         return name;
     }
 
+    /// <summary>
+    /// Identifier check for a table/view being <em>created or renamed to</em>. Also rejects names
+    /// reserved for the <c>/api/v1/{{entity-name}}</c> surface (see <see cref="ProjectDataReservedNames"/>).
+    /// Existing reserved tables (if any) remain readable via the normal Ident path.
+    /// </summary>
+    private static string TableIdent(string name, string what = "table name")
+    {
+        Ident(name, what);
+        ProjectDataReservedNames.EnsureAllowed(name, what);
+        return name;
+    }
+
     private static string QuoteIdent(string name) => "\"" + name.Replace("\"", "\"\"") + "\"";
 
     public async Task<ProjectQueryResult> ExecuteAsync(Guid projectId, string sql, CancellationToken ct = default)
@@ -242,7 +254,7 @@ public sealed class NpgsqlProjectDataStore : IProjectDataStore
 
     public async Task CreateTableAsync(Guid projectId, string tableName, IReadOnlyList<ProjectColumnSpec> columns, CancellationToken ct = default)
     {
-        Ident(tableName, "table name");
+        TableIdent(tableName);
         if (columns is null || columns.Count == 0)
             throw new ArgumentException("A table needs at least one column.");
 
@@ -269,7 +281,7 @@ public sealed class NpgsqlProjectDataStore : IProjectDataStore
     public Task RenameTableAsync(Guid projectId, string from, string to, CancellationToken ct = default)
     {
         Ident(from, "table name");
-        Ident(to, "new table name");
+        TableIdent(to, "new table name");
         return RunAsRoleAsync(projectId, $"ALTER TABLE {QuoteIdent(from)} RENAME TO {QuoteIdent(to)}", ct);
     }
 
@@ -346,7 +358,8 @@ public sealed class NpgsqlProjectDataStore : IProjectDataStore
     public async Task AppendReadOnlyRowsAsync(Guid projectId, string tableName, IReadOnlyList<ProjectColumnSpec> columns,
         IReadOnlyList<IReadOnlyList<string?>> rows, CancellationToken ct = default)
     {
-        Ident(tableName, "table name");
+        // May CREATE TABLE IF NOT EXISTS — block reserved API path names.
+        TableIdent(tableName);
         if (columns is null || columns.Count == 0)
             throw new ArgumentException("A table needs at least one column.");
         var pgTypes = new string[columns.Count];
@@ -419,7 +432,10 @@ public sealed class NpgsqlProjectDataStore : IProjectDataStore
     public async Task<int> ImportRowsAsync(Guid projectId, string tableName, IReadOnlyList<ProjectColumnSpec> columns,
         IReadOnlyList<IReadOnlyList<string?>> rows, bool createTable, CancellationToken ct = default)
     {
-        Ident(tableName, "table name");
+        // Creating a new table under a reserved name would steal /api/v1/{name}; imports into an
+        // already-existing reserved table (legacy) still go through Ident only.
+        if (createTable) TableIdent(tableName);
+        else Ident(tableName, "table name");
         if (columns is null || columns.Count == 0)
             throw new ArgumentException("A table needs at least one column.");
         var pgTypes = new string[columns.Count];

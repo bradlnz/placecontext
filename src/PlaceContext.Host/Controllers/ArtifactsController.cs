@@ -8,8 +8,9 @@ namespace PlaceContext.Host.Controllers;
 /// <summary>
 /// Streams a post-job artifact from the object store (MinIO). The portal/TUI link here; the
 /// <see cref="IRunArtifactLinkRepository"/> tenant filter scopes the lookup to the signed-in tenant, so
-/// one tenant can't read another's artifacts. HTML, images, and PDFs render inline (the browser previews
-/// them in the tab); the rest download with their original filename.
+/// one tenant can't read another's artifacts. HTML is always offered as a download (never inline) to
+/// prevent stored XSS from malicious job output running in the portal origin; images and PDFs may
+/// still render inline.
 /// </summary>
 [Authorize]
 public sealed class ArtifactsController : ControllerBase
@@ -31,9 +32,20 @@ public sealed class ArtifactsController : ControllerBase
         var obj = await _store.OpenReadAsync(link.Bucket, link.ObjectKey, HttpContext.RequestAborted);
         if (obj is null) return NotFound();
 
-        var inline = obj.ContentType.StartsWith("text/html") || obj.ContentType.StartsWith("image/")
-            || obj.ContentType.StartsWith("application/pdf");
-        var fileName = inline ? null : link.ObjectKey[(link.ObjectKey.LastIndexOf('/') + 1)..];
-        return File(obj.Content, obj.ContentType, fileDownloadName: fileName);
+        // Never inline HTML/SVG — job authors (or compromised workloads) could inject scripts that
+        // run as the signed-in portal user. Force download instead.
+        var isHtml = obj.ContentType.StartsWith("text/html", StringComparison.OrdinalIgnoreCase)
+            || obj.ContentType.Contains("svg", StringComparison.OrdinalIgnoreCase);
+        var inline = !isHtml && (obj.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase)
+            || obj.ContentType.StartsWith("application/pdf", StringComparison.OrdinalIgnoreCase));
+        var fileName = link.ObjectKey[(link.ObjectKey.LastIndexOf('/') + 1)..];
+        if (string.IsNullOrEmpty(fileName)) fileName = "artifact";
+
+        Response.Headers["X-Content-Type-Options"] = "nosniff";
+        if (isHtml)
+            Response.Headers["Content-Security-Policy"] = "sandbox";
+
+        return File(obj.Content, isHtml ? "application/octet-stream" : obj.ContentType,
+            fileDownloadName: inline ? null : fileName);
     }
 }

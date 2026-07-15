@@ -1,0 +1,24 @@
+.page { padding: 1.25rem 1.5rem 2rem; max-width: 52rem; }
+.page-title { margin: 0 0 .35rem; font-size: 1.35rem; }
+.page-sub { color: var(--muted, #6b7280); font-size: .9rem; margin-bottom: 1.25rem; line-height: 1.45; }
+.message { margin-bottom: 1rem; padding: .6rem .8rem; border-radius: 6px; background: #ecfdf5; color: #065f46; font-size: .9rem; }
+.add-card, .api-docs, .created, .empty, .token-row { margin-bottom: .85rem; padding: 1rem 1.1rem; }
+.add-title { font-weight: 600; margin-bottom: .65rem; }
+.add-row { display: flex; flex-wrap: wrap; gap: .65rem; align-items: flex-end; }
+.field { flex: 1 1 12rem; }
+.field-life { flex: 0 0 8rem; }
+.field-label { display: block; font-size: .75rem; color: var(--muted, #6b7280); margin-bottom: .25rem; }
+.field-input { width: 100%; }
+.add-error { color: #b91c1c; font-size: .85rem; margin-top: .5rem; }
+.created { border: 1px solid #fbbf24; background: #fffbeb; }
+.created-title { font-weight: 600; margin-bottom: .5rem; color: #92400e; }
+.raw-token { display: block; word-break: break-all; padding: .6rem .75rem; background: #fff; border-radius: 4px; font-size: .85rem; margin-bottom: .6rem; }
+.created-hint { font-size: .8rem; color: #78716c; margin-bottom: .75rem; }
+.api-list { margin: 0 0 .5rem 1.1rem; padding: 0; font-size: .9rem; line-height: 1.6; }
+.list { display: flex; flex-direction: column; gap: .55rem; }
+.token-row { display: flex; justify-content: space-between; align-items: center; gap: 1rem; }
+.token-meta { display: flex; flex-direction: column; gap: .2rem; min-width: 0; }
+.token-name { font-weight: 600; }
+.token-prefix code { font-size: .8rem; }
+.token-dates { font-size: .8rem; color: var(--muted, #6b7280); }
+.empty { color: var(--muted, #6b7280); font-size: .9rem; }

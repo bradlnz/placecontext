@@ -54,7 +54,7 @@ public sealed class PlaceContextTools
             };
         });
 
-    [Authorize(Policy = "Member")]
+    [Authorize(Policy = Permission.ProjectsManage)]
     [McpServerTool(Name = "create_project"), Description("Register a project with PlaceContext by its absolute path. Idempotent: re-creating a known path returns the existing project. New projects are created already registered.")]
     public static Task<string> CreateProject(IPlaceContextService svc, IToolCallLog log,
         [Description("Absolute path of the project repo, e.g. /home/brad/code/myapp")] string path,
@@ -62,7 +62,7 @@ public sealed class PlaceContextTools
         => Traced(log, "create_project", "—", $"create {path}", new { path, name },
             () => svc.CreateProjectAsync(path, name));
 
-    [Authorize(Policy = "Member")]
+    [Authorize(Policy = Permission.ProjectsManage)]
     [McpServerTool(Name = "onboard"), Description("Bootstrap a project into PlaceContext in one call: create the project (with initial risk), backfill the activity log from git history (when it is a git repo), seed context from any README/AGENTS/CLAUDE docs, and scaffold a local skill + agent for the target AI agent. Returns a setup summary.")]
     public static Task<string> Onboard(IPlaceContextService svc, IToolCallLog log,
         [Description("Absolute path of the project repo")] string path,
@@ -78,7 +78,7 @@ public sealed class PlaceContextTools
         => Traced(log, "list_projects", "—", "list all projects", new { },
             () => svc.GetProjectsAsync());
 
-    [Authorize(Policy = "Member")]
+    [Authorize(Policy = Permission.ProjectsManage)]
     [McpServerTool(Name = "register_project"), Description("Promote a discovered project to registered (watched) status.")]
     public static Task<string> RegisterProject(IPlaceContextService svc, IToolCallLog log,
         [Description("The project's GUID id")] Guid projectId)
@@ -262,7 +262,7 @@ public sealed class PlaceContextTools
         multiple files.
         """;
 
-    [Authorize(Policy = "Member")]
+    [Authorize(Policy = Permission.JobsEdit)]
     [McpServerTool(Name = "upload_job_code"), Description("Upload (replace) the source file set of a job's map step so it can be run as isolated containers. Target an existing job by jobId, OR by projectId + jobName (the job is created with sensible defaults — one '{}' shard, concurrency 1, success exit 0 — when it does not yet exist). 'filesJson' is a JSON array of {\"path\":\"index.js\",\"content\":\"...\"}; paths may include subdirectories (e.g. 'lib/report.js'). 'runtimeId' selects the sandbox ('python' — the default — 'node', 'go', 'ruby', or 'dotnet'); 'entrypoint' is the path of the file to invoke (required when uploading more than one file; defaults to the runtime's default for a single file). Existing input payloads, env, concurrency, reduce step, and exit-code policy are preserved.")]
     public static Task<string> UploadJobCode(IPlaceContextService svc, IToolCallLog log,
         [Description("JSON array of files, e.g. [{\"path\":\"main.py\",\"content\":\"...\"}]")] string filesJson,
@@ -294,7 +294,7 @@ public sealed class PlaceContextTools
         => Traced(log, "get_job", jobId.ToString(), "get job", new { jobId },
             () => svc.GetJobAsync(jobId));
 
-    [Authorize(Policy = "Member")]
+    [Authorize(Policy = Permission.JobsRun)]
     [McpServerTool(Name = "run_job"), Description("Run a job now: executes its map shards (and reduce step, if defined) as isolated containers and waits for completion. Returns the run detail — overall status plus each shard's exit code, outcome, artifact, and log, and any reduce result. Pass 'inputPayload' to override the stored shards with a single shard carrying that payload (e.g. parameters for a job that declares input fields). Use list_job_runs/get_job_run to fetch results later.")]
     public static Task<string> RunJob(IPlaceContextService svc, IToolCallLog log, Guid jobId,
         [Description("Optional input payload override (typically JSON); runs a single shard with it")] string? inputPayload = null)
@@ -315,7 +315,7 @@ public sealed class PlaceContextTools
 
     // ── Job chains ────────────────────────────────────────────────────────────────────────────────
 
-    [Authorize(Policy = "Member")]
+    [Authorize(Policy = Permission.ChainsManage)]
     [McpServerTool(Name = "create_job_chain"), Description("Define a job chain: an ordered pipeline of existing jobs where each step's primary output (reduce artifact if present, else the shard artifacts) becomes the next step's stdin input payload. 'jobIdsJson' is a JSON array of job ids in run order, e.g. [\"<guid>\",\"<guid>\"] — the same job may appear more than once. All jobs must belong to the project. Use run_job_chain to execute it.")]
     public static Task<string> CreateJobChain(IPlaceContextService svc, IToolCallLog log,
         Guid projectId, string name,
@@ -328,7 +328,7 @@ public sealed class PlaceContextTools
             () => svc.CreateJobChainAsync(projectId, name, description, steps));
     }
 
-    [Authorize(Policy = "Member")]
+    [Authorize(Policy = Permission.ChainsManage)]
     [McpServerTool(Name = "update_job_chain"), Description("Replace a job chain's name, description, and ordered steps. 'jobIdsJson' is a JSON array of job ids in run order.")]
     public static Task<string> UpdateJobChain(IPlaceContextService svc, IToolCallLog log,
         Guid chainId, string name,
@@ -347,7 +347,7 @@ public sealed class PlaceContextTools
         => Traced(log, "list_job_chains", projectId.ToString(), "list job chains", new { projectId },
             () => svc.ListJobChainsAsync(projectId));
 
-    [Authorize(Policy = "Member")]
+    [Authorize(Policy = Permission.JobsRun)]
     [McpServerTool(Name = "run_job_chain"), Description("Run a job chain now: executes each step's job in order, feeding every step's primary output into the next step as its input payload, and waits for completion. Stops at the first failed step (a Partial step continues but downgrades the chain status). Pass 'inputPayload' to feed the FIRST step; omit it to run the first job with its stored shard payloads. Returns the chain status, each executed step's run id + status (fetch full artifacts with get_job_run), and the final output — the last step's artifact, i.e. the chain's result.")]
     public static Task<string> RunJobChain(IPlaceContextService svc, IToolCallLog log, Guid chainId,
         [Description("Optional input payload for the first step (typically JSON)")] string? inputPayload = null)
@@ -372,7 +372,7 @@ public sealed class PlaceContextTools
         }
     }
 
-    [Authorize(Policy = "Member")]
+    [Authorize(Policy = Permission.DataRead)]
     [McpServerTool(Name = "query_project_data"), Description("Run a read-only SELECT against the project's own database and get columns + rows back. STRICTLY SELECT-ONLY: any other statement kind, multiple statements, or write/DDL keywords are rejected. The query executes as the project's isolated database role — it can only ever see this project's tables. Use list_project_tables/table names from the Data tab to explore, then build informative SQL charts with save_sql_chart.")]
     public static Task<string> QueryProjectData(IPlaceContextService svc, IToolCallLog log,
         [Description("The project whose database to query")] Guid projectId,
@@ -391,7 +391,7 @@ public sealed class PlaceContextTools
                 };
             });
 
-    [Authorize(Policy = "Member")]
+    [Authorize(Policy = Permission.DataWrite)]
     [McpServerTool(Name = "save_sql_chart"), Description("Create or update a named SQL chart on the project's Analytics tab (also shown read-only on the Dashboard). The SELECT runs isolated inside the project's database; its first text column becomes the labels and numeric columns become series, rendered as the given chart type. STRICTLY SELECT-ONLY — writes and DDL are rejected. Re-saving the same name replaces the chart, so agents can iterate.")]
     public static Task<string> SaveSqlChart(IPlaceContextService svc, IToolCallLog log,
         [Description("The project the chart belongs to")] Guid projectId,
@@ -430,7 +430,7 @@ public sealed class PlaceContextTools
 
     // ── Triggers ──────────────────────────────────────────────────────────────────────────────────
 
-    [Authorize(Policy = "Member")]
+    [Authorize(Policy = Permission.TriggersManage)]
     [McpServerTool(Name = "create_trigger"), Description("Create a trigger that starts runs of a job automatically. kind='Schedule' fires on a recurring cron expression (5-field, or 6-field with seconds; evaluated in the workspace timezone) — supply 'cron'. kind='Event' fires whenever a named event is emitted — supply 'eventName' (a built-in like 'job.completed'/'activity.recorded', or a user-defined event type). The project is inferred from the job. Firing enqueues an independent run; concurrent runs are allowed.")]
     public static Task<string> CreateTrigger(IPlaceContextService svc, IToolCallLog log,
         [Description("The job to run when the trigger fires")] Guid jobId,
@@ -448,7 +448,7 @@ public sealed class PlaceContextTools
         => Traced(log, "list_triggers", projectId.ToString(), "list triggers", new { projectId },
             () => svc.ListTriggersAsync(projectId));
 
-    [Authorize(Policy = "Member")]
+    [Authorize(Policy = Permission.TriggersManage)]
     [McpServerTool(Name = "set_trigger_enabled"), Description("Enable or pause a trigger. Re-enabling a schedule recomputes its next-run time; pausing stops it firing until re-enabled.")]
     public static Task<string> SetTriggerEnabled(IPlaceContextService svc, IToolCallLog log,
         Guid triggerId, bool enabled)
@@ -456,7 +456,7 @@ public sealed class PlaceContextTools
             new { triggerId, enabled },
             () => svc.SetTriggerEnabledAsync(triggerId, enabled));
 
-    [Authorize(Policy = "Member")]
+    [Authorize(Policy = Permission.TriggersManage)]
     [McpServerTool(Name = "delete_trigger"), Description("Permanently remove a trigger. Returns true if it existed.")]
     public static Task<string> DeleteTrigger(IPlaceContextService svc, IToolCallLog log, Guid triggerId)
         => Traced(log, "delete_trigger", triggerId.ToString(), "delete trigger", new { triggerId },
@@ -464,7 +464,7 @@ public sealed class PlaceContextTools
 
     // ── Events ────────────────────────────────────────────────────────────────────────────────────
 
-    [Authorize(Policy = "Member")]
+    [Authorize(Policy = Permission.EventsManage)]
     [McpServerTool(Name = "define_event_type"), Description("Define (or update) a user event type for this workspace so triggers can subscribe to it and it can be emitted. The name must not collide with a reserved built-in event. 'payloadSchema' is optional freetext/JSON describing the expected payload fields.")]
     public static Task<string> DefineEventType(IPlaceContextService svc, IToolCallLog log,
         [Description("Unique event name, e.g. 'deploy.finished'")] string name,
@@ -473,7 +473,7 @@ public sealed class PlaceContextTools
         => Traced(log, "define_event_type", "—", $"define {name}", new { name, description, payloadSchema },
             () => svc.DefineEventTypeAsync(name, description, payloadSchema));
 
-    [Authorize(Policy = "Member")]
+    [Authorize(Policy = Permission.EventsManage)]
     [McpServerTool(Name = "emit_event"), Description("Emit an event occurrence. Every enabled event-trigger subscribed to the name fires (each enqueues a job run); the optional payload is passed through as parameters for those runs. The name may be a user-defined event type or a built-in. Returns the occurrence and how many triggers fired.")]
     public static Task<string> EmitEvent(IPlaceContextService svc, IToolCallLog log,
         [Description("Event name to emit")] string name,

@@ -13,8 +13,8 @@
     <div class="err {{errorClass}}">{{error}}</div>
     <p class="alt" style="text-align:left;margin:0 0 14px">You were invited as <strong>{{email}}</strong>.</p>
     <label>Display name<input type="text" name="displayName" autocomplete="name"></label>
-    <label>Password<input type="password" name="password" autocomplete="new-password" minlength="8" required autofocus>
-      <span class="hint">At least 8 characters.</span></label>
+    <label>Password<input type="password" name="password" autocomplete="new-password" minlength="12" required autofocus>
+      <span class="hint">At least 12 characters.</span></label>
     <input type="hidden" name="token" value="{{token}}">
     <input type="hidden" name="{{afName}}" value="{{afValue}}">
     <button type="submit">Create account</button>

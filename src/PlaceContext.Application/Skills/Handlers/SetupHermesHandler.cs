@@ -65,7 +65,7 @@ public sealed class SetupHermesHandler : ICommandHandler<SetupHermesCommand, Ski
         - `create_trigger` with `kind='Schedule'` + `cron` (5-field, workspace timezone) for
           recurring runs; `kind='Event'` + `eventName` to run on an event.
         - `define_event_type` / `emit_event` publish custom events (external systems can POST to
-          `/ingest/{eventName}`); built-ins like `job.completed` and `sms.received` also fire triggers.
+          `/ingest/{eventName}`); built-ins like `job.completed` and `activity.recorded` also fire triggers.
         - `list_triggers` / `set_trigger_enabled` / `delete_trigger` manage what's armed.
 
         ## 5. Record what you did

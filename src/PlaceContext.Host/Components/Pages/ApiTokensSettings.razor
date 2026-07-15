@@ -1,0 +1,173 @@
+@page "/settings/api-tokens"
+@layout PlaceContext.Host.Components.Layout.SettingsLayout
+@attribute [Authorize]
+@inject IUserApiTokenService Tokens
+@inject PortalUiState Ui
+@inject NavigationManager Nav
+
+<PageTitle>placecontext — API tokens</PageTitle>
+
+@if (_loading)
+{
+    <Skeleton Kind="list" Rows="3" Padded />
+}
+else
+{
+    <div class="page">
+        <h2 class="page-title">API tokens</h2>
+        <div class="page-sub">
+            Personal tokens authenticate you against the <strong>entity data API</strong>
+            (<code>/api/v1/data/…</code>), which is generated from the workspace's registered data entities.
+            Tokens act as you — same role and permissions. The raw secret is shown once when created.
+        </div>
+
+        @if (_message is not null)
+        {
+            <div class="message">@_message</div>
+        }
+
+        @if (_createdRaw is not null)
+        {
+            <div class="dccard created">
+                <div class="created-title">Copy your token now — it will not be shown again</div>
+                <code class="raw-token">@_createdRaw</code>
+                <div class="created-hint">
+                    Example:
+                    <code>curl -H "Authorization: Bearer @_createdPrefix…" -H "X-Project: MyProject" @Nav.BaseUri.TrimEnd('/')/api/v1/entities</code>
+                </div>
+                <button class="dcbtn" @onclick="@(() => _createdRaw = null)">I've copied it</button>
+            </div>
+        }
+
+        <div class="dccard add-card">
+            <div class="add-title">Create token</div>
+            <div class="add-row">
+                <div class="field">
+                    <label class="field-label">Name</label>
+                    <input class="dcinput field-input" @bind="_newName" placeholder="CI, local script…" />
+                </div>
+                <div class="field-life">
+                    <label class="field-label">Expires</label>
+                    <select class="dcinput field-input" @bind="_lifetimeDays">
+                        <option value="0">Never</option>
+                        <option value="30">30 days</option>
+                        <option value="90">90 days</option>
+                        <option value="365">1 year</option>
+                    </select>
+                </div>
+                <button class="dcbtn primary" disabled="@_busy" @onclick="CreateAsync">@(_busy ? "Creating…" : "Create")</button>
+            </div>
+            @if (_createError is not null)
+            {
+                <div class="add-error">@_createError</div>
+            }
+        </div>
+
+        <div class="api-docs dccard">
+            <div class="add-title">Entity data API</div>
+            <div class="page-sub" style="margin-bottom:.5rem">
+                Scope the request with <code>X-Project-Id: &lt;guid&gt;</code> or <code>X-Project: &lt;name&gt;</code>
+                (project is resolved by middleware — not in the path).
+            </div>
+            <ul class="api-list">
+                <li><code>GET /api/v1/entities</code> — registry (name, slug, table)</li>
+                <li><code>GET /api/v1/{{entity-name}}</code> — rows (<code>?page=&amp;search=</code>)</li>
+                <li><code>GET /api/v1/{{entity-name}}/{{key}}</code> — rows matching the label column</li>
+            </ul>
+            <div class="page-sub">Auth: <code>Authorization: Bearer pct_…</code> or <code>X-Api-Key: pct_…</code>. Requires <code>data.read</code>.</div>
+        </div>
+
+        @if (_tokens.Count == 0)
+        {
+            <div class="dccard empty">No active tokens. Create one above to call the entity API from scripts or integrations.</div>
+        }
+        else
+        {
+            <div class="list">
+                @foreach (var t in _tokens)
+                {
+                    <div class="dccard token-row">
+                        <div class="token-meta">
+                            <span class="token-name">@t.Name</span>
+                            <span class="token-prefix"><code>@t.TokenPrefix…</code></span>
+                            <span class="token-dates">
+                                created @t.CreatedAt.ToWorkspaceTime().ToString("yyyy-MM-dd")
+                                @if (t.LastUsedAt is { } used)
+                                {
+                                    <text> · last used @used.ToWorkspaceTime().ToString("yyyy-MM-dd HH:mm")</text>
+                                }
+                                @if (t.ExpiresAt is { } exp)
+                                {
+                                    <text> · expires @exp.ToWorkspaceTime().ToString("yyyy-MM-dd")</text>
+                                }
+                            </span>
+                        </div>
+                        <button class="dcbtn" disabled="@_busy" @onclick="@(() => RevokeAsync(t.Id))">Revoke</button>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+}
+
+@code {
+    private IReadOnlyList<UserApiTokenView> _tokens = Array.Empty<UserApiTokenView>();
+    private bool _loading = true;
+    private bool _busy;
+    private string? _message;
+    private string? _createError;
+    private string _newName = "";
+    private string _lifetimeDays = "0";
+    private string? _createdRaw;
+    private string? _createdPrefix;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Ui.Set("API tokens", "personal tokens for the entity data API");
+        await ReloadAsync();
+    }
+
+    private async Task ReloadAsync()
+    {
+        _loading = true;
+        try { _tokens = await Tokens.ListMineAsync(); }
+        catch (Exception ex) { _message = ex.Message; }
+        finally { _loading = false; }
+    }
+
+    private async Task CreateAsync()
+    {
+        _createError = null;
+        _createdRaw = null;
+        if (string.IsNullOrWhiteSpace(_newName))
+        {
+            _createError = "Give the token a name.";
+            return;
+        }
+        _busy = true;
+        try
+        {
+            TimeSpan? life = int.TryParse(_lifetimeDays, out var d) && d > 0 ? TimeSpan.FromDays(d) : null;
+            var created = await Tokens.CreateAsync(_newName.Trim(), life);
+            _createdRaw = created.RawToken;
+            _createdPrefix = created.TokenPrefix;
+            _newName = "";
+            await ReloadAsync();
+        }
+        catch (Exception ex) { _createError = ex.Message; }
+        finally { _busy = false; }
+    }
+
+    private async Task RevokeAsync(Guid id)
+    {
+        _busy = true;
+        try
+        {
+            await Tokens.RevokeAsync(id);
+            _message = "Token revoked.";
+            await ReloadAsync();
+        }
+        catch (Exception ex) { _message = ex.Message; }
+        finally { _busy = false; }
+    }
+}

@@ -29,12 +29,14 @@ public static class DependencyInjection
 
         // Multi-tenancy: ambient current-tenant (AsyncLocal singleton) + the tenant registry.
         services.AddSingleton<ICurrentTenant, CurrentTenant>();
+        services.AddSingleton<ICurrentProject, CurrentProject>();
         services.AddScoped<ITenantStore, EfTenantStore>();
         services.AddScoped<ITenantSettingsPort, EfTenantSettingsPort>();
 
         // Portal authentication (tenant-scoped users) + persisted OAuth clients.
         services.AddScoped<IAuthService, Auth.AuthService>();
         services.AddScoped<IMembershipService, Auth.MembershipService>();
+        services.AddScoped<IUserApiTokenService, Auth.UserApiTokenService>();
         services.AddScoped<IOAuthClientStore, Persistence.EfOAuthClientStore>();
         services.AddScoped<IOAuthRefreshTokenStore, Persistence.EfOAuthRefreshTokenStore>();
 
@@ -88,7 +90,6 @@ public static class DependencyInjection
         services.AddSingleton<Application.Ports.IObjectStore, Storage.MinioObjectStore>();
         services.AddScoped<Domain.Repositories.IRunArtifactLinkRepository, Persistence.EfRunArtifactLinkRepository>();
         services.AddScoped<Domain.Repositories.IProjectChartRepository, Persistence.EfProjectChartRepository>();
-        services.AddScoped<Domain.Repositories.IInboundSmsRepository, Persistence.EfInboundSmsRepository>();
 
         // Job / JobRun repositories.
         services.AddScoped<IJobRepository, EfJobRepository>();

@@ -95,32 +95,6 @@ else
                     </div>
                 }
 
-                @* ── Inbound SMS (gateway messages, decrypted here for authorized eyes only) ── *@
-                <div class="column-title-mt">Inbound SMS</div>
-                @if (_sms is null || _sms.Count == 0)
-                {
-                    <div class="hint">
-                        No messages yet. Point your SMS provider's webhook at <code>POST /sms/inbound?key=…</code>
-                        (Twilio form posts or JSON <code>{from,to,body}</code>) — each message is stored encrypted
-                        and emits <code>sms.received</code> for triggers.
-                    </div>
-                }
-                else
-                {
-                    <div class="stack">
-                        @foreach (var m in _sms)
-                        {
-                            <div class="dccard log-card">
-                                <div class="card-row">
-                                    <span class="log-name">@m.From → @m.To</span>
-                                    <span class="provider-badge">@m.Provider</span>
-                                    <span class="log-time">@m.ReceivedAt.ToWorkspaceTime().ToString("MM-dd HH:mm:ss")</span>
-                                </div>
-                                <div class="sms-body">@m.Body</div>
-                            </div>
-                        }
-                    </div>
-                }
             </div>
         </div>
     </div>
@@ -159,7 +133,6 @@ else
 
     private IReadOnlyList<EventTypeView>? _types;
     private IReadOnlyList<EventOccurrenceView>? _log;
-    private IReadOnlyList<PlaceContext.Application.Features.InboundSmsView>? _sms;
     private bool _loading = true;
     private string? _message;
 
@@ -191,7 +164,6 @@ else
     {
         _types = await Svc.ListEventTypesAsync();
         _log = await Svc.ListEventOccurrencesAsync(50);
-        _sms = await Svc.ListInboundSmsAsync(20);
     }
 
     private async Task Define()

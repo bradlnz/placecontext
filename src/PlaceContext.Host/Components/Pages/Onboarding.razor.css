@@ -110,39 +110,6 @@
     padding-left: 18px;
 }
 
-.demo-card {
-    padding: 16px 20px;
-    margin-bottom: 14px;
-}
-
-.demo-row {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-}
-
-.demo-title {
-    font-size: 13px;
-    font-weight: 600;
-    margin-bottom: 4px;
-}
-
-.demo-desc {
-    font-size: 12px;
-    color: var(--text-3);
-    line-height: 1.6;
-}
-
-.btn-none {
-    flex: none;
-}
-
-.error-msg {
-    font-size: 12px;
-    color: var(--bad);
-    margin-top: 8px;
-}
-
 .auth-card {
     padding: 16px 20px;
 }

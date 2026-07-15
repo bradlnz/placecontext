@@ -1,10 +1,9 @@
 using System.Security.Claims;
-using System.Security.Cryptography;
-using System.Text;
 using System.Text.Encodings.Web;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.Extensions.Options;
 using PlaceContext.Application.Ports;
+using PlaceContext.Infrastructure.Security;
 
 namespace PlaceContext.Host.Auth;
 
@@ -89,8 +88,7 @@ public sealed class ApiKeyAuthenticationHandler : AuthenticationHandler<ApiKeyAu
         return string.IsNullOrEmpty(header) ? null : header;
     }
 
-    private static bool KeysMatch(string presented, string configured) => CryptographicOperations.FixedTimeEquals(
-        Encoding.UTF8.GetBytes(presented), Encoding.UTF8.GetBytes(configured));
+    private static bool KeysMatch(string presented, string configured) => SecureCompare.Equals(presented, configured);
 
     // 401 (not a redirect, not 404) on a missing/failed challenge — matches the REST contract callers expect.
     protected override Task HandleChallengeAsync(AuthenticationProperties properties)

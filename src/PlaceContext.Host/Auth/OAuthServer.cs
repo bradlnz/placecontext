@@ -56,7 +56,8 @@ public static class OAuthServer
 
         app.MapGet("/.well-known/jwks.json", () => Results.Json(OAuthKeys.Jwks())).AllowAnonymous();
 
-        // Dynamic Client Registration (RFC 7591) — open registration for public PKCE clients (persisted).
+        // Dynamic Client Registration (RFC 7591) — public PKCE clients. Redirect URIs are validated
+        // (https or loopback only) so an open DCR cannot register arbitrary phishing callbacks.
         app.MapPost("/connect/register", async (HttpContext ctx, IOAuthClientStore clients) =>
         {
             var req = await ctx.Request.ReadFromJsonAsync<RegisterRequest>();
@@ -64,15 +65,22 @@ public static class OAuthServer
             if (uris.Length == 0)
                 return Results.BadRequest(new { error = "invalid_redirect_uri" });
 
-            var client = await clients.RegisterAsync(uris, req?.ClientName ?? "MCP Client", ctx.RequestAborted);
-            return Results.Json(new Dictionary<string, object?>
+            try
             {
-                ["client_id"] = client.ClientId,
-                ["redirect_uris"] = client.RedirectUris,
-                ["token_endpoint_auth_method"] = "none",
-                ["grant_types"] = new[] { "authorization_code", "refresh_token" },
-                ["response_types"] = new[] { "code" },
-            }, statusCode: 201);
+                var client = await clients.RegisterAsync(uris, req?.ClientName ?? "MCP Client", ctx.RequestAborted);
+                return Results.Json(new Dictionary<string, object?>
+                {
+                    ["client_id"] = client.ClientId,
+                    ["redirect_uris"] = client.RedirectUris,
+                    ["token_endpoint_auth_method"] = "none",
+                    ["grant_types"] = new[] { "authorization_code", "refresh_token" },
+                    ["response_types"] = new[] { "code" },
+                }, statusCode: 201);
+            }
+            catch (ArgumentException ex)
+            {
+                return Results.BadRequest(new { error = "invalid_redirect_uri", error_description = ex.Message });
+            }
         }).AllowAnonymous();
 
         // Authorize — requires a logged-in user (cookie). Auto-consents and issues a code.
@@ -89,9 +97,17 @@ public static class OAuthServer
 
             if (string.IsNullOrWhiteSpace(client_id) || string.IsNullOrWhiteSpace(redirect_uri))
                 return Results.BadRequest("Missing client_id or redirect_uri.");
-            // Self-heal: register the client (or add this redirect URI) if it isn't on record — handles a
-            // public PKCE client whose DCR registration was lost (e.g. after a database reset).
-            var client = await clients.EnsureAsync(client_id, redirect_uri, ctx.RequestAborted);
+            // Resolve the client. EnsureAsync may self-heal a loopback-only public client after a DB
+            // reset, but never appends an arbitrary external redirect_uri (auth-code theft).
+            OAuthClient client;
+            try
+            {
+                client = await clients.EnsureAsync(client_id, redirect_uri, ctx.RequestAborted);
+            }
+            catch (InvalidOperationException)
+            {
+                return Results.BadRequest("Unknown client or redirect_uri.");
+            }
             if (!client.RedirectUris.Contains(redirect_uri))
                 return Results.BadRequest("Unknown client or redirect_uri.");
             if (response_type != "code" || string.IsNullOrEmpty(code_challenge) || (code_challenge_method ?? "S256") != "S256")
@@ -146,13 +162,10 @@ public static class OAuthServer
     private static string BaseUrl(HttpContext ctx) => $"{ctx.Request.Scheme}://{ctx.Request.Host}";
 
     /// <summary>
-    /// MCP access tokens are effectively non-expiring: a connected agent must never lose access
-    /// because a session crossed an hour boundary, and not every MCP client refreshes reliably.
-    /// This is safe here because expiry is not the revocation mechanism — the bearer pipeline
-    /// re-checks the user against the DB on every request (ghost tokens are rejected, roles
-    /// refreshed), so removing a member kills their tokens immediately regardless of lifetime.
+    /// Access tokens are short-lived; clients renew via the rotated refresh token. The bearer pipeline
+    /// still re-checks membership on every request (ghost tokens rejected, roles refreshed).
     /// </summary>
-    private static readonly TimeSpan AccessTokenLifetime = TimeSpan.FromDays(3650);
+    private static readonly TimeSpan AccessTokenLifetime = TimeSpan.FromHours(1);
 
     private static IResult TokenResponse(string issuer, OAuthRefreshGrant grant) =>
         Results.Json(new Dictionary<string, object?>

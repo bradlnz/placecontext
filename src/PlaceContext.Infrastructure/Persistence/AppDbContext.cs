@@ -51,7 +51,7 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
     public DbSet<DataMappingRow> DataMappings => Set<DataMappingRow>();
     public DbSet<DataEntityRow> DataEntities => Set<DataEntityRow>();
     public DbSet<EntityTagRow> EntityTags => Set<EntityTagRow>();
-    public DbSet<SmsMessageRow> SmsMessages => Set<SmsMessageRow>();
+    public DbSet<UserApiTokenRow> UserApiTokens => Set<UserApiTokenRow>();
 
     Task<int> IUnitOfWork.SaveChangesAsync(CancellationToken ct) => SaveChangesAsync(ct);
 
@@ -112,6 +112,15 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
             e.ToTable("invites");
             e.HasKey(x => x.Id);
             e.HasIndex(x => x.Token).IsUnique();
+            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
+        });
+
+        b.Entity<UserApiTokenRow>(e =>
+        {
+            e.ToTable("user_api_tokens");
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => x.TokenHash).IsUnique();
+            e.HasIndex(x => new { x.UserId, x.CreatedAt });
             e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
         });
 
@@ -248,15 +257,6 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
             e.Property(x => x.FieldsJson).HasDefaultValue("[]");
             e.Property(x => x.Enabled).HasDefaultValue(true);
             e.Property(x => x.SourceKind).HasDefaultValue("job");
-        });
-
-        b.Entity<SmsMessageRow>(e =>
-        {
-            e.ToTable("sms_messages");
-            e.HasKey(x => x.Id);
-            e.HasIndex(x => x.ReceivedAt);
-            e.HasIndex(x => new { x.Provider, x.ExternalId });
-            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
         });
 
         b.Entity<JobSecretRow>(e =>

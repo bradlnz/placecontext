@@ -16,7 +16,7 @@ The fastest path is the guided wizard, which walks every step in this guide inte
 | Piece | What it is |
 |------|------------|
 | **PlaceContext Host** | Portal (Blazor) + MCP server (Streamable HTTP at `/mcp`) + schedulers, 2 replicas |
-| **PostgreSQL (pgvector)** | The platform store — projects, ledger, jobs, charts, SMS, embeddings (RAG) |
+| **PostgreSQL (pgvector)** | The platform store — projects, ledger, jobs, charts, embeddings (RAG) |
 | **MinIO** | Object store for run artifacts (reports/charts/CSVs) + nightly DB dumps |
 | **Docker-in-Docker** | The per-project application runtime (portal **Runtime** tab) |
 | **k3d / k3s** | The cluster: k3d for one-machine dev, k3s for a real fleet |
@@ -50,7 +50,7 @@ The wizard walks through, in order:
 2. **Mode** — dev cluster on this machine, production master, or join an existing cluster.
 3. **Tailscale OAuth** (fleet modes) — save the OAuth client once (`pctl ts-oauth`); every
    join afterwards mints its own tailnet key.
-4. **Platform keys** — generate the event-ingest key and the inbound-SMS key (or skip); they're
+4. **Platform keys** — generate the event-ingest key (or skip); they're
    stored in a local overlay and re-applied on every deploy.
 5. **Bring-up** — `dev up`, `server up`, or `join --code …` for the chosen mode.
 6. **Next steps** — portal URL, MCP endpoint, and the first-project checklist.
@@ -153,7 +153,6 @@ never lose them.
 | Feature | Setting | Notes |
 |---|---|---|
 | **Event ingest webhook** | `PlaceContext:Ingest:Key` | External systems `POST /ingest/{event}` with `X-Ingest-Key`; disabled until set |
-| **Inbound SMS gateway** | `PlaceContext:Sms:InboundKey` | Twilio form posts or JSON to `POST /sms/inbound?key=…`; sender+body encrypted at rest; emits `sms.received` |
 | **GitHub import** | `PlaceContext:GitHub:ClientId` / `ClientSecret` | OAuth app; callback `{host}/auth/github/callback` |
 | **LLM provider** | `PlaceContext:Llm:Provider` | `none` (default — the jobs pipeline is deterministic) or `anthropic` + `ApiKey` for report polish |
 | **App runtime** | `PlaceContext:Runtime:DockerEndpoint` / `AppHost` | Pre-wired to the bundled DinD in the manifests |
