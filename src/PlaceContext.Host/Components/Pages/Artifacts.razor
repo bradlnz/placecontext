@@ -142,7 +142,14 @@
         {
             <div class="viewer-empty">
                 <span class="icon-placeholder">@FileIcon("", 40)</span>
-                Select a file on the left to view it.
+                @if (_loadError is { } deepLinkError)
+                {
+                    <span>Couldn't open the linked artifact — @deepLinkError.</span>
+                }
+                else
+                {
+                    <span>Select a file on the left to view it.</span>
+                }
             </div>
         }
         else
@@ -333,6 +340,30 @@
             // fall back to the recent global feed to locate it.
             try { _files = await Svc.ListRecentArtifactsAsync(RecentArtifactsCap); } catch { }
             target = _files.FirstOrDefault(f => f.Id == artifactId);
+        }
+        if (target is null)
+        {
+            // Still not found — the artifact may be older than both the project-scoped and recent
+            // caps (e.g. linked directly from an entity row via EntityBrowse). Rather than give up,
+            // resolve it directly by id through the same tenant-scoped repository ReadTextAsync uses.
+            _loadError = null;
+            try
+            {
+                var link = await Links.GetByIdAsync(artifactId);
+                if (link is null)
+                {
+                    _loadError = "artifact not found for this workspace";
+                    return;
+                }
+                target = new ArtifactFileView(
+                    link.Id, link.RunId, link.JobId, link.ProjectId, link.Kind.ToString(),
+                    link.Title, link.ContentType, link.SizeBytes, link.CreatedAt);
+            }
+            catch (Exception ex)
+            {
+                _loadError = ex.Message;
+                return;
+            }
         }
         if (target is { })
         {
