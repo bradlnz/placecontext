@@ -40,7 +40,10 @@ public sealed record JobRequest(
     string? ReduceEntrypoint,
     IReadOnlyList<JobCodeFile>? ReduceFiles,
     IReadOnlyDictionary<string, string>? ReduceEnv,
-    int ConcurrencyLimit = 1,
+    /// <summary>Max concurrent map shards. Default raised from 1 → 4 so multi-shard jobs parallelize
+    /// their shards out of the box; callers that need strict serial shard execution still pass 1
+    /// explicitly.</summary>
+    int ConcurrencyLimit = 4,
     IReadOnlyCollection<int>? SuccessExitCodes = null,
     IReadOnlyCollection<int>? PartialExitCodes = null,
     /// <summary>Opt-in outbound network access for the job's containers. Default false (--network none).</summary>

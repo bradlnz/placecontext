@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Features;
 using PlaceContext.Infrastructure.Persistence;
@@ -32,6 +33,11 @@ public sealed class TriggerSchedulerService : BackgroundService
     private static readonly TimeSpan DrainInterval = TimeSpan.FromSeconds(1);
     private static readonly TimeSpan ReapInterval = TimeSpan.FromSeconds(30);
     private const int ClaimBatch = 16;
+    // The drain loop used to await each claimed run fully before starting the next — one slow run
+    // head-of-line-blocked the other up-to-15 already-claimed rows behind it, invisible to other
+    // replicas (they'd already skipped these rows via SKIP LOCKED). Bounded parallelism instead: a
+    // conservative default that still leaves headroom under the runner's own container/pod limits.
+    private const int DrainParallelism = 4;
 
     // A run only stays "Running" while a live in-process driver executes it — every shard pod is
     // bounded by the job's own TimeoutSeconds. A run still Running beyond that (plus slack) is
@@ -44,13 +50,18 @@ public sealed class TriggerSchedulerService : BackgroundService
     private readonly Operations.OperationCenter _opCenter;
     private readonly ILogger<TriggerSchedulerService> _log;
     private readonly string _instanceId = $"{Environment.MachineName}:{Guid.NewGuid():N}";
+    private readonly int _drainParallelism;
 
     public TriggerSchedulerService(IServiceScopeFactory scopes, Operations.OperationCenter opCenter,
-        ILogger<TriggerSchedulerService> log)
+        ILogger<TriggerSchedulerService> log,
+        // Test-only override for the drain batch's max degree of parallelism; DI never supplies this
+        // (no such service is registered), so production always gets the DrainParallelism default.
+        int? drainParallelism = null)
     {
         _scopes = scopes;
         _opCenter = opCenter;
         _log = log;
+        _drainParallelism = drainParallelism is > 0 ? drainParallelism.Value : DrainParallelism;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -108,8 +119,14 @@ public sealed class TriggerSchedulerService : BackgroundService
         {
             try
             {
-                // Drain greedily until nothing is left, then wait for the next tick.
-                while (await DrainBatchAsync(ct) > 0) { }
+                // Tenant lookups are cached for the whole tick — loaded lazily on the first non-empty
+                // batch and reused by every batch drained afterwards, so what used to be one DB round
+                // trip per run is now at most one per tick (refreshed next tick, so a tenant created
+                // mid-tick still resolves within ~DrainInterval via ProcessOneRunAsync's fallback).
+                Dictionary<Guid, TenantInfo>? tenantCache = null;
+                int drained;
+                do { (drained, tenantCache) = await DrainBatchAsync(tenantCache, ct); }
+                while (drained > 0);
             }
             catch (OperationCanceledException) { throw; }
             catch (Exception ex) { _log.LogError(ex, "Run-queue drain failed; will retry next interval."); }
@@ -117,62 +134,103 @@ public sealed class TriggerSchedulerService : BackgroundService
         while (await SafeWaitAsync(timer, ct));
     }
 
-    private async Task<int> DrainBatchAsync(CancellationToken ct)
+    private async Task<(int Count, Dictionary<Guid, TenantInfo>? TenantCache)> DrainBatchAsync(
+        Dictionary<Guid, TenantInfo>? tenantCache, CancellationToken ct)
     {
         var claimed = await ClaimAsync(ct);
-        foreach (var run in claimed)
+        if (claimed.Count == 0) return (0, tenantCache);
+
+        tenantCache ??= (await LoadTenantsAsync(ct)).ToDictionary(t => t.Id);
+
+        var processedIds = await RunBatchInParallelAsync(claimed, tenantCache, ct);
+        if (processedIds.Count > 0) await DeleteManyAsync(processedIds, ct);
+
+        return (claimed.Count, tenantCache);
+    }
+
+    /// <summary>
+    /// Executes every claimed run with bounded parallelism (<see cref="_drainParallelism"/>) instead of
+    /// the old serial <c>foreach</c> — one slow run no longer head-of-line-blocks the rest of the batch.
+    /// Each run gets its OWN <see cref="IServiceScopeFactory.CreateAsyncScope"/> (its own AppDbContext,
+    /// dispatcher, repositories) inside <see cref="ProcessOneRunAsync"/> — scopes/DbContexts are never
+    /// shared across parallel iterations, since EF's DbContext is not thread-safe. Returns every claimed
+    /// run's id (whether it succeeded or failed) so the caller can drop the durable queue rows in one
+    /// batched delete instead of one scope+delete per run.
+    /// Internal — not private — so tests can drive it directly without the Npgsql claim/delete plumbing.
+    /// </summary>
+    internal async Task<IReadOnlyCollection<Guid>> RunBatchInParallelAsync(
+        IReadOnlyList<ClaimedRun> claimed,
+        IReadOnlyDictionary<Guid, TenantInfo> tenantCache,
+        CancellationToken ct)
+    {
+        var processed = new ConcurrentBag<Guid>();
+        var options = new ParallelOptions { MaxDegreeOfParallelism = _drainParallelism, CancellationToken = ct };
+        await Parallel.ForEachAsync(claimed, options, async (run, token) =>
         {
+            try { await ProcessOneRunAsync(run, tenantCache, token); }
+            finally { processed.Add(run.Id); }
+        });
+        return processed;
+    }
+
+    /// <summary>Runs a single claimed queue row. Identical error handling/status-transition semantics
+    /// to the old serial loop body — only the caller (now parallel) changed.</summary>
+    private async Task ProcessOneRunAsync(
+        ClaimedRun run, IReadOnlyDictionary<Guid, TenantInfo> tenantCache, CancellationToken ct)
+    {
+        try
+        {
+            var tenant = tenantCache.TryGetValue(run.TenantId, out var cached)
+                ? cached
+                : await FindTenantAsync(run.TenantId, ct); // cache miss (tenant created mid-tick) — fall back to the DB
+            if (tenant is null)
+            {
+                _log.LogWarning("Dropping queued run for unknown tenant {TenantId}.", run.TenantId);
+                return;
+            }
+
+            CurrentTenant.Set(tenant);
             try
             {
-                var tenant = await FindTenantAsync(run.TenantId, ct);
-                if (tenant is null)
-                {
-                    _log.LogWarning("Dropping queued run for unknown tenant {TenantId}.", run.TenantId);
-                }
-                else
-                {
-                    CurrentTenant.Set(tenant);
-                    try
-                    {
-                        await using var scope = _scopes.CreateAsyncScope();
+                await using var scope = _scopes.CreateAsyncScope();
 
-                        // Surface this run in the notifications bell (Track/Mark* — the external-worker
-                        // shape, like the analytics sweep) so trigger-fired and TUI-queued runs update
-                        // the pane live, exactly like a portal-started run. The run id is pre-allocated
-                        // and used as the op's correlation key, so the run-status watcher converges on
-                        // this entry (and flips it terminal the moment the row commits) instead of
-                        // waiting for the dispatcher to return behind the slow enrichment.
-                        var job = await scope.ServiceProvider.GetRequiredService<Domain.Repositories.IJobRepository>()
-                            .GetByIdAsync(run.JobId, ct);
-                        var runId = Guid.NewGuid();
-                        var op = _opCenter.Track(tenant, job?.ProjectId,
-                            $"Run job — {job?.Name ?? "job"} · {run.TriggerName}",
-                            $"/observability?run={runId}",
-                            correlationKey: RunStatusWatchService.JobRunKey(runId));
-                        _opCenter.MarkRunning(op.Id);
-                        try
-                        {
-                            var dispatcher = scope.ServiceProvider.GetRequiredService<IDispatcher>();
-                            var result = await dispatcher.Send(new RunJobCommand(run.JobId, run.Payload, runId), ct);
-                            if (result.Status == "Failed") _opCenter.MarkFailed(op.Id, "run finished — Failed");
-                            else _opCenter.MarkDone(op.Id, $"run finished — {result.Status}");
-                        }
-                        catch (Exception ex)
-                        {
-                            _opCenter.MarkFailed(op.Id, ex.Message);
-                            throw;
-                        }
-                        _log.LogInformation("Trigger '{Trigger}' ran job {JobId} for tenant {Slug}.",
-                            run.TriggerName, run.JobId, tenant.Slug);
-                    }
-                    finally { CurrentTenant.Clear(); }
+                // Surface this run in the notifications bell (Track/Mark* — the external-worker
+                // shape, like the analytics sweep) so trigger-fired and TUI-queued runs update
+                // the pane live, exactly like a portal-started run. The run id is pre-allocated
+                // and used as the op's correlation key, so the run-status watcher converges on
+                // this entry (and flips it terminal the moment the row commits) instead of
+                // waiting for the dispatcher to return behind the slow enrichment.
+                var job = await scope.ServiceProvider.GetRequiredService<Domain.Repositories.IJobRepository>()
+                    .GetByIdAsync(run.JobId, ct);
+                var runId = Guid.NewGuid();
+                var op = _opCenter.Track(tenant, job?.ProjectId,
+                    $"Run job — {job?.Name ?? "job"} · {run.TriggerName}",
+                    $"/observability?run={runId}",
+                    correlationKey: RunStatusWatchService.JobRunKey(runId));
+                _opCenter.MarkRunning(op.Id);
+                try
+                {
+                    var dispatcher = scope.ServiceProvider.GetRequiredService<IDispatcher>();
+                    var result = await dispatcher.Send(new RunJobCommand(run.JobId, run.Payload, runId), ct);
+                    if (result.Status == "Failed") _opCenter.MarkFailed(op.Id, "run finished — Failed");
+                    else _opCenter.MarkDone(op.Id, $"run finished — {result.Status}");
                 }
+                catch (Exception ex)
+                {
+                    _opCenter.MarkFailed(op.Id, ex.Message);
+                    throw;
+                }
+                _log.LogInformation("Trigger '{Trigger}' ran job {JobId} for tenant {Slug}.",
+                    run.TriggerName, run.JobId, tenant.Slug);
             }
-            catch (OperationCanceledException) { throw; }
-            catch (Exception ex) { _log.LogError(ex, "Queued job run {JobId} failed.", run.JobId); }
-            finally { await DeleteAsync(run.Id, ct); }
+            finally { CurrentTenant.Clear(); }
         }
-        return claimed.Count;
+        catch (OperationCanceledException) { throw; }
+        catch (Exception ex) { _log.LogError(ex, "Queued job run {JobId} failed.", run.JobId); }
+        // NOTE next throughput win (not done here — riskier, deferred): RunJobHandler.cs:149-205 runs
+        // its post-completion enrichment (context-append/embed, best-effort) INLINE before returning,
+        // and each map shard reinstalls its own workload dependencies. Detaching that enrichment and
+        // caching per-shard dependencies would further cut wall-clock per run; out of scope here.
     }
 
     // ── Loop 3: reap orphaned runs (all replicas; idempotent UPDATE) ────────────────────────────────
@@ -269,15 +327,18 @@ public sealed class TriggerSchedulerService : BackgroundService
         return rows;
     }
 
-    private async Task DeleteAsync(Guid id, CancellationToken ct)
+    /// <summary>Drops every drained batch's durable queue rows in one round trip (replaces what used to
+    /// be a separate scope+connection+delete per run).</summary>
+    private async Task DeleteManyAsync(IReadOnlyCollection<Guid> ids, CancellationToken ct)
     {
+        if (ids.Count == 0) return;
         await using var scope = _scopes.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var conn = (NpgsqlConnection)db.Database.GetDbConnection();
         if (conn.State != System.Data.ConnectionState.Open) await conn.OpenAsync(ct);
         await using var cmd = conn.CreateCommand();
-        cmd.CommandText = "DELETE FROM pending_job_runs WHERE \"Id\" = @id";
-        cmd.Parameters.AddWithValue("id", id);
+        cmd.CommandText = "DELETE FROM pending_job_runs WHERE \"Id\" = ANY(@ids)";
+        cmd.Parameters.AddWithValue("ids", ids.ToArray());
         await cmd.ExecuteNonQueryAsync(ct);
     }
 
@@ -318,5 +379,7 @@ public sealed class TriggerSchedulerService : BackgroundService
         catch (OperationCanceledException) { return false; }
     }
 
-    private sealed record ClaimedRun(Guid Id, Guid TenantId, Guid JobId, string TriggerName, string? Payload);
+    /// <summary>Internal (not private) so <c>RunBatchInParallelAsync</c> can be exercised directly by
+    /// tests without the Npgsql claim plumbing.</summary>
+    internal sealed record ClaimedRun(Guid Id, Guid TenantId, Guid JobId, string TriggerName, string? Payload);
 }
