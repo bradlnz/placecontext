@@ -1,10 +1,11 @@
-# ── Inputs for the PlaceContext public edge droplet on DigitalOcean ────────────────────────────────
-# This droplet is NOT a standalone app host. It is a thin, publicly-reachable EDGE node that:
-#   • joins the same self-hosted Headscale/Tailscale mesh the local cluster is on, and
-#   • terminates public TLS (Caddy) and reverse-proxies to the PlaceContext app running on the
-#     LOCAL k3s cluster over the tailnet.
-# All workloads (the app, Postgres, MinIO, and every user job) run on the LOCAL cluster node — the
-# droplet executes nothing and stores no data. See README.md for the topology diagram.
+# ── Inputs for the PlaceContext HA-Postgres PRIMARY droplet on DigitalOcean ───────────────────────
+#
+# This droplet hosts the read-write Postgres PRIMARY (Patroni-managed, pgvector) plus one member of
+# the 3-node etcd DCS. It joins the same self-hosted Headscale/Tailscale mesh the local k3s cluster
+# is on. Local node(s) run hot-standby ASYNC replicas + a second etcd member; a small WITNESS droplet
+# runs the third etcd member so the cluster keeps an odd 2-of-3 quorum and a single-site partition
+# cannot promote two primaries. Streaming replication + the DCS ride the tailnet only — never public.
+# See README.md / deploy/ha/README.md for the topology diagram and the failover/failback runbook.
 
 variable "do_token" {
   description = "DigitalOcean API token. Leave null to fall back to the DIGITALOCEAN_TOKEN env var."
@@ -14,26 +15,24 @@ variable "do_token" {
 }
 
 variable "name" {
-  description = "Name/tag prefix for the created resources (droplet, firewall, ssh keys)."
+  description = "Name/tag prefix for the created resources (droplets, firewalls, ssh keys)."
   type        = string
-  default     = "placecontext-edge"
+  default     = "placecontext-db"
 }
 
 variable "region" {
-  description = "DigitalOcean region slug (e.g. nyc1, nyc3, sfo3, fra1, lon1, sgp1)."
+  description = "DigitalOcean region slug for the PRIMARY (e.g. nyc1, nyc3, sfo3, fra1, lon1, sgp1)."
   type        = string
   default     = "nyc3"
 }
 
 # ── Droplet sizing ────────────────────────────────────────────────────────────────────────────────
-# Default s-2vcpu-2gb is the ~$18-20/mo tier. As a PURE EDGE (only Tailscale + Caddy run here — the
-# droplet no longer needs headroom for Docker-in-Docker job containers, Postgres or MinIO), 2 GB is
-# very comfortable. You could drop to s-1vcpu-1gb (~$6/mo) or s-1vcpu-2gb (~$12/mo) with no impact;
-# s-2vcpu-2gb is kept as the default only to match the project's ~$20/mo target and leave slack.
+# This box now runs Postgres (the primary) + etcd + Patroni, so it needs real RAM/disk headroom —
+# unlike the old thin edge. s-2vcpu-4gb (~$24/mo) is a sane floor for a small production DB.
 variable "droplet_size" {
-  description = "Droplet size slug. Default s-2vcpu-2gb ≈ $18-20/mo (roomy for a pure Tailscale+Caddy edge). s-1vcpu-1gb ≈ $6/mo is plenty for this role."
+  description = "Primary droplet size slug. Default s-2vcpu-4gb ≈ $24/mo (room for Postgres + etcd + Patroni)."
   type        = string
-  default     = "s-2vcpu-2gb"
+  default     = "s-2vcpu-4gb"
 }
 
 variable "image" {
@@ -43,12 +42,12 @@ variable "image" {
 }
 
 variable "ssh_public_keys" {
-  description = "SSH public key material (the contents of e.g. ~/.ssh/id_ed25519.pub) granted root access to the droplet. At least one is required so you can operate/debug the edge over SSH."
+  description = "SSH public key material (contents of e.g. ~/.ssh/id_ed25519.pub) granted root on the droplets. At least one is required so you can operate/debug over SSH (patronictl, etcdctl, logs)."
   type        = list(string)
 
   validation {
     condition     = length(var.ssh_public_keys) > 0
-    error_message = "Provide at least one SSH public key so you can reach the droplet."
+    error_message = "Provide at least one SSH public key so you can reach the droplets."
   }
 }
 
@@ -58,58 +57,160 @@ variable "ssh_allowed_cidrs" {
   default     = ["0.0.0.0/0", "::/0"]
 }
 
-# ── Public hostname / TLS ─────────────────────────────────────────────────────────────────────────
+# ── Public hostname / TLS (optional co-located edge) ──────────────────────────────────────────────
+# The primary's core job is the database, but 80/443 are kept open so this box can OPTIONALLY also run
+# a public Caddy edge / ACME challenge (or you front it with deploy/terraform/). The DB itself is
+# never reachable on these ports.
 variable "domain" {
-  description = "Optional FQDN the portal answers on, e.g. app.example.com. When set, Caddy issues a Let's Encrypt cert for it (the name must resolve to this droplet's reserved IP — managed here when manage_dns = true). Leave empty to serve plain HTTP on port 80."
+  description = "Optional FQDN for a public edge co-located on this droplet (leave empty for a pure DB host). Not required for the database."
   type        = string
   default     = ""
 }
 
 variable "manage_dns" {
-  description = "When true (and var.domain is set), create/manage the DNS A record for var.domain in DigitalOcean DNS pointing at the reserved IP. Set false if the domain's DNS lives elsewhere — you then point an A record at the reserved_ip output yourself."
+  description = "When true (and var.domain is set), manage the public A record for var.domain in DigitalOcean DNS pointing at the reserved IP."
   type        = bool
   default     = false
 }
 
+# ── Round-robin DB DNS (optional, ops convenience) ────────────────────────────────────────────────
+# The RELIABLE way the app finds the current leader is the Npgsql multi-host connection string
+# (Host=primary,replica;Target Session Attributes=primary) over Headscale MagicDNS — see README.
+# Optionally you can ALSO publish a single round-robin DNS name whose A records list the node tailnet
+# IPs, for humans / tools that just want one endpoint. Left empty → no such records are created.
+variable "db_rr_dns_name" {
+  description = "Optional round-robin DNS name for the DB endpoint, e.g. db.example.com (its apex must be hosted in DigitalOcean DNS). Empty → not created."
+  type        = string
+  default     = ""
+}
+
+variable "db_rr_dns_values" {
+  description = "Tailnet IPs (100.x / fd7a:…) of the DB nodes to publish as round-robin A/AAAA records under db_rr_dns_name. Order-insensitive; one record per value. Empty → none."
+  type        = list(string)
+  default     = []
+}
+
 # ── Mesh (Headscale) join — mirrors the mesh the local cluster already uses ────────────────────────
-# The existing deploy/terraform/ module provisions the Headscale control server, and each node joins
-# it with a pre-auth key minted by `pctl mesh authkey --tenant <id>`. This edge joins the same way.
 variable "mesh_control_url" {
-  description = "Headscale control server URL the local cluster is meshed on, e.g. https://mesh.example.com (the `domain` output of deploy/terraform/). The droplet runs `tailscale up --login-server <this>`."
+  description = "Headscale control server URL the local cluster is meshed on, e.g. https://mesh.example.com (the `domain` output of deploy/terraform/)."
   type        = string
 }
 
 variable "mesh_authkey" {
-  description = "Headscale pre-auth key for this node (mint on the mesh server: `pctl mesh authkey --tenant <id>`). Joins the droplet to the tailnet non-interactively."
+  description = "Headscale pre-auth key for the PRIMARY node (mint on the mesh server: `pctl mesh authkey --tenant <id>`)."
   type        = string
   sensitive   = true
 }
 
 variable "mesh_hostname" {
-  description = "Tailnet hostname to register the droplet under (visible in `tailscale status` / Headscale)."
+  description = "Tailnet (MagicDNS) hostname to register the PRIMARY under. Used verbatim in etcd peer URLs and the app connection string, so keep it stable."
   type        = string
-  default     = "placecontext-edge"
+  default     = "placecontext-db-primary"
 }
 
-# ── Upstream the edge proxies to (the app on the LOCAL cluster, over the tailnet) ──────────────────
-variable "app_upstream" {
-  description = "host:port of the PlaceContext portal/MCP as reachable OVER THE TAILNET — i.e. the local k3s node's tailnet IP (or Headscale hostname) and its ingress port. Example: `100.64.0.5:80` or `placecontext-local:7700`. Caddy reverse-proxies public traffic here."
+# ── DCS topology (the three etcd members, addressed by MagicDNS name) ──────────────────────────────
+# etcd forms its initial cluster from these three MagicDNS names; all three must resolve on the tailnet
+# for the DCS to reach quorum. The primary + witness are provisioned here; the replica is the local
+# k3s node brought up by deploy/ha/ (its Patroni + etcd member join the same scope).
+variable "replica_mesh_hostname" {
+  description = "MagicDNS hostname of the LOCAL replica node (deploy/ha/). Must match what the local node registers under. Used in the etcd initial-cluster + the app connection string."
   type        = string
+  default     = "placecontext-db-local"
+}
 
-  validation {
-    condition     = can(regex("^[a-zA-Z0-9._-]+:[0-9]+$", var.app_upstream))
-    error_message = "app_upstream must be host:port, e.g. 100.64.0.5:80 or placecontext-local:7700 (no scheme)."
-  }
+variable "patroni_scope" {
+  description = "Patroni cluster scope / etcd key namespace and the DB name. The app database is created under this."
+  type        = string
+  default     = "placecontext"
+}
+
+# ── Witness (third etcd member — the split-brain guard) ───────────────────────────────────────────
+variable "enable_witness" {
+  description = "Provision the witness droplet (third etcd member). STRONGLY recommended: without a 3rd member a 2-site cluster has no majority and WILL split-brain on a partition. Only disable if you provide a 3rd etcd member elsewhere on the mesh."
+  type        = bool
+  default     = true
+}
+
+variable "witness_region" {
+  description = "DigitalOcean region for the witness. Use a DIFFERENT region from var.region so a single-region outage can't take out both the primary and the tiebreaker."
+  type        = string
+  default     = "fra1"
+}
+
+variable "witness_size" {
+  description = "Witness droplet size. It runs only an etcd member (no Postgres), so the smallest box is plenty."
+  type        = string
+  default     = "s-1vcpu-1gb"
+}
+
+variable "witness_mesh_authkey" {
+  description = "Headscale pre-auth key for the WITNESS node. Ignored when enable_witness = false."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "witness_mesh_hostname" {
+  description = "MagicDNS hostname for the witness (third etcd member). Used in the etcd initial-cluster on every node."
+  type        = string
+  default     = "placecontext-db-witness"
+}
+
+# ── Database / replication credentials (sensitive; generated when left null) ──────────────────────
+variable "superuser_username" {
+  description = "Postgres superuser the app connects as. Kept as `postgres` for continuity with the existing connection string."
+  type        = string
+  default     = "postgres"
+}
+
+variable "superuser_password" {
+  description = "Password for the superuser. Leave null to auto-generate (see the sensitive `superuser_password` output / connection_string_hint)."
+  type        = string
+  default     = null
+  sensitive   = true
+}
+
+variable "replication_username" {
+  description = "Least-privilege physical-replication role the standbys stream as (LOGIN + REPLICATION only, no data access)."
+  type        = string
+  default     = "replicator"
+}
+
+variable "replication_password" {
+  description = "Password for the replication role. Leave null to auto-generate."
+  type        = string
+  default     = null
+  sensitive   = true
+}
+
+# ── Container images ──────────────────────────────────────────────────────────────────────────────
+variable "patroni_image" {
+  description = "Patroni + PostgreSQL 16 + pgvector image (built from deploy/postgres/Dockerfile.patroni and pushed to a registry the droplet can pull). MUST provide the `vector` extension."
+  type        = string
+  default     = "ghcr.io/bradlnz/placecontext-patroni:16-pgvector"
+}
+
+variable "etcd_image" {
+  description = "etcd image for the DCS members."
+  type        = string
+  default     = "quay.io/coreos/etcd:v3.5.16"
+}
+
+# ── Firewall / mesh CIDRs ─────────────────────────────────────────────────────────────────────────
+variable "tailnet_cidrs" {
+  description = "Tailnet CIDRs (Headscale defaults: CGNAT 100.64.0.0/10 + ULA fd7a:115c:a1e0::/48). Used only for documentation/pg_hba scoping — DCS/DB/replication ports are NOT opened on the public cloud firewall; tailnet traffic arrives decrypted on tailscale0 and services bind to the tailnet IP."
+  type        = list(string)
+  default     = ["100.64.0.0/10", "fd7a:115c:a1e0::/48"]
 }
 
 variable "enable_backups" {
-  description = "Enable DigitalOcean's automated weekly droplet backups (a stateless edge rarely needs this)."
+  description = "Enable DigitalOcean's automated weekly droplet backups for the primary."
   type        = bool
   default     = false
 }
 
 variable "monitoring" {
-  description = "Install the DigitalOcean monitoring agent on the droplet."
+  description = "Install the DigitalOcean monitoring agent on the droplets."
   type        = bool
   default     = true
 }

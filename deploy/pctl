@@ -551,12 +551,28 @@ cmd_db() {
   local sub="${1:-}"; shift || true
   case "$sub" in
     ha)           cmd_db_ha "$@";;
+    ha-join)      cmd_db_ha_join "$@";;
     backup-now)   cmd_db_backup "$@";;
     backups)      cmd_db_backups "$@";;
     restore)      cmd_db_restore "$@";;
     minio)        cmd_db_minio "$@";;
-    *) die "unknown 'db' subcommand: '$sub' (try: ha | backup-now | backups | restore [--dump KEY] | minio)";;
+    *) die "unknown 'db' subcommand: '$sub' (try: ha | ha-join | backup-now | backups | restore [--dump KEY] | minio)";;
   esac
+}
+
+# Join THIS local node to the cross-site HA cluster as a hot-standby (etcd member #2 + Patroni replica
+# streaming async from the DO primary over the mesh). The DO primary + witness are provisioned by
+# deploy/terraform-app/; this is the local side. Pass the passwords from its outputs, e.g.:
+#   REPLICATION_PASSWORD=$(terraform -chdir=deploy/terraform-app output -raw replication_password) \
+#   SUPERUSER_PASSWORD=$(terraform -chdir=deploy/terraform-app output -raw superuser_password) \
+#   sudo -E ./deploy/pctl db-ha-join
+# See deploy/ha/README.md for the full runbook.
+cmd_db_ha_join() {
+  local script="deploy/ha/join-local-replica.sh"
+  [ -f "$script" ] || die "missing $script (run from the repo root)."
+  say "Bringing this node up as a local Patroni hot-standby (see deploy/ha/README.md)…"
+  bash "$script" "$@"
+  ok "Local standby launched. Verify with patronictl list (printed above)."
 }
 
 # Run the nightly dump CronJob right now (a gzipped pg_dumpall of every database → MinIO).
@@ -1728,7 +1744,8 @@ ${C_BOLD}ANYWHERE${C_RESET}
                          in dist/; --arch/--os cross-build for the target machine (a darwin
                          package still carries a linux image — k3d nodes run in the Docker VM)
   kill pod|node|job NAME [--yes]   Delete a pod / k3d node / job (prompts unless --yes)
-  db ha                  Replicated Postgres (1 primary + 2 replicas) via CloudNativePG
+  db ha                  Replicated Postgres (1 primary + 2 replicas) via CloudNativePG (single-cluster)
+  db ha-join             Join this node as a cross-site Patroni hot-standby (DO primary; see deploy/ha/README.md)
   db backup-now          Dump all databases to MinIO right now (nightly CronJob does this at 03:00)
   db backups             List the dumps currently held (7-day retention)
   db restore [--dump KEY] [--yes]   Restore the databases from a dump (latest by default)

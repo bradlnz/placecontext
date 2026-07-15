@@ -1,0 +1,41 @@
+# Patroni-managed PostgreSQL 16 with the pgvector extension, for the cross-site HA cluster
+# (deploy/terraform-app/ = DO primary, deploy/ha/ = local replica). Unlike Dockerfile.cnpg (which is
+# a CloudNativePG operand image), this image runs Patroni itself as PID 1 against an external etcd DCS,
+# so it works on a plain Docker host (the DO droplet) AND in a k8s Pod on the local node — the same
+# binary on both sides of the mesh.
+#
+# pgvector is MANDATORY (embeddings + vector search): installed from the PGDG repo that the official
+# postgres:16 image already has configured, so `CREATE EXTENSION vector;` works out of the box.
+#
+# Build + push to a registry both the droplet and the local node can pull, then set var.patroni_image
+# (terraform-app) and the image in deploy/ha/local-replica.yaml to match:
+#   docker build -f deploy/postgres/Dockerfile.patroni -t ghcr.io/bradlnz/placecontext-patroni:16-pgvector .
+#   docker push ghcr.io/bradlnz/placecontext-patroni:16-pgvector
+FROM postgres:16
+
+# postgres:16 is Debian-based; postgresql-16-pgvector comes from the PGDG apt repo it ships with.
+# Patroni + the etcd v3 client are installed into a venv (Debian's PEP 668 marks the system Python
+# as externally managed).
+RUN set -eux; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends \
+      postgresql-16-pgvector \
+      python3 python3-venv python3-pip \
+      curl; \
+    python3 -m venv /opt/patroni-venv; \
+    /opt/patroni-venv/bin/pip install --no-cache-dir --upgrade pip; \
+    /opt/patroni-venv/bin/pip install --no-cache-dir "patroni[etcd3]==3.3.2" psycopg2-binary; \
+    ln -s /opt/patroni-venv/bin/patroni /usr/local/bin/patroni; \
+    ln -s /opt/patroni-venv/bin/patronictl /usr/local/bin/patronictl; \
+    rm -rf /var/lib/apt/lists/*
+
+# Patroni owns initdb/start/stop, so we do NOT use the postgres image's own entrypoint. It runs as the
+# unprivileged `postgres` user (uid 999); give it a home for the PGDATA parent (data_dir in patroni.yml
+# is /home/postgres/pgdata/data, matched by the mounted `pgdata` volume).
+RUN mkdir -p /home/postgres/pgdata /etc/patroni /opt/patroni; \
+    chown -R postgres:postgres /home/postgres /etc/patroni /opt/patroni
+
+USER postgres
+ENV PATH="/usr/lib/postgresql/16/bin:${PATH}"
+ENTRYPOINT []
+CMD ["patroni", "/etc/patroni/patroni.yml"]

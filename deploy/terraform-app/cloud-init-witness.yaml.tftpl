@@ -1,0 +1,91 @@
+#cloud-config
+# Bootstraps the WITNESS: joins the Headscale mesh and runs ONLY the third etcd member (no Postgres).
+# Its sole job is to be the tiebreaker so the DCS keeps an odd 2-of-3 majority — if the DO primary
+# site is partitioned away, the LOCAL replica + this witness still form a quorum and Patroni can
+# safely auto-promote the local standby; a lone partitioned site can never hold a majority alone.
+#
+# Rendered by Terraform (templatefile). ONLY $${...} names are Terraform vars; $VAR is shell.
+
+package_update: true
+package_upgrade: true
+
+packages:
+  - curl
+  - ca-certificates
+
+write_files:
+  - path: /usr/local/sbin/placecontext-witness-bootstrap.sh
+    permissions: "0755"
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+
+      DEST=/opt/placecontext-witness
+      mkdir -p "$DEST"
+
+      echo "[witness] installing Docker…"
+      if ! command -v docker >/dev/null 2>&1; then
+        curl -fsSL https://get.docker.com | sh
+      fi
+      systemctl enable --now docker
+
+      echo "[witness] installing Tailscale…"
+      if ! command -v tailscale >/dev/null 2>&1; then
+        curl -fsSL https://tailscale.com/install.sh | sh
+      fi
+      systemctl enable --now tailscaled
+
+      echo "[witness] joining the Headscale mesh (${mesh_control_url}) as ${mesh_hostname}…"
+      tailscale up \
+        --login-server "${mesh_control_url}" \
+        --authkey "${mesh_authkey}" \
+        --hostname "${mesh_hostname}" \
+        --accept-routes
+
+      TS_IP=""
+      for _ in $(seq 1 30); do
+        TS_IP="$(tailscale ip -4 2>/dev/null | head -1 || true)"
+        [ -n "$TS_IP" ] && break
+        echo "[witness] waiting for a tailnet IP…"; sleep 2
+      done
+      [ -n "$TS_IP" ] || { echo "[witness] ERROR: no tailnet IP after mesh join"; exit 1; }
+
+      cat > "$DEST/.env" <<EOF
+      TS_IP=$TS_IP
+      ETCD_IMAGE=${etcd_image}
+      ETCD_NAME=${etcd_name}
+      ETCD_INITIAL_CLUSTER=${etcd_initial_cluster}
+      MESH_HOSTNAME=${mesh_hostname}
+      EOF
+
+      cat > "$DEST/docker-compose.yml" <<'EOF'
+      services:
+        etcd:
+          image: $${ETCD_IMAGE}
+          restart: unless-stopped
+          network_mode: host
+          command:
+            - /usr/local/bin/etcd
+            - --name=$${ETCD_NAME}
+            - --data-dir=/etcd-data
+            - --listen-peer-urls=http://$${TS_IP}:2380
+            - --listen-client-urls=http://$${TS_IP}:2379,http://127.0.0.1:2379
+            - --advertise-client-urls=http://$${MESH_HOSTNAME}:2379
+            - --initial-advertise-peer-urls=http://$${MESH_HOSTNAME}:2380
+            - --initial-cluster=$${ETCD_INITIAL_CLUSTER}
+            - --initial-cluster-state=new
+            - --initial-cluster-token=placecontext-dcs
+          volumes:
+            - etcd-data:/etcd-data
+      volumes:
+        etcd-data:
+      EOF
+
+      echo "[witness] starting the etcd tiebreaker member…"
+      cd "$DEST"
+      docker compose --env-file "$DEST/.env" pull || true
+      docker compose --env-file "$DEST/.env" up -d
+      echo "[witness] up — etcd member ${etcd_name} on $TS_IP:2380 (tailnet)."
+
+runcmd:
+  - [ bash, /usr/local/sbin/placecontext-witness-bootstrap.sh ]

@@ -1,0 +1,200 @@
+#cloud-config
+# Bootstraps the PlaceContext Postgres PRIMARY on first boot: join the Headscale mesh, then run an
+# etcd member (DCS #1) + Patroni-managed PostgreSQL 16 (pgvector) as the read-write leader. Streaming
+# replication + etcd traffic ride the tailnet only; the services bind to the node's tailnet IP.
+#
+# Rendered by Terraform (templatefile). ONLY $${...} names are Terraform template vars, substituted at
+# apply. Shell variables use the brace-less $VAR / $(...) forms, which templatefile leaves untouched.
+#
+# NOTE: no host ufw — the DigitalOcean cloud firewall is the enforcement layer for the PUBLIC IP, and
+# 5432/8008/2379/2380 are simply never opened there. Binding to the tailnet IP is the second layer.
+
+package_update: true
+package_upgrade: true
+
+packages:
+  - curl
+  - ca-certificates
+  - jq
+
+write_files:
+  # First-boot bring-up: install Docker + Tailscale, join the mesh, render etcd + Patroni configs
+  # against the node's tailnet IP, and start them. Idempotent: safe to re-run.
+  - path: /usr/local/sbin/placecontext-db-bootstrap.sh
+    permissions: "0755"
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+
+      DEST=/opt/placecontext-db
+      mkdir -p "$DEST"
+
+      echo "[db] installing Docker engine + compose plugin…"
+      if ! command -v docker >/dev/null 2>&1; then
+        curl -fsSL https://get.docker.com | sh
+      fi
+      systemctl enable --now docker
+
+      echo "[db] installing Tailscale…"
+      if ! command -v tailscale >/dev/null 2>&1; then
+        curl -fsSL https://tailscale.com/install.sh | sh
+      fi
+      systemctl enable --now tailscaled
+
+      echo "[db] joining the Headscale mesh (${mesh_control_url}) as ${mesh_hostname}…"
+      tailscale up \
+        --login-server "${mesh_control_url}" \
+        --authkey "${mesh_authkey}" \
+        --hostname "${mesh_hostname}" \
+        --accept-routes
+
+      # Discover our tailnet IP — everything DB/DCS-related binds here, never the public NIC.
+      TS_IP=""
+      for _ in $(seq 1 30); do
+        TS_IP="$(tailscale ip -4 2>/dev/null | head -1 || true)"
+        [ -n "$TS_IP" ] && break
+        echo "[db] waiting for a tailnet IP…"; sleep 2
+      done
+      [ -n "$TS_IP" ] || { echo "[db] ERROR: no tailnet IP after mesh join"; exit 1; }
+      echo "[db] tailnet IP: $TS_IP"
+
+      echo "[db] writing etcd + Patroni environment…"
+      cat > "$DEST/.env" <<EOF
+      TS_IP=$TS_IP
+      PATRONI_IMAGE=${patroni_image}
+      ETCD_IMAGE=${etcd_image}
+      ETCD_NAME=${etcd_name}
+      ETCD_INITIAL_CLUSTER=${etcd_initial_cluster}
+      MESH_HOSTNAME=${mesh_hostname}
+      EOF
+
+      # ── Patroni config: this node bootstraps the cluster as the initial leader ──────────────────
+      # etcd DCS is the node-local member (127.0.0.1:2379). Replication is ASYNC (synchronous_mode:
+      # false) so the primary never blocks on tailnet latency. pg_hba permits replication + app
+      # connections only from the tailnet CIDRs.
+      mkdir -p "$DEST/patroni"
+      cat > "$DEST/patroni/patroni.yml" <<EOF
+      scope: ${patroni_scope}
+      namespace: /service/
+      name: ${mesh_hostname}
+
+      restapi:
+        listen: $TS_IP:8008
+        connect_address: ${mesh_hostname}:8008
+
+      etcd3:
+        host: 127.0.0.1:2379
+        protocol: http
+
+      bootstrap:
+        dcs:
+          ttl: 30
+          loop_wait: 10
+          retry_timeout: 10
+          maximum_lag_on_failover: 1048576
+          # ASYNC across the two sites: the leader does not wait on standby acks.
+          synchronous_mode: false
+          postgresql:
+            use_pg_rewind: true
+            parameters:
+              max_connections: 200
+              hot_standby: "on"
+              wal_level: replica
+              max_wal_senders: 10
+              max_replication_slots: 10
+              wal_keep_size: 512MB
+        initdb:
+          - encoding: UTF8
+          - data-checksums
+        # Created once, on first cluster bootstrap only.
+        post_bootstrap: /opt/patroni/post_bootstrap.sh
+        pg_hba:
+          - local all all trust
+          - host all all 127.0.0.1/32 scram-sha-256
+          - host all ${superuser_username} 100.64.0.0/10 scram-sha-256
+          - host all ${superuser_username} fd7a:115c:a1e0::/48 scram-sha-256
+          - host replication ${replication_username} 100.64.0.0/10 scram-sha-256
+          - host replication ${replication_username} fd7a:115c:a1e0::/48 scram-sha-256
+
+      postgresql:
+        listen: $TS_IP:5432
+        connect_address: ${mesh_hostname}:5432
+        data_dir: /home/postgres/pgdata/data
+        bin_dir: /usr/lib/postgresql/16/bin
+        pgpass: /tmp/pgpass
+        authentication:
+          superuser:
+            username: ${superuser_username}
+            password: "${superuser_password}"
+          replication:
+            username: ${replication_username}
+            password: "${replication_password}"
+        parameters:
+          password_encryption: scram-sha-256
+
+      tags:
+        nofailover: false
+        noloadbalance: false
+        clonefrom: false
+        nosync: false
+      EOF
+
+      # post_bootstrap runs once on the first leader: create the app database + pgvector extension.
+      cat > "$DEST/patroni/post_bootstrap.sh" <<'EOF'
+      #!/usr/bin/env bash
+      set -euo pipefail
+      psql -v ON_ERROR_STOP=1 <<SQL
+      SELECT 'CREATE DATABASE ${patroni_scope}'
+        WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = '${patroni_scope}')\gexec
+      SQL
+      psql -v ON_ERROR_STOP=1 -d ${patroni_scope} -c 'CREATE EXTENSION IF NOT EXISTS vector;'
+      EOF
+      chmod +x "$DEST/patroni/post_bootstrap.sh"
+
+      echo "[db] writing docker-compose…"
+      cat > "$DEST/docker-compose.yml" <<'EOF'
+      # network_mode: host so etcd + Patroni bind the node's tailnet IP (TS_IP) directly and reach the
+      # other members over the tailnet by their MagicDNS names.
+      services:
+        etcd:
+          image: $${ETCD_IMAGE}
+          restart: unless-stopped
+          network_mode: host
+          command:
+            - /usr/local/bin/etcd
+            - --name=$${ETCD_NAME}
+            - --data-dir=/etcd-data
+            - --listen-peer-urls=http://$${TS_IP}:2380
+            - --listen-client-urls=http://$${TS_IP}:2379,http://127.0.0.1:2379
+            - --advertise-client-urls=http://$${MESH_HOSTNAME}:2379
+            - --initial-advertise-peer-urls=http://$${MESH_HOSTNAME}:2380
+            - --initial-cluster=$${ETCD_INITIAL_CLUSTER}
+            - --initial-cluster-state=new
+            - --initial-cluster-token=placecontext-dcs
+          volumes:
+            - etcd-data:/etcd-data
+
+        patroni:
+          image: $${PATRONI_IMAGE}
+          restart: unless-stopped
+          network_mode: host
+          depends_on: [etcd]
+          volumes:
+            - ./patroni/patroni.yml:/etc/patroni/patroni.yml:ro
+            - ./patroni/post_bootstrap.sh:/opt/patroni/post_bootstrap.sh:ro
+            - pgdata:/home/postgres/pgdata
+          command: ["patroni", "/etc/patroni/patroni.yml"]
+
+      volumes:
+        etcd-data:
+        pgdata:
+      EOF
+
+      echo "[db] starting etcd + Patroni (primary leader)…"
+      cd "$DEST"
+      docker compose --env-file "$DEST/.env" pull || true
+      docker compose --env-file "$DEST/.env" up -d
+      echo "[db] up — Postgres primary listening on $TS_IP:5432 (tailnet). Check: docker compose logs -f patroni"
+
+runcmd:
+  - [ bash, /usr/local/sbin/placecontext-db-bootstrap.sh ]
