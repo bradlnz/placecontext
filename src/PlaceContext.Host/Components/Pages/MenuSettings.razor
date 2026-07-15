@@ -1,0 +1,228 @@
+@page "/settings/menu"
+@layout PlaceContext.Host.Components.Layout.SettingsLayout
+@attribute [Authorize(Policy = Permission.SettingsManage)]
+@inject PlaceContext.Application.Ports.IMenuConfigService Menu
+@inject PortalUiState Ui
+
+<PageTitle>placecontext — Menu</PageTitle>
+
+<div class="page">
+    <h2 class="page-title">Menu</h2>
+    <div class="page-sub">
+        Customize the workspace and project sidebars for this organisation: reorder, rename, hide, and group items.
+        Each viewer still only sees items their role and permission overrides allow.
+    </div>
+
+    @if (_message is not null)
+    {
+        <div class="message">@_message</div>
+    }
+
+    <div class="grid">
+        <div class="dccard panel">
+            <div class="panel-head">
+                <div class="panel-title">Workspace sidebar</div>
+                <button class="dcbtn" @onclick="@(() => ResetSide("workspace"))">Reset defaults</button>
+            </div>
+            @RenderEditor(_workspace, "workspace")
+        </div>
+        <div class="dccard panel">
+            <div class="panel-head">
+                <div class="panel-title">Project sidebar</div>
+                <button class="dcbtn" @onclick="@(() => ResetSide("project"))">Reset defaults</button>
+            </div>
+            @RenderEditor(_project, "project")
+        </div>
+    </div>
+
+    <div class="actions">
+        <button class="dcbtn primary" disabled="@_saving" @onclick="SaveAsync">
+            @(_saving ? "Saving…" : "Save menu")
+        </button>
+    </div>
+</div>
+
+@code {
+    private List<Row> _workspace = new();
+    private List<Row> _project = new();
+    private bool _saving;
+    private string? _message;
+
+    private sealed class Row
+    {
+        public string Id { get; set; } = "";
+        public string DefaultLabel { get; set; } = "";
+        public string Label { get; set; } = "";
+        public int Order { get; set; }
+        public bool Visible { get; set; } = true;
+        public string Section { get; set; } = "";
+        public string Kind { get; set; } = "link";
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        Ui.Set("Settings", "Menu");
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        var layout = await Menu.GetLayoutAsync();
+        var def = Menu.DefaultLayout();
+        _workspace = MergeRows(def.Workspace, layout.Workspace, isProject: false);
+        _project = MergeRows(def.Project, layout.Project, isProject: true);
+    }
+
+    private List<Row> MergeRows(
+        IReadOnlyList<MenuItemOverride> defaults,
+        IReadOnlyList<MenuItemOverride> current,
+        bool isProject)
+    {
+        // Catalog labels for display of default name
+        var catalogLabels = isProject
+            ? new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["project.overview"] = "Overview", ["project.jobs"] = "Jobs", ["project.chains"] = "Chains",
+                ["project.schedules"] = "Schedules", ["project.data"] = "Data", ["project.vault"] = "Vault",
+                ["project.events"] = "Events", ["project.entities"] = "Business (entities)",
+            }
+            : new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["dashboard"] = "Dashboard", ["jobs"] = "Jobs", ["chains"] = "Chains", ["schedules"] = "Schedules",
+                ["data"] = "Data", ["vault"] = "Vault", ["artifacts"] = "Artifacts", ["observability"] = "Observability",
+                ["cluster"] = "Cluster", ["mcp"] = "MCP Server", ["sec-workspace"] = "Workspace (section)",
+                ["overview"] = "Projects overview", ["onboarding"] = "Onboarding", ["wiki"] = "Wiki",
+                ["settings"] = "Settings", ["about"] = "About",
+            };
+
+        var byId = current.ToDictionary(x => x.Id, StringComparer.Ordinal);
+        var rows = new List<Row>();
+        foreach (var d in defaults.OrderBy(x => x.Order))
+        {
+            byId.TryGetValue(d.Id, out var c);
+            catalogLabels.TryGetValue(d.Id, out var defLabel);
+            rows.Add(new Row
+            {
+                Id = d.Id,
+                DefaultLabel = defLabel ?? d.Id,
+                Label = c?.Label ?? d.Label ?? "",
+                Order = c?.Order ?? d.Order,
+                Visible = c?.Visible ?? d.Visible,
+                Section = c?.Section ?? d.Section ?? "",
+                Kind = d.Id is "sec-workspace" or "project.entities" ? (d.Id == "sec-workspace" ? "section" : "entities") : "link",
+            });
+        }
+        return rows.OrderBy(r => r.Order).ToList();
+    }
+
+    private RenderFragment RenderEditor(List<Row> rows, string side) => __builder =>
+    {
+        __builder.OpenElement(0, "div");
+        __builder.AddAttribute(1, "class", "editor");
+        for (var i = 0; i < rows.Count; i++)
+        {
+            var row = rows[i];
+            var idx = i;
+            __builder.OpenElement(2, "div");
+            __builder.AddAttribute(3, "class", "row" + (row.Visible ? "" : " muted"));
+            __builder.OpenElement(4, "div");
+            __builder.AddAttribute(5, "class", "row-move");
+            __builder.OpenElement(6, "button");
+            __builder.AddAttribute(7, "class", "dcbtn move");
+            __builder.AddAttribute(8, "disabled", idx == 0);
+            __builder.AddAttribute(9, "onclick", EventCallback.Factory.Create(this, () => Move(side, idx, -1)));
+            __builder.AddContent(10, "↑");
+            __builder.CloseElement();
+            __builder.OpenElement(11, "button");
+            __builder.AddAttribute(12, "class", "dcbtn move");
+            __builder.AddAttribute(13, "disabled", idx >= rows.Count - 1);
+            __builder.AddAttribute(14, "onclick", EventCallback.Factory.Create(this, () => Move(side, idx, 1)));
+            __builder.AddContent(15, "↓");
+            __builder.CloseElement();
+            __builder.CloseElement();
+
+            __builder.OpenElement(16, "div");
+            __builder.AddAttribute(17, "class", "row-main");
+            __builder.OpenElement(18, "div");
+            __builder.AddAttribute(19, "class", "id");
+            __builder.AddContent(20, row.DefaultLabel);
+            __builder.AddMarkupContent(21, $" <span class=\"code\">{row.Id}</span>");
+            __builder.CloseElement();
+            __builder.OpenElement(22, "input");
+            __builder.AddAttribute(23, "class", "dcinput");
+            __builder.AddAttribute(24, "placeholder", "Custom label (optional)");
+            __builder.AddAttribute(25, "value", row.Label);
+            __builder.AddAttribute(26, "oninput", EventCallback.Factory.Create<ChangeEventArgs>(this, e => row.Label = e.Value?.ToString() ?? ""));
+            __builder.CloseElement();
+            __builder.OpenElement(27, "input");
+            __builder.AddAttribute(28, "class", "dcinput section");
+            __builder.AddAttribute(29, "placeholder", "Section header");
+            __builder.AddAttribute(30, "value", row.Section);
+            __builder.AddAttribute(31, "oninput", EventCallback.Factory.Create<ChangeEventArgs>(this, e => row.Section = e.Value?.ToString() ?? ""));
+            __builder.CloseElement();
+            __builder.CloseElement();
+
+            __builder.OpenElement(32, "label");
+            __builder.AddAttribute(33, "class", "vis");
+            __builder.OpenElement(34, "input");
+            __builder.AddAttribute(35, "type", "checkbox");
+            __builder.AddAttribute(36, "checked", row.Visible);
+            __builder.AddAttribute(37, "onchange", EventCallback.Factory.Create<ChangeEventArgs>(this, e =>
+            {
+                row.Visible = e.Value is bool b ? b : bool.TryParse(e.Value?.ToString(), out var x) && x;
+            }));
+            __builder.CloseElement();
+            __builder.AddContent(38, " Visible");
+            __builder.CloseElement();
+
+            __builder.CloseElement();
+        }
+        __builder.CloseElement();
+    };
+
+    private void Move(string side, int index, int delta)
+    {
+        var list = side == "workspace" ? _workspace : _project;
+        var j = index + delta;
+        if (j < 0 || j >= list.Count) return;
+        (list[index], list[j]) = (list[j], list[index]);
+        Renumber(list);
+    }
+
+    private static void Renumber(List<Row> list)
+    {
+        for (var i = 0; i < list.Count; i++)
+            list[i].Order = i * 10;
+    }
+
+    private async Task ResetSide(string side)
+    {
+        var def = Menu.DefaultLayout();
+        if (side == "workspace")
+            _workspace = MergeRows(def.Workspace, def.Workspace, false);
+        else
+            _project = MergeRows(def.Project, def.Project, true);
+        await Task.CompletedTask;
+    }
+
+    private async Task SaveAsync()
+    {
+        _saving = true;
+        _message = null;
+        try
+        {
+            Renumber(_workspace);
+            Renumber(_project);
+            var layout = new MenuLayout(
+                _workspace.Select(r => new MenuItemOverride(r.Id, string.IsNullOrWhiteSpace(r.Label) ? null : r.Label.Trim(), r.Order, r.Visible, string.IsNullOrWhiteSpace(r.Section) ? null : r.Section.Trim())).ToList(),
+                _project.Select(r => new MenuItemOverride(r.Id, string.IsNullOrWhiteSpace(r.Label) ? null : r.Label.Trim(), r.Order, r.Visible, string.IsNullOrWhiteSpace(r.Section) ? null : r.Section.Trim())).ToList());
+            await Menu.SaveLayoutAsync(layout);
+            _message = "Menu saved. Reload the page to refresh the sidebars.";
+        }
+        catch (Exception ex)
+        {
+            _message = ex.Message;
+        }
+        finally { _saving = false; }
+    }
+}

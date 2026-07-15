@@ -24,6 +24,8 @@ public sealed class NpgsqlProjectDataStore : IProjectDataStore
 
     private readonly string _connectionString;
     private readonly ILogger<NpgsqlProjectDataStore>? _log;
+    private readonly IDataEncryptor? _enc;
+    private static string DataPurpose => IDataEncryptor.Purpose.ProjectData;
 
     // Schemas this process has already provisioned successfully. Once a schema lands here,
     // EnsureProvisionedAsync short-circuits the DDL batch entirely — this is what removes the
@@ -39,12 +41,21 @@ public sealed class NpgsqlProjectDataStore : IProjectDataStore
     /// <summary>Test hook: clears the in-process provisioning cache so tests don't leak state.</summary>
     internal static void ResetProvisioningCacheForTests() => ProvisionedSchemas.Clear();
 
-    public NpgsqlProjectDataStore(IConfiguration config, ILogger<NpgsqlProjectDataStore>? log = null)
+    public NpgsqlProjectDataStore(IConfiguration config, ILogger<NpgsqlProjectDataStore>? log = null, IDataEncryptor? enc = null)
     {
         _connectionString = config.GetSection("PlaceContext")["ConnectionString"]
             ?? new PlaceContextOptions().ConnectionString;
         _log = log;
+        _enc = enc;
     }
+
+    /// <summary>Encrypt a cell for storage; null encryptor (tests) or empty values pass through.</summary>
+    private string? ProtectCell(string? value)
+        => value is null || _enc is null ? value : _enc.Protect(value, DataPurpose);
+
+    /// <summary>Decrypt a cell for portal/API display; legacy plaintext passes through.</summary>
+    private string? UnprotectCell(string? value)
+        => value is null || _enc is null ? value : _enc.Unprotect(value, DataPurpose);
 
     /// <summary>Schema/role name for a project: "proj_" + the guid without dashes (fits PG's 63-char limit).</summary>
     internal static string SchemaFor(Guid projectId) => "proj_" + projectId.ToString("N");
@@ -133,7 +144,7 @@ public sealed class NpgsqlProjectDataStore : IProjectDataStore
                     if (rows.Count >= MaxRows) { truncated = true; break; }
                     var row = new string?[reader.FieldCount];
                     for (var i = 0; i < reader.FieldCount; i++)
-                        row[i] = await reader.IsDBNullAsync(i, ct) ? null : reader.GetValue(i).ToString();
+                        row[i] = await reader.IsDBNullAsync(i, ct) ? null : UnprotectCell(reader.GetValue(i).ToString());
                     rows.Add(row);
                 }
             }
@@ -204,7 +215,9 @@ public sealed class NpgsqlProjectDataStore : IProjectDataStore
                 columns.Add(colReader.GetName(i));
         }
 
-        var whereSql = BuildSearchWhereClause(columns, search) ?? "";
+        // Encrypted text cells cannot be matched with SQL ILIKE — search filters after decrypt.
+        var searchInMemory = _enc is not null && !string.IsNullOrWhiteSpace(search);
+        var whereSql = searchInMemory ? "" : (BuildSearchWhereClause(columns, search) ?? "");
         var hasSearch = whereSql.Length > 0;
 
         long total;
@@ -224,18 +237,36 @@ public sealed class NpgsqlProjectDataStore : IProjectDataStore
             pageCmd.Transaction = tx;
             // ORDER BY 1 keeps paging stable/deterministic across requests (the table has no
             // guaranteed primary key visible here — the first column is the best available anchor).
-            pageCmd.CommandText = $"SELECT * FROM {quoted}{whereSql} ORDER BY 1 LIMIT @take OFFSET @skip";
-            if (hasSearch) pageCmd.Parameters.AddWithValue("search", $"%{search}%");
-            pageCmd.Parameters.AddWithValue("take", pageSize);
-            pageCmd.Parameters.AddWithValue("skip", offset);
+            if (searchInMemory)
+            {
+                // Bounded decrypt-then-filter window (same cap as ExecuteAsync).
+                pageCmd.CommandText = $"SELECT * FROM {quoted} ORDER BY 1 LIMIT @take";
+                pageCmd.Parameters.AddWithValue("take", MaxRows);
+            }
+            else
+            {
+                pageCmd.CommandText = $"SELECT * FROM {quoted}{whereSql} ORDER BY 1 LIMIT @take OFFSET @skip";
+                if (hasSearch) pageCmd.Parameters.AddWithValue("search", $"%{search}%");
+                pageCmd.Parameters.AddWithValue("take", pageSize);
+                pageCmd.Parameters.AddWithValue("skip", offset);
+            }
             await using var reader = await pageCmd.ExecuteReaderAsync(ct);
             while (await reader.ReadAsync(ct))
             {
                 var row = new string?[reader.FieldCount];
                 for (var i = 0; i < reader.FieldCount; i++)
-                    row[i] = await reader.IsDBNullAsync(i, ct) ? null : reader.GetValue(i).ToString();
+                    row[i] = await reader.IsDBNullAsync(i, ct) ? null : UnprotectCell(reader.GetValue(i).ToString());
                 rows.Add(row);
             }
+        }
+
+        if (searchInMemory)
+        {
+            var term = search!.Trim();
+            var matched = rows.Where(r => r.Any(c =>
+                c is not null && c.Contains(term, StringComparison.OrdinalIgnoreCase))).ToList();
+            total = matched.Count;
+            rows = matched.Skip((int)offset).Take(pageSize).ToList();
         }
 
         await tx.CommitAsync(ct);
@@ -444,8 +475,14 @@ public sealed class NpgsqlProjectDataStore : IProjectDataStore
             insert.Transaction = tx;
             insert.CommandText = $"INSERT INTO {qualified} ({cols}) VALUES ({placeholders})";
             for (var i = 0; i < columns.Count; i++)
+            {
+                var cell = row[i];
+                // text/jsonb cells are encrypted at rest; typed columns stay native for joins/keys.
+                if (cell is not null && pgTypes[i] is "text" or "jsonb")
+                    cell = ProtectCell(cell);
                 insert.Parameters.Add(new NpgsqlParameter($"p{i}", NpgsqlTypes.NpgsqlDbType.Text)
-                    { Value = (object?)row[i] ?? DBNull.Value });
+                    { Value = (object?)cell ?? DBNull.Value });
+            }
             await insert.ExecuteNonQueryAsync(ct);
         }
 
@@ -509,13 +546,187 @@ public sealed class NpgsqlProjectDataStore : IProjectDataStore
             insert.Transaction = tx;
             insert.CommandText = $"INSERT INTO {QuoteIdent(tableName)} ({cols}) VALUES ({placeholders})";
             for (var i = 0; i < columns.Count; i++)
+            {
+                var cell = row[i];
+                if (cell is not null && pgTypes[i] is "text" or "jsonb")
+                    cell = ProtectCell(cell);
                 insert.Parameters.Add(new NpgsqlParameter($"p{i}", NpgsqlTypes.NpgsqlDbType.Text)
-                    { Value = (object?)row[i] ?? DBNull.Value });
+                    { Value = (object?)cell ?? DBNull.Value });
+            }
             inserted += await insert.ExecuteNonQueryAsync(ct);
         }
 
         await tx.CommitAsync(ct);
         return inserted;
+    }
+
+    public async Task InsertRowAsync(Guid projectId, string tableName, IReadOnlyDictionary<string, string?> values, CancellationToken ct = default)
+    {
+        Ident(tableName, "table name");
+        if (values is null || values.Count == 0)
+            throw new ArgumentException("At least one column value is required.");
+        var cols = values.Keys.ToList();
+        foreach (var c in cols) Ident(c, "column name");
+
+        var schema = SchemaFor(projectId);
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+        await EnsureProvisionedAsync(conn, schema, ct);
+
+        await using var tx = await conn.BeginTransactionAsync(ct);
+        await using (var setup = conn.CreateCommand())
+        {
+            setup.Transaction = tx;
+            setup.CommandText =
+                $"SET LOCAL ROLE \"{schema}\"; SET LOCAL search_path TO \"{schema}\"; " +
+                $"SET LOCAL statement_timeout = '{StatementTimeout}'";
+            await setup.ExecuteNonQueryAsync(ct);
+        }
+
+        var colTypes = await LoadColumnTypesAsync(conn, tx, tableName, cols, ct);
+        var colList = string.Join(", ", cols.Select(QuoteIdent));
+        var placeholders = string.Join(", ", cols.Select((c, i) => $"@p{i}::{colTypes[c]}"));
+        await using (var insert = conn.CreateCommand())
+        {
+            insert.Transaction = tx;
+            insert.CommandText = $"INSERT INTO {QuoteIdent(tableName)} ({colList}) VALUES ({placeholders})";
+            for (var i = 0; i < cols.Count; i++)
+            {
+                var cell = values[cols[i]];
+                if (cell is not null && colTypes[cols[i]] is "text" or "jsonb" or "varchar")
+                    cell = ProtectCell(cell);
+                insert.Parameters.Add(new NpgsqlParameter($"p{i}", NpgsqlTypes.NpgsqlDbType.Text)
+                    { Value = (object?)cell ?? DBNull.Value });
+            }
+            await insert.ExecuteNonQueryAsync(ct);
+        }
+        await tx.CommitAsync(ct);
+    }
+
+    public async Task<int> UpdateRowsAsync(Guid projectId, string tableName, IReadOnlyDictionary<string, string?> keys,
+        IReadOnlyDictionary<string, string?> values, CancellationToken ct = default)
+    {
+        Ident(tableName, "table name");
+        if (keys is null || keys.Count == 0) throw new ArgumentException("At least one key column is required.");
+        if (values is null || values.Count == 0) throw new ArgumentException("At least one value column is required.");
+        var keyCols = keys.Keys.ToList();
+        var valCols = values.Keys.ToList();
+        foreach (var c in keyCols.Concat(valCols)) Ident(c, "column name");
+
+        var schema = SchemaFor(projectId);
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+        await EnsureProvisionedAsync(conn, schema, ct);
+        await using var tx = await conn.BeginTransactionAsync(ct);
+        await using (var setup = conn.CreateCommand())
+        {
+            setup.Transaction = tx;
+            setup.CommandText =
+                $"SET LOCAL ROLE \"{schema}\"; SET LOCAL search_path TO \"{schema}\"; " +
+                $"SET LOCAL statement_timeout = '{StatementTimeout}'";
+            await setup.ExecuteNonQueryAsync(ct);
+        }
+
+        var allCols = keyCols.Concat(valCols).Distinct(StringComparer.Ordinal).ToList();
+        var colTypes = await LoadColumnTypesAsync(conn, tx, tableName, allCols, ct);
+        var sets = string.Join(", ", valCols.Select((c, i) => $"{QuoteIdent(c)} = @v{i}::{colTypes[c]}"));
+        var wheres = string.Join(" AND ", keyCols.Select((c, i) =>
+            keys[c] is null
+                ? $"{QuoteIdent(c)} IS NULL"
+                : $"{QuoteIdent(c)}::text = @k{i}"));
+        await using var cmd = conn.CreateCommand();
+        cmd.Transaction = tx;
+        cmd.CommandText = $"UPDATE {QuoteIdent(tableName)} SET {sets} WHERE {wheres}";
+        for (var i = 0; i < valCols.Count; i++)
+        {
+            var cell = values[valCols[i]];
+            if (cell is not null && colTypes[valCols[i]] is "text" or "jsonb" or "varchar")
+                cell = ProtectCell(cell);
+            cmd.Parameters.Add(new NpgsqlParameter($"v{i}", NpgsqlTypes.NpgsqlDbType.Text)
+                { Value = (object?)cell ?? DBNull.Value });
+        }
+        for (var i = 0; i < keyCols.Count; i++)
+        {
+            if (keys[keyCols[i]] is null) continue;
+            // Match on plaintext or ciphertext for legacy/encrypted cells.
+            cmd.Parameters.Add(new NpgsqlParameter($"k{i}", NpgsqlTypes.NpgsqlDbType.Text)
+                { Value = keys[keyCols[i]]! });
+        }
+        var n = await cmd.ExecuteNonQueryAsync(ct);
+        await tx.CommitAsync(ct);
+        return n;
+    }
+
+    public async Task<int> DeleteRowsAsync(Guid projectId, string tableName, IReadOnlyDictionary<string, string?> keys, CancellationToken ct = default)
+    {
+        Ident(tableName, "table name");
+        if (keys is null || keys.Count == 0) throw new ArgumentException("At least one key column is required.");
+        var keyCols = keys.Keys.ToList();
+        foreach (var c in keyCols) Ident(c, "column name");
+
+        var schema = SchemaFor(projectId);
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+        await EnsureProvisionedAsync(conn, schema, ct);
+        await using var tx = await conn.BeginTransactionAsync(ct);
+        await using (var setup = conn.CreateCommand())
+        {
+            setup.Transaction = tx;
+            setup.CommandText =
+                $"SET LOCAL ROLE \"{schema}\"; SET LOCAL search_path TO \"{schema}\"; " +
+                $"SET LOCAL statement_timeout = '{StatementTimeout}'";
+            await setup.ExecuteNonQueryAsync(ct);
+        }
+
+        var wheres = string.Join(" AND ", keyCols.Select((c, i) =>
+            keys[c] is null ? $"{QuoteIdent(c)} IS NULL" : $"{QuoteIdent(c)}::text = @k{i}"));
+        await using var cmd = conn.CreateCommand();
+        cmd.Transaction = tx;
+        cmd.CommandText = $"DELETE FROM {QuoteIdent(tableName)} WHERE {wheres}";
+        for (var i = 0; i < keyCols.Count; i++)
+        {
+            if (keys[keyCols[i]] is null) continue;
+            cmd.Parameters.Add(new NpgsqlParameter($"k{i}", NpgsqlTypes.NpgsqlDbType.Text)
+                { Value = keys[keyCols[i]]! });
+        }
+        var n = await cmd.ExecuteNonQueryAsync(ct);
+        await tx.CommitAsync(ct);
+        return n;
+    }
+
+    private async Task<Dictionary<string, string>> LoadColumnTypesAsync(
+        NpgsqlConnection conn, NpgsqlTransaction tx, string tableName, IReadOnlyList<string> columns, CancellationToken ct)
+    {
+        // Default text; refine from information_schema when available.
+        var map = columns.ToDictionary(c => c, _ => "text", StringComparer.Ordinal);
+        await using var cmd = conn.CreateCommand();
+        cmd.Transaction = tx;
+        cmd.CommandText = """
+            SELECT column_name, data_type, udt_name
+            FROM information_schema.columns
+            WHERE table_schema = current_schema() AND table_name = @t
+            """;
+        cmd.Parameters.AddWithValue("t", tableName);
+        await using var r = await cmd.ExecuteReaderAsync(ct);
+        while (await r.ReadAsync(ct))
+        {
+            var name = r.GetString(0);
+            if (!map.ContainsKey(name)) continue;
+            var udt = r.GetString(2);
+            map[name] = udt switch
+            {
+                "int4" => "integer",
+                "int8" => "bigint",
+                "bool" => "boolean",
+                "numeric" or "float4" or "float8" => "numeric",
+                "uuid" => "uuid",
+                "timestamptz" or "timestamp" => "timestamptz",
+                "date" => "date",
+                "jsonb" or "json" => "jsonb",
+                _ => "text",
+            };
+        }
+        return map;
     }
 
     // Run a single non-query statement inside the project's schema as its role (DDL helper).

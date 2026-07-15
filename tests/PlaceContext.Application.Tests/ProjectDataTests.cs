@@ -66,6 +66,14 @@ public class ProjectDataTests
         public Task<int> ImportRowsAsync(Guid projectId, string tableName, IReadOnlyList<ProjectColumnSpec> columns,
             IReadOnlyList<IReadOnlyList<string?>> rows, bool createTable, CancellationToken ct = default)
         { SawProject = projectId; Appended = (tableName, columns, rows); return Task.FromResult(rows.Count); }
+        public Task InsertRowAsync(Guid projectId, string tableName, IReadOnlyDictionary<string, string?> values, CancellationToken ct = default)
+            => Task.CompletedTask;
+        public Task<int> UpdateRowsAsync(Guid projectId, string tableName, IReadOnlyDictionary<string, string?> keys,
+            IReadOnlyDictionary<string, string?> values, CancellationToken ct = default)
+            => Task.FromResult(0);
+        public Task<int> DeleteRowsAsync(Guid projectId, string tableName, IReadOnlyDictionary<string, string?> keys, CancellationToken ct = default)
+            => Task.FromResult(0);
+
 
         public string? SawSearch;
         public (int Page, int PageSize)? SawPaging;

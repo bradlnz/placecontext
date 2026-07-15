@@ -92,4 +92,18 @@ public interface IProjectDataStore
     /// </summary>
     Task<int> ImportRowsAsync(Guid projectId, string tableName, IReadOnlyList<ProjectColumnSpec> columns,
         IReadOnlyList<IReadOnlyList<string?>> rows, bool createTable, CancellationToken ct = default);
+
+    /// <summary>
+    /// Insert one project-owned row (CRM path). Column names validated; text/jsonb cells encrypted.
+    /// </summary>
+    Task InsertRowAsync(Guid projectId, string tableName, IReadOnlyDictionary<string, string?> values, CancellationToken ct = default);
+
+    /// <summary>
+    /// Update rows matching <paramref name="keys"/> (column → value). At least one key required.
+    /// </summary>
+    Task<int> UpdateRowsAsync(Guid projectId, string tableName, IReadOnlyDictionary<string, string?> keys,
+        IReadOnlyDictionary<string, string?> values, CancellationToken ct = default);
+
+    /// <summary>Delete rows matching <paramref name="keys"/>. At least one key required.</summary>
+    Task<int> DeleteRowsAsync(Guid projectId, string tableName, IReadOnlyDictionary<string, string?> keys, CancellationToken ct = default);
 }

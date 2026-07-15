@@ -1,5 +1,6 @@
 @page "/project/{ProjectId:guid}/entity/{EntityName}"
 @layout PlaceContext.Host.Components.Layout.ProjectLayout
+@attribute [Authorize(Policy = Permission.DataRead)]
 @implements IDisposable
 @using PlaceContext.Application.Features
 @inject IPlaceContextService Svc
@@ -32,8 +33,15 @@
                     }
                 </div>
             </div>
-            <input class="dcinput filter-input" placeholder="search records…"
-                   value="@_search" @oninput="OnSearchInput" />
+            <div class="header-actions">
+                <AuthorizeView Policy="@Permission.DataWrite">
+                    <Authorized>
+                        <button class="dcbtn primary" @onclick="StartCreateAsync">＋ New</button>
+                    </Authorized>
+                </AuthorizeView>
+                <input class="dcinput filter-input" placeholder="search records…"
+                       value="@_search" @oninput="OnSearchInput" />
+            </div>
         </div>
 
         @if (_error is not null)
@@ -250,21 +258,54 @@
     }
 </div>
 
-@* ── Record detail: the fields plus related records reached through the entity graph ────── *@
-@if (_open is not null && _entity is not null && _rows is not null)
+@* ── Record detail / CRM edit modal ────── *@
+@if ((_open is not null || _editing) && _entity is not null)
 {
-    <div class="dcslide-scrim" @onclick="@(() => _open = null)"></div>
+    <div class="dcslide-scrim" @onclick="CloseRecordPanel"></div>
     <div class="dcslide slide-560">
         <div class="dcslide-head">
             <div class="flex-min">
-                <div class="title-14">@RecordLabel(_open)</div>
-                <div class="sub-115">@_entity.Name record</div>
+                <div class="title-14">@(_creating ? $"New {_entity.Name}" : (_editing ? "Edit record" : RecordLabel(_open!)))</div>
+                <div class="sub-115">@_entity.Name</div>
             </div>
-            <button class="dcbtn graph-toggle-btn" style="@(_showGraph ? "color:var(--brand-2); border-color:var(--brand-2)" : "")"
-                    @onclick="@(() => _showGraph = !_showGraph)">◉ Graph</button>
-            <button class="dcslide-x" @onclick="@(() => _open = null)">×</button>
+            @if (!_editing && _open is not null)
+            {
+                <button class="dcbtn graph-toggle-btn" style="@(_showGraph ? "color:var(--brand-2); border-color:var(--brand-2)" : "")"
+                        @onclick="@(() => _showGraph = !_showGraph)">◉ Graph</button>
+                <AuthorizeView Policy="@Permission.DataWrite">
+                    <Authorized>
+                        <button class="dcbtn graph-toggle-btn" @onclick="StartEdit">Edit</button>
+                        <button class="dcbtn btn-11-del" @onclick="DeleteOpenAsync">Delete</button>
+                    </Authorized>
+                </AuthorizeView>
+            }
+            <button class="dcslide-x" @onclick="CloseRecordPanel">×</button>
         </div>
         <div class="dcslide-body record-body">
+            @if (_editError is not null)
+            {
+                <div class="error-banner">@_editError</div>
+            }
+            @if (_editing)
+            {
+                <div class="dccard card-pad crm-form">
+                    @foreach (var col in _formColumns)
+                    {
+                        <label class="crm-label">@col
+                            <input class="dcinput crm-input" value="@(_formValues.GetValueOrDefault(col))"
+                                   @oninput="e => _formValues[col] = e.Value?.ToString()" />
+                        </label>
+                    }
+                    <div class="crm-actions">
+                        <button class="dcbtn" @onclick="CloseRecordPanel" disabled="@_saving">Cancel</button>
+                        <button class="dcbtn primary" @onclick="SaveRecordAsync" disabled="@_saving">
+                            @(_saving ? "Saving…" : (_creating ? "Create" : "Save"))
+                        </button>
+                    </div>
+                </div>
+            }
+            else if (_open is not null && _rows is not null)
+            {
             @if (_showGraph)
             {
                 @* ── The link graph: every relation this record participates in, as nodes/edges. ── *@
@@ -328,6 +369,7 @@
                     }
                 </div>
             }
+            } @* end view mode *@
         </div>
     </div>
 }
@@ -346,6 +388,11 @@
     private IReadOnlyList<string?>? _open;
     private readonly List<(EntityRelationDto Relation, PlaceContext.Application.Ports.ProjectQueryResult Rows)> _related = new();
     private string? _error;
+    private bool _editing, _creating, _saving;
+    private string? _editError;
+    private List<string> _formColumns = new();
+    private Dictionary<string, string?> _formValues = new(StringComparer.Ordinal);
+    private Dictionary<string, string?> _keySnapshot = new(StringComparer.Ordinal);
 
     // ── Records tab: server-side pagination + search over the entity's table (the store binds the
     // search term as a parameter — see NpgsqlProjectDataStore.QueryTablePageAsync). ──
@@ -680,6 +727,108 @@
             }
             catch { /* a broken relation must not break the record view */ }
         }
+    }
+
+    private void CloseRecordPanel()
+    {
+        _open = null;
+        _editing = _creating = false;
+        _editError = null;
+        _formValues.Clear();
+        _keySnapshot.Clear();
+    }
+
+    private async Task StartCreateAsync()
+    {
+        if (_entity is null) return;
+        _creating = true;
+        _editing = true;
+        _open = null;
+        _editError = null;
+        _formColumns = (await Svc.ListProjectTableColumnsAsync(ProjectId, _entity.TableName))
+            .Select(c => c.Name).ToList();
+        if (_formColumns.Count == 0 && _page is { Columns.Count: > 0 })
+            _formColumns = _page.Columns.ToList();
+        _formValues = _formColumns.ToDictionary(c => c, _ => (string?)null, StringComparer.Ordinal);
+        _keySnapshot.Clear();
+    }
+
+    private void StartEdit()
+    {
+        if (_open is null || _rows is null) return;
+        _creating = false;
+        _editing = true;
+        _editError = null;
+        _formColumns = _rows.Columns.ToList();
+        _formValues = new Dictionary<string, string?>(StringComparer.Ordinal);
+        _keySnapshot = new Dictionary<string, string?>(StringComparer.Ordinal);
+        for (var i = 0; i < _formColumns.Count; i++)
+        {
+            var v = i < _open.Count ? _open[i] : null;
+            _formValues[_formColumns[i]] = v;
+            // Keys for WHERE: prefer label column, else first non-empty columns (up to 3).
+            _keySnapshot[_formColumns[i]] = v;
+        }
+        // Narrow keys to identity columns when possible.
+        var label = LabelCol();
+        if (label is not null && _keySnapshot.ContainsKey(label))
+            _keySnapshot = new Dictionary<string, string?>(StringComparer.Ordinal)
+                { [label] = _keySnapshot[label] };
+        else
+        {
+            var kept = _keySnapshot.Where(kv => !string.IsNullOrEmpty(kv.Value)).Take(3)
+                .ToDictionary(kv => kv.Key, kv => kv.Value, StringComparer.Ordinal);
+            if (kept.Count > 0) _keySnapshot = kept;
+        }
+    }
+
+    private async Task SaveRecordAsync()
+    {
+        if (_entity is null || _formValues.Count == 0) return;
+        _saving = true;
+        _editError = null;
+        try
+        {
+            if (_creating)
+                await Svc.CreateEntityRecordAsync(ProjectId, _entity.TableName, _formValues);
+            else
+                await Svc.UpdateEntityRecordAsync(ProjectId, _entity.TableName, _keySnapshot, _formValues);
+            CloseRecordPanel();
+            await ReloadPageAsync();
+        }
+        catch (Exception ex)
+        {
+            _editError = ex.Message;
+        }
+        finally { _saving = false; }
+    }
+
+    private async Task DeleteOpenAsync()
+    {
+        if (_entity is null || _open is null || _rows is null) return;
+        StartEdit(); // build keys
+        _editing = false;
+        try
+        {
+            await Svc.DeleteEntityRecordAsync(ProjectId, _entity.TableName, _keySnapshot);
+            CloseRecordPanel();
+            await ReloadPageAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private async Task ReloadPageAsync()
+    {
+        if (_entity is null) return;
+        try
+        {
+            _page = await Svc.QueryProjectTablePageAsync(ProjectId, _entity.TableName, _search, _page?.Page ?? 1, _page?.PageSize ?? 50);
+            _rows = await Svc.ExecuteProjectDataAsync(ProjectId, $"SELECT * FROM \"{_entity.TableName}\" LIMIT 500");
+        }
+        catch (Exception ex) { _error = ex.Message; }
     }
 
     // Artifacts join the graph through shared key values: any run whose recorded output mentions

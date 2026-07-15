@@ -76,6 +76,9 @@ public static class DependencyInjection
         services.AddScoped<ICommandHandler<DropProjectViewCommand, bool>, DropProjectViewHandler>();
         services.AddScoped<ICommandHandler<SaveDataEntityCommand, DataEntityView>, SaveDataEntityHandler>();
         services.AddScoped<ICommandHandler<DeleteDataEntityCommand, bool>, DeleteDataEntityHandler>();
+        services.AddScoped<ICommandHandler<CreateEntityRecordCommand, bool>, CreateEntityRecordHandler>();
+        services.AddScoped<ICommandHandler<UpdateEntityRecordCommand, int>, UpdateEntityRecordHandler>();
+        services.AddScoped<ICommandHandler<DeleteEntityRecordCommand, int>, DeleteEntityRecordHandler>();
         services.AddScoped<ICommandHandler<CreateTriggerCommand, TriggerView>, CreateTriggerHandler>();
         services.AddScoped<ICommandHandler<SetTriggerEnabledCommand, TriggerView>, SetTriggerEnabledHandler>();
         services.AddScoped<ICommandHandler<DeleteTriggerCommand, bool>, DeleteTriggerHandler>();

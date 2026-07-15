@@ -12,6 +12,11 @@ namespace PlaceContext.Infrastructure.Auth;
 /// </summary>
 public sealed class UserApiTokenService : IUserApiTokenService
 {
+    /// <summary>Default lifetime when the caller does not specify one.</summary>
+    public static readonly TimeSpan DefaultLifetime = TimeSpan.FromDays(90);
+    /// <summary>Hard cap — no non-expiring personal tokens.</summary>
+    public static readonly TimeSpan MaxLifetime = TimeSpan.FromDays(365);
+
     private readonly AppDbContext _db;
     private readonly ICurrentUser _currentUser;
     private readonly ICurrentTenant _tenant;
@@ -33,6 +38,10 @@ public sealed class UserApiTokenService : IUserApiTokenService
         if (name.Length > 80)
             throw new ArgumentException("Token name is too long (max 80 characters).", nameof(name));
 
+        var life = lifetime is { } t && t > TimeSpan.Zero ? t : DefaultLifetime;
+        if (life > MaxLifetime)
+            throw new ArgumentException($"Token lifetime cannot exceed {MaxLifetime.TotalDays:0} days.", nameof(lifetime));
+
         var rawBytes = RandomNumberGenerator.GetBytes(32);
         var raw = "pct_" + Convert.ToHexString(rawBytes).ToLowerInvariant();
         var hash = Hash(raw);
@@ -45,7 +54,7 @@ public sealed class UserApiTokenService : IUserApiTokenService
             TokenHash = hash,
             TokenPrefix = raw[..11], // "pct_" + 8 hex chars
             CreatedAt = now,
-            ExpiresAt = lifetime is { } t && t > TimeSpan.Zero ? now.Add(t) : null,
+            ExpiresAt = now.Add(life),
         };
         await _db.UserApiTokens.AddAsync(row, ct);
         await _db.SaveChangesAsync(ct);

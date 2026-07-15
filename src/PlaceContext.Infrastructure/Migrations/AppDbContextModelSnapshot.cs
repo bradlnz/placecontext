@@ -418,6 +418,9 @@ namespace PlaceContext.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<DateTimeOffset?>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("Role")
                         .IsRequired()
                         .HasColumnType("text");
@@ -1024,49 +1027,6 @@ namespace PlaceContext.Infrastructure.Migrations
                     b.ToTable("job_run_artifacts", (string)null);
                 });
 
-            modelBuilder.Entity("PlaceContext.Infrastructure.Persistence.SmsMessageRow", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("BodyProtected")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("ExternalId")
-                        .HasColumnType("text");
-
-                    b.Property<string>("FromProtected")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<Guid?>("ProjectId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Provider")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<DateTimeOffset>("ReceivedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid>("TenantId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("To")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ReceivedAt");
-
-                    b.HasIndex("Provider", "ExternalId");
-
-                    b.ToTable("sms_messages", (string)null);
-                });
-
             modelBuilder.Entity("PlaceContext.Infrastructure.Persistence.TenantRow", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1187,6 +1147,52 @@ namespace PlaceContext.Infrastructure.Migrations
                     b.HasIndex("ProjectId", "RecordedAt");
 
                     b.ToTable("usage_records", (string)null);
+                });
+
+            modelBuilder.Entity("PlaceContext.Infrastructure.Persistence.UserApiTokenRow", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("LastUsedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset?>("RevokedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("TokenPrefix")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique();
+
+                    b.HasIndex("UserId", "CreatedAt");
+
+                    b.ToTable("user_api_tokens", (string)null);
                 });
 
             modelBuilder.Entity("PlaceContext.Infrastructure.Persistence.UserPermissionGrantRow", b =>

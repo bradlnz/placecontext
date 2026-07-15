@@ -35,6 +35,7 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
     private readonly EventDispatchService? _events;
     private readonly IEmbeddingGateway? _embeddings;
     private readonly IRunEmbeddingRepository? _embeddingStore;
+    private readonly IContentIndexer? _contentIndexer;
     private readonly IProjectSecretRepository? _secretRepo;
     private readonly ISecretProtector? _secretProtector;
     private readonly PostJobActionService? _postActions;
@@ -54,6 +55,7 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
         EventDispatchService? events = null,
         IEmbeddingGateway? embeddings = null,
         IRunEmbeddingRepository? embeddingStore = null,
+        IContentIndexer? contentIndexer = null,
         IProjectSecretRepository? secretRepo = null,
         ISecretProtector? secretProtector = null,
         PostJobActionService? postActions = null,
@@ -76,6 +78,7 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
         _events = events;
         _embeddings = embeddings;
         _embeddingStore = embeddingStore;
+        _contentIndexer = contentIndexer;
     }
 
     public async Task<JobRunDetailView> HandleAsync(RunJobCommand command, CancellationToken ct = default)
@@ -408,13 +411,13 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
         context.Append(toStore, _clock.UtcNow);
         await _contexts.SaveAsync(context, ct);
 
-        // Vectorize the organized output (Voyage) and store it so runs become semantically searchable
-        // and linkable in the dependency graph. Best-effort — never fails the run.
+        // Vectorize the organized output for RAG + dependency graph. Dual-write: legacy
+        // job_run_embeddings (encrypted text) and universal content_embeddings. Best-effort.
+        var text = toStore.Length > 8000 ? toStore[..8000] : toStore;
         if (_embeddings is { IsEnabled: true } && _embeddingStore is not null)
         {
             try
             {
-                var text = toStore.Length > 8000 ? toStore[..8000] : toStore;
                 var vectors = await _embeddings.EmbedAsync(new[] { text }, ct);
                 if (vectors.Count > 0 && vectors[0].Length > 0)
                 {
@@ -426,6 +429,14 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
             {
                 // Embedding is best-effort; a gateway/store failure must not fail the job run.
             }
+        }
+        if (_contentIndexer is { IsEnabled: true })
+        {
+            try
+            {
+                await _contentIndexer.IndexAsync(run.ProjectId, ContentKind.RunOutput, $"run:{run.Id}", text, ct);
+            }
+            catch { /* best-effort */ }
         }
     }
 

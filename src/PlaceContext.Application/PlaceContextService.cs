@@ -269,6 +269,16 @@ public sealed class PlaceContextService : IPlaceContextService
     public Task<IReadOnlyList<EntityTagPair>> ListEntityTagPairsAsync(Guid entityId, CancellationToken ct = default)
         => _dispatcher.Query(new EntityTagPairsQuery(entityId), ct);
 
+    public Task CreateEntityRecordAsync(Guid projectId, string tableName, IReadOnlyDictionary<string, string?> values, CancellationToken ct = default)
+        => _dispatcher.Send(new CreateEntityRecordCommand(projectId, tableName, values), ct);
+
+    public Task<int> UpdateEntityRecordAsync(Guid projectId, string tableName, IReadOnlyDictionary<string, string?> keys,
+        IReadOnlyDictionary<string, string?> values, CancellationToken ct = default)
+        => _dispatcher.Send(new UpdateEntityRecordCommand(projectId, tableName, keys, values), ct);
+
+    public Task<int> DeleteEntityRecordAsync(Guid projectId, string tableName, IReadOnlyDictionary<string, string?> keys, CancellationToken ct = default)
+        => _dispatcher.Send(new DeleteEntityRecordCommand(projectId, tableName, keys), ct);
+
     public Task<IReadOnlyList<RunReportView>> ListRecentRunReportsAsync(int take = 24, CancellationToken ct = default)
         => _dispatcher.Query(new ListRecentRunReportsQuery(take), ct);
 

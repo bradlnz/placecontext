@@ -8,17 +8,21 @@ namespace PlaceContext.Infrastructure.Storage;
 /// <summary>
 /// <see cref="IObjectStore"/> backed by an S3-compatible store (MinIO in-cluster) via the AWS SDK with
 /// path-style addressing. Used to persist post-job artifacts (HTML reports, charts, CSVs, raw bundles).
+/// Objects are encrypted at rest with <see cref="IDataEncryptor"/> so MinIO disk alone cannot read them.
 /// Disabled (no-op, IsEnabled=false) when no endpoint/credentials are configured, so the run still
 /// completes when object storage isn't deployed.
 /// </summary>
 public sealed class MinioObjectStore : IObjectStore, IDisposable
 {
     private readonly ObjectStoreOptions _o;
+    private readonly IDataEncryptor _enc;
     private readonly AmazonS3Client? _client;
+    private static string P => IDataEncryptor.Purpose.ObjectStore;
 
-    public MinioObjectStore(IOptions<ObjectStoreOptions> options)
+    public MinioObjectStore(IOptions<ObjectStoreOptions> options, IDataEncryptor enc)
     {
         _o = options.Value;
+        _enc = enc;
         if (IsEnabled)
         {
             var cfg = new AmazonS3Config
@@ -36,11 +40,18 @@ public sealed class MinioObjectStore : IObjectStore, IDisposable
 
     public string ReportsBucket => _o.ReportsBucket;
 
+    /// <summary>Hard cap on object size before encryption (matches field-encryptor max bytes).</summary>
+    public const int MaxObjectBytes = Security.DataProtectionEncryptor.MaxPlaintextBytes;
+
     public async Task PutAsync(string bucket, string key, byte[] content, string contentType, CancellationToken ct = default)
     {
         if (_client is null) throw new InvalidOperationException("Object store is not configured.");
+        if (content.Length > MaxObjectBytes)
+            throw new InvalidOperationException(
+                $"Object too large ({content.Length:N0} bytes; max {MaxObjectBytes:N0}).");
         await EnsureBucketAsync(bucket, ct);
-        using var ms = new MemoryStream(content, writable: false);
+        var cipher = _enc.ProtectBytes(content, P);
+        using var ms = new MemoryStream(cipher, writable: false);
         await _client.PutObjectAsync(new PutObjectRequest
         {
             BucketName = bucket,
@@ -68,7 +79,12 @@ public sealed class MinioObjectStore : IObjectStore, IDisposable
         {
             var resp = await _client.GetObjectAsync(new GetObjectRequest { BucketName = bucket, Key = key }, ct);
             var ctype = string.IsNullOrWhiteSpace(resp.Headers.ContentType) ? "application/octet-stream" : resp.Headers.ContentType;
-            return new ObjectDownload(resp.ResponseStream, ctype);
+            // Buffer + decrypt so consumers see plaintext (legacy unencrypted objects pass through).
+            await using var raw = resp.ResponseStream;
+            using var buf = new MemoryStream();
+            await raw.CopyToAsync(buf, ct);
+            var plain = _enc.UnprotectBytes(buf.ToArray(), P);
+            return new ObjectDownload(new MemoryStream(plain, writable: false), ctype);
         }
         catch (AmazonS3Exception ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
         {

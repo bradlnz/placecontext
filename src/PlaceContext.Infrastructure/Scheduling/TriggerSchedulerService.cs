@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Features;
+using PlaceContext.Application.Ports;
 using PlaceContext.Infrastructure.Persistence;
 using PlaceContext.Infrastructure.Tenancy;
 using Microsoft.EntityFrameworkCore;
@@ -48,11 +49,14 @@ public sealed class TriggerSchedulerService : BackgroundService
 
     private readonly IServiceScopeFactory _scopes;
     private readonly Operations.OperationCenter _opCenter;
+    private readonly IDataEncryptor _enc;
     private readonly ILogger<TriggerSchedulerService> _log;
     private readonly string _instanceId = $"{Environment.MachineName}:{Guid.NewGuid():N}";
     private readonly int _drainParallelism;
+    private static string PendingPurpose => IDataEncryptor.Purpose.PendingRun;
 
     public TriggerSchedulerService(IServiceScopeFactory scopes, Operations.OperationCenter opCenter,
+        IDataEncryptor enc,
         ILogger<TriggerSchedulerService> log,
         // Test-only override for the drain batch's max degree of parallelism; DI never supplies this
         // (no such service is registered), so production always gets the DrainParallelism default.
@@ -60,6 +64,7 @@ public sealed class TriggerSchedulerService : BackgroundService
     {
         _scopes = scopes;
         _opCenter = opCenter;
+        _enc = enc;
         _log = log;
         _drainParallelism = drainParallelism is > 0 ? drainParallelism.Value : DrainParallelism;
     }
@@ -321,9 +326,14 @@ public sealed class TriggerSchedulerService : BackgroundService
         var rows = new List<ClaimedRun>();
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         while (await reader.ReadAsync(ct))
+        {
+            var cipher = await reader.IsDBNullAsync(4, ct) ? null : reader.GetString(4);
+            // Decrypt in Host only — raw DB rows stay opaque (legacy plaintext passthrough).
+            var payload = cipher is null ? null : _enc.Unprotect(cipher, PendingPurpose);
             rows.Add(new ClaimedRun(
                 reader.GetGuid(0), reader.GetGuid(1), reader.GetGuid(2),
-                reader.GetString(3), await reader.IsDBNullAsync(4, ct) ? null : reader.GetString(4)));
+                reader.GetString(3), payload));
+        }
         return rows;
     }
 

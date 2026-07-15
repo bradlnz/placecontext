@@ -49,10 +49,10 @@ else
                 <div class="field-life">
                     <label class="field-label">Expires</label>
                     <select class="dcinput field-input" @bind="_lifetimeDays">
-                        <option value="0">Never</option>
                         <option value="30">30 days</option>
-                        <option value="90">90 days</option>
-                        <option value="365">1 year</option>
+                        <option value="90">90 days (default)</option>
+                        <option value="180">180 days</option>
+                        <option value="365">1 year (max)</option>
                     </select>
                 </div>
                 <button class="dcbtn primary" disabled="@_busy" @onclick="CreateAsync">@(_busy ? "Creating…" : "Create")</button>
@@ -117,7 +117,7 @@ else
     private string? _message;
     private string? _createError;
     private string _newName = "";
-    private string _lifetimeDays = "0";
+    private string _lifetimeDays = "90";
     private string? _createdRaw;
     private string? _createdPrefix;
 
@@ -147,8 +147,8 @@ else
         _busy = true;
         try
         {
-            TimeSpan? life = int.TryParse(_lifetimeDays, out var d) && d > 0 ? TimeSpan.FromDays(d) : null;
-            var created = await Tokens.CreateAsync(_newName.Trim(), life);
+            var days = int.TryParse(_lifetimeDays, out var d) && d > 0 ? d : 90;
+            var created = await Tokens.CreateAsync(_newName.Trim(), TimeSpan.FromDays(days));
             _createdRaw = created.RawToken;
             _createdPrefix = created.TokenPrefix;
             _newName = "";

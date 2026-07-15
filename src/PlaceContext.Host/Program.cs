@@ -82,6 +82,11 @@ builder.Services.AddScoped<PlaceContext.Host.Branding.BrandingService>();
         .SetApplicationName("placecontext")
         .PersistKeysToDbContext<PlaceContext.Infrastructure.Persistence.AppDbContext>();
     var dpKey = builder.Configuration["PlaceContext:DataProtection:Key"];
+    // Outside Development a passphrase is required so a Postgres dump cannot decrypt vault secrets
+    // or auth cookies. Dev may omit it for zero-config local runs.
+    if (string.IsNullOrWhiteSpace(dpKey) && !builder.Environment.IsDevelopment())
+        throw new InvalidOperationException(
+            "PlaceContext:DataProtection:Key must be set outside Development (shared passphrase encrypting the Data Protection key ring).");
     if (!string.IsNullOrWhiteSpace(dpKey))
     {
         var encryptor = new PlaceContext.Infrastructure.Security.PassphraseXmlEncryptor(dpKey);
@@ -135,7 +140,7 @@ builder.Services
             OnChallenge = ctx =>
             {
                 ctx.HandleResponse();
-                var b = $"{ctx.Request.Scheme}://{ctx.Request.Host}";
+                var b = PlaceContext.Host.Tenancy.PublicUrl.Base(ctx.HttpContext, ctx.HttpContext.RequestServices.GetRequiredService<IConfiguration>());
                 ctx.Response.StatusCode = StatusCodes.Status401Unauthorized;
                 ctx.Response.Headers.WWWAuthenticate =
                     $"Bearer resource_metadata=\"{b}/.well-known/oauth-protected-resource\"";
@@ -234,8 +239,25 @@ builder.Services
 var bindUrls = Environment.GetEnvironmentVariable("ASPNETCORE_URLS");
 builder.WebHost.UseUrls(string.IsNullOrWhiteSpace(bindUrls) ? "http://localhost:7700" : bindUrls);
 
+// Hard caps against memory exhaustion / large-body tricks (oversized uploads, zip bombs via body,
+// multi-GB artifact POSTs). Field encryption also enforces its own max plaintext size.
+builder.WebHost.ConfigureKestrel(o =>
+{
+    o.Limits.MaxRequestBodySize = 32L * 1024 * 1024; // 32 MiB
+    o.Limits.MaxRequestHeadersTotalSize = 64 * 1024;
+    o.Limits.MaxRequestLineSize = 16 * 1024;
+});
+builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(o =>
+{
+    o.MultipartBodyLengthLimit = 32L * 1024 * 1024;
+    o.ValueLengthLimit = 16 * 1024 * 1024;
+    o.MemoryBufferThreshold = 256 * 1024; // spill to disk beyond 256 KiB
+});
+
 var app = builder.Build();
 PlaceContext.Infrastructure.DependencyInjection.MigrateDatabase(app.Services);
+// Encrypt any legacy plaintext (and migrate knowledge context DB → encrypted files) before serving.
+await PlaceContext.Infrastructure.DependencyInjection.EncryptExistingDataAsync(app.Services);
 
 // Subscriptions/billing are handled by a separate web portal (the TUI sends users there to pay), so the
 // product is no longer gated by an activation key.

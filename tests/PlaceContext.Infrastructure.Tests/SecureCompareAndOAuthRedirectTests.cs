@@ -18,9 +18,11 @@ public class SecureCompareAndOAuthRedirectTests
         => Assert.False(SecureCompare.Equals(null, "configured"));
 
     [Theory]
-    [InlineData("https://example.com/cb", true)]
+    [InlineData("https://example.com/cb", false)] // public DCR: loopback only (no remote phishing)
+    [InlineData("https://evil.example/steal", false)]
     [InlineData("http://localhost:1234/cb", true)]
     [InlineData("http://127.0.0.1:8765/oauth", true)]
+    [InlineData("https://127.0.0.1/cb", true)]
     [InlineData("http://evil.example/steal", false)]
     [InlineData("javascript:alert(1)", false)]
     [InlineData("", false)]

@@ -1,4 +1,3 @@
-using System.Text.Json;
 using PlaceContext.Application.Ports;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.Repositories;
@@ -10,7 +9,10 @@ namespace PlaceContext.Infrastructure.Persistence;
 public sealed class EfActivityLogRepository : IActivityLogRepository
 {
     private readonly AppDbContext _db;
-    public EfActivityLogRepository(AppDbContext db) => _db = db;
+    private readonly IDataEncryptor _enc;
+    private static string P => IDataEncryptor.Purpose.Activity;
+
+    public EfActivityLogRepository(AppDbContext db, IDataEncryptor enc) => (_db, _enc) = (db, enc);
 
     public async Task<ActivityLog> GetForProjectAsync(ProjectId projectId, CancellationToken ct = default)
     {
@@ -18,9 +20,10 @@ public sealed class EfActivityLogRepository : IActivityLogRepository
             .Where(x => x.ProjectId == projectId.Value).OrderBy(x => x.Sequence).ToListAsync(ct);
 
         var records = rows.Select(r => ActivityRecord.Rehydrate(
-            ActivityRecordId.From(r.Id), r.Sequence, r.Summary,
+            ActivityRecordId.From(r.Id), r.Sequence,
+            _enc.Unprotect(r.Summary, P),
             Author.From(r.AuthorName, Enum.Parse<ActorKind>(r.AuthorKind)),
-            Rationale.OrNone(r.Rationale),
+            Rationale.OrNone(_enc.Unprotect(r.Rationale, P)),
             TestDelta.From(r.TestsAdded, r.TestsRemoved, r.TestsChanged),
             RiskDelta.From(r.RiskResolved, r.RiskIntroduced),
             new ActivityVerification(r.ArchReviewed, r.LiveVerified),
@@ -45,15 +48,15 @@ public sealed class EfActivityLogRepository : IActivityLogRepository
         }
     }
 
-    private static ActivityRecordRow ToRow(ProjectId pid, ActivityRecord r) => new()
+    private ActivityRecordRow ToRow(ProjectId pid, ActivityRecord r) => new()
     {
         Id = r.Id.Value,
         ProjectId = pid.Value,
         Sequence = r.Sequence,
-        Summary = r.Summary,
+        Summary = _enc.Protect(r.Summary, P),
         AuthorName = r.Author.Name,
         AuthorKind = r.Author.Kind.ToString(),
-        Rationale = r.Rationale.IsPresent ? r.Rationale.Value : "",
+        Rationale = r.Rationale.IsPresent ? _enc.Protect(r.Rationale.Value, P) : "",
         TestsAdded = r.TestDelta.Added,
         TestsRemoved = r.TestDelta.Removed,
         TestsChanged = r.TestDelta.Changed,

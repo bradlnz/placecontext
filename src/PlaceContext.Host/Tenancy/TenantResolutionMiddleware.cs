@@ -1,13 +1,11 @@
-using Microsoft.AspNetCore.Components.Server.Circuits;
 using PlaceContext.Infrastructure.Tenancy;
 
 namespace PlaceContext.Host.Tenancy;
 
 /// <summary>
 /// Resolves the tenant from the request's host — the <c>{user}.placecontext.ai</c> subdomain (or
-/// <c>{user}.localhost</c> in dev) — provisioning one on first sight. Sets the ambient
-/// <see cref="CurrentTenant"/> (covers MCP + the prerender pass) and the scoped <see cref="TenantHolder"/>
-/// (which the circuit handler reads to keep interactive Blazor renders tenant-scoped).
+/// <c>{user}.localhost</c> in dev) — provisioning one on first sight for those known suffixes only.
+/// Arbitrary Host headers no longer mint tenants (was: <c>foo.evil.com</c> → slug <c>foo</c>).
 /// </summary>
 public sealed class TenantResolutionMiddleware
 {
@@ -23,7 +21,11 @@ public sealed class TenantResolutionMiddleware
         await _next(context);
     }
 
-    /// <summary>Extracts the tenant slug from a host name. Bare/apex hosts map to the "default" tenant.</summary>
+    /// <summary>
+    /// Extracts the tenant slug from a host name. Only known product/dev bases yield a subdomain
+    /// slug; everything else maps to the shared <c>default</c> tenant so Host-header injection
+    /// cannot auto-provision attacker-chosen workspaces.
+    /// </summary>
     public static string ResolveSlug(string host)
     {
         host = (host ?? string.Empty).ToLowerInvariant();
@@ -34,10 +36,10 @@ public sealed class TenantResolutionMiddleware
                 return string.IsNullOrEmpty(sub) ? "default" : sub.Split('.')[0];
             }
 
-        if (host is "localhost" or "placecontext.ai" or "127.0.0.1" || host.Length == 0)
+        if (host is "localhost" or "placecontext.ai" or "127.0.0.1" or "::1" or "[::1]" || host.Length == 0)
             return "default";
 
-        var parts = host.Split('.');
-        return parts.Length >= 3 ? parts[0] : "default"; // sub.example.com → "sub"
+        // Unknown host (e.g. evil.attacker, foo.evil.com) → default, do not derive a slug.
+        return "default";
     }
 }

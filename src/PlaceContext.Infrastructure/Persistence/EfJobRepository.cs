@@ -1,4 +1,5 @@
 using System.Text.Json;
+using PlaceContext.Application.Ports;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.Repositories;
 using PlaceContext.Domain.ValueObjects;
@@ -9,9 +10,11 @@ namespace PlaceContext.Infrastructure.Persistence;
 public sealed class EfJobRepository : IJobRepository
 {
     private readonly AppDbContext _db;
+    private readonly IDataEncryptor _enc;
     private static readonly JsonSerializerOptions Json = new() { WriteIndented = false };
+    private static string P => IDataEncryptor.Purpose.JobSource;
 
-    public EfJobRepository(AppDbContext db) => _db = db;
+    public EfJobRepository(AppDbContext db, IDataEncryptor enc) => (_db, _enc) = (db, enc);
 
     public async Task AddAsync(Job job, CancellationToken ct = default)
         => await _db.Jobs.AddAsync(ToRow(job), ct);
@@ -72,7 +75,7 @@ public sealed class EfJobRepository : IJobRepository
         return rows.Select(ToDomain).ToList();
     }
 
-    private static JobRow ToRow(Job job)
+    private JobRow ToRow(Job job)
     {
         var row = new JobRow
         {
@@ -80,8 +83,8 @@ public sealed class EfJobRepository : IJobRepository
             ProjectId = job.ProjectId,
             Name = job.Name,
             Description = job.Description,
-            InputPayloadsJson = JsonSerializer.Serialize(job.MapSpec.InputPayloads, Json),
-            MapEnvJson = JsonSerializer.Serialize(job.MapSpec.Env, Json),
+            InputPayloadsJson = Enc(JsonSerializer.Serialize(job.MapSpec.InputPayloads, Json)),
+            MapEnvJson = Enc(JsonSerializer.Serialize(job.MapSpec.Env, Json)),
             SuccessCodesJson = JsonSerializer.Serialize(job.ExitCodePolicy.SuccessCodes.ToList(), Json),
             PartialCodesJson = JsonSerializer.Serialize(job.ExitCodePolicy.PartialCodes.ToList(), Json),
             ConcurrencyLimit = job.ConcurrencyLimit,
@@ -98,6 +101,8 @@ public sealed class EfJobRepository : IJobRepository
 
         (row.MapSourceKind, row.MapImage, row.MapRuntimeId, row.MapSource, row.MapFilesJson, row.MapEntrypoint)
             = SerialiseSource(job.MapSpec.Source);
+        row.MapSource = Enc(row.MapSource);
+        row.MapFilesJson = Enc(row.MapFilesJson);
 
         if (job.ReduceSpec is not null)
         {
@@ -105,14 +110,17 @@ public sealed class EfJobRepository : IJobRepository
             row.ReduceSourceKind = kind;
             row.ReduceImage = img;
             row.ReduceRuntimeId = rtId;
-            row.ReduceSource = src;
-            row.ReduceFilesJson = filesJson;
+            row.ReduceSource = Enc(src);
+            row.ReduceFilesJson = Enc(filesJson);
             row.ReduceEntrypoint = entry;
-            row.ReduceEnvJson = JsonSerializer.Serialize(job.ReduceSpec.Env, Json);
+            row.ReduceEnvJson = Enc(JsonSerializer.Serialize(job.ReduceSpec.Env, Json));
         }
 
         return row;
     }
+
+    private string? Enc(string? s) => s is null ? null : _enc.Protect(s, P);
+    private string Dec(string? s) => _enc.Unprotect(s, P);
 
     private static (string Kind, string? Image, string? RuntimeId, string? Source, string? FilesJson, string? Entrypoint)
         SerialiseSource(WorkloadSource source) => source switch
@@ -126,11 +134,11 @@ public sealed class EfJobRepository : IJobRepository
             _ => throw new InvalidOperationException($"Unknown WorkloadSource type: {source.GetType().Name}"),
         };
 
-    private static Job ToDomain(JobRow row)
+    private Job ToDomain(JobRow row)
     {
-        var inputPayloads = JsonSerializer.Deserialize<List<string>>(row.InputPayloadsJson, Json)
+        var inputPayloads = JsonSerializer.Deserialize<List<string>>(Dec(row.InputPayloadsJson), Json)
             ?? new List<string>();
-        var mapEnv = JsonSerializer.Deserialize<Dictionary<string, string>>(row.MapEnvJson, Json)
+        var mapEnv = JsonSerializer.Deserialize<Dictionary<string, string>>(Dec(row.MapEnvJson), Json)
             ?? new Dictionary<string, string>();
         var successCodes = JsonSerializer.Deserialize<List<int>>(row.SuccessCodesJson, Json)
             ?? new List<int> { 0 };
@@ -138,16 +146,16 @@ public sealed class EfJobRepository : IJobRepository
             ?? new List<int>();
 
         var mapSource = DeserialiseSource("map", row.MapSourceKind,
-            row.MapImage, row.MapRuntimeId, row.MapSource, row.MapFilesJson, row.MapEntrypoint);
+            row.MapImage, row.MapRuntimeId, Dec(row.MapSource), Dec(row.MapFilesJson), row.MapEntrypoint);
         var mapSpec = new MapSpec(mapSource, inputPayloads, mapEnv);
 
         ReduceSpec? reduceSpec = null;
         if (row.ReduceSourceKind is not null)
         {
             var reduceSource = DeserialiseSource("reduce", row.ReduceSourceKind,
-                row.ReduceImage, row.ReduceRuntimeId, row.ReduceSource, row.ReduceFilesJson, row.ReduceEntrypoint);
+                row.ReduceImage, row.ReduceRuntimeId, Dec(row.ReduceSource), Dec(row.ReduceFilesJson), row.ReduceEntrypoint);
             var reduceEnv = row.ReduceEnvJson is not null
-                ? JsonSerializer.Deserialize<Dictionary<string, string>>(row.ReduceEnvJson, Json)
+                ? JsonSerializer.Deserialize<Dictionary<string, string>>(Dec(row.ReduceEnvJson), Json)
                     ?? new Dictionary<string, string>()
                 : new Dictionary<string, string>();
             reduceSpec = new ReduceSpec(reduceSource, reduceEnv);

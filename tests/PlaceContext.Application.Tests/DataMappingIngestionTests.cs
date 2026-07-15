@@ -112,6 +112,14 @@ public class DataMappingIngestionTests
             IReadOnlyList<IReadOnlyList<string?>> rows, bool createTable, CancellationToken ct = default)
             => Task.FromResult(rows.Count);
 
+        public Task InsertRowAsync(Guid projectId, string tableName, IReadOnlyDictionary<string, string?> values, CancellationToken ct = default)
+            => Task.CompletedTask;
+        public Task<int> UpdateRowsAsync(Guid projectId, string tableName, IReadOnlyDictionary<string, string?> keys,
+            IReadOnlyDictionary<string, string?> values, CancellationToken ct = default)
+            => Task.FromResult(0);
+        public Task<int> DeleteRowsAsync(Guid projectId, string tableName, IReadOnlyDictionary<string, string?> keys, CancellationToken ct = default)
+            => Task.FromResult(0);
+
         public Task<ProjectQueryResult> ExecuteAsync(Guid projectId, string sql, CancellationToken ct = default)
             => throw new NotSupportedException();
         public Task<IReadOnlyList<ProjectTableInfo>> ListTablesAsync(Guid projectId, CancellationToken ct = default)
@@ -139,4 +147,12 @@ public class DataMappingIngestionTests
     {
         public DateTimeOffset UtcNow => T0;
     }
+        public Task InsertRowAsync(Guid projectId, string tableName, IReadOnlyDictionary<string, string?> values, CancellationToken ct = default)
+            => Task.CompletedTask;
+        public Task<int> UpdateRowsAsync(Guid projectId, string tableName, IReadOnlyDictionary<string, string?> keys,
+            IReadOnlyDictionary<string, string?> values, CancellationToken ct = default)
+            => Task.FromResult(0);
+        public Task<int> DeleteRowsAsync(Guid projectId, string tableName, IReadOnlyDictionary<string, string?> keys, CancellationToken ct = default)
+            => Task.FromResult(0);
+
 }

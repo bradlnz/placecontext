@@ -10,4 +10,11 @@ public sealed class PlaceContextOptions
     /// <summary>Root folder under which tenant repositories are cloned (one subfolder per tenant).</summary>
     public string WorkspaceRoot { get; set; } =
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".placecontext", "workspaces");
+
+    /// <summary>
+    /// Durable on-disk product data (encrypted knowledge context files, etc.). Separate from
+    /// <see cref="WorkspaceRoot"/> so cloned repos stay distinct from Host-owned knowledge files.
+    /// </summary>
+    public string DataRoot { get; set; } =
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".placecontext", "data");
 }

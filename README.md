@@ -1,6 +1,6 @@
 # PlaceContext
 
-**A context platform for AI — free and open source (MIT).**
+**A context platform for AI.** Built by Bradley Lietz.
 
 PlaceContext gives AI agents and the people working with them a durable, structured home for
 project context — decisions, activity, knowledge, **jobs and their artifacts**, data, and
@@ -10,9 +10,10 @@ queue work, and **run real containerized jobs on your own machines** — from a 
 multi-node fleet.
 
 ```bash
-git clone https://github.com/bradlnz/placecontext && cd placecontext
-./deploy/install.sh        # installs deps (Docker, kubectl, k3d), brings the cluster up
-# portal → http://localhost:7700   ·   MCP → http://localhost:7700/mcp
+# Install the placecontext CLI, then open the TUI
+curl -fsSL https://get.placecontext.ai/install.sh | bash
+placecontext               # install / upgrade / connect a cluster
+# after cluster install → portal http://localhost:7700   ·   MCP /mcp
 ```
 
 Then connect your agent:
@@ -139,5 +140,10 @@ EF migrations apply automatically on startup.
 
 ## License
 
-MIT — see [LICENSE](LICENSE). Third-party components are listed in
-[THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md). Contributions welcome: open an issue or PR.
+**Software:** proprietary — © Bradley Lietz / CTRL SIGNAL SOFTWARE PTY LTD. See [LICENSE](LICENSE).
+
+**Your data and jobs:** owned by you. PlaceContext does not claim ownership of project data,
+knowledge, job definitions, runs, or artifacts you create or import. Details are in [LICENSE](LICENSE).
+
+Third-party components used by PlaceContext are listed in
+[THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).

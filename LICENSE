@@ -1,21 +1,40 @@
-MIT License
+Copyright (c) 2026 Bradley Lietz / CTRL SIGNAL SOFTWARE PTY LTD
 
-Copyright (c) 2026 Brad Lietz and PlaceContext contributors
+All rights reserved in the PlaceContext software.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+PlaceContext is proprietary software. No part of the PlaceContext software (source
+code, binaries, documentation, trademarks, or related materials) may be copied,
+modified, distributed, reverse engineered, or used except as expressly permitted
+in a written license agreement with the copyright holder.
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+────────────────────────────────────────────────────────────────────────────────
+YOUR DATA AND JOBS
+────────────────────────────────────────────────────────────────────────────────
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+You (the customer / operator / end user) own:
+
+  • All data you store in PlaceContext (project data, knowledge, decisions,
+    activity, requirements, secrets, charts, embeddings of your content, and
+    any other content you create or import); and
+  • All jobs, job definitions, job runs, artifacts, logs, and pipelines you
+    create or execute through PlaceContext.
+
+The licensor claims no ownership of your data or jobs. PlaceContext processes and
+stores them solely as a product you run (or have hosted for you). You may export,
+delete, or move your data and job definitions at any time subject to the features
+of the product and any agreement between you and the operator of a hosted
+instance.
+
+Nothing in this license transfers ownership of your data or jobs to Bradley Lietz,
+CTRL SIGNAL SOFTWARE PTY LTD, or any third party.
+
+────────────────────────────────────────────────────────────────────────────────
+
+This software is provided "as is", without warranty of any kind, express or
+implied, including but not limited to the warranties of merchantability, fitness
+for a particular purpose, and noninfringement. In no event shall the author or
+copyright holders be liable for any claim, damages, or other liability, whether
+in an action of contract, tort, or otherwise, arising from, out of, or in
+connection with the software or the use or other dealings in the software.
+
+For software licensing inquiries, contact Bradley Lietz / CTRL SIGNAL SOFTWARE PTY LTD.

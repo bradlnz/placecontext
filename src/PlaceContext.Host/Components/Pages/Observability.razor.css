@@ -312,3 +312,13 @@
     max-height: 300px;
     overflow-y: auto;
 }
+
+.trace-waterfall { display:flex; flex-direction:column; gap:8px; margin-top:8px }
+.trace-span { display:flex; flex-direction:column; gap:3px }
+.trace-span-head { font-size:12px; font-family:var(--font-sans); font-weight:600 }
+.trace-id { font-size:10px; color:var(--text-3); font-weight:400 }
+.trace-bar-track { height:8px; border-radius:4px; background:var(--card-2); overflow:hidden }
+.trace-bar-fill { height:100%; background:var(--brand-2); border-radius:4px }
+.trace-tags { display:flex; flex-wrap:wrap; gap:4px }
+.trace-tag { font-size:10px; padding:1px 6px; border-radius:4px; background:var(--card-2); color:var(--text-3); font-family:var(--font-sans) }
+

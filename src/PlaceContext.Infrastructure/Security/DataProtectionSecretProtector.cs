@@ -1,16 +1,16 @@
-using Microsoft.AspNetCore.DataProtection;
 using PlaceContext.Application.Ports;
 
 namespace PlaceContext.Infrastructure.Security;
 
-/// <summary>Encrypts vault secrets with ASP.NET Data Protection (AES) over the shared, DB-persisted
-/// key ring — encrypted at rest, decryptable by any replica.</summary>
+/// <summary>Vault secrets: thin façade over <see cref="IDataEncryptor"/> with the vault purpose.</summary>
 public sealed class DataProtectionSecretProtector : ISecretProtector
 {
-    private readonly IDataProtector _p;
-    public DataProtectionSecretProtector(IDataProtectionProvider provider)
-        => _p = provider.CreateProtector("placecontext.vault.secrets.v1");
+    private readonly IDataEncryptor _enc;
+    public DataProtectionSecretProtector(IDataEncryptor enc) => _enc = enc;
 
-    public string Protect(string plaintext) => _p.Protect(plaintext);
-    public string Unprotect(string ciphertext) => _p.Unprotect(ciphertext);
+    public string Protect(string plaintext)
+        => _enc.Protect(plaintext, IDataEncryptor.Purpose.Vault);
+
+    public string Unprotect(string ciphertext)
+        => _enc.Unprotect(ciphertext, IDataEncryptor.Purpose.Vault);
 }

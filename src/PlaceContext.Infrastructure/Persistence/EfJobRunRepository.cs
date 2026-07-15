@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using PlaceContext.Application.Ports;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.Repositories;
 using PlaceContext.Domain.ValueObjects;
@@ -10,6 +11,8 @@ namespace PlaceContext.Infrastructure.Persistence;
 public sealed class EfJobRunRepository : IJobRunRepository
 {
     private readonly AppDbContext _db;
+    private readonly IDataEncryptor _enc;
+    private static string P => IDataEncryptor.Purpose.JobRun;
     private static readonly JsonSerializerOptions Json = new()
     {
         WriteIndented = false,
@@ -17,7 +20,7 @@ public sealed class EfJobRunRepository : IJobRunRepository
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
     };
 
-    public EfJobRunRepository(AppDbContext db) => _db = db;
+    public EfJobRunRepository(AppDbContext db, IDataEncryptor enc) => (_db, _enc) = (db, enc);
 
     public async Task AddAsync(JobRun run, CancellationToken ct = default)
         => await _db.JobRuns.AddAsync(ToRow(run), ct);
@@ -60,7 +63,7 @@ public sealed class EfJobRunRepository : IJobRunRepository
         return rows.Select(ToDomain).ToList();
     }
 
-    private static JobRunRow ToRow(JobRun run) => new()
+    private JobRunRow ToRow(JobRun run) => new()
     {
         Id = run.Id,
         JobId = run.JobId,
@@ -68,7 +71,7 @@ public sealed class EfJobRunRepository : IJobRunRepository
         Status = run.Status.ToString(),
         StartedAt = run.StartedAt,
         FinishedAt = run.FinishedAt,
-        ShardResultsJson = JsonSerializer.Serialize(
+        ShardResultsJson = Enc(JsonSerializer.Serialize(
             run.ShardResults.Select(s => new ShardResultJson
             {
                 Index = s.Index,
@@ -77,23 +80,26 @@ public sealed class EfJobRunRepository : IJobRunRepository
                 Artifact = s.Artifact,
                 Log = s.Log,
                 Artifacts = ToArtifactsJson(s.Artifacts),
-            }).ToList(), Json),
+            }).ToList(), Json)),
         ReduceResultJson = run.ReduceResult is { } r
-            ? JsonSerializer.Serialize(new ReduceResultJson
+            ? Enc(JsonSerializer.Serialize(new ReduceResultJson
             {
                 ExitCode = r.ExitCode,
                 Succeeded = r.Succeeded,
                 Artifact = r.Artifact,
                 Log = r.Log,
                 Artifacts = ToArtifactsJson(r.Artifacts),
-            }, Json)
+            }, Json))
             : null,
-        SnapshotJson = JsonSerializer.Serialize(ToSnapshotJson(run.Snapshot), Json),
+        SnapshotJson = Enc(JsonSerializer.Serialize(ToSnapshotJson(run.Snapshot), Json)),
     };
 
-    private static JobRun ToDomain(JobRunRow row)
+    private string Enc(string s) => _enc.Protect(s, P);
+    private string Dec(string? s) => _enc.Unprotect(s, P);
+
+    private JobRun ToDomain(JobRunRow row)
     {
-        var shards = JsonSerializer.Deserialize<List<ShardResultJson>>(row.ShardResultsJson, Json)
+        var shards = JsonSerializer.Deserialize<List<ShardResultJson>>(Dec(row.ShardResultsJson), Json)
             ?? new List<ShardResultJson>();
 
         var shardResults = shards.Select(s => new ShardResult(
@@ -107,7 +113,7 @@ public sealed class EfJobRunRepository : IJobRunRepository
         ReduceResult? reduceResult = null;
         if (row.ReduceResultJson is not null)
         {
-            var rj = JsonSerializer.Deserialize<ReduceResultJson>(row.ReduceResultJson, Json);
+            var rj = JsonSerializer.Deserialize<ReduceResultJson>(Dec(row.ReduceResultJson), Json);
             if (rj is not null)
                 reduceResult = new ReduceResult(rj.ExitCode, rj.Succeeded, rj.Artifact, rj.Log,
                     FromArtifactsJson(rj.Artifacts));
@@ -115,7 +121,7 @@ public sealed class EfJobRunRepository : IJobRunRepository
 
         var status = Enum.TryParse<JobRunStatus>(row.Status, out var st) ? st : JobRunStatus.Failed;
 
-        var snapshot = DeserialiseSnapshot(row.SnapshotJson);
+        var snapshot = DeserialiseSnapshot(Dec(row.SnapshotJson));
 
         return JobRun.Rehydrate(row.Id, row.JobId, row.ProjectId, status,
             row.StartedAt, row.FinishedAt, shardResults, reduceResult, snapshot);

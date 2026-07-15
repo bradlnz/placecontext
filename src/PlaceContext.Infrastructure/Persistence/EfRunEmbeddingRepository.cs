@@ -23,14 +23,18 @@ public sealed class EfRunEmbeddingRepository : IRunEmbeddingRepository
     private readonly AppDbContext _db;
     private readonly ICurrentTenant _tenant;
     private readonly IEmbeddingGateway _embeddings;
+    private readonly IDataEncryptor _enc;
     private readonly ILogger<EfRunEmbeddingRepository> _log;
+    private static string TextPurpose => IDataEncryptor.Purpose.EmbeddingText;
 
     public EfRunEmbeddingRepository(
-        AppDbContext db, ICurrentTenant tenant, IEmbeddingGateway embeddings, ILogger<EfRunEmbeddingRepository> log)
+        AppDbContext db, ICurrentTenant tenant, IEmbeddingGateway embeddings, IDataEncryptor enc,
+        ILogger<EfRunEmbeddingRepository> log)
     {
         _db = db;
         _tenant = tenant;
         _embeddings = embeddings;
+        _enc = enc;
         _log = log;
     }
 
@@ -51,7 +55,7 @@ public sealed class EfRunEmbeddingRepository : IRunEmbeddingRepository
         cmd.Parameters.AddWithValue("run", embedding.JobRunId);
         cmd.Parameters.AddWithValue("job", embedding.JobId);
         cmd.Parameters.AddWithValue("project", embedding.ProjectId);
-        cmd.Parameters.AddWithValue("text", embedding.Text);
+        cmd.Parameters.AddWithValue("text", _enc.Protect(embedding.Text, TextPurpose));
         cmd.Parameters.AddWithValue("vec", ToVectorLiteral(embedding.Vector));
         cmd.Parameters.AddWithValue("created", embedding.CreatedAt);
         await cmd.ExecuteNonQueryAsync(ct);
@@ -85,7 +89,8 @@ public sealed class EfRunEmbeddingRepository : IRunEmbeddingRepository
         {
             var embedding = RunEmbedding.Rehydrate(
                 reader.GetGuid(0), reader.GetGuid(1), reader.GetGuid(2), reader.GetGuid(3),
-                reader.GetString(4), Array.Empty<float>(), reader.GetFieldValue<DateTimeOffset>(5));
+                _enc.Unprotect(reader.GetString(4), TextPurpose), Array.Empty<float>(),
+                reader.GetFieldValue<DateTimeOffset>(5));
             results.Add(new RunEmbeddingMatch(embedding, reader.GetDouble(6)));
         }
         return results;
@@ -116,7 +121,8 @@ public sealed class EfRunEmbeddingRepository : IRunEmbeddingRepository
         {
             results.Add(RunEmbedding.Rehydrate(
                 reader.GetGuid(0), reader.GetGuid(1), reader.GetGuid(2), reader.GetGuid(3),
-                reader.GetString(4), ParseVectorLiteral(reader.GetString(5)),
+                _enc.Unprotect(reader.GetString(4), TextPurpose),
+                ParseVectorLiteral(reader.GetString(5)),
                 reader.GetFieldValue<DateTimeOffset>(6)));
         }
         return results;

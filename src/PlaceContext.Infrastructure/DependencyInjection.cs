@@ -32,6 +32,7 @@ public static class DependencyInjection
         services.AddSingleton<ICurrentProject, CurrentProject>();
         services.AddScoped<ITenantStore, EfTenantStore>();
         services.AddScoped<ITenantSettingsPort, EfTenantSettingsPort>();
+        services.AddScoped<IMenuConfigService, Tenancy.MenuConfigService>();
 
         // Portal authentication (tenant-scoped users) + persisted OAuth clients.
         services.AddScoped<IAuthService, Auth.AuthService>();
@@ -60,7 +61,8 @@ public static class DependencyInjection
         services.AddScoped<IActivityLogRepository, EfActivityLogRepository>();
         services.AddScoped<IDecisionRepository, EfDecisionRepository>();
         services.AddScoped<IRiskAssessmentRepository, EfRiskAssessmentRepository>();
-        services.AddScoped<IProjectContextRepository, EfProjectContextRepository>();
+        // Knowledge context: encrypted file under DataRoot (not a DB column).
+        services.AddScoped<IProjectContextRepository, Files.FileProjectContextRepository>();
         services.AddScoped<IRequirementsRepository, EfRequirementsRepository>();
         services.AddScoped<IUsageRepository, EfUsageRepository>();
 
@@ -81,7 +83,10 @@ public static class DependencyInjection
         else
             services.AddSingleton<IWorkloadRunner, DockerWorkloadRunner>();
 
-        // Vault: encrypted project secrets (AES at rest via Data Protection) injected into job runs.
+        // Field encryption at rest (AES via Data Protection). Portal/jobs decrypt in-process;
+        // raw Postgres/MinIO without the DP key ring only see ciphertext.
+        services.AddSingleton<Application.Ports.IDataEncryptor, Security.DataProtectionEncryptor>();
+        // Vault secrets: purpose-scoped façade over IDataEncryptor.
         services.AddScoped<Domain.Repositories.IProjectSecretRepository, Persistence.EfProjectSecretRepository>();
         services.AddSingleton<Application.Ports.ISecretProtector, Security.DataProtectionSecretProtector>();
 
@@ -114,6 +119,8 @@ public static class DependencyInjection
         else
             services.AddSingleton<IEmbeddingGateway, Embeddings.NullEmbeddingGateway>();
         services.AddScoped<IRunEmbeddingRepository, EfRunEmbeddingRepository>();
+        // Universal RAG: any content kind, encrypted source text + pgvector.
+        services.AddScoped<IContentIndexer, Embeddings.ContentIndexer>();
 
         // Trigger scheduling: cron evaluation, a durable DB-backed run queue, and the background firing
         // service (advisory-lock-elected schedule scan + atomic queue drain — correct across replicas).
@@ -161,5 +168,19 @@ public static class DependencyInjection
         using var scope = provider.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         db.Database.Migrate();
+        // Additive column for menu customization (safe if already present).
+        try
+        {
+            db.Database.ExecuteSqlRaw(
+                """ALTER TABLE tenants ADD COLUMN IF NOT EXISTS "MenuJson" text NULL""");
+        }
+        catch { /* non-Postgres or already applied via migration */ }
     }
+
+    /// <summary>
+    /// Encrypts any pre-existing plaintext at rest and migrates knowledge context off the DB onto
+    /// encrypted files. Safe to call on every launch (idempotent).
+    /// </summary>
+    public static Task EncryptExistingDataAsync(IServiceProvider provider, CancellationToken ct = default)
+        => Security.EncryptionAtRestBootstrap.RunAsync(provider, ct);
 }

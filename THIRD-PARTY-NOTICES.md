@@ -1,9 +1,10 @@
 # Third-party notices
 
-PlaceContext is MIT-licensed (see [LICENSE](LICENSE)). It builds on the following
-third-party software. Each component is the property of its respective authors and is
-used under the license noted. Version numbers track the manifests
-(`src/*/*.csproj`, `deploy/tui/go.mod`) — those files are authoritative.
+PlaceContext software is proprietary © Bradley Lietz / CTRL SIGNAL SOFTWARE PTY LTD
+(see [LICENSE](LICENSE)). Customer data and jobs remain the customer's property.
+It builds on the following third-party software. Each component is the property of
+its respective authors and is used under the license noted. Version numbers track
+the manifests (`src/*/*.csproj`, `deploy/tui/go.mod`) — those files are authoritative.
 
 ## .NET (server, portal, MCP)
 

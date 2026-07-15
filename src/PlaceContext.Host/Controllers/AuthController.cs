@@ -113,6 +113,45 @@ public sealed class AuthController : ControllerBase
         return Redirect("/");
     }
 
+    /// <summary>
+    /// Whether first-run admin setup is still needed. Used by the install CLI/TUI to decide whether
+    /// to prompt for the default admin account.
+    /// </summary>
+    [HttpGet("/auth/setup/status")]
+    public async Task<IActionResult> SetupStatus()
+    {
+        var unconfigured = await _auth.IsUnconfiguredAsync(HttpContext.RequestAborted);
+        return Ok(new { configured = !unconfigured, needsAdmin = unconfigured });
+    }
+
+    /// <summary>
+    /// Non-browser first-run setup (install CLI / Terraform). JSON only; no antiforgery (there is no
+    /// form session). Fails closed once any Owner with a real password exists — same as the form path.
+    /// Does not set a cookie (install is headless); the operator signs in at /login afterward.
+    /// </summary>
+    [HttpPost("/auth/setup/cli")]
+    public async Task<IActionResult> SetupCli([FromBody] SetupCliRequest? body)
+    {
+        if (!await _auth.IsUnconfiguredAsync(HttpContext.RequestAborted))
+            return Conflict(new { error = "Admin already configured." });
+
+        if (body is null || string.IsNullOrWhiteSpace(body.Email) || !body.Email.Contains('@'))
+            return BadRequest(new { error = "Enter a valid email address." });
+
+        var policyError = PasswordPolicy.Validate(body.Password, body.ConfirmPassword ?? body.Password);
+        if (policyError is not null)
+            return BadRequest(new { error = policyError });
+
+        var admin = await _auth.CreateFirstAdminAsync(
+            body.Email, body.DisplayName ?? "", body.Password ?? "", HttpContext.RequestAborted);
+        if (admin is null)
+            return Conflict(new { error = "Could not create admin (already configured or email taken)." });
+
+        return Ok(new { email = admin.Email, displayName = admin.DisplayName, role = admin.Role.ToString() });
+    }
+
+    public sealed record SetupCliRequest(string Email, string? DisplayName, string Password, string? ConfirmPassword);
+
     // Password login. Always shows the same generic error on failure (unknown email, wrong password, or a
     // member with no password set) so a response can't be used to enumerate accounts, and applies a small
     // fixed delay on failure (see LoginThrottle) so a naive brute-force loop can't run at line rate.

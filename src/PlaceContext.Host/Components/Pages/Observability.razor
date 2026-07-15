@@ -1,9 +1,11 @@
 @page "/observability"
+@attribute [Authorize(Policy = Permission.JobsView)]
 @implements IDisposable
 @inject IPlaceContextService Svc
 @inject PortalUiState Ui
 @inject NavigationManager Nav
 @inject PlaceContext.Infrastructure.Operations.OperationCenter OpCenter
+@inject PlaceContext.Application.Ports.IJobTelemetryReader Telemetry
 
 <PageTitle>PlaceContext — Observability</PageTitle>
 
@@ -29,6 +31,7 @@ else
         <div class="dctabs tabs-strip">
             <button class="dctab @(_tab == "runs" ? "active" : "")" @onclick="@(() => _tab = "runs")">Job history<span class="n">@(_reports?.Count ?? 0)</span></button>
             <button class="dctab @(_tab == "chains" ? "active" : "")" @onclick="@(() => _tab = "chains")">Chains<span class="n">@(_chainReports?.Count ?? 0)</span></button>
+            <button class="dctab @(_tab == "traces" ? "active" : "")" @onclick="LoadTracesAsync">Live traces<span class="n">@(_liveTraces?.Count ?? 0)</span></button>
         </div>
 
         @if (_message is not null)
@@ -110,6 +113,38 @@ else
                                         @FormatDuration(run.StartedAt, run.FinishedAt.Value)
                                     </span>
                                 }
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+        }
+
+        @if (_tab == "traces")
+        {
+            <div class="page-sub" style="margin-bottom:12px">
+                In-process OpenTelemetry spans from this Host replica (job.run → job.shard). Full span trees for runs executed here.
+            </div>
+            @if (_liveTraces is null or { Count: 0 })
+            {
+                <div class="dccard empty-card">
+                    No live traces on this replica yet — run a job and refresh.
+                </div>
+            }
+            else
+            {
+                <div class="run-list">
+                    @foreach (var t in _liveTraces)
+                    {
+                        <div class="dccard run-row" @onclick="@(() => OpenLiveTrace(t))">
+                            <div class="run-row-inner">
+                                <span class="status-pill" style="color:@StatusColor(t.Status ?? ""); background:@StatusBg(t.Status ?? "")">@(t.Status ?? "—")</span>
+                                <div class="flex-fill">
+                                    <span class="job-name">@(t.JobName ?? t.JobId.ToString("N")[..8])</span>
+                                    <span class="project-name">trace @(t.TraceId is { Length: > 8 } ? t.TraceId[..8] : t.TraceId ?? "—")…</span>
+                                </div>
+                                <span class="note-sm">@t.Shards.Count shard(s)</span>
+                                <span class="run-duration">@FormatMs(t.DurationMs)</span>
                             </div>
                         </div>
                     }
@@ -207,31 +242,45 @@ else
                 </div>
             }
 
-            @* ── OTel trace for this run: total + per-shard timings, captured in-process from the
-               `PlaceContext.Jobs` ActivitySource — see IJobTelemetryReader. Absent when this replica
-               didn't execute the run (e.g. a different pod, or before this process started). ── *@
-            @if (_openTelemetry is { } tel)
+            @* ── Full in-process OTel span tree (run → shards). ── *@
+            @if (_openTraceSpans is { Count: > 0 })
             {
                 <div class="dccard panel-card">
                     <div class="panel-head">
-                        <div class="card-title">OpenTelemetry trace</div>
+                        <div class="card-title">Full trace</div>
                         <div class="note-sm">
-                            @FormatMs(tel.DurationMs) total @(tel.Replay ? "· replay" : "")
+                            @if (_openTelemetry?.TraceId is { } tid)
+                            {
+                                <span class="mono">@tid</span>
+                            }
+                            · @FormatMs(_openTelemetry?.DurationMs) total
                         </div>
                     </div>
-                    @if (tel.Shards.Count > 0)
-                    {
-                        <div class="shard-chips">
-                            @foreach (var shard in tel.Shards.OrderBy(s => s.Index))
-                            {
-                                <span class="shard-chip">
-                                    shard @shard.Index
-                                    <span style="color:@StatusColor(shard.Outcome ?? "")">@shard.Outcome</span>
-                                    · @FormatMs(shard.DurationMs)
-                                </span>
-                            }
-                        </div>
-                    }
+                    <div class="trace-waterfall">
+                        @foreach (var span in _openTraceSpans)
+                        {
+                            @RenderSpan(span, 0, _openTelemetry?.DurationMs ?? span.DurationMs)
+                        }
+                    </div>
+                </div>
+            }
+            else if (_openTelemetry is { } tel)
+            {
+                <div class="dccard panel-card">
+                    <div class="panel-head">
+                        <div class="card-title">OpenTelemetry summary</div>
+                        <div class="note-sm">@FormatMs(tel.DurationMs) total @(tel.Replay ? "· replay" : "")</div>
+                    </div>
+                    <div class="shard-chips">
+                        @foreach (var shard in tel.Shards.OrderBy(s => s.Index))
+                        {
+                            <span class="shard-chip">
+                                shard @shard.Index
+                                <span style="color:@StatusColor(shard.Outcome ?? "")">@shard.Outcome</span>
+                                · @FormatMs(shard.DurationMs)
+                            </span>
+                        }
+                    </div>
                 </div>
             }
 
@@ -307,6 +356,8 @@ else
     private RunReportView? _open;
     private IReadOnlyList<RunArtifactLinkView>? _openArtifacts;
     private JobRunTelemetry? _openTelemetry;
+    private IReadOnlyList<TraceSpanNode>? _openTraceSpans;
+    private IReadOnlyList<JobRunTelemetry>? _liveTraces;
     private IReadOnlyList<ChainRunReportView>? _chainReports;
     private ChainRunReportView? _openChain;
     private string _tab = "runs";
@@ -399,6 +450,7 @@ else
         _open = rep;
         _openArtifacts = null;
         _openTelemetry = null;
+        _openTraceSpans = null;
         try
         {
             _openArtifacts = await Svc.ListRunArtifactsAsync(rep.Run.Id);
@@ -408,6 +460,7 @@ else
         {
             var jobTelemetry = await Svc.ListJobRunTelemetryAsync(rep.JobId);
             _openTelemetry = jobTelemetry.FirstOrDefault(t => t.RunId == rep.Run.Id);
+            _openTraceSpans = Telemetry.TraceForRun(rep.Run.Id);
         }
         catch { /* OTel trace is a nicety — the detail renders without it */ }
     }
@@ -417,7 +470,58 @@ else
         _open = null;
         _openArtifacts = null;
         _openTelemetry = null;
+        _openTraceSpans = null;
     }
+
+    private Task LoadTracesAsync()
+    {
+        _tab = "traces";
+        _liveTraces = Telemetry.RecentRuns(50);
+        return Task.CompletedTask;
+    }
+
+    private void OpenLiveTrace(JobRunTelemetry t)
+    {
+        _openTelemetry = t;
+        _openTraceSpans = Telemetry.TraceForRun(t.RunId);
+        // Open a lightweight synthetic report if we have a durable match.
+        if (_reports?.FirstOrDefault(r => r.Run.Id == t.RunId) is { } rep)
+            _ = OpenRun(rep);
+    }
+
+    private RenderFragment RenderSpan(TraceSpanNode span, int depth, double totalMs) => __builder =>
+    {
+        var pct = totalMs > 0 ? Math.Clamp(100.0 * span.DurationMs / totalMs, 0.5, 100) : 0;
+        var pad = depth * 16;
+        __builder.OpenElement(0, "div");
+        __builder.AddAttribute(1, "class", "trace-span");
+        __builder.AddAttribute(2, "style", $"padding-left:{pad}px");
+        __builder.OpenElement(3, "div");
+        __builder.AddAttribute(4, "class", "trace-span-head");
+        __builder.AddContent(5, span.Name);
+        __builder.AddMarkupContent(6, $" <span class=\"note-sm\">{FormatMs(span.DurationMs)}</span>");
+        if (span.TraceId is not null)
+            __builder.AddMarkupContent(7, $" <span class=\"trace-id\">{span.TraceId[..Math.Min(12, span.TraceId.Length)]}…</span>");
+        __builder.CloseElement();
+        __builder.OpenElement(8, "div");
+        __builder.AddAttribute(9, "class", "trace-bar-track");
+        __builder.OpenElement(10, "div");
+        __builder.AddAttribute(11, "class", "trace-bar-fill");
+        __builder.AddAttribute(12, "style", $"width:{pct.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)}%");
+        __builder.CloseElement();
+        __builder.CloseElement();
+        if (span.Tags.Count > 0)
+        {
+            __builder.OpenElement(13, "div");
+            __builder.AddAttribute(14, "class", "trace-tags");
+            foreach (var kv in span.Tags.Take(8))
+                __builder.AddMarkupContent(15, $"<span class=\"trace-tag\">{kv.Key}={kv.Value}</span>");
+            __builder.CloseElement();
+        }
+        __builder.CloseElement();
+        foreach (var child in span.Children)
+            RenderSpan(child, depth + 1, totalMs)(__builder);
+    };
 
     private void OpenChainRun(ChainRunReportView rep) => _openChain = rep;
 

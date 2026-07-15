@@ -16,7 +16,20 @@ public sealed record JobRunTelemetry(
     bool Replay,
     DateTimeOffset StartedAt,
     double? DurationMs,
-    IReadOnlyList<ShardTelemetry> Shards);
+    IReadOnlyList<ShardTelemetry> Shards,
+    string? TraceId = null,
+    string? SpanId = null);
+
+/// <summary>One span node in a captured job trace tree (for the Observability waterfall).</summary>
+public sealed record TraceSpanNode(
+    string Name,
+    string? TraceId,
+    string? SpanId,
+    string? ParentSpanId,
+    DateTimeOffset StartedAt,
+    double DurationMs,
+    IReadOnlyDictionary<string, string> Tags,
+    IReadOnlyList<TraceSpanNode> Children);
 
 /// <summary>Count + min/max/avg summary of a histogram instrument since process start.</summary>
 public sealed record DurationSummary(long Count, double MinMs, double MaxMs, double AvgMs);
@@ -84,4 +97,10 @@ public interface IJobTelemetryReader
 
     /// <summary>The most recent chain-run traces across the whole process, newest first.</summary>
     IReadOnlyList<ChainRunTelemetry> RecentChainRuns(int take = 50);
+
+    /// <summary>
+    /// Full in-process span tree for a job run (run → shards), when this process executed it.
+    /// Empty when the run was on another replica or before this process started.
+    /// </summary>
+    IReadOnlyList<TraceSpanNode> TraceForRun(Guid runId);
 }

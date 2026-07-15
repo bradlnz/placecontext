@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json.Serialization;
 using PlaceContext.Application.Ports;
+using PlaceContext.Host.Tenancy;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Http.Extensions;
@@ -23,9 +24,9 @@ public static class OAuthServer
     public static void MapOAuthServer(this WebApplication app)
     {
         // Protected Resource Metadata (RFC 9728) — points clients at this host's authorization server.
-        app.MapGet("/.well-known/oauth-protected-resource", (HttpContext ctx) =>
+        app.MapGet("/.well-known/oauth-protected-resource", (HttpContext ctx, IConfiguration config) =>
         {
-            var b = BaseUrl(ctx);
+            var b = PublicUrl.Base(ctx, config);
             return Results.Json(new Dictionary<string, object?>
             {
                 ["resource"] = $"{b}/mcp",
@@ -36,9 +37,9 @@ public static class OAuthServer
         }).AllowAnonymous();
 
         // Authorization Server Metadata (RFC 8414).
-        app.MapGet("/.well-known/oauth-authorization-server", (HttpContext ctx) =>
+        app.MapGet("/.well-known/oauth-authorization-server", (HttpContext ctx, IConfiguration config) =>
         {
-            var b = BaseUrl(ctx);
+            var b = PublicUrl.Base(ctx, config);
             return Results.Json(new Dictionary<string, object?>
             {
                 ["issuer"] = b,
@@ -97,6 +98,10 @@ public static class OAuthServer
 
             if (string.IsNullOrWhiteSpace(client_id) || string.IsNullOrWhiteSpace(redirect_uri))
                 return Results.BadRequest("Missing client_id or redirect_uri.");
+            // Defense in depth: even a pre-registered client cannot use a non-loopback redirect.
+            // Blocks codes being sent to attacker hosts if an old DCR row still lists one.
+            if (!PlaceContext.Infrastructure.Persistence.EfOAuthClientStore.IsSafeRedirectUri(redirect_uri))
+                return Results.BadRequest("Invalid redirect_uri (loopback only for public MCP clients).");
             // Resolve the client. EnsureAsync may self-heal a loopback-only public client after a DB
             // reset, but never appends an arbitrary external redirect_uri (auth-code theft).
             OAuthClient client;
@@ -144,22 +149,20 @@ public static class OAuthServer
                         return Results.BadRequest(new { error = "invalid_grant", error_description = "PKCE verification failed" });
 
                     var grant = await refreshTokens.IssueAsync(ac.ClientId, ac.UserId, ac.TenantId, ac.Role, ac.Scope, ctx.RequestAborted);
-                    return TokenResponse(BaseUrl(ctx), grant);
+                    return TokenResponse(PublicUrl.Base(ctx, ctx.RequestServices.GetRequiredService<IConfiguration>()), grant);
                 }
                 case "refresh_token":
                 {
                     var grant = await refreshTokens.RotateAsync(F("refresh_token"), F("client_id"), ctx.RequestAborted);
                     if (grant is null)
                         return Results.BadRequest(new { error = "invalid_grant", error_description = "Refresh token is expired, revoked, or already used." });
-                    return TokenResponse(BaseUrl(ctx), grant);
+                    return TokenResponse(PublicUrl.Base(ctx, ctx.RequestServices.GetRequiredService<IConfiguration>()), grant);
                 }
                 default:
                     return Results.BadRequest(new { error = "unsupported_grant_type" });
             }
         }).AllowAnonymous().DisableAntiforgery();
     }
-
-    private static string BaseUrl(HttpContext ctx) => $"{ctx.Request.Scheme}://{ctx.Request.Host}";
 
     /// <summary>
     /// Access tokens are short-lived; clients renew via the rotated refresh token. The bearer pipeline

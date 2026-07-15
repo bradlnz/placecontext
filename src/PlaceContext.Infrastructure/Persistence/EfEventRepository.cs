@@ -1,3 +1,4 @@
+using PlaceContext.Application.Ports;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.Repositories;
 using PlaceContext.Domain.ValueObjects;
@@ -8,8 +9,10 @@ namespace PlaceContext.Infrastructure.Persistence;
 public sealed class EfEventRepository : IEventRepository
 {
     private readonly AppDbContext _db;
+    private readonly IDataEncryptor _enc;
+    private static string P => IDataEncryptor.Purpose.EventPayload;
 
-    public EfEventRepository(AppDbContext db) => _db = db;
+    public EfEventRepository(AppDbContext db, IDataEncryptor enc) => (_db, _enc) = (db, enc);
 
     // ── Definitions ──────────────────────────────────────────────────────────────────────────────
 
@@ -69,16 +72,17 @@ public sealed class EfEventRepository : IEventRepository
     private static EventDefinition ToDomain(EventDefinitionRow r) =>
         EventDefinition.Rehydrate(r.Id, r.Name, r.Description, r.PayloadSchema, r.CreatedAt, r.UpdatedAt);
 
-    private static EventOccurrenceRow ToRow(EventOccurrence o) => new()
+    private EventOccurrenceRow ToRow(EventOccurrence o) => new()
     {
         Id = o.Id,
         Name = o.Name,
         Source = o.Source.ToString(),
         ProjectId = o.ProjectId,
-        Payload = o.Payload,
+        Payload = o.Payload is null ? null : _enc.Protect(o.Payload, P),
         OccurredAt = o.OccurredAt,
     };
 
-    private static EventOccurrence ToDomain(EventOccurrenceRow r) => EventOccurrence.Rehydrate(
-        r.Id, r.Name, Enum.Parse<EventSource>(r.Source), r.ProjectId, r.Payload, r.OccurredAt);
+    private EventOccurrence ToDomain(EventOccurrenceRow r) => EventOccurrence.Rehydrate(
+        r.Id, r.Name, Enum.Parse<EventSource>(r.Source), r.ProjectId,
+        r.Payload is null ? null : _enc.Unprotect(r.Payload, P), r.OccurredAt);
 }

@@ -3,29 +3,46 @@
 @implements IDisposable
 @inject NavigationManager Nav
 @inject IPlaceContextService Svc
+@inject PlaceContext.Application.Ports.IMenuConfigService MenuCfg
 
-@* The project area: a vertical menu on the left (replacing the old horizontal tab strip),
-   second-level strips (like Data's Tables | Analytics | Data map) stay inside the pages. *@
+@* Project secondary nav — structure from tenant menu config; filtered by permissions. *@
 <div class="shell">
     <nav class="side">
         <div class="side-head">Project</div>
-        @foreach (var item in Items)
+        @{
+            string? lastSection = null;
+        }
+        @foreach (var item in _menu)
         {
+            if (item.Kind == "entities")
+            {
+                if (_entities.Count == 0) continue;
+                var sec = item.Section ?? item.Label;
+                if (sec != lastSection)
+                {
+                    lastSection = sec;
+                    <div class="side-head-2">@sec</div>
+                }
+                @foreach (var e in _entities)
+                {
+                    <button class="dcnav nav-btn @(Nav.Uri.Contains($"/entity/{Uri.EscapeDataString(e)}", StringComparison.OrdinalIgnoreCase) ? "active" : "")"
+                            @onclick="@(() => Nav.NavigateTo($"/project/{ProjectId()}/entity/{Uri.EscapeDataString(e)}"))">
+                        <span class="bar"></span>@e
+                    </button>
+                }
+                continue;
+            }
+
+            if (!string.IsNullOrEmpty(item.Section) && item.Section != lastSection)
+            {
+                lastSection = item.Section;
+                <div class="side-head-2">@item.Section</div>
+            }
+
             <button class="dcnav nav-btn @(IsActive(item) ? "active" : "")"
-                    @onclick="@(() => Nav.NavigateTo(UrlFor(item)))">
+                    @onclick="@(() => Nav.NavigateTo(item.Href ?? "/"))">
                 <span class="bar"></span>@item.Label
             </button>
-        }
-        @if (_entities.Count > 0)
-        {
-            <div class="side-head-2">Business</div>
-            @foreach (var e in _entities)
-            {
-                <button class="dcnav nav-btn @(Nav.Uri.Contains($"/entity/{Uri.EscapeDataString(e)}", StringComparison.OrdinalIgnoreCase) ? "active" : "")"
-                        @onclick="@(() => Nav.NavigateTo($"/project/{ProjectId()}/entity/{Uri.EscapeDataString(e)}"))">
-                    <span class="bar"></span>@e
-                </button>
-            }
         }
     </nav>
     <div class="body">
@@ -34,20 +51,9 @@
 </div>
 
 @code {
-    private sealed record Item(string Label, string Key, string Path);
-
-    // Overview/Knowledge/Activity are the project page's own tabs (carried in ?tab=); the rest
-    // are sub-pages. "data" is the parent of the Tables | Analytics | Data map strip.
-    private static readonly Item[] Items =
-    {
-        new("Overview", "overview", ""),
-        new("Jobs", "jobs", "jobs"),
-        new("Chains", "chains", "chains"),
-        new("Schedules", "schedules", "schedules"),
-        new("Data", "data", "data"),
-        new("Vault", "vault", "secrets"),
-        new("Events", "events", "events"),
-    };
+    private IReadOnlyList<ResolvedMenuItem> _menu = Array.Empty<ResolvedMenuItem>();
+    private IReadOnlyList<string> _entities = Array.Empty<string>();
+    private Guid? _entitiesFor;
 
     private Guid? ProjectId()
     {
@@ -55,52 +61,52 @@
         return m.Success && Guid.TryParse(m.Groups[1].Value, out var id) ? id : null;
     }
 
-    private string UrlFor(Item item)
+    private bool IsActive(ResolvedMenuItem item)
     {
-        var pid = ProjectId();
-        if (pid is null) return "/";
-        return item.Path.Length == 0
-            ? $"/project/{pid}?tab={item.Key}"
-            : $"/project/{pid}/{item.Path}";
+        if (string.IsNullOrEmpty(item.Href)) return false;
+        var path = new Uri(Nav.Uri).AbsolutePath.TrimEnd('/');
+        var target = item.Href.TrimEnd('/');
+        if (path.Equals(target, StringComparison.OrdinalIgnoreCase)) return true;
+        // Data parent owns analytics/datamap.
+        if (item.Id == "project.data" && (path.Contains("/analytics") || path.Contains("/datamap"))) return true;
+        return false;
     }
-
-    private bool IsActive(Item item)
-    {
-        var uri = new Uri(Nav.Uri);
-        var path = uri.AbsolutePath.TrimEnd('/');
-        var afterProject = System.Text.RegularExpressions.Regex.Match(path, @"/project/[0-9a-fA-F-]{36}(?:/([a-z]+))?").Groups[1].Value;
-        if (item.Path.Length > 0)
-        {
-            // Analytics + Data map live under the Data parent.
-            if (item.Key == "data" && afterProject is "analytics" or "datamap") return true;
-            return afterProject == item.Path;
-        }
-        // The single Overview item owns the project page (its Overview/Knowledge/Activity
-        // tabs are an in-page strip).
-        return afterProject.Length == 0;
-    }
-
-    // Tagged entities surface as custom menu items — the business views of ingested data.
-    private IReadOnlyList<string> _entities = Array.Empty<string>();
-    private Guid? _entitiesFor;
 
     protected override async Task OnInitializedAsync()
     {
         Nav.LocationChanged += OnMoved;
-        await LoadEntitiesAsync();
+        await ReloadAsync();
     }
 
-    private async Task LoadEntitiesAsync()
+    private async Task ReloadAsync()
     {
         var pid = ProjectId();
-        if (pid is null || pid == _entitiesFor) return;
-        _entitiesFor = pid;
-        try { _entities = (await Svc.ListDataEntitiesAsync(pid.Value)).Select(e => e.Name).ToList(); }
-        catch { _entities = Array.Empty<string>(); }
+        if (pid is null)
+        {
+            _menu = Array.Empty<ResolvedMenuItem>();
+            _entities = Array.Empty<string>();
+            return;
+        }
+        try { _menu = await MenuCfg.GetProjectMenuAsync(pid.Value); }
+        catch { _menu = Array.Empty<ResolvedMenuItem>(); }
+
+        if (_menu.Any(m => m.Kind == "entities"))
+        {
+            if (pid != _entitiesFor)
+            {
+                _entitiesFor = pid;
+                try { _entities = (await Svc.ListDataEntitiesAsync(pid.Value)).Select(e => e.Name).ToList(); }
+                catch { _entities = Array.Empty<string>(); }
+            }
+        }
+        else
+        {
+            _entities = Array.Empty<string>();
+        }
     }
 
     private void OnMoved(object? s, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
-        => _ = InvokeAsync(async () => { await LoadEntitiesAsync(); StateHasChanged(); });
+        => _ = InvokeAsync(async () => { await ReloadAsync(); StateHasChanged(); });
 
     public void Dispose() => Nav.LocationChanged -= OnMoved;
 }

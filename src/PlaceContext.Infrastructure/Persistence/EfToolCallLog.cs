@@ -8,13 +8,20 @@ namespace PlaceContext.Infrastructure.Persistence;
 /// EF-backed MCP tool-call log. A singleton shared by the MCP host (writer) and the portal (reader),
 /// which may run as separate processes against the same Postgres database. Each operation opens a
 /// short-lived scoped <see cref="AppDbContext"/>, so it never holds the request-scoped context.
+/// Request/response JSON and summaries are encrypted at rest.
 /// </summary>
 public sealed class EfToolCallLog : IToolCallLog
 {
     private const int Capacity = 200;
     private readonly IServiceScopeFactory _scopes;
+    private readonly IDataEncryptor _enc;
+    private static string P => IDataEncryptor.Purpose.ToolCall;
 
-    public EfToolCallLog(IServiceScopeFactory scopes) => _scopes = scopes;
+    public EfToolCallLog(IServiceScopeFactory scopes, IDataEncryptor enc)
+    {
+        _scopes = scopes;
+        _enc = enc;
+    }
 
     public void Record(ToolCallEntry e)
     {
@@ -24,9 +31,12 @@ public sealed class EfToolCallLog : IToolCallLog
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
             db.ToolCalls.Add(new ToolCallRow
             {
-                Id = e.Id, Tool = e.Tool, Direction = e.Direction, Project = e.Project, Summary = e.Summary,
+                Id = e.Id, Tool = e.Tool, Direction = e.Direction, Project = e.Project,
+                Summary = _enc.Protect(e.Summary, P),
                 Status = e.Status.ToString(), DurationMs = e.DurationMs,
-                RequestJson = e.RequestJson, ResponseJson = e.ResponseJson, At = e.At
+                RequestJson = _enc.Protect(e.RequestJson, P),
+                ResponseJson = _enc.Protect(e.ResponseJson, P),
+                At = e.At
             });
             db.SaveChanges();
 
@@ -46,9 +56,11 @@ public sealed class EfToolCallLog : IToolCallLog
             return db.ToolCalls.AsNoTracking().OrderByDescending(t => t.At).Take(take)
                 .ToList()
                 .Select(r => new ToolCallEntry(
-                    r.Id, r.Tool, r.Direction, r.Project, r.Summary,
+                    r.Id, r.Tool, r.Direction, r.Project,
+                    _enc.Unprotect(r.Summary, P),
                     Enum.Parse<ToolCallStatus>(r.Status), r.DurationMs,
-                    r.RequestJson, r.ResponseJson, r.At))
+                    _enc.Unprotect(r.RequestJson, P),
+                    _enc.Unprotect(r.ResponseJson, P), r.At))
                 .ToList();
         }
         catch { return Array.Empty<ToolCallEntry>(); }

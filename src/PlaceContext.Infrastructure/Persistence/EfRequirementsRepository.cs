@@ -12,18 +12,21 @@ public sealed class EfRequirementsRepository : IRequirementsRepository
     private static readonly Guid GlobalKey = Guid.Empty;
 
     private readonly AppDbContext _db;
-    public EfRequirementsRepository(AppDbContext db) => _db = db;
+    private readonly IDataEncryptor _enc;
+    private static string P => IDataEncryptor.Purpose.Requirements;
+
+    public EfRequirementsRepository(AppDbContext db, IDataEncryptor enc) => (_db, _enc) = (db, enc);
 
     public async Task<Requirements?> GetGlobalAsync(CancellationToken ct = default)
     {
         var r = await _db.Requirements.AsNoTracking().FirstOrDefaultAsync(x => x.ProjectId == GlobalKey, ct);
-        return r is null ? null : Requirements.Rehydrate(null, r.Markdown, r.CreatedAt, r.UpdatedAt);
+        return r is null ? null : Requirements.Rehydrate(null, _enc.Unprotect(r.Markdown, P), r.CreatedAt, r.UpdatedAt);
     }
 
     public async Task<Requirements?> GetForProjectAsync(ProjectId projectId, CancellationToken ct = default)
     {
         var r = await _db.Requirements.AsNoTracking().FirstOrDefaultAsync(x => x.ProjectId == projectId.Value, ct);
-        return r is null ? null : Requirements.Rehydrate(projectId, r.Markdown, r.CreatedAt, r.UpdatedAt);
+        return r is null ? null : Requirements.Rehydrate(projectId, _enc.Unprotect(r.Markdown, P), r.CreatedAt, r.UpdatedAt);
     }
 
     public async Task SaveAsync(Requirements requirements, CancellationToken ct = default)
@@ -31,15 +34,16 @@ public sealed class EfRequirementsRepository : IRequirementsRepository
         var key = requirements.ProjectId?.Value ?? GlobalKey;
         // Tenant-filtered (global query filter); composite PK is (TenantId, ProjectId), so no FindAsync.
         var row = await _db.Requirements.FirstOrDefaultAsync(x => x.ProjectId == key, ct);
+        var cipher = _enc.Protect(requirements.Markdown, P);
         if (row is null)
             await _db.Requirements.AddAsync(new RequirementsRow
             {
-                ProjectId = key, Markdown = requirements.Markdown,
+                ProjectId = key, Markdown = cipher,
                 CreatedAt = requirements.CreatedAt, UpdatedAt = requirements.UpdatedAt
             }, ct);
         else
         {
-            row.Markdown = requirements.Markdown;
+            row.Markdown = cipher;
             row.UpdatedAt = requirements.UpdatedAt;
         }
     }

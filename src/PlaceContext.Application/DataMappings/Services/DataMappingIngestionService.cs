@@ -26,14 +26,20 @@ public sealed class DataMappingIngestionService
     private readonly IDataMappingRepository _mappings;
     private readonly IProjectDataStore _store;
     private readonly IClock _clock;
+    private readonly IContentIndexer? _indexer;
     private readonly ILogger<DataMappingIngestionService>? _log;
 
-    public DataMappingIngestionService(IDataMappingRepository mappings, IProjectDataStore store, IClock clock,
+    public DataMappingIngestionService(
+        IDataMappingRepository mappings,
+        IProjectDataStore store,
+        IClock clock,
+        IContentIndexer? indexer = null,
         ILogger<DataMappingIngestionService>? log = null)
     {
         _mappings = mappings;
         _store = store;
         _clock = clock;
+        _indexer = indexer;
         _log = log;
     }
 
@@ -133,6 +139,24 @@ public sealed class DataMappingIngestionService
         await _store.AppendReadOnlyRowsAsync(projectId, mapping.TargetTable, columns, rows, ct);
         _log?.LogInformation("Ingested {Count} row(s) from run {RunId} into '{Table}'.",
             rows.Count, runId, mapping.TargetTable);
+
+        // Auto-embed every ingested row for RAG (source text encrypted at rest by the indexer).
+        if (_indexer is { IsEnabled: true })
+        {
+            var items = new List<(string, string)>(rows.Count);
+            for (var i = 0; i < rows.Count; i++)
+            {
+                var r = rows[i];
+                var parts = new List<string> { $"table: {mapping.TargetTable}" };
+                for (var c = 0; c < columns.Count && c < r.Count; c++)
+                {
+                    if (string.IsNullOrWhiteSpace(r[c])) continue;
+                    parts.Add($"{columns[c].Name}: {r[c]}");
+                }
+                items.Add(($"{mapping.TargetTable}:{runId}:{i}", string.Join("\n", parts)));
+            }
+            await _indexer.IndexManyAsync(projectId, ContentKind.ProjectData, items, ct);
+        }
     }
 
     // The run's primary data: the reduce artifact (final aggregate) when present, else the lone

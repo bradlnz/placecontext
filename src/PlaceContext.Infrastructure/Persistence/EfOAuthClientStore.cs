@@ -12,9 +12,13 @@ public sealed class EfOAuthClientStore : IOAuthClientStore
 
     public async Task<OAuthClient> RegisterAsync(IReadOnlyList<string> redirectUris, string name, CancellationToken ct = default)
     {
+        // Public PKCE clients (MCP desktop agents) must only use loopback redirects. Allowing any
+        // https:// host let an attacker DCR a phishing client and steal authorization codes from a
+        // logged-in browser (confirmed live: Location: https://evil.example/steal?code=…).
         var safe = redirectUris.Where(IsSafeRedirectUri).Distinct(StringComparer.Ordinal).ToList();
         if (safe.Count == 0)
-            throw new ArgumentException("At least one valid redirect_uri is required (https or localhost/127.0.0.1).");
+            throw new ArgumentException(
+                "At least one valid redirect_uri is required (http(s)://localhost or http(s)://127.0.0.1 only).");
 
         var row = new OAuthClientRow
         {
@@ -35,10 +39,9 @@ public sealed class EfOAuthClientStore : IOAuthClientStore
     }
 
     /// <summary>
-    /// Returns the registered client, or auto-registers a <em>loopback-only</em> public client when
-    /// the client is unknown and the redirect is localhost/127.0.0.1 (typical MCP desktop clients
-    /// after a DB reset). Never appends an arbitrary external redirect_uri to an existing client —
-    /// that was an OAuth authorization-code theft hole.
+    /// Returns the registered client, or auto-registers a loopback-only public client when the client
+    /// is unknown (typical MCP desktop clients after a DB reset). Never appends an arbitrary
+    /// external redirect_uri to an existing client.
     /// </summary>
     public async Task<OAuthClient> EnsureAsync(string clientId, string redirectUri, CancellationToken ct = default)
     {
@@ -46,7 +49,6 @@ public sealed class EfOAuthClientStore : IOAuthClientStore
         if (row is not null)
             return ToDomain(row);
 
-        // Self-heal only for loopback redirects — never for arbitrary attacker-controlled hosts.
         if (!IsLoopbackRedirectUri(redirectUri))
             throw new InvalidOperationException("Unknown OAuth client. Re-register via /connect/register.");
 
@@ -62,16 +64,13 @@ public sealed class EfOAuthClientStore : IOAuthClientStore
         return ToDomain(row);
     }
 
-    /// <summary>https (any host) or http://localhost / http://127.0.0.1 (with optional port).</summary>
-    internal static bool IsSafeRedirectUri(string? uri)
-    {
-        if (string.IsNullOrWhiteSpace(uri)) return false;
-        if (!Uri.TryCreate(uri, UriKind.Absolute, out var u)) return false;
-        if (u.Scheme.Equals(Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase)) return true;
-        return IsLoopbackRedirectUri(uri);
-    }
+    /// <summary>
+    /// Safe for open DCR of public PKCE clients: loopback only.
+    /// Remote https redirects require a different, operator-controlled client registration path.
+    /// </summary>
+    public static bool IsSafeRedirectUri(string? uri) => IsLoopbackRedirectUri(uri);
 
-    internal static bool IsLoopbackRedirectUri(string? uri)
+    public static bool IsLoopbackRedirectUri(string? uri)
     {
         if (string.IsNullOrWhiteSpace(uri)) return false;
         if (!Uri.TryCreate(uri, UriKind.Absolute, out var u)) return false;
@@ -80,7 +79,9 @@ public sealed class EfOAuthClientStore : IOAuthClientStore
             return false;
         return u.IsLoopback
             || string.Equals(u.Host, "localhost", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(u.Host, "127.0.0.1", StringComparison.OrdinalIgnoreCase);
+            || string.Equals(u.Host, "127.0.0.1", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(u.Host, "[::1]", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(u.Host, "::1", StringComparison.OrdinalIgnoreCase);
     }
 
     private static OAuthClient ToDomain(OAuthClientRow r) => new(

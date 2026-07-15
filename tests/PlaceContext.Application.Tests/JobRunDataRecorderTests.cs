@@ -2,6 +2,7 @@ using PlaceContext.Application.Features;
 using PlaceContext.Application.Ports;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.ValueObjects;
+using PlaceContext.TestSupport;
 using Xunit;
 
 namespace PlaceContext.Application.Tests;
@@ -38,6 +39,14 @@ public class JobRunDataRecorderTests
             IReadOnlyList<IReadOnlyList<string?>> rows, bool createTable, CancellationToken ct = default)
             => Task.FromResult(rows.Count);
 
+        public Task InsertRowAsync(Guid projectId, string tableName, IReadOnlyDictionary<string, string?> values, CancellationToken ct = default)
+            => Task.CompletedTask;
+        public Task<int> UpdateRowsAsync(Guid projectId, string tableName, IReadOnlyDictionary<string, string?> keys,
+            IReadOnlyDictionary<string, string?> values, CancellationToken ct = default)
+            => Task.FromResult(0);
+        public Task<int> DeleteRowsAsync(Guid projectId, string tableName, IReadOnlyDictionary<string, string?> keys, CancellationToken ct = default)
+            => Task.FromResult(0);
+
         public Task<ProjectQueryResult> ExecuteAsync(Guid projectId, string sql, CancellationToken ct = default)
             => throw new NotSupportedException();
         public Task<IReadOnlyList<ProjectTableInfo>> ListTablesAsync(Guid projectId, CancellationToken ct = default)
@@ -65,6 +74,14 @@ public class JobRunDataRecorderTests
     {
         public DateTimeOffset UtcNow => T0.AddSeconds(3);
     }
+        public Task InsertRowAsync(Guid projectId, string tableName, IReadOnlyDictionary<string, string?> values, CancellationToken ct = default)
+            => Task.CompletedTask;
+        public Task<int> UpdateRowsAsync(Guid projectId, string tableName, IReadOnlyDictionary<string, string?> keys,
+            IReadOnlyDictionary<string, string?> values, CancellationToken ct = default)
+            => Task.FromResult(0);
+        public Task<int> DeleteRowsAsync(Guid projectId, string tableName, IReadOnlyDictionary<string, string?> keys, CancellationToken ct = default)
+            => Task.FromResult(0);
+
 
     [Fact]
     public async Task Records_one_row_per_shard_into_job_run_data()
@@ -121,6 +138,21 @@ public class JobRunDataRecorderTests
         await new JobRunDataRecorder(store, new FakeClock()).RecordAsync(job, run);
     }
 
+    [Fact]
+    public async Task Records_also_index_rows_for_RAG_when_embeddings_enabled()
+    {
+        var (job, run) = Sample();
+        var store = new CapturingStore();
+        var indexer = new FakeContentIndexer();
+
+        await new JobRunDataRecorder(store, new FakeClock(), indexer).RecordAsync(job, run);
+
+        Assert.Equal(2, indexer.Indexed.Count);
+        Assert.All(indexer.Indexed, i => Assert.Equal(ContentKind.ProjectData, i.Kind));
+        Assert.All(indexer.Indexed, i => Assert.Equal(run.ProjectId, i.ProjectId));
+        Assert.Contains(indexer.Indexed, i => i.Text.Contains("nightly-etl"));
+    }
+
     private sealed class ThrowingStore : IProjectDataStore
     {
         public Task AppendReadOnlyRowsAsync(Guid projectId, string tableName, IReadOnlyList<ProjectColumnSpec> columns,
@@ -129,6 +161,14 @@ public class JobRunDataRecorderTests
         public Task<int> ImportRowsAsync(Guid projectId, string tableName, IReadOnlyList<ProjectColumnSpec> columns,
             IReadOnlyList<IReadOnlyList<string?>> rows, bool createTable, CancellationToken ct = default)
             => throw new InvalidOperationException("db down");
+        public Task InsertRowAsync(Guid projectId, string tableName, IReadOnlyDictionary<string, string?> values, CancellationToken ct = default)
+            => Task.CompletedTask;
+        public Task<int> UpdateRowsAsync(Guid projectId, string tableName, IReadOnlyDictionary<string, string?> keys,
+            IReadOnlyDictionary<string, string?> values, CancellationToken ct = default)
+            => Task.FromResult(0);
+        public Task<int> DeleteRowsAsync(Guid projectId, string tableName, IReadOnlyDictionary<string, string?> keys, CancellationToken ct = default)
+            => Task.FromResult(0);
+
         public Task<ProjectQueryResult> ExecuteAsync(Guid projectId, string sql, CancellationToken ct = default)
             => throw new NotSupportedException();
         public Task<IReadOnlyList<ProjectTableInfo>> ListTablesAsync(Guid projectId, CancellationToken ct = default)

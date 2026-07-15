@@ -259,6 +259,12 @@ public sealed class KubernetesWorkloadRunner : IWorkloadRunner
     /// logs — a frame that fails to decode to exactly that many bytes is dropped rather than surfaced
     /// corrupt. Logs from image workloads (no wrapper, no marker) pass through unchanged.
     /// </summary>
+    /// <summary>Max decoded artifact size accepted from a framed log (matches Docker /out capture).</summary>
+    public const long MaxFramedArtifactBytes = 5L * 1024 * 1024;
+    private const int MaxFramedArtifacts = 50;
+    /// <summary>Max base64 payload chars collected for one frame (~4/3 of max bytes + slack).</summary>
+    private const int MaxFramedBase64Chars = 8 * 1024 * 1024;
+
     public static (string Stdout, List<WorkloadArtifact> Files) SplitFramedLogs(string logs)
     {
         var files = new List<WorkloadArtifact>();
@@ -273,10 +279,13 @@ public sealed class KubernetesWorkloadRunner : IWorkloadRunner
         var lines = logs[(markerAt + ArtifactsMarker.Length)..].Split('\n');
         for (var l = 0; l < lines.Length; l++)
         {
+            if (files.Count >= MaxFramedArtifacts) break;
             var header = lines[l].TrimEnd('\r');
             if (!header.StartsWith("==PC-FILE== ", StringComparison.Ordinal)) continue;
             var sep = header.LastIndexOf(' ');
-            if (sep <= 12 || !long.TryParse(header[(sep + 1)..], out var size) || size < 0) continue;
+            // Reject negative / absurd size claims (integer overflow tricks, multi-GB claims).
+            if (sep <= 12 || !long.TryParse(header[(sep + 1)..], out var size)
+                || size < 0 || size > MaxFramedArtifactBytes) continue;
             var name = header[12..sep];
 
             // Collect the base64 payload up to the end marker; no marker ⇒ truncated log, drop the frame.
@@ -286,6 +295,7 @@ public sealed class KubernetesWorkloadRunner : IWorkloadRunner
             {
                 var line = lines[l].TrimEnd('\r');
                 if (line == FileEndMarker) { closed = true; break; }
+                if (payload.Length + line.Length > MaxFramedBase64Chars) { closed = false; break; }
                 payload.Append(line);
             }
             if (!closed) break;
@@ -293,7 +303,7 @@ public sealed class KubernetesWorkloadRunner : IWorkloadRunner
             try
             {
                 var bytes = Convert.FromBase64String(payload.ToString());
-                if (bytes.LongLength == size)
+                if (bytes.LongLength == size && bytes.LongLength <= MaxFramedArtifactBytes)
                     files.Add(WorkloadArtifact.FromBytes(name, bytes));
             }
             catch (FormatException) { /* mangled frame — drop it rather than surface corrupt content */ }

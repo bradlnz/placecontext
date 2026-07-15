@@ -43,7 +43,11 @@ spec:
                   pg_dumpall -h "$HOST" -U postgres --clean --if-exists | gzip > "/work/pg-${STAMP}.sql.gz"
                   ls -lh /work
               env:
-                - { name: PGPASSWORD, value: postgres }
+                - name: PGPASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: placecontext-db
+                      key: password
               volumeMounts: [{ name: work, mountPath: /work }]
           containers:
             # 2) upload to MinIO and prune — the prune is the disk-safety guardrail

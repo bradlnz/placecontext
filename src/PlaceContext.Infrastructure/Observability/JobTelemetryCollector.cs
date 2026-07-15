@@ -111,7 +111,9 @@ public sealed class JobTelemetryCollector : IJobTelemetryReader, IDisposable
         var telemetry = new JobRunTelemetry(
             runId, jobId, jobName, projectId, status, replay,
             new DateTimeOffset(activity.StartTimeUtc, TimeSpan.Zero),
-            activity.Duration.TotalMilliseconds, shards);
+            activity.Duration.TotalMilliseconds, shards,
+            activity.TraceId.ToHexString(),
+            activity.SpanId.ToHexString());
 
         lock (_runsGate)
         {
@@ -248,6 +250,54 @@ public sealed class JobTelemetryCollector : IJobTelemetryReader, IDisposable
     public IReadOnlyList<ChainRunTelemetry> RecentChainRuns(int take = 50)
     {
         lock (_chainRunsGate) return _chainRuns.Take(take).ToList();
+    }
+
+    public IReadOnlyList<TraceSpanNode> TraceForRun(Guid runId)
+    {
+        JobRunTelemetry? run;
+        lock (_runsGate) run = _runs.FirstOrDefault(r => r.RunId == runId);
+        if (run is null) return Array.Empty<TraceSpanNode>();
+
+        var shardChildren = run.Shards.OrderBy(s => s.Index).Select(s =>
+        {
+            var tags = new Dictionary<string, string>
+            {
+                ["shard.index"] = s.Index.ToString(),
+            };
+            if (s.Outcome is not null) tags["shard.outcome"] = s.Outcome;
+            if (s.ExitCode is not null) tags["shard.exit_code"] = s.ExitCode.Value.ToString();
+            return new TraceSpanNode(
+                Name: $"job.shard[{s.Index}]",
+                TraceId: run.TraceId,
+                SpanId: null,
+                ParentSpanId: run.SpanId,
+                StartedAt: run.StartedAt,
+                DurationMs: s.DurationMs ?? 0,
+                Tags: tags,
+                Children: Array.Empty<TraceSpanNode>());
+        }).ToList();
+
+        var rootTags = new Dictionary<string, string>
+        {
+            ["run.id"] = run.RunId.ToString(),
+            ["job.id"] = run.JobId.ToString(),
+        };
+        if (run.JobName is not null) rootTags["job.name"] = run.JobName;
+        if (run.Status is not null) rootTags["run.status"] = run.Status;
+        if (run.Replay) rootTags["job.replay"] = "true";
+
+        return new[]
+        {
+            new TraceSpanNode(
+                Name: "job.run",
+                TraceId: run.TraceId,
+                SpanId: run.SpanId,
+                ParentSpanId: null,
+                StartedAt: run.StartedAt,
+                DurationMs: run.DurationMs ?? 0,
+                Tags: rootTags,
+                Children: shardChildren),
+        };
     }
 
     public void Dispose()

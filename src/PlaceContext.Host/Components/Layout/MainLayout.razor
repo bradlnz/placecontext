@@ -8,10 +8,12 @@
 @inject PlaceContext.Host.Branding.BrandingService Branding
 @inject IJSRuntime JS
 @inject NavigationManager Nav
+@inject PlaceContext.Application.Ports.IPermissionService Perms
+@inject PlaceContext.Application.Ports.IMenuConfigService MenuCfg
 
 <div id="dcshell" data-theme="dark" class="shell" style="@_brand.CssOverrides()">
 
-    <!-- SIDEBAR -->
+    <!-- SIDEBAR — structure from tenant menu config; still filtered by effective permissions. -->
     <aside class="sidebar">
         <div class="brand-row">
             @if (_brand.LogoDataUri is { } logo)
@@ -31,31 +33,31 @@
         </div>
 
         <div class="nav-list">
-            <NavLink class="dcnav" href="/" Match="NavLinkMatch.All"><span class="bar"></span>@Icon("grid")<span class="nav-label">Dashboard</span></NavLink>
-
-            @if (Ui.CurrentProjectId is { } pid)
-            {
-                <NavLink class="dcnav" href="@($"project/{pid}/jobs")"><span class="bar"></span>@Icon("box")<span class="nav-label">Jobs</span></NavLink>
-                <NavLink class="dcnav" href="@($"project/{pid}/chains")"><span class="bar"></span>@Icon("chain")<span class="nav-label">Chains</span></NavLink>
-                <NavLink class="dcnav" href="@($"project/{pid}/schedules")"><span class="bar"></span>@Icon("clock")<span class="nav-label">Schedules</span></NavLink>
-                <NavLink class="dcnav" href="@($"project/{pid}/data")"><span class="bar"></span>@Icon("map")<span class="nav-label">Data</span></NavLink>
-                <NavLink class="dcnav" href="@($"project/{pid}/secrets")"><span class="bar"></span>@Icon("key")<span class="nav-label">Vault</span></NavLink>
+            @{
+                string? lastSection = null;
             }
-            <NavLink class="dcnav" href="artifacts"><span class="bar"></span>@Icon("file")<span class="nav-label">Artifacts</span></NavLink>
-            <NavLink class="dcnav" href="observability"><span class="bar"></span>@Icon("pulse")<span class="nav-label">Observability</span></NavLink>
-            <AuthorizeView Policy="@Permission.SettingsManage">
-                <Authorized>
-                    <NavLink class="dcnav" href="cluster"><span class="bar"></span>@Icon("grid")<span class="nav-label">Cluster</span></NavLink>
-                </Authorized>
-            </AuthorizeView>
-            <NavLink class="dcnav" href="inspector"><span class="bar"></span>@Icon("inspector")<span class="nav-label">MCP Server</span><span class="mcp-dot"></span></NavLink>
-
-            <div class="nav-section">Workspace</div>
-            <NavLink class="dcnav" href="overview"><span class="bar"></span>@Icon("pulse")<span class="nav-label">Projects overview</span></NavLink>
-            <NavLink class="dcnav" href="onboarding"><span class="bar"></span>@Icon("rocket")<span class="nav-label">Onboarding</span></NavLink>
-            <NavLink class="dcnav" href="wiki"><span class="bar"></span>@Icon("ledger")<span class="nav-label">Wiki</span></NavLink>
-            <NavLink class="dcnav" href="settings/branding"><span class="bar"></span>@Icon("key")<span class="nav-label">Settings</span></NavLink>
-            <NavLink class="dcnav" href="about"><span class="bar"></span>@Icon("grid")<span class="nav-label">About</span></NavLink>
+            @foreach (var item in _menu)
+            {
+                if (item.Kind == "section")
+                {
+                    lastSection = item.Label;
+                    <div class="nav-section">@item.Label</div>
+                    continue;
+                }
+                if (!string.IsNullOrEmpty(item.Section) && item.Section != lastSection)
+                {
+                    lastSection = item.Section;
+                    <div class="nav-section">@item.Section</div>
+                }
+                var href = item.Href ?? "/";
+                <NavLink class="dcnav" href="@href.TrimStart('/')" Match="@(href is "/" ? NavLinkMatch.All : NavLinkMatch.Prefix)">
+                    <span class="bar"></span>@Icon(item.Icon ?? "grid")<span class="nav-label">@item.Label</span>
+                    @if (item.Id == "mcp")
+                    {
+                        <span class="mcp-dot"></span>
+                    }
+                </NavLink>
+            }
         </div>
 
         @* ── Project switcher — the design's context pill; nav above scopes to this project ── *@
@@ -195,6 +197,7 @@
     }
 
     private PlaceContext.Host.Branding.TenantBranding _brand = new();
+    private IReadOnlyList<ResolvedMenuItem> _menu = Array.Empty<ResolvedMenuItem>();
 
     protected override async Task OnInitializedAsync()
     {
@@ -204,16 +207,27 @@
         SyncProjectFromUrl(Nav.Uri);
         if (Ui.CurrentProjectId is null && _projects.Count > 0)
             Ui.SetProject(_projects[0].Id, _projects[0].Name);
+        await ReloadMenuAsync();
         RefreshRunningCount();
+    }
+
+    private async Task ReloadMenuAsync()
+    {
+        try { _menu = await MenuCfg.GetWorkspaceMenuAsync(Ui.CurrentProjectId); }
+        catch { _menu = Array.Empty<ResolvedMenuItem>(); }
     }
 
     private void ToggleSwitcher() => _switcherOpen = !_switcherOpen;
 
-    private void SwitchProject(ProjectSummaryView p)
+    private async Task SwitchProject(ProjectSummaryView p)
     {
         _switcherOpen = false;
         Ui.SetProject(p.Id, p.Name);
-        Nav.NavigateTo($"/project/{p.Id}/jobs");
+        await ReloadMenuAsync();
+        // Prefer first project-scoped menu item the user can see, else jobs.
+        var dest = _menu.FirstOrDefault(m => m.Href?.Contains($"/project/{p.Id}", StringComparison.Ordinal) == true)?.Href
+                   ?? $"/project/{p.Id}/jobs";
+        Nav.NavigateTo(dest);
     }
 
     // Navigating into any /project/{id}/… page moves the switcher with you.

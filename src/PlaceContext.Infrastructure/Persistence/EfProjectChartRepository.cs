@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using PlaceContext.Application.Ports;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.Repositories;
 
@@ -7,7 +8,10 @@ namespace PlaceContext.Infrastructure.Persistence;
 public sealed class EfProjectChartRepository : IProjectChartRepository
 {
     private readonly AppDbContext _db;
-    public EfProjectChartRepository(AppDbContext db) => _db = db;
+    private readonly IDataEncryptor _enc;
+    private static string P => IDataEncryptor.Purpose.Chart;
+
+    public EfProjectChartRepository(AppDbContext db, IDataEncryptor enc) => (_db, _enc) = (db, enc);
 
     public async Task UpsertAsync(ProjectChart chart, CancellationToken ct = default)
     {
@@ -19,7 +23,7 @@ public sealed class EfProjectChartRepository : IProjectChartRepository
         }
         else
         {
-            existing.Html = chart.Html;
+            existing.Html = _enc.Protect(chart.Html, P);
             existing.GeneratedAt = chart.GeneratedAt;
         }
     }
@@ -51,15 +55,15 @@ public sealed class EfProjectChartRepository : IProjectChartRepository
         _db.ProjectCharts.RemoveRange(stale);
     }
 
-    private static ProjectChartRow ToRow(ProjectChart c) => new()
+    private ProjectChartRow ToRow(ProjectChart c) => new()
     {
         Id = c.Id,
         ProjectId = c.ProjectId,
         TableName = c.TableName,
-        Html = c.Html,
+        Html = _enc.Protect(c.Html, P),
         GeneratedAt = c.GeneratedAt,
     };
 
-    private static ProjectChart ToDomain(ProjectChartRow r)
-        => ProjectChart.Rehydrate(r.Id, r.ProjectId, r.TableName, r.Html, r.GeneratedAt);
+    private ProjectChart ToDomain(ProjectChartRow r)
+        => ProjectChart.Rehydrate(r.Id, r.ProjectId, r.TableName, _enc.Unprotect(r.Html, P), r.GeneratedAt);
 }

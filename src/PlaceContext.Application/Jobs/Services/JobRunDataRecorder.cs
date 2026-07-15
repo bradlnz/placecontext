@@ -7,9 +7,8 @@ namespace PlaceContext.Application.Features;
 /// <summary>
 /// After a run completes, appends its results to the project's read-only <c>job_run_data</c> table —
 /// one row per map shard plus one for the reduce step — so runs can be queried, joined, and charted
-/// from the Data tab like any other project data. The table is system-owned: the store enforces that
-/// the project can SELECT it but never write, alter, or drop it. Entirely best-effort — a data-store
-/// failure is logged and never fails the run.
+/// from the Data tab like any other project data. Each row is also embedded for RAG (encrypted text
+/// at rest). The table is system-owned. Entirely best-effort — never fails the run.
 /// </summary>
 public sealed class JobRunDataRecorder
 {
@@ -34,12 +33,18 @@ public sealed class JobRunDataRecorder
 
     private readonly IProjectDataStore _store;
     private readonly IClock _clock;
+    private readonly IContentIndexer? _indexer;
     private readonly ILogger<JobRunDataRecorder>? _log;
 
-    public JobRunDataRecorder(IProjectDataStore store, IClock clock, ILogger<JobRunDataRecorder>? log = null)
+    public JobRunDataRecorder(
+        IProjectDataStore store,
+        IClock clock,
+        IContentIndexer? indexer = null,
+        ILogger<JobRunDataRecorder>? log = null)
     {
         _store = store;
         _clock = clock;
+        _indexer = indexer;
         _log = log;
     }
 
@@ -49,12 +54,35 @@ public sealed class JobRunDataRecorder
         {
             var rows = BuildRows(job, run, _clock.UtcNow);
             await _store.AppendReadOnlyRowsAsync(run.ProjectId, TableName, Columns, rows, ct);
+            await EmbedRowsAsync(run.ProjectId, run.Id, rows, ct);
         }
         catch (Exception ex)
         {
             _log?.LogWarning(ex, "Recording run {RunId} (job {JobId}) into {Table} failed.",
                 run.Id, job.Id, TableName);
         }
+    }
+
+    private async Task EmbedRowsAsync(
+        Guid projectId, Guid runId, IReadOnlyList<IReadOnlyList<string?>> rows, CancellationToken ct)
+    {
+        if (_indexer is not { IsEnabled: true }) return;
+        var items = new List<(string, string)>();
+        for (var i = 0; i < rows.Count; i++)
+        {
+            var r = rows[i];
+            // Build a readable text blob for RAG (column names + values).
+            var parts = new List<string>();
+            for (var c = 0; c < Columns.Count && c < r.Count; c++)
+            {
+                if (string.IsNullOrWhiteSpace(r[c])) continue;
+                parts.Add($"{Columns[c].Name}: {r[c]}");
+            }
+            if (parts.Count == 0) continue;
+            items.Add(($"job_run_data:{runId}:{i}", string.Join("\n", parts)));
+        }
+        if (items.Count > 0)
+            await _indexer.IndexManyAsync(projectId, ContentKind.ProjectData, items, ct);
     }
 
     internal static IReadOnlyList<IReadOnlyList<string?>> BuildRows(Job job, JobRun run, DateTimeOffset recordedAt)

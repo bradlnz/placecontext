@@ -105,8 +105,12 @@ spec:
           ports:
             - containerPort: 7700
           env:
+            # Connection string is built by pctl into placecontext-db (password never committed).
             - name: PlaceContext__ConnectionString
-              value: "Host=placecontext-db;Port=5432;Database=placecontext;Username=postgres;Password=postgres"
+              valueFrom:
+                secretKeyRef:
+                  name: placecontext-db
+                  key: connection-string
             # HMAC key the pctl TUI uses to mint short-lived portal sign-in tokens (see deploy/pctl).
             - name: PlaceContext__Portal__SigningKey
               valueFrom:
@@ -119,6 +123,12 @@ spec:
                 secretKeyRef:
                   name: placecontext-oauth
                   key: key.pem
+            # Encrypts the Data Protection key ring at rest (vault secrets + auth cookies).
+            - name: PlaceContext__DataProtection__Key
+              valueFrom:
+                secretKeyRef:
+                  name: placecontext-dp
+                  key: key
             # No in-cluster LLM: the jobs pipeline is fully deterministic.
             - name: PlaceContext__Llm__Provider
               value: "none"

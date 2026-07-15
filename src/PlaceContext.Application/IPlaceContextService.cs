@@ -105,6 +105,10 @@ public interface IPlaceContextService
     Task<IReadOnlyList<Guid>> ListTaggedRunsAsync(Guid entityId, string key, CancellationToken ct = default);
     Task<IReadOnlyList<Guid>> ListEntityRunsAsync(Guid entityId, CancellationToken ct = default);
     Task<IReadOnlyList<Features.EntityTagPair>> ListEntityTagPairsAsync(Guid entityId, CancellationToken ct = default);
+    Task CreateEntityRecordAsync(Guid projectId, string tableName, IReadOnlyDictionary<string, string?> values, CancellationToken ct = default);
+    Task<int> UpdateEntityRecordAsync(Guid projectId, string tableName, IReadOnlyDictionary<string, string?> keys,
+        IReadOnlyDictionary<string, string?> values, CancellationToken ct = default);
+    Task<int> DeleteEntityRecordAsync(Guid projectId, string tableName, IReadOnlyDictionary<string, string?> keys, CancellationToken ct = default);
 
     Task<IReadOnlyList<RunReportView>> ListRecentRunReportsAsync(int take = 24, CancellationToken ct = default);
     Task<JobView?> GetJobAsync(Guid jobId, CancellationToken ct = default);
