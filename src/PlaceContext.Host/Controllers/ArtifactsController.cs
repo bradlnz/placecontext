@@ -44,9 +44,14 @@ public sealed class ArtifactsController : ControllerBase
         // Override the global baseline if anything else set DENY, and allow same-origin framing.
         Response.Headers["X-Frame-Options"] = "SAMEORIGIN";
         // Explicit CSP frame-ancestors for modern browsers (pairs with XFO above).
+        // The sandbox MUST be this response header, not a sandbox attribute on the portal's iframe:
+        // the attribute gives the frame an opaque origin before the fetch, so the browser withholds
+        // the SameSite=Lax auth cookie and this [Authorize] endpoint bounces to /locked (blank
+        // preview). The header applies after the authenticated fetch — scripts are still stripped
+        // and the document still gets an opaque origin. allow-popups lets links in HTML reports
+        // open in a new tab (the opened page stays sandboxed).
         Response.Headers["Content-Security-Policy"] = isHtml
-            // HTML/SVG from jobs is untrusted — sandbox strips script capability even if framed.
-            ? "sandbox; frame-ancestors 'self'"
+            ? "sandbox allow-popups; frame-ancestors 'self'"
             : "frame-ancestors 'self'";
 
         // Relative iframe src (/runs/…) uses the browser's current host — correct behind DNS/TLS

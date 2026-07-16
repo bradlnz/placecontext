@@ -242,18 +242,12 @@
             else if (Previewable(_active.ContentType))
             {
                 @* Relative /runs/… — browser keeps the public DNS host (never rewrite to in-cluster name).
-                   HTML/SVG from jobs is sandboxed; PDF/image/video omit sandbox so the browser can render. *@
-                @if (IsHtmlOrSvg(_active.ContentType))
-                {
-                    <iframe src="@Url(_active)" class="preview-frame" title="@_active.Title"
-                            loading="lazy" referrerpolicy="no-referrer"
-                            sandbox="allow-popups"></iframe>
-                }
-                else
-                {
-                    <iframe src="@Url(_active)" class="preview-frame" title="@_active.Title"
-                            loading="lazy" referrerpolicy="no-referrer"></iframe>
-                }
+                   No sandbox attribute here: it would give the frame an opaque origin, so the browser
+                   drops the SameSite=Lax auth cookie and the [Authorize] endpoint bounces to /locked.
+                   HTML/SVG is still sandboxed — ArtifactsController sends CSP "sandbox", which applies
+                   after the authenticated fetch. *@
+                <iframe src="@Url(_active)" class="preview-frame" title="@_active.Title"
+                        loading="lazy" referrerpolicy="no-referrer"></iframe>
             }
             else
             {
@@ -654,10 +648,6 @@
     private static bool Previewable(string ct) =>
         ct.StartsWith("text/") || ct.StartsWith("image/") || ct == "application/pdf"
         || ct.Contains("svg") || ct.StartsWith("video/");
-
-    private static bool IsHtmlOrSvg(string ct) =>
-        ct.StartsWith("text/html", StringComparison.OrdinalIgnoreCase)
-        || ct.Contains("svg", StringComparison.OrdinalIgnoreCase);
 
     // Stroke-style file icons matching the sidebar's icon set — no emoji.
     private static RenderFragment FileIcon(string ct, int size) => builder =>
