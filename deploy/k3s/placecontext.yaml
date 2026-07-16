@@ -175,6 +175,12 @@ spec:
                 secretKeyRef:
                   name: placecontext-minio
                   key: ACCESS_SECRET_KEY
+            # Job placement: job pods always *prefer* worker (agent) nodes, so a cloud portal
+            # server stays responsive while execution happens on the machines you joined over
+            # Tailscale. Set "true" to *require* workers — jobs then never run on the control
+            # plane and queue until a worker is online (pctl jobs placement require|prefer).
+            - name: PlaceContext__WorkloadRunner__RequireWorkerNodes
+              value: "false"
           # Give the app time to run EF migrations on first boot before liveness/readiness apply.
           startupProbe:
             httpGet: { path: /healthz, port: 7700 }

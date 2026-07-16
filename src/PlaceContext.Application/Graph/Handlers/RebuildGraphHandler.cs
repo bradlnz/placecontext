@@ -27,6 +27,8 @@ public sealed class RebuildGraphHandler : ICommandHandler<RebuildGraphCommand, P
         var project = await _projects.GetByIdAsync(ProjectId.From(command.ProjectId), ct)
             ?? throw new InvalidOperationException($"Project {command.ProjectId} not found.");
 
+        // An explicit rebuild must see brand-new data — drop any cached tree first.
+        _tree.Invalidate(project.Id);
         var tree = await _tree.BuildAsync(project.Id, ct);
         var snapshot = GraphSnapshotRef.Of(
             $"decision-tree:{project.Id.Value}", _clock.UtcNow,

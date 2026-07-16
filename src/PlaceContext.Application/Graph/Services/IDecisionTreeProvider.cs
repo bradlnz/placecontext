@@ -13,4 +13,11 @@ namespace PlaceContext.Application.Features;
 public interface IDecisionTreeProvider
 {
     Task<DecisionTree> BuildAsync(ProjectId projectId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Drops any cached tree for the project so the next <see cref="BuildAsync"/> reassembles from
+    /// scratch. No-op by default — only caching decorators carry state to drop. Callers that must
+    /// observe brand-new data right now (the explicit rebuild action) invalidate first.
+    /// </summary>
+    void Invalidate(ProjectId projectId) { }
 }

@@ -1563,6 +1563,34 @@ cmd_url() {
   printf '%sPortal + MCP:%s  http://localhost:%s/   (MCP at /mcp)\n' "$C_BOLD" "$C_RESET" "$PCTL_PORT"
 }
 
+# ── jobs placement ───────────────────────────────────────────────────────────────────────────────
+# Where job pods execute. Jobs always *prefer* worker (agent) nodes; 'require' hardens that so a
+# cloud portal server (the k3s control plane) never runs job pods — execution happens only on the
+# machines joined over Tailscale. 'prefer' restores the soft default (single-node installs keep
+# working). Patches the Host deployment env; the rollout picks it up in seconds.
+cmd_jobs_placement() {
+  resolve_ctx
+  local mode="${1:-}"
+  case "$mode" in
+    require) kube -n "$PCTL_NAMESPACE" set env deploy/placecontext \
+               PlaceContext__WorkloadRunner__RequireWorkerNodes=true \
+               || die "no cluster reachable (is one up?)"
+             ok "Job pods now REQUIRE worker nodes — the control-plane/portal server never runs jobs.";;
+    prefer)  kube -n "$PCTL_NAMESPACE" set env deploy/placecontext \
+               PlaceContext__WorkloadRunner__RequireWorkerNodes=false \
+               || die "no cluster reachable (is one up?)"
+             ok "Job pods PREFER worker nodes (soft default — a single-node install still runs jobs).";;
+    status|"")
+      local v
+      v="$(kube -n "$PCTL_NAMESPACE" get deploy/placecontext \
+             -o jsonpath='{.spec.template.spec.containers[?(@.name=="host")].env[?(@.name=="PlaceContext__WorkloadRunner__RequireWorkerNodes")].value}' 2>/dev/null)" \
+        || die "no cluster reachable (is one up?)"
+      if [ "$v" = "true" ]; then say "placement: require (jobs run only on worker nodes)"
+      else say "placement: prefer (jobs favour worker nodes, fall back to the server)"; fi;;
+    *) die "usage: pctl jobs placement [require|prefer|status]";;
+  esac
+}
+
 # Launch the reactive Go TUI dashboard (builds it on first run, or when the source is newer —
 # e.g. right after `pctl update` pulled new TUI code).
 cmd_tui() {
@@ -1735,6 +1763,9 @@ ${C_BOLD}ANYWHERE${C_RESET}
                          in dist/; --arch/--os cross-build for the target machine (a darwin
                          package still carries a linux image — k3d nodes run in the Docker VM)
   kill pod|node|job NAME [--yes]   Delete a pod / k3d node / job (prompts unless --yes)
+  jobs placement [require|prefer|status]
+                         Where job pods run: 'require' keeps them off the control-plane/portal
+                         server entirely (local machines only); 'prefer' is the soft default
   db ha                  Replicated Postgres (1 primary + 2 replicas) via CloudNativePG (single-cluster)
   db ha-join             Join this node as a cross-site Patroni hot-standby (DO primary; see deploy/ha/README.md)
   db backup-now          Dump all databases to MinIO right now (nightly CronJob does this at 03:00)
@@ -1788,6 +1819,12 @@ main() {
         *) die "unknown 'agent' subcommand: '$sub' (try: join)";;
       esac;;
     kill)         cmd_kill "$@";;
+    jobs)
+      local sub="${1:-}"; shift || true
+      case "$sub" in
+        placement) cmd_jobs_placement "$@";;
+        *) die "unknown 'jobs' subcommand: '$sub' (try: placement [require|prefer|status])";;
+      esac;;
     db)           cmd_db "$@";;
     mesh)         cmd_mesh "$@";;
     minio)        case "${1:-}" in open) shift; cmd_minio_open "$@";; *) die "usage: pctl minio open <bucket/key>";; esac;;

@@ -65,9 +65,20 @@ builder.Services.AddInfrastructure(builder.Configuration);
 PlaceContext.Host.Auth.OAuthKeys.Init(builder.Configuration["PlaceContext:OAuth:SigningKeyPem"]);
 
 builder.Services.AddRazorComponents().AddInteractiveServerComponents();
+// Compress dynamic responses (the initial Blazor HTML document is the portal's biggest payload —
+// inline CSS included — and it currently ships uncompressed). Brotli first, gzip fallback. The
+// Host terminates plain HTTP in-cluster (TLS ends at Traefik), so the default no-compression-
+// over-HTTPS stance never disables it in practice.
+builder.Services.AddResponseCompression(o =>
+{
+    o.Providers.Add<Microsoft.AspNetCore.ResponseCompression.BrotliCompressionProvider>();
+    o.Providers.Add<Microsoft.AspNetCore.ResponseCompression.GzipCompressionProvider>();
+});
 // The former minimal-API endpoints (ingest, backup, auth, artifacts, health) now live as controllers
 // under Controllers/ — attribute-routed, same paths/auth, wired below with MapControllers().
 builder.Services.AddControllers();
+// One shared in-memory cache for expensive read models (the per-project dependency graph above all).
+builder.Services.AddMemoryCache();
 builder.Services.AddCascadingAuthenticationState();
 builder.Services.AddScoped<PlaceContext.Host.PortalUiState>();
 builder.Services.AddScoped<PlaceContext.Host.Branding.BrandingService>();
@@ -262,7 +273,15 @@ await PlaceContext.Infrastructure.DependencyInjection.EncryptExistingDataAsync(a
 // Subscriptions/billing are handled by a separate web portal (the TUI sends users there to pay), so the
 // product is no longer gated by an activation key.
 
-app.UseStaticFiles();
+app.UseResponseCompression();
+app.UseStaticFiles(new StaticFileOptions
+{
+    // The vendored scripts (chart.umd.min.js, pcmonaco.js, pcgraph.js) and CSS were revalidated on
+    // every page view. An hour of client caching removes that chatter without pinning upgrades:
+    // assets are not fingerprinted, so keep the window modest rather than immutable.
+    OnPrepareResponse = ctx =>
+        ctx.Context.Response.Headers.CacheControl = "public,max-age=3600",
+});
 app.Use(async (ctx, next) =>
 {
     // Baseline security headers for every response (portal, API, MCP).

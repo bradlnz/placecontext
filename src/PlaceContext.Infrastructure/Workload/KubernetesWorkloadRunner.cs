@@ -152,6 +152,11 @@ public sealed class KubernetesWorkloadRunner : IWorkloadRunner
                     Spec = new V1PodSpec
                     {
                         RestartPolicy = "Never",
+                        // Keep execution on the operator's own machines: prefer (or require) worker/agent
+                        // nodes so the control-plane node — typically a small cloud server whose only duty
+                        // is the portal/MCP — doesn't burn its CPU running job pods. See BuildWorkerAffinity.
+                        Affinity = BuildWorkerAffinity(_options),
+                        NodeSelector = _options.JobNodeSelector.Count > 0 ? _options.JobNodeSelector : null,
                         // Spread job pods evenly across nodes by hostname. ScheduleAnyway keeps it a soft
                         // preference (never blocks a run), but a freshly added node — which carries zero job
                         // pods — becomes the lowest-skew target, so new workload flows onto it automatically.
@@ -323,6 +328,53 @@ public sealed class KubernetesWorkloadRunner : IWorkloadRunner
             hadEgress
                 ? Task.CompletedTask
                 : Best(() => client.NetworkingV1.DeleteNamespacedNetworkPolicyAsync(name, ns)));
+    }
+
+    /// <summary>
+    /// Node affinity steering job pods onto worker (agent) nodes — any node without the
+    /// <c>node-role.kubernetes.io/control-plane</c> label, which k3s stamps on every server node.
+    /// <see cref="WorkloadRunnerOptions.PreferWorkerNodes"/> (default) is a soft preference, so a
+    /// single-node install still runs jobs; <see cref="WorkloadRunnerOptions.RequireWorkerNodes"/>
+    /// hardens it so job pods never land on the portal server. Null when both are off.
+    /// </summary>
+    public static V1Affinity? BuildWorkerAffinity(WorkloadRunnerOptions options)
+    {
+        if (!options.PreferWorkerNodes && !options.RequireWorkerNodes) return null;
+
+        var notControlPlane = new V1NodeSelectorTerm
+        {
+            MatchExpressions = new List<V1NodeSelectorRequirement>
+            {
+                new()
+                {
+                    Key = "node-role.kubernetes.io/control-plane",
+                    OperatorProperty = "DoesNotExist",
+                },
+            },
+        };
+
+        if (options.RequireWorkerNodes)
+            return new V1Affinity
+            {
+                NodeAffinity = new V1NodeAffinity
+                {
+                    RequiredDuringSchedulingIgnoredDuringExecution = new V1NodeSelector
+                    {
+                        NodeSelectorTerms = new List<V1NodeSelectorTerm> { notControlPlane },
+                    },
+                },
+            };
+
+        return new V1Affinity
+        {
+            NodeAffinity = new V1NodeAffinity
+            {
+                PreferredDuringSchedulingIgnoredDuringExecution = new List<V1PreferredSchedulingTerm>
+                {
+                    new() { Weight = 100, Preference = notControlPlane },
+                },
+            },
+        };
     }
 
     private V1ResourceRequirements ResourceLimits()

@@ -122,6 +122,13 @@ public static class DependencyInjection
         // Universal RAG: any content kind, encrypted source text + pgvector.
         services.AddScoped<IContentIndexer, Embeddings.ContentIndexer>();
 
+        // Dependency-graph assembly is expensive (full ledger + decisions + O(n²) embedding weave);
+        // wrap the Application provider in a short-TTL cache so page opens and brain rollups don't
+        // recompute it every time. Registered after AddApplication, so this mapping wins resolution.
+        services.AddMemoryCache();
+        services.AddScoped<Application.Features.DecisionTreeProvider>();
+        services.AddScoped<Application.Features.IDecisionTreeProvider, Caching.CachedDecisionTreeProvider>();
+
         // Trigger scheduling: cron evaluation, a durable DB-backed run queue, and the background firing
         // service (advisory-lock-elected schedule scan + atomic queue drain — correct across replicas).
         services.AddSingleton<ICronSchedule, Scheduling.CronosCronSchedule>();
@@ -187,6 +194,25 @@ public static class DependencyInjection
                 """ALTER TABLE tenants ADD COLUMN IF NOT EXISTS "MenuJson" text NULL""");
         }
         catch { /* non-Postgres or already applied via migration */ }
+
+        // Additive indexes for the hot run queries (safe if already present). The status watcher
+        // scans job_runs/chain_runs for in-flight or recently-finished rows every 2 seconds — a
+        // sequential scan of the whole run history without these. Partial indexes keep the active-
+        // status side tiny (the working set of live runs), FinishedAt serves the "recently finished"
+        // arm of the OR, and (TenantId, StartedAt) serves the tenant-filtered newest-first lists.
+        try
+        {
+            db.Database.ExecuteSqlRaw(
+                """
+                CREATE INDEX IF NOT EXISTS ix_job_runs_active ON job_runs ("Status") WHERE "Status" IN ('Queued','Running');
+                CREATE INDEX IF NOT EXISTS ix_job_runs_finished_at ON job_runs ("FinishedAt");
+                CREATE INDEX IF NOT EXISTS ix_job_runs_tenant_started ON job_runs ("TenantId", "StartedAt");
+                CREATE INDEX IF NOT EXISTS ix_chain_runs_active ON chain_runs ("Status") WHERE "Status" IN ('Queued','Running');
+                CREATE INDEX IF NOT EXISTS ix_chain_runs_finished_at ON chain_runs ("FinishedAt");
+                CREATE INDEX IF NOT EXISTS ix_chain_runs_tenant_started ON chain_runs ("TenantId", "StartedAt");
+                """);
+        }
+        catch { /* non-Postgres, or the tables predate these columns */ }
     }
 
     /// <summary>
