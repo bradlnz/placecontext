@@ -14,11 +14,23 @@
 | `deploy/k3s/` | Kubernetes manifests |
 | `deploy/install.sh` | One-shot installer that puts `placecontext` on PATH |
 
-Package client releases:
+Package / publish client releases:
 
 ```bash
-./tools/pctl package                 # → dist/placecontext-{os}-{arch}.tar.gz + dist/latest/…
-# upload dist/install.sh, dist/latest/VERSION, dist/latest/*.tar.gz to the release host
+./tools/release.sh                 # host platform (+ linux-amd64), with image
+./tools/release.sh --linux-only    # linux-amd64 + linux-arm64
+./tools/release.sh --all           # linux/darwin × amd64/arm64
+./tools/release.sh --upload        # package then upload (s3cmd / aws / rclone)
+./tools/release.sh --upload --dry-run
+```
+
+Stages a clean tree at **`dist/upload/`** (only the objects to publish).  
+See `tools/release.sh` for `RELEASE_BUCKET`, `RELEASE_ENDPOINT`, `RELEASE_UPLOAD_CMD`, etc.
+
+Low-level single-target package:
+
+```bash
+./tools/pctl package [--os linux|darwin] [--arch amd64|arm64] [--no-image]
 ```
 
 Release layout expected by `deploy/install.sh`:

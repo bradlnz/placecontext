@@ -945,7 +945,7 @@ cmd_package() {
   done
 
   local ver host_os host_arch name stage
-  ver="$(git describe --tags --always 2>/dev/null || date +%Y%m%d)"
+  ver="${RELEASE_VERSION:-$(git describe --tags --always 2>/dev/null || date +%Y%m%d)}"
   host_os="$(uname -s | tr '[:upper:]' '[:lower:]')"
   host_arch="$(uname -m)"; [ "$host_arch" = x86_64 ] && host_arch=amd64; [ "$host_arch" = aarch64 ] && host_arch=arm64
   os="${os:-$host_os}"
