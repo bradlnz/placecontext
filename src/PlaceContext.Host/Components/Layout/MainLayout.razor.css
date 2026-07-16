@@ -319,6 +319,10 @@
 
 .body-scroll {
     flex: 1;
+    min-height: 0;
     overflow-y: auto;
     overflow-x: hidden;
+    /* Let nested ProjectLayout/SettingsLayout fill height and manage their own scroll. */
+    display: flex;
+    flex-direction: column;
 }

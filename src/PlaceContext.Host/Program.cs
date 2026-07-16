@@ -267,7 +267,10 @@ app.Use(async (ctx, next) =>
 {
     // Baseline security headers for every response (portal, API, MCP).
     ctx.Response.Headers.TryAdd("X-Content-Type-Options", "nosniff");
-    ctx.Response.Headers.TryAdd("X-Frame-Options", "DENY");
+    // SAMEORIGIN (not DENY): the Artifacts viewer embeds /runs/…/artifacts/… in a same-origin
+    // iframe. DENY blocks that even for the portal's own host — breaks previews on any public DNS
+    // hostname (and localhost). Still prevents third-party clickjacking.
+    ctx.Response.Headers.TryAdd("X-Frame-Options", "SAMEORIGIN");
     ctx.Response.Headers.TryAdd("Referrer-Policy", "no-referrer");
     ctx.Response.Headers.TryAdd("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
     await next();

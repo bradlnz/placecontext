@@ -72,6 +72,36 @@ func resolveHome() string {
 }
 
 func runCLI(home string, args []string) int {
+	// Global -v / -vv / --verbose may appear before the subcommand.
+	verbose := 0
+	if v := os.Getenv("PLACECONTEXT_VERBOSE"); v != "" {
+		switch v {
+		case "1", "true", "yes", "on":
+			verbose = 1
+		case "2":
+			verbose = 2
+		}
+	}
+	filtered := make([]string, 0, len(args))
+	for _, a := range args {
+		switch a {
+		case "-v", "--verbose":
+			verbose++
+		case "-vv":
+			verbose = 2
+		default:
+			filtered = append(filtered, a)
+		}
+	}
+	args = filtered
+	if len(args) == 0 {
+		printHelp()
+		return 0
+	}
+	if verbose > 0 {
+		_ = os.Setenv("PLACECONTEXT_VERBOSE", fmt.Sprintf("%d", verbose))
+	}
+
 	cmd := args[0]
 	rest := args[1:]
 	switch cmd {
@@ -89,8 +119,13 @@ func runCLI(home string, args []string) int {
 			return 1
 		}
 		return 0
-	case "install", "upgrade", "connect", "status", "logs", "url", "doctor":
-		return runEngine(home, append([]string{cmd}, rest...)...)
+	case "install", "upgrade", "connect", "join-code", "status", "logs", "url", "doctor":
+		engineArgs := append([]string{cmd}, rest...)
+		// Re-append verbose so the bash engine also sees the flag on the subcommand.
+		for i := 0; i < verbose; i++ {
+			engineArgs = append(engineArgs, "-v")
+		}
+		return runEngine(home, engineArgs...)
 	default:
 		fmt.Fprintf(os.Stderr, "unknown command: %s\n\n", cmd)
 		printHelp()
@@ -102,13 +137,27 @@ func printHelp() {
 	fmt.Print(`placecontext — PlaceContext operator
 
 USAGE
+  placecontext [-v|-vv] <command> …
+
   placecontext                 Open the TUI (install / upgrade / connect)
-  placecontext install [--docker|--service]
-  placecontext upgrade
-  placecontext connect --code CODE
-  placecontext status | logs [-f] | url | doctor
+  placecontext install [--docker|--service] [-v]
+  placecontext upgrade [-v]
+  placecontext connect --code CODE [-v]
+  placecontext join-code [--ts-authkey KEY]
+  placecontext status | logs [-f] | url | doctor [-v]
   placecontext version
   placecontext help
+
+CONNECT (fleet join — no tools/pctl needed)
+  On master:  sudo placecontext join-code
+  On new host: sudo placecontext connect --code PC2.…
+
+VERBOSITY
+  -v, --verbose   stream kubectl/k3d output; extra step detail
+  -vv             more diagnostics
+  PLACECONTEXT_VERBOSE=1|2
+
+  Install/upgrade always print step progress (secrets, manifests, waits, pods).
 
 Install the CLI itself with:
   curl -fsSL https://get.placecontext.ai/install.sh | bash
@@ -341,11 +390,17 @@ func (m model) startRun(args ...string) (tea.Model, tea.Cmd) {
 				}
 			}
 		}
-		cmd := exec.Command(engine, args...)
+		// Prefer verbose engine output in the TUI so long installs show real progress when done.
+		cmdArgs := append([]string{}, args...)
+		if os.Getenv("PLACECONTEXT_VERBOSE") == "" {
+			cmdArgs = append(cmdArgs, "-v")
+		}
+		cmd := exec.Command(engine, cmdArgs...)
 		cmd.Env = append(os.Environ(),
 			"PLACECONTEXT_HOME="+home,
 			"PCTL_IMAGE_TAR="+filepath.Join(home, "lib", "placecontext-local.tar"),
 			"K3S_DIR="+filepath.Join(home, "lib", "k3s"),
+			"PLACECONTEXT_VERBOSE=1",
 		)
 		out, err := cmd.CombinedOutput()
 		return runResultMsg{out: string(out), err: err}
@@ -383,8 +438,9 @@ func (m model) View() string {
 			body = okStyle.Render("Success") + "\n\n" + body
 		}
 		lines := strings.Split(body, "\n")
-		if len(lines) > 30 {
-			lines = append(lines[:30], "…")
+		// Keep enough lines that install step progress remains visible after a long run.
+		if len(lines) > 80 {
+			lines = append([]string{"… (earlier output truncated)"}, lines[len(lines)-79:]...)
 		}
 		b.WriteString(boxStyle.Render(strings.Join(lines, "\n")) + "\n\n")
 		b.WriteString(dimStyle.Render("enter back to menu  q quit") + "\n")

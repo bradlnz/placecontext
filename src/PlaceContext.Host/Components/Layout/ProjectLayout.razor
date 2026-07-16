@@ -25,8 +25,9 @@
                 }
                 @foreach (var e in _entities)
                 {
-                    <button class="dcnav nav-btn @(Nav.Uri.Contains($"/entity/{Uri.EscapeDataString(e)}", StringComparison.OrdinalIgnoreCase) ? "active" : "")"
-                            @onclick="@(() => Nav.NavigateTo($"/project/{ProjectId()}/entity/{Uri.EscapeDataString(e)}"))">
+                    var entityPath = $"/project/{ProjectId()}/entity/{Uri.EscapeDataString(e)}";
+                    <button class="dcnav nav-btn @(IsEntityActive(e) ? "active" : "")"
+                            @onclick="@(() => Nav.NavigateTo(entityPath))">
                         <span class="bar"></span>@e
                     </button>
                 }
@@ -67,9 +68,26 @@
         var path = new Uri(Nav.Uri).AbsolutePath.TrimEnd('/');
         var target = item.Href.TrimEnd('/');
         if (path.Equals(target, StringComparison.OrdinalIgnoreCase)) return true;
-        // Data parent owns analytics/datamap.
-        if (item.Id == "project.data" && (path.Contains("/analytics") || path.Contains("/datamap"))) return true;
+        // Data parent owns analytics/datamap/entities registry.
+        if (item.Id == "project.data" && (path.Contains("/analytics", StringComparison.OrdinalIgnoreCase)
+            || path.Contains("/datamap", StringComparison.OrdinalIgnoreCase)
+            || path.Contains("/entities", StringComparison.OrdinalIgnoreCase)))
+            return true;
         return false;
+    }
+
+    private bool IsEntityActive(string entityName)
+    {
+        var path = Uri.UnescapeDataString(new Uri(Nav.Uri).AbsolutePath);
+        // /project/{guid}/entity/{name}
+        var marker = "/entity/";
+        var i = path.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+        if (i < 0) return false;
+        var segment = path[(i + marker.Length)..].TrimEnd('/');
+        // Drop any further segments if present
+        var slash = segment.IndexOf('/');
+        if (slash >= 0) segment = segment[..slash];
+        return segment.Equals(entityName, StringComparison.OrdinalIgnoreCase);
     }
 
     protected override async Task OnInitializedAsync()
@@ -83,25 +101,26 @@
         var pid = ProjectId();
         if (pid is null)
         {
-            _menu = Array.Empty<ResolvedMenuItem>();
-            _entities = Array.Empty<string>();
+            // Keep last menu if URI briefly unparseable — avoid flash-empty nav on entity routes.
             return;
         }
-        try { _menu = await MenuCfg.GetProjectMenuAsync(pid.Value); }
-        catch { _menu = Array.Empty<ResolvedMenuItem>(); }
+        try
+        {
+            _menu = await MenuCfg.GetProjectMenuAsync(pid.Value);
+        }
+        catch
+        {
+            // Keep previous _menu on transient failures so the Project nav does not vanish.
+        }
 
         if (_menu.Any(m => m.Kind == "entities"))
         {
-            if (pid != _entitiesFor)
+            if (pid != _entitiesFor || _entities.Count == 0)
             {
                 _entitiesFor = pid;
                 try { _entities = (await Svc.ListDataEntitiesAsync(pid.Value)).Select(e => e.Name).ToList(); }
-                catch { _entities = Array.Empty<string>(); }
+                catch { /* keep previous entity list */ }
             }
-        }
-        else
-        {
-            _entities = Array.Empty<string>();
         }
     }
 

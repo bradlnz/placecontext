@@ -49,8 +49,11 @@
                     lastSection = item.Section;
                     <div class="nav-section">@item.Section</div>
                 }
+                @* Keep a leading '/' so links stay absolute. Relative hrefs break under deep
+                   routes like /project/{id}/entity/{name} (resolve under the entity segment). *@
                 var href = item.Href ?? "/";
-                <NavLink class="dcnav" href="@href.TrimStart('/')" Match="@(href is "/" ? NavLinkMatch.All : NavLinkMatch.Prefix)">
+                if (!href.StartsWith('/')) href = "/" + href;
+                <NavLink class="dcnav" href="@href" Match="@(href is "/" ? NavLinkMatch.All : NavLinkMatch.Prefix)">
                     <span class="bar"></span>@Icon(item.Icon ?? "grid")<span class="nav-label">@item.Label</span>
                     @if (item.Id == "mcp")
                     {
