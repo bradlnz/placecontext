@@ -56,7 +56,8 @@ metadata:
 rules:
   - apiGroups: [""]
     resources: ["nodes"]
-    verbs: ["get", "list"]
+    # patch/update: designate fleet master annotation from the Cluster page
+    verbs: ["get", "list", "patch", "update"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -69,6 +70,35 @@ subjects:
 roleRef:
   kind: ClusterRole
   name: placecontext-nodes
+  apiGroup: rbac.authorization.k8s.io
+---
+# Cluster page: ConfigMap placecontext-cluster (designated master) + Secret placecontext-cluster-join
+# (k3s node-token for portal join codes). Namespaced — not cluster-scoped.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: placecontext-cluster-admin
+rules:
+  # Designated master ConfigMap (create-or-replace). Scoped to this namespace only.
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list", "create", "update", "patch"]
+  # Join token for portal-minted PC2 join codes (seeded by installer on the k3s server).
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames: ["placecontext-cluster-join"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: placecontext-cluster-admin
+subjects:
+  - kind: ServiceAccount
+    name: placecontext
+roleRef:
+  kind: Role
+  name: placecontext-cluster-admin
   apiGroup: rbac.authorization.k8s.io
 ---
 apiVersion: apps/v1

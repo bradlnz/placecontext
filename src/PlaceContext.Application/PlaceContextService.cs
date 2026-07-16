@@ -338,10 +338,16 @@ public sealed class PlaceContextService : IPlaceContextService
     public Task<UserPermissionsView> SetUserPermissionOverrideAsync(Guid userId, string permission, bool? allowed, CancellationToken ct = default)
         => _dispatcher.Send(new SetUserPermissionOverrideCommand(userId, permission, allowed), ct);
 
-    // ── Cluster page: node inventory + in-process OpenTelemetry read model ──────────────────────────
+    // ── Cluster page: node inventory + promote master + join codes ───────────────────────────────────
 
     public Task<Ports.ClusterInfo> GetClusterInfoAsync(CancellationToken ct = default)
         => _dispatcher.Query(new PlaceContext.Application.Cluster.GetClusterInfoQuery(), ct);
+
+    public Task<Ports.PromoteMasterResult> PromoteNodeToMasterAsync(string nodeName, CancellationToken ct = default)
+        => _dispatcher.Send(new PlaceContext.Application.Cluster.PromoteNodeToMasterCommand(nodeName), ct);
+
+    public Task<Ports.ClusterJoinMaterial?> GetClusterJoinMaterialAsync(CancellationToken ct = default)
+        => _dispatcher.Query(new PlaceContext.Application.Cluster.GetClusterJoinMaterialQuery(), ct);
 
     public Task<Ports.JobTelemetrySnapshot> GetJobTelemetrySnapshotAsync(CancellationToken ct = default)
         => _dispatcher.Query(new Observability.GetJobTelemetrySnapshotQuery(), ct);

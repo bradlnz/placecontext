@@ -144,12 +144,24 @@ public static class DependencyInjection
         // Each project's own database (Postgres schema + role isolation; Monaco SQL in the portal).
         services.AddScoped<IProjectDataStore, ProjectData.NpgsqlProjectDataStore>();
 
-        // Cluster page: node inventory (same in-cluster/local detection as the workload runner above)
-        // + the in-process OpenTelemetry reader for the jobs pipeline (no external collector needed).
+        // Cluster page: node inventory + fleet-master admin (promote / join codes over Tailscale).
+        // Same in-cluster vs local detection as the workload runner above.
         if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("KUBERNETES_SERVICE_HOST")))
-            services.AddSingleton<Application.Ports.IClusterInfoProvider, Cluster.KubernetesClusterInfoProvider>();
+        {
+            services.AddSingleton<Cluster.KubernetesClusterInfoProvider>();
+            services.AddSingleton<Application.Ports.IClusterInfoProvider>(sp =>
+                sp.GetRequiredService<Cluster.KubernetesClusterInfoProvider>());
+            services.AddSingleton<Application.Ports.IClusterAdminPort>(sp =>
+                sp.GetRequiredService<Cluster.KubernetesClusterInfoProvider>());
+        }
         else
-            services.AddSingleton<Application.Ports.IClusterInfoProvider, Cluster.LocalClusterInfoProvider>();
+        {
+            services.AddSingleton<Cluster.LocalClusterInfoProvider>();
+            services.AddSingleton<Application.Ports.IClusterInfoProvider>(sp =>
+                sp.GetRequiredService<Cluster.LocalClusterInfoProvider>());
+            services.AddSingleton<Application.Ports.IClusterAdminPort>(sp =>
+                sp.GetRequiredService<Cluster.LocalClusterInfoProvider>());
+        }
 
         services.AddSingleton<Observability.JobTelemetryCollector>();
         services.AddSingleton<Application.Ports.IJobTelemetryReader>(sp => sp.GetRequiredService<Observability.JobTelemetryCollector>());

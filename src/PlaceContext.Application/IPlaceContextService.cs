@@ -141,8 +141,10 @@ public interface IPlaceContextService
     Task<UserPermissionsView> GetUserPermissionsAsync(Guid userId, CancellationToken ct = default);
     Task<UserPermissionsView> SetUserPermissionOverrideAsync(Guid userId, string permission, bool? allowed, CancellationToken ct = default);
 
-    // Cluster page: node inventory + in-process OpenTelemetry read model for the jobs pipeline.
+    // Cluster page: node inventory, promote-to-master, join codes (Tailscale fleet).
     Task<Ports.ClusterInfo> GetClusterInfoAsync(CancellationToken ct = default);
+    Task<Ports.PromoteMasterResult> PromoteNodeToMasterAsync(string nodeName, CancellationToken ct = default);
+    Task<Ports.ClusterJoinMaterial?> GetClusterJoinMaterialAsync(CancellationToken ct = default);
     Task<Ports.JobTelemetrySnapshot> GetJobTelemetrySnapshotAsync(CancellationToken ct = default);
     Task<IReadOnlyList<Ports.JobRunTelemetry>> ListRecentJobRunTelemetryAsync(int take = 50, CancellationToken ct = default);
     Task<IReadOnlyList<Ports.JobRunTelemetry>> ListJobRunTelemetryAsync(Guid jobId, int take = 20, CancellationToken ct = default);

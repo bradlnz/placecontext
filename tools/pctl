@@ -126,6 +126,22 @@ apply_manifests() {
       --dry-run=client -o yaml | kube apply -f -
   fi
 
+  # Cluster page join codes: seed k3s node-token (+ Tailscale API URL when available).
+  if [ -r /var/lib/rancher/k3s/server/node-token ]; then
+    local jtok jip jurl
+    jtok="$(tr -d '[:space:]' < /var/lib/rancher/k3s/server/node-token)"
+    jip="$(tailscale ip -4 2>/dev/null | head -1)"
+    [ -n "$jip" ] || jip="$(hostname -I 2>/dev/null | awk '{print $1}')"
+    [ -n "$jip" ] && jurl="https://${jip}:6443"
+    if [ -n "$jtok" ]; then
+      say "Seeding placecontext-cluster-join secret…"
+      kube -n "$PCTL_NAMESPACE" create secret generic placecontext-cluster-join \
+        --from-literal=node-token="$jtok" \
+        ${jurl:+--from-literal=server-url="$jurl"} \
+        --dry-run=client -o yaml | kube apply -f -
+    fi
+  fi
+
   say "PostgreSQL (pgvector)…"
   kube -n "$PCTL_NAMESPACE" apply -f "$K3S_DIR/postgres.yaml"
 

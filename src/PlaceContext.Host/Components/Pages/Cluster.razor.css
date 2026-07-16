@@ -124,6 +124,149 @@
     color: var(--text-2);
 }
 
+.node-card-master {
+    border-color: color-mix(in srgb, var(--brand) 35%, var(--border, #333));
+}
+
+.master-badge,
+.cp-badge,
+.master-pill {
+    font-size: 9.5px;
+    padding: 1px 6px;
+    border-radius: 4px;
+    flex: none;
+    font-weight: 600;
+}
+
+.master-badge {
+    background: var(--brand-bg);
+    color: var(--brand-2);
+}
+
+.cp-badge {
+    background: var(--card-2);
+    color: var(--text-3);
+}
+
+.master-pill {
+    background: var(--brand-bg);
+    color: var(--brand-2);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.master-pill-ip {
+    font-weight: 500;
+    opacity: 0.85;
+    font-family: var(--font-mono, ui-monospace, monospace);
+}
+
+.ts-ip {
+    color: var(--brand-2);
+}
+
+.node-actions {
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border, rgba(127,127,127,.2));
+}
+
+.node-promote {
+    font-size: 12px;
+    width: 100%;
+}
+
+.message-error {
+    color: var(--bad);
+    background: var(--bad-bg);
+}
+
+.host-action-card {
+    margin: -8px 0 22px;
+    padding: 14px 16px;
+}
+
+.host-action-title {
+    font-size: 12px;
+    font-weight: 600;
+    margin-bottom: 8px;
+    color: var(--warn, #c9a227);
+}
+
+.host-action-pre,
+.join-instructions {
+    margin: 0;
+    padding: 10px 12px;
+    border-radius: 8px;
+    background: var(--card-2);
+    font-size: 11.5px;
+    line-height: 1.45;
+    white-space: pre-wrap;
+    overflow-x: auto;
+    font-family: var(--font-mono, ui-monospace, monospace);
+    color: var(--text-2);
+}
+
+.add-node-card {
+    padding: 16px 18px;
+    margin-bottom: 26px;
+}
+
+.add-node-lead {
+    margin: 0 0 10px;
+    font-size: 12.5px;
+    color: var(--text-2);
+    line-height: 1.45;
+}
+
+.add-node-steps {
+    margin: 0 0 14px 1.1rem;
+    padding: 0;
+    font-size: 12.5px;
+    color: var(--text-2);
+    line-height: 1.5;
+}
+
+.join-code-block {
+    margin-bottom: 12px;
+}
+
+.join-code-label {
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    color: var(--text-3);
+    margin-bottom: 4px;
+}
+
+.join-code {
+    display: block;
+    word-break: break-all;
+    font-size: 12px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    background: var(--card-2);
+    margin-bottom: 6px;
+}
+
+.join-meta {
+    font-size: 11px;
+    color: var(--text-3);
+    margin-bottom: 8px;
+}
+
+.join-missing {
+    font-size: 12.5px;
+    color: var(--text-2);
+    margin-bottom: 12px;
+    line-height: 1.45;
+}
+
+.join-missing .join-instructions {
+    margin-top: 8px;
+}
+
 .text-3 {
     color: var(--text-3);
 }

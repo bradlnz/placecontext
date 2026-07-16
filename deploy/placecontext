@@ -86,6 +86,27 @@ ensure_secret() {
   fi
 }
 
+# Publish k3s node-token (+ optional mesh API URL) so the portal can mint Tailscale join codes
+# and promote a fleet master without root on the Host pod.
+seed_cluster_join_secret() {
+  local tok_file="/var/lib/rancher/k3s/server/node-token"
+  local tok=""
+  [ -r "$tok_file" ] && tok="$(tr -d '[:space:]' < "$tok_file")"
+  [ -n "$tok" ] || return 0
+
+  local ip; ip="$(tailscale ip -4 2>/dev/null | head -1)"
+  [ -n "$ip" ] || ip="$(hostname -I 2>/dev/null | awk '{print $1}')"
+  local url=""
+  [ -n "$ip" ] && url="https://${ip}:6443"
+
+  say "Seeding cluster join secret (for portal join codes)…"
+  # Always refresh so a Tailscale IP change after mesh join is picked up on next deploy.
+  kube -n "$PCTL_NAMESPACE" create secret generic placecontext-cluster-join \
+    --from-literal=node-token="$tok" \
+    ${url:+--from-literal=server-url="$url"} \
+    --dry-run=client -o yaml | kube apply -f -
+}
+
 apply_manifests() {
   local image="$1"
   # Prefer the full internal engine when developing from a source tree.
@@ -124,6 +145,9 @@ apply_manifests() {
   ensure_secret placecontext-minio \
     --from-literal=ACCESS_KEY_ID="$minio_user" \
     --from-literal=ACCESS_SECRET_KEY="$minio_secret"
+
+  # Seed join material for the Cluster page (promote master / add node over Tailscale).
+  seed_cluster_join_secret
 
   [ -d "$K3S_DIR" ] || die "manifests not found at $K3S_DIR — reinstall placecontext"
   say "PostgreSQL…"

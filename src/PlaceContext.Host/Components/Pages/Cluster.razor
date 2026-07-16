@@ -20,15 +20,15 @@ else
             <div>
                 <h2 class="page-title">Cluster</h2>
                 <div class="page-sub">
-                    The machines running PlaceContext, and a live read of the jobs pipeline's OpenTelemetry data.
+                    Fleet nodes, promote master, add machines over Tailscale — plus jobs pipeline telemetry.
                 </div>
             </div>
-            <button class="dcbtn" @onclick="RefreshAsync">Refresh</button>
+            <button class="dcbtn" @onclick="RefreshAsync" disabled="@_busy">Refresh</button>
         </div>
 
         @if (_message is not null)
         {
-            <div class="message-bar">@_message</div>
+            <div class="message-bar @(_messageIsError ? "message-error" : "")">@_message</div>
         }
 
         @* ── Nodes ──────────────────────────────────────────────────────────────────────────── *@
@@ -37,18 +37,37 @@ else
             <span class="node-count-badge">
                 @(_cluster?.IsRealCluster == true ? $"{_cluster.NodeCount} node(s)" : "local single-node (Docker runner)")
             </span>
+            @if (_cluster?.DesignatedMaster is { } dm)
+            {
+                <span class="master-pill" title="Designated fleet master (join codes target this node)">
+                    master · @dm.Name
+                    @if (dm.TailscaleIp is not null)
+                    {
+                        <span class="master-pill-ip">@dm.TailscaleIp</span>
+                    }
+                </span>
+            }
         </div>
 
         <div class="node-grid">
             @foreach (var node in _cluster?.Nodes ?? Array.Empty<ClusterNode>())
             {
-                <div class="dccard node-card" style="@(node.IsSelf ? "border-left:2px solid var(--brand-2)" : "")">
+                <div class="dccard node-card @(node.IsDesignatedMaster ? "node-card-master" : "")"
+                     style="@(node.IsSelf ? "border-left:2px solid var(--brand-2)" : "")">
                     <div class="node-card-head">
                         <div class="node-name-row">
                             <span class="node-name">@node.Name</span>
                             @if (node.IsSelf)
                             {
                                 <span class="this-node-badge">this node</span>
+                            }
+                            @if (node.IsDesignatedMaster)
+                            {
+                                <span class="master-badge">master</span>
+                            }
+                            else if (node.IsControlPlane)
+                            {
+                                <span class="cp-badge">control-plane</span>
                             }
                         </div>
                         <span class="node-status"
@@ -64,7 +83,11 @@ else
                         {
                             <div>@node.CpuCapacity @(node.CpuCapacity is not null && node.MemoryCapacity is not null ? "·" : "") @node.MemoryCapacity</div>
                         }
-                        @if (node.InternalIp is not null)
+                        @if (node.TailscaleIp is not null)
+                        {
+                            <div class="font-sans ts-ip" title="Tailscale mesh address">mesh @node.TailscaleIp</div>
+                        }
+                        else if (node.InternalIp is not null)
                         {
                             <div class="font-sans">@node.InternalIp</div>
                         }
@@ -73,8 +96,78 @@ else
                             <div class="text-3">joined @created.ToWorkspaceTime().ToString("yyyy-MM-dd")</div>
                         }
                     </div>
+                    @if (!node.IsDesignatedMaster)
+                    {
+                        <div class="node-actions">
+                            <button class="dcbtn primary node-promote"
+                                    disabled="@(_busy || !node.Ready)"
+                                    @onclick="() => PromoteAsync(node)">
+                                Promote to master
+                            </button>
+                        </div>
+                    }
                 </div>
             }
+        </div>
+
+        @if (_hostAction is not null)
+        {
+            <div class="dccard host-action-card">
+                <div class="host-action-title">Host action required (agent → control-plane)</div>
+                <pre class="host-action-pre">@_hostAction</pre>
+            </div>
+        }
+
+        @* ── Add a node (Tailscale) ─────────────────────────────────────────────────────────── *@
+        <div class="section-head">
+            <h3 class="section-title">Add a node</h3>
+        </div>
+        <div class="dccard add-node-card">
+            <p class="add-node-lead">
+                New machines (for example a DigitalOcean droplet) join the fleet over
+                <strong>Tailscale</strong>, targeting the designated master
+                @if (_cluster?.DesignatedMaster is { } m)
+                {
+                    <text>(currently <code>@m.Name</code>@if (m.PreferredIp is not null) { <text> · @m.PreferredIp</text> }).</text>
+                }
+                else
+                {
+                    <text>.</text>
+                }
+            </p>
+            <ol class="add-node-steps">
+                <li>Promote the Mac (or desired control-plane) to <strong>master</strong> above if it is not already.</li>
+                <li>Ensure Tailscale is up on the master and on the new host (same tailnet / Headscale).</li>
+                <li>On the new host install the CLI, then connect with the join code below.</li>
+            </ol>
+
+            @if (_join is not null)
+            {
+                <div class="join-code-block">
+                    <div class="join-code-label">Join code</div>
+                    <code class="join-code">@_join.JoinCode</code>
+                    <div class="join-meta">
+                        API: <code>@_join.ServerUrl</code>
+                        · @(_join.IncludesTailscaleAuthKey ? "includes Tailscale auth key" : "Tailscale must already be connected on the new host")
+                    </div>
+                    <pre class="join-instructions">@_join.Instructions</pre>
+                </div>
+            }
+            else
+            {
+                <div class="join-missing">
+                    Portal join codes are unavailable until the cluster join secret is seeded on a k3s server
+                    (redeploy / <code>placecontext upgrade</code> on the master after install).
+                    Meanwhile on the master host run:
+                    <pre class="join-instructions">sudo placecontext   # or tools/pctl join-code
+# then on the new DO node:
+curl -fsSL https://get.placecontext.ai/install.sh | bash
+placecontext connect --code &lt;code&gt;</pre>
+                </div>
+            }
+            <button class="dcbtn" disabled="@_busy" @onclick="LoadJoinAsync">
+                @(_join is null ? "Load join code" : "Refresh join code")
+            </button>
         </div>
 
         @* ── Telemetry ──────────────────────────────────────────────────────────────────────── *@
@@ -210,22 +303,26 @@ else
 
 @code {
     private ClusterInfo? _cluster;
+    private ClusterJoinMaterial? _join;
     private JobTelemetrySnapshot? _snapshot;
     private IReadOnlyList<JobRunTelemetry>? _recentRuns;
     private IReadOnlyList<ChainRunTelemetry>? _recentChainRuns;
     private string? _message;
+    private bool _messageIsError;
+    private string? _hostAction;
     private bool _loading = true;
+    private bool _busy;
+    private bool _refreshing;
 
     protected override async Task OnInitializedAsync()
     {
         OpCenter.Changed += OnOpsChanged;
         await RefreshAsync();
-        Ui.Set("Cluster", "nodes + jobs pipeline telemetry");
+        try { _join = await Svc.GetClusterJoinMaterialAsync(); } catch { /* optional */ }
+        Ui.Set("Cluster", "nodes · promote master · Tailscale join");
         _loading = false;
     }
 
-    // Job runs finishing lands in the OperationCenter on a short tick — refresh the telemetry feed
-    // live so completed runs (and their metrics) appear without a manual reload.
     private void OnOpsChanged() => _ = InvokeAsync(async () =>
     {
         if (_refreshing) return;
@@ -234,13 +331,12 @@ else
         finally { _refreshing = false; }
     });
 
-    private bool _refreshing;
-
     public void Dispose() => OpCenter.Changed -= OnOpsChanged;
 
     private async Task RefreshAsync()
     {
         _message = null;
+        _messageIsError = false;
         try
         {
             _cluster = await Svc.GetClusterInfoAsync();
@@ -248,7 +344,61 @@ else
             _recentRuns = await Svc.ListRecentJobRunTelemetryAsync(50);
             _recentChainRuns = await Svc.ListRecentChainRunTelemetryAsync(50);
         }
-        catch (Exception ex) { _message = ex.Message; }
+        catch (Exception ex)
+        {
+            _message = ex.Message;
+            _messageIsError = true;
+        }
+    }
+
+    private async Task PromoteAsync(ClusterNode node)
+    {
+        if (_busy) return;
+        _busy = true;
+        _hostAction = null;
+        _message = null;
+        _messageIsError = false;
+        try
+        {
+            var result = await Svc.PromoteNodeToMasterAsync(node.Name);
+            _message = result.Message;
+            _messageIsError = !result.Succeeded;
+            _hostAction = result.HostActionRequired;
+            await RefreshAsync();
+            try { _join = await Svc.GetClusterJoinMaterialAsync(); } catch { /* optional */ }
+        }
+        catch (Exception ex)
+        {
+            _message = ex.Message;
+            _messageIsError = true;
+        }
+        finally { _busy = false; }
+    }
+
+    private async Task LoadJoinAsync()
+    {
+        if (_busy) return;
+        _busy = true;
+        try
+        {
+            _join = await Svc.GetClusterJoinMaterialAsync();
+            if (_join is null)
+            {
+                _message = "Join secret not seeded yet — run upgrade/deploy on the k3s master, or use placecontext join-code on the host.";
+                _messageIsError = false;
+            }
+            else
+            {
+                _message = "Join code refreshed.";
+                _messageIsError = false;
+            }
+        }
+        catch (Exception ex)
+        {
+            _message = ex.Message;
+            _messageIsError = true;
+        }
+        finally { _busy = false; }
     }
 
     private sealed record Tile(string Label, string Value, string? Sub, string Color);

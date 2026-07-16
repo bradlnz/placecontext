@@ -159,9 +159,13 @@ public static class DependencyInjection
         services.AddScoped<IQueryHandler<GetUserPermissionsQuery, UserPermissionsView>, GetUserPermissionsHandler>();
         services.AddScoped<ICommandHandler<SetUserPermissionOverrideCommand, UserPermissionsView>, SetUserPermissionOverrideHandler>();
 
-        // Cluster page: node inventory + in-process OpenTelemetry read model for the jobs pipeline.
+        // Cluster page: node inventory + promote-to-master + join material (Tailscale fleet).
         services.AddScoped<IQueryHandler<PlaceContext.Application.Cluster.GetClusterInfoQuery, Ports.ClusterInfo>,
             PlaceContext.Application.Cluster.GetClusterInfoHandler>();
+        services.AddScoped<ICommandHandler<PlaceContext.Application.Cluster.PromoteNodeToMasterCommand, Ports.PromoteMasterResult>,
+            PlaceContext.Application.Cluster.PromoteNodeToMasterHandler>();
+        services.AddScoped<IQueryHandler<PlaceContext.Application.Cluster.GetClusterJoinMaterialQuery, Ports.ClusterJoinMaterial?>,
+            PlaceContext.Application.Cluster.GetClusterJoinMaterialHandler>();
         services.AddScoped<IQueryHandler<GetJobTelemetrySnapshotQuery, Ports.JobTelemetrySnapshot>, GetJobTelemetrySnapshotHandler>();
         services.AddScoped<IQueryHandler<ListRecentJobRunTelemetryQuery, IReadOnlyList<Ports.JobRunTelemetry>>, ListRecentJobRunTelemetryHandler>();
         services.AddScoped<IQueryHandler<ListJobRunTelemetryQuery, IReadOnlyList<Ports.JobRunTelemetry>>, ListJobRunTelemetryHandler>();
