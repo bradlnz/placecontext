@@ -68,6 +68,98 @@ use_dev_kubeconfig() {
   KUBECTL="kubectl --context k3d-$PCTL_CLUSTER"
 }
 
+# Portable base64url encode (stdin→stdout) / decode (arg→stdout) — GNU + macOS/BSD.
+b64url_encode() {
+  local raw b64
+  raw="$(cat)"
+  if b64="$(printf '%s' "$raw" | base64 -w0 2>/dev/null)"; then :; else
+    b64="$(printf '%s' "$raw" | base64 2>/dev/null | tr -d '\n\r')" || return 1
+  fi
+  printf '%s' "$b64" | sed 'y#+/#-_#' | tr -d '=\n\r'
+}
+b64url_decode() {
+  local b64="$1" decoded
+  b64="$(printf '%s' "$b64" | sed 'y#-_#+/#')"
+  while [ $((${#b64} % 4)) -ne 0 ]; do b64="${b64}="; done
+  if decoded="$(printf '%s' "$b64" | base64 -d 2>/dev/null)"; then printf '%s' "$decoded"; return 0; fi
+  if decoded="$(printf '%s' "$b64" | base64 -D 2>/dev/null)"; then printf '%s' "$decoded"; return 0; fi
+  if decoded="$(printf '%s' "$b64" | base64 --decode 2>/dev/null)"; then printf '%s' "$decoded"; return 0; fi
+  return 1
+}
+
+# k3s node-token from host path or k3d server container (Mac/docker master).
+resolve_node_token() {
+  local tok="" c="k3d-${PCTL_CLUSTER}-server-0"
+  if [ -r /var/lib/rancher/k3s/server/node-token ]; then
+    tok="$(tr -d '[:space:]' < /var/lib/rancher/k3s/server/node-token)"
+    [ -n "$tok" ] && { printf '%s\n' "$tok"; return 0; }
+  fi
+  if have docker && docker inspect "$c" >/dev/null 2>&1; then
+    tok="$(docker exec "$c" cat /var/lib/rancher/k3s/server/node-token 2>/dev/null | tr -d '[:space:]')"
+    [ -n "$tok" ] && { printf '%s\n' "$tok"; return 0; }
+  fi
+  return 1
+}
+
+mesh_ipv4() {
+  local c ip
+  for c in tailscale /usr/bin/tailscale /usr/local/bin/tailscale /opt/homebrew/bin/tailscale; do
+    if [ -x "$c" ] || command -v "$c" >/dev/null 2>&1; then
+      ip="$("$c" ip -4 2>/dev/null | head -1 | tr -d '[:space:]')"
+      case "${ip:-}" in 100.*) printf '%s\n' "$ip"; return 0;; esac
+    fi
+  done
+  return 1
+}
+
+k3d_api_is_public() {
+  local name line
+  for name in "k3d-${PCTL_CLUSTER}-serverlb" "k3d-${PCTL_CLUSTER}-server-0"; do
+    line="$(docker port "$name" 6443 2>/dev/null | head -1 || true)"
+    case "$line" in
+      127.0.0.1:*|\[::1\]:*) continue;;
+      0.0.0.0:*|\[::\]:*|[0-9]*.*.*.*:*) return 0;;
+    esac
+  done
+  return 1
+}
+
+k3d_api_host_port() {
+  local name port
+  for name in "k3d-${PCTL_CLUSTER}-serverlb" "k3d-${PCTL_CLUSTER}-server-0"; do
+    port="$(docker port "$name" 6443 2>/dev/null | head -1 | sed -E 's/.*://')"
+    [ -n "$port" ] && { printf '%s\n' "$port"; return 0; }
+  done
+  return 1
+}
+
+ensure_k3d_tls_san() {
+  local mesh="${1:-}" c="k3d-${PCTL_CLUSTER}-server-0"
+  [ -n "$mesh" ] || return 0
+  have docker || return 0
+  docker inspect "$c" >/dev/null 2>&1 || return 0
+  if docker exec "$c" sh -c "grep -qE '^[[:space:]]*-[[:space:]]*${mesh}[[:space:]]*\$' /etc/rancher/k3s/config.yaml 2>/dev/null"; then
+    return 0
+  fi
+  say "Adding tls-san ${mesh} to k3d server…"
+  docker exec "$c" sh -c "
+    mkdir -p /etc/rancher/k3s
+    if [ ! -f /etc/rancher/k3s/config.yaml ]; then
+      printf 'tls-san:\\n  - %s\\n' '$mesh' > /etc/rancher/k3s/config.yaml
+    elif grep -q '^tls-san:' /etc/rancher/k3s/config.yaml; then
+      grep -qE '^[[:space:]]*-[[:space:]]*${mesh}[[:space:]]*\$' /etc/rancher/k3s/config.yaml \
+        || printf '  - %s\\n' '$mesh' >> /etc/rancher/k3s/config.yaml
+    else
+      printf '\\ntls-san:\\n  - %s\\n' '$mesh' >> /etc/rancher/k3s/config.yaml
+    fi
+  " || true
+  docker restart "$c" >/dev/null 2>&1 || true
+  local i=0
+  until docker exec "$c" kubectl get nodes >/dev/null 2>&1; do
+    i=$((i + 1)); [ "$i" -lt 45 ] || break; sleep 2
+  done
+}
+
 # Substitute manifest placeholders and apply.  $1=image
 apply_manifests() {
   local image="$1"
@@ -127,23 +219,20 @@ apply_manifests() {
   fi
 
   # Cluster page join codes: seed k3s node-token (+ Tailscale API URL only — never LAN IP).
-  if [ -r /var/lib/rancher/k3s/server/node-token ]; then
-    local jtok jip jurl=""
-    jtok="$(tr -d '[:space:]' < /var/lib/rancher/k3s/server/node-token)"
-    for c in tailscale /usr/bin/tailscale /usr/local/bin/tailscale; do
-      if [ -x "$c" ] || command -v "$c" >/dev/null 2>&1; then
-        jip="$("$c" ip -4 2>/dev/null | head -1 | tr -d '[:space:]')"
-        [ -n "$jip" ] && break
-      fi
-    done
-    case "${jip:-}" in 100.*) jurl="https://${jip}:6443";; esac
-    if [ -n "$jtok" ]; then
-      say "Seeding placecontext-cluster-join secret…${jurl:+ server-url=$jurl}"
-      kube -n "$PCTL_NAMESPACE" create secret generic placecontext-cluster-join \
-        --from-literal=node-token="$jtok" \
-        ${jurl:+--from-literal=server-url="$jurl"} \
-        --dry-run=client -o yaml | kube apply -f -
+  # Token from native k3s or k3d server container (Mac/docker master).
+  local jtok jip jurl="" jport=6443
+  jtok="$(resolve_node_token 2>/dev/null || true)"
+  if [ -n "$jtok" ]; then
+    jip="$(mesh_ipv4 2>/dev/null || true)"
+    if have k3d && k3d cluster list 2>/dev/null | grep -q "$PCTL_CLUSTER"; then
+      jport="$(k3d_api_host_port 2>/dev/null || echo 6443)"
     fi
+    case "${jip:-}" in 100.*) jurl="https://${jip}:${jport}";; esac
+    say "Seeding placecontext-cluster-join secret…${jurl:+ server-url=$jurl}"
+    kube -n "$PCTL_NAMESPACE" create secret generic placecontext-cluster-join \
+      --from-literal=node-token="$jtok" \
+      ${jurl:+--from-literal=server-url="$jurl"} \
+      --dry-run=client -o yaml | kube apply -f -
   fi
 
   say "PostgreSQL (pgvector)…"
@@ -416,15 +505,27 @@ cmd_dev_up() {
 
   if dev_cluster_exists; then
     ok "k3d cluster '$PCTL_CLUSTER' already exists."
+    if ! k3d_api_is_public; then
+      warn "k3d API is localhost-only — Mac→Linux join codes need a recreate:
+  k3d cluster delete ${PCTL_CLUSTER} && pctl dev up"
+    fi
   else
-    say "Creating k3d cluster '$PCTL_CLUSTER' ($PCTL_SERVERS server + $PCTL_AGENTS agents)…"
+    say "Creating k3d cluster '$PCTL_CLUSTER' ($PCTL_SERVERS server + $PCTL_AGENTS agents, API :6443)…"
+    # Publish API on 0.0.0.0:6443 so remote Linux workers can join a Mac/docker master over Tailscale.
+    local -a k3d_extra=(--api-port "0.0.0.0:6443")
+    local mesh=""
+    mesh="$(mesh_ipv4 2>/dev/null || true)"
+    [ -n "$mesh" ] && k3d_extra+=(--k3s-arg "--tls-san=${mesh}@server:*")
     k3d cluster create "$PCTL_CLUSTER" \
       --servers "$PCTL_SERVERS" --agents "$PCTL_AGENTS" \
       -p "${PCTL_PORT}:80@loadbalancer" \
+      "${k3d_extra[@]}" \
       --wait
   fi
 
   use_dev_kubeconfig
+  mesh="$(mesh_ipv4 2>/dev/null || true)"
+  [ -n "${mesh:-}" ] && ensure_k3d_tls_san "$mesh"
   cmd_image_import
   apply_manifests "$PCTL_IMAGE"
   wait_rollout
@@ -1003,10 +1104,19 @@ cmd_package() {
 
   # The application image is ALWAYS linux/<arch>.
   if [ "$with_image" = 1 ]; then
-    if [ "$arch" != "$host_arch" ]; then
-      cmd_build --arch "$arch"
+    # The bundled tarball's arch MUST match the target. A prior cross-build (e.g. a linux/arm64
+    # target) overwrites deploy/placecontext-local.tar, so a bare "reuse if the file exists" check
+    # would silently ship that stale arm64 image inside every same-host-arch package (amd64 server
+    # → won't run). Reuse only when the already-built image reports the arch we're packaging;
+    # otherwise rebuild for this arch.
+    local have_arch=""
+    [ -s "$PCTL_IMAGE_TAR" ] && have_arch="$(docker inspect "$PCTL_IMAGE" --format '{{.Architecture}}' 2>/dev/null || true)"
+    if [ "$have_arch" = "$arch" ]; then
+      say "Reusing $PCTL_IMAGE_TAR (linux/$arch already built)."
+    elif [ "$arch" = "$host_arch" ]; then
+      cmd_build
     else
-      [ -s "$PCTL_IMAGE_TAR" ] || cmd_build
+      cmd_build --arch "$arch"
     fi
     cp "$PCTL_IMAGE_TAR" "$stage/lib/placecontext-local.tar"
   fi
@@ -1344,22 +1454,29 @@ cmd_join_code() {
       *) die "join-code: unknown arg $1";;
     esac
   done
-  local tok_file="/var/lib/rancher/k3s/server/node-token"
-  [ -r "$tok_file" ] || die "no k3s server token readable here — run on the master (or: sudo pctl join-code)"
+  local tok
+  if ! tok="$(resolve_node_token)"; then
+    die "no k3s node-token — run on the master (k3s server or k3d cluster with placecontext installed)"
+  fi
   # Prefer Tailscale mesh IP — never fall back to LAN unless no mesh address exists (and warn).
-  local ip=""
-  for c in tailscale /usr/bin/tailscale /usr/local/bin/tailscale; do
-    if [ -x "$c" ] || command -v "$c" >/dev/null 2>&1; then
-      ip="$("$c" ip -4 2>/dev/null | head -1 | tr -d '[:space:]')"
-      [ -n "$ip" ] && break
-    fi
-  done
+  local ip="" api_port=6443
+  ip="$(mesh_ipv4 2>/dev/null || true)"
   if [ -z "$ip" ]; then
     ip="$(hostname -I 2>/dev/null | awk '{print $1}')"
+    [ -n "$ip" ] || ip="$(ipconfig getifaddr en0 2>/dev/null || true)"
     [ -n "$ip" ] || die "could not determine this machine's IP"
     warn "No Tailscale IPv4 — join code will use LAN IP ${ip} (remote sites cannot join)."
   else
     ok "Join code will use Tailscale mesh IP ${ip}"
+  fi
+
+  if have k3d && dev_cluster_exists; then
+    if ! k3d_api_is_public; then
+      die "k3d API is localhost-only — remote Linux workers cannot join this Mac master.
+Recreate: k3d cluster delete ${PCTL_CLUSTER} && pctl dev up"
+    fi
+    api_port="$(k3d_api_host_port 2>/dev/null || echo 6443)"
+    case "${ip}" in 100.*) ensure_k3d_tls_san "$ip";; esac
   fi
 
   # No key passed but OAuth creds are in the environment → mint one, so the code is self-sufficient.
@@ -1369,30 +1486,31 @@ cmd_join_code() {
   fi
   if [ -z "$ts_key" ]; then
     warn "No Tailscale auth key embedded (pass --ts-authkey, or set PCTL_TS_OAUTH_ID/SECRET);"
-    warn "the joining machine must already be on the tailnet to reach https://${ip}:6443."
+    warn "the joining machine must already be on the tailnet to reach https://${ip}:${api_port}."
   fi
 
-  local code
-  code="PC2.$(printf 'https://%s:6443 %s %s' "$ip" "$(cat "$tok_file")" "$ts_key" \
-        | sed 's/ *$//' | base64 -w0 | tr '+/' '-_' | tr -d '=')"
-  printf '%sJoin code — master API https://%s:6443%s\n\n  %s\n\n' "$C_BOLD" "$ip" "$C_RESET" "$code"
-  printf 'On the new computer: sudo placecontext connect --code <code>\n'
+  local code payload
+  payload="$(printf 'https://%s:%s %s %s' "$ip" "$api_port" "$tok" "$ts_key" | sed 's/ *$//')"
+  code="PC2.$(printf '%s' "$payload" | b64url_encode)"
+  printf '%sJoin code — master API https://%s:%s%s\n\n  %s\n\n' "$C_BOLD" "$ip" "$api_port" "$C_RESET" "$code"
+  printf 'On the new computer (Linux): sudo placecontext connect --code <code>\n'
 }
 
 cmd_join() {
   local code=""
   while [ $# -gt 0 ]; do case "$1" in --code) code="$2"; shift 2;; *) die "join: unknown arg $1";; esac; done
   [ -n "$code" ] || die "join needs --code <code> — generate it on the master: pctl join-code"
+  code="$(printf '%s' "$code" | tr -d '[:space:]')"
   case "$code" in PC1.*|PC2.*) ;; *) die "unrecognised join code (expected PC1.… or PC2.…)";; esac
   local b64="${code#PC?.}"
-  b64="$(printf '%s' "$b64" | tr -- '-_' '+/')"
-  while [ $((${#b64} % 4)) -ne 0 ]; do b64="${b64}="; done
-  local decoded; decoded="$(printf '%s' "$b64" | base64 -d 2>/dev/null)" || die "join code is corrupted"
+  local decoded
+  decoded="$(b64url_decode "$b64")" || die "join code is corrupted"
   # Fields: url token [tskey] — PC1 codes simply have no third field.
-  local url token tskey
-  read -r url token tskey <<EOF2
-$decoded
-EOF2
+  local url token tskey rest
+  url="${decoded%% *}"
+  rest="${decoded#"$url"}"; rest="${rest# }"
+  token="${rest%% *}"
+  tskey="${rest#"$token"}"; tskey="${tskey# }"
   [ -n "$url" ] && [ -n "$token" ] || die "join code is incomplete"
   local -a extra=()
   [ -n "${tskey:-}" ] && extra=(--ts-authkey "$tskey")
@@ -1409,14 +1527,18 @@ EOF2
 }
 
 cmd_join_cmd() {
-  local tok_file="/var/lib/rancher/k3s/server/node-token"
-  # Prefer the tailnet IP (stable across NAT/locations) when this server is on Tailscale.
-  local ip; ip="$(tailscale ip -4 2>/dev/null | head -1)"
+  local tok ip api_port=6443
+  tok="$(resolve_node_token 2>/dev/null || true)"
+  [ -n "$tok" ] || tok="<run on server: resolve node-token>"
+  ip="$(mesh_ipv4 2>/dev/null || true)"
   [ -n "$ip" ] || ip="$(hostname -I 2>/dev/null | awk '{print $1}')"
-  local tok="<run on server: sudo cat $tok_file>"
-  [ -r "$tok_file" ] && tok="$(cat "$tok_file")"
-  printf '%sAdd a worker node — run on the other machine:%s\n' "$C_BOLD" "$C_RESET"
-  printf '  sudo ./deploy/pctl agent join \\\n    --server-url https://%s:6443 \\\n    --node-token %s \\\n    [--ts-oauth-client-id ID --ts-oauth-secret SECRET]\n' "${ip:-<server-ip>}" "$tok"
+  [ -n "$ip" ] || ip="$(ipconfig getifaddr en0 2>/dev/null || true)"
+  if have k3d && dev_cluster_exists; then
+    api_port="$(k3d_api_host_port 2>/dev/null || echo 6443)"
+  fi
+  printf '%sAdd a worker node — run on the other machine (Linux):%s\n' "$C_BOLD" "$C_RESET"
+  printf '  sudo ./deploy/pctl agent join \\\n    --server-url https://%s:%s \\\n    --node-token %s \\\n    [--ts-oauth-client-id ID --ts-oauth-secret SECRET]\n' "${ip:-<server-ip>}" "$api_port" "$tok"
+  printf '  # or: sudo placecontext connect --code $(pctl join-code | …)\n'
 }
 
 # ── status / logs / url ──────────────────────────────────────────────────────────────────────────

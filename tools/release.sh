@@ -18,6 +18,8 @@
 # Environment:
 #   RELEASE_BUCKET       object-store bucket name (default: placecontext)
 #   RELEASE_ENDPOINT     S3-compatible endpoint host (optional; for s3cmd/aws)
+#   RELEASE_S3CFG        path to s3cmd config (default: $S3CMD_CONFIG, else
+#                        ~/do-tor1.s3cfg if present, else ~/.s3cfg)
 #   RELEASE_PREFIX       key prefix inside the bucket (default: empty)
 #   RELEASE_PUBLIC_BASE  public base URL printed for install (default: https://get.placecontext.ai)
 #   RELEASE_VERSION      override git version stamp
@@ -25,7 +27,7 @@
 #   RELEASE_VERIFY_BASE  install base URL for --verify (default: CDN / Spaces origin)
 #
 # RELEASE_UPLOAD_CMD examples (use {src} and {dest} placeholders):
-#   s3cmd put --acl-public {src} s3://placecontext/{dest}
+#   s3cmd -c ~/do-tor1.s3cfg put --acl-public {src} s3://placecontext/{dest}
 #   aws s3 cp {src} s3://placecontext/{dest} --acl public-read --endpoint-url https://…
 #
 set -euo pipefail
@@ -81,6 +83,28 @@ PREFIX="${RELEASE_PREFIX:-}"
 PREFIX="${PREFIX#/}"; PREFIX="${PREFIX%/}"
 [ -n "$PREFIX" ] && PREFIX="${PREFIX}/"
 
+# Resolve s3cmd config: explicit env → common DO Spaces path → default ~/.s3cfg
+resolve_s3cfg() {
+  if [ -n "${RELEASE_S3CFG:-}" ]; then
+    printf '%s\n' "${RELEASE_S3CFG}"
+    return
+  fi
+  if [ -n "${S3CMD_CONFIG:-}" ]; then
+    printf '%s\n' "${S3CMD_CONFIG}"
+    return
+  fi
+  local candidate
+  for candidate in "${HOME}/do-tor1.s3cfg" "${HOME}/.s3cfg"; do
+    if [ -f "$candidate" ]; then
+      printf '%s\n' "$candidate"
+      return
+    fi
+  done
+  # Fall through to s3cmd default path (may not exist; s3cmd will error clearly)
+  printf '%s\n' "${HOME}/.s3cfg"
+}
+S3CFG="$(resolve_s3cfg)"
+
 host_os="$(uname -s | tr '[:upper:]' '[:lower:]')"
 host_arch="$(uname -m)"
 case "$host_arch" in x86_64) host_arch=amd64;; aarch64|arm64) host_arch=arm64;; esac
@@ -88,7 +112,9 @@ case "$host_arch" in x86_64) host_arch=amd64;; aarch64|arm64) host_arch=arm64;; 
 # ── target matrix ────────────────────────────────────────────────────────────────────────────────
 if [ ${#TARGETS[@]} -eq 0 ]; then
   if [ "$ALL" = 1 ]; then
-    TARGETS=(linux/amd64 linux/arm64 darwin/amd64 darwin/arm64)
+    # Group by arch (all amd64, then all arm64) so the shared app image is built once per arch
+    # rather than rebuilt on every target that flips architecture.
+    TARGETS=(linux/amd64 darwin/amd64 linux/arm64 darwin/arm64)
   elif [ "$LINUX_ONLY" = 1 ]; then
     TARGETS=(linux/amd64 linux/arm64)
   else
@@ -201,11 +227,15 @@ upload_one() {
   fi
 
   if have s3cmd; then
-    local args=(put --acl-public "$src" "s3://${BUCKET}/${key}")
-    [ -n "${RELEASE_ENDPOINT:-}" ] && args=(--host="$RELEASE_ENDPOINT" --host-bucket="%(bucket)s.${RELEASE_ENDPOINT}" "${args[@]}")
+    local args=(-c "$S3CFG")
+    [ -n "${RELEASE_ENDPOINT:-}" ] && args+=(--host="$RELEASE_ENDPOINT" --host-bucket="%(bucket)s.${RELEASE_ENDPOINT}")
+    args+=(put --acl-public "$src" "s3://${BUCKET}/${key}")
     if [ "$DRY_RUN" = 1 ]; then
       printf '  s3cmd %s\n' "${args[*]}"
       return 0
+    fi
+    if [ ! -f "$S3CFG" ]; then
+      die "s3cmd config not found at ${S3CFG} (set RELEASE_S3CFG or create ~/do-tor1.s3cfg / ~/.s3cfg)"
     fi
     s3cmd "${args[@]}" || die "s3cmd upload failed: $key"
     return 0

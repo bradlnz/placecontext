@@ -138,6 +138,62 @@ url_host() {
   printf '%s' "$1" | sed -E 's#^https?://##; s#/.*$##; s#:.*$##; s/^\[//; s/\]$//'
 }
 
+# Port part of https://host:port (default 6443).
+url_port() {
+  local s
+  s="$(printf '%s' "$1" | sed -E 's#^https?://##; s#/.*$##')"
+  case "$s" in
+    \[*\]:*) printf '%s\n' "${s##*]:}";;
+    *:*)     printf '%s\n' "${s##*:}";;
+    *)       printf '6443\n';;
+  esac
+}
+
+# Portable base64url (GNU + BSD / macOS). stdin → stdout.
+b64url_encode() {
+  local raw b64
+  raw="$(cat)"
+  # Prefer GNU -w0; on macOS/BSD base64 that flag fails — do not consume stdin twice.
+  if b64="$(printf '%s' "$raw" | base64 -w0 2>/dev/null)"; then
+    :
+  else
+    b64="$(printf '%s' "$raw" | base64 2>/dev/null | tr -d '\n\r')" || return 1
+  fi
+  # y### avoids '/' delimiter clash with base64 alphabet
+  printf '%s' "$b64" | sed 'y#+/#-_#' | tr -d '=\n\r'
+}
+
+# Decode base64url string (arg) → stdout. Works on Linux and macOS.
+b64url_decode() {
+  local b64="$1" decoded
+  b64="$(printf '%s' "$b64" | sed 'y#-_#+/#')"
+  while [ $((${#b64} % 4)) -ne 0 ]; do b64="${b64}="; done
+  if decoded="$(printf '%s' "$b64" | base64 -d 2>/dev/null)"; then
+    printf '%s' "$decoded"; return 0
+  fi
+  if decoded="$(printf '%s' "$b64" | base64 -D 2>/dev/null)"; then
+    printf '%s' "$decoded"; return 0
+  fi
+  if decoded="$(printf '%s' "$b64" | base64 --decode 2>/dev/null)"; then
+    printf '%s' "$decoded"; return 0
+  fi
+  return 1
+}
+
+# Primary LAN IPv4 (Linux hostname -I, macOS en0/en1).
+local_ipv4() {
+  local ip
+  ip="$(hostname -I 2>/dev/null | awk '{print $1}')"
+  [ -n "$ip" ] && { printf '%s\n' "$ip"; return 0; }
+  for iface in en0 en1 eth0; do
+    ip="$(ipconfig getifaddr "$iface" 2>/dev/null || true)"
+    [ -n "$ip" ] && { printf '%s\n' "$ip"; return 0; }
+  done
+  ip="$(ifconfig 2>/dev/null | awk '/inet / && $2 != "127.0.0.1" {print $2; exit}')"
+  [ -n "$ip" ] && { printf '%s\n' "$ip"; return 0; }
+  return 1
+}
+
 # Prefer mesh IP for join codes / server advertise. Use --local only for pure LAN tests.
 resolve_advertise_ip() {
   local allow_local="${1:-0}"
@@ -148,13 +204,140 @@ resolve_advertise_ip() {
     return 0
   fi
   if [ "$allow_local" = 1 ]; then
-    ip="$(hostname -I 2>/dev/null | awk '{print $1}')"
-    [ -n "$ip" ] || return 1
-    warn "No Tailscale IPv4 — using local IP ${ip} (LAN only; DO nodes cannot reach this)"
+    ip="$(local_ipv4)" || return 1
+    warn "No Tailscale IPv4 — using local IP ${ip} (LAN only; remote sites cannot reach this)"
     printf '%s\n' "$ip"
     return 0
   fi
   return 1
+}
+
+# ── k3d master support (macOS / Docker laptops as fleet control plane) ───────────────────────────
+# Mac cannot run k3s natively; the master is k3d. Linux workers join over Tailscale when:
+#   • API is published on 0.0.0.0:6443 (not 127.0.0.1-only)
+#   • server TLS SAN includes the Tailscale mesh IP
+#   • join code embeds https://MESH_IP:6443 + full node-token from the k3d server container
+
+k3d_server_container() {
+  local name="k3d-${PCTL_CLUSTER}-server-0"
+  if have docker && docker inspect "$name" >/dev/null 2>&1; then
+    printf '%s\n' "$name"
+    return 0
+  fi
+  return 1
+}
+
+k3d_cluster_running() {
+  have k3d || return 1
+  k3d cluster list 2>/dev/null | grep -q "$PCTL_CLUSTER"
+}
+
+# Read k3s node-token from native k3s or the k3d server container (Mac/docker master).
+resolve_node_token() {
+  local tok="" c
+  if [ -r /var/lib/rancher/k3s/server/node-token ]; then
+    tok="$(tr -d '[:space:]' < /var/lib/rancher/k3s/server/node-token)"
+    [ -n "$tok" ] && { printf '%s\n' "$tok"; return 0; }
+  fi
+  c="$(k3d_server_container 2>/dev/null || true)"
+  if [ -n "$c" ]; then
+    tok="$(docker exec "$c" cat /var/lib/rancher/k3s/server/node-token 2>/dev/null | tr -d '[:space:]')"
+    [ -n "$tok" ] && { printf '%s\n' "$tok"; return 0; }
+  fi
+  return 1
+}
+
+# Host port where k3d publishes the Kubernetes API (empty if unknown).
+k3d_api_host_port() {
+  local c port
+  c="$(k3d_server_container 2>/dev/null || true)"
+  # Prefer serverlb mapping (k3d routes API through the load balancer).
+  if have docker; then
+    for name in "k3d-${PCTL_CLUSTER}-serverlb" "$c"; do
+      [ -n "$name" ] || continue
+      port="$(docker port "$name" 6443 2>/dev/null | head -1 | sed -E 's/.*://')"
+      if [ -n "$port" ]; then
+        printf '%s\n' "$port"
+        return 0
+      fi
+    done
+  fi
+  # Fall back to kubeconfig server URL.
+  if have k3d; then
+    local url
+    url="$(k3d kubeconfig get "$PCTL_CLUSTER" 2>/dev/null | awk '/server:/{print $2; exit}')"
+    if [ -n "$url" ]; then
+      url_port "$url"
+      return 0
+    fi
+  fi
+  return 1
+}
+
+# Whether the API mapping listens on all interfaces (remote join needs this).
+k3d_api_is_public() {
+  local c line
+  c="$(k3d_server_container 2>/dev/null || true)"
+  if have docker; then
+    for name in "k3d-${PCTL_CLUSTER}-serverlb" "$c"; do
+      [ -n "$name" ] || continue
+      line="$(docker port "$name" 6443 2>/dev/null | head -1 || true)"
+      case "$line" in
+        0.0.0.0:*|\[::\]:*|*:*)
+          case "$line" in
+            127.0.0.1:*|\[::1\]:*) continue;;
+            *) return 0;;
+          esac
+          ;;
+      esac
+    done
+  fi
+  return 1
+}
+
+# Ensure k3d server cert trusts the mesh (or LAN) IP used in join codes.
+ensure_k3d_tls_san() {
+  local mesh="${1:-}" c cfg_snip
+  [ -n "$mesh" ] || return 0
+  c="$(k3d_server_container 2>/dev/null || true)"
+  [ -n "$c" ] || return 0
+  if docker exec "$c" sh -c "grep -qE '^[[:space:]]*-[[:space:]]*${mesh}[[:space:]]*\$' /etc/rancher/k3s/config.yaml 2>/dev/null"; then
+    info "k3d tls-san already includes ${mesh}"
+    return 0
+  fi
+  say "Adding tls-san ${mesh} to k3d server (required for Mac→Linux join codes)…"
+  docker exec "$c" sh -c "
+    mkdir -p /etc/rancher/k3s
+    if [ ! -f /etc/rancher/k3s/config.yaml ]; then
+      printf 'tls-san:\\n  - %s\\n' '$mesh' > /etc/rancher/k3s/config.yaml
+    elif grep -q '^tls-san:' /etc/rancher/k3s/config.yaml; then
+      grep -qE '^[[:space:]]*-[[:space:]]*${mesh}[[:space:]]*\$' /etc/rancher/k3s/config.yaml \
+        || printf '  - %s\\n' '$mesh' >> /etc/rancher/k3s/config.yaml
+    else
+      printf '\\ntls-san:\\n  - %s\\n' '$mesh' >> /etc/rancher/k3s/config.yaml
+    fi
+  " || warn "could not write k3d tls-san (join may fail TLS verify)"
+  # Restart server so cert regenerates with the new SAN.
+  docker restart "$c" >/dev/null 2>&1 || true
+  info "waiting for k3d server after tls-san restart…"
+  local i=0
+  until docker exec "$c" kubectl get nodes >/dev/null 2>&1; do
+    i=$((i + 1))
+    [ "$i" -lt 45 ] || { warn "k3d server slow after restart — continue anyway"; break; }
+    sleep 2
+  done
+}
+
+# Args for `k3d cluster create` so a laptop master can hand out join codes to remote Linux workers.
+k3d_create_join_args() {
+  # Publish API on all interfaces:6443 so Tailscale peers reach the Mac/docker master.
+  printf '%s\n' --api-port "0.0.0.0:6443"
+  local mesh=""
+  mesh="$(mesh_ipv4 2>/dev/null || true)"
+  if [ -n "$mesh" ]; then
+    printf '%s\n' --k3s-arg "--tls-san=${mesh}@server:*"
+    info "k3d create will tls-san ${mesh} (Tailscale)"
+  fi
 }
 
 image_import_k3s() {
@@ -189,19 +372,22 @@ ensure_secret() {
 
 # Publish k3s node-token (+ optional mesh API URL) so the portal can mint Tailscale join codes
 # and promote a fleet master without root on the Host pod.
+# Works for native k3s and k3d (Mac/docker master — token lives in the server container).
 seed_cluster_join_secret() {
-  local tok_file="/var/lib/rancher/k3s/server/node-token"
   local tok=""
-  [ -r "$tok_file" ] && tok="$(tr -d '[:space:]' < "$tok_file")"
+  tok="$(resolve_node_token 2>/dev/null || true)"
   [ -n "$tok" ] || return 0
 
   # Prefer Tailscale mesh IP so portal join codes never embed a LAN-only address.
-  local ip url=""
+  local ip url="" api_port=6443
   ip="$(mesh_ipv4 2>/dev/null || true)"
+  if k3d_cluster_running 2>/dev/null; then
+    api_port="$(k3d_api_host_port 2>/dev/null || echo 6443)"
+  fi
   if [ -z "$ip" ]; then
     warn "No Tailscale IPv4 when seeding join secret — skipping server-url (run join-code after Tailscale is up)"
   else
-    url="https://${ip}:6443"
+    url="https://${ip}:${api_port}"
   fi
 
   say "Seeding cluster join secret (for portal join codes)…"
@@ -576,14 +762,23 @@ cmd_install() {
       return 0
     fi
     # Keep Traefik enabled — manifests expose the portal via Ingress on :80 (mapped to PCTL_PORT).
-    say "Creating k3d cluster '$PCTL_CLUSTER' (agents=${PCTL_AGENTS}, port ${PCTL_PORT}→80)…"
+    # API on 0.0.0.0:6443 so Mac/docker masters can hand join codes to remote Linux k3s agents.
+    say "Creating k3d cluster '$PCTL_CLUSTER' (agents=${PCTL_AGENTS}, port ${PCTL_PORT}→80, API :6443)…"
     info "k3d cluster create ${PCTL_CLUSTER} — first pull of k3s images can take several minutes"
     if k3d cluster list 2>/dev/null | grep -q "$PCTL_CLUSTER"; then
       info "cluster already exists — starting…"
       k3d cluster start "$PCTL_CLUSTER" || true
+      if ! k3d_api_is_public; then
+        warn "Existing k3d API is localhost-only — Mac→Linux join codes will not work until you recreate:
+  k3d cluster delete ${PCTL_CLUSTER} && placecontext install --docker"
+      fi
     else
+      local -a k3d_extra=()
+      # shellcheck disable=SC2207
+      k3d_extra=($(k3d_create_join_args))
       k3d cluster create "$PCTL_CLUSTER" --agents "$PCTL_AGENTS" \
         --port "${PCTL_PORT}:80@loadbalancer" \
+        "${k3d_extra[@]+"${k3d_extra[@]}"}" \
         --wait \
         || k3d cluster start "$PCTL_CLUSTER" || true
     fi
@@ -591,6 +786,9 @@ cmd_install() {
     use_dev_kubeconfig
     info "kubeconfig context k3d-${PCTL_CLUSTER}"
     kube get nodes -o wide 2>/dev/null || true
+    local mesh=""
+    mesh="$(mesh_ipv4 2>/dev/null || true)"
+    [ -n "$mesh" ] && ensure_k3d_tls_san "$mesh"
     if [ -s "$PCTL_IMAGE_TAR" ]; then
       say "Importing image tarball ($(du -h "$PCTL_IMAGE_TAR" | cut -f1))…"
       if [ "${VERBOSE:-0}" -ge 1 ]; then
@@ -604,7 +802,11 @@ cmd_install() {
     fi
     apply_manifests "$PCTL_IMAGE"
     wait_rollout
+    seed_cluster_join_secret || true
     ok "Installed (Docker / k3d). Portal: $(portal_base)/"
+    if k3d_api_is_public; then
+      ok "k3d API published for remote joins (placecontext join-code → Linux workers)"
+    fi
     setup_default_admin
   else
     if [ -x "$ROOT/tools/pctl" ] && [ "$(id -u)" = 0 ]; then
@@ -788,14 +990,15 @@ and the join code has no auth key.
 }
 
 # Decode PC1/PC2 join code → url, token, optional tskey (stdout: three fields).
+# Tolerates whitespace/newlines from copy-paste (Mac Terminal wrap → Linux paste).
 decode_join_code() {
   local code="$1"
+  # Strip whitespace so multi-line paste still works.
+  code="$(printf '%s' "$code" | tr -d '[:space:]')"
   case "$code" in PC1.*|PC2.*) ;; *) die "unrecognised join code (expected PC1.… or PC2.…)";; esac
   local b64="${code#PC?.}"
-  b64="$(printf '%s' "$b64" | tr -- '-_' '+/')"
-  while [ $((${#b64} % 4)) -ne 0 ]; do b64="${b64}="; done
   local decoded
-  decoded="$(printf '%s' "$b64" | base64 -d 2>/dev/null)" || die "join code is corrupted (base64 decode failed)"
+  decoded="$(b64url_decode "$b64")" || die "join code is corrupted (base64 decode failed)"
   vvlog "join payload: ${decoded}"
   # Fields: url token [tskey] — token is K10…::server:… (no spaces); split on first two words carefully.
   local url token rest tskey
@@ -809,7 +1012,7 @@ decode_join_code() {
   # Validate URL embeds a host (IP or name) — this is the address we join, never replaced.
   local h; h="$(url_host "$url")"
   [ -n "$h" ] || die "join code URL missing host: $url"
-  info "decoded join host=${h}"
+  info "decoded join host=${h} port=$(url_port "$url")"
   printf '%s\n' "$url" "$token" "${tskey:-}"
 }
 
@@ -872,6 +1075,7 @@ Regenerate on the master with Tailscale up: sudo placecontext join-code"
 
 # Run on the master: print a join code for workers.
 # Always embeds the Tailscale mesh IP when available (never a LAN IP unless --local).
+# Supports native k3s (Linux) and k3d (macOS / Docker laptop masters) so Mac→Linux joins work.
 cmd_join_code() {
   local ts_key="" allow_local=0
   while [ $# -gt 0 ]; do
@@ -882,50 +1086,73 @@ cmd_join_code() {
       *) die "join-code: unknown arg $1 (try: join-code [--ts-authkey KEY] [--local])";;
     esac
   done
-  local tok_file="/var/lib/rancher/k3s/server/node-token"
-  [ -r "$tok_file" ] || die "no k3s server token at $tok_file — run on the master (sudo), after install --service"
-  local tok; tok="$(tr -d '[:space:]' < "$tok_file")"
+
+  local tok
+  if ! tok="$(resolve_node_token)"; then
+    die "no k3s node-token found.
+  • Linux master (k3s): run on the master after install --service (sudo).
+  • Mac/docker master (k3d): install with --docker first (placecontext install --docker),
+    then re-run join-code. Token is read from the k3d server container."
+  fi
+  info "node-token length ${#tok}"
 
   local ip
   if ! ip="$(resolve_advertise_ip "$allow_local")"; then
     die "No Tailscale IPv4 on this host — mesh join codes must use the Tailscale address.
   1) Install/start Tailscale and join the same tailnet as the worker
-  2) Re-run:  sudo placecontext join-code
-  LAN-only test:   sudo placecontext join-code --local"
+  2) Re-run:  placecontext join-code
+  LAN-only test:   placecontext join-code --local"
   fi
 
-  # Ensure API cert is valid for this mesh IP before handing out codes.
-  if [ "$(id -u)" = 0 ] && is_mesh_host "$ip"; then
-    ensure_k3s_tls_san "$ip"
+  local api_port=6443
+  if k3d_cluster_running 2>/dev/null; then
+    # Mac / docker master: API lives in k3d — must be published for remote Linux agents.
+    if ! k3d_api_is_public; then
+      die "k3d API is only on localhost — remote Linux workers cannot reach this Mac.
+Recreate the cluster so the API is public on :6443:
+
+  k3d cluster delete ${PCTL_CLUSTER}
+  placecontext install --docker
+
+(New installs publish --api-port 0.0.0.0:6443 and tls-san the Tailscale IP.)"
+    fi
+    api_port="$(k3d_api_host_port 2>/dev/null || echo 6443)"
+    [ -n "$api_port" ] || api_port=6443
+    if is_mesh_host "$ip"; then
+      ensure_k3d_tls_san "$ip"
+    fi
+    # Refresh portal join secret while we have the token.
+    if kube get ns "$PCTL_NAMESPACE" >/dev/null 2>&1; then
+      seed_cluster_join_secret || true
+    fi
+  else
+    # Ensure API cert is valid for this mesh IP before handing out codes (native k3s).
+    if [ "$(id -u)" = 0 ] && is_mesh_host "$ip"; then
+      ensure_k3s_tls_san "$ip"
+    fi
   fi
 
   if [ -z "$ts_key" ]; then
-    warn "No --ts-authkey — joining machines must already be on the same tailnet to reach https://${ip}:6443."
+    warn "No --ts-authkey — joining machines must already be on the same tailnet to reach https://${ip}:${api_port}."
   else
     info "embedding Tailscale auth key in join code"
   fi
 
-  # PC2.<base64url("https://MESH_IP:6443 token [tskey]")>
-  local payload b64 code
-  payload="$(printf 'https://%s:6443 %s %s' "$ip" "$tok" "$ts_key" | sed 's/ *$//')"
-  if b64="$(printf '%s' "$payload" | base64 -w0 2>/dev/null)"; then
-    :
-  else
-    b64="$(printf '%s' "$payload" | base64 | tr -d '\n')"
-  fi
-  b64="$(printf '%s' "$b64" | tr '+/' '-_' | tr -d '=')"
-  code="PC2.${b64}"
+  # PC2.<base64url("https://MESH_IP:PORT token [tskey]")>
+  local payload code
+  payload="$(printf 'https://%s:%s %s %s' "$ip" "$api_port" "$tok" "$ts_key" | sed 's/ *$//')"
+  code="PC2.$(printf '%s' "$payload" | b64url_encode)"
 
   printf '\n%sJoin code — master API is the mesh address below (not a LAN IP):%s\n\n' "$C_BOLD" "$C_RESET"
-  printf '  server:  https://%s:6443\n' "$ip"
+  printf '  server:  https://%s:%s\n' "$ip" "$api_port"
   printf '  code:    %s\n\n' "$code"
-  printf 'On the new computer:\n'
+  printf 'On the new computer (Linux):\n'
   printf '  curl -fsSL https://get.placecontext.ai/install.sh | bash\n'
   printf '  sudo placecontext connect --code %s\n\n' "$code"
   if is_mesh_host "$ip"; then
-    ok "join code uses Tailscale IP ${ip}"
+    ok "join code uses Tailscale IP ${ip}:${api_port}"
   else
-    warn "join code uses non-mesh IP ${ip} (--local)"
+    warn "join code uses non-mesh IP ${ip}:${api_port} (--local)"
   fi
 }
 

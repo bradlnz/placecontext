@@ -39,24 +39,29 @@ machine.
 ### 1. On the master, get a join code
 
 ```bash
-pctl join-code
-# Join code — give this to the new computer:
-#
-#   PC1.aHR0cHM6Ly8xOTIuMTY4LjEuMTA6NjQ0MyBLMTA6...
+# Linux k3s master:
+sudo placecontext join-code
+# Mac / Docker (k3d) master — same command; token comes from the k3d server container:
+placecontext join-code
 ```
 
-It's a single string that carries everything the new machine needs. (When the master is on a
-Tailscale-style network, the code prefers that address, so it keeps working even if the machine
-moves or is behind NAT.)
+It's a single string (`PC2.…`) that carries everything the new machine needs. When the master is
+on Tailscale, the code embeds the mesh address so it keeps working behind NAT — including **Mac
+laptop master → remote Linux worker**.
 
-### 2. On the new computer, use it
+Mac/docker masters need the k3d API published on `:6443` (new installs do this). If join-code
+says the API is localhost-only, recreate once:
 
-Either way works:
+```bash
+k3d cluster delete placecontext && placecontext install --docker
+```
 
-- **In the TUI** — run `pctl tui`, press **`[j]`** on the welcome screen, paste the code, press
-  `⏎`. The machine joins as a worker. (If it needs elevated permissions it either handles that
-  for you or hands you the exact command to run.)
-- **From a shell** — `sudo pctl join --code 'PC1.…'`
+### 2. On the new computer (Linux), use it
+
+Workers install k3s and must be Linux. Either way works:
+
+- **In the TUI** — run `placecontext`, choose **Connect**, paste the code, press `⏎`.
+- **From a shell** — `sudo placecontext connect --code 'PC2.…'`
 
 Either way, the new machine joins and starts taking on work right away.
 

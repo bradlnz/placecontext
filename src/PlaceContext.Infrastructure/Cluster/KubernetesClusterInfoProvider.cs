@@ -137,17 +137,23 @@ public sealed class KubernetesClusterInfoProvider : IClusterInfoProvider, IClust
 
             var master = info.DesignatedMaster;
             var ip = master?.PreferredIp;
-            if (string.IsNullOrWhiteSpace(ip) && !string.IsNullOrWhiteSpace(join.ServerUrl))
+            // Preserve non-default API port from secret (k3d Mac masters may use a mapped host port).
+            var apiPort = 6443;
+            if (!string.IsNullOrWhiteSpace(join.ServerUrl)
+                && Uri.TryCreate(join.ServerUrl, UriKind.Absolute, out var secretUri))
             {
-                // fall back to URL host from secret
-                if (Uri.TryCreate(join.ServerUrl, UriKind.Absolute, out var u))
-                    ip = u.Host;
+                if (string.IsNullOrWhiteSpace(ip))
+                    ip = secretUri.Host;
+                if (!secretUri.IsDefaultPort)
+                    apiPort = secretUri.Port;
             }
 
             if (string.IsNullOrWhiteSpace(ip))
                 return null;
 
-            var serverUrl = $"https://{ip}:6443";
+            var serverUrl = apiPort == 443 || apiPort <= 0
+                ? $"https://{ip}"
+                : $"https://{ip}:{apiPort}";
             var tsKey = join.TailscaleAuthKey ?? "";
             var payload = string.IsNullOrWhiteSpace(tsKey)
                 ? $"{serverUrl} {join.Token}"
@@ -158,7 +164,7 @@ public sealed class KubernetesClusterInfoProvider : IClusterInfoProvider, IClust
 
             var instructions = string.IsNullOrWhiteSpace(tsKey)
                 ? $"""
-                  On the new machine (e.g. DigitalOcean droplet):
+                  On a new Linux machine (Mac masters hand this code to Linux workers):
                     1. Install Tailscale and join the same tailnet as the master ({master?.Name ?? "master"}).
                     2. curl -fsSL https://get.placecontext.ai/install.sh | bash
                     3. placecontext connect --code {code}
@@ -169,7 +175,7 @@ public sealed class KubernetesClusterInfoProvider : IClusterInfoProvider, IClust
                   Tailscale must already be up before connect.
                   """
                 : $"""
-                  On the new machine (e.g. DigitalOcean droplet):
+                  On a new Linux machine:
                     curl -fsSL https://get.placecontext.ai/install.sh | bash
                     placecontext connect --code {code}
 

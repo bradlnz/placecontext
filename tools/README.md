@@ -26,7 +26,9 @@ Package / publish client releases:
 ```
 
 Stages a clean tree at **`dist/upload/`** (only the objects to publish).  
-See `tools/release.sh` for `RELEASE_BUCKET`, `RELEASE_ENDPOINT`, `RELEASE_UPLOAD_CMD`, etc.
+See `tools/release.sh` for `RELEASE_BUCKET`, `RELEASE_ENDPOINT`, `RELEASE_S3CFG`, `RELEASE_UPLOAD_CMD`, etc.
+
+s3cmd looks for config at `RELEASE_S3CFG`, then `$S3CMD_CONFIG`, then `~/do-tor1.s3cfg`, then `~/.s3cfg`.
 
 ### Post-release install check
 

@@ -76,7 +76,8 @@ Everything deploys with **`pctl`** (bash) and its full-screen **TUI dashboard** 
 - **Production**: genuine multi-machine k3s. `sudo ./deploy/pctl server up` on the master prints a
   join code; run it on any Linux box — nodes connect over **Tailscale** (or self-hosted
   [Headscale](https://headscale.net)), so a fleet can span homes, offices, and clouds with zero
-  port-forwarding.
+  port-forwarding. A **Mac laptop master** (k3d) can also mint join codes for remote Linux workers
+  when the API is published on `:6443` (default for new installs).
 - **Air-gap friendly**: images ship as tarballs inside cross-arch packages (`pctl package`) — no
   registry pulls on the nodes.
 - Postgres and MinIO run in-cluster; the portal, MCP endpoint, and job scheduler are one
