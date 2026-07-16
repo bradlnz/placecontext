@@ -230,6 +230,9 @@ else
 
             var nodes = new List<GraphNodeView>(graph?.Nodes ?? Array.Empty<GraphNodeView>());
             var links = new List<GraphLinkView>(graph?.Links ?? Array.Empty<GraphLinkView>());
+            // Membership by id — the run/artifact dedup checks below were O(nodes) list scans
+            // inside nested loops, which crawled once the graph grew.
+            var nodeIds = new HashSet<string>(nodes.Select(n => n.Id), StringComparer.Ordinal);
             var degree = new Dictionary<string, int>();
             void Link(string a, string b)
             {
@@ -238,7 +241,9 @@ else
                 degree[b] = degree.GetValueOrDefault(b) + 1;
             }
 
-            foreach (var entity in entities)
+            // Each entity costs a live SQL sample + tagged-run + artifact lookups, all sequential
+            // on the circuit — bound the fan-out so the overview stays snappy on data-heavy projects.
+            foreach (var entity in entities.Take(12))
             {
                 var eId = $"entity:{entity.Id}";
                 nodes.Add(new GraphNodeView(eId, entity.Name, 0, IsGod: true,
@@ -281,7 +286,7 @@ else
                     foreach (var runId in runIds)
                     {
                         var rid = $"run:{runId}";
-                        if (nodes.All(n => n.Id != rid))
+                        if (nodeIds.Add(rid))
                         {
                             nodes.Add(new GraphNodeView(rid, $"run {runId.ToString("N")[..8]}", 0, false, Content: "tagged job run"));
                             _overviewNodeUrls[rid] = $"/observability?run={runId}";
@@ -294,7 +299,7 @@ else
                         var latest = g.OrderByDescending(a => a.CreatedAt).First();
                         var aid = $"art:{latest.Id}";
                         var label = g.Count() > 1 ? $"{latest.Title} · v{g.Count()}" : latest.Title;
-                        if (nodes.All(n => n.Id != aid))
+                        if (nodeIds.Add(aid))
                         {
                             nodes.Add(new GraphNodeView(aid, label, 0, false,
                                 Content: $"artifact · {latest.Kind}", Kind: "good", Labeled: true));

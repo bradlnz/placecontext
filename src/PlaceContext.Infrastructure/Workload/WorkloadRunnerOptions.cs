@@ -58,6 +58,34 @@ public sealed class WorkloadRunnerOptions
     /// </summary>
     public bool SandboxNetworkNone { get; set; } = true;
 
+    // ── Job placement (Kubernetes runner only) ──────────────────────────────────────────────────
+    // Where job pods land in a multi-node fleet. The common shape is a small cloud server (e.g. a
+    // DigitalOcean droplet) running the portal/MCP as the k3s control plane, with the operator's
+    // own machines joined as agents over Tailscale — jobs should execute on those local machines,
+    // not burn the portal server's CPU.
+
+    /// <summary>
+    /// Prefer scheduling job pods onto worker (agent) nodes — any node NOT carrying the
+    /// <c>node-role.kubernetes.io/control-plane</c> label. Soft preference: on a single-node
+    /// install jobs still run on the server. Default: true.
+    /// </summary>
+    public bool PreferWorkerNodes { get; set; } = true;
+
+    /// <summary>
+    /// Require worker (agent) nodes for job pods. When true a job pod is never scheduled onto the
+    /// control-plane node — it stays Pending until a worker is online. Turn this on when the
+    /// control plane is a cloud portal server and all execution must happen on local machines.
+    /// Default: false.
+    /// </summary>
+    public bool RequireWorkerNodes { get; set; }
+
+    /// <summary>
+    /// Explicit node selector for job pods (label → value), e.g.
+    /// <c>{"placecontext.io/jobs": "true"}</c> to pin execution to hand-picked machines.
+    /// Applied in addition to the worker-node affinity above. Empty = any node.
+    /// </summary>
+    public Dictionary<string, string> JobNodeSelector { get; set; } = new();
+
     // ── Runtime registry ────────────────────────────────────────────────────────────────────────
     // Maps runtimeId → { BaseImage, InvokeCommand, DefaultEntrypoint }.
     // Config-driven — no domain-specific knowledge, just generic runtime sandbox definitions.

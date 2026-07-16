@@ -395,11 +395,20 @@ else
     }
 
     // Run/chain transitions land in the OperationCenter on a short tick — refresh the history
-    // live so runs appear and flip to terminal status without a manual reload.
+    // live so runs appear and flip to terminal status without a manual reload. Coalesced: each
+    // refresh pulls 50 run reports + 50 chain runs, so at most one reload runs per window; a
+    // burst's last event schedules a trailing refresh instead of being dropped.
     private void OnOpsChanged() => _ = InvokeAsync(async () =>
     {
-        if (_refreshing) return;
-        _refreshing = true;
+        if (_refreshScheduled) return;
+        _refreshScheduled = true;
+        try
+        {
+            var wait = _lastRefreshAt + MinRefreshInterval - DateTimeOffset.UtcNow;
+            if (wait > TimeSpan.Zero) await Task.Delay(wait);
+        }
+        finally { _refreshScheduled = false; }
+        _lastRefreshAt = DateTimeOffset.UtcNow;
         try
         {
             await RefreshAsync();
@@ -423,10 +432,12 @@ else
             }
             StateHasChanged();
         }
-        finally { _refreshing = false; }
+        catch { /* live refresh is best-effort */ }
     });
 
-    private bool _refreshing;
+    private static readonly TimeSpan MinRefreshInterval = TimeSpan.FromSeconds(5);
+    private DateTimeOffset _lastRefreshAt = DateTimeOffset.MinValue;
+    private bool _refreshScheduled;
 
     public void Dispose() => OpCenter.Changed -= OnOpsChanged;
 
