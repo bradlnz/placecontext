@@ -46,8 +46,18 @@ placecontext join-code
 ```
 
 It's a single string (`PC2.…`) that carries everything the new machine needs. When the master is
-on Tailscale, the code embeds the mesh address so it keeps working behind NAT — including **Mac
-laptop master → remote Linux worker**.
+on Tailscale, the code embeds the mesh address so it keeps working behind NAT — in **any**
+direction: Mac master → Linux worker, Linux master → Mac worker, or across a remote fleet.
+
+**Adding a Mac worker?** Mint the code with a Tailscale auth key:
+
+```bash
+placecontext join-code --ts-authkey tskey-auth-xxxxx   # from the Tailscale admin console → Keys
+```
+
+A Mac can't run k3s natively, so it joins by running the k3s agent inside Docker. That container
+can't see the Mac's own Tailscale, so it self-joins the tailnet using the embedded key. Linux
+workers don't need the key if they're already on the same tailnet.
 
 Mac/docker masters need the k3d API published on `:6443` (new installs do this). If join-code
 says the API is localhost-only, recreate once:
@@ -56,14 +66,19 @@ says the API is localhost-only, recreate once:
 k3d cluster delete placecontext && placecontext install --docker
 ```
 
-### 2. On the new computer (Linux), use it
-
-Workers install k3s and must be Linux. Either way works:
+### 2. On the new computer, use it
 
 - **In the TUI** — run `placecontext`, choose **Connect**, paste the code, press `⏎`.
-- **From a shell** — `sudo placecontext connect --code 'PC2.…'`
+- **From a shell**:
+  - **Linux** — `sudo placecontext connect --code 'PC2.…'` (installs a native k3s agent)
+  - **Mac** — `placecontext connect --code 'PC2.…'` (starts a k3s-agent container + a Tailscale
+    sidecar; no `sudo`, just Docker Desktop running)
 
-Either way, the new machine joins and starts taking on work right away.
+Either way, the new machine joins and starts taking on work right away. On a Mac the worker lives in
+two containers — `placecontext-tailscale` (mesh) and `placecontext-agent` (k3s). Manage it with
+`docker logs -f placecontext-agent`; remove it with `docker rm -f placecontext-agent placecontext-tailscale`.
+If the master runs a different k3s minor version, pin the agent image with
+`PCTL_K3S_IMAGE=rancher/k3s:vX.Y.Z-k3s1 placecontext connect --code …`.
 
 ## The TUI dashboard
 

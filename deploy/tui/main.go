@@ -149,8 +149,9 @@ USAGE
   placecontext help
 
 CONNECT (fleet join — no tools/pctl needed)
-  On master:  sudo placecontext join-code
-  On new host: sudo placecontext connect --code PC2.…
+  On master:   sudo placecontext join-code   (add --ts-authkey KEY for a Mac worker)
+  Linux host:  sudo placecontext connect --code PC2.…
+  Mac host:         placecontext connect --code PC2.…   (k3s agent in Docker; no sudo)
 
 VERBOSITY
   -v, --verbose   stream kubectl/k3d output; extra step detail
