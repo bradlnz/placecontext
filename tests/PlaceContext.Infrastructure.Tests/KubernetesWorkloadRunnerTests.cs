@@ -102,4 +102,43 @@ public class KubernetesWorkloadRunnerTests
         Assert.Equal("result", stdout);
         Assert.Empty(files);
     }
+
+    // ── job placement (BuildWorkerAffinity) ───────────────────────────────────────────────────────
+    // The portal server (k3s control plane, e.g. a cloud droplet) should serve the portal while job
+    // pods execute on the operator's own machines (agents joined over Tailscale).
+
+    [Fact]
+    public void Default_placement_prefers_worker_nodes_but_never_blocks_a_run()
+    {
+        var affinity = KubernetesWorkloadRunner.BuildWorkerAffinity(new WorkloadRunnerOptions());
+
+        Assert.NotNull(affinity);
+        Assert.Null(affinity!.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution);
+        var term = Assert.Single(affinity.NodeAffinity.PreferredDuringSchedulingIgnoredDuringExecution);
+        Assert.Equal(100, term.Weight);
+        var expr = Assert.Single(term.Preference.MatchExpressions);
+        Assert.Equal("node-role.kubernetes.io/control-plane", expr.Key);
+        Assert.Equal("DoesNotExist", expr.OperatorProperty);
+    }
+
+    [Fact]
+    public void Require_worker_nodes_hard_excludes_the_control_plane()
+    {
+        var affinity = KubernetesWorkloadRunner.BuildWorkerAffinity(
+            new WorkloadRunnerOptions { RequireWorkerNodes = true });
+
+        Assert.NotNull(affinity);
+        Assert.Null(affinity!.NodeAffinity.PreferredDuringSchedulingIgnoredDuringExecution);
+        var term = Assert.Single(affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms);
+        var expr = Assert.Single(term.MatchExpressions);
+        Assert.Equal("node-role.kubernetes.io/control-plane", expr.Key);
+        Assert.Equal("DoesNotExist", expr.OperatorProperty);
+    }
+
+    [Fact]
+    public void Placement_affinity_can_be_disabled_entirely()
+    {
+        Assert.Null(KubernetesWorkloadRunner.BuildWorkerAffinity(
+            new WorkloadRunnerOptions { PreferWorkerNodes = false, RequireWorkerNodes = false }));
+    }
 }

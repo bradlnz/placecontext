@@ -11,7 +11,9 @@
     @* Blazor scoped-CSS bundle: per-component <Name>.razor.css files compile into this. Component
        classes resolve --var() values from the #dcshell ancestor's cascade below. *@
     <link rel="stylesheet" href="PlaceContext.Host.styles.css" />
-    <HeadOutlet @rendermode="InteractiveServer" />
+    @* prerender:false — with prerender on, every page ran its whole data load twice (once for
+       the throwaway static render, again when the circuit connects). One load, one render. *@
+    <HeadOutlet @rendermode="new InteractiveServerRenderMode(prerender: false)" />
     <style>
         #dcshell {
             --bg:#0a0c0e; --panel:#0d1013; --card:#0e1216; --card-2:#151b21; --hover:#11161b;
@@ -152,7 +154,7 @@
     </style>
 </head>
 <body>
-    <Routes @rendermode="InteractiveServer" />
+    <Routes @rendermode="new InteractiveServerRenderMode(prerender: false)" />
     <script src="_framework/blazor.web.js"></script>
     <script src="placecontext.js"></script>
     <script src="pcgraph.js"></script>

@@ -154,6 +154,26 @@ pctl db ha              # run the database with live replicas for resilience
 A backup runs automatically every night and is kept for a week. `pctl db restore` replaces the
 current data, so it asks you to type `yes` to confirm unless you pass `--yes`.
 
+## Where jobs run
+
+Job containers always **prefer worker machines** — the master keeps its capacity for the portal
+and the scheduler. On a single machine everything still just works: with no workers joined, jobs
+run on the master too.
+
+When the master is a small cloud server (a droplet serving the portal) and the real horsepower is
+your own machines joined over the mesh, harden the preference into a rule:
+
+```bash
+pctl jobs placement require   # jobs run ONLY on worker machines — never on the portal server
+pctl jobs placement prefer    # back to the soft default
+pctl jobs placement status    # which mode is active
+```
+
+In `require` mode a run started while no worker is online simply waits (Pending) until one
+connects — nothing is lost, and the portal stays fast because the server never shares its CPU
+with job containers. You can also pin jobs to hand-picked machines by labelling nodes and setting
+`PlaceContext:WorkloadRunner:JobNodeSelector` in the Host configuration.
+
 ## Spanning networks
 
 To run workers in different locations, you can put the fleet on a private mesh network so the

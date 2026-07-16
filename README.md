@@ -80,6 +80,9 @@ Everything deploys with **`pctl`** (bash) and its full-screen **TUI dashboard** 
   when the API is published on `:6443` (default for new installs).
 - **Air-gap friendly**: images ship as tarballs inside cross-arch packages (`pctl package`) — no
   registry pulls on the nodes.
+- **Jobs run on your machines**: job pods prefer worker nodes, so a small cloud master (e.g. a
+  DigitalOcean droplet) serves the portal while execution lands on the workers you joined.
+  `pctl jobs placement require` makes that a hard rule — the portal server never runs jobs.
 - Postgres and MinIO run in-cluster; the portal, MCP endpoint, and job scheduler are one
   process, scaled horizontally.
 

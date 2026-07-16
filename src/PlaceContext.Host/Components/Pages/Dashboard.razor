@@ -183,7 +183,6 @@
     private IReadOnlyList<RunReportView> _reports = Array.Empty<RunReportView>();
     private int _running, _queued, _failed24, _succeeded24;
     private string _filter = "all";
-    private bool _refreshing;
 
     private IReadOnlyList<ProjectChartView> _charts = Array.Empty<ProjectChartView>();
     private IReadOnlyList<DataEntityView> _entities = Array.Empty<DataEntityView>();
@@ -257,14 +256,27 @@
 
     // The run-status watcher feeds the OperationCenter on a short tick — every transition
     // (queued → running → terminal) re-renders the stats and table without a manual refresh.
+    // Coalesced: RefreshAsync fans out to run reports + per-entity SQL, so at most one full
+    // reload runs per window. A burst's last event still lands — it schedules a trailing
+    // refresh rather than being dropped.
     private void OnOpsChanged() => _ = InvokeAsync(async () =>
     {
-        if (_refreshing) return;
-        _refreshing = true;
+        if (_refreshScheduled) return;
+        _refreshScheduled = true;
+        try
+        {
+            var wait = _lastRefreshAt + MinRefreshInterval - DateTimeOffset.UtcNow;
+            if (wait > TimeSpan.Zero) await Task.Delay(wait);
+        }
+        finally { _refreshScheduled = false; }
+        _lastRefreshAt = DateTimeOffset.UtcNow;
         try { await RefreshAsync(); StateHasChanged(); }
         catch { /* live refresh is best-effort */ }
-        finally { _refreshing = false; }
     });
+
+    private static readonly TimeSpan MinRefreshInterval = TimeSpan.FromSeconds(5);
+    private DateTimeOffset _lastRefreshAt = DateTimeOffset.MinValue;
+    private bool _refreshScheduled;
 
     private async Task RefreshAsync()
     {

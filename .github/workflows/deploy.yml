@@ -1,0 +1,70 @@
+name: Deploy
+
+# Publishes the latest build from main to the release host (the DO Spaces bucket
+# behind get.placecontext.ai) using tools/release.sh — the same script used for
+# manual releases. Every push to main becomes the new `latest/` that
+# `curl -fsSL https://get.placecontext.ai/install.sh | bash` installs, and
+# existing installs pick up via `placecontext upgrade`.
+#
+# Required repository secrets:
+#   DO_SPACES_ACCESS_KEY   Spaces key with write access to the release bucket
+#   DO_SPACES_SECRET_KEY   matching secret
+# Optional repository variables (defaults match tools/release.sh):
+#   RELEASE_BUCKET         bucket name              (default: placecontext)
+#   RELEASE_ENDPOINT       S3-compatible endpoint   (default: syd1.digitaloceanspaces.com)
+#   RELEASE_VERIFY_BASE    base URL for the post-upload install check
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# One deploy at a time, and never cancel a run mid-upload — a half-written
+# latest/ would break installs. Later pushes queue behind the current run.
+concurrency:
+  group: deploy-latest
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Package + publish latest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # release.sh stamps the version via `git describe --tags`
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: deploy/tui/go.mod
+
+      # qemu + binfmt so the linux/arm64 app image cross-builds on the amd64 runner.
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build packages and upload
+        env:
+          # release.sh uploads with the aws CLI (pre-installed on the runner;
+          # s3cmd is not, so the script's aws path is taken).
+          AWS_ACCESS_KEY_ID: ${{ secrets.DO_SPACES_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.DO_SPACES_SECRET_KEY }}
+          AWS_DEFAULT_REGION: us-east-1 # the CLI insists on a region; Spaces ignores it
+          # aws CLI >= 2.23 attaches CRC checksums by default, which
+          # S3-compatible stores like Spaces reject.
+          AWS_REQUEST_CHECKSUM_CALCULATION: when_required
+          AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
+          RELEASE_BUCKET: ${{ vars.RELEASE_BUCKET || 'placecontext' }}
+          RELEASE_ENDPOINT: ${{ vars.RELEASE_ENDPOINT || 'syd1.digitaloceanspaces.com' }}
+          RELEASE_VERIFY_BASE: ${{ vars.RELEASE_VERIFY_BASE }}
+          # --verify: fetch install.sh from the origin and install the CLI in a
+          # clean container; skip the full k3d cluster bring-up on CI.
+          IT_CLI_ONLY: 1
+        run: |
+          ./tools/release.sh \
+            --target linux/amd64 \
+            --target linux/arm64 \
+            --target darwin/arm64 \
+            --upload --verify
