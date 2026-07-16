@@ -21,11 +21,27 @@ Package / publish client releases:
 ./tools/release.sh --linux-only    # linux-amd64 + linux-arm64
 ./tools/release.sh --all           # linux/darwin × amd64/arm64
 ./tools/release.sh --upload        # package then upload (s3cmd / aws / rclone)
+./tools/release.sh --upload --verify   # upload then post-release install check
 ./tools/release.sh --upload --dry-run
 ```
 
 Stages a clean tree at **`dist/upload/`** (only the objects to publish).  
 See `tools/release.sh` for `RELEASE_BUCKET`, `RELEASE_ENDPOINT`, `RELEASE_UPLOAD_CMD`, etc.
+
+### Post-release install check
+
+After a publish, verify the live installer end-to-end inside an isolated Ubuntu container
+(downloads `install.sh`, installs the CLI, optionally `placecontext install --docker`):
+
+```bash
+./tools/integration_test_install.sh
+./tools/integration_test_install.sh --base https://placecontext.syd1.digitaloceanspaces.com
+./tools/integration_test_install.sh --cli-only          # skip k3d (fast)
+./tools/integration_test_install.sh --keep              # leave container + cluster
+```
+
+Prints a PASS/FAIL check table and exits non-zero on failure. Requires host Docker
+(and ~4+ GiB free disk for the cluster path).
 
 Low-level single-target package:
 

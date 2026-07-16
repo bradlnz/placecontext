@@ -8,6 +8,7 @@
 #   ./tools/release.sh --linux-only        # linux-amd64 + linux-arm64
 #   ./tools/release.sh --no-image          # skip embedding the app image (CLI-only packages)
 #   ./tools/release.sh --upload            # after package, upload public-read objects
+#   ./tools/release.sh --upload --verify   # upload then run post-release install check
 #   ./tools/release.sh --dry-run --upload  # print upload commands only
 #
 # Upload (any one works when --upload is set):
@@ -21,6 +22,7 @@
 #   RELEASE_PUBLIC_BASE  public base URL printed for install (default: https://get.placecontext.ai)
 #   RELEASE_VERSION      override git version stamp
 #   PCTL_IMAGE_TAR       path to linux image tarball (default: deploy/placecontext-local.tar)
+#   RELEASE_VERIFY_BASE  install base URL for --verify (default: CDN / Spaces origin)
 #
 # RELEASE_UPLOAD_CMD examples (use {src} and {dest} placeholders):
 #   s3cmd put --acl-public {src} s3://placecontext/{dest}
@@ -39,6 +41,7 @@ LINUX_ONLY=0
 NO_IMAGE=0
 UPLOAD=0
 DRY_RUN=0
+VERIFY=0
 TARGETS=()
 
 while [ $# -gt 0 ]; do
@@ -47,11 +50,12 @@ while [ $# -gt 0 ]; do
     --linux-only) LINUX_ONLY=1; shift;;
     --no-image)   NO_IMAGE=1; shift;;
     --upload)     UPLOAD=1; shift;;
+    --verify)     VERIFY=1; shift;;
     --dry-run)    DRY_RUN=1; shift;;
     --os)         TARGETS+=("$2/$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')"); shift 2;;
     --target)     TARGETS+=("$2"); shift 2;;  # e.g. linux/amd64
     -h|--help)
-      sed -n '2,35p' "$0" | sed 's/^# \{0,1\}//'
+      sed -n '2,40p' "$0" | sed 's/^# \{0,1\}//'
       exit 0
       ;;
     *) echo "unknown arg: $1" >&2; exit 2;;
@@ -241,3 +245,18 @@ for entry in "${MANIFEST[@]}"; do
 done
 ok "Upload finished."
 printf '\nInstall:\n  curl -fsSL %s/install.sh | bash\n' "$PUBLIC_BASE"
+
+if [ "$VERIFY" = 1 ]; then
+  if [ "$DRY_RUN" = 1 ]; then
+    say "Would run post-release install check (skipped on --dry-run)"
+  else
+    VERIFY_BASE="${RELEASE_VERIFY_BASE:-https://placecontext.syd1.digitaloceanspaces.com}"
+    IT="${ROOT}/tools/integration_test_install.sh"
+    [ -x "$IT" ] || die "missing $IT"
+    say "Post-release install check against ${VERIFY_BASE}…"
+    # Give the CDN/origin a moment after the last put
+    sleep 3
+    "$IT" --base "$VERIFY_BASE" || die "post-release install check failed"
+    ok "Post-release install check passed"
+  fi
+fi

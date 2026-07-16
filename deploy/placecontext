@@ -316,10 +316,11 @@ cmd_install() {
       setup_default_admin
       return 0
     fi
+    # Keep Traefik enabled — manifests expose the portal via Ingress on :80 (mapped to PCTL_PORT).
     say "Creating k3d cluster '$PCTL_CLUSTER'…"
     k3d cluster create "$PCTL_CLUSTER" --agents "$PCTL_AGENTS" \
       --port "${PCTL_PORT}:80@loadbalancer" \
-      --k3s-arg "--disable=traefik@server:0" 2>/dev/null \
+      --wait \
       || k3d cluster start "$PCTL_CLUSTER" || true
     use_dev_kubeconfig
     if [ -s "$PCTL_IMAGE_TAR" ]; then
