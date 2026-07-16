@@ -63,10 +63,11 @@ ok()   { printf '%s✓%s %s\n'  "$C_GREEN" "$C_RESET" "$*"; }
 warn() { printf '%s!%s %s\n'  "$C_YELLOW" "$C_RESET" "$*" >&2; }
 die()  { printf '%s✗%s %s\n'  "$C_RED" "$C_RESET" "$*" >&2; exit 1; }
 # Secondary progress (always on — keeps long installs from looking stuck).
-info() { printf '    %s%s%s\n' "$C_DIM" "$*" "$C_RESET"; }
+# stderr so helpers that print structured data on stdout (e.g. decode_join_code) stay clean.
+info() { printf '    %s%s%s\n' "$C_DIM" "$*" "$C_RESET" >&2; }
 # Verbose-only detail (-v / -vv / PLACECONTEXT_VERBOSE).
-vlog() { [ "${VERBOSE:-0}" -ge 1 ] && printf '    %s·%s %s\n' "$C_DIM" "$C_RESET" "$*" || true; }
-vvlog(){ [ "${VERBOSE:-0}" -ge 2 ] && printf '    %s··%s %s\n' "$C_DIM" "$C_RESET" "$*" || true; }
+vlog() { [ "${VERBOSE:-0}" -ge 1 ] && printf '    %s·%s %s\n' "$C_DIM" "$C_RESET" "$*" >&2 || true; }
+vvlog(){ [ "${VERBOSE:-0}" -ge 2 ] && printf '    %s··%s %s\n' "$C_DIM" "$C_RESET" "$*" >&2 || true; }
 have() { command -v "$1" >/dev/null 2>&1; }
 kube() { $KUBECTL "$@"; }
 
@@ -96,6 +97,64 @@ use_dev_kubeconfig() {
   [ -n "$kcfg" ] || die "could not obtain kubeconfig for cluster '$PCTL_CLUSTER'"
   export KUBECONFIG="$kcfg"
   KUBECTL="kubectl --context k3d-$PCTL_CLUSTER"
+}
+
+# Resolve the Tailscale binary even under sudo (secure_path often omits /usr/local/bin).
+tailscale_cmd() {
+  if [ -n "${PLACECONTEXT_TAILSCALE:-}" ] && [ -x "${PLACECONTEXT_TAILSCALE}" ]; then
+    printf '%s\n' "$PLACECONTEXT_TAILSCALE"
+    return 0
+  fi
+  local c
+  for c in tailscale /usr/bin/tailscale /usr/sbin/tailscale /usr/local/bin/tailscale \
+           /opt/homebrew/bin/tailscale; do
+    if [ -x "$c" ]; then printf '%s\n' "$c"; return 0; fi
+    if command -v "$c" >/dev/null 2>&1; then command -v "$c"; return 0; fi
+  done
+  return 1
+}
+
+# This host's Tailscale IPv4 (100.x mesh), or empty if offline / not installed.
+mesh_ipv4() {
+  local ts ip
+  ts="$(tailscale_cmd 2>/dev/null)" || return 1
+  ip="$("$ts" ip -4 2>/dev/null | head -1 | tr -d '[:space:]')"
+  [ -n "$ip" ] || return 1
+  case "$ip" in
+    100.*) printf '%s\n' "$ip"; return 0 ;;
+  esac
+  return 1
+}
+
+is_mesh_host() {
+  case "$1" in
+    100.*|fd7a:*|fd[0-9a-fA-F]*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+# Host part of https://IP:6443 or https://[v6]:6443
+url_host() {
+  printf '%s' "$1" | sed -E 's#^https?://##; s#/.*$##; s#:.*$##; s/^\[//; s/\]$//'
+}
+
+# Prefer mesh IP for join codes / server advertise. Use --local only for pure LAN tests.
+resolve_advertise_ip() {
+  local allow_local="${1:-0}"
+  local ip
+  if ip="$(mesh_ipv4)"; then
+    info "advertise IP: ${ip} (Tailscale mesh)"
+    printf '%s\n' "$ip"
+    return 0
+  fi
+  if [ "$allow_local" = 1 ]; then
+    ip="$(hostname -I 2>/dev/null | awk '{print $1}')"
+    [ -n "$ip" ] || return 1
+    warn "No Tailscale IPv4 — using local IP ${ip} (LAN only; DO nodes cannot reach this)"
+    printf '%s\n' "$ip"
+    return 0
+  fi
+  return 1
 }
 
 image_import_k3s() {
@@ -136,10 +195,14 @@ seed_cluster_join_secret() {
   [ -r "$tok_file" ] && tok="$(tr -d '[:space:]' < "$tok_file")"
   [ -n "$tok" ] || return 0
 
-  local ip; ip="$(tailscale ip -4 2>/dev/null | head -1)"
-  [ -n "$ip" ] || ip="$(hostname -I 2>/dev/null | awk '{print $1}')"
-  local url=""
-  [ -n "$ip" ] && url="https://${ip}:6443"
+  # Prefer Tailscale mesh IP so portal join codes never embed a LAN-only address.
+  local ip url=""
+  ip="$(mesh_ipv4 2>/dev/null || true)"
+  if [ -z "$ip" ]; then
+    warn "No Tailscale IPv4 when seeding join secret — skipping server-url (run join-code after Tailscale is up)"
+  else
+    url="https://${ip}:6443"
+  fi
 
   say "Seeding cluster join secret (for portal join codes)…"
   info "server-url=${url:-unset} (token length ${#tok})"
@@ -360,21 +423,51 @@ PY
   esac
 }
 
+# Ensure k3s server cert accepts the mesh IP (required for DO → Mac joins via Tailscale).
+ensure_k3s_tls_san() {
+  local mesh="${1:-}"
+  [ -n "$mesh" ] || return 0
+  local cfg="/etc/rancher/k3s/config.yaml"
+  mkdir -p /etc/rancher/k3s
+  if [ -f "$cfg" ] && grep -qE "^\s*-\s*${mesh}\s*$" "$cfg" 2>/dev/null; then
+    info "tls-san already includes ${mesh}"
+    return 0
+  fi
+  # Merge tls-san into config (idempotent-ish append).
+  if [ ! -f "$cfg" ]; then
+    printf 'tls-san:\n  - %s\n' "$mesh" >"$cfg"
+  elif grep -q '^tls-san:' "$cfg" 2>/dev/null; then
+    grep -qE "^\s*-\s*${mesh}\s*$" "$cfg" || printf '  - %s\n' "$mesh" >>"$cfg"
+  else
+    printf '\ntls-san:\n  - %s\n' "$mesh" >>"$cfg"
+  fi
+  info "added tls-san ${mesh} — restarting k3s to reload certs…"
+  systemctl restart k3s 2>/dev/null || true
+}
+
 # Install k3s as a systemd service, import the bundled image, deploy PlaceContext.
 install_service() {
   [ "$(id -u)" = 0 ] || die "service install needs root (sudo)"
   banner
+  local mesh=""
+  mesh="$(mesh_ipv4 2>/dev/null || true)"
+  [ -n "$mesh" ] && info "Tailscale mesh IP detected: ${mesh}"
+
   say "Installing k3s (systemd)…"
+  local -a server_args=(server)
+  if [ -n "$mesh" ]; then
+    # Advertise/SAN the mesh IP so join codes using https://100.x.x.x:6443 validate TLS.
+    server_args+=(--tls-san="$mesh")
+  fi
   if have k3s; then
     ok "k3s already installed ($(k3s --version 2>/dev/null | head -1 || echo present))"
+    ensure_k3s_tls_san "$mesh"
   else
     info "downloading https://get.k3s.io …"
-    if [ "${VERBOSE:-0}" -ge 1 ]; then
-      curl -sfL https://get.k3s.io | sh -s - server
-    else
-      curl -sfL https://get.k3s.io | sh -s - server
-    fi
+    info "k3s ${server_args[*]}"
+    curl -sfL https://get.k3s.io | sh -s - "${server_args[@]}"
     ok "k3s installed"
+    ensure_k3s_tls_san "$mesh"
   fi
   info "enabling k3s unit…"
   systemctl enable --now k3s
@@ -582,34 +675,96 @@ cmd_upgrade() {
 
 # Join this machine as a k3s agent to an existing master (no tools/pctl required).
 # PC1.<b64url("url token")>  |  PC2.<b64url("url token [tskey]")>
+# The server URL from the join code is used as-is — never rewritten to a local/LAN address.
 agent_join() {
   local url="$1" token="$2" ts_key="${3:-}"
   [ -n "$url" ] && [ -n "$token" ] || die "agent join needs server URL and node token"
   [ "$(id -u)" = 0 ] || die "joining installs k3s agent — re-run with sudo (or use passwordless sudo)"
 
+  # Normalize URL; refuse empty host.
+  case "$url" in
+    https://*|http://*) ;;
+    *) url="https://${url}";;
+  esac
+  local server_host; server_host="$(url_host "$url")"
+  [ -n "$server_host" ] || die "join code server URL has no host: $url"
+  say "Join target (from join code): ${url}"
+  info "server host=${server_host}  (will NOT substitute a local IP)"
+
   local -a exec_args=()
   if [ -n "$ts_key" ]; then
-    say "Node will join Tailscale via embedded auth key (k3s --vpn-auth)…"
-    exec_args+=("--vpn-auth=name=tailscale,joinKey=${ts_key}")
+    say "Bringing up Tailscale via k3s --vpn-auth (embedded auth key)…"
+    exec_args+=(--vpn-auth="name=tailscale,joinKey=${ts_key}")
   fi
 
-  case "$url" in
-    https://100.*|https://fd7a:*|https://\[fd*)
-      if [ ${#exec_args[@]} -eq 0 ] && ! { have tailscale && tailscale status >/dev/null 2>&1; }; then
-        die "server address ($url) is on the mesh, but this machine is not on Tailscale and the join code has no auth key.
-Bring Tailscale up first, or use a join code generated with a Tailscale auth key."
+  if is_mesh_host "$server_host"; then
+    if [ ${#exec_args[@]} -eq 0 ]; then
+      # Need Tailscale already up to reach a 100.x master.
+      if ! mesh_ipv4 >/dev/null 2>&1; then
+        die "server is on the Tailscale mesh (${server_host}), but this machine has no Tailscale IPv4
+and the join code has no auth key.
+  • Start Tailscale here, then re-run connect, or
+  • Regenerate the join code with --ts-authkey KEY"
       fi
-      ;;
-  esac
-
-  say "Installing k3s agent → ${url}…"
-  info "K3S_URL=${url}  token length=${#token}  vpn=$([ ${#exec_args[@]} -gt 0 ] && echo yes || echo no)"
-  if [ "${VERBOSE:-0}" -ge 1 ]; then
-    curl -sfL https://get.k3s.io | K3S_URL="$url" K3S_TOKEN="$token" sh -s - agent "${exec_args[@]+"${exec_args[@]}"}"
-  else
-    curl -sfL https://get.k3s.io | K3S_URL="$url" K3S_TOKEN="$token" sh -s - agent "${exec_args[@]+"${exec_args[@]}"}"
+      ok "local mesh IP $(mesh_ipv4)"
+    fi
   fi
-  ok "k3s agent installed"
+
+  # Prefer this node's mesh address for kubelet ↔ API traffic when available.
+  local my_mesh=""
+  my_mesh="$(mesh_ipv4 2>/dev/null || true)"
+  if [ -n "$my_mesh" ]; then
+    exec_args+=(--node-ip="$my_mesh")
+    info "agent --node-ip=${my_mesh}"
+    if ip link show tailscale0 >/dev/null 2>&1; then
+      exec_args+=(--flannel-iface=tailscale0)
+      info "agent --flannel-iface=tailscale0"
+    fi
+  fi
+
+  # After vpn-auth install, wait until the *coded* server host is reachable before declaring success.
+  say "Installing k3s agent → ${url}…"
+  info "K3S_URL=${url}  token length=${#token}  extra_args=${exec_args[*]:-none}"
+  # Pass --server explicitly so the installer cannot invent another endpoint.
+  # shellcheck disable=SC2086
+  curl -sfL https://get.k3s.io | \
+    K3S_URL="$url" \
+    K3S_TOKEN="$token" \
+    INSTALL_K3S_EXEC="agent --server ${url}" \
+    sh -s - agent "${exec_args[@]+"${exec_args[@]}"}"
+  ok "k3s agent installed (server=${url})"
+
+  # Verify we are talking to the IP from the join code, not a rewritten local address.
+  if [ -f /etc/systemd/system/k3s-agent.service ]; then
+    local svc_url
+    svc_url="$(grep -oE 'https://[^ ]+:6443' /etc/systemd/system/k3s-agent.service.env 2>/dev/null | head -1 || true)"
+    [ -z "$svc_url" ] && svc_url="$(tr '\0' '\n' < /proc/$(pgrep -f 'k3s agent' | head -1)/environ 2>/dev/null | grep '^K3S_URL=' | cut -d= -f2- || true)"
+    if [ -n "$svc_url" ] && [ "$svc_url" != "$url" ]; then
+      warn "k3s agent K3S_URL is ${svc_url} (expected ${url}) — fixing service env…"
+      mkdir -p /etc/systemd/system/k3s-agent.service.d
+      printf '[Service]\nEnvironment=K3S_URL=%s\nEnvironment=K3S_TOKEN=%s\n' "$url" "$token" \
+        > /etc/systemd/system/k3s-agent.service.d/10-placecontext-server.conf
+      systemctl daemon-reload
+      systemctl restart k3s-agent
+    fi
+  fi
+  # Also pin via k3s config if present
+  if [ -d /etc/rancher/k3s ]; then
+    printf 'server: %s\n' "$url" > /etc/rancher/k3s/config.yaml.join-tmp 2>/dev/null || true
+  fi
+
+  say "Checking reachability of join-code host ${server_host}…"
+  local i=0
+  until curl -sk --connect-timeout 3 "${url}/ping" >/dev/null 2>&1 \
+     || curl -sk --connect-timeout 3 "${url}/version" >/dev/null 2>&1 \
+     || timeout 2 bash -c "echo >/dev/tcp/${server_host}/6443" 2>/dev/null; do
+    i=$((i + 1))
+    [ "$i" -lt 30 ] || warn "still cannot reach ${url} — check Tailscale on both sides"
+    [ $((i % 5)) -eq 0 ] && info "waiting for ${server_host}:6443… (${i}/30)"
+    sleep 2
+    [ "$i" -ge 30 ] && break
+  done
+  [ "$i" -lt 30 ] && ok "API host ${server_host}:6443 is reachable"
 
   # Workers need the app image so jobs can schedule here.
   if [ -s "${PCTL_IMAGE_TAR:-}" ]; then
@@ -620,8 +775,8 @@ Bring Tailscale up first, or use a join code generated with a Tailscale auth key
 
   export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
   KUBECTL="k3s kubectl"
-  say "Waiting for this node to register…"
-  local i=0
+  say "Waiting for this node to register with ${url}…"
+  i=0
   until kube get nodes >/dev/null 2>&1; do
     i=$((i + 1))
     [ "$i" -lt 60 ] || { warn "API not ready yet — check: sudo systemctl status k3s-agent"; break; }
@@ -641,21 +796,29 @@ decode_join_code() {
   while [ $((${#b64} % 4)) -ne 0 ]; do b64="${b64}="; done
   local decoded
   decoded="$(printf '%s' "$b64" | base64 -d 2>/dev/null)" || die "join code is corrupted (base64 decode failed)"
-  # Fields: url token [tskey]
-  local url token tskey
-  # shellcheck disable=SC2086
-  read -r url token tskey <<EOF
-$decoded
-EOF
+  vvlog "join payload: ${decoded}"
+  # Fields: url token [tskey] — token is K10…::server:… (no spaces); split on first two words carefully.
+  local url token rest tskey
+  url="${decoded%% *}"
+  rest="${decoded#"$url"}"
+  rest="${rest# }"
+  token="${rest%% *}"
+  tskey="${rest#"$token"}"
+  tskey="${tskey# }"
   [ -n "$url" ] && [ -n "$token" ] || die "join code is incomplete (need url + token)"
+  # Validate URL embeds a host (IP or name) — this is the address we join, never replaced.
+  local h; h="$(url_host "$url")"
+  [ -n "$h" ] || die "join code URL missing host: $url"
+  info "decoded join host=${h}"
   printf '%s\n' "$url" "$token" "${tskey:-}"
 }
 
 cmd_connect() {
-  local code=""
+  local code="" force_url=""
   while [ $# -gt 0 ]; do
     case "$1" in
       --code) code="$2"; shift 2;;
+      --server-url) force_url="$2"; shift 2;; # override (debug); default is join-code URL only
       -v|--verbose) VERBOSE=$((VERBOSE + 1)); export PLACECONTEXT_VERBOSE="$VERBOSE"; shift;;
       *) die "connect: unknown arg $1 (usage: placecontext connect --code PC2.…)";;
     esac
@@ -671,44 +834,70 @@ cmd_connect() {
     read -r tskey || true
   } < <(decode_join_code "$code")
 
-  info "server  ${url}"
+  if [ -n "$force_url" ]; then
+    warn "overriding join-code URL with --server-url ${force_url}"
+    url="$force_url"
+  fi
+
+  info "server  ${url}  (host=$(url_host "$url"))"
   info "token   ${#token} chars"
   info "ts-key  $([ -n "${tskey:-}" ] && echo present || echo none)"
+
+  if is_mesh_host "$(url_host "$url")"; then
+    ok "join code points at Tailscale mesh address $(url_host "$url")"
+  else
+    warn "join code host $(url_host "$url") is not a Tailscale 100.x address — remote sites may be unreachable.
+Regenerate on the master with Tailscale up: sudo placecontext join-code"
+  fi
 
   if [ "$(id -u)" != 0 ]; then
     if sudo -n true 2>/dev/null; then
       say "Elevating with sudo to install k3s agent…"
+      # Preserve PATH so tailscale is still found if it lives outside secure_path... use full env
       exec sudo -n -E env \
+        PATH="/usr/local/bin:/usr/bin:/bin:${PATH}" \
         PLACECONTEXT_HOME="${PLACECONTEXT_HOME:-$ROOT}" \
         PLACECONTEXT_VERBOSE="${VERBOSE}" \
+        PLACECONTEXT_TAILSCALE="$(tailscale_cmd 2>/dev/null || true)" \
         PCTL_IMAGE_TAR="${PCTL_IMAGE_TAR:-}" \
         K3S_DIR="${K3S_DIR:-}" \
-        PATH="$PATH" \
-        "$SELF" connect --code "$code" $( [ "${VERBOSE:-0}" -ge 1 ] && printf '%s' '-v' )
+        "$SELF" connect --code "$code" ${force_url:+--server-url "$force_url"} $( [ "${VERBOSE:-0}" -ge 1 ] && printf '%s' '-v' )
     fi
     die "joining installs k3s (needs root). Run:
-  sudo env PLACECONTEXT_HOME=${PLACECONTEXT_HOME:-$ROOT} $SELF connect --code '$code'"
+  sudo env PATH=\"/usr/local/bin:/usr/bin:\$PATH\" PLACECONTEXT_HOME=${PLACECONTEXT_HOME:-$ROOT} $SELF connect --code '$code'"
   fi
 
   agent_join "$url" "$token" "${tskey:-}"
 }
 
-# Run on the master: print a join code for workers (Tailscale IP preferred).
+# Run on the master: print a join code for workers.
+# Always embeds the Tailscale mesh IP when available (never a LAN IP unless --local).
 cmd_join_code() {
-  local ts_key=""
+  local ts_key="" allow_local=0
   while [ $# -gt 0 ]; do
     case "$1" in
       --ts-authkey) ts_key="$2"; shift 2;;
+      --local) allow_local=1; shift;;
       -v|--verbose) VERBOSE=$((VERBOSE + 1)); export PLACECONTEXT_VERBOSE="$VERBOSE"; shift;;
-      *) die "join-code: unknown arg $1";;
+      *) die "join-code: unknown arg $1 (try: join-code [--ts-authkey KEY] [--local])";;
     esac
   done
   local tok_file="/var/lib/rancher/k3s/server/node-token"
   [ -r "$tok_file" ] || die "no k3s server token at $tok_file — run on the master (sudo), after install --service"
   local tok; tok="$(tr -d '[:space:]' < "$tok_file")"
-  local ip; ip="$(tailscale ip -4 2>/dev/null | head -1)"
-  [ -n "$ip" ] || ip="$(hostname -I 2>/dev/null | awk '{print $1}')"
-  [ -n "$ip" ] || die "could not determine this machine's IP (install Tailscale for mesh joins)"
+
+  local ip
+  if ! ip="$(resolve_advertise_ip "$allow_local")"; then
+    die "No Tailscale IPv4 on this host — mesh join codes must use the Tailscale address.
+  1) Install/start Tailscale and join the same tailnet as the worker
+  2) Re-run:  sudo placecontext join-code
+  LAN-only test:   sudo placecontext join-code --local"
+  fi
+
+  # Ensure API cert is valid for this mesh IP before handing out codes.
+  if [ "$(id -u)" = 0 ] && is_mesh_host "$ip"; then
+    ensure_k3s_tls_san "$ip"
+  fi
 
   if [ -z "$ts_key" ]; then
     warn "No --ts-authkey — joining machines must already be on the same tailnet to reach https://${ip}:6443."
@@ -716,7 +905,7 @@ cmd_join_code() {
     info "embedding Tailscale auth key in join code"
   fi
 
-  # PC2.<base64url("https://ip:6443 token [tskey]")> — same format as tools/pctl join-code.
+  # PC2.<base64url("https://MESH_IP:6443 token [tskey]")>
   local payload b64 code
   payload="$(printf 'https://%s:6443 %s %s' "$ip" "$tok" "$ts_key" | sed 's/ *$//')"
   if b64="$(printf '%s' "$payload" | base64 -w0 2>/dev/null)"; then
@@ -727,11 +916,17 @@ cmd_join_code() {
   b64="$(printf '%s' "$b64" | tr '+/' '-_' | tr -d '=')"
   code="PC2.${b64}"
 
-  printf '\n%sJoin code — give this to the new computer:%s\n\n  %s\n\n' "$C_BOLD" "$C_RESET" "$code"
+  printf '\n%sJoin code — master API is the mesh address below (not a LAN IP):%s\n\n' "$C_BOLD" "$C_RESET"
+  printf '  server:  https://%s:6443\n' "$ip"
+  printf '  code:    %s\n\n' "$code"
   printf 'On the new computer:\n'
   printf '  curl -fsSL https://get.placecontext.ai/install.sh | bash\n'
   printf '  sudo placecontext connect --code %s\n\n' "$code"
-  info "master API https://${ip}:6443  (prefer Tailscale IP for DO ↔ Mac)"
+  if is_mesh_host "$ip"; then
+    ok "join code uses Tailscale IP ${ip}"
+  else
+    warn "join code uses non-mesh IP ${ip} (--local)"
+  fi
 }
 
 cmd_status() {
@@ -792,11 +987,12 @@ Install modes
   --docker    k3s-in-Docker (k3d) — laptops / single machines
   --service   k3s systemd — servers / fleet masters (sudo)
 
-Connect (no tools/pctl required)
-  On the master:  sudo placecontext join-code
-  On the new host (e.g. DigitalOcean, over Tailscale):
+Connect (no tools/pctl required) — join code always uses the master's Tailscale IP
+  On the master (Tailscale up):  sudo placecontext join-code
+  On the new host:
     curl -fsSL https://get.placecontext.ai/install.sh | bash
     sudo placecontext connect --code PC2.…
+  LAN-only test:  sudo placecontext join-code --local
 
 Verbosity
   -v, --verbose   stream kubectl/k3d/import output; extra diagnostics

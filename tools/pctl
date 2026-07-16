@@ -126,15 +126,19 @@ apply_manifests() {
       --dry-run=client -o yaml | kube apply -f -
   fi
 
-  # Cluster page join codes: seed k3s node-token (+ Tailscale API URL when available).
+  # Cluster page join codes: seed k3s node-token (+ Tailscale API URL only — never LAN IP).
   if [ -r /var/lib/rancher/k3s/server/node-token ]; then
-    local jtok jip jurl
+    local jtok jip jurl=""
     jtok="$(tr -d '[:space:]' < /var/lib/rancher/k3s/server/node-token)"
-    jip="$(tailscale ip -4 2>/dev/null | head -1)"
-    [ -n "$jip" ] || jip="$(hostname -I 2>/dev/null | awk '{print $1}')"
-    [ -n "$jip" ] && jurl="https://${jip}:6443"
+    for c in tailscale /usr/bin/tailscale /usr/local/bin/tailscale; do
+      if [ -x "$c" ] || command -v "$c" >/dev/null 2>&1; then
+        jip="$("$c" ip -4 2>/dev/null | head -1 | tr -d '[:space:]')"
+        [ -n "$jip" ] && break
+      fi
+    done
+    case "${jip:-}" in 100.*) jurl="https://${jip}:6443";; esac
     if [ -n "$jtok" ]; then
-      say "Seeding placecontext-cluster-join secret…"
+      say "Seeding placecontext-cluster-join secret…${jurl:+ server-url=$jurl}"
       kube -n "$PCTL_NAMESPACE" create secret generic placecontext-cluster-join \
         --from-literal=node-token="$jtok" \
         ${jurl:+--from-literal=server-url="$jurl"} \
@@ -1342,9 +1346,21 @@ cmd_join_code() {
   done
   local tok_file="/var/lib/rancher/k3s/server/node-token"
   [ -r "$tok_file" ] || die "no k3s server token readable here — run on the master (or: sudo pctl join-code)"
-  local ip; ip="$(tailscale ip -4 2>/dev/null | head -1)"
-  [ -n "$ip" ] || ip="$(hostname -I 2>/dev/null | awk '{print $1}')"
-  [ -n "$ip" ] || die "could not determine this machine's IP"
+  # Prefer Tailscale mesh IP — never fall back to LAN unless no mesh address exists (and warn).
+  local ip=""
+  for c in tailscale /usr/bin/tailscale /usr/local/bin/tailscale; do
+    if [ -x "$c" ] || command -v "$c" >/dev/null 2>&1; then
+      ip="$("$c" ip -4 2>/dev/null | head -1 | tr -d '[:space:]')"
+      [ -n "$ip" ] && break
+    fi
+  done
+  if [ -z "$ip" ]; then
+    ip="$(hostname -I 2>/dev/null | awk '{print $1}')"
+    [ -n "$ip" ] || die "could not determine this machine's IP"
+    warn "No Tailscale IPv4 — join code will use LAN IP ${ip} (remote sites cannot join)."
+  else
+    ok "Join code will use Tailscale mesh IP ${ip}"
+  fi
 
   # No key passed but OAuth creds are in the environment → mint one, so the code is self-sufficient.
   if [ -z "$ts_key" ] && [ -n "$ts_id" ] && [ -n "$ts_secret" ]; then
@@ -1359,8 +1375,8 @@ cmd_join_code() {
   local code
   code="PC2.$(printf 'https://%s:6443 %s %s' "$ip" "$(cat "$tok_file")" "$ts_key" \
         | sed 's/ *$//' | base64 -w0 | tr '+/' '-_' | tr -d '=')"
-  printf '%sJoin code — give this to the new computer:%s\n\n  %s\n\n' "$C_BOLD" "$C_RESET" "$code"
-  printf 'On the new computer: run the TUI and press [j], or: sudo ./deploy/pctl join --code <code>\n'
+  printf '%sJoin code — master API https://%s:6443%s\n\n  %s\n\n' "$C_BOLD" "$ip" "$C_RESET" "$code"
+  printf 'On the new computer: sudo placecontext connect --code <code>\n'
 }
 
 cmd_join() {
