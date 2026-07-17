@@ -216,8 +216,14 @@
 
     private async Task ReloadMenuAsync()
     {
-        try { _menu = await MenuCfg.GetWorkspaceMenuAsync(Ui.CurrentProjectId); }
-        catch { _menu = Array.Empty<ResolvedMenuItem>(); }
+        // Keep the previous sidebar on a transient failure (e.g. the shared-circuit DbContext race in
+        // GetLayoutAsync) or an empty result (ambient user not yet resolved) instead of blanking it.
+        try
+        {
+            var menu = await MenuCfg.GetWorkspaceMenuAsync(Ui.CurrentProjectId);
+            if (menu.Count > 0) _menu = menu;
+        }
+        catch { /* keep previous _menu so the sidebar does not vanish */ }
     }
 
     private void ToggleSwitcher() => _switcherOpen = !_switcherOpen;

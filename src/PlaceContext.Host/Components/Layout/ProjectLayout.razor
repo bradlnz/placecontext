@@ -106,7 +106,12 @@
         }
         try
         {
-            _menu = await MenuCfg.GetProjectMenuAsync(pid.Value);
+            var menu = await MenuCfg.GetProjectMenuAsync(pid.Value);
+            // Every project item is permission-gated, so an unresolved ambient user (circuit
+            // reconnect / prerender→interactive handoff) yields an empty set — deny-by-default —
+            // which is transient, not "the user has no items". Keep the previous menu rather than
+            // overwriting it with empty, or the Project nav flickers away and back.
+            if (menu.Count > 0) _menu = menu;
         }
         catch
         {
