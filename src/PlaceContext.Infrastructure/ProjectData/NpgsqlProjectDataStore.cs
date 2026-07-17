@@ -25,6 +25,7 @@ public sealed class NpgsqlProjectDataStore : IProjectDataStore
     private readonly string _connectionString;
     private readonly ILogger<NpgsqlProjectDataStore>? _log;
     private readonly IDataEncryptor? _enc;
+    private readonly bool _encryptAtRest;
     private static string DataPurpose => IDataEncryptor.Purpose.ProjectData;
 
     // Schemas this process has already provisioned successfully. Once a schema lands here,
@@ -47,11 +48,16 @@ public sealed class NpgsqlProjectDataStore : IProjectDataStore
             ?? new PlaceContextOptions().ConnectionString;
         _log = log;
         _enc = enc;
+        // Encryption-at-rest for project-data cells is OFF by default: a jsonb column can't hold
+        // ciphertext (it isn't valid JSON), so encrypting cells broke every insert that touched a
+        // jsonb column (22P02) and silently dropped the batch. Opt back in with
+        // PlaceContext:EncryptProjectDataAtRest=true only once that path handles jsonb.
+        _encryptAtRest = config.GetValue("PlaceContext:EncryptProjectDataAtRest", false);
     }
 
-    /// <summary>Encrypt a cell for storage; null encryptor (tests) or empty values pass through.</summary>
+    /// <summary>Encrypt a cell for storage; disabled/null encryptor (tests) or empty values pass through.</summary>
     private string? ProtectCell(string? value)
-        => value is null || _enc is null ? value : _enc.Protect(value, DataPurpose);
+        => value is null || _enc is null || !_encryptAtRest ? value : _enc.Protect(value, DataPurpose);
 
     /// <summary>Decrypt a cell for portal/API display; legacy plaintext passes through.</summary>
     private string? UnprotectCell(string? value)
