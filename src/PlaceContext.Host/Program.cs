@@ -268,7 +268,13 @@ builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(o =>
 var app = builder.Build();
 PlaceContext.Infrastructure.DependencyInjection.MigrateDatabase(app.Services);
 // Encrypt any legacy plaintext (and migrate knowledge context DB → encrypted files) before serving.
-await PlaceContext.Infrastructure.DependencyInjection.EncryptExistingDataAsync(app.Services);
+// OFF by default: the EF passes load whole Jobs/JobRuns tables (map/reduce source + full run
+// artifacts, MBs per row, all tenants) into memory at once and OOM the pod. Opt in with
+// PlaceContext:EncryptionAtRest:BootstrapOnStartup=true only on a host sized for the one-shot scan.
+if (app.Configuration.GetValue("PlaceContext:EncryptionAtRest:BootstrapOnStartup", false))
+    await PlaceContext.Infrastructure.DependencyInjection.EncryptExistingDataAsync(app.Services);
+else
+    app.Logger.LogInformation("Encryption-at-rest startup bootstrap skipped (PlaceContext:EncryptionAtRest:BootstrapOnStartup is not true).");
 
 // Subscriptions/billing are handled by a separate web portal (the TUI sends users there to pay), so the
 // product is no longer gated by an activation key.
