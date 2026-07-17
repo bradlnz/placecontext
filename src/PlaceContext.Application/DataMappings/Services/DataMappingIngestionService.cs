@@ -116,7 +116,7 @@ public sealed class DataMappingIngestionService
     private async Task IngestPayloadAsync(DataMapping mapping, Guid runId, Guid projectId,
         string primary, CancellationToken ct)
     {
-        using var doc = JsonDocument.Parse(primary);
+        using var doc = ParsePayload(primary);
         var root = Navigate(doc.RootElement, mapping.RowsPath);
         if (root is not { } records) return;
 
@@ -218,6 +218,29 @@ public sealed class DataMappingIngestionService
             1 => shardArtifacts[0],
             _ => "[" + string.Join(",", shardArtifacts) + "]",
         };
+    }
+
+    // A job's stdout can carry leading noise before its JSON — pip-install logs from a runtime that
+    // installs requirements, framework warnings, etc. — and some jobs print more than one JSON line.
+    // Parse the whole artifact first (the clean case, unchanged); only on failure fall back to the LAST
+    // line that parses as a JSON value. Jobs emit their result as a final single-line json.dumps, so the
+    // last parseable line is the payload. Multi-line pretty-printed JSON behind noise still can't be
+    // recovered — but nothing that parses today changes behaviour.
+    private static JsonDocument ParsePayload(string primary)
+    {
+        try { return JsonDocument.Parse(primary); }
+        catch (JsonException)
+        {
+            var lines = primary.Split('\n');
+            for (var i = lines.Length - 1; i >= 0; i--)
+            {
+                var line = lines[i].Trim();
+                if (line.Length == 0 || (line[0] != '{' && line[0] != '[')) continue;
+                try { return JsonDocument.Parse(line); }
+                catch (JsonException) { /* keep scanning earlier lines */ }
+            }
+            throw; // nothing parseable — let the caller surface the original error
+        }
     }
 
     // An array yields one record per element; a single object is one record.
