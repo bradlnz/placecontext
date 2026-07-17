@@ -27,6 +27,7 @@ public sealed class DataMappingIngestionService
     private readonly IProjectDataStore _store;
     private readonly IClock _clock;
     private readonly IContentIndexer? _indexer;
+    private readonly IRunStatusNotifier? _notifier;
     private readonly ILogger<DataMappingIngestionService>? _log;
 
     public DataMappingIngestionService(
@@ -34,12 +35,14 @@ public sealed class DataMappingIngestionService
         IProjectDataStore store,
         IClock clock,
         IContentIndexer? indexer = null,
+        IRunStatusNotifier? notifier = null,
         ILogger<DataMappingIngestionService>? log = null)
     {
         _mappings = mappings;
         _store = store;
         _clock = clock;
         _indexer = indexer;
+        _notifier = notifier;
         _log = log;
     }
 
@@ -64,8 +67,7 @@ public sealed class DataMappingIngestionService
             }
             catch (Exception ex)
             {
-                _log?.LogWarning(ex, "Data mapping {MappingId} → table '{Table}' failed for run {RunId}.",
-                    mapping.Id, mapping.TargetTable, run.Id);
+                Surface(run.ProjectId, run.Id, mapping.TargetTable, $"ingest failed: {ex.Message}", ex);
             }
         }
     }
@@ -94,8 +96,7 @@ public sealed class DataMappingIngestionService
             }
             catch (Exception ex)
             {
-                _log?.LogWarning(ex, "Chain data mapping {MappingId} → table '{Table}' failed for run {RunId}.",
-                    mapping.Id, mapping.TargetTable, chainRunId);
+                Surface(projectId, chainRunId, mapping.TargetTable, $"ingest failed: {ex.Message}", ex);
             }
         }
     }
@@ -136,7 +137,34 @@ public sealed class DataMappingIngestionService
         }
         if (rows.Count == 0) return;
 
-        await _store.AppendReadOnlyRowsAsync(projectId, mapping.TargetTable, columns, rows, ct);
+        // Pre-flight: when the target table already exists, a field pointed at a column it doesn't
+        // have makes EVERY insert fail — the whole batch is dropped. CREATE TABLE IF NOT EXISTS never
+        // reconciles the schema, so this silently loses data on a completed "Succeeded" run (a mapping
+        // typo like lga→council_code). Catch it up front and surface a precise, actionable error.
+        var existing = await _store.ListColumnsAsync(projectId, mapping.TargetTable, ct);
+        if (existing.Count > 0)
+        {
+            var have = existing.Select(c => c.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var missing = mapping.Fields.Select(f => f.Column).Where(c => !have.Contains(c)).Distinct().ToList();
+            if (missing.Count > 0)
+            {
+                Surface(projectId, runId, mapping.TargetTable,
+                    $"{rows.Count} row(s) dropped — target column(s) {Quote(missing)} don't exist on '{mapping.TargetTable}'. " +
+                    $"Its columns are: {string.Join(", ", existing.Select(c => c.Name))}. " +
+                    "Point the field(s) at an existing column, or add the column on the Data tab first.");
+                return;
+            }
+        }
+
+        try
+        {
+            await _store.AppendReadOnlyRowsAsync(projectId, mapping.TargetTable, columns, rows, ct);
+        }
+        catch (Exception ex)
+        {
+            Surface(projectId, runId, mapping.TargetTable, $"{rows.Count} row(s) dropped — append failed: {ex.Message}", ex);
+            return;
+        }
         _log?.LogInformation("Ingested {Count} row(s) from run {RunId} into '{Table}'.",
             rows.Count, runId, mapping.TargetTable);
 
@@ -158,6 +186,21 @@ public sealed class DataMappingIngestionService
             await _indexer.IndexManyAsync(projectId, ContentKind.ProjectData, items, ct);
         }
     }
+
+    // A data-map failure never fails the run, but it must be VISIBLE: log at error level and push a
+    // distinct notification into the operations pane (its own key so it stands beside — not on top of —
+    // the run's "Succeeded" entry), rather than the buried best-effort warning that hid data loss.
+    private void Surface(Guid projectId, Guid runId, string table, string detail, Exception? ex = null)
+    {
+        _log?.LogError(ex, "Data map → '{Table}' for run {RunId}: {Detail}", table, runId, detail);
+        if (_notifier is null) return;
+        var at = _clock.UtcNow;
+        _notifier.Sync(new RunStatusUpdate(
+            $"data-map:{runId:N}:{table}", projectId, $"Data map failed — {table}",
+            RunOutcome.Failed, detail, $"/observability?run={runId}", at, at));
+    }
+
+    private static string Quote(IEnumerable<string> names) => string.Join(", ", names.Select(n => $"'{n}'"));
 
     // The run's primary data: the reduce artifact (final aggregate) when present, else the lone
     // shard's artifact, else a JSON array of all shard artifacts — same shape chains thread forward.

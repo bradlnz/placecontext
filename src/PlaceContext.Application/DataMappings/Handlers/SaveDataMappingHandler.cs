@@ -14,15 +14,17 @@ public sealed class SaveDataMappingHandler : ICommandHandler<SaveDataMappingComm
     private readonly IJobChainRepository _chains;
     private readonly IUnitOfWork _uow;
     private readonly IClock _clock;
+    private readonly IProjectDataStore? _store;
 
     public SaveDataMappingHandler(IDataMappingRepository mappings, IJobRepository jobs,
-        IJobChainRepository chains, IUnitOfWork uow, IClock clock)
+        IJobChainRepository chains, IUnitOfWork uow, IClock clock, IProjectDataStore? store = null)
     {
         _mappings = mappings;
         _jobs = jobs;
         _chains = chains;
         _uow = uow;
         _clock = clock;
+        _store = store;
     }
 
     public async Task<DataMappingView> HandleAsync(SaveDataMappingCommand command, CancellationToken ct = default)
@@ -50,6 +52,25 @@ public sealed class SaveDataMappingHandler : ICommandHandler<SaveDataMappingComm
         var fields = command.Fields
             .Select(f => new DataFieldMapping(f.SourcePath.Trim(), f.Column.Trim(), f.Type.Trim()).ThrowIfInvalid())
             .ToList();
+
+        // Guard the silent-drop failure at its source: if the target table already exists, a field
+        // pointed at a column it doesn't have would fail every insert at ingest time (the run still
+        // reports "Succeeded" while the whole batch vanishes). Reject it here, up front, where the
+        // user can act — a not-yet-created table is unconstrained (it's built from these fields).
+        if (_store is not null)
+        {
+            var existing = await _store.ListColumnsAsync(command.ProjectId, command.TargetTable.Trim(), ct);
+            if (existing.Count > 0)
+            {
+                var have = existing.Select(c => c.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+                var missing = fields.Select(f => f.Column).Where(c => !have.Contains(c)).Distinct().ToList();
+                if (missing.Count > 0)
+                    throw new InvalidOperationException(
+                        $"Table '{command.TargetTable.Trim()}' has no column(s) {string.Join(", ", missing.Select(m => $"'{m}'"))}. " +
+                        $"Its columns are: {string.Join(", ", existing.Select(c => c.Name))}. " +
+                        "Point the field(s) at an existing column, or add the column on the Data tab first.");
+            }
+        }
 
         DataMapping mapping;
         if (command.MappingId is { } id)

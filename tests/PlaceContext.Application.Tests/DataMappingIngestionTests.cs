@@ -21,8 +21,9 @@ public class DataMappingIngestionTests
         return (job, run);
     }
 
-    private static DataMappingIngestionService Service(Job job, DataMapping mapping, FakeDataStore store)
-        => new(new FakeMappings(mapping), store, new FakeClock());
+    private static DataMappingIngestionService Service(Job job, DataMapping mapping, FakeDataStore store,
+        FakeNotifier? notifier = null)
+        => new(new FakeMappings(mapping), store, new FakeClock(), indexer: null, notifier: notifier);
 
     [Fact]
     public async Task Ingests_each_record_of_the_rows_path_array_with_provenance()
@@ -82,6 +83,58 @@ public class DataMappingIngestionTests
         Assert.Empty(store.Appends);
     }
 
+    [Fact]
+    public async Task A_field_targeting_a_missing_column_on_an_existing_table_drops_nothing_and_surfaces_a_notification()
+    {
+        var (job, run) = RunWithArtifact("""{"listings":[{"suburb":"Logan","lga":"Logan"}]}""");
+        var mapping = DataMapping.Create(job.ProjectId, job.Id, "listings", "listings", new[]
+        {
+            new DataFieldMapping("suburb", "suburb", "text"),
+            new DataFieldMapping("lga", "lga", "text"), // table has council_code, not lga
+        }, T0);
+        var store = new FakeDataStore();
+        store.Existing["listings"] = new[]
+        {
+            new ProjectColumnInfo("suburb", "text", false, false),
+            new ProjectColumnInfo("council_code", "text", false, false),
+            new ProjectColumnInfo("ingested_at", "timestamptz", true, false),
+            new ProjectColumnInfo("run_id", "uuid", true, false),
+        };
+        var notifier = new FakeNotifier();
+
+        await Service(job, mapping, store, notifier).IngestAsync(job, run);
+
+        Assert.Empty(store.Appends); // the doomed insert is skipped, not attempted row-by-row
+        var update = Assert.Single(notifier.Updates);
+        Assert.Equal(RunOutcome.Failed, update.Outcome);
+        Assert.Contains("'lga'", update.Detail);
+        Assert.Contains("council_code", update.Detail);
+    }
+
+    [Fact]
+    public async Task All_columns_present_on_an_existing_table_ingests_normally()
+    {
+        var (job, run) = RunWithArtifact("""{"listings":[{"suburb":"Logan","lga":"Logan"}]}""");
+        var mapping = DataMapping.Create(job.ProjectId, job.Id, "listings", "listings", new[]
+        {
+            new DataFieldMapping("suburb", "suburb", "text"),
+            new DataFieldMapping("lga", "council_code", "text"), // source lga → existing council_code
+        }, T0);
+        var store = new FakeDataStore();
+        store.Existing["listings"] = new[]
+        {
+            new ProjectColumnInfo("suburb", "text", false, false),
+            new ProjectColumnInfo("council_code", "text", false, false),
+        };
+        var notifier = new FakeNotifier();
+
+        await Service(job, mapping, store, notifier).IngestAsync(job, run);
+
+        var append = Assert.Single(store.Appends);
+        Assert.Equal("Logan", append.Rows[0][3]); // council_code value
+        Assert.Empty(notifier.Updates);
+    }
+
     // ── fakes ───────────────────────────────────────────────────────────────────────────────────────
 
     private sealed class FakeMappings(DataMapping mapping) : IDataMappingRepository
@@ -100,6 +153,9 @@ public class DataMappingIngestionTests
     private sealed class FakeDataStore : IProjectDataStore
     {
         public List<(string Table, IReadOnlyList<ProjectColumnSpec> Columns, IReadOnlyList<IReadOnlyList<string?>> Rows)> Appends { get; } = new();
+
+        /// <summary>Seed a table's existing columns; absent tables report empty (i.e. not yet created).</summary>
+        public Dictionary<string, IReadOnlyList<ProjectColumnInfo>> Existing { get; } = new();
 
         public Task AppendReadOnlyRowsAsync(Guid projectId, string tableName, IReadOnlyList<ProjectColumnSpec> columns,
             IReadOnlyList<IReadOnlyList<string?>> rows, CancellationToken ct = default)
@@ -129,7 +185,7 @@ public class DataMappingIngestionTests
         public Task RenameTableAsync(Guid projectId, string from, string to, CancellationToken ct = default)
             => Task.CompletedTask;
         public Task<IReadOnlyList<ProjectColumnInfo>> ListColumnsAsync(Guid projectId, string tableName, CancellationToken ct = default)
-            => Task.FromResult<IReadOnlyList<ProjectColumnInfo>>(Array.Empty<ProjectColumnInfo>());
+            => Task.FromResult(Existing.TryGetValue(tableName, out var cols) ? cols : Array.Empty<ProjectColumnInfo>());
         public Task AddColumnAsync(Guid projectId, string tableName, ProjectColumnSpec column, CancellationToken ct = default)
             => Task.CompletedTask;
         public Task DropColumnAsync(Guid projectId, string tableName, string columnName, CancellationToken ct = default)
@@ -141,6 +197,12 @@ public class DataMappingIngestionTests
         public Task<ProjectTablePageResult> QueryTablePageAsync(Guid projectId, string tableName, string? search,
             int page, int pageSize, CancellationToken ct = default)
             => throw new NotSupportedException();
+    }
+
+    private sealed class FakeNotifier : IRunStatusNotifier
+    {
+        public List<RunStatusUpdate> Updates { get; } = new();
+        public void Sync(RunStatusUpdate update) => Updates.Add(update);
     }
 
     private sealed class FakeClock : IClock
