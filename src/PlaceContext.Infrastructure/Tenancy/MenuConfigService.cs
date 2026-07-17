@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using PlaceContext.Application.Ports;
 using PlaceContext.Infrastructure.Persistence;
 
@@ -18,13 +19,13 @@ public sealed class MenuConfigService : IMenuConfigService
         WriteIndented = false,
     };
 
-    private readonly AppDbContext _db;
+    private readonly IServiceScopeFactory _scopeFactory;
     private readonly ICurrentTenant _tenant;
     private readonly IPermissionService _perms;
 
-    public MenuConfigService(AppDbContext db, ICurrentTenant tenant, IPermissionService perms)
+    public MenuConfigService(IServiceScopeFactory scopeFactory, ICurrentTenant tenant, IPermissionService perms)
     {
-        _db = db;
+        _scopeFactory = scopeFactory;
         _tenant = tenant;
         _perms = perms;
     }
@@ -78,7 +79,13 @@ public sealed class MenuConfigService : IMenuConfigService
     public async Task<MenuLayout> GetLayoutAsync(CancellationToken ct = default)
     {
         if (!_tenant.IsResolved) return DefaultLayout();
-        var json = await _db.Tenants.AsNoTracking()
+        // Own scope (short-lived AppDbContext): this runs from MainLayout/ProjectLayout render,
+        // concurrently with the page's own load on the circuit-shared scoped context. Reading the
+        // tenant row on that shared context races the page ("A second operation was started on this
+        // context instance"). Mirror PermissionService — the ambient tenant (AsyncLocal) still flows in.
+        await using var scope = _scopeFactory.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var json = await db.Tenants.AsNoTracking()
             .Where(t => t.Id == _tenant.TenantId)
             .Select(t => t.MenuJson)
             .FirstOrDefaultAsync(ct);
@@ -95,13 +102,15 @@ public sealed class MenuConfigService : IMenuConfigService
     public async Task SaveLayoutAsync(MenuLayout layout, CancellationToken ct = default)
     {
         if (!_tenant.IsResolved) return;
-        var row = await _db.Tenants.FirstOrDefaultAsync(t => t.Id == _tenant.TenantId, ct);
+        await using var scope = _scopeFactory.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var row = await db.Tenants.FirstOrDefaultAsync(t => t.Id == _tenant.TenantId, ct);
         if (row is null) return;
         var dto = new MenuLayoutDto(
             layout.Workspace.Select(x => new MenuItemDto(x.Id, x.Label, x.Order, x.Visible, x.Section)).ToList(),
             layout.Project.Select(x => new MenuItemDto(x.Id, x.Label, x.Order, x.Visible, x.Section)).ToList());
         row.MenuJson = JsonSerializer.Serialize(dto, Json);
-        await _db.SaveChangesAsync(ct);
+        await db.SaveChangesAsync(ct);
     }
 
     public async Task<IReadOnlyList<ResolvedMenuItem>> GetWorkspaceMenuAsync(Guid? projectId, CancellationToken ct = default)
