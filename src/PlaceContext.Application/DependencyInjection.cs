@@ -166,6 +166,8 @@ public static class DependencyInjection
             PlaceContext.Application.Cluster.PromoteNodeToMasterHandler>();
         services.AddScoped<IQueryHandler<PlaceContext.Application.Cluster.GetClusterJoinMaterialQuery, Ports.ClusterJoinMaterial?>,
             PlaceContext.Application.Cluster.GetClusterJoinMaterialHandler>();
+        services.AddScoped<ICommandHandler<PlaceContext.Application.Cluster.LaunchClusterAgentCommand, PlaceContext.Application.Cluster.LaunchAgentResult>,
+            PlaceContext.Application.Cluster.LaunchClusterAgentHandler>();
         services.AddScoped<IQueryHandler<GetJobTelemetrySnapshotQuery, Ports.JobTelemetrySnapshot>, GetJobTelemetrySnapshotHandler>();
         services.AddScoped<IQueryHandler<ListRecentJobRunTelemetryQuery, IReadOnlyList<Ports.JobRunTelemetry>>, ListRecentJobRunTelemetryHandler>();
         services.AddScoped<IQueryHandler<ListJobRunTelemetryQuery, IReadOnlyList<Ports.JobRunTelemetry>>, ListJobRunTelemetryHandler>();

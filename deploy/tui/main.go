@@ -141,8 +141,8 @@ USAGE
 
   placecontext                 Open the TUI (install / upgrade / connect)
   placecontext install [--docker|--service] [-v]
-  placecontext upgrade [-v]
-  placecontext connect --code CODE [-v]
+  placecontext upgrade [--code CODE [--ts-authkey KEY]] [-v]
+  placecontext connect --code CODE [--ts-authkey KEY] [-v]
   placecontext join-code [--ts-authkey KEY]
   placecontext status | logs [-f] | url | doctor [-v]
   placecontext version
@@ -152,6 +152,8 @@ CONNECT (fleet join — no tools/pctl needed)
   On master:   sudo placecontext join-code   (add --ts-authkey KEY for a Mac worker)
   Linux host:  sudo placecontext connect --code PC2.…
   Mac host:         placecontext connect --code PC2.…   (k3s agent in Docker; no sudo)
+  Keyless code / rotating key:  connect --code PC1.… --ts-authkey KEY
+  Upgrade + (re)join agent:     sudo placecontext upgrade --code PC2.… [--ts-authkey KEY]
 
 VERBOSITY
   -v, --verbose   stream kubectl/k3d output; extra step detail

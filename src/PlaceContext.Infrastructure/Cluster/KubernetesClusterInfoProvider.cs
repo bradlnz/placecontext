@@ -125,7 +125,10 @@ public sealed class KubernetesClusterInfoProvider : IClusterInfoProvider, IClust
         }
     }
 
-    public async Task<ClusterJoinMaterial?> GetJoinMaterialAsync(CancellationToken ct = default)
+    public Task<ClusterJoinMaterial?> GetJoinMaterialAsync(CancellationToken ct = default)
+        => GetJoinMaterialAsync(tailscaleAuthKeyOverride: null, ct);
+
+    public async Task<ClusterJoinMaterial?> GetJoinMaterialAsync(string? tailscaleAuthKeyOverride, CancellationToken ct = default)
     {
         var (client, ns) = CreateClient();
         using (client)
@@ -154,7 +157,11 @@ public sealed class KubernetesClusterInfoProvider : IClusterInfoProvider, IClust
             var serverUrl = apiPort == 443 || apiPort <= 0
                 ? $"https://{ip}"
                 : $"https://{ip}:{apiPort}";
-            var tsKey = join.TailscaleAuthKey ?? "";
+            // A freshly minted, single-use key (e.g. from LaunchClusterAgentCommand) takes priority
+            // over whatever long-lived key was seeded into the join secret.
+            var tsKey = !string.IsNullOrWhiteSpace(tailscaleAuthKeyOverride)
+                ? tailscaleAuthKeyOverride!
+                : join.TailscaleAuthKey ?? "";
             var payload = string.IsNullOrWhiteSpace(tsKey)
                 ? $"{serverUrl} {join.Token}"
                 : $"{serverUrl} {join.Token} {tsKey}";

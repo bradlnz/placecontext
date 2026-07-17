@@ -170,6 +170,9 @@ public static class DependencyInjection
                 sp.GetRequiredService<Cluster.LocalClusterInfoProvider>());
         }
 
+        // Mints fresh Tailscale auth keys from vaulted OAuth client credentials for agent join codes.
+        services.AddSingleton<Application.Ports.ITailscaleKeyMinter, Cluster.TailscaleApiKeyMinter>();
+
         services.AddSingleton<Observability.JobTelemetryCollector>();
         services.AddSingleton<Application.Ports.IJobTelemetryReader>(sp => sp.GetRequiredService<Observability.JobTelemetryCollector>());
         services.AddHostedService<Observability.JobTelemetryCollectorStartup>();

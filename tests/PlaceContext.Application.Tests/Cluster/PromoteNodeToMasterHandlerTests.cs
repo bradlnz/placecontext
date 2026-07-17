@@ -38,5 +38,8 @@ public sealed class PromoteNodeToMasterHandlerTests
 
         public Task<ClusterJoinMaterial?> GetJoinMaterialAsync(CancellationToken ct = default)
             => Task.FromResult<ClusterJoinMaterial?>(null);
+
+        public Task<ClusterJoinMaterial?> GetJoinMaterialAsync(string? tailscaleAuthKeyOverride, CancellationToken ct = default)
+            => Task.FromResult<ClusterJoinMaterial?>(null);
     }
 }

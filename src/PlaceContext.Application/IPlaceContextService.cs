@@ -145,6 +145,7 @@ public interface IPlaceContextService
     Task<Ports.ClusterInfo> GetClusterInfoAsync(CancellationToken ct = default);
     Task<Ports.PromoteMasterResult> PromoteNodeToMasterAsync(string nodeName, CancellationToken ct = default);
     Task<Ports.ClusterJoinMaterial?> GetClusterJoinMaterialAsync(CancellationToken ct = default);
+    Task<Cluster.LaunchAgentResult> LaunchClusterAgentAsync(CancellationToken ct = default);
     Task<Ports.JobTelemetrySnapshot> GetJobTelemetrySnapshotAsync(CancellationToken ct = default);
     Task<IReadOnlyList<Ports.JobRunTelemetry>> ListRecentJobRunTelemetryAsync(int take = 50, CancellationToken ct = default);
     Task<IReadOnlyList<Ports.JobRunTelemetry>> ListJobRunTelemetryAsync(Guid jobId, int take = 20, CancellationToken ct = default);

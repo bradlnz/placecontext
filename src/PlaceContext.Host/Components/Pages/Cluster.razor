@@ -1,6 +1,7 @@
 @page "/cluster"
 @attribute [Authorize(Policy = Permission.SettingsManage)]
 @implements IDisposable
+@using PlaceContext.Application.Cluster
 @inject IPlaceContextService Svc
 @inject PortalUiState Ui
 @inject NavigationManager Nav
@@ -170,6 +171,45 @@ placecontext connect --code &lt;code&gt;</pre>
             </button>
         </div>
 
+        @* ── Launch agent (Tailscale OAuth → fresh join key) ────────────────────────────────── *@
+        <div class="section-head">
+            <h3 class="section-title">Launch agent</h3>
+        </div>
+        <div class="dccard launch-agent-card">
+            <p class="add-node-lead">
+                Mints a fresh, single-use Tailscale auth key from the OAuth trust credentials in the
+                vault and embeds it in a new join code, so a new agent machine can join the tailnet and
+                the fleet in one step — no long-lived key to copy around.
+            </p>
+            <p class="launch-agent-note">
+                Requires <code>TS_CLIENT_ID</code> and <code>TS_CLIENT_SECRET</code> (a Tailscale OAuth
+                client with device-write access) in the vault under the cluster system project; an
+                optional <code>TS_TAG</code> secret overrides the default <code>tag:agent</code> ACL tag.
+            </p>
+
+            @if (_launch is not null)
+            {
+                <div class="join-code-block">
+                    @if (_launch.JoinCode is not null)
+                    {
+                        <div class="join-code-label">Agent join code</div>
+                        <code class="join-code">@_launch.JoinCode</code>
+                        <div class="join-code-label">Connect command</div>
+                        <code class="join-code">@_launch.ConnectCommand</code>
+                        @if (_launch.ServerUrl is not null)
+                        {
+                            <div class="join-meta">API: <code>@_launch.ServerUrl</code></div>
+                        }
+                    }
+                    <div class="launch-agent-message @(_launch.Minted ? "" : "message-error")">@_launch.Message</div>
+                </div>
+            }
+
+            <button class="dcbtn primary" disabled="@_busy" @onclick="LaunchAgentAsync">
+                @(_busy ? "Minting…" : "Launch agent")
+            </button>
+        </div>
+
         @* ── Telemetry ──────────────────────────────────────────────────────────────────────── *@
         <h3 class="section-title-tele">Jobs pipeline telemetry</h3>
         <div class="tele-note">
@@ -304,6 +344,7 @@ placecontext connect --code &lt;code&gt;</pre>
 @code {
     private ClusterInfo? _cluster;
     private ClusterJoinMaterial? _join;
+    private LaunchAgentResult? _launch;
     private JobTelemetrySnapshot? _snapshot;
     private IReadOnlyList<JobRunTelemetry>? _recentRuns;
     private IReadOnlyList<ChainRunTelemetry>? _recentChainRuns;
@@ -397,6 +438,21 @@ placecontext connect --code &lt;code&gt;</pre>
         {
             _message = ex.Message;
             _messageIsError = true;
+        }
+        finally { _busy = false; }
+    }
+
+    private async Task LaunchAgentAsync()
+    {
+        if (_busy) return;
+        _busy = true;
+        try
+        {
+            _launch = await Svc.LaunchClusterAgentAsync();
+        }
+        catch (Exception ex)
+        {
+            _launch = new LaunchAgentResult(false, null, null, "", ex.Message);
         }
         finally { _busy = false; }
     }

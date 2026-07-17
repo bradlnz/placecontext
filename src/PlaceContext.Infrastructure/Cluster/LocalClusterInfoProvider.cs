@@ -44,4 +44,9 @@ public sealed class LocalClusterInfoProvider : IClusterInfoProvider, IClusterAdm
 
     public Task<ClusterJoinMaterial?> GetJoinMaterialAsync(CancellationToken ct = default)
         => Task.FromResult<ClusterJoinMaterial?>(null);
+
+    /// <summary>Local single-node dev has no join secret/mesh to embed a key into — the override is
+    /// irrelevant here (there's nothing to join).</summary>
+    public Task<ClusterJoinMaterial?> GetJoinMaterialAsync(string? tailscaleAuthKeyOverride, CancellationToken ct = default)
+        => Task.FromResult<ClusterJoinMaterial?>(null);
 }

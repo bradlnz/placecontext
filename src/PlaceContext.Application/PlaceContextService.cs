@@ -349,6 +349,9 @@ public sealed class PlaceContextService : IPlaceContextService
     public Task<Ports.ClusterJoinMaterial?> GetClusterJoinMaterialAsync(CancellationToken ct = default)
         => _dispatcher.Query(new PlaceContext.Application.Cluster.GetClusterJoinMaterialQuery(), ct);
 
+    public Task<Cluster.LaunchAgentResult> LaunchClusterAgentAsync(CancellationToken ct = default)
+        => _dispatcher.Send(new PlaceContext.Application.Cluster.LaunchClusterAgentCommand(), ct);
+
     public Task<Ports.JobTelemetrySnapshot> GetJobTelemetrySnapshotAsync(CancellationToken ct = default)
         => _dispatcher.Query(new Observability.GetJobTelemetrySnapshotQuery(), ct);
 

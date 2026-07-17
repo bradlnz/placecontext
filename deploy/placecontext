@@ -839,6 +839,15 @@ cmd_install() {
 }
 
 cmd_upgrade() {
+  local code="" ts_key=""
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --code) code="$2"; shift 2;;
+      --ts-authkey) ts_key="$2"; shift 2;;
+      -v|--verbose) VERBOSE=$((VERBOSE + 1)); export PLACECONTEXT_VERBOSE="$VERBOSE"; shift;;
+      *) die "upgrade: unknown arg $1 (usage: placecontext upgrade [--code PC2.… [--ts-authkey KEY]] [-v])";;
+    esac
+  done
   banner
   say "Upgrading PlaceContext…"
   local home="${PLACECONTEXT_HOME:-$HOME/.placecontext}"
@@ -858,6 +867,18 @@ cmd_upgrade() {
   elif [ -x "${ROOT}/tools/pctl" ] && [ -d "${ROOT}/.git" ]; then
     exec "${ROOT}/tools/pctl" update --deploy
   fi
+
+  # Worker/agent upgrade: a join code (and optional Tailscale auth key) means this machine
+  # should (re)join a cluster after refreshing the CLI, rather than roll a local stack.
+  # connect handles Tailscale bring-up, sudo elevation, and k3s agent install.
+  if [ -n "$code" ]; then
+    say "Joining cluster with the provided join code…"
+    [ -n "$ts_key" ] && info "using --ts-authkey Tailscale auth key for this join"
+    cmd_connect --code "$code" ${ts_key:+--ts-authkey "$ts_key"}
+    ok "Upgrade applied and worker joined."
+    return
+  fi
+
   # Roll cluster with the new image/manifests when a cluster is present.
   if k3d cluster list 2>/dev/null | grep -q "$PCTL_CLUSTER"; then
     say "Rolling k3d cluster '${PCTL_CLUSTER}'…"
@@ -1137,13 +1158,14 @@ decode_join_code() {
 }
 
 cmd_connect() {
-  local code="" force_url=""
+  local code="" force_url="" ts_key_override=""
   while [ $# -gt 0 ]; do
     case "$1" in
       --code) code="$2"; shift 2;;
+      --ts-authkey) ts_key_override="$2"; shift 2;; # supply/override the tailnet auth key outside the code
       --server-url) force_url="$2"; shift 2;; # override (debug); default is join-code URL only
       -v|--verbose) VERBOSE=$((VERBOSE + 1)); export PLACECONTEXT_VERBOSE="$VERBOSE"; shift;;
-      *) die "connect: unknown arg $1 (usage: placecontext connect --code PC2.…)";;
+      *) die "connect: unknown arg $1 (usage: placecontext connect --code PC2.… [--ts-authkey KEY])";;
     esac
   done
   [ -n "$code" ] || die "usage: placecontext connect --code PC1.…|PC2.…"
@@ -1160,6 +1182,15 @@ cmd_connect() {
   if [ -n "$force_url" ]; then
     warn "overriding join-code URL with --server-url ${force_url}"
     url="$force_url"
+  fi
+
+  if [ -n "$ts_key_override" ]; then
+    if [ -n "${tskey:-}" ]; then
+      info "overriding join-code Tailscale auth key with --ts-authkey"
+    else
+      info "using --ts-authkey Tailscale auth key (join code carried none)"
+    fi
+    tskey="$ts_key_override"
   fi
 
   info "server  ${url}  (host=$(url_host "$url"))"
@@ -1190,7 +1221,7 @@ Regenerate on the master with Tailscale up: sudo placecontext join-code"
         PLACECONTEXT_TAILSCALE="$(tailscale_cmd 2>/dev/null || true)" \
         PCTL_IMAGE_TAR="${PCTL_IMAGE_TAR:-}" \
         K3S_DIR="${K3S_DIR:-}" \
-        "$SELF" connect --code "$code" ${force_url:+--server-url "$force_url"} $( [ "${VERBOSE:-0}" -ge 1 ] && printf '%s' '-v' )
+        "$SELF" connect --code "$code" ${force_url:+--server-url "$force_url"} ${ts_key_override:+--ts-authkey "$ts_key_override"} $( [ "${VERBOSE:-0}" -ge 1 ] && printf '%s' '-v' )
     fi
     die "joining installs k3s (needs root). Run:
   sudo env PATH=\"/usr/local/bin:/usr/bin:\$PATH\" PLACECONTEXT_HOME=${PLACECONTEXT_HOME:-$ROOT} $SELF connect --code '$code'"
@@ -1332,8 +1363,8 @@ USAGE
 
   placecontext                 Launch the install / upgrade / connect TUI
   placecontext install [--docker|--service] [-v]
-  placecontext upgrade [-v]
-  placecontext connect --code CODE [-v]
+  placecontext upgrade [--code CODE [--ts-authkey KEY]] [-v]
+  placecontext connect --code CODE [--ts-authkey KEY] [-v]
   placecontext join-code [--ts-authkey KEY]   (on the master — print a join code)
   placecontext status | logs [-f] | url | doctor [-v]
   placecontext help
@@ -1349,6 +1380,8 @@ Connect (no tools/pctl required) — join code always uses the master's Tailscal
     curl -fsSL https://get.placecontext.ai/install.sh | bash
     Linux:  sudo placecontext connect --code PC2.…
     Mac:         placecontext connect --code PC2.…   (k3s-agent container; override image with PCTL_K3S_IMAGE)
+  Pass the key separately (keyless code, or rotating key):  connect --code PC1.… --ts-authkey KEY
+  Upgrade + (re)join an agent in one step:  sudo placecontext upgrade --code PC2.… [--ts-authkey KEY]
   LAN-only test:  sudo placecontext join-code --local
 
 Verbosity
