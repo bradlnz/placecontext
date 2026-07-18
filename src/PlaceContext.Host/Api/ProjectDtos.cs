@@ -17,16 +17,11 @@ public sealed record ProjectResponse(
     string Path,
     /// <summary>"Discovered" | "Registered" | "Graphified" | "Archived".</summary>
     string Status,
-    bool IsGraphified,
-    double? TechnicalRisk,
-    string? TechnicalRiskBand,
-    double? ProcessRisk,
-    string? ProcessRiskBand);
+    bool IsGraphified);
 
 /// <summary>Translates between the management API's project DTOs and the internal read model.</summary>
 internal static class ProjectApiMapper
 {
     public static ProjectResponse ToResponse(ProjectSummaryView v) => new(
-        v.Id, v.Name, v.Path, v.Status, v.IsGraphified,
-        v.TechnicalRisk, v.TechnicalBand, v.ProcessRisk, v.ProcessBand);
+        v.Id, v.Name, v.Path, v.Status, v.IsGraphified);
 }

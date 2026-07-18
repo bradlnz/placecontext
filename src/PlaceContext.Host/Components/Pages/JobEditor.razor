@@ -263,7 +263,20 @@ else
     private async Task SyncActiveAsync()
     {
         if (!_monacoReady || _files.Count == 0) return;
-        _files[_active].Content = await JS.InvokeAsync<string>("pcmonaco.getValue", _editorId);
+        // pcmonaco.getValue returns null when no editor is mounted yet (CDN still loading) —
+        // keep the in-memory content in that case instead of wiping the file.
+        try
+        {
+            var content = await JS.InvokeAsync<string?>("pcmonaco.getValue", _editorId);
+            if (content is not null) _files[_active].Content = content;
+        }
+        catch { /* editor unreachable — keep the in-memory content */ }
+    }
+
+    private async Task SetEditorValueAsync(EditorFile file)
+    {
+        try { await JS.InvokeVoidAsync("pcmonaco.setValue", _editorId, file.Content, Language(file.Path)); }
+        catch (Exception ex) { _message = ex.Message; }
     }
 
     private async Task SwitchFileAsync(int idx)
@@ -271,8 +284,7 @@ else
         if (idx == _active) return;
         await SyncActiveAsync();
         _active = idx;
-        var file = _files[_active];
-        await JS.InvokeVoidAsync("pcmonaco.setValue", _editorId, file.Content, Language(file.Path));
+        await SetEditorValueAsync(_files[_active]);
     }
 
     private async Task StartAddFile()
@@ -301,7 +313,7 @@ else
         _files.Add(new EditorFile { Path = name, Content = "" });
         _active = _files.Count - 1;
         _addingFile = false;
-        await JS.InvokeVoidAsync("pcmonaco.setValue", _editorId, "", Language(name));
+        await SetEditorValueAsync(_files[_active]);
     }
 
     private async Task DeleteFileAsync(int idx)
@@ -312,8 +324,7 @@ else
         if (removed.Path == _entrypoint) _entrypoint = _files.Count == 1 ? null : _files[0].Path;
         if (_active >= _files.Count) _active = _files.Count - 1;
         else if (idx < _active) _active--;
-        var file = _files[_active];
-        await JS.InvokeVoidAsync("pcmonaco.setValue", _editorId, file.Content, Language(file.Path));
+        await SetEditorValueAsync(_files[_active]);
     }
 
     private void SetEntry(string path) => _entrypoint = path;
@@ -352,11 +363,9 @@ else
         _renamingIdx = -1;
 
         // A changed extension can change the language of the file that's on screen.
-        if (idx == _active && Language(name) != Language(old))
-        {
-            await SyncActiveAsync();
-            await JS.InvokeVoidAsync("pcmonaco.setValue", _editorId, _files[idx].Content, Language(name));
-        }
+        if (idx != _active || Language(name) == Language(old)) return;
+        await SyncActiveAsync();
+        await SetEditorValueAsync(_files[idx]);
     }
 
     // ── Deploy / Test ────────────────────────────────────────────────────────────────────────────

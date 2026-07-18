@@ -9,29 +9,24 @@ namespace PlaceContext.Application.Features;
 
 public sealed class OnboardHandler : ICommandHandler<OnboardCommand, OnboardResultView>
 {
-    private static readonly string[] DocCandidates = { "README.md", "README", "AGENTS.md", "CLAUDE.md" };
     private static readonly string[] Prompts = { "review_work", "create_skill", "record_activity_guidance", "onboard" };
 
     private readonly IProjectRepository _projects;
-    private readonly RiskAssessmentService _risk;
     private readonly IActivityLogRepository _ledgers;
     private readonly IGitPort _git;
-    private readonly IProjectContextRepository _contexts;
     private readonly IRequirementsRepository _requirements;
     private readonly IRepoFiles _files;
     private readonly IUnitOfWork _uow;
     private readonly IClock _clock;
 
     public OnboardHandler(
-        IProjectRepository projects, RiskAssessmentService risk, IActivityLogRepository ledgers, IGitPort git,
-        IProjectContextRepository contexts, IRequirementsRepository requirements, IRepoFiles files,
+        IProjectRepository projects, IActivityLogRepository ledgers, IGitPort git,
+        IRequirementsRepository requirements, IRepoFiles files,
         IUnitOfWork uow, IClock clock)
     {
         _projects = projects;
-        _risk = risk;
         _ledgers = ledgers;
         _git = git;
-        _contexts = contexts;
         _requirements = requirements;
         _files = files;
         _uow = uow;
@@ -43,7 +38,7 @@ public sealed class OnboardHandler : ICommandHandler<OnboardCommand, OnboardResu
         var path = ProjectPath.From(command.Path);
         var now = _clock.UtcNow;
 
-        // 1. Get-or-create the project, then assess its risk.
+        // 1. Get-or-create the project.
         var project = await _projects.GetByPathAsync(path, ct);
         if (project is null)
         {
@@ -53,19 +48,13 @@ public sealed class OnboardHandler : ICommandHandler<OnboardCommand, OnboardResu
             project = Project.Discover(path, ProjectName.From(name), now);
             project.Register(now);
             await _projects.AddAsync(project, ct);
-            await _uow.SaveChangesAsync(ct); // persist first so risk collaborators can load it
+            await _uow.SaveChangesAsync(ct);
         }
-        await _risk.AssessAsync(project, ct);
-        await _projects.UpdateAsync(project, ct);
-        await _uow.SaveChangesAsync(ct);
 
         // 2. Backfill the activity log from git history (oldest first; skip already-recorded commits).
         var changesBackfilled = await BackfillAsync(project, path, command.BackfillLimit, now, ct);
 
-        // 3. Seed context from the repo's docs, if context is empty.
-        var contextSeeded = await SeedContextAsync(project, path, now, ct);
-
-        // 4. Scaffold a local skill + agent for the target AI agent.
+        // 3. Scaffold a local skill + agent for the target AI agent.
         var requirements = await EffectiveRequirementsAsync(project.Id, ct);
         var agent = (command.Agent ?? "claude").Trim().ToLowerInvariant();
         var name2 = project.Name.Value;
@@ -75,7 +64,7 @@ public sealed class OnboardHandler : ICommandHandler<OnboardCommand, OnboardResu
         var agents = new List<string> { await _files.WriteAsync(path, agentRel, AgentMarkdown(agent, name2, requirements), ct) };
 
         return new OnboardResultView(
-            ViewMapper.ToSummary(project), changesBackfilled, contextSeeded, skills, agents, Prompts);
+            ViewMapper.ToSummary(project), changesBackfilled, skills, agents, Prompts);
     }
 
     private async Task<int> BackfillAsync(Project project, ProjectPath path, int limit, DateTimeOffset now, CancellationToken ct)
@@ -94,7 +83,7 @@ public sealed class OnboardHandler : ICommandHandler<OnboardCommand, OnboardResu
             var record = ledger.Append(
                 FirstLine(c.Message),
                 Author.Human(string.IsNullOrWhiteSpace(c.AuthorName) ? "unknown" : c.AuthorName),
-                Rationale.None, TestDelta.None, RiskDelta.None, ActivityVerification.None,
+                Rationale.None, TestDelta.None, ActivityVerification.None,
                 c.Files, Array.Empty<GraphNodeId>(), (c.Date == default ? now : c.Date).ToUniversalTime());
             record.AttachCommit(CommitSha.From(sha));
             added++;
@@ -106,21 +95,6 @@ public sealed class OnboardHandler : ICommandHandler<OnboardCommand, OnboardResu
             await _uow.SaveChangesAsync(ct);
         }
         return added;
-    }
-
-    private async Task<bool> SeedContextAsync(Project project, ProjectPath path, DateTimeOffset now, CancellationToken ct)
-    {
-        var existing = await _contexts.GetForProjectAsync(project.Id, ct);
-        if (existing is { IsEmpty: false }) return false;
-
-        var doc = await _files.ReadFirstAsync(path, DocCandidates, ct);
-        if (string.IsNullOrWhiteSpace(doc)) return false;
-
-        var context = existing ?? ProjectContext.Start(project.Id, now);
-        context.Replace(doc.Length > 8000 ? doc[..8000] : doc, now);
-        await _contexts.SaveAsync(context, ct);
-        await _uow.SaveChangesAsync(ct);
-        return true;
     }
 
     private async Task<string> EffectiveRequirementsAsync(ProjectId projectId, CancellationToken ct)
@@ -145,7 +119,7 @@ public sealed class OnboardHandler : ICommandHandler<OnboardCommand, OnboardResu
         # PlaceContext workflow — {{name}}
 
         ## At session start
-        - Call `get_context` and `get_project_overview` to load what's known.
+        - Call `get_project_overview` to load what's known.
 
         ## Before every change (pre-action)
         - Confirm the change is in scope of the requirements below.
@@ -160,7 +134,7 @@ public sealed class OnboardHandler : ICommandHandler<OnboardCommand, OnboardResu
         ## After every change (post-action)
         - `record_activity` — rationale, touched items, check deltas, and only the guardrail flags you actually met.
         - `record_usage` — the input/output tokens spent on *this* change, so cost is tracked per change.
-        - `add_context` / `add_decision` — capture anything durable you learned or decided.
+        - `add_decision` — capture any durable direction you decided.
 
         ## Requirements
         {{requirements}}

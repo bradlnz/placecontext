@@ -2,12 +2,9 @@ using PlaceContext.Domain.ValueObjects;
 
 namespace PlaceContext.Application.Ports;
 
-/// <summary>Reads/writes plain files in a project's working tree — context seeding and skill/agent scaffolding.</summary>
+/// <summary>Reads/writes plain files in a project's working tree — skill/agent scaffolding.</summary>
 public interface IRepoFiles
 {
-    /// <summary>Returns the contents of the first candidate file that exists (relative paths), or null.</summary>
-    Task<string?> ReadFirstAsync(ProjectPath repo, IReadOnlyList<string> candidates, CancellationToken ct = default);
-
     /// <summary>Writes a file at a repo-relative path (creating folders) and returns its absolute path.</summary>
     Task<string> WriteAsync(ProjectPath repo, string relativePath, string content, CancellationToken ct = default);
 

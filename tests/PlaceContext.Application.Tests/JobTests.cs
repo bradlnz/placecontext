@@ -85,16 +85,15 @@ public class JobTests
     }
 
     private static (RunJobHandler handler, InMemoryJobRepository jobs, InMemoryJobRunRepository runs,
-        FakeWorkloadRunner runner, InMemoryProjectContextRepository contexts)
+        FakeWorkloadRunner runner)
         BuildRunHandler()
     {
         var jobs = new InMemoryJobRepository();
         var runs = new InMemoryJobRunRepository();
-        var contexts = new InMemoryProjectContextRepository();
         var runner = new FakeWorkloadRunner();
         var uow = new RecordingUnitOfWork();
         var clock = new FakeClock(T0);
-        return (new RunJobHandler(jobs, runs, contexts, runner, uow, clock), jobs, runs, runner, contexts);
+        return (new RunJobHandler(jobs, runs, runner, uow, clock), jobs, runs, runner);
     }
 
     // ── CreateJob ────────────────────────────────────────────────────────────────────────────────
@@ -242,7 +241,7 @@ public class JobTests
     [Fact]
     public async Task RunJob_invokes_one_container_per_shard()
     {
-        var (runHandler, jobs, _, runner, _) = BuildRunHandler();
+        var (runHandler, jobs, _, runner) = BuildRunHandler();
         var createH = new CreateJobHandler(jobs, new RecordingUnitOfWork(), new FakeClock(T0));
 
         var projectId = Guid.NewGuid();
@@ -263,7 +262,7 @@ public class JobTests
     [Fact]
     public async Task RunJob_honors_a_preallocated_run_id()
     {
-        var (runHandler, jobs, runs, runner, _) = BuildRunHandler();
+        var (runHandler, jobs, runs, runner) = BuildRunHandler();
         var createH = new CreateJobHandler(jobs, new RecordingUnitOfWork(), new FakeClock(T0));
         var job = await createH.HandleAsync(ImageCmd(Guid.NewGuid(), "correlated"));
         runner.EnqueueSuccessResults(1);
@@ -280,7 +279,7 @@ public class JobTests
     [Fact]
     public async Task RunJob_uses_correct_image_and_payload_for_each_shard()
     {
-        var (runHandler, jobRepo, _, runner, _) = BuildRunHandler();
+        var (runHandler, jobRepo, _, runner) = BuildRunHandler();
         var createH = new CreateJobHandler(jobRepo, new RecordingUnitOfWork(), new FakeClock(T0));
 
         var payloads = new[] { @"{""shard"":0}", @"{""shard"":1}" };
@@ -310,7 +309,7 @@ public class JobTests
     [Fact]
     public async Task RunJob_code_workload_sends_runtimeId_and_source_to_runner()
     {
-        var (runHandler, jobRepo, _, runner, _) = BuildRunHandler();
+        var (runHandler, jobRepo, _, runner) = BuildRunHandler();
         var createH = new CreateJobHandler(jobRepo, new RecordingUnitOfWork(), new FakeClock(T0));
 
         var job = await createH.HandleAsync(CodeCmd(
@@ -335,7 +334,7 @@ public class JobTests
     [Fact]
     public async Task RunJob_any_failed_shard_yields_Failed_status()
     {
-        var (runHandler, jobRepo, runs, runner, _) = BuildRunHandler();
+        var (runHandler, jobRepo, runs, runner) = BuildRunHandler();
         var createH = new CreateJobHandler(jobRepo, new RecordingUnitOfWork(), new FakeClock(T0));
 
         var job = await createH.HandleAsync(ImageCmd(Guid.NewGuid(), "fail-test",
@@ -353,7 +352,7 @@ public class JobTests
     [Fact]
     public async Task RunJob_partial_exit_code_yields_Partial_status_with_custom_policy()
     {
-        var (runHandler, jobRepo, _, runner, _) = BuildRunHandler();
+        var (runHandler, jobRepo, _, runner) = BuildRunHandler();
         var createH = new CreateJobHandler(jobRepo, new RecordingUnitOfWork(), new FakeClock(T0));
 
         var job = await createH.HandleAsync(ImageCmd(Guid.NewGuid(), "partial-test",
@@ -373,7 +372,7 @@ public class JobTests
     [Fact]
     public async Task RunJob_calls_reduce_container_when_spec_present()
     {
-        var (runHandler, jobRepo, _, runner, _) = BuildRunHandler();
+        var (runHandler, jobRepo, _, runner) = BuildRunHandler();
         var createH = new CreateJobHandler(jobRepo, new RecordingUnitOfWork(), new FakeClock(T0));
 
         var job = await createH.HandleAsync(new CreateJobCommand(
@@ -404,7 +403,7 @@ public class JobTests
     [Fact]
     public async Task RunJob_does_not_call_reduce_when_no_reduce_spec()
     {
-        var (runHandler, jobRepo, _, runner, _) = BuildRunHandler();
+        var (runHandler, jobRepo, _, runner) = BuildRunHandler();
         var createH = new CreateJobHandler(jobRepo, new RecordingUnitOfWork(), new FakeClock(T0));
 
         var job = await createH.HandleAsync(ImageCmd(Guid.NewGuid(), "no-reduce"));
@@ -422,7 +421,7 @@ public class JobTests
     [Fact]
     public async Task RunJob_snapshot_captures_workload_source_at_run_time()
     {
-        var (runHandler, jobRepo, runs, runner, _) = BuildRunHandler();
+        var (runHandler, jobRepo, runs, runner) = BuildRunHandler();
         var createH = new CreateJobHandler(jobRepo, new RecordingUnitOfWork(), new FakeClock(T0));
 
         var job = await createH.HandleAsync(ImageCmd(Guid.NewGuid(), "snap-test",
@@ -441,7 +440,7 @@ public class JobTests
     [Fact]
     public async Task RunJob_snapshot_is_code_kind_for_code_workload()
     {
-        var (runHandler, jobRepo, _, runner, _) = BuildRunHandler();
+        var (runHandler, jobRepo, _, runner) = BuildRunHandler();
         var createH = new CreateJobHandler(jobRepo, new RecordingUnitOfWork(), new FakeClock(T0));
 
         var job = await createH.HandleAsync(CodeCmd(Guid.NewGuid(), "code-snap", "python", "print('hi')"));
@@ -458,7 +457,7 @@ public class JobTests
     [Fact]
     public async Task RunJob_stores_run_scoped_to_correct_project()
     {
-        var (runHandler, jobRepo, runs, runner, _) = BuildRunHandler();
+        var (runHandler, jobRepo, runs, runner) = BuildRunHandler();
         var createH = new CreateJobHandler(jobRepo, new RecordingUnitOfWork(), new FakeClock(T0));
         var projectId = Guid.NewGuid();
 
@@ -471,28 +470,6 @@ public class JobTests
         var storedRun = await runs.GetByIdAsync(result.Id);
         Assert.NotNull(storedRun);
         Assert.Equal(projectId, storedRun!.ProjectId);
-    }
-
-    // ── RunJob: project context persistence ──────────────────────────────────────────────────────
-
-    [Fact]
-    public async Task RunJob_appends_run_summary_to_project_context()
-    {
-        var (runHandler, jobRepo, _, runner, contexts) = BuildRunHandler();
-        var createH = new CreateJobHandler(jobRepo, new RecordingUnitOfWork(), new FakeClock(T0));
-        var projectId = Guid.NewGuid();
-
-        var job = await createH.HandleAsync(ImageCmd(projectId, "context-persistence-test",
-            payloads: new[] { @"{""x"":1}" }));
-
-        runner.EnqueueResult(new WorkloadRunResult(0, @"{""result"":42}", "stdout", ""));
-        await runHandler.HandleAsync(new RunJobCommand(job.Id));
-
-        var pid = Domain.ValueObjects.ProjectId.From(projectId);
-        var ctx = await contexts.GetForProjectAsync(pid);
-        Assert.NotNull(ctx);
-        Assert.Contains("context-persistence-test", ctx!.Markdown);
-        Assert.Contains("Succeeded", ctx.Markdown);
     }
 
     // ── Queries ───────────────────────────────────────────────────────────────────────────────────
@@ -619,7 +596,7 @@ public class JobTests
     [Fact]
     public async Task RunJob_multifile_sends_every_file_and_entrypoint_to_runner()
     {
-        var (runHandler, jobRepo, _, runner, _) = BuildRunHandler();
+        var (runHandler, jobRepo, _, runner) = BuildRunHandler();
         var createH = new CreateJobHandler(jobRepo, new RecordingUnitOfWork(), new FakeClock(T0));
         var files = new[]
         {

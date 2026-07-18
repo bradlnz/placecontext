@@ -60,7 +60,6 @@ public class RunEmbeddingTests
     {
         var jobs = new InMemoryJobRepository();
         var runs = new InMemoryJobRunRepository();
-        var contexts = new InMemoryProjectContextRepository();
         var runner = new FakeWorkloadRunner();
         var uow = new RecordingUnitOfWork();
         var clock = new FakeClock(T0);
@@ -71,7 +70,7 @@ public class RunEmbeddingTests
         var job = Job.Create(Guid.NewGuid(), "j", null, map, null, 1, PlaceContext.Domain.ValueObjects.ExitCodePolicy.Default, T0);
         await jobs.AddAsync(job);
 
-        var handler = new RunJobHandler(jobs, runs, contexts, runner, uow, clock,
+        var handler = new RunJobHandler(jobs, runs, runner, uow, clock,
             events: null, embeddings: gateway, embeddingStore: store);
         await handler.HandleAsync(new RunJobCommand(job.Id));
 

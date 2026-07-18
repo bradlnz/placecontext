@@ -13,38 +13,26 @@ public class HandlerTests
 {
     private static readonly DateTimeOffset T0 = new(2026, 6, 23, 12, 0, 0, TimeSpan.Zero);
 
-    private static RiskAssessmentService Risk(IClock clock, IRiskAssessmentRepository assessments) => new(
-        new InMemoryActivityLogRepository(), assessments, new FakeDecisionTreeProvider(),
-        new FakeCodeMetricsProbe(), new TechnicalRiskScorer(), new ProcessRiskScorer(), new RiskScoreCalculator(), clock);
-
     [Fact]
-    public async Task CreateProject_registers_a_new_project_and_assesses_its_risk()
+    public async Task CreateProject_registers_a_new_project()
     {
         var repo = new InMemoryProjectRepository();
         var uow = new RecordingUnitOfWork();
-        var assessments = new InMemoryRiskAssessmentRepository();
-        var handler = new CreateProjectHandler(repo, Risk(new FakeClock(T0), assessments), uow, new FakeClock(T0));
+        var handler = new CreateProjectHandler(repo, uow, new FakeClock(T0));
 
         var view = await handler.HandleAsync(new CreateProjectCommand("/home/brad/code/alpha", null));
 
         Assert.Equal("alpha", view.Name); // name defaults to the last path segment
         Assert.Equal(nameof(ProjectStatus.Registered), view.Status);
-        Assert.Equal(2, uow.SaveCount); // persist the project, then its initial risk assessment
+        Assert.Equal(1, uow.SaveCount);
         Assert.Single(await repo.ListAsync());
-
-        // Risk is computed as part of creation: an assessment snapshot exists and scores are applied.
-        var project = (await repo.ListAsync()).Single();
-        Assert.NotNull(await assessments.GetLatestAsync(project.Id));
-        Assert.NotNull(view.TechnicalRisk);
-        Assert.NotNull(view.ProcessRisk);
     }
 
     [Fact]
     public async Task CreateProject_is_idempotent_for_known_paths()
     {
         var repo = new InMemoryProjectRepository();
-        var handler = new CreateProjectHandler(
-            repo, Risk(new FakeClock(T0), new InMemoryRiskAssessmentRepository()), new RecordingUnitOfWork(), new FakeClock(T0));
+        var handler = new CreateProjectHandler(repo, new RecordingUnitOfWork(), new FakeClock(T0));
 
         await handler.HandleAsync(new CreateProjectCommand("/home/brad/code/alpha", "alpha"));
         await handler.HandleAsync(new CreateProjectCommand("/home/brad/code/alpha", "alpha"));
@@ -68,7 +56,6 @@ public class HandlerTests
             project.Id.Value, "claude", IsAgent: true, Rationale: "add feature",
             TouchedFiles: new[] { "a.cs" }, TouchedNodes: new[] { "auth" },
             TestsAdded: 1, TestsRemoved: 0, TestsChanged: 0,
-            RiskResolved: 0, RiskIntroduced: 0,
             ArchitectureReviewerRun: true, LiveVerified: true,
             CommitMessage: "feat: add feature"));
 

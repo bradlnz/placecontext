@@ -63,7 +63,7 @@ public sealed class PlaceContextTools
             () => svc.CreateProjectAsync(path, name));
 
     [Authorize(Policy = Permission.ProjectsManage)]
-    [McpServerTool(Name = "onboard"), Description("Bootstrap a project into PlaceContext in one call: create the project (with initial risk), backfill the activity log from git history (when it is a git repo), seed context from any README/AGENTS/CLAUDE docs, and scaffold a local skill + agent for the target AI agent. Returns a setup summary.")]
+    [McpServerTool(Name = "onboard"), Description("Bootstrap a project into PlaceContext in one call: create the project, backfill the activity log from git history (when it is a git repo), seed context from any README/AGENTS/CLAUDE docs, and scaffold a local skill + agent for the target AI agent. Returns a setup summary.")]
     public static Task<string> Onboard(IPlaceContextService svc, IToolCallLog log,
         [Description("Absolute path of the project repo")] string path,
         [Description("Optional display name; defaults to the last path segment")] string? name = null,
@@ -73,7 +73,7 @@ public sealed class PlaceContextTools
             () => svc.OnboardAsync(path, name, agent, backfillLimit));
 
     [Authorize(Policy = "Member")]
-    [McpServerTool(Name = "list_projects"), Description("List all projects PlaceContext is tracking, with their risk bands.")]
+    [McpServerTool(Name = "list_projects"), Description("List all projects PlaceContext is tracking.")]
     public static Task<string> ListProjects(IPlaceContextService svc, IToolCallLog log)
         => Traced(log, "list_projects", "—", "list all projects", new { },
             () => svc.GetProjectsAsync());
@@ -92,13 +92,13 @@ public sealed class PlaceContextTools
             () => svc.RebuildGraphAsync(projectId, incremental));
 
     [Authorize(Policy = "Member")]
-    [McpServerTool(Name = "get_project_overview"), Description("Get a project's overview: status, graph stats, god nodes, risk, and change count.")]
+    [McpServerTool(Name = "get_project_overview"), Description("Get a project's overview: status, graph stats, god nodes, and change count.")]
     public static Task<string> GetProjectOverview(IPlaceContextService svc, IToolCallLog log, Guid projectId)
         => Traced(log, "get_project_overview", projectId.ToString(), "project overview", new { projectId },
             () => svc.GetProjectOverviewAsync(projectId));
 
     [Authorize(Policy = "Member")]
-    [McpServerTool(Name = "record_activity"), Description("Record a change into the activity log: appends an entry, makes a scoped git commit when the project is a git repo, and returns the activity record. Provide rationale, touched items/nodes, check deltas, and verification flags so process risk is scored accurately.")]
+    [McpServerTool(Name = "record_activity"), Description("Record a change into the activity log: appends an entry, makes a scoped git commit when the project is a git repo, and returns the activity record. Provide rationale, touched items/nodes, check deltas, and verification flags so the change is fully attested.")]
     public static Task<string> RecordActivity(IPlaceContextService svc, IToolCallLog log,
         Guid projectId, string authorName, bool isAgent, string? rationale,
         string[] touchedFiles, string[] touchedNodes,
@@ -106,17 +106,11 @@ public sealed class PlaceContextTools
     {
         var cmd = new RecordActivityCommand(
             projectId, authorName, isAgent, rationale, touchedFiles, touchedNodes,
-            testsAdded, 0, 0, 0, 0, architectureReviewerRun, liveVerified, commitMessage);
+            testsAdded, 0, 0, architectureReviewerRun, liveVerified, commitMessage);
         return Traced(log, "record_activity", projectId.ToString(), commitMessage,
             new { projectId, authorName, isAgent, rationale, touchedFiles, testsAdded, architectureReviewerRun, liveVerified },
             () => svc.RecordActivityAsync(cmd));
     }
-
-    [Authorize(Policy = "Member")]
-    [McpServerTool(Name = "recompute_risk"), Description("Recompute a project's technical and process risk and return the dashboard.")]
-    public static Task<string> RecomputeRisk(IPlaceContextService svc, IToolCallLog log, Guid projectId)
-        => Traced(log, "recompute_risk", projectId.ToString(), "recompute risk", new { projectId },
-            () => svc.RecomputeRiskAsync(projectId));
 
     [Authorize(Policy = "Member")]
     [McpServerTool(Name = "get_timeline"), Description("Get the recent change timeline for a project.")]
@@ -138,27 +132,7 @@ public sealed class PlaceContextTools
             () => svc.QueryGraphAsync(projectId, question));
 
     [Authorize(Policy = "Member")]
-    [McpServerTool(Name = "add_context"), Description("Append a Markdown section to the project's context document — the durable knowledge agents read before working. Creates the document if absent.")]
-    public static Task<string> AddContext(IPlaceContextService svc, IToolCallLog log,
-        Guid projectId, [Description("Markdown to append (a heading + notes)")] string section)
-        => Traced(log, "add_context", projectId.ToString(), "append context", new { projectId, section },
-            () => svc.AddContextAsync(projectId, section));
-
-    [Authorize(Policy = "Member")]
-    [McpServerTool(Name = "set_context"), Description("Replace the project's entire Markdown context document. Use add_context to append a section; use this to rewrite the whole document (e.g. after consolidating notes).")]
-    public static Task<string> SetContext(IPlaceContextService svc, IToolCallLog log,
-        Guid projectId, [Description("The full Markdown document to store, replacing any existing content")] string markdown)
-        => Traced(log, "set_context", projectId.ToString(), "set context", new { projectId, markdown },
-            () => svc.SetContextAsync(projectId, markdown));
-
-    [Authorize(Policy = "Member")]
-    [McpServerTool(Name = "get_context"), Description("Fetch the project's Markdown context document. Call this at the start of a session to load what's known about the project.")]
-    public static Task<string> GetContext(IPlaceContextService svc, IToolCallLog log, Guid projectId)
-        => Traced(log, "get_context", projectId.ToString(), "fetch context", new { projectId },
-            () => svc.GetContextAsync(projectId));
-
-    [Authorize(Policy = "Member")]
-    [McpServerTool(Name = "suggest_improvements"), Description("Suggest prioritized improvements for a project, derived from logged activity: churn hotspots, unverified changes, missing context, and risk signals.")]
+    [McpServerTool(Name = "suggest_improvements"), Description("Suggest prioritized improvements for a project, derived from logged activity: churn hotspots and unverified changes.")]
     public static Task<string> SuggestImprovements(IPlaceContextService svc, IToolCallLog log, Guid projectId)
         => Traced(log, "suggest_improvements", projectId.ToString(), "suggest improvements", new { projectId },
             () => svc.SuggestImprovementsAsync(projectId));
@@ -511,7 +485,7 @@ public sealed class PlaceContextTools
             () => svc.EmitEventAsync(name, projectId, payload));
 
     [Authorize(Policy = "Member")]
-    [McpServerTool(Name = "list_event_types"), Description("List all event types: the reserved built-ins (job.completed, activity.recorded, risk.recomputed) plus this workspace's user-defined ones.")]
+    [McpServerTool(Name = "list_event_types"), Description("List all event types: the reserved built-ins (job.completed, activity.recorded) plus this workspace's user-defined ones.")]
     public static Task<string> ListEventTypes(IPlaceContextService svc, IToolCallLog log)
         => Traced(log, "list_event_types", "—", "list event types", new { },
             () => svc.ListEventTypesAsync());

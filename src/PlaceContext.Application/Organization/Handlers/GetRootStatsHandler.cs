@@ -27,8 +27,6 @@ public sealed class GetRootStatsHandler : IQueryHandler<GetRootStatsQuery, RootS
         var since = _clock.UtcNow.Date;
 
         int agentToday = 0, humanToday = 0, godTotal = 0, stale = 0;
-        var processScores = new List<double>();
-        var technicalScores = new List<double>();
 
         foreach (var p in projects)
         {
@@ -40,17 +38,10 @@ public sealed class GetRootStatsHandler : IQueryHandler<GetRootStatsQuery, RootS
 
             godTotal += p.LastGraph?.GodNodes.Count ?? 0;
             if (RootRollup.IsStale(p, ledger)) stale++;
-            if (p.ProcessRisk is not null) processScores.Add(p.ProcessRisk.Value);
-            if (p.TechnicalRisk is not null) technicalScores.Add(p.TechnicalRisk.Value);
         }
-
-        var process = processScores.Count > 0 ? processScores.Average() : 0.0;
-        var technical = technicalScores.Count > 0 ? technicalScores.Average() : 0.0;
 
         return new RootStatsView(
             projects.Count, agentToday + humanToday, agentToday, humanToday,
-            process, RootRollup.Band(process),
-            technical, RootRollup.Band(technical),
             godTotal, stale);
     }
 }

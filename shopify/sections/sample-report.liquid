@@ -1,0 +1,122 @@
+{%- comment -%}
+  Sample report — cover preview, bullet list of report contents and an
+  optional PDF download. Included on both the home page and the product
+  template (shared configuration, edited once in the theme editor).
+{%- endcomment -%}
+
+<section class="section sample-report" id="sample-report">
+  <div class="container sample-report__grid">
+    <div class="sample-report__media">
+      {%- if section.settings.cover_image != blank -%}
+        <img
+          src="{{ section.settings.cover_image | image_url: width: 900 }}"
+          alt="{{ section.settings.cover_image.alt | default: section.settings.heading | escape }}"
+          width="{{ section.settings.cover_image.width }}"
+          height="{{ section.settings.cover_image.height }}"
+          loading="lazy"
+        >
+      {%- else -%}
+        <div class="sample-report__placeholder" aria-hidden="true">
+          {% render 'icon', icon: 'document' %}
+          <span>{{ 'sections.sample_report.placeholder' | t }}</span>
+        </div>
+      {%- endif -%}
+    </div>
+
+    <div class="sample-report__content">
+      <h2 class="section__heading section__heading--left">{{ section.settings.heading }}</h2>
+
+      {%- if section.settings.text != blank -%}
+        <p class="sample-report__text">{{ section.settings.text }}</p>
+      {%- endif -%}
+
+      <ul class="sample-report__points">
+        {%- if section.blocks.size > 0 -%}
+          {%- for block in section.blocks -%}
+            <li {{ block.shopify_attributes }}>
+              {% render 'icon', icon: 'check' %}
+              <span>{{ block.settings.text }}</span>
+            </li>
+          {%- endfor -%}
+        {%- else -%}
+          <li>{% render 'icon', icon: 'check' %} <span>Site overview, location and context maps</span></li>
+          <li>{% render 'icon', icon: 'check' %} <span>Zoning and planning-permission constraints</span></li>
+          <li>{% render 'icon', icon: 'check' %} <span>Access, utilities and services review</span></li>
+          <li>{% render 'icon', icon: 'check' %} <span>Environmental and hazard screening</span></li>
+          <li>{% render 'icon', icon: 'check' %} <span>Market context and comparable evidence</span></li>
+          <li>{% render 'icon', icon: 'check' %} <span>Verdict: key risks, indicative costs and next steps</span></li>
+        {%- endif -%}
+      </ul>
+
+      {%- if section.settings.sample_pdf_url != blank -%}
+        <a class="button button--secondary" href="{{ section.settings.sample_pdf_url }}" target="_blank" rel="noopener">
+          {% render 'icon', icon: 'download' %}
+          {{ section.settings.button_label }}
+        </a>
+      {%- endif -%}
+    </div>
+  </div>
+</section>
+
+{% schema %}
+{
+  "name": "Sample report",
+  "settings": [
+    {
+      "type": "text",
+      "id": "heading",
+      "label": "Heading",
+      "default": "See exactly what you'll get"
+    },
+    {
+      "type": "textarea",
+      "id": "text",
+      "label": "Text",
+      "default": "Every report follows the same structure. Download the sample to see the depth of the analysis before you order."
+    },
+    {
+      "type": "image_picker",
+      "id": "cover_image",
+      "label": "Cover image",
+      "info": "A screenshot or render of the report cover page."
+    },
+    {
+      "type": "text",
+      "id": "sample_pdf_url",
+      "label": "Sample PDF URL",
+      "info": "Upload the PDF under Settings → Files in your Shopify admin, then paste its URL here. Leave empty to hide the button."
+    },
+    {
+      "type": "text",
+      "id": "button_label",
+      "label": "Button label",
+      "default": "Download the sample report (PDF)"
+    }
+  ],
+  "blocks": [
+    {
+      "type": "point",
+      "name": "Report contents point",
+      "settings": [
+        {
+          "type": "text",
+          "id": "text",
+          "label": "Text",
+          "default": "What's in the report"
+        }
+      ]
+    }
+  ],
+  "max_blocks": 8,
+  "presets": [
+    {
+      "name": "Sample report",
+      "blocks": [
+        { "type": "point", "settings": { "text": "Site overview, location and context maps" } },
+        { "type": "point", "settings": { "text": "Zoning and planning-permission constraints" } },
+        { "type": "point", "settings": { "text": "Verdict: key risks, indicative costs and next steps" } }
+      ]
+    }
+  ]
+}
+{% endschema %}

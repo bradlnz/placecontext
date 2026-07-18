@@ -18,15 +18,11 @@ type JobParameter struct {
 // Project mirrors the API project DTO. Only id/name/path are user-managed; the
 // rest are server-computed and read-only.
 type Project struct {
-	ID                string   `json:"id,omitempty"`
-	Name              string   `json:"name,omitempty"`
-	Path              string   `json:"path,omitempty"`
-	Status            string   `json:"status,omitempty"`
-	IsGraphified      bool     `json:"isGraphified"`
-	TechnicalRisk     *float64 `json:"technicalRisk,omitempty"`
-	TechnicalRiskBand *string  `json:"technicalRiskBand,omitempty"`
-	ProcessRisk       *float64 `json:"processRisk,omitempty"`
-	ProcessRiskBand   *string  `json:"processRiskBand,omitempty"`
+	ID           string `json:"id,omitempty"`
+	Name         string `json:"name,omitempty"`
+	Path         string `json:"path,omitempty"`
+	Status       string `json:"status,omitempty"`
+	IsGraphified bool   `json:"isGraphified"`
 }
 
 // CreateProjectRequest is the body for POST /api/v1/projects.

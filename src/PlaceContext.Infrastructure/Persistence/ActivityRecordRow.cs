@@ -16,8 +16,6 @@ public sealed class ActivityRecordRow : ITenantOwned
     public int TestsAdded { get; set; }
     public int TestsRemoved { get; set; }
     public int TestsChanged { get; set; }
-    public int RiskResolved { get; set; }
-    public int RiskIntroduced { get; set; }
     public bool ArchReviewed { get; set; }
     public bool LiveVerified { get; set; }
     public string TouchedFiles { get; set; } = "[]";

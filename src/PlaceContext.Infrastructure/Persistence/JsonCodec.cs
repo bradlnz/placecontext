@@ -10,7 +10,6 @@ internal static class JsonCodec
 
     private sealed record GodNodeDto(string Id, string Label, int Degree);
     private sealed record SnapshotDto(string Path, DateTimeOffset BuiltAt, int NodeCount, int LinkCount, List<GodNodeDto> Gods);
-    private sealed record SignalDto(string Code, string Kind, int Severity, string Evidence);
 
     public static string Encode(IReadOnlyList<string> items) => JsonSerializer.Serialize(items, Opts);
 
@@ -33,17 +32,5 @@ internal static class JsonCodec
         if (dto is null) return null;
         var gods = dto.Gods.Select(g => GodNode.Of(GraphNodeId.From(g.Id), NormLabel.From(g.Label), g.Degree));
         return GraphSnapshotRef.Of(dto.Path, dto.BuiltAt, dto.NodeCount, dto.LinkCount, gods);
-    }
-
-    public static string EncodeSignals(IReadOnlyList<RiskSignal> signals)
-        => JsonSerializer.Serialize(
-            signals.Select(s => new SignalDto(s.Code, s.Kind.ToString(), (int)s.Severity, s.Evidence)).ToList(), Opts);
-
-    public static IReadOnlyList<RiskSignal> DecodeSignals(string? json)
-    {
-        if (string.IsNullOrWhiteSpace(json)) return Array.Empty<RiskSignal>();
-        var dtos = JsonSerializer.Deserialize<List<SignalDto>>(json, Opts) ?? new();
-        return dtos.Select(d => RiskSignal.Of(
-            d.Code, Enum.Parse<RiskKind>(d.Kind), (Severity)d.Severity, d.Evidence)).ToList();
     }
 }

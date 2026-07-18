@@ -11,10 +11,7 @@ public sealed record ActivityEntryView(
     string Why,
     bool HasRationale,
     string TestDelta,
-    int RiskNet,
     string? Commit,
     int FileCount,
     IReadOnlyList<string> Files,
-    bool Clean,
-    IReadOnlyList<string> Signals,
     DateTimeOffset RecordedAt);

@@ -97,7 +97,6 @@ public sealed class ObsidianVaultImporter
                 author,
                 Rationale.OrNone(null),
                 TestDelta.From(0, 0, 0),
-                RiskDelta.From(0, 0),
                 new ActivityVerification(false, false),
                 touched.Distinct(StringComparer.OrdinalIgnoreCase),
                 Array.Empty<GraphNodeId>(),

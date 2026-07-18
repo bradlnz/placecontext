@@ -20,18 +20,13 @@ public class SearchTests
         var ledgers = new InMemoryActivityLogRepository();
         var ledger = ActivityLog.Start(project.Id);
         ledger.Append("Add payment webhook", Author.Agent("claude"), Rationale.None, TestDelta.None,
-            RiskDelta.None, ActivityVerification.None, new[] { "a.cs" }, Array.Empty<GraphNodeId>(), T0);
+            ActivityVerification.None, new[] { "a.cs" }, Array.Empty<GraphNodeId>(), T0);
         await ledgers.SaveAsync(ledger);
-
-        var contexts = new InMemoryProjectContextRepository();
-        var ctx = ProjectContext.Start(project.Id, T0);
-        ctx.Append("# Notes\nStripe webhook signing secret rotates monthly.", T0);
-        await contexts.SaveAsync(ctx);
 
         var decisions = new InMemoryDecisionRepository();
         await decisions.AddAsync(Decision.Record(project.Id, "Which payment provider?", "Stripe", Rationale.None, T0));
 
-        return new SearchHandler(projects, ledgers, contexts, decisions);
+        return new SearchHandler(projects, ledgers, decisions);
     }
 
     [Theory]

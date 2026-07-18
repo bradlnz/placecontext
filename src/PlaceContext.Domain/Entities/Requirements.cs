@@ -8,7 +8,7 @@ namespace PlaceContext.Domain.Entities;
 /// follow and that the review/skill prompts check against. There is one <b>global</b> document
 /// (applies to every project) and optionally one <b>per project</b>. A project's <i>effective</i>
 /// requirements are the global document followed by the project's own (assembled in the Application
-/// layer). Mirrors <see cref="ProjectContext"/>: appendless, replaced wholesale from the portal.
+/// layer). Appendless: the document is replaced wholesale from the portal.
 /// </summary>
 public sealed class Requirements : AggregateRoot
 {

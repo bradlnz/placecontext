@@ -320,6 +320,7 @@ public class PostJobActionServiceTests
         public List<(string Key, byte[] Content)> Objects { get; } = new();
         public bool IsEnabled => true;
         public string ReportsBucket => "placecontext-reports";
+        public string DepsBucket => "placecontext-deps";
         public Task PutAsync(string bucket, string key, byte[] content, string contentType, CancellationToken ct = default)
         {
             Objects.Add((key, content));
@@ -332,6 +333,10 @@ public class PostJobActionServiceTests
             Objects.RemoveAll(o => o.Key == key);
             return Task.CompletedTask;
         }
+        public Task<bool> ExistsAsync(string bucket, string key, CancellationToken ct = default) => Task.FromResult(false);
+        public Task EnsureBucketAsync(string bucket, CancellationToken ct = default) => Task.CompletedTask;
+        public Task<string> PresignDownloadAsync(string bucket, string key, TimeSpan ttl, CancellationToken ct = default) => Task.FromResult("");
+        public Task<string> PresignUploadAsync(string bucket, string key, TimeSpan ttl, CancellationToken ct = default) => Task.FromResult("");
     }
 
     private sealed class FakeLinks : IRunArtifactLinkRepository

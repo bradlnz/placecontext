@@ -29,14 +29,14 @@ public sealed class TenantResolutionMiddleware
     public static string ResolveSlug(string host)
     {
         host = (host ?? string.Empty).ToLowerInvariant();
-        foreach (var baseDomain in new[] { ".placecontext.ai", ".localhost" })
+        foreach (var baseDomain in PublicUrl.TenantBaseDomains)
             if (host.EndsWith(baseDomain, StringComparison.Ordinal))
             {
                 var sub = host[..^baseDomain.Length];
                 return string.IsNullOrEmpty(sub) ? "default" : sub.Split('.')[0];
             }
 
-        if (host is "localhost" or "placecontext.ai" or "127.0.0.1" or "::1" or "[::1]" || host.Length == 0)
+        if (host.Length == 0 || PublicUrl.DefaultTenantHosts.Contains(host, StringComparer.Ordinal))
             return "default";
 
         // Unknown host (e.g. evil.attacker, foo.evil.com) → default, do not derive a slug.

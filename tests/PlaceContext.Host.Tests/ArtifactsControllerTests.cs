@@ -118,6 +118,7 @@ public class ArtifactsControllerTests
     {
         public bool IsEnabled => true;
         public string ReportsBucket => link.Bucket;
+        public string DepsBucket => "placecontext-deps";
 
         public Task<ObjectDownload?> OpenReadAsync(string bucket, string key, CancellationToken ct = default) =>
             Task.FromResult<ObjectDownload?>(bucket == link.Bucket && key == link.ObjectKey
@@ -126,5 +127,9 @@ public class ArtifactsControllerTests
 
         public Task PutAsync(string bucket, string key, byte[] content, string contentType, CancellationToken ct = default) => Task.CompletedTask;
         public Task DeleteAsync(string bucket, string key, CancellationToken ct = default) => Task.CompletedTask;
+        public Task<bool> ExistsAsync(string bucket, string key, CancellationToken ct = default) => Task.FromResult(false);
+        public Task EnsureBucketAsync(string bucket, CancellationToken ct = default) => Task.CompletedTask;
+        public Task<string> PresignDownloadAsync(string bucket, string key, TimeSpan ttl, CancellationToken ct = default) => Task.FromResult("");
+        public Task<string> PresignUploadAsync(string bucket, string key, TimeSpan ttl, CancellationToken ct = default) => Task.FromResult("");
     }
 }

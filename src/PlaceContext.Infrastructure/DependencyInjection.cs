@@ -1,7 +1,6 @@
 using PlaceContext.Application.Ports;
 using PlaceContext.Domain.Repositories;
 using PlaceContext.Infrastructure.Git;
-using PlaceContext.Infrastructure.Metrics;
 using PlaceContext.Infrastructure.Persistence;
 using PlaceContext.Infrastructure.Skills;
 using PlaceContext.Infrastructure.Tenancy;
@@ -14,8 +13,8 @@ namespace PlaceContext.Infrastructure;
 
 /// <summary>
 /// Composition root for the Infrastructure layer: binds options, opens the EF Core (PostgreSQL)
-/// store, and wires every Application port to its adapter — the EF repositories, the git/metrics
-/// adapters, the skill scaffolder, and the Strategy-behind-Factory risk calculators.
+/// store, and wires every Application port to its adapter — the EF repositories, the git
+/// adapters, and the skill scaffolder.
 /// </summary>
 public static class DependencyInjection
 {
@@ -60,15 +59,11 @@ public static class DependencyInjection
         services.AddScoped<IProjectRepository, EfProjectRepository>();
         services.AddScoped<IActivityLogRepository, EfActivityLogRepository>();
         services.AddScoped<IDecisionRepository, EfDecisionRepository>();
-        services.AddScoped<IRiskAssessmentRepository, EfRiskAssessmentRepository>();
-        // Knowledge context: encrypted file under DataRoot (not a DB column).
-        services.AddScoped<IProjectContextRepository, Files.FileProjectContextRepository>();
         services.AddScoped<IRequirementsRepository, EfRequirementsRepository>();
         services.AddScoped<IUsageRepository, EfUsageRepository>();
 
         // Git, metrics, skill scaffolding.
         services.AddSingleton<IGitPort, CliGitAdapter>();
-        services.AddSingleton<ICodeMetricsProbe, FileScanCodeMetricsProbe>();
         services.AddSingleton<ISkillScaffolder, FileSkillScaffolder>();
         services.AddSingleton<IRepoFiles, Files.FileRepoFiles>();
         services.AddHttpClient();
@@ -219,8 +214,7 @@ public static class DependencyInjection
     }
 
     /// <summary>
-    /// Encrypts any pre-existing plaintext at rest and migrates knowledge context off the DB onto
-    /// encrypted files. Safe to call on every launch (idempotent).
+    /// Encrypts any pre-existing plaintext at rest. Safe to call on every launch (idempotent).
     /// </summary>
     public static Task EncryptExistingDataAsync(IServiceProvider provider, CancellationToken ct = default)
         => Security.EncryptionAtRestBootstrap.RunAsync(provider, ct);

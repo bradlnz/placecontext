@@ -8,7 +8,7 @@ namespace PlaceContext.Application.Features;
 
 /// <summary>
 /// Aggregates the workspace's actionable focus items across all projects — cheaply, from each project's
-/// logged state (graph status, context, ledger, latest risk assessment) without rebuilding decision
+/// logged state (graph status and ledger) without rebuilding decision
 /// trees. Items auto-resolve: they disappear from the checklist once the underlying condition clears.
 /// </summary>
 public sealed class FocusHandler : IQueryHandler<GetFocusQuery, FocusView>
@@ -17,17 +17,11 @@ public sealed class FocusHandler : IQueryHandler<GetFocusQuery, FocusView>
 
     private readonly IProjectRepository _projects;
     private readonly IActivityLogRepository _ledgers;
-    private readonly IProjectContextRepository _contexts;
-    private readonly IRiskAssessmentRepository _assessments;
 
-    public FocusHandler(
-        IProjectRepository projects, IActivityLogRepository ledgers,
-        IProjectContextRepository contexts, IRiskAssessmentRepository assessments)
+    public FocusHandler(IProjectRepository projects, IActivityLogRepository ledgers)
     {
         _projects = projects;
         _ledgers = ledgers;
-        _contexts = contexts;
-        _assessments = assessments;
     }
 
     public async Task<FocusView> HandleAsync(GetFocusQuery query, CancellationToken ct = default)
@@ -44,23 +38,12 @@ public sealed class FocusHandler : IQueryHandler<GetFocusQuery, FocusView>
                 items.Add(new FocusItem("graphify", "low", "Build the knowledge graph",
                     "Run rebuild_graph to map this project's structure.", p.Id.Value, name, url));
 
-            var context = await _contexts.GetForProjectAsync(p.Id, ct);
-            if (context is null || context.IsEmpty)
-                items.Add(new FocusItem("missing-context", "medium", "Add project context",
-                    "Capture goals, conventions, and gotchas with add_context.", p.Id.Value, name, $"{url}#context"));
-
             var ledger = await _ledgers.GetForProjectAsync(p.Id, ct);
             var unverified = ledger.Records.Count(r => r.IsAgentAuthored && !r.Verification.LiveVerified);
             if (unverified > 0)
                 items.Add(new FocusItem("unverified-changes", unverified >= 3 ? "high" : "medium",
                     $"Verify {unverified} agent change(s)",
                     "Run and observe the app, then record live verification.", p.Id.Value, name, $"{url}#changes"));
-
-            var risk = await _assessments.GetLatestAsync(p.Id, ct);
-            var signal = risk?.Signals.Where(s => (int)s.Severity >= 2).OrderByDescending(s => (int)s.Severity).FirstOrDefault();
-            if (signal is not null)
-                items.Add(new FocusItem($"risk:{signal.Code}", "medium",
-                    $"Risk signal: {signal.Code}", signal.Evidence, p.Id.Value, name, url));
         }
 
         var ordered = items

@@ -14,8 +14,7 @@ namespace PlaceContext.Application.Features;
 /// Executes a job: snapshots the current spec onto the run, fans out all map shards (bounded
 /// concurrency), optionally runs the reduce step with the shard artifacts mounted as inputs,
 /// aggregates status via the job's ExitCodePolicy, and persists the run.
-/// Completed run artifacts (opaque JSON) are appended to the project's context document so the
-/// existing generic report-generation layer can observe them.
+/// A summary of the completed run is embedded for semantic search over run outputs.
 ///
 /// WorkloadSource resolution — image vs code:
 /// • ImageWorkload: passed to the runner via <see cref="WorkloadRunRequest.Image"/>; same behaviour as before.
@@ -28,7 +27,6 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
 {
     private readonly IJobRepository _jobs;
     private readonly IJobRunRepository _runs;
-    private readonly IProjectContextRepository _contexts;
     private readonly IWorkloadRunner _runner;
     private readonly IUnitOfWork _uow;
     private readonly IClock _clock;
@@ -47,7 +45,6 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
     public RunJobHandler(
         IJobRepository jobs,
         IJobRunRepository runs,
-        IProjectContextRepository contexts,
         IWorkloadRunner runner,
         IUnitOfWork uow,
         IClock clock,
@@ -71,7 +68,6 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
         _entityTags = entityTags;
         _jobs = jobs;
         _runs = runs;
-        _contexts = contexts;
         _runner = runner;
         _uow = uow;
         _clock = clock;
@@ -191,14 +187,14 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
         if (_entityTags is not null)
             await _entityTags.TagRunAsync(job, run, ct);
 
-        // Persist a summary of the run into the project's context document and embed it for
-        // search/the dependency graph. Best-effort — isolated so it can't fail or stall the run.
+        // Embed a summary of the run for search/the dependency graph. Best-effort — isolated so it
+        // can't fail or stall the run.
         try
         {
-            await AppendRunSummaryToProjectContextAsync(job, run, ct);
+            await EmbedRunSummaryAsync(job, run, ct);
             await _uow.SaveChangesAsync(ct);
         }
-        catch { /* organize/embed/context-append is best-effort enrichment */ }
+        catch { /* organize/embed is best-effort enrichment */ }
 
         // Raise the built-in "job.completed" domain event so event-triggers can chain off this run.
         if (_events is not null)
@@ -365,14 +361,10 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
         return merged;
     }
 
-    // ---- PROJECT CONTEXT PERSISTENCE ----
+    // ---- RUN SUMMARY EMBEDDING ----
 
-    private async Task AppendRunSummaryToProjectContextAsync(Job job, JobRun run, CancellationToken ct)
+    private async Task EmbedRunSummaryAsync(Job job, JobRun run, CancellationToken ct)
     {
-        var projectId = PlaceContext.Domain.ValueObjects.ProjectId.From(run.ProjectId);
-        var context = await _contexts.GetForProjectAsync(projectId, ct)
-            ?? ProjectContext.Start(projectId, _clock.UtcNow);
-
         var sb = new StringBuilder();
         sb.AppendLine($"## Job run: {job.Name} [{run.Status}] — {run.FinishedAt:yyyy-MM-dd HH:mm} UTC");
         sb.AppendLine($"Run ID: `{run.Id:N}`  |  Job: `{job.Id:N}`  |  Shards: {run.ShardResults.Count}");
@@ -407,9 +399,6 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
         }
 
         var toStore = sb.ToString().TrimEnd();
-
-        context.Append(toStore, _clock.UtcNow);
-        await _contexts.SaveAsync(context, ct);
 
         // Vectorize the organized output for RAG + dependency graph. Dual-write: legacy
         // job_run_embeddings (encrypted text) and universal content_embeddings. Best-effort.

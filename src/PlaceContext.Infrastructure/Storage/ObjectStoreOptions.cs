@@ -13,4 +13,7 @@ public sealed class ObjectStoreOptions
 
     /// <summary>Bucket post-job artifacts (reports/charts/CSVs/bundles) are written to.</summary>
     public string ReportsBucket { get; set; } = "placecontext-reports";
+
+    /// <summary>Bucket for baked job-dependency layers (the Kubernetes runner's warm cache).</summary>
+    public string DepsBucket { get; set; } = "placecontext-deps";
 }

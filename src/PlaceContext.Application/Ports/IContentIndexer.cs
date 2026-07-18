@@ -8,7 +8,6 @@ public static class ContentKind
 {
     public const string RunOutput = "run_output";
     public const string ProjectData = "project_data";
-    public const string Context = "context";
     public const string Decision = "decision";
     public const string Activity = "activity";
     public const string Requirements = "requirements";

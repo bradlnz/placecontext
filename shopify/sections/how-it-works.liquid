@@ -1,0 +1,113 @@
+{%- comment -%}
+  How it works — numbered steps rendered from "Step" blocks.
+  Ships with three built-in steps so the section looks complete before
+  any blocks are added in the theme editor.
+{%- endcomment -%}
+
+<section class="section how-it-works" id="how-it-works">
+  <div class="container">
+    {%- if section.settings.heading != blank -%}
+      <h2 class="section__heading">{{ section.settings.heading }}</h2>
+    {%- endif -%}
+    {%- if section.settings.subheading != blank -%}
+      <p class="section__subheading">{{ section.settings.subheading }}</p>
+    {%- endif -%}
+
+    <ol class="steps">
+      {%- if section.blocks.size > 0 -%}
+        {%- for block in section.blocks -%}
+          <li class="steps__item" {{ block.shopify_attributes }}>
+            <span class="steps__number" aria-hidden="true">{{ forloop.index }}</span>
+            <h3 class="steps__title">{{ block.settings.title }}</h3>
+            <p class="steps__text">{{ block.settings.text }}</p>
+          </li>
+        {%- endfor -%}
+      {%- else -%}
+        <li class="steps__item">
+          <span class="steps__number" aria-hidden="true">1</span>
+          <h3 class="steps__title">Tell us about the site</h3>
+          <p class="steps__text">Order your report and enter the site address plus any notes, plans or document links at checkout.</p>
+        </li>
+        <li class="steps__item">
+          <span class="steps__number" aria-hidden="true">2</span>
+          <h3 class="steps__title">We run the analysis</h3>
+          <p class="steps__text">Our platform researches zoning, access, services, environmental constraints and market context for the site.</p>
+        </li>
+        <li class="steps__item">
+          <span class="steps__number" aria-hidden="true">3</span>
+          <h3 class="steps__title">Get your report</h3>
+          <p class="steps__text">A decision-ready PDF lands in your inbox within the stated delivery window, with sources referenced.</p>
+        </li>
+      {%- endif -%}
+    </ol>
+  </div>
+</section>
+
+{% schema %}
+{
+  "name": "How it works",
+  "settings": [
+    {
+      "type": "text",
+      "id": "heading",
+      "label": "Heading",
+      "default": "How it works"
+    },
+    {
+      "type": "textarea",
+      "id": "subheading",
+      "label": "Subheading",
+      "default": "From site details to a decision-ready report in three steps."
+    }
+  ],
+  "blocks": [
+    {
+      "type": "step",
+      "name": "Step",
+      "settings": [
+        {
+          "type": "text",
+          "id": "title",
+          "label": "Title",
+          "default": "Step title"
+        },
+        {
+          "type": "textarea",
+          "id": "text",
+          "label": "Text",
+          "default": "Describe this step."
+        }
+      ]
+    }
+  ],
+  "max_blocks": 6,
+  "presets": [
+    {
+      "name": "How it works",
+      "blocks": [
+        {
+          "type": "step",
+          "settings": {
+            "title": "Tell us about the site",
+            "text": "Order your report and enter the site address plus any notes, plans or document links at checkout."
+          }
+        },
+        {
+          "type": "step",
+          "settings": {
+            "title": "We run the analysis",
+            "text": "Our platform researches zoning, access, services, environmental constraints and market context for the site."
+          }
+        },
+        {
+          "type": "step",
+          "settings": {
+            "title": "Get your report",
+            "text": "A decision-ready PDF lands in your inbox within the stated delivery window, with sources referenced."
+          }
+        }
+      ]
+    }
+  ]
+}
+{% endschema %}

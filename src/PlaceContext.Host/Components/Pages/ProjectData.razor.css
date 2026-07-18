@@ -1,7 +1,14 @@
 .page {
-    padding: 20px 24px 40px;
+    padding: 20px 24px;
     max-width: 1320px;
     margin: 0 auto;
+    /* Supabase-style: the page fills the layout's scroll area and never scrolls itself —
+       only the table menu and the rows box scroll, the SQL editor stays put. */
+    height: 100%;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
 }
 
 .head-row {
@@ -32,11 +39,22 @@
     display: flex;
     gap: 14px;
     margin-top: 12px;
+    flex: 1;
+    min-height: 0;
 }
 
 .tables-col {
     width: 250px;
     flex: none;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.tables-list {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
 }
 
 .tables-head {
@@ -171,10 +189,14 @@
 .flex-min {
     flex: 1;
     min-width: 0;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
 }
 
 .sql-editor {
     height: 220px;
+    flex: none;
     border: 1px solid var(--border);
     border-radius: 8px;
     overflow: hidden;
@@ -185,6 +207,7 @@
     align-items: center;
     gap: 10px;
     margin: 10px 0 14px;
+    flex: none;
 }
 
 .export-link {
@@ -209,7 +232,9 @@
 
 .result-scroll {
     overflow: auto;
-    max-height: 480px;
+    /* Static rows box: fills whatever height the page has left and scrolls inside itself. */
+    flex: 1;
+    min-height: 0;
     border: 1px solid var(--border);
     border-radius: 8px;
 }

@@ -58,6 +58,31 @@ public sealed class WorkloadRunnerOptions
     /// </summary>
     public bool SandboxNetworkNone { get; set; } = true;
 
+    /// <summary>
+    /// UID job containers run as (docker --user, k8s securityContext.runAsUser). Jobs never run as
+    /// root: the default 65534 is "nobody". A numeric UID works on every image — no /etc/passwd
+    /// entry is required. long, matching the Kubernetes API; config binding accepts either width.
+    /// Default: 65534.
+    /// </summary>
+    public long RunAsUser { get; set; } = 65534;
+
+    /// <summary>
+    /// GID job containers run as (docker --user, k8s securityContext.runAsGroup / fsGroup).
+    /// Default: 65534 ("nogroup").
+    /// </summary>
+    public long RunAsGroup { get; set; } = 65534;
+
+    /// <summary>
+    /// Bake dependency layers into reusable warm images: a code workload shipping its runtime's
+    /// manifest (requirements.txt, package.json, Gemfile, go.mod) gets a
+    /// <c>pcwarm-&lt;runtime&gt;:&lt;hash&gt;</c> image built once (base image + package install) and
+    /// every later run of the same manifest starts from it instead of reinstalling per container.
+    /// Builds download packages on the HOST network (job code itself still runs --network none
+    /// unless it opts into egress). Any build failure falls back to the per-run install.
+    /// Default: true.
+    /// </summary>
+    public bool WarmImages { get; set; } = true;
+
     // ── Job placement (Kubernetes runner only) ──────────────────────────────────────────────────
     // Where job pods land in a multi-node fleet. The common shape is a small cloud server (e.g. a
     // DigitalOcean droplet) running the portal/MCP as the k3s control plane, with the operator's
@@ -85,6 +110,16 @@ public sealed class WorkloadRunnerOptions
     /// Applied in addition to the worker-node affinity above. Empty = any node.
     /// </summary>
     public Dictionary<string, string> JobNodeSelector { get; set; } = new();
+
+    /// <summary>
+    /// Bake the dependency layer once per manifest hash and reuse it from the object store on
+    /// later runs (Kubernetes runner only): a bake Job installs the packages, tars them and PUTs
+    /// them to MinIO; warmed shard pods fetch + extract the tar in their init step and skip the
+    /// install. Requires a configured object store; silently off when there isn't one. Warmed pods
+    /// get scoped egress to MinIO + DNS instead of the usual deny-all. Any failure falls back to
+    /// the per-run install. Default: true.
+    /// </summary>
+    public bool WarmDependencyCache { get; set; } = true;
 
     // ── Runtime registry ────────────────────────────────────────────────────────────────────────
     // Maps runtimeId → { BaseImage, InvokeCommand, DefaultEntrypoint }.

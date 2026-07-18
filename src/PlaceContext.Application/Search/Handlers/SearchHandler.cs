@@ -8,21 +8,19 @@ public sealed class SearchHandler : IQueryHandler<SearchQuery, SearchResultsView
 {
     private readonly IProjectRepository _projects;
     private readonly IActivityLogRepository _ledgers;
-    private readonly IProjectContextRepository _contexts;
     private readonly IDecisionRepository _decisions;
     private readonly IRunArtifactLinkRepository? _artifacts;
     private readonly IEntityTagStore? _tagIndex;
 
     public SearchHandler(
         IProjectRepository projects, IActivityLogRepository ledgers,
-        IProjectContextRepository contexts, IDecisionRepository decisions,
+        IDecisionRepository decisions,
         // Optional so existing tests construct the handler unchanged; DI always supplies it.
         IRunArtifactLinkRepository? artifacts = null,
         IEntityTagStore? tagIndex = null)
     {
         _projects = projects;
         _ledgers = ledgers;
-        _contexts = contexts;
         _decisions = decisions;
         _artifacts = artifacts;
         _tagIndex = tagIndex;
@@ -73,16 +71,5 @@ public sealed class SearchHandler : IQueryHandler<SearchQuery, SearchResultsView
         }
 
         return new SearchResultsView(term, hits.Take(query.Limit).ToList());
-    }
-
-    /// <summary>A short window of text around the first match, for context hits.</summary>
-    private static string Snippet(string text, string term)
-    {
-        var i = text.IndexOf(term, StringComparison.OrdinalIgnoreCase);
-        if (i < 0) return text.Length <= 100 ? text : text[..100];
-        var start = Math.Max(0, i - 40);
-        var len = Math.Min(text.Length - start, 100);
-        var s = text.Substring(start, len).Replace('\n', ' ').Trim();
-        return (start > 0 ? "…" : "") + s + (start + len < text.Length ? "…" : "");
     }
 }

@@ -1,3 +1,4 @@
+using Amazon;
 using Amazon.S3;
 using Amazon.S3.Model;
 using Microsoft.Extensions.Options;
@@ -25,6 +26,9 @@ public sealed class MinioObjectStore : IObjectStore, IDisposable
         _enc = enc;
         if (IsEnabled)
         {
+            // The SDK picks SigV2 for presigned URLs by default (with a US-East-1 fallback) — the
+            // dependency-cache pods need SigV4, and the only S3 usage in this process is this store.
+            AWSConfigsS3.UseSignatureVersion4 = true;
             var cfg = new AmazonS3Config
             {
                 ServiceURL = _o.Endpoint,
@@ -39,6 +43,8 @@ public sealed class MinioObjectStore : IObjectStore, IDisposable
         && !string.IsNullOrWhiteSpace(_o.AccessKey) && !string.IsNullOrWhiteSpace(_o.SecretKey);
 
     public string ReportsBucket => _o.ReportsBucket;
+
+    public string DepsBucket => _o.DepsBucket;
 
     /// <summary>Hard cap on object size before encryption (matches field-encryptor max bytes).</summary>
     public const int MaxObjectBytes = Security.DataProtectionEncryptor.MaxPlaintextBytes;
@@ -62,14 +68,6 @@ public sealed class MinioObjectStore : IObjectStore, IDisposable
             // NB: do NOT set DisablePayloadSigning — the SDK rejects it over plain HTTP
             // ("must be sent over HTTPS"). Normal SigV4 payload signing works fine with MinIO on HTTP.
         }, ct);
-    }
-
-    // Create the bucket if absent so artifact storage works even before the make-bucket Job has run.
-    private async Task EnsureBucketAsync(string bucket, CancellationToken ct)
-    {
-        if (await Amazon.S3.Util.AmazonS3Util.DoesS3BucketExistV2Async(_client!, bucket)) return;
-        try { await _client!.PutBucketAsync(new PutBucketRequest { BucketName = bucket }, ct); }
-        catch (AmazonS3Exception ex) when (ex.ErrorCode is "BucketAlreadyOwnedByYou" or "BucketAlreadyExists") { }
     }
 
     public async Task<ObjectDownload?> OpenReadAsync(string bucket, string key, CancellationToken ct = default)
@@ -103,6 +101,52 @@ public sealed class MinioObjectStore : IObjectStore, IDisposable
         {
             // Already gone — deletion is idempotent.
         }
+    }
+
+    public async Task<bool> ExistsAsync(string bucket, string key, CancellationToken ct = default)
+    {
+        if (_client is null) return false;
+        try
+        {
+            await _client.GetObjectMetadataAsync(new GetObjectMetadataRequest { BucketName = bucket, Key = key }, ct);
+            return true;
+        }
+        catch (AmazonS3Exception ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>Creates the bucket if absent (idempotent). No-op when the store is disabled.</summary>
+    public async Task EnsureBucketAsync(string bucket, CancellationToken ct)
+    {
+        if (_client is null) return;
+        if (await Amazon.S3.Util.AmazonS3Util.DoesS3BucketExistV2Async(_client, bucket)) return;
+        try { await _client.PutBucketAsync(new PutBucketRequest { BucketName = bucket }, ct); }
+        catch (AmazonS3Exception ex) when (ex.ErrorCode is "BucketAlreadyOwnedByYou" or "BucketAlreadyExists") { }
+    }
+
+    // Presigned URLs give clients (job pods) direct raw-object access — used for the dependency
+    // cache, whose tarballs are not encrypted. SigV4 signing is computed locally (no round trip).
+    public Task<string> PresignDownloadAsync(string bucket, string key, TimeSpan ttl, CancellationToken ct = default)
+        => PresignAsync(bucket, key, HttpVerb.GET, ttl);
+
+    public Task<string> PresignUploadAsync(string bucket, string key, TimeSpan ttl, CancellationToken ct = default)
+        => PresignAsync(bucket, key, HttpVerb.PUT, ttl);
+
+    private Task<string> PresignAsync(string bucket, string key, HttpVerb verb, TimeSpan ttl)
+    {
+        if (_client is null) throw new InvalidOperationException("Object store is not configured.");
+        return _client.GetPreSignedURLAsync(new GetPreSignedUrlRequest
+        {
+            BucketName = bucket,
+            Key = key,
+            Verb = verb,
+            Expires = DateTime.UtcNow.Add(ttl),
+            // The SDK otherwise presigns HTTPS regardless of the endpoint — in-cluster MinIO
+            // serves plain HTTP, so follow the configured endpoint's scheme.
+            Protocol = _o.Endpoint.StartsWith("https", StringComparison.OrdinalIgnoreCase) ? Protocol.HTTPS : Protocol.HTTP,
+        });
     }
 
     public void Dispose() => _client?.Dispose();

@@ -12,8 +12,8 @@ public sealed class PlaceContextOptions
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".placecontext", "workspaces");
 
     /// <summary>
-    /// Durable on-disk product data (encrypted knowledge context files, etc.). Separate from
-    /// <see cref="WorkspaceRoot"/> so cloned repos stay distinct from Host-owned knowledge files.
+    /// Durable on-disk product data. Separate from <see cref="WorkspaceRoot"/> so cloned repos stay
+    /// distinct from Host-owned files.
     /// </summary>
     public string DataRoot { get; set; } =
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".placecontext", "data");

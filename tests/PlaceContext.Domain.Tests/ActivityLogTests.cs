@@ -15,7 +15,6 @@ public class ActivityLogTests
             Author.Agent("claude"),
             Rationale.Of("because"),
             TestDelta.None,
-            RiskDelta.None,
             ActivityVerification.None,
             touchedFiles: new[] { "a.cs" },
             touchedNodes: nodeIds.Select(GraphNodeId.From),

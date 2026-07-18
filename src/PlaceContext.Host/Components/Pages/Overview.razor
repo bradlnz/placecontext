@@ -78,8 +78,6 @@
         <div class="projects-grid">
             @foreach (var p in _projects)
             {
-                var process = Viz.Pct(p.ProcessRisk);
-                var tech = Viz.Pct(p.TechnicalRisk);
                 <div class="dccard project-card" @onclick="@(() => Open(p.Id))">
                     <div class="project-card-head">
                         <div class="min-w-0">
@@ -89,17 +87,13 @@
                             </div>
                             <div class="project-path">@p.Path</div>
                         </div>
-                        <div class="status-badge" style="color:@Viz.BandColor(p.ProcessBand); background:@Viz.BandBg(p.ProcessBand)">
-                            <span class="status-dot" style="background:@Viz.BandColor(p.ProcessBand)"></span>
+                        <div class="status-badge">
+                            <span class="status-dot"></span>
                             @p.Status
                         </div>
                     </div>
 
-                    <div class="risk-row">
-                        <div class="risk-bars">
-                            @RiskBar("Process risk", process)
-                            @RiskBar("Technical risk", tech)
-                        </div>
+                    <div class="map-row">
                         <div class="minimap">
                             <svg viewBox="0 0 100 76" width="100%" height="100%" preserveAspectRatio="xMidYMid slice">
                                 @foreach (var (x, y, god) in MiniNodes(p))
@@ -144,14 +138,10 @@
         _projects = await Svc.GetProjectsAsync();
         _focus = await Svc.GetFocusAsync();
         var st = await Svc.GetRootStatsAsync();
-        var process = (int)Math.Round(st.RootProcessRisk * 100);
-        var trust = 100 - process;
         _stats = new()
         {
             new("Projects", st.ProjectCount.ToString(), "under root", "var(--text)"),
             new("Changes today", st.ChangesToday.ToString(), $"{st.AgentChangesToday} agent · {st.HumanChangesToday} human", "var(--text)"),
-            new("Process risk", process.ToString(), "root average", Viz.Tone(process)),
-            new("Process-trust", trust.ToString(), "100 − process", Viz.Tone(100 - trust)),
             new("God-nodes", st.GodNodeTotal.ToString(), "top-degree files", "var(--text)"),
             new("Stale context", st.StaleContextCount.ToString(), "need re-index", st.StaleContextCount > 0 ? "var(--warn)" : "var(--good)"),
         };
@@ -176,18 +166,4 @@
     }
 
     private static string N(double v) => v.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture);
-
-    private RenderFragment RiskBar(string label, int pct) => builder =>
-    {
-        builder.AddMarkupContent(0, $@"
-            <div>
-              <div style='display:flex; justify-content:space-between; align-items:baseline; margin-bottom:5px'>
-                <span style='font-size:11px; color:var(--text-2)'>{label}</span>
-                <span style='font-size:12px; font-weight:600; font-family:Geist Mono,monospace; color:{Viz.Tone(pct)}'>{pct}</span>
-              </div>
-              <div style='height:5px; border-radius:99px; background:var(--card-2); overflow:hidden'>
-                <div class='dcbar' data-pct='{pct}' style='background:{Viz.Tone(pct)}'></div>
-              </div>
-            </div>");
-    };
 }

@@ -19,7 +19,6 @@ public sealed class ActivityRecord
         Author author,
         Rationale rationale,
         TestDelta testDelta,
-        RiskDelta riskDelta,
         ActivityVerification verification,
         IEnumerable<string> touchedFiles,
         IEnumerable<GraphNodeId> touchedNodes,
@@ -32,7 +31,6 @@ public sealed class ActivityRecord
         Author = author;
         Rationale = rationale;
         TestDelta = testDelta;
-        RiskDelta = riskDelta;
         Verification = verification;
         _touchedFiles = touchedFiles.ToList();
         _touchedNodes = touchedNodes.ToList();
@@ -47,7 +45,6 @@ public sealed class ActivityRecord
     public Author Author { get; }
     public Rationale Rationale { get; }
     public TestDelta TestDelta { get; }
-    public RiskDelta RiskDelta { get; }
     public ActivityVerification Verification { get; }
     public IReadOnlyList<string> TouchedFiles => _touchedFiles;
     public IReadOnlyList<GraphNodeId> TouchedNodes => _touchedNodes;
@@ -64,7 +61,6 @@ public sealed class ActivityRecord
         Author author,
         Rationale rationale,
         TestDelta testDelta,
-        RiskDelta riskDelta,
         ActivityVerification verification,
         IEnumerable<string> touchedFiles,
         IEnumerable<GraphNodeId> touchedNodes,
@@ -74,7 +70,7 @@ public sealed class ActivityRecord
         ArgumentNullException.ThrowIfNull(rationale);
 
         return new ActivityRecord(
-            ActivityRecordId.New(), sequence, summary ?? string.Empty, author, rationale, testDelta, riskDelta,
+            ActivityRecordId.New(), sequence, summary ?? string.Empty, author, rationale, testDelta,
             verification, touchedFiles, touchedNodes, commit: null, recordedAt);
     }
 
@@ -86,13 +82,12 @@ public sealed class ActivityRecord
         Author author,
         Rationale rationale,
         TestDelta testDelta,
-        RiskDelta riskDelta,
         ActivityVerification verification,
         IEnumerable<string> touchedFiles,
         IEnumerable<GraphNodeId> touchedNodes,
         CommitSha? commit,
         DateTimeOffset recordedAt)
-        => new(id, sequence, summary ?? string.Empty, author, rationale, testDelta, riskDelta, verification,
+        => new(id, sequence, summary ?? string.Empty, author, rationale, testDelta, verification,
                touchedFiles, touchedNodes, commit, recordedAt);
 
     /// <summary>Attaches the git commit this change produced. Allowed once; the commit is then immutable.</summary>

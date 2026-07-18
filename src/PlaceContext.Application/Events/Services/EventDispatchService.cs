@@ -9,7 +9,7 @@ namespace PlaceContext.Application.Features;
 /// <summary>
 /// Records an event occurrence and fans it out to every enabled event-trigger subscribed to its name,
 /// enqueuing a job run for each. Shared by <see cref="EmitEventHandler"/> (user events) and the
-/// built-in domain-event emission points (activity recorded, risk recomputed, job completed).
+/// built-in domain-event emission points (activity recorded, job completed).
 ///
 /// Firing only enqueues — the background runner executes the job — so emitting an event never blocks
 /// on container execution. Scoped: shares the request's DbContext/UoW.

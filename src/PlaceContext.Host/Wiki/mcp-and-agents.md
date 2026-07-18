@@ -82,8 +82,8 @@ subscribe the "post-deploy check" job to it
 emit "deploy.finished"  →  fires every subscribed job
 ```
 
-Built-in events work the same way — a job can run whenever another job finishes, whenever a
-change is recorded, or whenever risk is recalculated.
+Built-in events work the same way — a job can run whenever another job finishes or whenever a
+change is recorded.
 
 ## Good habits for agents
 

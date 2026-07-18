@@ -3,7 +3,7 @@
 **A context platform for AI.** Built by Bradley Lietz.
 
 PlaceContext gives AI agents and the people working with them a durable, structured home for
-project context — decisions, activity, knowledge, **jobs and their artifacts**, data, and
+project context — decisions, activity, **jobs and their artifacts**, data, and
 analytics — served over [MCP](https://modelcontextprotocol.io) and a web portal. Connect Claude
 Code (or any MCP client) to one endpoint and your agent can remember decisions across sessions,
 queue work, and **run real containerized jobs on your own machines** — from a laptop to a
@@ -27,8 +27,8 @@ automatic refresh). No API keys to paste.
 
 ## What your agent gets
 
-- **Durable context** — `get_context` at session start, `record_activity` and `add_decision` as it
-  works. Nothing lives only in a chat scrollback.
+- **Durable memory** — `get_project_overview` at session start, `record_activity` and `add_decision`
+  as it works. Nothing lives only in a chat scrollback.
 - **A job runner** — upload code (`python`, `node`, `go`, `ruby`, `dotnet`) or point at a container
   image; PlaceContext fans out shards as sandboxed containers (no network egress by default),
   collects JSON artifacts, and stores HTML/chart/CSV outputs in the object store.

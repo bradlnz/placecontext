@@ -94,18 +94,27 @@ window.pcmonaco = (function () {
     const ta = fallbacks.get(id);
     if (ta) { ta.value = value || ''; return; }
     const editor = editors.get(id);
-    if (!editor) return;
+    if (!editor) {
+      // No live editor for this id — Blazor thinks Monaco is up but the JS side has nothing
+      // (e.g. a file was clicked while the CDN bundle was still downloading). Mount one now
+      // with the requested value instead of silently dropping the switch. init never throws,
+      // and its destroy-before-create serializes it with any in-flight init.
+      init(id, value, language);
+      return;
+    }
     editor.setValue(value || '');
     if (language && window.monaco) {
       window.monaco.editor.setModelLanguage(editor.getModel(), language);
     }
   }
 
+  // null when no editor exists for the id — callers must NOT treat that as "empty file",
+  // or a click during the initial load would wipe the file's content in the caller's state.
   function getValue(id) {
     const ta = fallbacks.get(id);
     if (ta) return ta.value;
     const editor = editors.get(id);
-    return editor ? editor.getValue() : '';
+    return editor ? editor.getValue() : null;
   }
 
   function destroy(id) {

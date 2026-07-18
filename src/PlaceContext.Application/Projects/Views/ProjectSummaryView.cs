@@ -11,8 +11,4 @@ public sealed record ProjectSummaryView(
     bool IsGraphified,
     int GodNodeCount,
     int NodeCount,
-    int LinkCount,
-    double? TechnicalRisk,
-    string? TechnicalBand,
-    double? ProcessRisk,
-    string? ProcessBand);
+    int LinkCount);

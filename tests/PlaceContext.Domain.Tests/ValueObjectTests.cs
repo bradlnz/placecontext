@@ -21,14 +21,6 @@ public class ValueObjectTests
     }
 
     [Fact]
-    public void RiskScore_clamps_and_bands()
-    {
-        Assert.Equal(1.0, RiskScore.From(5.0).Value);
-        Assert.Equal(RiskBand.Low, RiskScore.From(0.1).Band);
-        Assert.Equal(RiskBand.Critical, RiskScore.From(0.9).Band);
-    }
-
-    [Fact]
     public void Rationale_none_is_not_present()
     {
         Assert.False(Rationale.None.IsPresent);

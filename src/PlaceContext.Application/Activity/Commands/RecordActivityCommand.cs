@@ -9,8 +9,7 @@ namespace PlaceContext.Application.Features;
 
 /// <summary>
 /// Record a change through the ledger: append → scoped git commit → attach the commit sha. The
-/// heart of "the MCP manages all changes". Risk is recomputed separately (the host chains
-/// <see cref="PlaceContext.Application.Features.RecomputeRiskCommand"/> after this).
+/// heart of "the MCP manages all changes".
 /// </summary>
 public sealed record RecordActivityCommand(
     Guid ProjectId,
@@ -22,8 +21,6 @@ public sealed record RecordActivityCommand(
     int TestsAdded,
     int TestsRemoved,
     int TestsChanged,
-    int RiskResolved,
-    int RiskIntroduced,
     bool ArchitectureReviewerRun,
     bool LiveVerified,
     string CommitMessage) : ICommand<ActivityRecordView>;

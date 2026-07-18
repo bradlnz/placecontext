@@ -32,8 +32,6 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
     public DbSet<ProjectRow> Projects => Set<ProjectRow>();
     public DbSet<ActivityRecordRow> ActivityRecords => Set<ActivityRecordRow>();
     public DbSet<DecisionRow> Decisions => Set<DecisionRow>();
-    public DbSet<RiskAssessmentRow> RiskAssessments => Set<RiskAssessmentRow>();
-    public DbSet<ProjectContextRow> ProjectContexts => Set<ProjectContextRow>();
     public DbSet<RequirementsRow> Requirements => Set<RequirementsRow>();
     public DbSet<UsageRow> UsageRecords => Set<UsageRow>();
     public DbSet<ToolCallRow> ToolCalls => Set<ToolCallRow>();
@@ -153,21 +151,6 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
             e.ToTable("decisions");
             e.HasKey(x => x.Id);
             e.HasIndex(x => x.ProjectId);
-            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
-        });
-
-        b.Entity<RiskAssessmentRow>(e =>
-        {
-            e.ToTable("risk_assessments");
-            e.HasKey(x => x.Id);
-            e.HasIndex(x => new { x.ProjectId, x.ComputedAt });
-            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
-        });
-
-        b.Entity<ProjectContextRow>(e =>
-        {
-            e.ToTable("project_contexts");
-            e.HasKey(x => x.ProjectId); // one context document per project (ProjectId is globally unique)
             e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
         });
 

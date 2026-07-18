@@ -53,14 +53,10 @@ public sealed class EfProjectRepository : IProjectRepository
         row.Status = p.Status.ToString();
         row.RegisteredAt = p.RegisteredAt;
         row.GraphJson = JsonCodec.EncodeSnapshot(p.LastGraph);
-        row.TechnicalRisk = p.TechnicalRisk?.Value;
-        row.ProcessRisk = p.ProcessRisk?.Value;
     }
 
     private static Project ToDomain(ProjectRow r) => Project.Rehydrate(
         ProjectId.From(r.Id), ProjectName.From(r.Name), ProjectPath.From(r.Path),
         Enum.Parse<ProjectStatus>(r.Status), r.DiscoveredAt, r.RegisteredAt,
-        JsonCodec.DecodeSnapshot(r.GraphJson),
-        r.TechnicalRisk is null ? null : RiskScore.From(r.TechnicalRisk.Value),
-        r.ProcessRisk is null ? null : RiskScore.From(r.ProcessRisk.Value));
+        JsonCodec.DecodeSnapshot(r.GraphJson));
 }

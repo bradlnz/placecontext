@@ -1,0 +1,68 @@
+<header class="site-header" data-header>
+  <div class="container site-header__inner">
+    <a class="site-header__brand" href="{{ routes.root_url }}">
+      {%- if section.settings.logo != blank -%}
+        <img
+          class="site-header__logo"
+          src="{{ section.settings.logo | image_url: width: 320 }}"
+          alt="{{ section.settings.logo.alt | default: shop.name | escape }}"
+          width="{{ section.settings.logo.width }}"
+          height="{{ section.settings.logo.height }}"
+        >
+      {%- else -%}
+        <span class="site-header__name">{{ shop.name }}</span>
+      {%- endif -%}
+    </a>
+
+    <button
+      class="site-header__nav-toggle"
+      type="button"
+      aria-expanded="false"
+      aria-controls="SiteNav"
+      data-nav-toggle
+    >
+      {% render 'icon', icon: 'menu' %}
+      <span class="visually-hidden">{{ 'general.navigation.menu' | t }}</span>
+    </button>
+
+    <nav class="site-header__nav" id="SiteNav" aria-label="{{ 'general.navigation.main' | t }}" data-nav>
+      {%- for link in section.settings.menu.links -%}
+        <a
+          class="site-header__nav-link{% if link.current %} site-header__nav-link--active{% endif %}"
+          href="{{ link.url }}"
+          {% if link.current %}aria-current="page"{% endif %}
+        >
+          {{- link.title -}}
+        </a>
+      {%- endfor -%}
+    </nav>
+
+    <a class="site-header__cart" href="{{ routes.cart_url }}">
+      {% render 'icon', icon: 'cart' %}
+      <span class="visually-hidden">{{ 'general.cart.view' | t }}</span>
+      {%- if cart.item_count > 0 -%}
+        <span class="site-header__cart-count">{{ cart.item_count }}</span>
+      {%- endif -%}
+    </a>
+  </div>
+</header>
+
+{% schema %}
+{
+  "name": "Header",
+  "settings": [
+    {
+      "type": "image_picker",
+      "id": "logo",
+      "label": "Logo image",
+      "info": "Leave empty to show the store name as text."
+    },
+    {
+      "type": "link_list",
+      "id": "menu",
+      "label": "Menu",
+      "default": "main-menu"
+    }
+  ]
+}
+{% endschema %}

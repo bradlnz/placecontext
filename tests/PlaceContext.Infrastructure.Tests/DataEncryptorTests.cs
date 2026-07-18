@@ -23,7 +23,7 @@ public class DataEncryptorTests
     public void Legacy_plaintext_unprotect_passthrough()
     {
         var enc = Create();
-        Assert.Equal("old-plaintext", enc.Unprotect("old-plaintext", IDataEncryptor.Purpose.Context));
+        Assert.Equal("old-plaintext", enc.Unprotect("old-plaintext", IDataEncryptor.Purpose.Requirements));
     }
 
     [Fact]

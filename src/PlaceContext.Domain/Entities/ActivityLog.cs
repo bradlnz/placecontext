@@ -40,7 +40,6 @@ public sealed class ActivityLog : AggregateRoot
         Author author,
         Rationale rationale,
         TestDelta testDelta,
-        RiskDelta riskDelta,
         ActivityVerification verification,
         IEnumerable<string> touchedFiles,
         IEnumerable<GraphNodeId> touchedNodes,
@@ -48,7 +47,7 @@ public sealed class ActivityLog : AggregateRoot
     {
         var record = ActivityRecord.Create(
             sequence: _records.Count + 1,
-            summary, author, rationale, testDelta, riskDelta, verification,
+            summary, author, rationale, testDelta, verification,
             touchedFiles, touchedNodes, recordedAt);
 
         _records.Add(record);
@@ -66,7 +65,7 @@ public sealed class ActivityLog : AggregateRoot
     /// <summary>
     /// True when any of <paramref name="nodes"/> was already touched by one of the previous
     /// <paramref name="window"/> records (excluding <paramref name="excludingSequence"/>) — i.e.
-    /// the same hotspot is being churned. Drives the "reverted/re-touched within N" risk signal.
+    /// the same hotspot is being churned.
     /// </summary>
     public bool TouchesWithin(IEnumerable<GraphNodeId> nodes, int window, int excludingSequence)
     {

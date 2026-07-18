@@ -20,17 +20,11 @@ public static class DependencyInjection
         services.AddScoped<IPlaceContextService, PlaceContextService>();
 
         // Pure domain services (no I/O) used by handlers.
-        services.AddSingleton<RiskScoreCalculator>();
-        services.AddSingleton<ProcessRiskScorer>();
-        services.AddSingleton<TechnicalRiskScorer>();
         services.AddSingleton<ContextStalenessPolicy>();
         services.AddSingleton<DecisionTreeAssembler>();
         services.AddSingleton<TokenCostCalculator>();
         // Knowledge graph (replaces the graphify reader).
         services.AddScoped<IDecisionTreeProvider, DecisionTreeProvider>();
-
-        // Shared risk computation (used by recompute + project creation).
-        services.AddScoped<RiskAssessmentService>();
 
         // Trigger + event application services (event fan-out, schedule scanning, run watching).
         services.AddScoped<EventDispatchService>();
@@ -48,10 +42,7 @@ public static class DependencyInjection
         services.AddScoped<ICommandHandler<RegisterProjectCommand, ProjectSummaryView>, RegisterProjectHandler>();
         services.AddScoped<ICommandHandler<RebuildGraphCommand, ProjectSummaryView>, RebuildGraphHandler>();
         services.AddScoped<ICommandHandler<RecordActivityCommand, ActivityRecordView>, RecordActivityHandler>();
-        services.AddScoped<ICommandHandler<RecomputeRiskCommand, RiskDashboardView>, RecomputeRiskHandler>();
         services.AddScoped<ICommandHandler<AddDecisionCommand, DecisionView>, AddDecisionHandler>();
-        services.AddScoped<ICommandHandler<AddContextCommand, ProjectContextView>, AddContextHandler>();
-        services.AddScoped<ICommandHandler<SetContextCommand, ProjectContextView>, SetContextHandler>();
         services.AddScoped<ICommandHandler<ScaffoldSkillCommand, SkillScaffoldView>, ScaffoldSkillHandler>();
         services.AddScoped<ICommandHandler<SetupHermesCommand, SkillScaffoldView>, SetupHermesHandler>();
         services.AddScoped<ICommandHandler<SetGlobalRequirementsCommand, RequirementsView>, SetGlobalRequirementsHandler>();
@@ -90,10 +81,8 @@ public static class DependencyInjection
         services.AddScoped<IQueryHandler<GetProjectByIdQuery, ProjectSummaryView?>, GetProjectByIdHandler>();
         services.AddScoped<IQueryHandler<GetProjectOverviewQuery, ProjectOverviewView>, GetProjectOverviewHandler>();
         services.AddScoped<IQueryHandler<GetTimelineQuery, ActivityTimelineView>, GetTimelineHandler>();
-        services.AddScoped<IQueryHandler<GetRiskDashboardQuery, RiskDashboardView>, GetRiskDashboardHandler>();
         services.AddScoped<IQueryHandler<GetDecisionsQuery, IReadOnlyList<DecisionView>>, GetDecisionsHandler>();
         services.AddScoped<IQueryHandler<QueryGraphQuery, GraphQueryView>, QueryGraphHandler>();
-        services.AddScoped<IQueryHandler<GetContextQuery, ProjectContextView>, GetContextHandler>();
         services.AddScoped<IQueryHandler<SuggestImprovementsQuery, ImprovementsView>, SuggestImprovementsHandler>();
         services.AddScoped<IQueryHandler<GetGlobalRequirementsQuery, RequirementsView>, GetGlobalRequirementsHandler>();
         services.AddScoped<IQueryHandler<GetProjectRequirementsQuery, RequirementsView>, GetProjectRequirementsHandler>();
@@ -105,7 +94,6 @@ public static class DependencyInjection
 
         // Root-level read models (redesigned portal).
         services.AddScoped<IQueryHandler<GetRootStatsQuery, RootStatsView>, GetRootStatsHandler>();
-        services.AddScoped<IQueryHandler<GetRootRiskQuery, RootRiskView>, GetRootRiskHandler>();
         services.AddScoped<IQueryHandler<GetRootActivityQuery, RootActivityView>, GetRootActivityHandler>();
         services.AddScoped<IQueryHandler<GetGraphVizQuery, GraphVizView>, GetGraphVizHandler>();
         services.AddScoped<IQueryHandler<GetRecentToolCallsQuery, IReadOnlyList<ToolCallView>>, GetRecentToolCallsHandler>();

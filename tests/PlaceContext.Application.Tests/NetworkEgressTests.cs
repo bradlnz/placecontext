@@ -37,11 +37,10 @@ public class NetworkEgressTests
     {
         var jobs = new InMemoryJobRepository();
         var runs = new InMemoryJobRunRepository();
-        var contexts = new InMemoryProjectContextRepository();
         var runner = new FakeWorkloadRunner();
         var uow = new RecordingUnitOfWork();
         var clock = new FakeClock(T0);
-        return (new RunJobHandler(jobs, runs, contexts, runner, uow, clock), jobs, runner);
+        return (new RunJobHandler(jobs, runs, runner, uow, clock), jobs, runner);
     }
 
     // ── CreateJob stores the flag ─────────────────────────────────────────────────────────────────

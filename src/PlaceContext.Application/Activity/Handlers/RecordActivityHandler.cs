@@ -44,7 +44,6 @@ public sealed class RecordActivityHandler : ICommandHandler<RecordActivityComman
             author,
             Rationale.OrNone(command.Rationale),
             TestDelta.From(command.TestsAdded, command.TestsRemoved, command.TestsChanged),
-            RiskDelta.From(command.RiskResolved, command.RiskIntroduced),
             new ActivityVerification(command.ArchitectureReviewerRun, command.LiveVerified),
             command.TouchedFiles,
             command.TouchedNodes.Select(GraphNodeId.From),

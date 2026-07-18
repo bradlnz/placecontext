@@ -1,6 +1,10 @@
+using System.Collections.Concurrent;
+using System.Net;
 using System.Text;
 using k8s;
+using k8s.Autorest;
 using k8s.Models;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using PlaceContext.Application.Ports;
 
@@ -16,12 +20,32 @@ namespace PlaceContext.Infrastructure.Workload;
 /// /work/input.json into the entrypoint on STDIN (preserving the same contract as the Docker runner).
 /// The pod's stdout is captured as the artifact; the container exit code is the result. When network
 /// egress is not allowed a deny-all-egress NetworkPolicy is attached to the pod (k3s enforces it).
+///
+/// <para><b>Jobs never run as root.</b> The run container carries a restricted securityContext
+/// (nobody, no privilege escalation, all capabilities dropped), the pod a RuntimeDefault seccomp
+/// profile and an fsGroup that keeps /work and /out writable for it. The materialize init container
+/// stays root — it runs only our fixed copy script and opens /work up for the run container.</para>
+///
+/// <para><b>Warm dependency cache.</b> A code workload shipping a dependency manifest no longer installs
+/// per pod: the first run bakes the layer once (a dedicated Job tars the installed deps and PUTs them to
+/// the object store — see <see cref="BakeAsync"/>) and every later pod fetches + extracts the tar in its
+/// init step, skipping the install via the <c>.baked</c> marker. Warmed pods get scoped egress to
+/// MinIO + DNS instead of deny-all. Any warm-path failure falls back to the cold per-pod install.</para>
 /// </summary>
 public sealed class KubernetesWorkloadRunner : IWorkloadRunner
 {
     private readonly WorkloadRunnerOptions _options;
+    private readonly IObjectStore? _store;
+    private readonly ILogger<KubernetesWorkloadRunner>? _log;
 
-    public KubernetesWorkloadRunner(IOptions<WorkloadRunnerOptions> options) => _options = options.Value;
+    // One bake per dependency-layer key (in-process); a failed bake is forgotten so the next run retries.
+    private readonly ConcurrentDictionary<string, Lazy<Task<string?>>> _bakes = new();
+    private const int BakeTimeoutSeconds = 600;
+    private const string BakeUploaderImage = "curlimages/curl:8.10.1";
+
+    public KubernetesWorkloadRunner(IOptions<WorkloadRunnerOptions> options, IObjectStore? store = null,
+        ILogger<KubernetesWorkloadRunner>? log = null)
+        => (_options, _store, _log) = (options.Value, store, log);
 
     public async Task<WorkloadRunResult> RunAsync(WorkloadRunRequest request, CancellationToken ct = default)
     {
@@ -37,6 +61,8 @@ public sealed class KubernetesWorkloadRunner : IWorkloadRunner
         // ── Resolve image + the in-pod run command ────────────────────────────────────────────────
         string image;
         string runShell; // shell run inside the pod (pipes the payload into the program on stdin)
+        string? depsGetUrl = null;   // presigned GET for the baked dependency layer (warm cache)
+        var storeScopedEgress = false; // warm-cache pods get MinIO+DNS egress instead of deny-all
         if (request.CodeFiles is not null)
         {
             var runtimeId = request.RuntimeId ?? throw new InvalidOperationException("RuntimeId is required for code workloads.");
@@ -47,13 +73,19 @@ public sealed class KubernetesWorkloadRunner : IWorkloadRunner
             var invoke = string.Join(" ", rt.InvokeCommand.Select(s => ShQuote(s.Replace("{entrypoint}", entrypoint))));
 
             // A job shipping its runtime's dependency manifest (requirements.txt, package.json,
-            // Gemfile, go.mod) gets its packages installed first — /work is a writable emptyDir
-            // here, so installs land beside the code. Downloads still need AllowNetworkEgress.
+            // Gemfile, go.mod) gets its packages installed first — unless the baked layer already
+            // exists in the object store: then the init container fetches it and the preamble's
+            // .baked check skips the install. Downloads (cold path) still need AllowNetworkEgress.
             var depsPreamble = "";
             if (WorkloadDependencies.For(runtimeId, request.CodeFiles) is { } recipe)
             {
                 depsPreamble = WorkloadDependencies.ShellPreamble(recipe);
                 if (recipe.InvokePrefix is not null) invoke = recipe.InvokePrefix + " " + invoke;
+                if (_options.WarmDependencyCache && _store is { IsEnabled: true })
+                {
+                    storeScopedEgress = true; // the fetch/upload needs MinIO + DNS even for no-egress jobs
+                    depsGetUrl = await EnsureWarmCacheAsync(ns, client, runtimeId, image, recipe, request, ct);
+                }
             }
             // After the program runs, stream every /out file through the pod log with base64 framing —
             // a completed pod's filesystem is gone, so the log is the only channel back, and the log
@@ -80,42 +112,18 @@ public sealed class KubernetesWorkloadRunner : IWorkloadRunner
         }
 
         // ── ConfigMap: code files + payload + reduce artifact mounts, plus a materialisation script ──
-        var data = new Dictionary<string, string>();
-        var script = new StringBuilder("set -e\n");
-        var files = NormalizeFiles(request);
-        for (var i = 0; i < files.Count; i++)
-        {
-            var key = $"f{i}";
-            data[key] = files[i].Content;
-            script.Append($"mkdir -p \"/work/$(dirname {ShQuote(files[i].Path)})\"\ncp /cm/{key} {ShQuote("/work/" + files[i].Path)}\n");
-        }
-        data["input"] = request.StdinPayload ?? "";
-        script.Append("cp /cm/input /work/input.json\n");
-        for (var i = 0; i < request.ArtifactMounts.Count; i++)
-        {
-            var key = $"am{i}";
-            data[key] = request.ArtifactMounts[i].Content;
-            var p = request.ArtifactMounts[i].ContainerPath;
-            script.Append($"mkdir -p \"$(dirname {ShQuote(p)})\"\ncp /cm/{key} {ShQuote(p)}\n");
-        }
+        var (data, script) = BuildMaterialize(request, NormalizeFiles(request), depsGetUrl is not null);
 
-        // The ConfigMap and (sealed sandbox: deny-all-egress unless the job opted in) NetworkPolicy
-        // are independent — create them concurrently. Both must exist before the Job below, so this
-        // is awaited before the Job create.
+        // The ConfigMap and the egress policy are independent — create them concurrently. Both must
+        // exist before the Job below, so this is awaited before the Job create. Sandbox: deny-all
+        // egress unless the job opted in; a warm-cache pod instead gets SCOPED egress (MinIO + DNS
+        // only) so it can fetch its baked dependency layer.
         var createConfigMap = client.CoreV1.CreateNamespacedConfigMapAsync(
             new V1ConfigMap { Metadata = new V1ObjectMeta { Name = name }, Data = data }, ns, cancellationToken: ct);
         var createNetPolicy = request.AllowNetworkEgress
             ? Task.CompletedTask
-            : client.NetworkingV1.CreateNamespacedNetworkPolicyAsync(new V1NetworkPolicy
-            {
-                Metadata = new V1ObjectMeta { Name = name },
-                Spec = new V1NetworkPolicySpec
-                {
-                    PodSelector = new V1LabelSelector { MatchLabels = new Dictionary<string, string> { ["placecontext-run"] = runLabel } },
-                    PolicyTypes = new[] { "Egress" },
-                    Egress = new List<V1NetworkPolicyEgressRule>(), // empty ⇒ deny all egress
-                },
-            }, ns, cancellationToken: ct);
+            : client.NetworkingV1.CreateNamespacedNetworkPolicyAsync(
+                BuildEgressPolicy(name, runLabel, storeScopedEgress), ns, cancellationToken: ct);
         await Task.WhenAll(createConfigMap, createNetPolicy);
 
         // ── The Job ─────────────────────────────────────────────────────────────────────────────
@@ -123,9 +131,19 @@ public sealed class KubernetesWorkloadRunner : IWorkloadRunner
         {
             Name = "run",
             Image = image,
-            Env = request.Env.Select(kv => new V1EnvVar { Name = kv.Key, Value = kv.Value }).ToList(),
-            VolumeMounts = new[] { new V1VolumeMount { Name = "work", MountPath = "/work" } },
+            // A writable HOME for tools that insist on one (npm cache, go env); listed first so the
+            // job's own env can still override it.
+            Env = new[] { new V1EnvVar { Name = "HOME", Value = "/tmp" } }
+                .Concat(request.Env.Select(kv => new V1EnvVar { Name = kv.Key, Value = kv.Value })).ToList(),
+            VolumeMounts = new[]
+            {
+                new V1VolumeMount { Name = "work", MountPath = "/work" },
+                // /out must be a volume: running as nobody, the job could never mkdir /out on the
+                // root-owned image rootfs. The pod fsGroup makes the emptyDir group-writable.
+                new V1VolumeMount { Name = "out", MountPath = "/out" },
+            },
             Resources = ResourceLimits(),
+            SecurityContext = BuildRestrictedContainerSecurityContext(_options),
         };
         if (runShell.Length > 0) runContainer.Command = new[] { "sh", "-c", runShell };
 
@@ -152,6 +170,12 @@ public sealed class KubernetesWorkloadRunner : IWorkloadRunner
                     Spec = new V1PodSpec
                     {
                         RestartPolicy = "Never",
+                        // Jobs never run as root: pod-level seccomp + an fsGroup that keeps /work and
+                        // /out writable for the unprivileged run container; the run container itself
+                        // adds the uid/gid, no-new-privileges and dropped capabilities. The
+                        // materialize init container stays root — it runs only our fixed copy script
+                        // and must reach arbitrary artifact-mount paths.
+                        SecurityContext = BuildPodSecurityContext(_options),
                         // Keep execution on the operator's own machines: prefer (or require) worker/agent
                         // nodes so the control-plane node — typically a small cloud server whose only duty
                         // is the portal/MCP — doesn't burn its CPU running job pods. See BuildWorkerAffinity.
@@ -179,7 +203,10 @@ public sealed class KubernetesWorkloadRunner : IWorkloadRunner
                             {
                                 Name = "materialize",
                                 Image = "busybox:1.36",
-                                Command = new[] { "sh", "-c", script.ToString() },
+                                Command = new[] { "sh", "-c", script },
+                                Env = depsGetUrl is null
+                                    ? null
+                                    : new[] { new V1EnvVar { Name = "PCDEPS_GET_URL", Value = depsGetUrl } },
                                 VolumeMounts = new[]
                                 {
                                     new V1VolumeMount { Name = "cm", MountPath = "/cm", ReadOnlyProperty = true },
@@ -192,6 +219,7 @@ public sealed class KubernetesWorkloadRunner : IWorkloadRunner
                         {
                             new V1Volume { Name = "cm", ConfigMap = new V1ConfigMapVolumeSource { Name = name } },
                             new V1Volume { Name = "work", EmptyDir = new V1EmptyDirVolumeSource() },
+                            new V1Volume { Name = "out", EmptyDir = new V1EmptyDirVolumeSource() },
                         },
                     },
                 },
@@ -248,6 +276,312 @@ public sealed class KubernetesWorkloadRunner : IWorkloadRunner
         // stdout is the artifact (the authoring contract); framed /out files ride behind the marker.
         var (stdout, files) = SplitFramedLogs(logs);
         return new WorkloadRunResult(exit, string.IsNullOrEmpty(stdout) ? null : stdout, stdout, "", files);
+    }
+
+    // ── Warm dependency cache (bake once per manifest hash, reuse from the object store) ──────────
+
+    /// <summary>
+    /// The ConfigMap payload + the busybox materialisation script: every file lands under /work,
+    /// then — when a baked dependency layer exists for this workload — the tar is fetched and
+    /// extracted over it (guarded: a fetch failure just means a cold, installing run).
+    /// </summary>
+    internal static (Dictionary<string, string> Data, string Script) BuildMaterialize(
+        WorkloadRunRequest request, IReadOnlyList<(string Path, string Content)> files, bool fetchDeps)
+    {
+        var data = new Dictionary<string, string>();
+        var script = new StringBuilder("set -e\n");
+        for (var i = 0; i < files.Count; i++)
+        {
+            var key = $"f{i}";
+            data[key] = files[i].Content;
+            script.Append($"mkdir -p \"/work/$(dirname {ShQuote(files[i].Path)})\"\ncp /cm/{key} {ShQuote("/work/" + files[i].Path)}\n");
+        }
+        data["input"] = request.StdinPayload ?? "";
+        script.Append("cp /cm/input /work/input.json\n");
+        for (var i = 0; i < request.ArtifactMounts.Count; i++)
+        {
+            var key = $"am{i}";
+            data[key] = request.ArtifactMounts[i].Content;
+            var p = request.ArtifactMounts[i].ContainerPath;
+            script.Append($"mkdir -p \"$(dirname {ShQuote(p)})\"\ncp /cm/{key} {ShQuote(p)}\n");
+        }
+        if (fetchDeps)
+            script.Append("wget -q -O- \"$PCDEPS_GET_URL\" | tar xz -C /work || true\n");
+        // The run container executes as nobody: open the materialised tree (the init container's
+        // copies are root-owned) so the job can write beside the code — node_modules, .bundle,
+        // npm rewriting a lockfile, the .pcdeps deps root. Artifact mounts stay read-only.
+        script.Append("chmod -R a+rwX /work\n");
+        return (data, script.ToString());
+    }
+
+    /// <summary>
+    /// Ensures the baked dependency layer for this workload exists in the object store and returns
+    /// a presigned GET URL for it (null → the shard runs cold and installs). The first caller runs
+    /// the bake Job; concurrent shards of the same layer share one bake.
+    /// </summary>
+    private Task<string?> EnsureWarmCacheAsync(string ns, Kubernetes client, string runtimeId, string baseImage,
+        WorkloadDependencies.Recipe recipe, WorkloadRunRequest request, CancellationToken ct)
+    {
+        var key = $"{runtimeId}/{WorkloadDependencies.BakeKey(runtimeId, baseImage, recipe, request.CodeFiles!)}.tar.gz";
+        var lazy = _bakes.GetOrAdd(key, k => new Lazy<Task<string?>>(
+            () => BakeAsync(ns, client, k, runtimeId, baseImage, recipe, request, ct)));
+        return AwaitBakeAsync(key, lazy);
+    }
+
+    private async Task<string?> AwaitBakeAsync(string key, Lazy<Task<string?>> lazy)
+    {
+        string? result;
+        try { result = await lazy.Value; }
+        catch { result = null; }
+        if (result is null) _bakes.TryRemove(key, out _); // a failed bake is retried on the next run
+        return result;
+    }
+
+    /// <summary>
+    /// Runs the bake Job for one dependency layer: the runtime image installs the packages into a
+    /// staging dir (mirroring a shard's /work layout), tars it, and a curl sidecar PUTs the tar to
+    /// the object store. Never throws — any failure leaves the shard on the cold install path.
+    /// </summary>
+    private async Task<string?> BakeAsync(string ns, Kubernetes client, string key, string runtimeId,
+        string baseImage, WorkloadDependencies.Recipe recipe, WorkloadRunRequest request, CancellationToken ct)
+    {
+        var store = _store!;
+        var bucket = store.DepsBucket;
+        var name = "pcbake-" + WorkloadDependencies.BakeKey(runtimeId, baseImage, recipe, request.CodeFiles!);
+        var createdJob = false;
+        try
+        {
+            await store.EnsureBucketAsync(bucket, ct);
+            if (await store.ExistsAsync(bucket, key, ct))
+                return await store.PresignDownloadAsync(bucket, key, TimeSpan.FromHours(1), ct);
+
+            var manifests = WorkloadDependencies.ManifestFiles(recipe, request.CodeFiles!);
+            var data = new Dictionary<string, string>();
+            for (var i = 0; i < manifests.Count; i++) data[$"f{i}"] = manifests[i].Content;
+            var putUrl = await store.PresignUploadAsync(bucket, key, TimeSpan.FromMinutes(15), ct);
+
+            // Another replica may be baking the same layer right now — 409s are fine: we share
+            // their Job and only clean up resources WE created (the TTL + active deadline bound
+            // any leftovers from a crashed baker).
+            try
+            {
+                await client.CoreV1.CreateNamespacedConfigMapAsync(
+                    new V1ConfigMap { Metadata = new V1ObjectMeta { Name = name }, Data = data }, ns, cancellationToken: ct);
+            }
+            catch (HttpOperationException ex) when (ex.Response?.StatusCode == HttpStatusCode.Conflict) { }
+            try
+            {
+                await client.NetworkingV1.CreateNamespacedNetworkPolicyAsync(
+                    BuildEgressPolicy(name, name, storeScoped: true), ns, cancellationToken: ct);
+            }
+            catch (HttpOperationException ex) when (ex.Response?.StatusCode == HttpStatusCode.Conflict) { }
+            try
+            {
+                await client.BatchV1.CreateNamespacedJobAsync(
+                    BuildBakeJob(name, baseImage, BuildBakeScript(recipe, manifests), putUrl, _options, ResourceLimits()),
+                    ns, cancellationToken: ct);
+                createdJob = true;
+            }
+            catch (HttpOperationException ex) when (ex.Response?.StatusCode == HttpStatusCode.Conflict) { }
+
+            await WaitForJobCompletionAsync(client, ns, name, BakeTimeoutSeconds + 30, ct);
+            // The object is the ground truth (not the Job status): another replica's bake may have
+            // completed while its Job was already cleaned up under our poll.
+            if (await store.ExistsAsync(bucket, key, ct))
+            {
+                _log?.LogInformation("Baked dependency layer {Bucket}/{Key} ({Runtime}).", bucket, key, runtimeId);
+                return await store.PresignDownloadAsync(bucket, key, TimeSpan.FromHours(1), ct);
+            }
+            _log?.LogWarning("Dependency bake for {Key} did not produce a cache object; shards run cold.", key);
+            return null;
+        }
+        catch (Exception ex)
+        {
+            _log?.LogWarning(ex, "Dependency bake for {Key} failed; shards run cold.", key);
+            return null;
+        }
+        finally
+        {
+            if (createdJob) await CleanupAsync(client, ns, name, hadEgress: false);
+        }
+    }
+
+    /// <summary>Polls a Job to a terminal state (or the deadline). False on failure/timeout/disappearance.</summary>
+    private static async Task<bool> WaitForJobCompletionAsync(Kubernetes client, string ns, string name,
+        int timeoutSeconds, CancellationToken ct)
+    {
+        var deadline = DateTimeOffset.UtcNow.AddSeconds(timeoutSeconds);
+        while (DateTimeOffset.UtcNow < deadline)
+        {
+            try
+            {
+                var job = await client.BatchV1.ReadNamespacedJobStatusAsync(name, ns, cancellationToken: ct);
+                if ((job.Status?.Succeeded ?? 0) >= 1) return true;
+                if ((job.Status?.Failed ?? 0) >= 1) return false;
+            }
+            catch (HttpOperationException ex) when (ex.Response?.StatusCode == HttpStatusCode.NotFound)
+            {
+                return false; // deleted under us (the baking replica cleaned up) — treat as failed
+            }
+            await Task.Delay(TimeSpan.FromMilliseconds(500), ct);
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// The bake container's script: materialise the manifests into the staging dir, run the same
+    /// env + install a shard would (with /work → /stage so the tar mirrors a shard's filesystem
+    /// exactly), then mark and pack the layer. The uploader sidecar waits for /out/.done.
+    /// </summary>
+    internal static string BuildBakeScript(WorkloadDependencies.Recipe recipe,
+        IReadOnlyList<(string Path, string Content)> manifests)
+    {
+        var sb = new StringBuilder("set -e\n");
+        sb.Append("mkdir -p /stage/.pcdeps /out\n");
+        for (var i = 0; i < manifests.Count; i++)
+            sb.Append($"cp /cm/f{i} {ShQuote("/stage/" + manifests[i].Path)}\n");
+        sb.Append(WorkloadDependencies.Apply(recipe.EnvTemplate, "/stage", "/stage/.pcdeps")).Append('\n');
+        sb.Append(WorkloadDependencies.Apply(recipe.BakeInstall, "/stage", "/stage/.pcdeps")).Append('\n');
+        sb.Append("touch /stage/.baked\n");
+        sb.Append("tar czf /out/deps.tar.gz -C /stage .\n");
+        sb.Append("touch /out/.done\n");
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// The two-container bake Job: <c>bake</c> (the workload's runtime image) installs + tars into a
+    /// shared emptyDir; <c>upload</c> (a curl image) waits for the marker and PUTs the tarball to
+    /// the presigned URL. The pod carries the same worker-node placement, resource limits and
+    /// non-root security context as job pods — the bake executes the same untrusted install recipes
+    /// (its emptyDirs stay writable via the pod fsGroup); the upload sidecar only reads them. Its
+    /// NetworkPolicy (scoped MinIO+DNS egress) is created alongside.
+    /// </summary>
+    internal static V1Job BuildBakeJob(string name, string image, string bakeScript, string putUrl,
+        WorkloadRunnerOptions options, V1ResourceRequirements resources)
+        => new()
+        {
+            Metadata = new V1ObjectMeta { Name = name, Labels = new Dictionary<string, string> { ["placecontext-run"] = name } },
+            Spec = new V1JobSpec
+            {
+                BackoffLimit = 0,
+                ActiveDeadlineSeconds = BakeTimeoutSeconds,
+                TtlSecondsAfterFinished = 600,
+                Template = new V1PodTemplateSpec
+                {
+                    Metadata = new V1ObjectMeta { Labels = new Dictionary<string, string> { ["placecontext-run"] = name } },
+                    Spec = new V1PodSpec
+                    {
+                        RestartPolicy = "Never",
+                        SecurityContext = BuildPodSecurityContext(options),
+                        Affinity = BuildWorkerAffinity(options),
+                        NodeSelector = options.JobNodeSelector.Count > 0 ? options.JobNodeSelector : null,
+                        Containers = new[]
+                        {
+                            new V1Container
+                            {
+                                Name = "bake",
+                                Image = image,
+                                Command = new[] { "sh", "-c", bakeScript },
+                                Resources = resources,
+                                SecurityContext = BuildRestrictedContainerSecurityContext(options),
+                                VolumeMounts = new[]
+                                {
+                                    new V1VolumeMount { Name = "cm", MountPath = "/cm", ReadOnlyProperty = true },
+                                    new V1VolumeMount { Name = "stage", MountPath = "/stage" },
+                                    new V1VolumeMount { Name = "out", MountPath = "/out" },
+                                },
+                            },
+                            new V1Container
+                            {
+                                Name = "upload",
+                                Image = BakeUploaderImage,
+                                Command = new[] { "sh", "-c",
+                                    "while [ ! -f /out/.done ]; do sleep 1; done\n" +
+                                    "curl -fsS -X PUT --upload-file /out/deps.tar.gz \"$PCDEPS_PUT_URL\"\n" },
+                                Env = new[] { new V1EnvVar { Name = "PCDEPS_PUT_URL", Value = putUrl } },
+                                VolumeMounts = new[] { new V1VolumeMount { Name = "out", MountPath = "/out" } },
+                            },
+                        },
+                        Volumes = new[]
+                        {
+                            new V1Volume { Name = "cm", ConfigMap = new V1ConfigMapVolumeSource { Name = name } },
+                            new V1Volume { Name = "stage", EmptyDir = new V1EmptyDirVolumeSource() },
+                            new V1Volume { Name = "out", EmptyDir = new V1EmptyDirVolumeSource() },
+                        },
+                    },
+                },
+            },
+        };
+
+    /// <summary>
+    /// The pod-level security context every workload pod carries: the default seccomp profile, plus
+    /// an fsGroup matching <see cref="WorkloadRunnerOptions.RunAsGroup"/> so the emptyDir volumes
+    /// (/work, /out, the bake's /stage) are group-writable by the unprivileged containers. runAs*
+    /// deliberately live on the containers instead — the materialize init container must stay root
+    /// to reach arbitrary artifact-mount paths.
+    /// </summary>
+    internal static V1PodSecurityContext BuildPodSecurityContext(WorkloadRunnerOptions options)
+        => new()
+        {
+            SeccompProfile = new V1SeccompProfile { Type = "RuntimeDefault" },
+            FsGroup = options.RunAsGroup,
+        };
+
+    /// <summary>
+    /// The restricted container-level security context for the containers that execute workload code
+    /// (the run container, the dependency bake): non-root numeric identity, no privilege escalation,
+    /// all capabilities dropped. RunAsNonRoot follows the configured uid so an operator who knowingly
+    /// sets RunAsUser=0 doesn't produce pods the kubelet refuses to start.
+    /// </summary>
+    internal static V1SecurityContext BuildRestrictedContainerSecurityContext(WorkloadRunnerOptions options)
+        => new()
+        {
+            RunAsNonRoot = options.RunAsUser != 0,
+            RunAsUser = options.RunAsUser,
+            RunAsGroup = options.RunAsGroup,
+            AllowPrivilegeEscalation = false,
+            Capabilities = new V1Capabilities { Drop = new[] { "ALL" } },
+        };
+
+    /// <summary>
+    /// The egress policy for a workload pod. Default is deny-all (the sealed sandbox). Pods on the
+    /// warm-cache path instead get <em>scoped</em> egress — MinIO (to fetch/PUT the baked layer)
+    /// plus DNS (to resolve it): the minimum opening that lets the cache work. Pods whose job
+    /// opted into network egress get no policy at all.
+    /// </summary>
+    internal static V1NetworkPolicy BuildEgressPolicy(string name, string runLabel, bool storeScoped)
+    {
+        var egress = storeScoped
+            ? new List<V1NetworkPolicyEgressRule>
+            {
+                new()
+                {
+                    To = new List<V1NetworkPolicyPeer>
+                    {
+                        new() { PodSelector = new V1LabelSelector { MatchLabels = new Dictionary<string, string> { ["app"] = "minio" } } },
+                    },
+                    Ports = new List<V1NetworkPolicyPort> { new() { Port = 9000, Protocol = "TCP" } },
+                },
+                new()
+                {
+                    Ports = new List<V1NetworkPolicyPort>
+                    {
+                        new() { Port = 53, Protocol = "UDP" },
+                        new() { Port = 53, Protocol = "TCP" },
+                    },
+                },
+            }
+            : new List<V1NetworkPolicyEgressRule>(); // empty ⇒ deny all egress
+        return new V1NetworkPolicy
+        {
+            Metadata = new V1ObjectMeta { Name = name },
+            Spec = new V1NetworkPolicySpec
+            {
+                PodSelector = new V1LabelSelector { MatchLabels = new Dictionary<string, string> { ["placecontext-run"] = runLabel } },
+                PolicyTypes = new[] { "Egress" },
+                Egress = egress,
+            },
+        };
     }
 
     /// <summary>Marker line the in-pod wrapper prints between the program's stdout and its framed /out files.</summary>

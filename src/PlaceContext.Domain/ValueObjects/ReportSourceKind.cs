@@ -11,7 +11,6 @@ public enum ReportSourceKind
     Requirements,
     Decisions,
     Activity,
-    Risk,
     Usage,
     ActionPlan
 }

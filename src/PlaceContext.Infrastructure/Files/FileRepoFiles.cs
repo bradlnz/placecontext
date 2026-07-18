@@ -3,20 +3,9 @@ using PlaceContext.Domain.ValueObjects;
 
 namespace PlaceContext.Infrastructure.Files;
 
-/// <summary>Reads/writes plain files within a project's working tree (context seeding + scaffolding).</summary>
+/// <summary>Reads/writes plain files within a project's working tree (skill/agent scaffolding).</summary>
 public sealed class FileRepoFiles : IRepoFiles
 {
-    public async Task<string?> ReadFirstAsync(ProjectPath repo, IReadOnlyList<string> candidates, CancellationToken ct = default)
-    {
-        foreach (var rel in candidates)
-        {
-            if (!TryResolve(repo.Value, rel, out var full)) continue;
-            if (File.Exists(full))
-                return await File.ReadAllTextAsync(full, ct);
-        }
-        return null;
-    }
-
     public async Task<string> WriteAsync(ProjectPath repo, string relativePath, string content, CancellationToken ct = default)
     {
         if (!TryResolve(repo.Value, relativePath, out var full))

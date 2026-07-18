@@ -156,6 +156,27 @@ never lose them.
 | **GitHub import** | `PlaceContext:GitHub:ClientId` / `ClientSecret` | OAuth app; callback `{host}/auth/github/callback` |
 | **LLM provider** | `PlaceContext:Llm:Provider` | `none` (default — the jobs pipeline is deterministic) or `anthropic` + `ApiKey` for report polish |
 | **App runtime** | `PlaceContext:Runtime:DockerEndpoint` / `AppHost` | Pre-wired to the bundled DinD in the manifests |
+| **Warm images (Docker runner)** | `PlaceContext:WorkloadRunner:WarmImages` | Default `true`; see below |
+| **Warm dep cache (K8s runner)** | `PlaceContext:WorkloadRunner:WarmDependencyCache` | Default `true`; needs the object store |
+
+### Warm dependency layers (jobs)
+
+A code workload that ships its runtime's dependency manifest (`requirements.txt`, `package.json`,
+`Gemfile`, `go.mod`) no longer installs packages on every shard of every run. The layer is keyed
+by a hash of the runtime + base image + manifest/lockfile contents — change a dependency and a
+new layer is baked; change only code and the warm layer is reused.
+
+- **Local (Docker runner):** the first run builds a `pcwarm-<runtime>:<hash>` image (base image +
+  the package install baked in); later runs start plain containers from it. Prune with
+  `docker image prune --filter label=placecontext.warm=true`.
+- **In-cluster (Kubernetes runner):** a one-shot bake Job tars the installed deps and uploads them
+  to the `placecontext-deps` MinIO bucket; shard pods fetch + extract the tar in their init step
+  and skip the install. Warmed pods get scoped egress (MinIO + DNS only) instead of the usual
+  deny-all. Clear the cache by deleting the bucket's contents.
+
+Every warm path falls back to the per-run install on any failure — a run never fails because
+warming did. Bake-time package downloads happen on the host / bake pod; job code still runs
+`--network none` unless the job opts into egress.
 
 ---
 

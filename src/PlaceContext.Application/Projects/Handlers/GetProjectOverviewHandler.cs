@@ -9,17 +9,11 @@ public sealed class GetProjectOverviewHandler : IQueryHandler<GetProjectOverview
 {
     private readonly IProjectRepository _projects;
     private readonly IActivityLogRepository _ledgers;
-    private readonly IRiskAssessmentRepository _assessments;
-    private readonly IProjectContextRepository _contexts;
 
-    public GetProjectOverviewHandler(
-        IProjectRepository projects, IActivityLogRepository ledgers,
-        IRiskAssessmentRepository assessments, IProjectContextRepository contexts)
+    public GetProjectOverviewHandler(IProjectRepository projects, IActivityLogRepository ledgers)
     {
         _projects = projects;
         _ledgers = ledgers;
-        _assessments = assessments;
-        _contexts = contexts;
     }
 
     public async Task<ProjectOverviewView> HandleAsync(GetProjectOverviewQuery query, CancellationToken ct = default)
@@ -28,8 +22,6 @@ public sealed class GetProjectOverviewHandler : IQueryHandler<GetProjectOverview
         var p = await _projects.GetByIdAsync(id, ct)
             ?? throw new InvalidOperationException($"Project {query.ProjectId} not found.");
         var ledger = await _ledgers.GetForProjectAsync(id, ct);
-        var latest = await _assessments.GetLatestAsync(id, ct);
-        var context = await _contexts.GetForProjectAsync(id, ct);
 
         return new ProjectOverviewView(
             p.Id.Value,
@@ -41,8 +33,6 @@ public sealed class GetProjectOverviewHandler : IQueryHandler<GetProjectOverview
             p.LastGraph?.NodeCount ?? 0,
             p.LastGraph?.LinkCount ?? 0,
             (p.LastGraph?.GodNodes ?? Array.Empty<GodNode>()).Select(ViewMapper.ToView).ToList(),
-            ViewMapper.ToDashboard(latest),
-            ledger.Count,
-            context?.Markdown ?? string.Empty);
+            ledger.Count);
     }
 }

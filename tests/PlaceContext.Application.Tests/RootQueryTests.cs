@@ -18,7 +18,6 @@ public class RootQueryTests
 
         var p = Project.Discover(ProjectPath.From("/home/brad/code/alpha"), ProjectName.From("alpha"), T0);
         p.Register(T0);
-        p.ApplyRisk(RiskScore.From(0.4), RiskScore.From(0.6), T0);
         await projects.AddAsync(p);
         return (projects, ledgers, p);
     }
@@ -29,9 +28,9 @@ public class RootQueryTests
         var (projects, ledgers, p) = await SeedAsync();
         var ledger = await ledgers.GetForProjectAsync(p.Id);
         ledger.Append("a", Author.Agent("claude"), Rationale.Of("x"), TestDelta.From(1, 0, 0),
-            RiskDelta.None, new ActivityVerification(true, true), new[] { "f.cs" }, Array.Empty<GraphNodeId>(), T0);
+            new ActivityVerification(true, true), new[] { "f.cs" }, Array.Empty<GraphNodeId>(), T0);
         ledger.Append("b", Author.Human("brad"), Rationale.Of("y"), TestDelta.None,
-            RiskDelta.None, ActivityVerification.None, new[] { "g.cs" }, Array.Empty<GraphNodeId>(), T0);
+            ActivityVerification.None, new[] { "g.cs" }, Array.Empty<GraphNodeId>(), T0);
         await ledgers.SaveAsync(ledger);
 
         var handler = new GetRootStatsHandler(projects, ledgers, new FakeClock(T0.AddHours(3)));
@@ -41,33 +40,32 @@ public class RootQueryTests
         Assert.Equal(2, stats.ChangesToday);
         Assert.Equal(1, stats.AgentChangesToday);
         Assert.Equal(1, stats.HumanChangesToday);
-        Assert.Equal(0.6, stats.RootProcessRisk, 3);
     }
 
     [Fact]
-    public async Task RootActivity_flags_untrusted_agent_change_and_marks_clean_one()
+    public async Task RootActivity_lists_entries_with_rationale_and_files()
     {
         var (projects, ledgers, p) = await SeedAsync();
         var ledger = await ledgers.GetForProjectAsync(p.Id);
-        // untrusted agent change: no tests, no rationale, no review, not verified
+        // agent change with no rationale recorded
         ledger.Append("sloppy patch", Author.Agent("claude"), Rationale.None, TestDelta.None,
-            RiskDelta.None, ActivityVerification.None, new[] { "a.cs" }, Array.Empty<GraphNodeId>(), T0);
-        // fully-trusted agent change
+            ActivityVerification.None, new[] { "a.cs" }, Array.Empty<GraphNodeId>(), T0);
+        // agent change with rationale and a test delta
         ledger.Append("clean patch", Author.Agent("claude"), Rationale.Of("why"), TestDelta.From(2, 0, 0),
-            RiskDelta.None, new ActivityVerification(true, true), new[] { "b.cs" }, Array.Empty<GraphNodeId>(), T0);
+            new ActivityVerification(true, true), new[] { "b.cs" }, Array.Empty<GraphNodeId>(), T0);
         await ledgers.SaveAsync(ledger);
 
-        var handler = new GetRootActivityHandler(projects, ledgers, new ProcessRiskScorer());
+        var handler = new GetRootActivityHandler(projects, ledgers);
         var view = await handler.HandleAsync(new GetRootActivityQuery(10));
 
         var sloppy = view.Entries.Single(e => e.Title == "sloppy patch");
         var clean = view.Entries.Single(e => e.Title == "clean patch");
 
-        Assert.False(sloppy.Clean);
-        Assert.Contains("No rationale recorded", sloppy.Signals);
-        Assert.Contains("No test delta", sloppy.Signals);
-        Assert.True(clean.Clean);
-        Assert.Empty(clean.Signals);
+        Assert.False(sloppy.HasRationale);
+        Assert.Contains("No rationale recorded", sloppy.Why);
+        Assert.True(clean.HasRationale);
+        Assert.Equal("why", clean.Why);
+        Assert.Equal("+2 / −0", clean.TestDelta);
 
         // The touched files surface on each ledger entry (not just a count).
         Assert.Equal(new[] { "a.cs" }, sloppy.Files);

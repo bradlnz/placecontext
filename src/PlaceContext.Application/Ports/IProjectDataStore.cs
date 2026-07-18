@@ -76,9 +76,10 @@ public interface IProjectDataStore
 
     /// <summary>
     /// Append rows to a system-owned, read-only table in the project's database, creating the table
-    /// from the spec on first use. The project can SELECT the table but never write, alter, or drop
-    /// it — the store must enforce that, not just the UI. Row values are text; each is cast to its
-    /// column's declared type on insert (null stays null).
+    /// from the spec on first use and ADDING any spec column an existing table lacks (flattened
+    /// data-map leaves appear as payloads evolve; new columns are added nullable). The project can
+    /// SELECT the table but never write, alter, or drop it — the store must enforce that, not just
+    /// the UI. Row values are text; each is cast to its column's declared type on insert (null stays null).
     /// </summary>
     Task AppendReadOnlyRowsAsync(Guid projectId, string tableName, IReadOnlyList<ProjectColumnSpec> columns,
         IReadOnlyList<IReadOnlyList<string?>> rows, CancellationToken ct = default);

@@ -67,19 +67,6 @@ public class ProjectTests
     }
 
     [Fact]
-    public void ApplyRisk_sets_both_scores_and_raises_event()
-    {
-        var p = Discovered();
-        p.Register(T0);
-        p.PullDomainEvents();
-        p.ApplyRisk(RiskScore.From(0.3), RiskScore.From(0.8), T0);
-
-        Assert.Equal(RiskBand.Moderate, p.TechnicalRisk!.Band);
-        Assert.Equal(RiskBand.Critical, p.ProcessRisk!.Band);
-        Assert.Contains(p.PullDomainEvents(), e => e is Events.RiskRecomputed);
-    }
-
-    [Fact]
     public void Archived_project_rejects_further_work()
     {
         var p = Discovered();

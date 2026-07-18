@@ -1,0 +1,230 @@
+{%- comment -%}
+  Main product — tailored to selling a Feasibility Report as a digital
+  service. Captures the site details the platform needs as line item
+  properties (visible on the order in Shopify admin):
+    - properties[Site address]               (required)
+    - properties[Site description and notes] (optional)
+    - properties[Document link]              (optional)
+  Includes: variant handling, quantity, what's-included list (blocks),
+  and a delivery-timeframe callout.
+{%- endcomment -%}
+
+{%- assign current_variant = product.selected_or_first_available_variant -%}
+
+<section class="section product-main" id="order">
+  <div class="container product-main__grid">
+    <div class="product-main__media">
+      {%- if product.featured_image != blank -%}
+        <img
+          class="product-main__image"
+          src="{{ product.featured_image | image_url: width: 1200 }}"
+          alt="{{ product.featured_image.alt | default: product.title | escape }}"
+          width="{{ product.featured_image.width }}"
+          height="{{ product.featured_image.height }}"
+        >
+      {%- else -%}
+        <div class="product-main__media-placeholder" aria-hidden="true">
+          {% render 'icon', icon: 'document' %}
+          <span>{{ product.title }}</span>
+        </div>
+      {%- endif -%}
+
+      <div class="product-main__delivery">
+        {% render 'icon', icon: 'clock' %}
+        <div>
+          <strong>{{ section.settings.delivery_heading }}</strong>
+          <p>{{ section.settings.delivery_text }}</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="product-main__info">
+      <h1 class="product-main__title">{{ product.title }}</h1>
+
+      <p class="product-main__price">{{ current_variant.price | money }}</p>
+
+      {%- if product.description != blank -%}
+        <div class="product-main__description rte">{{ product.description }}</div>
+      {%- endif -%}
+
+      {%- form 'product', product, class: 'product-form', data-product-form: '', novalidate: 'novalidate' -%}
+        {%- unless product.has_only_default_variant -%}
+          <div class="product-form__field">
+            <label class="product-form__label" for="ProductSelect-{{ section.id }}">{{ 'products.product.options' | t }}</label>
+            <select id="ProductSelect-{{ section.id }}" class="product-form__input" name="id">
+              {%- for variant in product.variants -%}
+                <option
+                  value="{{ variant.id }}"
+                  {% if variant == current_variant %}selected="selected"{% endif %}
+                  {% unless variant.available %}disabled="disabled"{% endunless %}
+                >
+                  {{ variant.title }} &ndash; {{ variant.price | money }}{% unless variant.available %} ({{ 'products.product.sold_out' | t }}){% endunless %}
+                </option>
+              {%- endfor -%}
+            </select>
+          </div>
+        {%- else -%}
+          <input type="hidden" name="id" value="{{ current_variant.id }}">
+        {%- endunless -%}
+
+        <div class="product-form__field">
+          <label class="product-form__label" for="Quantity-{{ section.id }}">{{ 'products.product.quantity' | t }}</label>
+          <input id="Quantity-{{ section.id }}" class="product-form__input product-form__input--narrow" type="number" name="quantity" value="1" min="1">
+        </div>
+
+        <fieldset class="product-form__properties">
+          <legend>{{ section.settings.details_heading }}</legend>
+          <p class="product-form__hint">{{ section.settings.details_hint }}</p>
+
+          <div class="product-form__field">
+            <label class="product-form__label" for="SiteAddress-{{ section.id }}">
+              {{ 'products.product.site_address' | t }}
+              <span class="product-form__required" aria-hidden="true">*</span>
+            </label>
+            <input
+              id="SiteAddress-{{ section.id }}"
+              class="product-form__input"
+              type="text"
+              name="properties[Site address]"
+              placeholder="{{ 'products.product.site_address_placeholder' | t }}"
+              required
+            >
+          </div>
+
+          <div class="product-form__field">
+            <label class="product-form__label" for="SiteNotes-{{ section.id }}">{{ 'products.product.site_notes' | t }}</label>
+            <textarea
+              id="SiteNotes-{{ section.id }}"
+              class="product-form__input"
+              name="properties[Site description and notes]"
+              rows="4"
+              placeholder="{{ 'products.product.site_notes_placeholder' | t }}"
+            ></textarea>
+          </div>
+
+          <div class="product-form__field">
+            <label class="product-form__label" for="DocumentLink-{{ section.id }}">{{ 'products.product.document_link' | t }}</label>
+            <input
+              id="DocumentLink-{{ section.id }}"
+              class="product-form__input"
+              type="url"
+              name="properties[Document link]"
+              placeholder="https://"
+            >
+            <p class="product-form__hint">{{ 'products.product.document_hint_html' | t: email: settings.support_email }}</p>
+          </div>
+        </fieldset>
+
+        <button
+          class="button button--primary product-form__submit"
+          type="submit"
+          data-submit-button
+          data-adding-text="{{ 'products.product.adding' | t }}"
+          {% unless product.available %}disabled{% endunless %}
+        >
+          {%- if product.available -%}
+            {{ 'products.product.add_to_cart' | t }}
+          {%- else -%}
+            {{ 'products.product.sold_out' | t }}
+          {%- endif -%}
+        </button>
+      {%- endform -%}
+
+      <div class="product-main__includes">
+        <h2 class="product-main__includes-heading">{{ section.settings.includes_heading }}</h2>
+        <ul class="check-list">
+          {%- if section.blocks.size > 0 -%}
+            {%- for block in section.blocks -%}
+              <li {{ block.shopify_attributes }}>
+                {% render 'icon', icon: 'check' %}
+                <span>{{ block.settings.text }}</span>
+              </li>
+            {%- endfor -%}
+          {%- else -%}
+            <li>{% render 'icon', icon: 'check' %} <span>Site &amp; location overview with maps</span></li>
+            <li>{% render 'icon', icon: 'check' %} <span>Zoning and planning-permission constraints</span></li>
+            <li>{% render 'icon', icon: 'check' %} <span>Access, utilities and services review</span></li>
+            <li>{% render 'icon', icon: 'check' %} <span>Environmental and flood-risk screening</span></li>
+            <li>{% render 'icon', icon: 'check' %} <span>Market context and comparable evidence</span></li>
+            <li>{% render 'icon', icon: 'check' %} <span>Plain-language verdict: risks, indicative costs and next steps</span></li>
+          {%- endif -%}
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+{% schema %}
+{
+  "name": "Feasibility report product",
+  "settings": [
+    {
+      "type": "header",
+      "content": "Site details form"
+    },
+    {
+      "type": "text",
+      "id": "details_heading",
+      "label": "Heading",
+      "default": "Site details"
+    },
+    {
+      "type": "textarea",
+      "id": "details_hint",
+      "label": "Intro text",
+      "default": "Tell us what to analyse. We start work as soon as your order is paid."
+    },
+    {
+      "type": "header",
+      "content": "Delivery timeframe"
+    },
+    {
+      "type": "text",
+      "id": "delivery_heading",
+      "label": "Heading",
+      "default": "Estimated delivery"
+    },
+    {
+      "type": "textarea",
+      "id": "delivery_text",
+      "label": "Text",
+      "default": "Your finished report is emailed to you as a PDF within 5 business days of payment. We'll confirm by email if we need anything extra about the site."
+    },
+    {
+      "type": "header",
+      "content": "What's included"
+    },
+    {
+      "type": "text",
+      "id": "includes_heading",
+      "label": "Heading",
+      "default": "What's included"
+    }
+  ],
+  "blocks": [
+    {
+      "type": "included_item",
+      "name": "Included item",
+      "settings": [
+        {
+          "type": "text",
+          "id": "text",
+          "label": "Text",
+          "default": "Included item"
+        }
+      ]
+    }
+  ],
+  "max_blocks": 12,
+  "presets": [
+    {
+      "name": "Feasibility report product",
+      "blocks": [
+        { "type": "included_item", "settings": { "text": "Site & location overview with maps" } },
+        { "type": "included_item", "settings": { "text": "Zoning and planning-permission constraints" } },
+        { "type": "included_item", "settings": { "text": "Plain-language verdict: risks, indicative costs and next steps" } }
+      ]
+    }
+  ]
+}
+{% endschema %}

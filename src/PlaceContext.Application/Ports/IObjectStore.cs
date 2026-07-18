@@ -13,6 +13,9 @@ public interface IObjectStore
     /// <summary>The default bucket post-job artifacts are written to.</summary>
     string ReportsBucket { get; }
 
+    /// <summary>The bucket baked job-dependency layers (the warm cache) are written to.</summary>
+    string DepsBucket { get; }
+
     /// <summary>Uploads bytes under (bucket, key) with the given content type. Idempotent (overwrites).</summary>
     Task PutAsync(string bucket, string key, byte[] content, string contentType, CancellationToken ct = default);
 
@@ -21,6 +24,26 @@ public interface IObjectStore
 
     /// <summary>Deletes an object. Idempotent — a missing object is not an error. No-op when disabled.</summary>
     Task DeleteAsync(string bucket, string key, CancellationToken ct = default);
+
+    /// <summary>Whether an object exists. False when the store is disabled.</summary>
+    Task<bool> ExistsAsync(string bucket, string key, CancellationToken ct = default);
+
+    /// <summary>Creates the bucket when absent (idempotent). No-op when the store is disabled.</summary>
+    Task EnsureBucketAsync(string bucket, CancellationToken ct = default);
+
+    /// <summary>
+    /// A time-limited presigned GET URL for an object, for direct client access (e.g. a job pod
+    /// fetching a dependency-cache tarball). The object is served RAW — presigned traffic bypasses
+    /// the store's encryption-at-rest, so only use it for content that is not encrypted (never for
+    /// post-job artifacts).
+    /// </summary>
+    Task<string> PresignDownloadAsync(string bucket, string key, TimeSpan ttl, CancellationToken ct = default);
+
+    /// <summary>
+    /// A time-limited presigned PUT URL, for direct client upload (e.g. a bake Job publishing a
+    /// dependency-cache tarball). The object lands RAW — see <see cref="PresignDownloadAsync"/>.
+    /// </summary>
+    Task<string> PresignUploadAsync(string bucket, string key, TimeSpan ttl, CancellationToken ct = default);
 }
 
 /// <summary>A readable object: its content stream plus the stored content type. Dispose to release.</summary>

@@ -13,6 +13,4 @@ public sealed record ProjectOverviewView(
     int NodeCount,
     int LinkCount,
     IReadOnlyList<GodNodeView> GodNodes,
-    RiskDashboardView Risk,
-    int ChangeCount,
-    string Context);
+    int ChangeCount);

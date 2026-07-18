@@ -3,15 +3,14 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Npgsql;
 using PlaceContext.Application.Ports;
-using PlaceContext.Domain.ValueObjects;
 using PlaceContext.Infrastructure.Persistence;
 
 namespace PlaceContext.Infrastructure.Security;
 
 /// <summary>
-/// One-shot at Host launch: encrypt any legacy plaintext still sitting in Postgres (and migrate
-/// knowledge context rows onto encrypted files). Idempotent — already-protected values (wire prefix
-/// <c>pcenc1.</c>) and empty cells are skipped. Uses <c>IgnoreQueryFilters</c> so every tenant is covered.
+/// One-shot at Host launch: encrypt any legacy plaintext still sitting in Postgres. Idempotent —
+/// already-protected values (wire prefix <c>pcenc1.</c>) and empty cells are skipped. Uses
+/// <c>IgnoreQueryFilters</c> so every tenant is covered.
 /// </summary>
 public static class EncryptionAtRestBootstrap
 {
@@ -25,7 +24,6 @@ public static class EncryptionAtRestBootstrap
         var log = sp.GetRequiredService<ILoggerFactory>().CreateLogger("EncryptionAtRestBootstrap");
         var enc = sp.GetRequiredService<IDataEncryptor>();
         var db = sp.GetRequiredService<AppDbContext>();
-        var contexts = sp.GetRequiredService<Domain.Repositories.IProjectContextRepository>();
         var config = sp.GetRequiredService<Microsoft.Extensions.Configuration.IConfiguration>();
 
         log.LogInformation("Encryption-at-rest bootstrap: scanning for legacy plaintext…");
@@ -37,12 +35,10 @@ public static class EncryptionAtRestBootstrap
         n += await EncryptEventPayloadsAsync(db, enc, ct);
         n += await EncryptDecisionsAsync(db, enc, ct);
         n += await EncryptActivityAsync(db, enc, ct);
-        n += await EncryptRiskAsync(db, enc, ct);
         n += await EncryptChartsAsync(db, enc, ct);
         n += await EncryptToolCallsAsync(db, enc, ct);
         n += await EncryptPendingRunsAsync(db, enc, ct);
         n += await EncryptVaultIfLegacyAsync(db, enc, ct);
-        n += await MigrateContextsToFilesAsync(db, contexts, ct);
         n += await EncryptProjectDataTextCellsAsync(config, enc, log, ct);
 
         if (n > 0)
@@ -143,19 +139,6 @@ public static class EncryptionAtRestBootstrap
         return n;
     }
 
-    private static async Task<int> EncryptRiskAsync(AppDbContext db, IDataEncryptor enc, CancellationToken ct)
-    {
-        var p = IDataEncryptor.Purpose.Risk;
-        var rows = await db.RiskAssessments.IgnoreQueryFilters().ToListAsync(ct);
-        var n = 0;
-        foreach (var r in rows)
-        {
-            if (NeedsProtect(enc, r.Signals)) { r.Signals = enc.Protect(r.Signals, p); n++; }
-        }
-        if (n > 0) await db.SaveChangesAsync(ct);
-        return n;
-    }
-
     private static async Task<int> EncryptChartsAsync(AppDbContext db, IDataEncryptor enc, CancellationToken ct)
     {
         var p = IDataEncryptor.Purpose.Chart;
@@ -220,24 +203,6 @@ public static class EncryptionAtRestBootstrap
     {
         if (string.IsNullOrEmpty(s) || s.Length > 512) return false;
         return s.Any(char.IsWhiteSpace) || s.All(c => char.IsLetterOrDigit(c) || "-_.".Contains(c));
-    }
-
-    private static async Task<int> MigrateContextsToFilesAsync(
-        AppDbContext db,
-        Domain.Repositories.IProjectContextRepository contexts,
-        CancellationToken ct)
-    {
-        var rows = await db.ProjectContexts.IgnoreQueryFilters()
-            .Where(r => r.Markdown != null && r.Markdown != "")
-            .Select(r => r.ProjectId)
-            .ToListAsync(ct);
-        var n = 0;
-        foreach (var projectId in rows)
-        {
-            _ = await contexts.GetForProjectAsync(ProjectId.From(projectId), ct);
-            n++;
-        }
-        return n;
     }
 
     /// <summary>

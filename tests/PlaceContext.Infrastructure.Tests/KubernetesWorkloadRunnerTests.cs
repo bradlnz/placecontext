@@ -1,3 +1,5 @@
+using k8s.Models;
+using PlaceContext.Application.Ports;
 using PlaceContext.Infrastructure.Workload;
 
 namespace PlaceContext.Infrastructure.Tests;
@@ -140,5 +142,137 @@ public class KubernetesWorkloadRunnerTests
     {
         Assert.Null(KubernetesWorkloadRunner.BuildWorkerAffinity(
             new WorkloadRunnerOptions { PreferWorkerNodes = false, RequireWorkerNodes = false }));
+    }
+
+    // ── warm dependency cache (bake once, reuse from the object store) ────────────────────────────
+
+    private static WorkloadRunRequest CodeRequest(params (string Path, string Content)[] files) =>
+        new(Image: null, StdinPayload: "{}", Env: new Dictionary<string, string>(),
+            ArtifactMounts: Array.Empty<(string, string)>(), CorrelationId: "corr",
+            CodeFiles: files, RuntimeId: "python", Entrypoint: null);
+
+    [Fact]
+    public void Materialize_fetches_the_baked_layer_only_when_warm()
+    {
+        var files = new[] { ("main.py", "x") };
+        var (_, cold) = KubernetesWorkloadRunner.BuildMaterialize(CodeRequest(files), files, fetchDeps: false);
+        Assert.DoesNotContain("PCDEPS_GET_URL", cold);
+
+        var (_, warm) = KubernetesWorkloadRunner.BuildMaterialize(CodeRequest(files), files, fetchDeps: true);
+        Assert.Contains("wget -q -O- \"$PCDEPS_GET_URL\" | tar xz -C /work || true", warm);
+    }
+
+    [Fact]
+    public void Bake_script_mirrors_the_shard_layout_then_marks_and_packs_the_layer()
+    {
+        var files = new[] { ("main.py", "x"), ("requirements.txt", "six") };
+        var recipe = WorkloadDependencies.For("python", files)!;
+        var script = KubernetesWorkloadRunner.BuildBakeScript(recipe, WorkloadDependencies.ManifestFiles(recipe, files));
+
+        Assert.StartsWith("set -e\n", script);
+        Assert.Contains("cp /cm/f0 '/stage/requirements.txt'", script);
+        Assert.Contains("export PYTHONPATH=/stage/.pcdeps/lib", script);
+        Assert.Contains("pip install --no-cache-dir --target /stage/.pcdeps/lib -r /stage/requirements.txt", script);
+        Assert.Contains("touch /stage/.baked", script);           // the marker warm shards skip installs on
+        Assert.Contains("tar czf /out/deps.tar.gz -C /stage .", script);
+        Assert.EndsWith("touch /out/.done\n", script);            // releases the uploader sidecar
+    }
+
+    [Fact]
+    public void Bake_job_installs_in_the_runtime_image_and_uploads_via_the_curl_sidecar()
+    {
+        var job = KubernetesWorkloadRunner.BuildBakeJob(
+            "pcbake-abc", "python:3.12-slim", "echo bake", "http://minio:9000/signed-put",
+            new WorkloadRunnerOptions(), new V1ResourceRequirements());
+
+        Assert.Equal("pcbake-abc", job.Metadata.Name);
+        Assert.Equal(600, job.Spec.TtlSecondsAfterFinished);
+        var containers = job.Spec.Template.Spec.Containers;
+        Assert.Equal(2, containers.Count);
+        Assert.Equal("bake", containers[0].Name);
+        Assert.Equal("python:3.12-slim", containers[0].Image);
+        var upload = containers[1];
+        Assert.Equal("upload", upload.Name);
+        Assert.Contains("--upload-file /out/deps.tar.gz", upload.Command[2]);
+        Assert.Equal("http://minio:9000/signed-put", Assert.Single(upload.Env).Value);
+        Assert.Equal(3, job.Spec.Template.Spec.Volumes.Count); // cm + stage + out
+    }
+
+    [Fact]
+    public void Egress_policy_denies_all_by_default_and_scopes_to_minio_plus_dns_when_warm()
+    {
+        var deny = KubernetesWorkloadRunner.BuildEgressPolicy("n", "lbl", storeScoped: false);
+        Assert.Empty(deny.Spec.Egress);
+
+        var scoped = KubernetesWorkloadRunner.BuildEgressPolicy("n", "lbl", storeScoped: true);
+        Assert.Equal(2, scoped.Spec.Egress.Count);
+        var toMinio = scoped.Spec.Egress[0];
+        Assert.Equal("minio", toMinio.To.Single().PodSelector.MatchLabels["app"]);
+        Assert.Equal("9000", toMinio.Ports.Single().Port.Value);
+        Assert.Equal("TCP", toMinio.Ports.Single().Protocol);
+        Assert.Equal(2, scoped.Spec.Egress[1].Ports.Count); // DNS over UDP + TCP
+    }
+
+    // ── non-root security context ───────────────────────────────────────────────────────────────
+    // Job pods never run as root: pod-level seccomp + fsGroup (so the nobody run container can
+    // write its volumes), container-level runAs*/capabilities on the containers that execute code.
+
+    [Fact]
+    public void Pod_security_context_applies_seccomp_and_the_run_as_group_as_fsgroup()
+    {
+        var pod = KubernetesWorkloadRunner.BuildPodSecurityContext(new WorkloadRunnerOptions());
+
+        Assert.Equal("RuntimeDefault", pod.SeccompProfile.Type);
+        Assert.Equal(65534, pod.FsGroup); // emptyDir volumes stay writable for the nobody container
+    }
+
+    [Fact]
+    public void Container_security_context_runs_nobody_with_dropped_capabilities()
+    {
+        var ctr = KubernetesWorkloadRunner.BuildRestrictedContainerSecurityContext(new WorkloadRunnerOptions());
+
+        Assert.True(ctr.RunAsNonRoot);
+        Assert.Equal(65534, ctr.RunAsUser);
+        Assert.Equal(65534, ctr.RunAsGroup);
+        Assert.False(ctr.AllowPrivilegeEscalation);
+        Assert.Equal("ALL", Assert.Single(ctr.Capabilities.Drop));
+    }
+
+    [Fact]
+    public void RunAsNonRoot_relaxes_only_when_the_operator_configures_uid_zero()
+    {
+        var ctr = KubernetesWorkloadRunner.BuildRestrictedContainerSecurityContext(
+            new WorkloadRunnerOptions { RunAsUser = 0, RunAsGroup = 0 });
+
+        // runAsNonRoot=true with a numeric uid 0 would make the kubelet refuse to start the pod.
+        Assert.False(ctr.RunAsNonRoot);
+        Assert.Equal(0, ctr.RunAsUser);
+    }
+
+    [Fact]
+    public void Bake_job_runs_the_untrusted_install_as_nobody_too()
+    {
+        var job = KubernetesWorkloadRunner.BuildBakeJob(
+            "pcbake-abc", "python:3.12-slim", "echo bake", "http://minio:9000/signed-put",
+            new WorkloadRunnerOptions(), new V1ResourceRequirements());
+
+        Assert.Equal("RuntimeDefault", job.Spec.Template.Spec.SecurityContext.SeccompProfile.Type);
+        Assert.Equal(65534, job.Spec.Template.Spec.SecurityContext.FsGroup); // /stage + /out stay writable
+        var bake = job.Spec.Template.Spec.Containers[0];
+        Assert.True(bake.SecurityContext.RunAsNonRoot);
+        Assert.Equal(65534, bake.SecurityContext.RunAsUser);
+        Assert.False(bake.SecurityContext.AllowPrivilegeEscalation);
+        Assert.Equal("ALL", Assert.Single(bake.SecurityContext.Capabilities.Drop));
+    }
+
+    [Fact]
+    public void Materialize_opens_work_for_the_unprivileged_run_container()
+    {
+        var files = new[] { ("main.py", "x") };
+        var (_, script) = KubernetesWorkloadRunner.BuildMaterialize(CodeRequest(files), files, fetchDeps: false);
+
+        // The init container's copies are root-owned; the job (nobody) must be able to write beside
+        // the code — node_modules, .bundle, an npm-rewritten lockfile, the .pcdeps deps root.
+        Assert.EndsWith("chmod -R a+rwX /work\n", script);
     }
 }

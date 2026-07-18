@@ -13,6 +13,4 @@ public sealed class ProjectRow : ITenantOwned
     public DateTimeOffset DiscoveredAt { get; set; }
     public DateTimeOffset? RegisteredAt { get; set; }
     public string? GraphJson { get; set; }
-    public double? TechnicalRisk { get; set; }
-    public double? ProcessRisk { get; set; }
 }

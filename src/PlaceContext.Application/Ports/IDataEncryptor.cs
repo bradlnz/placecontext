@@ -14,7 +14,6 @@ public interface IDataEncryptor
         public const string Vault = "vault.secrets.v1";
         public const string JobSource = "job.source.v1";
         public const string JobRun = "job.run.v1";
-        public const string Context = "project.context.v1";
         public const string Requirements = "project.requirements.v1";
         public const string EventPayload = "event.payload.v1";
         public const string ProjectData = "project.data.v1";
@@ -24,7 +23,6 @@ public interface IDataEncryptor
         public const string ToolCall = "mcp.toolcall.v1";
         public const string PendingRun = "job.pending.v1";
         public const string Chart = "project.chart.v1";
-        public const string Risk = "project.risk.v1";
         /// <summary>Source text stored with embedding rows (vectors stay searchable in pgvector).</summary>
         public const string EmbeddingText = "content.embedding.text.v1";
     }

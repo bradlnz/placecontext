@@ -851,30 +851,6 @@ namespace PlaceContext.Infrastructure.Migrations
                     b.ToTable("project_charts", (string)null);
                 });
 
-            modelBuilder.Entity("PlaceContext.Infrastructure.Persistence.ProjectContextRow", b =>
-                {
-                    b.Property<Guid>("ProjectId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Markdown")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<Guid>("TenantId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTimeOffset>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("ProjectId");
-
-                    b.ToTable("project_contexts", (string)null);
-                });
-
             modelBuilder.Entity("PlaceContext.Infrastructure.Persistence.ProjectRow", b =>
                 {
                     b.Property<Guid>("Id")

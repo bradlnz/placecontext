@@ -60,11 +60,11 @@
             <span style="@StepNum">3</span>
             <div>
                 <div class="step-title">Teach the agent the loop</div>
-                <div class="step-desc">Context in, decisions recorded, jobs queued — so nothing lives only in a chat scrollback.</div>
+                <div class="step-desc">Overview loaded, decisions recorded, jobs queued — so nothing lives only in a chat scrollback.</div>
             </div>
         </div>
         <div class="step-body-text">
-            Ask the agent to call <code>get_context</code> at the start of a session, <code>record_activity</code> after
+            Ask the agent to call <code>get_project_overview</code> at the start of a session, <code>record_activity</code> after
             changes, and <code>add_decision</code> when a direction is chosen. For background work, have it call
             <code>setup_hermes</code> once — that installs a playbook skill teaching the full job cycle:
             author job code → <code>upload_job_code</code> → <code>run_job</code> → fetch artifacts, plus schedules,

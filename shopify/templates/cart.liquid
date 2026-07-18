@@ -1,0 +1,73 @@
+{%- comment -%}
+  Cart — shows each line item together with the site-details properties
+  captured on the product page, so buyers can review them before checkout.
+{%- endcomment -%}
+
+<section class="section cart-page">
+  <div class="container">
+    <h1>{{ 'general.cart.title' | t }}</h1>
+
+    {%- if cart.item_count == 0 -%}
+      <p>{{ 'general.cart.empty' | t }}</p>
+      <a class="button button--primary" href="{{ routes.root_url }}">{{ 'general.cart.continue' | t }}</a>
+    {%- else -%}
+      <form action="{{ routes.cart_url }}" method="post" novalidate class="cart-form">
+        <ul class="cart-items">
+          {%- for item in cart.items -%}
+            <li class="cart-item">
+              <div class="cart-item__details">
+                <a class="cart-item__title" href="{{ item.url }}">{{ item.product.title }}</a>
+                {%- unless item.product.has_only_default_variant -%}
+                  <span class="cart-item__variant">{{ item.variant.title }}</span>
+                {%- endunless -%}
+                {%- assign has_properties = false -%}
+                {%- for property in item.properties -%}
+                  {%- unless property.last == blank -%}
+                    {%- assign has_properties = true -%}
+                  {%- endunless -%}
+                {%- endfor -%}
+                {%- if has_properties -%}
+                  <dl class="cart-item__properties">
+                    {%- for property in item.properties -%}
+                      {%- unless property.last == blank -%}
+                        <div class="cart-item__property">
+                          <dt>{{ property.first }}</dt>
+                          <dd>{{ property.last }}</dd>
+                        </div>
+                      {%- endunless -%}
+                    {%- endfor -%}
+                  </dl>
+                {%- endif -%}
+              </div>
+
+              <div class="cart-item__quantity">
+                <label class="visually-hidden" for="updates_{{ item.key }}">{{ 'products.product.quantity' | t }}</label>
+                <input
+                  id="updates_{{ item.key }}"
+                  class="product-form__input product-form__input--narrow"
+                  type="number"
+                  name="updates[]"
+                  value="{{ item.quantity }}"
+                  min="0"
+                >
+              </div>
+
+              <div class="cart-item__price">{{ item.final_line_price | money }}</div>
+
+              <a class="cart-item__remove" href="{{ item.url_to_remove }}">{{ 'general.cart.remove' | t }}</a>
+            </li>
+          {%- endfor -%}
+        </ul>
+
+        <div class="cart-page__footer">
+          <p class="cart-page__subtotal">{{ 'general.cart.subtotal' | t }}: {{ cart.total_price | money }}</p>
+          <p class="cart-page__note">{{ 'general.cart.taxes_note' | t }}</p>
+          <div class="cart-page__actions">
+            <button type="submit" name="update" class="button button--ghost">{{ 'general.cart.update' | t }}</button>
+            <button type="submit" name="checkout" class="button button--primary">{{ 'general.cart.checkout' | t }}</button>
+          </div>
+        </div>
+      </form>
+    {%- endif -%}
+  </div>
+</section>

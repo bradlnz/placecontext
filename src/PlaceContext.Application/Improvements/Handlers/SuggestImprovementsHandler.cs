@@ -11,17 +11,11 @@ public sealed class SuggestImprovementsHandler : IQueryHandler<SuggestImprovemen
 {
     private readonly IDecisionTreeProvider _tree;
     private readonly IActivityLogRepository _ledgers;
-    private readonly IProjectContextRepository _contexts;
-    private readonly IRiskAssessmentRepository _assessments;
 
-    public SuggestImprovementsHandler(
-        IDecisionTreeProvider tree, IActivityLogRepository ledgers,
-        IProjectContextRepository contexts, IRiskAssessmentRepository assessments)
+    public SuggestImprovementsHandler(IDecisionTreeProvider tree, IActivityLogRepository ledgers)
     {
         _tree = tree;
         _ledgers = ledgers;
-        _contexts = contexts;
-        _assessments = assessments;
     }
 
     public async Task<ImprovementsView> HandleAsync(SuggestImprovementsQuery query, CancellationToken ct = default)
@@ -29,8 +23,6 @@ public sealed class SuggestImprovementsHandler : IQueryHandler<SuggestImprovemen
         var projectId = ProjectId.From(query.ProjectId);
         var tree = await _tree.BuildAsync(projectId, ct);
         var ledger = await _ledgers.GetForProjectAsync(projectId, ct);
-        var context = await _contexts.GetForProjectAsync(projectId, ct);
-        var risk = await _assessments.GetLatestAsync(projectId, ct);
 
         var items = new List<ImprovementView>();
 
@@ -55,23 +47,9 @@ public sealed class SuggestImprovementsHandler : IQueryHandler<SuggestImprovemen
                 $"{unreviewed} agent change(s) without an architecture review",
                 "Run the architecture-reviewer on these slices to catch layer/SOLID regressions early."));
 
-        if (context is null || context.IsEmpty)
-            items.Add(new ImprovementView(
-                "missing-context", "medium",
-                "No project context recorded",
-                "Capture goals, conventions, and gotchas with add_context so future sessions start informed."));
-
-        if (risk is not null)
-        {
-            foreach (var s in risk.Signals.Where(s => (int)s.Severity >= 2).Take(3))
-                items.Add(new ImprovementView(
-                    $"risk:{s.Code}", "medium",
-                    $"Risk signal: {s.Code}", s.Evidence));
-        }
-
         if (items.Count == 0)
             items.Add(new ImprovementView("clean", "low", "No issues detected",
-                "No hotspots, unverified changes, or risk signals from the logged activity."));
+                "No hotspots or unverified changes in the logged activity."));
 
         return new ImprovementsView(query.ProjectId, items);
     }

@@ -10,10 +10,6 @@ public class OnboardTests
 {
     private static readonly DateTimeOffset T0 = new(2026, 6, 24, 12, 0, 0, TimeSpan.Zero);
 
-    private static RiskAssessmentService Risk(IClock clock) => new(
-        new InMemoryActivityLogRepository(), new InMemoryRiskAssessmentRepository(), new FakeDecisionTreeProvider(),
-        new FakeCodeMetricsProbe(), new TechnicalRiskScorer(), new ProcessRiskScorer(), new RiskScoreCalculator(), clock);
-
     private static (OnboardHandler handler, InMemoryProjectRepository projects, InMemoryActivityLogRepository ledgers, FakeRepoFiles files)
         Build(FakeGitPort git, FakeRepoFiles files)
     {
@@ -21,7 +17,7 @@ public class OnboardTests
         var ledgers = new InMemoryActivityLogRepository();
         var clock = new FakeClock(T0);
         var handler = new OnboardHandler(
-            projects, Risk(clock), ledgers, git, new InMemoryProjectContextRepository(),
+            projects, ledgers, git,
             new InMemoryRequirementsRepository(), files, new RecordingUnitOfWork(), clock);
         return (handler, projects, ledgers, files);
     }
@@ -36,16 +32,15 @@ public class OnboardTests
     };
 
     [Fact]
-    public async Task Onboard_creates_backfills_seeds_context_and_scaffolds_claude()
+    public async Task Onboard_creates_backfills_and_scaffolds_claude()
     {
-        var files = new FakeRepoFiles { DocToReturn = "# Payments\nStripe integration." };
+        var files = new FakeRepoFiles();
         var (handler, projects, ledgers, _) = Build(GitWithTwoCommits(), files);
 
         var result = await handler.HandleAsync(new OnboardCommand("/home/brad/code/payments", null, "claude", 50));
 
         Assert.Equal("payments", result.Project.Name);
         Assert.Equal(2, result.ChangesBackfilled);
-        Assert.True(result.ContextSeeded);
         Assert.Single(result.SkillsCreated);
         Assert.Single(result.AgentsCreated);
         Assert.Contains(files.Written, w => w.Path == ".claude/skills/placecontext/SKILL.md");
@@ -72,7 +67,7 @@ public class OnboardTests
     [Fact]
     public async Task Onboard_is_idempotent_and_does_not_duplicate_backfill()
     {
-        var files = new FakeRepoFiles { DocToReturn = "# Docs" };
+        var files = new FakeRepoFiles();
         var (handler, _, ledgers, _) = Build(GitWithTwoCommits(), files);
         var cmd = new OnboardCommand("/home/brad/code/payments", null, "claude", 50);
 

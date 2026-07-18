@@ -19,9 +19,7 @@ public sealed class Project : AggregateRoot
         ProjectStatus status,
         DateTimeOffset discoveredAt,
         DateTimeOffset? registeredAt,
-        GraphSnapshotRef? lastGraph,
-        RiskScore? technicalRisk,
-        RiskScore? processRisk)
+        GraphSnapshotRef? lastGraph)
     {
         Id = id;
         Name = name;
@@ -30,8 +28,6 @@ public sealed class Project : AggregateRoot
         DiscoveredAt = discoveredAt;
         RegisteredAt = registeredAt;
         LastGraph = lastGraph;
-        TechnicalRisk = technicalRisk;
-        ProcessRisk = processRisk;
     }
 
     public ProjectId Id { get; }
@@ -41,8 +37,6 @@ public sealed class Project : AggregateRoot
     public DateTimeOffset DiscoveredAt { get; }
     public DateTimeOffset? RegisteredAt { get; private set; }
     public GraphSnapshotRef? LastGraph { get; private set; }
-    public RiskScore? TechnicalRisk { get; private set; }
-    public RiskScore? ProcessRisk { get; private set; }
 
     public bool IsGraphified => LastGraph is not null;
 
@@ -54,8 +48,7 @@ public sealed class Project : AggregateRoot
 
         return new Project(
             ProjectId.New(), name, path, ProjectStatus.Discovered,
-            discoveredAt, registeredAt: null, lastGraph: null,
-            technicalRisk: null, processRisk: null);
+            discoveredAt, registeredAt: null, lastGraph: null);
     }
 
     /// <summary>Rebuilds an aggregate from persisted state. Used only by the Infrastructure repository.</summary>
@@ -66,10 +59,8 @@ public sealed class Project : AggregateRoot
         ProjectStatus status,
         DateTimeOffset discoveredAt,
         DateTimeOffset? registeredAt,
-        GraphSnapshotRef? lastGraph,
-        RiskScore? technicalRisk,
-        RiskScore? processRisk)
-        => new(id, name, path, status, discoveredAt, registeredAt, lastGraph, technicalRisk, processRisk);
+        GraphSnapshotRef? lastGraph)
+        => new(id, name, path, status, discoveredAt, registeredAt, lastGraph);
 
     /// <summary>Promotes a discovered candidate to a registered, watched project.</summary>
     public void Register(DateTimeOffset registeredAt)
@@ -103,19 +94,6 @@ public sealed class Project : AggregateRoot
         LastGraph = snapshot;
         Status = ProjectStatus.Graphified;
         Raise(new GraphRebuilt(Id, snapshot, snapshot.BuiltAt));
-    }
-
-    /// <summary>Applies freshly-computed risk scores to the project's registry record.</summary>
-    public void ApplyRisk(RiskScore technical, RiskScore process, DateTimeOffset computedAt)
-    {
-        ArgumentNullException.ThrowIfNull(technical);
-        ArgumentNullException.ThrowIfNull(process);
-        if (Status == ProjectStatus.Archived)
-            throw new InvalidOperationException("Cannot score an archived project.");
-
-        TechnicalRisk = technical;
-        ProcessRisk = process;
-        Raise(new RiskRecomputed(Id, technical, process, computedAt));
     }
 
     /// <summary>Stops tracking the project. Terminal state.</summary>

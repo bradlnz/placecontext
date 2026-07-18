@@ -34,7 +34,6 @@ public class JobParameterTests
     {
         var jobs = new InMemoryJobRepository();
         var runs = new InMemoryJobRunRepository();
-        var contexts = new InMemoryProjectContextRepository();
         var runner = new FakeWorkloadRunner();
         var uow = new RecordingUnitOfWork();
         var clock = new FakeClock(T0);
@@ -44,7 +43,7 @@ public class JobParameterTests
         var job = Job.Create(Guid.NewGuid(), "j", null, map, null, 1, ExitCodePolicy.Default, T0);
         await jobs.AddAsync(job);
 
-        var handler = new RunJobHandler(jobs, runs, contexts, runner, uow, clock);
+        var handler = new RunJobHandler(jobs, runs, runner, uow, clock);
 
         // …but an override payload collapses the run to one shard carrying that payload.
         var detail = await handler.HandleAsync(new RunJobCommand(job.Id, "{\"customerEmail\":\"a@b.com\"}"));
@@ -60,7 +59,6 @@ public class JobParameterTests
     {
         var jobs = new InMemoryJobRepository();
         var runs = new InMemoryJobRunRepository();
-        var contexts = new InMemoryProjectContextRepository();
         var runner = new FakeWorkloadRunner();
         var uow = new RecordingUnitOfWork();
         var clock = new FakeClock(T0);
@@ -74,7 +72,7 @@ public class JobParameterTests
         var job = Job.Create(Guid.NewGuid(), "j", null, map, null, 1, ExitCodePolicy.Default, T0);
         await jobs.AddAsync(job);
 
-        var handler = new RunJobHandler(jobs, runs, contexts, runner, uow, clock);
+        var handler = new RunJobHandler(jobs, runs, runner, uow, clock);
         var detail = await handler.HandleAsync(new RunJobCommand(job.Id));
 
         var artifact = Assert.Single(detail.ShardResults[0].Artifacts);
@@ -83,35 +81,10 @@ public class JobParameterTests
     }
 
     [Fact]
-    public async Task RunJob_appends_the_run_summary_to_project_context()
-    {
-        var jobs = new InMemoryJobRepository();
-        var runs = new InMemoryJobRunRepository();
-        var contexts = new InMemoryProjectContextRepository();
-        var runner = new FakeWorkloadRunner();
-        var uow = new RecordingUnitOfWork();
-        var clock = new FakeClock(T0);
-
-        var map = new MapSpec("img/worker:latest", new[] { "{}" }, new Dictionary<string, string>());
-        var job = Job.Create(Guid.NewGuid(), "j", null, map, null, 1, ExitCodePolicy.Default, T0);
-        await jobs.AddAsync(job);
-
-        var handler = new RunJobHandler(jobs, runs, contexts, runner, uow, clock, events: null);
-        await handler.HandleAsync(new RunJobCommand(job.Id));
-
-        // The deterministic run summary is appended to the project context.
-        var ctx = await contexts.GetForProjectAsync(
-            PlaceContext.Domain.ValueObjects.ProjectId.From(job.ProjectId));
-        Assert.NotNull(ctx);
-        Assert.Contains("## Job run: j", ctx!.Markdown);
-    }
-
-    [Fact]
     public async Task RunJob_without_override_runs_stored_shards()
     {
         var jobs = new InMemoryJobRepository();
         var runs = new InMemoryJobRunRepository();
-        var contexts = new InMemoryProjectContextRepository();
         var runner = new FakeWorkloadRunner();
         var uow = new RecordingUnitOfWork();
         var clock = new FakeClock(T0);
@@ -120,7 +93,7 @@ public class JobParameterTests
         var job = Job.Create(Guid.NewGuid(), "j", null, map, null, 2, ExitCodePolicy.Default, T0);
         await jobs.AddAsync(job);
 
-        var handler = new RunJobHandler(jobs, runs, contexts, runner, uow, clock);
+        var handler = new RunJobHandler(jobs, runs, runner, uow, clock);
         var detail = await handler.HandleAsync(new RunJobCommand(job.Id));
 
         Assert.Equal(2, detail.ShardResults.Count);

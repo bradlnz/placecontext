@@ -71,7 +71,7 @@ public sealed class SetupHermesHandler : ICommandHandler<SetupHermesCommand, Ski
         ## 5. Record what you did
 
         After orchestration work that matters, `record_activity` with a summary and the touched
-        files — the ledger feeds the project's graph, risk, and reports.
+        files — the ledger feeds the project's graph and reports.
 
         ## Ground rules
 

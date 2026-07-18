@@ -44,6 +44,8 @@
     font-weight: 600;
     padding: 3px 9px;
     border-radius: 20px;
+    color: var(--text-2);
+    background: var(--card-2);
 }
 
 .project-path {
@@ -143,27 +145,8 @@
     margin: 0 5px;
 }
 
-.two-col {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 14px;
-    align-items: start;
-    margin-top: 14px;
-}
-
 .pad-card {
     padding: 15px;
-}
-
-.risk-title {
-    font-size: 13px;
-    font-weight: 600;
-    margin-bottom: 14px;
-}
-
-.risk-rings {
-    display: flex;
-    gap: 14px;
 }
 
 .god-head {
@@ -237,10 +220,6 @@
     font-family: var(--font-sans);
     font-size: 12.5px;
     line-height: 1.55;
-}
-
-.editor-context {
-    min-height: 200px;
 }
 
 .editor-req {

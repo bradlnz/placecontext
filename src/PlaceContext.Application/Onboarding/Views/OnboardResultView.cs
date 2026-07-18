@@ -4,7 +4,6 @@ namespace PlaceContext.Application.Dtos;
 public sealed record OnboardResultView(
     ProjectSummaryView Project,
     int ChangesBackfilled,
-    bool ContextSeeded,
     IReadOnlyList<string> SkillsCreated,
     IReadOnlyList<string> AgentsCreated,
     IReadOnlyList<string> AvailablePrompts);

@@ -15,19 +15,14 @@ public interface IPlaceContextService
     Task<ProjectSummaryView> RegisterProjectAsync(Guid projectId, CancellationToken ct = default);
     Task<ProjectSummaryView> RebuildGraphAsync(Guid projectId, bool incremental = true, CancellationToken ct = default);
     Task<ActivityRecordView> RecordActivityAsync(RecordActivityCommand command, CancellationToken ct = default);
-    Task<RiskDashboardView> RecomputeRiskAsync(Guid projectId, CancellationToken ct = default);
     Task<DecisionView> AddDecisionAsync(Guid projectId, string question, string choice, string? rationale, CancellationToken ct = default);
 
     Task<IReadOnlyList<ProjectSummaryView>> GetProjectsAsync(CancellationToken ct = default);
     Task<ProjectSummaryView?> GetProjectByIdAsync(Guid projectId, CancellationToken ct = default);
     Task<ProjectOverviewView> GetProjectOverviewAsync(Guid projectId, CancellationToken ct = default);
     Task<ActivityTimelineView> GetTimelineAsync(Guid projectId, int take = 50, CancellationToken ct = default);
-    Task<RiskDashboardView> GetRiskDashboardAsync(Guid projectId, CancellationToken ct = default);
     Task<IReadOnlyList<DecisionView>> GetDecisionsAsync(Guid projectId, CancellationToken ct = default);
     Task<GraphQueryView> QueryGraphAsync(Guid projectId, string question, CancellationToken ct = default);
-    Task<ProjectContextView> AddContextAsync(Guid projectId, string section, CancellationToken ct = default);
-    Task<ProjectContextView> SetContextAsync(Guid projectId, string markdown, CancellationToken ct = default);
-    Task<ProjectContextView> GetContextAsync(Guid projectId, CancellationToken ct = default);
     Task<ProjectSecretView> AddProjectSecretAsync(Guid projectId, string name, string value, CancellationToken ct = default);
     Task<bool> DeleteProjectSecretAsync(Guid projectId, string name, CancellationToken ct = default);
     Task<IReadOnlyList<ProjectSecretView>> ListProjectSecretsAsync(Guid projectId, CancellationToken ct = default);
@@ -128,7 +123,6 @@ public interface IPlaceContextService
 
     // Root-level read models for the redesigned portal.
     Task<RootStatsView> GetRootStatsAsync(CancellationToken ct = default);
-    Task<RootRiskView> GetRootRiskAsync(CancellationToken ct = default);
     Task<RootActivityView> GetRootActivityAsync(int take = 40, CancellationToken ct = default);
     Task<GraphVizView> GetGraphVizAsync(Guid projectId, CancellationToken ct = default);
     Task<IReadOnlyList<ToolCallView>> GetRecentToolCallsAsync(int take = 100, CancellationToken ct = default);

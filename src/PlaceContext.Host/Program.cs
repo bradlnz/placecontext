@@ -267,7 +267,15 @@ builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(o =>
 
 var app = builder.Build();
 PlaceContext.Infrastructure.DependencyInjection.MigrateDatabase(app.Services);
-// Encrypt any legacy plaintext (and migrate knowledge context DB → encrypted files) before serving.
+// Flatten legacy JSON blob columns in the project databases into real columns (the data map used
+// to land objects as jsonb; it now flattens at ingest). Bounded catalog scans, cheap no-op once
+// done, best-effort per column. Disable with PlaceContext:DataMapFlattening:BootstrapOnStartup=false.
+if (app.Configuration.GetValue("PlaceContext:DataMapFlattening:BootstrapOnStartup", true))
+    await PlaceContext.Infrastructure.ProjectData.JsonFlatteningBootstrap.RunAsync(app.Services);
+else
+    app.Logger.LogInformation("Data-map flattening bootstrap skipped (PlaceContext:DataMapFlattening:BootstrapOnStartup is false).");
+
+// Encrypt any legacy plaintext before serving.
 // OFF by default: the EF passes load whole Jobs/JobRuns tables (map/reduce source + full run
 // artifacts, MBs per row, all tenants) into memory at once and OOM the pod. Opt in with
 // PlaceContext:EncryptionAtRest:BootstrapOnStartup=true only on a host sized for the one-shot scan.

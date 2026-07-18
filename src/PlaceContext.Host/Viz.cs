@@ -25,42 +25,6 @@ public static class Viz
     /// <summary>Stable integer seed from a project id (no Math.Random — deterministic across renders).</summary>
     public static int Seed(Guid id) => Math.Abs(id.GetHashCode()) % 100000 + 1;
 
-    /// <summary>Score in [0,1] → 0–100 integer percentage.</summary>
-    public static int Pct(double? score) => (int)Math.Round(100 * Math.Clamp(score ?? 0, 0, 1));
-
-    /// <summary>Risk 0–100 → tone bucket → CSS var colour.</summary>
-    public static string Tone(double pct) => pct >= 50 ? "var(--bad)" : pct >= 30 ? "var(--warn)" : "var(--good)";
-
-    /// <summary>Named tone (good|warn|bad) → CSS var colour.</summary>
-    public static string ToneVar(string tone) => tone switch
-    {
-        "bad" => "var(--bad)",
-        "warn" => "var(--warn)",
-        _ => "var(--good)"
-    };
-
-    public static string ToneBg(string tone) => tone switch
-    {
-        "bad" => "var(--bad-bg)",
-        "warn" => "var(--warn-bg)",
-        _ => "var(--good-bg)"
-    };
-
-    /// <summary>Risk band → tone colour for pills.</summary>
-    public static string BandColor(string? band) => band switch
-    {
-        "Critical" or "High" => "var(--bad)",
-        "Moderate" => "var(--warn)",
-        _ => "var(--good)"
-    };
-
-    public static string BandBg(string? band) => band switch
-    {
-        "Critical" or "High" => "var(--bad-bg)",
-        "Moderate" => "var(--warn-bg)",
-        _ => "var(--good-bg)"
-    };
-
     public static string AuthorColor(string kind) => kind == "Agent" ? "var(--brand-2)" : "var(--human)";
     public static string AuthorBg(string kind) => kind == "Agent" ? "var(--brand-bg)" : "var(--human-bg)";
 

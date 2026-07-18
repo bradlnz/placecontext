@@ -24,9 +24,6 @@ public sealed class PlaceContextService : IPlaceContextService
     public Task<ActivityRecordView> RecordActivityAsync(RecordActivityCommand command, CancellationToken ct = default)
         => _dispatcher.Send(command, ct);
 
-    public Task<RiskDashboardView> RecomputeRiskAsync(Guid projectId, CancellationToken ct = default)
-        => _dispatcher.Send(new RecomputeRiskCommand(projectId), ct);
-
     public Task<DecisionView> AddDecisionAsync(Guid projectId, string question, string choice, string? rationale, CancellationToken ct = default)
         => _dispatcher.Send(new AddDecisionCommand(projectId, question, choice, rationale), ct);
 
@@ -42,23 +39,11 @@ public sealed class PlaceContextService : IPlaceContextService
     public Task<ActivityTimelineView> GetTimelineAsync(Guid projectId, int take = 50, CancellationToken ct = default)
         => _dispatcher.Query(new GetTimelineQuery(projectId, take), ct);
 
-    public Task<RiskDashboardView> GetRiskDashboardAsync(Guid projectId, CancellationToken ct = default)
-        => _dispatcher.Query(new GetRiskDashboardQuery(projectId), ct);
-
     public Task<IReadOnlyList<DecisionView>> GetDecisionsAsync(Guid projectId, CancellationToken ct = default)
         => _dispatcher.Query(new GetDecisionsQuery(projectId), ct);
 
     public Task<GraphQueryView> QueryGraphAsync(Guid projectId, string question, CancellationToken ct = default)
         => _dispatcher.Query(new QueryGraphQuery(projectId, question), ct);
-
-    public Task<ProjectContextView> AddContextAsync(Guid projectId, string section, CancellationToken ct = default)
-        => _dispatcher.Send(new AddContextCommand(projectId, section), ct);
-
-    public Task<ProjectContextView> SetContextAsync(Guid projectId, string markdown, CancellationToken ct = default)
-        => _dispatcher.Send(new SetContextCommand(projectId, markdown), ct);
-
-    public Task<ProjectContextView> GetContextAsync(Guid projectId, CancellationToken ct = default)
-        => _dispatcher.Query(new GetContextQuery(projectId), ct);
 
     public Task<ProjectSecretView> AddProjectSecretAsync(Guid projectId, string name, string value, CancellationToken ct = default)
         => _dispatcher.Send(new AddProjectSecretCommand(projectId, name, value), ct);
@@ -110,9 +95,6 @@ public sealed class PlaceContextService : IPlaceContextService
 
     public Task<RootStatsView> GetRootStatsAsync(CancellationToken ct = default)
         => _dispatcher.Query(new GetRootStatsQuery(), ct);
-
-    public Task<RootRiskView> GetRootRiskAsync(CancellationToken ct = default)
-        => _dispatcher.Query(new GetRootRiskQuery(), ct);
 
     public Task<RootActivityView> GetRootActivityAsync(int take = 40, CancellationToken ct = default)
         => _dispatcher.Query(new GetRootActivityQuery(take), ct);

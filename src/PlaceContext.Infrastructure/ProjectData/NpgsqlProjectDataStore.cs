@@ -463,10 +463,15 @@ public sealed class NpgsqlProjectDataStore : IProjectDataStore
         await using (var create = conn.CreateCommand())
         {
             var defs = columns.Select((c, i) => $"{QuoteIdent(c.Name)} {pgTypes[i]}" + (c.NotNull ? " NOT NULL" : ""));
+            // Reconcile an already-existing table: add any spec column it lacks (flattened data-map
+            // leaves appear as payloads evolve). Nullable on purpose — Postgres rejects adding a
+            // NOT NULL column to a non-empty table, and every new row supplies the values anyway.
+            var adds = columns.Select((c, i) => $"ADD COLUMN IF NOT EXISTS {QuoteIdent(c.Name)} {pgTypes[i]}");
             create.Transaction = tx;
             // The revoke also undoes the schema's ALTER DEFAULT PRIVILEGES auto-grant on this table.
             create.CommandText =
                 $"CREATE TABLE IF NOT EXISTS {qualified} ({string.Join(", ", defs)}); " +
+                $"ALTER TABLE {qualified} {string.Join(", ", adds)}; " +
                 $"REVOKE ALL ON TABLE {qualified} FROM \"{schema}\"; " +
                 $"GRANT SELECT ON TABLE {qualified} TO \"{schema}\"";
             await create.ExecuteNonQueryAsync(ct);

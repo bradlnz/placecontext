@@ -23,7 +23,7 @@ else
                 <div class="title-row">
                     <span class="lang-dot" style="background:@Viz.LangColor(_overview.Path)"></span>
                     <h1 class="project-title">@_overview.Name</h1>
-                    <span class="status-pill" style="color:@Viz.BandColor(_overview.Risk.ProcessBand); background:@Viz.BandBg(_overview.Risk.ProcessBand)">@_overview.Status</span>
+                    <span class="status-pill">@_overview.Status</span>
                 </div>
                 <div class="project-path">@_overview.Path</div>
             </div>
@@ -34,7 +34,7 @@ else
 
 
         <div class="dctabs tabs">
-            @foreach (var (key, label) in new[] { ("overview", "Overview"), ("knowledge", "Knowledge"), ("activity", "Activity") })
+            @foreach (var (key, label) in new[] { ("overview", "Overview"), ("requirements", "Requirements"), ("activity", "Activity") })
             {
                 <button class="dctab @(_tab == key ? "active" : "")" @onclick="@(() => { _tab = key; StateHasChanged(); })">@label</button>
             }
@@ -68,66 +68,34 @@ else
                 </div>
         </div>
 
-        <!-- risk + god-nodes -->
-        <div class="two-col">
-                <div class="dccard pad-card">
-                    <div class="risk-title">Risk profile</div>
-                    <div class="risk-rings">
-                        @RiskRing("Process risk", Viz.Pct(_overview.Risk.Process))
-                        @RiskRing("Technical risk", Viz.Pct(_overview.Risk.Technical))
-                    </div>
+        <!-- god-nodes -->
+        <div class="dccard section-card pad-card">
+                <div class="god-head">
+                    <span class="card-title">God-nodes</span>
+                    <span class="meta-mono">top degree</span>
                 </div>
-
-                <div class="dccard pad-card">
-                    <div class="god-head">
-                        <span class="card-title">God-nodes</span>
-                        <span class="meta-mono">top degree</span>
+                @if (_overview.GodNodes.Count == 0)
+                {
+                    <div class="muted-note">None detected.</div>
+                }
+                else
+                {
+                    <div class="god-list">
+                        @foreach (var g in _overview.GodNodes)
+                        {
+                            <div class="god-row">
+                                <span class="god-dot"></span>
+                                <span class="god-label">@g.Label</span>
+                                <span class="god-degree">@g.Degree edges</span>
+                            </div>
+                        }
                     </div>
-                    @if (_overview.GodNodes.Count == 0)
-                    {
-                        <div class="muted-note">None detected.</div>
-                    }
-                    else
-                    {
-                        <div class="god-list">
-                            @foreach (var g in _overview.GodNodes)
-                            {
-                                <div class="god-row">
-                                    <span class="god-dot"></span>
-                                    <span class="god-label">@g.Label</span>
-                                    <span class="god-degree">@g.Degree edges</span>
-                                </div>
-                            }
-                        </div>
-                    }
-                </div>
+                }
         </div>
         }
 
-        @if (_tab == "knowledge")
+        @if (_tab == "requirements")
         {
-        <!-- context -->
-        <div id="context" class="dccard section-card">
-            <div class="card-head">
-                <div class="head-title-group">
-                    <span class="card-title">Context</span>
-                    <span class="meta-mono">the knowledge agents read before working</span>
-                </div>
-                <div class="head-actions">
-                    @if (_context?.UpdatedAt is { } ts)
-                    {
-                        <span class="meta-mono">updated @ts.ToWorkspaceTime().ToString("yyyy-MM-dd HH:mm")</span>
-                    }
-                    <button class="dcbtn primary" @onclick="SaveContext" disabled="@(_savingContext || !ContextDirty)">@(_savingContext ? "saving…" : "Save context")</button>
-                </div>
-            </div>
-            <div class="card-body">
-                <textarea @bind="_contextDraft" spellcheck="false"
-                    placeholder="Project context in Markdown — goals, conventions, gotchas, key decisions agents should know."
-                    class="editor editor-context"></textarea>
-            </div>
-        </div>
-
         <!-- project requirements -->
         <div class="dccard section-card">
             <div class="card-head">
@@ -327,12 +295,6 @@ else
     private string? _message;
     private bool _busy;
 
-    private ProjectContextView? _context;
-    private string _contextDraft = string.Empty;
-    private string _contextSaved = string.Empty;
-    private bool _savingContext;
-    private bool ContextDirty => !string.Equals(_contextDraft, _contextSaved, StringComparison.Ordinal);
-
     private RequirementsView? _requirements;
     private string _reqDraft = string.Empty;
     private string _reqSaved = string.Empty;
@@ -346,9 +308,9 @@ else
     {
         // Sub-pages link back here with ?tab= so their tab strip can open a project-local tab.
         var query = System.Web.HttpUtility.ParseQueryString(new Uri(Nav.Uri).Query);
-        // Unknown/retired tab values in old deep links (e.g. "board") fall back to overview.
+        // Unknown/retired tab values in old deep links (e.g. "board", "knowledge") fall back to overview.
         if (query["tab"] is { Length: > 0 } tab)
-            _tab = tab is "overview" or "knowledge" or "activity" ? tab : "overview";
+            _tab = tab is "overview" or "requirements" or "activity" ? tab : "overview";
         await Load();
     }
 
@@ -359,8 +321,6 @@ else
         _graph = await Svc.GetGraphVizAsync(Id);
         _graph = await MergeDataGraphAsync(_graph);
         _timeline = await Svc.GetTimelineAsync(Id, 8);
-        _context = await Svc.GetContextAsync(Id);
-        _contextDraft = _contextSaved = _context.Markdown;
         _requirements = await Svc.GetProjectRequirementsAsync(Id);
         _reqDraft = _reqSaved = _requirements.Markdown;
         _decisions = await Svc.GetDecisionsAsync(Id);
@@ -368,7 +328,7 @@ else
     }
 
     // After the loaded page renders, scroll to (and flash) the section/decision named in the URL
-    // fragment — e.g. /project/{id}#context or #decision-{id} from a search hit.
+    // fragment — e.g. /project/{id}#changes or #decision-{id} from a search hit.
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (_scrollPending && _overview is not null)
@@ -391,19 +351,6 @@ else
         finally { _savingReq = false; }
     }
 
-    private async Task SaveContext()
-    {
-        _savingContext = true; _message = null;
-        try
-        {
-            _context = await Svc.SetContextAsync(Id, _contextDraft);
-            _contextDraft = _contextSaved = _context.Markdown;
-            _message = "Context saved.";
-        }
-        catch (Exception ex) { _message = ex.Message; }
-        finally { _savingContext = false; }
-    }
-
     private Task Rebuild()
     {
         _message = null;
@@ -420,22 +367,4 @@ else
         _message = "Rebuild started in the background — follow it in the notifications bell.";
         return Task.CompletedTask;
     }
-
-    private RenderFragment RiskRing(string label, int pct) => builder =>
-    {
-        var color = Viz.Tone(pct);
-        builder.AddMarkupContent(0, $@"
-            <div style='flex:1; text-align:center'>
-              <div style='position:relative; width:84px; height:84px; margin:0 auto'>
-                <svg width='84' height='84' viewBox='0 0 84 84' style='transform:rotate(-90deg)'>
-                  <circle cx='42' cy='42' r='34' fill='none' stroke='var(--card-2)' stroke-width='7'></circle>
-                  <circle class='dcring' data-pct='{pct}' cx='42' cy='42' r='34' fill='none' stroke='{color}' stroke-width='7' stroke-linecap='round' stroke-dasharray='214' stroke-dashoffset='214' style='transition:stroke-dashoffset .8s cubic-bezier(.4,0,.2,1)'></circle>
-                </svg>
-                <div style='position:absolute; inset:0; display:flex; align-items:center; justify-content:center'>
-                  <span style='font-size:20px; font-weight:600; font-family:Geist Mono,monospace; color:{color}'>{pct}</span>
-                </div>
-              </div>
-              <div style='font-size:11.5px; color:var(--text-2); margin-top:8px'>{label}</div>
-            </div>");
-    };
 }
