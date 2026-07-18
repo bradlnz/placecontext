@@ -193,9 +193,10 @@ public sealed class PlaceContextService : IPlaceContextService
     public Task CreateProjectTableAsync(Guid projectId, string tableName, IReadOnlyList<Ports.ProjectColumnSpec> columns, CancellationToken ct = default)
         => _dispatcher.Send(new CreateProjectTableCommand(projectId, tableName, columns), ct);
 
-    public Task<int> ImportCsvToProjectTableAsync(Guid projectId, string tableName, IReadOnlyList<Ports.ProjectColumnSpec> columns,
+    public async Task<int> ImportCsvToProjectTableAsync(Guid projectId, string tableName, IReadOnlyList<Ports.ProjectColumnSpec> columns,
         IReadOnlyList<IReadOnlyList<string?>> rows, bool createTable, CancellationToken ct = default)
-        => _dispatcher.Send(new ImportCsvToProjectTableCommand(projectId, tableName, columns, rows, createTable), ct);
+        // The duplicate warnings ride along on the command result; the facade surface is unchanged.
+        => (await _dispatcher.Send(new ImportCsvToProjectTableCommand(projectId, tableName, columns, rows, createTable), ct)).Imported;
 
     public Task RenameProjectTableAsync(Guid projectId, string from, string to, CancellationToken ct = default)
         => _dispatcher.Send(new RenameProjectTableCommand(projectId, from, to), ct);

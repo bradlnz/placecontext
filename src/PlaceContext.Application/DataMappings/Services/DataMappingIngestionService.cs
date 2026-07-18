@@ -30,6 +30,7 @@ public sealed class DataMappingIngestionService
     private readonly IClock _clock;
     private readonly IContentIndexer? _indexer;
     private readonly IRunStatusNotifier? _notifier;
+    private readonly RecordLinkService? _links;
     private readonly ILogger<DataMappingIngestionService>? _log;
 
     public DataMappingIngestionService(
@@ -38,6 +39,7 @@ public sealed class DataMappingIngestionService
         IClock clock,
         IContentIndexer? indexer = null,
         IRunStatusNotifier? notifier = null,
+        RecordLinkService? links = null,
         ILogger<DataMappingIngestionService>? log = null)
     {
         _mappings = mappings;
@@ -45,6 +47,7 @@ public sealed class DataMappingIngestionService
         _clock = clock;
         _indexer = indexer;
         _notifier = notifier;
+        _links = links;
         _log = log;
     }
 
@@ -253,6 +256,19 @@ public sealed class DataMappingIngestionService
         }
         _log?.LogInformation("Ingested {Count} row(s) from run {RunId} into '{Table}'.",
             rows.Count, runId, mapping.TargetTable);
+
+        // The table gained rows: refresh its slice of the record-link index (best-effort).
+        if (_links is not null)
+        {
+            try
+            {
+                await _links.RefreshTableAsync(projectId, mapping.TargetTable, ct);
+            }
+            catch (Exception ex)
+            {
+                _log?.LogWarning(ex, "Record-link refresh of '{Table}' failed — the ingest is unaffected.", mapping.TargetTable);
+            }
+        }
 
         // Auto-embed every ingested row for RAG (source text encrypted at rest by the indexer).
         if (_indexer is { IsEnabled: true })

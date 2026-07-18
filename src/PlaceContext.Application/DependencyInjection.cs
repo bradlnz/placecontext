@@ -34,6 +34,7 @@ public static class DependencyInjection
         services.AddScoped<JobRunDataRecorder>();
         services.AddScoped<DataMappingIngestionService>();
         services.AddScoped<EntityTagService>();
+        services.AddScoped<RecordLinkService>();
         services.AddScoped<ProjectChartService>();
         services.AddScoped<ObsidianVaultImporter>();
 
@@ -67,7 +68,7 @@ public static class DependencyInjection
         services.AddScoped<ICommandHandler<DropProjectViewCommand, bool>, DropProjectViewHandler>();
         services.AddScoped<ICommandHandler<SaveDataEntityCommand, DataEntityView>, SaveDataEntityHandler>();
         services.AddScoped<ICommandHandler<DeleteDataEntityCommand, bool>, DeleteDataEntityHandler>();
-        services.AddScoped<ICommandHandler<CreateEntityRecordCommand, bool>, CreateEntityRecordHandler>();
+        services.AddScoped<ICommandHandler<CreateEntityRecordCommand, CreateEntityRecordResult>, CreateEntityRecordHandler>();
         services.AddScoped<ICommandHandler<UpdateEntityRecordCommand, int>, UpdateEntityRecordHandler>();
         services.AddScoped<ICommandHandler<DeleteEntityRecordCommand, int>, DeleteEntityRecordHandler>();
         services.AddScoped<ICommandHandler<CreateTriggerCommand, TriggerView>, CreateTriggerHandler>();
@@ -130,7 +131,7 @@ public static class DependencyInjection
         services.AddScoped<IQueryHandler<ListProjectDataTablesQuery, IReadOnlyList<Ports.ProjectTableInfo>>, ListProjectDataTablesHandler>();
         services.AddScoped<IQueryHandler<QueryProjectTablePageQuery, Ports.ProjectTablePageResult>, QueryProjectTablePageHandler>();
         services.AddScoped<ICommandHandler<CreateProjectTableCommand, bool>, CreateProjectTableHandler>();
-        services.AddScoped<ICommandHandler<ImportCsvToProjectTableCommand, int>, ImportCsvToProjectTableHandler>();
+        services.AddScoped<ICommandHandler<ImportCsvToProjectTableCommand, ImportCsvResult>, ImportCsvToProjectTableHandler>();
         services.AddScoped<ICommandHandler<RenameProjectTableCommand, bool>, RenameProjectTableHandler>();
         services.AddScoped<ICommandHandler<DropProjectTableCommand, bool>, DropProjectTableHandler>();
         services.AddScoped<IQueryHandler<ExportProjectTableQuery, string>, ExportProjectTableHandler>();

@@ -49,6 +49,7 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
     public DbSet<DataMappingRow> DataMappings => Set<DataMappingRow>();
     public DbSet<DataEntityRow> DataEntities => Set<DataEntityRow>();
     public DbSet<EntityTagRow> EntityTags => Set<EntityTagRow>();
+    public DbSet<RecordLinkRow> RecordLinks => Set<RecordLinkRow>();
     public DbSet<UserApiTokenRow> UserApiTokens => Set<UserApiTokenRow>();
 
     Task<int> IUnitOfWork.SaveChangesAsync(CancellationToken ct) => SaveChangesAsync(ct);
@@ -217,6 +218,15 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
             e.HasKey(x => x.Id);
             e.HasIndex(x => new { x.EntityId, x.Key });
             e.HasIndex(x => x.RunId);
+            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
+        });
+
+        b.Entity<RecordLinkRow>(e =>
+        {
+            e.ToTable("record_links");
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => new { x.ProjectId, x.NormalizedValue });
+            e.HasIndex(x => new { x.ProjectId, x.TableName, x.RowKey });
             e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
         });
 

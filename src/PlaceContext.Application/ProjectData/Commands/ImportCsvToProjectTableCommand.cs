@@ -4,13 +4,19 @@ using PlaceContext.Application.Ports;
 namespace PlaceContext.Application.Features;
 
 /// <summary>
+/// The CSV import outcome: how many rows were imported, plus warn-only notices for rows whose
+/// identity values already existed in the table (the rows are kept regardless).
+/// </summary>
+public sealed record ImportCsvResult(int Imported, IReadOnlyList<string> DuplicateWarnings);
+
+/// <summary>
 /// Import parsed CSV rows into a project table. When <paramref name="CreateTable"/> is true the table
 /// is created from <paramref name="Columns"/> first; otherwise the rows are appended to an existing
-/// project-owned table with a matching column order. Returns the number of rows imported.
+/// project-owned table with a matching column order.
 /// </summary>
 public sealed record ImportCsvToProjectTableCommand(
     Guid ProjectId,
     string TableName,
     IReadOnlyList<ProjectColumnSpec> Columns,
     IReadOnlyList<IReadOnlyList<string?>> Rows,
-    bool CreateTable) : ICommand<int>;
+    bool CreateTable) : ICommand<ImportCsvResult>;
