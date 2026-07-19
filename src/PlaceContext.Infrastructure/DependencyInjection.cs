@@ -37,13 +37,13 @@ public static class DependencyInjection
         services.AddScoped<IAuthService, Auth.AuthService>();
         services.AddScoped<IMembershipService, Auth.MembershipService>();
         services.AddScoped<IUserApiTokenService, Auth.UserApiTokenService>();
-        services.AddScoped<IOAuthClientStore, Persistence.EfOAuthClientStore>();
-        services.AddScoped<IOAuthRefreshTokenStore, Persistence.EfOAuthRefreshTokenStore>();
+        services.AddScoped<IOAuthClientStore, EfOAuthClientStore>();
+        services.AddScoped<IOAuthRefreshTokenStore, EfOAuthRefreshTokenStore>();
 
         // Granular RBAC: ambient current-user (mirrors ICurrentTenant) + role-default/override
         // permission resolution + the tenant-scoped override store.
         services.AddSingleton<ICurrentUser, CurrentUser>();
-        services.AddScoped<Domain.Repositories.IUserPermissionGrantRepository, Persistence.EfUserPermissionGrantRepository>();
+        services.AddScoped<IUserPermissionGrantRepository, EfUserPermissionGrantRepository>();
         services.AddScoped<IPermissionService, Auth.PermissionService>();
 
         // EF Core code-first store. The DbContext is the request-scoped unit of work.
@@ -67,29 +67,29 @@ public static class DependencyInjection
         services.AddSingleton<ISkillScaffolder, FileSkillScaffolder>();
         services.AddSingleton<IRepoFiles, Files.FileRepoFiles>();
         services.AddHttpClient();
-        services.AddSingleton<ICodeWorkspace, Git.CodeWorkspace>();
+        services.AddSingleton<ICodeWorkspace, CodeWorkspace>();
 
         // Generic workload runner. In-cluster (the Host pod has KUBERNETES_SERVICE_HOST) we run jobs as
         // Kubernetes Jobs via the API + the Host's ServiceAccount/RBAC; otherwise (local dev) Docker.
         services.Configure<WorkloadRunnerOptions>(
             configuration.GetSection("PlaceContext:WorkloadRunner"));
         if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("KUBERNETES_SERVICE_HOST")))
-            services.AddSingleton<IWorkloadRunner, Workload.KubernetesWorkloadRunner>();
+            services.AddSingleton<IWorkloadRunner, KubernetesWorkloadRunner>();
         else
             services.AddSingleton<IWorkloadRunner, DockerWorkloadRunner>();
 
         // Field encryption at rest (AES via Data Protection). Portal/jobs decrypt in-process;
         // raw Postgres/MinIO without the DP key ring only see ciphertext.
-        services.AddSingleton<Application.Ports.IDataEncryptor, Security.DataProtectionEncryptor>();
+        services.AddSingleton<IDataEncryptor, Security.DataProtectionEncryptor>();
         // Vault secrets: purpose-scoped façade over IDataEncryptor.
-        services.AddScoped<Domain.Repositories.IProjectSecretRepository, Persistence.EfProjectSecretRepository>();
-        services.AddSingleton<Application.Ports.ISecretProtector, Security.DataProtectionSecretProtector>();
+        services.AddScoped<IProjectSecretRepository, EfProjectSecretRepository>();
+        services.AddSingleton<ISecretProtector, Security.DataProtectionSecretProtector>();
 
         // Object store (MinIO, S3-compatible) for post-job artifacts: HTML reports, charts, CSVs, bundles.
         services.Configure<Storage.ObjectStoreOptions>(configuration.GetSection("PlaceContext:ObjectStore"));
-        services.AddSingleton<Application.Ports.IObjectStore, Storage.MinioObjectStore>();
-        services.AddScoped<Domain.Repositories.IRunArtifactLinkRepository, Persistence.EfRunArtifactLinkRepository>();
-        services.AddScoped<Domain.Repositories.IProjectChartRepository, Persistence.EfProjectChartRepository>();
+        services.AddSingleton<IObjectStore, Storage.MinioObjectStore>();
+        services.AddScoped<IRunArtifactLinkRepository, EfRunArtifactLinkRepository>();
+        services.AddScoped<IProjectChartRepository, EfProjectChartRepository>();
 
         // Job / JobRun repositories.
         services.AddScoped<IJobRepository, EfJobRepository>();
@@ -98,8 +98,8 @@ public static class DependencyInjection
         // Data map (declarative job-result → project-table ingestion rules).
         services.AddScoped<IDataMappingRepository, EfDataMappingRepository>();
         services.AddScoped<IDataEntityRepository, EfDataEntityRepository>();
-        services.AddScoped<Application.Features.IEntityTagStore, Persistence.EfEntityTagStore>();
-        services.AddScoped<Application.Features.IRecordLinkStore, Persistence.EfRecordLinkStore>();
+        services.AddScoped<Application.Features.IEntityTagStore, EfEntityTagStore>();
+        services.AddScoped<Application.Features.IRecordLinkStore, EfRecordLinkStore>();
         services.AddSingleton<IDocumentTextExtractor, Documents.PdfPigTextExtractor>();
 
         // Trigger + event repositories.
@@ -140,7 +140,7 @@ public static class DependencyInjection
         // Run-status watcher: syncs persisted job/chain run statuses into the notifications pane on
         // a short tick, so the bell reflects finish/fail the moment the row commits — independent of
         // the (slow, best-effort) in-process enrichment and of which replica executed the run.
-        services.AddScoped<IRunStatusReader, Persistence.DbRunStatusReader>();
+        services.AddScoped<IRunStatusReader, DbRunStatusReader>();
         services.AddSingleton<IRunStatusNotifier, Operations.OperationCenterRunStatusNotifier>();
         services.AddHostedService<Scheduling.RunStatusWatcherService>();
 
@@ -152,25 +152,25 @@ public static class DependencyInjection
         if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("KUBERNETES_SERVICE_HOST")))
         {
             services.AddSingleton<Cluster.KubernetesClusterInfoProvider>();
-            services.AddSingleton<Application.Ports.IClusterInfoProvider>(sp =>
+            services.AddSingleton<IClusterInfoProvider>(sp =>
                 sp.GetRequiredService<Cluster.KubernetesClusterInfoProvider>());
-            services.AddSingleton<Application.Ports.IClusterAdminPort>(sp =>
+            services.AddSingleton<IClusterAdminPort>(sp =>
                 sp.GetRequiredService<Cluster.KubernetesClusterInfoProvider>());
         }
         else
         {
             services.AddSingleton<Cluster.LocalClusterInfoProvider>();
-            services.AddSingleton<Application.Ports.IClusterInfoProvider>(sp =>
+            services.AddSingleton<IClusterInfoProvider>(sp =>
                 sp.GetRequiredService<Cluster.LocalClusterInfoProvider>());
-            services.AddSingleton<Application.Ports.IClusterAdminPort>(sp =>
+            services.AddSingleton<IClusterAdminPort>(sp =>
                 sp.GetRequiredService<Cluster.LocalClusterInfoProvider>());
         }
 
         // Mints fresh Tailscale auth keys from vaulted OAuth client credentials for agent join codes.
-        services.AddSingleton<Application.Ports.ITailscaleKeyMinter, Cluster.TailscaleApiKeyMinter>();
+        services.AddSingleton<ITailscaleKeyMinter, Cluster.TailscaleApiKeyMinter>();
 
         services.AddSingleton<Observability.JobTelemetryCollector>();
-        services.AddSingleton<Application.Ports.IJobTelemetryReader>(sp => sp.GetRequiredService<Observability.JobTelemetryCollector>());
+        services.AddSingleton<IJobTelemetryReader>(sp => sp.GetRequiredService<Observability.JobTelemetryCollector>());
         services.AddHostedService<Observability.JobTelemetryCollectorStartup>();
 
         return services;

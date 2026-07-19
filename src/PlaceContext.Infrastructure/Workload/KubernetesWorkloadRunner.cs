@@ -371,12 +371,6 @@ public sealed class KubernetesWorkloadRunner : IWorkloadRunner
             catch (HttpOperationException ex) when (ex.Response?.StatusCode == HttpStatusCode.Conflict) { }
             try
             {
-                await client.NetworkingV1.CreateNamespacedNetworkPolicyAsync(
-                    BuildEgressPolicy(name, name, storeScoped: true), ns, cancellationToken: ct);
-            }
-            catch (HttpOperationException ex) when (ex.Response?.StatusCode == HttpStatusCode.Conflict) { }
-            try
-            {
                 await client.BatchV1.CreateNamespacedJobAsync(
                     BuildBakeJob(name, baseImage, BuildBakeScript(recipe, manifests), putUrl, _options, ResourceLimits()),
                     ns, cancellationToken: ct);
@@ -402,7 +396,9 @@ public sealed class KubernetesWorkloadRunner : IWorkloadRunner
         }
         finally
         {
-            if (createdJob) await CleanupAsync(client, ns, name, hadEgress: false);
+            // No NetworkPolicy is created for bake jobs — the bake container needs full internet
+            // egress to install packages (pip install, npm install, etc.).
+            if (createdJob) await CleanupAsync(client, ns, name, hadEgress: true);
         }
     }
 
