@@ -372,7 +372,7 @@ public sealed class KubernetesWorkloadRunner : IWorkloadRunner
             try
             {
                 await client.BatchV1.CreateNamespacedJobAsync(
-                    BuildBakeJob(name, baseImage, BuildBakeScript(recipe, manifests), putUrl, _options, ResourceLimits()),
+                    BuildBakeJob(name, baseImage, BuildBakeScript(recipe, manifests), putUrl, _options, BakeResourceLimits()),
                     ns, cancellationToken: ct);
                 createdJob = true;
             }
@@ -707,11 +707,33 @@ public sealed class KubernetesWorkloadRunner : IWorkloadRunner
         };
     }
 
-    private V1ResourceRequirements ResourceLimits()
+    private V1ResourceRequirements ResourceLimits() => BuildResourceLimits(_options.SandboxMemory, _options.SandboxCpus);
+
+    /// <summary>
+    /// Bake containers run untrusted install scripts (pip install, npm install) that are far more
+    /// memory-hungry than just executing code. Double the default memory limit to avoid OOMKills
+    /// during heavy dependency installs; keep the same CPU cap.
+    /// </summary>
+    private V1ResourceRequirements BakeResourceLimits()
+    {
+        var mem = _options.SandboxMemory;
+        if (!string.IsNullOrWhiteSpace(mem))
+        {
+            var num = int.TryParse(new string(mem.Where(char.IsDigit).ToArray()), out var n) ? n : 0;
+            if (num > 0)
+            {
+                var suffix = new string(mem.Where(c => !char.IsDigit(c)).ToArray());
+                mem = (num * 2) + suffix;
+            }
+        }
+        return BuildResourceLimits(mem, _options.SandboxCpus);
+    }
+
+    private static V1ResourceRequirements BuildResourceLimits(string memory, double cpus)
     {
         var limits = new Dictionary<string, ResourceQuantity>();
-        if (!string.IsNullOrWhiteSpace(_options.SandboxMemory)) limits["memory"] = new ResourceQuantity(ToK8sMemory(_options.SandboxMemory));
-        if (_options.SandboxCpus > 0) limits["cpu"] = new ResourceQuantity(_options.SandboxCpus.ToString("0.0"));
+        if (!string.IsNullOrWhiteSpace(memory)) limits["memory"] = new ResourceQuantity(ToK8sMemory(memory));
+        if (cpus > 0) limits["cpu"] = new ResourceQuantity(cpus.ToString("0.0"));
         return new V1ResourceRequirements { Limits = limits.Count > 0 ? limits : null };
     }
 
