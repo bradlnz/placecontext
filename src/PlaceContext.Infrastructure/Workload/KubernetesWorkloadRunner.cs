@@ -83,7 +83,7 @@ public sealed class KubernetesWorkloadRunner : IWorkloadRunner
                 if (recipe.InvokePrefix is not null) invoke = recipe.InvokePrefix + " " + invoke;
                 if (_options.WarmDependencyCache && _store is { IsEnabled: true })
                 {
-                    storeScopedEgress = true; // the fetch/upload needs MinIO + DNS even for no-egress jobs
+                    storeScopedEgress = false; // the fetch/upload needs MinIO + DNS even for no-egress jobs
                     depsGetUrl = await EnsureWarmCacheAsync(ns, client, runtimeId, image, recipe, request, ct);
                 }
             }
