@@ -230,6 +230,15 @@
     color: var(--text-3);
 }
 
+.msg-warn {
+    font-size: 12px;
+    color: var(--warn);
+    background: var(--warn-bg);
+    padding: 8px 12px;
+    border-radius: 6px;
+    margin-bottom: 12px;
+}
+
 .result-scroll {
     overflow: auto;
     /* Static rows box: fills whatever height the page has left and scrolls inside itself. */

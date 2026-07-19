@@ -1,7 +1,7 @@
 # PlaceContext — Jobs Automation Progress
 
 Branch: `main` · all jobs-automation work merged
-Last updated: 2026-06-25
+Last updated: 2026-07-18
 
 Status: **212 tests passing** (4 Docker-gated skipped), all layers build clean.
 
@@ -31,6 +31,7 @@ plus the roadmap items still to do.
 | 11 | **External event ingress** | `POST /ingest/{eventName}` — an external source (form/webhook/Cloudflare Queue consumer) emits an event into the tenant (resolved by subdomain), firing subscribed event-triggers with the JSON body injected as the runs' input payload. Gated by `PlaceContext:Ingest:Key` (constant-time check; disabled when unset); activation-enforced. **Live-verified** (401 no/wrong key, 200 + occurrence with key). |
 | 10 | **Scheduler scales on k3s** | Durable DB-backed run queue (`pending_job_runs`): producers enqueue transactionally; the background scheduler drains with `FOR UPDATE SKIP LOCKED` so **any replica** executes runs without duplication, and runs survive restarts. Schedule-scan is guarded by a **Postgres advisory lock** (one replica scans) — environment-agnostic leader election, no k8s RBAC. Replaces the in-process channel. Deploy bumped to 2 replicas. **Live-verified**: queue row claimed + drained + deleted in ~1s; advisory scan clean. *(The k8s-Job workload runner — shards as k8s Jobs instead of Docker — remains a follow-up.)* |
 | 9 | **Voyage embeddings → pgvector** | `IEmbeddingGateway` + `VoyageEmbeddingGateway` + Null fallback (keyed by `PlaceContext:Voyage:ApiKey`). `RunJobHandler` embeds the organized run output and stores it. `EfRunEmbeddingRepository` is **pgvector-backed with lazy self-init** (creates the `vector` extension + `job_run_embeddings` table on first use) and **degrades gracefully** if pgvector/Voyage are absent — so it never touches the migration path or breaks the existing `postgres:16` dev DB. `SearchRunOutputsQuery` + `search_run_outputs` MCP tool do cosine semantic search. New dev containers use `pgvector/pgvector:pg16`. Cosine search unit-tested in-memory; the pgvector path is integration-only (needs a Voyage key + pgvector). |
+| 16 | **Automatic value linking + duplicate warnings** | `RecordLink` index over identity-ish columns (address/email/phone/name/url) across all project tables; normalized exact matching; `record_links` table + `AddRecordLinks` migration; on-write refresh hooks for CRM records, CSV import, and data-map ingest; duplicate warnings on create/import (warn-only, rows kept); rescan button + linked-values list on Data Entities page; auto-linked records shown in EntityBrowse record detail. 70 new Application tests, full suite green. Also fixes the file-switch content-loss bug in `JobEditor.razor` (`DeleteFileAsync`). |
 
 Commits: `6411749` triggers/events layer → `aec4860` MCP → `1450683` UI → `1240f6a`
 parameters/modal → `6c29f00` artifacts → `4ae1900` configurable LLM → `81a4fbb` setup.sh.

@@ -11,11 +11,11 @@ namespace PlaceContext.Application.Features;
 /// Executes the project's data map after a run completes: for every enabled mapping of the job,
 /// extracts records from the run's primary artifact (at the mapping's RowsPath, or the root),
 /// resolves each field's dot-path, and appends the rows to the mapping's target table in the
-/// project database. A field whose value is a JSON object is flattened — each nested leaf gets
-/// its own typed column (<c>meta.region</c> → <c>meta_region</c>), auto-created by the store —
-/// instead of landing as a raw JSON blob. Tables are system-owned append-only (created on first
-/// ingest) with <c>ingested_at</c>/<c>run_id</c> provenance columns, so lineage back to the run
-/// is always queryable. Entirely best-effort — a mapping failure is logged and never fails the run.
+/// project database. Field values are stored as-is in their declared column: objects and arrays
+/// land as JSON text (so huge nested objects don't explode into hundreds of leaf columns).
+/// Tables are system-owned append-only (created on first ingest) with <c>ingested_at</c>/<c>run_id</c>
+/// provenance columns, so lineage back to the run is always queryable. Entirely best-effort — a
+/// mapping failure is logged and never fails the run.
 /// </summary>
 public sealed class DataMappingIngestionService
 {
@@ -128,80 +128,32 @@ public sealed class DataMappingIngestionService
         var recordList = Records(records).ToList();
         if (recordList.Count == 0) return;
 
-        // Extract every record's cells first. A field whose value is an object with at least one
-        // property is FLATTENED: its nested leaves become their own columns ({field}_{path}, e.g.
-        // meta.region → meta_region) instead of landing as raw JSON text in one column. Scalars,
-        // arrays, empty objects and nulls keep landing in the declared column as before.
-        var declaredUsed = new bool[mapping.Fields.Count];
-        var leafOrder = new List<string>?[mapping.Fields.Count]; // first-seen leaf columns per field
-        var leafKinds = new Dictionary<string, string?>(StringComparer.Ordinal); // leaf column → merged kind
-        var cellRows = new List<List<(int Field, string Column, string? Text)>>(recordList.Count);
-        foreach (var record in recordList)
-        {
-            var cells = new List<(int, string, string?)>();
-            for (var i = 0; i < mapping.Fields.Count; i++)
-            {
-                var field = mapping.Fields[i];
-                var value = Navigate(record, field.SourcePath);
-                if (value is { ValueKind: JsonValueKind.Object } v && v.EnumerateObject().Any())
+        // Each field lands in its declared column as JSON text. Objects and arrays stay whole —
+        // they are not flattened into leaf columns, so huge nested payloads can't explode the schema.
+        var cellRows = recordList
+            .Select(record => mapping.Fields
+                .Select((field, i) =>
                 {
-                    foreach (var leaf in JsonFlattener.Flatten(v))
-                    {
-                        var col = JsonFlattener.ColumnName(field.Column, leaf.Path);
-                        leafKinds[col] = JsonFlattener.MergeKind(
-                            leafKinds.TryGetValue(col, out var k) ? k : null, leaf.Value);
-                        if (!(leafOrder[i]?.Contains(col) ?? false))
-                            (leafOrder[i] ??= new List<string>()).Add(col);
-                        cells.Add((i, col, JsonFlattener.ValueText(leaf.Value)));
-                    }
-                }
-                else
-                {
-                    declaredUsed[i] = true; // scalars/arrays/empty objects/missing paths → declared column
-                    cells.Add((i, field.Column, JsonFlattener.ValueText(value)));
-                }
-            }
-            cellRows.Add(cells);
-        }
+                    var value = Navigate(record, field.SourcePath);
+                    return (Field: i, Column: field.Column, Text: JsonFlattener.ValueText(value));
+                })
+                .ToList())
+            .ToList();
 
-        // Column spec in encounter order: provenance, then per field its declared column (only when
-        // some record actually used it) followed by its flattened leaves (types inferred batch-wide).
-        // Name collisions (a leaf sanitizing onto another column) are first-wins + logged, never fatal
-        // — the loser's cells are tracked per field so they never land in the winner's column.
         var columns = new List<ProjectColumnSpec>(ProvenanceColumns);
         var taken = new HashSet<string>(ProvenanceColumns.Select(c => c.Name), StringComparer.OrdinalIgnoreCase);
         var columnIndex = new Dictionary<string, int>(StringComparer.Ordinal);
-        var droppedLeaves = new HashSet<(int, string)>();
         for (var i = 0; i < ProvenanceColumns.Count; i++) columnIndex[ProvenanceColumns[i].Name] = i;
-        for (var i = 0; i < mapping.Fields.Count; i++)
+        foreach (var field in mapping.Fields)
         {
-            var field = mapping.Fields[i];
-            if (declaredUsed[i])
+            if (!taken.Add(field.Column))
             {
-                if (taken.Add(field.Column))
-                {
-                    columnIndex[field.Column] = columns.Count;
-                    columns.Add(new ProjectColumnSpec(field.Column, field.Type, NotNull: false, PrimaryKey: false));
-                }
-                else
-                {
-                    _log?.LogWarning("Data map → '{Table}': declared column '{Column}' collides with an earlier column — skipped.",
-                        mapping.TargetTable, field.Column);
-                    droppedLeaves.Add((i, field.Column));
-                }
+                _log?.LogWarning("Data map → '{Table}': declared column '{Column}' collides with an earlier column — skipped.",
+                    mapping.TargetTable, field.Column);
+                continue;
             }
-            foreach (var leafCol in leafOrder[i] ?? Enumerable.Empty<string>())
-            {
-                if (!taken.Add(leafCol))
-                {
-                    _log?.LogWarning("Data map → '{Table}': flattened column '{Column}' collides with an earlier column — its values are dropped.",
-                        mapping.TargetTable, leafCol);
-                    droppedLeaves.Add((i, leafCol));
-                    continue;
-                }
-                columnIndex[leafCol] = columns.Count;
-                columns.Add(new ProjectColumnSpec(leafCol, JsonFlattener.InferredType(leafKinds[leafCol]), NotNull: false, PrimaryKey: false));
-            }
+            columnIndex[field.Column] = columns.Count;
+            columns.Add(new ProjectColumnSpec(field.Column, field.Type, NotNull: false, PrimaryKey: false));
         }
 
         var now = _clock.UtcNow.ToString("O");
@@ -213,9 +165,8 @@ public sealed class DataMappingIngestionService
             row[0] = now;
             row[1] = runId.ToString();
             written[0] = written[1] = true;
-            foreach (var (fieldIdx, col, text) in cells)
+            foreach (var (_, col, text) in cells)
             {
-                if (droppedLeaves.Contains((fieldIdx, col))) continue; // lost a name collision
                 if (!columnIndex.TryGetValue(col, out var idx) || written[idx]) continue;
                 row[idx] = text;
                 written[idx] = true;
@@ -224,17 +175,13 @@ public sealed class DataMappingIngestionService
         }
 
         // Pre-flight: when the target table already exists, a field pointed at a column it doesn't
-        // have makes EVERY insert fail — the whole batch is dropped. The store reconciles the schema
-        // (CREATE/ALTER IF NOT EXISTS) for the columns it's given, but a DECLARED column that doesn't
-        // exist is almost always a mapping typo (lga→council_code) silently losing data on a completed
-        // "Succeeded" run. Catch it up front and surface a precise, actionable error. Flattened leaf
-        // columns are exempt: they're derived from the data itself and auto-created by the store.
+        // have makes EVERY insert fail — the whole batch is dropped. Catch it up front and surface
+        // a precise, actionable error instead of silently losing data on a "Succeeded" run.
         var existing = await _store.ListColumnsAsync(projectId, mapping.TargetTable, ct);
         if (existing.Count > 0)
         {
             var have = existing.Select(c => c.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
-            var missing = mapping.Fields.Where((_, i) => declaredUsed[i])
-                .Select(f => f.Column).Where(c => !have.Contains(c)).Distinct().ToList();
+            var missing = mapping.Fields.Select(f => f.Column).Where(c => !have.Contains(c)).Distinct().ToList();
             if (missing.Count > 0)
             {
                 Surface(projectId, runId, mapping.TargetTable,

@@ -136,7 +136,7 @@ public class DataMappingIngestionTests
     }
 
     [Fact]
-    public async Task An_object_valued_field_flattens_into_typed_leaf_columns()
+    public async Task An_object_valued_field_stays_as_a_json_blob_in_its_declared_column()
     {
         var (job, run) = RunWithArtifact("""
             {"rows":[
@@ -154,20 +154,16 @@ public class DataMappingIngestionTests
         await Service(job, mapping, store).IngestAsync(job, run);
 
         var append = Assert.Single(store.Appends);
-        // No "meta" blob column — its leaves replaced it, types inferred across the batch.
-        Assert.Equal(
-            new[] { "ingested_at", "run_id", "city", "meta_region", "meta_pop", "meta_capital" },
-            append.Columns.Select(c => c.Name));
-        Assert.Equal(new[] { "timestamptz", "uuid", "text", "text", "numeric", "boolean" },
-            append.Columns.Select(c => c.Type));
+        // Objects are no longer flattened — they land as JSON text in the declared column.
+        Assert.Equal(new[] { "ingested_at", "run_id", "city", "meta" }, append.Columns.Select(c => c.Name));
+        Assert.Equal(new[] { "timestamptz", "uuid", "text", "jsonb" }, append.Columns.Select(c => c.Type));
         Assert.Equal(2, append.Rows.Count);
-        Assert.Equal("QLD", append.Rows[0][3]);
-        Assert.Equal("2500000", append.Rows[0][4]);
-        Assert.Equal("true", append.Rows[0][5]);
+        Assert.Equal("Brisbane", append.Rows[0][2]);
+        Assert.Equal("""{"region":"QLD","pop":2500000,"capital":true}""", append.Rows[0][3]);
     }
 
     [Fact]
-    public async Task Nested_objects_flatten_recursively()
+    public async Task Nested_objects_stay_as_json_in_the_declared_column()
     {
         var (job, run) = RunWithArtifact("""{"rows":[{"meta":{"a":{"b":{"c":"deep"}}}}]}""");
         var mapping = DataMapping.Create(job.ProjectId, job.Id, "t", "rows",
@@ -177,8 +173,8 @@ public class DataMappingIngestionTests
         await Service(job, mapping, store).IngestAsync(job, run);
 
         var append = Assert.Single(store.Appends);
-        Assert.Equal(new[] { "ingested_at", "run_id", "meta_a_b_c" }, append.Columns.Select(c => c.Name));
-        Assert.Equal("deep", append.Rows[0][2]);
+        Assert.Equal(new[] { "ingested_at", "run_id", "meta" }, append.Columns.Select(c => c.Name));
+        Assert.Equal("""{"a":{"b":{"c":"deep"}}}""", append.Rows[0][2]);
     }
 
     [Fact]
@@ -201,7 +197,7 @@ public class DataMappingIngestionTests
     }
 
     [Fact]
-    public async Task Mixed_object_and_scalar_rows_share_the_declared_column_and_its_leaves()
+    public async Task Mixed_object_and_scalar_rows_both_land_in_the_declared_column()
     {
         var (job, run) = RunWithArtifact("""{"rows":[{"meta":{"region":"QLD"}},{"meta":"unknown"}]}""");
         var mapping = DataMapping.Create(job.ProjectId, job.Id, "t", "rows",
@@ -211,15 +207,13 @@ public class DataMappingIngestionTests
         await Service(job, mapping, store).IngestAsync(job, run);
 
         var append = Assert.Single(store.Appends);
-        Assert.Equal(new[] { "ingested_at", "run_id", "meta", "meta_region" }, append.Columns.Select(c => c.Name));
-        Assert.Null(append.Rows[0][2]);          // object row: declared column empty
-        Assert.Equal("QLD", append.Rows[0][3]);
-        Assert.Equal("unknown", append.Rows[1][2]); // scalar row: leaves empty
-        Assert.Null(append.Rows[1][3]);
+        Assert.Equal(new[] { "ingested_at", "run_id", "meta" }, append.Columns.Select(c => c.Name));
+        Assert.Equal("""{"region":"QLD"}""", append.Rows[0][2]); // object row: JSON text
+        Assert.Equal("unknown", append.Rows[1][2]);                  // scalar row: plain text
     }
 
     [Fact]
-    public async Task Flattened_leaves_dont_trip_the_missing_column_guard_on_an_existing_table()
+    public async Task Object_fields_use_the_declared_column_and_pass_the_existing_table_guard()
     {
         var (job, run) = RunWithArtifact("""{"rows":[{"city":"Logan","meta":{"region":"QLD"}}]}""");
         var mapping = DataMapping.Create(job.ProjectId, job.Id, "listings", "rows", new[]
@@ -228,7 +222,7 @@ public class DataMappingIngestionTests
             new DataFieldMapping("meta", "meta", "jsonb"),
         }, T0);
         var store = new FakeDataStore();
-        store.Existing["listings"] = new[] // table predates flattening: blob column, no leaves yet
+        store.Existing["listings"] = new[]
         {
             new ProjectColumnInfo("ingested_at", "timestamptz", true, false),
             new ProjectColumnInfo("run_id", "uuid", true, false),
@@ -239,15 +233,16 @@ public class DataMappingIngestionTests
 
         await Service(job, mapping, store, notifier).IngestAsync(job, run);
 
-        var append = Assert.Single(store.Appends); // leaves are auto-created by the store, not required to pre-exist
-        Assert.Equal(new[] { "ingested_at", "run_id", "city", "meta_region" }, append.Columns.Select(c => c.Name));
+        var append = Assert.Single(store.Appends);
+        Assert.Equal(new[] { "ingested_at", "run_id", "city", "meta" }, append.Columns.Select(c => c.Name));
+        Assert.Equal("""{"region":"QLD"}""", append.Rows[0][3]);
         Assert.Empty(notifier.Updates);
     }
 
     [Fact]
-    public async Task A_leaf_losing_a_name_collision_never_writes_into_the_winners_column()
+    public async Task Object_fields_with_sanitizing_name_overlap_both_keep_their_declared_columns()
     {
-        // field m flattens leaf "a_b" → m_a_b; field m_a flattens leaf "b" → also m_a_b. First wins.
+        // With flattening disabled, m and m_a are distinct declared columns and both values survive.
         var (job, run) = RunWithArtifact("""{"rows":[{"m":{"a_b":"first"},"m_a":{"b":"second"}}]}""");
         var mapping = DataMapping.Create(job.ProjectId, job.Id, "t", "rows", new[]
         {
@@ -259,8 +254,10 @@ public class DataMappingIngestionTests
         await Service(job, mapping, store).IngestAsync(job, run);
 
         var append = Assert.Single(store.Appends);
-        Assert.Equal(new[] { "ingested_at", "run_id", "m_a_b" }, append.Columns.Select(c => c.Name));
-        Assert.Equal("first", Assert.Single(append.Rows)[2]); // "second" is dropped, never overwrites
+        Assert.Equal(new[] { "ingested_at", "run_id", "m", "m_a" }, append.Columns.Select(c => c.Name));
+        var row = Assert.Single(append.Rows);
+        Assert.Equal("""{"a_b":"first"}""", row[2]);
+        Assert.Equal("""{"b":"second"}""", row[3]);
     }
 
     // ── fakes ───────────────────────────────────────────────────────────────────────────────────────

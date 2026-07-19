@@ -11,6 +11,7 @@
 .mono { font-family:var(--font-sans) }
 .filter-input { width:200px; padding:5px 10px; font-size:12px }
 .error-banner { margin-bottom:12px; padding:10px 14px; border-radius:8px; background:var(--bad-bg); color:var(--bad); font-size:12.5px }
+.warn-banner { margin-bottom:12px; padding:10px 14px; border-radius:8px; background:var(--warn-bg); color:var(--warn); font-size:12.5px }
 .tabs-mb { margin-bottom:14px }
 .analytics-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px }
 .note-12 { font-size:12px; color:var(--text-3) }
@@ -84,3 +85,6 @@
 .related-link { padding:8px 12px; margin-bottom:5px; font-size:12px; display:flex; gap:10px; overflow:hidden; text-decoration:none; color:inherit }
 .ellipsis { white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
 .related-arrow { margin-left:auto; color:var(--human); flex:none }
+.auto-link { padding:8px 12px; margin-bottom:5px; font-size:12px; display:flex; align-items:center; gap:10px; overflow:hidden; color:inherit }
+.link-kind { font-size:9.5px; text-transform:uppercase; letter-spacing:.5px; padding:1px 6px; border-radius:4px; background:var(--brand-bg); color:var(--brand-2); flex:none }
+.link-meta { margin-left:auto; font-size:10.5px; color:var(--text-3); font-family:var(--font-sans); white-space:nowrap; flex:none }

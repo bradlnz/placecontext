@@ -4,6 +4,7 @@
 @inject PortalUiState Ui
 @inject NavigationManager Nav
 @inject IJSRuntime JS
+@using PlaceContext.Application.Features
 @using PlaceContext.Application.Ports
 @using Microsoft.AspNetCore.Components.Forms
 
@@ -131,6 +132,14 @@
                     </span>
                 }
             </div>
+
+            @if (_importWarnings.Count > 0)
+            {
+                <div class="msg-warn">
+                    <strong>@_importWarnings.Count possible duplicate(s)</strong> — first: @_importWarnings[0]
+                    <button class="dclink" style="margin-left:8px" @onclick="@(() => _importWarnings = Array.Empty<string>())">dismiss</button>
+                </div>
+            }
 
             @if (_result is { Columns.Count: > 0 })
             {
@@ -592,6 +601,7 @@
 
     private CsvImportDraft? _csvImport;
     private string? _csvError;
+    private IReadOnlyList<string> _importWarnings = Array.Empty<string>();
     private bool _importing;
 
     private const long MaxCsvBytes = 15L * 1024 * 1024;   // 15 MB upload cap
@@ -667,8 +677,9 @@
                     .Select(i => i < r.Length && !string.IsNullOrEmpty(r[i]) ? r[i] : null).ToList())
                 .ToList();
             var table = d.TableName.Trim();
-            await Svc.ImportCsvToProjectTableAsync(ProjectId, table, specs, rows, createTable: true);
+            var result = await Svc.ImportCsvToProjectTableAsync(ProjectId, table, specs, rows, createTable: true);
             _csvImport = null;
+            _importWarnings = result.DuplicateWarnings;
             await RefreshTablesAsync();
             await SelectTableAsync(table);
         }

@@ -267,10 +267,11 @@ builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(o =>
 
 var app = builder.Build();
 PlaceContext.Infrastructure.DependencyInjection.MigrateDatabase(app.Services);
-// Flatten legacy JSON blob columns in the project databases into real columns (the data map used
-// to land objects as jsonb; it now flattens at ingest). Bounded catalog scans, cheap no-op once
-// done, best-effort per column. Disable with PlaceContext:DataMapFlattening:BootstrapOnStartup=false.
-if (app.Configuration.GetValue("PlaceContext:DataMapFlattening:BootstrapOnStartup", true))
+// Legacy JSON blob flattening is OFF by default: the data map now stores objects/arrays as JSON
+// text in their declared column, so huge nested payloads don't explode into hundreds of leaf
+// columns. The bootstrap remains available via PlaceContext:DataMapFlattening:BootstrapOnStartup=true
+// for backfilling historically flattened tables if ever needed.
+if (app.Configuration.GetValue("PlaceContext:DataMapFlattening:BootstrapOnStartup", false))
     await PlaceContext.Infrastructure.ProjectData.JsonFlatteningBootstrap.RunAsync(app.Services);
 else
     app.Logger.LogInformation("Data-map flattening bootstrap skipped (PlaceContext:DataMapFlattening:BootstrapOnStartup is false).");

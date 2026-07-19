@@ -236,3 +236,71 @@
 .btn-danger {
     color: var(--bad);
 }
+
+.head-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.rescan-msg {
+    font-size: 12px;
+    color: var(--good);
+    margin-bottom: 12px;
+}
+
+.link-groups {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 10px;
+}
+
+.link-group {
+    padding: 10px 12px;
+}
+
+.link-group-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+}
+
+.kind-badge {
+    font-size: 9.5px;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    padding: 1px 6px;
+    border-radius: 4px;
+    background: var(--brand-bg);
+    color: var(--brand-2);
+}
+
+.link-value {
+    font-size: 12px;
+    font-weight: 600;
+    word-break: break-word;
+    flex: 1;
+    min-width: 0;
+}
+
+.link-count {
+    font-size: 10.5px;
+    color: var(--text-3);
+    white-space: nowrap;
+}
+
+.link-occurrences {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.occurrence {
+    font-size: 11px;
+    color: var(--text-2);
+    font-family: var(--font-sans);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}

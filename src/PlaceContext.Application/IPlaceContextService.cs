@@ -80,7 +80,7 @@ public interface IPlaceContextService
     Task<Ports.ProjectTablePageResult> QueryProjectTablePageAsync(Guid projectId, string tableName, string? search,
         int page, int pageSize, CancellationToken ct = default);
     Task CreateProjectTableAsync(Guid projectId, string tableName, IReadOnlyList<Ports.ProjectColumnSpec> columns, CancellationToken ct = default);
-    Task<int> ImportCsvToProjectTableAsync(Guid projectId, string tableName, IReadOnlyList<Ports.ProjectColumnSpec> columns,
+    Task<ImportCsvResult> ImportCsvToProjectTableAsync(Guid projectId, string tableName, IReadOnlyList<Ports.ProjectColumnSpec> columns,
         IReadOnlyList<IReadOnlyList<string?>> rows, bool createTable, CancellationToken ct = default);
     Task RenameProjectTableAsync(Guid projectId, string from, string to, CancellationToken ct = default);
     Task DropProjectTableAsync(Guid projectId, string tableName, CancellationToken ct = default);
@@ -100,10 +100,15 @@ public interface IPlaceContextService
     Task<IReadOnlyList<Guid>> ListTaggedRunsAsync(Guid entityId, string key, CancellationToken ct = default);
     Task<IReadOnlyList<Guid>> ListEntityRunsAsync(Guid entityId, CancellationToken ct = default);
     Task<IReadOnlyList<Features.EntityTagPair>> ListEntityTagPairsAsync(Guid entityId, CancellationToken ct = default);
-    Task CreateEntityRecordAsync(Guid projectId, string tableName, IReadOnlyDictionary<string, string?> values, CancellationToken ct = default);
+    Task<CreateEntityRecordResult> CreateEntityRecordAsync(Guid projectId, string tableName, IReadOnlyDictionary<string, string?> values, CancellationToken ct = default);
     Task<int> UpdateEntityRecordAsync(Guid projectId, string tableName, IReadOnlyDictionary<string, string?> keys,
         IReadOnlyDictionary<string, string?> values, CancellationToken ct = default);
     Task<int> DeleteEntityRecordAsync(Guid projectId, string tableName, IReadOnlyDictionary<string, string?> keys, CancellationToken ct = default);
+
+    // Record-link index: value-based linking across project tables + duplicate warnings on row add.
+    Task<RecordLinkService.RescanResult> RescanRecordLinksAsync(Guid projectId, CancellationToken ct = default);
+    Task<IReadOnlyList<RecordLinkGroup>> ListRecordLinkGroupsAsync(Guid projectId, CancellationToken ct = default);
+    Task<IReadOnlyList<RecordLink>> RelatedRecordLinksAsync(Guid projectId, string tableName, string rowKey, CancellationToken ct = default);
 
     Task<IReadOnlyList<RunReportView>> ListRecentRunReportsAsync(int take = 24, CancellationToken ct = default);
     Task<JobView?> GetJobAsync(Guid jobId, CancellationToken ct = default);

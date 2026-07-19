@@ -7,7 +7,15 @@ namespace PlaceContext.Application;
 public sealed class PlaceContextService : IPlaceContextService
 {
     private readonly IDispatcher _dispatcher;
-    public PlaceContextService(IDispatcher dispatcher) => _dispatcher = dispatcher;
+    private readonly RecordLinkService _links;
+    private readonly IRecordLinkStore _linkStore;
+
+    public PlaceContextService(IDispatcher dispatcher, RecordLinkService links, IRecordLinkStore linkStore)
+    {
+        _dispatcher = dispatcher;
+        _links = links;
+        _linkStore = linkStore;
+    }
 
     public Task<ProjectSummaryView> CreateProjectAsync(string path, string? name, CancellationToken ct = default)
         => _dispatcher.Send(new CreateProjectCommand(path, name), ct);
@@ -193,10 +201,9 @@ public sealed class PlaceContextService : IPlaceContextService
     public Task CreateProjectTableAsync(Guid projectId, string tableName, IReadOnlyList<Ports.ProjectColumnSpec> columns, CancellationToken ct = default)
         => _dispatcher.Send(new CreateProjectTableCommand(projectId, tableName, columns), ct);
 
-    public async Task<int> ImportCsvToProjectTableAsync(Guid projectId, string tableName, IReadOnlyList<Ports.ProjectColumnSpec> columns,
+    public Task<ImportCsvResult> ImportCsvToProjectTableAsync(Guid projectId, string tableName, IReadOnlyList<Ports.ProjectColumnSpec> columns,
         IReadOnlyList<IReadOnlyList<string?>> rows, bool createTable, CancellationToken ct = default)
-        // The duplicate warnings ride along on the command result; the facade surface is unchanged.
-        => (await _dispatcher.Send(new ImportCsvToProjectTableCommand(projectId, tableName, columns, rows, createTable), ct)).Imported;
+        => _dispatcher.Send(new ImportCsvToProjectTableCommand(projectId, tableName, columns, rows, createTable), ct);
 
     public Task RenameProjectTableAsync(Guid projectId, string from, string to, CancellationToken ct = default)
         => _dispatcher.Send(new RenameProjectTableCommand(projectId, from, to), ct);
@@ -252,7 +259,7 @@ public sealed class PlaceContextService : IPlaceContextService
     public Task<IReadOnlyList<EntityTagPair>> ListEntityTagPairsAsync(Guid entityId, CancellationToken ct = default)
         => _dispatcher.Query(new EntityTagPairsQuery(entityId), ct);
 
-    public Task CreateEntityRecordAsync(Guid projectId, string tableName, IReadOnlyDictionary<string, string?> values, CancellationToken ct = default)
+    public Task<CreateEntityRecordResult> CreateEntityRecordAsync(Guid projectId, string tableName, IReadOnlyDictionary<string, string?> values, CancellationToken ct = default)
         => _dispatcher.Send(new CreateEntityRecordCommand(projectId, tableName, values), ct);
 
     public Task<int> UpdateEntityRecordAsync(Guid projectId, string tableName, IReadOnlyDictionary<string, string?> keys,
@@ -261,6 +268,15 @@ public sealed class PlaceContextService : IPlaceContextService
 
     public Task<int> DeleteEntityRecordAsync(Guid projectId, string tableName, IReadOnlyDictionary<string, string?> keys, CancellationToken ct = default)
         => _dispatcher.Send(new DeleteEntityRecordCommand(projectId, tableName, keys), ct);
+
+    public Task<RecordLinkService.RescanResult> RescanRecordLinksAsync(Guid projectId, CancellationToken ct = default)
+        => _links.RescanProjectAsync(projectId, ct);
+
+    public Task<IReadOnlyList<RecordLinkGroup>> ListRecordLinkGroupsAsync(Guid projectId, CancellationToken ct = default)
+        => _linkStore.GroupsAsync(projectId, ct: ct);
+
+    public Task<IReadOnlyList<RecordLink>> RelatedRecordLinksAsync(Guid projectId, string tableName, string rowKey, CancellationToken ct = default)
+        => _linkStore.RelatedAsync(projectId, tableName, rowKey, ct: ct);
 
     public Task<IReadOnlyList<RunReportView>> ListRecentRunReportsAsync(int take = 24, CancellationToken ct = default)
         => _dispatcher.Query(new ListRecentRunReportsQuery(take), ct);

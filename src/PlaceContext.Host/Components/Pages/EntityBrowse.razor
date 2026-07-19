@@ -3,6 +3,7 @@
 @attribute [Authorize(Policy = Permission.DataRead)]
 @implements IDisposable
 @using PlaceContext.Application.Features
+@using PlaceContext.Application.Ports
 @inject IPlaceContextService Svc
 @inject PortalUiState Ui
 @inject NavigationManager Nav
@@ -47,6 +48,10 @@
         @if (_error is not null)
         {
             <div class="error-banner">@_error</div>
+        }
+        @if (_warnMessage is not null)
+        {
+            <div class="warn-banner">@_warnMessage</div>
         }
 
         <div class="dctabs tabs-mb">
@@ -369,6 +374,21 @@
                     }
                 </div>
             }
+
+            @if (_autoLinks.Count > 0)
+            {
+                <div>
+                    <div class="section-label">Auto-linked records</div>
+                    @foreach (var link in _autoLinks)
+                    {
+                        <div class="dccard dcdash-row auto-link">
+                            <span class="link-kind">@link.Kind</span>
+                            <span class="ellipsis">@link.DisplayValue</span>
+                            <span class="link-meta">@link.TableName · @link.ColumnName · @link.RowKey</span>
+                        </div>
+                    }
+                </div>
+            }
             } @* end view mode *@
         </div>
     </div>
@@ -387,7 +407,9 @@
     private PlaceContext.Application.Ports.ProjectQueryResult? _rows;
     private IReadOnlyList<string?>? _open;
     private readonly List<(EntityRelationDto Relation, PlaceContext.Application.Ports.ProjectQueryResult Rows)> _related = new();
+    private IReadOnlyList<RecordLink> _autoLinks = Array.Empty<RecordLink>();
     private string? _error;
+    private string? _warnMessage;
     private bool _editing, _creating, _saving;
     private string? _editError;
     private List<string> _formColumns = new();
@@ -706,12 +728,14 @@
     {
         _open = row;
         _related.Clear();
+        _autoLinks = Array.Empty<RecordLink>();
         _artifacts.Clear();
         _linkedRuns.Clear();
         _runArtifacts.Clear();
         _showGraph = false;
         if (_entity is null || _rows is null) return;
         await LoadLinkedArtifactsAsync(row);
+        await LoadAutoLinksAsync(row);
         foreach (var rel in _entity.Relations)
         {
             var target = _all.FirstOrDefault(e => string.Equals(e.Name, rel.TargetEntity, StringComparison.OrdinalIgnoreCase));
@@ -729,13 +753,47 @@
         }
     }
 
+    private async Task LoadAutoLinksAsync(IReadOnlyList<string?> row)
+    {
+        if (_entity is null || _rows is null) return;
+        try
+        {
+            var columns = await Svc.ListProjectTableColumnsAsync(ProjectId, _entity.TableName);
+            var rowKey = ComputeRowKey(_entity.TableName, row, _rows.Columns, _all, columns);
+            if (string.IsNullOrEmpty(rowKey)) return;
+            _autoLinks = await Svc.RelatedRecordLinksAsync(ProjectId, _entity.TableName, rowKey);
+        }
+        catch { /* auto-links are best-effort display sugar */ }
+    }
+
     private void CloseRecordPanel()
     {
         _open = null;
         _editing = _creating = false;
         _editError = null;
+        _warnMessage = null;
+        _autoLinks = Array.Empty<RecordLink>();
         _formValues.Clear();
         _keySnapshot.Clear();
+    }
+
+    private static string ComputeRowKey(string table, IReadOnlyList<string?> row, IReadOnlyList<string> colNames,
+        IReadOnlyList<DataEntityView> entities, IReadOnlyList<ProjectColumnInfo> columns)
+    {
+        var colNamesList = colNames.ToList();
+        var entity = entities.FirstOrDefault(e => string.Equals(e.TableName, table, StringComparison.OrdinalIgnoreCase));
+        if (entity?.LabelColumn is { Length: > 0 } label)
+        {
+            var li = colNamesList.FindIndex(c => string.Equals(c, label, StringComparison.OrdinalIgnoreCase));
+            if (li >= 0 && li < row.Count && !string.IsNullOrEmpty(row[li])) return row[li]!;
+        }
+        var values = columns
+            .Where(c => c.Type is "text" or "citext" || c.Type.StartsWith("character", StringComparison.Ordinal) || c.Type.StartsWith("varchar", StringComparison.Ordinal))
+            .Select(c => c.Name)
+            .Take(3)
+            .Select(name => { var i = colNamesList.FindIndex(n => string.Equals(n, name, StringComparison.OrdinalIgnoreCase)); return i >= 0 && i < row.Count ? row[i] : null; })
+            .Where(v => !string.IsNullOrEmpty(v));
+        return string.Join(" · ", values);
     }
 
     private async Task StartCreateAsync()
@@ -787,12 +845,20 @@
         if (_entity is null || _formValues.Count == 0) return;
         _saving = true;
         _editError = null;
+        _warnMessage = null;
         try
         {
             if (_creating)
-                await Svc.CreateEntityRecordAsync(ProjectId, _entity.TableName, _formValues);
+            {
+                var created = await Svc.CreateEntityRecordAsync(ProjectId, _entity.TableName, _formValues);
+                _warnMessage = created.DuplicateWarnings.Count > 0
+                    ? "Created — possible duplicate(s): " + string.Join("; ", created.DuplicateWarnings)
+                    : null;
+            }
             else
+            {
                 await Svc.UpdateEntityRecordAsync(ProjectId, _entity.TableName, _keySnapshot, _formValues);
+            }
             CloseRecordPanel();
             await ReloadPageAsync();
         }

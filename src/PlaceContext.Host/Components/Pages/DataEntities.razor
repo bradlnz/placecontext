@@ -17,7 +17,10 @@
                 below. Each entity becomes a menu item with its own business view.
             </div>
         </div>
-        <button class="dcbtn primary" @onclick="@(() => OpenEditor(null))">+ New entity</button>
+        <div class="head-actions">
+            <button class="dcbtn" disabled="@_rescanning" @onclick="RescanAsync">@(_rescanning ? "Scanning…" : "↻ Rescan links")</button>
+            <button class="dcbtn primary" @onclick="@(() => OpenEditor(null))">+ New entity</button>
+        </div>
     </div>
 
     @* ── The entity graph: nodes = entities, edges = declared relations ─────────────────── *@
@@ -58,6 +61,38 @@
         <div class="dccard empty-note">
             No entities yet — tag your first ingested table (e.g. <b>sites</b>) and it appears in the
             project menu as a business view.
+        </div>
+    }
+
+    @if (_rescanMessage is not null)
+    {
+        <div class="rescan-msg">@_rescanMessage</div>
+    }
+
+    <div class="section-label">Linked values</div>
+    @if (_linkGroups.Count == 0)
+    {
+        <div class="empty-note">No linked values yet — rescan after adding data.</div>
+    }
+    else
+    {
+        <div class="link-groups">
+            @foreach (var g in _linkGroups)
+            {
+                <div class="dccard link-group">
+                    <div class="link-group-head">
+                        <span class="kind-badge">@g.Kind</span>
+                        <span class="link-value">@g.DisplayValue</span>
+                        <span class="link-count">@g.Occurrences.Count occurrence(s)</span>
+                    </div>
+                    <div class="link-occurrences">
+                        @foreach (var o in g.Occurrences.Take(6))
+                        {
+                            <div class="occurrence">@o.TableName · @o.ColumnName · @o.RowKey</div>
+                        }
+                    </div>
+                </div>
+            }
         </div>
     }
 </div>
@@ -166,6 +201,10 @@
     private readonly List<string> _edTags = new();
     private string _tagInput = "";
 
+    private IReadOnlyList<RecordLinkGroup> _linkGroups = Array.Empty<RecordLinkGroup>();
+    private bool _rescanning;
+    private string? _rescanMessage;
+
     private sealed class RelEdit
     {
         public string Column = "";
@@ -177,6 +216,7 @@
     {
         Ui.Set("Entities", "the project's data graph — tagged tables, related records");
         await ReloadAsync();
+        await LoadLinkGroupsAsync();
     }
 
     private async Task ReloadAsync()
@@ -187,6 +227,26 @@
             _tables = await Svc.ListProjectDataTablesAsync(ProjectId);
         }
         catch (Exception ex) { _error = ex.Message; }
+    }
+
+    private async Task LoadLinkGroupsAsync()
+    {
+        try { _linkGroups = await Svc.ListRecordLinkGroupsAsync(ProjectId); }
+        catch (Exception ex) { _rescanMessage = ex.Message; }
+    }
+
+    private async Task RescanAsync()
+    {
+        _rescanning = true;
+        _rescanMessage = null;
+        try
+        {
+            var r = await Svc.RescanRecordLinksAsync(ProjectId);
+            _rescanMessage = $"scanned {r.TablesScanned} table(s) · {r.LinksFound} link(s)";
+            await LoadLinkGroupsAsync();
+        }
+        catch (Exception ex) { _rescanMessage = ex.Message; }
+        finally { _rescanning = false; }
     }
 
     private void OpenEditor(DataEntityView? e)
