@@ -127,6 +127,31 @@ builder.Services
         o.LogoutPath = "/auth/logout";
         o.ExpireTimeSpan = TimeSpan.FromDays(14);
         o.SlidingExpiration = true;
+        // The Blazor SignalR hubs (/_blazor, /_blazor/negotiate, /_blazor/initializers) expect JSON
+        // responses. Return 401 + empty JSON instead of a 302 redirect to /locked (HTML), which the
+        // Blazor JS client would try to parse as JSON → "unexpected token" errors.
+        o.Events.OnRedirectToLogin = ctx =>
+        {
+            if (ctx.Request.Path.StartsWithSegments("/_blazor"))
+            {
+                ctx.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                ctx.Response.ContentType = "application/json";
+                return Task.CompletedTask;
+            }
+            ctx.Response.Redirect(ctx.RedirectUri);
+            return Task.CompletedTask;
+        };
+        o.Events.OnRedirectToAccessDenied = ctx =>
+        {
+            if (ctx.Request.Path.StartsWithSegments("/_blazor"))
+            {
+                ctx.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                ctx.Response.ContentType = "application/json";
+                return Task.CompletedTask;
+            }
+            ctx.Response.Redirect(ctx.RedirectUri);
+            return Task.CompletedTask;
+        };
     })
     // Bearer tokens for MCP, issued by the first-party OAuth server (signed with the in-process RSA key).
     .AddJwtBearer(o =>
@@ -203,8 +228,16 @@ builder.Services
         PlaceContext.Host.Auth.UserApiTokenAuthenticationHandler.SchemeName, _ => { });
 builder.Services.AddAuthorization(o =>
 {
-    // Any authenticated member can read (Viewer+).
-    o.FallbackPolicy = new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build();
+    // Any authenticated member can read (Viewer+).  The Blazor SignalR hubs (/_blazor,
+    // /_blazor/negotiate, /_blazor/initializers) are mapped internally by
+    // AddInteractiveServerRenderMode() and don't carry [AllowAnonymous], so the fallback policy
+    // would reject unauthenticated requests and break Blazor initialisation on public pages like
+    // /login and /setup.  A BlazorHubBypass requirement lets the handler succeed for those paths
+    // so anonymous visitors can still load the portal shell.
+    o.FallbackPolicy = new AuthorizationPolicyBuilder()
+        .RequireAuthenticatedUser()
+        .AddRequirements(new PlaceContext.Host.Auth.BlazorHubBypass())
+        .Build();
     // Role-gated policies, used on portal management endpoints and MCP write tools.
     o.AddPolicy("Member", p => p.RequireAuthenticatedUser().RequireAssertion(c => RoleAtLeast(c.User, UserRole.Member)));
     o.AddPolicy("Admin", p => p.RequireAuthenticatedUser().RequireAssertion(c => RoleAtLeast(c.User, UserRole.Admin)));
@@ -219,6 +252,7 @@ builder.Services.AddAuthorization(o =>
 // Scoped, not singleton: it depends on the scoped IPermissionService (which in turn depends on the
 // scoped IUserPermissionGrantRepository / DbContext).
 builder.Services.AddScoped<IAuthorizationHandler, PlaceContext.Host.Auth.PermissionAuthorizationHandler>();
+builder.Services.AddSingleton<IAuthorizationHandler, PlaceContext.Host.Auth.BlazorHubBypassHandler>();
 builder.Services.AddSingleton<OAuthStore>();
 builder.Services.AddSingleton<PlaceContext.Host.Auth.PortalToken>();
 
@@ -318,7 +352,7 @@ app.UseAuthorization();
 app.UseMiddleware<PlaceContext.Host.Auth.UserResolutionMiddleware>();
 app.UseAntiforgery();
 
-app.MapRazorComponents<App>().AddInteractiveServerRenderMode();
+app.MapRazorComponents<App>().AddInteractiveServerRenderMode().AllowAnonymous();
 
 // MCP requires an OAuth bearer token (validated by the JwtBearer scheme); the token binds the tenant.
 app.MapMcp("/mcp").RequireAuthorization(new AuthorizeAttribute { AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme });

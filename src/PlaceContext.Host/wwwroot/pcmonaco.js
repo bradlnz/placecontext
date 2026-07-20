@@ -7,6 +7,7 @@ window.pcmonaco = (function () {
   const LOAD_TIMEOUT_MS = 10000; // a hanging CDN must not hang the page
   const editors = new Map();   // id → Monaco editor
   const fallbacks = new Map(); // id → plain <textarea> (CDN unreachable)
+  const initLocks = new Map(); // id → in-flight init Promise (serializes concurrent inits)
   let loaderPromise = null;
 
   function loadMonaco() {
@@ -49,45 +50,55 @@ window.pcmonaco = (function () {
   }
 
   async function init(id, value, language, theme) {
-    try {
-      const monaco = await loadMonaco();
-      const el = document.getElementById(id);
-      if (!el) return true;
-      destroy(id);
-      watchTheme(monaco);
-      const editor = monaco.editor.create(el, {
-        value: value || '',
-        language: language || 'plaintext',
-        theme: shellTheme(),
-        automaticLayout: true,
-        minimap: { enabled: true },
-        fontSize: 12.5,
-        lineNumbers: 'on',
-        scrollBeyondLastLine: false,
-        tabSize: 2,
-        renderWhitespace: 'selection',
-        fontFamily: "'JetBrains Mono', ui-monospace, monospace",
-      });
-      editors.set(id, editor);
-      return true;
-    } catch (e) {
-      console.warn('pcmonaco: falling back to a plain editor —', e && e.message);
-      const el = document.getElementById(id);
-      if (el) {
-        destroy(id);
-        el.innerHTML = '';
-        const ta = document.createElement('textarea');
-        ta.value = value || '';
-        ta.spellcheck = false;
-        ta.style.cssText =
-          'width:100%;height:100%;box-sizing:border-box;resize:none;border:none;outline:none;' +
-          'background:#1e1e1e;color:#d4d4d4;padding:10px 12px;font-size:12.5px;line-height:1.5;' +
-          "font-family:'JetBrains Mono',ui-monospace,monospace;tab-size:2";
-        el.appendChild(ta);
-        fallbacks.set(id, ta);
-      }
-      return false;
+    // Serialize concurrent inits for the same element: a rapid file switch during initial load
+    // must not spawn two racing Monaco creates, or the visible editor can end up showing the
+    // previous file (or a disposed instance) instead of the requested one.
+    while (initLocks.has(id)) {
+      try { await initLocks.get(id); } catch { /* keep waiting */ }
     }
+    const lock = (async () => {
+      try {
+        const monaco = await loadMonaco();
+        const el = document.getElementById(id);
+        if (!el) return true;
+        destroy(id);
+        watchTheme(monaco);
+        const editor = monaco.editor.create(el, {
+          value: value || '',
+          language: language || 'plaintext',
+          theme: shellTheme(),
+          automaticLayout: true,
+          minimap: { enabled: true },
+          fontSize: 12.5,
+          lineNumbers: 'on',
+          scrollBeyondLastLine: false,
+          tabSize: 2,
+          renderWhitespace: 'selection',
+          fontFamily: "'JetBrains Mono', ui-monospace, monospace",
+        });
+        editors.set(id, editor);
+        return true;
+      } catch (e) {
+        console.warn('pcmonaco: falling back to a plain editor —', e && e.message);
+        const el = document.getElementById(id);
+        if (el) {
+          destroy(id);
+          el.innerHTML = '';
+          const ta = document.createElement('textarea');
+          ta.value = value || '';
+          ta.spellcheck = false;
+          ta.style.cssText =
+            'width:100%;height:100%;box-sizing:border-box;resize:none;border:none;outline:none;' +
+            'background:#1e1e1e;color:#d4d4d4;padding:10px 12px;font-size:12.5px;line-height:1.5;' +
+            "font-family:'JetBrains Mono',ui-monospace,monospace;tab-size:2";
+          el.appendChild(ta);
+          fallbacks.set(id, ta);
+        }
+        return false;
+      }
+    })();
+    initLocks.set(id, lock);
+    try { return await lock; } finally { initLocks.delete(id); }
   }
 
   function setValue(id, value, language) {
@@ -96,9 +107,13 @@ window.pcmonaco = (function () {
     const editor = editors.get(id);
     if (!editor) {
       // No live editor for this id — Blazor thinks Monaco is up but the JS side has nothing
-      // (e.g. a file was clicked while the CDN bundle was still downloading). Mount one now
-      // with the requested value instead of silently dropping the switch. init never throws,
-      // and its destroy-before-create serializes it with any in-flight init.
+      // (e.g. a file was clicked while the CDN bundle was still downloading). If an init is
+      // already in flight, wait for it and then apply the value; otherwise mount one now with
+      // the requested value instead of silently dropping the switch. init never throws.
+      if (initLocks.has(id)) {
+        initLocks.get(id).then(() => setValue(id, value, language));
+        return;
+      }
       init(id, value, language);
       return;
     }
