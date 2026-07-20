@@ -253,7 +253,7 @@ builder.Services.AddAuthorization(o =>
 // scoped IUserPermissionGrantRepository / DbContext).
 builder.Services.AddScoped<IAuthorizationHandler, PlaceContext.Host.Auth.PermissionAuthorizationHandler>();
 builder.Services.AddSingleton<IAuthorizationHandler, PlaceContext.Host.Auth.BlazorHubBypassHandler>();
-builder.Services.AddSingleton<OAuthStore>();
+builder.Services.AddScoped<IOAuthAuthCodeStore, PlaceContext.Infrastructure.Persistence.EfOAuthAuthCodeStore>();
 builder.Services.AddSingleton<PlaceContext.Host.Auth.PortalToken>();
 
 // Exposes the current request's ClaimsPrincipal to MCP tools (e.g. whoami reads the bearer's claims).

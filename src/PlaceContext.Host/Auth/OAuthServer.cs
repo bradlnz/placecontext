@@ -85,7 +85,7 @@ public static class OAuthServer
         }).AllowAnonymous();
 
         // Authorize — requires a logged-in user (cookie). Auto-consents and issues a code.
-        app.MapGet("/connect/authorize", async (HttpContext ctx, OAuthStore store, IOAuthClientStore clients, ICurrentTenant tenant,
+        app.MapGet("/connect/authorize", async (HttpContext ctx, IOAuthAuthCodeStore authCodes, IOAuthClientStore clients, ICurrentTenant tenant,
             string client_id, string redirect_uri, string response_type,
             string code_challenge, string? code_challenge_method, string? scope, string? state) =>
         {
@@ -121,8 +121,8 @@ public static class OAuthServer
             var userId = Guid.Parse(ctx.User.FindFirstValue(ClaimTypes.NameIdentifier)!);
             var role = ctx.User.FindFirstValue(ClaimTypes.Role) ?? "Viewer";
             var code = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
-            store.SaveCode(new AuthCode(code, client_id, redirect_uri, code_challenge, userId, tenant.TenantId,
-                role, scope ?? "mcp", DateTimeOffset.UtcNow.AddMinutes(5)));
+            await authCodes.SaveAsync(new AuthCode(code, client_id, redirect_uri, code_challenge, userId, tenant.TenantId,
+                role, scope ?? "mcp", DateTimeOffset.UtcNow.AddMinutes(5)), ctx.RequestAborted);
 
             var sep = redirect_uri.Contains('?') ? "&" : "?";
             var loc = $"{redirect_uri}{sep}code={Uri.EscapeDataString(code)}";
@@ -133,7 +133,7 @@ public static class OAuthServer
         // Token — authorization_code (code + PKCE verifier) or refresh_token (auto-renew). Both return
         // a tenant-scoped JWT access token plus a rotated refresh token, so MCP clients renew for as
         // long as they stay active — no hourly browser round-trip.
-        app.MapPost("/connect/token", async (HttpContext ctx, OAuthStore store, IOAuthRefreshTokenStore refreshTokens) =>
+        app.MapPost("/connect/token", async (HttpContext ctx, IOAuthAuthCodeStore authCodes, IOAuthRefreshTokenStore refreshTokens) =>
         {
             var form = await ctx.Request.ReadFormAsync(ctx.RequestAborted);
             string F(string key) => form.TryGetValue(key, out var v) ? v.ToString() : "";
@@ -142,7 +142,7 @@ public static class OAuthServer
             {
                 case "authorization_code":
                 {
-                    var ac = store.TakeCode(F("code"), DateTimeOffset.UtcNow);
+                    var ac = await authCodes.TakeAsync(F("code"), DateTimeOffset.UtcNow, ctx.RequestAborted);
                     if (ac is null || ac.ClientId != F("client_id") || ac.RedirectUri != F("redirect_uri"))
                         return Results.BadRequest(new { error = "invalid_grant" });
                     if (!VerifyPkce(F("code_verifier"), ac.CodeChallenge))

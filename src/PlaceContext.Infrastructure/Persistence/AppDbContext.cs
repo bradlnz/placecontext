@@ -26,6 +26,7 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
     public DbSet<TenantRow> Tenants => Set<TenantRow>();
     public DbSet<OAuthClientRow> OAuthClients => Set<OAuthClientRow>();
     public DbSet<OAuthRefreshTokenRow> OAuthRefreshTokens => Set<OAuthRefreshTokenRow>();
+    public DbSet<OAuthAuthCodeRow> OAuthAuthCodes => Set<OAuthAuthCodeRow>();
     public DbSet<UserRow> Users => Set<UserRow>();
     public DbSet<InviteRow> Invites => Set<InviteRow>();
     public DbSet<UserPermissionGrantRow> UserPermissionGrants => Set<UserPermissionGrantRow>();
@@ -94,6 +95,13 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
         {
             e.ToTable("oauth_refresh_tokens"); // global (the row carries its tenant)
             e.HasKey(x => x.TokenHash);
+            e.HasIndex(x => x.ExpiresAt); // purge scans
+        });
+
+        b.Entity<OAuthAuthCodeRow>(e =>
+        {
+            e.ToTable("oauth_auth_codes"); // global (the row carries its tenant)
+            e.HasKey(x => x.CodeHash);
             e.HasIndex(x => x.ExpiresAt); // purge scans
         });
 
