@@ -1,0 +1,1 @@
+cd {app} && export HOME={deps} BUNDLE_PATH={deps}/lib BUNDLE_APP_CONFIG={deps}/bundleconf && bundle install --quiet 1>&2

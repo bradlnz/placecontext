@@ -1,0 +1,1 @@
+cd {app} && go mod download

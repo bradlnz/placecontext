@@ -1,0 +1,1 @@
+export HOME=/tmp/pchome BUNDLE_PATH={deps}/lib BUNDLE_APP_CONFIG={deps}/bundleconf

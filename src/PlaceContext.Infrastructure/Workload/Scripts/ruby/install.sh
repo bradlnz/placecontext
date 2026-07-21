@@ -1,0 +1,1 @@
+cd {app} && bundle install --quiet 1>&2

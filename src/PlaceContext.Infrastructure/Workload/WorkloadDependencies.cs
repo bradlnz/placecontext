@@ -42,8 +42,8 @@ public static class WorkloadDependencies
     /// <param name="BakeInstall">The bake-time install. Differs from <paramref name="InstallTemplate"/>
     /// where the cold path defers work to run time (go's <c>go run</c> downloads modules implicitly —
     /// the bake must <c>go mod download</c> explicitly to fill the cache).</param>
-    /// <param name="BakeEnv">ENV pairs baked into the warm image so the runtime resolves deps from the
-    /// baked layer (e.g. NODE_PATH, since the script stays at /work while node_modules lives in the image).</param>
+    /// <param name="BakeEnv">ENV directive body baked into the warm image so the runtime resolves
+    /// deps from the baked layer (e.g. <c>NODE_PATH=/pcw/app/node_modules HOME=/pcw</c>).</param>
     public sealed record Recipe(
         string Manifest,
         bool NeedsWritableApp,
@@ -52,7 +52,7 @@ public static class WorkloadDependencies
         string InstallTemplate,
         IReadOnlyList<string> Companions,
         string BakeInstall,
-        IReadOnlyList<(string Key, string Value)> BakeEnv,
+        string BakeEnv,
         string? InvokePrefix = null);
 
     /// <summary>Docker: the writable, exec-capable tmpfs the runner mounts when a recipe applies.</summary>
@@ -81,51 +81,49 @@ public static class WorkloadDependencies
     {
         ["python"] = new(
             "requirements.txt", NeedsWritableApp: false,
-            SetupTemplate: "pip install --no-cache-dir --target {deps}/lib -r {app}/requirements.txt 1>&2 && export PYTHONPATH={deps}/lib",
-            EnvTemplate: "export PYTHONPATH={deps}/lib",
-            InstallTemplate: "pip install --no-cache-dir --target {deps}/lib -r {app}/requirements.txt 1>&2",
+            SetupTemplate: WorkloadScriptLoader.Load("python/setup.sh"),
+            EnvTemplate: WorkloadScriptLoader.Load("python/env.sh"),
+            InstallTemplate: WorkloadScriptLoader.Load("python/install.sh"),
             Companions: Array.Empty<string>(),
-            BakeInstall: "pip install --no-cache-dir --target {deps}/lib -r {app}/requirements.txt",
-            BakeEnv: new[] { ("PYTHONPATH", BakeDepsRoot + "/lib") }),
+            BakeInstall: WorkloadScriptLoader.Load("python/bake.sh"),
+            BakeEnv: WorkloadScriptLoader.Load("python/bake.env")),
         // HOME points into the deps root: the image's real home (/root) is read-only under the
         // sandbox, and npm/bundler insist on writable caches under $HOME.
         ["node"] = new(
             "package.json", NeedsWritableApp: true,
-            SetupTemplate: "cd {app} && export HOME={deps} && npm install --no-audit --no-fund --loglevel=error 1>&2",
+            SetupTemplate: WorkloadScriptLoader.Load("node/setup.sh"),
             // HOME outside the deps root on warm paths: npm's own cache (~/.npm) must not ride in
             // the baked layer — only node_modules is payload. A warm shard never runs npm anyway.
-            EnvTemplate: "export HOME=/tmp/pchome",
-            InstallTemplate: "cd {app} && npm install --no-audit --no-fund --loglevel=error 1>&2",
+            EnvTemplate: WorkloadScriptLoader.Load("node/env.sh"),
+            InstallTemplate: WorkloadScriptLoader.Load("node/install.sh"),
             Companions: new[] { "package-lock.json", "npm-shrinkwrap.json", "yarn.lock", "pnpm-lock.yaml" },
-            BakeInstall: "cd {app} && npm install --no-audit --no-fund",
+            BakeInstall: WorkloadScriptLoader.Load("node/bake.sh"),
             // NODE_PATH: the script runs from /work (read-only mount) while node_modules sits in the
             // image — the resolver walks NODE_PATH when no sibling node_modules exists.
-            BakeEnv: new[] { ("NODE_PATH", BakeAppDir + "/node_modules"), ("HOME", BakeDepsRoot) }),
+            BakeEnv: WorkloadScriptLoader.Load("node/bake.env")),
         ["ruby"] = new(
             "Gemfile", NeedsWritableApp: true,
-            SetupTemplate: "cd {app} && export HOME={deps} BUNDLE_PATH={deps}/lib BUNDLE_APP_CONFIG={deps}/bundleconf && bundle install --quiet 1>&2",
+            SetupTemplate: WorkloadScriptLoader.Load("ruby/setup.sh"),
             // BUNDLE_PATH (the gems) is the payload; bundler's own cache stays out of the baked layer.
-            EnvTemplate: "export HOME=/tmp/pchome BUNDLE_PATH={deps}/lib BUNDLE_APP_CONFIG={deps}/bundleconf",
-            InstallTemplate: "cd {app} && bundle install --quiet 1>&2",
+            EnvTemplate: WorkloadScriptLoader.Load("ruby/env.sh"),
+            InstallTemplate: WorkloadScriptLoader.Load("ruby/install.sh"),
             Companions: new[] { "Gemfile.lock" },
-            BakeInstall: "cd {app} && bundle install",
-            BakeEnv: new[] { ("HOME", BakeDepsRoot), ("BUNDLE_PATH", BakeDepsRoot + "/lib"),
-                ("BUNDLE_APP_CONFIG", BakeDepsRoot + "/bundleconf"), ("BUNDLE_GEMFILE", BakeAppDir + "/Gemfile") },
+            BakeInstall: WorkloadScriptLoader.Load("ruby/bake.sh"),
+            BakeEnv: WorkloadScriptLoader.Load("ruby/bake.env"),
             InvokePrefix: "bundle exec"),
         ["go"] = new(
             "go.mod", NeedsWritableApp: false,
-            SetupTemplate: "export HOME={deps} GOPATH={deps}/go GOMODCACHE={deps}/go/pkg/mod GOCACHE={deps}/gocache GOFLAGS=-mod=mod && cd {app}",
+            SetupTemplate: WorkloadScriptLoader.Load("go/setup.sh"),
             // GOMODCACHE (downloaded modules) is the payload and rides in the baked layer; GOCACHE
             // (compile cache) is huge and per-run, so it lives on scratch instead.
-            EnvTemplate: "export HOME=/tmp/pchome GOPATH={deps}/go GOMODCACHE={deps}/go/pkg/mod GOCACHE=/tmp/gocache GOFLAGS=-mod=mod",
+            EnvTemplate: WorkloadScriptLoader.Load("go/env.sh"),
             // The cold path downloads modules implicitly at `go run` (GOFLAGS=-mod=mod) — there is
             // no separate install step; the cd only anchors the module context.
-            InstallTemplate: "cd {app}",
+            InstallTemplate: WorkloadScriptLoader.Load("go/install.sh"),
             Companions: new[] { "go.sum" },
-            BakeInstall: "cd {app} && go mod download",
+            BakeInstall: WorkloadScriptLoader.Load("go/bake.sh"),
             // GOCACHE (the compile cache) is NOT baked — it's huge; a per-run tmpfs keeps builds correct.
-            BakeEnv: new[] { ("HOME", BakeDepsRoot), ("GOPATH", BakeDepsRoot + "/go"),
-                ("GOMODCACHE", BakeDepsRoot + "/go/pkg/mod"), ("GOCACHE", "/tmp/gocache"), ("GOFLAGS", "-mod=mod") }),
+            BakeEnv: WorkloadScriptLoader.Load("go/bake.env")),
     };
 
     /// <summary>The recipe for this workload, when its runtime has one and the manifest is in the file set.</summary>
@@ -187,8 +185,8 @@ public static class WorkloadDependencies
         sb.Append("LABEL placecontext.warm=true\n");
         foreach (var (path, _) in ManifestFiles(recipe, codeFiles))
             sb.Append("COPY ").Append(path).Append(' ').Append(BakeAppDir).Append('/').Append(path).Append('\n');
-        if (recipe.BakeEnv.Count > 0)
-            sb.Append("ENV ").AppendJoin(' ', recipe.BakeEnv.Select(kv => $"{kv.Key}={kv.Value}")).Append('\n');
+        if (!string.IsNullOrWhiteSpace(recipe.BakeEnv))
+            sb.Append("ENV ").Append(recipe.BakeEnv).Append('\n');
         sb.Append("RUN ").Append(Apply(recipe.BakeInstall, BakeAppDir, BakeDepsRoot)).Append('\n');
         return sb.ToString();
     }
@@ -225,13 +223,12 @@ public static class WorkloadDependencies
     {
         var env = Apply(recipe.EnvTemplate, "/work", K8sDepsRoot);
         var install = Apply(recipe.InstallTemplate, "/work", K8sDepsRoot);
-        return $"if [ -f /work/{recipe.Manifest} ]; then\n" +
-               $"  mkdir -p {K8sDepsRoot}\n" +
-               $"  {env}\n" +
-               $"  if [ ! -f {BakedMarker} ]; then\n" +
-               $"    {install} || exit $?\n" +
-               "  fi\n" +
-               "fi\n";
+        return WorkloadScriptLoader.Load("k8s/shell-preamble.sh")
+            .Replace("{{MANIFEST}}", recipe.Manifest, StringComparison.Ordinal)
+            .Replace("{{DEPS_ROOT}}", K8sDepsRoot, StringComparison.Ordinal)
+            .Replace("{{BAKED_MARKER}}", BakedMarker, StringComparison.Ordinal)
+            .Replace("{{ENV}}", env, StringComparison.Ordinal)
+            .Replace("{{INSTALL}}", install, StringComparison.Ordinal);
     }
 
     private static string ShQuote(string s) => "'" + s.Replace("'", "'\\''") + "'";

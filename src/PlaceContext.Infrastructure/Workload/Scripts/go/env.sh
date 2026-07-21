@@ -1,0 +1,1 @@
+export HOME=/tmp/pchome GOPATH={deps}/go GOMODCACHE={deps}/go/pkg/mod GOCACHE=/tmp/gocache GOFLAGS=-mod=mod

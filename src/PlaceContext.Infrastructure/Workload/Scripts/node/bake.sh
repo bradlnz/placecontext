@@ -1,0 +1,1 @@
+cd {app} && npm install --no-audit --no-fund

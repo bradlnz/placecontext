@@ -1,0 +1,1 @@
+pip install --no-cache-dir --target {deps}/lib -r {app}/requirements.txt 1>&2 && export PYTHONPATH={deps}/lib

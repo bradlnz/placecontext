@@ -92,18 +92,11 @@ public sealed class KubernetesWorkloadRunner : IWorkloadRunner
             // pipeline (CRI → kubelet → API → UTF-8 string decode) is not binary-safe: base64 keeps the
             // frames pure ASCII so PDFs and other binary files survive byte-exact. The header carries the
             // raw byte count for integrity; the program's exit code is preserved. See SplitFramedLogs.
-            runShell =
-                "mkdir -p /out\n" +
-                depsPreamble +
-                "cat /work/input.json | " + invoke + "\n" +
-                "rc=$?\n" +
-                $"echo\necho {ShQuote(ArtifactsMarker)}\n" +
-                "find /out -type f 2>/dev/null | while read -r f; do\n" +
-                "  printf '==PC-FILE== %s %s\\n' \"${f#/out/}\" \"$(wc -c < \"$f\" | tr -d ' \\t')\"\n" +
-                $"  base64 < \"$f\"\n" +
-                $"  echo {ShQuote(FileEndMarker)}\n" +
-                "done\n" +
-                "exit $rc";
+            runShell = WorkloadScriptLoader.Load("k8s/run-wrapper.sh")
+                .Replace("{{DEPS_PREAMBLE}}", depsPreamble, StringComparison.Ordinal)
+                .Replace("{{INVOKE}}", invoke, StringComparison.Ordinal)
+                .Replace("{{ARTIFACTS_MARKER}}", ShQuote(ArtifactsMarker), StringComparison.Ordinal)
+                .Replace("{{FILE_END_MARKER}}", ShQuote(FileEndMarker), StringComparison.Ordinal);
         }
         else
         {
@@ -289,7 +282,7 @@ public sealed class KubernetesWorkloadRunner : IWorkloadRunner
         WorkloadRunRequest request, IReadOnlyList<(string Path, string Content)> files, bool fetchDeps)
     {
         var data = new Dictionary<string, string>();
-        var script = new StringBuilder("set -e\n");
+        var script = new StringBuilder(WorkloadScriptLoader.Load("k8s/materialize-header.sh"));
         for (var i = 0; i < files.Count; i++)
         {
             var key = $"f{i}";
@@ -305,12 +298,9 @@ public sealed class KubernetesWorkloadRunner : IWorkloadRunner
             var p = request.ArtifactMounts[i].ContainerPath;
             script.Append($"mkdir -p \"$(dirname {ShQuote(p)})\"\ncp /cm/{key} {ShQuote(p)}\n");
         }
-        if (fetchDeps)
-            script.Append("wget -q -O- \"$PCDEPS_GET_URL\" | tar xz -C /work || true\n");
-        // The run container executes as nobody: open the materialised tree (the init container's
-        // copies are root-owned) so the job can write beside the code — node_modules, .bundle,
-        // npm rewriting a lockfile, the .pcdeps deps root. Artifact mounts stay read-only.
-        script.Append("chmod -R a+rwX /work\n");
+        var fetchLine = fetchDeps ? "wget -q -O- \"$PCDEPS_GET_URL\" | tar xz -C /work || true\n" : "";
+        script.Append(WorkloadScriptLoader.Load("k8s/materialize-footer.sh")
+            .Replace("{{FETCH_DEPS}}", fetchLine, StringComparison.Ordinal));
         return (data, script.ToString());
     }
 
@@ -432,15 +422,13 @@ public sealed class KubernetesWorkloadRunner : IWorkloadRunner
     internal static string BuildBakeScript(WorkloadDependencies.Recipe recipe,
         IReadOnlyList<(string Path, string Content)> manifests)
     {
-        var sb = new StringBuilder("set -e\n");
-        sb.Append("mkdir -p /stage/.pcdeps /out\n");
+        var sb = new StringBuilder(WorkloadScriptLoader.Load("k8s/bake-header.sh"));
         for (var i = 0; i < manifests.Count; i++)
             sb.Append($"cp /cm/f{i} {ShQuote("/stage/" + manifests[i].Path)}\n");
-        sb.Append(WorkloadDependencies.Apply(recipe.EnvTemplate, "/stage", "/stage/.pcdeps")).Append('\n');
-        sb.Append(WorkloadDependencies.Apply(recipe.BakeInstall, "/stage", "/stage/.pcdeps")).Append('\n');
-        sb.Append("touch /stage/.baked\n");
-        sb.Append("tar czf /out/deps.tar.gz -C /stage .\n");
-        sb.Append("touch /out/.done\n");
+        var footer = WorkloadScriptLoader.Load("k8s/bake-footer.sh")
+            .Replace("{{ENV}}", WorkloadDependencies.Apply(recipe.EnvTemplate, "/stage", "/stage/.pcdeps"), StringComparison.Ordinal)
+            .Replace("{{INSTALL}}", WorkloadDependencies.Apply(recipe.BakeInstall, "/stage", "/stage/.pcdeps"), StringComparison.Ordinal);
+        sb.Append(footer);
         return sb.ToString();
     }
 
@@ -491,9 +479,7 @@ public sealed class KubernetesWorkloadRunner : IWorkloadRunner
                             {
                                 Name = "upload",
                                 Image = BakeUploaderImage,
-                                Command = new[] { "sh", "-c",
-                                    "while [ ! -f /out/.done ]; do sleep 1; done\n" +
-                                    "curl -fsS -X PUT --upload-file /out/deps.tar.gz \"$PCDEPS_PUT_URL\"\n" },
+                                Command = new[] { "sh", "-c", WorkloadScriptLoader.Load("k8s/upload.sh") },
                                 Env = new[] { new V1EnvVar { Name = "PCDEPS_PUT_URL", Value = putUrl } },
                                 VolumeMounts = new[] { new V1VolumeMount { Name = "out", MountPath = "/out" } },
                             },

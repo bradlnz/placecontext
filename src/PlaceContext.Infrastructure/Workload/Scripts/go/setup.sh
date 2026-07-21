@@ -1,0 +1,1 @@
+export HOME={deps} GOPATH={deps}/go GOMODCACHE={deps}/go/pkg/mod GOCACHE={deps}/gocache GOFLAGS=-mod=mod && cd {app}
