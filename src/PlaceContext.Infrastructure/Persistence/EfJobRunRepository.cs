@@ -33,6 +33,10 @@ public sealed class EfJobRunRepository : IJobRunRepository
         var updated = ToRow(run);
         existing.Status = updated.Status;
         existing.FinishedAt = updated.FinishedAt;
+        existing.ShardCount = updated.ShardCount;
+        existing.SucceededShards = updated.SucceededShards;
+        existing.PartialShards = updated.PartialShards;
+        existing.FailedShards = updated.FailedShards;
         existing.ShardResultsJson = updated.ShardResultsJson;
         existing.ReduceResultJson = updated.ReduceResultJson;
         // SnapshotJson is immutable (set once at AddAsync) — not updated here.
@@ -49,6 +53,20 @@ public sealed class EfJobRunRepository : IJobRunRepository
         var rows = await _db.JobRuns.AsNoTracking()
             .Where(r => r.JobId == jobId)
             .OrderByDescending(r => r.StartedAt)
+            .Select(r => new JobRunRow
+            {
+                Id = r.Id,
+                TenantId = r.TenantId,
+                JobId = r.JobId,
+                ProjectId = r.ProjectId,
+                Status = r.Status,
+                StartedAt = r.StartedAt,
+                FinishedAt = r.FinishedAt,
+                ShardCount = r.ShardCount,
+                SucceededShards = r.SucceededShards,
+                PartialShards = r.PartialShards,
+                FailedShards = r.FailedShards,
+            })
             .ToListAsync(ct);
         return rows.Select(ToDomain).ToList();
     }
@@ -59,6 +77,20 @@ public sealed class EfJobRunRepository : IJobRunRepository
         var rows = await _db.JobRuns.AsNoTracking()
             .OrderByDescending(r => r.StartedAt)
             .Take(Math.Clamp(take, 1, 200))
+            .Select(r => new JobRunRow
+            {
+                Id = r.Id,
+                TenantId = r.TenantId,
+                JobId = r.JobId,
+                ProjectId = r.ProjectId,
+                Status = r.Status,
+                StartedAt = r.StartedAt,
+                FinishedAt = r.FinishedAt,
+                ShardCount = r.ShardCount,
+                SucceededShards = r.SucceededShards,
+                PartialShards = r.PartialShards,
+                FailedShards = r.FailedShards,
+            })
             .ToListAsync(ct);
         return rows.Select(ToDomain).ToList();
     }
@@ -71,6 +103,10 @@ public sealed class EfJobRunRepository : IJobRunRepository
         Status = run.Status.ToString(),
         StartedAt = run.StartedAt,
         FinishedAt = run.FinishedAt,
+        ShardCount = run.ShardResults.Count,
+        SucceededShards = run.ShardResults.Count(s => s.Outcome == WorkloadOutcome.Succeeded),
+        PartialShards = run.ShardResults.Count(s => s.Outcome == WorkloadOutcome.Partial),
+        FailedShards = run.ShardResults.Count(s => s.Outcome == WorkloadOutcome.Failed),
         ShardResultsJson = Enc(JsonSerializer.Serialize(
             run.ShardResults.Select(s => new ShardResultJson
             {
@@ -99,16 +135,33 @@ public sealed class EfJobRunRepository : IJobRunRepository
 
     private JobRun ToDomain(JobRunRow row)
     {
-        var shards = JsonSerializer.Deserialize<List<ShardResultJson>>(Dec(row.ShardResultsJson), Json)
-            ?? new List<ShardResultJson>();
+        List<ShardResult> shardResults;
 
-        var shardResults = shards.Select(s => new ShardResult(
-            index: s.Index,
-            exitCode: s.ExitCode,
-            outcome: Enum.TryParse<WorkloadOutcome>(s.Outcome, out var o) ? o : WorkloadOutcome.Failed,
-            artifact: s.Artifact,
-            log: s.Log,
-            artifacts: FromArtifactsJson(s.Artifacts)));
+        if (string.IsNullOrEmpty(row.ShardResultsJson))
+        {
+            // List query: only denormalized counts are available — synthesize shard stubs
+            // so ToSummaryView can still read .Count / outcome counts.
+            shardResults = new List<ShardResult>();
+            for (var i = 0; i < row.SucceededShards; i++)
+                shardResults.Add(new ShardResult(i, 0, WorkloadOutcome.Succeeded, null, null));
+            for (var i = 0; i < row.PartialShards; i++)
+                shardResults.Add(new ShardResult(i, 0, WorkloadOutcome.Partial, null, null));
+            for (var i = 0; i < row.FailedShards; i++)
+                shardResults.Add(new ShardResult(i, 0, WorkloadOutcome.Failed, null, null));
+        }
+        else
+        {
+            var shards = JsonSerializer.Deserialize<List<ShardResultJson>>(Dec(row.ShardResultsJson), Json)
+                         ?? new List<ShardResultJson>();
+
+            shardResults = shards.Select(s => new ShardResult(
+                index: s.Index,
+                exitCode: s.ExitCode,
+                outcome: Enum.TryParse<WorkloadOutcome>(s.Outcome, out var o) ? o : WorkloadOutcome.Failed,
+                artifact: s.Artifact,
+                log: s.Log,
+                artifacts: FromArtifactsJson(s.Artifacts))).ToList();
+        }
 
         ReduceResult? reduceResult = null;
         if (row.ReduceResultJson is not null)
@@ -121,7 +174,12 @@ public sealed class EfJobRunRepository : IJobRunRepository
 
         var status = Enum.TryParse<JobRunStatus>(row.Status, out var st) ? st : JobRunStatus.Failed;
 
-        var snapshot = DeserialiseSnapshot(Dec(row.SnapshotJson));
+        var snapshot = string.IsNullOrWhiteSpace(row.SnapshotJson) || row.SnapshotJson == "{}"
+            ? new WorkloadSnapshot(
+                new WorkloadSource.ImageWorkload("unknown"),
+                Array.Empty<string>(),
+                new Dictionary<string, string>(), null, null, 1)
+            : DeserialiseSnapshot(Dec(row.SnapshotJson));
 
         return JobRun.Rehydrate(row.Id, row.JobId, row.ProjectId, status,
             row.StartedAt, row.FinishedAt, shardResults, reduceResult, snapshot);

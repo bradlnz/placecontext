@@ -118,6 +118,16 @@ public static class DependencyInjection
         // Universal RAG: any content kind, encrypted source text + pgvector.
         services.AddScoped<IContentIndexer, Embeddings.ContentIndexer>();
 
+        // Chat gateway: Ollama when an endpoint is configured, else a no-op.
+        if (!string.IsNullOrWhiteSpace(configuration["PlaceContext:Chat:Endpoint"]))
+            services.AddSingleton<IChatGateway, Chat.OllamaChatGateway>();
+        else
+            services.AddSingleton<IChatGateway, Chat.NullChatGateway>();
+
+        // Agent repositories.
+        services.AddScoped<IAgentConfigRepository, EfAgentConfigRepository>();
+        services.AddScoped<IAgentChatSessionRepository, EfAgentChatSessionRepository>();
+
         // Dependency-graph assembly is expensive (full ledger + decisions + O(n²) embedding weave);
         // wrap the Application provider in a short-TTL cache so page opens and brain rollups don't
         // recompute it every time. Registered after AddApplication, so this mapping wins resolution.
@@ -212,6 +222,50 @@ public static class DependencyInjection
                 """);
         }
         catch { /* non-Postgres, or the tables predate these columns */ }
+
+        // Backfill denormalized shard counts for existing runs.
+        // The JSON is encrypted at the app layer, so we must read/decrypt/count in C#.
+        BackfillShardCounts(db, scope.ServiceProvider);
+    }
+
+    private static void BackfillShardCounts(AppDbContext db, IServiceProvider sp)
+    {
+        try
+        {
+            var enc = sp.GetService<IDataEncryptor>();
+            if (enc is null) return;
+            var purpose = IDataEncryptor.Purpose.JobRun;
+            var rows = db.JobRuns
+                .FromSqlRaw("""SELECT * FROM job_runs WHERE "ShardCount" = 0 AND "ShardResultsJson" IS NOT NULL""")
+                .ToList();
+            if (rows.Count == 0) return;
+
+            foreach (var row in rows)
+            {
+                try
+                {
+                    var json = enc.Unprotect(row.ShardResultsJson, purpose);
+                    var shards = System.Text.Json.JsonSerializer.Deserialize<List<ShardResultDto>>(json,
+                        new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                    if (shards is null) continue;
+                    row.ShardCount = shards.Count;
+                    row.SucceededShards = shards.Count(s =>
+                        string.Equals(s.Outcome, "Succeeded", StringComparison.OrdinalIgnoreCase));
+                    row.PartialShards = shards.Count(s =>
+                        string.Equals(s.Outcome, "Partial", StringComparison.OrdinalIgnoreCase));
+                    row.FailedShards = shards.Count(s =>
+                        string.Equals(s.Outcome, "Failed", StringComparison.OrdinalIgnoreCase));
+                }
+                catch { /* row with unparseable JSON — leave counts at 0 */ }
+            }
+            db.SaveChanges();
+        }
+        catch { /* backfill is best-effort */ }
+    }
+
+    private sealed class ShardResultDto
+    {
+        public string Outcome { get; set; } = "";
     }
 
     /// <summary>

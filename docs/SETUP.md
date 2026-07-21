@@ -264,4 +264,35 @@ pctl package           # self-contained release tarball (installer, image, TUI, 
 
 ---
 
+## Local Ollama Setup (Chat Agent)
+
+The chat agent connects to a local Ollama instance for SLM inference. In-cluster, Ollama is
+already deployed via `deploy/k3s/ollama.yaml`. For local development:
+
+```bash
+# Install Ollama (macOS / Linux)
+curl -fsSL https://ollama.ai/install.sh | sh
+
+# Pull the default model (qwen3.5:0.8b)
+ollama pull qwen3.5:0.8b
+
+# Ollama runs on http://localhost:11434 by default
+```
+
+Set the configuration in `appsettings.json` (or via environment variables):
+
+```json
+"PlaceContext": {
+  "Chat": {
+    "Endpoint": "http://localhost:11434",
+    "Model": "qwen3.5:0.8b"
+  }
+}
+```
+
+When `PlaceContext:Chat:Endpoint` is unset or empty, the chat agent gracefully degrades with
+a "no model configured" message. No external API key is required after the model is pulled.
+
+---
+
 *PlaceContext — a context platform for AI. Built by Bradley Lietz of CTRL SIGNAL SOFTWARE PTY LTD.*

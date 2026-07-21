@@ -77,6 +77,14 @@ public static class DependencyInjection
         services.AddScoped<ICommandHandler<DefineEventTypeCommand, EventTypeView>, DefineEventTypeHandler>();
         services.AddScoped<ICommandHandler<EmitEventCommand, EventOccurrenceView>, EmitEventHandler>();
 
+        // Agent chat (Phase 1).
+        services.AddScoped<ICommandHandler<Features.UpdateAgentConfigCommand, Dtos.AgentConfigView>, Features.UpdateAgentConfigHandler>();
+        services.AddScoped<ICommandHandler<Features.SendAgentMessageCommand, Dtos.AgentChatSessionView>, Features.SendAgentMessageHandler>();
+        services.AddScoped<IQueryHandler<Features.GetAgentConfigQuery, Dtos.AgentConfigView>, Features.GetAgentConfigHandler>();
+        services.AddScoped<IQueryHandler<Features.ListAgentChatSessionsQuery, IReadOnlyList<Dtos.AgentChatSessionView>>, Features.ListAgentChatSessionsHandler>();
+        services.AddScoped<IQueryHandler<Features.GetAgentChatSessionQuery, Dtos.AgentChatSessionView?>, Features.GetAgentChatSessionHandler>();
+        services.AddScoped<Features.AgentContextBuilder>();
+
         // Queries.
         services.AddScoped<IQueryHandler<GetProjectsQuery, IReadOnlyList<ProjectSummaryView>>, GetProjectsHandler>();
         services.AddScoped<IQueryHandler<GetProjectByIdQuery, ProjectSummaryView?>, GetProjectByIdHandler>();

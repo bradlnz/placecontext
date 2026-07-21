@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using PlaceContext.Infrastructure.Persistence;
@@ -11,9 +12,11 @@ using PlaceContext.Infrastructure.Persistence;
 namespace PlaceContext.Infrastructure.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260721003451_ResolvePendingChanges")]
+    partial class ResolvePendingChanges
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -697,26 +700,17 @@ namespace PlaceContext.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
-                    b.Property<int>("FailedShards")
-                        .HasColumnType("integer");
-
                     b.Property<DateTimeOffset?>("FinishedAt")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<Guid>("JobId")
                         .HasColumnType("uuid");
 
-                    b.Property<int>("PartialShards")
-                        .HasColumnType("integer");
-
                     b.Property<Guid>("ProjectId")
                         .HasColumnType("uuid");
 
                     b.Property<string>("ReduceResultJson")
                         .HasColumnType("text");
-
-                    b.Property<int>("ShardCount")
-                        .HasColumnType("integer");
 
                     b.Property<string>("ShardResultsJson")
                         .IsRequired()
@@ -734,9 +728,6 @@ namespace PlaceContext.Infrastructure.Migrations
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasColumnType("text");
-
-                    b.Property<int>("SucceededShards")
-                        .HasColumnType("integer");
 
                     b.Property<Guid>("TenantId")
                         .HasColumnType("uuid");

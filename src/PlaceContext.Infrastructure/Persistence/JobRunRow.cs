@@ -15,6 +15,12 @@ public sealed class JobRunRow : ITenantOwned
     public DateTimeOffset StartedAt { get; set; }
     public DateTimeOffset? FinishedAt { get; set; }
 
+    /// <summary>Denormalized shard counts — populated at write time so list queries never load ShardResultsJson.</summary>
+    public int ShardCount { get; set; }
+    public int SucceededShards { get; set; }
+    public int PartialShards { get; set; }
+    public int FailedShards { get; set; }
+
     /// <summary>JSON array of ShardResultJson objects.</summary>
     public string ShardResultsJson { get; set; } = "[]";
 

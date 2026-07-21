@@ -362,4 +362,21 @@ public sealed class PlaceContextService : IPlaceContextService
 
     public Task<IReadOnlyList<Ports.ChainRunTelemetry>> ListRecentChainRunTelemetryAsync(int take = 50, CancellationToken ct = default)
         => _dispatcher.Query(new Observability.ListRecentChainRunTelemetryQuery(take), ct);
+
+    // ── Agent chat ─────────────────────────────────────────────────────────────────────────────────
+
+    public Task<AgentConfigView> GetAgentConfigAsync(Guid projectId, CancellationToken ct = default)
+        => _dispatcher.Query(new Features.GetAgentConfigQuery(projectId), ct);
+
+    public Task<AgentConfigView> UpdateAgentConfigAsync(Features.UpdateAgentConfigCommand command, CancellationToken ct = default)
+        => _dispatcher.Send(command, ct);
+
+    public Task<AgentChatSessionView> SendAgentMessageAsync(Features.SendAgentMessageCommand command, CancellationToken ct = default)
+        => _dispatcher.Send(command, ct);
+
+    public Task<IReadOnlyList<AgentChatSessionView>> ListAgentChatSessionsAsync(Guid projectId, CancellationToken ct = default)
+        => _dispatcher.Query(new Features.ListAgentChatSessionsQuery(projectId), ct);
+
+    public Task<AgentChatSessionView?> GetAgentChatSessionAsync(Guid sessionId, CancellationToken ct = default)
+        => _dispatcher.Query(new Features.GetAgentChatSessionQuery(sessionId), ct);
 }

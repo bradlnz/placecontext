@@ -52,6 +52,8 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
     public DbSet<EntityTagRow> EntityTags => Set<EntityTagRow>();
     public DbSet<RecordLinkRow> RecordLinks => Set<RecordLinkRow>();
     public DbSet<UserApiTokenRow> UserApiTokens => Set<UserApiTokenRow>();
+    public DbSet<AgentConfigRow> AgentConfigs => Set<AgentConfigRow>();
+    public DbSet<AgentChatSessionRow> AgentChatSessions => Set<AgentChatSessionRow>();
 
     Task<int> IUnitOfWork.SaveChangesAsync(CancellationToken ct) => SaveChangesAsync(ct);
 
@@ -328,6 +330,29 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
             e.HasKey(x => x.Id);
             // Drained oldest-first among unclaimed rows.
             e.HasIndex(x => new { x.ClaimedAt, x.EnqueuedAt });
+        });
+
+        b.Entity<AgentConfigRow>(e =>
+        {
+            e.ToTable("agent_configs");
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => x.ProjectId).IsUnique(); // one config per project
+            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
+            e.Property(x => x.BaseModel).HasDefaultValue("qwen3.5:0.8b");
+            e.Property(x => x.SystemPrompt).HasDefaultValue("");
+            e.Property(x => x.MaxContextChunks).HasDefaultValue(5);
+            e.Property(x => x.Temperature).HasDefaultValue(0.7f);
+            e.Property(x => x.TopP).HasDefaultValue(0.9f);
+            e.Property(x => x.Enabled).HasDefaultValue(true);
+        });
+
+        b.Entity<AgentChatSessionRow>(e =>
+        {
+            e.ToTable("agent_chat_sessions");
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => new { x.ProjectId, x.UpdatedAt });
+            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
+            e.Property(x => x.MessagesJson).HasDefaultValue("[]");
         });
     }
 }

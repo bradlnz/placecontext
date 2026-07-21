@@ -60,6 +60,7 @@ public sealed class MenuConfigService : IMenuConfigService
         new("project.data", "Data", "link", null, "data", Permission.DataRead, null, null),
         new("project.vault", "Vault", "link", null, "secrets", Permission.SecretsManage, null, null),
         new("project.events", "Events", "link", null, "events", Permission.EventsManage, null, null),
+        new("project.agents", "Agents", "link", null, "agents", Permission.AgentsChat, null, null),
         new("project.entities", "Business", "entities", null, null, Permission.DataRead, null, "Business"),
     };
 

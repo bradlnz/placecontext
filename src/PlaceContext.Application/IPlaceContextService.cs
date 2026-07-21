@@ -149,4 +149,11 @@ public interface IPlaceContextService
     Task<IReadOnlyList<Ports.JobRunTelemetry>> ListRecentJobRunTelemetryAsync(int take = 50, CancellationToken ct = default);
     Task<IReadOnlyList<Ports.JobRunTelemetry>> ListJobRunTelemetryAsync(Guid jobId, int take = 20, CancellationToken ct = default);
     Task<IReadOnlyList<Ports.ChainRunTelemetry>> ListRecentChainRunTelemetryAsync(int take = 50, CancellationToken ct = default);
+
+    // Agent chat (Phase 1).
+    Task<AgentConfigView> GetAgentConfigAsync(Guid projectId, CancellationToken ct = default);
+    Task<AgentConfigView> UpdateAgentConfigAsync(UpdateAgentConfigCommand command, CancellationToken ct = default);
+    Task<AgentChatSessionView> SendAgentMessageAsync(SendAgentMessageCommand command, CancellationToken ct = default);
+    Task<IReadOnlyList<AgentChatSessionView>> ListAgentChatSessionsAsync(Guid projectId, CancellationToken ct = default);
+    Task<AgentChatSessionView?> GetAgentChatSessionAsync(Guid sessionId, CancellationToken ct = default);
 }

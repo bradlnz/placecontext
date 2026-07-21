@@ -1,9 +1,9 @@
 # PlaceContext — Jobs Automation Progress
 
 Branch: `main` · all jobs-automation work merged
-Last updated: 2026-07-18
+Last updated: 2026-07-20
 
-Status: **212 tests passing** (4 Docker-gated skipped), all layers build clean.
+Status: **222 tests passing** (4 Docker-gated skipped), all layers build clean.
 
 This document tracks the jobs-automation work: scheduled/event triggers, an events layer,
 run parameters, run artifacts, a configurable LLM organize step, and the local installer —
@@ -32,6 +32,7 @@ plus the roadmap items still to do.
 | 10 | **Scheduler scales on k3s** | Durable DB-backed run queue (`pending_job_runs`): producers enqueue transactionally; the background scheduler drains with `FOR UPDATE SKIP LOCKED` so **any replica** executes runs without duplication, and runs survive restarts. Schedule-scan is guarded by a **Postgres advisory lock** (one replica scans) — environment-agnostic leader election, no k8s RBAC. Replaces the in-process channel. Deploy bumped to 2 replicas. **Live-verified**: queue row claimed + drained + deleted in ~1s; advisory scan clean. *(The k8s-Job workload runner — shards as k8s Jobs instead of Docker — remains a follow-up.)* |
 | 9 | **Voyage embeddings → pgvector** | `IEmbeddingGateway` + `VoyageEmbeddingGateway` + Null fallback (keyed by `PlaceContext:Voyage:ApiKey`). `RunJobHandler` embeds the organized run output and stores it. `EfRunEmbeddingRepository` is **pgvector-backed with lazy self-init** (creates the `vector` extension + `job_run_embeddings` table on first use) and **degrades gracefully** if pgvector/Voyage are absent — so it never touches the migration path or breaks the existing `postgres:16` dev DB. `SearchRunOutputsQuery` + `search_run_outputs` MCP tool do cosine semantic search. New dev containers use `pgvector/pgvector:pg16`. Cosine search unit-tested in-memory; the pgvector path is integration-only (needs a Voyage key + pgvector). |
 | 16 | **Automatic value linking + duplicate warnings** | `RecordLink` index over identity-ish columns (address/email/phone/name/url) across all project tables; normalized exact matching; `record_links` table + `AddRecordLinks` migration; on-write refresh hooks for CRM records, CSV import, and data-map ingest; duplicate warnings on create/import (warn-only, rows kept); rescan button + linked-values list on Data Entities page; auto-linked records shown in EntityBrowse record detail. 70 new Application tests, full suite green. Also fixes the file-switch content-loss bug in `JobEditor.razor` (`DeleteFileAsync`). |
+| 17 | **Agent Runner Phase 1 — Chat interface + persistence scaffold** | `IChatGateway` port + `OllamaChatGateway` / `NullChatGateway` adapters (config: `PlaceContext:Chat:Endpoint`/`Model`, default `qwen3.5:0.8b`). Domain entities: `AgentConfig` (project-scoped singleton), `AgentChatSession`, `AgentMessage`; repos `IAgentConfigRepository` / `IAgentChatSessionRepository`. EF rows + `AppDbContext` config (auto-migrated). CQRS: `GetAgentConfig` / `UpdateAgentConfig` / `SendAgentMessage` / `ListAgentChatSessions` / `GetAgentChatSession` handlers + views. `AgentContextBuilder` service does RAG: semantic search over run outputs + dependency graph summary injected into the system prompt. Facade methods on `IPlaceContextService`. MCP tools: `chat_with_agent`, `list_agent_sessions`, `get_agent_config`, `update_agent_config`. Permissions: `AgentsChat`, `AgentsManage`. Portal **Agents** page: config panel + chat UI + session sidebar. Menu item `project.agents`. 10 new handler tests + `FakeChatGateway` + in-memory repos. Full suite green. |
 
 Commits: `6411749` triggers/events layer → `aec4860` MCP → `1450683` UI → `1240f6a`
 parameters/modal → `6c29f00` artifacts → `4ae1900` configurable LLM → `81a4fbb` setup.sh.
@@ -193,3 +194,90 @@ project (plus its test project) have now been **deleted** from the tree and the 
   (✓ settings menu, ✓ run jobs from TUI, ✓ theme also changes font, ✓ per-job timeout.)
 - Open-source/setup **wiki** (`docs/SETUP.md` started).
 - Optional: graduate the in-cluster job controller into a standalone **control-plane API** for multi-cluster.
+
+---
+
+## 🤖 Agent Runner: Chat Interface + Local SLM Fine-Tuning (MLX)
+
+**Goal:** Add an agent runner that acts as a chat interface connected to a local Small Language Model (SLM). The model will be fine-tuned on PlaceContext project data using Apple's MLX framework, configured from the dashboard. Once trained, the fine-tuned model drives business outcomes by interacting with project context, job outputs, and the dependency graph.
+
+**Status:** Phase 1 shipped (chat interface + persistence scaffold); Phase 2 (MLX fine-tuning) planned  
+**Branch:** `main` (merged)
+
+### Motivation
+
+Today, run outputs are organized by an external or local LLM and stored in the dependency graph as searchable memory. A dedicated agent runner will expose this memory through a conversational UI and let customers specialize the model on their own PlaceContext data so answers and actions are tuned to their domain.
+
+### Architecture Decisions
+
+1. **Local-first inference**
+   - The agent connects to a local SLM served by **Ollama** or **llama.cpp** (reusing the existing `OllamaLlmGateway` infrastructure).
+   - No external API key is required after the model is downloaded.
+
+2. **Fine-tuning with MLX**
+   - On Apple Silicon, use **MLX** (`mlx`, `mlx-lm`) for efficient LoRA/QLoRA fine-tuning of a small base model (e.g. `Qwen2.5-3B-Instruct`, `Llama-3.2-3B`, or `Gemma-3-4B-it`).
+   - On non-Apple hardware, fall back to **Unsloth** / **PEFT** + **bitsandbytes** with the same training recipe so the feature is not Mac-only.
+   - Fine-tuning is triggered from the dashboard as an async **job** (reusing the Jobs/Run infrastructure) so it runs in-cluster or locally with the same artifact/secret/queue semantics.
+
+3. **Training data from PlaceContext**
+   - Generate a supervised fine-tuning (SFT) dataset from:
+     - organized run outputs (`job_run_embeddings` + raw artifacts),
+     - project activity/decisions,
+     - entity records and record links,
+     - existing brain/dependency graph Q&A pairs.
+   - Dataset format: ShareGPT / OpenAI chat-completion JSONL.
+   - Dataset is versioned and stored as a run artifact / MinIO object.
+
+4. **Dashboard configuration**
+   - New **Agents** page in the portal:
+     - select base model,
+     - tune hyperparameters (epochs, learning rate, LoRA rank, max seq length),
+     - pick data sources (projects, run tags, entity types),
+     - start fine-tuning run,
+     - view progress, loss curves, eval metrics,
+     - activate a fine-tuned checkpoint for chat.
+   - Configuration persisted as `AgentConfig` / `AgentModel` domain entities.
+
+5. **Chat interface**
+   - New MCP tool(s) and portal page for chat:
+     - `chat_with_agent` / `send_agent_message`,
+     - streaming responses,
+     - tool-calling support so the agent can invoke existing PlaceContext tools (search run outputs, list jobs, emit events, enqueue runs).
+   - The agent's system prompt injects relevant context retrieved via the existing embedding/search layer (RAG over run outputs + dependency graph).
+
+6. **Driving business outcomes**
+   - Agent can be given goals/outcomes via the dashboard (e.g. "watch for duplicate leads", "summarize weekly activity", "suggest next action").
+   - Outcomes are implemented as event-triggers or scheduled jobs that call the active agent model.
+   - Fine-tuned weights + adapter config are exposed as a job secret/env so other jobs can load the same model.
+
+### Domain / Data Model (planned)
+
+| Entity | Purpose |
+|---|---|
+| `AgentConfig` | Dashboard config: base model, hyperparameters, data-source filters, active checkpoint id. |
+| `AgentTrainingRun` | One fine-tuning run: dataset artifact, checkpoint artifact, status, metrics. |
+| `AgentCheckpoint` | A produced adapter + merged weights (or GGUF) stored as artifacts. |
+| `AgentChatSession` | Per-user chat thread + message history. |
+| `AgentOutcome` | Business outcome definition: trigger, prompt template, enabled flag. |
+
+### Phases / Remaining Work
+
+| # | Phase | Deliverables |
+|---|---|---|
+| 1 | **Spike** | Validate MLX LoRA fine-tuning on sample PlaceContext data; pick base model; confirm Ollama can serve merged/adapter weights. |
+| 2 | **Dataset pipeline** | `BuildAgentDatasetJob` (or handler) that exports project data to JSONL; unit tests; artifact storage. |
+| 3 | **Fine-tune job** | `FineTuneAgentJob` using MLX (Apple) and Unsloth/PEFT fallback; hyperparameters from `AgentConfig`; metrics logging. |
+| 4 | **Domain + persistence** | ✅ `AgentConfig`, `AgentChatSession`, `AgentMessage` entities + repos + EF rows + AppDbContext config; CQRS commands/queries/handlers; `IChatGateway` port + Ollama/Null adapters. *(AgentTrainingRun, AgentCheckpoint, AgentOutcome deferred to Phase 2.)* |
+| 5 | **Dashboard UI** | ✅ **Agents** portal page: config panel (model, prompt, context chunks, enabled toggle) + chat UI + session sidebar. |
+| 6 | **Chat interface** | ✅ Portal chat page + `chat_with_agent` MCP tool; RAG context injection via `AgentContextBuilder` (embedding search + graph summary); `list_agent_sessions`, `get_agent_config`, `update_agent_config` MCP tools. Permissions: `AgentsChat`, `AgentsManage`. |
+| 7 | **Outcomes / automation** | `AgentOutcome` entity; schedule/event triggers that invoke the active agent; action handlers to enqueue jobs/emit events. |
+| 8 | **Self-host packaging** | k3s manifest for MLX-capable node selector / GPU scheduling; docs update; TUI integration. |
+
+### Open Questions / Notes
+
+- **MLX availability:** MLX is Apple-only; the Linux fallback must be solid for self-hosting on k3s/Linux.
+- **Model licensing:** Fine-tuned derivatives of permissive base models only; track base-model license in `AgentConfig`.
+- **Data privacy:** Training data stays in the tenant's Postgres/MinIO; no phone-home for fine-tuning.
+- **Compute:** Fine-tuning is CPU/GPU heavy; runs should respect job timeout, resource requests/limits, and node selectors.
+- **Reusability:** The existing `IEmbeddingGateway`, `ILlmGateway`, `IWorkloadRunner`, run artifacts, and event/trigger plumbing should be reused as much as possible.
+- **Evaluation:** Add a held-out eval split and perplexity/BERTScore metric; surfaced per checkpoint.

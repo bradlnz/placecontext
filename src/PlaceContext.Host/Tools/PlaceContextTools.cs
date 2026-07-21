@@ -503,6 +503,44 @@ public sealed class PlaceContextTools
         => Traced(log, "search_run_outputs", projectId.ToString(), $"search runs: {query}", new { projectId, query, take },
             () => svc.SearchRunOutputsAsync(projectId, query, take));
 
+    // ── Agent chat ────────────────────────────────────────────────────────────────────────────────
+
+    [Authorize(Policy = Permission.AgentsChat)]
+    [McpServerTool(Name = "chat_with_agent"), Description("Send a message to the project's chat agent and return the assistant's reply. The agent retrieves relevant context from run outputs and the dependency graph (RAG). Pass a sessionId to continue an existing conversation, or omit it to start a new one.")]
+    public static Task<string> ChatWithAgent(IPlaceContextService svc, IToolCallLog log,
+        [Description("Project id")] Guid projectId,
+        [Description("User message")] string message,
+        [Description("Existing session id to continue (omit for new session)")] Guid? sessionId = null)
+        => Traced(log, "chat_with_agent", projectId.ToString(), $"chat: {message[..Math.Min(60, message.Length)]}", new { projectId, message, sessionId },
+            () => svc.SendAgentMessageAsync(new Application.Features.SendAgentMessageCommand(projectId, sessionId, message)));
+
+    [Authorize(Policy = Permission.AgentsChat)]
+    [McpServerTool(Name = "list_agent_sessions"), Description("List all chat sessions for a project (newest first).")]
+    public static Task<string> ListAgentSessions(IPlaceContextService svc, IToolCallLog log,
+        [Description("Project id")] Guid projectId)
+        => Traced(log, "list_agent_sessions", projectId.ToString(), "list chat sessions", new { projectId },
+            () => svc.ListAgentChatSessionsAsync(projectId));
+
+    [Authorize(Policy = Permission.AgentsManage)]
+    [McpServerTool(Name = "get_agent_config"), Description("Get the chat agent configuration for a project (model, prompt, context settings, enabled flag).")]
+    public static Task<string> GetAgentConfig(IPlaceContextService svc, IToolCallLog log,
+        [Description("Project id")] Guid projectId)
+        => Traced(log, "get_agent_config", projectId.ToString(), "get agent config", new { projectId },
+            () => svc.GetAgentConfigAsync(projectId));
+
+    [Authorize(Policy = Permission.AgentsManage)]
+    [McpServerTool(Name = "update_agent_config"), Description("Update the chat agent configuration for a project.")]
+    public static Task<string> UpdateAgentConfig(IPlaceContextService svc, IToolCallLog log,
+        [Description("Project id")] Guid projectId,
+        [Description("Model name (e.g. gemma3:4b)")] string baseModel,
+        [Description("System prompt")] string systemPrompt,
+        [Description("Max context chunks from RAG (default 5)")] int maxContextChunks = 5,
+        [Description("Temperature 0-2 (default 0.7)")] float temperature = 0.7f,
+        [Description("Top-p 0-1 (default 0.9)")] float topP = 0.9f,
+        [Description("Whether the agent is enabled")] bool enabled = true)
+        => Traced(log, "update_agent_config", projectId.ToString(), $"update agent config: {baseModel}", new { projectId, baseModel, maxContextChunks, temperature, topP, enabled },
+            () => svc.UpdateAgentConfigAsync(new Application.Features.UpdateAgentConfigCommand(projectId, baseModel, systemPrompt, maxContextChunks, temperature, topP, enabled)));
+
     private static IReadOnlyList<CodeFileDto> ParseFiles(string filesJson)
     {
         if (string.IsNullOrWhiteSpace(filesJson))
