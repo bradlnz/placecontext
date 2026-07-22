@@ -121,7 +121,8 @@ public sealed class MinioObjectStore : IObjectStore, IDisposable
     public async Task EnsureBucketAsync(string bucket, CancellationToken ct)
     {
         if (_client is null) return;
-        if (await Amazon.S3.Util.AmazonS3Util.DoesS3BucketExistV2Async(_client, bucket)) return;
+        // Skip DoesS3BucketExistV2Async — it requires s3:ListBucket which DO Spaces creds may
+        // lack. PutBucketAsync is idempotent (catches BucketAlreadyOwnedByYou/Exists).
         try { await _client.PutBucketAsync(new PutBucketRequest { BucketName = bucket }, ct); }
         catch (AmazonS3Exception ex) when (ex.ErrorCode is "BucketAlreadyOwnedByYou" or "BucketAlreadyExists") { }
     }
