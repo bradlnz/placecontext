@@ -1,9 +1,8 @@
 namespace PlaceContext.Infrastructure.Storage;
 
 /// <summary>
-/// Options for <see cref="MinioObjectStore"/>, bound from "PlaceContext:ObjectStore". In-cluster these
-/// point at the MinIO service; credentials come from the placecontext-minio secret (same as CNPG).
-/// Supports S3-compatible stores (MinIO, Digital Ocean Spaces, AWS S3).
+/// Options for <see cref="S3ObjectStore"/>, bound from "PlaceContext:ObjectStore".
+/// Supports any S3-compatible store: MinIO, DigitalOcean Spaces, AWS S3.
 /// </summary>
 public sealed class ObjectStoreOptions
 {

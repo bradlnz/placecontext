@@ -85,9 +85,9 @@ public static class DependencyInjection
         services.AddScoped<IProjectSecretRepository, EfProjectSecretRepository>();
         services.AddSingleton<ISecretProtector, Security.DataProtectionSecretProtector>();
 
-        // Object store (MinIO, S3-compatible) for post-job artifacts: HTML reports, charts, CSVs, bundles.
+        // Object store (S3-compatible: MinIO, DO Spaces, AWS S3) for post-job artifacts.
         services.Configure<Storage.ObjectStoreOptions>(configuration.GetSection("PlaceContext:ObjectStore"));
-        services.AddSingleton<IObjectStore, Storage.MinioObjectStore>();
+        services.AddSingleton<IObjectStore, Storage.S3ObjectStore>();
         services.AddScoped<IRunArtifactLinkRepository, EfRunArtifactLinkRepository>();
         services.AddScoped<IProjectChartRepository, EfProjectChartRepository>();
 
