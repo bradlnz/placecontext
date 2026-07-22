@@ -270,7 +270,45 @@
     text-align: center;
 }
 
+.ok-text {
+    color: var(--ok, #2ea043);
+    font-size: 12px;
+}
+
 .err-text {
     color: var(--bad);
     font-size: 12px;
+}
+
+/* ── Markdown rendering ─────────────────────────────────────────────── */
+
+.code-block {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 12px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    line-height: 1.5;
+    overflow-x: auto;
+    white-space: pre;
+    margin: 6px 0;
+}
+
+.inline-code {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 1px 5px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+}
+
+.msg-content a {
+    color: var(--accent, #4f6df5);
+    text-decoration: none;
+}
+
+.msg-content a:hover {
+    text-decoration: underline;
 }

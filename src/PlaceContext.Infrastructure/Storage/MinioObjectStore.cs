@@ -32,8 +32,8 @@ public sealed class MinioObjectStore : IObjectStore, IDisposable
             var cfg = new AmazonS3Config
             {
                 ServiceURL = _o.Endpoint,
-                ForcePathStyle = true,            // MinIO uses path-style (no virtual-host buckets)
-                AuthenticationRegion = "us-east-1",
+                ForcePathStyle = _o.ForcePathStyle, // MinIO: true; S3/DO Spaces: false
+                AuthenticationRegion = _o.Region,
             };
             _client = new AmazonS3Client(_o.AccessKey, _o.SecretKey, cfg);
         }

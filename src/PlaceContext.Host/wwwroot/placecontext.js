@@ -31,6 +31,9 @@ window.placecontext = {
       });
     });
   },
+  scrollToBottom(el) {
+    if (el) el.scrollTop = el.scrollHeight;
+  },
   scrollToHash() {
     const hash = location.hash;
     if (!hash) return;

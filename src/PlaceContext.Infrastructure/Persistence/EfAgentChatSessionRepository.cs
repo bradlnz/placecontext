@@ -44,6 +44,7 @@ public sealed class EfAgentChatSessionRepository : IAgentChatSessionRepository
                 ProjectId = r.ProjectId,
                 UserId = r.UserId,
                 Title = r.Title,
+                MessagesJson = r.MessagesJson,
                 CreatedAt = r.CreatedAt,
                 UpdatedAt = r.UpdatedAt,
             })
@@ -62,6 +63,7 @@ public sealed class EfAgentChatSessionRepository : IAgentChatSessionRepository
                 ProjectId = r.ProjectId,
                 UserId = r.UserId,
                 Title = r.Title,
+                MessagesJson = r.MessagesJson,
                 CreatedAt = r.CreatedAt,
                 UpdatedAt = r.UpdatedAt,
             })

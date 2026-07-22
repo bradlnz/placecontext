@@ -19,9 +19,11 @@ public sealed class PlaceContextPrompts
     [McpServerPrompt(Name = "review_work"), Description("Review the project's current work against its requirements (global + project).")]
     public static async Task<string> ReviewWork(
         IPlaceContextService svc,
-        [Description("The project's GUID id")] Guid projectId)
+        [Description("The project's GUID id")] string projectId)
     {
-        var (header, requirements) = await GatherAsync(svc, projectId);
+        if (!Guid.TryParse(projectId, out var id))
+            throw new ArgumentException($"Invalid project id: '{projectId}' is not a valid GUID.");
+        var (header, requirements) = await GatherAsync(svc, id);
         return $$"""
         {{header}}
 
@@ -40,12 +42,14 @@ public sealed class PlaceContextPrompts
     [McpServerPrompt(Name = "create_skill"), Description("Guide creating a reusable skill/command for the project for an AI agent (Claude Code or Codex), in that agent's format and following the project's requirements.")]
     public static async Task<string> CreateSkill(
         IPlaceContextService svc,
-        [Description("The project's GUID id")] Guid projectId,
+        [Description("The project's GUID id")] string projectId,
         [Description("Short skill name, e.g. 'run-tests' or 'add-endpoint'")] string skillName,
         [Description("Target AI agent: 'claude' (Claude Code) or 'codex' (OpenAI Codex CLI). Defaults to claude.")] string agent = "claude",
         [Description("Optional one-line description of what the skill should do")] string? description = null)
     {
-        var (header, requirements) = await GatherAsync(svc, projectId);
+        if (!Guid.TryParse(projectId, out var pid))
+            throw new ArgumentException($"Invalid project id: '{projectId}' is not a valid GUID.");
+        var (header, requirements) = await GatherAsync(svc, pid);
         var intent = string.IsNullOrWhiteSpace(description) ? "(infer from the project's conventions)" : description!;
         var spec = AgentSkillSpec(agent, skillName);
         return $$"""
@@ -95,9 +99,11 @@ public sealed class PlaceContextPrompts
     [McpServerPrompt(Name = "record_activity_guidance"), Description("Walk through recording a change correctly into the activity log so it passes the process-trust gates.")]
     public static async Task<string> RecordActivityGuidance(
         IPlaceContextService svc,
-        [Description("The project's GUID id")] Guid projectId)
+        [Description("The project's GUID id")] string projectId)
     {
-        var (header, requirements) = await GatherAsync(svc, projectId);
+        if (!Guid.TryParse(projectId, out var id))
+            throw new ArgumentException($"Invalid project id: '{projectId}' is not a valid GUID.");
+        var (header, requirements) = await GatherAsync(svc, id);
         return $$"""
         {{header}}
 
@@ -123,9 +129,11 @@ public sealed class PlaceContextPrompts
     [McpServerPrompt(Name = "onboard"), Description("Load the project's requirements and overview to start a session well-grounded.")]
     public static async Task<string> Onboard(
         IPlaceContextService svc,
-        [Description("The project's GUID id")] Guid projectId)
+        [Description("The project's GUID id")] string projectId)
     {
-        var (header, requirements) = await GatherAsync(svc, projectId);
+        if (!Guid.TryParse(projectId, out var id))
+            throw new ArgumentException($"Invalid project id: '{projectId}' is not a valid GUID.");
+        var (header, requirements) = await GatherAsync(svc, id);
         return $$"""
         {{header}}
 

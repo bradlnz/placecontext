@@ -436,6 +436,13 @@ public sealed class NpgsqlProjectDataStore : IProjectDataStore
         // read-only contract, the UI merely reflects it.
         await using var tx = await conn.BeginTransactionAsync(ct);
 
+        await using (var setup = conn.CreateCommand())
+        {
+            setup.Transaction = tx;
+            setup.CommandText = $"SET LOCAL statement_timeout = '{StatementTimeout}'";
+            await setup.ExecuteNonQueryAsync(ct);
+        }
+
         // A same-named table the project role owns is a user table — refuse rather than hijack it.
         await using (var owner = conn.CreateCommand())
         {

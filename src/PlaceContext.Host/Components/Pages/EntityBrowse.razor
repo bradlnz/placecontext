@@ -279,7 +279,7 @@
                         @onclick="@(() => _showGraph = !_showGraph)">◉ Graph</button>
                 <AuthorizeView Policy="@Permission.DataWrite">
                     <Authorized>
-                        <button class="dcbtn graph-toggle-btn" @onclick="StartEdit">Edit</button>
+                        <button class="dcbtn graph-toggle-btn" @onclick="StartEditAsync">Edit</button>
                         <button class="dcbtn btn-11-del" @onclick="DeleteOpenAsync">Delete</button>
                     </Authorized>
                 </AuthorizeView>
@@ -296,9 +296,27 @@
                 <div class="dccard card-pad crm-form">
                     @foreach (var col in _formColumns)
                     {
-                        <label class="crm-label">@col
-                            <input class="dcinput crm-input" value="@(_formValues.GetValueOrDefault(col))"
-                                   @oninput="e => _formValues[col] = e.Value?.ToString()" />
+                        var inputType = col.Type switch
+                        {
+                            "integer" or "bigint" or "numeric" or "double" or "real" => "number",
+                            "boolean" => "checkbox",
+                            "date" => "date",
+                            "timestamptz" => "datetime-local",
+                            _ => "text"
+                        };
+                        <label class="crm-label">@col.Name
+                            @if (inputType == "checkbox")
+                            {
+                                <input type="checkbox" class="dccheckbox crm-input" style="margin-top:2px"
+                                       checked="@(_formValues.GetValueOrDefault(col.Name) == "true" || _formValues.GetValueOrDefault(col.Name) == "1")"
+                                       @onchange="e => ToggleBool(col.Name, (ChangeEventArgs)e)" />
+                            }
+                            else
+                            {
+                                <input type="@inputType" class="dcinput crm-input"
+                                       value="@(_formValues.GetValueOrDefault(col.Name))"
+                                       @oninput="e => _formValues[col.Name] = e.Value?.ToString()" />
+                            }
                         </label>
                     }
                     <div class="crm-actions">
@@ -412,7 +430,8 @@
     private string? _warnMessage;
     private bool _editing, _creating, _saving;
     private string? _editError;
-    private List<string> _formColumns = new();
+    private record FormColumn(string Name, string Type);
+    private List<FormColumn> _formColumns = new();
     private Dictionary<string, string?> _formValues = new(StringComparer.Ordinal);
     private Dictionary<string, string?> _keySnapshot = new(StringComparer.Ordinal);
 
@@ -796,36 +815,23 @@
         return string.Join(" · ", values);
     }
 
-    private async Task StartCreateAsync()
+    private async Task StartEditAsync()
     {
         if (_entity is null) return;
-        _creating = true;
-        _editing = true;
-        _open = null;
-        _editError = null;
-        _formColumns = (await Svc.ListProjectTableColumnsAsync(ProjectId, _entity.TableName))
-            .Select(c => c.Name).ToList();
-        if (_formColumns.Count == 0 && _page is { Columns.Count: > 0 })
-            _formColumns = _page.Columns.ToList();
-        _formValues = _formColumns.ToDictionary(c => c, _ => (string?)null, StringComparer.Ordinal);
-        _keySnapshot.Clear();
-    }
-
-    private void StartEdit()
-    {
-        if (_open is null || _rows is null) return;
         _creating = false;
         _editing = true;
         _editError = null;
-        _formColumns = _rows.Columns.ToList();
+        // Fetch column types for proper input rendering; fall back to "text".
+        var columnInfos = (await Svc.ListProjectTableColumnsAsync(ProjectId, _entity.TableName))
+            .ToDictionary(c => c.Name, c => c.Type, StringComparer.Ordinal);
+        _formColumns = _rows.Columns.Select(c => new FormColumn(c, columnInfos.GetValueOrDefault(c, "text"))).ToList();
         _formValues = new Dictionary<string, string?>(StringComparer.Ordinal);
         _keySnapshot = new Dictionary<string, string?>(StringComparer.Ordinal);
         for (var i = 0; i < _formColumns.Count; i++)
         {
             var v = i < _open.Count ? _open[i] : null;
-            _formValues[_formColumns[i]] = v;
-            // Keys for WHERE: prefer label column, else first non-empty columns (up to 3).
-            _keySnapshot[_formColumns[i]] = v;
+            _formValues[_formColumns[i].Name] = v;
+            _keySnapshot[_formColumns[i].Name] = v;
         }
         // Narrow keys to identity columns when possible.
         var label = LabelCol();
@@ -838,6 +844,21 @@
                 .ToDictionary(kv => kv.Key, kv => kv.Value, StringComparer.Ordinal);
             if (kept.Count > 0) _keySnapshot = kept;
         }
+    }
+
+    private async Task StartCreateAsync()
+    {
+        if (_entity is null) return;
+        _creating = true;
+        _editing = true;
+        _open = null;
+        _editError = null;
+        var columnInfos = await Svc.ListProjectTableColumnsAsync(ProjectId, _entity.TableName);
+        _formColumns = columnInfos.Select(c => new FormColumn(c.Name, c.Type)).ToList();
+        if (_formColumns.Count == 0 && _page is { Columns.Count: > 0 })
+            _formColumns = _page.Columns.Select(c => new FormColumn(c, "text")).ToList();
+        _formValues = _formColumns.ToDictionary(c => c.Name, _ => (string?)null, StringComparer.Ordinal);
+        _keySnapshot.Clear();
     }
 
     private async Task SaveRecordAsync()
@@ -872,7 +893,7 @@
     private async Task DeleteOpenAsync()
     {
         if (_entity is null || _open is null || _rows is null) return;
-        StartEdit(); // build keys
+        await StartEditAsync(); // build keys
         _editing = false;
         try
         {
@@ -1231,6 +1252,11 @@
     private static string E(string s) => s.Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;").Replace("'", "&#39;");
 
     private static string Trunc(string? s, int n) => string.IsNullOrEmpty(s) ? "—" : s.Length <= n ? s : s[..n] + "…";
+
+    private void ToggleBool(string colName, ChangeEventArgs e)
+    {
+        _formValues[colName] = e.Value?.ToString() == "true" ? "true" : "false";
+    }
 
     private static bool IsNumeric(string type) =>
         type.Contains("int") || type.Contains("numeric") || type.Contains("double") || type.Contains("real");
