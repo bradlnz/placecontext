@@ -1,21 +1,23 @@
 @page "/chat"
 @layout PlaceContext.Host.Components.Layout.MainLayout
 @using PlaceContext.Application.Ports
+@using PlaceContext.Application.Dtos
 @using PlaceContext.Infrastructure.Chat
 @inject IChatGateway Gateway
+@inject IPlaceContextService Svc
 @inject PortalUiState Ui
 @inject IJSRuntime JS
 
-<PageTitle>placecontext — Chat</PageTitle>
+<PageTitle>placecontext — Agent Chat</PageTitle>
 
 <div class="page">
     <div class="page-head">
         <div>
-            <h2 class="page-title">Chat</h2>
+            <h2 class="page-title">Agent Chat</h2>
             <div class="page-sub">
                 @if (Gateway is ClusterChatGateway cg && cg.IsEnabled)
                 {
-                    <span>Cluster model — streaming SafeTensors inference</span>
+                    <span>Cluster model — @_projectName</span>
                 }
                 else if (Gateway.IsEnabled)
                 {
@@ -23,17 +25,56 @@
                 }
                 else
                 {
-                    <span>No model configured. Set <code>PlaceContext:ClusterChat:Endpoint</code> in appsettings.</span>
+                    <span>No model configured</span>
                 }
             </div>
         </div>
+        <div class="chat-controls">
+            <button class="dcbtn sm" @onclick="ToggleConfig">@(_showConfig ? "Hide Config" : "Agent Config")</button>
+            <select class="dcselect sm" @bind="_projectId" @bind:after="OnProjectChanged">
+                <option value="">Select project…</option>
+                @foreach (var p in _projects)
+                {
+                    <option value="@p.Id">@p.Name</option>
+                }
+            </select>
+        </div>
     </div>
+
+    @if (_showConfig)
+    {
+        <div class="agent-config-panel">
+            <h3>Agent Configuration</h3>
+            <div class="config-row">
+                <label>System Prompt</label>
+                <textarea class="dcinput" @bind="_systemPrompt" rows="6" placeholder="You are a PlaceContext agent. You can query project data, inspect job runs, and render graphs."></textarea>
+            </div>
+            <div class="config-row">
+                <label>Temperature</label>
+                <input type="range" class="dcslider" @bind="_temperature" min="0" max="1" step="0.1" />
+                <span>@_temperature.ToString("0.0")</span>
+            </div>
+            <div class="config-row">
+                <label>Max Tokens</label>
+                <input type="number" class="dcinput sm" @bind="_maxTokens" min="64" max="4096" />
+            </div>
+            <div class="config-row">
+                <label>
+                    <input type="checkbox" @bind="_toolCallingEnabled" /> Enable tool calling
+                </label>
+            </div>
+            <button class="dcbtn primary" @onclick="SaveConfig">Save Config</button>
+        </div>
+    }
 
     <div class="chat-container">
         <div class="chat-messages" @ref="_messagesRef">
             @if (_messages.Count == 0)
             {
-                <div class="empty-note chat-empty">Start a conversation below.</div>
+                <div class="empty-note chat-empty">
+                    <p>Ask me about your project data, job runs, or request a graph.</p>
+                    <p class="hint">Try: "Show me the job run history" or "Render a bar chart of entity counts"</p>
+                </div>
             }
             else
             {
@@ -41,6 +82,34 @@
                 {
                     <div class="chat-msg @msg.Role">
                         <div class="msg-role">@msg.Role</div>
+                        @if (msg.ToolCalls.Count > 0)
+                        {
+                            <div class="tool-calls">
+                                @foreach (var tc in msg.ToolCalls)
+                                {
+                                    <div class="tool-call @(tc.Status)">
+                                        <span class="tool-name">@tc.ToolName</span>
+                                        <span class="tool-status">@tc.Status</span>
+                                        @if (tc.Status == ToolCallStatus.Completed && !string.IsNullOrEmpty(tc.Result))
+                                        {
+                                            <details class="tool-result">
+                                                <summary>View result</summary>
+                                                @if (tc.ResultType == "graph")
+                                                {
+                                                    <div class="graph-container" @key="tc.Id">
+                                                        <canvas id="graph-@tc.Id" width="600" height="300"></canvas>
+                                                    </div>
+                                                }
+                                                else
+                                                {
+                                                    <pre class="tool-output">@tc.Result</pre>
+                                                }
+                                            </details>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        }
                         <div class="msg-content">@((MarkupString)FormatContent(msg.Content))</div>
                     </div>
                 }
@@ -49,7 +118,16 @@
             {
                 <div class="chat-msg assistant">
                     <div class="msg-role">assistant</div>
-                    <div class="msg-content">@((MarkupString)_streamBuffer)</div>
+                    @if (_currentToolCall != null)
+                    {
+                        <div class="tool-calls">
+                            <div class="tool-call running">
+                                <span class="tool-name">@_currentToolCall.ToolName</span>
+                                <span class="tool-status">Running…</span>
+                            </div>
+                        </div>
+                    }
+                    <div class="msg-content">@((MarkupString)FormatContent(_streamBuffer))</div>
                 </div>
             }
             <div @ref="_scrollAnchor"></div>
@@ -57,7 +135,7 @@
 
         <div class="chat-input-bar">
             <input class="dcinput chat-input" @bind="_input" @bind:event="oninput"
-                   placeholder="Type a message…" disabled="@_streaming"
+                   placeholder="Ask about data, jobs, or request a graph…" disabled="@_streaming"
                    @onkeydown="InputKeydown" />
             <button class="dcbtn primary" disabled="@(_streaming || string.IsNullOrWhiteSpace(_input))" @onclick="Send">Send</button>
         </div>
@@ -65,24 +143,80 @@
 </div>
 
 @code {
-    private readonly List<ChatMessage> _messages = new();
+    private readonly List<AgentMessage> _messages = new();
     private string _input = "";
     private bool _streaming;
     private string _streamBuffer = "";
     private ElementReference _messagesRef;
     private ElementReference _scrollAnchor;
+    private bool _showConfig;
+    private Guid? _projectId;
+    private string _systemPrompt = "You are a PlaceContext agent. You can query project data, inspect job runs, and render graphs. Use tools when the user asks about data, jobs, or requests visualizations.";
+    private float _temperature = 0.7f;
+    private int _maxTokens = 2048;
+    private bool _toolCallingEnabled = true;
+    private IReadOnlyList<ProjectSummaryView> _projects = Array.Empty<ProjectSummaryView>();
+    private string _projectName = "";
+    private ToolCallInfo? _currentToolCall;
+    private int _toolCallCounter;
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
-        Ui.Set("Chat", "Cluster inference");
+        Ui.Set("Chat", "Agent inference");
+        _projects = await Svc.GetProjectsAsync();
+        if (_projects.Count > 0)
+        {
+            _projectId = _projects[0].Id;
+            _projectName = _projects[0].Name;
+            await LoadAgentConfig();
+        }
+    }
+
+    private async Task LoadAgentConfig()
+    {
+        if (!_projectId.HasValue) return;
+        try
+        {
+            var config = await Svc.GetAgentConfigAsync(_projectId.Value);
+            _systemPrompt = config.SystemPrompt;
+            _temperature = config.Temperature;
+        }
+        catch { /* use defaults */ }
+    }
+
+    private async Task OnProjectChanged()
+    {
+        if (_projectId.HasValue)
+        {
+            _projectName = _projects.FirstOrDefault(p => p.Id == _projectId.Value)?.Name ?? "";
+            await LoadAgentConfig();
+        }
+    }
+
+    private void ToggleConfig() => _showConfig = !_showConfig;
+
+    private async Task SaveConfig()
+    {
+        if (!_projectId.HasValue) return;
+        try
+        {
+            var config = await Svc.GetAgentConfigAsync(_projectId.Value);
+            await Svc.UpdateAgentConfigAsync(new Application.Features.UpdateAgentConfigCommand(
+                config.ProjectId, config.BaseModel, _systemPrompt, config.MaxContextChunks,
+                _temperature, config.TopP, config.Enabled));
+        }
+        catch (Exception ex)
+        {
+            _messages.Add(new AgentMessage("system", $"Config save failed: {ex.Message}"));
+        }
     }
 
     private async Task Send()
     {
         var text = _input.Trim();
-        if (string.IsNullOrEmpty(text) || _streaming) return;
+        if (string.IsNullOrEmpty(text) || _streaming || !_projectId.HasValue) return;
 
-        _messages.Add(new ChatMessage("user", text));
+        _messages.Add(new AgentMessage("user", text));
         _input = "";
         _streaming = true;
         _streamBuffer = "";
@@ -91,10 +225,17 @@
 
         try
         {
+            var messages = new List<ChatMessage>
+            {
+                new("system", _systemPrompt),
+            };
+            foreach (var m in _messages.Where(x => x.Role != "system"))
+                messages.Add(new ChatMessage(m.Role, m.Content));
+
             if (Gateway is ClusterChatGateway cg && cg.IsEnabled)
             {
-                // Streaming path — tokens arrive via IAsyncEnumerable
-                await foreach (var token in cg.ChatStreamAsync(_messages, ct: CancellationToken.None))
+                var settings = new ChatSettings(Temperature: _temperature, MaxTokens: _maxTokens);
+                await foreach (var token in cg.ChatStreamAsync(messages, settings, CancellationToken.None))
                 {
                     _streamBuffer += token;
                     StateHasChanged();
@@ -103,21 +244,21 @@
             }
             else
             {
-                // Non-streaming fallback
-                var reply = await Gateway.ChatAsync(_messages, ct: CancellationToken.None);
-                _streamBuffer = reply;
+                var settings = new ChatSettings(Temperature: _temperature, MaxTokens: _maxTokens);
+                _streamBuffer = await Gateway.ChatAsync(messages, settings, CancellationToken.None);
             }
 
-            _messages.Add(new ChatMessage("assistant", _streamBuffer));
+            _messages.Add(new AgentMessage("assistant", _streamBuffer));
         }
         catch (Exception ex)
         {
-            _messages.Add(new ChatMessage("assistant", $"[error: {ex.Message}]"));
+            _messages.Add(new AgentMessage("assistant", $"[error: {ex.Message}]"));
         }
         finally
         {
             _streaming = false;
             _streamBuffer = "";
+            _currentToolCall = null;
             StateHasChanged();
             await ScrollToBottom();
         }
@@ -126,27 +267,172 @@
     private async Task InputKeydown(KeyboardEventArgs e)
     {
         if (e.Key is "Enter" and not "Shift")
-        {
             await Send();
-        }
     }
 
     private async Task ScrollToBottom()
     {
-        try
-        {
-            await JS.InvokeVoidAsync(".scrollToElement", _scrollAnchor);
-        }
-        catch { /* best-effort */ }
+        try { await JS.InvokeVoidAsync(".scrollToElement", _scrollAnchor); }
+        catch { }
     }
 
     private static string FormatContent(string raw)
     {
-        // Basic markdown: bold, inline code, newlines → <br>
         var escaped = System.Net.WebUtility.HtmlEncode(raw);
         escaped = escaped.Replace("\n", "<br/>");
         escaped = System.Text.RegularExpressions.Regex.Replace(escaped, @"\*\*(.+?)\*\*", "<strong>$1</strong>");
         escaped = System.Text.RegularExpressions.Regex.Replace(escaped, @"`(.+?)`", "<code>$1</code>");
         return escaped;
     }
+
+    // ── Tool calling helpers ──────────────────────────────────────────────
+
+    private async Task<ToolCallResult> ExecuteToolAsync(string toolName, string args, CancellationToken ct)
+    {
+        if (!_projectId.HasValue) return ToolCallResult.Fail("No project selected");
+
+        try
+        {
+            return toolName switch
+            {
+                "query_table" => await ExecuteQueryTableAsync(args, ct),
+                "list_tables" => await ExecuteListTablesAsync(ct),
+                "list_jobs" => await ExecuteListJobsAsync(ct),
+                "list_job_runs" => await ExecuteListJobRunsAsync(args, ct),
+                "render_graph" => await ExecuteRenderGraphAsync(args, ct),
+                _ => ToolCallResult.Fail($"Unknown tool: {toolName}"),
+            };
+        }
+        catch (Exception ex)
+        {
+            return ToolCallResult.Fail(ex.Message);
+        }
+    }
+
+    private async Task<ToolCallResult> ExecuteQueryTableAsync(string args, CancellationToken ct)
+    {
+        var parts = args.Split('|');
+        var tableName = parts.Length > 0 ? parts[0].Trim() : "";
+        var page = parts.Length > 1 ? int.Parse(parts[1]) : 1;
+        var result = await Svc.QueryProjectTablePageAsync(_projectId.Value, tableName, null, page, 50, ct);
+        var sb = new System.Text.StringBuilder();
+        sb.Append($"Table: {tableName} ({result.TotalCount} rows)\n");
+        sb.Append(string.Join(" | ", result.Columns));
+        sb.Append("\n");
+        sb.Append("---\n");
+        foreach (var row in result.Rows)
+        {
+            sb.Append(string.Join(" | ", row.Select(v => v?.ToString() ?? "null")));
+            sb.Append("\n");
+        }
+        return ToolCallResult.Ok(sb.ToString());
+    }
+
+    private async Task<ToolCallResult> ExecuteListTablesAsync(CancellationToken ct)
+    {
+        var tables = await Svc.ListProjectDataTablesAsync(_projectId.Value, ct);
+        var sb = new System.Text.StringBuilder();
+        sb.Append("Project tables:\n");
+        foreach (var t in tables)
+            sb.Append($"- {t.Name} ({t.RowEstimate} rows)\n");
+        return ToolCallResult.Ok(sb.ToString());
+    }
+
+    private async Task<ToolCallResult> ExecuteListJobsAsync(CancellationToken ct)
+    {
+        var jobs = await Svc.ListJobsAsync(_projectId.Value, ct);
+        var sb = new System.Text.StringBuilder();
+        sb.Append("Jobs:\n");
+        foreach (var j in jobs)
+            sb.Append($"- {j.Name} (id: {j.Id})\n");
+        return ToolCallResult.Ok(sb.ToString());
+    }
+
+    private async Task<ToolCallResult> ExecuteListJobRunsAsync(string args, CancellationToken ct)
+    {
+        var jobId = Guid.TryParse(args, out var id) ? id : Guid.Empty;
+        var runs = jobId != Guid.Empty
+            ? await Svc.ListJobRunsAsync(jobId, ct)
+            : new List<JobRunView>();
+        var sb = new System.Text.StringBuilder();
+        sb.Append($"Job runs: {runs.Count}\n");
+        foreach (var r in runs.Take(20))
+            sb.Append($"- {r.Status} ({r.StartedAt:yyyy-MM-dd HH:mm})\n");
+        return ToolCallResult.Ok(sb.ToString());
+    }
+
+    private async Task<ToolCallResult> ExecuteRenderGraphAsync(string args, CancellationToken ct)
+    {
+        // Parse: "bar|tableName|column" or "pie|tableName|column"
+        var parts = args.Split('|');
+        var chartType = parts.Length > 0 ? parts[0].Trim() : "bar";
+        var tableName = parts.Length > 1 ? parts[1].Trim() : "";
+        var column = parts.Length > 2 ? parts[2].Trim() : "";
+
+        var result = await Svc.QueryProjectTablePageAsync(_projectId.Value, tableName, null, 1, 100, ct);
+        var colIndex = -1; for (var i = 0; i < result.Columns.Count; i++) { if (result.Columns[i].Equals(column, StringComparison.OrdinalIgnoreCase)) { colIndex = i; break; } }
+        if (colIndex < 0) return ToolCallResult.Fail($"Column '{column}' not found in {tableName}");
+
+        var labels = new List<string>();
+        var values = new List<double>();
+        foreach (var row in result.Rows)
+        {
+            var label = row[0]?.ToString() ?? "";
+            var valStr = row[colIndex]?.ToString() ?? "0";
+            if (double.TryParse(valStr, out var val))
+            {
+                labels.Add(label);
+                values.Add(val);
+            }
+        }
+
+        var graphData = new { type = chartType, labels, values };
+        return ToolCallResult.Graph(System.Text.Json.JsonSerializer.Serialize(graphData));
+    }
+// ── Message and tool call models ──────────────────────────────────────────
+
+public sealed class AgentMessage
+{
+    public AgentMessage(string role, string content)
+    {
+        Role = role;
+        Content = content;
+    }
+    public string Role { get; }
+    public string Content { get; }
+    public List<ToolCallInfo> ToolCalls { get; } = new();
+}
+
+public sealed class ToolCallInfo
+{
+    public int Id { get; set; }
+    public string ToolName { get; set; } = "";
+    public string Args { get; set; } = "";
+    public ToolCallStatus Status { get; set; }
+    public string? Result { get; set; }
+    public string ResultType { get; set; } = "text";
+}
+
+public enum ToolCallStatus { Pending, Running, Completed, Error }
+
+public sealed class ToolCallResult
+{
+    public bool Success { get; }
+    public string? Data { get; }
+    public string? Error { get; }
+    public bool IsGraph { get; }
+
+    public static ToolCallResult Ok(string data) => new(true, data, null, false);
+    public static ToolCallResult Fail(string error) => new(false, null, error, false);
+    public static ToolCallResult Graph(string data) => new(true, data, null, true);
+
+    private ToolCallResult(bool success, string? data, string? error, bool isGraph)
+    {
+        Success = success;
+        Data = data;
+        Error = error;
+        IsGraph = isGraph;
+    }
+}
+
 }
