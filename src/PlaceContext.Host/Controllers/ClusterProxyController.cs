@@ -38,6 +38,7 @@ public sealed class ClusterProxyController : ControllerBase
     }
 
     [HttpPost("chat")]
+    [AllowAnonymous]
     public async Task<IActionResult> Chat([FromBody] ClusterChatRequest req)
     {
         try
@@ -60,6 +61,7 @@ public sealed class ClusterProxyController : ControllerBase
     }
 
     [HttpPost("chat/stream")]
+    [AllowAnonymous]
     public async Task ChatStream([FromBody] ClusterChatRequest req)
     {
         Response.Headers.ContentType = "text/event-stream";
