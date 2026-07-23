@@ -91,6 +91,22 @@ public static class DependencyInjection
         services.AddScoped<IRunArtifactLinkRepository, EfRunArtifactLinkRepository>();
         services.AddScoped<IProjectChartRepository, EfProjectChartRepository>();
 
+        // Redis-backed distributed cache for job run shard results (keeps Postgres lean).
+        var redisConn = configuration["PlaceContext:Redis:ConnectionString"];
+        if (!string.IsNullOrWhiteSpace(redisConn))
+        {
+            services.AddStackExchangeRedisCache(opts =>
+            {
+                opts.Configuration = redisConn;
+                opts.InstanceName = "pc";
+            });
+            services.AddSingleton<Caching.IJobRunCache, Caching.RedisJobRunCache>();
+        }
+        else
+        {
+            services.AddSingleton<Caching.IJobRunCache, Caching.NullJobRunCache>();
+        }
+
         // Job / JobRun repositories.
         services.AddScoped<IJobRepository, EfJobRepository>();
         services.AddScoped<IJobRunRepository, EfJobRunRepository>();
@@ -118,8 +134,11 @@ public static class DependencyInjection
         // Universal RAG: any content kind, encrypted source text + pgvector.
         services.AddScoped<IContentIndexer, Embeddings.ContentIndexer>();
 
-        // Chat gateway: Ollama when an endpoint is configured, else a no-op.
-        if (!string.IsNullOrWhiteSpace(configuration["PlaceContext:Chat:Endpoint"]))
+        // Chat gateway: cluster (SafeTensors shard server) takes precedence,
+        // then Ollama, else a no-op.
+        if (!string.IsNullOrWhiteSpace(configuration["PlaceContext:ClusterChat:Endpoint"]))
+            services.AddSingleton<IChatGateway, Chat.ClusterChatGateway>();
+        else if (!string.IsNullOrWhiteSpace(configuration["PlaceContext:Chat:Endpoint"]))
             services.AddSingleton<IChatGateway, Chat.OllamaChatGateway>();
         else
             services.AddSingleton<IChatGateway, Chat.NullChatGateway>();

@@ -1,0 +1,152 @@
+@page "/chat"
+@layout PlaceContext.Host.Components.Layout.MainLayout
+@using PlaceContext.Application.Ports
+@using PlaceContext.Infrastructure.Chat
+@inject IChatGateway Gateway
+@inject PortalUiState Ui
+@inject IJSRuntime JS
+
+<PageTitle>placecontext — Chat</PageTitle>
+
+<div class="page">
+    <div class="page-head">
+        <div>
+            <h2 class="page-title">Chat</h2>
+            <div class="page-sub">
+                @if (Gateway is ClusterChatGateway cg && cg.IsEnabled)
+                {
+                    <span>Cluster model — streaming SafeTensors inference</span>
+                }
+                else if (Gateway.IsEnabled)
+                {
+                    <span>Chat backend active</span>
+                }
+                else
+                {
+                    <span>No model configured. Set <code>PlaceContext:ClusterChat:Endpoint</code> in appsettings.</span>
+                }
+            </div>
+        </div>
+    </div>
+
+    <div class="chat-container">
+        <div class="chat-messages" @ref="_messagesRef">
+            @if (_messages.Count == 0)
+            {
+                <div class="empty-note chat-empty">Start a conversation below.</div>
+            }
+            else
+            {
+                @foreach (var msg in _messages)
+                {
+                    <div class="chat-msg @msg.Role">
+                        <div class="msg-role">@msg.Role</div>
+                        <div class="msg-content">@((MarkupString)FormatContent(msg.Content))</div>
+                    </div>
+                }
+            }
+            @if (_streaming)
+            {
+                <div class="chat-msg assistant">
+                    <div class="msg-role">assistant</div>
+                    <div class="msg-content">@((MarkupString)_streamBuffer)</div>
+                </div>
+            }
+            <div @ref="_scrollAnchor"></div>
+        </div>
+
+        <div class="chat-input-bar">
+            <input class="dcinput chat-input" @bind="_input" @bind:event="oninput"
+                   placeholder="Type a message…" disabled="@_streaming"
+                   @onkeydown="InputKeydown" />
+            <button class="dcbtn primary" disabled="@(_streaming || string.IsNullOrWhiteSpace(_input))" @onclick="Send">Send</button>
+        </div>
+    </div>
+</div>
+
+@code {
+    private readonly List<ChatMessage> _messages = new();
+    private string _input = "";
+    private bool _streaming;
+    private string _streamBuffer = "";
+    private ElementReference _messagesRef;
+    private ElementReference _scrollAnchor;
+
+    protected override void OnInitialized()
+    {
+        Ui.Set("Chat", "Cluster inference");
+    }
+
+    private async Task Send()
+    {
+        var text = _input.Trim();
+        if (string.IsNullOrEmpty(text) || _streaming) return;
+
+        _messages.Add(new ChatMessage("user", text));
+        _input = "";
+        _streaming = true;
+        _streamBuffer = "";
+        StateHasChanged();
+        await ScrollToBottom();
+
+        try
+        {
+            if (Gateway is ClusterChatGateway cg && cg.IsEnabled)
+            {
+                // Streaming path — tokens arrive via IAsyncEnumerable
+                await foreach (var token in cg.ChatStreamAsync(_messages, ct: CancellationToken.None))
+                {
+                    _streamBuffer += token;
+                    StateHasChanged();
+                    await ScrollToBottom();
+                }
+            }
+            else
+            {
+                // Non-streaming fallback
+                var reply = await Gateway.ChatAsync(_messages, ct: CancellationToken.None);
+                _streamBuffer = reply;
+            }
+
+            _messages.Add(new ChatMessage("assistant", _streamBuffer));
+        }
+        catch (Exception ex)
+        {
+            _messages.Add(new ChatMessage("assistant", $"[error: {ex.Message}]"));
+        }
+        finally
+        {
+            _streaming = false;
+            _streamBuffer = "";
+            StateHasChanged();
+            await ScrollToBottom();
+        }
+    }
+
+    private async Task InputKeydown(KeyboardEventArgs e)
+    {
+        if (e.Key is "Enter" and not "Shift")
+        {
+            await Send();
+        }
+    }
+
+    private async Task ScrollToBottom()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync(".scrollToElement", _scrollAnchor);
+        }
+        catch { /* best-effort */ }
+    }
+
+    private static string FormatContent(string raw)
+    {
+        // Basic markdown: bold, inline code, newlines → <br>
+        var escaped = System.Net.WebUtility.HtmlEncode(raw);
+        escaped = escaped.Replace("\n", "<br/>");
+        escaped = System.Text.RegularExpressions.Regex.Replace(escaped, @"\*\*(.+?)\*\*", "<strong>$1</strong>");
+        escaped = System.Text.RegularExpressions.Regex.Replace(escaped, @"`(.+?)`", "<code>$1</code>");
+        return escaped;
+    }
+}

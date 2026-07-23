@@ -5,6 +5,7 @@ using PlaceContext.Host.Auth;
 using PlaceContext.Application;
 using PlaceContext.Application.Ports;
 using PlaceContext.Host.Components;
+using PlaceContext.Host.Controllers;
 using PlaceContext.Host.Tenancy;
 using PlaceContext.Host.Tools;
 using PlaceContext.Infrastructure;
@@ -77,6 +78,10 @@ builder.Services.AddResponseCompression(o =>
 // The former minimal-API endpoints (ingest, backup, auth, artifacts, health) now live as controllers
 // under Controllers/ — attribute-routed, same paths/auth, wired below with MapControllers().
 builder.Services.AddControllers();
+builder.Services.AddHttpClient();
+builder.Services.Configure<ClusterProxyOptions>(builder.Configuration.GetSection("PlaceContext:ClusterChat"));
+builder.Services.AddScoped<ClusterPipeline>();
+builder.Services.AddHostedService<ClusterProxyService>();
 // One shared in-memory cache for expensive read models (the per-project dependency graph above all).
 builder.Services.AddMemoryCache();
 builder.Services.AddCascadingAuthenticationState();
