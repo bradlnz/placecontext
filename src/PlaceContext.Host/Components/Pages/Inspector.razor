@@ -90,7 +90,7 @@
 
     private async Task Load()
     {
-        _calls = await Svc.GetRecentToolCallsAsync(100);
+        _calls = await Svc.GetRecentToolCallsAsync(20);
         _active ??= _calls.FirstOrDefault();
     }
 

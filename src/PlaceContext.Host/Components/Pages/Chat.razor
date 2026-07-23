@@ -35,6 +35,7 @@
             @if (_projectId.HasValue)
             {
                 <button class="dcbtn sm" @onclick="ToggleSidePanel">@(_showSidePanel ? "Hide Panel" : "Show Panel")</button>
+                <button class="dcbtn sm" @onclick="OpenSettings">⚙ Settings</button>
             }
             <select class="dcselect sm" @bind="_projectId" @bind:after="OnProjectChanged">
                 <option value="">Select project…</option>
@@ -228,6 +229,10 @@
     private ToolCallInfo? _currentToolCall;
     private int _toolCallCounter;
     private bool _showSidePanel = true;
+    private bool _showSettings;
+    private string _pendingSystemPrompt = "";
+    private float _pendingTemperature;
+    private int _pendingMaxTokens;
     private Guid? _sessionId;
     private string _sessionTitle = "New Chat";
     private IReadOnlyList<ChatSessionSummary> _sessions = Array.Empty<ChatSessionSummary>();
@@ -701,6 +706,36 @@
 
 
     private void ToggleSidePanel() => _showSidePanel = !_showSidePanel;
+
+    private void OpenSettings()
+    {
+        _pendingSystemPrompt = _systemPrompt;
+        _pendingTemperature = _temperature;
+        _pendingMaxTokens = _maxTokens;
+        _showSettings = true;
+    }
+
+    private void CloseSettings() => _showSettings = false;
+
+    private async Task SaveSettings()
+    {
+        _systemPrompt = _pendingSystemPrompt;
+        _temperature = _pendingTemperature;
+        _maxTokens = _pendingMaxTokens;
+        _showSettings = false;
+
+        if (_projectId.HasValue)
+        {
+            try
+            {
+                var config = await Svc.GetAgentConfigAsync(_projectId.Value);
+                await Svc.UpdateAgentConfigAsync(new Application.Features.UpdateAgentConfigCommand(
+                    config.ProjectId, config.BaseModel, _systemPrompt, config.MaxContextChunks,
+                    _temperature, config.TopP, config.Enabled));
+            }
+            catch { /* best-effort */ }
+        }
+    }
 
     private static string GetActionIcon(ToolCallStatus status) => status switch
     {

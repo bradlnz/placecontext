@@ -428,3 +428,100 @@
     color: var(--muted);
     margin-top: 2px;
 }
+
+/* Settings modal */
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.modal-dialog {
+    background: var(--bg-1);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    width: 90%;
+    max-width: 560px;
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+}
+
+.modal-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--border);
+}
+
+.modal-head h3 {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+.modal-close {
+    background: none;
+    border: none;
+    font-size: 1.4rem;
+    color: var(--muted);
+    cursor: pointer;
+    padding: 0 4px;
+    line-height: 1;
+}
+
+.modal-close:hover {
+    color: var(--text);
+}
+
+.modal-body {
+    padding: 18px;
+    overflow-y: auto;
+    flex: 1;
+}
+
+.dcfield textarea.textarea {
+    width: 100%;
+    font-family: var(--mono);
+    font-size: 0.8rem;
+    line-height: 1.5;
+    resize: vertical;
+    min-height: 120px;
+}
+
+.settings-row {
+    display: flex;
+    gap: 16px;
+    margin-top: 14px;
+}
+
+.settings-row .dcfield {
+    flex: 1;
+}
+
+.dcslider {
+    width: 100%;
+    margin-top: 4px;
+}
+
+.slider-val {
+    display: block;
+    text-align: center;
+    font-size: 0.85rem;
+    color: var(--muted);
+    margin-top: 2px;
+}
+
+.modal-foot {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 12px 18px;
+    border-top: 1px solid var(--border);
+}
