@@ -30,7 +30,10 @@
             </div>
         </div>
         <div class="chat-controls">
-            <button class="dcbtn sm" @onclick="ToggleConfig">@(_showConfig ? "Hide Config" : "Agent Config")</button>
+            @if (_projectId.HasValue)
+            {
+                <a class="dcbtn sm" href="/project/@_projectId.Value/agents">Agent Config</a>
+            }
             <select class="dcselect sm" @bind="_projectId" @bind:after="OnProjectChanged">
                 <option value="">Select project…</option>
                 @foreach (var p in _projects)
@@ -40,32 +43,6 @@
             </select>
         </div>
     </div>
-
-    @if (_showConfig)
-    {
-        <div class="agent-config-panel">
-            <h3>Agent Configuration</h3>
-            <div class="config-row">
-                <label>System Prompt</label>
-                <textarea class="dcinput" @bind="_systemPrompt" rows="6" placeholder="You are a PlaceContext agent. You can query project data, inspect job runs, and render graphs."></textarea>
-            </div>
-            <div class="config-row">
-                <label>Temperature</label>
-                <input type="range" class="dcslider" @bind="_temperature" min="0" max="1" step="0.1" />
-                <span>@_temperature.ToString("0.0")</span>
-            </div>
-            <div class="config-row">
-                <label>Max Tokens</label>
-                <input type="number" class="dcinput sm" @bind="_maxTokens" min="64" max="4096" />
-            </div>
-            <div class="config-row">
-                <label>
-                    <input type="checkbox" @bind="_toolCallingEnabled" /> Enable tool calling
-                </label>
-            </div>
-            <button class="dcbtn primary" @onclick="SaveConfig">Save Config</button>
-        </div>
-    }
 
     <div class="chat-container">
         <div class="chat-messages" @ref="_messagesRef">
@@ -149,8 +126,7 @@
     private string _streamBuffer = "";
     private ElementReference _messagesRef;
     private ElementReference _scrollAnchor;
-    private bool _showConfig;
-    private Guid? _projectId;
+        private Guid? _projectId;
     private string _systemPrompt = "You are a PlaceContext agent. You can query project data, inspect job runs, and render graphs. Use tools when the user asks about data, jobs, or requests visualizations.";
     private float _temperature = 0.7f;
     private int _maxTokens = 2048;
@@ -193,23 +169,7 @@
         }
     }
 
-    private void ToggleConfig() => _showConfig = !_showConfig;
-
-    private async Task SaveConfig()
-    {
-        if (!_projectId.HasValue) return;
-        try
-        {
-            var config = await Svc.GetAgentConfigAsync(_projectId.Value);
-            await Svc.UpdateAgentConfigAsync(new Application.Features.UpdateAgentConfigCommand(
-                config.ProjectId, config.BaseModel, _systemPrompt, config.MaxContextChunks,
-                _temperature, config.TopP, config.Enabled));
-        }
-        catch (Exception ex)
-        {
-            _messages.Add(new AgentMessage("system", $"Config save failed: {ex.Message}"));
-        }
-    }
+    
 
     private async Task Send()
     {
