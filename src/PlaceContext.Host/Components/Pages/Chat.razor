@@ -62,37 +62,48 @@
                     @foreach (var msg in _messages)
                     {
                         <div class="chat-msg @msg.Role">
-                            <div class="msg-role">@msg.Role</div>
-                            @if (msg.ToolCalls.Count > 0)
-                            {
-                                <div class="tool-calls">
-                                    @foreach (var tc in msg.ToolCalls)
-                                    {
-                                        <div class="tool-call @(tc.Status.ToString().ToLower())">
-                                            <span class="tool-name">@tc.ToolName</span>
-                                            <span class="tool-status">@tc.Status</span>
-                                            @if (tc.Status == ToolCallStatus.Completed && !string.IsNullOrEmpty(tc.Result))
-                                            {
-                                                <details class="tool-result">
-                                                    <summary>View result</summary>
-                                                    @if (tc.ResultType == "graph")
-                                                    {
-                                                        <div class="graph-container" @key="tc.Id">
-                                                            <canvas id="graph-@tc.Id" width="600" height="300"></canvas>
-                                                        </div>
-                                                    }
-                                                    else
-                                                    {
-                                                        <pre class="tool-output">@tc.Result</pre>
-                                                    }
-                                                </details>
-                                            }
-                                        </div>
-                                    }
-                                </div>
-                            }
-                            <div class="msg-content">@((MarkupString)FormatContent(msg.Content))</div>
-                        </div>
+                            <div class="msg-avatar @(msg.Role == "user" ? "avatar-user" : "avatar-bot")">
+                                @if (msg.Role == "user")
+                                {
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                                }
+                                else
+                                {
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+                                }
+                            </div>
+                            <div class="msg-body">
+                                <div class="msg-role">@msg.Role</div>
+                                @if (msg.ToolCalls.Count > 0)
+                                {
+                                    <div class="tool-calls">
+                                        @foreach (var tc in msg.ToolCalls)
+                                        {
+                                            <div class="tool-call @(tc.Status.ToString().ToLower())">
+                                                <span class="tool-name">@tc.ToolName</span>
+                                                <span class="tool-status">@tc.Status</span>
+                                                @if (tc.Status == ToolCallStatus.Completed && !string.IsNullOrEmpty(tc.Result))
+                                                {
+                                                    <details class="tool-result">
+                                                        <summary>View result</summary>
+                                                        @if (tc.ResultType == "graph")
+                                                        {
+                                                            <div class="graph-container" @key="tc.Id">
+                                                                <canvas id="graph-@tc.Id" width="600" height="300"></canvas>
+                                                            </div>
+                                                        }
+                                                        else
+                                                        {
+                                                            <pre class="tool-output">@tc.Result</pre>
+                                                        }
+                                                    </details>
+                                                }
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                                <div class="msg-content">@((MarkupString)FormatContent(msg.Content))</div>
+                            </div>
                         </div>
                     }
                 }
