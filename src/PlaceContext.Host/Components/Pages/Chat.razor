@@ -32,7 +32,7 @@
         <div class="chat-controls">
             @if (_projectId.HasValue)
             {
-                <a class="dcbtn sm" href="/project/@_projectId.Value/agents">Agent Config</a>
+                <button class="dcbtn sm" @onclick="ToggleSidePanel">@(_showSidePanel ? "Hide Panel" : "Show Panel")</button>
             }
             <select class="dcselect sm" @bind="_projectId" @bind:after="OnProjectChanged">
                 <option value="">Select project…</option>
@@ -44,7 +44,8 @@
         </div>
     </div>
 
-    <div class="chat-container">
+    <div class="chat-layout">
+        <div class="chat-container">
         <div class="chat-messages" @ref="_messagesRef">
             @if (_messages.Count == 0)
             {
@@ -116,6 +117,77 @@
                    @onkeydown="InputKeydown" />
             <button class="dcbtn primary" disabled="@(_streaming || string.IsNullOrWhiteSpace(_input))" @onclick="Send">Send</button>
         </div>
+        </div>
+
+        @if (_showSidePanel)
+        {
+            <div class="side-panel">
+                <div class="side-panel-head">
+                    <h3>Agent Workspace</h3>
+                    @if (_graphNodes.Count > 0)
+                    {
+                        <span class="graph-badge">@_graphNodes nodes · @_graphLinks links</span>
+                    }
+                </div>
+
+                @if (_activeActions.Count > 0)
+                {
+                    <div class="side-section">
+                        <h4>Active Actions</h4>
+                        @foreach (var action in _activeActions)
+                        {
+                            <div class="action-item @action.Status.ToString().ToLower()">
+                                <span class="action-icon">@GetActionIcon(action.Status)</span>
+                                <span class="action-name">@action.ToolName</span>
+                                <span class="action-detail">@action.Detail</span>
+                            </div>
+                        }
+                    </div>
+                }
+
+                @if (_fetchedData.Count > 0)
+                {
+                    <div class="side-section">
+                        <h4>Fetched Data</h4>
+                        @foreach (var data in _fetchedData.TakeLast(10))
+                        {
+                            <details class="data-item">
+                                <summary>@data.Source (@data.RowCount rows)</summary>
+                                <pre class="data-preview">@data.Preview</pre>
+                            </details>
+                        }
+                    </div>
+                }
+
+                @if (_graphNodes.Count > 0)
+                {
+                    <div class="side-section">
+                        <h4>Project Graph</h4>
+                        <div class="graph-nodes">
+                            @foreach (var node in _graphNodes.Take(20))
+                            {
+                                <span class="graph-node-tag" title="@node.Label (@node.Degree connections)">@node.Label</span>
+                            }
+                        </div>
+                    </div>
+                }
+
+                @if (_toolHistory.Count > 0)
+                {
+                    <div class="side-section">
+                        <h4>Tool History</h4>
+                        @foreach (var th in _toolHistory.TakeLast(15))
+                        {
+                            <div class="tool-history-item @(th.Success ? "ok" : "err")">
+                                <span class="th-time">@th.Timestamp.ToString("HH:mm:ss")</span>
+                                <span class="th-tool">@th.ToolName</span>
+                                <span class="th-status">@th.Status</span>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        }
     </div>
 </div>
 
@@ -135,6 +207,12 @@
     private string _projectName = "";
     private ToolCallInfo? _currentToolCall;
     private int _toolCallCounter;
+    private bool _showSidePanel = true;
+    private readonly List<AgentAction> _activeActions = new();
+    private readonly List<FetchedData> _fetchedData = new();
+    private readonly List<ToolHistoryEntry> _toolHistory = new();
+    private readonly List<GraphNodeView> _graphNodes = new();
+    private int _graphLinks;
 
     protected override async Task OnInitializedAsync()
     {
@@ -166,6 +244,10 @@
         {
             _projectName = _projects.FirstOrDefault(p => p.Id == _projectId.Value)?.Name ?? "";
             await LoadAgentConfig();
+            await LoadGraphAsync();
+            _activeActions.Clear();
+            _fetchedData.Clear();
+            _toolHistory.Clear();
         }
     }
 
@@ -271,6 +353,7 @@
             "[[tool:list_jobs|]] - List jobs, " +
             "[[tool:list_job_runs|jobId]] - List runs, " +
             "[[tool:render_graph|bar|table|col]] - Chart, " +
+            "[[tool:query_graph|]] - Query project graph for entities/relationships, " +
             "[[tool:schedule_job|jobId|name|cron]] - Create cron schedule, " +
             "[[tool:list_schedules|jobId]] - List job schedules, " +
             "[[tool:toggle_schedule|triggerId|true|false]] - Enable/disable schedule, " +
@@ -333,6 +416,7 @@
                 "list_jobs" => await ExecuteListJobsAsync(ct),
                 "list_job_runs" => await ExecuteListJobRunsAsync(args, ct),
                 "render_graph" => await ExecuteRenderGraphAsync(args, ct),
+                "query_graph" => await ExecuteQueryGraphAsync(ct),
                 "schedule_job" => await ExecuteScheduleJobAsync(args, ct),
                 "list_schedules" => await ExecuteListSchedulesAsync(args, ct),
                 "toggle_schedule" => await ExecuteToggleScheduleAsync(args, ct),
@@ -351,7 +435,10 @@
         var parts = args.Split('|');
         var tableName = parts.Length > 0 ? parts[0].Trim() : "";
         var page = parts.Length > 1 ? int.Parse(parts[1]) : 1;
+        AddActiveAction("query_table", $"Querying {tableName}...");
         var result = await Svc.QueryProjectTablePageAsync(_projectId.Value, tableName, null, page, 50, ct);
+        var preview = string.Join("\n", result.Rows.Take(3).Select(r => string.Join(", ", r.Take(4))));
+        AddFetchedData(tableName, (int)result.TotalCount, preview);
         var sb = new System.Text.StringBuilder();
         sb.Append($"Table: {tableName} ({result.TotalCount} rows)\n");
         sb.Append(string.Join(" | ", result.Columns));
@@ -367,9 +454,10 @@
 
     private async Task<ToolCallResult> ExecuteListTablesAsync(CancellationToken ct)
     {
+        AddActiveAction("list_tables", "Loading tables...");
         var tables = await Svc.ListProjectDataTablesAsync(_projectId.Value, ct);
         var sb = new System.Text.StringBuilder();
-        sb.Append("Project tables:\n");
+        sb.Append($"Project tables: {tables.Count}\n");
         foreach (var t in tables)
             sb.Append($"- {t.Name} ({t.RowEstimate} rows)\n");
         return ToolCallResult.Ok(sb.ToString());
@@ -377,9 +465,10 @@
 
     private async Task<ToolCallResult> ExecuteListJobsAsync(CancellationToken ct)
     {
+        AddActiveAction("list_jobs", "Loading jobs...");
         var jobs = await Svc.ListJobsAsync(_projectId.Value, ct);
         var sb = new System.Text.StringBuilder();
-        sb.Append("Jobs:\n");
+        sb.Append($"Jobs: {jobs.Count}\n");
         foreach (var j in jobs)
             sb.Append($"- {j.Name} (id: {j.Id})\n");
         return ToolCallResult.Ok(sb.ToString());
@@ -387,6 +476,7 @@
 
     private async Task<ToolCallResult> ExecuteListJobRunsAsync(string args, CancellationToken ct)
     {
+        AddActiveAction("list_job_runs", args != "" ? $"Runs for {args[..8]}..." : "Loading all runs...");
         var jobId = Guid.TryParse(args, out var id) ? id : Guid.Empty;
         var runs = jobId != Guid.Empty
             ? await Svc.ListJobRunsAsync(jobId, ct)
@@ -427,6 +517,36 @@
         return ToolCallResult.Graph(System.Text.Json.JsonSerializer.Serialize(graphData));
     }
 
+    private async Task<ToolCallResult> ExecuteQueryGraphAsync(CancellationToken ct)
+    {
+        if (!_projectId.HasValue) return ToolCallResult.Fail("No project selected");
+        AddActiveAction("query_graph", "Loading project graph...");
+        try
+        {
+            var graph = await Svc.GetGraphVizAsync(_projectId.Value, ct);
+            var sb = new System.Text.StringBuilder();
+            sb.Append($"Project Graph: {graph.NodeCount} nodes, {graph.LinkCount} links\n\n");
+            sb.Append("Top entities by connections:\n");
+            var topNodes = graph.Nodes.OrderByDescending(n => n.Degree).Take(15);
+            foreach (var n in topNodes)
+            {
+                sb.Append($"- {n.Label} ({n.Degree} connections, hotspot: {n.IsGod})\n");
+            }
+            _graphNodes.Clear();
+            _graphNodes.AddRange(graph.Nodes);
+            _graphLinks = graph.LinkCount;
+            CompleteActiveAction("query_graph", true);
+            AddToolHistory("query_graph", true, $"{graph.NodeCount} nodes");
+            return ToolCallResult.Ok(sb.ToString());
+        }
+        catch (Exception ex)
+        {
+            CompleteActiveAction("query_graph", false);
+            AddToolHistory("query_graph", false, ex.Message);
+            return ToolCallResult.Fail($"Graph query failed: {ex.Message}");
+        }
+    }
+
     private async Task<ToolCallResult> ExecuteScheduleJobAsync(string args, CancellationToken ct)
     {
         var parts = args.Split('|');
@@ -435,8 +555,11 @@
         if (jobId == Guid.Empty) return ToolCallResult.Fail("Invalid jobId");
         var name = parts[1].Trim();
         var cron = parts[2].Trim();
+        AddActiveAction("schedule_job", $"Creating schedule for job {jobId.ToString()[..8]}...");
         var trigger = await Svc.CreateTriggerAsync(new Application.Features.CreateTriggerCommand(
             jobId, name, "Schedule", cron, null), ct);
+        CompleteActiveAction("schedule_job", true);
+        AddToolHistory("schedule_job", true, $"Next: {trigger.NextRunAt?.ToString("HH:mm") ?? "—"}");
         return ToolCallResult.Ok($"Schedule created: {trigger.Name} (id: {trigger.Id})\n" +
             $"Cron: {trigger.CronExpression}\n" +
             $"Next run: {trigger.NextRunAt?.ToString("yyyy-MM-dd HH:mm") ?? "—"}\n" +
@@ -468,7 +591,10 @@
         var triggerId = Guid.TryParse(parts[0].Trim(), out var id) ? id : Guid.Empty;
         if (triggerId == Guid.Empty) return ToolCallResult.Fail("Invalid triggerId");
         var enabled = parts[1].Trim().ToLower() == "true";
+        AddActiveAction("toggle_schedule", $"Toggling schedule {triggerId.ToString()[..8]}...");
         var trigger = await Svc.SetTriggerEnabledAsync(triggerId, enabled, ct);
+        CompleteActiveAction("toggle_schedule", true);
+        AddToolHistory("toggle_schedule", true, enabled ? "enabled" : "disabled");
         return ToolCallResult.Ok($"Schedule '{trigger.Name}' {(enabled ? "enabled" : "disabled")}.\n" +
             $"Next run: {trigger.NextRunAt?.ToString("yyyy-MM-dd HH:mm") ?? "—"}");
     }
@@ -477,10 +603,64 @@
     {
         var jobId = Guid.TryParse(args.Trim(), out var id) ? id : Guid.Empty;
         if (jobId == Guid.Empty) return ToolCallResult.Fail("Invalid jobId");
+        AddActiveAction("run_job", $"Running job {jobId.ToString()[..8]}...");
         var run = await Svc.RunJobAsync(jobId, null, null, ct);
+        CompleteActiveAction("run_job", true);
+        AddToolHistory("run_job", true, run.Status);
         return ToolCallResult.Ok($"Job run started: {run.Id}\nStatus: {run.Status}\nStarted: {run.StartedAt:yyyy-MM-dd HH:mm}");
     }
 
+
+    private void ToggleSidePanel() => _showSidePanel = !_showSidePanel;
+
+    private static string GetActionIcon(ToolCallStatus status) => status switch
+    {
+        ToolCallStatus.Running => "⏳",
+        ToolCallStatus.Completed => "✅",
+        ToolCallStatus.Error => "❌",
+        _ => "⏸️"
+    };
+
+    private async Task LoadGraphAsync()
+    {
+        if (!_projectId.HasValue) return;
+        try
+        {
+            var graph = await Svc.GetGraphVizAsync(_projectId.Value);
+            _graphNodes.Clear();
+            _graphNodes.AddRange(graph.Nodes);
+            _graphLinks = graph.LinkCount;
+        }
+        catch { }
+    }
+
+    private void AddActiveAction(string toolName, string detail)
+    {
+        _activeActions.Add(new AgentAction { ToolName = toolName, Detail = detail, Status = ToolCallStatus.Running });
+    }
+
+    private void CompleteActiveAction(string toolName, bool success)
+    {
+        var action = _activeActions.FirstOrDefault(a => a.ToolName == toolName && a.Status == ToolCallStatus.Running);
+        if (action != null)
+            action.Status = success ? ToolCallStatus.Completed : ToolCallStatus.Error;
+    }
+
+    private void AddFetchedData(string source, int rowCount, string preview)
+    {
+        _fetchedData.Add(new FetchedData { Source = source, RowCount = rowCount, Preview = preview });
+    }
+
+    private void AddToolHistory(string toolName, bool success, string status)
+    {
+        _toolHistory.Add(new ToolHistoryEntry
+        {
+            ToolName = toolName,
+            Success = success,
+            Status = status,
+            Timestamp = DateTimeOffset.Now
+        });
+    }
 
 // ── Message and tool call models ──────────────────────────────────────────
 
@@ -526,6 +706,28 @@ public sealed class ToolCallResult
         Error = error;
         IsGraph = isGraph;
     }
+}
+
+public sealed class AgentAction
+{
+    public string ToolName { get; set; } = "";
+    public string Detail { get; set; } = "";
+    public ToolCallStatus Status { get; set; }
+}
+
+public sealed class FetchedData
+{
+    public string Source { get; set; } = "";
+    public int RowCount { get; set; }
+    public string Preview { get; set; } = "";
+}
+
+public sealed class ToolHistoryEntry
+{
+    public string ToolName { get; set; } = "";
+    public bool Success { get; set; }
+    public string Status { get; set; } = "";
+    public DateTimeOffset Timestamp { get; set; }
 }
 
 }
