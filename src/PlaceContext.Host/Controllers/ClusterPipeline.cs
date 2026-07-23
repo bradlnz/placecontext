@@ -10,8 +10,8 @@ public sealed class ClusterPipeline
     private readonly ClusterProxyOptions _opts;
     private readonly ILogger<ClusterPipeline> _log;
     private static readonly JsonSerializerOptions J = new() { PropertyNameCaseInsensitive = true };
-    private const string BOS = "<|im_start|>";
-    private const string EOS = "<|im_end|>";
+    private static readonly string BOS = "im_start";
+    private static readonly string EOS = "im_end";
 
     public ClusterPipeline(
         IHttpClientFactory http,
@@ -41,22 +41,18 @@ public sealed class ClusterPipeline
         var client = _http.CreateClient();
         client.Timeout = TimeSpan.FromMinutes(5);
 
-        var prompt = BuildPrompt(req);
         var temp = req.Temperature ?? 0.7f;
         var topP = req.TopP ?? 0.9f;
         var maxTokens = req.MaxTokens ?? 2048;
 
         if (shards.Length == 1)
         {
-            var r = await Fwd(client, shards[0], prompt, null, null, temp, topP, maxTokens, true, null, ct);
-            if (r.TryGetProperty("generated_text", out var gt))
-            {
-                var t = gt.GetString();
-                if (!string.IsNullOrEmpty(t)) yield return t;
-            }
+            await foreach (var token in StreamSingleShard(client, shards[0], req, temp, topP, maxTokens, ct))
+                yield return token;
             yield break;
         }
 
+        var prompt = BuildPrompt(req);
         var init = await Fwd(client, shards[0], prompt, null, null, temp, topP, maxTokens, false, null, ct);
         var hs = init.GetProperty("hidden_states");
         var seqLen = hs[0][0].GetArrayLength();
@@ -88,6 +84,49 @@ public sealed class ClusterPipeline
 
             var emb = await Raw(client, shards[0], new { token_ids = ids, attention_mask = mask }, ct);
             hs = emb.TryGetProperty("hidden_states", out var n2) ? n2 : hs;
+        }
+    }
+
+    private async IAsyncEnumerable<string> StreamSingleShard(
+        HttpClient client, string url, ClusterChatRequest req,
+        float temp, float topP, int maxTokens, CancellationToken ct)
+    {
+        var payload = new
+        {
+            model = _opts.Model,
+            messages = req.Messages.Select(m => new { role = m.Role, content = m.Content }).ToList(),
+            stream = true,
+            temperature = temp,
+            top_p = topP,
+            max_tokens = maxTokens,
+        };
+
+        using var httpReq = new HttpRequestMessage(HttpMethod.Post, $"{url}/v1/chat/stream")
+        { Content = JsonContent.Create(payload, options: J) };
+        using var resp = await client.SendAsync(httpReq, HttpCompletionOption.ResponseHeadersRead, ct);
+        resp.EnsureSuccessStatusCode();
+
+        await using var stream = await resp.Content.ReadAsStreamAsync(ct);
+        using var reader = new StreamReader(stream);
+        while (!ct.IsCancellationRequested)
+        {
+            var line = await reader.ReadLineAsync(ct);
+            if (line is null) break;
+            if (!line.StartsWith("data: ")) continue;
+            var data = line[6..];
+            if (data == "[DONE]") break;
+            string? content = null;
+            try
+            {
+                using var doc = JsonDocument.Parse(data);
+                var choices = doc.RootElement.GetProperty("choices");
+                if (choices.GetArrayLength() == 0) continue;
+                var delta = choices[0].GetProperty("delta");
+                if (delta.TryGetProperty("content", out var contentEl))
+                    content = contentEl.GetString();
+            }
+            catch { }
+            if (!string.IsNullOrEmpty(content)) yield return content;
         }
     }
 
