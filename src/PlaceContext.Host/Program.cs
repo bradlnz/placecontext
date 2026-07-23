@@ -81,7 +81,8 @@ builder.Services.AddControllers();
 builder.Services.AddHttpClient();
 builder.Services.Configure<ClusterProxyOptions>(builder.Configuration.GetSection("PlaceContext:ClusterChat"));
 builder.Services.AddScoped<ClusterPipeline>();
-builder.Services.AddHostedService<ClusterProxyService>();
+builder.Services.AddSingleton<ClusterProxyService>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<ClusterProxyService>());
 // One shared in-memory cache for expensive read models (the per-project dependency graph above all).
 builder.Services.AddMemoryCache();
 builder.Services.AddCascadingAuthenticationState();
