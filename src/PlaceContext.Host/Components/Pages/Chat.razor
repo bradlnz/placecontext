@@ -93,22 +93,28 @@
                             }
                             <div class="msg-content">@((MarkupString)FormatContent(msg.Content))</div>
                         </div>
+                        </div>
                     }
                 }
                 @if (_streaming)
                 {
                     <div class="chat-msg assistant">
-                        <div class="msg-role">assistant</div>
-                        @if (_currentToolCall != null)
-                        {
-                            <div class="tool-calls">
-                                <div class="tool-call running">
-                                    <span class="tool-name">@_currentToolCall.ToolName</span>
-                                    <span class="tool-status">Running…</span>
+                        <div class="msg-avatar avatar-bot">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+                        </div>
+                        <div class="msg-body">
+                            <div class="msg-role">assistant</div>
+                            @if (_currentToolCall != null)
+                            {
+                                <div class="tool-calls">
+                                    <div class="tool-call running">
+                                        <span class="tool-name">@_currentToolCall.ToolName</span>
+                                        <span class="tool-status">Running…</span>
+                                    </div>
                                 </div>
-                            </div>
-                        }
-                        <div class="msg-content">@((MarkupString)FormatContent(_streamBuffer))</div>
+                            }
+                            <div class="msg-content">@((MarkupString)FormatContent(_streamBuffer))</div>
+                        </div>
                     </div>
                 }
                 <div @ref="_scrollAnchor"></div>
