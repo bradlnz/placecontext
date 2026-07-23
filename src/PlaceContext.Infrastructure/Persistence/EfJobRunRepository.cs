@@ -4,6 +4,7 @@ using PlaceContext.Application.Ports;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.Repositories;
 using PlaceContext.Domain.ValueObjects;
+using PlaceContext.Infrastructure.Caching;
 using Microsoft.EntityFrameworkCore;
 
 namespace PlaceContext.Infrastructure.Persistence;
@@ -12,6 +13,7 @@ public sealed class EfJobRunRepository : IJobRunRepository
 {
     private readonly AppDbContext _db;
     private readonly IDataEncryptor _enc;
+    private readonly IJobRunCache _cache;
     private static string P => IDataEncryptor.Purpose.JobRun;
     private static readonly JsonSerializerOptions Json = new()
     {
@@ -20,7 +22,8 @@ public sealed class EfJobRunRepository : IJobRunRepository
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
     };
 
-    public EfJobRunRepository(AppDbContext db, IDataEncryptor enc) => (_db, _enc) = (db, enc);
+    public EfJobRunRepository(AppDbContext db, IDataEncryptor enc, IJobRunCache cache)
+        => (_db, _enc, _cache) = (db, enc, cache);
 
     public async Task AddAsync(JobRun run, CancellationToken ct = default)
         => await _db.JobRuns.AddAsync(ToRow(run), ct);
@@ -40,12 +43,23 @@ public sealed class EfJobRunRepository : IJobRunRepository
         existing.ShardResultsJson = updated.ShardResultsJson;
         existing.ReduceResultJson = updated.ReduceResultJson;
         // SnapshotJson is immutable (set once at AddAsync) — not updated here.
+
+        // Cache ShardResultsJson in Redis so we can strip it from the DB later.
+        if (!string.IsNullOrEmpty(updated.ShardResultsJson))
+            await _cache.SetShardResultsJsonAsync(run.Id, updated.ShardResultsJson, ct);
     }
 
     public async Task<JobRun?> GetByIdAsync(Guid runId, CancellationToken ct = default)
     {
         var row = await _db.JobRuns.AsNoTracking().FirstOrDefaultAsync(r => r.Id == runId, ct);
-        return row is null ? null : ToDomain(row);
+        if (row is null) return null;
+
+        // Fast path: try Redis for ShardResultsJson (offloaded to keep Postgres lean).
+        var cached = await _cache.GetShardResultsJsonAsync(runId, ct);
+        if (cached is not null)
+            row.ShardResultsJson = cached;
+
+        return ToDomain(row);
     }
 
     public async Task<IReadOnlyList<JobRun>> ListForJobAsync(Guid jobId, CancellationToken ct = default)

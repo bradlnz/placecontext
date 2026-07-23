@@ -159,22 +159,37 @@ spec:
                 secretKeyRef:
                   name: placecontext-dp
                   key: key
-            # No in-cluster LLM: the jobs pipeline is fully deterministic.
-            - name: PlaceContext__Llm__Provider
+            # No in-cluster LLM: the jobs pipeline is fully deterministic.            - name: PlaceContext__Llm__Provider
               value: "none"
-            # Object store (MinIO) for post-job artifacts — HTML reports, charts, CSVs, raw bundles.
+            # Object store (DigitalOcean Spaces) for post-job artifacts.
             - name: PlaceContext__ObjectStore__Endpoint
-              value: "http://minio:9000"
+              value: "https://syd1.digitaloceanspaces.com"
             - name: PlaceContext__ObjectStore__AccessKey
               valueFrom:
                 secretKeyRef:
-                  name: placecontext-minio
+                  name: placecontext-do-spaces
                   key: ACCESS_KEY_ID
             - name: PlaceContext__ObjectStore__SecretKey
               valueFrom:
                 secretKeyRef:
-                  name: placecontext-minio
-                  key: ACCESS_SECRET_KEY
+                  name: placecontext-do-spaces
+                  key: ACCESS_KEY_SECRET
+            - name: PlaceContext__ObjectStore__Region
+              value: "syd1"
+            - name: PlaceContext__ObjectStore__ForcePathStyle
+              value: "false"
+            - name: PlaceContext__ObjectStore__ReportsBucket
+              value: "ossenfeasibility"
+            - name: PlaceContext__ObjectStore__DepsBucket
+              value: "ossenfeasibility"
+            # Redis cache for job_runs ShardResultsJson (keeps Postgres lean).
+            - name: PlaceContext__Redis__ConnectionString
+              value: "redis:6379"
+            # Internal CA cert for the /ca endpoint (client trust installation).
+            - name: PLACECONTEXT_CA_CERT_PATH
+              value: "/etc/placecontext/ca/tls.crt"
+            - name: PLACECONTEXT_HOSTNAME
+              value: "feasibility.ossenpropertygroup.com.au"
             # Job placement: job pods always *prefer* worker (agent) nodes, so a cloud portal
             # server stays responsive while execution happens on the machines you joined over
             # Tailscale. Set "true" to *require* workers — jobs then never run on the control
@@ -193,6 +208,14 @@ spec:
             httpGet: { path: /healthz, port: 7700 }
             periodSeconds: 15
             failureThreshold: 4
+          volumeMounts:
+            - name: ca-cert
+              mountPath: /etc/placecontext/ca
+              readOnly: true
+      volumes:
+        - name: ca-cert
+          secret:
+            secretName: placecontext-ca
 ---
 apiVersion: v1
 kind: Service
@@ -211,19 +234,27 @@ spec:
     - port: 80
       targetPort: 7700
 ---
-# k3s ships Traefik — expose the portal/MCP via an Ingress. Set your host as needed.
+# k3s ships Traefik — expose the portal/MCP via an Ingress with TLS (internal CA).
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: placecontext
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
 spec:
+  ingressClassName: traefik
+  tls:
+  - hosts:
+    - feasibility.ossenpropertygroup.com.au
+    secretName: feasibility-tls
   rules:
-    - http:
-        paths:
-          - path: /
-            pathType: Prefix
-            backend:
-              service:
-                name: placecontext
-                port:
-                  number: 80
+  - host: feasibility.ossenpropertygroup.com.au
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: placecontext
+            port:
+              number: 80
