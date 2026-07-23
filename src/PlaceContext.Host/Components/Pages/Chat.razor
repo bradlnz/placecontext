@@ -185,30 +185,69 @@
 
         try
         {
-            var messages = new List<ChatMessage>
-            {
-                new("system", _systemPrompt),
-            };
-            foreach (var m in _messages.Where(x => x.Role != "system"))
-                messages.Add(new ChatMessage(m.Role, m.Content));
+            var ct = CancellationToken.None;
+            var maxToolRounds = 3;
+            var round = 0;
 
-            if (Gateway is ClusterChatGateway cg && cg.IsEnabled)
+            while (round < maxToolRounds)
             {
-                var settings = new ChatSettings(Temperature: _temperature, MaxTokens: _maxTokens);
-                await foreach (var token in cg.ChatStreamAsync(messages, settings, CancellationToken.None))
+                round++;
+                var messages = BuildChatMessages();
+
+                _streamBuffer = "";
+                _currentToolCall = null;
+                StateHasChanged();
+
+                if (Gateway is ClusterChatGateway cg && cg.IsEnabled)
                 {
-                    _streamBuffer += token;
-                    StateHasChanged();
-                    await ScrollToBottom();
+                    var settings = new ChatSettings(Temperature: _temperature, MaxTokens: _maxTokens);
+                    await foreach (var token in cg.ChatStreamAsync(messages, settings, ct))
+                    {
+                        _streamBuffer += token;
+                        StateHasChanged();
+                        await ScrollToBottom();
+                    }
                 }
-            }
-            else
-            {
-                var settings = new ChatSettings(Temperature: _temperature, MaxTokens: _maxTokens);
-                _streamBuffer = await Gateway.ChatAsync(messages, settings, CancellationToken.None);
+                else
+                {
+                    var settings = new ChatSettings(Temperature: _temperature, MaxTokens: _maxTokens);
+                    _streamBuffer = await Gateway.ChatAsync(messages, settings, ct);
+                }
+
+                var toolCalls = ParseToolCalls(_streamBuffer);
+                if (toolCalls.Count == 0) break;
+
+                var toolResults = new System.Text.StringBuilder();
+                toolResults.Append("\n\n## Tool Results\n\n");
+                foreach (var tc in toolCalls)
+                {
+                    _currentToolCall = tc;
+                    tc.Status = ToolCallStatus.Running;
+                    StateHasChanged();
+
+                    var result = await ExecuteToolAsync(tc.ToolName, tc.Args, ct);
+                    tc.Status = result.Success ? ToolCallStatus.Completed : ToolCallStatus.Error;
+                    tc.Result = result.Data ?? result.Error;
+                    tc.ResultType = result.IsGraph ? "graph" : "text";
+
+                    toolResults.Append("### " + tc.ToolName + "\n");
+                    toolResults.Append("Args: " + tc.Args + "\n");
+                    toolResults.Append(result.Success ? "Result:\n" : "Error:\n");
+                    toolResults.Append(result.Data ?? result.Error);
+                    toolResults.Append("\n\n");
+                }
+
+                var assistantMsg = new AgentMessage("assistant", _streamBuffer);
+                assistantMsg.ToolCalls.AddRange(toolCalls);
+                _messages.Add(assistantMsg);
+                _messages.Add(new AgentMessage("system", toolResults.ToString()));
+                _streamBuffer = "";
+                StateHasChanged();
+                await ScrollToBottom();
             }
 
-            _messages.Add(new AgentMessage("assistant", _streamBuffer));
+            if (_messages.Count == 0 || _messages.Last().Role != "assistant")
+                _messages.Add(new AgentMessage("assistant", _streamBuffer));
         }
         catch (Exception ex)
         {
@@ -223,6 +262,36 @@
             await ScrollToBottom();
         }
     }
+
+    private List<ChatMessage> BuildChatMessages()
+    {
+        var toolDesc = "Available tools (use [[tool:toolName|args]] syntax): " +
+            "[[tool:list_tables|]] - List tables, " +
+            "[[tool:query_table|tableName|page]] - Query table, " +
+            "[[tool:list_jobs|]] - List jobs, " +
+            "[[tool:list_job_runs|jobId]] - List runs, " +
+            "[[tool:render_graph|bar|table|col]] - Chart";
+
+        var messages = new List<ChatMessage>
+        {
+            new("system", _systemPrompt + "\n\n" + toolDesc),
+        };
+        foreach (var m in _messages.Where(x => x.Role != "system" || x.Content.Contains("Tool Results")))
+            messages.Add(new ChatMessage(m.Role, m.Content));
+        return messages;
+    }
+
+    private List<ToolCallInfo> ParseToolCalls(string response)
+    {
+        var calls = new List<ToolCallInfo>();
+        var pattern = @"\[\[tool:(\w+)\|([^\]]*)\]\]";
+        foreach (System.Text.RegularExpressions.Match m in System.Text.RegularExpressions.Regex.Matches(response, pattern))
+        {
+            calls.Add(new ToolCallInfo { ToolName = m.Groups[1].Value, Args = m.Groups[2].Value });
+        }
+        return calls;
+    }
+
 
     private async Task InputKeydown(KeyboardEventArgs e)
     {
