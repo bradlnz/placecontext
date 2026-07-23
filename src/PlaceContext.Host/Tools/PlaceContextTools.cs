@@ -336,6 +336,14 @@ public sealed class PlaceContextTools
         => Traced(log, "delete_job_chain", chainId.ToString(), "delete job chain", new { chainId },
             () => svc.DeleteJobChainAsync(chainId));
 
+    [Authorize(Policy = Permission.JobsRun)]
+    [McpServerTool(Name = "replay_job_chain"), Description("Replay a failed/partial chain run from the point of failure. The original run is preserved; a new run is created that re-executes from the first failed step (or a specific step index). Use this to retry a chain after fixing a failing job, without re-running steps that already succeeded. Returns the new chain run status and step details.")]
+    public static Task<string> ReplayJobChain(IPlaceContextService svc, IToolCallLog log, Guid chainId, Guid originalRunId,
+        [Description("Optional: 0-based step index to resume from (default: first failed step)")] int? fromStepIndex = null,
+        [Description("Optional: input payload override for the replay start step")] string? inputPayload = null)
+        => Traced(log, "replay_job_chain", chainId.ToString(), "replay job chain", new { chainId, originalRunId, fromStepIndex, inputPayload },
+            () => svc.ReplayJobChainAsync(new ReplayJobChainCommand(chainId, originalRunId, fromStepIndex, inputPayload)));
+
     /// <summary>
     /// Parses a chain's stages from the tool's 'jobIdsJson' argument: each top-level element is
     /// either a job id string (its own size-1, ordinary sequential stage) or a JSON array of job id

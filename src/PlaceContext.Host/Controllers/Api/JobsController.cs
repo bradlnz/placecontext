@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using PlaceContext.Application;
+using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Ports;
 using PlaceContext.Host.Api;
 using PlaceContext.Host.Auth;
@@ -96,4 +97,54 @@ public sealed class JobsController : ControllerBase
         var deleted = await _svc.DeleteJobAsync(id, HttpContext.RequestAborted);
         return deleted ? NoContent() : NotFound();
     }
+
+    // ── Chain Replay ────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// POST /api/v1/chains/{chainId}/replay — replay a failed/partial chain run from the
+    /// first failed step. The original run is preserved; a new run is created that re-executes
+    /// from the failure point.
+    /// </summary>
+    [HttpPost("chains/{chainId:guid}/replay")]
+    [Authorize(Policy = Permission.JobsEdit)]
+    public async Task<ActionResult<ChainRunView>> ReplayChain(
+        Guid chainId,
+        [FromBody] ReplayChainRequest request)
+    {
+        var ct = HttpContext.RequestAborted;
+        try
+        {
+            var result = await _svc.ReplayJobChainAsync(
+                new PlaceContext.Application.Features.ReplayJobChainCommand(
+                    chainId,
+                    request.OriginalRunId,
+                    request.FromStepIndex,
+                    request.InputPayload,
+                    request.StepPayloadOverrides), ct);
+            return Ok(result);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+        catch (ArgumentOutOfRangeException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+}
+
+public sealed class ReplayChainRequest
+{
+    /// <summary>The original chain run to replay from.</summary>
+    public Guid OriginalRunId { get; set; }
+
+    /// <summary>0-based step index to resume from. Null = first failed step.</summary>
+    public int? FromStepIndex { get; set; }
+
+    /// <summary>Optional input payload override for the replay start step.</summary>
+    public string? InputPayload { get; set; }
+
+    /// <summary>Optional per-step parameter overrides (keyed by step index).</summary>
+    public IReadOnlyDictionary<int, string>? StepPayloadOverrides { get; set; }
 }

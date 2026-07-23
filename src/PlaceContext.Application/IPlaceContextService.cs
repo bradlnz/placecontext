@@ -64,6 +64,7 @@ public interface IPlaceContextService
     Task<bool> DeleteJobChainAsync(Guid chainId, CancellationToken ct = default);
     Task<IReadOnlyList<JobChainView>> ListJobChainsAsync(Guid projectId, CancellationToken ct = default);
     Task<ChainRunView> RunJobChainAsync(Guid chainId, string? inputPayload = null, Guid? chainRunId = null, IReadOnlyDictionary<int, string>? stepPayloadOverrides = null, CancellationToken ct = default);
+    Task<ChainRunView> ReplayJobChainAsync(Features.ReplayJobChainCommand command, CancellationToken ct = default);
     Task<IReadOnlyList<ChainRunView>> ListChainRunsAsync(Guid chainId, int take = 20, CancellationToken ct = default);
     Task<ChainRunView?> GetChainRunAsync(Guid chainRunId, CancellationToken ct = default);
     /// <summary>Cross-project chain run history, newest first — Observability's "Chains" tab.</summary>
