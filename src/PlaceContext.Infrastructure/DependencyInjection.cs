@@ -101,10 +101,12 @@ public static class DependencyInjection
                 opts.InstanceName = "pc";
             });
             services.AddSingleton<Caching.IJobRunCache, Caching.RedisJobRunCache>();
+            services.AddSingleton<Caching.IChatMemoryStore, Caching.RedisChatMemoryStore>();
         }
         else
         {
             services.AddSingleton<Caching.IJobRunCache, Caching.NullJobRunCache>();
+            services.AddSingleton<Caching.IChatMemoryStore, Caching.NullChatMemoryStore>();
         }
 
         // Job / JobRun repositories.

@@ -3,10 +3,12 @@
 @using PlaceContext.Application.Ports
 @using PlaceContext.Application.Dtos
 @using PlaceContext.Infrastructure.Chat
+@using PlaceContext.Infrastructure.Caching
 @inject IChatGateway Gateway
 @inject IPlaceContextService Svc
 @inject PortalUiState Ui
 @inject IJSRuntime JS
+@inject PlaceContext.Infrastructure.Caching.IChatMemoryStore MemoryStore
 
 <PageTitle>placecontext — Agent Chat</PageTitle>
 
@@ -45,78 +47,78 @@
     </div>
 
     <div class="chat-layout">
-        <div class="chat-container">
-        <div class="chat-messages" @ref="_messagesRef">
-            @if (_messages.Count == 0)
-            {
-                <div class="empty-note chat-empty">
-                    <p>Ask me about your project data, job runs, or request a graph.</p>
-                    <p class="hint">Try: "Show me the job run history" or "Render a bar chart of entity counts"</p>
-                </div>
-            }
-            else
-            {
-                @foreach (var msg in _messages)
+        <div class="chat-area">
+            <div class="chat-messages" @ref="_messagesRef">
+                @if (_messages.Count == 0)
                 {
-                    <div class="chat-msg @msg.Role">
-                        <div class="msg-role">@msg.Role</div>
-                        @if (msg.ToolCalls.Count > 0)
-                        {
-                            <div class="tool-calls">
-                                @foreach (var tc in msg.ToolCalls)
-                                {
-                                    <div class="tool-call @(tc.Status)">
-                                        <span class="tool-name">@tc.ToolName</span>
-                                        <span class="tool-status">@tc.Status</span>
-                                        @if (tc.Status == ToolCallStatus.Completed && !string.IsNullOrEmpty(tc.Result))
-                                        {
-                                            <details class="tool-result">
-                                                <summary>View result</summary>
-                                                @if (tc.ResultType == "graph")
-                                                {
-                                                    <div class="graph-container" @key="tc.Id">
-                                                        <canvas id="graph-@tc.Id" width="600" height="300"></canvas>
-                                                    </div>
-                                                }
-                                                else
-                                                {
-                                                    <pre class="tool-output">@tc.Result</pre>
-                                                }
-                                            </details>
-                                        }
-                                    </div>
-                                }
-                            </div>
-                        }
-                        <div class="msg-content">@((MarkupString)FormatContent(msg.Content))</div>
+                    <div class="empty-note chat-empty">
+                        <p>Ask me about your project data, job runs, or request a graph.</p>
+                        <p class="hint">Try: "Show me the job run history" or "Render a bar chart of entity counts"</p>
                     </div>
                 }
-            }
-            @if (_streaming)
-            {
-                <div class="chat-msg assistant">
-                    <div class="msg-role">assistant</div>
-                    @if (_currentToolCall != null)
+                else
+                {
+                    @foreach (var msg in _messages)
                     {
-                        <div class="tool-calls">
-                            <div class="tool-call running">
-                                <span class="tool-name">@_currentToolCall.ToolName</span>
-                                <span class="tool-status">Running…</span>
-                            </div>
+                        <div class="chat-msg @msg.Role">
+                            <div class="msg-role">@msg.Role</div>
+                            @if (msg.ToolCalls.Count > 0)
+                            {
+                                <div class="tool-calls">
+                                    @foreach (var tc in msg.ToolCalls)
+                                    {
+                                        <div class="tool-call @(tc.Status.ToString().ToLower())">
+                                            <span class="tool-name">@tc.ToolName</span>
+                                            <span class="tool-status">@tc.Status</span>
+                                            @if (tc.Status == ToolCallStatus.Completed && !string.IsNullOrEmpty(tc.Result))
+                                            {
+                                                <details class="tool-result">
+                                                    <summary>View result</summary>
+                                                    @if (tc.ResultType == "graph")
+                                                    {
+                                                        <div class="graph-container" @key="tc.Id">
+                                                            <canvas id="graph-@tc.Id" width="600" height="300"></canvas>
+                                                        </div>
+                                                    }
+                                                    else
+                                                    {
+                                                        <pre class="tool-output">@tc.Result</pre>
+                                                    }
+                                                </details>
+                                            }
+                                        </div>
+                                    }
+                                </div>
+                            }
+                            <div class="msg-content">@((MarkupString)FormatContent(msg.Content))</div>
                         </div>
                     }
-                    <div class="msg-content">@((MarkupString)FormatContent(_streamBuffer))</div>
-                </div>
-            }
-            <div @ref="_scrollAnchor"></div>
-        </div>
+                }
+                @if (_streaming)
+                {
+                    <div class="chat-msg assistant">
+                        <div class="msg-role">assistant</div>
+                        @if (_currentToolCall != null)
+                        {
+                            <div class="tool-calls">
+                                <div class="tool-call running">
+                                    <span class="tool-name">@_currentToolCall.ToolName</span>
+                                    <span class="tool-status">Running…</span>
+                                </div>
+                            </div>
+                        }
+                        <div class="msg-content">@((MarkupString)FormatContent(_streamBuffer))</div>
+                    </div>
+                }
+                <div @ref="_scrollAnchor"></div>
+            </div>
 
-        <div class="chat-input-bar">
-            <input class="dcinput chat-input" @bind="_input" @bind:event="oninput"
-                   placeholder="Ask about data, jobs, or request a graph…" disabled="@_streaming"
-                   @onkeydown="InputKeydown" />
-            <button class="dcbtn primary" disabled="@(_streaming || string.IsNullOrWhiteSpace(_input))" @onclick="Send">Send</button>
-        </div>
+            <div class="chat-input-bar">
+                <input class="dcinput chat-input" @bind="_input" @bind:event="oninput"
+                       placeholder="Ask about data, jobs, or request a graph…" disabled="@_streaming"
+                       @onkeydown="InputKeydown" />
+                <button class="dcbtn primary" disabled="@(_streaming || string.IsNullOrWhiteSpace(_input))" @onclick="Send">Send</button>
+            </div>
         </div>
 
         @if (_showSidePanel)
@@ -126,9 +128,26 @@
                     <h3>Agent Workspace</h3>
                     @if (_graphNodes.Count > 0)
                     {
-                        <span class="graph-badge">@_graphNodes nodes · @_graphLinks links</span>
+                        <span class="graph-badge">@_graphNodes.Count nodes · @_graphLinks links</span>
                     }
                 </div>
+
+                @if (_showSessionList)
+                {
+                    <div class="side-section">
+                        <div class="session-header">
+                            <h4>Sessions</h4>
+                            <button class="dcbtn xs" @onclick="NewSession">+ New</button>
+                        </div>
+                        @foreach (var s in _sessions.Take(20))
+                        {
+                            <div class="session-item @(s.Id == _sessionId ? "active" : "")" @onclick="@(() => SelectSessionAsync(s))">
+                                <span class="session-title">@s.Title</span>
+                                <span class="session-meta">@s.MessageCount msgs · @s.LastMessageAt.ToString("MMM d HH:mm")</span>
+                            </div>
+                        }
+                    </div>
+                }
 
                 @if (_activeActions.Count > 0)
                 {
@@ -191,6 +210,7 @@
     </div>
 </div>
 
+
 @code {
     private readonly List<AgentMessage> _messages = new();
     private string _input = "";
@@ -208,6 +228,10 @@
     private ToolCallInfo? _currentToolCall;
     private int _toolCallCounter;
     private bool _showSidePanel = true;
+    private Guid? _sessionId;
+    private string _sessionTitle = "New Chat";
+    private IReadOnlyList<ChatSessionSummary> _sessions = Array.Empty<ChatSessionSummary>();
+    private bool _showSessionList = true;
     private readonly List<AgentAction> _activeActions = new();
     private readonly List<FetchedData> _fetchedData = new();
     private readonly List<ToolHistoryEntry> _toolHistory = new();
@@ -248,7 +272,71 @@
             _activeActions.Clear();
             _fetchedData.Clear();
             _toolHistory.Clear();
+            await LoadSessionsAsync();
+            NewSession();
         }
+    }
+
+    private async Task LoadSessionsAsync()
+    {
+        if (!_projectId.HasValue) return;
+        try { _sessions = await MemoryStore.ListSessionsAsync(_projectId.Value); }
+        catch { _sessions = Array.Empty<ChatSessionSummary>(); }
+    }
+
+    private void NewSession()
+    {
+        _sessionId = Guid.NewGuid();
+        _sessionTitle = "New Chat";
+        _messages.Clear();
+        _streamBuffer = "";
+        StateHasChanged();
+    }
+
+    private async Task SelectSessionAsync(ChatSessionSummary session)
+    {
+        if (!_projectId.HasValue) return;
+        try
+        {
+            var memory = await MemoryStore.GetSessionAsync(session.Id);
+            if (memory != null)
+            {
+                _sessionId = session.Id;
+                _sessionTitle = memory.Title;
+                _messages.Clear();
+                foreach (var m in memory.Messages)
+                {
+                    var msg = new AgentMessage(m.Role, m.Content);
+                    if (m.ToolCalls != null)
+                        msg.ToolCalls.AddRange(m.ToolCalls.Select(tc => new ToolCallInfo
+                        {
+                            ToolName = tc.ToolName,
+                            Args = tc.Args,
+                            Status = Enum.TryParse<ToolCallStatus>(tc.Status, out var s) ? s : ToolCallStatus.Completed,
+                            Result = tc.Result,
+                            ResultType = tc.ResultType,
+                        }));
+                    _messages.Add(msg);
+                }
+                StateHasChanged();
+            }
+        }
+        catch { }
+    }
+
+    private async Task SaveCurrentSessionAsync()
+    {
+        if (!_projectId.HasValue || _sessionId == null) return;
+        var memory = new ChatSessionMemory(
+            _sessionId.Value, _projectId.Value, _sessionTitle,
+            _messages.Select(m => new ChatMemoryMessage(
+                m.Role, m.Content, DateTimeOffset.Now,
+                m.ToolCalls.Select(tc => new ChatMemoryToolCall(
+                    tc.ToolName, tc.Args, tc.Status.ToString(), tc.Result, tc.ResultType)).ToList())).ToList(),
+            DateTimeOffset.Now, DateTimeOffset.Now);
+        try { await MemoryStore.SaveSessionAsync(_sessionId.Value, memory); }
+        catch { }
+        await LoadSessionsAsync();
     }
 
     
@@ -340,6 +428,7 @@
             _streaming = false;
             _streamBuffer = "";
             _currentToolCall = null;
+            await SaveCurrentSessionAsync();
             StateHasChanged();
             await ScrollToBottom();
         }
