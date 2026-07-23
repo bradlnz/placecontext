@@ -61,8 +61,13 @@ public sealed class ClusterChatGateway : IChatGateway
             resp.EnsureSuccessStatusCode();
 
             using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync(ct));
-            var choice = doc.RootElement.GetProperty("choices")[0];
-            return choice.GetProperty("message").GetProperty("content").GetString() ?? string.Empty;
+            if (doc.RootElement.TryGetProperty("choices", out var choices) && choices.GetArrayLength() > 0)
+            {
+                var choice = choices[0];
+                if (choice.TryGetProperty("message", out var msg) && msg.TryGetProperty("content", out var contentEl))
+                    return contentEl.GetString() ?? string.Empty;
+            }
+            return string.Empty;
         }
         catch (Exception ex)
         {
@@ -142,12 +147,12 @@ public sealed class ClusterChatGateway : IChatGateway
             try
             {
                 using var doc = JsonDocument.Parse(data);
-                var choices = doc.RootElement.GetProperty("choices");
-                if (choices.GetArrayLength() == 0) continue;
-
-                var delta = choices[0].GetProperty("delta");
-                if (delta.TryGetProperty("content", out var contentEl))
-                    content = contentEl.GetString();
+                if (doc.RootElement.TryGetProperty("choices", out var choices) && choices.GetArrayLength() > 0)
+                {
+                    var first = choices[0];
+                    if (first.TryGetProperty("delta", out var delta) && delta.TryGetProperty("content", out var contentEl))
+                        content = contentEl.GetString();
+                }
             }
             catch (JsonException)
             {

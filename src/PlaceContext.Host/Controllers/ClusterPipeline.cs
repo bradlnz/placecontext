@@ -119,11 +119,12 @@ public sealed class ClusterPipeline
             try
             {
                 using var doc = JsonDocument.Parse(data);
-                var choices = doc.RootElement.GetProperty("choices");
-                if (choices.GetArrayLength() == 0) continue;
-                var delta = choices[0].GetProperty("delta");
-                if (delta.TryGetProperty("content", out var contentEl))
-                    content = contentEl.GetString();
+                if (doc.RootElement.TryGetProperty("choices", out var choices) && choices.GetArrayLength() > 0)
+                {
+                    var first = choices[0];
+                    if (first.TryGetProperty("delta", out var delta) && delta.TryGetProperty("content", out var contentEl))
+                        content = contentEl.GetString();
+                }
             }
             catch { }
             if (!string.IsNullOrEmpty(content)) yield return content;
@@ -172,7 +173,10 @@ public sealed class ClusterPipeline
 
     private static int Sample(JsonElement logits, float temp, float topP)
     {
-        var arr = logits[0][logits[0].GetArrayLength() - 1];
+        if (logits.ValueKind != JsonValueKind.Array || logits.GetArrayLength() == 0) return -1;
+        var first = logits[0];
+        if (first.ValueKind != JsonValueKind.Array || first.GetArrayLength() == 0) return -1;
+        var arr = first[first.GetArrayLength() - 1];
         var n = arr.GetArrayLength();
         var probs = new float[n];
         float maxVal = float.MinValue, sum = 0;

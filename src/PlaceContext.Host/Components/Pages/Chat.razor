@@ -226,6 +226,40 @@
             </div>
         }
     </div>
+
+    @if (_showSettings)
+    {
+        <div class="modal-overlay" @onclick="CloseSettings">
+            <div class="modal-dialog" @onclick:stopPropagation>
+                <div class="modal-head">
+                    <h3>Agent Settings</h3>
+                    <button class="modal-close" @onclick="CloseSettings">×</button>
+                </div>
+                <div class="modal-body">
+                    <div class="dcfield">
+                        <label>System Prompt</label>
+                        <textarea class="dcinput textarea" @bind="_pendingSystemPrompt" rows="8"
+                            placeholder="You are a PlaceContext agent. You can query project data, inspect job runs, and render graphs."></textarea>
+                    </div>
+                    <div class="settings-row">
+                        <div class="dcfield">
+                            <label>Temperature</label>
+                            <input type="range" class="dcslider" @bind="_pendingTemperature" min="0" max="1" step="0.1" />
+                            <span class="slider-val">@_pendingTemperature.ToString("0.0")</span>
+                        </div>
+                        <div class="dcfield">
+                            <label>Max Tokens</label>
+                            <input type="number" class="dcinput" @bind="_pendingMaxTokens" min="64" max="8192" step="64" />
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-foot">
+                    <button class="dcbtn" @onclick="CloseSettings">Cancel</button>
+                    <button class="dcbtn primary" @onclick="SaveSettings">Save</button>
+                </div>
+            </div>
+        </div>
+    }
 </div>
 
 
