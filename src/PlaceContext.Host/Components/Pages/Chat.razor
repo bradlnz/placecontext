@@ -270,7 +270,11 @@
             "[[tool:query_table|tableName|page]] - Query table, " +
             "[[tool:list_jobs|]] - List jobs, " +
             "[[tool:list_job_runs|jobId]] - List runs, " +
-            "[[tool:render_graph|bar|table|col]] - Chart";
+            "[[tool:render_graph|bar|table|col]] - Chart, " +
+            "[[tool:schedule_job|jobId|name|cron]] - Create cron schedule, " +
+            "[[tool:list_schedules|jobId]] - List job schedules, " +
+            "[[tool:toggle_schedule|triggerId|true|false]] - Enable/disable schedule, " +
+            "[[tool:run_job|jobId]] - Run job now";
 
         var messages = new List<ChatMessage>
         {
@@ -329,6 +333,10 @@
                 "list_jobs" => await ExecuteListJobsAsync(ct),
                 "list_job_runs" => await ExecuteListJobRunsAsync(args, ct),
                 "render_graph" => await ExecuteRenderGraphAsync(args, ct),
+                "schedule_job" => await ExecuteScheduleJobAsync(args, ct),
+                "list_schedules" => await ExecuteListSchedulesAsync(args, ct),
+                "toggle_schedule" => await ExecuteToggleScheduleAsync(args, ct),
+                "run_job" => await ExecuteRunJobAsync(args, ct),
                 _ => ToolCallResult.Fail($"Unknown tool: {toolName}"),
             };
         }
@@ -418,6 +426,62 @@
         var graphData = new { type = chartType, labels, values };
         return ToolCallResult.Graph(System.Text.Json.JsonSerializer.Serialize(graphData));
     }
+
+    private async Task<ToolCallResult> ExecuteScheduleJobAsync(string args, CancellationToken ct)
+    {
+        var parts = args.Split('|');
+        if (parts.Length < 3) return ToolCallResult.Fail("Usage: schedule_job|jobId|name|cron");
+        var jobId = Guid.TryParse(parts[0].Trim(), out var id) ? id : Guid.Empty;
+        if (jobId == Guid.Empty) return ToolCallResult.Fail("Invalid jobId");
+        var name = parts[1].Trim();
+        var cron = parts[2].Trim();
+        var trigger = await Svc.CreateTriggerAsync(new Application.Features.CreateTriggerCommand(
+            jobId, name, "Schedule", cron, null), ct);
+        return ToolCallResult.Ok($"Schedule created: {trigger.Name} (id: {trigger.Id})\n" +
+            $"Cron: {trigger.CronExpression}\n" +
+            $"Next run: {trigger.NextRunAt?.ToString("yyyy-MM-dd HH:mm") ?? "—"}\n" +
+            $"Enabled: {trigger.Enabled}");
+    }
+
+    private async Task<ToolCallResult> ExecuteListSchedulesAsync(string args, CancellationToken ct)
+    {
+        var jobId = Guid.TryParse(args.Trim(), out var id) ? id : Guid.Empty;
+        var triggers = await Svc.ListTriggersAsync(_projectId.Value, ct);
+        if (jobId != Guid.Empty)
+            triggers = triggers.Where(t => t.JobId == jobId).ToList();
+        var sb = new System.Text.StringBuilder();
+        sb.Append($"Schedules: {triggers.Count}\n");
+        foreach (var t in triggers)
+        {
+            sb.Append($"- {t.Name} ({t.Kind})\n");
+            if (t.Kind == "Schedule")
+                sb.Append($"  Cron: {t.CronExpression} | Next: {t.NextRunAt?.ToString("yyyy-MM-dd HH:mm") ?? "—"}\n");
+            sb.Append($"  Enabled: {t.Enabled} | Last fired: {t.LastFiredAt?.ToString("yyyy-MM-dd HH:mm") ?? "never"}\n");
+        }
+        return ToolCallResult.Ok(sb.ToString());
+    }
+
+    private async Task<ToolCallResult> ExecuteToggleScheduleAsync(string args, CancellationToken ct)
+    {
+        var parts = args.Split('|');
+        if (parts.Length < 2) return ToolCallResult.Fail("Usage: toggle_schedule|triggerId|true|false");
+        var triggerId = Guid.TryParse(parts[0].Trim(), out var id) ? id : Guid.Empty;
+        if (triggerId == Guid.Empty) return ToolCallResult.Fail("Invalid triggerId");
+        var enabled = parts[1].Trim().ToLower() == "true";
+        var trigger = await Svc.SetTriggerEnabledAsync(triggerId, enabled, ct);
+        return ToolCallResult.Ok($"Schedule '{trigger.Name}' {(enabled ? "enabled" : "disabled")}.\n" +
+            $"Next run: {trigger.NextRunAt?.ToString("yyyy-MM-dd HH:mm") ?? "—"}");
+    }
+
+    private async Task<ToolCallResult> ExecuteRunJobAsync(string args, CancellationToken ct)
+    {
+        var jobId = Guid.TryParse(args.Trim(), out var id) ? id : Guid.Empty;
+        if (jobId == Guid.Empty) return ToolCallResult.Fail("Invalid jobId");
+        var run = await Svc.RunJobAsync(jobId, null, null, ct);
+        return ToolCallResult.Ok($"Job run started: {run.Id}\nStatus: {run.Status}\nStarted: {run.StartedAt:yyyy-MM-dd HH:mm}");
+    }
+
+
 // ── Message and tool call models ──────────────────────────────────────────
 
 public sealed class AgentMessage
