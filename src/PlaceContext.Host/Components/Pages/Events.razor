@@ -1,4 +1,5 @@
 @page "/project/{ProjectId:guid}/events"
+@attribute [Authorize]
 @layout PlaceContext.Host.Components.Layout.ProjectLayout
 @inject IPlaceContextService Svc
 @inject PortalUiState Ui
