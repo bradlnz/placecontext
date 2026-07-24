@@ -19,10 +19,13 @@ namespace PlaceContext.Infrastructure.Scheduling;
 public sealed class RunStatusWatcherService : BackgroundService
 {
     private static readonly TimeSpan WatchInterval = TimeSpan.FromSeconds(2);
+    private static readonly TimeSpan TenantCacheInterval = TimeSpan.FromMinutes(5);
 
     private readonly IServiceScopeFactory _scopes;
     private readonly ILogger<RunStatusWatcherService> _log;
     private readonly Dictionary<Guid, RunWatchState> _states = new();
+    private List<TenantInfo> _cachedTenants = new();
+    private DateTimeOffset _tenantsRefreshAt = DateTimeOffset.MinValue;
 
     public RunStatusWatcherService(IServiceScopeFactory scopes, ILogger<RunStatusWatcherService> log)
     {
@@ -44,7 +47,7 @@ public sealed class RunStatusWatcherService : BackgroundService
 
     private async Task SweepAllTenantsAsync(CancellationToken ct)
     {
-        var tenants = await LoadTenantsAsync(ct);
+        var tenants = await GetTenantsAsync(ct);
         foreach (var tenant in tenants)
         {
             if (!_states.TryGetValue(tenant.Id, out var state))
@@ -65,12 +68,17 @@ public sealed class RunStatusWatcherService : BackgroundService
             _states.Remove(gone);
     }
 
-    private async Task<IReadOnlyList<TenantInfo>> LoadTenantsAsync(CancellationToken ct)
+    private async Task<IReadOnlyList<TenantInfo>> GetTenantsAsync(CancellationToken ct)
     {
+        if (_cachedTenants.Count > 0 && DateTimeOffset.UtcNow < _tenantsRefreshAt)
+            return _cachedTenants;
+
         await using var scope = _scopes.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        return await db.Tenants.AsNoTracking()
+        _cachedTenants = await db.Tenants.AsNoTracking()
             .Select(t => new TenantInfo(t.Id, t.Slug, t.Name, t.TimeZoneId)).ToListAsync(ct);
+        _tenantsRefreshAt = DateTimeOffset.UtcNow + TenantCacheInterval;
+        return _cachedTenants;
     }
 
     private static async Task<bool> SafeWaitAsync(PeriodicTimer timer, CancellationToken ct)

@@ -1,22 +1,24 @@
-# PlaceContext Host — portal + MCP (Streamable HTTP) + trigger scheduler.
-# Multi-stage .NET 10 build. Cross-arch aware: the SDK stage always runs on the BUILD machine's
-# native platform and .NET cross-publishes for TARGETARCH, so `docker build --platform
-# linux/arm64` (Mac/ARM-fleet packages) doesn't crawl through qemu emulation.
+# PlaceContext — multi-stage build for Host + ClusterHost sidecar.
 FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 ARG TARGETARCH
 WORKDIR /src
 
-# Restore against the full solution so project references resolve.
 COPY . .
 RUN dotnet restore src/PlaceContext.Host/PlaceContext.Host.csproj -a $TARGETARCH
-RUN dotnet publish src/PlaceContext.Host/PlaceContext.Host.csproj -c Release -o /app -a $TARGETARCH --no-restore
+RUN dotnet publish src/PlaceContext.Host/PlaceContext.Host.csproj -c Release -o /app/host -a $TARGETARCH --no-restore
+RUN dotnet restore src/PlaceContext.ClusterHost/PlaceContext.ClusterHost.csproj -a $TARGETARCH
+RUN dotnet publish src/PlaceContext.ClusterHost/PlaceContext.ClusterHost.csproj -c Release -o /app/cluster -a $TARGETARCH --no-restore
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 RUN apt-get update && apt-get install -y --no-install-recommends libgssapi-krb5-2 && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
-COPY --from=build /app ./
+COPY --from=build /app/host ./host/
+COPY --from=build /app/cluster ./cluster/
 
-# Portal + MCP listen on 7700 (see appsettings / Kestrel).
+# Host: portal + MCP on 7700
 EXPOSE 7700
-ENV ASPNETCORE_URLS=http://+:7700
-ENTRYPOINT ["dotnet", "PlaceContext.Host.dll"]
+# ClusterHost: cluster proxy pipeline on 8081
+EXPOSE 8081
+
+# Default entrypoint runs the Host. Use CLUSTER=1 env var to run the cluster sidecar instead.
+ENTRYPOINT ["sh", "-c", "if [ \"$CLUSTER\" = \"1\" ]; then exec dotnet cluster/PlaceContext.ClusterHost.dll --urls=http://+:8081; else exec dotnet host/PlaceContext.Host.dll; fi"]

@@ -824,7 +824,7 @@
         // Fetch column types for proper input rendering; fall back to "text".
         var columnInfos = (await Svc.ListProjectTableColumnsAsync(ProjectId, _entity.TableName))
             .ToDictionary(c => c.Name, c => c.Type, StringComparer.Ordinal);
-        _formColumns = _rows.Columns.Select(c => new FormColumn(c, columnInfos.GetValueOrDefault(c, "text"))).ToList();
+        _formColumns = (_rows.Columns ?? Array.Empty<string>()).Select(c => new FormColumn(c, columnInfos.GetValueOrDefault(c, "text"))).ToList();
         _formValues = new Dictionary<string, string?>(StringComparer.Ordinal);
         _keySnapshot = new Dictionary<string, string?>(StringComparer.Ordinal);
         for (var i = 0; i < _formColumns.Count; i++)

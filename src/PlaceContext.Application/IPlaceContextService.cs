@@ -157,4 +157,11 @@ public interface IPlaceContextService
     Task<AgentChatSessionView> SendAgentMessageAsync(SendAgentMessageCommand command, CancellationToken ct = default);
     Task<IReadOnlyList<AgentChatSessionView>> ListAgentChatSessionsAsync(Guid projectId, CancellationToken ct = default);
     Task<AgentChatSessionView?> GetAgentChatSessionAsync(Guid sessionId, CancellationToken ct = default);
+
+    // MCP connections
+    Task<McpConnectionView> CreateMcpConnectionAsync(Features.CreateMcpConnectionCommand command, CancellationToken ct = default);
+    Task<McpConnectionView> UpdateMcpConnectionAsync(Features.UpdateMcpConnectionCommand command, CancellationToken ct = default);
+    Task<bool> DeleteMcpConnectionAsync(Guid id, CancellationToken ct = default);
+    Task<McpConnectionView> TestMcpConnectionAsync(Guid id, CancellationToken ct = default);
+    Task<IReadOnlyList<McpConnectionView>> ListMcpConnectionsAsync(Guid projectId, CancellationToken ct = default);
 }

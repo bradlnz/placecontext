@@ -1,0 +1,20 @@
+namespace PlaceContext.Infrastructure.Persistence;
+
+public sealed class McpConnectionRow : ITenantOwned
+{
+    public Guid Id { get; set; }
+    public Guid ProjectId { get; set; }
+    public Guid TenantId { get; set; }
+    public string Name { get; set; } = "";
+    public string Transport { get; set; } = "";
+    public string? EndpointUrl { get; set; }
+    public string? Command { get; set; }
+    public string? Args { get; set; }
+    public string? AuthType { get; set; }
+    public string? AuthToken { get; set; }
+    public string? AuthHeader { get; set; }
+    public bool Enabled { get; set; }
+    public string? LastStatus { get; set; }
+    public DateTimeOffset? LastConnectedAt { get; set; }
+    public DateTimeOffset CreatedAt { get; set; }
+}

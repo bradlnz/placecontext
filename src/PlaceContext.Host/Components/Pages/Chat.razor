@@ -2,6 +2,7 @@
 @layout PlaceContext.Host.Components.Layout.MainLayout
 @using PlaceContext.Application.Ports
 @using PlaceContext.Application.Dtos
+@using PlaceContext.Application.Features
 @using PlaceContext.Infrastructure.Chat
 @using PlaceContext.Infrastructure.Caching
 @inject IChatGateway Gateway
@@ -9,6 +10,7 @@
 @inject PortalUiState Ui
 @inject IJSRuntime JS
 @inject PlaceContext.Infrastructure.Caching.IChatMemoryStore MemoryStore
+@inject AgentContextBuilder ContextBuilder
 
 <PageTitle>placecontext — Agent Chat</PageTitle>
 
@@ -17,9 +19,9 @@
         <div>
             <h2 class="page-title">Agent Chat</h2>
             <div class="page-sub">
-                @if (Gateway is ClusterChatGateway cg && cg.IsEnabled)
+                @if (Gateway is ClusterChatGateway cg)
                 {
-                    <span>Cluster model — @_projectName</span>
+                    <span>@cg.StatusText — @_projectName</span>
                 }
                 else if (Gateway.IsEnabled)
                 {
@@ -103,6 +105,30 @@
                                     </div>
                                 }
                                 <div class="msg-content">@((MarkupString)FormatContent(msg.Content))</div>
+                                @if (msg.Role == "assistant" && !_streaming)
+                                {
+                                    <div class="quick-actions">
+                                        <button class="qa-btn" @onclick="@(() => QuickActionAsync(msg.Content, "summarize"))" title="Summarize">
+                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M4 6h16M4 12h10M4 18h14"/></svg>
+                                            Summarize
+                                        </button>
+                                        <button class="qa-btn" @onclick="@(() => QuickActionAsync(msg.Content, "explain"))" title="Explain in detail">
+                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                                            Explain
+                                        </button>
+                                        <button class="qa-btn" @onclick="@(() => QuickActionAsync(msg.Content, "code"))" title="Generate code">
+                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+                                            Code
+                                        </button>
+                                        <button class="qa-btn" @onclick="@(() => QuickActionAsync(msg.Content, "graph"))" title="Visualize as graph">
+                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><circle cx="5" cy="6" r="3"/><circle cx="19" cy="6" r="3"/><circle cx="12" cy="18" r="3"/><line x1="8" y1="8" x2="10" y2="15"/><line x1="16" y1="8" x2="14" y2="15"/></svg>
+                                            Graph
+                                        </button>
+                                        <button class="qa-btn" @onclick="@(() => CopyMessageAsync(msg.Content))" title="Copy to clipboard">
+                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                                        </button>
+                                    </div>
+                                }
                             </div>
                         </div>
                     }
@@ -229,31 +255,184 @@
 
     @if (_showSettings)
     {
-        <div class="modal-overlay" @onclick="CloseSettings">
-            <div class="modal-dialog" @onclick:stopPropagation>
-                <div class="modal-head">
+        <div class="dcmodal-overlay" @onclick="CloseSettings">
+            <div class="dcmodal settings-modal" @onclick:stopPropagation>
+                <div class="dcmodal-head">
                     <h3>Agent Settings</h3>
-                    <button class="modal-close" @onclick="CloseSettings">×</button>
+                    <button class="dcslide-x" @onclick="CloseSettings">×</button>
                 </div>
-                <div class="modal-body">
-                    <div class="dcfield">
-                        <label>System Prompt</label>
-                        <textarea class="dcinput textarea" @bind="_pendingSystemPrompt" rows="8"
-                            placeholder="You are a PlaceContext agent. You can query project data, inspect job runs, and render graphs."></textarea>
+                <div class="dcmodal-body settings-body">
+                    <div class="settings-tabs">
+                        <button class="tab-btn @(_settingsTab == "prompt" ? "active" : "")" @onclick="@(() => _settingsTab = "prompt")">Prompt</button>
+                        <button class="tab-btn @(_settingsTab == "rag" ? "active" : "")" @onclick="@(() => _settingsTab = "rag")">RAG</button>
+                        <button class="tab-btn @(_settingsTab == "mcp" ? "active" : "")" @onclick="@(() => _settingsTab = "mcp")">MCP Servers</button>
                     </div>
-                    <div class="settings-row">
+
+                    @if (_settingsTab == "prompt")
+                    {
                         <div class="dcfield">
-                            <label>Temperature</label>
-                            <input type="range" class="dcslider" @bind="_pendingTemperature" min="0" max="1" step="0.1" />
-                            <span class="slider-val">@_pendingTemperature.ToString("0.0")</span>
+                            <label>System Prompt</label>
+                            <textarea class="dcinput textarea" @bind="_pendingSystemPrompt" rows="6"
+                                placeholder="You are a PlaceContext agent. You can query project data, inspect job runs, and render graphs."></textarea>
                         </div>
-                        <div class="dcfield">
-                            <label>Max Tokens</label>
-                            <input type="number" class="dcinput" @bind="_pendingMaxTokens" min="64" max="8192" step="64" />
+                        <div class="settings-row">
+                            <div class="dcfield">
+                                <label>Temperature</label>
+                                <div class="slider-row">
+                                    <input type="range" class="dcslider" @bind="_pendingTemperature" min="0" max="1" step="0.1" />
+                                    <span class="slider-val">@_pendingTemperature.ToString("0.0")</span>
+                                </div>
+                            </div>
+                            <div class="dcfield">
+                                <label>Max Tokens</label>
+                                <input type="number" class="dcinput" @bind="_pendingMaxTokens" min="64" max="8192" step="64" />
+                            </div>
                         </div>
-                    </div>
+                    }
+                    else if (_settingsTab == "rag")
+                    {
+                        <div class="rag-settings">
+                            <div class="rag-toggle">
+                                <label class="toggle-switch">
+                                    <input type="checkbox" @bind="_pendingRagEnabled" />
+                                    <span class="toggle-slider"></span>
+                                </label>
+                                <span class="toggle-label">Enable RAG context retrieval</span>
+                            </div>
+                            <p class="rag-desc">Automatically retrieves semantically relevant project run outputs and dependency graph data to ground agent responses.</p>
+                            @if (_pendingRagEnabled)
+                            {
+                                <div class="dcfield">
+                                    <label>Max context chunks</label>
+                                    <div class="slider-row">
+                                        <input type="range" class="dcslider" @bind="_pendingMaxContextChunks" min="1" max="20" step="1" />
+                                        <span class="slider-val">@_pendingMaxContextChunks</span>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                    else if (_settingsTab == "mcp")
+                    {
+                        <div class="mcp-section">
+                            @if (_mcpConnections.Count == 0)
+                            {
+                                <div class="mcp-empty">
+                                    <p>No MCP servers configured yet.</p>
+                                    <span>Add external tool servers to extend agent capabilities.</span>
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="mcp-list">
+                                    @foreach (var mcp in _mcpConnections)
+                                    {
+                                        <div class="mcp-item @(mcp.Enabled ? "" : "disabled")">
+                                            <div class="mcp-info">
+                                                <span class="mcp-name">@mcp.Name</span>
+                                                <span class="mcp-badge">@mcp.Transport</span>
+                                                @if (!string.IsNullOrEmpty(mcp.LastStatus))
+                                                {
+                                                    <span class="mcp-status @(mcp.LastStatus.StartsWith("connected") || mcp.LastStatus.StartsWith("http:2") ? "ok" : "err")">@mcp.LastStatus</span>
+                                                }
+                                            </div>
+                                            <div class="mcp-actions">
+                                                <button class="dcbtn xs" @onclick="@(() => TestMcpConnectionAsync(mcp.Id))">Test</button>
+                                                <button class="dcbtn xs danger" @onclick="@(() => DeleteMcpConnectionAsync(mcp.Id))">×</button>
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                            <button class="dcbtn sm primary add-mcp-btn" @onclick="ShowAddMcp">+ Add MCP Server</button>
+
+                            @if (_showAddMcp)
+                            {
+                                <div class="mcp-form">
+                                    <div class="mcp-form-title">New MCP Server</div>
+                                    <div class="dcfield">
+                                        <label>Name</label>
+                                        <input class="dcinput" @bind="_newMcpName" placeholder="My MCP Server" />
+                                    </div>
+                                    <div class="dcfield">
+                                        <label>Transport</label>
+                                        <select class="dcinput" @bind="_newMcpTransport">
+                                            <option value="http">HTTP</option>
+                                            <option value="sse">SSE</option>
+                                            <option value="stdio">Stdio</option>
+                                        </select>
+                                    </div>
+                                    @if (_newMcpTransport != "stdio")
+                                    {
+                                        <div class="dcfield">
+                                            <label>Endpoint URL</label>
+                                            <input class="dcinput" @bind="_newMcpEndpoint" placeholder="http://localhost:3001/mcp" />
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <div class="dcfield">
+                                            <label>Command</label>
+                                            <input class="dcinput" @bind="_newMcpCommand" placeholder="npx" />
+                                        </div>
+                                        <div class="dcfield">
+                                            <label>Args (JSON array)</label>
+                                            <input class="dcinput" @bind="_newMcpArgs" placeholder='["-y", "@@modelcontextprotocol/server-filesystem", "/path"]' />
+                                        </div>
+                                    }
+                                    <div class="mcp-auth-section">
+                                        <div class="mcp-auth-header" @onclick="@(() => _showAuthFields = !_showAuthFields)">
+                                            <span>Authentication</span>
+                                            <span class="mcp-auth-chevron">@(_showAuthFields ? "▾" : "▸")</span>
+                                        </div>
+                                        @if (_showAuthFields)
+                                        {
+                                            <div class="dcfield">
+                                                <label>Auth Type</label>
+                                                <select class="dcinput" @bind="_newMcpAuthType">
+                                                    <option value="none">None</option>
+                                                    <option value="bearer">Bearer Token</option>
+                                                    <option value="apikey">API Key</option>
+                                                    <option value="header">Custom Header</option>
+                                                </select>
+                                            </div>
+                                            @if (_newMcpAuthType == "bearer")
+                                            {
+                                                <div class="dcfield">
+                                                    <label>Bearer Token</label>
+                                                    <input class="dcinput" type="password" @bind="_newMcpAuthToken" placeholder="eyJhbGci..." />
+                                                </div>
+                                            }
+                                            else if (_newMcpAuthType == "apikey")
+                                            {
+                                                <div class="dcfield">
+                                                    <label>API Key</label>
+                                                    <input class="dcinput" type="password" @bind="_newMcpAuthToken" placeholder="sk-..." />
+                                                </div>
+                                            }
+                                            else if (_newMcpAuthType == "header")
+                                            {
+                                                <div class="dcfield">
+                                                    <label>Header Name</label>
+                                                    <input class="dcinput" @bind="_newMcpAuthHeader" placeholder="X-API-Key" />
+                                                </div>
+                                                <div class="dcfield">
+                                                    <label>Header Value</label>
+                                                    <input class="dcinput" type="password" @bind="_newMcpAuthToken" placeholder="value" />
+                                                </div>
+                                            }
+                                        }
+                                    </div>
+                                    <div class="mcp-form-actions">
+                                        <button class="dcbtn xs" @onclick="@(() => _showAddMcp = false)">Cancel</button>
+                                        <button class="dcbtn xs primary" @onclick="AddMcpConnectionAsync">Add</button>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
                 </div>
-                <div class="modal-foot">
+                <div class="dcmodal-foot">
                     <button class="dcbtn" @onclick="CloseSettings">Cancel</button>
                     <button class="dcbtn primary" @onclick="SaveSettings">Save</button>
                 </div>
@@ -261,6 +440,7 @@
         </div>
     }
 </div>
+
 
 
 @code {
@@ -272,6 +452,8 @@
     private ElementReference _scrollAnchor;
         private Guid? _projectId;
     private string _systemPrompt = "You are a PlaceContext agent. You can query project data, inspect job runs, and render graphs. Use tools when the user asks about data, jobs, or requests visualizations.";
+    private bool _ragEnabled = true;
+    private int _maxContextChunks = 5;
     private float _temperature = 0.7f;
     private int _maxTokens = 2048;
     private bool _toolCallingEnabled = true;
@@ -281,9 +463,23 @@
     private int _toolCallCounter;
     private bool _showSidePanel = true;
     private bool _showSettings;
+    private string _settingsTab = "prompt";
+    private IReadOnlyList<McpConnectionView> _mcpConnections = Array.Empty<McpConnectionView>();
+    private bool _showAddMcp;
+    private bool _showAuthFields;
+    private string _newMcpName = "";
+    private string _newMcpTransport = "http";
+    private string _newMcpEndpoint = "";
+    private string _newMcpCommand = "";
+    private string _newMcpArgs = "";
+    private string _newMcpAuthType = "none";
+    private string _newMcpAuthToken = "";
+    private string _newMcpAuthHeader = "";
     private string _pendingSystemPrompt = "";
     private float _pendingTemperature;
     private int _pendingMaxTokens;
+    private bool _pendingRagEnabled = true;
+    private int _pendingMaxContextChunks = 5;
     private Guid? _sessionId;
     private string _sessionTitle = "New Chat";
     private IReadOnlyList<ChatSessionSummary> _sessions = Array.Empty<ChatSessionSummary>();
@@ -314,6 +510,7 @@
             var config = await Svc.GetAgentConfigAsync(_projectId.Value);
             _systemPrompt = config.SystemPrompt;
             _temperature = config.Temperature;
+            _maxContextChunks = config.MaxContextChunks;
         }
         catch { /* use defaults */ }
     }
@@ -329,6 +526,7 @@
             _fetchedData.Clear();
             _toolHistory.Clear();
             await LoadSessionsAsync();
+            await LoadMcpConnectionsAsync();
             NewSession();
         }
     }
@@ -409,6 +607,14 @@
         StateHasChanged();
         await ScrollToBottom();
 
+        // Build RAG context once before the tool loop.
+        string ragContext = "";
+        if (_ragEnabled)
+        {
+            try { ragContext = await ContextBuilder.BuildContextAsync(_projectId.Value, text, _maxContextChunks); }
+            catch { /* best-effort */ }
+        }
+
         try
         {
             var ct = CancellationToken.None;
@@ -418,7 +624,7 @@
             while (round < maxToolRounds)
             {
                 round++;
-                var messages = BuildChatMessages();
+                var messages = BuildChatMessages(ragContext);
 
                 _streamBuffer = "";
                 _currentToolCall = null;
@@ -433,6 +639,10 @@
                         StateHasChanged();
                         await ScrollToBottom();
                     }
+                }
+                else if (Gateway is ClusterChatGateway configuredButNotReady && !configuredButNotReady.IsEnabled)
+                {
+                    _streamBuffer = "Cluster is starting — please try again in a moment.";
                 }
                 else
                 {
@@ -490,7 +700,7 @@
         }
     }
 
-    private List<ChatMessage> BuildChatMessages()
+    private List<ChatMessage> BuildChatMessages(string ragContext = "")
     {
         var toolDesc = "Available tools (use [[tool:toolName|args]] syntax): " +
             "[[tool:list_tables|]] - List tables, " +
@@ -504,9 +714,15 @@
             "[[tool:toggle_schedule|triggerId|true|false]] - Enable/disable schedule, " +
             "[[tool:run_job|jobId]] - Run job now";
 
+        var systemPrompt = _systemPrompt + "\n\n" + toolDesc;
+        if (!string.IsNullOrWhiteSpace(ragContext))
+        {
+            systemPrompt += "\n\n## Project context (retrieved automatically)\n\n" + ragContext;
+        }
+
         var messages = new List<ChatMessage>
         {
-            new("system", _systemPrompt + "\n\n" + toolDesc),
+            new("system", systemPrompt),
         };
         foreach (var m in _messages.Where(x => x.Role != "system" || x.Content.Contains("Tool Results")))
             messages.Add(new ChatMessage(m.Role, m.Content));
@@ -544,6 +760,27 @@
         escaped = System.Text.RegularExpressions.Regex.Replace(escaped, @"\*\*(.+?)\*\*", "<strong>$1</strong>");
         escaped = System.Text.RegularExpressions.Regex.Replace(escaped, @"`(.+?)`", "<code>$1</code>");
         return escaped;
+    }
+
+    private async Task QuickActionAsync(string context, string action)
+    {
+        if (_streaming || !_projectId.HasValue) return;
+        var prompt = action switch
+        {
+            "summarize" => "Summarize the following in 3 bullet points:\n\n" + context,
+            "explain" => "Explain the following in more detail, breaking down each concept:\n\n" + context,
+            "code" => "Generate clean, well-commented code based on the following description:\n\n" + context,
+            "graph" => "Create a visual graph/chart description based on the following:\n\n" + context,
+            _ => context
+        };
+        _input = prompt;
+        await Send();
+    }
+
+    private async Task CopyMessageAsync(string content)
+    {
+        try { await JS.InvokeVoidAsync("navigator.clipboard.writeText", content); }
+        catch { }
     }
 
     // ── Tool calling helpers ──────────────────────────────────────────────
@@ -758,12 +995,18 @@
 
     private void ToggleSidePanel() => _showSidePanel = !_showSidePanel;
 
-    private void OpenSettings()
+    private async void OpenSettings()
     {
         _pendingSystemPrompt = _systemPrompt;
         _pendingTemperature = _temperature;
         _pendingMaxTokens = _maxTokens;
+        _pendingRagEnabled = _ragEnabled;
+        _pendingMaxContextChunks = _maxContextChunks;
+        _settingsTab = "prompt";
+        _showAddMcp = false;
+        await LoadMcpConnectionsAsync();
         _showSettings = true;
+        StateHasChanged();
     }
 
     private void CloseSettings() => _showSettings = false;
@@ -773,6 +1016,8 @@
         _systemPrompt = _pendingSystemPrompt;
         _temperature = _pendingTemperature;
         _maxTokens = _pendingMaxTokens;
+        _ragEnabled = _pendingRagEnabled;
+        _maxContextChunks = _pendingMaxContextChunks;
         _showSettings = false;
 
         if (_projectId.HasValue)
@@ -781,11 +1026,63 @@
             {
                 var config = await Svc.GetAgentConfigAsync(_projectId.Value);
                 await Svc.UpdateAgentConfigAsync(new Application.Features.UpdateAgentConfigCommand(
-                    config.ProjectId, config.BaseModel, _systemPrompt, config.MaxContextChunks,
+                    config.ProjectId, config.BaseModel, _systemPrompt, _maxContextChunks,
                     _temperature, config.TopP, config.Enabled));
             }
             catch { /* best-effort */ }
         }
+    }
+
+    private void ShowAddMcp()
+    {
+        _newMcpName = "";
+        _newMcpTransport = "http";
+        _newMcpEndpoint = "";
+        _newMcpCommand = "";
+        _newMcpArgs = "";
+        _newMcpAuthType = "none";
+        _newMcpAuthToken = "";
+        _newMcpAuthHeader = "";
+        _showAuthFields = false;
+        _showAddMcp = true;
+    }
+
+    private async Task AddMcpConnectionAsync()
+    {
+        if (!_projectId.HasValue || string.IsNullOrWhiteSpace(_newMcpName)) return;
+        try
+        {
+            await Svc.CreateMcpConnectionAsync(new Application.Features.CreateMcpConnectionCommand(
+                _projectId.Value, _newMcpName, _newMcpTransport,
+                _newMcpTransport != "stdio" ? _newMcpEndpoint : null,
+                _newMcpTransport == "stdio" ? _newMcpCommand : null,
+                _newMcpTransport == "stdio" ? _newMcpArgs : null,
+                _newMcpAuthType != "none" ? _newMcpAuthType : null,
+                _newMcpAuthType != "none" ? _newMcpAuthToken : null,
+                _newMcpAuthType == "header" ? _newMcpAuthHeader : null));
+            _showAddMcp = false;
+            await LoadMcpConnectionsAsync();
+        }
+        catch { }
+    }
+
+    private async Task TestMcpConnectionAsync(Guid id)
+    {
+        try { await Svc.TestMcpConnectionAsync(id); await LoadMcpConnectionsAsync(); }
+        catch { }
+    }
+
+    private async Task DeleteMcpConnectionAsync(Guid id)
+    {
+        try { await Svc.DeleteMcpConnectionAsync(id); await LoadMcpConnectionsAsync(); }
+        catch { }
+    }
+
+    private async Task LoadMcpConnectionsAsync()
+    {
+        if (!_projectId.HasValue) return;
+        try { _mcpConnections = await Svc.ListMcpConnectionsAsync(_projectId.Value); }
+        catch { _mcpConnections = Array.Empty<McpConnectionView>(); }
     }
 
     private static string GetActionIcon(ToolCallStatus status) => status switch

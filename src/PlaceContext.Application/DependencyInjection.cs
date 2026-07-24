@@ -86,6 +86,13 @@ public static class DependencyInjection
         services.AddScoped<IQueryHandler<Features.GetAgentChatSessionQuery, Dtos.AgentChatSessionView?>, Features.GetAgentChatSessionHandler>();
         services.AddScoped<Features.AgentContextBuilder>();
 
+        // MCP connections
+        services.AddScoped<ICommandHandler<Features.CreateMcpConnectionCommand, Dtos.McpConnectionView>, Features.CreateMcpConnectionHandler>();
+        services.AddScoped<ICommandHandler<Features.UpdateMcpConnectionCommand, Dtos.McpConnectionView>, Features.UpdateMcpConnectionHandler>();
+        services.AddScoped<ICommandHandler<Features.DeleteMcpConnectionCommand, bool>, Features.DeleteMcpConnectionHandler>();
+        services.AddScoped<ICommandHandler<Features.TestMcpConnectionCommand, Dtos.McpConnectionView>, Features.TestMcpConnectionHandler>();
+        services.AddScoped<IQueryHandler<Features.ListMcpConnectionsQuery, IReadOnlyList<Dtos.McpConnectionView>>, Features.ListMcpConnectionsHandler>();
+
         // Queries.
         services.AddScoped<IQueryHandler<GetProjectsQuery, IReadOnlyList<ProjectSummaryView>>, GetProjectsHandler>();
         services.AddScoped<IQueryHandler<GetProjectByIdQuery, ProjectSummaryView?>, GetProjectByIdHandler>();

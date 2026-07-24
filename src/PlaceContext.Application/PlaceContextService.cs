@@ -382,4 +382,15 @@ public sealed class PlaceContextService : IPlaceContextService
 
     public Task<AgentChatSessionView?> GetAgentChatSessionAsync(Guid sessionId, CancellationToken ct = default)
         => _dispatcher.Query(new Features.GetAgentChatSessionQuery(sessionId), ct);
+
+    public Task<Dtos.McpConnectionView> CreateMcpConnectionAsync(Features.CreateMcpConnectionCommand command, CancellationToken ct = default)
+        => _dispatcher.Send(command, ct);
+    public Task<Dtos.McpConnectionView> UpdateMcpConnectionAsync(Features.UpdateMcpConnectionCommand command, CancellationToken ct = default)
+        => _dispatcher.Send(command, ct);
+    public Task<bool> DeleteMcpConnectionAsync(Guid id, CancellationToken ct = default)
+        => _dispatcher.Send(new Features.DeleteMcpConnectionCommand(id), ct);
+    public Task<Dtos.McpConnectionView> TestMcpConnectionAsync(Guid id, CancellationToken ct = default)
+        => _dispatcher.Send(new Features.TestMcpConnectionCommand(id), ct);
+    public Task<IReadOnlyList<Dtos.McpConnectionView>> ListMcpConnectionsAsync(Guid projectId, CancellationToken ct = default)
+        => _dispatcher.Query(new Features.ListMcpConnectionsQuery(projectId), ct);
 }

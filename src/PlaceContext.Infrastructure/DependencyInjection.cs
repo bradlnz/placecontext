@@ -109,6 +109,20 @@ public static class DependencyInjection
             services.AddSingleton<Caching.IChatMemoryStore, Caching.NullChatMemoryStore>();
         }
 
+        // Qdrant semantic search for cross-session chat memory (decorates Redis/Null store).
+        var qdrantUrl = configuration["PlaceContext:Qdrant:Endpoint"];
+        if (!string.IsNullOrWhiteSpace(qdrantUrl))
+        {
+            var qdrantCollection = configuration["PlaceContext:Qdrant:Collection"] ?? "chat-memory";
+            services.AddSingleton<Caching.IChatMemoryStore>(sp =>
+            {
+                var fallback = sp.GetRequiredService<Caching.IChatMemoryStore>();
+                var embeddings = sp.GetRequiredService<IEmbeddingGateway>();
+                var http = sp.GetRequiredService<IHttpClientFactory>().CreateClient();
+                return new Caching.QdrantChatMemoryStore(fallback, embeddings, http, qdrantUrl, qdrantCollection);
+            });
+        }
+
         // Job / JobRun repositories.
         services.AddScoped<IJobRepository, EfJobRepository>();
         services.AddScoped<IJobRunRepository, EfJobRunRepository>();
@@ -138,16 +152,28 @@ public static class DependencyInjection
 
         // Chat gateway: cluster (SafeTensors shard server) takes precedence,
         // then Ollama, else a no-op.
-        if (!string.IsNullOrWhiteSpace(configuration["PlaceContext:ClusterChat:Endpoint"]))
+        var clusterEp = configuration["PlaceContext:ClusterChat:Endpoint"];
+        var ollamaEp = configuration["PlaceContext:Chat:Endpoint"];
+        if (!string.IsNullOrWhiteSpace(clusterEp))
+        {
             services.AddSingleton<IChatGateway, Chat.ClusterChatGateway>();
-        else if (!string.IsNullOrWhiteSpace(configuration["PlaceContext:Chat:Endpoint"]))
+            Console.WriteLine($"[di] IChatGateway -> ClusterChatGateway (endpoint={clusterEp})");
+        }
+        else if (!string.IsNullOrWhiteSpace(ollamaEp))
+        {
             services.AddSingleton<IChatGateway, Chat.OllamaChatGateway>();
+            Console.WriteLine($"[di] IChatGateway -> OllamaChatGateway (endpoint={ollamaEp})");
+        }
         else
+        {
             services.AddSingleton<IChatGateway, Chat.NullChatGateway>();
+            Console.WriteLine("[di] IChatGateway -> NullChatGateway (no endpoint configured)");
+        }
 
         // Agent repositories.
         services.AddScoped<IAgentConfigRepository, EfAgentConfigRepository>();
         services.AddScoped<IAgentChatSessionRepository, EfAgentChatSessionRepository>();
+        services.AddScoped<Domain.Repositories.IMcpConnectionRepository, Persistence.EfMcpConnectionRepository>();
 
         // Dependency-graph assembly is expensive (full ledger + decisions + O(n²) embedding weave);
         // wrap the Application provider in a short-TTL cache so page opens and brain rollups don't

@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.HttpOverrides;
 using PlaceContext.Host;
 using PlaceContext.Host.Auth;
 using PlaceContext.Application;
@@ -22,6 +23,12 @@ using Microsoft.IdentityModel.Tokens;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
+using PlaceContext.Host.Branding;
+using PlaceContext.Infrastructure.Security;
+using Microsoft.AspNetCore.DataProtection.XmlEncryption;
+using Microsoft.AspNetCore.DataProtection.KeyManagement;
+using PlaceContext.Infrastructure.Persistence;
+using Microsoft.AspNetCore.ResponseCompression;
 
 // PlaceContext is a single hosted web app on http://localhost:7700, serving two surfaces from one
 // process and the same Postgres store:
@@ -63,7 +70,7 @@ builder.Services.AddInfrastructure(builder.Configuration);
 }
 
 // Load the shared OAuth signing key (so every replica signs/verifies MCP tokens with the same RSA key).
-PlaceContext.Host.Auth.OAuthKeys.Init(builder.Configuration["PlaceContext:OAuth:SigningKeyPem"]);
+OAuthKeys.Init(builder.Configuration["PlaceContext:OAuth:SigningKeyPem"]);
 
 builder.Services.AddRazorComponents().AddInteractiveServerComponents();
 // Compress dynamic responses (the initial Blazor HTML document is the portal's biggest payload —
@@ -72,22 +79,35 @@ builder.Services.AddRazorComponents().AddInteractiveServerComponents();
 // over-HTTPS stance never disables it in practice.
 builder.Services.AddResponseCompression(o =>
 {
-    o.Providers.Add<Microsoft.AspNetCore.ResponseCompression.BrotliCompressionProvider>();
-    o.Providers.Add<Microsoft.AspNetCore.ResponseCompression.GzipCompressionProvider>();
+    o.Providers.Add<BrotliCompressionProvider>();
+    o.Providers.Add<GzipCompressionProvider>();
 });
 // The former minimal-API endpoints (ingest, backup, auth, artifacts, health) now live as controllers
 // under Controllers/ — attribute-routed, same paths/auth, wired below with MapControllers().
 builder.Services.AddControllers();
 builder.Services.AddHttpClient();
-builder.Services.Configure<ClusterProxyOptions>(builder.Configuration.GetSection("PlaceContext:ClusterChat"));
-builder.Services.AddScoped<ClusterPipeline>();
-builder.Services.AddSingleton<ClusterProxyService>();
-builder.Services.AddHostedService(sp => sp.GetRequiredService<ClusterProxyService>());
+
+// Forwarded headers: Traefik terminates TLS and forwards X-Forwarded-Proto=https.
+// Without this the app generates http:// URLs for styles/scripts, causing mixed-content blocks.
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.KnownNetworks.Clear();
+    options.KnownProxies.Clear();
+});
+
+// Log chat gateway config at startup
+var chatSection = builder.Configuration.GetSection("PlaceContext:ClusterChat");
+var chatEndpoint = chatSection["Endpoint"];
+var chatModel = chatSection["Model"];
+var shardEndpoints = chatSection.GetSection("ShardEndpoints").Get<List<string>>() ?? new();
+Console.WriteLine($"[startup] ClusterChat.Endpoint='{chatEndpoint}'  Model='{chatModel}'  ShardEndpoints=[{string.Join(", ", shardEndpoints)}]");
+Console.WriteLine($"[startup] Chat.Endpoint='{builder.Configuration["PlaceContext:Chat:Endpoint"]}'");
 // One shared in-memory cache for expensive read models (the per-project dependency graph above all).
 builder.Services.AddMemoryCache();
 builder.Services.AddCascadingAuthenticationState();
-builder.Services.AddScoped<PlaceContext.Host.PortalUiState>();
-builder.Services.AddScoped<PlaceContext.Host.Branding.BrandingService>();
+builder.Services.AddScoped<PortalUiState>();
+builder.Services.AddScoped<BrandingService>();
 
 // Share the Data Protection key ring across replicas (persisted in Postgres) and pin the application
 // name, so the auth cookie one replica issues can be decrypted by any other — otherwise a token sign-in
@@ -97,7 +117,7 @@ builder.Services.AddScoped<PlaceContext.Host.Branding.BrandingService>();
 {
     var dpBuilder = builder.Services.AddDataProtection()
         .SetApplicationName("placecontext")
-        .PersistKeysToDbContext<PlaceContext.Infrastructure.Persistence.AppDbContext>();
+        .PersistKeysToDbContext<AppDbContext>();
     var dpKey = builder.Configuration["PlaceContext:DataProtection:Key"];
     // Outside Development a passphrase is required so a Postgres dump cannot decrypt vault secrets
     // or auth cookies. Dev may omit it for zero-config local runs.
@@ -106,11 +126,11 @@ builder.Services.AddScoped<PlaceContext.Host.Branding.BrandingService>();
             "PlaceContext:DataProtection:Key must be set outside Development (shared passphrase encrypting the Data Protection key ring).");
     if (!string.IsNullOrWhiteSpace(dpKey))
     {
-        var encryptor = new PlaceContext.Infrastructure.Security.PassphraseXmlEncryptor(dpKey);
-        dpBuilder.Services.AddSingleton<Microsoft.AspNetCore.DataProtection.XmlEncryption.IXmlEncryptor>(encryptor);
-        dpBuilder.Services.AddSingleton<Microsoft.AspNetCore.DataProtection.XmlEncryption.IXmlDecryptor>(encryptor);
+        var encryptor = new PassphraseXmlEncryptor(dpKey);
+        dpBuilder.Services.AddSingleton<IXmlEncryptor>(encryptor);
+        dpBuilder.Services.AddSingleton<IXmlDecryptor>(encryptor);
         // Wire the encryptor into the key management options.
-        dpBuilder.Services.Configure<Microsoft.AspNetCore.DataProtection.KeyManagement.KeyManagementOptions>(o =>
+        dpBuilder.Services.Configure<KeyManagementOptions>(o =>
         {
             o.XmlEncryptor = encryptor;
         });
@@ -182,7 +202,7 @@ builder.Services
             OnChallenge = ctx =>
             {
                 ctx.HandleResponse();
-                var b = PlaceContext.Host.Tenancy.PublicUrl.Base(ctx.HttpContext, ctx.HttpContext.RequestServices.GetRequiredService<IConfiguration>());
+                var b = PublicUrl.Base(ctx.HttpContext, ctx.HttpContext.RequestServices.GetRequiredService<IConfiguration>());
                 ctx.Response.StatusCode = StatusCodes.Status401Unauthorized;
                 ctx.Response.Headers.WWWAuthenticate =
                     $"Bearer resource_metadata=\"{b}/.well-known/oauth-protected-resource\"";
@@ -227,11 +247,11 @@ builder.Services
     // Machine-facing "ApiKey" scheme for the /api/v1/* management API (the Terraform provider and other
     // IaC/CI clients). Deliberately opt-in per endpoint via [Authorize(AuthenticationSchemes = "ApiKey")]
     // — it never becomes the ambient default, so it can't accidentally widen the portal or MCP surfaces.
-    .AddScheme<PlaceContext.Host.Auth.ApiKeyAuthenticationOptions, PlaceContext.Host.Auth.ApiKeyAuthenticationHandler>(
-        PlaceContext.Host.Auth.ApiKeyAuthenticationHandler.SchemeName, _ => { })
+    .AddScheme<ApiKeyAuthenticationOptions, ApiKeyAuthenticationHandler>(
+        ApiKeyAuthenticationHandler.SchemeName, _ => { })
     // Personal user API tokens (Settings → API tokens), used by the entity data API at /api/v1/data/*.
-    .AddScheme<PlaceContext.Host.Auth.UserApiTokenAuthenticationOptions, PlaceContext.Host.Auth.UserApiTokenAuthenticationHandler>(
-        PlaceContext.Host.Auth.UserApiTokenAuthenticationHandler.SchemeName, _ => { });
+    .AddScheme<UserApiTokenAuthenticationOptions, UserApiTokenAuthenticationHandler>(
+        UserApiTokenAuthenticationHandler.SchemeName, _ => { });
 builder.Services.AddAuthorization(o =>
 {
     // Any authenticated member can read (Viewer+).  The Blazor SignalR hubs (/_blazor,
@@ -242,7 +262,7 @@ builder.Services.AddAuthorization(o =>
     // so anonymous visitors can still load the portal shell.
     o.FallbackPolicy = new AuthorizationPolicyBuilder()
         .RequireAuthenticatedUser()
-        .AddRequirements(new PlaceContext.Host.Auth.BlazorHubBypass())
+        .AddRequirements(new BlazorHubBypass())
         .Build();
     // Role-gated policies, used on portal management endpoints and MCP write tools.
     o.AddPolicy("Member", p => p.RequireAuthenticatedUser().RequireAssertion(c => RoleAtLeast(c.User, UserRole.Member)));
@@ -253,14 +273,14 @@ builder.Services.AddAuthorization(o =>
     // Backed by PermissionAuthorizationHandler, which resolves role defaults + tenant-scoped overrides.
     foreach (var permission in PlaceContext.Application.Ports.Permission.All)
         o.AddPolicy(permission, p => p.RequireAuthenticatedUser()
-            .AddRequirements(new PlaceContext.Host.Auth.PermissionRequirement(permission)));
+            .AddRequirements(new PermissionRequirement(permission)));
 });
 // Scoped, not singleton: it depends on the scoped IPermissionService (which in turn depends on the
 // scoped IUserPermissionGrantRepository / DbContext).
-builder.Services.AddScoped<IAuthorizationHandler, PlaceContext.Host.Auth.PermissionAuthorizationHandler>();
-builder.Services.AddSingleton<IAuthorizationHandler, PlaceContext.Host.Auth.BlazorHubBypassHandler>();
+builder.Services.AddScoped<IAuthorizationHandler, PermissionAuthorizationHandler>();
+builder.Services.AddSingleton<IAuthorizationHandler, BlazorHubBypassHandler>();
 builder.Services.AddScoped<IOAuthAuthCodeStore, PlaceContext.Infrastructure.Persistence.EfOAuthAuthCodeStore>();
-builder.Services.AddSingleton<PlaceContext.Host.Auth.PortalToken>();
+builder.Services.AddSingleton<PortalToken>();
 
 // Exposes the current request's ClaimsPrincipal to MCP tools (e.g. whoami reads the bearer's claims).
 builder.Services.AddHttpContextAccessor();
@@ -271,8 +291,8 @@ builder.Services.AddScoped<CircuitHandler, TenantCircuitHandler>();
 
 // Granular RBAC: per-request/circuit holder + a circuit handler that keeps interactive renders
 // resolved to the right caller (mirrors the tenant holder/handler pair above).
-builder.Services.AddScoped<PlaceContext.Host.Auth.UserHolder>();
-builder.Services.AddScoped<CircuitHandler, PlaceContext.Host.Auth.UserCircuitHandler>();
+builder.Services.AddScoped<UserHolder>();
+builder.Services.AddScoped<CircuitHandler, UserCircuitHandler>();
 
 // MCP over Streamable HTTP, exposed below at /mcp.
 builder.Services
@@ -290,22 +310,11 @@ builder.Services
 var bindUrls = Environment.GetEnvironmentVariable("ASPNETCORE_URLS");
 builder.WebHost.UseUrls(string.IsNullOrWhiteSpace(bindUrls) ? "http://localhost:7700" : bindUrls);
 
-// Hard caps against memory exhaustion / large-body tricks (oversized uploads, zip bombs via body,
-// multi-GB artifact POSTs). Field encryption also enforces its own max plaintext size.
-builder.WebHost.ConfigureKestrel(o =>
-{
-    o.Limits.MaxRequestBodySize = 32L * 1024 * 1024; // 32 MiB
-    o.Limits.MaxRequestHeadersTotalSize = 64 * 1024;
-    o.Limits.MaxRequestLineSize = 16 * 1024;
-});
-builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(o =>
-{
-    o.MultipartBodyLengthLimit = 32L * 1024 * 1024;
-    o.ValueLengthLimit = 16 * 1024 * 1024;
-    o.MemoryBufferThreshold = 256 * 1024; // spill to disk beyond 256 KiB
-});
-
 var app = builder.Build();
+
+// Must be first: reads X-Forwarded-Proto from Traefik so the app knows it's HTTPS.
+app.UseForwardedHeaders();
+
 PlaceContext.Infrastructure.DependencyInjection.MigrateDatabase(app.Services);
 // Legacy JSON blob flattening is OFF by default: the data map now stores objects/arrays as JSON
 // text in their declared column, so huge nested payloads don't explode into hundreds of leaf
@@ -351,14 +360,16 @@ app.Use(async (ctx, next) =>
 });
 app.UseMiddleware<TenantResolutionMiddleware>(); // resolve {user}.placecontext.ai → tenant, before any data access
 // Project for the entity data API: X-Project-Id / X-Project (optional; entity routes require it).
-app.UseMiddleware<PlaceContext.Host.Tenancy.ProjectResolutionMiddleware>();
+app.UseMiddleware<ProjectResolutionMiddleware>();
 app.UseAuthentication();
 app.UseAuthorization();
 // After UseAuthorization deliberately — see UserResolutionMiddleware for why.
-app.UseMiddleware<PlaceContext.Host.Auth.UserResolutionMiddleware>();
+app.UseMiddleware<UserResolutionMiddleware>();
 app.UseAntiforgery();
 
-app.MapRazorComponents<App>().AddInteractiveServerRenderMode().AllowAnonymous();
+app.MapRazorComponents<App>()
+.AddInteractiveServerRenderMode()
+.AllowAnonymous();
 
 // MCP requires an OAuth bearer token (validated by the JwtBearer scheme); the token binds the tenant.
 app.MapMcp("/mcp").RequireAuthorization(new AuthorizeAttribute { AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme });

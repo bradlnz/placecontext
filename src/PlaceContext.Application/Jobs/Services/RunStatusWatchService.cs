@@ -65,10 +65,19 @@ public sealed class RunStatusWatchService
         var now = _clock.UtcNow;
         var since = state.Cursor == default ? now - StartupLookback : state.Cursor;
 
-        // Chains first: their rows commit before their step runs do, so the suppression set is
-        // always populated before the owned job runs are considered.
         var chains = await _reader.ListChainRunsAsync(since, ct);
         var jobRuns = await _reader.ListJobRunsAsync(since, ct);
+
+        // Fast path: nothing running and nothing newly finished — skip processing.
+        var hasActive = chains.Any(c => c.Status == ChainRunStatus.Running)
+                     || jobRuns.Any(r => r.Status is JobRunStatus.Running or JobRunStatus.Queued);
+        var hasNewTerminal = chains.Any(c => c.Status != ChainRunStatus.Running && !state.NotifiedTerminal.ContainsKey(c.RunId))
+                          || jobRuns.Any(r => r.Status is not (JobRunStatus.Running or JobRunStatus.Queued) && !state.NotifiedTerminal.ContainsKey(r.RunId));
+        if (!hasActive && !hasNewTerminal)
+        {
+            state.Cursor = now - CursorOverlap;
+            return;
+        }
 
         foreach (var chain in chains)
             foreach (var stepRunId in chain.StepRunIds)

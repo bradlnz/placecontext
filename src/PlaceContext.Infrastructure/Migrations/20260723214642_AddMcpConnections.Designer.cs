@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using PlaceContext.Infrastructure.Persistence;
@@ -11,9 +12,11 @@ using PlaceContext.Infrastructure.Persistence;
 namespace PlaceContext.Infrastructure.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260723214642_AddMcpConnections")]
+    partial class AddMcpConnections
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -835,15 +838,6 @@ namespace PlaceContext.Infrastructure.Migrations
                     b.Property<string>("Args")
                         .HasMaxLength(1000)
                         .HasColumnType("character varying(1000)");
-
-                    b.Property<string>("AuthHeader")
-                        .HasColumnType("text");
-
-                    b.Property<string>("AuthToken")
-                        .HasColumnType("text");
-
-                    b.Property<string>("AuthType")
-                        .HasColumnType("text");
 
                     b.Property<string>("Command")
                         .HasMaxLength(200)

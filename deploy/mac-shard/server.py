@@ -271,7 +271,8 @@ def chat_stream_mlx(messages, temperature=0.7, top_p=0.9, max_tokens=2048):
     )
     sampler = make_sampler(temp=temperature, top_p=top_p)
     for response in stream_generate(model, tokenizer, prompt=prompt, max_tokens=max_tokens, sampler=sampler):
-        yield response.text
+        if response.text:  # only yield non-empty chunks
+            yield response.text
 
 
 def chat_torch(messages, temperature=0.7, top_p=0.9, max_tokens=2048):
@@ -474,10 +475,14 @@ async def chat_stream(req: ChatRequest):
         gen = chat_stream_torch(messages, temp, top, tokens)
 
     def sse():
-        for text in gen:
-            chunk = {"choices": [{"delta": {"content": text}, "finish_reason": None}]}
-            yield f"data: {json.dumps(chunk)}\n\n"
-        yield "data: [DONE]\n\n"
+        try:
+            for text in gen:
+                chunk = {"choices": [{"delta": {"content": text}, "finish_reason": None}]}
+                yield f"data: {json.dumps(chunk)}\n\n"
+        except Exception as e:
+            logger.error(f"Stream generation error: {e}")
+        finally:
+            yield "data: [DONE]\n\n"
 
     return StreamingResponse(sse(), media_type="text/event-stream")
 

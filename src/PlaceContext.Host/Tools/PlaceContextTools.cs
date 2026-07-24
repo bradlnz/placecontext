@@ -430,7 +430,7 @@ public sealed class PlaceContextTools
         PlaceContext.Infrastructure.Tenancy.ITenantStore tenants,
         PlaceContext.Application.Ports.ICurrentTenant tenant,
         [Description("IANA timezone id, e.g. 'Australia/Brisbane' or 'UTC'")] string timeZoneId)
-        => Traced(log, "set_workspace_timezone", null, timeZoneId, new { timeZoneId },
+        => Traced(log, "set_workspace_timezone", "", timeZoneId, new { timeZoneId },
             async () =>
             {
                 _ = TimeZoneInfo.FindSystemTimeZoneById(timeZoneId); // throws on unknown ids

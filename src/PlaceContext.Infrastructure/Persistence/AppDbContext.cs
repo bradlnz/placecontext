@@ -54,6 +54,7 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
     public DbSet<UserApiTokenRow> UserApiTokens => Set<UserApiTokenRow>();
     public DbSet<AgentConfigRow> AgentConfigs => Set<AgentConfigRow>();
     public DbSet<AgentChatSessionRow> AgentChatSessions => Set<AgentChatSessionRow>();
+    public DbSet<McpConnectionRow> McpConnections => Set<McpConnectionRow>();
 
     Task<int> IUnitOfWork.SaveChangesAsync(CancellationToken ct) => SaveChangesAsync(ct);
 
@@ -352,6 +353,22 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
             e.HasKey(x => x.Id);
             e.HasIndex(x => new { x.ProjectId, x.UpdatedAt });
             e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
+
+        b.Entity<McpConnectionRow>(e =>
+        {
+            e.ToTable("mcp_connections");
+            e.HasKey(r => r.Id);
+            e.Property(r => r.Id).HasColumnType("uuid");
+            e.Property(r => r.ProjectId).HasColumnType("uuid");
+            e.Property(r => r.TenantId).HasColumnType("uuid");
+            e.Property(r => r.Name).HasMaxLength(100);
+            e.Property(r => r.Transport).HasMaxLength(20);
+            e.Property(r => r.EndpointUrl).HasMaxLength(500);
+            e.Property(r => r.Command).HasMaxLength(200);
+            e.Property(r => r.Args).HasMaxLength(1000);
+            e.Property(r => r.LastStatus).HasMaxLength(200);
+            e.HasQueryFilter(r => r.TenantId == _tenant.TenantId);
+        });
             e.Property(x => x.MessagesJson).HasDefaultValue("[]");
         });
     }
