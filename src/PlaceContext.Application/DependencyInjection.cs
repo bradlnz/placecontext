@@ -1,6 +1,7 @@
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Features;
+using PlaceContext.Application.Mcp;
 using PlaceContext.Application.Observability;
 using PlaceContext.Domain.Services;
 using Microsoft.Extensions.DependencyInjection;
@@ -85,6 +86,11 @@ public static class DependencyInjection
         services.AddScoped<IQueryHandler<Features.ListAgentChatSessionsQuery, IReadOnlyList<Dtos.AgentChatSessionView>>, Features.ListAgentChatSessionsHandler>();
         services.AddScoped<IQueryHandler<Features.GetAgentChatSessionQuery, Dtos.AgentChatSessionView?>, Features.GetAgentChatSessionHandler>();
         services.AddScoped<Features.AgentContextBuilder>();
+        services.AddScoped<IMcpClientService, McpClientService>();
+
+        // Launchpads: unattended agent sessions driven by the [[tool:...]] protocol.
+        services.AddScoped<Agents.Services.LaunchpadToolExecutor>();
+        services.AddScoped<Agents.Services.AgentSessionRunner>();
 
         // MCP connections
         services.AddScoped<ICommandHandler<Features.CreateMcpConnectionCommand, Dtos.McpConnectionView>, Features.CreateMcpConnectionHandler>();

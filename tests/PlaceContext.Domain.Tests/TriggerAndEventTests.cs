@@ -30,6 +30,77 @@ public class TriggerAndEventTests
         Assert.Null(t.LastFiredAt);
     }
 
+    // ---- JobTrigger: launchpad ----
+
+    [Fact]
+    public void CreateLaunchpad_is_enabled_cron_based_and_jobless()
+    {
+        var next = T0.AddHours(1);
+        var chainId = Guid.NewGuid();
+        var t = JobTrigger.CreateLaunchpad(ProjectId, "daily-enrich", "0 6 * * *", chainId,
+            "customers", "For each row, run the chain", next, T0);
+
+        Assert.Equal(TriggerKind.Launchpad, t.Kind);
+        Assert.True(t.Enabled);
+        Assert.Null(t.JobId);
+        Assert.Equal(chainId, t.ChainId);
+        Assert.Equal("customers", t.SourceTable);
+        Assert.Equal("For each row, run the chain", t.Prompt);
+        Assert.Equal("0 6 * * *", t.CronExpression);
+        Assert.Equal(next, t.NextRunAt);
+    }
+
+    [Fact]
+    public void CreateLaunchpad_validates_required_fields()
+    {
+        Assert.Throws<ArgumentException>(() =>
+            JobTrigger.CreateLaunchpad(ProjectId, "x", "0 6 * * *", Guid.Empty, null, "do it", T0, T0));
+        Assert.Throws<ArgumentException>(() =>
+            JobTrigger.CreateLaunchpad(ProjectId, "x", "  ", Guid.NewGuid(), null, "do it", T0, T0));
+        Assert.Throws<ArgumentException>(() =>
+            JobTrigger.CreateLaunchpad(ProjectId, "x", "0 6 * * *", Guid.NewGuid(), null, " ", T0, T0));
+    }
+
+    [Fact]
+    public void Launchpad_is_due_and_mark_fired_advances_next_run()
+    {
+        var t = JobTrigger.CreateLaunchpad(ProjectId, "x", "* * * * *", Guid.NewGuid(),
+            null, "do it", T0.AddMinutes(-1), T0);
+        Assert.True(t.IsDue(T0));
+
+        var next = T0.AddMinutes(1);
+        t.MarkFired(T0, next);
+        Assert.Equal(T0, t.LastFiredAt);
+        Assert.Equal(next, t.NextRunAt);
+        Assert.False(t.IsDue(T0));
+    }
+
+    [Fact]
+    public void Launchpad_disable_clears_next_run_enable_reschedules()
+    {
+        var t = JobTrigger.CreateLaunchpad(ProjectId, "x", "* * * * *", Guid.NewGuid(),
+            null, "do it", T0, T0);
+        t.Disable(T0);
+        Assert.Null(t.NextRunAt);
+        Assert.False(t.IsDue(T0));
+
+        var next = T0.AddMinutes(5);
+        t.Enable(next, T0);
+        Assert.True(t.Enabled);
+        Assert.Equal(next, t.NextRunAt);
+    }
+
+    [Fact]
+    public void Launchpad_can_be_rescheduled()
+    {
+        var t = JobTrigger.CreateLaunchpad(ProjectId, "x", "* * * * *", Guid.NewGuid(),
+            null, "do it", T0, T0);
+        var next = T0.AddHours(2);
+        t.Reschedule("0 */2 * * *", next, T0);
+        Assert.Equal("0 */2 * * *", t.CronExpression);
+        Assert.Equal(next, t.NextRunAt);
+    }
+
     [Fact]
     public void CreateSchedule_rejects_empty_cron()
     {

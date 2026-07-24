@@ -285,6 +285,7 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
         {
             e.ToTable("job_triggers");
             e.HasKey(x => x.Id);
+            e.Property(x => x.JobId).IsRequired(false);
             e.HasIndex(x => x.JobId);
             // Scheduler scans by (Enabled, Kind, NextRunAt) across tenants.
             e.HasIndex(x => new { x.Enabled, x.Kind, x.NextRunAt });

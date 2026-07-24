@@ -3,6 +3,17 @@
     flex-direction: column;
     height: 100vh;
     overflow: hidden;
+    /* Legacy variable aliases — this file predates the current theme tokens
+       (App.razor defines --bg/--card/--card-2/--text-2/--brand/--good/--bad).
+       Aliasing keeps the existing rules working instead of silently falling back. */
+    --primary: var(--brand);
+    --bg-1: var(--bg);
+    --bg-2: var(--card);
+    --bg-3: var(--card-2);
+    --muted: var(--text-2);
+    --mono: var(--font-mono);
+    --success: var(--good);
+    --error: var(--bad);
 }
 
 .page-head {
@@ -582,12 +593,44 @@
 }
 
 .session-item {
-    padding: 6px 8px;
+    position: relative;
+    padding: 6px 28px 6px 8px;
     margin-bottom: 2px;
     border-radius: 5px;
     cursor: pointer;
     background: var(--bg-3);
     transition: background 0.15s;
+}
+
+.session-header-actions {
+    display: flex;
+    gap: 4px;
+}
+
+.session-delete {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 0.85rem;
+    line-height: 1;
+    padding: 2px 5px;
+    border-radius: 4px;
+    opacity: 0;
+    transition: opacity 0.15s, background 0.15s, color 0.15s;
+}
+
+.session-item:hover .session-delete,
+.session-item.active .session-delete {
+    opacity: 1;
+}
+
+.session-delete:hover {
+    background: var(--error);
+    color: #fff;
 }
 
 .session-item:hover {
@@ -1278,4 +1321,249 @@
 .option-picker .dcbtn {
     align-self: flex-end;
     margin-top: 4px;
+}
+
+/* ── File upload (drag-and-drop + attach button) ─────────────────── */
+.chat-input-wrap {
+    position: relative;
+    border-radius: 8px;
+    transition: border-color 0.2s, background 0.2s;
+}
+
+.chat-input-wrap.drag-over {
+    border: 2px dashed var(--primary, #2563eb);
+    background: rgba(37, 99, 235, 0.05);
+}
+
+.chat-attach-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border: none;
+    background: transparent;
+    color: var(--fg-muted);
+    cursor: pointer;
+    border-radius: 6px;
+    flex-shrink: 0;
+    transition: color 0.15s, background 0.15s;
+}
+
+.chat-attach-btn:hover {
+    color: var(--primary, #2563eb);
+    background: var(--bg-3);
+}
+
+.hidden-file-input {
+    display: none;
+}
+
+.attached-file-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    margin: 4px 0 0 44px;
+    border-radius: 12px;
+    background: var(--bg-3, #1e2024);
+    border: 1px solid var(--border);
+    font-size: 0.78rem;
+    color: var(--fg);
+    max-width: 260px;
+}
+
+.attached-file-chip span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.chip-remove {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    border: none;
+    background: transparent;
+    color: var(--fg-muted);
+    cursor: pointer;
+    border-radius: 50%;
+    font-size: 0.9rem;
+    line-height: 1;
+    flex-shrink: 0;
+}
+
+.chip-remove:hover {
+    color: var(--err, #ef4444);
+    background: var(--err-bg, rgba(239, 68, 68, 0.1));
+}
+
+/* ── Chat map (Leaflet inline maps) ─────────────────────────────── */
+.chat-map-wrap {
+    height: 280px;
+    margin: 8px 0;
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+}
+
+.chat-map-container {
+    width: 100%;
+    height: 100%;
+}
+
+/* Fix Leaflet dark mode issues */
+.chat-map-container .leaflet-control-zoom a {
+    background: var(--card-2, #151b21);
+    color: var(--text-2, #8b98a5);
+    border-color: var(--border, #1b2229);
+}
+
+.chat-map-container .leaflet-control-zoom a:hover {
+    background: var(--hover, #11161b);
+    color: var(--text, #e6edf3);
+}
+
+/* Attachment chip on sent messages */
+.msg-attachment {
+    margin-bottom: 4px;
+}
+
+.attachment-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    background: var(--bg-3);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    font-size: 0.75rem;
+    color: var(--text);
+    text-decoration: none;
+    max-width: 100%;
+}
+
+.attachment-chip span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+a.attachment-chip:hover {
+    border-color: var(--primary);
+    color: var(--primary);
+}
+
+.attachment-chip .attachment-size {
+    color: var(--muted);
+    font-size: 0.65rem;
+    flex-shrink: 0;
+}
+
+/* Starter quick actions for new sessions */
+.starter-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: center;
+    margin: 16px 0 8px;
+    max-width: 520px;
+}
+
+.starter-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    color: var(--text);
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: border-color 0.15s, color 0.15s;
+}
+
+.starter-btn:hover {
+    border-color: var(--primary);
+    color: var(--primary);
+}
+
+/* ── Mobile (≤ 900px) ─────────────────────────────────────────────── */
+@media (max-width: 900px) {
+    .page-head {
+        padding: 10px 12px;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    .chat-controls {
+        flex-wrap: wrap;
+        gap: 6px;
+    }
+
+    .chat-controls .dcselect.sm {
+        min-width: 0;
+        flex: 1;
+    }
+
+    .chat-controls .dcbtn.sm {
+        min-height: 40px;
+    }
+
+    .chat-layout {
+        position: relative;
+    }
+
+    .chat-messages {
+        padding: 12px;
+    }
+
+    .chat-msg {
+        max-width: 95%;
+    }
+
+    .chat-input-bar {
+        padding: 10px 12px;
+        gap: 6px;
+    }
+
+    /* Side panel slides over the chat instead of squeezing it */
+    .side-panel {
+        position: absolute;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        width: min(320px, 88vw);
+        z-index: 30;
+        box-shadow: -8px 0 24px rgba(0, 0, 0, 0.3);
+    }
+
+    .starter-actions {
+        flex-direction: column;
+        align-items: stretch;
+        width: 100%;
+        max-width: 340px;
+    }
+
+    .starter-btn {
+        justify-content: center;
+        min-height: 40px;
+    }
+
+    /* No hover on touch — keep controls visible and tappable */
+    .session-item {
+        min-height: 40px;
+    }
+
+    .session-delete {
+        opacity: 1;
+        padding: 6px;
+    }
+
+    .qa-btn {
+        min-height: 40px;
+    }
 }

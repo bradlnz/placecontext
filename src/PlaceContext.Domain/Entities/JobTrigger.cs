@@ -17,12 +17,15 @@ public sealed class JobTrigger : AggregateRoot
     private JobTrigger(
         Guid id,
         Guid projectId,
-        Guid jobId,
+        Guid? jobId,
         string name,
         TriggerKind kind,
         bool enabled,
         string? cronExpression,
         string? eventName,
+        Guid? chainId,
+        string? sourceTable,
+        string? prompt,
         DateTimeOffset? nextRunAt,
         DateTimeOffset? lastFiredAt,
         DateTimeOffset createdAt,
@@ -36,6 +39,9 @@ public sealed class JobTrigger : AggregateRoot
         Enabled = enabled;
         CronExpression = cronExpression;
         EventName = eventName;
+        ChainId = chainId;
+        SourceTable = sourceTable;
+        Prompt = prompt;
         NextRunAt = nextRunAt;
         LastFiredAt = lastFiredAt;
         CreatedAt = createdAt;
@@ -44,7 +50,9 @@ public sealed class JobTrigger : AggregateRoot
 
     public Guid Id { get; }
     public Guid ProjectId { get; }
-    public Guid JobId { get; }
+
+    /// <summary>The job a schedule/event trigger runs. Null for launchpads (they target a chain).</summary>
+    public Guid? JobId { get; }
 
     /// <summary>Human-readable label for this trigger.</summary>
     public string Name { get; private set; }
@@ -60,6 +68,15 @@ public sealed class JobTrigger : AggregateRoot
     /// <summary>Subscribed event name (event triggers only); null for schedule triggers.</summary>
     public string? EventName { get; private set; }
 
+    /// <summary>The job chain a launchpad's agent session is pointed at (launchpads only).</summary>
+    public Guid? ChainId { get; }
+
+    /// <summary>Project data table fetched into the launchpad session context (launchpads only; optional).</summary>
+    public string? SourceTable { get; }
+
+    /// <summary>The operator-defined prompt the launchpad session runs autonomously (launchpads only).</summary>
+    public string? Prompt { get; }
+
     /// <summary>Next time this schedule is due to fire (UTC); null for event triggers or when paused.</summary>
     public DateTimeOffset? NextRunAt { get; private set; }
 
@@ -69,9 +86,9 @@ public sealed class JobTrigger : AggregateRoot
     public DateTimeOffset CreatedAt { get; }
     public DateTimeOffset UpdatedAt { get; private set; }
 
-    /// <summary>True when the schedule is due at <paramref name="now"/> (enabled schedule with a past NextRunAt).</summary>
+    /// <summary>True when the schedule is due at <paramref name="now"/> (enabled cron-based trigger with a past NextRunAt).</summary>
     public bool IsDue(DateTimeOffset now) =>
-        Enabled && Kind == TriggerKind.Schedule && NextRunAt is { } next && next <= now;
+        Enabled && (Kind is TriggerKind.Schedule or TriggerKind.Launchpad) && NextRunAt is { } next && next <= now;
 
     /// <summary>True when this enabled event trigger subscribes to <paramref name="eventName"/>.</summary>
     public bool MatchesEvent(string eventName) =>
@@ -93,6 +110,7 @@ public sealed class JobTrigger : AggregateRoot
         return new JobTrigger(
             Guid.NewGuid(), projectId, jobId, name.Trim(), TriggerKind.Schedule,
             enabled: true, cronExpression: cronExpression.Trim(), eventName: null,
+            chainId: null, sourceTable: null, prompt: null,
             nextRunAt: nextRunAt, lastFiredAt: null, createdAt: now, updatedAt: now);
     }
 
@@ -108,16 +126,42 @@ public sealed class JobTrigger : AggregateRoot
         return new JobTrigger(
             Guid.NewGuid(), projectId, jobId, name.Trim(), TriggerKind.Event,
             enabled: true, cronExpression: null, eventName: eventName.Trim(),
+            chainId: null, sourceTable: null, prompt: null,
             nextRunAt: null, lastFiredAt: null, createdAt: now, updatedAt: now);
+    }
+
+    /// <summary>Creates a cron launchpad: fires an autonomous agent session (prompt + rows from
+    /// <paramref name="sourceTable"/>) pointed at <paramref name="chainId"/>.</summary>
+    public static JobTrigger CreateLaunchpad(
+        Guid projectId, string name, string cronExpression, Guid chainId,
+        string? sourceTable, string prompt, DateTimeOffset? nextRunAt, DateTimeOffset now)
+    {
+        if (projectId == Guid.Empty)
+            throw new ArgumentException("ProjectId must not be empty.", nameof(projectId));
+        if (chainId == Guid.Empty)
+            throw new ArgumentException("ChainId must not be empty.", nameof(chainId));
+        ValidateName(name);
+        if (string.IsNullOrWhiteSpace(cronExpression))
+            throw new ArgumentException("A launchpad requires a cron expression.", nameof(cronExpression));
+        if (string.IsNullOrWhiteSpace(prompt))
+            throw new ArgumentException("A launchpad requires a prompt.", nameof(prompt));
+
+        return new JobTrigger(
+            Guid.NewGuid(), projectId, jobId: null, name.Trim(), TriggerKind.Launchpad,
+            enabled: true, cronExpression: cronExpression.Trim(), eventName: null,
+            chainId: chainId, sourceTable: string.IsNullOrWhiteSpace(sourceTable) ? null : sourceTable.Trim(),
+            prompt: prompt.Trim(),
+            nextRunAt: nextRunAt, lastFiredAt: null, createdAt: now, updatedAt: now);
     }
 
     /// <summary>Rehydrates from persisted state. Infrastructure only.</summary>
     public static JobTrigger Rehydrate(
-        Guid id, Guid projectId, Guid jobId, string name, TriggerKind kind, bool enabled,
-        string? cronExpression, string? eventName, DateTimeOffset? nextRunAt, DateTimeOffset? lastFiredAt,
+        Guid id, Guid projectId, Guid? jobId, string name, TriggerKind kind, bool enabled,
+        string? cronExpression, string? eventName, Guid? chainId, string? sourceTable, string? prompt,
+        DateTimeOffset? nextRunAt, DateTimeOffset? lastFiredAt,
         DateTimeOffset createdAt, DateTimeOffset updatedAt)
         => new(id, projectId, jobId, name, kind, enabled, cronExpression, eventName,
-               nextRunAt, lastFiredAt, createdAt, updatedAt);
+               chainId, sourceTable, prompt, nextRunAt, lastFiredAt, createdAt, updatedAt);
 
     // ── Behaviour ─────────────────────────────────────────────────────────────────────────────────
 
@@ -126,7 +170,7 @@ public sealed class JobTrigger : AggregateRoot
     public void MarkFired(DateTimeOffset firedAt, DateTimeOffset? nextRunAt)
     {
         LastFiredAt = firedAt;
-        if (Kind == TriggerKind.Schedule)
+        if (Kind is TriggerKind.Schedule or TriggerKind.Launchpad)
             NextRunAt = nextRunAt;
         UpdatedAt = firedAt;
     }
@@ -134,8 +178,8 @@ public sealed class JobTrigger : AggregateRoot
     /// <summary>Updates a schedule's cron expression and its recomputed next-run time.</summary>
     public void Reschedule(string cronExpression, DateTimeOffset? nextRunAt, DateTimeOffset now)
     {
-        if (Kind != TriggerKind.Schedule)
-            throw new InvalidOperationException("Only schedule triggers can be rescheduled.");
+        if (Kind is not (TriggerKind.Schedule or TriggerKind.Launchpad))
+            throw new InvalidOperationException("Only cron-based triggers can be rescheduled.");
         if (string.IsNullOrWhiteSpace(cronExpression))
             throw new ArgumentException("A schedule trigger requires a cron expression.", nameof(cronExpression));
 
@@ -156,7 +200,7 @@ public sealed class JobTrigger : AggregateRoot
     public void Enable(DateTimeOffset? nextRunAt, DateTimeOffset now)
     {
         Enabled = true;
-        if (Kind == TriggerKind.Schedule)
+        if (Kind is TriggerKind.Schedule or TriggerKind.Launchpad)
             NextRunAt = nextRunAt;
         UpdatedAt = now;
     }

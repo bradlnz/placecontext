@@ -6,12 +6,12 @@ using PlaceContext.Infrastructure.Storage;
 namespace PlaceContext.Infrastructure.Tests;
 
 /// <summary>
-/// <see cref="MinioObjectStore"/> presigned URLs (the dependency-cache channel job pods use) —
+/// <see cref="S3ObjectStore"/> presigned URLs (the dependency-cache channel job pods use) —
 /// SigV4 signing is computed locally, so these need no live store.
 /// </summary>
-public class MinioObjectStoreTests
+public class S3ObjectStoreTests
 {
-    private static MinioObjectStore Create(string endpoint = "http://minio:9000") => new(
+    private static S3ObjectStore Create(string endpoint = "http://minio:9000") => new(
         Options.Create(new ObjectStoreOptions { Endpoint = endpoint, AccessKey = "ak", SecretKey = "sk" }),
         new DataProtectionEncryptor(new EphemeralDataProtectionProvider()));
 
@@ -36,7 +36,7 @@ public class MinioObjectStoreTests
     [Fact]
     public async Task A_disabled_store_cannot_presign()
     {
-        var store = new MinioObjectStore(Options.Create(new ObjectStoreOptions()),
+        var store = new S3ObjectStore(Options.Create(new ObjectStoreOptions()),
             new DataProtectionEncryptor(new EphemeralDataProtectionProvider()));
         Assert.False(store.IsEnabled);
         await Assert.ThrowsAsync<InvalidOperationException>(() => store.PresignDownloadAsync("b", "k", TimeSpan.FromMinutes(1)));
@@ -45,7 +45,7 @@ public class MinioObjectStoreTests
     [Fact]
     public async Task S3_presigned_download_uses_virtual_hosted_style()
     {
-        var store = new MinioObjectStore(
+        var store = new S3ObjectStore(
             Options.Create(new ObjectStoreOptions
             {
                 Endpoint = "https://s3.us-east-1.amazonaws.com",
@@ -65,7 +65,7 @@ public class MinioObjectStoreTests
     [Fact]
     public async Task DigitalOcean_spaces_presigned_download_uses_virtual_hosted_style()
     {
-        var store = new MinioObjectStore(
+        var store = new S3ObjectStore(
             Options.Create(new ObjectStoreOptions
             {
                 Endpoint = "https://nyc3.digitaloceanspaces.com",
@@ -85,7 +85,7 @@ public class MinioObjectStoreTests
     [Fact]
     public async Task MinIO_presigned_download_uses_path_style()
     {
-        var store = new MinioObjectStore(
+        var store = new S3ObjectStore(
             Options.Create(new ObjectStoreOptions
             {
                 Endpoint = "http://minio:9000",

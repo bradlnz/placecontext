@@ -14,6 +14,9 @@
 @inject IJSRuntime JS
 @inject PlaceContext.Infrastructure.Caching.IChatMemoryStore MemoryStore
 @inject AgentContextBuilder ContextBuilder
+@inject IDocumentTextExtractor DocExtractor
+@inject IObjectStore ObjectStore
+@inject ICurrentTenant Tenant
 
 <PageTitle>placecontext — Agent Chat</PageTitle>
 
@@ -59,7 +62,32 @@
                 {
                     <div class="empty-note chat-empty">
                         <p>Ask me about your project data, job runs, or request a graph.</p>
-                        <p class="hint">Try: "Show me the job run history" or "Render a bar chart of entity counts"</p>
+                        @if (_projectId.HasValue)
+                        {
+                            <div class="starter-actions">
+                                <button class="starter-btn" @onclick="@(() => StarterPromptAsync("Give me an overview of this project"))">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                                    Project overview
+                                </button>
+                                <button class="starter-btn" @onclick="@(() => StarterPromptAsync("Show me the recent job runs and their status"))">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                                    Recent job runs
+                                </button>
+                                <button class="starter-btn" @onclick="@(() => StarterPromptAsync("What are the hotspots in the project dependency graph?"))">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><circle cx="5" cy="6" r="3"/><circle cx="19" cy="6" r="3"/><circle cx="12" cy="18" r="3"/><line x1="8" y1="8" x2="10" y2="15"/><line x1="16" y1="8" x2="14" y2="15"/></svg>
+                                    Graph hotspots
+                                </button>
+                                <button class="starter-btn" @onclick="@(() => StarterPromptAsync("List the recent artifacts produced by job runs"))">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                                    Recent artifacts
+                                </button>
+                                <button class="starter-btn" @onclick="@(() => StarterPromptAsync("List the project data tables"))">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+                                    Data tables
+                                </button>
+                            </div>
+                        }
+                        <p class="hint">Or type your own question below.</p>
                     </div>
                 }
                 else
@@ -82,13 +110,22 @@
                                 @if (msg.ToolCalls.Count > 0)
                                 {
                                     var graphCalls = msg.ToolCalls.Where(tc => tc.ResultType == "graph" && tc.Status == ToolCallStatus.Completed).ToList();
-                                    var otherCalls = msg.ToolCalls.Where(tc => tc.ResultType != "graph" || tc.Status != ToolCallStatus.Completed).ToList();
+                                    var mapCalls = msg.ToolCalls.Where(tc => tc.ResultType == "map" && tc.Status == ToolCallStatus.Completed).ToList();
+                                    var otherCalls = msg.ToolCalls.Where(tc => (tc.ResultType != "graph" && tc.ResultType != "map") || tc.Status != ToolCallStatus.Completed).ToList();
                                     
                                     @* Show graphs inline *@
                                     @foreach (var tc in graphCalls)
                                     {
                                         <div class="chat-chart-wrap">
                                             <canvas id="graph-@tc.Id"></canvas>
+                                        </div>
+                                    }
+
+                                    @* Show maps inline *@
+                                    @foreach (var tc in mapCalls)
+                                    {
+                                        <div class="chat-map-wrap">
+                                            <div id="map-@tc.Id" class="chat-map-container"></div>
                                         </div>
                                     }
                                     
@@ -132,6 +169,33 @@
                                             </div>
                                         </details>
                                     }
+                                }
+                                @if (msg.AttachmentName != null)
+                                {
+                                    <div class="msg-attachment">
+                                        @if (msg.AttachmentKey != null)
+                                        {
+                                            <a class="attachment-chip" href="/chat/attachments/@msg.AttachmentKey" target="_blank" title="Open attachment">
+                                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                                                <span>@msg.AttachmentName</span>
+                                                @if (msg.AttachmentSizeBytes > 0)
+                                                {
+                                                    <span class="attachment-size">@FormatBytes(msg.AttachmentSizeBytes)</span>
+                                                }
+                                            </a>
+                                        }
+                                        else
+                                        {
+                                            <span class="attachment-chip">
+                                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                                                <span>@msg.AttachmentName</span>
+                                                @if (msg.AttachmentSizeBytes > 0)
+                                                {
+                                                    <span class="attachment-size">@FormatBytes(msg.AttachmentSizeBytes)</span>
+                                                }
+                                            </span>
+                                        }
+                                    </div>
                                 }
                                 <div class="msg-content">@((MarkupString)FormatContent(msg.Content))</div>
                                 @{
@@ -253,12 +317,31 @@
                 <div @ref="_scrollAnchor"></div>
             </div>
 
-            <div class="chat-input-bar">
-                <input class="dcinput chat-input" @bind="_input" @bind:event="oninput"
-                       placeholder="@(_pendingClarification != null ? "Respond to the question above…" : "Ask about data, jobs, or request a graph…")"
-                       disabled="@(_streaming && _pendingClarification == null)"
-                       @onkeydown="InputKeydown" />
-                <button class="dcbtn primary" disabled="@((_streaming && _pendingClarification == null) || string.IsNullOrWhiteSpace(_input))" @onclick="Send">Send</button>
+            <div class="chat-input-wrap"
+                 @ondragover="PreventDefault"
+                 @ondragover:preventDefault="true"
+                 @ondrop="OnFileDrop">
+                <div class="chat-input-bar">
+                    <button class="chat-attach-btn" @onclick="TriggerFileInput" title="Attach file (CSV, PDF, DOC, DOCX)">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+                            <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/>
+                        </svg>
+                    </button>
+                    <input type="file" @ref="_fileInputRef" @onchange="OnFileSelected" accept=".csv,.pdf,.doc,.docx" class="hidden-file-input" />
+                    <input class="dcinput chat-input" @bind="_input" @bind:event="oninput"
+                           placeholder="@(_pendingClarification != null ? "Respond to the question above…" : "Ask about data, jobs, or request a graph…")"
+                           disabled="@(_streaming && _pendingClarification == null)"
+                           @onkeydown="InputKeydown" />
+                    <button class="dcbtn primary" disabled="@((_streaming && _pendingClarification == null) || string.IsNullOrWhiteSpace(_input))" @onclick="Send">Send</button>
+                </div>
+                @if (_attachedFileName != null)
+                {
+                    <div class="attached-file-chip">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                        <span>@_attachedFileName</span>
+                        <button class="chip-remove" @onclick="RemoveAttachment" title="Remove file">×</button>
+                    </div>
+                }
             </div>
         </div>
 
@@ -278,13 +361,17 @@
                     <div class="side-section">
                         <div class="session-header">
                             <h4>Sessions</h4>
-                            <button class="dcbtn xs" @onclick="NewSession">+ New</button>
+                            <div class="session-header-actions">
+                                <button class="dcbtn xs" @onclick="ClearCurrentSessionAsync" disabled="@(_messages.Count == 0)" title="Clear messages in this session">Clear</button>
+                                <button class="dcbtn xs" @onclick="NewSession">+ New</button>
+                            </div>
                         </div>
                         @foreach (var s in _sessions.Take(20))
                         {
                             <div class="session-item @(s.Id == _sessionId ? "active" : "")" @onclick="@(() => SelectSessionAsync(s))">
                                 <span class="session-title">@s.Title</span>
                                 <span class="session-meta">@s.MessageCount msgs · @s.LastMessageAt.ToString("MMM d HH:mm")</span>
+                                <button class="session-delete" @onclick="@(() => DeleteSessionAsync(s))" @onclick:stopPropagation="true" title="Delete session">×</button>
                             </div>
                         }
                     </div>
@@ -599,7 +686,7 @@
     private ElementReference _messagesRef;
     private ElementReference _scrollAnchor;
         private Guid? _projectId;
-    private string _systemPrompt = "You are a PlaceContext agent. You can query project data, inspect job runs, and render graphs. Use tools when the user asks about data, jobs, or requests visualizations.";
+    private string _systemPrompt = "You are a PlaceContext agent. You can query project data, inspect job runs, and render graphs. Answer directly and concisely: no preamble, no restating the question, no visible chain-of-thought. When data is needed, call the right tool immediately instead of deliberating. Keep answers short unless the user asks for detail.";
     private bool _ragEnabled = true;
     private int _maxContextChunks = 5;
     private float _temperature = 0.7f;
@@ -641,6 +728,13 @@
     private readonly HashSet<string> _clarificationSelected = new();
     private TaskCompletionSource<ClarificationResult>? _clarificationTcs;
     private readonly HashSet<int> _renderedChartIds = new();
+    private readonly HashSet<int> _renderedMapIds = new();
+    private byte[]? _attachedFile;
+    private string? _attachedFileName;
+    private string? _attachedFileText;
+    private ElementReference _fileInputRef;
+    private const string AttachmentsBucket = "chat-attachments";
+    private bool _attachmentsBucketEnsured;
 
     protected override async Task OnInitializedAsync()
     {
@@ -713,7 +807,48 @@
         _pendingClarification = null;
         _clarificationSelected.Clear();
         _renderedChartIds.Clear();
+        _renderedMapIds.Clear();
+        _attachedFile = null;
+        _attachedFileName = null;
+        _attachedFileText = null;
         _streamBuffer = "";
+        StateHasChanged();
+    }
+
+    private async Task DeleteSessionAsync(ChatSessionSummary session)
+    {
+        try { await MemoryStore.DeleteSessionAsync(session.Id); }
+        catch { }
+        if (session.Id == _sessionId)
+        {
+            NewSession();
+        }
+        await LoadSessionsAsync();
+        StateHasChanged();
+    }
+
+    private async Task ClearCurrentSessionAsync()
+    {
+        if (_sessionId.HasValue)
+        {
+            try { await MemoryStore.ClearSessionMemoryAsync(_sessionId.Value); }
+            catch { }
+        }
+        // Reset the conversation but keep the same session id
+        _sessionTitle = "New Chat";
+        _messages.Clear();
+        _activeActions.Clear();
+        _fetchedData.Clear();
+        _toolHistory.Clear();
+        _pendingClarification = null;
+        _clarificationSelected.Clear();
+        _renderedChartIds.Clear();
+        _renderedMapIds.Clear();
+        _attachedFile = null;
+        _attachedFileName = null;
+        _attachedFileText = null;
+        _streamBuffer = "";
+        await LoadSessionsAsync();
         StateHasChanged();
     }
 
@@ -730,7 +865,13 @@
                 _messages.Clear();
                 foreach (var m in memory.Messages)
                 {
-                    var msg = new AgentMessage(m.Role, m.Content);
+                    var msg = new AgentMessage(m.Role, m.Content)
+                    {
+                        AttachmentName = m.AttachmentName,
+                        AttachmentKey = m.AttachmentKey,
+                        AttachmentContentType = m.AttachmentContentType,
+                        AttachmentSizeBytes = m.AttachmentSizeBytes,
+                    };
                     if (m.ToolCalls != null)
                         msg.ToolCalls.AddRange(m.ToolCalls.Select(tc => new ToolCallInfo
                         {
@@ -756,7 +897,8 @@
             _messages.Select(m => new ChatMemoryMessage(
                 m.Role, m.Content, DateTimeOffset.Now,
                 m.ToolCalls.Select(tc => new ChatMemoryToolCall(
-                    tc.ToolName, tc.Args, tc.Status.ToString(), tc.Result, tc.ResultType)).ToList())).ToList(),
+                    tc.ToolName, tc.Args, tc.Status.ToString(), tc.Result, tc.ResultType)).ToList(),
+                m.AttachmentName, m.AttachmentKey, m.AttachmentContentType, m.AttachmentSizeBytes)).ToList(),
             DateTimeOffset.Now, DateTimeOffset.Now);
         try { await MemoryStore.SaveSessionAsync(_sessionId.Value, memory); }
         catch { }
@@ -770,8 +912,48 @@
         var text = _input.Trim();
         if (string.IsNullOrEmpty(text) || _streaming || !_projectId.HasValue) return;
 
-        _messages.Add(new AgentMessage("user", text));
+        // Include attached file content in the user message
+        var userText = text;
+        if (_attachedFileName != null && _attachedFileText != null)
+        {
+            userText += $"\n\n## Attached file: {_attachedFileName}\n\n{_attachedFileText}";
+        }
+        var userMsg = new AgentMessage("user", userText);
+
+        // Persist the raw attachment to object storage so it stays downloadable from the transcript
+        if (_attachedFile != null && _attachedFileName != null && _sessionId.HasValue && ObjectStore.IsEnabled)
+        {
+            try
+            {
+                if (!_attachmentsBucketEnsured)
+                {
+                    await ObjectStore.EnsureBucketAsync(AttachmentsBucket);
+                    _attachmentsBucketEnsured = true;
+                }
+                var contentType = ContentTypeFor(_attachedFileName);
+                var key = $"chat/{Tenant.TenantId}/{_projectId!.Value}/{_sessionId.Value}/{Guid.NewGuid():N}-{SanitizeFileName(_attachedFileName)}";
+                await ObjectStore.PutAsync(AttachmentsBucket, key, _attachedFile, contentType);
+                userMsg.AttachmentName = _attachedFileName;
+                userMsg.AttachmentKey = key;
+                userMsg.AttachmentContentType = contentType;
+                userMsg.AttachmentSizeBytes = _attachedFile.Length;
+            }
+            catch { /* best-effort: the extracted text is still inlined above */ }
+        }
+        else if (_attachedFileName != null)
+        {
+            // Store disabled or no bytes — still show the attachment name on the message
+            userMsg.AttachmentName = _attachedFileName;
+            userMsg.AttachmentSizeBytes = _attachedFile?.Length ?? 0;
+        }
+        _messages.Add(userMsg);
         _input = "";
+
+        // Clear attachment after sending
+        _attachedFile = null;
+        _attachedFileName = null;
+        _attachedFileText = null;
+
         _streaming = true;
         _streamBuffer = "";
 
@@ -888,7 +1070,7 @@
 
                     tc.Status = result.Success ? ToolCallStatus.Completed : ToolCallStatus.Error;
                     tc.Result = result.Data ?? result.Error;
-                    tc.ResultType = result.IsGraph ? "graph" : "text";
+                    tc.ResultType = result.IsMap ? "map" : result.IsGraph ? "graph" : "text";
 
                     // Update active action with result detail
                     var action = _activeActions.FirstOrDefault(a => a.ToolName == tc.ToolName && a.Status == ToolCallStatus.Running);
@@ -956,11 +1138,15 @@
             "- [[tool:list_job_runs|jobId]] - List runs for a job\n" +
             "- [[tool:render_graph|chartType|tableName|columnName]] - Render a chart (pass table AND column names from context, e.g. [[tool:render_graph|bar|cashflow_runs|amount]])\n" +
             "- [[tool:query_graph|]] - Query project dependency graph\n" +
+            "- [[tool:search|query]] - Semantic search over project run outputs and data\n" +
+            "- [[tool:get_artifacts|]] - List recent project artifacts (reports, charts, CSVs) with download links\n" +
             "- [[tool:schedule_job|jobId|name|cron]] - Create a cron schedule\n" +
             "- [[tool:list_schedules|jobId]] - List job schedules\n" +
             "- [[tool:toggle_schedule|triggerId|true|false]] - Enable/disable schedule\n" +
             "- [[tool:run_job|jobId]] - Run a job now\n" +
-            "- [[tool:call_mcp|serverName|toolName|argsJson]] - Call a tool on an external MCP server";
+            "- [[tool:call_mcp|serverName|toolName|argsJson]] - Call a tool on an external MCP server\n" +
+            "- [[tool:list_mcp_tools|serverName]] - List available tools on an MCP server\n" +
+            "- [[tool:render_map|specJson]] - Render a Leaflet map (JSON spec with {markers:[{lat,lng,label,color}], polygons:[{coords,color}], center:[lat,lng], zoom}). Example: [[tool:render_map|{\\\"markers\\\":[{\\\"lat\\\":48.135,\\\"lng\\\":11.582,\\\"label\\\":\\\"Munich\\\"}]}]]";
 
         var systemPrompt = _systemPrompt + "\n\n" + toolDesc;
         if (!string.IsNullOrWhiteSpace(ragContext))
@@ -1050,6 +1236,11 @@
             var escaped = System.Net.WebUtility.HtmlEncode(raw);
             return $"<em>{escaped}</em>";
         }
+        // Hide the inlined attached-file dump from display (shown as a chip instead;
+        // the full text remains in the message history sent to the model)
+        var attachIdx = raw.IndexOf("\n\n## Attached file:", StringComparison.Ordinal);
+        if (attachIdx >= 0)
+            raw = raw[..attachIdx];
         // Strip raw tool call syntax from display
         var cleaned = System.Text.RegularExpressions.Regex.Replace(raw, @"\[\[tool:[^\]]*\]\]", "").Trim();
         // If only tool calls were present, return empty (tool results are shown separately)
@@ -1164,6 +1355,13 @@
         await Send();
     }
 
+    private async Task StarterPromptAsync(string prompt)
+    {
+        if (_streaming || !_projectId.HasValue) return;
+        _input = prompt;
+        await Send();
+    }
+
     private async Task CopyMessageAsync(string content)
     {
         try { await JS.InvokeVoidAsync("navigator.clipboard.writeText", content); }
@@ -1186,12 +1384,15 @@
                 "list_job_runs" => await ExecuteListJobRunsAsync(args, ct),
                 "render_graph" => await ExecuteRenderGraphAsync(args, ct),
                 "query_graph" => await ExecuteQueryGraphAsync(ct),
+                "search" => await ExecuteSearchAsync(args, ct),
+                "get_artifacts" => await ExecuteGetArtifactsAsync(ct),
                 "schedule_job" => await ExecuteScheduleJobAsync(args, ct),
                 "list_schedules" => await ExecuteListSchedulesAsync(args, ct),
                 "toggle_schedule" => await ExecuteToggleScheduleAsync(args, ct),
                 "run_job" => await ExecuteRunJobAsync(args, ct),
                 "call_mcp" => await ExecuteCallMcpAsync(args, ct),
                 "list_mcp_tools" => await ExecuteListMcpToolsAsync(args, ct),
+                "render_map" => await ExecuteRenderMapAsync(args, ct),
                 _ => ToolCallResult.Fail($"Unknown tool: {toolName}"),
             };
         }
@@ -1257,6 +1458,67 @@
         foreach (var r in runs.Take(20))
             sb.Append($"- {r.Status} ({r.StartedAt:yyyy-MM-dd HH:mm})\n");
         return ToolCallResult.Ok(sb.ToString());
+    }
+
+    private async Task<ToolCallResult> ExecuteSearchAsync(string args, CancellationToken ct)
+    {
+        if (!_projectId.HasValue) return ToolCallResult.Fail("No project selected");
+        var query = args.Trim();
+        if (query.Length == 0) return ToolCallResult.Fail("Usage: [[tool:search|query]]");
+        AddActiveAction("search", $"Searching \"{(query.Length > 30 ? query[..30] + "…" : query)}\"...");
+        try
+        {
+            var matches = await Svc.SearchRunOutputsAsync(_projectId.Value, query, 8, ct);
+            if (matches.Count == 0)
+            {
+                CompleteActiveAction("search", true);
+                return ToolCallResult.Ok("No matching run outputs found. Semantic search may be disabled (no embedding API key configured).");
+            }
+            var sb = new System.Text.StringBuilder();
+            sb.Append($"Matches for \"{query}\": {matches.Count}\n");
+            foreach (var m in matches)
+            {
+                var snippet = m.Text.Length > 300 ? m.Text[..300] + "…" : m.Text;
+                sb.Append($"- (score {m.Score:0.00}, run {m.JobRunId.ToString()[..8]}) {snippet}\n");
+            }
+            CompleteActiveAction("search", true);
+            AddToolHistory("search", true, $"{matches.Count} matches");
+            return ToolCallResult.Ok(sb.ToString());
+        }
+        catch (Exception ex)
+        {
+            CompleteActiveAction("search", false);
+            return ToolCallResult.Fail(ex.Message);
+        }
+    }
+
+    private async Task<ToolCallResult> ExecuteGetArtifactsAsync(CancellationToken ct)
+    {
+        if (!_projectId.HasValue) return ToolCallResult.Fail("No project selected");
+        AddActiveAction("get_artifacts", "Loading artifacts...");
+        try
+        {
+            var artifacts = await Svc.ListProjectArtifactsAsync(_projectId.Value, 25, null, ct);
+            if (artifacts.Count == 0)
+            {
+                CompleteActiveAction("get_artifacts", true);
+                return ToolCallResult.Ok("No artifacts found for this project yet.");
+            }
+            var sb = new System.Text.StringBuilder();
+            sb.Append($"Artifacts: {artifacts.Count}\n");
+            foreach (var a in artifacts)
+            {
+                sb.Append($"- {a.Title} | {a.Kind} | {FormatBytes(a.SizeBytes)} | {a.CreatedAt:yyyy-MM-dd HH:mm} | /runs/{a.RunId}/artifacts/{a.Id}\n");
+            }
+            CompleteActiveAction("get_artifacts", true);
+            AddToolHistory("get_artifacts", true, $"{artifacts.Count} artifacts");
+            return ToolCallResult.Ok(sb.ToString());
+        }
+        catch (Exception ex)
+        {
+            CompleteActiveAction("get_artifacts", false);
+            return ToolCallResult.Fail(ex.Message);
+        }
     }
 
     private async Task<ToolCallResult> ExecuteRenderGraphAsync(string args, CancellationToken ct)
@@ -1448,6 +1710,20 @@
             AddToolHistory("query_graph", false, ex.Message);
             return ToolCallResult.Fail($"Graph query failed: {ex.Message}");
         }
+    }
+
+    private async Task<ToolCallResult> ExecuteRenderMapAsync(string args, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(args)) return ToolCallResult.Fail("Usage: render_map|specJson");
+        var specJson = args.Trim();
+        // Validate it's valid JSON
+        try { System.Text.Json.JsonDocument.Parse(specJson); }
+        catch { return ToolCallResult.Fail("Invalid JSON spec for render_map"); }
+        AddActiveAction("render_map", "Rendering map...");
+        await Task.Delay(10, ct); // yield
+        CompleteActiveAction("render_map", true);
+        AddToolHistory("render_map", true, "Map rendered");
+        return ToolCallResult.Map(specJson);
     }
 
     private async Task<ToolCallResult> ExecuteScheduleJobAsync(string args, CancellationToken ct)
@@ -1701,18 +1977,23 @@
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (firstRender && !_oauthListenerRegistered)
+        if (firstRender)
         {
-            _oauthListenerRegistered = true;
-            var dotNetRef = DotNetObjectReference.Create(this);
-            await JS.InvokeVoidAsync("eval", @"
-                window.__mcpOAuthListener = function(e) {
-                    if (e.data && e.data.startsWith && e.data.startsWith('mcp-oauth-')) {
-                        DotNet.invokeMethodAsync('PlaceContext.Host', 'OnMcpOAuthCallback', e.data);
-                    }
-                };
-                window.addEventListener('message', window.__mcpOAuthListener);
-            ");
+            if (!_oauthListenerRegistered)
+            {
+                _oauthListenerRegistered = true;
+                var dotNetRef = DotNetObjectReference.Create(this);
+                await JS.InvokeVoidAsync("eval", @"
+                    window.__mcpOAuthListener = function(e) {
+                        if (e.data && e.data.startsWith && e.data.startsWith('mcp-oauth-')) {
+                            DotNet.invokeMethodAsync('PlaceContext.Host', 'OnMcpOAuthCallback', e.data);
+                        }
+                    };
+                    window.addEventListener('message', window.__mcpOAuthListener);
+                ");
+            }
+            // Set up file drop zone
+            await JS.InvokeVoidAsync("placecontext.setupDropZone", _fileInputRef);
         }
 
         // Render any pending chart canvases
@@ -1727,6 +2008,17 @@
                     _renderedChartIds.Add(tc.Id);
                 }
                 catch { /* canvas not in DOM yet — will retry next render */ }
+            }
+
+            foreach (var tc in msg.ToolCalls.Where(t => t.ResultType == "map" && t.Status == ToolCallStatus.Completed))
+            {
+                if (_renderedMapIds.Contains(tc.Id)) continue;
+                try
+                {
+                    await JS.InvokeVoidAsync("pcmap.render", $"map-{tc.Id}", tc.Result);
+                    _renderedMapIds.Add(tc.Id);
+                }
+                catch { /* container not in DOM yet — will retry next render */ }
             }
         }
     }
@@ -1830,6 +2122,87 @@
             || lower.Contains("rate limit");
     }
 
+    private void PreventDefault() { }
+
+    private async Task TriggerFileInput()
+    {
+        await JS.InvokeVoidAsync("placecontext.clickElement", _fileInputRef);
+    }
+
+    private async Task OnFileSelected(ChangeEventArgs e)
+    {
+        await ProcessFileFromInput();
+    }
+
+    private async Task ProcessFileFromInput()
+    {
+        try
+        {
+            var file = await JS.InvokeAsync<UploadedFile>("placecontext.readFileInput", _fileInputRef);
+            if (file == null || file.Size == 0) return;
+            if (file.Size > 10 * 1024 * 1024) // 10 MB limit
+            {
+                _attachedFileName = null;
+                _attachedFile = null;
+                _attachedFileText = null;
+                return;
+            }
+            _attachedFile = file.Data;
+            _attachedFileName = file.Name;
+            _attachedFileText = DocExtractor.ExtractText(file.Data, file.Name);
+            await InvokeAsync(StateHasChanged);
+        }
+        catch { }
+    }
+
+    private async Task OnFileDrop(DragEventArgs e)
+    {
+        try
+        {
+            var file = await JS.InvokeAsync<UploadedFile>("placecontext.dropFile");
+            if (file == null || file.Size == 0) return;
+            if (file.Size > 10 * 1024 * 1024) return;
+            _attachedFile = file.Data;
+            _attachedFileName = file.Name;
+            _attachedFileText = DocExtractor.ExtractText(file.Data, file.Name);
+            await InvokeAsync(StateHasChanged);
+        }
+        catch { }
+    }
+
+    private void RemoveAttachment()
+    {
+        _attachedFile = null;
+        _attachedFileName = null;
+        _attachedFileText = null;
+    }
+
+    private static string SanitizeFileName(string name)
+    {
+        var cleaned = string.Concat(name.Select(c => char.IsLetterOrDigit(c) || c is '.' or '-' or '_' ? c : '-'));
+        return cleaned.Length > 80 ? cleaned[..80] : cleaned;
+    }
+
+    private static string ContentTypeFor(string fileName) =>
+        System.IO.Path.GetExtension(fileName).ToLowerInvariant() switch
+        {
+            ".csv" => "text/csv",
+            ".pdf" => "application/pdf",
+            ".doc" => "application/msword",
+            ".docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            ".txt" or ".md" => "text/plain",
+            ".png" => "image/png",
+            ".jpg" or ".jpeg" => "image/jpeg",
+            _ => "application/octet-stream",
+        };
+
+    private static string FormatBytes(long bytes) => bytes switch
+    {
+        < 1024 => $"{bytes} B",
+        < 1024 * 1024 => $"{bytes / 1024.0:0.#} KB",
+        _ => $"{bytes / (1024.0 * 1024.0):0.#} MB",
+    };
+
     private async Task LoadGraphAsync()
     {
         if (!_projectId.HasValue) return;
@@ -1886,6 +2259,10 @@ public sealed class AgentMessage
     public string Role { get; }
     public string Content { get; }
     public List<ToolCallInfo> ToolCalls { get; } = new();
+    public string? AttachmentName { get; set; }
+    public string? AttachmentKey { get; set; }
+    public string? AttachmentContentType { get; set; }
+    public long AttachmentSizeBytes { get; set; }
 }
 
 public sealed class ToolCallInfo
@@ -1907,17 +2284,20 @@ public sealed class ToolCallResult
     public string? Data { get; }
     public string? Error { get; }
     public bool IsGraph { get; }
+    public bool IsMap { get; }
 
-    public static ToolCallResult Ok(string data) => new(true, data, null, false);
-    public static ToolCallResult Fail(string error) => new(false, null, error, false);
-    public static ToolCallResult Graph(string data) => new(true, data, null, true);
+    public static ToolCallResult Ok(string data) => new(true, data, null, false, false);
+    public static ToolCallResult Fail(string error) => new(false, null, error, false, false);
+    public static ToolCallResult Graph(string data) => new(true, data, null, true, false);
+    public static ToolCallResult Map(string data) => new(true, data, null, false, true);
 
-    private ToolCallResult(bool success, string? data, string? error, bool isGraph)
+    private ToolCallResult(bool success, string? data, string? error, bool isGraph, bool isMap)
     {
         Success = success;
         Data = data;
         Error = error;
         IsGraph = isGraph;
+        IsMap = isMap;
     }
 }
 
@@ -1963,6 +2343,13 @@ public sealed class ClarificationResult
 {
     public bool Confirmed { get; set; }
     public List<string> SelectedIds { get; set; } = new();
+}
+
+public sealed class UploadedFile
+{
+    public string Name { get; set; } = "";
+    public long Size { get; set; }
+    public byte[] Data { get; set; } = Array.Empty<byte>();
 }
 
 }

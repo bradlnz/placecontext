@@ -15,6 +15,9 @@ internal static class TriggerViewMapper
         Enabled: t.Enabled,
         CronExpression: t.CronExpression,
         EventName: t.EventName,
+        ChainId: t.ChainId,
+        SourceTable: t.SourceTable,
+        Prompt: t.Prompt,
         NextRunAt: t.NextRunAt,
         LastFiredAt: t.LastFiredAt,
         CreatedAt: t.CreatedAt);

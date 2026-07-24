@@ -57,7 +57,7 @@ public sealed class EventDispatchService
             trigger.MarkFired(firedAt, nextRunAt: null);
             await _triggers.UpdateAsync(trigger, ct); // re-finds the row by id and copies the new state
             // The event payload is injected as parameters for the triggered run (task: param injection).
-            await _queue.EnqueueAsync(new QueuedJobRun(tenantId, trigger.JobId, trigger.Id, trigger.Name, occurrence.Payload), ct);
+            await _queue.EnqueueAsync(new QueuedJobRun(tenantId, trigger.JobId ?? Guid.Empty, trigger.Id, trigger.Name, occurrence.Payload), ct);
             fired++;
         }
 

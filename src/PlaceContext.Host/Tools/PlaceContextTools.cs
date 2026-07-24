@@ -287,6 +287,27 @@ public sealed class PlaceContextTools
         => Traced(log, "get_job_run", runId.ToString(), "get job run", new { runId },
             () => svc.GetJobRunAsync(runId));
 
+    [Authorize(Policy = "Member")]
+    [McpServerTool(Name = "get_artifacts"), Description("List recent artifacts (reports, charts, CSVs) produced by job runs; returns metadata and download URLs, not file contents")]
+    public static Task<string> GetArtifacts(IPlaceContextService svc, IToolCallLog log,
+        [Description("Project id")] Guid projectId,
+        [Description("Max artifacts to return (newest first)")] int take = 100)
+        => Traced(log, "get_artifacts", projectId.ToString(), "list artifacts", new { projectId, take },
+            async () => (await svc.ListProjectArtifactsAsync(projectId, take))
+                .Select(a => new
+                {
+                    id = a.Id,
+                    runId = a.RunId,
+                    jobId = a.JobId,
+                    kind = a.Kind,
+                    title = a.Title,
+                    contentType = a.ContentType,
+                    sizeBytes = a.SizeBytes,
+                    createdAt = a.CreatedAt,
+                    downloadUrl = $"/runs/{a.RunId}/artifacts/{a.Id}",
+                })
+                .ToList());
+
     // ── Job chains ────────────────────────────────────────────────────────────────────────────────
 
     [Authorize(Policy = Permission.ChainsManage)]

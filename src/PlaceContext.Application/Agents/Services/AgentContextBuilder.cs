@@ -8,21 +8,25 @@ namespace PlaceContext.Application.Features;
 
 /// <summary>
 /// Builds the RAG context for a chat message: retrieves top-k semantically similar run outputs
-/// via the embedding/search layer, and a summary of the project's dependency graph.
+/// via the embedding/search layer, related project data via the universal content index,
+/// and a summary of the project's dependency graph.
 /// </summary>
 public sealed class AgentContextBuilder
 {
     private readonly IEmbeddingGateway? _embeddings;
     private readonly IRunEmbeddingRepository? _embeddingStore;
+    private readonly IContentIndexer? _contentIndexer;
     private readonly IDecisionTreeProvider? _treeProvider;
 
     public AgentContextBuilder(
         IEmbeddingGateway? embeddings = null,
         IRunEmbeddingRepository? embeddingStore = null,
+        IContentIndexer? contentIndexer = null,
         IDecisionTreeProvider? treeProvider = null)
     {
         _embeddings = embeddings;
         _embeddingStore = embeddingStore;
+        _contentIndexer = contentIndexer;
         _treeProvider = treeProvider;
     }
 
@@ -61,7 +65,32 @@ public sealed class AgentContextBuilder
             }
         }
 
-        // 2. Dependency graph summary.
+        // 2. Semantic search over the universal content index (project data only —
+        //    run outputs are already covered above).
+        if (_contentIndexer is { IsEnabled: true })
+        {
+            try
+            {
+                var hits = await _contentIndexer.SearchAsync(
+                    projectId, userMessage, maxChunks, ContentKind.ProjectData, ct);
+                if (hits.Count > 0)
+                {
+                    sb.AppendLine("## Related project data (semantically relevant)");
+                    sb.AppendLine();
+                    foreach (var h in hits)
+                    {
+                        sb.AppendLine($"- **{h.SourceKey}**: {Truncate(h.Text, 500)}");
+                        sb.AppendLine();
+                    }
+                }
+            }
+            catch
+            {
+                // Best-effort: content search failure should not block the chat.
+            }
+        }
+
+        // 3. Dependency graph summary.
         if (_treeProvider is not null)
         {
             try

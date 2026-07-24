@@ -1,16 +1,19 @@
 namespace PlaceContext.Application.Dtos;
 
-/// <summary>Read model for a <see cref="PlaceContext.Domain.Entities.JobTrigger"/>.</summary>
 public sealed record TriggerView(
     Guid Id,
     Guid ProjectId,
-    Guid JobId,
+    /// <summary>Null for launchpads (they target a chain, not a job).</summary>
+    Guid? JobId,
     string Name,
-    /// <summary>"Schedule" | "Event".</summary>
+    /// <summary>"Schedule" | "Event" | "Launchpad".</summary>
     string Kind,
     bool Enabled,
     string? CronExpression,
     string? EventName,
+    Guid? ChainId,
+    string? SourceTable,
+    string? Prompt,
     DateTimeOffset? NextRunAt,
     DateTimeOffset? LastFiredAt,
     DateTimeOffset CreatedAt);

@@ -14,7 +14,7 @@
 <div id="dcshell" data-theme="dark" class="shell" style="@_brand.CssOverrides()">
 
     <!-- SIDEBAR — structure from tenant menu config; still filtered by effective permissions. -->
-    <aside class="sidebar">
+    <aside class="sidebar @(_navOpen ? "open" : null)">
         <div class="brand-row">
             @if (_brand.LogoDataUri is { } logo)
             {
@@ -120,10 +120,19 @@
         </div>
     </aside>
 
+    @* Mobile nav backdrop — click anywhere outside the sidebar to close it. *@
+    @if (_navOpen)
+    {
+        <div class="nav-backdrop" @onclick="CloseNav"></div>
+    }
+
     <!-- MAIN -->
     <main class="main">
         <header class="topbar">
             <div class="topbar-left">
+                <button class="nav-toggle" @onclick="ToggleNav" title="Menu" aria-label="Toggle navigation">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 7h16"></path><path d="M4 12h16"></path><path d="M4 17h16"></path></svg>
+                </button>
                 <span class="title-14">@Ui.Title</span>
                 <span class="topbar-sub">@Ui.Sub</span>
             </div>
@@ -188,6 +197,7 @@
 @code {
     private IReadOnlyList<ProjectSummaryView> _projects = Array.Empty<ProjectSummaryView>();
     private bool _switcherOpen;
+    private bool _navOpen;
     private int _runningCount;
     private string OrgName => string.IsNullOrEmpty(Tenant.Slug) ? "organisation" : Tenant.Slug;
     private string RootPath => Config["PlaceContext:RootPath"] ?? "/home/brad/code";
@@ -228,6 +238,10 @@
 
     private void ToggleSwitcher() => _switcherOpen = !_switcherOpen;
 
+    private void ToggleNav() => _navOpen = !_navOpen;
+
+    private void CloseNav() => _navOpen = false;
+
     private async Task SwitchProject(ProjectSummaryView p)
     {
         _switcherOpen = false;
@@ -239,9 +253,13 @@
         Nav.NavigateTo(dest);
     }
 
-    // Navigating into any /project/{id}/… page moves the switcher with you.
+    // Navigating into any /project/{id}/… page moves the switcher with you; any navigation
+    // also closes the mobile nav drawer.
     private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
-        => SyncProjectFromUrl(e.Location);
+    {
+        _navOpen = false;
+        SyncProjectFromUrl(e.Location);
+    }
 
     private void SyncProjectFromUrl(string uri)
     {

@@ -80,7 +80,7 @@ public sealed class McpConnection : AggregateRoot
         OAuthScopes = scopes?.Trim();
     }
 
-    public void StoreOAuthTokens(string accessToken, string refreshToken, DateTimeOffset expiresAt, DateTimeOffset now)
+    public void StoreOAuthTokens(string accessToken, string? refreshToken, DateTimeOffset expiresAt, DateTimeOffset now)
     {
         OAuthAccessToken = accessToken;
         OAuthRefreshToken = refreshToken;

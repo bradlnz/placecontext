@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using PlaceContext.Application.Agents.Services;
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Features;
 using PlaceContext.Application.Ports;
@@ -318,7 +319,7 @@ public sealed class TriggerSchedulerService : BackgroundService
                 LIMIT @batch
             ) c
             WHERE p."Id" = c."Id"
-            RETURNING p."Id", p."TenantId", p."JobId", p."TriggerName", p."Payload"
+            RETURNING p."Id", p."TenantId", p."JobId", p."TriggerId", p."TriggerName", p."Payload"
             """;
         cmd.Parameters.AddWithValue("me", _instanceId);
         cmd.Parameters.AddWithValue("batch", ClaimBatch);
@@ -327,12 +328,12 @@ public sealed class TriggerSchedulerService : BackgroundService
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         while (await reader.ReadAsync(ct))
         {
-            var cipher = await reader.IsDBNullAsync(4, ct) ? null : reader.GetString(4);
+            var cipher = await reader.IsDBNullAsync(5, ct) ? null : reader.GetString(5);
             // Decrypt in Host only — raw DB rows stay opaque (legacy plaintext passthrough).
             var payload = cipher is null ? null : _enc.Unprotect(cipher, PendingPurpose);
             rows.Add(new ClaimedRun(
                 reader.GetGuid(0), reader.GetGuid(1), reader.GetGuid(2),
-                reader.GetString(3), payload));
+                reader.GetGuid(3), reader.GetString(4), payload));
         }
         return rows;
     }

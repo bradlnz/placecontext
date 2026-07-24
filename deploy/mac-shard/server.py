@@ -254,16 +254,30 @@ def torch_forward_slice(hidden_states, attention_mask, layer_start, layer_end):
     return hs
 
 
+def render_chat_prompt(messages):
+    """Render the chat template, disabling Qwen3 'thinking' blocks when supported.
+
+    Thinking mode roughly doubles time-to-first-token for interactive chat; the
+    portal prefers fast, direct answers. Templates without the kwarg (non-Qwen3
+    models) fall back to the default rendering.
+    """
+    msgs = [{"role": m["role"], "content": m["content"]} for m in messages]
+    try:
+        return tokenizer.apply_chat_template(
+            msgs, tokenize=False, add_generation_prompt=True, enable_thinking=False,
+        )
+    except TypeError:
+        return tokenizer.apply_chat_template(
+            msgs, tokenize=False, add_generation_prompt=True,
+        )
+
+
 def chat_mlx(messages, temperature=0.7, top_p=0.9, max_tokens=2048):
     """Generate a chat completion via mlx-lm (full model, single-node)."""
     from mlx_lm import generate
     from mlx_lm.sample_utils import make_sampler
 
-    prompt = tokenizer.apply_chat_template(
-        [{"role": m["role"], "content": m["content"]} for m in messages],
-        tokenize=False,
-        add_generation_prompt=True,
-    )
+    prompt = render_chat_prompt(messages)
     sampler = make_sampler(temp=temperature, top_p=top_p)
     t0 = time.time()
     response = generate(model, tokenizer, prompt=prompt, max_tokens=max_tokens, sampler=sampler)
@@ -276,11 +290,7 @@ def chat_stream_mlx(messages, temperature=0.7, top_p=0.9, max_tokens=2048):
     from mlx_lm import stream_generate
     from mlx_lm.sample_utils import make_sampler
 
-    prompt = tokenizer.apply_chat_template(
-        [{"role": m["role"], "content": m["content"]} for m in messages],
-        tokenize=False,
-        add_generation_prompt=True,
-    )
+    prompt = render_chat_prompt(messages)
     
     logger.info(f"chat_stream_mlx: {len(messages)} messages, prompt length: {len(prompt)} chars")
     logger.debug(f"Prompt preview: {prompt[:500]}...")
@@ -299,11 +309,7 @@ def chat_torch(messages, temperature=0.7, top_p=0.9, max_tokens=2048):
     """Generate via transformers (full model, single-node)."""
     import torch
 
-    prompt = tokenizer.apply_chat_template(
-        [{"role": m["role"], "content": m["content"]} for m in messages],
-        tokenize=False,
-        add_generation_prompt=True,
-    )
+    prompt = render_chat_prompt(messages)
     inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
     t0 = time.time()
     with torch.no_grad():
@@ -321,11 +327,7 @@ def chat_stream_torch(messages, temperature=0.7, top_p=0.9, max_tokens=2048):
     """Yield tokens via transformers with KV-cache (full model, single-node)."""
     import torch
 
-    prompt = tokenizer.apply_chat_template(
-        [{"role": m["role"], "content": m["content"]} for m in messages],
-        tokenize=False,
-        add_generation_prompt=True,
-    )
+    prompt = render_chat_prompt(messages)
     
     logger.info(f"chat_stream_torch: {len(messages)} messages, prompt length: {len(prompt)} chars")
     

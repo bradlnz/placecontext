@@ -8,6 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
     @* Blazor scoped-CSS bundle: per-component <Name>.razor.css files compile into this. Component
        classes resolve --var() values from the #dcshell ancestor's cascade below. *@
     <link rel="stylesheet" href="PlaceContext.Host.styles.css" />
@@ -151,6 +152,13 @@
         @@keyframes dcflashkf { 0% { background:var(--brand-bg); } 100% { background:transparent; } }
         .dcflash { animation:dcflashkf 1.6s ease-out; }
         #decisions.dcflash { box-shadow:0 0 0 1.5px var(--brand); }
+
+        /* Small screens — shared primitives only; page-level fixes live in the page CSS.
+           .dcmodal (max-width:94vw) and .dcslide (max-width:92vw) already fit, unchanged. */
+        @@media (max-width: 900px) {
+            .dctabs { overflow-x:auto; }
+            .dcbtn.sm { min-height:40px; }
+        }
     </style>
 </head>
 <body>
@@ -161,5 +169,7 @@
     <script src="pcmonaco.js"></script>
     <script src="vendor/chart.umd.min.js"></script>
     <script src="pcchart.js"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+    <script src="pcmap.js"></script>
 </body>
 </html>

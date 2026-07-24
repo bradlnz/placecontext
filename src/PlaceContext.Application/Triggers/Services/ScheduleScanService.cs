@@ -45,7 +45,7 @@ public sealed class ScheduleScanService
             var next = trigger.CronExpression is { } cron ? _cron.Next(cron, now, tz) : null;
             trigger.MarkFired(now, next);
             await _triggers.UpdateAsync(trigger, ct);
-            await _queue.EnqueueAsync(new QueuedJobRun(tenantId, trigger.JobId, trigger.Id, trigger.Name), ct);
+            await _queue.EnqueueAsync(new QueuedJobRun(tenantId, trigger.JobId ?? Guid.Empty, trigger.Id, trigger.Name), ct);
         }
 
         await _uow.SaveChangesAsync(ct);

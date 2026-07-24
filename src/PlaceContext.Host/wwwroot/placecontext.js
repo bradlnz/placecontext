@@ -50,5 +50,58 @@ window.placecontext = {
     if (!picker) return [];
     return Array.from(picker.querySelectorAll('input[type="checkbox"]:checked'))
       .map(cb => cb.value);
+  },
+
+  // File upload helpers
+  _pendingDrop: null,
+
+  clickElement(el) {
+    if (el) el.click();
+  },
+
+  readFileInput(el) {
+    return new Promise(resolve => {
+      if (!el || !el.files || el.files.length === 0) { resolve(null); return; }
+      const file = el.files[0];
+      const reader = new FileReader();
+      reader.onload = () => {
+        const bytes = new Uint8Array(reader.result);
+        resolve({ name: file.name, size: file.size, data: Array.from(bytes) });
+        el.value = '';
+      };
+      reader.onerror = () => resolve(null);
+      reader.readAsArrayBuffer(file);
+    });
+  },
+
+  dropFile() {
+    return new Promise(resolve => {
+      if (this._pendingDrop) {
+        const f = this._pendingDrop;
+        this._pendingDrop = null;
+        const reader = new FileReader();
+        reader.onload = () => {
+          const bytes = new Uint8Array(reader.result);
+          resolve({ name: f.name, size: f.size, data: Array.from(bytes) });
+        };
+        reader.onerror = () => resolve(null);
+        reader.readAsArrayBuffer(f);
+      } else {
+        resolve(null);
+      }
+    });
+  },
+
+  setupDropZone(el) {
+    if (!el) return;
+    el.addEventListener('dragover', e => { e.preventDefault(); el.classList.add('drag-over'); });
+    el.addEventListener('dragleave', () => el.classList.remove('drag-over'));
+    el.addEventListener('drop', e => {
+      e.preventDefault();
+      el.classList.remove('drag-over');
+      if (e.dataTransfer.files.length > 0) {
+        this._pendingDrop = e.dataTransfer.files[0];
+      }
+    });
   }
 };

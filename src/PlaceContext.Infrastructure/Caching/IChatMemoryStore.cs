@@ -36,7 +36,11 @@ public sealed record ChatMemoryMessage(
     string Role,
     string Content,
     DateTimeOffset Timestamp,
-    List<ChatMemoryToolCall>? ToolCalls = null);
+    List<ChatMemoryToolCall>? ToolCalls = null,
+    string? AttachmentName = null,
+    string? AttachmentKey = null,
+    string? AttachmentContentType = null,
+    long AttachmentSizeBytes = 0);
 
 /// <summary>A tool call within a message.</summary>
 public sealed record ChatMemoryToolCall(

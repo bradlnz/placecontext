@@ -123,6 +123,9 @@ public static class DependencyInjection
             });
         }
 
+        // Launchpad agent sessions persist through the Application port onto the chat memory store.
+        services.AddScoped<IAgentSessionStore, Caching.ChatMemoryAgentSessionStore>();
+
         // Job / JobRun repositories.
         services.AddScoped<IJobRepository, EfJobRepository>();
         services.AddScoped<IJobRunRepository, EfJobRunRepository>();

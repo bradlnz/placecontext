@@ -7,6 +7,8 @@ public sealed class FakeContentIndexer : IContentIndexer
 {
     public bool IsEnabled { get; set; } = true;
     public List<(Guid ProjectId, string Kind, string SourceKey, string Text)> Indexed { get; } = new();
+    public IReadOnlyList<ContentSearchHit> HitsToReturn { get; set; } = Array.Empty<ContentSearchHit>();
+    public string? LastSearchKind { get; private set; }
 
     public Task IndexAsync(Guid projectId, string kind, string sourceKey, string text, CancellationToken ct = default)
     {
@@ -26,5 +28,8 @@ public sealed class FakeContentIndexer : IContentIndexer
 
     public Task<IReadOnlyList<ContentSearchHit>> SearchAsync(
         Guid projectId, string query, int take = 10, string? kind = null, CancellationToken ct = default)
-        => Task.FromResult<IReadOnlyList<ContentSearchHit>>(Array.Empty<ContentSearchHit>());
+    {
+        LastSearchKind = kind;
+        return Task.FromResult(HitsToReturn);
+    }
 }

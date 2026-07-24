@@ -54,7 +54,8 @@ public sealed class ExportManifestHandler : IQueryHandler<ExportManifestQuery, B
                 .Select(c => new JobChainManifest(c.Id, c.ProjectId, c.Name, c.Description, c.StepJobIds.ToList())));
 
             triggerManifests.AddRange((await _triggers.ListForProjectAsync(projectId, ct))
-                .Select(t => new TriggerManifest(t.Id, t.ProjectId, t.JobId, t.Name, t.Kind.ToString(), t.Enabled, t.CronExpression, t.EventName)));
+                .Select(t => new TriggerManifest(t.Id, t.ProjectId, t.JobId, t.Name, t.Kind.ToString(), t.Enabled,
+                    t.CronExpression, t.EventName, t.ChainId, t.SourceTable, t.Prompt)));
 
             mappingManifests.AddRange((await _mappings.ListForProjectAsync(projectId, ct))
                 .Select(m => new DataMappingManifest(
