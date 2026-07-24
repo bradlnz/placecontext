@@ -72,6 +72,12 @@ public sealed class JobRow : ITenantOwned
     /// <summary>Per-container wall-clock timeout in seconds. Default 300 (5 minutes).</summary>
     public int TimeoutSeconds { get; set; } = 300;
 
+    /// <summary>Maximum number of automatic retry attempts when a run fails. Default 0 (no retries).</summary>
+    public int RetryCount { get; set; }
+
+    /// <summary>Fixed delay in seconds between automatic retry attempts. Default 0.</summary>
+    public int RetryDelaySeconds { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
 }

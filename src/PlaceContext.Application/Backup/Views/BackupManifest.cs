@@ -70,7 +70,9 @@ public sealed record JobManifest(
     IReadOnlyList<JobParameterDto> Parameters,
     IReadOnlyList<PostJobActionKind> PostJobActions,
     JobReturnType ReturnType,
-    string? ReturnFileName);
+    string? ReturnFileName,
+    int RetryCount = 0,
+    int RetryDelaySeconds = 0);
 
 /// <summary>An ordered job pipeline. Steps are old JobIds, rewired through the import's job map.
 /// Natural key on import is (ProjectId, Name).</summary>

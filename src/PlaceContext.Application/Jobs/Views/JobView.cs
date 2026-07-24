@@ -44,5 +44,12 @@ public sealed record JobView(
     PlaceContext.Domain.ValueObjects.JobReturnType ReturnType,
     /// <summary>Expected /out file name for file return types.</summary>
     string? ReturnFileName,
+
+    /// <summary>Maximum number of automatic retry attempts when a run fails. 0 = no retries.</summary>
+    int RetryCount,
+
+    /// <summary>Fixed delay in seconds between automatic retry attempts.</summary>
+    int RetryDelaySeconds,
+
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt);

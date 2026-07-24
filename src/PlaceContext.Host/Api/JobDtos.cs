@@ -54,7 +54,11 @@ public sealed record JobRequest(
     /// <summary>"Json" | "Table" | "Chart" | "Html" | "Csv" | "Text" | "Pdf" | "Image" | "Video".</summary>
     string ReturnType = "Json",
     /// <summary>Expected /out file name for file return types (Pdf/Image/Video).</summary>
-    string? ReturnFileName = null);
+    string? ReturnFileName = null,
+    /// <summary>Maximum number of automatic retry attempts when a run fails. 0 = no retries.</summary>
+    int RetryCount = 0,
+    /// <summary>Fixed delay in seconds between automatic retry attempts.</summary>
+    int RetryDelaySeconds = 0);
 
 /// <summary>Public read model for a job definition, including its full workload source.</summary>
 public sealed record JobResponse(
@@ -86,6 +90,8 @@ public sealed record JobResponse(
     IReadOnlyList<string> PostJobActions,
     string ReturnType,
     string? ReturnFileName,
+    int RetryCount,
+    int RetryDelaySeconds,
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt);
 
@@ -108,7 +114,9 @@ internal static class JobApiMapper
         ToParameters(r.Parameters),
         ParsePostJobActions(r.PostJobActions),
         ParseReturnType(r.ReturnType),
-        r.ReturnFileName);
+        r.ReturnFileName,
+        r.RetryCount,
+        r.RetryDelaySeconds);
 
     public static UpdateJobCommand ToUpdateCommand(Guid jobId, JobRequest r) => new(
         jobId, r.Name, r.Description,
@@ -125,7 +133,9 @@ internal static class JobApiMapper
         ToParameters(r.Parameters),
         ParsePostJobActions(r.PostJobActions),
         ParseReturnType(r.ReturnType),
-        r.ReturnFileName);
+        r.ReturnFileName,
+        r.RetryCount,
+        r.RetryDelaySeconds);
 
     public static JobResponse ToResponse(JobView v) => new(
         v.Id, v.ProjectId, v.Name, v.Description,
@@ -140,6 +150,8 @@ internal static class JobApiMapper
         v.PostJobActions.Select(a => a.ToString()).ToList(),
         v.ReturnType.ToString(),
         v.ReturnFileName,
+        v.RetryCount,
+        v.RetryDelaySeconds,
         v.CreatedAt, v.UpdatedAt);
 
     private static IReadOnlyList<CodeFileDto>? ToCodeFiles(IReadOnlyList<JobCodeFile>? files)

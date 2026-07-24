@@ -26,7 +26,13 @@ namespace PlaceContext.Application.Features;
 /// ignored when replaying. The job's exit-code policy and timeout (not captured in the snapshot) are
 /// taken from the current job.
 /// </param>
-public sealed record RunJobCommand(Guid JobId, string? InputPayload = null, Guid? RunId = null, Guid? ReplayOfRunId = null)
+public sealed record RunJobCommand(
+    Guid JobId,
+    string? InputPayload = null,
+    Guid? RunId = null,
+    Guid? ReplayOfRunId = null,
+    int AttemptNumber = 1,
+    Guid? OriginalRunId = null)
     : ICommand<JobRunDetailView>;
 
 /// <summary>Replay a prior run: re-execute the exact workload snapshot it captured. Returns the new run.</summary>

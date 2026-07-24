@@ -4,6 +4,7 @@ using PlaceContext.Application.Features;
 using PlaceContext.Application.Ports;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.Repositories;
+using PlaceContext.Domain.ValueObjects;
 using PlaceContext.Infrastructure.Operations;
 using PlaceContext.Infrastructure.Scheduling;
 using PlaceContext.Infrastructure.Security;
@@ -41,6 +42,7 @@ public class TriggerSchedulerServiceDrainTests
         var services = new ServiceCollection();
         services.AddScoped<IJobRepository>(_ => new FakeJobRepository());
         services.AddScoped<IDispatcher>(_ => dispatcher);
+        services.AddScoped<IJobRunner, JobRunner>();
         var scopeFactory = services.BuildServiceProvider().GetRequiredService<IServiceScopeFactory>();
 
         var opCenter = new OperationCenter(new StubScopeFactory(), new StubLifetime());
@@ -72,6 +74,7 @@ public class TriggerSchedulerServiceDrainTests
         var services = new ServiceCollection();
         services.AddScoped<IJobRepository>(_ => new FakeJobRepository());
         services.AddScoped<IDispatcher>(_ => dispatcher);
+        services.AddScoped<IJobRunner, JobRunner>();
         var scopeFactory = services.BuildServiceProvider().GetRequiredService<IServiceScopeFactory>();
 
         var opCenter = new OperationCenter(new StubScopeFactory(), new StubLifetime());
@@ -99,6 +102,7 @@ public class TriggerSchedulerServiceDrainTests
         var services = new ServiceCollection();
         services.AddScoped<IJobRepository>(_ => new FakeJobRepository());
         services.AddScoped<IDispatcher>(_ => dispatcher);
+        services.AddScoped<IJobRunner, JobRunner>();
         var scopeFactory = services.BuildServiceProvider().GetRequiredService<IServiceScopeFactory>();
 
         var opCenter = new OperationCenter(new StubScopeFactory(), new StubLifetime());
@@ -169,10 +173,15 @@ public class TriggerSchedulerServiceDrainTests
 
     private sealed class FakeJobRepository : IJobRepository
     {
+        private static readonly Job FakeJob = Job.Create(
+            Guid.NewGuid(), "probe", null,
+            new MapSpec("img", new[] { "{}" }, new Dictionary<string, string>()),
+            null, 1, ExitCodePolicy.Default, DateTimeOffset.UtcNow);
+
         public Task AddAsync(Job job, CancellationToken ct = default) => Task.CompletedTask;
         public Task UpdateAsync(Job job, CancellationToken ct = default) => Task.CompletedTask;
         public Task RemoveAsync(Guid jobId, CancellationToken ct = default) => Task.CompletedTask;
-        public Task<Job?> GetByIdAsync(Guid jobId, CancellationToken ct = default) => Task.FromResult<Job?>(null);
+        public Task<Job?> GetByIdAsync(Guid jobId, CancellationToken ct = default) => Task.FromResult<Job?>(FakeJob);
         public Task<IReadOnlyList<Job>> ListForProjectAsync(Guid projectId, CancellationToken ct = default)
             => Task.FromResult<IReadOnlyList<Job>>(Array.Empty<Job>());
     }

@@ -59,5 +59,11 @@ public sealed record UpdateJobCommand(
     PlaceContext.Domain.ValueObjects.JobReturnType ReturnType = PlaceContext.Domain.ValueObjects.JobReturnType.Json,
 
     /// <summary>Expected /out file name for file return types (Pdf/Image/Video).</summary>
-    string? ReturnFileName = null)
+    string? ReturnFileName = null,
+
+    /// <summary>Maximum number of automatic retry attempts when a run fails. 0 = no retries.</summary>
+    int RetryCount = 0,
+
+    /// <summary>Fixed delay in seconds between automatic retry attempts.</summary>
+    int RetryDelaySeconds = 0)
     : ICommand<JobView>;

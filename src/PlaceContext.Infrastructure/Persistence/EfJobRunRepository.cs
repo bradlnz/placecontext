@@ -121,6 +121,8 @@ public sealed class EfJobRunRepository : IJobRunRepository
         SucceededShards = run.ShardResults.Count(s => s.Outcome == WorkloadOutcome.Succeeded),
         PartialShards = run.ShardResults.Count(s => s.Outcome == WorkloadOutcome.Partial),
         FailedShards = run.ShardResults.Count(s => s.Outcome == WorkloadOutcome.Failed),
+        AttemptNumber = run.AttemptNumber,
+        OriginalRunId = run.OriginalRunId,
         ShardResultsJson = Enc(JsonSerializer.Serialize(
             run.ShardResults.Select(s => new ShardResultJson
             {
@@ -196,7 +198,8 @@ public sealed class EfJobRunRepository : IJobRunRepository
             : DeserialiseSnapshot(Dec(row.SnapshotJson));
 
         return JobRun.Rehydrate(row.Id, row.JobId, row.ProjectId, status,
-            row.StartedAt, row.FinishedAt, shardResults, reduceResult, snapshot);
+            row.StartedAt, row.FinishedAt, shardResults, reduceResult, snapshot,
+            row.AttemptNumber, row.OriginalRunId);
     }
 
     // ── Artifact serialisation ────────────────────────────────────────────────────────────────────

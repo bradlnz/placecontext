@@ -47,10 +47,10 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
     private readonly IChainRunRepository _runs;
     private readonly IUnitOfWork _uow;
     private readonly IClock _clock;
-    private readonly IDispatcher _dispatcher;
+    private readonly IJobRunner _jobRunner;
 
     public RunJobChainHandler(IJobChainRepository chains, IJobRepository jobs, IChainRunRepository runs,
-        IUnitOfWork uow, IClock clock, IDispatcher dispatcher,
+        IUnitOfWork uow, IClock clock, IJobRunner jobRunner,
         // Optional so unit tests construct the handler unchanged; DI always supplies it.
         DataMappingIngestionService? dataMappings = null)
     {
@@ -60,7 +60,7 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
         _runs = runs;
         _uow = uow;
         _clock = clock;
-        _dispatcher = dispatcher;
+        _jobRunner = jobRunner;
     }
 
     private readonly DataMappingIngestionService? _dataMappings;
@@ -139,7 +139,7 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
                 await dispatchGate.WaitAsync(ct);
                 try
                 {
-                    run = await _dispatcher.Send(new RunJobCommand(stage.JobIds[branchIndex], stepPayload, stepRunId), ct);
+                    run = await _jobRunner.RunAsync(stage.JobIds[branchIndex], stepPayload, stepRunId, ct: ct);
                 }
                 finally
                 {

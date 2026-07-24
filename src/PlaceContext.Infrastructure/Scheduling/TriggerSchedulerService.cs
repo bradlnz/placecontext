@@ -221,8 +221,8 @@ public sealed class TriggerSchedulerService : BackgroundService
                 _opCenter.MarkRunning(op.Id);
                 try
                 {
-                    var dispatcher = scope.ServiceProvider.GetRequiredService<IDispatcher>();
-                    var result = await dispatcher.Send(new RunJobCommand(run.JobId, run.Payload, runId), ct);
+                    var jobRunner = scope.ServiceProvider.GetRequiredService<IJobRunner>();
+                    var result = await jobRunner.RunAsync(run.JobId, run.Payload, runId, ct: ct);
                     if (result.Status == "Failed") _opCenter.MarkFailed(op.Id, "run finished — Failed");
                     else _opCenter.MarkDone(op.Id, $"run finished — {result.Status}");
                 }

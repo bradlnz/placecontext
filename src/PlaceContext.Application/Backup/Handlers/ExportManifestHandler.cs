@@ -86,6 +86,7 @@ public sealed class ExportManifestHandler : IQueryHandler<ExportManifestQuery, B
             v.MapSourceKind, v.MapImage, v.MapRuntimeId, v.MapEntrypoint, v.MapFiles, v.InputPayloads, v.MapEnv,
             v.ReduceSourceKind, v.ReduceImage, v.ReduceRuntimeId, v.ReduceEntrypoint, v.ReduceFiles, v.ReduceEnv,
             v.ConcurrencyLimit, v.SuccessExitCodes, v.PartialExitCodes, v.AllowNetworkEgress, job.TimeoutSeconds,
-            v.Parameters, v.PostJobActions, v.ReturnType, v.ReturnFileName);
+            v.Parameters, v.PostJobActions, v.ReturnType, v.ReturnFileName,
+            job.RetryCount, job.RetryDelaySeconds);
     }
 }

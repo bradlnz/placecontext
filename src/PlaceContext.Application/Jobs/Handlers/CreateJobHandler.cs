@@ -50,7 +50,9 @@ public sealed class CreateJobHandler : ICommandHandler<CreateJobCommand, JobView
             parameters: JobParameterMapper.ToDomain(command.Parameters),
             postJobActions: command.PostJobActions,
             returnType: command.ReturnType,
-            returnFileName: command.ReturnFileName);
+            returnFileName: command.ReturnFileName,
+            retryCount: command.RetryCount,
+            retryDelaySeconds: command.RetryDelaySeconds);
 
         await _jobs.AddAsync(job, ct);
         await _uow.SaveChangesAsync(ct);

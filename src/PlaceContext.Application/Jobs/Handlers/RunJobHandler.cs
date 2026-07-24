@@ -130,8 +130,10 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
         // Snapshot the effective spec onto the run at start-time (captures AllowNetworkEgress too).
         var snapshot = WorkloadSnapshot.From(effectiveMap, effectiveReduce, concurrency, allowEgress);
         var startedAt = _clock.UtcNow;
-        var run = JobRun.Start(job.Id, job.ProjectId, startedAt, snapshot, command.RunId);
+        var run = JobRun.Start(job.Id, job.ProjectId, startedAt, snapshot, command.RunId,
+            command.AttemptNumber, command.OriginalRunId);
         runSpan?.SetTag("run.id", run.Id);
+        runSpan?.SetTag("run.attempt", command.AttemptNumber);
         await _runs.AddAsync(run, ct);
         await _uow.SaveChangesAsync(ct);
 

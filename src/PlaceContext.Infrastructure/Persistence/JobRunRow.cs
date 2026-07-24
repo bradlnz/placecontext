@@ -32,4 +32,10 @@ public sealed class JobRunRow : ITenantOwned
     /// Guarantees run-history reproducibility regardless of later job edits.
     /// </summary>
     public string SnapshotJson { get; set; } = "{}";
+
+    /// <summary>1-based attempt number for this run. Retries increment this value.</summary>
+    public int AttemptNumber { get; set; } = 1;
+
+    /// <summary>Id of the first run in this retry chain. Null for the first attempt.</summary>
+    public Guid? OriginalRunId { get; set; }
 }

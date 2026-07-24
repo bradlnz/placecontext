@@ -88,6 +88,9 @@ public static class DependencyInjection
         services.AddScoped<Features.AgentContextBuilder>();
         services.AddScoped<IMcpClientService, McpClientService>();
 
+        // Job execution orchestrator (applies per-job retry policy).
+        services.AddScoped<IJobRunner, JobRunner>();
+
         // Launchpads: unattended agent sessions driven by the [[tool:...]] protocol.
         services.AddScoped<Agents.Services.LaunchpadToolExecutor>();
         services.AddScoped<Agents.Services.AgentSessionRunner>();

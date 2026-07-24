@@ -36,6 +36,8 @@ internal static class JobViewMapper
         PostJobActions: job.PostJobActions.ToList(),
         ReturnType: job.ReturnType,
         ReturnFileName: job.ReturnFileName,
+        RetryCount: job.RetryCount,
+        RetryDelaySeconds: job.RetryDelaySeconds,
         CreatedAt: job.CreatedAt,
         UpdatedAt: job.UpdatedAt);
 
@@ -65,7 +67,9 @@ internal static class JobViewMapper
         ReduceResult: run.ReduceResult is { } r
             ? new ReduceResultView(r.ExitCode, r.Succeeded, r.Artifact, r.Log, ToArtifactViews(r.Artifacts))
             : null,
-        Snapshot: ToSnapshotView(run.Snapshot));
+        Snapshot: ToSnapshotView(run.Snapshot),
+        AttemptNumber: run.AttemptNumber,
+        OriginalRunId: run.OriginalRunId);
 
     private static IReadOnlyList<RunArtifactView> ToArtifactViews(IReadOnlyList<RunArtifact> artifacts)
         => artifacts.Select(a => new RunArtifactView(a.Name, a.Content, a.IsBinary)).ToList();

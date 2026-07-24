@@ -51,7 +51,9 @@ public sealed class UpdateJobHandler : ICommandHandler<UpdateJobCommand, JobView
             parameters: JobParameterMapper.ToDomain(command.Parameters),
             postJobActions: command.PostJobActions,
             returnType: command.ReturnType,
-            returnFileName: command.ReturnFileName);
+            returnFileName: command.ReturnFileName,
+            retryCount: command.RetryCount,
+            retryDelaySeconds: command.RetryDelaySeconds);
 
         await _jobs.UpdateAsync(job, ct);
         await _uow.SaveChangesAsync(ct);

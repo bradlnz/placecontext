@@ -27,6 +27,8 @@ public sealed class Job : AggregateRoot
         IReadOnlyList<PostJobActionKind> postJobActions,
         JobReturnType returnType,
         string? returnFileName,
+        int retryCount,
+        int retryDelaySeconds,
         DateTimeOffset createdAt,
         DateTimeOffset updatedAt)
     {
@@ -44,6 +46,8 @@ public sealed class Job : AggregateRoot
         PostJobActions = postJobActions;
         ReturnType = returnType;
         ReturnFileName = string.IsNullOrWhiteSpace(returnFileName) ? null : returnFileName.Trim();
+        RetryCount = retryCount;
+        RetryDelaySeconds = retryDelaySeconds;
         CreatedAt = createdAt;
         UpdatedAt = updatedAt;
     }
@@ -107,6 +111,12 @@ public sealed class Job : AggregateRoot
     /// first file matching the type's extensions.</summary>
     public string? ReturnFileName { get; private set; }
 
+    /// <summary>Maximum number of automatic retry attempts when a run fails. 0 = no retries.</summary>
+    public int RetryCount { get; private set; }
+
+    /// <summary>Fixed delay in seconds between automatic retry attempts.</summary>
+    public int RetryDelaySeconds { get; private set; }
+
     public DateTimeOffset CreatedAt { get; }
     public DateTimeOffset UpdatedAt { get; private set; }
 
@@ -133,7 +143,9 @@ public sealed class Job : AggregateRoot
         int timeoutSeconds = DefaultTimeoutSeconds,
         IReadOnlyList<PostJobActionKind>? postJobActions = null,
         JobReturnType returnType = JobReturnType.Json,
-        string? returnFileName = null)
+        string? returnFileName = null,
+        int retryCount = 0,
+        int retryDelaySeconds = 0)
     {
         if (projectId == Guid.Empty)
             throw new ArgumentException("ProjectId must not be empty.", nameof(projectId));
@@ -145,12 +157,17 @@ public sealed class Job : AggregateRoot
             throw new ArgumentOutOfRangeException(nameof(concurrencyLimit), "Concurrency limit must be >= 1.");
         if (mapSpec.InputPayloads.Count == 0)
             throw new ArgumentException("A job must have at least one shard (input payload).", nameof(mapSpec));
+        if (retryCount < 0)
+            throw new ArgumentOutOfRangeException(nameof(retryCount), "Retry count must be >= 0.");
+        if (retryDelaySeconds < 0)
+            throw new ArgumentOutOfRangeException(nameof(retryDelaySeconds), "Retry delay must be >= 0.");
 
         return new Job(
             Guid.NewGuid(), projectId, name.Trim(), description?.Trim(),
             mapSpec, reduceSpec, concurrencyLimit, exitCodePolicy,
             allowNetworkEgress, NormalizeTimeout(timeoutSeconds), parameters ?? Array.Empty<JobParameter>(),
-            DistinctActions(postJobActions), returnType, returnFileName, createdAt, createdAt);
+            DistinctActions(postJobActions), returnType, returnFileName, retryCount, retryDelaySeconds,
+            createdAt, createdAt);
     }
 
     // Post-job actions are a set (no duplicates) and order-stable for display.
@@ -178,10 +195,13 @@ public sealed class Job : AggregateRoot
         int timeoutSeconds = DefaultTimeoutSeconds,
         IReadOnlyList<PostJobActionKind>? postJobActions = null,
         JobReturnType returnType = JobReturnType.Json,
-        string? returnFileName = null)
+        string? returnFileName = null,
+        int retryCount = 0,
+        int retryDelaySeconds = 0)
         => new(id, projectId, name, description, mapSpec, reduceSpec, concurrencyLimit, exitCodePolicy,
                allowNetworkEgress, NormalizeTimeout(timeoutSeconds), parameters ?? Array.Empty<JobParameter>(),
-               DistinctActions(postJobActions), returnType, returnFileName, createdAt, updatedAt);
+               DistinctActions(postJobActions), returnType, returnFileName, retryCount, retryDelaySeconds,
+               createdAt, updatedAt);
 
     // ── Behaviour ─────────────────────────────────────────────────────────────────────────────────
 
@@ -201,7 +221,9 @@ public sealed class Job : AggregateRoot
         int timeoutSeconds = DefaultTimeoutSeconds,
         IReadOnlyList<PostJobActionKind>? postJobActions = null,
         JobReturnType returnType = JobReturnType.Json,
-        string? returnFileName = null)
+        string? returnFileName = null,
+        int retryCount = 0,
+        int retryDelaySeconds = 0)
     {
         if (string.IsNullOrWhiteSpace(name))
             throw new ArgumentException("Job name must not be empty.", nameof(name));
@@ -211,6 +233,10 @@ public sealed class Job : AggregateRoot
             throw new ArgumentOutOfRangeException(nameof(concurrencyLimit), "Concurrency limit must be >= 1.");
         if (mapSpec.InputPayloads.Count == 0)
             throw new ArgumentException("A job must have at least one shard (input payload).", nameof(mapSpec));
+        if (retryCount < 0)
+            throw new ArgumentOutOfRangeException(nameof(retryCount), "Retry count must be >= 0.");
+        if (retryDelaySeconds < 0)
+            throw new ArgumentOutOfRangeException(nameof(retryDelaySeconds), "Retry delay must be >= 0.");
 
         Name = name.Trim();
         Description = description?.Trim();
@@ -224,6 +250,8 @@ public sealed class Job : AggregateRoot
         if (postJobActions is not null) PostJobActions = DistinctActions(postJobActions);
         ReturnType = returnType;
         ReturnFileName = string.IsNullOrWhiteSpace(returnFileName) ? null : returnFileName.Trim();
+        RetryCount = retryCount;
+        RetryDelaySeconds = retryDelaySeconds;
         UpdatedAt = updatedAt;
     }
 

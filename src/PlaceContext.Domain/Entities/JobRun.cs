@@ -24,7 +24,9 @@ public sealed class JobRun : AggregateRoot
         DateTimeOffset startedAt,
         DateTimeOffset? finishedAt,
         ReduceResult? reduceResult,
-        WorkloadSnapshot snapshot)
+        WorkloadSnapshot snapshot,
+        int attemptNumber,
+        Guid? originalRunId)
     {
         Id = id;
         JobId = jobId;
@@ -34,6 +36,8 @@ public sealed class JobRun : AggregateRoot
         FinishedAt = finishedAt;
         ReduceResult = reduceResult;
         Snapshot = snapshot;
+        AttemptNumber = attemptNumber;
+        OriginalRunId = originalRunId;
     }
 
     public Guid Id { get; }
@@ -51,11 +55,17 @@ public sealed class JobRun : AggregateRoot
     /// </summary>
     public WorkloadSnapshot Snapshot { get; }
 
+    /// <summary>1-based attempt number for this run. Retries increment this value.</summary>
+    public int AttemptNumber { get; private set; }
+
+    /// <summary>Id of the first run in this retry chain. Null for the first attempt.</summary>
+    public Guid? OriginalRunId { get; private set; }
+
     /// <summary>Factory: creates a new run in the Running state, snapshotting the current job spec.
     /// Callers may pre-allocate <paramref name="id"/> so the run is addressable (progress
     /// notifications, chain step links) before the handler returns.</summary>
     public static JobRun Start(Guid jobId, Guid projectId, DateTimeOffset startedAt, WorkloadSnapshot snapshot,
-        Guid? id = null)
+        Guid? id = null, int attemptNumber = 1, Guid? originalRunId = null)
     {
         if (jobId == Guid.Empty)
             throw new ArgumentException("JobId must not be empty.", nameof(jobId));
@@ -63,9 +73,12 @@ public sealed class JobRun : AggregateRoot
             throw new ArgumentException("ProjectId must not be empty.", nameof(projectId));
         if (id == Guid.Empty)
             throw new ArgumentException("A pre-allocated run id must not be empty.", nameof(id));
+        if (attemptNumber < 1)
+            throw new ArgumentOutOfRangeException(nameof(attemptNumber), "Attempt number must be >= 1.");
         ArgumentNullException.ThrowIfNull(snapshot);
 
-        return new JobRun(id ?? Guid.NewGuid(), jobId, projectId, JobRunStatus.Running, startedAt, null, null, snapshot);
+        return new JobRun(id ?? Guid.NewGuid(), jobId, projectId, JobRunStatus.Running, startedAt, null, null, snapshot,
+            attemptNumber, originalRunId);
     }
 
     /// <summary>
@@ -98,9 +111,12 @@ public sealed class JobRun : AggregateRoot
         DateTimeOffset? finishedAt,
         IEnumerable<ShardResult> shardResults,
         ReduceResult? reduceResult,
-        WorkloadSnapshot snapshot)
+        WorkloadSnapshot snapshot,
+        int attemptNumber = 1,
+        Guid? originalRunId = null)
     {
-        var run = new JobRun(id, jobId, projectId, status, startedAt, finishedAt, reduceResult, snapshot);
+        var run = new JobRun(id, jobId, projectId, status, startedAt, finishedAt, reduceResult, snapshot,
+            attemptNumber, originalRunId);
         run._shardResults.AddRange(shardResults);
         return run;
     }

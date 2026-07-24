@@ -178,6 +178,8 @@ A single job definition (full source), or `404`.
   "postJobActions": ["HtmlReport"],
   "returnType": "Json",
   "returnFileName": null,
+  "retryCount": 0,
+  "retryDelaySeconds": 0,
   "createdAt": "2026-07-15T12:00:00+00:00",
   "updatedAt": "2026-07-15T12:00:00+00:00"
 }
@@ -251,6 +253,8 @@ Full field reference (all fields except `name` are optional and default as shown
 | `postJobActions` | `string[]?` | `null` | any of `HtmlReport`, `Chart`, `Csv`, `RawBundle`, `HtmlOutput` |
 | `returnType` | string | `"Json"` | one of `Json`, `Table`, `Chart`, `Html`, `Csv`, `Text`, `Pdf`, `Image`, `Video` |
 | `returnFileName` | string? | `null` | expected `/out` filename for `Pdf`/`Image`/`Video` return types |
+| `retryCount` | int | `0` | maximum automatic retry attempts when a run fails; `0` = no retries |
+| `retryDelaySeconds` | int | `0` | fixed delay between retry attempts |
 
 **201 response:** the created job (shape above), `Location: /api/v1/jobs/{id}`.
 

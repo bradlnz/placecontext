@@ -178,7 +178,8 @@ public sealed class ImportManifestHandler : ICommandHandler<ImportManifestComman
             if (match is not null)
             {
                 match.Update(jm.Name, jm.Description, mapSpec, reduceSpec, jm.ConcurrencyLimit, policy, now,
-                    jm.AllowNetworkEgress, parameters, jm.TimeoutSeconds, jm.PostJobActions, jm.ReturnType, jm.ReturnFileName);
+                    jm.AllowNetworkEgress, parameters, jm.TimeoutSeconds, jm.PostJobActions, jm.ReturnType, jm.ReturnFileName,
+                    jm.RetryCount, jm.RetryDelaySeconds);
                 await _jobs.UpdateAsync(match, ct);
                 jobMap[jm.JobId] = match;
                 updated++;
@@ -186,7 +187,8 @@ public sealed class ImportManifestHandler : ICommandHandler<ImportManifestComman
             else
             {
                 var job = Job.Create(newProjectId, jm.Name, jm.Description, mapSpec, reduceSpec, jm.ConcurrencyLimit, policy, now,
-                    jm.AllowNetworkEgress, parameters, jm.TimeoutSeconds, jm.PostJobActions, jm.ReturnType, jm.ReturnFileName);
+                    jm.AllowNetworkEgress, parameters, jm.TimeoutSeconds, jm.PostJobActions, jm.ReturnType, jm.ReturnFileName,
+                    jm.RetryCount, jm.RetryDelaySeconds);
                 await _jobs.AddAsync(job, ct);
                 siblings.Add(job);
                 jobMap[jm.JobId] = job;

@@ -204,6 +204,8 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
             e.Property(x => x.ParametersJson).HasDefaultValue("[]");
             e.Property(x => x.PostJobActionsJson).HasDefaultValue("[]");
             e.Property(x => x.ReturnType).HasDefaultValue("Json");
+            e.Property(x => x.RetryCount).HasDefaultValue(0);
+            e.Property(x => x.RetryDelaySeconds).HasDefaultValue(0);
         });
 
         b.Entity<RunArtifactLinkRow>(e =>
@@ -279,6 +281,7 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
             e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
             // SnapshotJson stores the full WorkloadSnapshot at run-start.
             e.Property(x => x.SnapshotJson).HasDefaultValue("{}");
+            e.Property(x => x.AttemptNumber).HasDefaultValue(1);
         });
 
         b.Entity<JobTriggerRow>(e =>

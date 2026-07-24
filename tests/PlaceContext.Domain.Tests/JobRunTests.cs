@@ -241,4 +241,83 @@ public class JobRunTests
         Assert.Equal(2, job.MapSpec.ShardCount);
         Assert.Equal(2, job.ConcurrencyLimit);
     }
+
+    [Fact]
+    public void Job_Create_defaults_retry_policy_to_zero()
+    {
+        var map = new MapSpec("img", new[] { "{}" }, new Dictionary<string, string>());
+
+        var job = Job.Create(Guid.NewGuid(), "test", null, map, null, 1, ExitCodePolicy.Default, T0);
+
+        Assert.Equal(0, job.RetryCount);
+        Assert.Equal(0, job.RetryDelaySeconds);
+    }
+
+    [Fact]
+    public void Job_Create_with_retry_policy()
+    {
+        var map = new MapSpec("img", new[] { "{}" }, new Dictionary<string, string>());
+
+        var job = Job.Create(Guid.NewGuid(), "test", null, map, null, 1, ExitCodePolicy.Default, T0,
+            retryCount: 3, retryDelaySeconds: 5);
+
+        Assert.Equal(3, job.RetryCount);
+        Assert.Equal(5, job.RetryDelaySeconds);
+    }
+
+    [Fact]
+    public void Job_Create_rejects_negative_retry_count()
+    {
+        var map = new MapSpec("img", new[] { "{}" }, new Dictionary<string, string>());
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            Job.Create(Guid.NewGuid(), "test", null, map, null, 1, ExitCodePolicy.Default, T0, retryCount: -1));
+    }
+
+    [Fact]
+    public void Job_Create_rejects_negative_retry_delay()
+    {
+        var map = new MapSpec("img", new[] { "{}" }, new Dictionary<string, string>());
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            Job.Create(Guid.NewGuid(), "test", null, map, null, 1, ExitCodePolicy.Default, T0, retryDelaySeconds: -1));
+    }
+
+    [Fact]
+    public void Job_Update_changes_retry_policy()
+    {
+        var map = new MapSpec("img", new[] { "{}" }, new Dictionary<string, string>());
+        var job = Job.Create(Guid.NewGuid(), "test", null, map, null, 1, ExitCodePolicy.Default, T0);
+
+        job.Update("test", null, map, null, 1, ExitCodePolicy.Default, T0.AddMinutes(1),
+            retryCount: 2, retryDelaySeconds: 10);
+
+        Assert.Equal(2, job.RetryCount);
+        Assert.Equal(10, job.RetryDelaySeconds);
+    }
+
+    [Fact]
+    public void JobRun_Start_defaults_attempt_number_to_one()
+    {
+        var run = JobRun.Start(JobId, ProjectId, T0, DefaultSnapshot());
+
+        Assert.Equal(1, run.AttemptNumber);
+        Assert.Null(run.OriginalRunId);
+    }
+
+    [Fact]
+    public void JobRun_Start_honors_attempt_number_and_original_run()
+    {
+        var originalRunId = Guid.NewGuid();
+
+        var run = JobRun.Start(JobId, ProjectId, T0, DefaultSnapshot(), attemptNumber: 3, originalRunId: originalRunId);
+
+        Assert.Equal(3, run.AttemptNumber);
+        Assert.Equal(originalRunId, run.OriginalRunId);
+    }
+
+    [Fact]
+    public void JobRun_Start_rejects_attempt_number_below_one()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            JobRun.Start(JobId, ProjectId, T0, DefaultSnapshot(), attemptNumber: 0));
+    }
 }

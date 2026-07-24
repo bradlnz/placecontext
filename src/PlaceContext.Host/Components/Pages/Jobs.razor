@@ -192,6 +192,15 @@ else
                             @_runDetail.Status
                         </span>
                         <span class="meta-mono">@_runDetail.Id</span>
+                        @if (_runDetail.AttemptNumber > 1)
+                        {
+                            <span class="meta-11">attempt @_runDetail.AttemptNumber
+                                @if (_runDetail.OriginalRunId is { } orig)
+                                {
+                                    <span>of <a @onclick:preventDefault @onclick="@(() => OpenRunDetail(orig))" href="#">@orig</a></span>
+                                }
+                            </span>
+                        }
                     </div>
 
                     @* Snapshot badge *@
@@ -667,6 +676,19 @@ else
                         <input class="dcinput" @bind="_edPartialCodesRaw" placeholder="" />
                     </div>
                 </div>
+                <div class="row-gap-10 mt-10">
+                    <div class="dcfield flex-1">
+                        <label>Max retries</label>
+                        <input class="dcinput" type="number" min="0" @bind="_edRetryCount" />
+                        <div class="dchint">Automatic retry attempts when a run fails. 0 = no retries.</div>
+                    </div>
+                    <div class="dcfield flex-1">
+                        <label>Retry delay (seconds)</label>
+                        <input class="dcinput" type="number" min="0" @bind="_edRetryDelaySeconds" />
+                        <div class="dchint">Fixed wait between retry attempts.</div>
+                    </div>
+                    <div class="flex-1"></div>
+                </div>
                 <label class="egress-label">
                     <input type="checkbox" @bind="_edAllowNetworkEgress"
                            class="checkbox-16" />
@@ -852,6 +874,8 @@ else
     private string _edSuccessCodesRaw = "0";
     private string _edPartialCodesRaw = "";
     private bool _edAllowNetworkEgress;
+    private int _edRetryCount;
+    private int _edRetryDelaySeconds;
     private readonly List<ParamEdit> _edParams = new();
 
     private sealed class ParamEdit
@@ -1114,6 +1138,8 @@ else
         _edSuccessCodesRaw = "0";
         _edPartialCodesRaw = "";
         _edAllowNetworkEgress = false;
+        _edRetryCount = 0;
+        _edRetryDelaySeconds = 0;
         _edParams.Clear();
         _edPostJobActions.Clear();
         _edReturnType = PlaceContext.Domain.ValueObjects.JobReturnType.Json;
@@ -1140,6 +1166,8 @@ else
         _edSuccessCodesRaw = string.Join(",", job.SuccessExitCodes);
         _edPartialCodesRaw = string.Join(",", job.PartialExitCodes);
         _edAllowNetworkEgress = job.AllowNetworkEgress;
+        _edRetryCount = job.RetryCount;
+        _edRetryDelaySeconds = job.RetryDelaySeconds;
         _edParams.Clear();
         _edParams.AddRange(job.Parameters.Select(ParamEdit.From));
         _edPostJobActions.Clear();
@@ -1303,7 +1331,9 @@ else
                     Parameters: parameters,
                     PostJobActions: _edPostJobActions.ToList(),
                     ReturnType: _edReturnType,
-                    ReturnFileName: string.IsNullOrWhiteSpace(_edReturnFileName) ? null : _edReturnFileName.Trim());
+                    ReturnFileName: string.IsNullOrWhiteSpace(_edReturnFileName) ? null : _edReturnFileName.Trim(),
+                    RetryCount: _edRetryCount,
+                    RetryDelaySeconds: _edRetryDelaySeconds);
 
                 await Svc.UpdateJobAsync(cmd);
                 _message = $"Job '{_edName.Trim()}' updated.";
@@ -1332,7 +1362,9 @@ else
                     Parameters: parameters,
                     PostJobActions: _edPostJobActions.ToList(),
                     ReturnType: _edReturnType,
-                    ReturnFileName: string.IsNullOrWhiteSpace(_edReturnFileName) ? null : _edReturnFileName.Trim());
+                    ReturnFileName: string.IsNullOrWhiteSpace(_edReturnFileName) ? null : _edReturnFileName.Trim(),
+                    RetryCount: _edRetryCount,
+                    RetryDelaySeconds: _edRetryDelaySeconds);
 
                 await Svc.CreateJobAsync(cmd);
                 _message = $"Job '{_edName.Trim()}' created.";

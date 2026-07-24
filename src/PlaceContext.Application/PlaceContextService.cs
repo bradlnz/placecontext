@@ -7,12 +7,14 @@ namespace PlaceContext.Application;
 public sealed class PlaceContextService : IPlaceContextService
 {
     private readonly IDispatcher _dispatcher;
+    private readonly IJobRunner _jobRunner;
     private readonly RecordLinkService _links;
     private readonly IRecordLinkStore _linkStore;
 
-    public PlaceContextService(IDispatcher dispatcher, RecordLinkService links, IRecordLinkStore linkStore)
+    public PlaceContextService(IDispatcher dispatcher, IJobRunner jobRunner, RecordLinkService links, IRecordLinkStore linkStore)
     {
         _dispatcher = dispatcher;
+        _jobRunner = jobRunner;
         _links = links;
         _linkStore = linkStore;
     }
@@ -120,7 +122,7 @@ public sealed class PlaceContextService : IPlaceContextService
         => _dispatcher.Send(command, ct);
 
     public Task<JobRunDetailView> RunJobAsync(Guid jobId, string? inputPayload = null, Guid? runId = null, CancellationToken ct = default)
-        => _dispatcher.Send(new RunJobCommand(jobId, inputPayload, runId), ct);
+        => _jobRunner.RunAsync(jobId, inputPayload, runId, ct: ct);
 
     public Task<JobRunDetailView> ReplayRunAsync(Guid runId, Guid? newRunId = null, CancellationToken ct = default)
         => _dispatcher.Send(new ReplayRunCommand(runId, newRunId), ct);

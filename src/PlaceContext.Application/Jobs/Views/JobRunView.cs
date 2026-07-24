@@ -57,4 +57,8 @@ public sealed record JobRunDetailView(
     DateTimeOffset? FinishedAt,
     IReadOnlyList<ShardResultView> ShardResults,
     ReduceResultView? ReduceResult,
-    JobRunSnapshotView Snapshot);
+    JobRunSnapshotView Snapshot,
+    /// <summary>1-based attempt number for this run. Retries increment this value.</summary>
+    int AttemptNumber = 1,
+    /// <summary>Id of the first run in this retry chain. Null for the first attempt.</summary>
+    Guid? OriginalRunId = null);

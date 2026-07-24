@@ -14,8 +14,8 @@ public class JobChainTests
     private static readonly Guid ProjectId = Guid.NewGuid();
 
     private static RunJobChainHandler RunHandler(InMemoryJobChainRepository chains, InMemoryJobRepository jobs,
-        IDispatcher dispatcher, InMemoryChainRunRepository? runs = null)
-        => new(chains, jobs, runs ?? new InMemoryChainRunRepository(), new RecordingUnitOfWork(), new FakeClock(T0), dispatcher);
+        FakeRunDispatcher dispatcher, InMemoryChainRunRepository? runs = null)
+        => new(chains, jobs, runs ?? new InMemoryChainRunRepository(), new RecordingUnitOfWork(), new FakeClock(T0), new FakeJobRunner(dispatcher));
 
     private static Job MakeJob(string name, Guid? projectId = null)
     {
@@ -402,5 +402,18 @@ public class JobChainTests
 
         public Task<TResult> Query<TResult>(IQuery<TResult> query, CancellationToken ct = default)
             => throw new NotSupportedException();
+    }
+
+    /// <summary>Thin IJobRunner wrapper around <see cref="FakeRunDispatcher"/> so chain tests keep
+    /// using the same canned-result seam without real retry logic (test jobs have RetryCount=0).</summary>
+    private sealed class FakeJobRunner : IJobRunner
+    {
+        private readonly FakeRunDispatcher _dispatcher;
+
+        public FakeJobRunner(FakeRunDispatcher dispatcher) => _dispatcher = dispatcher;
+
+        public Task<JobRunDetailView> RunAsync(Guid jobId, string? inputPayload = null, Guid? runId = null,
+            Guid? replayOfRunId = null, CancellationToken ct = default)
+            => _dispatcher.Send(new RunJobCommand(jobId, inputPayload, runId, replayOfRunId), ct);
     }
 }
