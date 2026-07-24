@@ -822,7 +822,7 @@
                     // No tool calls - this is the final response
                     if (string.IsNullOrWhiteSpace(_streamBuffer))
                     {
-                        _streamBuffer = "I apologize, but I didn't generate a response. Please try again.";
+                        _streamBuffer = "I've processed your request but didn't generate a text response. The tool results are shown above.";
                     }
                     break;
                 }
@@ -944,8 +944,47 @@
         {
             new("system", systemPrompt),
         };
-        foreach (var m in _messages.Where(x => x.Role != "system" || x.Content.Contains("Tool Results")))
-            messages.Add(new ChatMessage(m.Role, m.Content));
+
+        // Build conversation history: merge tool results into assistant messages,
+        // skip standalone system messages, and ensure proper role ordering.
+        var history = new List<ChatMessage>();
+        for (var i = 0; i < _messages.Count; i++)
+        {
+            var m = _messages[i];
+
+            // Skip standalone system messages (tool results will be merged below)
+            if (m.Role == "system") continue;
+
+            var content = m.Content;
+
+            // For assistant messages, append tool calls and any following tool results
+            if (m.Role == "assistant")
+            {
+                if (m.ToolCalls.Count > 0)
+                {
+                    var toolCallText = string.Join("\n", m.ToolCalls.Select(tc =>
+                        $"[[tool:{tc.ToolName}|{tc.Args}]]"));
+                    content = string.IsNullOrWhiteSpace(content)
+                        ? toolCallText
+                        : content + "\n\n" + toolCallText;
+                }
+
+                // Merge the next message if it's a system tool-results message
+                if (i + 1 < _messages.Count && _messages[i + 1].Role == "system"
+                    && _messages[i + 1].Content.Contains("Tool Results"))
+                {
+                    content += "\n\n" + _messages[i + 1].Content;
+                    i++; // skip the merged system message
+                }
+            }
+
+            history.Add(new ChatMessage(m.Role, content));
+        }
+
+        // Limit to last 20 messages to avoid context overflow
+        foreach (var m in history.TakeLast(20))
+            messages.Add(m);
+
         return messages;
     }
 
@@ -1178,7 +1217,6 @@
         var column = parts.Length > 2 ? parts[2].Trim() : "";
 
         // ── HITL: prompt for table if missing OR invalid ───────────────────
-        // Probe the table to check it actually exists (catches literal "table" etc.)
         var tableValid = false;
         if (!string.IsNullOrEmpty(tableName))
         {
@@ -1200,9 +1238,7 @@
             {
                 ToolName = "render_graph",
                 Args = args,
-                Question = tableName == "" || !tableValid
-                    ? $"Table '{tableName}' not found. Which table would you like to chart?"
-                    : "Which table would you like to chart?",
+                Question = $"Table '{tableName}' not found. Which table would you like to chart?",
                 MultiSelect = false,
                 Options = tables.Where(t => t.RowEstimate > 0).Select(t => new ClarificationOption
                 {
@@ -1218,29 +1254,40 @@
             tableName = clarify.SelectedIds[0];
         }
 
-        // ── HITL: prompt for column if missing OR invalid ──────────────────
-        var colValid = false;
+        // ── HITL: prompt for column(s) if missing OR invalid ───────────────
+        // Support multi-select: user can pick multiple columns to chart as series
+        var columns = new List<string>();
         if (!string.IsNullOrEmpty(column))
         {
             var probe = await Svc.QueryProjectTablePageAsync(_projectId!.Value, tableName, null, 1, 1, ct);
-            colValid = probe.Columns.Any(c => c.Equals(column, StringComparison.OrdinalIgnoreCase));
+            if (probe.Columns.Any(c => c.Equals(column, StringComparison.OrdinalIgnoreCase)))
+            {
+                columns.Add(column);
+            }
         }
 
-        if (!colValid)
+        if (columns.Count == 0)
         {
             var probe = await Svc.QueryProjectTablePageAsync(_projectId!.Value, tableName, null, 1, 1, ct);
             if (probe.Columns.Count == 0)
                 return ToolCallResult.Fail($"Table '{tableName}' has no columns.");
 
+            // Only show numeric columns for charting
+            var numericProbe = await Svc.QueryProjectTablePageAsync(_projectId!.Value, tableName, null, 1, 10, ct);
+            var numericCols = new List<string>();
+            for (var i = 0; i < numericProbe.Columns.Count; i++)
+            {
+                var hasNumeric = numericProbe.Rows.Any(r => i < r.Count && double.TryParse(r[i]?.ToString(), out _));
+                if (hasNumeric) numericCols.Add(numericProbe.Columns[i]);
+            }
+
             var clarify = await AskClarificationAsync(new ClarificationRequest
             {
                 ToolName = "render_graph",
                 Args = args,
-                Question = !colValid && column != ""
-                    ? $"Column '{column}' not found in '{tableName}'. Which column should be the value axis?"
-                    : $"Which column in '{tableName}' should be the value axis?",
-                MultiSelect = false,
-                Options = probe.Columns.Select(c => new ClarificationOption
+                Question = $"Which column(s) in '{tableName}' should be charted? (select one or more for multi-series)",
+                MultiSelect = true,
+                Options = numericCols.Select(c => new ClarificationOption
                 {
                     Id = c,
                     Label = c,
@@ -1250,32 +1297,46 @@
             if (!clarify.Confirmed || clarify.SelectedIds.Count == 0)
                 return ToolCallResult.Fail("Cancelled — no column selected.");
 
-            column = clarify.SelectedIds[0];
+            columns = clarify.SelectedIds;
         }
 
+        // Query data and build chart (single or multi-series)
         var result = await Svc.QueryProjectTablePageAsync(_projectId!.Value, tableName, null, 1, 100, ct);
-        var colIndex = -1; for (var i = 0; i < result.Columns.Count; i++) { if (result.Columns[i].Equals(column, StringComparison.OrdinalIgnoreCase)) { colIndex = i; break; } }
-        if (colIndex < 0) return ToolCallResult.Fail($"Column '{column}' not found in {tableName}");
-
         var labels = new List<string>();
-        var values = new List<double>();
+        var seriesList = new List<(string Name, List<double> Values)>();
+
+        foreach (var col in columns)
+        {
+            var colIndex = result.Columns.ToList().FindIndex(c => c.Equals(col, StringComparison.OrdinalIgnoreCase));
+            if (colIndex < 0) continue;
+            seriesList.Add((col, new List<double>()));
+        }
+
+        if (seriesList.Count == 0)
+            return ToolCallResult.Fail($"None of the selected columns found in '{tableName}'.");
+
         foreach (var row in result.Rows)
         {
             var label = row[0]?.ToString() ?? "";
-            var valStr = row[colIndex]?.ToString() ?? "0";
-            if (double.TryParse(valStr, out var val))
+            labels.Add(label);
+            for (var s = 0; s < seriesList.Count; s++)
             {
-                labels.Add(label);
-                values.Add(val);
+                var colIndex = result.Columns.ToList().FindIndex(c => c.Equals(columns[s], StringComparison.OrdinalIgnoreCase));
+                var valStr = colIndex >= 0 && colIndex < row.Count ? row[colIndex]?.ToString() ?? "0" : "0";
+                if (double.TryParse(valStr, out var val))
+                    seriesList[s].Values.Add(val);
+                else
+                    seriesList[s].Values.Add(0);
             }
         }
 
+        // Build ChartSpec-compatible JSON
         var graphData = new
         {
             type = chartType,
-            title = $"{tableName} — {column}",
+            title = $"{tableName}" + (columns.Count > 1 ? $" — {string.Join(", ", columns)}" : $" — {columns[0]}"),
             labels = labels.Take(24).ToList(),
-            series = new[] { new { name = column, values = values.Take(24).ToList() } }
+            series = seriesList.Select(s => new { name = s.Name, values = s.Values.Take(24).ToList() }).ToList()
         };
         return ToolCallResult.Graph(System.Text.Json.JsonSerializer.Serialize(graphData));
     }
@@ -1588,6 +1649,20 @@
     private void SubmitClarification()
     {
         if (_pendingClarification == null) return;
+
+        // Build a user message showing what was selected (for LLM context)
+        var selectedLabels = _pendingClarification.Options
+            .Where(o => _clarificationSelected.Contains(o.Id))
+            .Select(o => o.Label)
+            .ToList();
+
+        var userResponse = selectedLabels.Count == 1
+            ? $"Selected: {selectedLabels[0]}"
+            : $"Selected: {string.Join(", ", selectedLabels)}";
+
+        // Add the user's selection as a message so the LLM sees it
+        _messages.Add(new AgentMessage("user", userResponse));
+
         var result = new ClarificationResult
         {
             Confirmed = true,

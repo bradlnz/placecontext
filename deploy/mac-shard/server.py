@@ -93,7 +93,11 @@ def mlx_forward_slice(hidden_states, attention_mask, layer_start, layer_end):
     import mlx.core as mx
     from mlx_lm.layers import Attention
 
-    layers = model.model.layers[layer_start:layer_end]
+    # Handle both old (model.model.layers) and new (model.layers) structure
+    if hasattr(model, 'model') and hasattr(model.model, 'layers'):
+        layers = model.model.layers[layer_start:layer_end]
+    else:
+        layers = model.layers[layer_start:layer_end]
 
     # Build causal mask for the sequence length
     seq_len = hidden_states.shape[1]
@@ -139,13 +143,21 @@ def mlx_embed(token_ids):
     """Convert token IDs to embeddings."""
     import mlx.core as mx
     ids = mx.array([token_ids]) if isinstance(token_ids, list) else mx.expand_dims(mx.array(token_ids), 0)
-    return model.model.embed_tokens(ids)
+    # Handle both old and new model structure
+    if hasattr(model, 'model') and hasattr(model.model, 'embed_tokens'):
+        return model.model.embed_tokens(ids)
+    else:
+        return model.embed_tokens(ids)
 
 
 def mlx_lm_head(hidden_states):
     """Apply final layer norm + LM head to get logits."""
     import mlx.core as mx
-    h = model.model.norm(hidden_states)
+    # Handle both old and new model structure
+    if hasattr(model, 'model') and hasattr(model.model, 'norm'):
+        h = model.model.norm(hidden_states)
+    else:
+        h = model.norm(hidden_states)
     logits = model.lm_head(h)
     return logits
 
@@ -269,10 +281,18 @@ def chat_stream_mlx(messages, temperature=0.7, top_p=0.9, max_tokens=2048):
         tokenize=False,
         add_generation_prompt=True,
     )
+    
+    logger.info(f"chat_stream_mlx: {len(messages)} messages, prompt length: {len(prompt)} chars")
+    logger.debug(f"Prompt preview: {prompt[:500]}...")
+    
     sampler = make_sampler(temp=temperature, top_p=top_p)
+    token_count = 0
     for response in stream_generate(model, tokenizer, prompt=prompt, max_tokens=max_tokens, sampler=sampler):
         if response.text:  # only yield non-empty chunks
+            token_count += 1
             yield response.text
+    
+    logger.info(f"chat_stream_mlx completed: {token_count} tokens generated")
 
 
 def chat_torch(messages, temperature=0.7, top_p=0.9, max_tokens=2048):
@@ -306,9 +326,13 @@ def chat_stream_torch(messages, temperature=0.7, top_p=0.9, max_tokens=2048):
         tokenize=False,
         add_generation_prompt=True,
     )
+    
+    logger.info(f"chat_stream_torch: {len(messages)} messages, prompt length: {len(prompt)} chars")
+    
     inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
     past = None
     input_ids = inputs["input_ids"]
+    token_count = 0
 
     with torch.no_grad():
         for _ in range(max_tokens):
@@ -325,8 +349,11 @@ def chat_stream_torch(messages, temperature=0.7, top_p=0.9, max_tokens=2048):
             if token_id == tokenizer.eos_token_id:
                 break
             text = tokenizer.decode(token_id, skip_special_tokens=True)
+            token_count += 1
             yield text
             input_ids = torch.cat([input_ids, next_token], dim=-1)
+    
+    logger.info(f"chat_stream_torch completed: {token_count} tokens generated")
 
 
 # ---------------------------------------------------------------------------
@@ -377,7 +404,13 @@ async def lifespan(app: FastAPI):
     if is_apple_silicon():
         backend = "mlx"
         model, tokenizer = load_model_mlx(args.model)
-        total_layers = len(model.model.layers)
+        # MLX model structure varies - try common patterns
+        if hasattr(model, 'model') and hasattr(model.model, 'layers'):
+            total_layers = len(model.model.layers)
+        elif hasattr(model, 'layers'):
+            total_layers = len(model.layers)
+        else:
+            raise RuntimeError(f"Cannot find layers in model. Attributes: {dir(model)}")
     else:
         backend = "torch"
         model, tokenizer, device = load_model_torch(args.model)
@@ -476,11 +509,16 @@ async def chat_stream(req: ChatRequest):
 
     def sse():
         try:
+            logger.info(f"Starting SSE stream for {len(messages)} messages")
             for text in gen:
                 chunk = {"choices": [{"delta": {"content": text}, "finish_reason": None}]}
                 yield f"data: {json.dumps(chunk)}\n\n"
+            logger.info("SSE stream completed successfully")
         except Exception as e:
-            logger.error(f"Stream generation error: {e}")
+            logger.error(f"SSE stream error: {e}", exc_info=True)
+            # Send error as a message so the client knows what happened
+            error_chunk = {"choices": [{"delta": {"content": f"\n\n[Error: {str(e)}]"}, "finish_reason": "error"}]}
+            yield f"data: {json.dumps(error_chunk)}\n\n"
         finally:
             yield "data: [DONE]\n\n"
 
@@ -508,10 +546,18 @@ async def forward(req: ForwardRequest):
             # First shard: tokenize prompt and embed
             token_ids = tokenizer.encode(req.prompt, add_special_tokens=False)
             hidden_states = mx.array([token_ids])
-            hidden_states = model.model.embed_tokens(hidden_states)
+            # Handle both old and new model structure
+            if hasattr(model, 'model') and hasattr(model.model, 'embed_tokens'):
+                hidden_states = model.model.embed_tokens(hidden_states)
+            else:
+                hidden_states = model.embed_tokens(hidden_states)
         elif sc.is_first and req.token_ids is not None:
             hidden_states = mx.array([req.token_ids])
-            hidden_states = model.model.embed_tokens(hidden_states)
+            # Handle both old and new model structure
+            if hasattr(model, 'model') and hasattr(model.model, 'embed_tokens'):
+                hidden_states = model.model.embed_tokens(hidden_states)
+            else:
+                hidden_states = model.embed_tokens(hidden_states)
         elif req.hidden_states is not None:
             hidden_states = mx.array(req.hidden_states)
             if hidden_states.ndim == 2:
@@ -558,7 +604,11 @@ async def forward(req: ForwardRequest):
 
                     # Forward pass for next token
                     ids_arr = mx.array([current_ids])
-                    hs = model.model.embed_tokens(ids_arr)
+                    # Handle both old and new model structure
+                    if hasattr(model, 'model') and hasattr(model.model, 'embed_tokens'):
+                        hs = model.model.embed_tokens(ids_arr)
+                    else:
+                        hs = model.embed_tokens(ids_arr)
                     hs = mlx_forward_slice(hs, mx.ones((1, len(current_ids))), sc.layer_start, sc.layer_end)
                     logits = mlx_lm_head(hs)
 
