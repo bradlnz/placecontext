@@ -10,38 +10,18 @@ namespace PlaceContext.Infrastructure.Persistence;
 /// Read side for the run-status watcher: compact projections of the tenant's in-flight runs and
 /// the runs that recently reached a terminal status. Deliberately never selects the shard/artifact
 /// JSON blobs — this runs on a short tick. Tenant isolation comes from the global query filters.
-/// Caches results for a few seconds to avoid hammering the DB on the 2-second sweep tick.
 /// </summary>
 public sealed class DbRunStatusReader : IRunStatusReader
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
-    private static readonly TimeSpan CacheTtl = TimeSpan.FromSeconds(5);
 
     private readonly AppDbContext _db;
-    private readonly ICurrentTenant _tenant;
 
-    // Per-tenant cache keyed by (tenantId, finishedSince floor).
-    private static readonly object _cacheLock = new();
-    private static (Guid TenantId, DateTimeOffset Since, IReadOnlyList<JobRunStatusRow> Jobs, IReadOnlyList<ChainRunStatusRow> Chains, DateTimeOffset Expires) _cache;
-
-    public DbRunStatusReader(AppDbContext db, ICurrentTenant tenant)
-    {
-        _db = db;
-        _tenant = tenant;
-    }
+    public DbRunStatusReader(AppDbContext db) => _db = db;
 
     public async Task<IReadOnlyList<JobRunStatusRow>> ListJobRunsAsync(
         DateTimeOffset finishedSince, CancellationToken ct = default)
     {
-        var tenantId = _tenant.TenantId;
-        var sinceFloor = RoundDown(finishedSince);
-
-        lock (_cacheLock)
-        {
-            if (_cache.TenantId == tenantId && _cache.Since == sinceFloor && DateTimeOffset.UtcNow < _cache.Expires)
-                return _cache.Jobs;
-        }
-
         var rows = await (
                 from r in _db.JobRuns.AsNoTracking()
                 where r.Status == nameof(JobRunStatus.Running) || r.Status == nameof(JobRunStatus.Queued)
@@ -51,41 +31,23 @@ public sealed class DbRunStatusReader : IRunStatusReader
                 select new { r.Id, r.JobId, JobName = (string?)j.Name, r.ProjectId, r.Status, r.StartedAt, r.FinishedAt })
             .ToListAsync(ct);
 
-        var result = rows.Select(r => new JobRunStatusRow(
+        return rows.Select(r => new JobRunStatusRow(
                 r.Id, r.JobId, r.JobName ?? "job", r.ProjectId,
                 Enum.TryParse<JobRunStatus>(r.Status, out var s) ? s : JobRunStatus.Failed,
                 r.StartedAt, r.FinishedAt))
             .ToList();
-
-        lock (_cacheLock)
-        {
-            _cache = (tenantId, sinceFloor, result,
-                _cache.TenantId == tenantId && _cache.Since == sinceFloor ? _cache.Chains : new List<ChainRunStatusRow>(),
-                DateTimeOffset.UtcNow + CacheTtl);
-        }
-
-        return result;
     }
 
     public async Task<IReadOnlyList<ChainRunStatusRow>> ListChainRunsAsync(
         DateTimeOffset finishedSince, CancellationToken ct = default)
     {
-        var tenantId = _tenant.TenantId;
-        var sinceFloor = RoundDown(finishedSince);
-
-        lock (_cacheLock)
-        {
-            if (_cache.TenantId == tenantId && _cache.Since == sinceFloor && DateTimeOffset.UtcNow < _cache.Expires)
-                return _cache.Chains;
-        }
-
         var rows = await _db.ChainRuns.AsNoTracking()
             .Where(r => r.Status == nameof(ChainRunStatus.Running)
                 || (r.FinishedAt != null && r.FinishedAt >= finishedSince))
             .Select(r => new { r.Id, r.ChainId, r.ChainName, r.ProjectId, r.Status, r.StepsJson, r.StartedAt, r.FinishedAt })
             .ToListAsync(ct);
 
-        var result = rows.Select(r =>
+        return rows.Select(r =>
         {
             var steps = ParseSteps(r.StepsJson);
             return new ChainRunStatusRow(
@@ -97,20 +59,7 @@ public sealed class DbRunStatusReader : IRunStatusReader
                 StepRunIds: steps.Where(st => st.RunId is { } id && id != Guid.Empty).Select(st => st.RunId!.Value).ToList(),
                 r.StartedAt, r.FinishedAt);
         }).ToList();
-
-        lock (_cacheLock)
-        {
-            _cache = (tenantId, sinceFloor,
-                _cache.TenantId == tenantId && _cache.Since == sinceFloor ? _cache.Jobs : new List<JobRunStatusRow>(),
-                result, DateTimeOffset.UtcNow + CacheTtl);
-        }
-
-        return result;
     }
-
-    /// <summary>Round down to the nearest 5 seconds so consecutive sweeps within the same window share a cache key.</summary>
-    private static DateTimeOffset RoundDown(DateTimeOffset dt)
-        => dt.AddTicks(-(dt.Ticks % (CacheTtl.Ticks)));
 
     private static List<StepStatusJson> ParseSteps(string stepsJson)
     {
@@ -118,7 +67,6 @@ public sealed class DbRunStatusReader : IRunStatusReader
         catch { return new(); }
     }
 
-    /// <summary>The slice of EfChainRunRepository's step JSON this reader needs.</summary>
     private sealed class StepStatusJson
     {
         public string JobName { get; set; } = "";

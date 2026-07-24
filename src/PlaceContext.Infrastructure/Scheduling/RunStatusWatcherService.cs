@@ -18,7 +18,7 @@ namespace PlaceContext.Infrastructure.Scheduling;
 /// </summary>
 public sealed class RunStatusWatcherService : BackgroundService
 {
-    private static readonly TimeSpan WatchInterval = TimeSpan.FromSeconds(2);
+    private static readonly TimeSpan WatchInterval = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan TenantCacheInterval = TimeSpan.FromMinutes(5);
 
     private readonly IServiceScopeFactory _scopes;
