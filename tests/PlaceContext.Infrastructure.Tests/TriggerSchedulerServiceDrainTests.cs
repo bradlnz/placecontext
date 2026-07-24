@@ -49,7 +49,7 @@ public class TriggerSchedulerServiceDrainTests
 
         var tenantCache = new Dictionary<Guid, TenantInfo> { [Tenant.Id] = Tenant };
         var claimed = Enumerable.Range(0, expectedConcurrency)
-            .Select(_ => new TriggerSchedulerService.ClaimedRun(Guid.NewGuid(), Tenant.Id, Guid.NewGuid(), "nightly", null))
+            .Select(_ => new TriggerSchedulerService.ClaimedRun(Guid.NewGuid(), Tenant.Id, Guid.NewGuid(), Guid.NewGuid(), "nightly", null))
             .ToList();
 
         var runTask = svc.RunBatchInParallelAsync(claimed, tenantCache, CancellationToken.None);
@@ -80,7 +80,7 @@ public class TriggerSchedulerServiceDrainTests
 
         var tenantCache = new Dictionary<Guid, TenantInfo> { [Tenant.Id] = Tenant };
         var claimed = Enumerable.Range(0, 6)
-            .Select(_ => new TriggerSchedulerService.ClaimedRun(Guid.NewGuid(), Tenant.Id, Guid.NewGuid(), "nightly", null))
+            .Select(_ => new TriggerSchedulerService.ClaimedRun(Guid.NewGuid(), Tenant.Id, Guid.NewGuid(), Guid.NewGuid(), "nightly", null))
             .ToList();
 
         var runTask = svc.RunBatchInParallelAsync(claimed, tenantCache, CancellationToken.None);
@@ -109,7 +109,7 @@ public class TriggerSchedulerServiceDrainTests
         var tenantCache = new Dictionary<Guid, TenantInfo> { [Tenant.Id] = Tenant };
         var claimed = new List<TriggerSchedulerService.ClaimedRun>
         {
-            new(Guid.NewGuid(), Tenant.Id, Guid.NewGuid(), "nightly", null),
+            new(Guid.NewGuid(), Tenant.Id, Guid.NewGuid(), Guid.NewGuid(), "nightly", null),
         };
 
         // FindTenantAsync (the DB fallback) needs a real AppDbContext/Postgres connection — it is never

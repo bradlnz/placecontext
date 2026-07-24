@@ -198,6 +198,11 @@ public sealed class TriggerSchedulerService : BackgroundService
             CurrentTenant.Set(tenant);
             try
             {
+                // Launchpad rows don't run a job — they kick an autonomous agent session.
+                // The agent run is detached so it doesn't block a drain-slot for minutes.
+                if (await TryKickLaunchpadAsync(run, tenant, ct))
+                    return;
+
                 await using var scope = _scopes.CreateAsyncScope();
 
                 // Surface this run in the notifications bell (Track/Mark* — the external-worker
@@ -392,5 +397,47 @@ public sealed class TriggerSchedulerService : BackgroundService
 
     /// <summary>Internal (not private) so <c>RunBatchInParallelAsync</c> can be exercised directly by
     /// tests without the Npgsql claim plumbing.</summary>
-    internal sealed record ClaimedRun(Guid Id, Guid TenantId, Guid JobId, string TriggerName, string? Payload);
+    internal sealed record ClaimedRun(Guid Id, Guid TenantId, Guid JobId, Guid TriggerId, string TriggerName, string? Payload);
+
+    // ── Launchpad support ──────────────────────────────────────────────────────────────────────────
+
+    private async Task<bool> TryKickLaunchpadAsync(ClaimedRun run, TenantInfo tenant, CancellationToken ct)
+    {
+        // Launchpad queue rows carry no job id; they are agent-session starts, not job runs.
+        if (run.JobId != Guid.Empty) return false;
+
+        await using var scope = _scopes.CreateAsyncScope();
+        var trigger = await scope.ServiceProvider.GetRequiredService<Domain.Repositories.IJobTriggerRepository>()
+            .GetByIdAsync(run.TriggerId, ct);
+        if (trigger is null || trigger.Kind != Domain.ValueObjects.TriggerKind.Launchpad || trigger.ChainId is not { } chainId)
+        {
+            _log.LogWarning("Launchpad trigger {TriggerId} missing or invalid — dropping queued row.", run.TriggerId);
+            return true;
+        }
+
+        _log.LogInformation("Kicking launchpad '{Trigger}' for tenant {Slug}.", trigger.Name, tenant.Slug);
+        _ = RunLaunchpadDetachedAsync(run.TenantId, tenant, trigger.ProjectId, trigger.Name,
+            trigger.Prompt ?? "", trigger.SourceTable, chainId);
+        return true;
+    }
+
+    private async Task RunLaunchpadDetachedAsync(Guid tenantId, TenantInfo tenant, Guid projectId,
+        string triggerName, string prompt, string? sourceTable, Guid chainId)
+    {
+        try
+        {
+            CurrentTenant.Set(tenant);
+            try
+            {
+                await using var scope = _scopes.CreateAsyncScope();
+                var runner = scope.ServiceProvider.GetRequiredService<AgentSessionRunner>();
+                await runner.RunLaunchpadAsync(projectId, triggerName, prompt, sourceTable, chainId, CancellationToken.None);
+            }
+            finally { CurrentTenant.Clear(); }
+        }
+        catch (Exception ex)
+        {
+            _log.LogError(ex, "Launchpad '{Trigger}' agent run failed for tenant {Slug}.", triggerName, tenant.Slug);
+        }
+    }
 }

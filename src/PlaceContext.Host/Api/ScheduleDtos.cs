@@ -40,6 +40,6 @@ public sealed record ScheduleResponse(
 internal static class ScheduleApiMapper
 {
     public static ScheduleResponse ToResponse(TriggerView v) => new(
-        v.Id, v.ProjectId, v.JobId, v.Name, v.Kind, v.Enabled,
+        v.Id, v.ProjectId, v.JobId ?? Guid.Empty, v.Name, v.Kind, v.Enabled,
         v.CronExpression, v.EventName, v.NextRunAt, v.LastFiredAt, v.CreatedAt);
 }

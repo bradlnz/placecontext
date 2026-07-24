@@ -70,6 +70,16 @@
     min-width: 150px;
 }
 
+.field-prompt {
+    min-width: 260px;
+    flex: 1;
+}
+
+.field-prompt textarea {
+    min-height: 64px;
+    resize: vertical;
+}
+
 .code-hint {
     margin-left: 4px;
 }

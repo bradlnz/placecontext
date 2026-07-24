@@ -3,20 +3,20 @@
 @layout PlaceContext.Host.Components.Layout.ProjectLayout
 @using PlaceContext.Application.Dtos
 @using PlaceContext.Application.Features
+@using PlaceContext.Application.Ports
 @inject IPlaceContextService Svc
 @inject PortalUiState Ui
-@inject PlaceContext.Application.Ports.ICurrentTenant Tenant
+@inject ICurrentTenant Tenant
 
 <PageTitle>placecontext — Schedules</PageTitle>
 
 <div class="page">
-
-
     <div class="page-head">
         <div>
             <h2 class="page-title">Schedules</h2>
             <div class="page-sub">
-                Every trigger across this project's jobs — cron schedules and event hooks that run jobs while you're away. Cron fires in <span class="tz">@Tenant.TimeZoneId</span> (agents set it via <code>set_workspace_timezone</code>).
+                Every trigger across this project's jobs — cron schedules, event hooks, and launchpads that run an autonomous agent session on a schedule.
+                Cron fires in <span class="tz">@Tenant.TimeZoneId</span>.
             </div>
         </div>
     </div>
@@ -28,28 +28,55 @@
 
     @* ── Add trigger ──────────────────────────────────────────────────────────────────── *@
     <div class="dccard add-bar">
-        <div class="dcfield field-job">
-            <label>Job</label>
-            <select class="dcinput" @bind="_newJobId">
-                <option value="@Guid.Empty">— pick a job —</option>
-                @foreach (var j in _jobs ?? Array.Empty<JobView>())
-                {
-                    <option value="@j.Id">@j.Name</option>
-                }
+        <div class="dcfield field-sm">
+            <label>Kind</label>
+            <select class="dcinput" @bind="_newKind" @bind:after="OnKindChanged">
+                <option value="Schedule">Schedule</option>
+                <option value="Event">Event</option>
+                <option value="Launchpad">Launchpad</option>
             </select>
         </div>
         <div class="dcfield field-name">
             <label>Name</label>
             <input class="dcinput" @bind="_newName" placeholder="nightly refresh" />
         </div>
-        <div class="dcfield field-sm">
-            <label>Kind</label>
-            <select class="dcinput" @bind="_newKind">
-                <option value="Schedule">Schedule</option>
-                <option value="Event">Event</option>
-            </select>
-        </div>
-        @if (_newKind == "Schedule")
+        @if (_newKind == "Launchpad")
+        {
+            <div class="dcfield field-job">
+                <label>Chain</label>
+                <select class="dcinput" @bind="_newChainId">
+                    <option value="@Guid.Empty">— pick a chain —</option>
+                    @foreach (var c in _chains ?? Array.Empty<JobChainView>())
+                    {
+                        <option value="@c.Id">@c.Name</option>
+                    }
+                </select>
+            </div>
+            <div class="dcfield field-job">
+                <label>Source table</label>
+                <select class="dcinput" @bind="_newSourceTable">
+                    <option value="">— optional —</option>
+                    @foreach (var t in _tables ?? Array.Empty<ProjectTableInfo>())
+                    {
+                        <option value="@t.Name">@t.Name</option>
+                    }
+                </select>
+            </div>
+        }
+        else
+        {
+            <div class="dcfield field-job">
+                <label>Job</label>
+                <select class="dcinput" @bind="_newJobId">
+                    <option value="@Guid.Empty">— pick a job —</option>
+                    @foreach (var j in _jobs ?? Array.Empty<JobView>())
+                    {
+                        <option value="@j.Id">@j.Name</option>
+                    }
+                </select>
+            </div>
+        }
+        @if (_newKind is "Schedule" or "Launchpad")
         {
             @if (_advancedCron)
             {
@@ -114,6 +141,13 @@
                 </select>
             </div>
         }
+        @if (_newKind == "Launchpad")
+        {
+            <div class="dcfield field-prompt">
+                <label>Prompt</label>
+                <textarea class="dcinput" rows="3" @bind="_newPrompt" placeholder="For each row, run the chain and summarize anomalies." />
+            </div>
+        }
         <button class="dcbtn primary" disabled="@_busy" @onclick="AddTrigger">＋ Add trigger</button>
         @if (_error is not null)
         {
@@ -124,7 +158,7 @@
     @* ── Trigger table ────────────────────────────────────────────────────────────────── *@
     <div class="dccard table-card">
         <div class="trigger-grid table-head">
-            <span>STATE</span><span>TRIGGER</span><span>JOB</span><span>FIRES ON</span><span>NEXT RUN</span><span>LAST FIRED</span><span></span>
+            <span>STATE</span><span>TRIGGER</span><span>TARGET</span><span>FIRES ON</span><span>NEXT RUN</span><span>LAST FIRED</span><span></span>
         </div>
         @if (_triggers is null)
         {
@@ -133,7 +167,7 @@
         else if (_triggers.Count == 0)
         {
             <div class="empty-note">
-                No triggers yet — add a cron schedule or an event hook above.
+                No triggers yet — add a cron schedule, an event hook, or an agent launchpad above.
             </div>
         }
         else
@@ -145,9 +179,16 @@
                         <span class="state-dot" style="background:@(t.Enabled ? "var(--good)" : "var(--border-2)")"></span>@(t.Enabled ? "ON" : "PAUSED")
                     </span>
                     <span class="trigger-name">@t.Name</span>
-                    <span class="cell-job">@JobName(t.JobId)</span>
+                    <span class="cell-job">@TargetLabel(t)</span>
                     <span class="cell-2">
-                        @(t.Kind == "Schedule" ? $"cron {t.CronExpression}" : $"event {t.EventName}")
+                        @if (t.Kind == "Event")
+                        {
+                            <text>event @t.EventName</text>
+                        }
+                        else
+                        {
+                            <text>cron @t.CronExpression</text>
+                        }
                     </span>
                     <span class="cell-2">@(t.NextRunAt?.ToWorkspaceTime().ToString("MMM d · HH:mm") ?? "—")</span>
                     <span class="cell-3">@(t.LastFiredAt?.ToWorkspaceTime().ToString("MMM d · HH:mm") ?? "never")</span>
@@ -166,6 +207,8 @@
 
     private IReadOnlyList<TriggerView>? _triggers;
     private IReadOnlyList<JobView>? _jobs;
+    private IReadOnlyList<JobChainView>? _chains;
+    private IReadOnlyList<ProjectTableInfo>? _tables;
     private IReadOnlyList<EventTypeView>? _eventTypes;
     private string? _message, _error;
     private bool _busy;
@@ -175,6 +218,9 @@
     private string _newKind = "Schedule";
     private string _newCron = "0 0 * * *";
     private string _newEvent = "";
+    private Guid _newChainId;
+    private string _newSourceTable = "";
+    private string _newPrompt = "";
 
     // Simple picker (the default): frequency + time compose the cron; advanced users type it raw.
     private bool _advancedCron;
@@ -197,29 +243,61 @@
         try
         {
             _jobs = await Svc.ListJobsAsync(ProjectId);
+            _chains = await Svc.ListJobChainsAsync(ProjectId);
+            _tables = await Svc.ListProjectDataTablesAsync(ProjectId);
             _triggers = await Svc.ListTriggersAsync(ProjectId);
             _eventTypes = await Svc.ListEventTypesAsync();
             _newEvent = _eventTypes.FirstOrDefault()?.Name ?? "";
-            Ui.Set("Schedules", "cron + event triggers across this project");
+            Ui.Set("Schedules", "cron + event triggers + launchpads across this project");
         }
         catch (Exception ex) { _message = ex.Message; }
     }
 
+    private async Task OnKindChanged()
+    {
+        if (_newKind == "Launchpad" && _chains?.Count > 0 && _newChainId == Guid.Empty)
+            _newChainId = _chains[0].Id;
+        await Task.CompletedTask;
+    }
+
+    private string TargetLabel(TriggerView t) => t.Kind switch
+    {
+        "Launchpad" => ChainName(t.ChainId) + (!string.IsNullOrEmpty(t.SourceTable) ? $" · {t.SourceTable}" : ""),
+        _ => JobName(t.JobId ?? Guid.Empty),
+    };
+
     private string JobName(Guid jobId) => _jobs?.FirstOrDefault(j => j.Id == jobId)?.Name ?? "(deleted job)";
+    private string ChainName(Guid? chainId) => _chains?.FirstOrDefault(c => c.Id == chainId)?.Name ?? "(deleted chain)";
 
     private async Task AddTrigger()
     {
         _error = null;
-        if (_newJobId == Guid.Empty) { _error = "Pick a job."; return; }
         if (string.IsNullOrWhiteSpace(_newName)) { _error = "Name is required."; return; }
         _busy = true;
         try
         {
-            var cron = _newKind == "Schedule" ? (_advancedCron ? _newCron : ComposedCron()) : null;
-            var evt = _newKind == "Event" ? _newEvent : null;
-            await Svc.CreateTriggerAsync(new CreateTriggerCommand(_newJobId, _newName.Trim(), _newKind, cron, evt));
+            if (_newKind == "Launchpad")
+            {
+                if (_newChainId == Guid.Empty) { _error = "Pick a chain."; return; }
+                if (string.IsNullOrWhiteSpace(_newPrompt)) { _error = "Prompt is required."; return; }
+                var cron = _advancedCron ? _newCron : ComposedCron();
+                await Svc.CreateTriggerAsync(new CreateTriggerCommand(
+                    null, _newName.Trim(), "Launchpad", cron, null,
+                    _newChainId,
+                    string.IsNullOrWhiteSpace(_newSourceTable) ? null : _newSourceTable,
+                    _newPrompt.Trim()));
+            }
+            else
+            {
+                if (_newJobId == Guid.Empty) { _error = "Pick a job."; return; }
+                var cron = _newKind == "Schedule" ? (_advancedCron ? _newCron : ComposedCron()) : null;
+                var evt = _newKind == "Event" ? _newEvent : null;
+                await Svc.CreateTriggerAsync(new CreateTriggerCommand(_newJobId, _newName.Trim(), _newKind, cron, evt));
+            }
             _triggers = await Svc.ListTriggersAsync(ProjectId);
             _newName = "";
+            _newPrompt = "";
+            _newSourceTable = "";
         }
         catch (Exception ex) { _error = ex.Message; }
         finally { _busy = false; }
