@@ -1236,3 +1236,46 @@
     font-weight: 600;
     font-family: var(--mono);
 }
+
+/* ── Option picker (numbered lists as checkboxes) ─────────────────── */
+.option-picker {
+    margin-top: 10px;
+    padding: 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--bg-2);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.option-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background 0.15s;
+    font-size: 0.85rem;
+}
+
+.option-item:hover {
+    background: var(--bg-3);
+}
+
+.option-item input[type="checkbox"] {
+    accent-color: var(--primary);
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+}
+
+.option-item span {
+    flex: 1;
+}
+
+.option-picker .dcbtn {
+    align-self: flex-end;
+    margin-top: 4px;
+}

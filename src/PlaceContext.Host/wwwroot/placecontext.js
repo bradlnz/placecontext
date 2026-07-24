@@ -44,5 +44,11 @@ window.placecontext = {
       el.classList.add('dcflash');
       setTimeout(() => el.classList.remove('dcflash'), 1600);
     });
+  },
+  getCheckedOptions(msgId) {
+    const picker = document.querySelector(`.option-picker[data-msg-id="${msgId}"]`);
+    if (!picker) return [];
+    return Array.from(picker.querySelectorAll('input[type="checkbox"]:checked'))
+      .map(cb => cb.value);
   }
 };

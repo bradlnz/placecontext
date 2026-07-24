@@ -4,10 +4,12 @@
 @using PlaceContext.Application.Ports
 @using PlaceContext.Application.Dtos
 @using PlaceContext.Application.Features
+@using PlaceContext.Application.Mcp
 @using PlaceContext.Infrastructure.Chat
 @using PlaceContext.Infrastructure.Caching
 @inject IChatGateway Gateway
 @inject IPlaceContextService Svc
+@inject IMcpClientService McpClient
 @inject PortalUiState Ui
 @inject IJSRuntime JS
 @inject PlaceContext.Infrastructure.Caching.IChatMemoryStore MemoryStore
@@ -79,53 +81,75 @@
                                 <div class="msg-role">@msg.Role</div>
                                 @if (msg.ToolCalls.Count > 0)
                                 {
-                                    var completedCount = msg.ToolCalls.Count(tc => tc.Status == ToolCallStatus.Completed);
-                                    var errorCount = msg.ToolCalls.Count(tc => tc.Status == ToolCallStatus.Error);
-                                    <details class="tool-calls-expandable">
-                                        <summary class="tool-calls-summary">
-                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M9 18l6-6-6-6"/></svg>
-                                            <span>@msg.ToolCalls.Count tool call@(msg.ToolCalls.Count > 1 ? "s" : "")</span>
-                                            @if (completedCount > 0)
-                                            {
-                                                <span class="tc-badge tc-ok">@completedCount ok</span>
-                                            }
-                                            @if (errorCount > 0)
-                                            {
-                                                <span class="tc-badge tc-err">@errorCount err</span>
-                                            }
-                                        </summary>
-                                        <div class="tool-calls">
-                                            @foreach (var tc in msg.ToolCalls)
-                                            {
-                                                <div class="tool-call @(tc.Status.ToString().ToLower())">
-                                                    <span class="tool-name">@tc.ToolName</span>
-                                                    <span class="tool-status">@tc.Status</span>
-                                                    @if (tc.Status == ToolCallStatus.Error && !string.IsNullOrEmpty(tc.Result))
-                                                    {
-                                                        <span class="tool-error-text">@tc.Result</span>
-                                                    }
-                                                    @if (tc.Status == ToolCallStatus.Completed && !string.IsNullOrEmpty(tc.Result))
-                                                    {
-                                                        @if (tc.ResultType == "graph")
+                                    var graphCalls = msg.ToolCalls.Where(tc => tc.ResultType == "graph" && tc.Status == ToolCallStatus.Completed).ToList();
+                                    var otherCalls = msg.ToolCalls.Where(tc => tc.ResultType != "graph" || tc.Status != ToolCallStatus.Completed).ToList();
+                                    
+                                    @* Show graphs inline *@
+                                    @foreach (var tc in graphCalls)
+                                    {
+                                        <div class="chat-chart-wrap">
+                                            <canvas id="graph-@tc.Id"></canvas>
+                                        </div>
+                                    }
+                                    
+                                    @* Show other tool calls in expandable details *@
+                                    @if (otherCalls.Count > 0)
+                                    {
+                                        var completedCount = otherCalls.Count(tc => tc.Status == ToolCallStatus.Completed);
+                                        var errorCount = otherCalls.Count(tc => tc.Status == ToolCallStatus.Error);
+                                        <details class="tool-calls-expandable">
+                                            <summary class="tool-calls-summary">
+                                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M9 18l6-6-6-6"/></svg>
+                                                <span>@otherCalls.Count tool call@(otherCalls.Count > 1 ? "s" : "")</span>
+                                                @if (completedCount > 0)
+                                                {
+                                                    <span class="tc-badge tc-ok">@completedCount ok</span>
+                                                }
+                                                @if (errorCount > 0)
+                                                {
+                                                    <span class="tc-badge tc-err">@errorCount err</span>
+                                                }
+                                            </summary>
+                                            <div class="tool-calls">
+                                                @foreach (var tc in otherCalls)
+                                                {
+                                                    <div class="tool-call @(tc.Status.ToString().ToLower())">
+                                                        <span class="tool-name">@tc.ToolName</span>
+                                                        <span class="tool-status">@tc.Status</span>
+                                                        @if (tc.Status == ToolCallStatus.Error && !string.IsNullOrEmpty(tc.Result))
                                                         {
-                                                            <div class="chat-chart-wrap">
-                                                                <canvas id="graph-@tc.Id"></canvas>
-                                                            </div>
+                                                            <span class="tool-error-text">@tc.Result</span>
                                                         }
-                                                        else
+                                                        @if (tc.Status == ToolCallStatus.Completed && !string.IsNullOrEmpty(tc.Result))
                                                         {
                                                             <details class="tool-result">
                                                                 <summary>View result</summary>
                                                                 <div class="tool-output-formatted">@((MarkupString)FormatToolResult(tc.Result))</div>
                                                             </details>
                                                         }
-                                                    }
-                                                </div>
-                                            }
-                                        </div>
-                                    </details>
+                                                    </div>
+                                                }
+                                            </div>
+                                        </details>
+                                    }
                                 }
                                 <div class="msg-content">@((MarkupString)FormatContent(msg.Content))</div>
+                                @{
+                                    var parsedOptions = ParseNumberedOptions(msg.Content);
+                                    if (parsedOptions.Count > 0 && msg.Role == "assistant" && !_streaming)
+                                    {
+                                        <div class="option-picker" data-msg-id="@msg.Id">
+                                            @foreach (var opt in parsedOptions)
+                                            {
+                                                <label class="option-item">
+                                                    <input type="checkbox" value="@opt" />
+                                                    <span>@opt</span>
+                                                </label>
+                                            }
+                                            <button class="dcbtn xs primary" @onclick="@(() => SubmitOptionsAsync(msg.Id))">Continue</button>
+                                        </div>
+                                    }
+                                }
                                 @if (msg.Role == "assistant" && !_streaming)
                                 {
                                     <div class="quick-actions">
@@ -922,17 +946,21 @@
 
     private List<ChatMessage> BuildChatMessages(string ragContext = "")
     {
-        var toolDesc = "Available tools (use [[tool:toolName|args]] syntax): " +
-            "[[tool:list_tables|]] - List tables, " +
-            "[[tool:query_table|tableName|page]] - Query table, " +
-            "[[tool:list_jobs|]] - List jobs, " +
-            "[[tool:list_job_runs|jobId]] - List runs, " +
-            "[[tool:render_graph|bar|table|col]] - Chart, " +
-            "[[tool:query_graph|]] - Query project graph for entities/relationships, " +
-            "[[tool:schedule_job|jobId|name|cron]] - Create cron schedule, " +
-            "[[tool:list_schedules|jobId]] - List job schedules, " +
-            "[[tool:toggle_schedule|triggerId|true|false]] - Enable/disable schedule, " +
-            "[[tool:run_job|jobId]] - Run job now";
+        var toolDesc = "Available tools (use [[tool:toolName|args]] syntax). " +
+            "IMPORTANT: Always pass ALL known parameters (table names, column names, IDs, etc.) from the conversation context. " +
+            "Do not ask the user for information you already have.\n\n" +
+            "Built-in tools:\n" +
+            "- [[tool:list_tables|]] - List all project data tables\n" +
+            "- [[tool:query_table|tableName|page]] - Query a table (pass table name from context)\n" +
+            "- [[tool:list_jobs|]] - List all jobs\n" +
+            "- [[tool:list_job_runs|jobId]] - List runs for a job\n" +
+            "- [[tool:render_graph|chartType|tableName|columnName]] - Render a chart (pass table AND column names from context, e.g. [[tool:render_graph|bar|cashflow_runs|amount]])\n" +
+            "- [[tool:query_graph|]] - Query project dependency graph\n" +
+            "- [[tool:schedule_job|jobId|name|cron]] - Create a cron schedule\n" +
+            "- [[tool:list_schedules|jobId]] - List job schedules\n" +
+            "- [[tool:toggle_schedule|triggerId|true|false]] - Enable/disable schedule\n" +
+            "- [[tool:run_job|jobId]] - Run a job now\n" +
+            "- [[tool:call_mcp|serverName|toolName|argsJson]] - Call a tool on an external MCP server";
 
         var systemPrompt = _systemPrompt + "\n\n" + toolDesc;
         if (!string.IsNullOrWhiteSpace(ragContext))
@@ -1032,6 +1060,28 @@
         escaped2 = System.Text.RegularExpressions.Regex.Replace(escaped2, @"\*\*(.+?)\*\*", "<strong>$1</strong>");
         escaped2 = System.Text.RegularExpressions.Regex.Replace(escaped2, @"`(.+?)`", "<code>$1</code>");
         return escaped2;
+    }
+
+    private static List<string> ParseNumberedOptions(string content)
+    {
+        if (string.IsNullOrWhiteSpace(content)) return new();
+        // Match patterns like "1. Option text" or "1) Option text" at start of line
+        var matches = System.Text.RegularExpressions.Regex.Matches(
+            content, @"^\s*\d+[.)]\s+(.+)$",
+            System.Text.RegularExpressions.RegexOptions.Multiline);
+        if (matches.Count < 2) return new(); // Need at least 2 options to show picker
+        return matches.Select(m => m.Groups[1].Value.Trim()).ToList();
+    }
+
+    private async Task SubmitOptionsAsync(int messageId)
+    {
+        // Find checked options via JS interop
+        var selected = await JS.InvokeAsync<string[]>("placecontext.getCheckedOptions", messageId);
+        if (selected == null || selected.Length == 0) return;
+
+        var text = $"I selected: {string.Join(", ", selected)}";
+        _input = text;
+        await Send();
     }
 
     private static string FormatToolResult(string result)
@@ -1140,6 +1190,8 @@
                 "list_schedules" => await ExecuteListSchedulesAsync(args, ct),
                 "toggle_schedule" => await ExecuteToggleScheduleAsync(args, ct),
                 "run_job" => await ExecuteRunJobAsync(args, ct),
+                "call_mcp" => await ExecuteCallMcpAsync(args, ct),
+                "list_mcp_tools" => await ExecuteListMcpToolsAsync(args, ct),
                 _ => ToolCallResult.Fail($"Unknown tool: {toolName}"),
             };
         }
@@ -1462,6 +1514,85 @@
         return ToolCallResult.Ok($"Job run started: {run.Id}\nStatus: {run.Status}\nStarted: {run.StartedAt:yyyy-MM-dd HH:mm}");
     }
 
+    private async Task<ToolCallResult> ExecuteCallMcpAsync(string args, CancellationToken ct)
+    {
+        // args: "serverName|toolName|jsonArgs" or "serverName|toolName"
+        var parts = args.Split('|');
+        if (parts.Length < 2) return ToolCallResult.Fail("Usage: call_mcp|serverName|toolName|[jsonArgs]");
+
+        var serverName = parts[0].Trim();
+        var toolName = parts[1].Trim();
+        var jsonArgs = parts.Length > 2 ? parts[2].Trim() : "{}";
+
+        AddActiveAction("call_mcp", $"Calling {serverName}.{toolName}...");
+
+        // Find the MCP connection by name
+        var connections = await Svc.ListMcpConnectionsAsync(_projectId!.Value, ct);
+        var connection = connections.FirstOrDefault(c => c.Name.Equals(serverName, StringComparison.OrdinalIgnoreCase));
+        if (connection == null)
+        {
+            CompleteActiveAction("call_mcp", false);
+            return ToolCallResult.Fail($"MCP server '{serverName}' not found. Available: {string.Join(", ", connections.Select(c => c.Name))}");
+        }
+
+        try
+        {
+            var arguments = System.Text.Json.JsonDocument.Parse(jsonArgs).RootElement;
+            var result = await McpClient.CallToolAsync(connection.Id, toolName, arguments, ct);
+            CompleteActiveAction("call_mcp", result.Success);
+            AddToolHistory("call_mcp", result.Success, result.Success ? "ok" : result.Error ?? "error");
+
+            if (result.Success)
+                return ToolCallResult.Ok(result.Content ?? "Tool executed successfully");
+            else
+                return ToolCallResult.Fail($"MCP tool error: {result.Error}");
+        }
+        catch (Exception ex)
+        {
+            CompleteActiveAction("call_mcp", false);
+            return ToolCallResult.Fail($"MCP call failed: {ex.Message}");
+        }
+    }
+
+    private async Task<ToolCallResult> ExecuteListMcpToolsAsync(string args, CancellationToken ct)
+    {
+        // args: "serverName" or empty to list all servers
+        var serverName = args.Trim();
+
+        var connections = await Svc.ListMcpConnectionsAsync(_projectId!.Value, ct);
+        if (connections.Count == 0)
+            return ToolCallResult.Ok("No MCP servers configured. Add one in Settings → MCP Servers.");
+
+        var sb = new System.Text.StringBuilder();
+
+        if (string.IsNullOrEmpty(serverName))
+        {
+            // List all servers
+            sb.AppendLine("Available MCP servers:");
+            foreach (var conn in connections)
+            {
+                sb.AppendLine($"- {conn.Name} ({conn.Transport}) - {(conn.Enabled ? "enabled" : "disabled")}");
+            }
+            sb.AppendLine("\nUse list_mcp_tools|serverName to see available tools.");
+        }
+        else
+        {
+            // List tools for a specific server
+            var connection = connections.FirstOrDefault(c => c.Name.Equals(serverName, StringComparison.OrdinalIgnoreCase));
+            if (connection == null)
+                return ToolCallResult.Fail($"MCP server '{serverName}' not found.");
+
+            var tools = await McpClient.ListToolsAsync(connection.Id, ct);
+            sb.AppendLine($"Tools on {serverName}:");
+            foreach (var tool in tools)
+            {
+                sb.AppendLine($"- {tool.Name}: {tool.Description ?? "No description"}");
+            }
+        }
+
+        return ToolCallResult.Ok(sb.ToString());
+    }
+
 
     private void ToggleSidePanel() => _showSidePanel = !_showSidePanel;
 
@@ -1744,11 +1875,14 @@
 
 public sealed class AgentMessage
 {
+    private static int _nextId;
     public AgentMessage(string role, string content)
     {
+        Id = Interlocked.Increment(ref _nextId);
         Role = role;
         Content = content;
     }
+    public int Id { get; }
     public string Role { get; }
     public string Content { get; }
     public List<ToolCallInfo> ToolCalls { get; } = new();
