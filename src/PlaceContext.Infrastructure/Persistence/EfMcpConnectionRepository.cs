@@ -47,6 +47,11 @@ public sealed class EfMcpConnectionRepository : IMcpConnectionRepository
             row.Enabled = connection.Enabled;
             row.LastStatus = connection.LastStatus;
             row.LastConnectedAt = connection.LastConnectedAt;
+            row.OAuthAccessToken = connection.OAuthAccessToken;
+            row.OAuthRefreshToken = connection.OAuthRefreshToken;
+            row.OAuthTokenExpiresAt = connection.OAuthTokenExpiresAt;
+            row.OAuthClientId = connection.OAuthClientId;
+            row.OAuthScopes = connection.OAuthScopes;
         }
     }
 
@@ -72,10 +77,17 @@ public sealed class EfMcpConnectionRepository : IMcpConnectionRepository
         LastStatus = c.LastStatus,
         LastConnectedAt = c.LastConnectedAt,
         CreatedAt = c.CreatedAt,
+        OAuthAccessToken = c.OAuthAccessToken,
+        OAuthRefreshToken = c.OAuthRefreshToken,
+        OAuthTokenExpiresAt = c.OAuthTokenExpiresAt,
+        OAuthClientId = c.OAuthClientId,
+        OAuthScopes = c.OAuthScopes,
     };
 
     private static McpConnection ToDomain(McpConnectionRow r) =>
         McpConnection.Rehydrate(r.Id, r.ProjectId, r.Name, r.Transport, r.EndpointUrl,
             r.Command, r.Args, r.AuthType, r.AuthToken, r.AuthHeader,
-            r.Enabled, r.LastStatus, r.LastConnectedAt, r.CreatedAt);
+            r.Enabled, r.LastStatus, r.LastConnectedAt, r.CreatedAt,
+            r.OAuthAccessToken, r.OAuthRefreshToken, r.OAuthTokenExpiresAt,
+            r.OAuthClientId, r.OAuthScopes);
 }

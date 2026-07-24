@@ -17,4 +17,11 @@ public sealed class McpConnectionRow : ITenantOwned
     public string? LastStatus { get; set; }
     public DateTimeOffset? LastConnectedAt { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
+
+    // OAuth fields
+    public string? OAuthAccessToken { get; set; }
+    public string? OAuthRefreshToken { get; set; }
+    public DateTimeOffset? OAuthTokenExpiresAt { get; set; }
+    public string? OAuthClientId { get; set; }
+    public string? OAuthScopes { get; set; }
 }

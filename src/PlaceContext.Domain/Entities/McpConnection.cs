@@ -33,13 +33,22 @@ public sealed class McpConnection : AggregateRoot
     public string? EndpointUrl { get; private set; }
     public string? Command { get; private set; }
     public string? Args { get; private set; }
-    public string? AuthType { get; private set; }   // "none" | "bearer" | "header" | "apikey"
+    public string? AuthType { get; private set; }   // "none" | "bearer" | "header" | "apikey" | "oauth"
     public string? AuthToken { get; private set; }
     public string? AuthHeader { get; private set; }
     public bool Enabled { get; private set; }
     public string? LastStatus { get; private set; }
     public DateTimeOffset? LastConnectedAt { get; private set; }
     public DateTimeOffset CreatedAt { get; }
+
+    // OAuth fields
+    public string? OAuthAccessToken { get; private set; }
+    public string? OAuthRefreshToken { get; private set; }
+    public DateTimeOffset? OAuthTokenExpiresAt { get; private set; }
+    public string? OAuthClientId { get; private set; }
+    public string? OAuthScopes { get; private set; }
+
+    public bool OAuthTokenExpired => OAuthTokenExpiresAt.HasValue && OAuthTokenExpiresAt.Value <= DateTimeOffset.UtcNow;
 
     public static McpConnection Create(Guid projectId, string name, string transport,
         string? endpointUrl, string? command, string? args, string? authType,
@@ -65,6 +74,26 @@ public sealed class McpConnection : AggregateRoot
         AuthHeader = authHeader?.Trim();
     }
 
+    public void SetOAuthCredentials(string? clientId, string? scopes, DateTimeOffset now)
+    {
+        OAuthClientId = clientId?.Trim();
+        OAuthScopes = scopes?.Trim();
+    }
+
+    public void StoreOAuthTokens(string accessToken, string refreshToken, DateTimeOffset expiresAt, DateTimeOffset now)
+    {
+        OAuthAccessToken = accessToken;
+        OAuthRefreshToken = refreshToken;
+        OAuthTokenExpiresAt = expiresAt;
+    }
+
+    public void ClearOAuthTokens()
+    {
+        OAuthAccessToken = null;
+        OAuthRefreshToken = null;
+        OAuthTokenExpiresAt = null;
+    }
+
     public void SetEnabled(bool enabled, DateTimeOffset now)
     {
         Enabled = enabled;
@@ -79,11 +108,19 @@ public sealed class McpConnection : AggregateRoot
     public static McpConnection Rehydrate(Guid id, Guid projectId, string name, string transport,
         string? endpointUrl, string? command, string? args, string? authType,
         string? authToken, string? authHeader, bool enabled, string? lastStatus,
-        DateTimeOffset? lastConnectedAt, DateTimeOffset createdAt)
+        DateTimeOffset? lastConnectedAt, DateTimeOffset createdAt,
+        string? oauthAccessToken = null, string? oauthRefreshToken = null,
+        DateTimeOffset? oauthTokenExpiresAt = null, string? oauthClientId = null,
+        string? oauthScopes = null)
         => new(id, projectId, name, transport, endpointUrl, command, args,
             authType, authToken, authHeader, enabled, createdAt)
         {
             LastStatus = lastStatus,
             LastConnectedAt = lastConnectedAt,
+            OAuthAccessToken = oauthAccessToken,
+            OAuthRefreshToken = oauthRefreshToken,
+            OAuthTokenExpiresAt = oauthTokenExpiresAt,
+            OAuthClientId = oauthClientId,
+            OAuthScopes = oauthScopes,
         };
 }

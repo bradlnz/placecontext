@@ -79,31 +79,51 @@
                                 <div class="msg-role">@msg.Role</div>
                                 @if (msg.ToolCalls.Count > 0)
                                 {
-                                    <div class="tool-calls">
-                                        @foreach (var tc in msg.ToolCalls)
-                                        {
-                                            <div class="tool-call @(tc.Status.ToString().ToLower())">
-                                                <span class="tool-name">@tc.ToolName</span>
-                                                <span class="tool-status">@tc.Status</span>
-                                                @if (tc.Status == ToolCallStatus.Completed && !string.IsNullOrEmpty(tc.Result))
-                                                {
-                                                    <details class="tool-result">
-                                                        <summary>View result</summary>
-                                                        @if (tc.ResultType == "graph")
-                                                        {
-                                                            <div class="graph-container" @key="tc.Id">
-                                                                <canvas id="graph-@tc.Id" width="600" height="300"></canvas>
-                                                            </div>
-                                                        }
-                                                        else
-                                                        {
-                                                            <pre class="tool-output">@tc.Result</pre>
-                                                        }
-                                                    </details>
-                                                }
-                                            </div>
-                                        }
-                                    </div>
+                                    var completedCount = msg.ToolCalls.Count(tc => tc.Status == ToolCallStatus.Completed);
+                                    var errorCount = msg.ToolCalls.Count(tc => tc.Status == ToolCallStatus.Error);
+                                    <details class="tool-calls-expandable">
+                                        <summary class="tool-calls-summary">
+                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M9 18l6-6-6-6"/></svg>
+                                            <span>@msg.ToolCalls.Count tool call@(msg.ToolCalls.Count > 1 ? "s" : "")</span>
+                                            @if (completedCount > 0)
+                                            {
+                                                <span class="tc-badge tc-ok">@completedCount ok</span>
+                                            }
+                                            @if (errorCount > 0)
+                                            {
+                                                <span class="tc-badge tc-err">@errorCount err</span>
+                                            }
+                                        </summary>
+                                        <div class="tool-calls">
+                                            @foreach (var tc in msg.ToolCalls)
+                                            {
+                                                <div class="tool-call @(tc.Status.ToString().ToLower())">
+                                                    <span class="tool-name">@tc.ToolName</span>
+                                                    <span class="tool-status">@tc.Status</span>
+                                                    @if (tc.Status == ToolCallStatus.Error && !string.IsNullOrEmpty(tc.Result))
+                                                    {
+                                                        <span class="tool-error-text">@tc.Result</span>
+                                                    }
+                                                    @if (tc.Status == ToolCallStatus.Completed && !string.IsNullOrEmpty(tc.Result))
+                                                    {
+                                                        <details class="tool-result">
+                                                            <summary>View result</summary>
+                                                            @if (tc.ResultType == "graph")
+                                                            {
+                                                                <div class="graph-container" @key="tc.Id">
+                                                                    <canvas id="graph-@tc.Id" width="600" height="300"></canvas>
+                                                                </div>
+                                                            }
+                                                            else
+                                                            {
+                                                                <div class="tool-output-formatted">@((MarkupString)FormatToolResult(tc.Result))</div>
+                                                            }
+                                                        </details>
+                                                    }
+                                                </div>
+                                            }
+                                        </div>
+                                    </details>
                                 }
                                 <div class="msg-content">@((MarkupString)FormatContent(msg.Content))</div>
                                 @if (msg.Role == "assistant" && !_streaming)
@@ -148,10 +168,61 @@
                                     <div class="tool-call running">
                                         <span class="tool-name">@_currentToolCall.ToolName</span>
                                         <span class="tool-status">Running…</span>
+                                        @if (_currentToolCall.RetryCount > 0)
+                                        {
+                                            <span class="retry-badge">retry @_currentToolCall.RetryCount</span>
+                                        }
                                     </div>
                                 </div>
                             }
-                            <div class="msg-content">@((MarkupString)FormatContent(_streamBuffer))</div>
+                            @if (_currentToolCall == null && string.IsNullOrEmpty(_streamBuffer))
+                            {
+                                <div class="skeleton-loader">
+                                    <div class="skeleton skeleton-line w80"></div>
+                                    <div class="skeleton skeleton-line w60"></div>
+                                    <div class="skeleton skeleton-line w40"></div>
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="msg-content">@((MarkupString)FormatContent(_streamBuffer))</div>
+                            }
+                        </div>
+                    </div>
+                }
+                @if (_pendingClarification != null)
+                {
+                    <div class="chat-msg assistant">
+                        <div class="msg-avatar avatar-bot">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+                        </div>
+                        <div class="msg-body">
+                            <div class="msg-role">assistant</div>
+                            <div class="clarification-panel">
+                                <div class="clarification-title">@_pendingClarification.Question</div>
+                                <div class="clarification-options">
+                                    @foreach (var opt in _pendingClarification.Options)
+                                    {
+                                        var isSelected = _clarificationSelected.Contains(opt.Id);
+                                        <label class="clarification-option @(isSelected ? "selected" : "")">
+                                            <input type="checkbox"
+                                                   checked="@isSelected"
+                                                   @onchange="@(_ => ToggleClarificationOption(opt.Id))" />
+                                            <span class="clarification-option-label">@opt.Label</span>
+                                            @if (!string.IsNullOrEmpty(opt.Description))
+                                            {
+                                                <span class="clarification-option-desc">@opt.Description</span>
+                                            }
+                                        </label>
+                                    }
+                                </div>
+                                <div class="clarification-actions">
+                                    <button class="dcbtn xs" @onclick="CancelClarification">Cancel</button>
+                                    <button class="dcbtn xs primary"
+                                                disabled="@(_clarificationSelected.Count == 0)"
+                                                @onclick="SubmitClarification">Continue</button>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 }
@@ -160,9 +231,10 @@
 
             <div class="chat-input-bar">
                 <input class="dcinput chat-input" @bind="_input" @bind:event="oninput"
-                       placeholder="Ask about data, jobs, or request a graph…" disabled="@_streaming"
+                       placeholder="@(_pendingClarification != null ? "Respond to the question above…" : "Ask about data, jobs, or request a graph…")"
+                       disabled="@(_streaming && _pendingClarification == null)"
                        @onkeydown="InputKeydown" />
-                <button class="dcbtn primary" disabled="@(_streaming || string.IsNullOrWhiteSpace(_input))" @onclick="Send">Send</button>
+                <button class="dcbtn primary" disabled="@((_streaming && _pendingClarification == null) || string.IsNullOrWhiteSpace(_input))" @onclick="Send">Send</button>
             </div>
         </div>
 
@@ -201,7 +273,35 @@
                         @foreach (var action in _activeActions)
                         {
                             <div class="action-item @action.Status.ToString().ToLower()">
-                                <span class="action-icon">@GetActionIcon(action.Status)</span>
+                                <span class="action-icon">
+                                    @if (action.Status == ToolCallStatus.Running)
+                                    {
+                                        <svg class="icon-spinner" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="14" height="14">
+                                            <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+                                        </svg>
+                                    }
+                                    else if (action.Status == ToolCallStatus.Completed)
+                                    {
+                                        <svg class="icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="14" height="14">
+                                            <path d="M20 6 9 17l-5-5" />
+                                        </svg>
+                                    }
+                                    else if (action.Status == ToolCallStatus.Error)
+                                    {
+                                        <svg class="icon-warn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="14" height="14">
+                                            <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
+                                            <line x1="12" y1="9" x2="12" y2="13" />
+                                            <line x1="12" y1="17" x2="12.01" y2="17" />
+                                        </svg>
+                                    }
+                                    else
+                                    {
+                                        <svg class="icon-pause" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="14" height="14">
+                                            <rect x="6" y="4" width="4" height="16" />
+                                            <rect x="14" y="4" width="4" height="16" />
+                                        </svg>
+                                    }
+                                </span>
                                 <span class="action-name">@action.ToolName</span>
                                 <span class="action-detail">@action.Detail</span>
                             </div>
@@ -332,12 +432,26 @@
                                             <div class="mcp-info">
                                                 <span class="mcp-name">@mcp.Name</span>
                                                 <span class="mcp-badge">@mcp.Transport</span>
+                                                @if (mcp.AuthType == "oauth")
+                                                {
+                                                    var isExpired = mcp.OAuthTokenExpiresAt.HasValue && mcp.OAuthTokenExpiresAt.Value <= DateTimeOffset.UtcNow;
+                                                    var isConnected = mcp.LastStatus?.StartsWith("oauth:connected") == true;
+                                                    <span class="mcp-badge oauth @(isExpired ? "expired" : isConnected ? "active" : "")">
+                                                        @(isExpired ? "token expired" : isConnected ? "oauth connected" : "oauth")
+                                                    </span>
+                                                }
                                                 @if (!string.IsNullOrEmpty(mcp.LastStatus))
                                                 {
-                                                    <span class="mcp-status @(mcp.LastStatus.StartsWith("connected") || mcp.LastStatus.StartsWith("http:2") ? "ok" : "err")">@mcp.LastStatus</span>
+                                                    <span class="mcp-status @(mcp.LastStatus.StartsWith("connected") || mcp.LastStatus.StartsWith("http:2") || mcp.LastStatus.StartsWith("oauth:connected") ? "ok" : "err")">@mcp.LastStatus</span>
                                                 }
                                             </div>
                                             <div class="mcp-actions">
+                                                @if (mcp.AuthType == "oauth")
+                                                {
+                                                    <button class="dcbtn xs" @onclick="@(() => StartOAuthFlow(mcp.Id))">
+                                                        @(mcp.OAuthTokenExpiresAt.HasValue && mcp.OAuthTokenExpiresAt.Value <= DateTimeOffset.UtcNow ? "Reconnect" : "Auth")
+                                                    </button>
+                                                }
                                                 <button class="dcbtn xs" @onclick="@(() => TestMcpConnectionAsync(mcp.Id))">Test</button>
                                                 <button class="dcbtn xs danger" @onclick="@(() => DeleteMcpConnectionAsync(mcp.Id))">×</button>
                                             </div>
@@ -395,6 +509,7 @@
                                                     <option value="bearer">Bearer Token</option>
                                                     <option value="apikey">API Key</option>
                                                     <option value="header">Custom Header</option>
+                                                    <option value="oauth">OAuth 2.1</option>
                                                 </select>
                                             </div>
                                             @if (_newMcpAuthType == "bearer")
@@ -421,6 +536,14 @@
                                                     <label>Header Value</label>
                                                     <input class="dcinput" type="password" @bind="_newMcpAuthToken" placeholder="value" />
                                                 </div>
+                                            }
+                                            else if (_newMcpAuthType == "oauth")
+                                            {
+                                                <div class="dcfield">
+                                                    <label>Scopes (optional)</label>
+                                                    <input class="dcinput" @bind="_newMcpOAuthScopes" placeholder="openid profile" />
+                                                </div>
+                                                <div class="dchint">The OAuth flow will open in a popup. The external server must expose <code>/.well-known/oauth-authorization-server</code>.</div>
                                             }
                                         }
                                     </div>
@@ -457,11 +580,9 @@
     private int _maxContextChunks = 5;
     private float _temperature = 0.7f;
     private int _maxTokens = 2048;
-    private bool _toolCallingEnabled = true;
     private IReadOnlyList<ProjectSummaryView> _projects = Array.Empty<ProjectSummaryView>();
     private string _projectName = "";
     private ToolCallInfo? _currentToolCall;
-    private int _toolCallCounter;
     private bool _showSidePanel = true;
     private bool _showSettings;
     private string _settingsTab = "prompt";
@@ -476,6 +597,7 @@
     private string _newMcpAuthType = "none";
     private string _newMcpAuthToken = "";
     private string _newMcpAuthHeader = "";
+    private string _newMcpOAuthScopes = "";
     private string _pendingSystemPrompt = "";
     private float _pendingTemperature;
     private int _pendingMaxTokens;
@@ -490,6 +612,9 @@
     private readonly List<ToolHistoryEntry> _toolHistory = new();
     private readonly List<GraphNodeView> _graphNodes = new();
     private int _graphLinks;
+    private ClarificationRequest? _pendingClarification;
+    private readonly HashSet<string> _clarificationSelected = new();
+    private TaskCompletionSource<ClarificationResult>? _clarificationTcs;
 
     protected override async Task OnInitializedAsync()
     {
@@ -544,6 +669,11 @@
         _sessionId = Guid.NewGuid();
         _sessionTitle = "New Chat";
         _messages.Clear();
+        _activeActions.Clear();
+        _fetchedData.Clear();
+        _toolHistory.Clear();
+        _pendingClarification = null;
+        _clarificationSelected.Clear();
         _streamBuffer = "";
         StateHasChanged();
     }
@@ -662,10 +792,43 @@
                     tc.Status = ToolCallStatus.Running;
                     StateHasChanged();
 
-                    var result = await ExecuteToolAsync(tc.ToolName, tc.Args, ct);
+                    const int maxRetries = 2;
+                    const int timeoutSeconds = 15;
+                    ToolCallResult result = ToolCallResult.Fail("uninitialized");
+                    for (var attempt = 0; attempt <= maxRetries; attempt++)
+                    {
+                        tc.RetryCount = attempt;
+                        StateHasChanged();
+
+                        using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSeconds));
+                        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct, timeoutCts.Token);
+                        try
+                        {
+                            result = await ExecuteToolAsync(tc.ToolName, tc.Args, linkedCts.Token);
+                        }
+                        catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested)
+                        {
+                            result = ToolCallResult.Fail($"Timed out after {timeoutSeconds}s");
+                        }
+
+                        if (result.Success || !IsTransientError(result.Error ?? ""))
+                            break;
+
+                        if (attempt < maxRetries)
+                            await Task.Delay(1000, ct);
+                    }
+
                     tc.Status = result.Success ? ToolCallStatus.Completed : ToolCallStatus.Error;
                     tc.Result = result.Data ?? result.Error;
                     tc.ResultType = result.IsGraph ? "graph" : "text";
+
+                    // Update active action with result detail
+                    var action = _activeActions.FirstOrDefault(a => a.ToolName == tc.ToolName && a.Status == ToolCallStatus.Running);
+                    if (action != null)
+                    {
+                        action.Status = result.Success ? ToolCallStatus.Completed : ToolCallStatus.Error;
+                        action.Detail = result.Success ? "done" : (result.Error?.Length > 40 ? result.Error[..40] + "…" : result.Error ?? "error");
+                    }
 
                     toolResults.Append("### " + tc.ToolName + "\n");
                     toolResults.Append("Args: " + tc.Args + "\n");
@@ -674,7 +837,10 @@
                     toolResults.Append("\n\n");
                 }
 
-                var assistantMsg = new AgentMessage("assistant", _streamBuffer);
+                var assistantMsg = new AgentMessage("assistant",
+                    string.IsNullOrWhiteSpace(_streamBuffer)
+                        ? $"Called {string.Join(", ", toolCalls.Select(tc => tc.ToolName))}"
+                        : _streamBuffer);
                 assistantMsg.ToolCalls.AddRange(toolCalls);
                 _messages.Add(assistantMsg);
                 _messages.Add(new AgentMessage("system", toolResults.ToString()));
@@ -756,11 +922,86 @@
 
     private static string FormatContent(string raw)
     {
-        var escaped = System.Net.WebUtility.HtmlEncode(raw);
+        // If it's a "Called ..." message, show it as-is (no stripping needed)
+        if (raw.StartsWith("Called "))
+        {
+            var escaped = System.Net.WebUtility.HtmlEncode(raw);
+            return $"<em>{escaped}</em>";
+        }
+        // Strip raw tool call syntax from display
+        var cleaned = System.Text.RegularExpressions.Regex.Replace(raw, @"\[\[tool:[^\]]*\]\]", "").Trim();
+        if (string.IsNullOrWhiteSpace(cleaned))
+            return "<em>No text response</em>";
+        var escaped2 = System.Net.WebUtility.HtmlEncode(cleaned);
+        escaped2 = escaped2.Replace("\n", "<br/>");
+        escaped2 = System.Text.RegularExpressions.Regex.Replace(escaped2, @"\*\*(.+?)\*\*", "<strong>$1</strong>");
+        escaped2 = System.Text.RegularExpressions.Regex.Replace(escaped2, @"`(.+?)`", "<code>$1</code>");
+        return escaped2;
+    }
+
+    private static string FormatToolResult(string result)
+    {
+        if (string.IsNullOrWhiteSpace(result)) return "<em>Empty result</em>";
+
+        var lines = result.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        var sb = new System.Text.StringBuilder();
+
+        // Detect table format: has a "---" separator line
+        var separatorIdx = Array.FindIndex(lines, l => l.Trim() == "---");
+        if (separatorIdx > 0)
+        {
+            // Table: header line(s) before ---, data rows after
+            var headerLine = lines[separatorIdx - 1];
+            var headers = headerLine.Split('|', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+            var dataLines = lines.Skip(separatorIdx + 1).ToArray();
+
+            sb.Append("<table class=\"tool-table\">");
+            sb.Append("<thead><tr>");
+            foreach (var h in headers)
+                sb.Append($"<th>{System.Net.WebUtility.HtmlEncode(h)}</th>");
+            sb.Append("</tr></thead>");
+            sb.Append("<tbody>");
+            foreach (var row in dataLines)
+            {
+                var cells = row.Split('|', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+                sb.Append("<tr>");
+                foreach (var c in cells)
+                    sb.Append($"<td>{System.Net.WebUtility.HtmlEncode(c)}</td>");
+                sb.Append("</tr>");
+            }
+            sb.Append("</tbody></table>");
+            return sb.ToString();
+        }
+
+        // Detect list format: lines starting with "- "
+        var listItems = lines.Where(l => l.TrimStart().StartsWith("- ")).ToArray();
+        if (listItems.Length > 0)
+        {
+            // Check if there's a header line before the list (e.g., "Project tables: 42")
+            var headerLine = lines.FirstOrDefault(l => !l.TrimStart().StartsWith("- "));
+            if (!string.IsNullOrEmpty(headerLine))
+            {
+                sb.Append($"<div class=\"tool-result-header\">{System.Net.WebUtility.HtmlEncode(headerLine)}</div>");
+            }
+            sb.Append("<ul class=\"tool-list\">");
+            foreach (var item in listItems)
+            {
+                var text = item.TrimStart().Substring(2); // Remove "- "
+                // Highlight parenthetical info (e.g., "(213 rows)")
+                var formatted = System.Text.RegularExpressions.Regex.Replace(
+                    System.Net.WebUtility.HtmlEncode(text),
+                    @"\(([^)]+)\)",
+                    "<span class=\"tool-meta\">($1)</span>");
+                sb.Append($"<li>{formatted}</li>");
+            }
+            sb.Append("</ul>");
+            return sb.ToString();
+        }
+
+        // Fallback: plain text with line breaks
+        var escaped = System.Net.WebUtility.HtmlEncode(result);
         escaped = escaped.Replace("\n", "<br/>");
-        escaped = System.Text.RegularExpressions.Regex.Replace(escaped, @"\*\*(.+?)\*\*", "<strong>$1</strong>");
-        escaped = System.Text.RegularExpressions.Regex.Replace(escaped, @"`(.+?)`", "<code>$1</code>");
-        return escaped;
+        return $"<div class=\"tool-plain\">{escaped}</div>";
     }
 
     private async Task QuickActionAsync(string context, string action)
@@ -819,7 +1060,7 @@
         var tableName = parts.Length > 0 ? parts[0].Trim() : "";
         var page = parts.Length > 1 ? int.Parse(parts[1]) : 1;
         AddActiveAction("query_table", $"Querying {tableName}...");
-        var result = await Svc.QueryProjectTablePageAsync(_projectId.Value, tableName, null, page, 50, ct);
+        var result = await Svc.QueryProjectTablePageAsync(_projectId!.Value, tableName, null, page, 50, ct);
         var preview = string.Join("\n", result.Rows.Take(3).Select(r => string.Join(", ", r.Take(4))));
         AddFetchedData(tableName, (int)result.TotalCount, preview);
         var sb = new System.Text.StringBuilder();
@@ -838,7 +1079,7 @@
     private async Task<ToolCallResult> ExecuteListTablesAsync(CancellationToken ct)
     {
         AddActiveAction("list_tables", "Loading tables...");
-        var tables = await Svc.ListProjectDataTablesAsync(_projectId.Value, ct);
+        var tables = await Svc.ListProjectDataTablesAsync(_projectId!.Value, ct);
         var sb = new System.Text.StringBuilder();
         sb.Append($"Project tables: {tables.Count}\n");
         foreach (var t in tables)
@@ -849,7 +1090,7 @@
     private async Task<ToolCallResult> ExecuteListJobsAsync(CancellationToken ct)
     {
         AddActiveAction("list_jobs", "Loading jobs...");
-        var jobs = await Svc.ListJobsAsync(_projectId.Value, ct);
+        var jobs = await Svc.ListJobsAsync(_projectId!.Value, ct);
         var sb = new System.Text.StringBuilder();
         sb.Append($"Jobs: {jobs.Count}\n");
         foreach (var j in jobs)
@@ -873,13 +1114,90 @@
 
     private async Task<ToolCallResult> ExecuteRenderGraphAsync(string args, CancellationToken ct)
     {
+        if (!_projectId.HasValue) return ToolCallResult.Fail("No project selected");
         // Parse: "bar|tableName|column" or "pie|tableName|column"
         var parts = args.Split('|');
         var chartType = parts.Length > 0 ? parts[0].Trim() : "bar";
         var tableName = parts.Length > 1 ? parts[1].Trim() : "";
         var column = parts.Length > 2 ? parts[2].Trim() : "";
 
-        var result = await Svc.QueryProjectTablePageAsync(_projectId.Value, tableName, null, 1, 100, ct);
+        // ── HITL: prompt for table if missing OR invalid ───────────────────
+        // Probe the table to check it actually exists (catches literal "table" etc.)
+        var tableValid = false;
+        if (!string.IsNullOrEmpty(tableName))
+        {
+            try
+            {
+                var probe = await Svc.QueryProjectTablePageAsync(_projectId!.Value, tableName, null, 1, 1, ct);
+                tableValid = probe.Columns.Count > 0;
+            }
+            catch { tableValid = false; }
+        }
+
+        if (!tableValid)
+        {
+            var tables = await Svc.ListProjectDataTablesAsync(_projectId!.Value, ct);
+            if (tables.Count == 0)
+                return ToolCallResult.Fail("No data tables found in this project.");
+
+            var clarify = await AskClarificationAsync(new ClarificationRequest
+            {
+                ToolName = "render_graph",
+                Args = args,
+                Question = tableName == "" || !tableValid
+                    ? $"Table '{tableName}' not found. Which table would you like to chart?"
+                    : "Which table would you like to chart?",
+                MultiSelect = false,
+                Options = tables.Where(t => t.RowEstimate > 0).Select(t => new ClarificationOption
+                {
+                    Id = t.Name,
+                    Label = t.Name,
+                    Description = $"~{t.RowEstimate} rows"
+                }).ToList()
+            });
+
+            if (!clarify.Confirmed || clarify.SelectedIds.Count == 0)
+                return ToolCallResult.Fail("Cancelled — no table selected.");
+
+            tableName = clarify.SelectedIds[0];
+        }
+
+        // ── HITL: prompt for column if missing OR invalid ──────────────────
+        var colValid = false;
+        if (!string.IsNullOrEmpty(column))
+        {
+            var probe = await Svc.QueryProjectTablePageAsync(_projectId!.Value, tableName, null, 1, 1, ct);
+            colValid = probe.Columns.Any(c => c.Equals(column, StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (!colValid)
+        {
+            var probe = await Svc.QueryProjectTablePageAsync(_projectId!.Value, tableName, null, 1, 1, ct);
+            if (probe.Columns.Count == 0)
+                return ToolCallResult.Fail($"Table '{tableName}' has no columns.");
+
+            var clarify = await AskClarificationAsync(new ClarificationRequest
+            {
+                ToolName = "render_graph",
+                Args = args,
+                Question = !colValid && column != ""
+                    ? $"Column '{column}' not found in '{tableName}'. Which column should be the value axis?"
+                    : $"Which column in '{tableName}' should be the value axis?",
+                MultiSelect = false,
+                Options = probe.Columns.Select(c => new ClarificationOption
+                {
+                    Id = c,
+                    Label = c,
+                }).ToList()
+            });
+
+            if (!clarify.Confirmed || clarify.SelectedIds.Count == 0)
+                return ToolCallResult.Fail("Cancelled — no column selected.");
+
+            column = clarify.SelectedIds[0];
+        }
+
+        var result = await Svc.QueryProjectTablePageAsync(_projectId!.Value, tableName, null, 1, 100, ct);
         var colIndex = -1; for (var i = 0; i < result.Columns.Count; i++) { if (result.Columns[i].Equals(column, StringComparison.OrdinalIgnoreCase)) { colIndex = i; break; } }
         if (colIndex < 0) return ToolCallResult.Fail($"Column '{column}' not found in {tableName}");
 
@@ -906,7 +1224,7 @@
         AddActiveAction("query_graph", "Loading project graph...");
         try
         {
-            var graph = await Svc.GetGraphVizAsync(_projectId.Value, ct);
+            var graph = await Svc.GetGraphVizAsync(_projectId!.Value, ct);
             var sb = new System.Text.StringBuilder();
             sb.Append($"Project Graph: {graph.NodeCount} nodes, {graph.LinkCount} links\n\n");
             sb.Append("Top entities by connections:\n");
@@ -951,8 +1269,9 @@
 
     private async Task<ToolCallResult> ExecuteListSchedulesAsync(string args, CancellationToken ct)
     {
+        if (!_projectId.HasValue) return ToolCallResult.Fail("No project selected");
         var jobId = Guid.TryParse(args.Trim(), out var id) ? id : Guid.Empty;
-        var triggers = await Svc.ListTriggersAsync(_projectId.Value, ct);
+        var triggers = await Svc.ListTriggersAsync(_projectId!.Value, ct);
         if (jobId != Guid.Empty)
             triggers = triggers.Where(t => t.JobId == jobId).ToList();
         var sb = new System.Text.StringBuilder();
@@ -1044,6 +1363,7 @@
         _newMcpAuthType = "none";
         _newMcpAuthToken = "";
         _newMcpAuthHeader = "";
+        _newMcpOAuthScopes = "";
         _showAuthFields = false;
         _showAddMcp = true;
     }
@@ -1053,16 +1373,24 @@
         if (!_projectId.HasValue || string.IsNullOrWhiteSpace(_newMcpName)) return;
         try
         {
-            await Svc.CreateMcpConnectionAsync(new Application.Features.CreateMcpConnectionCommand(
+            var conn = await Svc.CreateMcpConnectionAsync(new Application.Features.CreateMcpConnectionCommand(
                 _projectId.Value, _newMcpName, _newMcpTransport,
                 _newMcpTransport != "stdio" ? _newMcpEndpoint : null,
                 _newMcpTransport == "stdio" ? _newMcpCommand : null,
                 _newMcpTransport == "stdio" ? _newMcpArgs : null,
                 _newMcpAuthType != "none" ? _newMcpAuthType : null,
-                _newMcpAuthType != "none" ? _newMcpAuthToken : null,
-                _newMcpAuthType == "header" ? _newMcpAuthHeader : null));
+                _newMcpAuthType != "none" && _newMcpAuthType != "oauth" ? _newMcpAuthToken : null,
+                _newMcpAuthType == "header" ? _newMcpAuthHeader : null,
+                null, // OAuthClientId — discovered during flow
+                _newMcpAuthType == "oauth" ? _newMcpOAuthScopes : null));
             _showAddMcp = false;
             await LoadMcpConnectionsAsync();
+
+            // If OAuth was selected, immediately start the flow
+            if (_newMcpAuthType == "oauth")
+            {
+                await StartOAuthFlow(conn.Id);
+            }
         }
         catch { }
     }
@@ -1086,13 +1414,111 @@
         catch { _mcpConnections = Array.Empty<McpConnectionView>(); }
     }
 
-    private static string GetActionIcon(ToolCallStatus status) => status switch
+    // ── OAuth flow ──────────────────────────────────────────────────────────────────
+
+    private bool _oauthListenerRegistered;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        ToolCallStatus.Running => "⏳",
-        ToolCallStatus.Completed => "✅",
-        ToolCallStatus.Error => "❌",
-        _ => "⏸️"
-    };
+        if (firstRender && !_oauthListenerRegistered)
+        {
+            _oauthListenerRegistered = true;
+            var dotNetRef = DotNetObjectReference.Create(this);
+            await JS.InvokeVoidAsync("eval", @"
+                window.__mcpOAuthListener = function(e) {
+                    if (e.data && e.data.startsWith && e.data.startsWith('mcp-oauth-')) {
+                        DotNet.invokeMethodAsync('PlaceContext.Host', 'OnMcpOAuthCallback', e.data);
+                    }
+                };
+                window.addEventListener('message', window.__mcpOAuthListener);
+            ");
+        }
+    }
+
+    private async Task StartOAuthFlow(Guid connectionId)
+    {
+        await JS.InvokeVoidAsync("open", $"/mcp-oauth/start?connectionId={connectionId}", "_blank");
+    }
+
+    [JSInvokable]
+    public static async Task OnMcpOAuthCallback(string message)
+    {
+        // This is called from JS when the popup sends a message.
+        // We can't directly update the component state from a static method,
+        // so we use a static event that components can subscribe to.
+        OnMcpOAuthCompleted?.Invoke(null, EventArgs.Empty);
+    }
+
+    internal static event EventHandler? OnMcpOAuthCompleted;
+
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+        OnMcpOAuthCompleted += async (_, _) => await InvokeAsync(async () =>
+        {
+            await LoadMcpConnectionsAsync();
+            StateHasChanged();
+        });
+    }
+
+    // ── Human-in-the-loop clarification ──────────────────────────────────
+
+    private void ToggleClarificationOption(string id)
+    {
+        if (_clarificationSelected.Contains(id))
+            _clarificationSelected.Remove(id);
+        else
+            _clarificationSelected.Add(id);
+        StateHasChanged();
+    }
+
+    private void CancelClarification()
+    {
+        _pendingClarification = null;
+        _clarificationSelected.Clear();
+        _clarificationTcs?.TrySetResult(new ClarificationResult { Confirmed = false });
+        _clarificationTcs = null;
+        StateHasChanged();
+    }
+
+    private void SubmitClarification()
+    {
+        if (_pendingClarification == null) return;
+        var result = new ClarificationResult
+        {
+            Confirmed = true,
+            SelectedIds = _clarificationSelected.ToList()
+        };
+        _pendingClarification = null;
+        _clarificationSelected.Clear();
+        _clarificationTcs?.TrySetResult(result);
+        _clarificationTcs = null;
+        StateHasChanged();
+    }
+
+    private async Task<ClarificationResult> AskClarificationAsync(ClarificationRequest request)
+    {
+        _clarificationSelected.Clear();
+        _pendingClarification = request;
+        _clarificationTcs = new TaskCompletionSource<ClarificationResult>();
+        StateHasChanged();
+        await ScrollToBottom();
+        return await _clarificationTcs.Task;
+    }
+
+    private static bool IsTransientError(string error)
+    {
+        if (string.IsNullOrEmpty(error)) return false;
+        var lower = error.ToLowerInvariant();
+        return lower.Contains("timeout")
+            || lower.Contains("econnreset")
+            || lower.Contains("econnrefused")
+            || lower.Contains("socket")
+            || lower.Contains("503")
+            || lower.Contains("502")
+            || lower.Contains("429")
+            || lower.Contains("rate limit");
+    }
 
     private async Task LoadGraphAsync()
     {
@@ -1157,6 +1583,7 @@ public sealed class ToolCallInfo
     public ToolCallStatus Status { get; set; }
     public string? Result { get; set; }
     public string ResultType { get; set; } = "text";
+    public int RetryCount { get; set; }
 }
 
 public enum ToolCallStatus { Pending, Running, Completed, Error }
@@ -1201,6 +1628,28 @@ public sealed class ToolHistoryEntry
     public bool Success { get; set; }
     public string Status { get; set; } = "";
     public DateTimeOffset Timestamp { get; set; }
+}
+
+public sealed class ClarificationRequest
+{
+    public string ToolName { get; set; } = "";
+    public string Args { get; set; } = "";
+    public string Question { get; set; } = "";
+    public List<ClarificationOption> Options { get; set; } = new();
+    public bool MultiSelect { get; set; }
+}
+
+public sealed class ClarificationOption
+{
+    public string Id { get; set; } = "";
+    public string Label { get; set; } = "";
+    public string? Description { get; set; }
+}
+
+public sealed class ClarificationResult
+{
+    public bool Confirmed { get; set; }
+    public List<string> SelectedIds { get; set; } = new();
 }
 
 }

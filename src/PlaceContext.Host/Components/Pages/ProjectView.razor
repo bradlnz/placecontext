@@ -355,8 +355,9 @@ else
     private Task Rebuild()
     {
         _message = null;
+        _busy = true;
         var tenant = PlaceContext.Infrastructure.Tenancy.CurrentTenant.Current;
-        if (tenant is null) { _message = "No tenant resolved — sign in again."; return Task.CompletedTask; }
+        if (tenant is null) { _message = "No tenant resolved — sign in again."; _busy = false; return Task.CompletedTask; }
         // Background portal operation: navigating away doesn't interrupt the rebuild; the
         // notifications bell carries the outcome.
         OpCenter.Run(tenant, Id, $"Rebuild dependency graph — {_overview?.Name ?? "project"}", $"/project/{Id}",
@@ -365,6 +366,7 @@ else
                 await sp.GetRequiredService<IPlaceContextService>().RebuildGraphAsync(Id, ct: ct);
                 return "graph rebuilt";
             });
+        _busy = false;
         _message = "Rebuild started in the background — follow it in the notifications bell.";
         return Task.CompletedTask;
     }

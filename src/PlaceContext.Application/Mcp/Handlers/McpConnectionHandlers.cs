@@ -25,6 +25,8 @@ public sealed class CreateMcpConnectionHandler : ICommandHandler<CreateMcpConnec
         var conn = McpConnection.Create(command.ProjectId, command.Name, command.Transport,
             command.EndpointUrl, command.Command, command.Args,
             command.AuthType, command.AuthToken, command.AuthHeader, _clock.UtcNow);
+        if (command.AuthType == "oauth")
+            conn.SetOAuthCredentials(command.OAuthClientId, command.OAuthScopes, _clock.UtcNow);
         await _repo.AddAsync(conn, ct);
         await _uow.SaveChangesAsync(ct);
         return McpConnectionMapper.ToView(conn);
@@ -46,9 +48,11 @@ public sealed class UpdateMcpConnectionHandler : ICommandHandler<UpdateMcpConnec
 
     public async Task<McpConnectionView> HandleAsync(UpdateMcpConnectionCommand command, CancellationToken ct = default)
     {
-        var conn = await _repo.GetByIdAsync(command.Id, ct) ?? throw new InvalidOperationException($"MCP connection {command.Id} not found.");
+        var conn = await _repo.GetByIdAsync(command.Id, ct) ?? throw new InvalidOperationException($"McpConnection {command.Id} not found.");
         conn.Update(command.Name, command.Transport, command.EndpointUrl, command.Command, command.Args,
             command.AuthType, command.AuthToken, command.AuthHeader, _clock.UtcNow);
+        if (command.AuthType == "oauth")
+            conn.SetOAuthCredentials(command.OAuthClientId, command.OAuthScopes, _clock.UtcNow);
         await _repo.UpdateAsync(conn, ct);
         await _uow.SaveChangesAsync(ct);
         return McpConnectionMapper.ToView(conn);
@@ -106,7 +110,7 @@ public sealed class TestMcpConnectionHandler : ICommandHandler<TestMcpConnection
 
     public async Task<McpConnectionView> HandleAsync(TestMcpConnectionCommand command, CancellationToken ct = default)
     {
-        var conn = await _repo.GetByIdAsync(command.Id, ct) ?? throw new InvalidOperationException($"MCP connection {command.Id} not found.");
+        var conn = await _repo.GetByIdAsync(command.Id, ct) ?? throw new InvalidOperationException($"McpConnection {command.Id} not found.");
 
         var status = "unknown";
         try
@@ -115,6 +119,21 @@ public sealed class TestMcpConnectionHandler : ICommandHandler<TestMcpConnection
             {
                 var client = _http.CreateClient();
                 client.Timeout = TimeSpan.FromSeconds(10);
+
+                // Apply auth headers
+                if (conn.AuthType is "bearer" or "oauth" && !string.IsNullOrEmpty(conn.AuthToken))
+                {
+                    client.DefaultRequestHeaders.Authorization = new("Bearer", conn.AuthToken);
+                }
+                else if (conn.AuthType == "apikey" && !string.IsNullOrEmpty(conn.AuthToken))
+                {
+                    client.DefaultRequestHeaders.Add("X-API-Key", conn.AuthToken);
+                }
+                else if (conn.AuthType == "header" && !string.IsNullOrEmpty(conn.AuthHeader) && !string.IsNullOrEmpty(conn.AuthToken))
+                {
+                    client.DefaultRequestHeaders.Add(conn.AuthHeader, conn.AuthToken);
+                }
+
                 var resp = await client.GetAsync(conn.EndpointUrl, ct);
                 status = resp.IsSuccessStatusCode ? "connected" : $"http:{(int)resp.StatusCode}";
             }
@@ -138,7 +157,8 @@ public sealed class TestMcpConnectionHandler : ICommandHandler<TestMcpConnection
 // Commands
 public sealed record UpdateMcpConnectionCommand(
     Guid Id, string Name, string Transport, string? EndpointUrl = null, string? Command = null, string? Args = null,
-    string? AuthType = null, string? AuthToken = null, string? AuthHeader = null) : ICommand<McpConnectionView>;
+    string? AuthType = null, string? AuthToken = null, string? AuthHeader = null,
+    string? OAuthClientId = null, string? OAuthScopes = null) : ICommand<McpConnectionView>;
 
 public sealed record DeleteMcpConnectionCommand(Guid Id) : ICommand<bool>;
 
@@ -151,5 +171,6 @@ internal static class McpConnectionMapper
 {
     internal static McpConnectionView ToView(McpConnection c) => new(
         c.Id, c.ProjectId, c.Name, c.Transport, c.EndpointUrl, c.Command, c.Args,
-        c.AuthType, c.Enabled, c.LastStatus, c.LastConnectedAt, c.CreatedAt);
+        c.AuthType, c.Enabled, c.LastStatus, c.LastConnectedAt, c.CreatedAt,
+        c.OAuthAccessToken, c.OAuthTokenExpiresAt, c.OAuthClientId, c.OAuthScopes);
 }

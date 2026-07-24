@@ -367,6 +367,8 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
             e.Property(r => r.Command).HasMaxLength(200);
             e.Property(r => r.Args).HasMaxLength(1000);
             e.Property(r => r.LastStatus).HasMaxLength(200);
+            e.Property(r => r.OAuthClientId).HasMaxLength(200);
+            e.Property(r => r.OAuthScopes).HasMaxLength(500);
             e.HasQueryFilter(r => r.TenantId == _tenant.TenantId);
         });
             e.Property(x => x.MessagesJson).HasDefaultValue("[]");

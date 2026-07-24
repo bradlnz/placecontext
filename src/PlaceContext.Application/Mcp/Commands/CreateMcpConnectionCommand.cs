@@ -12,4 +12,6 @@ public sealed record CreateMcpConnectionCommand(
     string? Args = null,
     string? AuthType = null,
     string? AuthToken = null,
-    string? AuthHeader = null) : ICommand<McpConnectionView>;
+    string? AuthHeader = null,
+    string? OAuthClientId = null,
+    string? OAuthScopes = null) : ICommand<McpConnectionView>;

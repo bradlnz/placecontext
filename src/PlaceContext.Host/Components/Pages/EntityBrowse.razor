@@ -1144,7 +1144,7 @@
     // Fold the collected data into the force-directed brain's shape: records are the hubs,
     // related records / runs / artifacts orbit them via their concrete edges.
     private PlaceContext.Application.Dtos.GraphVizView BuildBrain(
-        List<string?> records,
+        List<string> records,
         List<(string Entity, string Label)> related,
         List<(int Record, int Related)> relEdges,
         List<Guid> runs,

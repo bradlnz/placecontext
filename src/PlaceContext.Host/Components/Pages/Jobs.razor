@@ -1040,10 +1040,11 @@ else
     private async Task RunJobCore(Guid jobId, string? payload)
     {
         _message = null;
+        _runningJobId = jobId;
         // Runs execute as background portal operations — leaving this page never interrupts one;
         // progress and the outcome live in the notifications bell.
         var tenant = PlaceContext.Infrastructure.Tenancy.CurrentTenant.Current;
-        if (tenant is null) { _message = "No tenant resolved — sign in again."; return; }
+        if (tenant is null) { _message = "No tenant resolved — sign in again."; _runningJobId = null; return; }
         var jobName = _jobs?.FirstOrDefault(j => j.Id == jobId)?.Name ?? "job";
         // The run id is pre-allocated and doubles as the op's correlation key, so the run-status
         // watcher flips this entry the moment the run row commits — well before the awaited
@@ -1057,6 +1058,7 @@ else
             },
             correlationKey: PlaceContext.Application.Features.RunStatusWatchService.JobRunKey(runId));
         _runPromptJob = null;
+        _runningJobId = null;
         _message = $"Run of {jobName} started in the background — follow it in the notifications bell.";
         if (_selectedJobId == jobId)
         {

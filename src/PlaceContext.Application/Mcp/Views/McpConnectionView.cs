@@ -13,4 +13,8 @@ public sealed record McpConnectionView(
     bool Enabled,
     string? LastStatus,
     DateTimeOffset? LastConnectedAt,
-    DateTimeOffset CreatedAt);
+    DateTimeOffset CreatedAt,
+    string? OAuthAccessToken = null,
+    DateTimeOffset? OAuthTokenExpiresAt = null,
+    string? OAuthClientId = null,
+    string? OAuthScopes = null);
