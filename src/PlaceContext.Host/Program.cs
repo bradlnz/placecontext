@@ -87,15 +87,6 @@ builder.Services.AddResponseCompression(o =>
 builder.Services.AddControllers();
 builder.Services.AddHttpClient();
 
-// Forwarded headers: Traefik terminates TLS and forwards X-Forwarded-Proto=https.
-// Without this the app generates http:// URLs for styles/scripts, causing mixed-content blocks.
-builder.Services.Configure<ForwardedHeadersOptions>(options =>
-{
-    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
-    options.KnownNetworks.Clear();
-    options.KnownProxies.Clear();
-});
-
 // Log chat gateway config at startup
 var chatSection = builder.Configuration.GetSection("PlaceContext:ClusterChat");
 var chatEndpoint = chatSection["Endpoint"];
