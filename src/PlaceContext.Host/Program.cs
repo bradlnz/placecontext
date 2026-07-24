@@ -35,7 +35,15 @@ using Microsoft.AspNetCore.ResponseCompression;
 //   • the Blazor portal (codebase-visibility UI) at the site root — behind cookie login, and
 //   • the MCP server over Streamable HTTP at /mcp (anonymous for now; tenant from subdomain).
 
-var builder = WebApplication.CreateBuilder(args);
+var builder = WebApplication.CreateBuilder(new WebApplicationOptions
+{
+    Args = args,
+    // In the container the Host project lives under {CWD}/host/, so wwwroot is at host/wwwroot/
+    // rather than the default {CWD}/wwwroot. Detect and point there.
+    WebRootPath = Directory.Exists(Path.Combine(Directory.GetCurrentDirectory(), "host", "wwwroot"))
+        ? Path.Combine("host", "wwwroot")
+        : null, // null = default (wwwroot)
+});
 builder.Logging.ClearProviders();
 builder.Logging.AddConsole();
 
@@ -303,11 +311,16 @@ builder.WebHost.UseUrls(string.IsNullOrWhiteSpace(bindUrls) ? "http://localhost:
 
 var app = builder.Build();
 
-// Must be first: reads X-Forwarded-Proto from Traefik so the app knows it's HTTPS.
-// NOTE: the parameterless overload ignores DI options — pass the config directly.
-app.UseForwardedHeaders(new ForwardedHeadersOptions
+// UseForwardedHeaders is deprecated in .NET 10 and no longer sets Request.Scheme.
+// Manually read X-Forwarded-Proto from Traefik so the app knows it's HTTPS.
+app.Use(async (ctx, next) =>
 {
-    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto,
+    if (ctx.Request.Headers.TryGetValue("X-Forwarded-Proto", out var proto)
+        && string.Equals(proto, "https", StringComparison.OrdinalIgnoreCase))
+    {
+        ctx.Request.Scheme = "https";
+    }
+    await next();
 });
 
 PlaceContext.Infrastructure.DependencyInjection.MigrateDatabase(app.Services);
