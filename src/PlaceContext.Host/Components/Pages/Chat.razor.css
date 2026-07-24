@@ -237,6 +237,18 @@
     padding: 4px 0;
 }
 
+/* Chat chart rendering */
+.chat-chart-wrap {
+    height: 220px;
+    padding: 8px 4px 4px;
+    margin: 4px 0;
+}
+
+.chat-chart-wrap canvas {
+    width: 100% !important;
+    height: 100% !important;
+}
+
 .tool-table {
     width: 100%;
     border-collapse: collapse;

@@ -62,7 +62,7 @@
                 }
                 else
                 {
-                    @foreach (var msg in _messages)
+                    @foreach (var msg in _messages.Where(m => m.Role != "system"))
                     {
                         <div class="chat-msg @msg.Role">
                             <div class="msg-avatar @(msg.Role == "user" ? "avatar-user" : "avatar-bot")">
@@ -106,19 +106,19 @@
                                                     }
                                                     @if (tc.Status == ToolCallStatus.Completed && !string.IsNullOrEmpty(tc.Result))
                                                     {
-                                                        <details class="tool-result">
-                                                            <summary>View result</summary>
-                                                            @if (tc.ResultType == "graph")
-                                                            {
-                                                                <div class="graph-container" @key="tc.Id">
-                                                                    <canvas id="graph-@tc.Id" width="600" height="300"></canvas>
-                                                                </div>
-                                                            }
-                                                            else
-                                                            {
+                                                        @if (tc.ResultType == "graph")
+                                                        {
+                                                            <div class="chat-chart-wrap">
+                                                                <canvas id="graph-@tc.Id"></canvas>
+                                                            </div>
+                                                        }
+                                                        else
+                                                        {
+                                                            <details class="tool-result">
+                                                                <summary>View result</summary>
                                                                 <div class="tool-output-formatted">@((MarkupString)FormatToolResult(tc.Result))</div>
-                                                            }
-                                                        </details>
+                                                            </details>
+                                                        }
                                                     }
                                                 </div>
                                             }
@@ -615,6 +615,7 @@
     private ClarificationRequest? _pendingClarification;
     private readonly HashSet<string> _clarificationSelected = new();
     private TaskCompletionSource<ClarificationResult>? _clarificationTcs;
+    private readonly HashSet<int> _renderedChartIds = new();
 
     protected override async Task OnInitializedAsync()
     {
@@ -625,6 +626,9 @@
             _projectId = _projects[0].Id;
             _projectName = _projects[0].Name;
             await LoadAgentConfig();
+            await LoadSessionsAsync();
+            await LoadMcpConnectionsAsync();
+            NewSession();
         }
     }
 
@@ -674,6 +678,7 @@
         _toolHistory.Clear();
         _pendingClarification = null;
         _clarificationSelected.Clear();
+        _renderedChartIds.Clear();
         _streamBuffer = "";
         StateHasChanged();
     }
@@ -735,7 +740,14 @@
         _input = "";
         _streaming = true;
         _streamBuffer = "";
-        StateHasChanged();
+
+        // Update session title from first user message
+        if (_messages.Count(m => m.Role == "user") == 1)
+        {
+            _sessionTitle = text.Length > 50 ? text[..50] + "…" : text;
+        }
+
+        await InvokeAsync(StateHasChanged);
         await ScrollToBottom();
 
         // Build RAG context once before the tool loop.
@@ -862,7 +874,7 @@
             _streamBuffer = "";
             _currentToolCall = null;
             await SaveCurrentSessionAsync();
-            StateHasChanged();
+            await InvokeAsync(StateHasChanged);
             await ScrollToBottom();
         }
     }
@@ -1214,7 +1226,13 @@
             }
         }
 
-        var graphData = new { type = chartType, labels, values };
+        var graphData = new
+        {
+            type = chartType,
+            title = $"{tableName} — {column}",
+            labels = labels.Take(24).ToList(),
+            series = new[] { new { name = column, values = values.Take(24).ToList() } }
+        };
         return ToolCallResult.Graph(System.Text.Json.JsonSerializer.Serialize(graphData));
     }
 
@@ -1226,16 +1244,43 @@
         {
             var graph = await Svc.GetGraphVizAsync(_projectId!.Value, ct);
             var sb = new System.Text.StringBuilder();
-            sb.Append($"Project Graph: {graph.NodeCount} nodes, {graph.LinkCount} links\n\n");
-            sb.Append("Top entities by connections:\n");
-            var topNodes = graph.Nodes.OrderByDescending(n => n.Degree).Take(15);
-            foreach (var n in topNodes)
+
+            // Summary stats
+            sb.AppendLine($"# Project Dependency Graph");
+            sb.AppendLine($"- **Nodes:** {graph.NodeCount}");
+            sb.AppendLine($"- **Links:** {graph.LinkCount}");
+            sb.AppendLine();
+
+            // Group nodes by kind
+            var byKind = graph.Nodes.GroupBy(n => n.Kind ?? "unknown")
+                .OrderByDescending(g => g.Count())
+                .ToList();
+
+            sb.AppendLine("## Entity types");
+            foreach (var kind in byKind.Take(10))
             {
-                sb.Append($"- {n.Label} ({n.Degree} connections, hotspot: {n.IsGod})\n");
+                sb.AppendLine($"- **{kind.Key}:** {kind.Count()} nodes");
             }
+            sb.AppendLine();
+
+            // Top hubs (high degree nodes)
+            var hubs = graph.Nodes.Where(n => n.Degree >= 5).OrderByDescending(n => n.Degree).Take(10).ToList();
+            if (hubs.Count > 0)
+            {
+                sb.AppendLine("## Key entities (hubs)");
+                foreach (var n in hubs)
+                {
+                    var godBadge = n.IsGod ? " ⭐" : "";
+                    sb.AppendLine($"- **{n.Label}** ({n.Degree} connections){godBadge}");
+                }
+                sb.AppendLine();
+            }
+
+            // Store for side panel visualization (limit to top 50 for performance)
             _graphNodes.Clear();
-            _graphNodes.AddRange(graph.Nodes);
+            _graphNodes.AddRange(graph.Nodes.OrderByDescending(n => n.Degree).Take(50));
             _graphLinks = graph.LinkCount;
+
             CompleteActiveAction("query_graph", true);
             AddToolHistory("query_graph", true, $"{graph.NodeCount} nodes");
             return ToolCallResult.Ok(sb.ToString());
@@ -1432,6 +1477,21 @@
                 };
                 window.addEventListener('message', window.__mcpOAuthListener);
             ");
+        }
+
+        // Render any pending chart canvases
+        foreach (var msg in _messages)
+        {
+            foreach (var tc in msg.ToolCalls.Where(t => t.ResultType == "graph" && t.Status == ToolCallStatus.Completed))
+            {
+                if (_renderedChartIds.Contains(tc.Id)) continue;
+                try
+                {
+                    await JS.InvokeVoidAsync("pcchart.render", $"graph-{tc.Id}", tc.Result);
+                    _renderedChartIds.Add(tc.Id);
+                }
+                catch { /* canvas not in DOM yet — will retry next render */ }
+            }
         }
     }
 
