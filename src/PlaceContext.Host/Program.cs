@@ -304,7 +304,11 @@ builder.WebHost.UseUrls(string.IsNullOrWhiteSpace(bindUrls) ? "http://localhost:
 var app = builder.Build();
 
 // Must be first: reads X-Forwarded-Proto from Traefik so the app knows it's HTTPS.
-app.UseForwardedHeaders();
+// NOTE: the parameterless overload ignores DI options — pass the config directly.
+app.UseForwardedHeaders(new ForwardedHeadersOptions
+{
+    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto,
+});
 
 PlaceContext.Infrastructure.DependencyInjection.MigrateDatabase(app.Services);
 // Legacy JSON blob flattening is OFF by default: the data map now stores objects/arrays as JSON
