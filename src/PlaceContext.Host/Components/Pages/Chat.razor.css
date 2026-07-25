@@ -256,30 +256,47 @@
 
 .tool-table {
     width: 100%;
-    border-collapse: collapse;
-    font-size: 0.7rem;
-    font-family: var(--mono);
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 0.75rem;
+    font-family: var(--font-sans);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    background: var(--bg-2);
 }
 
 .tool-table th {
     text-align: left;
-    padding: 4px 8px;
-    border-bottom: 2px solid var(--border);
+    padding: 7px 10px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-3);
     color: var(--muted);
     font-weight: 600;
     font-size: 0.65rem;
     text-transform: uppercase;
     letter-spacing: 0.3px;
     white-space: nowrap;
+    position: sticky;
+    top: 0;
 }
 
 .tool-table td {
-    padding: 3px 8px;
+    padding: 6px 10px;
     border-bottom: 1px solid var(--border);
     white-space: nowrap;
-    max-width: 200px;
+    max-width: 220px;
     overflow: hidden;
     text-overflow: ellipsis;
+    color: var(--text-2);
+}
+
+.tool-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.tool-table tbody tr:nth-child(even) td {
+    background: rgba(255,255,255,0.02);
 }
 
 .tool-table tr:hover td {
@@ -830,12 +847,48 @@
     min-width: 0;
 }
 
+.msg-role-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 3px;
+}
+
 .chat-msg .msg-role {
     font-size: 0.65rem;
     text-transform: uppercase;
     color: var(--muted);
-    margin-bottom: 3px;
     letter-spacing: 0.5px;
+}
+
+.msg-copy-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 3px;
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    border-radius: 4px;
+    opacity: 0;
+    transition: opacity 0.15s, background 0.15s, color 0.15s;
+}
+
+.chat-msg:hover .msg-copy-btn {
+    opacity: 1;
+}
+
+.msg-copy-btn:hover {
+    color: var(--text);
+    background: var(--bg-3);
+}
+
+@media (max-width: 950px) {
+    .msg-copy-btn {
+        opacity: 1;
+        padding: 6px;
+    }
 }
 
 .chat-msg .msg-content {
@@ -1554,28 +1607,48 @@
 
 .artifact-table {
     width: 100%;
-    border-collapse: collapse;
-    font-size: 0.72rem;
-    font-family: var(--mono);
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 0.75rem;
+    font-family: var(--font-sans);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    background: var(--bg-2);
 }
 
 .artifact-table th,
 .artifact-table td {
-    padding: 4px 8px;
+    padding: 6px 10px;
     border-bottom: 1px solid var(--border);
     text-align: left;
     white-space: nowrap;
-    max-width: 200px;
+    max-width: 220px;
     overflow: hidden;
     text-overflow: ellipsis;
 }
 
 .artifact-table th {
+    background: var(--bg-3);
     color: var(--muted);
     font-weight: 600;
     text-transform: uppercase;
-    font-size: 0.6rem;
+    font-size: 0.65rem;
     letter-spacing: 0.3px;
+    position: sticky;
+    top: 0;
+}
+
+.artifact-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.artifact-table tbody tr:nth-child(even) td {
+    background: rgba(255,255,255,0.02);
+}
+
+.artifact-table tr:hover td {
+    background: var(--bg-3);
 }
 
 .artifact-error,

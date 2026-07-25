@@ -101,7 +101,15 @@
                                 }
                             </div>
                             <div class="msg-body">
-                                <div class="msg-role">@msg.Role</div>
+                                <div class="msg-role-row">
+                                    <span class="msg-role">@msg.Role</span>
+                                    @if (msg.Role == "assistant" && !_streaming)
+                                    {
+                                        <button class="msg-copy-btn" @onclick="@(() => CopyMessageAsync(msg.Content))" title="Copy response">
+                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                                        </button>
+                                    }
+                                </div>
                                 @if (msg.ToolCalls.Count > 0)
                                 {
                                     var graphCalls = msg.ToolCalls.Where(tc => tc.ResultType == "graph" && tc.Status == ToolCallStatus.Completed).ToList();
@@ -690,7 +698,7 @@
     private ElementReference _messagesRef;
     private ElementReference _scrollAnchor;
         private Guid? _projectId;
-    private string _systemPrompt = "You are a PlaceContext agent. You can query project data, inspect job runs, render graphs, and render artifacts. CRITICAL: Never output reasoning, planning, chain-of-thought, self-talk, or meta-commentary. Do not write phrases like 'Looking at the conversation', 'Let me think', 'I notice', 'Actually', or 'Re-reading'. Answer the user's request directly and concisely. When data is needed, call the right tool immediately without explaining why. Keep answers short unless the user asks for detail.";
+    private string _systemPrompt = "You are a PlaceContext agent — a casual, friendly Australian mate who helps with project data, job runs, graphs, and artifacts. Talk like a real Aussie: use words like 'mate', 'no worries', 'righto', 'cheers', 'good on ya', 'sweet as', 'no drama'. Keep it relaxed and warm. CRITICAL: NEVER think out loud. NEVER write your thought process, reasoning, self-correction, or commentary about the conversation. NEVER output phrases like 'Looking at the conversation', 'Let me think', 'I notice', 'Actually', 'Re-reading', or 'Hmm'. NEVER wrap your answer in <think>, <reasoning>, or <reflection> tags. If you catch yourself starting to explain your reasoning, STOP and give the answer directly. When data is needed, call the right tool immediately without explaining why. Keep answers short unless the user asks for detail. Never use formal corporate language — you're a mate, not a robot.";
     private bool _ragEnabled = true;
     private int _maxContextChunks = 5;
     private float _temperature = 0.7f;
@@ -1122,8 +1130,12 @@
 
                 // Extract text content (strip tool call syntax and model noise)
                 var textContent = System.Text.RegularExpressions.Regex.Replace(_streamBuffer, @"\[\[tool:[^\]]*\]\]", "").Trim();
+                var rawCleaned = textContent;
                 textContent = CleanAssistantOutput(textContent);
-                if (string.IsNullOrWhiteSpace(textContent) && toolCalls.Count == 0)
+                // If content was stripped because it was all reasoning (not tools),
+                // leave it empty — the hallucination guard will catch it and force a retry.
+                // Only add the quip if there truly was no tool call AND the raw content wasn't reasoning.
+                if (string.IsNullOrWhiteSpace(textContent) && toolCalls.Count == 0 && !IsAllReasoning(rawCleaned))
                     textContent = FriendlyLoadingQuip();
 
                 var assistantMsg = new AgentMessage("assistant", textContent);
@@ -1144,6 +1156,94 @@
                 if (string.IsNullOrWhiteSpace(finalContent))
                     finalContent = FriendlyLoadingQuip();
                 _messages.Add(new AgentMessage("assistant", finalContent));
+            }
+
+            // ── Hallucination guard ──────────────────────────────────────
+            var hallucination = DetectHallucination();
+            if (hallucination.Detected)
+            {
+                _messages.Add(new AgentMessage("assistant", hallucination.CorrectionPrompt ?? "Let me try that again…"));
+                await InvokeAsync(StateHasChanged);
+                await ScrollToBottom();
+
+                // Artifact-specific auto-retry: fetch the content then re-summarise
+                if (hallucination.ArtifactId != null)
+                {
+                    _streaming = true;
+                    _streamBuffer = "";
+                    await InvokeAsync(StateHasChanged);
+
+                    var showResult = await ExecuteShowArtifactAsync(hallucination.ArtifactId, ct);
+                    if (showResult.Success && !string.IsNullOrWhiteSpace(showResult.Data))
+                    {
+                        var followUp = $"The artifact content is below. Summarise it accurately — do not fabricate anything.\n\n{showResult.Data}";
+                        _messages.Add(new AgentMessage("system", followUp));
+                        await InvokeAsync(StateHasChanged);
+
+                        var messages = BuildChatMessages("");
+                        _streamBuffer = "";
+                        var settings = new ChatSettings(Temperature: _temperature, MaxTokens: _maxTokens);
+                        if (Gateway is ClusterChatGateway cg2 && cg2.IsEnabled)
+                        {
+                            await foreach (var token in cg2.ChatStreamAsync(messages, settings, ct))
+                            {
+                                _streamBuffer += token;
+                                await InvokeAsync(StateHasChanged);
+                                await ScrollToBottom();
+                            }
+                        }
+                        else
+                        {
+                            _streamBuffer = await Gateway.ChatAsync(messages, settings, ct);
+                        }
+                        var summarised = CleanAssistantOutput(_streamBuffer);
+                        if (!string.IsNullOrWhiteSpace(summarised))
+                        {
+                            _messages.Add(new AgentMessage("assistant", summarised));
+                        }
+                    }
+                    else
+                    {
+                        _messages.Add(new AgentMessage("assistant", "Couldn't load the artifact content — it may be missing or corrupted."));
+                    }
+                    _streaming = false;
+                    _streamBuffer = "";
+                    await InvokeAsync(StateHasChanged);
+                    await ScrollToBottom();
+                }
+                else
+                {
+                    // Generic / non-artifact hallucination: re-prompt the model with the correction
+                    _streaming = true;
+                    _streamBuffer = "";
+                    await InvokeAsync(StateHasChanged);
+
+                    var messages = BuildChatMessages("");
+                    _streamBuffer = "";
+                    var settings = new ChatSettings(Temperature: _temperature, MaxTokens: _maxTokens);
+                    if (Gateway is ClusterChatGateway cg3 && cg3.IsEnabled)
+                    {
+                        await foreach (var token in cg3.ChatStreamAsync(messages, settings, ct))
+                        {
+                            _streamBuffer += token;
+                            await InvokeAsync(StateHasChanged);
+                            await ScrollToBottom();
+                        }
+                    }
+                    else
+                    {
+                        _streamBuffer = await Gateway.ChatAsync(messages, settings, ct);
+                    }
+                    var retried = CleanAssistantOutput(_streamBuffer);
+                    if (!string.IsNullOrWhiteSpace(retried))
+                    {
+                        _messages.Add(new AgentMessage("assistant", retried));
+                    }
+                    _streaming = false;
+                    _streamBuffer = "";
+                    await InvokeAsync(StateHasChanged);
+                    await ScrollToBottom();
+                }
             }
         }
         catch (Exception ex)
@@ -1166,8 +1266,11 @@
 
     private List<ChatMessage> BuildChatMessages(string ragContext = "")
     {
-        var antiCoT = "CRITICAL: Do not think out loud. Do not write your thought process, reasoning, self-correction, or commentary about the conversation. " +
-            "Never output text like 'Looking at the conversation', 'Let me think', 'I notice', 'Actually', or 'Re-reading'. " +
+        var antiCoT = "CRITICAL: NEVER think out loud. NEVER write your thought process, reasoning, self-correction, or commentary about the conversation. " +
+            "NEVER output text like 'Looking at the conversation', 'Let me think', 'I notice', 'Actually', 'Re-reading', or 'Hmm'. " +
+            "NEVER wrap your answer in <think>, <reasoning>, or <reflection> tags. " +
+            "If you catch yourself starting to explain your reasoning, STOP and give the answer directly. " +
+            "You are a casual Australian mate. Talk like one: use 'mate', 'no worries', 'righto', 'cheers', 'sweet as'. " +
             "Provide only the final answer or the tool call. If a tool is needed, emit it immediately without explanation.\n\n";
 
         var toolDesc = "Available tools (use [[tool:toolName|args]] syntax). " +
@@ -1182,8 +1285,8 @@
             "- [[tool:render_graph|chartType|tableName|columnName]] - Render a chart (pass table AND column names from context, e.g. [[tool:render_graph|bar|cashflow_runs|amount]])\n" +
             "- [[tool:query_graph|]] - Query project dependency graph\n" +
             "- [[tool:search|query]] - Semantic search over job run output text/logs only (not files/reports)\n" +
-            "- [[tool:get_artifacts|query]] - Search project artifacts (reports, files, CSVs, charts) by title/kind. Use this — not search — when the user asks for a report, file, or artifact.\n" +
-            "- [[tool:show_artifact|artifactId]] - Render an artifact inline by its id (use the id from get_artifacts)\n" +
+            "- [[tool:get_artifacts|query]] - Search project artifacts by title/kind. Returns METADATA ONLY: title, kind, size, and id. Does NOT return file content. Use this to find the artifact id, then ALWAYS call show_artifact to get the actual content. Do NOT summarize or describe artifact content based on get_artifacts results alone — you have not seen the content yet.\n" +
+            "- [[tool:show_artifact|artifactId]] - Fetches and returns the ACTUAL CONTENT of an artifact (extracted text for docs, raw content for text files). You MUST call this after get_artifacts before summarizing, describing, or answering questions about artifact content. This is the only way to see what's inside an artifact.\n" +
             "- [[tool:schedule_job|jobId|name|cron]] - Create a cron schedule\n" +
             "- [[tool:list_schedules|jobId]] - List job schedules\n" +
             "- [[tool:toggle_schedule|triggerId|true|false]] - Enable/disable schedule\n" +
@@ -1289,6 +1392,8 @@
         var attachIdx = raw.IndexOf("\n\n## Attached file:", StringComparison.Ordinal);
         if (attachIdx >= 0)
             raw = raw[..attachIdx];
+        // Strip thinking/reasoning tags before encoding — belt-and-suspenders with CleanAssistantOutput
+        raw = StripThinkTags(raw);
         // Strip raw tool call syntax from display
         var cleaned = System.Text.RegularExpressions.Regex.Replace(raw, @"\[\[tool:[^\]]*\]\]", "").Trim();
         // If only tool calls were present, return empty (tool results are shown separately)
@@ -1301,18 +1406,71 @@
         return escaped2;
     }
 
+    /// <summary>Strips think/reasoning/reflection tags and their content using plain string
+    /// operations — avoids regex angle-bracket escaping issues in razor files.</summary>
+    private static string StripThinkTags(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return text;
+        var tags = new[] { "think", "reasoning", "reflection" };
+        foreach (var tag in tags)
+        {
+            var open = "<" + tag;
+            var close = "</" + tag + ">";
+            // Case-insensitive search for open tag
+            var idx = text.IndexOf(open, StringComparison.OrdinalIgnoreCase);
+            while (idx >= 0)
+            {
+                // Find the closing tag (case-insensitive)
+                var closeIdx = text.IndexOf(close, idx, StringComparison.OrdinalIgnoreCase);
+                if (closeIdx < 0)
+                {
+                    // No closing tag — strip from open tag to end
+                    text = text[..idx];
+                    break;
+                }
+                // Remove from open tag start to closing tag end
+                text = text[..idx] + text[(closeIdx + close.Length)..];
+                // Continue searching from same position (text shifted)
+                idx = text.IndexOf(open, idx, StringComparison.OrdinalIgnoreCase);
+            }
+        }
+        return text;
+    }
+
     /// <summary>Removes chain-of-thought / meta-commentary and known backend error strings
     /// that some small models emit instead of an answer.</summary>
     private static string CleanAssistantOutput(string raw)
     {
         if (string.IsNullOrWhiteSpace(raw)) return raw;
 
+        // Strip explicit thinking/reasoning tags first (uses hex escapes to avoid
+        // the literal angle-bracket sequences that confuse the razor parser).
+        var tagPattern = @"\x3c(?:think|reasoning|reflection)\b[^>]*>.*?\x3c/(?:think|reasoning|reflection)\x3e";
+        raw = System.Text.RegularExpressions.Regex.Replace(raw, tagPattern, "",
+            System.Text.RegularExpressions.RegexOptions.Singleline | System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+        // Strip raw reasoning that isn't wrapped in tags — detect nested thinking patterns
+        // where the model outputs its reasoning process about tool calls instead of calling them.
+        // If the entire response is thinking lines with no [[tool:]] calls, nuke it all.
+        if (!System.Text.RegularExpressions.Regex.IsMatch(raw, @"\[\[tool:[^\]]*\]\]") && IsAllReasoning(raw))
+            raw = "";
+
         var lines = raw.Split('\n');
         var noiseStarts = new[]
         {
             "the user has provided", "looking at the conversation", "however, i notice",
             "let me re-read", "actually, i think", "let me think", "i notice there's",
-            "there is no stream(gpu", "[cluster error:", "[error:"
+            "there is no stream(gpu", "[cluster error:", "[error:", "thinking:", "reasoning:", "step-by-step:",
+            "based on the", "i see that", "from the conversation", "the user is asking",
+            "the user wants", "examining the", "reviewing the", "analyzing the",
+            "hmm", "oh wait", "let me consider", "i should", "i need to",
+            "wait, let me", "first, let me", "to answer this", "answering this question",
+            "the context shows", "looking at this", "re-reading the",
+            "now, i", "so, i", "next, i", "i need", "i will need",
+            "looking at the tool", "the tool call", "calling the tool",
+            "to display", "to show", "to render", "to fetch", "to get",
+            "first, let me call", "let me call", "i'll call", "i should call",
+            "the correct tool", "the right tool", "using the tool"
         };
         var cleaned = lines
             .Where(l => !noiseStarts.Any(p => l.TrimStart().StartsWith(p, StringComparison.OrdinalIgnoreCase)))
@@ -1324,12 +1482,498 @@
         return result;
     }
 
+    /// <summary>Returns true if the content is entirely reasoning/thinking lines
+    /// with no substantive answer, data, or tool calls.</summary>
+    private static bool IsAllReasoning(string content)
+    {
+        if (string.IsNullOrWhiteSpace(content)) return false;
+        var lines = content.Split('\n')
+            .Select(l => l.Trim())
+            .Where(l => l.Length > 0)
+            .ToList();
+        if (lines.Count == 0) return false;
+
+        // If any line contains actual data (pipes, URLs, IDs, numbers with units), it's not all reasoning
+        foreach (var l in lines)
+        {
+            if (l.Contains('|') || l.Contains("http") || System.Text.RegularExpressions.Regex.IsMatch(l, @"\b\d{4,}\b"))
+                return false;
+        }
+
+        var reasoningStarts = new[]
+        {
+            "i ", "i'll ", "let me ", "now ", "so ", "next ", "first ",
+            "the user", "looking at", "based on", "from the", "to display",
+            "to show", "to render", "to fetch", "to get", "calling",
+            "the tool", "the correct", "the right", "hmm", "wait",
+            "actually", "so, i", "now, i", "next, i", "i need",
+            "i should", "i will", "i would", "i can", "i could",
+            "to answer", "to summar", "this is", "that is", "here's",
+            "one thing", "another", "however", "also"
+        };
+
+        var reasoningCount = lines.Count(l =>
+            reasoningStarts.Any(p => l.StartsWith(p, StringComparison.OrdinalIgnoreCase)));
+        // If >70% of lines are reasoning starts, it's all reasoning
+        return (double)reasoningCount / lines.Count > 0.7;
+    }
+
+    // ── Hallucination detection ────────────────────────────────────────────
+
+    private sealed class HallucinationResult
+    {
+        public bool Detected { get; init; }
+        public string Reason { get; init; } = "";
+        public string? ArtifactId { get; init; }
+        public string? CorrectionPrompt { get; init; }
+    }
+
+    /// <summary>Master hallucination detector. Checks both tool-specific and generic linguistic issues.</summary>
+    private HallucinationResult DetectHallucination()
+    {
+        var lastAssistant = _messages.LastOrDefault(m => m.Role == "assistant");
+        if (lastAssistant == null) return new() { Detected = false };
+
+        var content = System.Text.RegularExpressions.Regex.Replace(lastAssistant.Content, @"\[\[tool:[^\]]*\]\]", "").Trim();
+
+        // Collect all tool calls and their results from this conversation turn
+        var allToolCalls = _messages
+            .Where(m => m.Role == "assistant")
+            .SelectMany(m => m.ToolCalls)
+            .Where(tc => tc.Status == ToolCallStatus.Completed)
+            .ToList();
+
+        var toolResults = _messages
+            .Where(m => m.Role == "system" && m.Content.Contains("Tool Results"))
+            .Select(m => m.Content)
+            .ToList();
+
+        // ── 1. Generic linguistic hallucination checks ────────────────────
+        var genericResult = DetectGenericHallucination(content);
+        if (genericResult.Detected) return genericResult;
+
+        // ── 2. Per-tool hallucination checks ──────────────────────────────
+        if (allToolCalls.Count > 0)
+        {
+            // Artifact chain: get_artifacts without show_artifact
+            var artifactResult = DetectArtifactHallucination(allToolCalls, content);
+            if (artifactResult.Detected) return artifactResult;
+
+            // query_table: agent may fabricate rows/columns not in the result
+            var tableResult = DetectTableHallucination(allToolCalls, toolResults, content);
+            if (tableResult.Detected) return tableResult;
+
+            // search: agent may fabricate search matches
+            var searchResult = DetectSearchHallucination(allToolCalls, toolResults, content);
+            if (searchResult.Detected) return searchResult;
+
+            // list_job_runs: agent may fabricate run details
+            var runsResult = DetectRunsHallucination(allToolCalls, toolResults, content);
+            if (runsResult.Detected) return runsResult;
+
+            // list_jobs: agent may fabricate job details
+            var jobsResult = DetectJobsHallucination(allToolCalls, toolResults, content);
+            if (jobsResult.Detected) return jobsResult;
+
+            // Tool returned error but agent responded as if it succeeded
+            var errorResult = DetectErrorMaskingHallucination(allToolCalls, content);
+            if (errorResult.Detected) return errorResult;
+
+            // Empty response after successful tool calls — model was thinking instead of answering
+            var emptyResult = DetectEmptyAfterTools(allToolCalls, content);
+            if (emptyResult.Detected) return emptyResult;
+        }
+
+        // Intent mismatch: response doesn't address what the user asked
+        var intentResult = DetectIntentMismatch(content);
+        if (intentResult.Detected) return intentResult;
+
+        return new() { Detected = false };
+    }
+
+    /// <summary>Generic linguistic hallucination: word repetition, phrase loops, gibberish.</summary>
+    private static HallucinationResult DetectGenericHallucination(string content)
+    {
+        if (string.IsNullOrWhiteSpace(content) || content.Length < 10)
+            return new() { Detected = false };
+
+        var lower = content.ToLowerInvariant();
+        var words = lower.Split(new[] { ' ', '\t', '\n', '\r', ',', '.', ';', ':', '!', '?', '(', ')', '"', '\'' },
+            StringSplitOptions.RemoveEmptyEntries);
+
+        // ── Word repetition: same word 3+ times in a row ─────────────────
+        for (var i = 2; i < words.Length; i++)
+        {
+            if (words[i] == words[i - 1] && words[i - 1] == words[i - 2] && words[i].Length > 2)
+            {
+                return new()
+                {
+                    Detected = true,
+                    Reason = $"Word repetition detected: '{words[i]}' repeated 3+ times",
+                    CorrectionPrompt = "Your response contained repeated words. Please provide a clear, concise answer without repeating words or phrases."
+                };
+            }
+        }
+
+        // ── Phrase repetition: same 3+ word phrase repeated ──────────────
+        if (words.Length >= 6)
+        {
+            var phraseCounts = new Dictionary<string, int>();
+            for (var i = 0; i <= words.Length - 3; i++)
+            {
+                var phrase = $"{words[i]} {words[i + 1]} {words[i + 2]}";
+                phraseCounts.TryGetValue(phrase, out var count);
+                phraseCounts[phrase] = count + 1;
+            }
+            var maxPhrase = phraseCounts.OrderByDescending(kv => kv.Value).FirstOrDefault();
+            if (maxPhrase.Value >= 3)
+            {
+                return new()
+                {
+                    Detected = true,
+                    Reason = $"Phrase repetition detected: '{maxPhrase.Key}' repeated {maxPhrase.Value} times",
+                    CorrectionPrompt = "Your response contained repeated phrases. Please provide a clear, concise answer without repeating the same phrases."
+                };
+            }
+        }
+
+        // ── Low-entropy / gibberish: too many unique 2-char tokens ───────
+        if (words.Length > 8)
+        {
+            var shortWords = words.Count(w => w.Length <= 2);
+            var ratio = (float)shortWords / words.Length;
+            if (ratio > 0.6f)
+            {
+                return new()
+                {
+                    Detected = true,
+                    Reason = "Response appears to be gibberish (too many short tokens)",
+                    CorrectionPrompt = "Your response was unclear. Please provide a meaningful answer."
+                };
+            }
+        }
+
+        // ── Repeated sentence structure: same sentence start 3+ times ────
+        if (words.Length >= 6)
+        {
+            var sentenceStarts = content.Split(new[] { '.', '!', '?' }, StringSplitOptions.RemoveEmptyEntries)
+                .Select(s => s.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries).Take(3).Select(w => w.ToLowerInvariant()).ToArray())
+                .Where(s => s.Length >= 3)
+                .Select(s => string.Join(" ", s))
+                .ToList();
+            if (sentenceStarts.Count >= 3)
+            {
+                var startGroups = sentenceStarts.GroupBy(s => s).ToDictionary(g => g.Key, g => g.Count());
+                var maxStart = startGroups.OrderByDescending(kv => kv.Value).FirstOrDefault();
+                if (maxStart.Value >= 3)
+                {
+                    return new()
+                    {
+                        Detected = true,
+                        Reason = $"Repeated sentence start: '{maxStart.Key}' used {maxStart.Value} times",
+                        CorrectionPrompt = "Your response重复了相同的句子开头. Please vary your sentence structure."
+                    };
+                }
+            }
+        }
+
+        return new() { Detected = false };
+    }
+
+    /// <summary>Artifact hallucination: get_artifacts returned real artifacts but show_artifact was never called.</summary>
+    private static HallucinationResult DetectArtifactHallucination(List<ToolCallInfo> toolCalls, string content)
+    {
+        var getArtifactCalls = toolCalls.Where(tc => tc.ToolName == "get_artifacts").ToList();
+        var showArtifactCalls = toolCalls.Where(tc => tc.ToolName == "show_artifact").ToList();
+
+        if (getArtifactCalls.Count == 0) return new() { Detected = false };
+        if (showArtifactCalls.Count > 0) return new() { Detected = false };
+
+        var hasRealArtifacts = getArtifactCalls.Any(tc =>
+            tc.Result != null &&
+            !tc.Result.StartsWith("No artifacts") &&
+            !tc.Result.StartsWith("No artifacts matched") &&
+            tc.Result.Contains("id:"));
+
+        if (!hasRealArtifacts) return new() { Detected = false };
+
+        // Content can be short/empty after IsAllReasoning stripped thinking text.
+        // Either way — the agent didn't fetch the content, so we must force it.
+        return new()
+        {
+            Detected = true,
+            Reason = "Agent did not call show_artifact after get_artifacts",
+            CorrectionPrompt = "You found artifacts but did not fetch their content. You MUST call [[tool:show_artifact|id]] to get the actual content before summarizing. Pick the most relevant artifact and call show_artifact now."
+        };
+    }
+
+    /// <summary>Empty after tools: tool calls were made and returned data, but the
+    /// agent's final response is empty or too short — it thought about tools instead of answering.</summary>
+    private static HallucinationResult DetectEmptyAfterTools(List<ToolCallInfo> toolCalls, string content)
+    {
+        if (toolCalls.Count == 0) return new() { Detected = false };
+
+        var successfulCalls = toolCalls.Where(tc => tc.Status == ToolCallStatus.Completed).ToList();
+        if (successfulCalls.Count == 0) return new() { Detected = false };
+
+        // If content is empty or very short after tools ran, the model was thinking instead of answering
+        if (content.Length < 40)
+        {
+            return new()
+            {
+                Detected = true,
+                Reason = $"Empty/short response after {successfulCalls.Count} successful tool call(s)",
+                CorrectionPrompt = "You called tools but did not provide an answer. Use the tool results to give the user a direct, helpful response. Do not output your thinking process — just answer."
+            };
+        }
+
+        return new() { Detected = false };
+    }
+
+    /// <summary>Table hallucination: agent fabricates row data not present in query_table results.</summary>
+    private static HallucinationResult DetectTableHallucination(List<ToolCallInfo> toolCalls, List<string> toolResults, string content)
+    {
+        var tableCalls = toolCalls.Where(tc => tc.ToolName == "query_table").ToList();
+        if (tableCalls.Count == 0) return new() { Detected = false };
+
+        // Collect all data values from table results
+        var allResultText = string.Join("\n", toolCalls.Select(tc => tc.Result ?? ""));
+        // Extract unique meaningful words (3+ chars) from results
+        var resultWords = ExtractMeaningfulWords(allResultText);
+        if (resultWords.Count == 0) return new() { Detected = false };
+
+        // Check if the response contains fabricated specific values
+        // Look for quoted strings or specific identifiers that aren't in the results
+        var quotedInResponse = System.Text.RegularExpressions.Regex.Matches(content, @"[""']([^""']{3,})[""']")
+            .Select(m => m.Groups[1].Value.ToLowerInvariant())
+            .Where(v => !new[] { "the", "and", "for", "not", "you", "are", "was", "has", "but", "can", "may", "all", "its" }.Contains(v))
+            .ToList();
+
+        var fabricated = quotedInResponse.Where(q => !resultWords.Contains(q)).ToList();
+        if (fabricated.Count >= 2)
+        {
+            return new()
+            {
+                Detected = true,
+                Reason = $"Agent referenced fabricated values: {string.Join(", ", fabricated.Take(3))}",
+                CorrectionPrompt = "Your response contained values that were not in the table data. Only reference values that appear in the tool results."
+            };
+        }
+
+        return new() { Detected = false };
+    }
+
+    /// <summary>Search hallucination: agent fabricates search results not in the output.</summary>
+    private static HallucinationResult DetectSearchHallucination(List<ToolCallInfo> toolCalls, List<string> toolResults, string content)
+    {
+        var searchCalls = toolCalls.Where(tc => tc.ToolName == "search").ToList();
+        if (searchCalls.Count == 0) return new() { Detected = false };
+
+        // If search returned no matches but agent claims it found results
+        var noMatch = searchCalls.Any(tc => tc.Result != null && tc.Result.Contains("No matching run outputs found"));
+        if (noMatch && content.Length > 40 &&
+            (content.Contains("found") || content.Contains("match") || content.Contains("result") || content.Contains("showed")))
+        {
+            return new()
+            {
+                Detected = true,
+                Reason = "Agent claimed search found results when search returned no matches",
+                CorrectionPrompt = "The search returned no matches. Do not fabricate results. Tell the user no matches were found."
+            };
+        }
+
+        return new() { Detected = false };
+    }
+
+    /// <summary>Job runs hallucination: agent fabricates specific run statuses/dates.</summary>
+    private static HallucinationResult DetectRunsHallucination(List<ToolCallInfo> toolCalls, List<string> toolResults, string content)
+    {
+        var runCalls = toolCalls.Where(tc => tc.ToolName == "list_job_runs").ToList();
+        if (runCalls.Count == 0) return new() { Detected = false };
+
+        var allResultText = string.Join("\n", runCalls.Select(tc => tc.Result ?? ""));
+        // If the result says 0 runs but agent discusses specific runs
+        if (allResultText.Contains("Job runs: 0") && content.Length > 50)
+        {
+            // Check if agent mentions specific statuses or dates
+            var statusWords = new[] { "completed", "failed", "running", "pending", "success", "error" };
+            var mentionsStatus = statusWords.Any(s => content.ToLowerInvariant().Contains(s));
+            if (mentionsStatus)
+            {
+                return new()
+                {
+                    Detected = true,
+                    Reason = "Agent described job runs when list_job_runs returned 0 runs",
+                    CorrectionPrompt = "There are no job runs to describe. The tool returned 0 runs."
+                };
+            }
+        }
+
+        return new() { Detected = false };
+    }
+
+    /// <summary>Jobs hallucination: agent fabricates job names/ids not in list_jobs results.</summary>
+    private static HallucinationResult DetectJobsHallucination(List<ToolCallInfo> toolCalls, List<string> toolResults, string content)
+    {
+        var jobCalls = toolCalls.Where(tc => tc.ToolName == "list_jobs").ToList();
+        if (jobCalls.Count == 0) return new() { Detected = false };
+
+        var allResultText = string.Join("\n", jobCalls.Select(tc => tc.Result ?? ""));
+        if (allResultText.Contains("Jobs: 0") && content.Length > 50)
+        {
+            return new()
+            {
+                Detected = true,
+                Reason = "Agent described jobs when list_jobs returned 0 jobs",
+                CorrectionPrompt = "There are no jobs in this project. The tool returned 0 jobs."
+            };
+        }
+
+        return new() { Detected = false };
+    }
+
+    /// <summary>Error masking: tool returned an error but agent responded as if it succeeded.</summary>
+    private static HallucinationResult DetectErrorMaskingHallucination(List<ToolCallInfo> toolCalls, string content)
+    {
+        var failedCalls = toolCalls.Where(tc =>
+            (tc.Status == ToolCallStatus.Error || (tc.Result != null && tc.Result.StartsWith("Error:")))
+            && tc.ToolName != "show_artifact" // show_artifact errors are handled by artifact guard
+        ).ToList();
+
+        if (failedCalls.Count == 0) return new() { Detected = false };
+
+        // If the agent produced a long response (>60 chars) after a tool error,
+        // check if it acknowledges the error or fabricates a result anyway
+        if (content.Length < 60) return new() { Detected = false };
+
+        var acknowledgesError = content.Contains("error", StringComparison.OrdinalIgnoreCase)
+            || content.Contains("failed", StringComparison.OrdinalIgnoreCase)
+            || content.Contains("couldn't", StringComparison.OrdinalIgnoreCase)
+            || content.Contains("unable", StringComparison.OrdinalIgnoreCase)
+            || content.Contains("sorry", StringComparison.OrdinalIgnoreCase)
+            || content.Contains("no worries", StringComparison.OrdinalIgnoreCase);
+
+        if (!acknowledgesError)
+        {
+            return new()
+            {
+                Detected = true,
+                Reason = $"Agent produced content after {failedCalls.First().ToolName} error without acknowledging it",
+                CorrectionPrompt = $"The tool {failedCalls.First().ToolName} returned an error: {(failedCalls.First().Result?.Length > 200 ? failedCalls.First().Result[..200] + "…" : failedCalls.First().Result)}. Acknowledge the error to the user."
+            };
+        }
+
+        return new() { Detected = false };
+    }
+
+    /// <summary>Intent mismatch: response doesn't address what the user asked.</summary>
+    private static HallucinationResult DetectIntentMismatch(string content)
+    {
+        if (string.IsNullOrWhiteSpace(content) || content.Length < 20)
+            return new() { Detected = false };
+
+        var lower = content.ToLowerInvariant();
+
+        // ── Off-topic: response is a disclaimer/refusal with no substance ──
+        var emptyPhrases = new[]
+        {
+            "i don't have enough information", "i cannot determine", "i'm not able to",
+            "i don't have access", "i can't find", "there is no information",
+            "i'm not sure", "it's unclear", "i don't know", "no information available"
+        };
+        var isBlanketRefusal = emptyPhrases.Any(p => lower.Contains(p)) && content.Length < 120;
+        if (isBlanketRefusal)
+        {
+            // Only flag if tools WERE called and returned data (the agent didn't bother using it)
+            return new()
+            {
+                Detected = false // Don't auto-block refusals — they may be legitimate
+            };
+        }
+
+        // ── Response is just the user's question rephrased back ──────────
+        // Detect patterns like "You asked about X" / "The question is about X" with no answer
+        var rephrasePatterns = new[]
+        {
+            "you asked about", "you want to know", "your question is",
+            "you're asking", "the question asks", "you're looking for"
+        };
+        var isRephrase = rephrasePatterns.Any(p => lower.Contains(p));
+        if (isRephrase && content.Length < 150)
+        {
+            // Check if there's actually an answer after the rephrase
+            var answerIndicators = new[] { "here", "the answer", "is ", "are ", "was ", "has ", "shows", "includes", "contains" };
+            var hasSubstance = answerIndicators.Any(a => lower.Contains(a)) && content.Length > 80;
+            if (!hasSubstance)
+            {
+                return new()
+                {
+                    Detected = true,
+                    Reason = "Response rephrases the question without answering it",
+                    CorrectionPrompt = "You rephrased the user's question but didn't answer it. Use the available tools to find the answer and provide it directly."
+                };
+            }
+        }
+
+        // ── Repeated filler across the response ──────────────────────────
+        var fillerWords = new[] { "basically", "essentially", "actually", "literally", "just", "well", "so", "like", "um", "uh", "hmm" };
+        var fillerCount = fillerWords.Count(f => System.Text.RegularExpressions.Regex.IsMatch(lower, $@"\b{System.Text.RegularExpressions.Regex.Escape(f)}\b"));
+        if (fillerCount >= 4 && content.Length < 200)
+        {
+            return new()
+            {
+                Detected = true,
+                Reason = $"Response contains excessive filler words ({fillerCount} different fillers)",
+                CorrectionPrompt = "Your response contained too many filler words. Please give a direct, clear answer without padding."
+            };
+        }
+
+        return new() { Detected = false };
+    }
+
+    /// <summary>Extracts meaningful words (3+ chars, lowercase) from text, excluding common stop words.</summary>
+    private static HashSet<string> ExtractMeaningfulWords(string text)
+    {
+        var stopWords = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "the", "and", "for", "are", "but", "not", "you", "all", "can", "had", "her", "was", "one",
+            "our", "out", "has", "his", "how", "its", "may", "new", "now", "old", "see", "way", "who",
+            "did", "get", "let", "say", "she", "too", "use", "this", "that", "with", "have", "from",
+            "they", "been", "said", "each", "make", "like", "just", "over", "such", "take", "year",
+            "them", "some", "than", "time", "very", "when", "come", "could", "what", "there",
+            "result", "results", "rows", "row", "table", "data", "matches", "match", "score"
+        };
+        var words = text.Split(new[] { ' ', '\t', '\n', '\r', ',', '.', ';', ':', '!', '?', '(', ')', '"', '\'', '/', '|', '-' },
+            StringSplitOptions.RemoveEmptyEntries)
+            .Select(w => w.ToLowerInvariant())
+            .Where(w => w.Length >= 3 && !stopWords.Contains(w))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return words;
+    }
+
+    /// <summary>Extracts the first artifact id from get_artifacts tool results.</summary>
+    private static string? ExtractFirstArtifactId(List<ToolCallInfo> toolCalls)
+    {
+        var getArtifactCalls = toolCalls.Where(tc => tc.ToolName == "get_artifacts" && tc.Status == ToolCallStatus.Completed);
+        foreach (var tc in getArtifactCalls)
+        {
+            if (tc.Result != null)
+            {
+                var match = System.Text.RegularExpressions.Regex.Match(tc.Result, @"id:([0-9a-f-]{36})");
+                if (match.Success) return match.Groups[1].Value;
+            }
+        }
+        return null;
+    }
+
     private static readonly string[] FriendlyLoadingQuips = new[]
     {
-        "Just a mo — sussing that out for you…",
+        "No worries mate — sussing that out for you…",
         "Give us a sec — working out what you need…",
         "Righto, figuring out the best way to answer this…",
-        "Hang tight — I'm on it…",
+        "Hang tight cobber — I'm on it…",
+        "Sweet as — just pulling that together…",
+        "One sec legend — sorting it out…",
     };
 
     private static string FriendlyLoadingQuip()
