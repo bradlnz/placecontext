@@ -301,6 +301,16 @@ spec:
     metadata:
       labels: { app: qdrant }
     spec:
+      nodeSelector:
+        node-role.kubernetes.io/control-plane: "true"
+      tolerations:
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule
+      volumes:
+        - name: qdrant-storage
+          persistentVolumeClaim:
+            claimName: qdrant-storage
       containers:
         - name: qdrant
           image: qdrant/qdrant:v1.12.1
