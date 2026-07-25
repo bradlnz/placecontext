@@ -45,9 +45,9 @@ spec:
                   fi
                   STAMP="$(date -u +%Y%m%d-%H%M%S)"
                   echo "dumping all databases from ${HOST}…"
-                  # --lock-wait-timeout is forwarded to each pg_dump so the dump fails fast
-                  # instead of queuing behind long-running DDL/transactions.
-                  export PGOPTIONS="--lock-wait-timeout=30000"
+                  # Set a session lock timeout so the dump fails fast instead of queuing
+                  # behind long-running DDL/transactions.
+                  export PGOPTIONS="-c lock_timeout=30s"
                   pg_dumpall -h "$HOST" -U postgres --clean --if-exists | gzip > "/work/pg-${STAMP}.sql.gz"
                   ls -lh /work
               env:
