@@ -1170,8 +1170,8 @@
             "- [[tool:render_graph|chartType|tableName|columnName]] - Render a chart (pass table AND column names from context, e.g. [[tool:render_graph|bar|cashflow_runs|amount]])\n" +
             "- [[tool:query_graph|]] - Query project dependency graph\n" +
             "- [[tool:search|query]] - Semantic search over project run outputs and data\n" +
-            "- [[tool:get_artifacts|query]] - Search recent project artifacts (reports, charts, CSVs) by title/kind\n" +
-            "- [[tool:show_artifact|artifactId]] - Render an artifact inline by its id\n" +
+            "- [[tool:get_artifacts|query]] - Search project artifacts by title/kind. When the user asks for a specific report/file, search first, then use show_artifact with the id.\n" +
+            "- [[tool:show_artifact|artifactId]] - Render an artifact inline by its id (use the id from get_artifacts)\n" +
             "- [[tool:schedule_job|jobId|name|cron]] - Create a cron schedule\n" +
             "- [[tool:list_schedules|jobId]] - List job schedules\n" +
             "- [[tool:toggle_schedule|triggerId|true|false]] - Enable/disable schedule\n" +
@@ -1731,18 +1731,45 @@
         AddActiveAction("get_artifacts", string.IsNullOrEmpty(query) ? "Loading artifacts..." : $"Searching artifacts for \"{query}\"...");
         try
         {
-            var artifacts = await Svc.ListProjectArtifactsAsync(_projectId.Value, 25, query, ct);
+            var artifacts = await Svc.ListProjectArtifactsAsync(_projectId.Value, 100, query, ct);
+            if (artifacts.Count == 0 && !string.IsNullOrEmpty(query))
+            {
+                // Fallback: show the newest project artifacts so the user has something to pick from.
+                artifacts = await Svc.ListProjectArtifactsAsync(_projectId.Value, 25, null, ct);
+                if (artifacts.Count == 0)
+                {
+                    CompleteActiveAction("get_artifacts", true);
+                    return ToolCallResult.Ok($"No artifacts matched \"{query}\" and this project has no artifacts yet.");
+                }
+                var fallback = new System.Text.StringBuilder();
+                fallback.Append($"No exact matches for \"{query}\". Recent artifacts:\n");
+                foreach (var a in artifacts)
+                    fallback.Append($"- {a.Title} | {a.Kind} | {FormatBytes(a.SizeBytes)} | {a.CreatedAt:yyyy-MM-dd HH:mm} | id:{a.Id} | /runs/{a.RunId}/artifacts/{a.Id}\n");
+                CompleteActiveAction("get_artifacts", true);
+                AddToolHistory("get_artifacts", true, $"{artifacts.Count} artifacts (fallback)");
+                return ToolCallResult.Ok(fallback.ToString());
+            }
+
             if (artifacts.Count == 0)
             {
                 CompleteActiveAction("get_artifacts", true);
                 return ToolCallResult.Ok("No artifacts found for this project yet.");
             }
+
+            // If a specific query resolves to exactly one artifact, render it inline immediately.
+            if (!string.IsNullOrEmpty(query) && artifacts.Count == 1)
+            {
+                CompleteActiveAction("get_artifacts", true);
+                return await ExecuteShowArtifactAsync(artifacts[0].Id.ToString(), ct);
+            }
+
             var sb = new System.Text.StringBuilder();
             sb.Append($"Artifacts: {artifacts.Count}\n");
             foreach (var a in artifacts)
             {
-                sb.Append($"- {a.Title} | {a.Kind} | {FormatBytes(a.SizeBytes)} | {a.CreatedAt:yyyy-MM-dd HH:mm} | /runs/{a.RunId}/artifacts/{a.Id}\n");
+                sb.Append($"- {a.Title} | {a.Kind} | {FormatBytes(a.SizeBytes)} | {a.CreatedAt:yyyy-MM-dd HH:mm} | id:{a.Id} | /runs/{a.RunId}/artifacts/{a.Id}\n");
             }
+            sb.Append("\nTo display one, call [[tool:show_artifact|id]].");
             CompleteActiveAction("get_artifacts", true);
             AddToolHistory("get_artifacts", true, $"{artifacts.Count} artifacts");
             return ToolCallResult.Ok(sb.ToString());
