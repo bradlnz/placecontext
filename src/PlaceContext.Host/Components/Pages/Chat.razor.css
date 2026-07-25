@@ -1494,8 +1494,8 @@ a.attachment-chip:hover {
     color: var(--primary);
 }
 
-/* ── Mobile (≤ 900px) ─────────────────────────────────────────────── */
-@media (max-width: 900px) {
+/* ── Mobile (≤ 950px) ─────────────────────────────────────────────── */
+@media (max-width: 950px) {
     .page-head {
         padding: 10px 12px;
         flex-wrap: wrap;

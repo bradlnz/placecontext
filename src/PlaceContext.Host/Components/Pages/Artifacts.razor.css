@@ -379,7 +379,7 @@
     color: var(--text);
 }
 
-@media (max-width: 900px) {
+@media (max-width: 950px) {
     .page {
         flex-direction: column;
     }

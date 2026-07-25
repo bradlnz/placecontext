@@ -305,7 +305,7 @@
     white-space: nowrap;
 }
 
-@media (max-width: 900px) {
+@media (max-width: 950px) {
     .page { padding: 16px 14px 28px; }
     .page-head { flex-wrap: wrap; gap: 12px; }
     .head-actions { flex-wrap: wrap; width: 100%; }

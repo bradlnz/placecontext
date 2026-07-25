@@ -638,7 +638,7 @@
     min-width: 0;
 }
 
-@media (max-width: 900px) {
+@media (max-width: 950px) {
     .page {
         padding: 16px 14px;
         height: auto;

@@ -53,7 +53,7 @@ window.placecontext = {
   },
 
   isMobile() {
-    return window.matchMedia('(max-width: 900px)').matches;
+    return window.matchMedia('(max-width: 950px)').matches;
   },
 
   // File upload helpers

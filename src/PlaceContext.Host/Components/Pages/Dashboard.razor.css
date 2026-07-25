@@ -263,6 +263,7 @@
 .jobs-card {
     border-radius: 8px;
     overflow: hidden;
+    min-width: 0;
 }
 
 .jobs-head {
@@ -395,7 +396,7 @@
     flex-wrap: wrap;
 }
 
-@media (max-width: 900px) {
+@media (max-width: 950px) {
     .page {
         padding: 14px 12px 24px;
     }
@@ -436,10 +437,6 @@
         width: 100%;
         justify-content: center;
         min-height: 40px;
-    }
-
-    .jobs-card {
-        min-width: 0;
     }
 
     .jobs-head {

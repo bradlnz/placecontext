@@ -782,7 +782,7 @@
     border-radius: 6px;
 }
 
-@media (max-width: 900px) {
+@media (max-width: 950px) {
     .jobs-page { padding: 16px 14px 28px; }
     .page-header { flex-wrap: wrap; gap: 12px; }
     .page-header .dcbtn.primary { width: 100%; min-height: 40px; }

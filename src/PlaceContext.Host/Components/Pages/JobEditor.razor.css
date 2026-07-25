@@ -285,7 +285,7 @@
     margin: 3px 0 0;
 }
 
-@media (max-width: 900px) {
+@media (max-width: 950px) {
     .page { height: auto; overflow: visible; }
     .toolbar { flex-wrap: wrap; gap: 8px; padding: 10px 12px; }
     .toolbar .dcbtn { min-height: 40px; }
