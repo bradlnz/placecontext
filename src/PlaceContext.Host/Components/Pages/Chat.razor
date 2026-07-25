@@ -1123,6 +1123,8 @@
                 // Extract text content (strip tool call syntax and model noise)
                 var textContent = System.Text.RegularExpressions.Regex.Replace(_streamBuffer, @"\[\[tool:[^\]]*\]\]", "").Trim();
                 textContent = CleanAssistantOutput(textContent);
+                if (string.IsNullOrWhiteSpace(textContent) && toolCalls.Count == 0)
+                    textContent = FriendlyLoadingQuip();
 
                 var assistantMsg = new AgentMessage("assistant", textContent);
                 assistantMsg.ToolCalls.AddRange(toolCalls);
@@ -1137,10 +1139,10 @@
             if (_messages.Count == 0 || _messages.Last().Role != "assistant")
             {
                 var finalContent = string.IsNullOrWhiteSpace(_streamBuffer)
-                    ? "I've completed the requested actions."
+                    ? FriendlyLoadingQuip()
                     : CleanAssistantOutput(_streamBuffer);
                 if (string.IsNullOrWhiteSpace(finalContent))
-                    finalContent = "I've completed the requested actions.";
+                    finalContent = FriendlyLoadingQuip();
                 _messages.Add(new AgentMessage("assistant", finalContent));
             }
         }
@@ -1320,6 +1322,20 @@
         // Collapse a leading "answer:" or similar marker.
         result = System.Text.RegularExpressions.Regex.Replace(result, @"^(answer|final answer)[:\-]\s*", "", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
         return result;
+    }
+
+    private static readonly string[] FriendlyLoadingQuips = new[]
+    {
+        "Just a mo — sussing that out for you…",
+        "Give us a sec — working out what you need…",
+        "Righto, figuring out the best way to answer this…",
+        "Hang tight — I'm on it…",
+    };
+
+    private static string FriendlyLoadingQuip()
+    {
+        var idx = Random.Shared.Next(FriendlyLoadingQuips.Length);
+        return FriendlyLoadingQuips[idx];
     }
 
     private static List<string> ParseNumberedOptions(string content)
