@@ -33,13 +33,21 @@ spec:
               args:
                 - |
                   set -e
-                  if pg_isready -h placecontext-pg-rw -U postgres >/dev/null 2>&1; then
+                  # Dump from the read-only replica when HA is enabled so the primary
+                  # never takes dump-related locks. Fall back to the primary, then the
+                  # single-node postgres service.
+                  if pg_isready -h placecontext-pg-ro -U postgres >/dev/null 2>&1; then
+                    HOST=placecontext-pg-ro
+                  elif pg_isready -h placecontext-pg-rw -U postgres >/dev/null 2>&1; then
                     HOST=placecontext-pg-rw
                   else
                     HOST=placecontext-db
                   fi
                   STAMP="$(date -u +%Y%m%d-%H%M%S)"
                   echo "dumping all databases from ${HOST}…"
+                  # --lock-wait-timeout is forwarded to each pg_dump so the dump fails fast
+                  # instead of queuing behind long-running DDL/transactions.
+                  export PGOPTIONS="--lock-wait-timeout=30000"
                   pg_dumpall -h "$HOST" -U postgres --clean --if-exists | gzip > "/work/pg-${STAMP}.sql.gz"
                   ls -lh /work
               env:
