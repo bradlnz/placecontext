@@ -2,6 +2,9 @@
     padding: 28px 28px 40px;
     max-width: 1320px;
     margin: 0 auto;
+    min-width: 0;
+    box-sizing: border-box;
+    width: 100%;
 }
 
 .page-head {
@@ -9,6 +12,8 @@
     align-items: flex-end;
     justify-content: space-between;
     margin-bottom: 22px;
+    gap: 12px;
+    min-width: 0;
 }
 
 .page-title {
@@ -47,6 +52,20 @@
     grid-template-columns: repeat(4, 1fr);
     gap: 12px;
     margin-bottom: 24px;
+    min-width: 0;
+}
+
+.stat-card {
+    min-width: 0;
+    overflow: hidden;
+}
+
+.stat-figure {
+    min-width: 0;
+}
+
+.stat-num {
+    min-width: 0;
 }
 
 .stat-card {
@@ -378,17 +397,21 @@
 
 @media (max-width: 900px) {
     .page {
-        padding: 16px 14px 28px;
+        padding: 14px 12px 24px;
     }
 
     .page-head {
-        flex-wrap: wrap;
+        flex-direction: column;
+        align-items: stretch;
         gap: 12px;
-        align-items: flex-start;
+    }
+
+    .page-head > div {
+        min-width: 0;
     }
 
     .stat-grid {
-        grid-template-columns: repeat(2, 1fr);
+        grid-template-columns: 1fr;
         gap: 10px;
         margin-bottom: 18px;
     }
@@ -406,7 +429,7 @@
     }
 
     .chart-canvas-wrap {
-        height: 190px;
+        height: 180px;
     }
 
     .submit-btn {
@@ -415,47 +438,26 @@
         min-height: 40px;
     }
 
+    .jobs-card {
+        min-width: 0;
+    }
+
     .jobs-head {
-        flex-wrap: wrap;
-        gap: 8px;
-    }
-}
-
-@media (max-width: 600px) {
-    .page {
-        padding: 12px 10px 20px;
-    }
-
-    .page-head {
+        flex-direction: column;
+        align-items: flex-start;
         gap: 10px;
     }
 
-    .page-title {
-        font-size: 18px;
+    .jobs-filters {
+        width: 100%;
     }
 
-    .page-sub {
-        font-size: 12px;
-    }
-
-    .stat-grid {
-        grid-template-columns: 1fr;
-        gap: 8px;
-        margin-bottom: 16px;
-    }
-
-    .stat-num {
-        font-size: 22px;
-    }
-
-    .chart-canvas-wrap {
-        height: 160px;
-    }
-
-    .jobs-grid-head,
-    .jobs-row {
-        padding-left: 10px;
-        padding-right: 10px;
-        gap: 0 10px;
+    .jobs-filter {
+        flex: 1;
+        text-align: center;
+        min-height: 32px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
     }
 }
