@@ -192,6 +192,11 @@ spec:
             # Redis cache for job_runs ShardResultsJson (keeps Postgres lean).
             - name: PlaceContext__Redis__ConnectionString
               value: "redis:6379"
+            # Qdrant vector DB (for future RAG enhancements)
+            - name: PlaceContext__Qdrant__Endpoint
+              value: "http://qdrant:6333"
+            - name: PlaceContext__Qdrant__Collection
+              value: "placecontext"
             # Internal CA cert for the /ca endpoint (client trust installation).
             - name: PLACECONTEXT_CA_CERT_PATH
               value: "/etc/placecontext/ca/tls.crt"
@@ -270,6 +275,72 @@ spec:
   ports:
     - port: 80
       targetPort: 7700
+---
+# Vector DB for future advanced RAG (optional — content index uses pgvector today)
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: qdrant-storage
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: qdrant
+spec:
+  serviceName: qdrant
+  replicas: 1
+  selector:
+    matchLabels: { app: qdrant }
+  template:
+    metadata:
+      labels: { app: qdrant }
+    spec:
+      containers:
+        - name: qdrant
+          image: qdrant/qdrant:v1.12.1
+          ports:
+            - containerPort: 6333  # REST API
+            - containerPort: 6334  # gRPC
+          env:
+            - name: QDRANT__SERVICE__GRPC_PORT
+              value: "6334"
+          volumeMounts:
+            - name: qdrant-storage
+              mountPath: /qdrant/storage
+          readinessProbe:
+            httpGet: { path: /readyz, port: 6333 }
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: { path: /readyz, port: 6333 }
+            periodSeconds: 15
+            failureThreshold: 3
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: qdrant
+spec:
+  selector: { app: qdrant }
+  ports:
+    - name: http
+      port: 6333
+      targetPort: 6333
+    - name: grpc
+      port: 6334
+      targetPort: 6334
 ---
 # k3s ships Traefik — expose the portal/MCP via an Ingress with TLS (internal CA).
 apiVersion: networking.k8s.io/v1

@@ -22,12 +22,12 @@ public class AgentContextBuilderTests
 
         var context = await builder.BuildContextAsync(Guid.NewGuid(), "how does auth work?", maxChunks: 5);
 
-        Assert.Contains("## Related project data (semantically relevant)", context);
+        Assert.Contains("## Related project content (semantically relevant)", context);
         Assert.Contains("spec:auth", context);
         Assert.Contains("Auth module uses JWT tokens.", context);
         Assert.Contains("spec:billing", context);
-        // Project data only — run outputs are covered by the run-embedding search.
-        Assert.Equal(ContentKind.ProjectData, indexer.LastSearchKind);
+        // Search all kinds so documents, decisions, activity, etc. are all in scope.
+        Assert.Null(indexer.LastSearchKind);
     }
 
     [Fact]
@@ -37,7 +37,7 @@ public class AgentContextBuilderTests
 
         var context = await builder.BuildContextAsync(Guid.NewGuid(), "anything", maxChunks: 5);
 
-        Assert.DoesNotContain("Related project data", context);
+        Assert.DoesNotContain("Related project content", context);
     }
 
     [Fact]
@@ -55,7 +55,7 @@ public class AgentContextBuilderTests
 
         var context = await builder.BuildContextAsync(Guid.NewGuid(), "how does auth work?", maxChunks: 5);
 
-        Assert.DoesNotContain("Related project data", context);
+        Assert.DoesNotContain("Related project content", context);
     }
 
     [Fact]

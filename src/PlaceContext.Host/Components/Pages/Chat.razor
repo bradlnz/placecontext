@@ -2820,6 +2820,19 @@
             _graphNodes.AddRange(graph.Nodes.OrderByDescending(n => n.Degree).Take(50));
             _graphLinks = graph.LinkCount;
 
+            // Full edge list for reference.
+            var nodeLabels = graph.Nodes.ToDictionary(n => n.Id, n => n.Label);
+            if (graph.Links.Count > 0)
+            {
+                sb.AppendLine("\n**All relationships:**");
+                foreach (var edge in graph.Links)
+                {
+                    var parent = nodeLabels.GetValueOrDefault(edge.Source) ?? "?";
+                    var child = nodeLabels.GetValueOrDefault(edge.Target) ?? "?";
+                    sb.AppendLine($"- {parent} → {child} ({edge.Confidence})");
+                }
+            }
+
             CompleteActiveAction("query_graph", true);
             AddToolHistory("query_graph", true, $"{graph.NodeCount} nodes");
             return ToolCallResult.Ok(sb.ToString());

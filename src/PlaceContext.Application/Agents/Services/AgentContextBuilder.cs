@@ -65,21 +65,21 @@ public sealed class AgentContextBuilder
             }
         }
 
-        // 2. Semantic search over the universal content index (project data only —
-        //    run outputs are already covered above).
+        // 2. Semantic search over the universal content index (documents, project data,
+        //    decisions, activity, etc. — run outputs are already covered above).
         if (_contentIndexer is { IsEnabled: true })
         {
             try
             {
                 var hits = await _contentIndexer.SearchAsync(
-                    projectId, userMessage, maxChunks, ContentKind.ProjectData, ct);
+                    projectId, userMessage, maxChunks, kind: null, ct);
                 if (hits.Count > 0)
                 {
-                    sb.AppendLine("## Related project data (semantically relevant)");
+                    sb.AppendLine("## Related project content (semantically relevant)");
                     sb.AppendLine();
                     foreach (var h in hits)
                     {
-                        sb.AppendLine($"- **{h.SourceKey}**: {Truncate(h.Text, 500)}");
+                        sb.AppendLine($"- **{h.SourceKey}** ({h.Kind}): {Truncate(h.Text, 500)}");
                         sb.AppendLine();
                     }
                 }
@@ -90,7 +90,7 @@ public sealed class AgentContextBuilder
             }
         }
 
-        // 3. Dependency graph summary.
+        // 3. Dependency graph — structured context.
         if (_treeProvider is not null)
         {
             try
@@ -100,31 +100,25 @@ public sealed class AgentContextBuilder
                 {
                     sb.AppendLine("## Project dependency graph");
                     sb.AppendLine();
-                    sb.AppendLine(tree.Answer("summary"));
-                    sb.AppendLine();
 
-                    var topNodes = tree.Nodes
-                        .OrderByDescending(n => n.Degree)
-                        .Take(maxChunks)
-                        .ToList();
-                    sb.AppendLine("Top nodes:");
-                    foreach (var node in topNodes)
+                    // Hotspots first.
+                    var hotspots = tree.Nodes.Where(n => n.IsHotspot).ToList();
+                    if (hotspots.Count > 0)
                     {
-                        sb.AppendLine($"- {node.Label} (touches: {node.Degree}, hotspot: {node.IsHotspot})");
+                        sb.AppendLine("Hotspots (high degree, most touched):");
+                        foreach (var h in hotspots.Take(10))
+                            sb.AppendLine($"- {h.Label} (degree: {h.Degree})");
+                        sb.AppendLine();
                     }
 
+                    // Full edge list.
                     var labels = tree.Nodes.ToDictionary(n => n.Id, n => n.Label);
-                    var topEdges = tree.Edges.Take(maxChunks).ToList();
-                    if (topEdges.Count > 0)
+                    sb.AppendLine("All relationships:");
+                    foreach (var edge in tree.Edges)
                     {
-                        sb.AppendLine();
-                        sb.AppendLine("Key relationships:");
-                        foreach (var edge in topEdges)
-                        {
-                            var parent = labels.GetValueOrDefault(edge.ParentId) ?? edge.ParentId;
-                            var child = labels.GetValueOrDefault(edge.ChildId) ?? edge.ChildId;
-                            sb.AppendLine($"- {parent} → {child} ({edge.Confidence})");
-                        }
+                        var parent = labels.GetValueOrDefault(edge.ParentId) ?? "?";
+                        var child = labels.GetValueOrDefault(edge.ChildId) ?? "?";
+                        sb.AppendLine($"- {parent} → {child} ({edge.Confidence})");
                     }
                 }
             }

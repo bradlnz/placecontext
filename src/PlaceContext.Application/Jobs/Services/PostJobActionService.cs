@@ -21,15 +21,17 @@ public sealed class PostJobActionService
     private readonly IUnitOfWork _uow;
     private readonly IClock _clock;
     private readonly ILogger<PostJobActionService>? _log;
+    private readonly IContentIndexer? _contentIndexer;
 
     public PostJobActionService(IObjectStore store, IRunArtifactLinkRepository links, IUnitOfWork uow, IClock clock,
-        ILogger<PostJobActionService>? log = null)
+        ILogger<PostJobActionService>? log = null, IContentIndexer? contentIndexer = null)
     {
         _store = store;
         _links = links;
         _uow = uow;
         _clock = clock;
         _log = log;
+        _contentIndexer = contentIndexer;
     }
 
     public async Task RunAsync(Job job, JobRun run, CancellationToken ct = default)
@@ -297,6 +299,23 @@ public sealed class PostJobActionService
         await _links.AddAsync(RunArtifactLink.Create(
             run.Id, job.Id, run.ProjectId, kind, file.Title, bucket, key,
             file.ContentType, file.Content.LongLength, _clock.UtcNow), ct);
+
+        // Index artifact text for RAG search.
+        if (_contentIndexer is { IsEnabled: true } && file.Content.Length > 0)
+        {
+            try
+            {
+                var bytes = file.Content.Length > 8000 ? file.Content[..8000] : file.Content;
+                var text = Encoding.UTF8.GetString(bytes);
+                if (!string.IsNullOrWhiteSpace(text))
+                    await _contentIndexer.IndexAsync(
+                        run.ProjectId, ContentKind.Document,
+                        $"run/{run.Id:N}/{file.FileName}",
+                        $"{job.Name} — {file.Title}\n\n{text}", ct);
+            }
+            catch { }
+        }
+
         return true;
     }
 }

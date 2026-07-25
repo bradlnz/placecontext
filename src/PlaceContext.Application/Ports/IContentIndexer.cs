@@ -13,6 +13,8 @@ public static class ContentKind
     public const string Requirements = "requirements";
     public const string Event = "event";
     public const string Chart = "chart";
+    public const string Document = "document";
+    public const string GraphNode = "graph_node";
 }
 
 /// <summary>One semantic search hit over indexed project content.</summary>
