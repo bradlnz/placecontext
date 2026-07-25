@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
     <base href="/" />
     <title>PlaceContext — codebase visibility</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -45,6 +45,7 @@
         body { font-family:var(--font-sans); background:#0a0b0d; -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility; }
         #dcshell { font-family:var(--font-sans); color:var(--text); font-variant-numeric:tabular-nums; letter-spacing:-0.006em; }
         a { color:inherit; text-decoration:none; }
+        button, a, [role="button"] { touch-action: manipulation; }
         ::selection { background:var(--brand-bg); }
         ::-webkit-scrollbar { width:10px; height:10px; }
         ::-webkit-scrollbar-thumb { background:var(--border-2); border-radius:8px; border:3px solid var(--bg); }

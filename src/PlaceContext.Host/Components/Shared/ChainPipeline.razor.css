@@ -1,6 +1,10 @@
-.pipeline { display:flex; flex-wrap:wrap; align-items:center; gap:8px; padding:14px; border-radius:10px; background:var(--card) }
-.pipe-arrow { color:var(--text-3); font-size:15px }
-.stage-col { display:flex; flex-direction:column; gap:6px }
-.stage { display:flex; flex-direction:column; gap:2px; padding:8px 12px; border-radius:8px }
+.pipeline { display:flex; flex-wrap:wrap; align-items:center; gap:8px; padding:14px; border-radius:10px; background:var(--card); overflow-x:auto; overscroll-behavior-x:contain }
+.pipe-arrow { color:var(--text-3); font-size:15px; flex:none }
+.stage-col { display:flex; flex-direction:column; gap:6px; flex:none }
+.stage { display:flex; flex-direction:column; gap:2px; padding:8px 12px; border-radius:8px; flex:none }
 .stage-title { display:flex; align-items:center; gap:6px; font-size:12.5px; font-weight:600 }
 .stage-sub { font-size:10.5px; color:var(--text-3) }
+
+@media (max-width: 900px) {
+    .pipeline { flex-wrap:nowrap; }
+}

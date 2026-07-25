@@ -52,6 +52,10 @@ window.placecontext = {
       .map(cb => cb.value);
   },
 
+  isMobile() {
+    return window.matchMedia('(max-width: 900px)').matches;
+  },
+
   // File upload helpers
   _pendingDrop: null,
 

@@ -139,7 +139,7 @@
             <div class="topbar-right">
                 <button class="dcsearch-trigger" @onclick="OpenSearch">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path></svg>
-                    Search context, files, changes
+                    <span class="dcsearch-text">Search context, files, changes</span>
                     <kbd>/</kbd>
                 </button>
                 <div class="running-badge">
@@ -207,6 +207,7 @@
         Ui.OnChanged += OnUiChanged;
         OpCenter.Changed += OnOpsChanged;
         Nav.LocationChanged += OnLocationChanged;
+        Ui.SetMainNavOpener(() => _ = InvokeAsync(() => { _navOpen = true; StateHasChanged(); }));
     }
 
     private PlaceContext.Host.Branding.TenantBranding _brand = new();
@@ -238,7 +239,13 @@
 
     private void ToggleSwitcher() => _switcherOpen = !_switcherOpen;
 
-    private void ToggleNav() => _navOpen = !_navOpen;
+    private void ToggleNav()
+    {
+        if (Ui.HasSubNav && Ui.ToggleSubNav is not null)
+            Ui.ToggleSubNav();
+        else
+            _navOpen = !_navOpen;
+    }
 
     private void CloseNav() => _navOpen = false;
 

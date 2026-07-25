@@ -304,3 +304,11 @@
     text-overflow: ellipsis;
     white-space: nowrap;
 }
+
+@media (max-width: 900px) {
+    .page { padding: 16px 14px 28px; }
+    .page-head { flex-wrap: wrap; gap: 12px; }
+    .head-actions { flex-wrap: wrap; width: 100%; }
+    .head-actions .dcbtn { flex: 1; min-height: 40px; }
+    .entity-row { flex-wrap: wrap; }
+}

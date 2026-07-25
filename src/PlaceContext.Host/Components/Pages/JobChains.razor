@@ -257,23 +257,25 @@ else
                     <div class="step-list">
                         @foreach (var (stage, i) in _edStages.Select((s, i) => (s, i)))
                         {
+                            var stageIndex = i;
                             <div class="step-item stage-item">
-                                <span class="step-num">@(i + 1).</span>
+                                <span class="step-num">@(stageIndex + 1).</span>
                                 <div class="stage-jobs">
                                     @foreach (var (jobId, j) in stage.Select((id, j) => (id, j)))
                                     {
+                                        var branchIndex = j;
                                         <span class="stage-job-chip">
                                             @JobName(jobId)
                                             <button class="dcbtn btn-2-8-del" title="Remove this job from the stage"
-                                                    @onclick="@(() => RemoveBranch(i, j))">×</button>
+                                                    @onclick="@(() => RemoveBranch(stageIndex, branchIndex))">×</button>
                                         </span>
                                     }
                                 </div>
                                 <button class="dcbtn btn-2-8" title="Add the picked job as a parallel branch of this stage"
-                                        disabled="@(string.IsNullOrEmpty(_edAddJobId))" @onclick="@(() => AddBranch(i))">+ branch</button>
-                                <button class="dcbtn btn-2-8" disabled="@(i == 0)" @onclick="@(() => MoveStage(i, -1))">↑</button>
-                                <button class="dcbtn btn-2-8" disabled="@(i == _edStages.Count - 1)" @onclick="@(() => MoveStage(i, +1))">↓</button>
-                                <button class="dcbtn btn-2-8-del" @onclick="@(() => _edStages.RemoveAt(i))">×</button>
+                                        disabled="@(string.IsNullOrEmpty(_edAddJobId))" @onclick="@(() => AddBranch(stageIndex))">+ branch</button>
+                                <button class="dcbtn btn-2-8" disabled="@(stageIndex == 0)" @onclick="@(() => MoveStage(stageIndex, -1))">↑</button>
+                                <button class="dcbtn btn-2-8" disabled="@(stageIndex == _edStages.Count - 1)" @onclick="@(() => MoveStage(stageIndex, +1))">↓</button>
+                                <button class="dcbtn btn-2-8-del" @onclick="@(() => _edStages.RemoveAt(stageIndex))">×</button>
                             </div>
                         }
                     </div>

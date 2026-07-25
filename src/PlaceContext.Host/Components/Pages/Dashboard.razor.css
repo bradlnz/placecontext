@@ -362,3 +362,42 @@
     font-size: 11.5px;
     color: var(--text-3);
 }
+
+@media (max-width: 900px) {
+    .page {
+        padding: 16px 14px 28px;
+    }
+
+    .page-head {
+        flex-wrap: wrap;
+        gap: 12px;
+    }
+
+    .stat-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 10px;
+        margin-bottom: 18px;
+    }
+
+    .entity-grid {
+        grid-template-columns: 1fr;
+        gap: 10px;
+        margin-bottom: 18px;
+    }
+
+    .charts-grid {
+        grid-template-columns: 1fr;
+        gap: 10px;
+        margin-bottom: 18px;
+    }
+
+    .chart-canvas-wrap {
+        height: 190px;
+    }
+
+    .submit-btn {
+        width: 100%;
+        justify-content: center;
+        min-height: 40px;
+    }
+}

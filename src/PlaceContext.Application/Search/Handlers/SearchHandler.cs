@@ -1,5 +1,6 @@
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Dtos;
+using PlaceContext.Application.Ports;
 using PlaceContext.Domain.Repositories;
 
 namespace PlaceContext.Application.Features;
@@ -11,19 +12,22 @@ public sealed class SearchHandler : IQueryHandler<SearchQuery, SearchResultsView
     private readonly IDecisionRepository _decisions;
     private readonly IRunArtifactLinkRepository? _artifacts;
     private readonly IEntityTagStore? _tagIndex;
+    private readonly IContentIndexer? _contentIndex;
 
     public SearchHandler(
         IProjectRepository projects, IActivityLogRepository ledgers,
         IDecisionRepository decisions,
         // Optional so existing tests construct the handler unchanged; DI always supplies it.
         IRunArtifactLinkRepository? artifacts = null,
-        IEntityTagStore? tagIndex = null)
+        IEntityTagStore? tagIndex = null,
+        IContentIndexer? contentIndex = null)
     {
         _projects = projects;
         _ledgers = ledgers;
         _decisions = decisions;
         _artifacts = artifacts;
         _tagIndex = tagIndex;
+        _contentIndex = contentIndex;
     }
 
     public async Task<SearchResultsView> HandleAsync(SearchQuery query, CancellationToken ct = default)
@@ -68,8 +72,31 @@ public sealed class SearchHandler : IQueryHandler<SearchQuery, SearchResultsView
 
             foreach (var d in (await _decisions.ListForProjectAsync(p.Id, ct)).Where(d => Match(d.Question) || Match(d.Choice)).Take(3))
                 hits.Add(new SearchHit("decision", p.Id.Value, d.Question, $"{name} · {d.Choice}", $"{url}#decision-{d.Id.Value}"));
+
+            // Universal content index: semantic search over project data, decisions, activity, charts, etc.
+            if (_contentIndex is { IsEnabled: true })
+            {
+                foreach (var c in await _contentIndex.SearchAsync(p.Id.Value, term, take: 5, ct: ct))
+                {
+                    var subtitle = c.Text.Length <= 120 ? c.Text : c.Text[..120] + "…";
+                    hits.Add(new SearchHit(c.Kind, p.Id.Value, c.SourceKey, subtitle, ContentUrl(p.Id.Value, c.Kind)));
+                }
+            }
         }
 
         return new SearchResultsView(term, hits.Take(query.Limit).ToList());
     }
+
+    private static string ContentUrl(Guid projectId, string kind)
+        => kind switch
+        {
+            ContentKind.Decision => $"/project/{projectId}#decisions",
+            ContentKind.Activity => $"/project/{projectId}#changes",
+            ContentKind.Event => $"/project/{projectId}/events",
+            ContentKind.Chart => $"/project/{projectId}/analytics",
+            ContentKind.ProjectData => $"/project/{projectId}/data",
+            ContentKind.RunOutput => $"/project/{projectId}/jobs",
+            ContentKind.Requirements => $"/project/{projectId}/agents",
+            _ => $"/project/{projectId}"
+        };
 }

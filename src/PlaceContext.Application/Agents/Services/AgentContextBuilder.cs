@@ -98,15 +98,33 @@ public sealed class AgentContextBuilder
                 var tree = await _treeProvider.BuildAsync(ProjectId.From(projectId), ct);
                 if (tree.Nodes.Count > 0)
                 {
-                    sb.AppendLine("## Project structure");
+                    sb.AppendLine("## Project dependency graph");
                     sb.AppendLine();
+                    sb.AppendLine(tree.Answer("summary"));
+                    sb.AppendLine();
+
                     var topNodes = tree.Nodes
                         .OrderByDescending(n => n.Degree)
-                        .Take(15)
+                        .Take(maxChunks)
                         .ToList();
+                    sb.AppendLine("Top nodes:");
                     foreach (var node in topNodes)
                     {
                         sb.AppendLine($"- {node.Label} (touches: {node.Degree}, hotspot: {node.IsHotspot})");
+                    }
+
+                    var labels = tree.Nodes.ToDictionary(n => n.Id, n => n.Label);
+                    var topEdges = tree.Edges.Take(maxChunks).ToList();
+                    if (topEdges.Count > 0)
+                    {
+                        sb.AppendLine();
+                        sb.AppendLine("Key relationships:");
+                        foreach (var edge in topEdges)
+                        {
+                            var parent = labels.GetValueOrDefault(edge.ParentId) ?? edge.ParentId;
+                            var child = labels.GetValueOrDefault(edge.ChildId) ?? edge.ChildId;
+                            sb.AppendLine($"- {parent} → {child} ({edge.Confidence})");
+                        }
                     }
                 }
             }

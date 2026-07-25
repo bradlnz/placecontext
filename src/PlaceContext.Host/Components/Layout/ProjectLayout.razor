@@ -4,14 +4,15 @@
 @inject NavigationManager Nav
 @inject IPlaceContextService Svc
 @inject PlaceContext.Application.Ports.IMenuConfigService MenuCfg
+@inject PortalUiState Ui
 
 @* Project secondary nav — structure from tenant menu config; filtered by permissions. *@
 <div class="shell">
-    <button class="subnav-toggle" @onclick="ToggleNav" title="Project menu" aria-label="Toggle project menu">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 7h16"></path><path d="M4 12h16"></path><path d="M4 17h16"></path></svg>
-    </button>
-
     <nav class="side @(_navOpen ? "open" : null)">
+        <button class="main-menu-back" @onclick="OpenMainMenu" title="Open main menu">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M19 12H5"></path><path d="M12 19l-7-7 7-7"></path></svg>
+            Main menu
+        </button>
         <div class="side-head">Project</div>
         @{
             string? lastSection = null;
@@ -113,6 +114,7 @@
     protected override async Task OnInitializedAsync()
     {
         Nav.LocationChanged += OnMoved;
+        Ui.SetSubNav(true, ToggleNav);
         await ReloadAsync();
     }
 
@@ -152,5 +154,15 @@
     private void OnMoved(object? s, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
         => _ = InvokeAsync(async () => { await ReloadAsync(); StateHasChanged(); });
 
-    public void Dispose() => Nav.LocationChanged -= OnMoved;
+    private void OpenMainMenu()
+    {
+        _navOpen = false;
+        Ui.OpenMainNav?.Invoke();
+    }
+
+    public void Dispose()
+    {
+        Nav.LocationChanged -= OnMoved;
+        Ui.SetSubNav(false, null);
+    }
 }

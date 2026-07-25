@@ -1994,6 +1994,17 @@
             }
             // Set up file drop zone
             await JS.InvokeVoidAsync("placecontext.setupDropZone", _fileInputRef);
+
+            // Hide side panel by default on narrow screens so the chat area is usable.
+            try
+            {
+                if (await JS.InvokeAsync<bool>("placecontext.isMobile"))
+                {
+                    _showSidePanel = false;
+                    StateHasChanged();
+                }
+            }
+            catch { }
         }
 
         // Render any pending chart canvases

@@ -1,14 +1,16 @@
 @inherits LayoutComponentBase
 @layout MainLayout
+@implements IDisposable
 @inject NavigationManager Nav
+@inject PortalUiState Ui
 
 @* The settings area mirrors the project area: a vertical menu, tabs inside the pages. *@
 <div class="shell">
-    <button class="subnav-toggle" @onclick="ToggleNav" title="Settings menu" aria-label="Toggle settings menu">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 7h16"></path><path d="M4 12h16"></path><path d="M4 17h16"></path></svg>
-    </button>
-
     <nav class="side @(_navOpen ? "open" : null)">
+        <button class="main-menu-back" @onclick="OpenMainMenu" title="Open main menu">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M19 12H5"></path><path d="M12 19l-7-7 7-7"></path></svg>
+            Main menu
+        </button>
         <div class="side-head">Settings</div>
         @foreach (var (label, path) in Items)
         {
@@ -39,6 +41,22 @@
     {
         _navOpen = false;
         Nav.NavigateTo(href);
+    }
+
+    private void OpenMainMenu()
+    {
+        _navOpen = false;
+        Ui.OpenMainNav?.Invoke();
+    }
+
+    protected override void OnInitialized()
+    {
+        Ui.SetSubNav(true, ToggleNav);
+    }
+
+    public void Dispose()
+    {
+        Ui.SetSubNav(false, null);
     }
 
     private static readonly (string Label, string Path)[] Items =

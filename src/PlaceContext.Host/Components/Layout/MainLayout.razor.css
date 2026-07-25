@@ -385,8 +385,10 @@
 
     .dcsearch-trigger {
         min-width: 0;
+        padding: 6px;
     }
 
+    .dcsearch-trigger .dcsearch-text,
     .dcsearch-trigger kbd {
         display: none;
     }

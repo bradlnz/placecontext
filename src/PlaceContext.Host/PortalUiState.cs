@@ -13,6 +13,15 @@ public sealed class PortalUiState
     public Guid? CurrentProjectId { get; private set; }
     public string? CurrentProjectName { get; private set; }
 
+    /// <summary>True when the current page is rendered inside ProjectLayout or SettingsLayout.</summary>
+    public bool HasSubNav { get; private set; }
+
+    /// <summary>Registered by a sub-layout to open/close its own slide-over side menu.</summary>
+    public Action? ToggleSubNav { get; private set; }
+
+    /// <summary>Registered by MainLayout so a sub-layout can open the main workspace sidebar.</summary>
+    public Action? OpenMainNav { get; private set; }
+
     public event Action? OnChanged;
 
     public void Set(string title, string sub)
@@ -27,6 +36,19 @@ public sealed class PortalUiState
         if (CurrentProjectId == id && CurrentProjectName == name) return;
         CurrentProjectId = id;
         CurrentProjectName = name;
+        OnChanged?.Invoke();
+    }
+
+    public void SetSubNav(bool hasSubNav, Action? toggleSubNav = null)
+    {
+        HasSubNav = hasSubNav;
+        ToggleSubNav = toggleSubNav;
+        OnChanged?.Invoke();
+    }
+
+    public void SetMainNavOpener(Action openMainNav)
+    {
+        OpenMainNav = openMainNav;
         OnChanged?.Invoke();
     }
 }

@@ -276,3 +276,11 @@
     white-space: pre-wrap;
     margin: 3px 0 0;
 }
+
+@media (max-width: 900px) {
+    .toolbar { flex-wrap: wrap; gap: 8px; padding: 10px 12px; }
+    .toolbar .dcbtn { min-height: 40px; }
+    .toolbar .dcbtn.primary { margin-left: auto; }
+    .workspace { flex-direction: column; height: auto; }
+    .file-tree { width: 100%; border-right: none; border-bottom: 1px solid var(--border); max-height: 220px; }
+}
