@@ -1528,6 +1528,23 @@
     color: var(--text-2);
 }
 
+.artifact-extracted {
+    margin: 0;
+    border-top: 1px solid var(--border);
+}
+
+.artifact-extracted summary {
+    padding: 8px 12px;
+    font-size: 0.7rem;
+    color: var(--muted);
+    cursor: pointer;
+    user-select: none;
+}
+
+.artifact-extracted .artifact-pre {
+    max-height: 300px;
+}
+
 .artifact-json {
     padding: 8px 12px;
     font-size: 0.75rem;

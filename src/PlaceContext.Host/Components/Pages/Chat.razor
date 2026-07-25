@@ -739,6 +739,8 @@
     private const string AttachmentsBucket = "chat-attachments";
     private bool _attachmentsBucketEnsured;
     private const int MaxArtifactInlineBytes = 512 * 1024;
+    private const int MaxArtifactDocumentBytes = 10 * 1024 * 1024;
+    private const int MaxArtifactExtractedTextLength = 200_000;
 
     protected override async Task OnInitializedAsync()
     {
@@ -1435,7 +1437,22 @@
 
         builder.AddMarkupContent(0, header);
 
-        if (info.IsText && !string.IsNullOrEmpty(info.Content))
+        // Documents (PDF/DOC/DOCX): extracted text for the agent, iframe for PDFs.
+        if (!string.IsNullOrEmpty(info.ExtractedText))
+        {
+            if (info.ContentType == "application/pdf")
+            {
+                builder.AddMarkupContent(1, $"<iframe class='artifact-frame' src='{url}' title='{System.Net.WebUtility.HtmlEncode(info.Title)}' loading='lazy' referrerpolicy='no-referrer'></iframe>");
+            }
+            var details = $"""
+                <details class="artifact-extracted">
+                    <summary>Extracted text {(info.ExtractedTruncated ? "(truncated)" : "")}</summary>
+                    <pre class="artifact-pre">{System.Net.WebUtility.HtmlEncode(info.ExtractedText)}</pre>
+                </details>
+                """;
+            builder.AddMarkupContent(2, details);
+        }
+        else if (info.IsText && !string.IsNullOrEmpty(info.Content))
         {
             if (IsJson(info.ContentType))
             {
@@ -1512,6 +1529,8 @@
         public long SizeBytes { get; set; }
         public bool IsText { get; set; }
         public string? Content { get; set; }
+        public string? ExtractedText { get; set; }
+        public bool ExtractedTruncated { get; set; }
         public bool Truncated { get; set; }
     }
 
@@ -1837,9 +1856,13 @@
             }
 
             var isTextLike = IsTextArtifactContentType(link.ContentType);
+            var isDocument = IsDocumentContentType(link.ContentType);
             string? content = null;
+            string? extractedText = null;
             var truncated = false;
-            if (isTextLike && ObjectStore.IsEnabled)
+            var extractedTruncated = false;
+
+            if ((isTextLike || isDocument) && ObjectStore.IsEnabled)
             {
                 try
                 {
@@ -1850,17 +1873,38 @@
                         using var ms = new MemoryStream();
                         var buffer = new byte[81920];
                         int read, total = 0;
+                        var maxBytes = isDocument ? MaxArtifactDocumentBytes : MaxArtifactInlineBytes;
                         while ((read = await stream.ReadAsync(buffer, ct)) > 0)
                         {
                             total += read;
-                            if (total > MaxArtifactInlineBytes)
+                            if (total > maxBytes)
                             {
                                 truncated = true;
                                 break;
                             }
                             ms.Write(buffer, 0, read);
                         }
-                        content = System.Text.Encoding.UTF8.GetString(ms.ToArray());
+                        var bytes = ms.ToArray();
+                        if (isDocument)
+                        {
+                            var rawText = DocExtractor.ExtractText(bytes, link.Title);
+                            if (!string.IsNullOrWhiteSpace(rawText))
+                            {
+                                if (rawText.Length > MaxArtifactExtractedTextLength)
+                                {
+                                    extractedText = rawText[..MaxArtifactExtractedTextLength];
+                                    extractedTruncated = true;
+                                }
+                                else
+                                {
+                                    extractedText = rawText;
+                                }
+                            }
+                        }
+                        else
+                        {
+                            content = System.Text.Encoding.UTF8.GetString(bytes);
+                        }
                     }
                 }
                 catch { /* fall back to metadata-only */ }
@@ -1875,6 +1919,8 @@
                 SizeBytes = link.SizeBytes,
                 IsText = isTextLike,
                 Content = content,
+                ExtractedText = extractedText,
+                ExtractedTruncated = extractedTruncated,
                 Truncated = truncated,
             };
             CompleteActiveAction("show_artifact", true);
@@ -1895,6 +1941,11 @@
            || contentType.Contains("html", StringComparison.OrdinalIgnoreCase)
            || contentType.Contains("xml", StringComparison.OrdinalIgnoreCase)
            || contentType.Contains("svg", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsDocumentContentType(string contentType)
+        => contentType == "application/pdf"
+           || contentType == "application/msword"
+           || contentType == "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
     private async Task<ToolCallResult> ExecuteRenderGraphAsync(string args, CancellationToken ct)
     {
