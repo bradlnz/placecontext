@@ -690,7 +690,7 @@
     private ElementReference _messagesRef;
     private ElementReference _scrollAnchor;
         private Guid? _projectId;
-    private string _systemPrompt = "You are a PlaceContext agent. You can query project data, inspect job runs, render graphs, and render artifacts. Answer directly and concisely: no preamble, no restating the question, no visible chain-of-thought, no reasoning steps, no self-talk. Never output phrases like 'Looking at the conversation', 'Let me think', or 'I notice'. When data is needed, call the right tool immediately instead of deliberating. Keep answers short unless the user asks for detail.";
+    private string _systemPrompt = "You are a PlaceContext agent. You can query project data, inspect job runs, render graphs, and render artifacts. CRITICAL: Never output reasoning, planning, chain-of-thought, self-talk, or meta-commentary. Do not write phrases like 'Looking at the conversation', 'Let me think', 'I notice', 'Actually', or 'Re-reading'. Answer the user's request directly and concisely. When data is needed, call the right tool immediately without explaining why. Keep answers short unless the user asks for detail.";
     private bool _ragEnabled = true;
     private int _maxContextChunks = 5;
     private float _temperature = 0.7f;
@@ -1120,8 +1120,9 @@
                     toolResults.Append("\n\n");
                 }
 
-                // Extract text content (strip tool call syntax)
+                // Extract text content (strip tool call syntax and model noise)
                 var textContent = System.Text.RegularExpressions.Regex.Replace(_streamBuffer, @"\[\[tool:[^\]]*\]\]", "").Trim();
+                textContent = CleanAssistantOutput(textContent);
 
                 var assistantMsg = new AgentMessage("assistant", textContent);
                 assistantMsg.ToolCalls.AddRange(toolCalls);
@@ -1135,9 +1136,11 @@
             // Ensure we always have a final assistant message
             if (_messages.Count == 0 || _messages.Last().Role != "assistant")
             {
-                var finalContent = string.IsNullOrWhiteSpace(_streamBuffer) 
-                    ? "I've completed the requested actions." 
-                    : _streamBuffer;
+                var finalContent = string.IsNullOrWhiteSpace(_streamBuffer)
+                    ? "I've completed the requested actions."
+                    : CleanAssistantOutput(_streamBuffer);
+                if (string.IsNullOrWhiteSpace(finalContent))
+                    finalContent = "I've completed the requested actions.";
                 _messages.Add(new AgentMessage("assistant", finalContent));
             }
         }
@@ -1161,6 +1164,10 @@
 
     private List<ChatMessage> BuildChatMessages(string ragContext = "")
     {
+        var antiCoT = "CRITICAL: Do not think out loud. Do not write your thought process, reasoning, self-correction, or commentary about the conversation. " +
+            "Never output text like 'Looking at the conversation', 'Let me think', 'I notice', 'Actually', or 'Re-reading'. " +
+            "Provide only the final answer or the tool call. If a tool is needed, emit it immediately without explanation.\n\n";
+
         var toolDesc = "Available tools (use [[tool:toolName|args]] syntax). " +
             "IMPORTANT: Always pass ALL known parameters (table names, column names, IDs, etc.) from the conversation context. " +
             "Do not ask the user for information you already have. " +
@@ -1183,7 +1190,7 @@
             "- [[tool:list_mcp_tools|serverName]] - List available tools on an MCP server\n" +
             "- [[tool:render_map|specJson]] - Render a Leaflet map (JSON spec with {markers:[{lat,lng,label,color}], polygons:[{coords,color}], center:[lat,lng], zoom}). Example: [[tool:render_map|{\\\"markers\\\":[{\\\"lat\\\":48.135,\\\"lng\\\":11.582,\\\"label\\\":\\\"Munich\\\"}]}]]";
 
-        var systemPrompt = _systemPrompt + "\n\n" + toolDesc;
+        var systemPrompt = antiCoT + _systemPrompt + "\n\n" + toolDesc;
         if (!string.IsNullOrWhiteSpace(ragContext))
         {
             systemPrompt += "\n\n## Project context (retrieved automatically)\n\n" + ragContext;
@@ -1225,6 +1232,10 @@
                     content += "\n\n" + _messages[i + 1].Content;
                     i++; // skip the merged system message
                 }
+
+                // Strip chain-of-thought noise from prior assistant replies so the model doesn't repeat it.
+                if (m.Role == "assistant")
+                    content = CleanAssistantOutput(content);
             }
 
             history.Add(new ChatMessage(m.Role, content));
@@ -1286,6 +1297,29 @@
         escaped2 = System.Text.RegularExpressions.Regex.Replace(escaped2, @"\*\*(.+?)\*\*", "<strong>$1</strong>");
         escaped2 = System.Text.RegularExpressions.Regex.Replace(escaped2, @"`(.+?)`", "<code>$1</code>");
         return escaped2;
+    }
+
+    /// <summary>Removes chain-of-thought / meta-commentary and known backend error strings
+    /// that some small models emit instead of an answer.</summary>
+    private static string CleanAssistantOutput(string raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return raw;
+
+        var lines = raw.Split('\n');
+        var noiseStarts = new[]
+        {
+            "the user has provided", "looking at the conversation", "however, i notice",
+            "let me re-read", "actually, i think", "let me think", "i notice there's",
+            "there is no stream(gpu", "[cluster error:", "[error:"
+        };
+        var cleaned = lines
+            .Where(l => !noiseStarts.Any(p => l.TrimStart().StartsWith(p, StringComparison.OrdinalIgnoreCase)))
+            .ToList();
+        var result = string.Join("\n", cleaned).Trim();
+
+        // Collapse a leading "answer:" or similar marker.
+        result = System.Text.RegularExpressions.Regex.Replace(result, @"^(answer|final answer)[:\-]\s*", "", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        return result;
     }
 
     private static List<string> ParseNumberedOptions(string content)
@@ -2584,6 +2618,7 @@
             _attachedFileName = file.Name;
             _attachedFileText = DocExtractor.ExtractText(file.Data, file.Name);
             await InvokeAsync(StateHasChanged);
+            await SendAttachmentSummaryAsync();
         }
         catch { }
     }
@@ -2599,8 +2634,16 @@
             _attachedFileName = file.Name;
             _attachedFileText = DocExtractor.ExtractText(file.Data, file.Name);
             await InvokeAsync(StateHasChanged);
+            await SendAttachmentSummaryAsync();
         }
         catch { }
+    }
+
+    private async Task SendAttachmentSummaryAsync()
+    {
+        if (_attachedFileName == null || _streaming) return;
+        _input = $"Please summarize the attached file \"{_attachedFileName}\" and ask what I would like to do with it.";
+        await Send();
     }
 
     private void RemoveAttachment()

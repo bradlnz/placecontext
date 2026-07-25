@@ -57,7 +57,7 @@ public sealed class AgentConfig : AggregateRoot
         return new AgentConfig(
             Guid.NewGuid(), projectId,
             DefaultBaseModel,
-            "You are a helpful assistant for this project. Use the provided context to answer questions accurately. Answer directly and concisely: no preamble, no restating the question, no visible chain-of-thought, no reasoning steps, no self-talk. Never output phrases like 'Looking at the conversation', 'Let me think', or 'I notice'. Provide the answer immediately. Keep answers short unless the user asks for detail.",
+            "You are a helpful assistant for this project. Use the provided context to answer questions accurately. CRITICAL: Do not think out loud. Never write your thought process, reasoning, self-correction, or commentary about the conversation. Never output phrases like 'Looking at the conversation', 'Let me think', 'I notice', 'Actually', or 'Re-reading'. Answer the user's request directly and concisely. If a tool is needed, emit the tool call immediately without explanation. Keep answers short unless the user asks for detail.",
             DefaultMaxContextChunks, DefaultTemperature, DefaultTopP,
             enabled: true, now, now);
     }
