@@ -17,6 +17,7 @@
 @inject AgentContextBuilder ContextBuilder
 @inject IDocumentTextExtractor DocExtractor
 @inject IObjectStore ObjectStore
+@inject PlaceContext.Domain.Repositories.IRunArtifactLinkRepository Links
 @inject ICurrentTenant Tenant
 
 <PageTitle>placecontext — Agent Chat</PageTitle>
@@ -105,8 +106,9 @@
                                 {
                                     var graphCalls = msg.ToolCalls.Where(tc => tc.ResultType == "graph" && tc.Status == ToolCallStatus.Completed).ToList();
                                     var mapCalls = msg.ToolCalls.Where(tc => tc.ResultType == "map" && tc.Status == ToolCallStatus.Completed).ToList();
-                                    var otherCalls = msg.ToolCalls.Where(tc => (tc.ResultType != "graph" && tc.ResultType != "map") || tc.Status != ToolCallStatus.Completed).ToList();
-                                    
+                                    var artifactCalls = msg.ToolCalls.Where(tc => tc.ResultType == "artifact" && tc.Status == ToolCallStatus.Completed).ToList();
+                                    var otherCalls = msg.ToolCalls.Where(tc => (tc.ResultType != "graph" && tc.ResultType != "map" && tc.ResultType != "artifact") || tc.Status != ToolCallStatus.Completed).ToList();
+
                                     @* Show graphs inline *@
                                     @foreach (var tc in graphCalls)
                                     {
@@ -122,7 +124,15 @@
                                             <div id="map-@tc.Id" class="chat-map-container"></div>
                                         </div>
                                     }
-                                    
+
+                                    @* Show artifacts inline *@
+                                    @foreach (var tc in artifactCalls)
+                                    {
+                                        <div class="chat-artifact-wrap">
+                                            @RenderArtifact(tc)
+                                        </div>
+                                    }
+
                                     @* Show other tool calls in expandable details *@
                                     @if (otherCalls.Count > 0)
                                     {
@@ -356,8 +366,8 @@
                         <div class="session-header">
                             <h4>Sessions</h4>
                             <div class="session-header-actions">
-                                <button class="dcbtn xs" @onclick="ClearCurrentSessionAsync" disabled="@(_messages.Count == 0)" title="Clear messages in this session">Clear</button>
-                                <button class="dcbtn xs" @onclick="NewSession">+ New</button>
+                                <button class="dcbtn xs" @onclick="ClearCurrentSessionAsync" disabled="@(_messages.Count == 0 || _streaming)" title="Clear messages in this session">Clear</button>
+                                <button class="dcbtn xs" @onclick="NewSession" disabled="@_streaming">+ New</button>
                             </div>
                         </div>
                         @foreach (var s in _sessions.Take(20))
@@ -476,10 +486,10 @@
 
                     @if (_settingsTab == "prompt")
                     {
-                        <div class="dcfield">
-                            <label>System Prompt</label>
-                            <textarea class="dcinput textarea" @bind="_pendingSystemPrompt" rows="6"
-                                placeholder="You are a PlaceContext agent. You can query project data, inspect job runs, and render graphs."></textarea>
+                        <div class="dcfield system-prompt-field">
+                            <label>System Prompt <span class="field-hint">— saved per project</span></label>
+                            <textarea class="dcinput textarea prompt-textarea" @bind="_pendingSystemPrompt" rows="16"
+                                placeholder="You are a PlaceContext agent. You can query project data, inspect job runs, render artifacts, and render graphs."></textarea>
                         </div>
                         <div class="settings-row">
                             <div class="dcfield">
@@ -728,6 +738,7 @@
     private ElementReference _fileInputRef;
     private const string AttachmentsBucket = "chat-attachments";
     private bool _attachmentsBucketEnsured;
+    private const int MaxArtifactInlineBytes = 512 * 1024;
 
     protected override async Task OnInitializedAsync()
     {
@@ -815,6 +826,7 @@
 
     private void NewSession()
     {
+        if (_streaming) return;
         _sessionId = Guid.NewGuid();
         _sessionTitle = "New Chat";
         _messages.Clear();
@@ -834,6 +846,7 @@
 
     private async Task DeleteSessionAsync(ChatSessionSummary session)
     {
+        if (_streaming) return;
         try { await MemoryStore.DeleteSessionAsync(session.Id); }
         catch { }
         if (session.Id == _sessionId)
@@ -846,6 +859,7 @@
 
     private async Task ClearCurrentSessionAsync()
     {
+        if (_streaming) return;
         if (_sessionId.HasValue)
         {
             try { await MemoryStore.ClearSessionMemoryAsync(_sessionId.Value); }
@@ -871,7 +885,7 @@
 
     private async Task SelectSessionAsync(ChatSessionSummary session)
     {
-        if (!_projectId.HasValue) return;
+        if (_streaming || !_projectId.HasValue) return;
         try
         {
             var memory = await MemoryStore.GetSessionAsync(session.Id);
@@ -1087,7 +1101,7 @@
 
                     tc.Status = result.Success ? ToolCallStatus.Completed : ToolCallStatus.Error;
                     tc.Result = result.Data ?? result.Error;
-                    tc.ResultType = result.IsMap ? "map" : result.IsGraph ? "graph" : "text";
+                    tc.ResultType = result.IsMap ? "map" : result.IsGraph ? "graph" : result.IsArtifact ? "artifact" : "text";
 
                     // Update active action with result detail
                     var action = _activeActions.FirstOrDefault(a => a.ToolName == tc.ToolName && a.Status == ToolCallStatus.Running);
@@ -1156,7 +1170,8 @@
             "- [[tool:render_graph|chartType|tableName|columnName]] - Render a chart (pass table AND column names from context, e.g. [[tool:render_graph|bar|cashflow_runs|amount]])\n" +
             "- [[tool:query_graph|]] - Query project dependency graph\n" +
             "- [[tool:search|query]] - Semantic search over project run outputs and data\n" +
-            "- [[tool:get_artifacts|]] - List recent project artifacts (reports, charts, CSVs) with download links\n" +
+            "- [[tool:get_artifacts|query]] - Search recent project artifacts (reports, charts, CSVs) by title/kind\n" +
+            "- [[tool:show_artifact|artifactId]] - Render an artifact inline by its id\n" +
             "- [[tool:schedule_job|jobId|name|cron]] - Create a cron schedule\n" +
             "- [[tool:list_schedules|jobId]] - List job schedules\n" +
             "- [[tool:toggle_schedule|triggerId|true|false]] - Enable/disable schedule\n" +
@@ -1385,6 +1400,205 @@
         catch { }
     }
 
+    // ── Artifact rendering ───────────────────────────────────────────────
+
+    private RenderFragment RenderArtifact(ToolCallInfo tc) => builder =>
+    {
+        ArtifactRenderInfo? info = null;
+        try
+        {
+            info = System.Text.Json.JsonSerializer.Deserialize<ArtifactRenderInfo>(tc.Result ?? "{}");
+        }
+        catch { }
+
+        if (info is null)
+        {
+            builder.AddMarkupContent(0, "<div class=\"artifact-error\">Couldn't parse artifact result.</div>");
+            return;
+        }
+
+        var url = $"/runs/{info.RunId}/artifacts/{info.Id}";
+        var header = $"""
+            <div class="artifact-header">
+                <span class="artifact-title">{System.Net.WebUtility.HtmlEncode(info.Title)}</span>
+                <span class="artifact-ct">{System.Net.WebUtility.HtmlEncode(info.ContentType)}</span>
+                <span class="artifact-size">{FormatBytes(info.SizeBytes)}</span>
+                <a class="artifact-open" href="{url}" target="_blank" rel="noopener">Open ↗</a>
+            </div>
+            """;
+
+        if (info.Truncated)
+        {
+            header += "<div class='artifact-truncated'>Preview truncated — use Open ↗ for the full file.</div>";
+        }
+
+        builder.AddMarkupContent(0, header);
+
+        if (info.IsText && !string.IsNullOrEmpty(info.Content))
+        {
+            if (IsJson(info.ContentType))
+            {
+                builder.OpenElement(1, "div");
+                builder.AddAttribute(2, "class", "artifact-json");
+                try
+                {
+                    var el = System.Text.Json.JsonDocument.Parse(info.Content).RootElement.Clone();
+                    builder.AddMarkupContent(3, RenderJson(el, 0));
+                }
+                catch
+                {
+                    builder.AddMarkupContent(3, $"<pre class='artifact-pre'>{System.Net.WebUtility.HtmlEncode(info.Content)}</pre>");
+                }
+                builder.CloseElement();
+            }
+            else if (IsCsv(info.ContentType))
+            {
+                var parsed = ParseCsv(info.Content);
+                if (parsed.Header.Count == 0)
+                {
+                    builder.AddMarkupContent(1, $"<pre class='artifact-pre'>{System.Net.WebUtility.HtmlEncode(info.Content)}</pre>");
+                }
+                else
+                {
+                    var sb = new System.Text.StringBuilder();
+                    sb.Append("<table class='artifact-table'><thead><tr>");
+                    foreach (var h in parsed.Header)
+                        sb.Append($"<th>{System.Net.WebUtility.HtmlEncode(h)}</th>");
+                    sb.Append("</tr></thead><tbody>");
+                    foreach (var row in parsed.Rows)
+                    {
+                        sb.Append("<tr>");
+                        foreach (var cell in row)
+                            sb.Append($"<td>{System.Net.WebUtility.HtmlEncode(cell)}</td>");
+                        sb.Append("</tr>");
+                    }
+                    sb.Append("</tbody></table>");
+                    builder.AddMarkupContent(1, sb.ToString());
+                }
+            }
+            else
+            {
+                builder.AddMarkupContent(1, $"<pre class='artifact-pre'>{System.Net.WebUtility.HtmlEncode(info.Content)}</pre>");
+            }
+        }
+        else if (PreviewableArtifact(info.ContentType))
+        {
+            if (info.ContentType.StartsWith("image/"))
+            {
+                builder.AddMarkupContent(1, $"<img class='artifact-image' src='{url}' alt='{System.Net.WebUtility.HtmlEncode(info.Title)}' loading='lazy' />");
+            }
+            else if (info.ContentType.StartsWith("video/"))
+            {
+                builder.AddMarkupContent(1, $"<video class='artifact-frame' src='{url}' controls preload='metadata' />");
+            }
+            else
+            {
+                builder.AddMarkupContent(1, $"<iframe class='artifact-frame' src='{url}' title='{System.Net.WebUtility.HtmlEncode(info.Title)}' loading='lazy' referrerpolicy='no-referrer'></iframe>");
+            }
+        }
+        else
+        {
+            builder.AddMarkupContent(1, $"<div class='artifact-none'>No inline preview for {System.Net.WebUtility.HtmlEncode(info.ContentType)}.</div>");
+        }
+    };
+
+    private sealed class ArtifactRenderInfo
+    {
+        public Guid Id { get; set; }
+        public Guid RunId { get; set; }
+        public string Title { get; set; } = "";
+        public string ContentType { get; set; } = "";
+        public long SizeBytes { get; set; }
+        public bool IsText { get; set; }
+        public string? Content { get; set; }
+        public bool Truncated { get; set; }
+    }
+
+    private static bool IsJson(string ct) => ct.Contains("json", StringComparison.OrdinalIgnoreCase);
+    private static bool IsCsv(string ct) => ct.Contains("csv", StringComparison.OrdinalIgnoreCase);
+
+    private static bool PreviewableArtifact(string ct) =>
+        ct.StartsWith("text/") || ct.StartsWith("image/") || ct == "application/pdf"
+        || ct.Contains("svg") || ct.StartsWith("video/") || ct.Contains("html");
+
+    private static (IReadOnlyList<string> Header, IReadOnlyList<IReadOnlyList<string>> Rows) ParseCsv(string text)
+    {
+        var lines = text.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        var header = lines.Length > 0 ? SplitCsvLine(lines[0]) : Array.Empty<string>();
+        var rows = new List<IReadOnlyList<string>>();
+        foreach (var line in lines.Skip(1))
+            rows.Add(SplitCsvLine(line));
+        return (header, rows);
+    }
+
+    private static IReadOnlyList<string> SplitCsvLine(string line)
+    {
+        var cells = new List<string>();
+        var sb = new System.Text.StringBuilder();
+        var quoted = false;
+        for (var i = 0; i < line.Length; i++)
+        {
+            var c = line[i];
+            if (quoted)
+            {
+                if (c == '"' && i + 1 < line.Length && line[i + 1] == '"') { sb.Append('"'); i++; }
+                else if (c == '"') quoted = false;
+                else sb.Append(c);
+            }
+            else if (c == '"') quoted = true;
+            else if (c == ',') { cells.Add(sb.ToString()); sb.Clear(); }
+            else if (c != '\r') sb.Append(c);
+        }
+        cells.Add(sb.ToString());
+        return cells;
+    }
+
+    private static string RenderJson(System.Text.Json.JsonElement el, int depth)
+    {
+        var sb = new System.Text.StringBuilder();
+        switch (el.ValueKind)
+        {
+            case System.Text.Json.JsonValueKind.Object:
+                sb.Append($"<details {(depth < 2 ? "open" : "")} style=\"margin-left:{(depth == 0 ? 0 : 14)}px\"><summary style=\"cursor:pointer; color:var(--text-3)\">{{…}} <span style=\"font-size:10px\">({el.EnumerateObject().Count()})</span></summary>");
+                foreach (var p in el.EnumerateObject())
+                {
+                    sb.Append($"<div style=\"margin-left:14px\"><span style=\"color:var(--human)\">\"{Esc(p.Name)}\"</span>: ");
+                    sb.Append(p.Value.ValueKind is System.Text.Json.JsonValueKind.Object or System.Text.Json.JsonValueKind.Array
+                        ? RenderJson(p.Value, depth + 1) : Scalar(p.Value));
+                    sb.Append("</div>");
+                }
+                sb.Append("</details>");
+                break;
+            case System.Text.Json.JsonValueKind.Array:
+                sb.Append($"<details {(depth < 2 ? "open" : "")} style=\"margin-left:{(depth == 0 ? 0 : 14)}px\"><summary style=\"cursor:pointer; color:var(--text-3)\">[…] <span style=\"font-size:10px\">({el.GetArrayLength()})</span></summary>");
+                var i = 0;
+                foreach (var item in el.EnumerateArray())
+                {
+                    if (i++ >= 200) { sb.Append("<div style=\"margin-left:14px; color:var(--text-3)\">…</div>"); break; }
+                    sb.Append("<div style=\"margin-left:14px\">");
+                    sb.Append(item.ValueKind is System.Text.Json.JsonValueKind.Object or System.Text.Json.JsonValueKind.Array
+                        ? RenderJson(item, depth + 1) : Scalar(item));
+                    sb.Append("</div>");
+                }
+                sb.Append("</details>");
+                break;
+            default:
+                sb.Append(Scalar(el));
+                break;
+        }
+        return sb.ToString();
+    }
+
+    private static string Scalar(System.Text.Json.JsonElement v) => v.ValueKind switch
+    {
+        System.Text.Json.JsonValueKind.String => $"<span style=\"color:var(--good)\">\"{Esc(v.GetString() ?? "")}\"</span>",
+        System.Text.Json.JsonValueKind.Number => $"<span style=\"color:var(--warn)\">{v.GetRawText()}</span>",
+        System.Text.Json.JsonValueKind.True or System.Text.Json.JsonValueKind.False => $"<span style=\"color:var(--brand-2)\">{v.GetRawText()}</span>",
+        _ => "<span style=\"color:var(--text-3)\">null</span>",
+    };
+
+    private static string Esc(string s) => s.Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;");
+
     // ── Tool calling helpers ──────────────────────────────────────────────
 
     private async Task<ToolCallResult> ExecuteToolAsync(string toolName, string args, CancellationToken ct)
@@ -1402,7 +1616,8 @@
                 "render_graph" => await ExecuteRenderGraphAsync(args, ct),
                 "query_graph" => await ExecuteQueryGraphAsync(ct),
                 "search" => await ExecuteSearchAsync(args, ct),
-                "get_artifacts" => await ExecuteGetArtifactsAsync(ct),
+                "get_artifacts" => await ExecuteGetArtifactsAsync(args, ct),
+                "show_artifact" => await ExecuteShowArtifactAsync(args, ct),
                 "schedule_job" => await ExecuteScheduleJobAsync(args, ct),
                 "list_schedules" => await ExecuteListSchedulesAsync(args, ct),
                 "toggle_schedule" => await ExecuteToggleScheduleAsync(args, ct),
@@ -1509,13 +1724,14 @@
         }
     }
 
-    private async Task<ToolCallResult> ExecuteGetArtifactsAsync(CancellationToken ct)
+    private async Task<ToolCallResult> ExecuteGetArtifactsAsync(string args, CancellationToken ct)
     {
         if (!_projectId.HasValue) return ToolCallResult.Fail("No project selected");
-        AddActiveAction("get_artifacts", "Loading artifacts...");
+        var query = args.Trim();
+        AddActiveAction("get_artifacts", string.IsNullOrEmpty(query) ? "Loading artifacts..." : $"Searching artifacts for \"{query}\"...");
         try
         {
-            var artifacts = await Svc.ListProjectArtifactsAsync(_projectId.Value, 25, null, ct);
+            var artifacts = await Svc.ListProjectArtifactsAsync(_projectId.Value, 25, query, ct);
             if (artifacts.Count == 0)
             {
                 CompleteActiveAction("get_artifacts", true);
@@ -1537,6 +1753,83 @@
             return ToolCallResult.Fail(ex.Message);
         }
     }
+
+    private async Task<ToolCallResult> ExecuteShowArtifactAsync(string args, CancellationToken ct)
+    {
+        if (!_projectId.HasValue) return ToolCallResult.Fail("No project selected");
+        var idStr = args.Trim().Split('|')[0].Trim();
+        if (!Guid.TryParse(idStr, out var artifactId))
+            return ToolCallResult.Fail("Usage: [[tool:show_artifact|artifactId]]");
+
+        AddActiveAction("show_artifact", $"Loading artifact {artifactId.ToString()[..8]}...");
+        try
+        {
+            var link = await Links.GetByIdAsync(artifactId, ct);
+            if (link is null)
+            {
+                CompleteActiveAction("show_artifact", false);
+                return ToolCallResult.Fail("Artifact not found.");
+            }
+
+            var isTextLike = IsTextArtifactContentType(link.ContentType);
+            string? content = null;
+            var truncated = false;
+            if (isTextLike && ObjectStore.IsEnabled)
+            {
+                try
+                {
+                    var obj = await ObjectStore.OpenReadAsync(link.Bucket, link.ObjectKey, ct);
+                    if (obj is not null)
+                    {
+                        await using var stream = obj.Content;
+                        using var ms = new MemoryStream();
+                        var buffer = new byte[81920];
+                        int read, total = 0;
+                        while ((read = await stream.ReadAsync(buffer, ct)) > 0)
+                        {
+                            total += read;
+                            if (total > MaxArtifactInlineBytes)
+                            {
+                                truncated = true;
+                                break;
+                            }
+                            ms.Write(buffer, 0, read);
+                        }
+                        content = System.Text.Encoding.UTF8.GetString(ms.ToArray());
+                    }
+                }
+                catch { /* fall back to metadata-only */ }
+            }
+
+            var payload = new
+            {
+                Id = link.Id,
+                RunId = link.RunId,
+                Title = link.Title,
+                ContentType = link.ContentType,
+                SizeBytes = link.SizeBytes,
+                IsText = isTextLike,
+                Content = content,
+                Truncated = truncated,
+            };
+            CompleteActiveAction("show_artifact", true);
+            AddToolHistory("show_artifact", true, link.Title);
+            return ToolCallResult.Artifact(System.Text.Json.JsonSerializer.Serialize(payload));
+        }
+        catch (Exception ex)
+        {
+            CompleteActiveAction("show_artifact", false);
+            return ToolCallResult.Fail(ex.Message);
+        }
+    }
+
+    private static bool IsTextArtifactContentType(string contentType)
+        => contentType.StartsWith("text/")
+           || contentType.Contains("json", StringComparison.OrdinalIgnoreCase)
+           || contentType.Contains("csv", StringComparison.OrdinalIgnoreCase)
+           || contentType.Contains("html", StringComparison.OrdinalIgnoreCase)
+           || contentType.Contains("xml", StringComparison.OrdinalIgnoreCase)
+           || contentType.Contains("svg", StringComparison.OrdinalIgnoreCase);
 
     private async Task<ToolCallResult> ExecuteRenderGraphAsync(string args, CancellationToken ct)
     {
@@ -2309,19 +2602,22 @@ public sealed class ToolCallResult
     public string? Error { get; }
     public bool IsGraph { get; }
     public bool IsMap { get; }
+    public bool IsArtifact { get; }
 
-    public static ToolCallResult Ok(string data) => new(true, data, null, false, false);
-    public static ToolCallResult Fail(string error) => new(false, null, error, false, false);
-    public static ToolCallResult Graph(string data) => new(true, data, null, true, false);
-    public static ToolCallResult Map(string data) => new(true, data, null, false, true);
+    public static ToolCallResult Ok(string data) => new(true, data, null, false, false, false);
+    public static ToolCallResult Fail(string error) => new(false, null, error, false, false, false);
+    public static ToolCallResult Graph(string data) => new(true, data, null, true, false, false);
+    public static ToolCallResult Map(string data) => new(true, data, null, false, true, false);
+    public static ToolCallResult Artifact(string data) => new(true, data, null, false, false, true);
 
-    private ToolCallResult(bool success, string? data, string? error, bool isGraph, bool isMap)
+    private ToolCallResult(bool success, string? data, string? error, bool isGraph, bool isMap, bool isArtifact)
     {
         Success = success;
         Data = data;
         Error = error;
         IsGraph = isGraph;
         IsMap = isMap;
+        IsArtifact = isArtifact;
     }
 }
 

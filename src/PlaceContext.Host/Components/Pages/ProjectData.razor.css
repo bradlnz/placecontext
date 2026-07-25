@@ -641,32 +641,38 @@
 @media (max-width: 950px) {
     .page {
         padding: 16px 14px;
-        height: auto;
-        overflow: visible;
+        height: 100%;
+        overflow: hidden;
     }
 
     .cols {
         flex-direction: column;
         gap: 16px;
-        min-height: auto;
+        min-height: 0;
+        flex: 1;
     }
 
     .tables-col {
         width: 100%;
-        min-height: 220px;
-        max-height: 360px;
+        min-height: 0;
+        max-height: 180px;
+        flex: none;
     }
 
     .flex-min {
-        min-height: 420px;
+        flex: 1;
+        min-height: 0;
     }
 
     .sql-editor {
-        min-height: 180px;
+        flex: 1;
+        min-height: 120px;
+        height: 100%;
     }
 
     .result-scroll {
-        min-height: 160px;
+        flex: 1;
+        min-height: 0;
     }
 
     .run-bar {
