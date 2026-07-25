@@ -16,6 +16,9 @@
     align-items: baseline;
     justify-content: space-between;
     margin-bottom: 6px;
+    flex: none;
+    flex-wrap: wrap;
+    gap: 4px;
 }
 
 .head-title {
@@ -33,6 +36,7 @@
     font-size: 11px;
     color: var(--warn);
     margin-bottom: 6px;
+    flex: none;
 }
 
 .cols {
@@ -195,8 +199,8 @@
 }
 
 .sql-editor {
-    height: 220px;
-    flex: none;
+    flex: 1;
+    min-height: 160px;
     border: 1px solid var(--border);
     border-radius: 8px;
     overflow: hidden;
@@ -589,6 +593,7 @@
     display: flex;
     flex-direction: column;
     gap: 12px;
+    min-height: calc(100vh - 150px);
 }
 
 .field-320 {
@@ -631,4 +636,71 @@
     color: var(--bad);
     font-size: 12px;
     min-width: 0;
+}
+
+@media (max-width: 900px) {
+    .page {
+        padding: 16px 14px;
+        height: auto;
+        overflow: visible;
+    }
+
+    .cols {
+        flex-direction: column;
+        gap: 16px;
+        min-height: auto;
+    }
+
+    .tables-col {
+        width: 100%;
+        min-height: 220px;
+        max-height: 360px;
+    }
+
+    .flex-min {
+        min-height: 420px;
+    }
+
+    .sql-editor {
+        min-height: 180px;
+    }
+
+    .result-scroll {
+        min-height: 160px;
+    }
+
+    .run-bar {
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    .slide-560,
+    .slide-680 {
+        width: min(560px, 92vw);
+    }
+
+    .col-grid-head,
+    .col-grid-row {
+        grid-template-columns: 1fr 110px 44px 44px 24px;
+    }
+
+    .csv-grid-head,
+    .csv-grid-row {
+        grid-template-columns: 1fr 110px;
+    }
+
+    .edit-grid-head,
+    .edit-grid-row {
+        grid-template-columns: 1fr 110px 44px 34px 60px;
+    }
+
+    .add-col-grid {
+        grid-template-columns: 1fr 110px 44px 94px;
+    }
+
+    .csv-name-row {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+    }
 }

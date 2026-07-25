@@ -44,12 +44,6 @@
     align-items: center;
 }
 
-.chat-controls .dcselect.sm {
-    min-width: 150px;
-    font-size: 0.8rem;
-    padding: 4px 8px;
-}
-
 .chat-controls .dcbtn.sm {
     font-size: 0.75rem;
     padding: 4px 10px;
@@ -1513,12 +1507,7 @@ a.attachment-chip:hover {
         gap: 6px;
     }
 
-    .chat-controls .dcselect.sm {
-        min-width: 0;
-        flex: 1;
-    }
-
-    .chat-controls .dcbtn.sm {
+.chat-controls .dcbtn.sm {
         min-height: 40px;
     }
 

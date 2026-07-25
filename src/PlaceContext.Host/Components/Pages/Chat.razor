@@ -1,6 +1,7 @@
 @page "/chat"
 @attribute [Authorize]
 @layout PlaceContext.Host.Components.Layout.MainLayout
+@implements IDisposable
 @using PlaceContext.Application.Ports
 @using PlaceContext.Application.Dtos
 @using PlaceContext.Application.Features
@@ -45,13 +46,6 @@
                 <button class="dcbtn sm" @onclick="ToggleSidePanel">@(_showSidePanel ? "Hide Panel" : "Show Panel")</button>
                 <button class="dcbtn sm" @onclick="OpenSettings">⚙ Settings</button>
             }
-            <select class="dcselect sm" @bind="_projectId" @bind:after="OnProjectChanged">
-                <option value="">Select project…</option>
-                @foreach (var p in _projects)
-                {
-                    <option value="@p.Id">@p.Name</option>
-                }
-            </select>
         </div>
     </div>
 
@@ -691,7 +685,6 @@
     private int _maxContextChunks = 5;
     private float _temperature = 0.7f;
     private int _maxTokens = 2048;
-    private IReadOnlyList<ProjectSummaryView> _projects = Array.Empty<ProjectSummaryView>();
     private string _projectName = "";
     private ToolCallInfo? _currentToolCall;
     private int _toolCallCounter;
@@ -739,15 +732,15 @@
     protected override async Task OnInitializedAsync()
     {
         Ui.Set("Chat", "Agent inference");
-        _projects = await Svc.GetProjectsAsync();
-        if (_projects.Count > 0)
+        Ui.OnChanged += OnUiChanged;
+        _projectId = Ui.CurrentProjectId;
+        _projectName = Ui.CurrentProjectName ?? "";
+        if (_projectId.HasValue)
         {
-            _projectId = _projects[0].Id;
-            _projectName = _projects[0].Name;
             await LoadAgentConfig();
             await LoadSessionsAsync();
             await LoadMcpConnectionsAsync();
-            
+
             // Load most recent session if one exists, otherwise create new
             if (_sessions.Count > 0)
             {
@@ -777,7 +770,7 @@
     {
         if (_projectId.HasValue)
         {
-            _projectName = _projects.FirstOrDefault(p => p.Id == _projectId.Value)?.Name ?? "";
+            _projectName = Ui.CurrentProjectName ?? "";
             await LoadAgentConfig();
             await LoadGraphAsync();
             _activeActions.Clear();
@@ -787,6 +780,30 @@
             await LoadMcpConnectionsAsync();
             NewSession();
         }
+    }
+
+    private async void OnUiChanged()
+    {
+        if (_projectId == Ui.CurrentProjectId) return;
+        _projectId = Ui.CurrentProjectId;
+        _projectName = Ui.CurrentProjectName ?? "";
+        await OnProjectChanged();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        Ui.OnChanged -= OnUiChanged;
+        OnMcpOAuthCompleted -= OnMcpOAuthCompletedHandler;
+    }
+
+    private async void OnMcpOAuthCompletedHandler(object? _, EventArgs __)
+    {
+        await InvokeAsync(async () =>
+        {
+            await LoadMcpConnectionsAsync();
+            StateHasChanged();
+        });
     }
 
     private async Task LoadSessionsAsync()
@@ -2053,11 +2070,7 @@
     protected override void OnInitialized()
     {
         base.OnInitialized();
-        OnMcpOAuthCompleted += async (_, _) => await InvokeAsync(async () =>
-        {
-            await LoadMcpConnectionsAsync();
-            StateHasChanged();
-        });
+        OnMcpOAuthCompleted += OnMcpOAuthCompletedHandler;
     }
 
     // ── Human-in-the-loop clarification ──────────────────────────────────

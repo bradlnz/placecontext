@@ -41,7 +41,6 @@ public sealed class MenuConfigService : IMenuConfigService
         new("vault", "Vault", "link", "/project/{projectId}/secrets", null, Permission.SecretsManage, "key", null),
         new("artifacts", "Artifacts", "link", "/artifacts", null, Permission.ArtifactsView, "file", null),
         new("observability", "Observability", "link", "/observability", null, Permission.JobsView, "pulse", null),
-        new("cluster", "Cluster", "link", "/cluster", null, Permission.SettingsManage, "grid", null),
         new("chat", "Chat", "link", "/chat", null, Permission.AgentsChat, "message", null),
         new("mcp", "MCP Server", "link", "/inspector", null, Permission.ProjectsView, "inspector", null),
         new("sec-workspace", "Workspace", "section", null, null, null, null, "Workspace"),
@@ -61,7 +60,6 @@ public sealed class MenuConfigService : IMenuConfigService
         new("project.data", "Data", "link", null, "data", Permission.DataRead, null, null),
         new("project.vault", "Vault", "link", null, "secrets", Permission.SecretsManage, null, null),
         new("project.events", "Events", "link", null, "events", Permission.EventsManage, null, null),
-        new("project.agents", "Agents", "link", null, "agents", Permission.AgentsChat, null, null),
         new("project.entities", "Business", "entities", null, null, Permission.DataRead, null, "Business"),
     };
 

@@ -50,9 +50,17 @@
     color: var(--text-3);
 }
 
+.page {
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - 54px);
+    overflow: hidden;
+}
+
 .workspace {
     display: flex;
-    height: calc(100vh - 53px);
+    flex: 1;
+    min-height: 0;
 }
 
 .file-tree {
@@ -278,9 +286,12 @@
 }
 
 @media (max-width: 900px) {
+    .page { height: auto; overflow: visible; }
     .toolbar { flex-wrap: wrap; gap: 8px; padding: 10px 12px; }
     .toolbar .dcbtn { min-height: 40px; }
     .toolbar .dcbtn.primary { margin-left: auto; }
-    .workspace { flex-direction: column; height: auto; }
+    .workspace { flex-direction: column; height: auto; min-height: 0; gap: 0; }
     .file-tree { width: 100%; border-right: none; border-bottom: 1px solid var(--border); max-height: 220px; }
+    .editor-pane { min-height: 360px; }
+    .editor-host { min-height: 240px; }
 }
