@@ -4,22 +4,43 @@
 
 @* The settings area mirrors the project area: a vertical menu, tabs inside the pages. *@
 <div class="shell">
-    <nav class="side">
+    <button class="subnav-toggle" @onclick="ToggleNav" title="Settings menu" aria-label="Toggle settings menu">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 7h16"></path><path d="M4 12h16"></path><path d="M4 17h16"></path></svg>
+    </button>
+
+    <nav class="side @(_navOpen ? "open" : null)">
         <div class="side-head">Settings</div>
         @foreach (var (label, path) in Items)
         {
             <button class="dcnav nav-btn @(Nav.Uri.Contains($"/settings/{path}") ? "active" : "")"
-                    @onclick="@(() => Nav.NavigateTo($"/settings/{path}"))">
+                    @onclick="@(() => GoTo($"/settings/{path}"))">
                 <span class="bar"></span>@label
             </button>
         }
     </nav>
+
+    @if (_navOpen)
+    {
+        <div class="subnav-backdrop" @onclick="CloseNav"></div>
+    }
+
     <div class="body">
         @Body
     </div>
 </div>
 
 @code {
+    private bool _navOpen;
+
+    private void ToggleNav() => _navOpen = !_navOpen;
+    private void CloseNav() => _navOpen = false;
+
+    private void GoTo(string href)
+    {
+        _navOpen = false;
+        Nav.NavigateTo(href);
+    }
+
     private static readonly (string Label, string Path)[] Items =
     {
         ("Branding", "branding"),

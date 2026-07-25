@@ -7,7 +7,11 @@
 
 @* Project secondary nav — structure from tenant menu config; filtered by permissions. *@
 <div class="shell">
-    <nav class="side">
+    <button class="subnav-toggle" @onclick="ToggleNav" title="Project menu" aria-label="Toggle project menu">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 7h16"></path><path d="M4 12h16"></path><path d="M4 17h16"></path></svg>
+    </button>
+
+    <nav class="side @(_navOpen ? "open" : null)">
         <div class="side-head">Project</div>
         @{
             string? lastSection = null;
@@ -27,7 +31,7 @@
                 {
                     var entityPath = $"/project/{ProjectId()}/entity/{Uri.EscapeDataString(e)}";
                     <button class="dcnav nav-btn @(IsEntityActive(e) ? "active" : "")"
-                            @onclick="@(() => Nav.NavigateTo(entityPath))">
+                            @onclick="@(() => GoTo(entityPath))">
                         <span class="bar"></span>@e
                     </button>
                 }
@@ -41,11 +45,17 @@
             }
 
             <button class="dcnav nav-btn @(IsActive(item) ? "active" : "")"
-                    @onclick="@(() => Nav.NavigateTo(item.Href ?? "/"))">
+                    @onclick="@(() => GoTo(item.Href ?? "/"))">
                 <span class="bar"></span>@item.Label
             </button>
         }
     </nav>
+
+    @if (_navOpen)
+    {
+        <div class="subnav-backdrop" @onclick="CloseNav"></div>
+    }
+
     <div class="body">
         @Body
     </div>
@@ -55,6 +65,16 @@
     private IReadOnlyList<ResolvedMenuItem> _menu = Array.Empty<ResolvedMenuItem>();
     private IReadOnlyList<string> _entities = Array.Empty<string>();
     private Guid? _entitiesFor;
+    private bool _navOpen;
+
+    private void ToggleNav() => _navOpen = !_navOpen;
+    private void CloseNav() => _navOpen = false;
+
+    private void GoTo(string href)
+    {
+        _navOpen = false;
+        Nav.NavigateTo(href);
+    }
 
     private Guid? ProjectId()
     {

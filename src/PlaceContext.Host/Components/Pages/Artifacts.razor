@@ -138,7 +138,7 @@
     </div>
 
     @* ── Viewer ────────────────────────────────────────────────────────────────────────── *@
-    <div class="viewer">
+    <div class="viewer @(_active is not null ? "active" : null)">
         @if (_active is null)
         {
             <div class="viewer-empty">
@@ -156,6 +156,10 @@
         else
         {
             <div class="viewer-head">
+                <button class="viewer-back" @onclick="CloseViewer" title="Back to files">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"></path><path d="M12 19l-7-7 7-7"></path></svg>
+                    Back
+                </button>
                 <span class="viewer-title">@_active.Title</span>
                 <span class="viewer-ct">@_active.ContentType</span>
                 <a class="dcbtn viewer-open-btn" target="_blank" rel="noopener"
@@ -642,6 +646,12 @@
     // Always path-absolute on the current host — never bake Request.Host (breaks when the
     // reverse-proxy public DNS differs from the in-cluster name).
     private static string Url(ArtifactFileView a) => $"/runs/{a.RunId}/artifacts/{a.Id}";
+
+    private void CloseViewer()
+    {
+        _active = null;
+        Nav.NavigateTo("/artifacts", replace: true);
+    }
 
     private static bool IsJson(string ct) => ct.Contains("json", StringComparison.OrdinalIgnoreCase);
     private static bool IsCsv(string ct) => ct.Contains("csv", StringComparison.OrdinalIgnoreCase);

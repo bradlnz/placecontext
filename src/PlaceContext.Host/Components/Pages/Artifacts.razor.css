@@ -361,3 +361,89 @@
     color: var(--text-3);
     font-size: 12.5px;
 }
+
+.viewer-back {
+    display: none;
+    align-items: center;
+    gap: 6px;
+    border: none;
+    background: transparent;
+    color: var(--text-2);
+    font-size: 12px;
+    cursor: pointer;
+    padding: 4px 8px;
+    margin-left: -8px;
+}
+
+.viewer-back:hover {
+    color: var(--text);
+}
+
+@media (max-width: 900px) {
+    .page {
+        flex-direction: column;
+    }
+
+    .file-panel {
+        width: 100%;
+        border-right: none;
+        border-bottom: none;
+        max-height: 100%;
+    }
+
+    .viewer {
+        position: fixed;
+        inset: 0;
+        z-index: 30;
+        transform: translateX(100%);
+        transition: transform .22s cubic-bezier(.4, 0, .2, 1);
+    }
+
+    .viewer.active {
+        transform: translateX(0);
+    }
+
+    .viewer-head {
+        padding: 10px 14px;
+        gap: 8px;
+    }
+
+    .viewer-back {
+        display: inline-flex;
+    }
+
+    .viewer-title {
+        font-size: 12px;
+    }
+
+    .viewer-ct {
+        display: none;
+    }
+
+    .viewer-open-btn,
+    .viewer-btn,
+    .viewer-btn-danger {
+        padding: 4px 9px;
+        font-size: 11px;
+    }
+
+    .file-row {
+        padding: 10px 14px;
+        gap: 9px;
+    }
+
+    .version-row {
+        padding: 7px 14px 7px 40px;
+    }
+
+    .pager-row {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+        padding: 10px 14px;
+    }
+
+    .csv-td {
+        max-width: 180px;
+    }
+}
