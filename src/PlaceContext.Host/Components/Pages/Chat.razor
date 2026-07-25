@@ -690,7 +690,7 @@
     private ElementReference _messagesRef;
     private ElementReference _scrollAnchor;
         private Guid? _projectId;
-    private string _systemPrompt = "You are a PlaceContext agent. You can query project data, inspect job runs, and render graphs. Answer directly and concisely: no preamble, no restating the question, no visible chain-of-thought. When data is needed, call the right tool immediately instead of deliberating. Keep answers short unless the user asks for detail.";
+    private string _systemPrompt = "You are a PlaceContext agent. You can query project data, inspect job runs, render graphs, and render artifacts. Answer directly and concisely: no preamble, no restating the question, no visible chain-of-thought, no reasoning steps, no self-talk. Never output phrases like 'Looking at the conversation', 'Let me think', or 'I notice'. When data is needed, call the right tool immediately instead of deliberating. Keep answers short unless the user asks for detail.";
     private bool _ragEnabled = true;
     private int _maxContextChunks = 5;
     private float _temperature = 0.7f;
@@ -1732,29 +1732,33 @@
         AddActiveAction("get_artifacts", string.IsNullOrEmpty(query) ? "Loading artifacts..." : $"Searching artifacts for \"{query}\"...");
         try
         {
-            var artifacts = await Svc.ListProjectArtifactsAsync(_projectId.Value, 100, query, ct);
-            if (artifacts.Count == 0 && !string.IsNullOrEmpty(query))
+            IReadOnlyList<ArtifactFileView> artifacts;
+            if (string.IsNullOrEmpty(query))
             {
-                // Fallback: show the newest project artifacts so the user has something to pick from.
-                artifacts = await Svc.ListProjectArtifactsAsync(_projectId.Value, 25, null, ct);
-                if (artifacts.Count == 0)
+                artifacts = await Svc.ListProjectArtifactsAsync(_projectId.Value, 100, null, ct);
+            }
+            else
+            {
+                // Tokenize the query and match any relevant word in the title or kind.
+                var terms = ArtifactSearchTerms(query);
+                if (terms.Count == 0)
                 {
-                    CompleteActiveAction("get_artifacts", true);
-                    return ToolCallResult.Ok($"No artifacts matched \"{query}\" and this project has no artifacts yet.");
+                    artifacts = await Svc.ListProjectArtifactsAsync(_projectId.Value, 100, null, ct);
                 }
-                var fallback = new System.Text.StringBuilder();
-                fallback.Append($"No exact matches for \"{query}\". Recent artifacts:\n");
-                foreach (var a in artifacts)
-                    fallback.Append($"- {a.Title} | {a.Kind} | {FormatBytes(a.SizeBytes)} | {a.CreatedAt:yyyy-MM-dd HH:mm} | id:{a.Id} | /runs/{a.RunId}/artifacts/{a.Id}\n");
-                CompleteActiveAction("get_artifacts", true);
-                AddToolHistory("get_artifacts", true, $"{artifacts.Count} artifacts (fallback)");
-                return ToolCallResult.Ok(fallback.ToString());
+                else
+                {
+                    // Pull a broad set so we can score across all terms (server-side ILIKE only does a single pattern).
+                    var broad = await Svc.ListProjectArtifactsAsync(_projectId.Value, 2000, null, ct);
+                    artifacts = ScoreAndFilterArtifacts(broad, terms);
+                }
             }
 
             if (artifacts.Count == 0)
             {
                 CompleteActiveAction("get_artifacts", true);
-                return ToolCallResult.Ok("No artifacts found for this project yet.");
+                return ToolCallResult.Ok(string.IsNullOrEmpty(query)
+                    ? "No artifacts found for this project yet."
+                    : $"No artifacts matched \"{query}\".");
             }
 
             // If a specific query resolves to exactly one artifact, render it inline immediately.
@@ -1780,6 +1784,39 @@
             CompleteActiveAction("get_artifacts", false);
             return ToolCallResult.Fail(ex.Message);
         }
+    }
+
+    private static IReadOnlyList<string> ArtifactSearchTerms(string query)
+    {
+        var stopWords = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "the", "a", "an", "and", "or", "of", "in", "on", "at", "to", "for", "with", "from", "is", "are", "was", "were",
+            "me", "show", "give", "list", "report", "reports", "file", "files", "artifact", "artifacts", "find", "search", "get"
+        };
+        var terms = query.Split(new[] { ' ', ',', '.', '-', '_', '/', '\\', '|', '&' }, StringSplitOptions.RemoveEmptyEntries)
+            .Select(t => t.Trim().ToLowerInvariant())
+            .Where(t => t.Length > 2 && !stopWords.Contains(t))
+            .Distinct()
+            .ToList();
+        return terms;
+    }
+
+    private static IReadOnlyList<ArtifactFileView> ScoreAndFilterArtifacts(IReadOnlyList<ArtifactFileView> artifacts, IReadOnlyList<string> terms)
+    {
+        var scored = artifacts
+            .Select(a =>
+            {
+                var haystack = $"{a.Title} {a.Kind}".ToLowerInvariant();
+                var score = terms.Count(t => haystack.Contains(t));
+                return (Artifact: a, Score: score);
+            })
+            .Where(x => x.Score > 0)
+            .OrderByDescending(x => x.Score)
+            .ThenByDescending(x => x.Artifact.CreatedAt)
+            .Take(25)
+            .Select(x => x.Artifact)
+            .ToList();
+        return scored;
     }
 
     private async Task<ToolCallResult> ExecuteShowArtifactAsync(string args, CancellationToken ct)
