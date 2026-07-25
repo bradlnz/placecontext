@@ -93,6 +93,7 @@ public static class DependencyInjection
 
         // Redis-backed distributed cache for job run shard results (keeps Postgres lean).
         var redisConn = configuration["PlaceContext:Redis:ConnectionString"];
+        Type? innerChatMemoryStoreType = null;
         if (!string.IsNullOrWhiteSpace(redisConn))
         {
             services.AddStackExchangeRedisCache(opts =>
@@ -101,22 +102,26 @@ public static class DependencyInjection
                 opts.InstanceName = "pc";
             });
             services.AddSingleton<Caching.IJobRunCache, Caching.RedisJobRunCache>();
-            services.AddSingleton<Caching.IChatMemoryStore, Caching.RedisChatMemoryStore>();
+            services.AddSingleton<Caching.RedisChatMemoryStore>();
+            services.AddSingleton<Caching.IChatMemoryStore>(sp => sp.GetRequiredService<Caching.RedisChatMemoryStore>());
+            innerChatMemoryStoreType = typeof(Caching.RedisChatMemoryStore);
         }
         else
         {
             services.AddSingleton<Caching.IJobRunCache, Caching.NullJobRunCache>();
-            services.AddSingleton<Caching.IChatMemoryStore, Caching.NullChatMemoryStore>();
+            services.AddSingleton<Caching.NullChatMemoryStore>();
+            services.AddSingleton<Caching.IChatMemoryStore>(sp => sp.GetRequiredService<Caching.NullChatMemoryStore>());
+            innerChatMemoryStoreType = typeof(Caching.NullChatMemoryStore);
         }
 
         // Qdrant semantic search for cross-session chat memory (decorates Redis/Null store).
         var qdrantUrl = configuration["PlaceContext:Qdrant:Endpoint"];
-        if (!string.IsNullOrWhiteSpace(qdrantUrl))
+        if (!string.IsNullOrWhiteSpace(qdrantUrl) && innerChatMemoryStoreType is not null)
         {
             var qdrantCollection = configuration["PlaceContext:Qdrant:Collection"] ?? "chat-memory";
             services.AddSingleton<Caching.IChatMemoryStore>(sp =>
             {
-                var fallback = sp.GetRequiredService<Caching.IChatMemoryStore>();
+                var fallback = (Caching.IChatMemoryStore)sp.GetRequiredService(innerChatMemoryStoreType);
                 var embeddings = sp.GetRequiredService<IEmbeddingGateway>();
                 var http = sp.GetRequiredService<IHttpClientFactory>().CreateClient();
                 return new Caching.QdrantChatMemoryStore(fallback, embeddings, http, qdrantUrl, qdrantCollection);
