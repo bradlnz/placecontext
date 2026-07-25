@@ -1161,7 +1161,8 @@
     {
         var toolDesc = "Available tools (use [[tool:toolName|args]] syntax). " +
             "IMPORTANT: Always pass ALL known parameters (table names, column names, IDs, etc.) from the conversation context. " +
-            "Do not ask the user for information you already have.\n\n" +
+            "Do not ask the user for information you already have. " +
+            "Tool routing: use get_artifacts for reports/files/artifacts, search only for run output text, query_table for table data.\n\n" +
             "Built-in tools:\n" +
             "- [[tool:list_tables|]] - List all project data tables\n" +
             "- [[tool:query_table|tableName|page]] - Query a table (pass table name from context)\n" +
@@ -1169,8 +1170,8 @@
             "- [[tool:list_job_runs|jobId]] - List runs for a job\n" +
             "- [[tool:render_graph|chartType|tableName|columnName]] - Render a chart (pass table AND column names from context, e.g. [[tool:render_graph|bar|cashflow_runs|amount]])\n" +
             "- [[tool:query_graph|]] - Query project dependency graph\n" +
-            "- [[tool:search|query]] - Semantic search over project run outputs and data\n" +
-            "- [[tool:get_artifacts|query]] - Search project artifacts by title/kind. When the user asks for a specific report/file, search first, then use show_artifact with the id.\n" +
+            "- [[tool:search|query]] - Semantic search over job run output text/logs only (not files/reports)\n" +
+            "- [[tool:get_artifacts|query]] - Search project artifacts (reports, files, CSVs, charts) by title/kind. Use this — not search — when the user asks for a report, file, or artifact.\n" +
             "- [[tool:show_artifact|artifactId]] - Render an artifact inline by its id (use the id from get_artifacts)\n" +
             "- [[tool:schedule_job|jobId|name|cron]] - Create a cron schedule\n" +
             "- [[tool:list_schedules|jobId]] - List job schedules\n" +
