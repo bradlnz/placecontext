@@ -2,22 +2,22 @@
 @attribute [Authorize]
 @layout PlaceContext.Host.Components.Layout.ProjectLayout
 @implements IDisposable
-@inject IPlaceContextService Svc
+@using PlaceContext.Application.Dtos
+@using PlaceContext.Host.Components.ViewModels
+@using PlaceContext.Host.Components.ViewModels.Helpers
+@inject JobChainsViewModel Vm
 @inject PortalUiState Ui
 @inject NavigationManager Nav
-@inject PlaceContext.Infrastructure.Operations.OperationCenter OpCenter
-@using Microsoft.Extensions.DependencyInjection
 
 <PageTitle>PlaceContext — Job chains</PageTitle>
 
-@if (_loading)
+@if (Vm.Loading)
 {
     <Skeleton Kind="list" Rows="5" Padded />
 }
 else
 {
     <div class="page-wrap">
-
 
         <div class="header-row">
             <div>
@@ -27,15 +27,15 @@ else
                     stage with more than one job (chips joined with "+") is a parallel fan-out group.
                 </div>
             </div>
-            <button class="dcbtn primary" @onclick="NewChain">+ New chain</button>
+            <button class="dcbtn primary" @onclick="() => Vm.NewChain()">+ New chain</button>
         </div>
 
-        @if (_message is not null)
+        @if (Vm.Message is not null)
         {
-            <div class="message-banner">@_message</div>
+            <div class="message-banner">@Vm.Message</div>
         }
 
-        @if (_chains is null or { Count: 0 })
+        @if (Vm.Chains is null or { Count: 0 })
         {
             <div class="dccard empty-card">
                 No chains defined for this project yet. Click <strong>+ New chain</strong> to link jobs into a pipeline.
@@ -44,9 +44,9 @@ else
         else
         {
             <div class="chain-list">
-                @foreach (var chain in _chains)
+                @foreach (var chain in Vm.Chains)
                 {
-                    <div class="dccard chain-card" @onclick="@(() => OpenChain(chain))">
+                    <div class="dccard chain-card" @onclick="@(() => Vm.OpenChainAsync(chain))">
                         <div class="chain-row">
                             <div class="min0">
                                 <div class="chain-name">@chain.Name</div>
@@ -82,16 +82,16 @@ else
                                 </div>
                             </div>
                             <div class="chain-actions">
-                                @if (_confirmDeleteId == chain.Id)
+                                @if (Vm.ConfirmDeleteId == chain.Id)
                                 {
-                                    <button class="dcbtn c-bad" @onclick:stopPropagation="true" @onclick="@(() => DeleteChain(chain.Id))">Confirm delete</button>
-                                    <button class="dcbtn" @onclick:stopPropagation="true" @onclick="@(() => _confirmDeleteId = null)">Keep</button>
+                                    <button class="dcbtn c-bad" @onclick:stopPropagation="true" @onclick="@(() => Vm.DeleteChainAsync(chain.Id))">Confirm delete</button>
+                                    <button class="dcbtn" @onclick:stopPropagation="true" @onclick="@(() => Vm.ConfirmDeleteId = null)">Keep</button>
                                 }
                                 else
                                 {
-                                    <button class="dcbtn" @onclick:stopPropagation="true" @onclick="@(() => _confirmDeleteId = chain.Id)">Delete</button>
+                                    <button class="dcbtn" @onclick:stopPropagation="true" @onclick="@(() => Vm.ConfirmDeleteId = chain.Id)">Delete</button>
                                 }
-                                <button class="dcbtn primary" @onclick:stopPropagation="true" @onclick="@(() => RunChain(chain))">▶ Run</button>
+                                <button class="dcbtn primary" @onclick:stopPropagation="true" @onclick="@(() => Vm.RunChainAsync(chain))">▶ Run</button>
                             </div>
                         </div>
                     </div>
@@ -102,50 +102,50 @@ else
 }
 
 @* ── Chain slide-out: Details (edit) | Runs (pipeline history, live) ─────────────────────── *@
-@if (_showEditor)
+@if (Vm.ShowEditor)
 {
-    <div class="dcslide-scrim" @onclick="CloseEditor"></div>
+    <div class="dcslide-scrim" @onclick="() => Vm.CloseEditor()"></div>
     <div class="dcslide slide-640">
         <div class="dcslide-head">
             <div class="flex-min">
-                <div class="title-14">@(_editChainId.HasValue ? _edName : "New chain")</div>
+                <div class="title-14">@(Vm.EditChainId.HasValue ? Vm.EdName : "New chain")</div>
                 <div class="sub-115">
                     Stages run in order; a stage with more than one job runs them all in parallel — every job
                     in it must succeed for the chain to continue. A failed job stops the whole chain. The same
                     job may appear more than once.
                 </div>
             </div>
-            @if (_editChainId.HasValue && _chains?.FirstOrDefault(c => c.Id == _editChainId) is { } runnable)
+            @if (Vm.EditChainId.HasValue && Vm.Chains?.FirstOrDefault(c => c.Id == Vm.EditChainId) is { } runnable)
             {
-                <button class="dcbtn primary mr-10" @onclick="@(() => RunChain(runnable))">▶ Run</button>
+                <button class="dcbtn primary mr-10" @onclick="@(() => Vm.RunChainAsync(runnable))">▶ Run</button>
             }
-            <button class="dcslide-x" @onclick="CloseEditor">×</button>
+            <button class="dcslide-x" @onclick="() => Vm.CloseEditor()">×</button>
         </div>
 
-        @if (_editChainId.HasValue)
+        @if (Vm.EditChainId.HasValue)
         {
             <div class="dctabs editor-tabs">
-                <button class="dctab @(_editorTab == "details" ? "active" : "")" @onclick="@(() => _editorTab = "details")">Details</button>
-                <button class="dctab @(_editorTab == "runs" ? "active" : "")" @onclick="SwitchToRunsTab">Runs<span class="n">@(_chainRuns?.Count ?? 0)</span></button>
+                <button class="dctab @(Vm.EditorTab == "details" ? "active" : "")" @onclick="@(() => Vm.EditorTab = "details")">Details</button>
+                <button class="dctab @(Vm.EditorTab == "runs" ? "active" : "")" @onclick="() => Vm.SwitchToRunsTabAsync()">Runs<span class="n">@(Vm.ChainRuns?.Count ?? 0)</span></button>
             </div>
         }
 
-        @if (_editorTab == "runs" && _editChainId.HasValue)
+        @if (Vm.EditorTab == "runs" && Vm.EditChainId.HasValue)
         {
             <div class="dcslide-body runs-body">
-                @if (_openRun is null)
+                @if (Vm.OpenRun is null)
                 {
-                    @if (_chainRuns is null or { Count: 0 })
+                    @if (Vm.ChainRuns is null or { Count: 0 })
                     {
                         <div class="no-runs">No runs yet — click ▶ Run to start the pipeline.</div>
                     }
                     else
                     {
-                        @foreach (var run in _chainRuns)
+                        @foreach (var run in Vm.ChainRuns)
                         {
-                            <div class="dccard run-card" @onclick="@(() => OpenChainRun(run))">
+                            <div class="dccard run-card" @onclick="@(() => Vm.OpenChainRun(run))">
                                 <div class="run-row">
-                                    <span class="status-chip" style="color:@StatusColor(run.Status); background:@StatusBg(run.Status)">@run.Status</span>
+                                    <span class="status-chip" style="color:@JobChainsViewModel.StatusColor(run.Status); background:@JobChainsViewModel.StatusBg(run.Status)">@run.Status</span>
                                     <span class="run-time">
                                         @run.StartedAt.ToWorkspaceTime().ToString("yyyy-MM-dd HH:mm:ss")
                                     </span>
@@ -155,7 +155,7 @@ else
                                     @if (run.FinishedAt.HasValue)
                                     {
                                         <span class="dur-meta">
-                                            @FormatDuration(run.StartedAt, run.FinishedAt.Value)
+                                            @JobChainsViewModel.FormatDuration(run.StartedAt, run.FinishedAt.Value)
                                         </span>
                                     }
                                     else
@@ -169,35 +169,32 @@ else
                 }
                 else
                 {
-                    <button class="dcbtn btn-start" @onclick="@(() => { _openRun = null; _stepRunDetail = null; })">← All runs</button>
+                    <button class="dcbtn btn-start" @onclick="@(() => Vm.CloseStepRun())">← All runs</button>
 
                     <div class="status-row">
-                        <span class="status-chip-lg" style="color:@StatusColor(_openRun.Status); background:@StatusBg(_openRun.Status)">@_openRun.Status</span>
+                        <span class="status-chip-lg" style="color:@JobChainsViewModel.StatusColor(Vm.OpenRun.Status); background:@JobChainsViewModel.StatusBg(Vm.OpenRun.Status)">@Vm.OpenRun.Status</span>
                         <span class="dur-meta">
-                            @_openRun.StartedAt.ToWorkspaceTime().ToString("yyyy-MM-dd HH:mm:ss")
-                            @(_openRun.FinishedAt.HasValue ? " · took " + FormatDuration(_openRun.StartedAt, _openRun.FinishedAt.Value) : " · live")
+                            @Vm.OpenRun.StartedAt.ToWorkspaceTime().ToString("yyyy-MM-dd HH:mm:ss")
+                            @(Vm.OpenRun.FinishedAt.HasValue ? " · took " + JobChainsViewModel.FormatDuration(Vm.OpenRun.StartedAt, Vm.OpenRun.FinishedAt.Value) : " · live")
                         </span>
                     </div>
 
-                    @* ── The pipeline: stage boxes flowing left to right; a fan-out stage stacks its
-                       branches in one column and the join is simply the next column ────────────── *@
-                    <ChainPipeline Run="_openRun" OnStepClick="OpenStepRun" />
+                    <ChainPipeline Run="Vm.OpenRun" OnStepClick="@Vm.OpenStepRunAsync" />
 
-                    @if (_openRun.FinalOutput is { Length: > 0 })
+                    @if (Vm.OpenRun.FinalOutput is { Length: > 0 })
                     {
                         <div>
                             <div class="out-label">Pipeline output</div>
-                            <pre class="json-pre">@PrettyJson(_openRun.FinalOutput)</pre>
+                            <pre class="json-pre">@JobChainsViewModel.PrettyJson(Vm.OpenRun.FinalOutput)</pre>
                         </div>
                     }
 
-                    @* Compact detail of a clicked stage's job run — artifact + logs without leaving the pipeline. *@
-                    @if (_stepRunDetail is { } d)
+                    @if (Vm.StepRunDetail is { } d)
                     {
                         <div class="stage-detail">
                             <div class="stage-detail-head">
-                                <span>Stage run — @(_openRun.Steps.FirstOrDefault(s => s.RunId == d.Id)?.JobName)</span>
-                                <span class="status-chip-sm" style="color:@StatusColor(d.Status); background:@StatusBg(d.Status)">@d.Status</span>
+                                <span>Stage run — @(Vm.OpenRun.Steps.FirstOrDefault(s => s.RunId == d.Id)?.JobName)</span>
+                                <span class="status-chip-sm" style="color:@JobChainsViewModel.StatusColor(d.Status); background:@JobChainsViewModel.StatusBg(d.Status)">@d.Status</span>
                                 <span class="flex-1"></span>
                                 <button class="dcbtn btn-xs"
                                         @onclick="@(() => Nav.NavigateTo($"/project/{ProjectId}/jobs"))">open in Jobs →</button>
@@ -208,7 +205,7 @@ else
                                     <div class="shard-head">shard @shard.Index — @shard.Outcome (exit @shard.ExitCode)</div>
                                     @if (shard.Artifact is not null)
                                     {
-                                        <pre class="artifact-pre">@PrettyJson(shard.Artifact)</pre>
+                                        <pre class="artifact-pre">@JobChainsViewModel.PrettyJson(shard.Artifact)</pre>
                                     }
                                     @if (!string.IsNullOrWhiteSpace(shard.Log))
                                     {
@@ -231,11 +228,11 @@ else
             <div class="field-row">
                 <div class="dcfield flex-1">
                     <label>Name <span class="req">*</span></label>
-                    <input class="dcinput" @bind="_edName" placeholder="my-pipeline" />
+                    <input class="dcinput" @bind="Vm.EdName" placeholder="my-pipeline" />
                 </div>
                 <div class="dcfield flex-14">
                     <label>Description</label>
-                    <input class="dcinput" @bind="_edDescription" placeholder="What does this chain produce? (optional)" />
+                    <input class="dcinput" @bind="Vm.EdDescription" placeholder="What does this chain produce? (optional)" />
                 </div>
             </div>
 
@@ -246,7 +243,7 @@ else
                     it must succeed for the chain to continue to the next stage, which acts as the join.
                 </div>
 
-                @if (_edStages.Count == 0)
+                @if (Vm.EdStages.Count == 0)
                 {
                     <div class="empty-steps">
                         No stages yet — pick a job below and add it.
@@ -255,7 +252,7 @@ else
                 else
                 {
                     <div class="step-list">
-                        @foreach (var (stage, i) in _edStages.Select((s, i) => (s, i)))
+                        @foreach (var (stage, i) in Vm.EdStages.Select((s, i) => (s, i)))
                         {
                             var stageIndex = i;
                             <div class="step-item stage-item">
@@ -265,68 +262,68 @@ else
                                     {
                                         var branchIndex = j;
                                         <span class="stage-job-chip">
-                                            @JobName(jobId)
+                                            @Vm.JobName(jobId)
                                             <button class="dcbtn btn-2-8-del" title="Remove this job from the stage"
-                                                    @onclick="@(() => RemoveBranch(stageIndex, branchIndex))">×</button>
+                                                    @onclick="@(() => Vm.RemoveBranch(stageIndex, branchIndex))">×</button>
                                         </span>
                                     }
                                 </div>
                                 <button class="dcbtn btn-2-8" title="Add the picked job as a parallel branch of this stage"
-                                        disabled="@(string.IsNullOrEmpty(_edAddJobId))" @onclick="@(() => AddBranch(stageIndex))">+ branch</button>
-                                <button class="dcbtn btn-2-8" disabled="@(stageIndex == 0)" @onclick="@(() => MoveStage(stageIndex, -1))">↑</button>
-                                <button class="dcbtn btn-2-8" disabled="@(stageIndex == _edStages.Count - 1)" @onclick="@(() => MoveStage(stageIndex, +1))">↓</button>
-                                <button class="dcbtn btn-2-8-del" @onclick="@(() => _edStages.RemoveAt(stageIndex))">×</button>
+                                        disabled="@(string.IsNullOrEmpty(Vm.EdAddJobId))" @onclick="@(() => Vm.AddBranch(stageIndex))">+ branch</button>
+                                <button class="dcbtn btn-2-8" disabled="@(stageIndex == 0)" @onclick="@(() => Vm.MoveStage(stageIndex, -1))">↑</button>
+                                <button class="dcbtn btn-2-8" disabled="@(stageIndex == Vm.EdStages.Count - 1)" @onclick="@(() => Vm.MoveStage(stageIndex, +1))">↓</button>
+                                <button class="dcbtn btn-2-8-del" @onclick="@(() => Vm.EdStages.RemoveAt(stageIndex))">×</button>
                             </div>
                         }
                     </div>
                 }
 
                 <div class="add-row">
-                    <select class="dcinput flex-1" @bind="_edAddJobId">
+                    <select class="dcinput flex-1" @bind="Vm.EdAddJobId">
                         <option value="">— pick a job —</option>
-                        @foreach (var job in _jobs ?? Array.Empty<JobView>())
+                        @foreach (var job in Vm.Jobs ?? Array.Empty<JobView>())
                         {
                             <option value="@job.Id">@job.Name</option>
                         }
                     </select>
-                    <button class="dcbtn" disabled="@(string.IsNullOrEmpty(_edAddJobId))" @onclick="AddStage">+ Add step</button>
+                    <button class="dcbtn" disabled="@(string.IsNullOrEmpty(Vm.EdAddJobId))" @onclick="() => Vm.AddStage()">+ Add step</button>
                 </div>
             </div>
 
         </div>
         }
 
-        @if (_editorTab == "details")
+        @if (Vm.EditorTab == "details")
         {
             <div class="dcslide-foot">
-                @if (_editorError is not null)
+                @if (Vm.EditorError is not null)
                 {
-                    <div class="editor-err">@_editorError</div>
+                    <div class="editor-err">@Vm.EditorError</div>
                 }
-                <button class="dcbtn" @onclick="CloseEditor">Cancel</button>
-                <button class="dcbtn primary" disabled="@_saving" @onclick="SaveChain">
-                    @(_saving ? "Saving…" : _editChainId.HasValue ? "Save chain" : "Create chain")
+                <button class="dcbtn" @onclick="() => Vm.CloseEditor()">Cancel</button>
+                <button class="dcbtn primary" disabled="@Vm.Saving" @onclick="() => Vm.SaveChainAsync()">
+                    @(Vm.Saving ? "Saving…" : Vm.EditChainId.HasValue ? "Save chain" : "Create chain")
                 </button>
             </div>
         }
     </div>
 }
 
-@if (_runPromptChain is not null)
+@if (Vm.RunPromptChain is not null)
 {
-    <div class="dcmodal-overlay" @onclick="@(() => _runPromptChain = null)">
+    <div class="dcmodal-overlay" @onclick="() => Vm.CancelRunPrompt()">
         <div class="dcmodal run-modal" @onclick:stopPropagation="true">
             <div class="dcmodal-head">
                 <div class="flex-min">
-                    <div class="title-14">Run @_runPromptChain.Name</div>
+                    <div class="title-14">Run @Vm.RunPromptChain.Name</div>
                     <div class="sub-115">
                         Every step that takes input is listed below — values are prefilled from each job's stored payload.
                     </div>
                 </div>
-                <button class="dcslide-x" @onclick="@(() => _runPromptChain = null)">×</button>
+                <button class="dcslide-x" @onclick="() => Vm.CancelRunPrompt()">×</button>
             </div>
             <div class="dcmodal-body modal-body-scroll">
-                @foreach (var step in _runPromptSteps)
+                @foreach (var step in Vm.RunPromptSteps)
                 {
                     <div class="prompt-step">
                         <div class="prompt-step-head">
@@ -335,7 +332,7 @@ else
                         </div>
                         @foreach (var p in step.Job.Parameters)
                         {
-                            var key = ArgKey(step.Index, p.Name);
+                            var key = JobChainsViewModel.ArgKey(step.Index, p.Name);
                             <div class="dcfield">
                                 <label>
                                     @(p.Label ?? p.Name)
@@ -345,20 +342,20 @@ else
                                     }
                                     <span class="code ml-5">@p.Name</span>
                                 </label>
-                                <ParamInput Parameter="p" Value="@GetArg(key)"
-                                            ValueChanged="@(v => SetArg(key, v))" />
+                                <ParamInput Parameter="p" Value="@Vm.GetArg(key)"
+                                            ValueChanged="@(v => Vm.SetArg(key, v))" />
                             </div>
                         }
                     </div>
                 }
-                @if (_runPromptError is not null)
+                @if (Vm.RunPromptError is not null)
                 {
-                    <div class="prompt-err">@_runPromptError</div>
+                    <div class="prompt-err">@Vm.RunPromptError</div>
                 }
             </div>
             <div class="dcmodal-foot">
-                <button class="dcbtn" @onclick="@(() => _runPromptChain = null)">Cancel</button>
-                <button class="dcbtn primary" @onclick="SubmitRunPrompt">▶ Run chain</button>
+                <button class="dcbtn" @onclick="() => Vm.CancelRunPrompt()">Cancel</button>
+                <button class="dcbtn primary" @onclick="() => Vm.SubmitRunPromptAsync()">▶ Run chain</button>
             </div>
         </div>
     </div>
@@ -367,419 +364,17 @@ else
 @code {
     [Parameter] public Guid ProjectId { get; set; }
 
-    private IReadOnlyList<JobChainView>? _chains;
-    private IReadOnlyList<JobView>? _jobs;
-    private string? _message;
-    private bool _loading = true;
-    private Guid? _confirmDeleteId;
-
-    // ── Editor state ────────────────────────────────────────────────────────────────────────────
-    private bool _showEditor;
-    private bool _saving;
-    private Guid? _editChainId;
-    private string? _editorError;
-    private string _editorTab = "details"; // details | runs
-    private string _edName = "";
-    private string _edDescription = "";
-    // Each entry is one stage's job ids; a stage with more than one id is a parallel fan-out group.
-    private readonly List<List<Guid>> _edStages = new();
-    private string _edAddJobId = "";
-
-    // ── Pipeline runs state ───────────────────────────────────────────────────────────────────────
-    private IReadOnlyList<ChainRunView>? _chainRuns;
-    private ChainRunView? _openRun;
-    private JobRunDetailView? _stepRunDetail;
-    private CancellationTokenSource? _pollCts; // live refresh while a pipeline is running
-    private bool _followNewest;                // just dispatched: open the new Running run when it lands
-
-    // ── Run-input prompt state (only when the first step's job declares parameters) ──────────────
-    private JobChainView? _runPromptChain;
-    private List<(int Index, JobView Job)> _runPromptSteps = new();
-    private Dictionary<string, string> _runArgs = new();
-    private string? _runPromptError;
-
-    private static string ArgKey(int stepIndex, string param) => $"{stepIndex}:{param}";
-
-    protected override void OnInitialized() => OpCenter.Changed += OnOpsChanged;
+    protected override void OnInitialized() => Vm.Attach(StateHasChanged);
 
     protected override async Task OnParametersSetAsync()
     {
-        _loading = true;
-        _message = null;
-        try
-        {
-            _chains = await Svc.ListJobChainsAsync(ProjectId);
-            _jobs = await Svc.ListJobsAsync(ProjectId);
-            Ui.Set("Job chains", "ordered job pipelines");
-        }
-        catch (Exception ex) { _message = ex.Message; }
-        finally { _loading = false; }
+        Vm.Initialize(ProjectId);
+        await Vm.LoadAsync();
     }
-
-    // Push updates for chains started elsewhere (MCP, triggers, another tab): the run-status
-    // watcher syncs chain/step transitions into the OperationCenter, so refresh the open runs tab
-    // on every change — the local poll loop only covers a run this page just dispatched.
-    private void OnOpsChanged() => _ = InvokeAsync(async () =>
-    {
-        if (_opRefreshing || _editChainId is not { } chainId || _editorTab != "runs") return;
-        _opRefreshing = true;
-        try
-        {
-            await RefreshRunsAsync(chainId, openNewest: false);
-            StateHasChanged();
-        }
-        finally { _opRefreshing = false; }
-    });
-
-    private bool _opRefreshing;
 
     public void Dispose()
     {
-        OpCenter.Changed -= OnOpsChanged;
-        StopPolling();
-    }
-
-    private string JobName(Guid jobId) =>
-        _jobs?.FirstOrDefault(j => j.Id == jobId)?.Name ?? "(deleted)";
-
-    // ── Run ───────────────────────────────────────────────────────────────────────────────────────
-
-    private async Task RunChain(JobChainView chain)
-    {
-        // Collect the declared parameters of EVERY step that takes input — the form groups them
-        // per step and each step's values merge over its chained input at run time.
-        _runPromptSteps = chain.Steps
-            .Select((step, i) => (Index: i, Job: _jobs?.FirstOrDefault(j => j.Id == step.JobId)))
-            .Where(x => x.Job is { Parameters.Count: > 0 })
-            .Select(x => (x.Index, x.Job!))
-            .ToList();
-        if (_runPromptSteps.Count > 0)
-        {
-            _runPromptChain = chain;
-            _runArgs = new Dictionary<string, string>();
-            foreach (var (index, job) in _runPromptSteps)
-            {
-                var defaults = StoredPayloadDefaults(job);
-                foreach (var p in job.Parameters)
-                    _runArgs[ArgKey(index, p.Name)] = defaults.GetValueOrDefault(p.Name, "");
-            }
-            _runPromptError = null;
-            return;
-        }
-        await RunChainCore(chain, null);
-    }
-
-    // Prefill from existing data: the job's stored input payload is its last-known-good shape.
-    private static Dictionary<string, string> StoredPayloadDefaults(JobView job)
-    {
-        try
-        {
-            if (job.InputPayloads.Count == 0) return new();
-            using var doc = System.Text.Json.JsonDocument.Parse(job.InputPayloads[0]);
-            if (doc.RootElement.ValueKind != System.Text.Json.JsonValueKind.Object) return new();
-            return doc.RootElement.EnumerateObject()
-                .Where(p => p.Value.ValueKind is not (System.Text.Json.JsonValueKind.Object or System.Text.Json.JsonValueKind.Array))
-                .ToDictionary(p => p.Name, p => p.Value.ValueKind == System.Text.Json.JsonValueKind.String ? p.Value.GetString() ?? "" : p.Value.ToString());
-        }
-        catch { return new(); }
-    }
-
-    private async Task RunChainCore(JobChainView chain, string? payload, IReadOnlyDictionary<int, string>? stepOverrides = null)
-    {
-        _message = null;
-        // The pipeline executes as a background portal operation; the run row appears in the DB
-        // the moment it starts, so the Runs tab below picks it up and follows it live.
-        var tenant = PlaceContext.Infrastructure.Tenancy.CurrentTenant.Current;
-        if (tenant is null) { _message = "No tenant resolved — sign in again."; return; }
-        // Pre-allocated run id = the op's correlation key: the run-status watcher updates this
-        // entry live (step progress, prompt terminal status) straight from the persisted run.
-        var chainRunId = Guid.NewGuid();
-        OpCenter.Run(tenant, ProjectId, $"Run chain — {chain.Name}", $"/project/{ProjectId}/chains",
-            async (sp, ct) =>
-            {
-                var result = await sp.GetRequiredService<IPlaceContextService>().RunJobChainAsync(chain.Id, payload, chainRunId, stepOverrides, ct);
-                return $"chain finished — {result.Status} ({result.Steps.Count(s => s.Status != "Skipped")} step(s) ran)";
-            },
-            correlationKey: PlaceContext.Application.Features.RunStatusWatchService.ChainRunKey(chainRunId));
-        _runPromptChain = null;
-        _runPromptSteps = new();
-
-        // Land the user on the live pipeline: open this chain's Runs tab and follow the new run.
-        // The background op needs a beat to persist the run row, so the poll loop latches onto
-        // the newest Running run as soon as it appears rather than reading the list right now.
-        if (_editChainId != chain.Id || !_showEditor) OpenChainEditor(chain);
-        _editorTab = "runs";
-        _openRun = null;
-        _stepRunDetail = null;
-        _followNewest = true;
-        await RefreshRunsAsync(chain.Id, openNewest: false);
-        StartPolling();
-    }
-
-    private string GetArg(string name) => _runArgs.TryGetValue(name, out var v) ? v : "";
-    private void SetArg(string name, string value) => _runArgs[name] = value;
-
-    private async Task SubmitRunPrompt()
-    {
-        if (_runPromptChain is null) return;
-        _runPromptError = null;
-
-        var missing = _runPromptSteps
-            .SelectMany(step => step.Job.Parameters
-                .Where(p => p.Required && string.IsNullOrWhiteSpace(GetArg(ArgKey(step.Index, p.Name))))
-                .Select(p => $"step {step.Index + 1}: {p.Label ?? p.Name}"))
-            .ToList();
-        if (missing.Count > 0) { _runPromptError = $"Required: {string.Join(", ", missing)}"; return; }
-
-        // One JSON object per step; step 0's doubles as the chain's input payload.
-        var overrides = _runPromptSteps.ToDictionary(
-            step => step.Index,
-            step => System.Text.Json.JsonSerializer.Serialize(
-                step.Job.Parameters.ToDictionary(p => p.Name, p => GetArg(ArgKey(step.Index, p.Name)))));
-        var payload = overrides.GetValueOrDefault(0);
-        await RunChainCore(_runPromptChain, payload, overrides);
-    }
-
-    // ── Pipeline runs ─────────────────────────────────────────────────────────────────────────────
-
-    private async Task SwitchToRunsTab()
-    {
-        _editorTab = "runs";
-        _openRun = null;
-        _stepRunDetail = null;
-        if (_editChainId is { } chainId)
-        {
-            await RefreshRunsAsync(chainId, openNewest: false);
-            StartPolling();
-        }
-    }
-
-    private void OpenChainRun(ChainRunView run)
-    {
-        _openRun = run;
-        _stepRunDetail = null;
-        StartPolling();
-    }
-
-    private async Task OpenStepRun(ChainStepRunView step)
-    {
-        if (step.RunId is not { } runId || runId == Guid.Empty) return;
-        try
-        {
-            _stepRunDetail = await Svc.GetJobRunAsync(runId);
-        }
-        catch (Exception ex) { _message = ex.Message; }
-    }
-
-    private async Task RefreshRunsAsync(Guid chainId, bool openNewest)
-    {
-        try
-        {
-            _chainRuns = await Svc.ListChainRunsAsync(chainId);
-            if (_followNewest && _chainRuns.FirstOrDefault(r => r.Status == "Running") is { } live)
-            {
-                _openRun = live;
-                _followNewest = false; // latched — from here the poll refreshes it by id
-            }
-            else if (openNewest && _chainRuns.Count > 0) _openRun = _chainRuns[0];
-            else if (_openRun is not null)
-                _openRun = _chainRuns.FirstOrDefault(r => r.Id == _openRun.Id) ?? _openRun;
-        }
-        catch (Exception ex) { _message = ex.Message; }
-    }
-
-    /// <summary>Follows a running pipeline: refresh every 1.5s until nothing is Running.</summary>
-    private void StartPolling()
-    {
-        if (_pollCts is not null) return; // already following
-        var cts = new CancellationTokenSource();
-        _pollCts = cts;
-        _ = Task.Run(async () =>
-        {
-            try
-            {
-                while (!cts.IsCancellationRequested)
-                {
-                    await Task.Delay(1500, cts.Token);
-                    if (_editChainId is not { } chainId || _editorTab != "runs") break;
-                    await InvokeAsync(async () =>
-                    {
-                        await RefreshRunsAsync(chainId, openNewest: false);
-                        StateHasChanged();
-                    });
-                    // _followNewest keeps the loop alive across the gap between dispatching the
-                    // background op and its run row landing in the DB.
-                    var anyRunning = _followNewest
-                        || (_chainRuns?.Any(r => r.Status == "Running") ?? false)
-                        || _openRun?.Status == "Running";
-                    if (!anyRunning) break;
-                }
-            }
-            catch (OperationCanceledException) { /* closed the panel */ }
-            finally
-            {
-                if (ReferenceEquals(_pollCts, cts)) _pollCts = null;
-                cts.Dispose();
-            }
-        });
-    }
-
-    private void StopPolling()
-    {
-        _pollCts?.Cancel();
-        _pollCts = null;
-    }
-
-    // ── Editor ───────────────────────────────────────────────────────────────────────────────────
-
-    private void NewChain()
-    {
-        _editChainId = null;
-        _edName = "";
-        _edDescription = "";
-        _edStages.Clear();
-        _edAddJobId = "";
-        _editorError = null;
-        _editorTab = "details";
-        _showEditor = true;
-    }
-
-    private async Task OpenChain(JobChainView chain)
-    {
-        OpenChainEditor(chain);
-        await RefreshRunsAsync(chain.Id, openNewest: false);
-    }
-
-    private void OpenChainEditor(JobChainView chain)
-    {
-        _editChainId = chain.Id;
-        _edName = chain.Name;
-        _edDescription = chain.Description ?? "";
-        _edStages.Clear();
-        _edStages.AddRange(chain.Stages.Select(s => s.Jobs.Select(j => j.JobId).ToList()));
-        _edAddJobId = "";
-        _editorError = null;
-        _editorTab = "details";
-        _openRun = null;
-        _stepRunDetail = null;
-        _chainRuns = null;
-        _showEditor = true;
-    }
-
-    private void CloseEditor()
-    {
-        _showEditor = false;
-        _editorError = null;
-        _editorTab = "details";
-        _openRun = null;
-        _stepRunDetail = null;
-        StopPolling();
-    }
-
-    /// <summary>Adds the picked job as a whole new (ordinary sequential) stage.</summary>
-    private void AddStage()
-    {
-        if (Guid.TryParse(_edAddJobId, out var id)) _edStages.Add(new List<Guid> { id });
-        _edAddJobId = "";
-    }
-
-    /// <summary>Adds the picked job as a parallel branch of an existing stage, turning it (or keeping
-    /// it) a fan-out group.</summary>
-    private void AddBranch(int stageIndex)
-    {
-        if (Guid.TryParse(_edAddJobId, out var id)) _edStages[stageIndex].Add(id);
-        _edAddJobId = "";
-    }
-
-    /// <summary>Removes one job from a stage; an emptied stage is dropped entirely.</summary>
-    private void RemoveBranch(int stageIndex, int branchIndex)
-    {
-        _edStages[stageIndex].RemoveAt(branchIndex);
-        if (_edStages[stageIndex].Count == 0) _edStages.RemoveAt(stageIndex);
-    }
-
-    private void MoveStage(int index, int delta)
-    {
-        var target = index + delta;
-        if (target < 0 || target >= _edStages.Count) return;
-        (_edStages[index], _edStages[target]) = (_edStages[target], _edStages[index]);
-    }
-
-    private async Task SaveChain()
-    {
-        _editorError = null;
-        if (string.IsNullOrWhiteSpace(_edName)) { _editorError = "Name is required."; return; }
-        if (_edStages.Count == 0) { _editorError = "A chain needs at least one stage."; return; }
-
-        _saving = true;
-        try
-        {
-            var description = string.IsNullOrWhiteSpace(_edDescription) ? null : _edDescription.Trim();
-            var flat = _edStages.SelectMany(s => s).ToList();
-            if (_editChainId is { } chainId)
-            {
-                await Svc.UpdateJobChainAsync(chainId, _edName.Trim(), description, flat, _edStages);
-                _message = $"Chain {_edName.Trim()} updated.";
-            }
-            else
-            {
-                await Svc.CreateJobChainAsync(ProjectId, _edName.Trim(), description, flat, _edStages);
-                _message = $"Chain {_edName.Trim()} created.";
-            }
-            _chains = await Svc.ListJobChainsAsync(ProjectId);
-            _showEditor = false;
-        }
-        catch (Exception ex) { _editorError = ex.Message; }
-        finally { _saving = false; }
-    }
-
-    private async Task DeleteChain(Guid chainId)
-    {
-        _confirmDeleteId = null;
-        try
-        {
-            await Svc.DeleteJobChainAsync(chainId);
-            _chains = await Svc.ListJobChainsAsync(ProjectId);
-            _message = "Chain deleted.";
-        }
-        catch (Exception ex) { _message = ex.Message; }
-    }
-
-    // ── Presentation helpers ─────────────────────────────────────────────────────────────────────
-
-    private static string StatusColor(string status) => status switch
-    {
-        "Succeeded" => "var(--good)",
-        "Failed" => "var(--bad)",
-        "Partial" => "var(--warn)",
-        "Running" => "var(--brand-2)",
-        _ => "var(--text-3)"
-    };
-
-    private static string StatusBg(string status) => status switch
-    {
-        "Succeeded" => "var(--good-bg)",
-        "Failed" => "var(--bad-bg)",
-        "Partial" => "var(--warn-bg)",
-        "Running" => "var(--brand-bg)",
-        _ => "var(--card-2)"
-    };
-
-    private static string FormatDuration(DateTimeOffset start, DateTimeOffset end)
-    {
-        var span = end - start;
-        if (span.TotalSeconds < 60) return $"{(int)span.TotalSeconds}s";
-        return $"{(int)span.TotalMinutes}m {span.Seconds}s";
-    }
-
-    private static string PrettyJson(string raw)
-    {
-        try
-        {
-            var doc = System.Text.Json.JsonDocument.Parse(raw);
-            return System.Text.Json.JsonSerializer.Serialize(doc.RootElement,
-                new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
-        }
-        catch { return raw; }
+        Vm.DetachEvents();
+        Vm.Detach();
     }
 }
