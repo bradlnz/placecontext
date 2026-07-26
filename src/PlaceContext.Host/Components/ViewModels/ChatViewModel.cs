@@ -125,15 +125,26 @@ public sealed class ChatViewModel : PageViewModel
         ProjectName = _ui.CurrentProjectName ?? "";
         if (ProjectId.HasValue)
         {
-            await LoadAgentConfigAsync();
-            await LoadSessionsAsync();
-            await LoadMcpConnectionsAsync();
-            await LoadPanelArtifactsAsync();
+            NewSession();
+            NotifyStateChanged();
+            // Fire-and-forget: populate sidebar data in the background so the UI renders immediately.
+            _ = LoadAndRestoreSessionAsync();
+        }
+    }
+
+    private async Task LoadAndRestoreSessionAsync()
+    {
+        try
+        {
+            await Task.WhenAll(
+                LoadAgentConfigAsync(),
+                LoadSessionsAsync(),
+                LoadMcpConnectionsAsync(),
+                LoadPanelArtifactsAsync());
             if (Sessions.Count > 0)
                 await SelectSessionAsync(Sessions[0]);
-            else
-                NewSession();
         }
+        catch { }
         NotifyStateChanged();
     }
 
