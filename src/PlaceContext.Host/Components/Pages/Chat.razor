@@ -990,12 +990,40 @@
                             Result = tc.Result,
                             ResultType = tc.ResultType,
                         }));
+                    RecoverLostMapCalls(msg);
                     _messages.Add(msg);
                 }
                 StateHasChanged();
             }
         }
         catch { }
+    }
+
+    /// <summary>
+    /// Sessions saved before the tool-call scanner handled ']' in args have render_map calls
+    /// stored as raw text — they never executed, so the map was lost. Re-attach any valid map
+    /// spec as a completed tool call so it renders on session restore, and strip the raw syntax
+    /// from the displayed message.
+    /// </summary>
+    private static void RecoverLostMapCalls(AgentMessage msg)
+    {
+        if (msg.Role != "assistant" || string.IsNullOrEmpty(msg.Content)) return;
+        if (!msg.Content.Contains("[[tool:render_map|", StringComparison.Ordinal)) return;
+
+        foreach (var call in ScanToolCalls(msg.Content).Where(c => c.Name == "render_map"))
+        {
+            if (msg.ToolCalls.Any(t => t.ResultType == "map" && t.Args == call.Args)) continue;
+            try { System.Text.Json.JsonDocument.Parse(call.Args); }
+            catch { continue; } // not a valid spec — leave the text as-is
+            msg.ToolCalls.Add(new ToolCallInfo
+            {
+                ToolName = "render_map",
+                Args = call.Args,
+                Status = ToolCallStatus.Completed,
+                Result = call.Args,
+                ResultType = "map",
+            });
+        }
     }
 
     private async Task SaveCurrentSessionAsync()

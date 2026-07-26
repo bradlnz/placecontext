@@ -64,3 +64,6 @@ scratchpad/test-chat.mjs
 scratchpad/test-login-chat.mjs
 scratchpad/test-query-graph.mjs
 scratchpad/test-render-map.mjs
+scratchpad/**
+scratchpad/*
+scratchpad
