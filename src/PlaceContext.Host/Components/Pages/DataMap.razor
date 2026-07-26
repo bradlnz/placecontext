@@ -10,7 +10,7 @@
 
 <PageTitle>PlaceContext — Data map</PageTitle>
 
-@if (Vm.Loading)
+@if (Vm.Loading || !Vm.PosLoaded)
 {
     <Skeleton Kind="detail" Rows="5" Padded />
 }

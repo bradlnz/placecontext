@@ -80,7 +80,16 @@ public sealed class ProjectDataViewModel : PageViewModel
     public string? Dropping { get; private set; }
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────────────────────
-    public void Initialize(Guid projectId) => ProjectId = projectId;
+    public void Initialize(Guid projectId)
+    {
+        if (ProjectId != projectId)
+        {
+            ProjectId = projectId;
+            MonacoReady = false;
+            MonacoLite = false;
+            ViewMonacoReady = false;
+        }
+    }
 
     public async Task LoadAsync()
     {

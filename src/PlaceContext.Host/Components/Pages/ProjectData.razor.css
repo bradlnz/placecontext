@@ -217,6 +217,7 @@
 .export-link {
     font-size: 12px;
     text-decoration: none;
+    display: inline-block;
 }
 
 .msg-bad {
