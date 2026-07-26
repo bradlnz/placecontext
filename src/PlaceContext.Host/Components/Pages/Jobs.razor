@@ -2,15 +2,15 @@
 @attribute [Authorize]
 @layout PlaceContext.Host.Components.Layout.ProjectLayout
 @implements IDisposable
-@inject IPlaceContextService Svc
+@inject JobsViewModel Vm
 @inject PortalUiState Ui
 @inject NavigationManager Nav
-@inject PlaceContext.Infrastructure.Operations.OperationCenter OpCenter
-@using Microsoft.Extensions.DependencyInjection
+@using PlaceContext.Host.Components.ViewModels
+@using PlaceContext.Host.Components.ViewModels.Helpers
 
 <PageTitle>PlaceContext — Jobs</PageTitle>
 
-@if (_loading)
+@if (Vm.Loading)
 {
     <Skeleton Kind="list" Rows="6" Padded />
 }
@@ -21,15 +21,15 @@ else
 
         <div class="page-header">
             <h2 class="page-title">Jobs</h2>
-            <button class="dcbtn primary" @onclick="NewJob">+ New job</button>
+            <button class="dcbtn primary" @onclick="() => Vm.NewJob()">+ New job</button>
         </div>
 
-        @if (_message is not null)
+        @if (Vm.Message is not null)
         {
-            <div class="status-message">@_message</div>
+            <div class="status-message">@Vm.Message</div>
         }
 
-        @if (_jobs is null || _jobs.Count == 0)
+        @if (Vm.Jobs is null || Vm.Jobs.Count == 0)
         {
             <div class="dccard empty-state">
                 No jobs defined for this project yet. Click <strong>+ New job</strong> to create one.
@@ -38,11 +38,11 @@ else
         else
         {
             <div class="jobs-list">
-                @foreach (var job in _jobs)
+                @foreach (var job in Vm.Jobs)
                 {
-                    var isSelected = _selectedJobId == job.Id;
+                    var isSelected = Vm.SelectedJobId == job.Id;
                     <div class="dccard @(isSelected ? "selected" : "") job-card"
-                         @onclick="@(() => OpenJob(job))">
+                         @onclick="@(() => Vm.OpenJobAsync(job))">
                         <div class="job-card-row">
                             <div class="min-w-0">
                                 <div class="job-name">@job.Name</div>
@@ -73,10 +73,10 @@ else
                                     <button class="dcbtn" @onclick:stopPropagation="true"
                                             @onclick="@(() => Nav.NavigateTo($"/project/{ProjectId}/jobs/{job.Id}"))">⌁ Editor</button>
                                 }
-                                <button class="dcbtn primary" disabled="@(_runningJobId == job.Id)"
+                                <button class="dcbtn primary" disabled="@Vm.IsRunningJob(job.Id)"
                                         @onclick:stopPropagation="true"
-                                        @onclick="@(() => RunJob(job.Id))">
-                                    @(_runningJobId == job.Id ? "running…" : "Run")
+                                        @onclick="@(() => Vm.RunJobAsync(job.Id))">
+                                    @(Vm.IsRunningJob(job.Id) ? "running…" : "Run")
                                 </button>
                             </div>
                         </div>
@@ -89,80 +89,77 @@ else
 }
 
 @* ── Job editor slide-out ─────────────────────────────────────────────────────────────── *@
-@if (_showEditor)
+@if (Vm.ShowEditor)
 {
-    <div class="dcslide-scrim" @onclick="CloseEditor"></div>
+    <div class="dcslide-scrim" @onclick="() => Vm.CloseEditor()"></div>
     <div class="dcslide slide-620">
         <div class="dcslide-head">
             <div class="flex-fill-min">
-                <div class="title-14">@(_editJobId.HasValue ? _edName : "New job")</div>
+                <div class="title-14">@(Vm.EditJobId.HasValue ? Vm.EdName : "New job")</div>
                 <div class="subtitle-11-5">
                     A job fans its input payloads out as parallel shards and collects a JSON artifact from each.
                 </div>
             </div>
-            @if (_editJobId is { } runnableId)
+            @if (Vm.EditJobId is { } runnableId)
             {
-                <button class="dcbtn primary mr-10" disabled="@(_runningJobId == runnableId)"
-                        @onclick="@(() => RunJob(runnableId))">▶ Run</button>
+                <button class="dcbtn primary mr-10" disabled="@Vm.IsRunningJob(runnableId)"
+                        @onclick="@(() => Vm.RunJobAsync(runnableId))">▶ Run</button>
             }
-            <button class="dcslide-x" @onclick="CloseEditor">×</button>
+            <button class="dcslide-x" @onclick="() => Vm.CloseEditor()">×</button>
         </div>
 
-        @if (_editJobId.HasValue)
+        @if (Vm.EditJobId.HasValue)
         {
             <div class="dctabs job-tabs">
-                <button class="dctab @(_editorTab == "details" ? "active" : "")" @onclick="@(() => _editorTab = "details")">Details</button>
-                <button class="dctab @(_editorTab == "runs" ? "active" : "")" @onclick="@(() => SwitchToRunsTab())">Runs<span class="n">@(_runs?.Count ?? 0)</span></button>
-                <button class="dctab @(_editorTab == "triggers" ? "active" : "")" @onclick="@(() => { _editorTab = "triggers"; _selectedTriggerId = null; })">Triggers<span class="n">@JobTriggers().Count()</span></button>
+                <button class="dctab @(Vm.EditorTab == "details" ? "active" : "")" @onclick="@(() => Vm.SetEditorTab("details"))">Details</button>
+                <button class="dctab @(Vm.EditorTab == "runs" ? "active" : "")" @onclick="@(() => Vm.SwitchToRunsTabAsync())">Runs<span class="n">@(Vm.Runs?.Count ?? 0)</span></button>
+                <button class="dctab @(Vm.EditorTab == "triggers" ? "active" : "")" @onclick="@(() => Vm.SetEditorTab("triggers"))">Triggers<span class="n">@Vm.JobTriggers().Count()</span></button>
             </div>
         }
 
-        @if (_editorTab == "runs" && _editJobId.HasValue)
+        @if (Vm.EditorTab == "runs" && Vm.EditJobId.HasValue)
         {
             @* ── Runs tab: execution results, with a run's full detail inline ─────────────────── *@
             <div class="dcslide-body slide-body-scroll">
-                @if (_runDetail is null)
+                @if (Vm.RunDetail is null)
                 {
-                    @* ── OTel panel: this job's recent run/shard timings, captured in-process (no
-                       external collector) — see IJobTelemetryReader. A quick "is this job healthy and
-                       fast" read before diving into a specific run. ── *@
-                    @if (_jobTelemetry is { Count: > 0 })
+                    @if (Vm.JobTelemetry is { Count: > 0 })
                     {
                         <div class="dccard otel-card">
                             <div class="otel-title">RECENT RUN DURATIONS (OTEL)</div>
                             <div class="otel-bars">
-                                @{ var maxMs = _jobTelemetry.Max(t => t.DurationMs ?? 0); }
-                                @foreach (var t in _jobTelemetry.Reverse().TakeLast(24))
+                                @{ var maxMs = Vm.JobTelemetry.Max(t => t.DurationMs ?? 0); }
+                                @foreach (var t in Vm.JobTelemetry.Reverse().TakeLast(24))
                                 {
                                     var pct = maxMs > 0 ? Math.Max(6, (t.DurationMs ?? 0) / maxMs * 100) : 6;
-                                    <div title="@(t.Status ?? "running") · @FormatMs(t.DurationMs)"
-                                         class="otel-bar" style="height:@(pct)%; background:@StatusColor(t.Status)"></div>
+                                    <div title="@(t.Status ?? "running") · @JobsViewModel.FormatMs(t.DurationMs)"
+                                         class="otel-bar" style="height:@(pct)%; background:@JobsViewModel.StatusColor(t.Status)"></div>
                                 }
                             </div>
                             <div class="otel-legend">
-                                @foreach (var (outcome, count) in _jobTelemetry.SelectMany(t => t.Shards)
+                                @foreach (var (outcome, count) in Vm.JobTelemetry.SelectMany(t => t.Shards)
                                     .GroupBy(s => s.Outcome ?? "unknown")
                                     .Select(g => (Outcome: g.Key, Count: g.Count()))
                                     .OrderByDescending(g => g.Count))
                                 {
-                                    <span style="color:@StatusColor(outcome)">@count @outcome shard(s)</span>
+                                    <span style="color:@JobsViewModel.StatusColor(outcome)">@count @outcome shard(s)</span>
                                 }
                             </div>
                         </div>
                     }
 
-                    @if (_runs is null or { Count: 0 })
+                    @if (Vm.Runs is null or { Count: 0 })
                     {
                         <div class="empty-note">No runs yet — click ▶ Run to start one.</div>
                     }
                     else
                     {
                         <div class="col-gap-8">
-                            @foreach (var run in _runs)
+                            @foreach (var run in Vm.Runs)
                             {
                                 <div class="dccard card-pad">
-                                    <div class="run-row-head" @onclick="@(() => OpenRunDetail(run.Id))">
-                                        <span class="status-badge-sm" style="color:@StatusColor(run.Status); background:@StatusBg(run.Status)">
+                                    <div class="run-row-head" @onclick="@(() => Vm.OpenRunDetailAsync(run.Id))">
+                                        <span class="status-badge-sm" style="color:@JobsViewModel.StatusColor(run.Status); background:@JobsViewModel.StatusBg(run.Status)">
                                             @run.Status
                                         </span>
                                         <span class="run-time">
@@ -174,7 +171,7 @@ else
                                         @if (run.FinishedAt.HasValue)
                                         {
                                             <span class="meta-mono">
-                                                @FormatDuration(run.StartedAt, run.FinishedAt.Value)
+                                                @JobsViewModel.FormatDuration(run.StartedAt, run.FinishedAt.Value)
                                             </span>
                                         }
                                     </div>
@@ -185,66 +182,64 @@ else
                 }
                 else
                 {
-                    <button class="dcbtn mb-12" @onclick="@(() => _runDetail = null)">← All runs</button>
+                    <button class="dcbtn mb-12" @onclick="() => Vm.CloseRunDetail()">← All runs</button>
 
                     <div class="run-detail-head">
-                        <span class="status-badge-lg" style="color:@StatusColor(_runDetail.Status); background:@StatusBg(_runDetail.Status)">
-                            @_runDetail.Status
+                        <span class="status-badge-lg" style="color:@JobsViewModel.StatusColor(Vm.RunDetail.Status); background:@JobsViewModel.StatusBg(Vm.RunDetail.Status)">
+                            @Vm.RunDetail.Status
                         </span>
-                        <span class="meta-mono">@_runDetail.Id</span>
-                        @if (_runDetail.AttemptNumber > 1)
+                        <span class="meta-mono">@Vm.RunDetail.Id</span>
+                        @if (Vm.RunDetail.AttemptNumber > 1)
                         {
-                            <span class="meta-11">attempt @_runDetail.AttemptNumber
-                                @if (_runDetail.OriginalRunId is { } orig)
+                            <span class="meta-11">attempt @Vm.RunDetail.AttemptNumber
+                                @if (Vm.RunDetail.OriginalRunId is { } orig)
                                 {
-                                    <span>of <a @onclick:preventDefault @onclick="@(() => OpenRunDetail(orig))" href="#">@orig</a></span>
+                                    <span>of <a @onclick:preventDefault @onclick="@(() => Vm.OpenRunDetailAsync(orig))" href="#">@orig</a></span>
                                 }
                             </span>
                         }
                     </div>
 
-                    @* Snapshot badge *@
                     <div class="snapshot-line">
-                        Ran as: <code>@_runDetail.Snapshot.MapSourceKind</code> · @_runDetail.Snapshot.MapSourceLabel
-                        · @_runDetail.Snapshot.ShardCount shard(s) · concurrency @_runDetail.Snapshot.ConcurrencyLimit
-                        @if (_runDetail.Snapshot.AllowNetworkEgress)
+                        Ran as: <code>@Vm.RunDetail.Snapshot.MapSourceKind</code> · @Vm.RunDetail.Snapshot.MapSourceLabel
+                        · @Vm.RunDetail.Snapshot.ShardCount shard(s) · concurrency @Vm.RunDetail.Snapshot.ConcurrencyLimit
+                        @if (Vm.RunDetail.Snapshot.AllowNetworkEgress)
                         {
                             <span class="egress-flag">[network egress allowed]</span>
                         }
                     </div>
 
-                    @* ── Post-job outputs (reports / charts / CSVs / raw files stored in MinIO) ───────── *@
-                    @if (_runArtifacts is { Count: > 0 })
+                    @if (Vm.RunArtifacts is { Count: > 0 })
                     {
                         <div class="dccard outputs-card">
                             <div class="outputs-title">Post-job outputs</div>
                             <div class="col-gap-6">
-                                @foreach (var art in _runArtifacts)
+                                @foreach (var art in Vm.RunArtifacts)
                                 {
                                     <div class="output-row">
                                         <span class="output-kind">@art.Kind</span>
                                         <a href="@($"/runs/{art.RunId}/artifacts/{art.Id}")" target="_blank" rel="noopener"
                                            class="output-link">@art.Title ↗</a>
-                                        <span class="hint-10-5">@FormatBytes(art.SizeBytes)</span>
+                                        <span class="hint-10-5">@JobsViewModel.FormatBytes(art.SizeBytes)</span>
                                     </div>
                                 }
                             </div>
                         </div>
                     }
 
-                    @foreach (var shard in _runDetail.ShardResults)
+                    @foreach (var shard in Vm.RunDetail.ShardResults)
                     {
                         <div class="mb-14">
                             <div class="shard-head">
                                 <span>Shard @shard.Index</span>
-                                <span class="shard-badge" style="color:@StatusColor(shard.Outcome); background:@StatusBg(shard.Outcome)">
+                                <span class="shard-badge" style="color:@JobsViewModel.StatusColor(shard.Outcome); background:@JobsViewModel.StatusBg(shard.Outcome)">
                                     @shard.Outcome
                                 </span>
                                 <span class="meta-11">exit @shard.ExitCode</span>
                             </div>
                             @if (shard.Artifact is not null)
                             {
-                                <pre class="artifact-pre">@PrettyJson(shard.Artifact)</pre>
+                                <pre class="artifact-pre">@JobsViewModel.PrettyJson(shard.Artifact)</pre>
                                 @if (ArtifactChart.TrySvg(shard.Artifact, out var shardChart))
                                 {
                                     <div class="chart-label">chart <span class="text-3">(from the artifact's JSON)</span></div>
@@ -261,7 +256,7 @@ else
                                     @foreach (var a in shard.Artifacts)
                                     {
                                         <a class="dcbtn artifact-dl"
-                                           href="@DataUri(a)" download="@a.Name">⬇ @a.Name</a>
+                                           href="@JobsViewModel.DataUri(a)" download="@a.Name">⬇ @a.Name</a>
                                     }
                                 </div>
                             }
@@ -275,7 +270,7 @@ else
                         </div>
                     }
 
-                    @if (_runDetail.ReduceResult is { } reduce)
+                    @if (Vm.RunDetail.ReduceResult is { } reduce)
                     {
                         <div class="reduce-section">
                             <div class="shard-head">
@@ -287,7 +282,7 @@ else
                             </div>
                             @if (reduce.Artifact is not null)
                             {
-                                <pre class="artifact-pre-lg">@PrettyJson(reduce.Artifact)</pre>
+                                <pre class="artifact-pre-lg">@JobsViewModel.PrettyJson(reduce.Artifact)</pre>
                                 @if (ArtifactChart.TrySvg(reduce.Artifact, out var reduceChart))
                                 {
                                     <div class="chart-label">chart <span class="text-3">(from the artifact's JSON)</span></div>
@@ -300,7 +295,7 @@ else
                                     @foreach (var a in reduce.Artifacts)
                                     {
                                         <a class="dcbtn artifact-dl"
-                                           href="@DataUri(a)" download="@a.Name">⬇ @a.Name</a>
+                                           href="@JobsViewModel.DataUri(a)" download="@a.Name">⬇ @a.Name</a>
                                     }
                                 </div>
                             }
@@ -309,13 +304,13 @@ else
                 }
             </div>
         }
-        else if (_editorTab == "triggers" && _editJobId.HasValue)
+        else if (Vm.EditorTab == "triggers" && Vm.EditJobId.HasValue)
         {
             @* ── Triggers tab: this job's triggers, a trigger's detail inline, and the add form ── *@
             <div class="dcslide-body slide-body-col">
-                @if (SelectedTrigger() is { } sel)
+                @if (Vm.SelectedTrigger() is { } sel)
                 {
-                    <button class="dcbtn self-start" @onclick="@(() => _selectedTriggerId = null)">← All triggers</button>
+                    <button class="dcbtn self-start" @onclick="() => Vm.SelectedTriggerId = null">← All triggers</button>
 
                     <div class="row-center-8">
                         <span class="status-badge-lg" style="color:@(sel.Enabled ? "var(--good)" : "var(--text-3)"); background:@(sel.Enabled ? "var(--good-bg)" : "var(--card-2)")">
@@ -323,8 +318,8 @@ else
                         </span>
                         <span class="title-14">@sel.Name</span>
                         <span class="flex-1"></span>
-                        <button class="dcbtn" @onclick="@(() => ToggleTrigger(sel))">@(sel.Enabled ? "Pause" : "Enable")</button>
-                        <button class="dcbtn text-bad" @onclick="@(() => RemoveTrigger(sel.Id))">Delete</button>
+                        <button class="dcbtn" @onclick="@(() => Vm.ToggleTriggerAsync(sel))">@(sel.Enabled ? "Pause" : "Enable")</button>
+                        <button class="dcbtn text-bad" @onclick="@(() => Vm.RemoveTriggerAsync(sel.Id))">Delete</button>
                     </div>
 
                     <div class="dccard trigger-detail-card">
@@ -342,20 +337,19 @@ else
                         <div><span class="text-3">Created:</span> @sel.CreatedAt.ToWorkspaceTime().ToString("yyyy-MM-dd HH:mm")</div>
                     </div>
 
-                    @* Execution results: runs of this job (trigger-started runs land here). *@
                     <div class="section-label-mt4">Execution results</div>
-                    @if (_runs is null or { Count: 0 })
+                    @if (Vm.Runs is null or { Count: 0 })
                     {
                         <div class="text-3-12">This job has no runs yet.</div>
                     }
                     else
                     {
                         <div class="col-gap-6">
-                            @foreach (var run in _runs)
+                            @foreach (var run in Vm.Runs)
                             {
                                 <div class="dccard run-row"
-                                     @onclick="@(() => OpenRunDetailFromTrigger(run.Id))">
-                                    <span class="status-badge-sm" style="color:@StatusColor(run.Status); background:@StatusBg(run.Status)">@run.Status</span>
+                                     @onclick="@(() => Vm.OpenRunDetailFromTriggerAsync(run.Id))">
+                                    <span class="status-badge-sm" style="color:@JobsViewModel.StatusColor(run.Status); background:@JobsViewModel.StatusBg(run.Status)">@run.Status</span>
                                     <span class="run-time">
                                         @run.StartedAt.ToWorkspaceTime().ToString("yyyy-MM-dd HH:mm")
                                     </span>
@@ -367,10 +361,10 @@ else
                 }
                 else
                 {
-                    @foreach (var t in JobTriggers())
+                    @foreach (var t in Vm.JobTriggers())
                     {
                         <div class="dccard trigger-row"
-                             @onclick="@(() => _selectedTriggerId = t.Id)">
+                             @onclick="@(() => Vm.SelectedTriggerId = t.Id)">
                             <span class="status-badge-sm" style="color:@(t.Enabled ? "var(--good)" : "var(--text-3)"); background:@(t.Enabled ? "var(--good-bg)" : "var(--card-2)")">
                                 @(t.Enabled ? "on" : "paused")
                             </span>
@@ -397,11 +391,11 @@ else
                                     }
                                 </div>
                             </div>
-                            <button class="dcbtn" @onclick:stopPropagation="true" @onclick="@(() => ToggleTrigger(t))">@(t.Enabled ? "Pause" : "Enable")</button>
-                            <button class="dcbtn" @onclick:stopPropagation="true" @onclick="@(() => RemoveTrigger(t.Id))">Delete</button>
+                            <button class="dcbtn" @onclick:stopPropagation="true" @onclick="@(() => Vm.ToggleTriggerAsync(t))">@(t.Enabled ? "Pause" : "Enable")</button>
+                            <button class="dcbtn" @onclick:stopPropagation="true" @onclick="@(() => Vm.RemoveTriggerAsync(t.Id))">Delete</button>
                         </div>
                     }
-                    @if (!JobTriggers().Any())
+                    @if (!Vm.JobTriggers().Any())
                     {
                         <div class="text-3-12">No triggers — add one below to run this job automatically.</div>
                     }
@@ -411,40 +405,40 @@ else
                         <div class="trigger-form-row">
                             <div class="field-150">
                                 <label class="field-label">Name</label>
-                                <input class="dcinput w-full" @bind="_trName" placeholder="nightly" />
+                                <input class="dcinput w-full" @bind="Vm.TrName" placeholder="nightly" />
                             </div>
                             <div>
                                 <label class="field-label">Kind</label>
-                                <select class="dcinput" @bind="_trKind">
+                                <select class="dcinput" @bind="Vm.TrKind">
                                     <option value="Schedule">Schedule</option>
                                     <option value="Event">Event</option>
                                 </select>
                             </div>
-                            @if (_trKind == "Schedule")
+                            @if (Vm.TrKind == "Schedule")
                             {
                                 <div class="field-150">
                                     <label class="field-label">Cron</label>
-                                    <input class="dcinput w-full" @bind="_trCron" placeholder="0 0 * * *" />
+                                    <input class="dcinput w-full" @bind="Vm.TrCron" placeholder="0 0 * * *" />
                                 </div>
                             }
                             else
                             {
                                 <div class="field-150">
                                     <label class="field-label">Event</label>
-                                    <input class="dcinput w-full" list="evt-names" @bind="_trEvent" placeholder="deploy.finished" />
+                                    <input class="dcinput w-full" list="evt-names" @bind="Vm.TrEvent" placeholder="deploy.finished" />
                                     <datalist id="evt-names">
-                                        @foreach (var e in _eventTypes ?? Array.Empty<EventTypeView>())
+                                        @foreach (var e in Vm.EventTypes ?? Array.Empty<PlaceContext.Application.Dtos.EventTypeView>())
                                         {
                                             <option value="@e.Name" />
                                         }
                                     </datalist>
                                 </div>
                             }
-                            <button class="dcbtn primary" disabled="@_trBusy" @onclick="AddTrigger">Add</button>
+                            <button class="dcbtn primary" disabled="@Vm.TrBusy" @onclick="() => Vm.AddTriggerAsync()">Add</button>
                         </div>
-                        @if (_trError is not null)
+                        @if (Vm.TrError is not null)
                         {
-                            <div class="error-12">@_trError</div>
+                            <div class="error-12">@Vm.TrError</div>
                         }
                     </div>
                 }
@@ -457,11 +451,11 @@ else
             <div class="row-gap-10">
                 <div class="dcfield flex-1">
                     <label>Name <span class="req">*</span></label>
-                    <input class="dcinput" @bind="_edName" placeholder="my-job" />
+                    <input class="dcinput" @bind="Vm.EdName" placeholder="my-job" />
                 </div>
                 <div class="dcfield flex-1-4">
                     <label>Description</label>
-                    <input class="dcinput" @bind="_edDescription" placeholder="What does this job do? (optional)" />
+                    <input class="dcinput" @bind="Vm.EdDescription" placeholder="What does this job do? (optional)" />
                 </div>
             </div>
 
@@ -469,18 +463,18 @@ else
                 <div class="workload-head">
                     <span class="dcform-title">Workload</span>
                     <div class="dcseg">
-                        <button type="button" class="@(_edMapSourceKind == "image" ? "on" : "")"
-                                @onclick="@(() => _edMapSourceKind = "image")">Container image</button>
-                        <button type="button" class="@(_edMapSourceKind == "code" ? "on" : "")"
-                                @onclick="@(() => _edMapSourceKind = "code")">Inline code</button>
+                        <button type="button" class="@(Vm.EdMapSourceKind == "image" ? "on" : "")"
+                                @onclick="@(() => Vm.EdMapSourceKind = "image")">Container image</button>
+                        <button type="button" class="@(Vm.EdMapSourceKind == "code" ? "on" : "")"
+                                @onclick="@(() => Vm.EdMapSourceKind = "code")">Inline code</button>
                     </div>
                 </div>
 
-                @if (_edMapSourceKind == "image")
+                @if (Vm.EdMapSourceKind == "image")
                 {
                     <div class="dcfield">
                         <label>Image <span class="req">*</span></label>
-                        <input class="dcinput input-sans-12" @bind="_edMapImage" placeholder="myorg/worker:latest" />
+                        <input class="dcinput input-sans-12" @bind="Vm.EdMapImage" placeholder="myorg/worker:latest" />
                     </div>
                 }
                 else
@@ -488,7 +482,7 @@ else
                     <div class="row-gap-10">
                         <div class="dcfield flex-1">
                             <label>Runtime <span class="req">*</span></label>
-                            <select class="dcinput" @bind="_edMapRuntimeId">
+                            <select class="dcinput" @bind="Vm.EdMapRuntimeId">
                                 <option value="">— select —</option>
                                 <option value="node">node</option>
                                 <option value="python">python</option>
@@ -499,27 +493,25 @@ else
                         </div>
                         <div class="dcfield flex-1">
                             <label>Entrypoint</label>
-                            <input class="dcinput input-sans-12" @bind="_edMapEntrypoint"
-                                   placeholder="@DefaultEntrypointFor(_edMapRuntimeId)" />
+                            <input class="dcinput input-sans-12" @bind="Vm.EdMapEntrypoint"
+                                   placeholder="@JobsViewModel.DefaultEntrypointFor(Vm.EdMapRuntimeId)" />
                         </div>
                     </div>
                     <div class="dcfield">
-                        <label>Source code @(_editJobId.HasValue ? "" : "*")</label>
-                        @if (_editJobId is { } editingJobId)
+                        <label>Source code @(Vm.EditJobId.HasValue ? "" : "*")</label>
+                        @if (Vm.EditJobId is { } editingJobId)
                         {
-                            @* Source lives in the code editor, not this pane — one place to edit,
-                               with Monaco, the file tree, and Test runs. *@
                             <button class="dcbtn open-editor-btn"
                                     @onclick="@(() => Nav.NavigateTo($"/project/{ProjectId}/jobs/{editingJobId}"))">
                                 ⤷ Open code editor
-                                <span class="hint-10-5">@Math.Max(_edMapFiles.Count, 1) file(s)</span>
+                                <span class="hint-10-5">@Math.Max(Vm.EdMapFiles.Count, 1) file(s)</span>
                             </button>
                         }
                         else
                         {
                             <textarea class="dcinput textarea-sans" rows="12"
-                                      @bind="_edMapSource"
-                                      placeholder="@SourcePlaceholderFor(_edMapRuntimeId)">
+                                      @bind="Vm.EdMapSource"
+                                      placeholder="@JobsViewModel.SourcePlaceholderFor(Vm.EdMapRuntimeId)">
                             </textarea>
                         }
                         <div class="dchint">
@@ -528,11 +520,11 @@ else
                             <code>package.json</code>, <code>Gemfile</code>, <code>go.mod</code>) and packages install
                             before the entrypoint runs — downloads need <strong>Allow network egress</strong> ticked.
                         </div>
-                        @if (_edMapFiles.Count > 1)
+                        @if (Vm.EdMapFiles.Count > 1)
                         {
                             <div class="files-note">
-                                <span>This job has @_edMapFiles.Count files — the editor above changes only the entrypoint; the rest are kept on save:</span>
-                                @foreach (var f in _edMapFiles.Where(f => f.Path != (_edMapEntrypoint == "" ? DefaultEntrypointFor(_edMapRuntimeId) : _edMapEntrypoint)))
+                                <span>This job has @Vm.EdMapFiles.Count files — the editor above changes only the entrypoint; the rest are kept on save:</span>
+                                @foreach (var f in Vm.EdMapFiles.Where(f => f.Path != (Vm.EdMapEntrypoint == "" ? JobsViewModel.DefaultEntrypointFor(Vm.EdMapRuntimeId) : Vm.EdMapEntrypoint)))
                                 {
                                     <span class="file-chip">@f.Path</span>
                                 }
@@ -547,13 +539,13 @@ else
                 <div class="dcfield">
                     <label>
                         Input payloads <span class="req">*</span>
-                        @if (DeclaredParams().Count > 0)
+                        @if (Vm.DeclaredParams().Count > 0)
                         {
                             <span class="payload-mode-toggle">
-                                <button type="button" class="dcbtn mode-btn" style="@(_edPayloadMode == "form" ? "color:var(--brand-2); border-color:var(--brand-2)" : "")"
-                                        @onclick="@(() => SwitchPayloadMode("form"))">form</button>
-                                <button type="button" class="dcbtn mode-btn" style="@(_edPayloadMode == "raw" ? "color:var(--brand-2); border-color:var(--brand-2)" : "")"
-                                        @onclick="@(() => SwitchPayloadMode("raw"))">raw JSON</button>
+                                <button type="button" class="dcbtn mode-btn" style="@(Vm.EdPayloadMode == "form" ? "color:var(--brand-2); border-color:var(--brand-2)" : "")"
+                                        @onclick="@(() => Vm.SwitchPayloadMode("form"))">form</button>
+                                <button type="button" class="dcbtn mode-btn" style="@(Vm.EdPayloadMode == "raw" ? "color:var(--brand-2); border-color:var(--brand-2)" : "")"
+                                        @onclick="@(() => Vm.SwitchPayloadMode("raw"))">raw JSON</button>
                             </span>
                         }
                         else
@@ -561,18 +553,17 @@ else
                             <span class="code ml-5">one JSON per line — each line becomes a shard</span>
                         }
                     </label>
-                    @if (_edPayloadMode == "form" && DeclaredParams().Count > 0)
+                    @if (Vm.EdPayloadMode == "form" && Vm.DeclaredParams().Count > 0)
                     {
-                        @* The declared inputs render as a form; the values compose the payload JSON. *@
-                        @foreach (var p in DeclaredParams())
+                        @foreach (var p in Vm.DeclaredParams())
                         {
                             <div class="param-row">
                                 <span class="param-name-label">
                                     @(p.Label ?? p.Name)@(p.Required ? " *" : "")
                                 </span>
                                 <div class="flex-1">
-                                    <ParamInput Parameter="p" Value="@PayloadFormValue(p.Name)"
-                                                ValueChanged="@(v => SetPayloadFormValue(p.Name, v))" />
+                                    <ParamInput Parameter="p" Value="@Vm.PayloadFormValue(p.Name)"
+                                                ValueChanged="@(v => Vm.SetPayloadFormValue(p.Name, v))" />
                                 </div>
                             </div>
                         }
@@ -581,7 +572,7 @@ else
                     else
                     {
                         <textarea class="dcinput textarea-sans" rows="4"
-                                  @bind="_edInputPayloadsRaw"
+                                  @bind="Vm.EdInputPayloadsRaw"
                                   placeholder="{&quot;key&quot;: &quot;value1&quot;}&#10;{&quot;key&quot;: &quot;value2&quot;}">
                         </textarea>
                     }
@@ -589,30 +580,30 @@ else
                 <div class="dcfield">
                     <div class="row-between">
                         <label>Run-form parameters</label>
-                        <button type="button" class="dcbtn btn-2-9" @onclick="@(() => _edParams.Add(new ParamEdit()))">+ input</button>
+                        <button type="button" class="dcbtn btn-2-9" @onclick="@(() => Vm.EdParams.Add(new ParamEdit()))">+ input</button>
                     </div>
                     <div class="param-list">
-                        @for (var i = 0; i < _edParams.Count; i++)
+                        @for (var i = 0; i < Vm.EdParams.Count; i++)
                         {
                             var idx = i;
                             <div class="param-edit-row">
-                                <input class="dcinput param-name-input" placeholder="name" @bind="_edParams[idx].Name" />
-                                <input class="dcinput param-label-input" placeholder="Label (optional)" @bind="_edParams[idx].Label" />
-                                <select class="dcinput param-type-select" @bind="_edParams[idx].Type">
+                                <input class="dcinput param-name-input" placeholder="name" @bind="Vm.EdParams[idx].Name" />
+                                <input class="dcinput param-label-input" placeholder="Label (optional)" @bind="Vm.EdParams[idx].Label" />
+                                <select class="dcinput param-type-select" @bind="Vm.EdParams[idx].Type">
                                     <option value="text">text</option>
                                     <option value="number">number</option>
                                     <option value="select">select</option>
                                     <option value="checkbox">checkbox</option>
                                 </select>
-                                @if (_edParams[idx].Type == "select")
+                                @if (Vm.EdParams[idx].Type == "select")
                                 {
                                     <input class="dcinput param-options-input"
-                                           placeholder="options, comma-separated" @bind="_edParams[idx].OptionsRaw" />
+                                           placeholder="options, comma-separated" @bind="Vm.EdParams[idx].OptionsRaw" />
                                 }
                                 <label class="param-required-label">
-                                    <input type="checkbox" @bind="_edParams[idx].Required" class="accent-brand" /> required
+                                    <input type="checkbox" @bind="Vm.EdParams[idx].Required" class="accent-brand" /> required
                                 </label>
-                                <button type="button" class="dcbtn btn-2-8" @onclick="@(() => _edParams.RemoveAt(idx))">×</button>
+                                <button type="button" class="dcbtn btn-2-8" @onclick="@(() => Vm.EdParams.RemoveAt(idx))">×</button>
                             </div>
                         }
                     </div>
@@ -628,23 +619,21 @@ else
                 <div class="dcfield">
                     <label>Environment variables <span class="code ml-5">KEY=VALUE, one per line</span></label>
                     <textarea class="dcinput textarea-sans" rows="3"
-                              @bind="_edMapEnvRaw"
+                              @bind="Vm.EdMapEnvRaw"
                               placeholder="MY_KEY=my_value">
                     </textarea>
                 </div>
 
-                @* Vault secrets are injected as env vars at run time (decrypted in-process), on top of the
-                   plaintext vars above — names only; values are write-only and managed in the Vault. *@
                 <div class="vault-box">
                     <div class="vault-head">
                         <span class="text-3-12">Injected at run time (from Vault)</span>
                         <button type="button" class="link-btn"
                                 @onclick="@(() => Nav.NavigateTo($"/project/{ProjectId}/secrets"))">manage in Vault →</button>
                     </div>
-                    @if (_vaultSecrets is { Count: > 0 })
+                    @if (Vm.VaultSecrets is { Count: > 0 })
                     {
                         <div class="chip-wrap">
-                            @foreach (var s in _vaultSecrets)
+                            @foreach (var s in Vm.VaultSecrets)
                             {
                                 <span class="secret-chip">@s.Name</span>
                             }
@@ -665,32 +654,32 @@ else
                 <div class="row-gap-10">
                     <div class="dcfield flex-1">
                         <label>Concurrency</label>
-                        <input class="dcinput" type="number" min="1" max="32" @bind="_edConcurrency" />
+                        <input class="dcinput" type="number" min="1" max="32" @bind="Vm.EdConcurrency" />
                     </div>
                     <div class="dcfield flex-1">
                         <label>Success exit codes <span class="code ml-5">comma-separated</span></label>
-                        <input class="dcinput" @bind="_edSuccessCodesRaw" placeholder="0" />
+                        <input class="dcinput" @bind="Vm.EdSuccessCodesRaw" placeholder="0" />
                     </div>
                     <div class="dcfield flex-1">
                         <label>Partial exit codes</label>
-                        <input class="dcinput" @bind="_edPartialCodesRaw" placeholder="" />
+                        <input class="dcinput" @bind="Vm.EdPartialCodesRaw" placeholder="" />
                     </div>
                 </div>
                 <div class="row-gap-10 mt-10">
                     <div class="dcfield flex-1">
                         <label>Max retries</label>
-                        <input class="dcinput" type="number" min="0" @bind="_edRetryCount" />
+                        <input class="dcinput" type="number" min="0" @bind="Vm.EdRetryCount" />
                         <div class="dchint">Automatic retry attempts when a run fails. 0 = no retries.</div>
                     </div>
                     <div class="dcfield flex-1">
                         <label>Retry delay (seconds)</label>
-                        <input class="dcinput" type="number" min="0" @bind="_edRetryDelaySeconds" />
+                        <input class="dcinput" type="number" min="0" @bind="Vm.EdRetryDelaySeconds" />
                         <div class="dchint">Fixed wait between retry attempts.</div>
                     </div>
                     <div class="flex-1"></div>
                 </div>
                 <label class="egress-label">
-                    <input type="checkbox" @bind="_edAllowNetworkEgress"
+                    <input type="checkbox" @bind="Vm.EdAllowNetworkEgress"
                            class="checkbox-16" />
                     Allow network egress
                     <span class="dchint">(disables the --network none sandbox; only enable for jobs that require outbound access)</span>
@@ -701,8 +690,8 @@ else
                 <span class="dcform-title">Outputs</span>
                 <div class="dcfield">
                     <label>Return type <span class="req">*</span></label>
-                    <select class="dcinput mw-260" @bind="_edReturnType">
-                        @foreach (var (rt, label) in ReturnTypeChoices)
+                    <select class="dcinput mw-260" @bind="Vm.EdReturnType">
+                        @foreach (var (rt, label) in JobsViewModel.ReturnTypeChoices)
                         {
                             <option value="@rt">@label</option>
                         }
@@ -711,13 +700,13 @@ else
                         What this job's code returns on stdout. Every run generates its primary artifact from this
                         type — a run always yields at least one stored artifact.
                     </div>
-                    @if (_edReturnType is PlaceContext.Domain.ValueObjects.JobReturnType.Pdf
+                    @if (Vm.EdReturnType is PlaceContext.Domain.ValueObjects.JobReturnType.Pdf
                         or PlaceContext.Domain.ValueObjects.JobReturnType.Image
                         or PlaceContext.Domain.ValueObjects.JobReturnType.Video)
                     {
                         <div class="dcfield mw-280-mt8">
                             <label>Output file name <span class="code ml-5">in /out</span></label>
-                            <input class="dcinput font-sans" @bind="_edReturnFileName"
+                            <input class="dcinput font-sans" @bind="Vm.EdReturnFileName"
                                    placeholder="report.pdf" />
                             <div class="dchint">The named file becomes the run's artifact; blank = first file matching the type.</div>
                         </div>
@@ -726,12 +715,12 @@ else
                 <div class="dcfield">
                     <label>Extra post-job actions</label>
                     <div class="actions-wrap">
-                        @foreach (var (kind, label) in PostJobActionChoices)
+                        @foreach (var (kind, label) in JobsViewModel.PostJobActionChoices)
                         {
                             <label class="action-label">
-                                <input type="checkbox" checked="@_edPostJobActions.Contains(kind)"
+                                <input type="checkbox" checked="@Vm.EdPostJobActions.Contains(kind)"
                                        class="checkbox-15"
-                                       @onchange="@(e => TogglePostJobAction(kind, (bool)e.Value!))" />
+                                       @onchange="@(e => Vm.TogglePostJobAction(kind, (bool)e.Value!))" />
                                 @label
                             </label>
                         }
@@ -744,16 +733,16 @@ else
         </div>
         }
 
-        @if (_editorTab == "details")
+        @if (Vm.EditorTab == "details")
         {
             <div class="dcslide-foot">
-                @if (_editorError is not null)
+                @if (Vm.EditorError is not null)
                 {
-                    <div class="foot-error">@_editorError</div>
+                    <div class="foot-error">@Vm.EditorError</div>
                 }
-                <button class="dcbtn" @onclick="CloseEditor">Cancel</button>
-                <button class="dcbtn primary" disabled="@_saving" @onclick="SaveJob">
-                    @(_saving ? "Saving…" : _editJobId.HasValue ? "Save changes" : "Create job")
+                <button class="dcbtn" @onclick="() => Vm.CloseEditor()">Cancel</button>
+                <button class="dcbtn primary" disabled="@Vm.Saving" @onclick="() => Vm.SaveJobAsync()">
+                    @(Vm.Saving ? "Saving…" : Vm.EditJobId.HasValue ? "Save changes" : "Create job")
                 </button>
             </div>
         }
@@ -761,21 +750,21 @@ else
 }
 
 @* ── Run-input modal (prompts for a job's declared parameters) ────────────────────────── *@
-@if (_runPromptJob is not null)
+@if (Vm.RunPromptJob is not null)
 {
-    <div class="dcmodal-overlay" @onclick="@(() => _runPromptJob = null)">
+    <div class="dcmodal-overlay" @onclick="() => Vm.CancelRunPrompt()">
         <div class="dcmodal modal-440" @onclick:stopPropagation="true">
             <div class="dcmodal-head">
                 <div class="flex-fill-min">
-                    <div class="title-14">Run @_runPromptJob.Name</div>
+                    <div class="title-14">Run @Vm.RunPromptJob.Name</div>
                     <div class="subtitle-11-5">
                         This job takes input — the values below become the run's payload.
                     </div>
                 </div>
-                <button class="dcslide-x" @onclick="@(() => _runPromptJob = null)">×</button>
+                <button class="dcslide-x" @onclick="() => Vm.CancelRunPrompt()">×</button>
             </div>
             <div class="dcmodal-body">
-                @foreach (var (p, i) in _runPromptJob.Parameters.Select((p, i) => (p, i)))
+                @foreach (var (p, i) in Vm.RunPromptJob.Parameters.Select((p, i) => (p, i)))
                 {
                     <div class="dcfield">
                         <label>
@@ -786,19 +775,19 @@ else
                             }
                             <span class="code ml-5">@p.Name</span>
                         </label>
-                        <ParamInput Parameter="p" Value="@GetArg(p.Name)"
-                                    ValueChanged="@(v => SetArg(p.Name, v))" />
+                        <ParamInput Parameter="p" Value="@Vm.GetArg(p.Name)"
+                                    ValueChanged="@(v => Vm.SetArg(p.Name, v))" />
                     </div>
                 }
-                @if (_runPromptError is not null)
+                @if (Vm.RunPromptError is not null)
                 {
-                    <div class="prompt-error">@_runPromptError</div>
+                    <div class="prompt-error">@Vm.RunPromptError</div>
                 }
             </div>
             <div class="dcmodal-foot">
-                <button class="dcbtn" @onclick="@(() => _runPromptJob = null)">Cancel</button>
-                <button class="dcbtn primary" disabled="@(_runningJobId == _runPromptJob.Id)" @onclick="SubmitRunPrompt">
-                    @(_runningJobId == _runPromptJob.Id ? "Running…" : "▶ Run job")
+                <button class="dcbtn" @onclick="() => Vm.CancelRunPrompt()">Cancel</button>
+                <button class="dcbtn primary" disabled="@(Vm.RunningJobId == Vm.RunPromptJob.Id)" @onclick="() => Vm.SubmitRunPromptAsync()">
+                    @(Vm.RunningJobId == Vm.RunPromptJob.Id ? "Running…" : "▶ Run job")
                 </button>
             </div>
         </div>
@@ -808,656 +797,17 @@ else
 @code {
     [Parameter] public Guid ProjectId { get; set; }
 
-    // Per-runtime hints for the inline-code editor (must match WorkloadRunnerOptions.Runtimes).
-    private static string DefaultEntrypointFor(string? runtime) => runtime switch
-    {
-        "python" => "main.py",
-        "go" => "main.go",
-        "ruby" => "main.rb",
-        "dotnet" => "main.cs",
-        _ => "index.js",
-    };
-
-    // Placeholders follow the authoring contract (job_authoring_guide): read the payload from
-    // STDIN and print the JSON artifact to STDOUT — that's what the in-cluster runner captures.
-    private static string SourcePlaceholderFor(string? runtime) => runtime switch
-    {
-        "python" => "import sys, json\ndata = json.loads(sys.stdin.read() or \"{}\")\nresult = {}\nprint(json.dumps(result))",
-        "go" => "package main\n\nimport (\n    \"encoding/json\"\n    \"io\"\n    \"os\"\n)\n\nfunc main() {\n    in, _ := io.ReadAll(os.Stdin)\n    var data any\n    json.Unmarshal(in, &data)\n    json.NewEncoder(os.Stdout).Encode(map[string]any{})\n}",
-        "ruby" => "require 'json'\ndata = JSON.parse(STDIN.read)\nresult = {}\nputs result.to_json",
-        "dotnet" => "using System.Text.Json;\nvar input = Console.In.ReadToEnd();\nvar data = JsonSerializer.Deserialize<JsonElement>(input);\nvar result = new { };\nConsole.Write(JsonSerializer.Serialize(result));",
-        _ => "const fs = require('fs');\nconst data = JSON.parse(fs.readFileSync('/dev/stdin','utf8'));\nconst result = {};\nprocess.stdout.write(JSON.stringify(result));",
-    };
-
-    private IReadOnlyList<JobView>? _jobs;
-    private IReadOnlyList<ProjectSecretView>? _vaultSecrets; // names injected as env at run time (Vault)
-    private IReadOnlyList<JobRunView>? _runs;
-    private JobRunDetailView? _runDetail;
-    private IReadOnlyList<RunArtifactLinkView>? _runArtifacts; // MinIO post-job outputs for the open run
-    private IReadOnlyList<JobRunTelemetry>? _jobTelemetry; // in-process OTel read model — this job's recent run/shard timings
-    private Guid? _selectedJobId;
-    private Guid? _runningJobId;
-    private string? _message;
-    private bool _loading = true;
-
-    // ── Triggers state ────────────────────────────────────────────────────────────────────────────
-    private IReadOnlyList<TriggerView>? _triggers;
-    private IReadOnlyList<EventTypeView>? _eventTypes;
-    private string _trName = "";
-    private string _trKind = "Schedule";
-    private string _trCron = "0 0 * * *";
-    private string _trEvent = "";
-    private bool _trBusy;
-    private string? _trError;
-
-    // ── Editor state ────────────────────────────────────────────────────────────────────────────
-    private bool _showEditor;
-    private bool _saving;
-    private Guid? _editJobId;
-    private string? _editorError;
-    private string _editorTab = "details";   // details | runs | triggers (tabs exist only when editing)
-    private Guid? _selectedTriggerId;        // trigger opened inline on the Triggers tab
-
-    private string _edName = "";
-    private string _edDescription = "";
-    private string _edMapSourceKind = "image";
-    private string _edMapImage = "";
-    private string _edMapRuntimeId = "node";
-    private string _edMapEntrypoint = "";
-    private string _edMapSource = "";
-    private IReadOnlyList<CodeFileDto> _edMapFiles = Array.Empty<CodeFileDto>(); // full file set of a multi-file job
-    private string _edInputPayloadsRaw = "{}";
-    private string _edPayloadMode = "raw";                 // "form" composes JSON from declared inputs
-    private Dictionary<string, string> _edPayloadForm = new();
-    private string _edMapEnvRaw = "";
-    private int _edConcurrency = 1;
-    private string _edSuccessCodesRaw = "0";
-    private string _edPartialCodesRaw = "";
-    private bool _edAllowNetworkEgress;
-    private int _edRetryCount;
-    private int _edRetryDelaySeconds;
-    private readonly List<ParamEdit> _edParams = new();
-
-    private sealed class ParamEdit
-    {
-        public string Name = "";
-        public string Label = "";
-        public string Type = "text";
-        public string OptionsRaw = "";
-        public bool Required = true;
-
-        public JobParameterDto ToDto() => new(Name.Trim(),
-            string.IsNullOrWhiteSpace(Label) ? null : Label.Trim(), Required, Type,
-            Type == "select"
-                ? OptionsRaw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                : null);
-
-        public static ParamEdit From(JobParameterDto p) => new()
-        {
-            Name = p.Name,
-            Label = p.Label ?? "",
-            Type = p.Type,
-            OptionsRaw = string.Join(", ", p.Options ?? Array.Empty<string>()),
-            Required = p.Required,
-        };
-    }
-    private readonly List<PlaceContext.Domain.ValueObjects.PostJobActionKind> _edPostJobActions = new();
-    private PlaceContext.Domain.ValueObjects.JobReturnType _edReturnType = PlaceContext.Domain.ValueObjects.JobReturnType.Json;
-    private string _edReturnFileName = "";
-
-    // ── Run-input prompt state ────────────────────────────────────────────────────────────────────
-    private JobView? _runPromptJob;
-    private Dictionary<string, string> _runArgs = new();
-    private string? _runPromptError;
-
-    protected override void OnInitialized() => OpCenter.Changed += OnOpsChanged;
+    protected override void OnInitialized() => Vm.Attach(StateHasChanged);
 
     protected override async Task OnParametersSetAsync()
     {
-        _loading = true;
-        _message = null;
-        try
-        {
-            _jobs = await Svc.ListJobsAsync(ProjectId);
-            _vaultSecrets = await Svc.ListProjectSecretsAsync(ProjectId);
-            _triggers = await Svc.ListTriggersAsync(ProjectId);
-            _eventTypes = await Svc.ListEventTypesAsync();
-            Ui.Set("Jobs", "project workload runner");
-        }
-        catch (Exception ex) { _message = ex.Message; }
-        finally { _loading = false; }
+        Vm.Initialize(ProjectId);
+        await Vm.LoadAsync();
     }
 
-    // The OperationCenter raises Changed whenever any background operation transitions — the
-    // run-status watcher syncs persisted run states into it on a short tick, so subscribing here
-    // makes the run list and the expanded run detail flip live, with no manual refresh.
-    private void OnOpsChanged() => _ = InvokeAsync(RefreshRunsAsync);
-
-    private bool _refreshingRuns;
-
-    private async Task RefreshRunsAsync()
+    public void Dispose()
     {
-        if (_refreshingRuns || _selectedJobId is not { } jobId) return;
-        _refreshingRuns = true;
-        try
-        {
-            var runs = await Svc.ListJobRunsAsync(jobId);
-            if (_runDetail is { } open
-                && runs.FirstOrDefault(r => r.Id == open.Id) is { } summary
-                && summary.Status != open.Status)
-            {
-                _runDetail = await Svc.GetJobRunAsync(open.Id);
-                _runArtifacts = await Svc.ListRunArtifactsAsync(open.Id);
-            }
-            _runs = runs;
-            StateHasChanged();
-        }
-        catch { /* live refresh is best-effort; the next change notification retries */ }
-        finally { _refreshingRuns = false; }
-    }
-
-    public void Dispose() => OpCenter.Changed -= OnOpsChanged;
-
-    // ── Triggers ─────────────────────────────────────────────────────────────────────────────────
-
-    private IEnumerable<TriggerView> JobTriggers() =>
-        _triggers?.Where(t => t.JobId == _selectedJobId) ?? Enumerable.Empty<TriggerView>();
-
-    private async Task AddTrigger()
-    {
-        _trError = null;
-        if (!_selectedJobId.HasValue) return;
-        if (string.IsNullOrWhiteSpace(_trName)) { _trError = "Name is required."; return; }
-
-        _trBusy = true;
-        try
-        {
-            var cron = _trKind == "Schedule" ? _trCron : null;
-            var evt = _trKind == "Event" ? _trEvent : null;
-            await Svc.CreateTriggerAsync(new CreateTriggerCommand(_selectedJobId.Value, _trName.Trim(), _trKind, cron, evt));
-            _triggers = await Svc.ListTriggersAsync(ProjectId);
-            _trName = "";
-            _trEvent = "";
-        }
-        catch (Exception ex) { _trError = ex.Message; }
-        finally { _trBusy = false; }
-    }
-
-    private async Task ToggleTrigger(TriggerView t)
-    {
-        try
-        {
-            await Svc.SetTriggerEnabledAsync(t.Id, !t.Enabled);
-            _triggers = await Svc.ListTriggersAsync(ProjectId);
-        }
-        catch (Exception ex) { _trError = ex.Message; }
-    }
-
-    private async Task RemoveTrigger(Guid triggerId)
-    {
-        try
-        {
-            await Svc.DeleteTriggerAsync(triggerId);
-            _triggers = await Svc.ListTriggersAsync(ProjectId);
-            if (_selectedTriggerId == triggerId) _selectedTriggerId = null;
-        }
-        catch (Exception ex) { _trError = ex.Message; }
-    }
-
-    // Clicking a job card opens the editor slide-out on its details, with the job's execution
-    // results one tab away — the list page itself stays a clean list.
-    private async Task OpenJob(JobView job)
-    {
-        EditJob(job);
-        _selectedJobId = job.Id;
-        _runDetail = null;
-        try
-        {
-            _runs = await Svc.ListJobRunsAsync(job.Id);
-        }
-        catch (Exception ex) { _message = ex.Message; }
-        await LoadJobTelemetryAsync(job.Id);
-    }
-
-    private async Task SwitchToRunsTab()
-    {
-        _editorTab = "runs";
-        _runDetail = null;
-        if (_editJobId is { } jobId)
-        {
-            try { _runs = await Svc.ListJobRunsAsync(jobId); } catch { /* keep the last list on refresh failure */ }
-            await LoadJobTelemetryAsync(jobId);
-        }
-    }
-
-    // Best-effort — the OTel panel is a nicety over the durable run list above it, never a blocker.
-    private async Task LoadJobTelemetryAsync(Guid jobId)
-    {
-        try { _jobTelemetry = await Svc.ListJobRunTelemetryAsync(jobId); }
-        catch { _jobTelemetry = null; }
-    }
-
-    private TriggerView? SelectedTrigger() =>
-        _selectedTriggerId is { } id ? JobTriggers().FirstOrDefault(t => t.Id == id) : null;
-
-    // From a trigger's detail, opening a run jumps to the Runs tab with that run expanded.
-    private async Task OpenRunDetailFromTrigger(Guid runId)
-    {
-        _editorTab = "runs";
-        await OpenRunDetail(runId);
-    }
-
-    private async Task RunJob(Guid jobId)
-    {
-        // If the job declares input parameters, prompt for them before running.
-        var job = _jobs?.FirstOrDefault(j => j.Id == jobId);
-        if (job is not null && job.Parameters.Count > 0)
-        {
-            _runPromptJob = job;
-            _runArgs = job.Parameters.ToDictionary(p => p.Name, _ => "");
-            _runPromptError = null;
-            return;
-        }
-        await RunJobCore(jobId, null);
-    }
-
-    private async Task RunJobCore(Guid jobId, string? payload)
-    {
-        _message = null;
-        _runningJobId = jobId;
-        // Runs execute as background portal operations — leaving this page never interrupts one;
-        // progress and the outcome live in the notifications bell.
-        var tenant = PlaceContext.Infrastructure.Tenancy.CurrentTenant.Current;
-        if (tenant is null) { _message = "No tenant resolved — sign in again."; _runningJobId = null; return; }
-        var jobName = _jobs?.FirstOrDefault(j => j.Id == jobId)?.Name ?? "job";
-        // The run id is pre-allocated and doubles as the op's correlation key, so the run-status
-        // watcher flips this entry the moment the run row commits — well before the awaited
-        // handler returns from its slow best-effort enrichment.
-        var runId = Guid.NewGuid();
-        OpCenter.Run(tenant, ProjectId, $"Run job — {jobName}", $"/observability?run={runId}",
-            async (sp, ct) =>
-            {
-                var result = await sp.GetRequiredService<IPlaceContextService>().RunJobAsync(jobId, payload, runId, ct);
-                return $"run finished — {result.Status}";
-            },
-            correlationKey: PlaceContext.Application.Features.RunStatusWatchService.JobRunKey(runId));
-        _runPromptJob = null;
-        _runningJobId = null;
-        _message = $"Run of {jobName} started in the background — follow it in the notifications bell.";
-        if (_selectedJobId == jobId)
-        {
-            try { _runs = await Svc.ListJobRunsAsync(jobId); } catch { /* list refresh is best-effort */ }
-        }
-    }
-
-    private string GetArg(string name) => _runArgs.TryGetValue(name, out var v) ? v : "";
-    private void SetArg(string name, string value) => _runArgs[name] = value;
-
-    private async Task SubmitRunPrompt()
-    {
-        if (_runPromptJob is null) return;
-        _runPromptError = null;
-
-        var missing = _runPromptJob.Parameters
-            .Where(p => p.Required && string.IsNullOrWhiteSpace(GetArg(p.Name)))
-            .Select(p => p.Label ?? p.Name)
-            .ToList();
-        if (missing.Count > 0) { _runPromptError = $"Required: {string.Join(", ", missing)}"; return; }
-
-        var payload = System.Text.Json.JsonSerializer.Serialize(
-            _runPromptJob.Parameters.ToDictionary(p => p.Name, p => GetArg(p.Name)));
-        await RunJobCore(_runPromptJob.Id, payload);
-    }
-
-    private async Task OpenRunDetail(Guid runId)
-    {
-        try
-        {
-            _runDetail = await Svc.GetJobRunAsync(runId);
-            _runArtifacts = await Svc.ListRunArtifactsAsync(runId);
-        }
-        catch (Exception ex) { _message = ex.Message; }
-    }
-
-    // ── Editor ───────────────────────────────────────────────────────────────────────────────────
-
-    private void NewJob()
-    {
-        _editJobId = null;
-        _edName = "";
-        _edDescription = "";
-        _edMapSourceKind = "image";
-        _edMapImage = "";
-        _edMapRuntimeId = "python";
-        _edMapEntrypoint = "";
-        _edMapSource = "";
-        _edMapFiles = Array.Empty<CodeFileDto>();
-        _edInputPayloadsRaw = "{}";
-        _edMapEnvRaw = "";
-        _edConcurrency = 1;
-        _edSuccessCodesRaw = "0";
-        _edPartialCodesRaw = "";
-        _edAllowNetworkEgress = false;
-        _edRetryCount = 0;
-        _edRetryDelaySeconds = 0;
-        _edParams.Clear();
-        _edPostJobActions.Clear();
-        _edReturnType = PlaceContext.Domain.ValueObjects.JobReturnType.Json;
-        _edReturnFileName = "";
-        _editorError = null;
-        _editorTab = "details";
-        _showEditor = true;
-    }
-
-    private void EditJob(JobView job)
-    {
-        _editJobId = job.Id;
-        _edName = job.Name;
-        _edDescription = job.Description ?? "";
-        _edMapSourceKind = job.MapSourceKind;
-        _edMapImage = job.MapImage ?? "";
-        _edMapRuntimeId = job.MapRuntimeId ?? "node";
-        _edMapEntrypoint = job.MapEntrypoint ?? "";
-        _edMapSource = job.MapSource ?? "";
-        _edMapFiles = job.MapFiles;
-        _edInputPayloadsRaw = string.Join("\n", job.InputPayloads);
-        _edMapEnvRaw = string.Join("\n", job.MapEnv.Select(kv => $"{kv.Key}={kv.Value}"));
-        _edConcurrency = job.ConcurrencyLimit;
-        _edSuccessCodesRaw = string.Join(",", job.SuccessExitCodes);
-        _edPartialCodesRaw = string.Join(",", job.PartialExitCodes);
-        _edAllowNetworkEgress = job.AllowNetworkEgress;
-        _edRetryCount = job.RetryCount;
-        _edRetryDelaySeconds = job.RetryDelaySeconds;
-        _edParams.Clear();
-        _edParams.AddRange(job.Parameters.Select(ParamEdit.From));
-        _edPostJobActions.Clear();
-        _edPostJobActions.AddRange(job.PostJobActions);
-        _edReturnType = job.ReturnType;
-        _edReturnFileName = job.ReturnFileName ?? "";
-        _editorError = null;
-        _editorTab = "details";
-        _selectedTriggerId = null;
-        _showEditor = true;
-    }
-
-    // ── Payload form (declared inputs → payload JSON) ─────────────────────────────────────────────
-    private IReadOnlyList<JobParameterDto> DeclaredParams()
-        => _edParams.Where(p => !string.IsNullOrWhiteSpace(p.Name)).Select(p => p.ToDto()).ToList();
-
-    private void SwitchPayloadMode(string mode)
-    {
-        if (mode == "form")
-        {
-            // Prefill the form from the first raw payload line when it's a flat JSON object.
-            _edPayloadForm = new Dictionary<string, string>();
-            try
-            {
-                var first = _edInputPayloadsRaw.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).FirstOrDefault();
-                if (first is not null)
-                {
-                    using var doc = System.Text.Json.JsonDocument.Parse(first);
-                    if (doc.RootElement.ValueKind == System.Text.Json.JsonValueKind.Object)
-                        foreach (var prop in doc.RootElement.EnumerateObject())
-                            if (prop.Value.ValueKind is not (System.Text.Json.JsonValueKind.Object or System.Text.Json.JsonValueKind.Array))
-                                _edPayloadForm[prop.Name] = prop.Value.ValueKind == System.Text.Json.JsonValueKind.String
-                                    ? prop.Value.GetString() ?? "" : prop.Value.ToString();
-                }
-            }
-            catch { /* raw payload isn't a flat object — start blank */ }
-        }
-        else if (_edPayloadMode == "form")
-        {
-            ComposePayloadFromForm();
-        }
-        _edPayloadMode = mode;
-    }
-
-    private string PayloadFormValue(string name) => _edPayloadForm.GetValueOrDefault(name, "");
-
-    private void SetPayloadFormValue(string name, string value)
-    {
-        _edPayloadForm[name] = value;
-        ComposePayloadFromForm();
-    }
-
-    // The form always keeps the raw payload in sync, so SaveJob needs no special casing.
-    private void ComposePayloadFromForm()
-        => _edInputPayloadsRaw = System.Text.Json.JsonSerializer.Serialize(
-            DeclaredParams().ToDictionary(p => p.Name, p => (object)PayloadFormValue(p.Name)));
-
-    private void TogglePostJobAction(PlaceContext.Domain.ValueObjects.PostJobActionKind kind, bool on)
-    {
-        if (on) { if (!_edPostJobActions.Contains(kind)) _edPostJobActions.Add(kind); }
-        else _edPostJobActions.Remove(kind);
-    }
-
-    private static string FormatBytes(long n) =>
-        n >= 1_048_576 ? $"{n / 1_048_576.0:0.#} MB" : n >= 1024 ? $"{n / 1024.0:0.#} KB" : $"{n} B";
-
-    private static readonly (PlaceContext.Domain.ValueObjects.PostJobActionKind Kind, string Label)[] PostJobActionChoices =
-    {
-        (PlaceContext.Domain.ValueObjects.PostJobActionKind.HtmlReport, "HTML report"),
-        (PlaceContext.Domain.ValueObjects.PostJobActionKind.Chart, "Chart"),
-        (PlaceContext.Domain.ValueObjects.PostJobActionKind.Csv, "CSV export"),
-        (PlaceContext.Domain.ValueObjects.PostJobActionKind.RawBundle, "Raw artifacts bundle"),
-    };
-
-    private static readonly (PlaceContext.Domain.ValueObjects.JobReturnType Type, string Label)[] ReturnTypeChoices =
-    {
-        (PlaceContext.Domain.ValueObjects.JobReturnType.Json, "JSON — stored as result.json"),
-        (PlaceContext.Domain.ValueObjects.JobReturnType.Table, "Table — rendered as an HTML report"),
-        (PlaceContext.Domain.ValueObjects.JobReturnType.Chart, "Chart — rendered as an SVG chart page"),
-        (PlaceContext.Domain.ValueObjects.JobReturnType.Html, "HTML — stored openable as-is"),
-        (PlaceContext.Domain.ValueObjects.JobReturnType.Csv, "CSV — flattened to a CSV export"),
-        (PlaceContext.Domain.ValueObjects.JobReturnType.Text, "Text — stored as result.txt"),
-        (PlaceContext.Domain.ValueObjects.JobReturnType.Pdf, "PDF — file emitted to /out, stored as-is"),
-        (PlaceContext.Domain.ValueObjects.JobReturnType.Image, "Image — file emitted to /out (png/jpg/svg/…)"),
-        (PlaceContext.Domain.ValueObjects.JobReturnType.Video, "Video — file emitted to /out (mp4/webm/…)"),
-    };
-
-    private void CloseEditor()
-    {
-        _showEditor = false;
-        _editorError = null;
-        _runDetail = null;
-        _selectedTriggerId = null;
-        _editorTab = "details";
-    }
-
-    private async Task SaveJob()
-    {
-        _editorError = null;
-        if (string.IsNullOrWhiteSpace(_edName)) { _editorError = "Name is required."; return; }
-
-        // Parse payloads — one per non-empty line.
-        var payloads = _edInputPayloadsRaw
-            .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .ToList();
-        if (payloads.Count == 0) { _editorError = "At least one input payload is required."; return; }
-
-        // Parse env vars — KEY=VALUE per line.
-        var env = new Dictionary<string, string>();
-        foreach (var line in _edMapEnvRaw.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-        {
-            var eq = line.IndexOf('=');
-            if (eq > 0)
-                env[line[..eq].Trim()] = line[(eq + 1)..];
-        }
-
-        // Parse exit codes.
-        var successCodes = ParseInts(_edSuccessCodesRaw, out var sucErr);
-        if (sucErr is not null) { _editorError = $"Success codes: {sucErr}"; return; }
-        var partialCodes = ParseInts(_edPartialCodesRaw, out var parErr);
-        if (parErr is not null) { _editorError = $"Partial codes: {parErr}"; return; }
-
-        var parameters = DeclaredParams();
-
-        _saving = true;
-        try
-        {
-            if (_editJobId.HasValue)
-            {
-                // Multi-file code jobs (authored via upload_job_code / the code editor): the form's
-                // single textarea edits only the entrypoint file — the rest of the file set
-                // (requirements.txt, package.json, libs) must survive a save, so send the full set
-                // with the entrypoint's content swapped in rather than a single MapSource.
-                IReadOnlyList<CodeFileDto>? mapFiles = null;
-                if (_edMapSourceKind == "code" && _edMapFiles.Count > 1)
-                {
-                    var entry = !string.IsNullOrWhiteSpace(_edMapEntrypoint) ? _edMapEntrypoint : DefaultEntrypointFor(_edMapRuntimeId);
-                    mapFiles = _edMapFiles.Select(f => f.Path == entry ? f with { Content = _edMapSource } : f).ToList();
-                }
-
-                var cmd = new UpdateJobCommand(
-                    JobId: _editJobId.Value,
-                    Name: _edName.Trim(),
-                    Description: string.IsNullOrWhiteSpace(_edDescription) ? null : _edDescription.Trim(),
-                    MapImage: _edMapSourceKind == "image" ? _edMapImage : null,
-                    MapRuntimeId: _edMapSourceKind == "code" ? _edMapRuntimeId : null,
-                    MapSource: _edMapSourceKind == "code" && mapFiles is null ? _edMapSource : null,
-                    MapFiles: mapFiles,
-                    MapEntrypoint: _edMapSourceKind == "code" && !string.IsNullOrWhiteSpace(_edMapEntrypoint) ? _edMapEntrypoint : null,
-                    InputPayloads: payloads,
-                    MapEnv: env,
-                    ReduceImage: null,
-                    ReduceRuntimeId: null,
-                    ReduceSource: null,
-                    ReduceEntrypoint: null,
-                    ReduceEnv: null,
-                    ConcurrencyLimit: _edConcurrency,
-                    SuccessExitCodes: successCodes,
-                    PartialExitCodes: partialCodes,
-                    AllowNetworkEgress: _edAllowNetworkEgress,
-                    Parameters: parameters,
-                    PostJobActions: _edPostJobActions.ToList(),
-                    ReturnType: _edReturnType,
-                    ReturnFileName: string.IsNullOrWhiteSpace(_edReturnFileName) ? null : _edReturnFileName.Trim(),
-                    RetryCount: _edRetryCount,
-                    RetryDelaySeconds: _edRetryDelaySeconds);
-
-                await Svc.UpdateJobAsync(cmd);
-                _message = $"Job '{_edName.Trim()}' updated.";
-            }
-            else
-            {
-                var cmd = new CreateJobCommand(
-                    ProjectId: ProjectId,
-                    Name: _edName.Trim(),
-                    Description: string.IsNullOrWhiteSpace(_edDescription) ? null : _edDescription.Trim(),
-                    MapImage: _edMapSourceKind == "image" ? _edMapImage : null,
-                    MapRuntimeId: _edMapSourceKind == "code" ? _edMapRuntimeId : null,
-                    MapSource: _edMapSourceKind == "code" ? _edMapSource : null,
-                    MapEntrypoint: _edMapSourceKind == "code" && !string.IsNullOrWhiteSpace(_edMapEntrypoint) ? _edMapEntrypoint : null,
-                    InputPayloads: payloads,
-                    MapEnv: env,
-                    ReduceImage: null,
-                    ReduceRuntimeId: null,
-                    ReduceSource: null,
-                    ReduceEntrypoint: null,
-                    ReduceEnv: null,
-                    ConcurrencyLimit: _edConcurrency,
-                    SuccessExitCodes: successCodes,
-                    PartialExitCodes: partialCodes,
-                    AllowNetworkEgress: _edAllowNetworkEgress,
-                    Parameters: parameters,
-                    PostJobActions: _edPostJobActions.ToList(),
-                    ReturnType: _edReturnType,
-                    ReturnFileName: string.IsNullOrWhiteSpace(_edReturnFileName) ? null : _edReturnFileName.Trim(),
-                    RetryCount: _edRetryCount,
-                    RetryDelaySeconds: _edRetryDelaySeconds);
-
-                await Svc.CreateJobAsync(cmd);
-                _message = $"Job '{_edName.Trim()}' created.";
-            }
-
-            _jobs = await Svc.ListJobsAsync(ProjectId);
-            _showEditor = false;
-        }
-        catch (Exception ex)
-        {
-            _editorError = ex.Message;
-        }
-        finally
-        {
-            _saving = false;
-        }
-    }
-
-    private static int[] ParseInts(string raw, out string? error)
-    {
-        error = null;
-        if (string.IsNullOrWhiteSpace(raw)) return Array.Empty<int>();
-        var result = new List<int>();
-        foreach (var part in raw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-        {
-            if (!int.TryParse(part, out var n)) { error = $"'{part}' is not a valid integer."; return Array.Empty<int>(); }
-            result.Add(n);
-        }
-        return result.ToArray();
-    }
-
-    // ── Utilities ────────────────────────────────────────────────────────────────────────────────
-
-    private static string StatusColor(string? status) => status switch
-    {
-        "Succeeded" => "var(--good)",
-        "Partial" => "var(--warn)",
-        "Failed" => "var(--bad)",
-        "Running" => "var(--brand-2)",
-        _ => "var(--text-3)"
-    };
-
-    private static string StatusBg(string? status) => status switch
-    {
-        "Succeeded" => "var(--good-bg)",
-        "Partial" => "var(--warn-bg)",
-        "Failed" => "var(--bad-bg)",
-        "Running" => "var(--brand-bg)",
-        _ => "var(--card-2)"
-    };
-
-    private static string FormatDuration(DateTimeOffset start, DateTimeOffset end)
-    {
-        var span = end - start;
-        if (span.TotalSeconds < 60) return $"{(int)span.TotalSeconds}s";
-        return $"{(int)span.TotalMinutes}m {span.Seconds}s";
-    }
-
-    // OTel run-duration formatting for the per-job telemetry panel (RECENT RUN DURATIONS).
-    private static string FormatMs(double? ms) => ms switch
-    {
-        null => "—",
-        < 1000 => $"{ms:0}ms",
-        < 60000 => $"{ms / 1000:0.#}s",
-        _ => $"{ms / 60000:0.#}m",
-    };
-
-    private static string DataUri(RunArtifactView a)
-    {
-        var contentType = a.Name.EndsWith(".csv", StringComparison.OrdinalIgnoreCase) ? "text/csv"
-            : a.Name.EndsWith(".json", StringComparison.OrdinalIgnoreCase) ? "application/json"
-            : a.Name.EndsWith(".html", StringComparison.OrdinalIgnoreCase) ? "text/html"
-            : a.Name.EndsWith(".svg", StringComparison.OrdinalIgnoreCase) ? "image/svg+xml"
-            : a.Name.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase) ? "application/pdf"
-            : a.Name.EndsWith(".png", StringComparison.OrdinalIgnoreCase) ? "image/png"
-            : a.Name.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase) || a.Name.EndsWith(".jpeg", StringComparison.OrdinalIgnoreCase) ? "image/jpeg"
-            : "text/plain";
-        // Binary artifacts already carry base64; text ones need encoding for the data: URI.
-        var b64 = a.IsBinary ? a.Content : Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(a.Content));
-        return $"data:{contentType};base64,{b64}";
-    }
-
-    private static string PrettyJson(string raw)
-    {
-        try
-        {
-            var doc = System.Text.Json.JsonDocument.Parse(raw);
-            return System.Text.Json.JsonSerializer.Serialize(doc.RootElement,
-                new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
-        }
-        catch
-        {
-            return raw;
-        }
+        Vm.DetachEvents();
+        Vm.Detach();
     }
 }

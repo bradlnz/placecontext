@@ -2,24 +2,16 @@
 @attribute [Authorize]
 @layout PlaceContext.Host.Components.Layout.MainLayout
 @implements IDisposable
-@using PlaceContext.Application.Ports
 @using PlaceContext.Application.Dtos
 @using PlaceContext.Application.Features
 @using PlaceContext.Application.Mcp
 @using PlaceContext.Infrastructure.Chat
 @using PlaceContext.Infrastructure.Caching
-@inject IChatGateway Gateway
-@inject IPlaceContextService Svc
-@inject IMcpClientService McpClient
+@using PlaceContext.Host.Components.ViewModels
+@using PlaceContext.Host.Components.ViewModels.Helpers
+@inject ChatViewModel Vm
 @inject PortalUiState Ui
 @inject IJSRuntime JS
-@inject PlaceContext.Infrastructure.Caching.IChatMemoryStore MemoryStore
-@inject AgentContextBuilder ContextBuilder
-@inject IDocumentTextExtractor DocExtractor
-@inject IObjectStore ObjectStore
-@inject PlaceContext.Domain.Repositories.IRunArtifactLinkRepository Links
-@inject ICurrentTenant Tenant
-@inject IContentIndexer ContentIndexer
 
 <PageTitle>placecontext — Agent Chat</PageTitle>
 
@@ -28,11 +20,11 @@
         <div>
             <h2 class="page-title">Agent Chat</h2>
             <div class="page-sub">
-                @if (Gateway is ClusterChatGateway cg)
+                @if (Vm.Gateway is ClusterChatGateway cg)
                 {
-                    <span>@cg.StatusText — @_projectName</span>
+                    <span>@cg.StatusText — @Vm.ProjectName</span>
                 }
-                else if (Gateway.IsEnabled)
+                else if (Vm.Gateway.IsEnabled)
                 {
                     <span>Chat backend active</span>
                 }
@@ -43,9 +35,9 @@
             </div>
         </div>
         <div class="chat-controls">
-            @if (_projectId.HasValue)
+            @if (Vm.ProjectId.HasValue)
             {
-                <button class="dcbtn sm" @onclick="ToggleSidePanel">@(_showSidePanel ? "Hide Panel" : "Show Panel")</button>
+                <button class="dcbtn sm" @onclick="ToggleSidePanel">@(Vm.ShowSidePanel ? "Hide Panel" : "Show Panel")</button>
                 <button class="dcbtn sm" @onclick="OpenSettings">⚙ Settings</button>
             }
         </div>
@@ -54,11 +46,11 @@
     <div class="chat-layout">
         <div class="chat-area">
             <div class="chat-messages" @ref="_messagesRef">
-                @if (_messages.Count == 0)
+                @if (Vm.Messages.Count == 0)
                 {
                     <div class="empty-note chat-empty">
                         <p>Ask me about your project data, job runs, or request a graph.</p>
-                        @if (_projectId.HasValue)
+                        @if (Vm.ProjectId.HasValue)
                         {
                             <div class="starter-actions">
                                 <button class="starter-btn" @onclick="@(() => StarterPromptAsync("Give me an overview of this project"))">
@@ -88,7 +80,7 @@
                 }
                 else
                 {
-                    @foreach (var msg in _messages.Where(m => m.Role != "system"))
+                    @foreach (var msg in Vm.Messages.Where(m => m.Role != "system"))
                     {
                         <div class="chat-msg @msg.Role">
                             <div class="msg-avatar @(msg.Role == "user" ? "avatar-user" : "avatar-bot")">
@@ -104,7 +96,7 @@
                             <div class="msg-body">
                                 <div class="msg-role-row">
                                     <span class="msg-role">@msg.Role</span>
-                                    @if (msg.Role == "assistant" && !_streaming)
+                                    @if (msg.Role == "assistant" && !Vm.Streaming)
                                     {
                                         <button class="msg-copy-btn" @onclick="@(() => CopyMessageAsync(msg.Content))" title="Copy response">
                                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
@@ -113,10 +105,10 @@
                                 </div>
                                 @if (msg.ToolCalls.Count > 0)
                                 {
-                                    var graphCalls = msg.ToolCalls.Where(tc => tc.ResultType == "graph" && tc.Status == ToolCallStatus.Completed).ToList();
-                                    var mapCalls = msg.ToolCalls.Where(tc => tc.ResultType == "map" && tc.Status == ToolCallStatus.Completed).ToList();
-                                    var artifactCalls = msg.ToolCalls.Where(tc => tc.ResultType == "artifact" && tc.Status == ToolCallStatus.Completed).ToList();
-                                    var otherCalls = msg.ToolCalls.Where(tc => (tc.ResultType != "graph" && tc.ResultType != "map" && tc.ResultType != "artifact") || tc.Status != ToolCallStatus.Completed).ToList();
+                                    var graphCalls = msg.ToolCalls.Where(tc => tc.ResultType == "graph" && tc.Status == AgentToolCallStatus.Completed).ToList();
+                                    var mapCalls = msg.ToolCalls.Where(tc => tc.ResultType == "map" && tc.Status == AgentToolCallStatus.Completed).ToList();
+                                    var artifactCalls = msg.ToolCalls.Where(tc => tc.ResultType == "artifact" && tc.Status == AgentToolCallStatus.Completed).ToList();
+                                    var otherCalls = msg.ToolCalls.Where(tc => (tc.ResultType != "graph" && tc.ResultType != "map" && tc.ResultType != "artifact") || tc.Status != AgentToolCallStatus.Completed).ToList();
 
                                     @* Show graphs inline *@
                                     @foreach (var tc in graphCalls)
@@ -145,8 +137,8 @@
                                     @* Show other tool calls in expandable details *@
                                     @if (otherCalls.Count > 0)
                                     {
-                                        var completedCount = otherCalls.Count(tc => tc.Status == ToolCallStatus.Completed);
-                                        var errorCount = otherCalls.Count(tc => tc.Status == ToolCallStatus.Error);
+                                        var completedCount = otherCalls.Count(tc => tc.Status == AgentToolCallStatus.Completed);
+                                        var errorCount = otherCalls.Count(tc => tc.Status == AgentToolCallStatus.Error);
                                         <details class="tool-calls-expandable">
                                             <summary class="tool-calls-summary">
                                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M9 18l6-6-6-6"/></svg>
@@ -166,11 +158,11 @@
                                                     <div class="tool-call @(tc.Status.ToString().ToLower())">
                                                         <span class="tool-name">@tc.ToolName</span>
                                                         <span class="tool-status">@tc.Status</span>
-                                                        @if (tc.Status == ToolCallStatus.Error && !string.IsNullOrEmpty(tc.Result))
+                                                        @if (tc.Status == AgentToolCallStatus.Error && !string.IsNullOrEmpty(tc.Result))
                                                         {
                                                             <span class="tool-error-text">@tc.Result</span>
                                                         }
-                                                        @if (tc.Status == ToolCallStatus.Completed && !string.IsNullOrEmpty(tc.Result))
+                                                        @if (tc.Status == AgentToolCallStatus.Completed && !string.IsNullOrEmpty(tc.Result))
                                                         {
                                                             <details class="tool-result">
                                                                 <summary>View result</summary>
@@ -222,11 +214,11 @@
                                 }
                                 @if (!string.IsNullOrWhiteSpace(msg.Content))
                                 {
-                                    <div class="msg-content">@((MarkupString)FormatContent(msg.Content))</div>
+                                    <div class="msg-content">@((MarkupString)ChatViewModel.FormatContent(msg.Content))</div>
                                 }
                                 @{
-                                    var parsedOptions = ParseNumberedOptions(msg.Content);
-                                    if (parsedOptions.Count > 0 && msg.Role == "assistant" && !_streaming)
+                                    var parsedOptions = ChatViewModel.ParseNumberedOptions(msg.Content);
+                                    if (parsedOptions.Count > 0 && msg.Role == "assistant" && !Vm.Streaming)
                                     {
                                         <div class="option-picker" data-msg-id="@msg.Id">
                                             @foreach (var opt in parsedOptions)
@@ -240,7 +232,7 @@
                                         </div>
                                     }
                                 }
-                                @if (msg.Role == "assistant" && !_streaming)
+                                @if (msg.Role == "assistant" && !Vm.Streaming)
                                 {
                                     <div class="quick-actions">
                                         <button class="qa-btn" @onclick="@(() => QuickActionAsync(msg.Content, "summarize"))" title="Summarize">
@@ -268,7 +260,7 @@
                         </div>
                     }
                 }
-                @if (_streaming)
+                @if (Vm.Streaming)
                 {
                     <div class="chat-msg assistant">
                         <div class="msg-avatar avatar-bot">
@@ -276,20 +268,20 @@
                         </div>
                         <div class="msg-body">
                             <div class="msg-role">assistant</div>
-                            @if (_currentToolCall != null)
+                            @if (Vm.CurrentToolCall != null)
                             {
                                 <div class="tool-calls">
                                     <div class="tool-call running">
-                                        <span class="tool-name">@_currentToolCall.ToolName</span>
+                                        <span class="tool-name">@Vm.CurrentToolCall.ToolName</span>
                                         <span class="tool-status">Running…</span>
-                                        @if (_currentToolCall.RetryCount > 0)
+                                        @if (Vm.CurrentToolCall.RetryCount > 0)
                                         {
-                                            <span class="retry-badge">retry @_currentToolCall.RetryCount</span>
+                                            <span class="retry-badge">retry @Vm.CurrentToolCall.RetryCount</span>
                                         }
                                     </div>
                                 </div>
                             }
-                            @if (_currentToolCall == null && string.IsNullOrEmpty(_streamBuffer))
+                            @if (Vm.CurrentToolCall == null && string.IsNullOrEmpty(Vm.StreamBuffer))
                             {
                                 <div class="typing-dots">
                                     <span></span>
@@ -297,9 +289,9 @@
                                     <span></span>
                                 </div>
                             }
-                            else if (!string.IsNullOrEmpty(_streamBuffer))
+                            else if (!string.IsNullOrEmpty(Vm.StreamBuffer))
                             {
-                                var streamSplit = SplitThinking(_streamBuffer);
+                                var streamSplit = ChatViewModel.SplitThinking(Vm.StreamBuffer);
                                 @if (!string.IsNullOrWhiteSpace(streamSplit.Thinking))
                                 {
                                     <details class="thinking-expandable" open>
@@ -312,13 +304,13 @@
                                 }
                                 @if (!string.IsNullOrWhiteSpace(streamSplit.Answer))
                                 {
-                                    <div class="msg-content">@((MarkupString)FormatContent(streamSplit.Answer))</div>
+                                    <div class="msg-content">@((MarkupString)ChatViewModel.FormatContent(streamSplit.Answer))</div>
                                 }
                             }
                         </div>
                     </div>
                 }
-                @if (_pendingClarification != null)
+                @if (Vm.PendingClarification != null)
                 {
                     <div class="chat-msg assistant">
                         <div class="msg-avatar avatar-bot">
@@ -327,11 +319,11 @@
                         <div class="msg-body">
                             <div class="msg-role">assistant</div>
                             <div class="clarification-panel">
-                                <div class="clarification-title">@_pendingClarification.Question</div>
+                                <div class="clarification-title">@Vm.PendingClarification.Question</div>
                                 <div class="clarification-options">
-                                    @foreach (var opt in _pendingClarification.Options)
+                                    @foreach (var opt in Vm.PendingClarification.Options)
                                     {
-                                        var isSelected = _clarificationSelected.Contains(opt.Id);
+                                        var isSelected = Vm.ClarificationSelected.Contains(opt.Id);
                                         <label class="clarification-option @(isSelected ? "selected" : "")">
                                             <input type="checkbox"
                                                    checked="@isSelected"
@@ -347,7 +339,7 @@
                                 <div class="clarification-actions">
                                     <button class="dcbtn xs" @onclick="CancelClarification">Cancel</button>
                                     <button class="dcbtn xs primary"
-                                                disabled="@(_clarificationSelected.Count == 0)"
+                                                disabled="@(Vm.ClarificationSelected.Count == 0)"
                                                 @onclick="SubmitClarification">Continue</button>
                                 </div>
                             </div>
@@ -368,47 +360,47 @@
                         </svg>
                     </button>
                     <input type="file" @ref="_fileInputRef" @onchange="OnFileSelected" accept=".csv,.pdf,.doc,.docx" class="hidden-file-input" />
-                    <input class="dcinput chat-input" @bind="_input" @bind:event="oninput"
-                           placeholder="@(_pendingClarification != null ? "Respond to the question above…" : "Ask about data, jobs, or request a graph…")"
-                           disabled="@(_streaming && _pendingClarification == null)"
+                    <input class="dcinput chat-input" @bind="Vm.Input" @bind:event="oninput"
+                           placeholder="@(Vm.PendingClarification != null ? "Respond to the question above…" : "Ask about data, jobs, or request a graph…")"
+                           disabled="@(Vm.Streaming && Vm.PendingClarification == null)"
                            @onkeydown="InputKeydown" />
-                    <button class="dcbtn primary" disabled="@((_streaming && _pendingClarification == null) || string.IsNullOrWhiteSpace(_input))" @onclick="Send">Send</button>
+                    <button class="dcbtn primary" disabled="@((Vm.Streaming && Vm.PendingClarification == null) || string.IsNullOrWhiteSpace(Vm.Input))" @onclick="Send">Send</button>
                 </div>
-                @if (_attachedFileName != null)
+                @if (Vm.AttachedFileName != null)
                 {
                     <div class="attached-file-chip">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-                        <span>@_attachedFileName</span>
+                        <span>@Vm.AttachedFileName</span>
                         <button class="chip-remove" @onclick="RemoveAttachment" title="Remove file">×</button>
                     </div>
                 }
             </div>
         </div>
 
-        @if (_showSidePanel)
+        @if (Vm.ShowSidePanel)
         {
             <div class="side-panel">
                 <div class="side-panel-head">
                     <h3>Agent Workspace</h3>
-                    @if (_graphNodes.Count > 0)
+                    @if (Vm.GraphNodes.Count > 0)
                     {
-                        <span class="graph-badge">@_graphNodes.Count nodes · @_graphLinks links</span>
+                        <span class="graph-badge">@Vm.GraphNodes.Count nodes · @Vm.GraphLinks links</span>
                     }
                 </div>
 
-                @if (_showSessionList)
+                @if (Vm.ShowSessionList)
                 {
                     <div class="side-section">
                         <div class="session-header">
                             <h4>Sessions</h4>
                             <div class="session-header-actions">
-                                <button class="dcbtn xs" @onclick="ClearCurrentSessionAsync" disabled="@(_messages.Count == 0 || _streaming)" title="Clear messages in this session">Clear</button>
-                                <button class="dcbtn xs" @onclick="NewSession" disabled="@_streaming">+ New</button>
+                                <button class="dcbtn xs" @onclick="ClearCurrentSessionAsync" disabled="@(Vm.Messages.Count == 0 || Vm.Streaming)" title="Clear messages in this session">Clear</button>
+                                <button class="dcbtn xs" @onclick="NewSession" disabled="@Vm.Streaming">+ New</button>
                             </div>
                         </div>
-                        @foreach (var s in _sessions.Take(20))
+                        @foreach (var s in Vm.Sessions.Take(20))
                         {
-                            <div class="session-item @(s.Id == _sessionId ? "active" : "")" @onclick="@(() => SelectSessionAsync(s))">
+                            <div class="session-item @(s.Id == Vm.SessionId ? "active" : "")" @onclick="@(() => SelectSessionAsync(s))">
                                 <span class="session-title">@s.Title</span>
                                 <span class="session-meta">@s.MessageCount msgs · @s.LastMessageAt.ToString("MMM d HH:mm")</span>
                                 <button class="session-delete" @onclick="@(() => DeleteSessionAsync(s))" @onclick:stopPropagation="true" title="Delete session">×</button>
@@ -417,27 +409,27 @@
                     </div>
                 }
 
-                @if (_activeActions.Count > 0)
+                @if (Vm.ActiveActions.Count > 0)
                 {
                     <div class="side-section">
                         <h4>Active Actions</h4>
-                        @foreach (var action in _activeActions)
+                        @foreach (var action in Vm.ActiveActions)
                         {
                             <div class="action-item @action.Status.ToString().ToLower()">
                                 <span class="action-icon">
-                                    @if (action.Status == ToolCallStatus.Running)
+                                    @if (action.Status == AgentToolCallStatus.Running)
                                     {
                                         <svg class="icon-spinner" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="14" height="14">
                                             <path d="M21 12a9 9 0 1 1-6.219-8.56" />
                                         </svg>
                                     }
-                                    else if (action.Status == ToolCallStatus.Completed)
+                                    else if (action.Status == AgentToolCallStatus.Completed)
                                     {
                                         <svg class="icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="14" height="14">
                                             <path d="M20 6 9 17l-5-5" />
                                         </svg>
                                     }
-                                    else if (action.Status == ToolCallStatus.Error)
+                                    else if (action.Status == AgentToolCallStatus.Error)
                                     {
                                         <svg class="icon-warn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="14" height="14">
                                             <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
@@ -460,11 +452,11 @@
                     </div>
                 }
 
-                @if (_fetchedData.Count > 0)
+                @if (Vm.FetchedData.Count > 0)
                 {
                     <div class="side-section">
                         <h4>Fetched Data</h4>
-                        @foreach (var data in _fetchedData.TakeLast(10))
+                        @foreach (var data in Vm.FetchedData.TakeLast(10))
                         {
                             <details class="data-item">
                                 <summary>@data.Source (@data.RowCount rows)</summary>
@@ -474,11 +466,11 @@
                     </div>
                 }
 
-                @if (_panelArtifacts.Count > 0)
+                @if (Vm.PanelArtifacts.Count > 0)
                 {
                     <div class="side-section">
                         <h4>Artifacts</h4>
-                        @foreach (var a in _panelArtifacts)
+                        @foreach (var a in Vm.PanelArtifacts)
                         {
                             <a class="artifact-item" href="/runs/@a.RunId/artifacts/@a.Id" target="_blank" title="Open @a.Title (@FormatBytes(a.SizeBytes))">
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
@@ -489,12 +481,12 @@
                     </div>
                 }
 
-                @if (_graphNodes.Count > 0)
+                @if (Vm.GraphNodes.Count > 0)
                 {
                     <div class="side-section">
                         <h4>Project Graph</h4>
                         <div class="graph-nodes">
-                            @foreach (var node in _graphNodes.Take(20))
+                            @foreach (var node in Vm.GraphNodes.Take(20))
                             {
                                 <span class="graph-node-tag" title="@node.Label (@node.Degree connections)">@node.Label</span>
                             }
@@ -502,11 +494,11 @@
                     </div>
                 }
 
-                @if (_toolHistory.Count > 0)
+                @if (Vm.ToolHistory.Count > 0)
                 {
                     <div class="side-section">
                         <h4>Tool History</h4>
-                        @foreach (var th in _toolHistory.TakeLast(15))
+                        @foreach (var th in Vm.ToolHistory.TakeLast(15))
                         {
                             <div class="tool-history-item @(th.Success ? "ok" : "err")">
                                 <span class="th-time">@th.Timestamp.ToString("HH:mm:ss")</span>
@@ -520,7 +512,7 @@
         }
     </div>
 
-    @if (_showSettings)
+    @if (Vm.ShowSettings)
     {
         <div class="dcmodal-overlay" @onclick="CloseSettings">
             <div class="dcmodal settings-modal" @onclick:stopPropagation>
@@ -530,59 +522,59 @@
                 </div>
                 <div class="dcmodal-body settings-body">
                     <div class="settings-tabs">
-                        <button class="tab-btn @(_settingsTab == "prompt" ? "active" : "")" @onclick="@(() => _settingsTab = "prompt")">Prompt</button>
-                        <button class="tab-btn @(_settingsTab == "rag" ? "active" : "")" @onclick="@(() => _settingsTab = "rag")">RAG</button>
-                        <button class="tab-btn @(_settingsTab == "mcp" ? "active" : "")" @onclick="@(() => _settingsTab = "mcp")">MCP Servers</button>
+                        <button class="tab-btn @(Vm.SettingsTab == "prompt" ? "active" : "")" @onclick="@(() => Vm.SettingsTab = "prompt")">Prompt</button>
+                        <button class="tab-btn @(Vm.SettingsTab == "rag" ? "active" : "")" @onclick="@(() => Vm.SettingsTab = "rag")">RAG</button>
+                        <button class="tab-btn @(Vm.SettingsTab == "mcp" ? "active" : "")" @onclick="@(() => Vm.SettingsTab = "mcp")">MCP Servers</button>
                     </div>
 
-                    @if (_settingsTab == "prompt")
+                    @if (Vm.SettingsTab == "prompt")
                     {
                         <div class="dcfield system-prompt-field">
                             <label>System Prompt <span class="field-hint">— saved per project</span></label>
-                            <textarea class="dcinput textarea prompt-textarea" @bind="_pendingSystemPrompt" rows="16"
+                            <textarea class="dcinput textarea prompt-textarea" @bind="Vm.PendingSystemPrompt" rows="16"
                                 placeholder="You are a PlaceContext agent. You can query project data, inspect job runs, render artifacts, and render graphs."></textarea>
                         </div>
                         <div class="settings-row">
                             <div class="dcfield">
                                 <label>Temperature</label>
                                 <div class="slider-row">
-                                    <input type="range" class="dcslider" @bind="_pendingTemperature" min="0" max="1" step="0.1" />
-                                    <span class="slider-val">@_pendingTemperature.ToString("0.0")</span>
+                                    <input type="range" class="dcslider" @bind="Vm.PendingTemperature" min="0" max="1" step="0.1" />
+                                    <span class="slider-val">@Vm.PendingTemperature.ToString("0.0")</span>
                                 </div>
                             </div>
                             <div class="dcfield">
                                 <label>Max Tokens</label>
-                                <input type="number" class="dcinput" @bind="_pendingMaxTokens" min="64" max="8192" step="64" />
+                                <input type="number" class="dcinput" @bind="Vm.PendingMaxTokens" min="64" max="8192" step="64" />
                             </div>
                         </div>
                     }
-                    else if (_settingsTab == "rag")
+                    else if (Vm.SettingsTab == "rag")
                     {
                         <div class="rag-settings">
                             <div class="rag-toggle">
                                 <label class="toggle-switch">
-                                    <input type="checkbox" @bind="_pendingRagEnabled" />
+                                    <input type="checkbox" @bind="Vm.PendingRagEnabled" />
                                     <span class="toggle-slider"></span>
                                 </label>
                                 <span class="toggle-label">Enable RAG context retrieval</span>
                             </div>
                             <p class="rag-desc">Automatically retrieves semantically relevant project run outputs and dependency graph data to ground agent responses.</p>
-                            @if (_pendingRagEnabled)
+                            @if (Vm.PendingRagEnabled)
                             {
                                 <div class="dcfield">
                                     <label>Max context chunks</label>
                                     <div class="slider-row">
-                                        <input type="range" class="dcslider" @bind="_pendingMaxContextChunks" min="1" max="20" step="1" />
-                                        <span class="slider-val">@_pendingMaxContextChunks</span>
+                                        <input type="range" class="dcslider" @bind="Vm.PendingMaxContextChunks" min="1" max="20" step="1" />
+                                        <span class="slider-val">@Vm.PendingMaxContextChunks</span>
                                     </div>
                                 </div>
                             }
                         </div>
                     }
-                    else if (_settingsTab == "mcp")
+                    else if (Vm.SettingsTab == "mcp")
                     {
                         <div class="mcp-section">
-                            @if (_mcpConnections.Count == 0)
+                            @if (Vm.McpConnections.Count == 0)
                             {
                                 <div class="mcp-empty">
                                     <p>No MCP servers configured yet.</p>
@@ -592,7 +584,7 @@
                             else
                             {
                                 <div class="mcp-list">
-                                    @foreach (var mcp in _mcpConnections)
+                                    @foreach (var mcp in Vm.McpConnections)
                                     {
                                         <div class="mcp-item @(mcp.Enabled ? "" : "disabled")">
                                             <div class="mcp-info">
@@ -627,50 +619,50 @@
                             }
                             <button class="dcbtn sm primary add-mcp-btn" @onclick="ShowAddMcp">+ Add MCP Server</button>
 
-                            @if (_showAddMcp)
+                            @if (Vm.ShowAddMcp)
                             {
                                 <div class="mcp-form">
                                     <div class="mcp-form-title">New MCP Server</div>
                                     <div class="dcfield">
                                         <label>Name</label>
-                                        <input class="dcinput" @bind="_newMcpName" placeholder="My MCP Server" />
+                                        <input class="dcinput" @bind="Vm.NewMcpName" placeholder="My MCP Server" />
                                     </div>
                                     <div class="dcfield">
                                         <label>Transport</label>
-                                        <select class="dcinput" @bind="_newMcpTransport">
+                                        <select class="dcinput" @bind="Vm.NewMcpTransport">
                                             <option value="http">HTTP</option>
                                             <option value="sse">SSE</option>
                                             <option value="stdio">Stdio</option>
                                         </select>
                                     </div>
-                                    @if (_newMcpTransport != "stdio")
+                                    @if (Vm.NewMcpTransport != "stdio")
                                     {
                                         <div class="dcfield">
                                             <label>Endpoint URL</label>
-                                            <input class="dcinput" @bind="_newMcpEndpoint" placeholder="http://localhost:3001/mcp" />
+                                            <input class="dcinput" @bind="Vm.NewMcpEndpoint" placeholder="http://localhost:3001/mcp" />
                                         </div>
                                     }
                                     else
                                     {
                                         <div class="dcfield">
                                             <label>Command</label>
-                                            <input class="dcinput" @bind="_newMcpCommand" placeholder="npx" />
+                                            <input class="dcinput" @bind="Vm.NewMcpCommand" placeholder="npx" />
                                         </div>
                                         <div class="dcfield">
                                             <label>Args (JSON array)</label>
-                                            <input class="dcinput" @bind="_newMcpArgs" placeholder='["-y", "@@modelcontextprotocol/server-filesystem", "/path"]' />
+                                            <input class="dcinput" @bind="Vm.NewMcpArgs" placeholder='["-y", "@@modelcontextprotocol/server-filesystem", "/path"]' />
                                         </div>
                                     }
                                     <div class="mcp-auth-section">
-                                        <div class="mcp-auth-header" @onclick="@(() => _showAuthFields = !_showAuthFields)">
+                                        <div class="mcp-auth-header" @onclick="@(() => Vm.ShowAuthFields = !Vm.ShowAuthFields)">
                                             <span>Authentication</span>
-                                            <span class="mcp-auth-chevron">@(_showAuthFields ? "▾" : "▸")</span>
+                                            <span class="mcp-auth-chevron">@(Vm.ShowAuthFields ? "▾" : "▸")</span>
                                         </div>
-                                        @if (_showAuthFields)
+                                        @if (Vm.ShowAuthFields)
                                         {
                                             <div class="dcfield">
                                                 <label>Auth Type</label>
-                                                <select class="dcinput" @bind="_newMcpAuthType">
+                                                <select class="dcinput" @bind="Vm.NewMcpAuthType">
                                                     <option value="none">None</option>
                                                     <option value="bearer">Bearer Token</option>
                                                     <option value="apikey">API Key</option>
@@ -678,43 +670,43 @@
                                                     <option value="oauth">OAuth 2.1</option>
                                                 </select>
                                             </div>
-                                            @if (_newMcpAuthType == "bearer")
+                                            @if (Vm.NewMcpAuthType == "bearer")
                                             {
                                                 <div class="dcfield">
                                                     <label>Bearer Token</label>
-                                                    <input class="dcinput" type="password" @bind="_newMcpAuthToken" placeholder="eyJhbGci..." />
+                                                    <input class="dcinput" type="password" @bind="Vm.NewMcpAuthToken" placeholder="eyJhbGci..." />
                                                 </div>
                                             }
-                                            else if (_newMcpAuthType == "apikey")
+                                            else if (Vm.NewMcpAuthType == "apikey")
                                             {
                                                 <div class="dcfield">
                                                     <label>API Key</label>
-                                                    <input class="dcinput" type="password" @bind="_newMcpAuthToken" placeholder="sk-..." />
+                                                    <input class="dcinput" type="password" @bind="Vm.NewMcpAuthToken" placeholder="sk-..." />
                                                 </div>
                                             }
-                                            else if (_newMcpAuthType == "header")
+                                            else if (Vm.NewMcpAuthType == "header")
                                             {
                                                 <div class="dcfield">
                                                     <label>Header Name</label>
-                                                    <input class="dcinput" @bind="_newMcpAuthHeader" placeholder="X-API-Key" />
+                                                    <input class="dcinput" @bind="Vm.NewMcpAuthHeader" placeholder="X-API-Key" />
                                                 </div>
                                                 <div class="dcfield">
                                                     <label>Header Value</label>
-                                                    <input class="dcinput" type="password" @bind="_newMcpAuthToken" placeholder="value" />
+                                                    <input class="dcinput" type="password" @bind="Vm.NewMcpAuthToken" placeholder="value" />
                                                 </div>
                                             }
-                                            else if (_newMcpAuthType == "oauth")
+                                            else if (Vm.NewMcpAuthType == "oauth")
                                             {
                                                 <div class="dcfield">
                                                     <label>Scopes (optional)</label>
-                                                    <input class="dcinput" @bind="_newMcpOAuthScopes" placeholder="openid profile" />
+                                                    <input class="dcinput" @bind="Vm.NewMcpOAuthScopes" placeholder="openid profile" />
                                                 </div>
                                                 <div class="dchint">The OAuth flow will open in a popup. The external server must expose <code>/.well-known/oauth-authorization-server</code>.</div>
                                             }
                                         }
                                     </div>
                                     <div class="mcp-form-actions">
-                                        <button class="dcbtn xs" @onclick="@(() => _showAddMcp = false)">Cancel</button>
+                                        <button class="dcbtn xs" @onclick="@(() => Vm.ShowAddMcp = false)">Cancel</button>
                                         <button class="dcbtn xs primary" @onclick="AddMcpConnectionAsync">Add</button>
                                     </div>
                                 </div>
@@ -734,1570 +726,299 @@
 
 
 @code {
-    private readonly List<AgentMessage> _messages = new();
-    private string _input = "";
-    private bool _streaming;
-    private string _streamBuffer = "";
     private ElementReference _messagesRef;
     private ElementReference _scrollAnchor;
-        private Guid? _projectId;
-    private string _systemPrompt = "You are a PlaceContext agent — a casual, friendly Australian mate who helps with project data, job runs, graphs, and artifacts. Talk like a real Aussie: use words like 'mate', 'no worries', 'righto', 'cheers', 'good on ya', 'sweet as', 'no drama'. Keep it relaxed and warm. CRITICAL: NEVER think out loud. NEVER write your thought process, reasoning, self-correction, or commentary about the conversation. NEVER output phrases like 'Looking at the conversation', 'Let me think', 'I notice', 'Actually', 'Re-reading', or 'Hmm'. NEVER wrap your answer in <think>, <reasoning>, or <reflection> tags. If you catch yourself starting to explain your reasoning, STOP and give the answer directly. When data is needed, call the right tool immediately without explaining why. Keep answers short unless the user asks for detail. Never use formal corporate language — you're a mate, not a robot.";
-    private bool _ragEnabled = true;
-    private int _maxContextChunks = 5;
-    private float _temperature = 0.7f;
-    private int _maxTokens = 2048;
-    private string _projectName = "";
-    private ToolCallInfo? _currentToolCall;
-    private int _toolCallCounter;
-    private bool _showSidePanel = true;
-    private bool _showSettings;
-    private string _settingsTab = "prompt";
-    private IReadOnlyList<McpConnectionView> _mcpConnections = Array.Empty<McpConnectionView>();
-    private bool _showAddMcp;
-    private bool _showAuthFields;
-    private string _newMcpName = "";
-    private string _newMcpTransport = "http";
-    private string _newMcpEndpoint = "";
-    private string _newMcpCommand = "";
-    private string _newMcpArgs = "";
-    private string _newMcpAuthType = "none";
-    private string _newMcpAuthToken = "";
-    private string _newMcpAuthHeader = "";
-    private string _newMcpOAuthScopes = "";
-    private string _pendingSystemPrompt = "";
-    private float _pendingTemperature;
-    private int _pendingMaxTokens;
-    private bool _pendingRagEnabled = true;
-    private int _pendingMaxContextChunks = 5;
-    private Guid? _sessionId;
-    private string _sessionTitle = "New Chat";
-    private IReadOnlyList<ChatSessionSummary> _sessions = Array.Empty<ChatSessionSummary>();
-    private bool _showSessionList = true;
-    private readonly List<AgentAction> _activeActions = new();
-    private readonly List<FetchedData> _fetchedData = new();
-    private readonly List<ToolHistoryEntry> _toolHistory = new();
-    private readonly List<GraphNodeView> _graphNodes = new();
-    private int _graphLinks;
-    private readonly List<ArtifactFileView> _panelArtifacts = new();
-    private ClarificationRequest? _pendingClarification;
-    private readonly HashSet<string> _clarificationSelected = new();
-    private TaskCompletionSource<ClarificationResult>? _clarificationTcs;
-    private readonly HashSet<int> _renderedChartIds = new();
-    private byte[]? _attachedFile;
-    private string? _attachedFileName;
-    private string? _attachedFileText;
     private ElementReference _fileInputRef;
-    private const string AttachmentsBucket = "chat-attachments";
-    private bool _attachmentsBucketEnsured;
-    private const int MaxArtifactInlineBytes = 512 * 1024;
-    private const int MaxArtifactDocumentBytes = 10 * 1024 * 1024;
-    private const int MaxArtifactExtractedTextLength = 200_000;
+    private bool _oauthListenerRegistered;
+
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+        Vm.Attach(StateHasChanged);
+        Ui.OnChanged += OnUiChanged;
+        OnMcpOAuthCompleted += OnMcpOAuthCompletedHandler;
+    }
 
     protected override async Task OnInitializedAsync()
     {
-        Ui.Set("Chat", "Agent inference");
-        Ui.OnChanged += OnUiChanged;
-        _projectId = Ui.CurrentProjectId;
-        _projectName = Ui.CurrentProjectName ?? "";
-        if (_projectId.HasValue)
-        {
-            await LoadAgentConfig();
-            await LoadSessionsAsync();
-            await LoadMcpConnectionsAsync();
-            await LoadPanelArtifactsAsync();
+        await Vm.InitializeAsync();
+    }
 
-            // Load most recent session if one exists, otherwise create new
-            if (_sessions.Count > 0)
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            if (!_oauthListenerRegistered)
             {
-                await SelectSessionAsync(_sessions[0]);
+                _oauthListenerRegistered = true;
+                await JS.InvokeVoidAsync("eval", @"
+                    window.__mcpOAuthListener = function(e) {
+                        if (e.data && e.data.startsWith && e.data.startsWith('mcp-oauth-')) {
+                            DotNet.invokeMethodAsync('PlaceContext.Host', 'OnMcpOAuthCallback', e.data);
+                        }
+                    };
+                    window.addEventListener('message', window.__mcpOAuthListener);
+                ");
             }
-            else
+            await JS.InvokeVoidAsync("placecontext.setupDropZone", _fileInputRef);
+            try
             {
-                NewSession();
+                if (await JS.InvokeAsync<bool>("placecontext.isMobile"))
+                {
+                    Vm.ShowSidePanel = false;
+                    StateHasChanged();
+                }
+            }
+            catch { }
+        }
+
+        foreach (var msg in Vm.Messages)
+        {
+            foreach (var tc in msg.ToolCalls.Where(t => t.ResultType == "graph" && t.Status == AgentToolCallStatus.Completed))
+            {
+                if (Vm.RenderedChartIds.Contains(tc.Id)) continue;
+                try
+                {
+                    await JS.InvokeVoidAsync("pcchart.render", $"graph-{tc.Id}", tc.Result);
+                    Vm.RenderedChartIds.Add(tc.Id);
+                }
+                catch { }
+            }
+            foreach (var tc in msg.ToolCalls.Where(t => t.ResultType == "map" && t.Status == AgentToolCallStatus.Completed))
+            {
+                try
+                {
+                    await JS.InvokeVoidAsync("pcmap.render", $"map-{tc.Id}", tc.Result);
+                }
+                catch { }
             }
         }
-    }
-
-    /// <summary>Recent project artifacts for the side panel gallery (documents open in a new tab).</summary>
-    private async Task LoadPanelArtifactsAsync()
-    {
-        if (!_projectId.HasValue) return;
-        try
-        {
-            var artifacts = await Svc.ListProjectArtifactsAsync(_projectId.Value, 8, null);
-            _panelArtifacts.Clear();
-            _panelArtifacts.AddRange(artifacts);
-        }
-        catch { /* best-effort */ }
-    }
-
-    /// <summary>Bumps freshly discovered artifacts into the side panel (deduped, newest first).</summary>
-    private void MergePanelArtifacts(IEnumerable<ArtifactFileView> found)
-    {
-        var incoming = found.ToList();
-        if (incoming.Count == 0) return;
-        _panelArtifacts.RemoveAll(a => incoming.Any(f => f.Id == a.Id));
-        _panelArtifacts.InsertRange(0, incoming);
-        if (_panelArtifacts.Count > 10)
-            _panelArtifacts.RemoveRange(10, _panelArtifacts.Count - 10);
-    }
-
-    private async Task LoadAgentConfig()
-    {
-        if (!_projectId.HasValue) return;
-        try
-        {
-            var config = await Svc.GetAgentConfigAsync(_projectId.Value);
-            _systemPrompt = config.SystemPrompt;
-            _temperature = config.Temperature;
-            _maxContextChunks = config.MaxContextChunks;
-        }
-        catch { /* use defaults */ }
-    }
-
-    private async Task OnProjectChanged()
-    {
-        if (_projectId.HasValue)
-        {
-            _projectName = Ui.CurrentProjectName ?? "";
-            await LoadAgentConfig();
-            await LoadGraphAsync();
-            _activeActions.Clear();
-            _fetchedData.Clear();
-            _toolHistory.Clear();
-            await LoadSessionsAsync();
-            await LoadMcpConnectionsAsync();
-            await LoadPanelArtifactsAsync();
-            NewSession();
-        }
-    }
-
-    private async void OnUiChanged()
-    {
-        if (_projectId == Ui.CurrentProjectId) return;
-        _projectId = Ui.CurrentProjectId;
-        _projectName = Ui.CurrentProjectName ?? "";
-        await OnProjectChanged();
-        await InvokeAsync(StateHasChanged);
     }
 
     public void Dispose()
     {
+        Vm.Detach();
         Ui.OnChanged -= OnUiChanged;
         OnMcpOAuthCompleted -= OnMcpOAuthCompletedHandler;
+    }
+
+    private async void OnUiChanged()
+    {
+        Vm.OnProjectChanged();
+        await InvokeAsync(StateHasChanged);
     }
 
     private async void OnMcpOAuthCompletedHandler(object? _, EventArgs __)
     {
         await InvokeAsync(async () =>
         {
-            await LoadMcpConnectionsAsync();
+            await Vm.LoadMcpConnectionsAsync();
             StateHasChanged();
         });
     }
 
-    private async Task LoadSessionsAsync()
+    // ── Thin event handler wrappers ──────────────────────────────────────
+
+    private async Task Send()
     {
-        if (!_projectId.HasValue) return;
-        try { _sessions = await MemoryStore.ListSessionsAsync(_projectId.Value); }
-        catch { _sessions = Array.Empty<ChatSessionSummary>(); }
+        await Vm.SendAsync(ScrollToBottom, ScrollAfterRender);
     }
 
     private void NewSession()
     {
-        if (_streaming) return;
-        _sessionId = Guid.NewGuid();
-        _sessionTitle = "New Chat";
-        _messages.Clear();
-        _activeActions.Clear();
-        _fetchedData.Clear();
-        _toolHistory.Clear();
-        _pendingClarification = null;
-        _clarificationSelected.Clear();
-        _renderedChartIds.Clear();
-        _attachedFile = null;
-        _attachedFileName = null;
-        _attachedFileText = null;
-        _streamBuffer = "";
-        StateHasChanged();
+        Vm.NewSession();
     }
 
     private async Task DeleteSessionAsync(ChatSessionSummary session)
     {
-        if (_streaming) return;
-        try { await MemoryStore.DeleteSessionAsync(session.Id); }
-        catch { }
-        if (session.Id == _sessionId)
-        {
-            NewSession();
-        }
-        await LoadSessionsAsync();
-        StateHasChanged();
+        await Vm.DeleteSessionAsync(session);
     }
 
     private async Task ClearCurrentSessionAsync()
     {
-        if (_streaming) return;
-        if (_sessionId.HasValue)
-        {
-            try { await MemoryStore.ClearSessionMemoryAsync(_sessionId.Value); }
-            catch { }
-        }
-        // Reset the conversation but keep the same session id
-        _sessionTitle = "New Chat";
-        _messages.Clear();
-        _activeActions.Clear();
-        _fetchedData.Clear();
-        _toolHistory.Clear();
-        _pendingClarification = null;
-        _clarificationSelected.Clear();
-        _renderedChartIds.Clear();
-        _attachedFile = null;
-        _attachedFileName = null;
-        _attachedFileText = null;
-        _streamBuffer = "";
-        await LoadSessionsAsync();
-        StateHasChanged();
+        await Vm.ClearCurrentSessionAsync();
     }
 
     private async Task SelectSessionAsync(ChatSessionSummary session)
     {
-        if (_streaming || !_projectId.HasValue) return;
-        try
-        {
-            var memory = await MemoryStore.GetSessionAsync(session.Id);
-            if (memory != null)
-            {
-                _sessionId = session.Id;
-                _sessionTitle = memory.Title;
-                _messages.Clear();
-                foreach (var m in memory.Messages)
-                {
-                    var msg = new AgentMessage(m.Role, m.Content)
-                    {
-                        Thinking = m.Thinking,
-                        AttachmentName = m.AttachmentName,
-                        AttachmentKey = m.AttachmentKey,
-                        AttachmentContentType = m.AttachmentContentType,
-                        AttachmentSizeBytes = m.AttachmentSizeBytes,
-                    };
-                    if (m.ToolCalls != null)
-                        msg.ToolCalls.AddRange(m.ToolCalls.Select(tc => new ToolCallInfo
-                        {
-                            ToolName = tc.ToolName,
-                            Args = tc.Args,
-                            Status = Enum.TryParse<ToolCallStatus>(tc.Status, out var s) ? s : ToolCallStatus.Completed,
-                            Result = tc.Result,
-                            ResultType = tc.ResultType,
-                        }));
-                    RecoverLostMapCalls(msg);
-                    _messages.Add(msg);
-                }
-                StateHasChanged();
-            }
-        }
-        catch { }
+        await Vm.SelectSessionAsync(session);
     }
 
-    /// <summary>
-    /// Sessions saved before the tool-call scanner handled ']' in args have render_map calls
-    /// stored as raw text — they never executed, so the map was lost. Re-attach any valid map
-    /// spec as a completed tool call so it renders on session restore, and strip the raw syntax
-    /// from the displayed message.
-    /// </summary>
-    private static void RecoverLostMapCalls(AgentMessage msg)
+    private void ToggleSidePanel()
     {
-        if (msg.Role != "assistant" || string.IsNullOrEmpty(msg.Content)) return;
-        if (!msg.Content.Contains("[[tool:render_map|", StringComparison.Ordinal)) return;
-
-        foreach (var call in ScanToolCalls(msg.Content).Where(c => c.Name == "render_map"))
-        {
-            if (msg.ToolCalls.Any(t => t.ResultType == "map" && t.Args == call.Args)) continue;
-            try { System.Text.Json.JsonDocument.Parse(call.Args); }
-            catch { continue; } // not a valid spec — leave the text as-is
-            msg.ToolCalls.Add(new ToolCallInfo
-            {
-                ToolName = "render_map",
-                Args = call.Args,
-                Status = ToolCallStatus.Completed,
-                Result = call.Args,
-                ResultType = "map",
-            });
-        }
+        Vm.ShowSidePanel = !Vm.ShowSidePanel;
     }
 
-    private async Task SaveCurrentSessionAsync()
+    private void OpenSettings()
     {
-        if (!_projectId.HasValue || _sessionId == null) return;
-        var memory = new ChatSessionMemory(
-            _sessionId.Value, _projectId.Value, _sessionTitle,
-            _messages.Select(m => new ChatMemoryMessage(
-                m.Role, m.Content, DateTimeOffset.Now,
-                m.ToolCalls.Select(tc => new ChatMemoryToolCall(
-                    tc.ToolName, tc.Args, tc.Status.ToString(), tc.Result, tc.ResultType)).ToList(),
-                m.AttachmentName, m.AttachmentKey, m.AttachmentContentType, m.AttachmentSizeBytes, m.Thinking)).ToList(),
-            DateTimeOffset.Now, DateTimeOffset.Now);
-        try { await MemoryStore.SaveSessionAsync(_sessionId.Value, memory); }
-        catch { }
-        await LoadSessionsAsync();
+        Vm.OpenSettings();
     }
 
-    
-
-    private async Task Send()
+    private void CloseSettings()
     {
-        var text = _input.Trim();
-        if (string.IsNullOrEmpty(text) || _streaming || !_projectId.HasValue) return;
-
-        // Include attached file content in the user message
-        var userText = text;
-        if (_attachedFileName != null && _attachedFileText != null)
-        {
-            userText += $"\n\n## Attached file: {_attachedFileName}\n\n{_attachedFileText}";
-        }
-        var userMsg = new AgentMessage("user", userText);
-
-        // Persist the raw attachment to object storage so it stays downloadable from the transcript
-        if (_attachedFile != null && _attachedFileName != null && _sessionId.HasValue && ObjectStore.IsEnabled)
-        {
-            try
-            {
-                if (!_attachmentsBucketEnsured)
-                {
-                    await ObjectStore.EnsureBucketAsync(AttachmentsBucket);
-                    _attachmentsBucketEnsured = true;
-                }
-                var contentType = ContentTypeFor(_attachedFileName);
-                var key = $"chat/{Tenant.TenantId}/{_projectId!.Value}/{_sessionId.Value}/{Guid.NewGuid():N}-{SanitizeFileName(_attachedFileName)}";
-                await ObjectStore.PutAsync(AttachmentsBucket, key, _attachedFile, contentType);
-                userMsg.AttachmentName = _attachedFileName;
-                userMsg.AttachmentKey = key;
-                userMsg.AttachmentContentType = contentType;
-                userMsg.AttachmentSizeBytes = _attachedFile.Length;
-            }
-            catch { /* best-effort: the extracted text is still inlined above */ }
-        }
-        else if (_attachedFileName != null)
-        {
-            // Store disabled or no bytes — still show the attachment name on the message
-            userMsg.AttachmentName = _attachedFileName;
-            userMsg.AttachmentSizeBytes = _attachedFile?.Length ?? 0;
-        }
-        _messages.Add(userMsg);
-        _input = "";
-
-        // Clear attachment after sending
-        _attachedFile = null;
-        _attachedFileName = null;
-        _attachedFileText = null;
-
-        _streaming = true;
-        _streamBuffer = "";
-
-        // Update session title from first user message
-        if (_messages.Count(m => m.Role == "user") == 1)
-        {
-            _sessionTitle = text.Length > 50 ? text[..50] + "…" : text;
-        }
-
-        await InvokeAsync(StateHasChanged);
-        await ScrollToBottom();
-
-        // Build RAG context once before the tool loop.
-        string ragContext = "";
-        if (_ragEnabled)
-        {
-            try { ragContext = await ContextBuilder.BuildContextAsync(_projectId.Value, text, _maxContextChunks); }
-            catch { /* best-effort */ }
-        }
-
-        try
-        {
-            var ct = CancellationToken.None;
-            var maxToolRounds = 3;
-            var round = 0;
-
-            while (round < maxToolRounds)
-            {
-                round++;
-                var messages = BuildChatMessages(ragContext);
-
-                _streamBuffer = "";
-                _currentToolCall = null;
-                await InvokeAsync(StateHasChanged);
-
-                // Small delay to show typing dots
-                if (round > 1 || _messages.Any(m => m.ToolCalls.Count > 0))
-                {
-                    await Task.Delay(300, ct);
-                }
-
-                if (Gateway is ClusterChatGateway cg && cg.IsEnabled)
-                {
-                    var settings = new ChatSettings(Temperature: _temperature, MaxTokens: _maxTokens);
-                    var tokenCount = 0;
-                    await foreach (var token in cg.ChatStreamAsync(messages, settings, ct))
-                    {
-                        _streamBuffer += token;
-                        tokenCount++;
-                        if (IsRepetitionLoopTail(_streamBuffer))
-                        {
-                            // Model is stuck in a repetition loop — stop the stream and
-                            // keep only the content before the loop started.
-                            _streamBuffer = TruncateRepeatedLines(_streamBuffer);
-                            break;
-                        }
-                        await InvokeAsync(StateHasChanged);
-                        await ScrollToBottom();
-                    }
-                    // Log if we got no tokens
-                    if (tokenCount == 0)
-                    {
-                        _streamBuffer = "The model returned an empty response. This might be due to the conversation context. Please try rephrasing your question.";
-                    }
-                }
-                else if (Gateway is ClusterChatGateway configuredButNotReady && !configuredButNotReady.IsEnabled)
-                {
-                    _streamBuffer = "Cluster is starting — please try again in a moment.";
-                }
-                else
-                {
-                    var settings = new ChatSettings(Temperature: _temperature, MaxTokens: _maxTokens);
-                    _streamBuffer = await Gateway.ChatAsync(messages, settings, ct);
-                }
-
-                var toolCalls = ParseToolCalls(_streamBuffer);
-                if (toolCalls.Count == 0) 
-                {
-                    // No tool calls - this is the final response
-                    if (string.IsNullOrWhiteSpace(_streamBuffer))
-                    {
-                        _streamBuffer = "I've processed your request but didn't generate a text response. The tool results are shown above.";
-                    }
-                    break;
-                }
-
-                var toolResults = new System.Text.StringBuilder();
-                toolResults.Append("\n\n## Tool Results\n\n");
-                foreach (var tc in toolCalls)
-                {
-                    _currentToolCall = tc;
-                    tc.Id = _toolCallCounter++;
-                    tc.Status = ToolCallStatus.Running;
-                    await InvokeAsync(StateHasChanged);
-
-                    const int maxRetries = 2;
-                    const int timeoutSeconds = 15;
-                    ToolCallResult result = ToolCallResult.Fail("uninitialized");
-                    for (var attempt = 0; attempt <= maxRetries; attempt++)
-                    {
-                        tc.RetryCount = attempt;
-                        await InvokeAsync(StateHasChanged);
-
-                        using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSeconds));
-                        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct, timeoutCts.Token);
-                        try
-                        {
-                            result = await ExecuteToolAsync(tc.ToolName, tc.Args, linkedCts.Token);
-                        }
-                        catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested)
-                        {
-                            result = ToolCallResult.Fail($"Timed out after {timeoutSeconds}s");
-                        }
-
-                        if (result.Success || !IsTransientError(result.Error ?? ""))
-                            break;
-
-                        if (attempt < maxRetries)
-                            await Task.Delay(1000, ct);
-                    }
-
-                    tc.Status = result.Success ? ToolCallStatus.Completed : ToolCallStatus.Error;
-                    tc.Result = result.Data ?? result.Error;
-                    tc.ResultType = result.IsMap ? "map" : result.IsGraph ? "graph" : result.IsArtifact ? "artifact" : "text";
-
-                    // Update active action with result detail
-                    var action = _activeActions.FirstOrDefault(a => a.ToolName == tc.ToolName && a.Status == ToolCallStatus.Running);
-                    if (action != null)
-                    {
-                        action.Status = result.Success ? ToolCallStatus.Completed : ToolCallStatus.Error;
-                        action.Detail = result.Success ? "done" : (result.Error?.Length > 40 ? result.Error[..40] + "…" : result.Error ?? "error");
-                    }
-
-                    toolResults.Append("### " + tc.ToolName + "\n");
-                    toolResults.Append("Args: " + tc.Args + "\n");
-                    toolResults.Append(result.Success ? "Result:\n" : "Error:\n");
-                    toolResults.Append(result.Data ?? result.Error);
-                    toolResults.Append("\n\n");
-                }
-
-                // Extract text content (strip tool call syntax), split thinking from the answer
-                var textContent = StripToolCallSyntax(_streamBuffer).Trim();
-                var rawCleaned = textContent;
-                var split = SplitThinking(textContent);
-                textContent = split.Answer;
-                // If content was stripped because it was all reasoning (not tools),
-                // leave it empty — the hallucination guard will catch it and force a retry.
-                // Only add the quip if there truly was no tool call AND the raw content wasn't reasoning.
-                if (string.IsNullOrWhiteSpace(textContent) && toolCalls.Count == 0 && !IsAllReasoning(rawCleaned))
-                    textContent = FriendlyLoadingQuip();
-
-                var assistantMsg = new AgentMessage("assistant", textContent);
-                assistantMsg.Thinking = string.IsNullOrWhiteSpace(split.Thinking) ? null : split.Thinking;
-                assistantMsg.ToolCalls.AddRange(toolCalls);
-                _messages.Add(assistantMsg);
-                _messages.Add(new AgentMessage("system", toolResults.ToString()));
-                _streamBuffer = "";
-                await InvokeAsync(StateHasChanged);
-                await ScrollToBottom();
-            }
-
-            // Ensure we always have a final assistant message
-            if (_messages.Count == 0 || _messages.Last().Role != "assistant")
-            {
-                var finalSplit = string.IsNullOrWhiteSpace(_streamBuffer)
-                    ? (Thinking: "", Answer: "")
-                    : SplitThinking(_streamBuffer);
-                var finalContent = string.IsNullOrWhiteSpace(finalSplit.Answer)
-                    ? FriendlyLoadingQuip()
-                    : finalSplit.Answer;
-                var finalMsg = new AgentMessage("assistant", finalContent);
-                finalMsg.Thinking = string.IsNullOrWhiteSpace(finalSplit.Thinking) ? null : finalSplit.Thinking;
-                _messages.Add(finalMsg);
-            }
-
-            // ── Hallucination guard ──────────────────────────────────────
-            var hallucination = DetectHallucination();
-            if (hallucination.Detected)
-            {
-                _messages.Add(new AgentMessage("assistant", hallucination.CorrectionPrompt ?? "Let me try that again…"));
-                await InvokeAsync(StateHasChanged);
-                await ScrollToBottom();
-
-                // Artifact-specific auto-retry: fetch the content then re-summarise
-                if (hallucination.ArtifactId != null)
-                {
-                    _streaming = true;
-                    _streamBuffer = "";
-                    await InvokeAsync(StateHasChanged);
-
-                    var showResult = await ExecuteShowArtifactAsync(hallucination.ArtifactId, ct);
-                    if (showResult.Success && !string.IsNullOrWhiteSpace(showResult.Data))
-                    {
-                        var followUp = $"The artifact content is below. Summarise it accurately — do not fabricate anything.\n\n{showResult.Data}";
-                        _messages.Add(new AgentMessage("system", followUp));
-                        await InvokeAsync(StateHasChanged);
-
-                        var messages = BuildChatMessages("");
-                        _streamBuffer = "";
-                        var settings = new ChatSettings(Temperature: _temperature, MaxTokens: _maxTokens);
-                        if (Gateway is ClusterChatGateway cg2 && cg2.IsEnabled)
-                        {
-                            await foreach (var token in cg2.ChatStreamAsync(messages, settings, ct))
-                            {
-                                _streamBuffer += token;
-                                if (IsRepetitionLoopTail(_streamBuffer))
-                                {
-                                    _streamBuffer = TruncateRepeatedLines(_streamBuffer);
-                                    break;
-                                }
-                                await InvokeAsync(StateHasChanged);
-                                await ScrollToBottom();
-                            }
-                        }
-                        else
-                        {
-                            _streamBuffer = await Gateway.ChatAsync(messages, settings, ct);
-                        }
-                        var sumSplit = SplitThinking(_streamBuffer);
-                        var summarised = TruncateRepeatedLines(sumSplit.Answer);
-                        if (!string.IsNullOrWhiteSpace(summarised))
-                        {
-                            var sumMsg = new AgentMessage("assistant", summarised);
-                            sumMsg.Thinking = string.IsNullOrWhiteSpace(sumSplit.Thinking) ? null : sumSplit.Thinking;
-                            _messages.Add(sumMsg);
-                        }
-                    }
-                    else
-                    {
-                        _messages.Add(new AgentMessage("assistant", "Couldn't load the artifact content — it may be missing or corrupted."));
-                    }
-                    _streaming = false;
-                    _streamBuffer = "";
-                    await InvokeAsync(StateHasChanged);
-                    await ScrollToBottom();
-                }
-                else
-                {
-                    // Generic / non-artifact hallucination: re-prompt the model with the correction
-                    _streaming = true;
-                    _streamBuffer = "";
-                    await InvokeAsync(StateHasChanged);
-
-                    var messages = BuildChatMessages("");
-                    _streamBuffer = "";
-                    var settings = new ChatSettings(Temperature: _temperature, MaxTokens: _maxTokens);
-                    if (Gateway is ClusterChatGateway cg3 && cg3.IsEnabled)
-                    {
-                        await foreach (var token in cg3.ChatStreamAsync(messages, settings, ct))
-                        {
-                            _streamBuffer += token;
-                            if (IsRepetitionLoopTail(_streamBuffer))
-                            {
-                                _streamBuffer = TruncateRepeatedLines(_streamBuffer);
-                                break;
-                            }
-                            await InvokeAsync(StateHasChanged);
-                            await ScrollToBottom();
-                        }
-                    }
-                    else
-                    {
-                        _streamBuffer = await Gateway.ChatAsync(messages, settings, ct);
-                    }
-                    var retrySplit = SplitThinking(_streamBuffer);
-                    var retried = TruncateRepeatedLines(retrySplit.Answer);
-                    if (!string.IsNullOrWhiteSpace(retried))
-                    {
-                        // The retry is not re-prompted again — if it's still looping,
-                        // don't show the garbage to the user.
-                        if (DetectGenericHallucination(retried).Detected)
-                            retried = "The model got stuck repeating itself — please try asking again.";
-                        var retryMsg = new AgentMessage("assistant", retried);
-                        retryMsg.Thinking = string.IsNullOrWhiteSpace(retrySplit.Thinking) ? null : retrySplit.Thinking;
-                        _messages.Add(retryMsg);
-                    }
-                    _streaming = false;
-                    _streamBuffer = "";
-                    await InvokeAsync(StateHasChanged);
-                    await ScrollToBottom();
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            _messages.Add(new AgentMessage("assistant", $"[error: {ex.Message}]"));
-        }
-        finally
-        {
-            _streaming = false;
-            _streamBuffer = "";
-            _currentToolCall = null;
-            _pendingClarification = null;
-            _clarificationSelected.Clear();
-            _clarificationTcs = null;
-            await SaveCurrentSessionAsync();
-            await InvokeAsync(StateHasChanged);
-            await ScrollToBottom();
-        }
+        Vm.CloseSettings();
     }
 
-    private List<ChatMessage> BuildChatMessages(string ragContext = "")
+    private async Task SaveSettings()
     {
-        var antiCoT = "CRITICAL: NEVER think out loud. NEVER write your thought process, reasoning, self-correction, or commentary about the conversation. " +
-            "NEVER output text like 'Looking at the conversation', 'Let me think', 'I notice', 'Actually', 'Re-reading', or 'Hmm'. " +
-            "NEVER wrap your answer in <think>, <reasoning>, or <reflection> tags. " +
-            "If you catch yourself starting to explain your reasoning, STOP and give the answer directly. " +
-            "You are a casual Australian mate. Talk like one: use 'mate', 'no worries', 'righto', 'cheers', 'sweet as'. " +
-            "Provide only the final answer or the tool call. If a tool is needed, emit it immediately without explanation.\n\n";
-
-        var toolDesc = "Available tools (use [[tool:toolName|args]] syntax). " +
-            "IMPORTANT: Always pass ALL known parameters (table names, column names, IDs, etc.) from the conversation context. " +
-            "Do not ask the user for information you already have. " +
-            "Tool routing: use get_artifacts for reports/files/artifacts, search only for run output text, query_table for table data.\n\n" +
-            "Built-in tools:\n" +
-            "- [[tool:list_tables|]] - List all project data tables\n" +
-            "- [[tool:query_table|tableName|page]] - Query a table (pass table name from context)\n" +
-            "- [[tool:list_jobs|]] - List all jobs\n" +
-            "- [[tool:list_job_runs|jobId]] - List runs for a job\n" +
-            "- [[tool:render_graph|chartType|tableName|columnName]] - Render a chart (pass table AND column names from context, e.g. [[tool:render_graph|bar|cashflow_runs|amount]])\n" +
-            "- [[tool:query_graph|]] - Query project dependency graph\n" +
-            "- [[tool:search|query]] - Semantic search over job run output text/logs only (not files/reports)\n" +
-            "- [[tool:get_artifacts|query]] - Search project artifacts by title/kind. Returns METADATA ONLY: title, kind, size, and id. Does NOT return file content. Use this to find the artifact id, then ALWAYS call show_artifact to get the actual content. Do NOT summarize or describe artifact content based on get_artifacts results alone — you have not seen the content yet.\n" +
-            "- [[tool:show_artifact|artifactId]] - Fetches and returns the ACTUAL CONTENT of an artifact (extracted text for docs, raw content for text files). You MUST call this after get_artifacts before summarizing, describing, or answering questions about artifact content. This is the only way to see what's inside an artifact.\n" +
-            "- [[tool:schedule_job|jobId|name|cron]] - Create a cron schedule\n" +
-            "- [[tool:list_schedules|jobId]] - List job schedules\n" +
-            "- [[tool:toggle_schedule|triggerId|true|false]] - Enable/disable schedule\n" +
-            "- [[tool:run_job|jobId]] - Run a job now\n" +
-            "- [[tool:call_mcp|serverName|toolName|argsJson]] - Call a tool on an external MCP server\n" +
-            "- [[tool:list_mcp_tools|serverName]] - List available tools on an MCP server\n" +
-            "- [[tool:render_map|specJson]] - Render a Leaflet map (JSON spec with {markers:[{lat,lng,label,color}], polygons:[{coords,color}], center:[lat,lng], zoom}). Example: [[tool:render_map|{\\\"markers\\\":[{\\\"lat\\\":48.135,\\\"lng\\\":11.582,\\\"label\\\":\\\"Munich\\\"}]}]]";
-
-        var systemPrompt = antiCoT + _systemPrompt + "\n\n" + toolDesc;
-        if (!string.IsNullOrWhiteSpace(ragContext))
-        {
-            systemPrompt += "\n\n## Project context (retrieved automatically)\n\n" + ragContext;
-        }
-
-        var messages = new List<ChatMessage>
-        {
-            new("system", systemPrompt),
-        };
-
-        // Build conversation history: merge tool results into assistant messages,
-        // skip standalone system messages, and ensure proper role ordering.
-        var history = new List<ChatMessage>();
-        for (var i = 0; i < _messages.Count; i++)
-        {
-            var m = _messages[i];
-
-            // Skip standalone system messages (tool results will be merged below)
-            if (m.Role == "system") continue;
-
-            var content = m.Content;
-
-            // For assistant messages, append tool calls and any following tool results
-            if (m.Role == "assistant")
-            {
-                if (m.ToolCalls.Count > 0)
-                {
-                    var toolCallText = string.Join("\n", m.ToolCalls.Select(tc =>
-                        $"[[tool:{tc.ToolName}|{tc.Args}]]"));
-                    content = string.IsNullOrWhiteSpace(content)
-                        ? toolCallText
-                        : content + "\n\n" + toolCallText;
-                }
-
-                // Merge the next message if it's a system tool-results message
-                if (i + 1 < _messages.Count && _messages[i + 1].Role == "system"
-                    && _messages[i + 1].Content.Contains("Tool Results"))
-                {
-                    content += "\n\n" + _messages[i + 1].Content;
-                    i++; // skip the merged system message
-                }
-
-                // Strip chain-of-thought noise from prior assistant replies so the model doesn't repeat it.
-                if (m.Role == "assistant")
-                    content = CleanAssistantOutput(content);
-            }
-
-            history.Add(new ChatMessage(m.Role, content));
-        }
-
-        // Limit to last 20 messages to avoid context overflow
-        foreach (var m in history.TakeLast(20))
-            messages.Add(m);
-
-        return messages;
+        await Vm.SaveSettingsAsync();
     }
 
-    private List<ToolCallInfo> ParseToolCalls(string response)
+    private void ShowAddMcp()
     {
-        var calls = new List<ToolCallInfo>();
-        foreach (var c in ScanToolCalls(response))
-            calls.Add(new ToolCallInfo { ToolName = c.Name, Args = c.Args });
-        return calls;
+        Vm.ShowAddMcpForm();
     }
 
-    /// <summary>
-    /// Finds [[tool:name|args]] calls in model output. Unlike a regex, this tolerates ']' inside
-    /// the args (render_map's JSON spec is full of array brackets): a call ends at the LAST ']]'
-    /// before the next '[[tool:' or the end of the text. Incomplete calls (still streaming) are
-    /// skipped, same as the old regex.
-    /// </summary>
-    private static List<(string Name, string Args, int Start, int Length)> ScanToolCalls(string text)
+    private async Task AddMcpConnectionAsync()
     {
-        var calls = new List<(string Name, string Args, int Start, int Length)>();
-        if (string.IsNullOrEmpty(text)) return calls;
-
-        var pos = 0;
-        while (pos < text.Length)
-        {
-            var start = text.IndexOf("[[tool:", pos, StringComparison.Ordinal);
-            if (start < 0) break;
-            var nameStart = start + "[[tool:".Length;
-            var pipe = text.IndexOf('|', nameStart);
-            var nextCall = text.IndexOf("[[tool:", nameStart, StringComparison.Ordinal);
-            if (pipe < 0 || (nextCall >= 0 && pipe > nextCall)) { pos = nameStart; continue; }
-
-            var searchEnd = nextCall >= 0 ? nextCall : text.Length;
-            var close = searchEnd - pipe - 1 > 0
-                ? text.LastIndexOf("]]", searchEnd - 1, searchEnd - pipe - 1, StringComparison.Ordinal)
-                : -1;
-            if (close < 0) { pos = nameStart; continue; }
-
-            calls.Add((text[nameStart..pipe], text[(pipe + 1)..close], start, close + 2 - start));
-            pos = close + 2;
-        }
-        return calls;
+        await Vm.AddMcpConnectionAsync();
     }
 
-    /// <summary>Removes every complete tool call from display text (see <see cref="ScanToolCalls"/>).</summary>
-    private static string StripToolCallSyntax(string text)
+    private async Task TestMcpConnectionAsync(Guid id)
     {
-        var calls = ScanToolCalls(text);
-        if (calls.Count == 0) return text;
-        var sb = new System.Text.StringBuilder(text.Length);
-        var pos = 0;
-        foreach (var c in calls)
-        {
-            sb.Append(text, pos, c.Start - pos);
-            pos = c.Start + c.Length;
-        }
-        sb.Append(text, pos, text.Length - pos);
-        return sb.ToString();
+        await Vm.TestMcpConnectionAsync(id);
     }
 
-
-    private async Task InputKeydown(KeyboardEventArgs e)
+    private async Task DeleteMcpConnectionAsync(Guid id)
     {
-        if (e.Key is "Enter" and not "Shift")
-            await Send();
+        await Vm.DeleteMcpConnectionAsync(id);
     }
 
-    private async Task ScrollToBottom()
+    private async Task StarterPromptAsync(string prompt)
     {
-        try { await JS.InvokeVoidAsync(".scrollToElement", _scrollAnchor); }
-        catch { }
+        await Vm.StarterPromptAsync(prompt, ScrollToBottom);
     }
 
-    private static string FormatContent(string raw)
+    private async Task QuickActionAsync(string context, string action)
     {
-        if (string.IsNullOrWhiteSpace(raw))
-            return "";
-        // If it's a "Called ..." message, show it as-is (no stripping needed)
-        if (raw.StartsWith("Called "))
-        {
-            var escaped = System.Net.WebUtility.HtmlEncode(raw);
-            return $"<em>{escaped}</em>";
-        }
-        // Hide the inlined attached-file dump from display (shown as a chip instead;
-        // the full text remains in the message history sent to the model)
-        var attachIdx = raw.IndexOf("\n\n## Attached file:", StringComparison.Ordinal);
-        if (attachIdx >= 0)
-            raw = raw[..attachIdx];
-        // Strip thinking/reasoning tags before encoding — belt-and-suspenders with CleanAssistantOutput
-        raw = StripThinkTags(raw);
-        // Strip raw tool call syntax from display
-        var cleaned = StripToolCallSyntax(raw).Trim();
-        // If only tool calls were present, return empty (tool results are shown separately)
-        if (string.IsNullOrWhiteSpace(cleaned))
-            return "";
-        var escaped2 = System.Net.WebUtility.HtmlEncode(cleaned);
-        escaped2 = escaped2.Replace("\n", "<br/>");
-        escaped2 = System.Text.RegularExpressions.Regex.Replace(escaped2, @"\*\*(.+?)\*\*", "<strong>$1</strong>");
-        escaped2 = System.Text.RegularExpressions.Regex.Replace(escaped2, @"`(.+?)`", "<code>$1</code>");
-        return escaped2;
+        await Vm.QuickActionAsync(context, action, ScrollToBottom);
     }
 
-    /// <summary>Strips think/reasoning/reflection tags and their content using plain string
-    /// operations — avoids regex angle-bracket escaping issues in razor files.</summary>
-    private static string StripThinkTags(string text)
+    private void ToggleClarificationOption(string id)
     {
-        if (string.IsNullOrWhiteSpace(text)) return text;
-        var tags = new[] { "think", "reasoning", "reflection" };
-        foreach (var tag in tags)
-        {
-            var open = "<" + tag;
-            var close = "</" + tag + ">";
-            // Case-insensitive search for open tag
-            var idx = text.IndexOf(open, StringComparison.OrdinalIgnoreCase);
-            while (idx >= 0)
-            {
-                // Find the closing tag (case-insensitive)
-                var closeIdx = text.IndexOf(close, idx, StringComparison.OrdinalIgnoreCase);
-                if (closeIdx < 0)
-                {
-                    // No closing tag — strip from open tag to end
-                    text = text[..idx];
-                    break;
-                }
-                // Remove from open tag start to closing tag end
-                text = text[..idx] + text[(closeIdx + close.Length)..];
-                // Continue searching from same position (text shifted)
-                idx = text.IndexOf(open, idx, StringComparison.OrdinalIgnoreCase);
-            }
-        }
-        return text;
+        Vm.ToggleClarificationOption(id);
     }
 
-    /// <summary>Removes chain-of-thought / meta-commentary and known backend error strings
-    /// that some small models emit instead of an answer.</summary>
-    private static string CleanAssistantOutput(string raw) => SplitThinking(raw).Answer;
-
-    /// <summary>Splits raw model output into the model's thinking (chain-of-thought,
-    /// meta-commentary, reasoning tags) and the actual answer. Thinking is kept so the
-    /// UI can show it in a collapsible view instead of discarding it.</summary>
-    private static (string Thinking, string Answer) SplitThinking(string raw)
+    private void SubmitClarification()
     {
-        if (string.IsNullOrWhiteSpace(raw)) return ("", raw ?? "");
-        var thinking = new List<string>();
-
-        // Extract explicit thinking/reasoning tag blocks (uses hex escapes to avoid
-        // the literal angle-bracket sequences that confuse the razor parser).
-        // Also matches an unterminated block to end-of-string (stream cut off mid-think).
-        var tagPattern = @"\x3c(?:think|reasoning|reflection)\b[^>]*>(.*?)(?:\x3c/(?:think|reasoning|reflection)\x3e|$)";
-        raw = System.Text.RegularExpressions.Regex.Replace(raw, tagPattern, m =>
-        {
-            var inner = m.Groups[1].Value.Trim();
-            if (inner.Length > 0) thinking.Add(inner);
-            return "";
-        }, System.Text.RegularExpressions.RegexOptions.Singleline | System.Text.RegularExpressions.RegexOptions.IgnoreCase);
-
-        // Drop stray closing tags (e.g. a lone "</think>" left after stripping).
-        raw = System.Text.RegularExpressions.Regex.Replace(raw, @"\x3c/(?:think|reasoning|reflection)\x3e", "",
-            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
-
-        // Raw reasoning that isn't wrapped in tags — detect nested thinking patterns
-        // where the model outputs its reasoning process about tool calls instead of calling them.
-        // If the entire response is thinking lines with no [[tool:]] calls, it's all thinking.
-        if (ScanToolCalls(raw).Count == 0 && IsAllReasoning(raw))
-        {
-            if (!string.IsNullOrWhiteSpace(raw)) thinking.Add(raw.Trim());
-            raw = "";
-        }
-
-        var lines = raw.Split('\n');
-        var noiseStarts = new[]
-        {
-            "the user has provided", "looking at the conversation", "however, i notice",
-            "let me re-read", "actually, i think", "let me think", "i notice there's",
-            "there is no stream(gpu", "[cluster error:", "[error:", "thinking:", "reasoning:", "step-by-step:",
-            "based on the", "i see that", "from the conversation", "the user is asking",
-            "the user wants", "examining the", "reviewing the", "analyzing the",
-            "hmm", "oh wait", "let me consider", "i should", "i need to",
-            "wait, let me", "first, let me", "to answer this", "answering this question",
-            "the context shows", "looking at this", "re-reading the",
-            "now, i", "so, i", "next, i", "i need", "i will need",
-            "looking at the tool", "the tool call", "calling the tool",
-            "to display", "to show", "to render", "to fetch", "to get",
-            "first, let me call", "let me call", "i'll call", "i should call",
-            "the correct tool", "the right tool", "using the tool"
-        };
-        var cleaned = new List<string>();
-        foreach (var l in lines)
-        {
-            // Noise lines are model meta-commentary — move them to the thinking view
-            // instead of dropping them. Error strings stay dropped.
-            if (noiseStarts.Any(p => l.TrimStart().StartsWith(p, StringComparison.OrdinalIgnoreCase)))
-            {
-                var t = l.Trim();
-                if (t.Length > 0 && !t.StartsWith("[", StringComparison.Ordinal))
-                    thinking.Add(t);
-            }
-            else
-            {
-                cleaned.Add(l);
-            }
-        }
-        var result = string.Join("\n", cleaned).Trim();
-
-        // Collapse a leading "answer:" or similar marker.
-        result = System.Text.RegularExpressions.Regex.Replace(result, @"^(answer|final answer)[:\-]\s*", "", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
-        return (string.Join("\n", thinking).Trim(), result);
+        Vm.SubmitClarification();
     }
 
-    /// <summary>Returns true if the content is entirely reasoning/thinking lines
-    /// with no substantive answer, data, or tool calls.</summary>
-    private static bool IsAllReasoning(string content)
+    private void CancelClarification()
     {
-        if (string.IsNullOrWhiteSpace(content)) return false;
-        var lines = content.Split('\n')
-            .Select(l => l.Trim())
-            .Where(l => l.Length > 0)
-            .ToList();
-        if (lines.Count == 0) return false;
-
-        // If any line contains actual data (pipes, URLs, IDs, numbers with units), it's not all reasoning
-        foreach (var l in lines)
-        {
-            if (l.Contains('|') || l.Contains("http") || System.Text.RegularExpressions.Regex.IsMatch(l, @"\b\d{4,}\b"))
-                return false;
-        }
-
-        var reasoningStarts = new[]
-        {
-            "i ", "i'll ", "let me ", "now ", "so ", "next ", "first ",
-            "the user", "looking at", "based on", "from the", "to display",
-            "to show", "to render", "to fetch", "to get", "calling",
-            "the tool", "the correct", "the right", "hmm", "wait",
-            "actually", "so, i", "now, i", "next, i", "i need",
-            "i should", "i will", "i would", "i can", "i could",
-            "to answer", "to summar", "this is", "that is", "here's",
-            "one thing", "another", "however", "also"
-        };
-
-        var reasoningCount = lines.Count(l =>
-            reasoningStarts.Any(p => l.StartsWith(p, StringComparison.OrdinalIgnoreCase)));
-        // If >70% of lines are reasoning starts, it's all reasoning
-        return (double)reasoningCount / lines.Count > 0.7;
-    }
-
-    // ── Hallucination detection ────────────────────────────────────────────
-
-    private sealed class HallucinationResult
-    {
-        public bool Detected { get; init; }
-        public string Reason { get; init; } = "";
-        public string? ArtifactId { get; init; }
-        public string? CorrectionPrompt { get; init; }
-    }
-
-    /// <summary>Master hallucination detector. Checks both tool-specific and generic linguistic issues.</summary>
-    private HallucinationResult DetectHallucination()
-    {
-        var lastAssistant = _messages.LastOrDefault(m => m.Role == "assistant");
-        if (lastAssistant == null) return new() { Detected = false };
-
-        var content = StripToolCallSyntax(lastAssistant.Content).Trim();
-
-        // Collect all tool calls and their results from this conversation turn
-        var allToolCalls = _messages
-            .Where(m => m.Role == "assistant")
-            .SelectMany(m => m.ToolCalls)
-            .Where(tc => tc.Status == ToolCallStatus.Completed)
-            .ToList();
-
-        var toolResults = _messages
-            .Where(m => m.Role == "system" && m.Content.Contains("Tool Results"))
-            .Select(m => m.Content)
-            .ToList();
-
-        // ── 0. No answer at all: model produced only thinking (or nothing),
-        // so a placeholder quip / empty message is the final response ──────
-        if (content.Length == 0 || FriendlyLoadingQuips.Contains(content))
-        {
-            return new()
-            {
-                Detected = true,
-                Reason = "Model produced no answer — only thinking or an empty response",
-                CorrectionPrompt = "You did not answer the user's question. Answer it directly now, or call a tool with [[tool:name|args]] if you need data. Do not output your reasoning — just the answer or the tool call."
-            };
-        }
-
-        // ── 1. Generic linguistic hallucination checks ────────────────────
-        var genericResult = DetectGenericHallucination(content);
-        if (genericResult.Detected) return genericResult;
-
-        // ── 2. Per-tool hallucination checks ──────────────────────────────
-        if (allToolCalls.Count > 0)
-        {
-            // Artifact chain: get_artifacts without show_artifact
-            var artifactResult = DetectArtifactHallucination(allToolCalls, content);
-            if (artifactResult.Detected) return artifactResult;
-
-            // query_table: agent may fabricate rows/columns not in the result
-            var tableResult = DetectTableHallucination(allToolCalls, toolResults, content);
-            if (tableResult.Detected) return tableResult;
-
-            // search: agent may fabricate search matches
-            var searchResult = DetectSearchHallucination(allToolCalls, toolResults, content);
-            if (searchResult.Detected) return searchResult;
-
-            // list_job_runs: agent may fabricate run details
-            var runsResult = DetectRunsHallucination(allToolCalls, toolResults, content);
-            if (runsResult.Detected) return runsResult;
-
-            // list_jobs: agent may fabricate job details
-            var jobsResult = DetectJobsHallucination(allToolCalls, toolResults, content);
-            if (jobsResult.Detected) return jobsResult;
-
-            // Tool returned error but agent responded as if it succeeded
-            var errorResult = DetectErrorMaskingHallucination(allToolCalls, content);
-            if (errorResult.Detected) return errorResult;
-
-            // Empty response after successful tool calls — model was thinking instead of answering
-            var emptyResult = DetectEmptyAfterTools(allToolCalls, content);
-            if (emptyResult.Detected) return emptyResult;
-        }
-
-        // Intent mismatch: response doesn't address what the user asked
-        var intentResult = DetectIntentMismatch(content);
-        if (intentResult.Detected) return intentResult;
-
-        return new() { Detected = false };
-    }
-
-    /// <summary>Generic linguistic hallucination: word repetition, phrase loops, gibberish.</summary>
-    private static HallucinationResult DetectGenericHallucination(string content)
-    {
-        if (string.IsNullOrWhiteSpace(content) || content.Length < 10)
-            return new() { Detected = false };
-
-        var lower = content.ToLowerInvariant();
-        var words = lower.Split(new[] { ' ', '\t', '\n', '\r', ',', '.', ';', ':', '!', '?', '(', ')', '"', '\'' },
-            StringSplitOptions.RemoveEmptyEntries);
-
-        // ── Word repetition: same word 3+ times in a row ─────────────────
-        for (var i = 2; i < words.Length; i++)
-        {
-            if (words[i] == words[i - 1] && words[i - 1] == words[i - 2] && words[i].Length > 2)
-            {
-                return new()
-                {
-                    Detected = true,
-                    Reason = $"Word repetition detected: '{words[i]}' repeated 3+ times",
-                    CorrectionPrompt = "Your response contained repeated words. Please provide a clear, concise answer without repeating words or phrases."
-                };
-            }
-        }
-
-        // ── Line repetition: same line/bullet repeated 3+ times in a row ─
-        // Catches degeneration loops like the same bullet printed endlessly.
-        {
-            var significant = content.Split('\n')
-                .Select(NormalizeLineForRepetition)
-                .Where(l => l.Length > 10)
-                .ToList();
-            var run = 1;
-            for (var i = 1; i < significant.Count; i++)
-            {
-                run = significant[i] == significant[i - 1] ? run + 1 : 1;
-                if (run >= 3)
-                {
-                    return new()
-                    {
-                        Detected = true,
-                        Reason = $"Line repetition detected: same line repeated {run}+ times in a row",
-                        CorrectionPrompt = "Your response repeated the same line over and over. State each point once, then stop."
-                    };
-                }
-            }
-        }
-
-        // ── Phrase repetition: same 3+ word phrase repeated ──────────────
-        if (words.Length >= 6)
-        {
-            var phraseCounts = new Dictionary<string, int>();
-            for (var i = 0; i <= words.Length - 3; i++)
-            {
-                var phrase = $"{words[i]} {words[i + 1]} {words[i + 2]}";
-                phraseCounts.TryGetValue(phrase, out var count);
-                phraseCounts[phrase] = count + 1;
-            }
-            var maxPhrase = phraseCounts.OrderByDescending(kv => kv.Value).FirstOrDefault();
-            if (maxPhrase.Value >= 3)
-            {
-                return new()
-                {
-                    Detected = true,
-                    Reason = $"Phrase repetition detected: '{maxPhrase.Key}' repeated {maxPhrase.Value} times",
-                    CorrectionPrompt = "Your response contained repeated phrases. Please provide a clear, concise answer without repeating the same phrases."
-                };
-            }
-        }
-
-        // ── Low-entropy / gibberish: too many unique 2-char tokens ───────
-        if (words.Length > 8)
-        {
-            var shortWords = words.Count(w => w.Length <= 2);
-            var ratio = (float)shortWords / words.Length;
-            if (ratio > 0.6f)
-            {
-                return new()
-                {
-                    Detected = true,
-                    Reason = "Response appears to be gibberish (too many short tokens)",
-                    CorrectionPrompt = "Your response was unclear. Please provide a meaningful answer."
-                };
-            }
-        }
-
-        // ── Repeated sentence structure: same sentence start 3+ times ────
-        if (words.Length >= 6)
-        {
-            var sentenceStarts = content.Split(new[] { '.', '!', '?' }, StringSplitOptions.RemoveEmptyEntries)
-                .Select(s => s.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries).Take(3).Select(w => w.ToLowerInvariant()).ToArray())
-                .Where(s => s.Length >= 3)
-                .Select(s => string.Join(" ", s))
-                .ToList();
-            if (sentenceStarts.Count >= 3)
-            {
-                var startGroups = sentenceStarts.GroupBy(s => s).ToDictionary(g => g.Key, g => g.Count());
-                var maxStart = startGroups.OrderByDescending(kv => kv.Value).FirstOrDefault();
-                if (maxStart.Value >= 3)
-                {
-                    return new()
-                    {
-                        Detected = true,
-                        Reason = $"Repeated sentence start: '{maxStart.Key}' used {maxStart.Value} times",
-                        CorrectionPrompt = "Your response repeated the same sentence opening multiple times. Please vary your sentence structure."
-                    };
-                }
-            }
-        }
-
-        return new() { Detected = false };
-    }
-
-    /// <summary>Normalizes a line for repetition comparison: strips bullet/number
-    /// markers, collapses whitespace, lowercases.</summary>
-    private static string NormalizeLineForRepetition(string line)
-    {
-        var l = line.Trim().ToLowerInvariant();
-        l = System.Text.RegularExpressions.Regex.Replace(l, @"^(?:[-*•]|\d+[.)])\s*", "");
-        l = System.Text.RegularExpressions.Regex.Replace(l, @"\s+", " ");
-        return l;
-    }
-
-    /// <summary>Detects a repetition loop at the tail of (streaming) content: the same
-    /// normalized line repeated 3+ times in a row at the end of what has arrived so far.
-    /// Used to abort streaming early instead of waiting for max_tokens.</summary>
-    private static bool IsRepetitionLoopTail(string content)
-    {
-        if (string.IsNullOrEmpty(content)) return false;
-        // Only inspect the tail — the buffer is re-checked on every token.
-        var tail = content.Length > 4000 ? content[^4000..] : content;
-        var significant = tail.Split('\n')
-            .Select(NormalizeLineForRepetition)
-            .Where(l => l.Length > 10)
-            .ToList();
-        var run = 1;
-        for (var i = 1; i < significant.Count; i++)
-        {
-            run = significant[i] == significant[i - 1] ? run + 1 : 1;
-            if (run >= 3 && i == significant.Count - 1) return true;
-        }
-        return false;
-    }
-
-    /// <summary>Truncates content at the point where it devolves into a repetition loop
-    /// (same normalized line 3+ times in a row). Keeps everything up to and including
-    /// the first occurrence of the repeated line.</summary>
-    private static string TruncateRepeatedLines(string content)
-    {
-        if (string.IsNullOrWhiteSpace(content)) return content;
-        var lines = content.Split('\n');
-        var significant = lines
-            .Select((l, idx) => (norm: NormalizeLineForRepetition(l), idx))
-            .Where(x => x.norm.Length > 10)
-            .ToList();
-        var run = 1;
-        for (var k = 1; k < significant.Count; k++)
-        {
-            run = significant[k].norm == significant[k - 1].norm ? run + 1 : 1;
-            if (run >= 3)
-            {
-                var firstOccurrenceIndex = significant[k - run + 1].idx;
-                return string.Join("\n", lines.Take(firstOccurrenceIndex + 1)).TrimEnd();
-            }
-        }
-        return content;
-    }
-
-    /// <summary>Artifact hallucination: get_artifacts returned real artifacts but show_artifact was never called.</summary>
-    private static HallucinationResult DetectArtifactHallucination(List<ToolCallInfo> toolCalls, string content)
-    {
-        var getArtifactCalls = toolCalls.Where(tc => tc.ToolName == "get_artifacts").ToList();
-        var showArtifactCalls = toolCalls.Where(tc => tc.ToolName == "show_artifact").ToList();
-
-        if (getArtifactCalls.Count == 0) return new() { Detected = false };
-        if (showArtifactCalls.Count > 0) return new() { Detected = false };
-
-        var hasRealArtifacts = getArtifactCalls.Any(tc =>
-            tc.Result != null &&
-            !tc.Result.StartsWith("No artifacts") &&
-            !tc.Result.StartsWith("No artifacts matched") &&
-            tc.Result.Contains("id:"));
-
-        if (!hasRealArtifacts) return new() { Detected = false };
-
-        // Content can be short/empty after IsAllReasoning stripped thinking text.
-        // Either way — the agent didn't fetch the content, so we must force it.
-        return new()
-        {
-            Detected = true,
-            Reason = "Agent did not call show_artifact after get_artifacts",
-            CorrectionPrompt = "You found artifacts but did not fetch their content. You MUST call [[tool:show_artifact|id]] to get the actual content before summarizing. Pick the most relevant artifact and call show_artifact now."
-        };
-    }
-
-    /// <summary>Empty after tools: tool calls were made and returned data, but the
-    /// agent's final response is empty or too short — it thought about tools instead of answering.</summary>
-    private static HallucinationResult DetectEmptyAfterTools(List<ToolCallInfo> toolCalls, string content)
-    {
-        if (toolCalls.Count == 0) return new() { Detected = false };
-
-        var successfulCalls = toolCalls.Where(tc => tc.Status == ToolCallStatus.Completed).ToList();
-        if (successfulCalls.Count == 0) return new() { Detected = false };
-
-        // If content is empty or very short after tools ran, the model was thinking instead of answering
-        if (content.Length < 40)
-        {
-            return new()
-            {
-                Detected = true,
-                Reason = $"Empty/short response after {successfulCalls.Count} successful tool call(s)",
-                CorrectionPrompt = "You called tools but did not provide an answer. Use the tool results to give the user a direct, helpful response. Do not output your thinking process — just answer."
-            };
-        }
-
-        return new() { Detected = false };
-    }
-
-    /// <summary>Table hallucination: agent fabricates row data not present in query_table results.</summary>
-    private static HallucinationResult DetectTableHallucination(List<ToolCallInfo> toolCalls, List<string> toolResults, string content)
-    {
-        var tableCalls = toolCalls.Where(tc => tc.ToolName == "query_table").ToList();
-        if (tableCalls.Count == 0) return new() { Detected = false };
-
-        // Collect all data values from table results
-        var allResultText = string.Join("\n", toolCalls.Select(tc => tc.Result ?? ""));
-        // Extract unique meaningful words (3+ chars) from results
-        var resultWords = ExtractMeaningfulWords(allResultText);
-        if (resultWords.Count == 0) return new() { Detected = false };
-
-        // Check if the response contains fabricated specific values
-        // Look for quoted strings or specific identifiers that aren't in the results
-        var quotedInResponse = System.Text.RegularExpressions.Regex.Matches(content, @"[""']([^""']{3,})[""']")
-            .Select(m => m.Groups[1].Value.ToLowerInvariant())
-            .Where(v => !new[] { "the", "and", "for", "not", "you", "are", "was", "has", "but", "can", "may", "all", "its" }.Contains(v))
-            .ToList();
-
-        var fabricated = quotedInResponse.Where(q => !resultWords.Contains(q)).ToList();
-        if (fabricated.Count >= 2)
-        {
-            return new()
-            {
-                Detected = true,
-                Reason = $"Agent referenced fabricated values: {string.Join(", ", fabricated.Take(3))}",
-                CorrectionPrompt = "Your response contained values that were not in the table data. Only reference values that appear in the tool results."
-            };
-        }
-
-        return new() { Detected = false };
-    }
-
-    /// <summary>Search hallucination: agent fabricates search results not in the output.</summary>
-    private static HallucinationResult DetectSearchHallucination(List<ToolCallInfo> toolCalls, List<string> toolResults, string content)
-    {
-        var searchCalls = toolCalls.Where(tc => tc.ToolName == "search").ToList();
-        if (searchCalls.Count == 0) return new() { Detected = false };
-
-        // If search returned no matches but agent claims it found results
-        var noMatch = searchCalls.Any(tc => tc.Result != null && tc.Result.Contains("No matching run outputs found"));
-        if (noMatch && content.Length > 40 &&
-            (content.Contains("found") || content.Contains("match") || content.Contains("result") || content.Contains("showed")))
-        {
-            return new()
-            {
-                Detected = true,
-                Reason = "Agent claimed search found results when search returned no matches",
-                CorrectionPrompt = "The search returned no matches. Do not fabricate results. Tell the user no matches were found."
-            };
-        }
-
-        return new() { Detected = false };
-    }
-
-    /// <summary>Job runs hallucination: agent fabricates specific run statuses/dates.</summary>
-    private static HallucinationResult DetectRunsHallucination(List<ToolCallInfo> toolCalls, List<string> toolResults, string content)
-    {
-        var runCalls = toolCalls.Where(tc => tc.ToolName == "list_job_runs").ToList();
-        if (runCalls.Count == 0) return new() { Detected = false };
-
-        var allResultText = string.Join("\n", runCalls.Select(tc => tc.Result ?? ""));
-        // If the result says 0 runs but agent discusses specific runs
-        if (allResultText.Contains("Job runs: 0") && content.Length > 50)
-        {
-            // Check if agent mentions specific statuses or dates
-            var statusWords = new[] { "completed", "failed", "running", "pending", "success", "error" };
-            var mentionsStatus = statusWords.Any(s => content.ToLowerInvariant().Contains(s));
-            if (mentionsStatus)
-            {
-                return new()
-                {
-                    Detected = true,
-                    Reason = "Agent described job runs when list_job_runs returned 0 runs",
-                    CorrectionPrompt = "There are no job runs to describe. The tool returned 0 runs."
-                };
-            }
-        }
-
-        return new() { Detected = false };
-    }
-
-    /// <summary>Jobs hallucination: agent fabricates job names/ids not in list_jobs results.</summary>
-    private static HallucinationResult DetectJobsHallucination(List<ToolCallInfo> toolCalls, List<string> toolResults, string content)
-    {
-        var jobCalls = toolCalls.Where(tc => tc.ToolName == "list_jobs").ToList();
-        if (jobCalls.Count == 0) return new() { Detected = false };
-
-        var allResultText = string.Join("\n", jobCalls.Select(tc => tc.Result ?? ""));
-        if (allResultText.Contains("Jobs: 0") && content.Length > 50)
-        {
-            return new()
-            {
-                Detected = true,
-                Reason = "Agent described jobs when list_jobs returned 0 jobs",
-                CorrectionPrompt = "There are no jobs in this project. The tool returned 0 jobs."
-            };
-        }
-
-        return new() { Detected = false };
-    }
-
-    /// <summary>Error masking: tool returned an error but agent responded as if it succeeded.</summary>
-    private static HallucinationResult DetectErrorMaskingHallucination(List<ToolCallInfo> toolCalls, string content)
-    {
-        var failedCalls = toolCalls.Where(tc =>
-            (tc.Status == ToolCallStatus.Error || (tc.Result != null && tc.Result.StartsWith("Error:")))
-            && tc.ToolName != "show_artifact" // show_artifact errors are handled by artifact guard
-        ).ToList();
-
-        if (failedCalls.Count == 0) return new() { Detected = false };
-
-        // If the agent produced a long response (>60 chars) after a tool error,
-        // check if it acknowledges the error or fabricates a result anyway
-        if (content.Length < 60) return new() { Detected = false };
-
-        var acknowledgesError = content.Contains("error", StringComparison.OrdinalIgnoreCase)
-            || content.Contains("failed", StringComparison.OrdinalIgnoreCase)
-            || content.Contains("couldn't", StringComparison.OrdinalIgnoreCase)
-            || content.Contains("unable", StringComparison.OrdinalIgnoreCase)
-            || content.Contains("sorry", StringComparison.OrdinalIgnoreCase)
-            || content.Contains("no worries", StringComparison.OrdinalIgnoreCase);
-
-        if (!acknowledgesError)
-        {
-            return new()
-            {
-                Detected = true,
-                Reason = $"Agent produced content after {failedCalls.First().ToolName} error without acknowledging it",
-                CorrectionPrompt = $"The tool {failedCalls.First().ToolName} returned an error: {(failedCalls.First().Result?.Length > 200 ? failedCalls.First().Result[..200] + "…" : failedCalls.First().Result)}. Acknowledge the error to the user."
-            };
-        }
-
-        return new() { Detected = false };
-    }
-
-    /// <summary>Intent mismatch: response doesn't address what the user asked.</summary>
-    private static HallucinationResult DetectIntentMismatch(string content)
-    {
-        if (string.IsNullOrWhiteSpace(content) || content.Length < 20)
-            return new() { Detected = false };
-
-        var lower = content.ToLowerInvariant();
-
-        // ── Off-topic: response is a disclaimer/refusal with no substance ──
-        var emptyPhrases = new[]
-        {
-            "i don't have enough information", "i cannot determine", "i'm not able to",
-            "i don't have access", "i can't find", "there is no information",
-            "i'm not sure", "it's unclear", "i don't know", "no information available"
-        };
-        var isBlanketRefusal = emptyPhrases.Any(p => lower.Contains(p)) && content.Length < 120;
-        if (isBlanketRefusal)
-        {
-            // Only flag if tools WERE called and returned data (the agent didn't bother using it)
-            return new()
-            {
-                Detected = false // Don't auto-block refusals — they may be legitimate
-            };
-        }
-
-        // ── Response is just the user's question rephrased back ──────────
-        // Detect patterns like "You asked about X" / "The question is about X" with no answer
-        var rephrasePatterns = new[]
-        {
-            "you asked about", "you want to know", "your question is",
-            "you're asking", "the question asks", "you're looking for"
-        };
-        var isRephrase = rephrasePatterns.Any(p => lower.Contains(p));
-        if (isRephrase && content.Length < 150)
-        {
-            // Check if there's actually an answer after the rephrase
-            var answerIndicators = new[] { "here", "the answer", "is ", "are ", "was ", "has ", "shows", "includes", "contains" };
-            var hasSubstance = answerIndicators.Any(a => lower.Contains(a)) && content.Length > 80;
-            if (!hasSubstance)
-            {
-                return new()
-                {
-                    Detected = true,
-                    Reason = "Response rephrases the question without answering it",
-                    CorrectionPrompt = "You rephrased the user's question but didn't answer it. Use the available tools to find the answer and provide it directly."
-                };
-            }
-        }
-
-        // ── Repeated filler across the response ──────────────────────────
-        var fillerWords = new[] { "basically", "essentially", "actually", "literally", "just", "well", "so", "like", "um", "uh", "hmm" };
-        var fillerCount = fillerWords.Count(f => System.Text.RegularExpressions.Regex.IsMatch(lower, $@"\b{System.Text.RegularExpressions.Regex.Escape(f)}\b"));
-        if (fillerCount >= 4 && content.Length < 200)
-        {
-            return new()
-            {
-                Detected = true,
-                Reason = $"Response contains excessive filler words ({fillerCount} different fillers)",
-                CorrectionPrompt = "Your response contained too many filler words. Please give a direct, clear answer without padding."
-            };
-        }
-
-        return new() { Detected = false };
-    }
-
-    /// <summary>Extracts meaningful words (3+ chars, lowercase) from text, excluding common stop words.</summary>
-    private static HashSet<string> ExtractMeaningfulWords(string text)
-    {
-        var stopWords = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-        {
-            "the", "and", "for", "are", "but", "not", "you", "all", "can", "had", "her", "was", "one",
-            "our", "out", "has", "his", "how", "its", "may", "new", "now", "old", "see", "way", "who",
-            "did", "get", "let", "say", "she", "too", "use", "this", "that", "with", "have", "from",
-            "they", "been", "said", "each", "make", "like", "just", "over", "such", "take", "year",
-            "them", "some", "than", "time", "very", "when", "come", "could", "what", "there",
-            "result", "results", "rows", "row", "table", "data", "matches", "match", "score"
-        };
-        var words = text.Split(new[] { ' ', '\t', '\n', '\r', ',', '.', ';', ':', '!', '?', '(', ')', '"', '\'', '/', '|', '-' },
-            StringSplitOptions.RemoveEmptyEntries)
-            .Select(w => w.ToLowerInvariant())
-            .Where(w => w.Length >= 3 && !stopWords.Contains(w))
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        return words;
-    }
-
-    /// <summary>Extracts the first artifact id from get_artifacts tool results.</summary>
-    private static string? ExtractFirstArtifactId(List<ToolCallInfo> toolCalls)
-    {
-        var getArtifactCalls = toolCalls.Where(tc => tc.ToolName == "get_artifacts" && tc.Status == ToolCallStatus.Completed);
-        foreach (var tc in getArtifactCalls)
-        {
-            if (tc.Result != null)
-            {
-                var match = System.Text.RegularExpressions.Regex.Match(tc.Result, @"id:([0-9a-f-]{36})");
-                if (match.Success) return match.Groups[1].Value;
-            }
-        }
-        return null;
-    }
-
-    private static readonly string[] FriendlyLoadingQuips = new[]
-    {
-        "No worries mate — sussing that out for you…",
-        "Give us a sec — working out what you need…",
-        "Righto, figuring out the best way to answer this…",
-        "Hang tight cobber — I'm on it…",
-        "Sweet as — just pulling that together…",
-        "One sec legend — sorting it out…",
-    };
-
-    private static string FriendlyLoadingQuip()
-    {
-        var idx = Random.Shared.Next(FriendlyLoadingQuips.Length);
-        return FriendlyLoadingQuips[idx];
-    }
-
-    private static List<string> ParseNumberedOptions(string content)
-    {
-        if (string.IsNullOrWhiteSpace(content)) return new();
-        // Match patterns like "1. Option text" or "1) Option text" at start of line
-        var matches = System.Text.RegularExpressions.Regex.Matches(
-            content, @"^\s*\d+[.)]\s+(.+)$",
-            System.Text.RegularExpressions.RegexOptions.Multiline);
-        if (matches.Count < 2) return new(); // Need at least 2 options to show picker
-        return matches.Select(m => m.Groups[1].Value.Trim()).ToList();
+        Vm.CancelClarification();
     }
 
     private async Task SubmitOptionsAsync(int messageId)
     {
-        // Find checked options via JS interop
         var selected = await JS.InvokeAsync<string[]>("placecontext.getCheckedOptions", messageId);
         if (selected == null || selected.Length == 0) return;
-
         var text = $"I selected: {string.Join(", ", selected)}";
-        _input = text;
+        Vm.Input = text;
         await Send();
     }
+
+    private async Task InputKeydown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !e.ShiftKey)
+        {
+            await Send();
+        }
+    }
+
+    private void RemoveAttachment()
+    {
+        Vm.RemoveAttachment();
+    }
+
+    private async Task CopyMessageAsync(string content)
+    {
+        try { await JS.InvokeVoidAsync("navigator.clipboard.writeText", content); }
+        catch { }
+    }
+
+    // ── JS interop helpers ───────────────────────────────────────────────
+
+    private async Task ScrollToBottom()
+    {
+        try { await JS.InvokeVoidAsync("placecontext.scrollToBottom", _messagesRef); }
+        catch { }
+    }
+
+    private async Task ScrollAfterRender()
+    {
+        try { await JS.InvokeVoidAsync("placecontext.scrollToElement", _scrollAnchor); }
+        catch { }
+    }
+
+    private void PreventDefault() { }
+
+    private async Task TriggerFileInput()
+    {
+        await JS.InvokeVoidAsync("placecontext.clickElement", _fileInputRef);
+    }
+
+    private async Task OnFileSelected(ChangeEventArgs e)
+    {
+        await ProcessFileFromInput();
+    }
+
+    private async Task ProcessFileFromInput()
+    {
+        try
+        {
+            var file = await JS.InvokeAsync<UploadedFile>("placecontext.readFileInput", _fileInputRef);
+            if (file == null || file.Size == 0) return;
+            if (file.Size > 10 * 1024 * 1024) return;
+            Vm.SetAttachment(file.Data, file.Name, Vm.ExtractText(file.Data, file.Name));
+            await InvokeAsync(StateHasChanged);
+            await SendAttachmentSummaryAsync();
+        }
+        catch { }
+    }
+
+    private async Task OnFileDrop(DragEventArgs e)
+    {
+        try
+        {
+            var file = await JS.InvokeAsync<UploadedFile>("placecontext.dropFile");
+            if (file == null || file.Size == 0) return;
+            if (file.Size > 10 * 1024 * 1024) return;
+            Vm.SetAttachment(file.Data, file.Name, Vm.ExtractText(file.Data, file.Name));
+            await InvokeAsync(StateHasChanged);
+            await SendAttachmentSummaryAsync();
+        }
+        catch { }
+    }
+
+    private async Task SendAttachmentSummaryAsync()
+    {
+        if (Vm.AttachedFileName == null || Vm.Streaming) return;
+        Vm.Input = $"Please summarize the attached file \"{Vm.AttachedFileName}\" and ask what I would like to do with it.";
+        await Send();
+    }
+
+    private async Task StartOAuthFlow(Guid connectionId)
+    {
+        await JS.InvokeVoidAsync("open", $"/mcp-oauth/start?connectionId={connectionId}", "_blank");
+    }
+
+    [JSInvokable]
+    public static async Task OnMcpOAuthCallback(string message)
+    {
+        OnMcpOAuthCompleted?.Invoke(null, EventArgs.Empty);
+    }
+
+    internal static event EventHandler? OnMcpOAuthCompleted;
+
+    // ── Render helpers (Blazor-specific: MarkupString / RenderFragment) ──
+
+    private static string FormatBytes(long bytes) => bytes switch
+    {
+        < 1024 => $"{bytes} B",
+        < 1024 * 1024 => $"{bytes / 1024.0:0.#} KB",
+        _ => $"{bytes / (1024.0 * 1024.0):0.#} MB",
+    };
 
     private static string FormatToolResult(string result)
     {
@@ -2306,11 +1027,9 @@
         var lines = result.Split('\n', StringSplitOptions.RemoveEmptyEntries);
         var sb = new System.Text.StringBuilder();
 
-        // Detect table format: has a "---" separator line
         var separatorIdx = Array.FindIndex(lines, l => l.Trim() == "---");
         if (separatorIdx > 0)
         {
-            // Table: header line(s) before ---, data rows after
             var headerLine = lines[separatorIdx - 1];
             var headers = headerLine.Split('|', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
             var dataLines = lines.Skip(separatorIdx + 1).ToArray();
@@ -2333,21 +1052,16 @@
             return sb.ToString();
         }
 
-        // Detect list format: lines starting with "- "
         var listItems = lines.Where(l => l.TrimStart().StartsWith("- ")).ToArray();
         if (listItems.Length > 0)
         {
-            // Check if there's a header line before the list (e.g., "Project tables: 42")
             var headerLine = lines.FirstOrDefault(l => !l.TrimStart().StartsWith("- "));
             if (!string.IsNullOrEmpty(headerLine))
-            {
                 sb.Append($"<div class=\"tool-result-header\">{System.Net.WebUtility.HtmlEncode(headerLine)}</div>");
-            }
             sb.Append("<ul class=\"tool-list\">");
             foreach (var item in listItems)
             {
-                var text = item.TrimStart().Substring(2); // Remove "- "
-                // Highlight parenthetical info (e.g., "(213 rows)")
+                var text = item.TrimStart().Substring(2);
                 var formatted = System.Text.RegularExpressions.Regex.Replace(
                     System.Net.WebUtility.HtmlEncode(text),
                     @"\(([^)]+)\)",
@@ -2358,49 +1072,15 @@
             return sb.ToString();
         }
 
-        // Fallback: plain text with line breaks
         var escaped = System.Net.WebUtility.HtmlEncode(result);
         escaped = escaped.Replace("\n", "<br/>");
         return $"<div class=\"tool-plain\">{escaped}</div>";
     }
 
-    private async Task QuickActionAsync(string context, string action)
-    {
-        if (_streaming || !_projectId.HasValue) return;
-        var prompt = action switch
-        {
-            "summarize" => "Summarize the following in 3 bullet points:\n\n" + context,
-            "explain" => "Explain the following in more detail, breaking down each concept:\n\n" + context,
-            "code" => "Generate clean, well-commented code based on the following description:\n\n" + context,
-            "graph" => "Create a visual graph/chart description based on the following:\n\n" + context,
-            _ => context
-        };
-        _input = prompt;
-        await Send();
-    }
-
-    private async Task StarterPromptAsync(string prompt)
-    {
-        if (_streaming || !_projectId.HasValue) return;
-        _input = prompt;
-        await Send();
-    }
-
-    private async Task CopyMessageAsync(string content)
-    {
-        try { await JS.InvokeVoidAsync("navigator.clipboard.writeText", content); }
-        catch { }
-    }
-
-    // ── Artifact rendering ───────────────────────────────────────────────
-
     private RenderFragment RenderArtifact(ToolCallInfo tc) => builder =>
     {
         ArtifactRenderInfo? info = null;
-        try
-        {
-            info = System.Text.Json.JsonSerializer.Deserialize<ArtifactRenderInfo>(tc.Result ?? "{}");
-        }
+        try { info = System.Text.Json.JsonSerializer.Deserialize<ArtifactRenderInfo>(tc.Result ?? "{}"); }
         catch { }
 
         if (info is null)
@@ -2418,21 +1098,14 @@
                 <a class="artifact-open" href="{url}" target="_blank" rel="noopener">Open ↗</a>
             </div>
             """;
-
         if (info.Truncated)
-        {
             header += "<div class='artifact-truncated'>Preview truncated — use Open ↗ for the full file.</div>";
-        }
-
         builder.AddMarkupContent(0, header);
 
-        // Documents (PDF/DOC/DOCX): extracted text for the agent, iframe for PDFs.
         if (!string.IsNullOrEmpty(info.ExtractedText))
         {
             if (info.ContentType == "application/pdf")
-            {
                 builder.AddMarkupContent(1, $"<iframe class='artifact-frame' src='{url}' title='{System.Net.WebUtility.HtmlEncode(info.Title)}' loading='lazy' referrerpolicy='no-referrer'></iframe>");
-            }
             var details = $"""
                 <details class="artifact-extracted">
                     <summary>Extracted text {(info.ExtractedTruncated ? "(truncated)" : "")}</summary>
@@ -2467,20 +1140,20 @@
                 }
                 else
                 {
-                    var sb = new System.Text.StringBuilder();
-                    sb.Append("<table class='artifact-table'><thead><tr>");
+                    var csvSb = new System.Text.StringBuilder();
+                    csvSb.Append("<table class='artifact-table'><thead><tr>");
                     foreach (var h in parsed.Header)
-                        sb.Append($"<th>{System.Net.WebUtility.HtmlEncode(h)}</th>");
-                    sb.Append("</tr></thead><tbody>");
+                        csvSb.Append($"<th>{System.Net.WebUtility.HtmlEncode(h)}</th>");
+                    csvSb.Append("</tr></thead><tbody>");
                     foreach (var row in parsed.Rows)
                     {
-                        sb.Append("<tr>");
+                        csvSb.Append("<tr>");
                         foreach (var cell in row)
-                            sb.Append($"<td>{System.Net.WebUtility.HtmlEncode(cell)}</td>");
-                        sb.Append("</tr>");
+                            csvSb.Append($"<td>{System.Net.WebUtility.HtmlEncode(cell)}</td>");
+                        csvSb.Append("</tr>");
                     }
-                    sb.Append("</tbody></table>");
-                    builder.AddMarkupContent(1, sb.ToString());
+                    csvSb.Append("</tbody></table>");
+                    builder.AddMarkupContent(1, csvSb.ToString());
                 }
             }
             else
@@ -2491,17 +1164,11 @@
         else if (PreviewableArtifact(info.ContentType))
         {
             if (info.ContentType.StartsWith("image/"))
-            {
                 builder.AddMarkupContent(1, $"<img class='artifact-image' src='{url}' alt='{System.Net.WebUtility.HtmlEncode(info.Title)}' loading='lazy' />");
-            }
             else if (info.ContentType.StartsWith("video/"))
-            {
                 builder.AddMarkupContent(1, $"<video class='artifact-frame' src='{url}' controls preload='metadata' />");
-            }
             else
-            {
                 builder.AddMarkupContent(1, $"<iframe class='artifact-frame' src='{url}' title='{System.Net.WebUtility.HtmlEncode(info.Title)}' loading='lazy' referrerpolicy='no-referrer'></iframe>");
-            }
         }
         else
         {
@@ -2607,1216 +1274,4 @@
     };
 
     private static string Esc(string s) => s.Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;");
-
-    // ── Tool calling helpers ──────────────────────────────────────────────
-
-    private async Task<ToolCallResult> ExecuteToolAsync(string toolName, string args, CancellationToken ct)
-    {
-        if (!_projectId.HasValue) return ToolCallResult.Fail("No project selected");
-
-        try
-        {
-            return toolName switch
-            {
-                "query_table" => await ExecuteQueryTableAsync(args, ct),
-                "list_tables" => await ExecuteListTablesAsync(ct),
-                "list_jobs" => await ExecuteListJobsAsync(ct),
-                "list_job_runs" => await ExecuteListJobRunsAsync(args, ct),
-                "render_graph" => await ExecuteRenderGraphAsync(args, ct),
-                "query_graph" => await ExecuteQueryGraphAsync(ct),
-                "search" => await ExecuteSearchAsync(args, ct),
-                "get_artifacts" => await ExecuteGetArtifactsAsync(args, ct),
-                "show_artifact" => await ExecuteShowArtifactAsync(args, ct),
-                "schedule_job" => await ExecuteScheduleJobAsync(args, ct),
-                "list_schedules" => await ExecuteListSchedulesAsync(args, ct),
-                "toggle_schedule" => await ExecuteToggleScheduleAsync(args, ct),
-                "run_job" => await ExecuteRunJobAsync(args, ct),
-                "call_mcp" => await ExecuteCallMcpAsync(args, ct),
-                "list_mcp_tools" => await ExecuteListMcpToolsAsync(args, ct),
-                "render_map" => await ExecuteRenderMapAsync(args, ct),
-                _ => ToolCallResult.Fail($"Unknown tool: {toolName}"),
-            };
-        }
-        catch (Exception ex)
-        {
-            return ToolCallResult.Fail(ex.Message);
-        }
-    }
-
-    private async Task<ToolCallResult> ExecuteQueryTableAsync(string args, CancellationToken ct)
-    {
-        var parts = args.Split('|');
-        var tableName = parts.Length > 0 ? parts[0].Trim() : "";
-        var page = parts.Length > 1 ? int.Parse(parts[1]) : 1;
-        AddActiveAction("query_table", $"Querying {tableName}...");
-        var result = await Svc.QueryProjectTablePageAsync(_projectId!.Value, tableName, null, page, 50, ct: ct);
-        var preview = string.Join("\n", result.Rows.Take(3).Select(r => string.Join(", ", r.Take(4))));
-        AddFetchedData(tableName, (int)result.TotalCount, preview);
-        var sb = new System.Text.StringBuilder();
-        sb.Append($"Table: {tableName} ({result.TotalCount} rows)\n");
-        sb.Append(string.Join(" | ", result.Columns));
-        sb.Append("\n");
-        sb.Append("---\n");
-        foreach (var row in result.Rows)
-        {
-            sb.Append(string.Join(" | ", row.Select(v => v?.ToString() ?? "null")));
-            sb.Append("\n");
-        }
-        return ToolCallResult.Ok(sb.ToString());
-    }
-
-    private async Task<ToolCallResult> ExecuteListTablesAsync(CancellationToken ct)
-    {
-        AddActiveAction("list_tables", "Loading tables...");
-        var tables = await Svc.ListProjectDataTablesAsync(_projectId!.Value, ct);
-        var sb = new System.Text.StringBuilder();
-        sb.Append($"Project tables: {tables.Count}\n");
-        foreach (var t in tables)
-            sb.Append($"- {t.Name} ({t.RowEstimate} rows)\n");
-        return ToolCallResult.Ok(sb.ToString());
-    }
-
-    private async Task<ToolCallResult> ExecuteListJobsAsync(CancellationToken ct)
-    {
-        AddActiveAction("list_jobs", "Loading jobs...");
-        var jobs = await Svc.ListJobsAsync(_projectId!.Value, ct);
-        var sb = new System.Text.StringBuilder();
-        sb.Append($"Jobs: {jobs.Count}\n");
-        foreach (var j in jobs)
-            sb.Append($"- {j.Name} (id: {j.Id})\n");
-        return ToolCallResult.Ok(sb.ToString());
-    }
-
-    private async Task<ToolCallResult> ExecuteListJobRunsAsync(string args, CancellationToken ct)
-    {
-        AddActiveAction("list_job_runs", args != "" ? $"Runs for {args[..8]}..." : "Loading all runs...");
-        var jobId = Guid.TryParse(args, out var id) ? id : Guid.Empty;
-        var runs = jobId != Guid.Empty
-            ? await Svc.ListJobRunsAsync(jobId, ct)
-            : new List<JobRunView>();
-        var sb = new System.Text.StringBuilder();
-        sb.Append($"Job runs: {runs.Count}\n");
-        foreach (var r in runs.Take(20))
-            sb.Append($"- {r.Status} ({r.StartedAt:yyyy-MM-dd HH:mm})\n");
-        return ToolCallResult.Ok(sb.ToString());
-    }
-
-    private async Task<ToolCallResult> ExecuteSearchAsync(string args, CancellationToken ct)
-    {
-        if (!_projectId.HasValue) return ToolCallResult.Fail("No project selected");
-        var query = args.Trim();
-        if (query.Length == 0) return ToolCallResult.Fail("Usage: [[tool:search|query]]");
-        AddActiveAction("search", $"Searching \"{(query.Length > 30 ? query[..30] + "…" : query)}\"...");
-        try
-        {
-            var matches = await Svc.SearchRunOutputsAsync(_projectId.Value, query, 8, ct);
-            if (matches.Count == 0)
-            {
-                CompleteActiveAction("search", true);
-                return ToolCallResult.Ok("No matching run outputs found. Semantic search may be disabled (no embedding API key configured).");
-            }
-            var sb = new System.Text.StringBuilder();
-            sb.Append($"Matches for \"{query}\": {matches.Count}\n");
-            foreach (var m in matches)
-            {
-                var snippet = m.Text.Length > 300 ? m.Text[..300] + "…" : m.Text;
-                sb.Append($"- (score {m.Score:0.00}, run {m.JobRunId.ToString()[..8]}) {snippet}\n");
-            }
-            CompleteActiveAction("search", true);
-            AddToolHistory("search", true, $"{matches.Count} matches");
-            return ToolCallResult.Ok(sb.ToString());
-        }
-        catch (Exception ex)
-        {
-            CompleteActiveAction("search", false);
-            return ToolCallResult.Fail(ex.Message);
-        }
-    }
-
-    private async Task<ToolCallResult> ExecuteGetArtifactsAsync(string args, CancellationToken ct)
-    {
-        if (!_projectId.HasValue) return ToolCallResult.Fail("No project selected");
-        var query = args.Trim();
-        AddActiveAction("get_artifacts", string.IsNullOrEmpty(query) ? "Loading artifacts..." : $"Searching artifacts for \"{query}\"...");
-        try
-        {
-            IReadOnlyList<ArtifactFileView> artifacts;
-            if (string.IsNullOrEmpty(query))
-            {
-                artifacts = await Svc.ListProjectArtifactsAsync(_projectId.Value, 100, null, ct);
-            }
-            else
-            {
-                // Tokenize the query and match any relevant word in the title or kind.
-                var terms = ArtifactSearchTerms(query);
-                if (terms.Count == 0)
-                {
-                    artifacts = await Svc.ListProjectArtifactsAsync(_projectId.Value, 100, null, ct);
-                }
-                else
-                {
-                    // Pull a broad set so we can score across all terms (server-side ILIKE only does a single pattern).
-                    var broad = await Svc.ListProjectArtifactsAsync(_projectId.Value, 2000, null, ct);
-                    artifacts = ScoreAndFilterArtifacts(broad, terms);
-                }
-            }
-
-            if (artifacts.Count == 0)
-            {
-                CompleteActiveAction("get_artifacts", true);
-                return ToolCallResult.Ok(string.IsNullOrEmpty(query)
-                    ? "No artifacts found for this project yet."
-                    : $"No artifacts matched \"{query}\".");
-            }
-
-            MergePanelArtifacts(artifacts);
-
-            // If a specific query resolves to exactly one artifact, render it inline immediately.
-            if (!string.IsNullOrEmpty(query) && artifacts.Count == 1)
-            {
-                CompleteActiveAction("get_artifacts", true);
-                return await ExecuteShowArtifactAsync(artifacts[0].Id.ToString(), ct);
-            }
-
-            var sb = new System.Text.StringBuilder();
-            sb.Append($"Artifacts: {artifacts.Count}\n");
-            foreach (var a in artifacts)
-            {
-                sb.Append($"- {a.Title} | {a.Kind} | {FormatBytes(a.SizeBytes)} | {a.CreatedAt:yyyy-MM-dd HH:mm} | id:{a.Id} | /runs/{a.RunId}/artifacts/{a.Id}\n");
-            }
-            sb.Append("\nTo display one, call [[tool:show_artifact|id]].");
-            CompleteActiveAction("get_artifacts", true);
-            AddToolHistory("get_artifacts", true, $"{artifacts.Count} artifacts");
-            return ToolCallResult.Ok(sb.ToString());
-        }
-        catch (Exception ex)
-        {
-            CompleteActiveAction("get_artifacts", false);
-            return ToolCallResult.Fail(ex.Message);
-        }
-    }
-
-    private static IReadOnlyList<string> ArtifactSearchTerms(string query)
-    {
-        var stopWords = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-        {
-            "the", "a", "an", "and", "or", "of", "in", "on", "at", "to", "for", "with", "from", "is", "are", "was", "were",
-            "me", "show", "give", "list", "report", "reports", "file", "files", "artifact", "artifacts", "find", "search", "get"
-        };
-        var terms = query.Split(new[] { ' ', ',', '.', '-', '_', '/', '\\', '|', '&' }, StringSplitOptions.RemoveEmptyEntries)
-            .Select(t => t.Trim().ToLowerInvariant())
-            .Where(t => t.Length > 2 && !stopWords.Contains(t))
-            .Distinct()
-            .ToList();
-        return terms;
-    }
-
-    private static IReadOnlyList<ArtifactFileView> ScoreAndFilterArtifacts(IReadOnlyList<ArtifactFileView> artifacts, IReadOnlyList<string> terms)
-    {
-        var scored = artifacts
-            .Select(a =>
-            {
-                var haystack = $"{a.Title} {a.Kind}".ToLowerInvariant();
-                var score = terms.Count(t => haystack.Contains(t));
-                return (Artifact: a, Score: score);
-            })
-            .Where(x => x.Score > 0)
-            .OrderByDescending(x => x.Score)
-            .ThenByDescending(x => x.Artifact.CreatedAt)
-            .Take(25)
-            .Select(x => x.Artifact)
-            .ToList();
-        return scored;
-    }
-
-    private async Task<ToolCallResult> ExecuteShowArtifactAsync(string args, CancellationToken ct)
-    {
-        if (!_projectId.HasValue) return ToolCallResult.Fail("No project selected");
-        var idStr = args.Trim().Split('|')[0].Trim();
-        if (!Guid.TryParse(idStr, out var artifactId))
-            return ToolCallResult.Fail("Usage: [[tool:show_artifact|artifactId]]");
-
-        AddActiveAction("show_artifact", $"Loading artifact {artifactId.ToString()[..8]}...");
-        try
-        {
-            var link = await Links.GetByIdAsync(artifactId, ct);
-            if (link is null)
-            {
-                CompleteActiveAction("show_artifact", false);
-                return ToolCallResult.Fail("Artifact not found.");
-            }
-
-            var isTextLike = IsTextArtifactContentType(link.ContentType);
-            var isDocument = IsDocumentContentType(link.ContentType);
-            string? content = null;
-            string? extractedText = null;
-            var truncated = false;
-            var extractedTruncated = false;
-
-            if ((isTextLike || isDocument) && ObjectStore.IsEnabled)
-            {
-                try
-                {
-                    var obj = await ObjectStore.OpenReadAsync(link.Bucket, link.ObjectKey, ct);
-                    if (obj is not null)
-                    {
-                        await using var stream = obj.Content;
-                        using var ms = new MemoryStream();
-                        var buffer = new byte[81920];
-                        int read, total = 0;
-                        var maxBytes = isDocument ? MaxArtifactDocumentBytes : MaxArtifactInlineBytes;
-                        while ((read = await stream.ReadAsync(buffer, ct)) > 0)
-                        {
-                            total += read;
-                            if (total > maxBytes)
-                            {
-                                truncated = true;
-                                break;
-                            }
-                            ms.Write(buffer, 0, read);
-                        }
-                        var bytes = ms.ToArray();
-                        if (isDocument)
-                        {
-                            var rawText = DocExtractor.ExtractText(bytes, link.Title);
-                            if (!string.IsNullOrWhiteSpace(rawText))
-                            {
-                                if (rawText.Length > MaxArtifactExtractedTextLength)
-                                {
-                                    extractedText = rawText[..MaxArtifactExtractedTextLength];
-                                    extractedTruncated = true;
-                                }
-                                else
-                                {
-                                    extractedText = rawText;
-                                }
-                            }
-                        }
-                        else
-                        {
-                            content = System.Text.Encoding.UTF8.GetString(bytes);
-                        }
-                    }
-                }
-                catch { /* fall back to metadata-only */ }
-            }
-
-            // Lazy RAG backfill: an artifact that gets viewed becomes searchable in future chats
-            // (its content was only indexed at creation time when embeddings were enabled).
-            if (ContentIndexer is { IsEnabled: true })
-            {
-                var indexText = extractedText ?? content;
-                if (!string.IsNullOrWhiteSpace(indexText))
-                {
-                    try
-                    {
-                        await ContentIndexer.IndexAsync(_projectId!.Value, ContentKind.Document,
-                            $"artifact:{link.Id}", $"{link.Title}\n\n{indexText}", ct);
-                    }
-                    catch { /* best-effort */ }
-                }
-            }
-
-            var payload = new
-            {
-                Id = link.Id,
-                RunId = link.RunId,
-                Title = link.Title,
-                ContentType = link.ContentType,
-                SizeBytes = link.SizeBytes,
-                IsText = isTextLike,
-                Content = content,
-                ExtractedText = extractedText,
-                ExtractedTruncated = extractedTruncated,
-                Truncated = truncated,
-            };
-            CompleteActiveAction("show_artifact", true);
-            AddToolHistory("show_artifact", true, link.Title);
-            return ToolCallResult.Artifact(System.Text.Json.JsonSerializer.Serialize(payload));
-        }
-        catch (Exception ex)
-        {
-            CompleteActiveAction("show_artifact", false);
-            return ToolCallResult.Fail(ex.Message);
-        }
-    }
-
-    private static bool IsTextArtifactContentType(string contentType)
-        => contentType.StartsWith("text/")
-           || contentType.Contains("json", StringComparison.OrdinalIgnoreCase)
-           || contentType.Contains("csv", StringComparison.OrdinalIgnoreCase)
-           || contentType.Contains("html", StringComparison.OrdinalIgnoreCase)
-           || contentType.Contains("xml", StringComparison.OrdinalIgnoreCase)
-           || contentType.Contains("svg", StringComparison.OrdinalIgnoreCase);
-
-    private static bool IsDocumentContentType(string contentType)
-        => contentType == "application/pdf"
-           || contentType == "application/msword"
-           || contentType == "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
-
-    private async Task<ToolCallResult> ExecuteRenderGraphAsync(string args, CancellationToken ct)
-    {
-        if (!_projectId.HasValue) return ToolCallResult.Fail("No project selected");
-        // Parse: "bar|tableName|column" or "pie|tableName|column"
-        var parts = args.Split('|');
-        var chartType = parts.Length > 0 ? parts[0].Trim() : "bar";
-        var tableName = parts.Length > 1 ? parts[1].Trim() : "";
-        var column = parts.Length > 2 ? parts[2].Trim() : "";
-
-        // ── HITL: prompt for table if missing OR invalid ───────────────────
-        var tableValid = false;
-        if (!string.IsNullOrEmpty(tableName))
-        {
-            try
-            {
-                var probe = await Svc.QueryProjectTablePageAsync(_projectId!.Value, tableName, null, 1, 1, ct: ct);
-                tableValid = probe.Columns.Count > 0;
-            }
-            catch { tableValid = false; }
-        }
-
-        if (!tableValid)
-        {
-            var tables = await Svc.ListProjectDataTablesAsync(_projectId!.Value, ct);
-            if (tables.Count == 0)
-                return ToolCallResult.Fail("No data tables found in this project.");
-
-            var clarify = await AskClarificationAsync(new ClarificationRequest
-            {
-                ToolName = "render_graph",
-                Args = args,
-                Question = $"Table '{tableName}' not found. Which table would you like to chart?",
-                MultiSelect = false,
-                Options = tables.Where(t => t.RowEstimate > 0).Select(t => new ClarificationOption
-                {
-                    Id = t.Name,
-                    Label = t.Name,
-                    Description = $"~{t.RowEstimate} rows"
-                }).ToList()
-            });
-
-            if (!clarify.Confirmed || clarify.SelectedIds.Count == 0)
-                return ToolCallResult.Fail("Cancelled — no table selected.");
-
-            tableName = clarify.SelectedIds[0];
-        }
-
-        // ── HITL: prompt for column(s) if missing OR invalid ───────────────
-        // Support multi-select: user can pick multiple columns to chart as series
-        var columns = new List<string>();
-        if (!string.IsNullOrEmpty(column))
-        {
-            var probe = await Svc.QueryProjectTablePageAsync(_projectId!.Value, tableName, null, 1, 1, ct: ct);
-            if (probe.Columns.Any(c => c.Equals(column, StringComparison.OrdinalIgnoreCase)))
-            {
-                columns.Add(column);
-            }
-        }
-
-        if (columns.Count == 0)
-        {
-            var probe = await Svc.QueryProjectTablePageAsync(_projectId!.Value, tableName, null, 1, 1, ct: ct);
-            if (probe.Columns.Count == 0)
-                return ToolCallResult.Fail($"Table '{tableName}' has no columns.");
-
-            // Only show numeric columns for charting
-            var numericProbe = await Svc.QueryProjectTablePageAsync(_projectId!.Value, tableName, null, 1, 10, ct: ct);
-            var numericCols = new List<string>();
-            for (var i = 0; i < numericProbe.Columns.Count; i++)
-            {
-                var hasNumeric = numericProbe.Rows.Any(r => i < r.Count && double.TryParse(r[i]?.ToString(), out _));
-                if (hasNumeric) numericCols.Add(numericProbe.Columns[i]);
-            }
-
-            var clarify = await AskClarificationAsync(new ClarificationRequest
-            {
-                ToolName = "render_graph",
-                Args = args,
-                Question = $"Which column(s) in '{tableName}' should be charted? (select one or more for multi-series)",
-                MultiSelect = true,
-                Options = numericCols.Select(c => new ClarificationOption
-                {
-                    Id = c,
-                    Label = c,
-                }).ToList()
-            });
-
-            if (!clarify.Confirmed || clarify.SelectedIds.Count == 0)
-                return ToolCallResult.Fail("Cancelled — no column selected.");
-
-            columns = clarify.SelectedIds;
-        }
-
-        // Query data and build chart (single or multi-series)
-        var result = await Svc.QueryProjectTablePageAsync(_projectId!.Value, tableName, null, 1, 100, ct: ct);
-        var labels = new List<string>();
-        var seriesList = new List<(string Name, List<double> Values)>();
-
-        foreach (var col in columns)
-        {
-            var colIndex = result.Columns.ToList().FindIndex(c => c.Equals(col, StringComparison.OrdinalIgnoreCase));
-            if (colIndex < 0) continue;
-            seriesList.Add((col, new List<double>()));
-        }
-
-        if (seriesList.Count == 0)
-            return ToolCallResult.Fail($"None of the selected columns found in '{tableName}'.");
-
-        foreach (var row in result.Rows)
-        {
-            var label = row[0]?.ToString() ?? "";
-            labels.Add(label);
-            for (var s = 0; s < seriesList.Count; s++)
-            {
-                var colIndex = result.Columns.ToList().FindIndex(c => c.Equals(columns[s], StringComparison.OrdinalIgnoreCase));
-                var valStr = colIndex >= 0 && colIndex < row.Count ? row[colIndex]?.ToString() ?? "0" : "0";
-                if (double.TryParse(valStr, out var val))
-                    seriesList[s].Values.Add(val);
-                else
-                    seriesList[s].Values.Add(0);
-            }
-        }
-
-        // Build ChartSpec-compatible JSON
-        var graphData = new
-        {
-            type = chartType,
-            title = $"{tableName}" + (columns.Count > 1 ? $" — {string.Join(", ", columns)}" : $" — {columns[0]}"),
-            labels = labels.Take(24).ToList(),
-            series = seriesList.Select(s => new { name = s.Name, values = s.Values.Take(24).ToList() }).ToList()
-        };
-        return ToolCallResult.Graph(System.Text.Json.JsonSerializer.Serialize(graphData));
-    }
-
-    private async Task<ToolCallResult> ExecuteQueryGraphAsync(CancellationToken ct)
-    {
-        if (!_projectId.HasValue) return ToolCallResult.Fail("No project selected");
-        AddActiveAction("query_graph", "Loading project graph...");
-        try
-        {
-            var graph = await Svc.GetGraphVizAsync(_projectId!.Value, ct);
-            var sb = new System.Text.StringBuilder();
-
-            // Summary stats
-            sb.AppendLine($"# Project Dependency Graph");
-            sb.AppendLine($"- **Nodes:** {graph.NodeCount}");
-            sb.AppendLine($"- **Links:** {graph.LinkCount}");
-            sb.AppendLine();
-
-            // Group nodes by kind
-            var byKind = graph.Nodes.GroupBy(n => n.Kind ?? "unknown")
-                .OrderByDescending(g => g.Count())
-                .ToList();
-
-            sb.AppendLine("## Entity types");
-            foreach (var kind in byKind.Take(10))
-            {
-                sb.AppendLine($"- **{kind.Key}:** {kind.Count()} nodes");
-            }
-            sb.AppendLine();
-
-            // Top hubs (high degree nodes)
-            var hubs = graph.Nodes.Where(n => n.Degree >= 5).OrderByDescending(n => n.Degree).Take(10).ToList();
-            if (hubs.Count > 0)
-            {
-                sb.AppendLine("## Key entities (hubs)");
-                foreach (var n in hubs)
-                {
-                    var godBadge = n.IsGod ? " ⭐" : "";
-                    sb.AppendLine($"- **{n.Label}** ({n.Degree} connections){godBadge}");
-                }
-                sb.AppendLine();
-            }
-
-            // Store for side panel visualization (limit to top 50 for performance)
-            _graphNodes.Clear();
-            _graphNodes.AddRange(graph.Nodes.OrderByDescending(n => n.Degree).Take(50));
-            _graphLinks = graph.LinkCount;
-
-            // Full edge list for reference.
-            var nodeLabels = graph.Nodes.ToDictionary(n => n.Id, n => n.Label);
-            if (graph.Links.Count > 0)
-            {
-                sb.AppendLine("\n**All relationships:**");
-                foreach (var edge in graph.Links)
-                {
-                    var parent = nodeLabels.GetValueOrDefault(edge.Source) ?? "?";
-                    var child = nodeLabels.GetValueOrDefault(edge.Target) ?? "?";
-                    sb.AppendLine($"- {parent} → {child} ({edge.Confidence})");
-                }
-            }
-
-            CompleteActiveAction("query_graph", true);
-            AddToolHistory("query_graph", true, $"{graph.NodeCount} nodes");
-            return ToolCallResult.Ok(sb.ToString());
-        }
-        catch (Exception ex)
-        {
-            CompleteActiveAction("query_graph", false);
-            AddToolHistory("query_graph", false, ex.Message);
-            return ToolCallResult.Fail($"Graph query failed: {ex.Message}");
-        }
-    }
-
-    private async Task<ToolCallResult> ExecuteRenderMapAsync(string args, CancellationToken ct)
-    {
-        if (string.IsNullOrWhiteSpace(args)) return ToolCallResult.Fail("Usage: render_map|specJson");
-        var specJson = args.Trim();
-        // Validate it's valid JSON
-        try { System.Text.Json.JsonDocument.Parse(specJson); }
-        catch { return ToolCallResult.Fail("Invalid JSON spec for render_map"); }
-        AddActiveAction("render_map", "Rendering map...");
-        await Task.Delay(10, ct); // yield
-        CompleteActiveAction("render_map", true);
-        AddToolHistory("render_map", true, "Map rendered");
-        return ToolCallResult.Map(specJson);
-    }
-
-    private async Task<ToolCallResult> ExecuteScheduleJobAsync(string args, CancellationToken ct)
-    {
-        var parts = args.Split('|');
-        if (parts.Length < 3) return ToolCallResult.Fail("Usage: schedule_job|jobId|name|cron");
-        var jobId = Guid.TryParse(parts[0].Trim(), out var id) ? id : Guid.Empty;
-        if (jobId == Guid.Empty) return ToolCallResult.Fail("Invalid jobId");
-        var name = parts[1].Trim();
-        var cron = parts[2].Trim();
-        AddActiveAction("schedule_job", $"Creating schedule for job {jobId.ToString()[..8]}...");
-        var trigger = await Svc.CreateTriggerAsync(new Application.Features.CreateTriggerCommand(
-            jobId, name, "Schedule", cron, null), ct);
-        CompleteActiveAction("schedule_job", true);
-        AddToolHistory("schedule_job", true, $"Next: {trigger.NextRunAt?.ToString("HH:mm") ?? "—"}");
-        return ToolCallResult.Ok($"Schedule created: {trigger.Name} (id: {trigger.Id})\n" +
-            $"Cron: {trigger.CronExpression}\n" +
-            $"Next run: {trigger.NextRunAt?.ToString("yyyy-MM-dd HH:mm") ?? "—"}\n" +
-            $"Enabled: {trigger.Enabled}");
-    }
-
-    private async Task<ToolCallResult> ExecuteListSchedulesAsync(string args, CancellationToken ct)
-    {
-        if (!_projectId.HasValue) return ToolCallResult.Fail("No project selected");
-        var jobId = Guid.TryParse(args.Trim(), out var id) ? id : Guid.Empty;
-        var triggers = await Svc.ListTriggersAsync(_projectId!.Value, ct);
-        if (jobId != Guid.Empty)
-            triggers = triggers.Where(t => t.JobId == jobId).ToList();
-        var sb = new System.Text.StringBuilder();
-        sb.Append($"Schedules: {triggers.Count}\n");
-        foreach (var t in triggers)
-        {
-            sb.Append($"- {t.Name} ({t.Kind})\n");
-            if (t.Kind == "Schedule")
-                sb.Append($"  Cron: {t.CronExpression} | Next: {t.NextRunAt?.ToString("yyyy-MM-dd HH:mm") ?? "—"}\n");
-            sb.Append($"  Enabled: {t.Enabled} | Last fired: {t.LastFiredAt?.ToString("yyyy-MM-dd HH:mm") ?? "never"}\n");
-        }
-        return ToolCallResult.Ok(sb.ToString());
-    }
-
-    private async Task<ToolCallResult> ExecuteToggleScheduleAsync(string args, CancellationToken ct)
-    {
-        var parts = args.Split('|');
-        if (parts.Length < 2) return ToolCallResult.Fail("Usage: toggle_schedule|triggerId|true|false");
-        var triggerId = Guid.TryParse(parts[0].Trim(), out var id) ? id : Guid.Empty;
-        if (triggerId == Guid.Empty) return ToolCallResult.Fail("Invalid triggerId");
-        var enabled = parts[1].Trim().ToLower() == "true";
-        AddActiveAction("toggle_schedule", $"Toggling schedule {triggerId.ToString()[..8]}...");
-        var trigger = await Svc.SetTriggerEnabledAsync(triggerId, enabled, ct);
-        CompleteActiveAction("toggle_schedule", true);
-        AddToolHistory("toggle_schedule", true, enabled ? "enabled" : "disabled");
-        return ToolCallResult.Ok($"Schedule '{trigger.Name}' {(enabled ? "enabled" : "disabled")}.\n" +
-            $"Next run: {trigger.NextRunAt?.ToString("yyyy-MM-dd HH:mm") ?? "—"}");
-    }
-
-    private async Task<ToolCallResult> ExecuteRunJobAsync(string args, CancellationToken ct)
-    {
-        var jobId = Guid.TryParse(args.Trim(), out var id) ? id : Guid.Empty;
-        if (jobId == Guid.Empty) return ToolCallResult.Fail("Invalid jobId");
-        AddActiveAction("run_job", $"Running job {jobId.ToString()[..8]}...");
-        var run = await Svc.RunJobAsync(jobId, null, null, ct);
-        CompleteActiveAction("run_job", true);
-        AddToolHistory("run_job", true, run.Status);
-        return ToolCallResult.Ok($"Job run started: {run.Id}\nStatus: {run.Status}\nStarted: {run.StartedAt:yyyy-MM-dd HH:mm}");
-    }
-
-    private async Task<ToolCallResult> ExecuteCallMcpAsync(string args, CancellationToken ct)
-    {
-        // args: "serverName|toolName|jsonArgs" or "serverName|toolName"
-        var parts = args.Split('|');
-        if (parts.Length < 2) return ToolCallResult.Fail("Usage: call_mcp|serverName|toolName|[jsonArgs]");
-
-        var serverName = parts[0].Trim();
-        var toolName = parts[1].Trim();
-        var jsonArgs = parts.Length > 2 ? parts[2].Trim() : "{}";
-
-        AddActiveAction("call_mcp", $"Calling {serverName}.{toolName}...");
-
-        // Find the MCP connection by name
-        var connections = await Svc.ListMcpConnectionsAsync(_projectId!.Value, ct);
-        var connection = connections.FirstOrDefault(c => c.Name.Equals(serverName, StringComparison.OrdinalIgnoreCase));
-        if (connection == null)
-        {
-            CompleteActiveAction("call_mcp", false);
-            return ToolCallResult.Fail($"MCP server '{serverName}' not found. Available: {string.Join(", ", connections.Select(c => c.Name))}");
-        }
-
-        try
-        {
-            var arguments = System.Text.Json.JsonDocument.Parse(jsonArgs).RootElement;
-            var result = await McpClient.CallToolAsync(connection.Id, toolName, arguments, ct);
-            CompleteActiveAction("call_mcp", result.Success);
-            AddToolHistory("call_mcp", result.Success, result.Success ? "ok" : result.Error ?? "error");
-
-            if (result.Success)
-                return ToolCallResult.Ok(result.Content ?? "Tool executed successfully");
-            else
-                return ToolCallResult.Fail($"MCP tool error: {result.Error}");
-        }
-        catch (Exception ex)
-        {
-            CompleteActiveAction("call_mcp", false);
-            return ToolCallResult.Fail($"MCP call failed: {ex.Message}");
-        }
-    }
-
-    private async Task<ToolCallResult> ExecuteListMcpToolsAsync(string args, CancellationToken ct)
-    {
-        // args: "serverName" or empty to list all servers
-        var serverName = args.Trim();
-
-        var connections = await Svc.ListMcpConnectionsAsync(_projectId!.Value, ct);
-        if (connections.Count == 0)
-            return ToolCallResult.Ok("No MCP servers configured. Add one in Settings → MCP Servers.");
-
-        var sb = new System.Text.StringBuilder();
-
-        if (string.IsNullOrEmpty(serverName))
-        {
-            // List all servers
-            sb.AppendLine("Available MCP servers:");
-            foreach (var conn in connections)
-            {
-                sb.AppendLine($"- {conn.Name} ({conn.Transport}) - {(conn.Enabled ? "enabled" : "disabled")}");
-            }
-            sb.AppendLine("\nUse list_mcp_tools|serverName to see available tools.");
-        }
-        else
-        {
-            // List tools for a specific server
-            var connection = connections.FirstOrDefault(c => c.Name.Equals(serverName, StringComparison.OrdinalIgnoreCase));
-            if (connection == null)
-                return ToolCallResult.Fail($"MCP server '{serverName}' not found.");
-
-            var tools = await McpClient.ListToolsAsync(connection.Id, ct);
-            sb.AppendLine($"Tools on {serverName}:");
-            foreach (var tool in tools)
-            {
-                sb.AppendLine($"- {tool.Name}: {tool.Description ?? "No description"}");
-            }
-        }
-
-        return ToolCallResult.Ok(sb.ToString());
-    }
-
-
-    private void ToggleSidePanel() => _showSidePanel = !_showSidePanel;
-
-    private async void OpenSettings()
-    {
-        _pendingSystemPrompt = _systemPrompt;
-        _pendingTemperature = _temperature;
-        _pendingMaxTokens = _maxTokens;
-        _pendingRagEnabled = _ragEnabled;
-        _pendingMaxContextChunks = _maxContextChunks;
-        _settingsTab = "prompt";
-        _showAddMcp = false;
-        await LoadMcpConnectionsAsync();
-        _showSettings = true;
-        StateHasChanged();
-    }
-
-    private void CloseSettings() => _showSettings = false;
-
-    private async Task SaveSettings()
-    {
-        _systemPrompt = _pendingSystemPrompt;
-        _temperature = _pendingTemperature;
-        _maxTokens = _pendingMaxTokens;
-        _ragEnabled = _pendingRagEnabled;
-        _maxContextChunks = _pendingMaxContextChunks;
-        _showSettings = false;
-
-        if (_projectId.HasValue)
-        {
-            try
-            {
-                var config = await Svc.GetAgentConfigAsync(_projectId.Value);
-                await Svc.UpdateAgentConfigAsync(new Application.Features.UpdateAgentConfigCommand(
-                    config.ProjectId, config.BaseModel, _systemPrompt, _maxContextChunks,
-                    _temperature, config.TopP, config.Enabled));
-            }
-            catch { /* best-effort */ }
-        }
-    }
-
-    private void ShowAddMcp()
-    {
-        _newMcpName = "";
-        _newMcpTransport = "http";
-        _newMcpEndpoint = "";
-        _newMcpCommand = "";
-        _newMcpArgs = "";
-        _newMcpAuthType = "none";
-        _newMcpAuthToken = "";
-        _newMcpAuthHeader = "";
-        _newMcpOAuthScopes = "";
-        _showAuthFields = false;
-        _showAddMcp = true;
-    }
-
-    private async Task AddMcpConnectionAsync()
-    {
-        if (!_projectId.HasValue || string.IsNullOrWhiteSpace(_newMcpName)) return;
-        try
-        {
-            var conn = await Svc.CreateMcpConnectionAsync(new Application.Features.CreateMcpConnectionCommand(
-                _projectId.Value, _newMcpName, _newMcpTransport,
-                _newMcpTransport != "stdio" ? _newMcpEndpoint : null,
-                _newMcpTransport == "stdio" ? _newMcpCommand : null,
-                _newMcpTransport == "stdio" ? _newMcpArgs : null,
-                _newMcpAuthType != "none" ? _newMcpAuthType : null,
-                _newMcpAuthType != "none" && _newMcpAuthType != "oauth" ? _newMcpAuthToken : null,
-                _newMcpAuthType == "header" ? _newMcpAuthHeader : null,
-                null, // OAuthClientId — discovered during flow
-                _newMcpAuthType == "oauth" ? _newMcpOAuthScopes : null));
-            _showAddMcp = false;
-            await LoadMcpConnectionsAsync();
-
-            // If OAuth was selected, immediately start the flow
-            if (_newMcpAuthType == "oauth")
-            {
-                await StartOAuthFlow(conn.Id);
-            }
-        }
-        catch { }
-    }
-
-    private async Task TestMcpConnectionAsync(Guid id)
-    {
-        try { await Svc.TestMcpConnectionAsync(id); await LoadMcpConnectionsAsync(); }
-        catch { }
-    }
-
-    private async Task DeleteMcpConnectionAsync(Guid id)
-    {
-        try { await Svc.DeleteMcpConnectionAsync(id); await LoadMcpConnectionsAsync(); }
-        catch { }
-    }
-
-    private async Task LoadMcpConnectionsAsync()
-    {
-        if (!_projectId.HasValue) return;
-        try { _mcpConnections = await Svc.ListMcpConnectionsAsync(_projectId.Value); }
-        catch { _mcpConnections = Array.Empty<McpConnectionView>(); }
-    }
-
-    // ── OAuth flow ──────────────────────────────────────────────────────────────────
-
-    private bool _oauthListenerRegistered;
-
-    protected override async Task OnAfterRenderAsync(bool firstRender)
-    {
-        if (firstRender)
-        {
-            if (!_oauthListenerRegistered)
-            {
-                _oauthListenerRegistered = true;
-                var dotNetRef = DotNetObjectReference.Create(this);
-                await JS.InvokeVoidAsync("eval", @"
-                    window.__mcpOAuthListener = function(e) {
-                        if (e.data && e.data.startsWith && e.data.startsWith('mcp-oauth-')) {
-                            DotNet.invokeMethodAsync('PlaceContext.Host', 'OnMcpOAuthCallback', e.data);
-                        }
-                    };
-                    window.addEventListener('message', window.__mcpOAuthListener);
-                ");
-            }
-            // Set up file drop zone
-            await JS.InvokeVoidAsync("placecontext.setupDropZone", _fileInputRef);
-
-            // Hide side panel by default on narrow screens so the chat area is usable.
-            try
-            {
-                if (await JS.InvokeAsync<bool>("placecontext.isMobile"))
-                {
-                    _showSidePanel = false;
-                    StateHasChanged();
-                }
-            }
-            catch { }
-        }
-
-        // Render any pending chart canvases
-        foreach (var msg in _messages)
-        {
-            foreach (var tc in msg.ToolCalls.Where(t => t.ResultType == "graph" && t.Status == ToolCallStatus.Completed))
-            {
-                if (_renderedChartIds.Contains(tc.Id)) continue;
-                try
-                {
-                    await JS.InvokeVoidAsync("pcchart.render", $"graph-{tc.Id}", tc.Result);
-                    _renderedChartIds.Add(tc.Id);
-                }
-                catch { /* canvas not in DOM yet — will retry next render */ }
-            }
-
-            foreach (var tc in msg.ToolCalls.Where(t => t.ResultType == "map" && t.Status == ToolCallStatus.Completed))
-            {
-                // No "already rendered" skip: pcmap.render is idempotent and self-heals when
-                // Blazor replaced the container element (streaming/session re-renders).
-                try
-                {
-                    await JS.InvokeVoidAsync("pcmap.render", $"map-{tc.Id}", tc.Result);
-                }
-                catch { /* container not in DOM yet — will retry next render */ }
-            }
-        }
-    }
-
-    private async Task StartOAuthFlow(Guid connectionId)
-    {
-        await JS.InvokeVoidAsync("open", $"/mcp-oauth/start?connectionId={connectionId}", "_blank");
-    }
-
-    [JSInvokable]
-    public static async Task OnMcpOAuthCallback(string message)
-    {
-        // This is called from JS when the popup sends a message.
-        // We can't directly update the component state from a static method,
-        // so we use a static event that components can subscribe to.
-        OnMcpOAuthCompleted?.Invoke(null, EventArgs.Empty);
-    }
-
-    internal static event EventHandler? OnMcpOAuthCompleted;
-
-    protected override void OnInitialized()
-    {
-        base.OnInitialized();
-        OnMcpOAuthCompleted += OnMcpOAuthCompletedHandler;
-    }
-
-    // ── Human-in-the-loop clarification ──────────────────────────────────
-
-    private void ToggleClarificationOption(string id)
-    {
-        if (_clarificationSelected.Contains(id))
-            _clarificationSelected.Remove(id);
-        else
-            _clarificationSelected.Add(id);
-        StateHasChanged();
-    }
-
-    private void CancelClarification()
-    {
-        _pendingClarification = null;
-        _clarificationSelected.Clear();
-        _clarificationTcs?.TrySetResult(new ClarificationResult { Confirmed = false });
-        _clarificationTcs = null;
-        StateHasChanged();
-    }
-
-    private void SubmitClarification()
-    {
-        if (_pendingClarification == null) return;
-
-        // Build a user message showing what was selected (for LLM context)
-        var selectedLabels = _pendingClarification.Options
-            .Where(o => _clarificationSelected.Contains(o.Id))
-            .Select(o => o.Label)
-            .ToList();
-
-        var userResponse = selectedLabels.Count == 1
-            ? $"Selected: {selectedLabels[0]}"
-            : $"Selected: {string.Join(", ", selectedLabels)}";
-
-        // Add the user's selection as a message so the LLM sees it
-        _messages.Add(new AgentMessage("user", userResponse));
-
-        var result = new ClarificationResult
-        {
-            Confirmed = true,
-            SelectedIds = _clarificationSelected.ToList()
-        };
-        _pendingClarification = null;
-        _clarificationSelected.Clear();
-        _clarificationTcs?.TrySetResult(result);
-        _clarificationTcs = null;
-        StateHasChanged();
-    }
-
-    private async Task<ClarificationResult> AskClarificationAsync(ClarificationRequest request)
-    {
-        _clarificationSelected.Clear();
-        _pendingClarification = request;
-        _clarificationTcs = new TaskCompletionSource<ClarificationResult>();
-        StateHasChanged();
-        await ScrollToBottom();
-        return await _clarificationTcs.Task;
-    }
-
-    private static bool IsTransientError(string error)
-    {
-        if (string.IsNullOrEmpty(error)) return false;
-        var lower = error.ToLowerInvariant();
-        return lower.Contains("timeout")
-            || lower.Contains("econnreset")
-            || lower.Contains("econnrefused")
-            || lower.Contains("socket")
-            || lower.Contains("503")
-            || lower.Contains("502")
-            || lower.Contains("429")
-            || lower.Contains("rate limit");
-    }
-
-    private void PreventDefault() { }
-
-    private async Task TriggerFileInput()
-    {
-        await JS.InvokeVoidAsync("placecontext.clickElement", _fileInputRef);
-    }
-
-    private async Task OnFileSelected(ChangeEventArgs e)
-    {
-        await ProcessFileFromInput();
-    }
-
-    private async Task ProcessFileFromInput()
-    {
-        try
-        {
-            var file = await JS.InvokeAsync<UploadedFile>("placecontext.readFileInput", _fileInputRef);
-            if (file == null || file.Size == 0) return;
-            if (file.Size > 10 * 1024 * 1024) // 10 MB limit
-            {
-                _attachedFileName = null;
-                _attachedFile = null;
-                _attachedFileText = null;
-                return;
-            }
-            _attachedFile = file.Data;
-            _attachedFileName = file.Name;
-            _attachedFileText = DocExtractor.ExtractText(file.Data, file.Name);
-            await InvokeAsync(StateHasChanged);
-            await SendAttachmentSummaryAsync();
-        }
-        catch { }
-    }
-
-    private async Task OnFileDrop(DragEventArgs e)
-    {
-        try
-        {
-            var file = await JS.InvokeAsync<UploadedFile>("placecontext.dropFile");
-            if (file == null || file.Size == 0) return;
-            if (file.Size > 10 * 1024 * 1024) return;
-            _attachedFile = file.Data;
-            _attachedFileName = file.Name;
-            _attachedFileText = DocExtractor.ExtractText(file.Data, file.Name);
-            await InvokeAsync(StateHasChanged);
-            await SendAttachmentSummaryAsync();
-        }
-        catch { }
-    }
-
-    private async Task SendAttachmentSummaryAsync()
-    {
-        if (_attachedFileName == null || _streaming) return;
-        _input = $"Please summarize the attached file \"{_attachedFileName}\" and ask what I would like to do with it.";
-        await Send();
-    }
-
-    private void RemoveAttachment()
-    {
-        _attachedFile = null;
-        _attachedFileName = null;
-        _attachedFileText = null;
-    }
-
-    private static string SanitizeFileName(string name)
-    {
-        var cleaned = string.Concat(name.Select(c => char.IsLetterOrDigit(c) || c is '.' or '-' or '_' ? c : '-'));
-        return cleaned.Length > 80 ? cleaned[..80] : cleaned;
-    }
-
-    private static string ContentTypeFor(string fileName) =>
-        System.IO.Path.GetExtension(fileName).ToLowerInvariant() switch
-        {
-            ".csv" => "text/csv",
-            ".pdf" => "application/pdf",
-            ".doc" => "application/msword",
-            ".docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            ".txt" or ".md" => "text/plain",
-            ".png" => "image/png",
-            ".jpg" or ".jpeg" => "image/jpeg",
-            _ => "application/octet-stream",
-        };
-
-    private static string FormatBytes(long bytes) => bytes switch
-    {
-        < 1024 => $"{bytes} B",
-        < 1024 * 1024 => $"{bytes / 1024.0:0.#} KB",
-        _ => $"{bytes / (1024.0 * 1024.0):0.#} MB",
-    };
-
-    private async Task LoadGraphAsync()
-    {
-        if (!_projectId.HasValue) return;
-        try
-        {
-            var graph = await Svc.GetGraphVizAsync(_projectId.Value);
-            _graphNodes.Clear();
-            _graphNodes.AddRange(graph.Nodes);
-            _graphLinks = graph.LinkCount;
-        }
-        catch { }
-    }
-
-    private void AddActiveAction(string toolName, string detail)
-    {
-        _activeActions.Add(new AgentAction { ToolName = toolName, Detail = detail, Status = ToolCallStatus.Running });
-    }
-
-    private void CompleteActiveAction(string toolName, bool success)
-    {
-        var action = _activeActions.FirstOrDefault(a => a.ToolName == toolName && a.Status == ToolCallStatus.Running);
-        if (action != null)
-            action.Status = success ? ToolCallStatus.Completed : ToolCallStatus.Error;
-    }
-
-    private void AddFetchedData(string source, int rowCount, string preview)
-    {
-        _fetchedData.Add(new FetchedData { Source = source, RowCount = rowCount, Preview = preview });
-    }
-
-    private void AddToolHistory(string toolName, bool success, string status)
-    {
-        _toolHistory.Add(new ToolHistoryEntry
-        {
-            ToolName = toolName,
-            Success = success,
-            Status = status,
-            Timestamp = DateTimeOffset.Now
-        });
-    }
-
-// ── Message and tool call models ──────────────────────────────────────────
-
-public sealed class AgentMessage
-{
-    private static int _nextId;
-    public AgentMessage(string role, string content)
-    {
-        Id = Interlocked.Increment(ref _nextId);
-        Role = role;
-        Content = content;
-    }
-    public int Id { get; }
-    public string Role { get; }
-    public string Content { get; }
-    /// <summary>The model's chain-of-thought / meta-commentary, shown in a collapsible view.</summary>
-    public string? Thinking { get; set; }
-    public List<ToolCallInfo> ToolCalls { get; } = new();
-    public string? AttachmentName { get; set; }
-    public string? AttachmentKey { get; set; }
-    public string? AttachmentContentType { get; set; }
-    public long AttachmentSizeBytes { get; set; }
-}
-
-public sealed class ToolCallInfo
-{
-    public int Id { get; set; }
-    public string ToolName { get; set; } = "";
-    public string Args { get; set; } = "";
-    public ToolCallStatus Status { get; set; }
-    public string? Result { get; set; }
-    public string ResultType { get; set; } = "text";
-    public int RetryCount { get; set; }
-}
-
-public enum ToolCallStatus { Pending, Running, Completed, Error }
-
-public sealed class ToolCallResult
-{
-    public bool Success { get; }
-    public string? Data { get; }
-    public string? Error { get; }
-    public bool IsGraph { get; }
-    public bool IsMap { get; }
-    public bool IsArtifact { get; }
-
-    public static ToolCallResult Ok(string data) => new(true, data, null, false, false, false);
-    public static ToolCallResult Fail(string error) => new(false, null, error, false, false, false);
-    public static ToolCallResult Graph(string data) => new(true, data, null, true, false, false);
-    public static ToolCallResult Map(string data) => new(true, data, null, false, true, false);
-    public static ToolCallResult Artifact(string data) => new(true, data, null, false, false, true);
-
-    private ToolCallResult(bool success, string? data, string? error, bool isGraph, bool isMap, bool isArtifact)
-    {
-        Success = success;
-        Data = data;
-        Error = error;
-        IsGraph = isGraph;
-        IsMap = isMap;
-        IsArtifact = isArtifact;
-    }
-}
-
-public sealed class AgentAction
-{
-    public string ToolName { get; set; } = "";
-    public string Detail { get; set; } = "";
-    public ToolCallStatus Status { get; set; }
-}
-
-public sealed class FetchedData
-{
-    public string Source { get; set; } = "";
-    public int RowCount { get; set; }
-    public string Preview { get; set; } = "";
-}
-
-public sealed class ToolHistoryEntry
-{
-    public string ToolName { get; set; } = "";
-    public bool Success { get; set; }
-    public string Status { get; set; } = "";
-    public DateTimeOffset Timestamp { get; set; }
-}
-
-public sealed class ClarificationRequest
-{
-    public string ToolName { get; set; } = "";
-    public string Args { get; set; } = "";
-    public string Question { get; set; } = "";
-    public List<ClarificationOption> Options { get; set; } = new();
-    public bool MultiSelect { get; set; }
-}
-
-public sealed class ClarificationOption
-{
-    public string Id { get; set; } = "";
-    public string Label { get; set; } = "";
-    public string? Description { get; set; }
-}
-
-public sealed class ClarificationResult
-{
-    public bool Confirmed { get; set; }
-    public List<string> SelectedIds { get; set; } = new();
-}
-
-public sealed class UploadedFile
-{
-    public string Name { get; set; } = "";
-    public long Size { get; set; }
-    public byte[] Data { get; set; } = Array.Empty<byte>();
-}
-
 }

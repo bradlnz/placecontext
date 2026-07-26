@@ -113,6 +113,10 @@ builder.Services.AddCascadingAuthenticationState();
 builder.Services.AddScoped<PortalUiState>();
 builder.Services.AddScoped<BrandingService>();
 
+// ── Page ViewModels ──────────────────────────────────────────────────────────
+builder.Services.AddScoped<PlaceContext.Host.Components.ViewModels.ChatViewModel>();
+builder.Services.AddScoped<PlaceContext.Host.Components.ViewModels.JobsViewModel>();
+
 // Share the Data Protection key ring across replicas (persisted in Postgres) and pin the application
 // name, so the auth cookie one replica issues can be decrypted by any other — otherwise a token sign-in
 // handled by pod A produces a cookie pod B can't read, bouncing the operator back to /locked.
