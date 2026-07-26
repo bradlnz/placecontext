@@ -135,6 +135,10 @@ public sealed class ChatViewModel : PageViewModel
             // Fire-and-forget: populate sidebar data in the background so the UI renders immediately.
             _ = LoadAndRestoreSessionAsync();
         }
+        else
+        {
+            WorkspaceLoaded = true;
+        }
     }
 
     private async Task LoadAndRestoreSessionAsync()
@@ -165,6 +169,8 @@ public sealed class ChatViewModel : PageViewModel
     private async Task OnProjectChangedAsync()
     {
         if (!ProjectId.HasValue) return;
+        WorkspaceLoaded = false;
+        NotifyStateChanged();
         await LoadAgentConfigAsync();
         await LoadGraphAsync();
         ActiveActions.Clear();
@@ -174,6 +180,7 @@ public sealed class ChatViewModel : PageViewModel
         await LoadMcpConnectionsAsync();
         await LoadPanelArtifactsAsync();
         NewSession();
+        WorkspaceLoaded = true;
         NotifyStateChanged();
     }
 
