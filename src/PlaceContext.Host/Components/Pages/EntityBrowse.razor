@@ -4,7 +4,9 @@
 @implements IDisposable
 @using PlaceContext.Application.Features
 @using PlaceContext.Application.Ports
-@inject IPlaceContextService Svc
+@using PlaceContext.Host.Components.ViewModels
+@using PlaceContext.Host.Components.ViewModels.Helpers
+@inject EntityBrowseViewModel Vm
 @inject PortalUiState Ui
 @inject NavigationManager Nav
 @inject IJSRuntime JS
@@ -12,93 +14,92 @@
 <PageTitle>placecontext — @EntityName</PageTitle>
 
 <div class="page-wrap">
-    @if (!_loaded)
+    @if (!Vm.Loaded)
     {
         <Skeleton Kind="detail" Rows="7" />
     }
-    else if (_entity is null)
+    else if (Vm.Entity is null)
     {
-        <div class="unknown-entity">Unknown entity “@EntityName”. Define it under Data → Entities.</div>
+        <div class="unknown-entity">Unknown entity "@EntityName". Define it under Data → Entities.</div>
     }
     else
     {
         <div class="header-row">
             <div>
-                <h2 class="page-title">@_entity.Name</h2>
+                <h2 class="page-title">@Vm.Entity.Name</h2>
                 <div class="page-sub">
-                    <span class="mono">@_entity.TableName</span>
-                    · @(_page?.TotalCount ?? 0) records
-                    @if (_entity.Relations.Count > 0)
+                    <span class="mono">@Vm.Entity.TableName</span>
+                    · @(Vm.Page?.TotalCount ?? 0) records
+                    @if (Vm.Entity.Relations.Count > 0)
                     {
-                        <span> · related to @string.Join(", ", _entity.Relations.Select(r => r.TargetEntity))</span>
+                        <span> · related to @string.Join(", ", Vm.Entity.Relations.Select(r => r.TargetEntity))</span>
                     }
                 </div>
             </div>
             <div class="header-actions">
                 <AuthorizeView Policy="@Permission.DataWrite">
                     <Authorized>
-                        <button class="dcbtn primary" @onclick="StartCreateAsync">＋ New</button>
+                        <button class="dcbtn primary" @onclick="() => Vm.StartCreateAsync()">＋ New</button>
                     </Authorized>
                 </AuthorizeView>
                 <input class="dcinput filter-input" placeholder="search records…"
-                       value="@_search" @oninput="OnSearchInput" />
+                       value="@Vm.Search" @oninput="OnSearchInput" />
             </div>
         </div>
 
-        @if (_error is not null)
+        @if (Vm.Error is not null)
         {
-            <div class="error-banner">@_error</div>
+            <div class="error-banner">@Vm.Error</div>
         }
-        @if (_warnMessage is not null)
+        @if (Vm.WarnMessage is not null)
         {
-            <div class="warn-banner">@_warnMessage</div>
+            <div class="warn-banner">@Vm.WarnMessage</div>
         }
 
         <div class="dctabs tabs-mb">
-            <button class="dctab @(_viewTab == "records" ? "active" : "")" @onclick="@(() => _viewTab = "records")">Records</button>
-            <button class="dctab @(_viewTab == "graph" ? "active" : "")" @onclick="@(() => _viewTab = "graph")">Graph</button>
-            <button class="dctab @(_viewTab == "analytics" ? "active" : "")" @onclick="OpenAnalyticsAsync">Analytics</button>
+            <button class="dctab @(Vm.ViewTab == "records" ? "active" : "")" @onclick="@(() => Vm.ViewTab = "records")">Records</button>
+            <button class="dctab @(Vm.ViewTab == "graph" ? "active" : "")" @onclick="@(() => Vm.ViewTab = "graph")">Graph</button>
+            <button class="dctab @(Vm.ViewTab == "analytics" ? "active" : "")" @onclick="OpenAnalyticsAsync">Analytics</button>
         </div>
 
-        @* ── Analytics tab: SQL-backed charts scoped to this entity (same engine as Data → Analytics). ── *@
-        @if (_viewTab == "analytics")
+        @if (Vm.ViewTab == "analytics")
         {
             <div class="analytics-head">
-                <span class="note-12">Charts over <span class="mono">@_entity.TableName</span> — SELECT-only, isolated to this project.</span>
-                <button class="dcbtn sql-chart-btn" @onclick="ToggleChartEditor">＋ SQL chart</button>
+                <span class="note-12">Charts over <span class="mono">@Vm.Entity.TableName</span> — SELECT-only, isolated to this project.</span>
+                <button class="dcbtn sql-chart-btn" @onclick="() => Vm.ToggleChartEditor()">＋ SQL chart</button>
             </div>
 
-            @if (_showChartEditor)
+            @if (Vm.ShowChartEditor)
             {
                 <div class="dccard chart-editor">
-                    <input class="dcinput chart-name-input" placeholder="chart name (e.g. price by suburb)" @bind="_chartName" />
-                    @if (_chartMonaco)
+                    <input class="dcinput chart-name-input" placeholder="chart name (e.g. price by suburb)" @bind="Vm.ChartName" />
+                    @if (Vm.ChartMonaco)
                     {
-                        <div id="@ChartEditorId" class="monaco-box"></div>
+                        <div id="@EntityBrowseViewModel.ChartEditorId" class="monaco-box"></div>
                     }
                     else
                     {
-                        <textarea @bind="_chartSql" rows="4" spellcheck="false"
+                        <textarea @bind="Vm.ChartSql" rows="4" spellcheck="false"
                                   class="sql-textarea"></textarea>
                     }
                     <div class="editor-controls">
-                        <select class="dcinput chart-type-select" @bind="_chartType">
+                        <select class="dcinput chart-type-select" @bind="Vm.ChartType">
                             <option value="bar">bar</option>
                             <option value="line">line</option>
                             <option value="pie">pie</option>
                         </select>
-                        <button class="dcbtn primary run-save-btn" disabled="@_chartBusy" @onclick="SaveEntityChartAsync">
-                            @(_chartBusy ? "Running…" : "▶ Run & save")
+                        <button class="dcbtn primary run-save-btn" disabled="@Vm.ChartBusy" @onclick="SaveChartAsync">
+                            @(Vm.ChartBusy ? "Running…" : "▶ Run & save")
                         </button>
-                        @if (_chartError is not null)
+                        @if (Vm.ChartError is not null)
                         {
-                            <span class="chart-err">@_chartError</span>
+                            <span class="chart-err">@Vm.ChartError</span>
                         }
                     </div>
                 </div>
             }
 
-            @if (EntityCharts() is { Count: 0 })
+            @if (Vm.EntityCharts() is { Count: 0 })
             {
                 <div class="dccard empty-card">
                     No charts yet — the first text column labels, numeric columns become series.
@@ -107,24 +108,24 @@
             else
             {
                 <div class="charts-grid">
-                    @foreach (var chart in EntityCharts())
+                    @foreach (var chart in Vm.EntityCharts())
                     {
                         <div class="dccard card-pad">
                             <div class="chart-head">
-                                <span class="chart-name">@ChartShortName(chart)</span>
+                                <span class="chart-name">@Vm.ChartShortName(chart)</span>
                                 <span class="chart-type-group">
                                     @foreach (var t in new[] { "bar", "line", "pie" })
                                     {
-                                        <button class="dcbtn chart-type-btn" style="@(StoredType(chart) == t ? "color:var(--brand-2); border-color:var(--brand-2)" : "")"
-                                                @onclick="@(() => SwitchChartTypeAsync(chart, t))">@t</button>
+                                        <button class="dcbtn chart-type-btn" style="@(EntityBrowseViewModel.StoredType(chart) == t ? "color:var(--brand-2); border-color:var(--brand-2)" : "")"
+                                                @onclick="@(() => Vm.SwitchChartTypeAsync(chart, t))">@t</button>
                                     }
                                 </span>
                                 <span class="flex-1"></span>
-                                <button class="dcbtn btn-11" @onclick="@(() => RefreshChartAsync(chart))">↻</button>
-                                <button class="dcbtn btn-11-del" @onclick="@(() => DeleteChartAsync(chart))">✕</button>
+                                <button class="dcbtn btn-11" @onclick="@(() => Vm.RefreshChartAsync(chart))">↻</button>
+                                <button class="dcbtn btn-11-del" @onclick="@(() => Vm.DeleteChartAsync(chart))">✕</button>
                             </div>
                             <div class="chart-canvas-box">
-                                <canvas id="@ChartCanvasId(chart.TableName)"></canvas>
+                                <canvas id="@EntityBrowseViewModel.ChartCanvasId(chart.TableName)"></canvas>
                             </div>
                         </div>
                     }
@@ -132,24 +133,23 @@
             }
         }
 
-        @* ── Graph tab: the full data graph — records, relations, runs, artifacts. ── *@
-        @if (_viewTab == "graph")
+        @if (Vm.ViewTab == "graph")
         {
-            @if (_brainGraph is { Nodes.Count: > 0 })
+            @if (Vm.BrainGraph is { Nodes.Count: > 0 })
             {
                 <div class="dccard graph-card">
-                    <GraphCanvas Graph="_brainGraph" Height="520" NodeUrl="NodeUrl" Searchable="true" AllowFullscreen="true" />
+                    <GraphCanvas Graph="Vm.BrainGraph" Height="520" NodeUrl="Vm.NodeUrl" Searchable="true" AllowFullscreen="true" />
                 </div>
-                @if (_focusKey is not null)
+                @if (Vm.FocusKey is not null)
                 {
                     <div class="focus-row">
-                        <span class="focus-chip">focused: @_focusKey</span>
+                        <span class="focus-chip">focused: @Vm.FocusKey</span>
                         <button class="dcbtn btn-11"
-                                @onclick="@(async () => { _focusKey = null; await BuildSectionGraphAsync(); })">show whole graph</button>
+                                @onclick="@ClearFocusAsync">show whole graph</button>
                     </div>
                 }
                 <div class="legend">
-                    <span><span class="dot-brand">●</span> @_entity.Name records</span>
+                    <span><span class="dot-brand">●</span> @Vm.Entity.Name records</span>
                     <span><span class="dot-human">●</span> related records</span>
                     <span><span class="dot-good">●</span> artifacts</span>
                     <span><span class="dot-run">●</span> runs</span>
@@ -164,12 +164,10 @@
             }
         }
 
-        @* ── Insights: organized automatically from the entity's tags — numeric columns roll up,
-             relation keys show their distribution. No configuration, just the graph. ── *@
-        @if (_viewTab == "records" && _insights.Count > 0)
+        @if (Vm.ViewTab == "records" && Vm.Insights.Count > 0)
         {
             <div class="insights-grid">
-                @foreach (var ins in _insights)
+                @foreach (var ins in Vm.Insights)
                 {
                     <div class="dccard insight-card">
                         <div class="insight-title">@ins.Title</div>
@@ -200,12 +198,12 @@
             </div>
         }
 
-        @if (_viewTab == "records" && _page is null)
+        @if (Vm.ViewTab == "records" && Vm.Page is null)
         {
             <Skeleton Kind="table" Rows="8" Columns="4" />
         }
 
-        @if (_viewTab == "records" && _page is { } pg)
+        @if (Vm.ViewTab == "records" && Vm.Page is { } pg)
         {
             <div class="dccard table-card">
                 <div class="table-scroll">
@@ -223,7 +221,7 @@
                             {
                                 <tr>
                                     <td class="data-cell no-rows-cell" colspan="@Math.Max(1, pg.Columns.Count)">
-                                        @(string.IsNullOrWhiteSpace(_search) ? "No records yet." : "No records match your search.")
+                                        @(string.IsNullOrWhiteSpace(Vm.Search) ? "No records yet." : "No records match your search.")
                                     </td>
                                 </tr>
                             }
@@ -232,7 +230,7 @@
                                 <tr class="dcdash-row clickable" @onclick="@(() => OpenRecordAsync(row))">
                                     @for (var i = 0; i < pg.Columns.Count; i++)
                                     {
-                                        <td class="data-cell" style="color:@(pg.Columns[i] == LabelCol() ? "var(--text)" : "var(--text-2)"); font-weight:@(pg.Columns[i] == LabelCol() ? "600" : "400")">@(i < row.Count ? row[i] : "")</td>
+                                        <td class="data-cell" style="color:@(pg.Columns[i] == Vm.LabelCol() ? "var(--text)" : "var(--text-2)"); font-weight:@(pg.Columns[i] == Vm.LabelCol() ? "600" : "400")">@(i < row.Count ? row[i] : "")</td>
                                     }
                                 </tr>
                             }
@@ -252,10 +250,10 @@
                     </span>
                     <div class="pager-controls">
                         <button class="dcbtn pager-btn" disabled="@(pg.Page <= 1)"
-                                @onclick="@(() => GoToPageAsync(pg.Page - 1))">‹ Prev</button>
-                        <span class="pager-page">Page @pg.Page of @TotalPages(pg)</span>
+                                @onclick="@(() => Vm.GoToPageAsync(pg.Page - 1))">‹ Prev</button>
+                        <span class="pager-page">Page @pg.Page of @EntityBrowseViewModel.TotalPages(pg)</span>
                         <button class="dcbtn pager-btn" disabled="@((long)pg.Page * pg.PageSize >= pg.TotalCount)"
-                                @onclick="@(() => GoToPageAsync(pg.Page + 1))">Next ›</button>
+                                @onclick="@(() => Vm.GoToPageAsync(pg.Page + 1))">Next ›</button>
                     </div>
                 </div>
             </div>
@@ -264,37 +262,37 @@
 </div>
 
 @* ── Record detail / CRM edit modal ────── *@
-@if ((_open is not null || _editing) && _entity is not null)
+@if ((Vm.Open is not null || Vm.Editing) && Vm.Entity is not null)
 {
-    <div class="dcslide-scrim" @onclick="CloseRecordPanel"></div>
+    <div class="dcslide-scrim" @onclick="() => Vm.CloseRecordPanel()"></div>
     <div class="dcslide slide-560">
         <div class="dcslide-head">
             <div class="flex-min">
-                <div class="title-14">@(_creating ? $"New {_entity.Name}" : (_editing ? "Edit record" : RecordLabel(_open!)))</div>
-                <div class="sub-115">@_entity.Name</div>
+                <div class="title-14">@(Vm.Creating ? $"New {Vm.Entity.Name}" : (Vm.Editing ? "Edit record" : Vm.RecordLabel(Vm.Open!)))</div>
+                <div class="sub-115">@Vm.Entity.Name</div>
             </div>
-            @if (!_editing && _open is not null)
+            @if (!Vm.Editing && Vm.Open is not null)
             {
-                <button class="dcbtn graph-toggle-btn" style="@(_showGraph ? "color:var(--brand-2); border-color:var(--brand-2)" : "")"
-                        @onclick="@(() => _showGraph = !_showGraph)">◉ Graph</button>
+                <button class="dcbtn graph-toggle-btn" style="@(Vm.ShowGraph ? "color:var(--brand-2); border-color:var(--brand-2)" : "")"
+                        @onclick="@(() => Vm.ShowGraph = !Vm.ShowGraph)">◉ Graph</button>
                 <AuthorizeView Policy="@Permission.DataWrite">
                     <Authorized>
-                        <button class="dcbtn graph-toggle-btn" @onclick="StartEditAsync">Edit</button>
-                        <button class="dcbtn btn-11-del" @onclick="DeleteOpenAsync">Delete</button>
+                        <button class="dcbtn graph-toggle-btn" @onclick="() => Vm.StartEditAsync()">Edit</button>
+                        <button class="dcbtn btn-11-del" @onclick="() => Vm.DeleteOpenAsync()">Delete</button>
                     </Authorized>
                 </AuthorizeView>
             }
-            <button class="dcslide-x" @onclick="CloseRecordPanel">×</button>
+            <button class="dcslide-x" @onclick="() => Vm.CloseRecordPanel()">×</button>
         </div>
         <div class="dcslide-body record-body">
-            @if (_editError is not null)
+            @if (Vm.EditError is not null)
             {
-                <div class="error-banner">@_editError</div>
+                <div class="error-banner">@Vm.EditError</div>
             }
-            @if (_editing)
+            @if (Vm.Editing)
             {
                 <div class="dccard card-pad crm-form">
-                    @foreach (var col in _formColumns)
+                    @foreach (var col in Vm.FormColumns)
                     {
                         var inputType = col.Type switch
                         {
@@ -308,49 +306,48 @@
                             @if (inputType == "checkbox")
                             {
                                 <input type="checkbox" class="dccheckbox crm-input" style="margin-top:2px"
-                                       checked="@(_formValues.GetValueOrDefault(col.Name) == "true" || _formValues.GetValueOrDefault(col.Name) == "1")"
+                                       checked="@(Vm.FormValues.GetValueOrDefault(col.Name) == "true" || Vm.FormValues.GetValueOrDefault(col.Name) == "1")"
                                        @onchange="e => ToggleBool(col.Name, (ChangeEventArgs)e)" />
                             }
                             else
                             {
                                 <input type="@inputType" class="dcinput crm-input"
-                                       value="@(_formValues.GetValueOrDefault(col.Name))"
-                                       @oninput="e => _formValues[col.Name] = e.Value?.ToString()" />
+                                       value="@(Vm.FormValues.GetValueOrDefault(col.Name))"
+                                       @oninput="e => Vm.FormValues[col.Name] = e.Value?.ToString()" />
                             }
                         </label>
                     }
                     <div class="crm-actions">
-                        <button class="dcbtn" @onclick="CloseRecordPanel" disabled="@_saving">Cancel</button>
-                        <button class="dcbtn primary" @onclick="SaveRecordAsync" disabled="@_saving">
-                            @(_saving ? "Saving…" : (_creating ? "Create" : "Save"))
+                        <button class="dcbtn" @onclick="() => Vm.CloseRecordPanel()" disabled="@Vm.Saving">Cancel</button>
+                        <button class="dcbtn primary" @onclick="() => Vm.SaveRecordAsync()" disabled="@Vm.Saving">
+                            @(Vm.Saving ? "Saving…" : (Vm.Creating ? "Create" : "Save"))
                         </button>
                     </div>
                 </div>
             }
-            else if (_open is not null && _rows is not null)
+            else if (Vm.Open is not null && Vm.Rows is not null)
             {
-            @if (_showGraph)
+            @if (Vm.ShowGraph)
             {
-                @* ── The link graph: every relation this record participates in, as nodes/edges. ── *@
-                @((MarkupString)GraphSvg())
+                @((MarkupString)Vm.GraphSvg())
             }
             <div class="dccard card-pad">
                 <dl class="field-dl">
-                    @for (var i = 0; i < _rows.Columns.Count; i++)
+                    @for (var i = 0; i < Vm.Rows.Columns.Count; i++)
                     {
-                        <dt class="field-dt">@_rows.Columns[i]</dt>
-                        <dd class="field-dd">@(i < _open.Count ? _open[i] : "")</dd>
+                        <dt class="field-dt">@Vm.Rows.Columns[i]</dt>
+                        <dd class="field-dd">@(i < Vm.Open.Count ? Vm.Open[i] : "")</dd>
                     }
                 </dl>
             </div>
 
-            @if (_artifacts.Count > 0)
+            @if (Vm.Artifacts.Count > 0)
             {
                 <div>
                     <div class="section-label">
                         Artifacts <span class="label-normal">from runs tagged with this record</span>
                     </div>
-                    @foreach (var (a, versions) in _artifacts)
+                    @foreach (var (a, versions) in Vm.Artifacts)
                     {
                         <a href="@($"/artifacts?artifact={a.Id}")"
                            class="artifact-link">
@@ -365,7 +362,7 @@
                 </div>
             }
 
-            @foreach (var (relation, related) in _related)
+            @foreach (var (relation, related) in Vm.Related)
             {
                 <div>
                     <div class="section-label">
@@ -393,11 +390,11 @@
                 </div>
             }
 
-            @if (_autoLinks.Count > 0)
+            @if (Vm.AutoLinks.Count > 0)
             {
                 <div>
                     <div class="section-label">Auto-linked records</div>
-                    @foreach (var link in _autoLinks)
+                    @foreach (var link in Vm.AutoLinks)
                     {
                         <div class="dccard dcdash-row auto-link">
                             <span class="link-kind">@link.Kind</span>
@@ -407,7 +404,7 @@
                     }
                 </div>
             }
-            } @* end view mode *@
+            }
         </div>
     </div>
 }
@@ -416,848 +413,72 @@
     [Parameter] public Guid ProjectId { get; set; }
     [Parameter] public string EntityName { get; set; } = "";
 
-    /// <summary>Search deep link: focuses the graph on this record. Supplied from the query so
-    /// clicking a search hit while already on the page re-applies without a manual refresh.</summary>
     [SupplyParameterFromQuery(Name = "record")] public string? RecordKey { get; set; }
 
-    private DataEntityView? _entity;
-    private IReadOnlyList<DataEntityView> _all = Array.Empty<DataEntityView>();
-    private PlaceContext.Application.Ports.ProjectQueryResult? _rows;
-    private IReadOnlyList<string?>? _open;
-    private readonly List<(EntityRelationDto Relation, PlaceContext.Application.Ports.ProjectQueryResult Rows)> _related = new();
-    private IReadOnlyList<RecordLink> _autoLinks = Array.Empty<RecordLink>();
-    private string? _error;
-    private string? _warnMessage;
-    private bool _editing, _creating, _saving;
-    private string? _editError;
-    private record FormColumn(string Name, string Type);
-    private List<FormColumn> _formColumns = new();
-    private Dictionary<string, string?> _formValues = new(StringComparer.Ordinal);
-    private Dictionary<string, string?> _keySnapshot = new(StringComparer.Ordinal);
+    protected override void OnInitialized() => Vm.Attach(StateHasChanged);
 
-    // ── Records tab: server-side pagination + search over the entity's table (the store binds the
-    // search term as a parameter — see NpgsqlProjectDataStore.QueryTablePageAsync). ──
-    private PlaceContext.Application.Ports.ProjectTablePageResult? _page;
-    private string _search = "";
-    private int _pageNum = 1;
-    private const int RecordsPageSize = 50;
-    private CancellationTokenSource? _searchDebounce;
-    private string _viewTab = "records";
-    private bool _loaded;   // entity list resolved — gates the load skeleton vs the not-found message
-
-    // ── Entity analytics: SQL charts namespaced "{Entity} · {name}" on the shared chart engine. ──
-    private IReadOnlyList<ProjectChartView> _charts = Array.Empty<ProjectChartView>();
-    private bool _showChartEditor, _chartBusy;
-    private string _chartName = "", _chartSql = "", _chartType = "bar";
-    private string? _chartError;
-    private bool _chartMonaco = true;   // degrade to the textarea when the Monaco CDN is unreachable
-    private bool _chartMonacoReady;
-    private const string ChartEditorId = "pcmonaco-entchart";
-    private readonly Dictionary<string, DateTimeOffset> _renderedCharts = new();
-
-    private string ChartPrefix => $"sql:{_entity?.Name} · ";
-    private bool _defaultsTried;
-
-    private async Task OpenAnalyticsAsync()
+    protected override async Task OnParametersSetAsync()
     {
-        _viewTab = "analytics";
-        // Leaving the tab destroys the canvases, so the render cache must not survive re-entry.
-        _renderedCharts.Clear();
-        _chartMonacoReady = false;
-        await EnsureDefaultChartsAsync();
-    }
-
-    // Default charts: when an entity has none, seed a few sensible ones straight from its schema —
-    // a count distribution, a numeric average per category, and a relation-key pie. They persist
-    // as ordinary SQL charts, so they're editable, refreshable, and deletable like any other.
-    private async Task EnsureDefaultChartsAsync()
-    {
-        if (_defaultsTried || _entity is null || EntityCharts().Count > 0) return;
-        _defaultsTried = true;
-        try
-        {
-            var table = _entity.TableName.Replace("\"", "");
-            var columns = await Svc.ListProjectTableColumnsAsync(ProjectId, _entity.TableName);
-            var categorical = _entity.Relations.Select(r => r.Column)
-                .Concat(columns.Where(c => (c.Type.Contains("text") || c.Type.Contains("char"))
-                    && !string.Equals(c.Name, _entity.LabelColumn, StringComparison.OrdinalIgnoreCase)).Select(c => c.Name))
-                .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-            var numeric = columns.Where(c => (c.Type.Contains("int") || c.Type.Contains("numeric") || c.Type.Contains("double") || c.Type.Contains("real"))
-                    && !string.Equals(c.Name, "id", StringComparison.OrdinalIgnoreCase))
-                .Select(c => c.Name).ToList();
-
-            async Task Seed(string name, string sql, string type)
-            {
-                try { await Svc.SaveSqlChartAsync(ProjectId, $"{_entity.Name} · {name}", sql, type); } catch { }
-            }
-
-            if (categorical.FirstOrDefault() is { } cat)
-            {
-                await Seed($"records by {cat}",
-                    $"SELECT \"{cat}\"::text, count(*) FROM \"{table}\" GROUP BY 1 ORDER BY 2 DESC LIMIT 10", "bar");
-                if (numeric.FirstOrDefault() is { } num)
-                    await Seed($"avg {num} by {cat}",
-                        $"SELECT \"{cat}\"::text, round(avg(\"{num}\")::numeric, 1) FROM \"{table}\" GROUP BY 1 ORDER BY 2 DESC LIMIT 10", "bar");
-                if (categorical.Skip(1).FirstOrDefault() is { } cat2)
-                    await Seed($"share by {cat2}",
-                        $"SELECT \"{cat2}\"::text, count(*) FROM \"{table}\" GROUP BY 1 ORDER BY 2 DESC LIMIT 8", "pie");
-            }
-            else if (numeric.FirstOrDefault() is { } num && LabelCol() is { } label)
-            {
-                await Seed($"{num} by {label}",
-                    $"SELECT \"{label.Replace("\"", "")}\"::text, \"{num}\" FROM \"{table}\" ORDER BY 2 DESC LIMIT 12", "bar");
-            }
-
-            _charts = await Svc.ListProjectChartsAsync(ProjectId);
-        }
-        catch { /* defaults are a convenience — the tab still works empty */ }
-    }
-
-    private IReadOnlyList<ProjectChartView> EntityCharts()
-        => _charts.Where(c => c.TableName.StartsWith(ChartPrefix, StringComparison.OrdinalIgnoreCase)).ToList();
-
-    private string ChartShortName(ProjectChartView c) => c.TableName[ChartPrefix.Length..];
-
-    private static string ChartCanvasId(string slot)
-        => "pcentchart-" + Convert.ToHexString(System.Security.Cryptography.MD5.HashData(
-               System.Text.Encoding.UTF8.GetBytes(slot)))[..12];
-
-    private void ToggleChartEditor()
-    {
-        _showChartEditor = !_showChartEditor;
-        _chartMonacoReady = false;   // the editor div remounts each time the pane opens
-        _chartError = null;
-        if (_showChartEditor && string.IsNullOrWhiteSpace(_chartSql) && _entity is not null)
-            _chartSql = $"SELECT \"{LabelCol()}\", count(*) FROM \"{_entity.TableName}\" GROUP BY 1 ORDER BY 2 DESC LIMIT 10";
-    }
-
-    private async Task SaveEntityChartAsync()
-    {
-        if (_entity is null) return;
-        if (_chartMonaco && _chartMonacoReady)
-        {
-            try { _chartSql = await JS.InvokeAsync<string>("pcmonaco.getValue", ChartEditorId); } catch { }
-        }
-        _chartError = null;
-        if (string.IsNullOrWhiteSpace(_chartName)) { _chartError = "Give the chart a name."; return; }
-        _chartBusy = true;
-        try
-        {
-            await Svc.SaveSqlChartAsync(ProjectId, $"{_entity.Name} · {_chartName.Trim()}", _chartSql, _chartType);
-            _charts = await Svc.ListProjectChartsAsync(ProjectId);
-            _showChartEditor = false;
-            _chartName = "";
-        }
-        catch (Exception ex) { _chartError = ex.Message; }
-        finally { _chartBusy = false; }
-    }
-
-    private async Task SwitchChartTypeAsync(ProjectChartView chart, string type)
-    {
-        if (StoredSql(chart) is not { } sql || StoredType(chart) == type) return;
-        try
-        {
-            await Svc.SaveSqlChartAsync(ProjectId, chart.TableName["sql:".Length..], sql, type);
-            _charts = await Svc.ListProjectChartsAsync(ProjectId);
-        }
-        catch (Exception ex) { _chartError = ex.Message; }
-    }
-
-    private async Task RefreshChartAsync(ProjectChartView chart)
-    {
-        if (StoredSql(chart) is not { } sql) return;
-        try
-        {
-            await Svc.SaveSqlChartAsync(ProjectId, chart.TableName["sql:".Length..], sql, StoredType(chart));
-            _charts = await Svc.ListProjectChartsAsync(ProjectId);
-        }
-        catch (Exception ex) { _chartError = ex.Message; }
-    }
-
-    private async Task DeleteChartAsync(ProjectChartView chart)
-    {
-        try
-        {
-            await Svc.DeleteSqlChartAsync(ProjectId, chart.TableName["sql:".Length..]);
-            _charts = await Svc.ListProjectChartsAsync(ProjectId);
-        }
-        catch (Exception ex) { _chartError = ex.Message; }
-    }
-
-    private static string? StoredSql(ProjectChartView chart)
-    {
-        try { return System.Text.Json.Nodes.JsonNode.Parse(chart.Html)?["sql"]?.GetValue<string>(); }
-        catch { return null; }
-    }
-
-    private static string StoredType(ProjectChartView chart)
-    {
-        try { return System.Text.Json.Nodes.JsonNode.Parse(chart.Html)?["type"]?.GetValue<string>() ?? "bar"; }
-        catch { return "bar"; }
+        Vm.EntityName = EntityName;
+        Vm.RecordKey = RecordKey;
+        Vm.Initialize(ProjectId);
+        await Vm.LoadAsync();
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (_viewTab != "analytics") return;
-        if (_showChartEditor && _chartMonaco && !_chartMonacoReady)
+        if (Vm.ViewTab != "analytics") return;
+        if (Vm.ShowChartEditor && Vm.ChartMonaco && !Vm.ChartMonacoReady)
         {
-            _chartMonacoReady = true;
+            Vm.ChartMonacoReady = true;
             try
             {
-                var rich = await JS.InvokeAsync<bool>("pcmonaco.init", ChartEditorId, _chartSql, "sql", "vs-dark");
-                if (!rich) { _chartMonaco = false; StateHasChanged(); }
+                var rich = await JS.InvokeAsync<bool>("pcmonaco.init", EntityBrowseViewModel.ChartEditorId, Vm.ChartSql, "sql", "vs-dark");
+                if (!rich) { Vm.ChartMonaco = false; StateHasChanged(); }
             }
-            catch { _chartMonaco = false; StateHasChanged(); }
+            catch { Vm.ChartMonaco = false; StateHasChanged(); }
         }
-        foreach (var chart in EntityCharts().Where(c => c.Html.TrimStart().StartsWith('{')))
+        foreach (var chart in Vm.EntityCharts().Where(c => c.Html.TrimStart().StartsWith('{')))
         {
-            var id = ChartCanvasId(chart.TableName);
-            if (_renderedCharts.TryGetValue(id, out var at) && at == chart.GeneratedAt) continue;
+            var id = EntityBrowseViewModel.ChartCanvasId(chart.TableName);
+            if (Vm.RenderedCharts.TryGetValue(id, out var at) && at == chart.GeneratedAt) continue;
             try
             {
                 await JS.InvokeVoidAsync("pcchart.render", id, chart.Html);
-                _renderedCharts[id] = chart.GeneratedAt;
+                Vm.RenderedCharts[id] = chart.GeneratedAt;
             }
-            catch (JSException) { /* canvas not on screen yet — the next render pass retries */ }
+            catch (JSException) { }
         }
-    }
-    private string? _focusKey;   // set by search deep links: the graph renders only this record's neighbourhood
-
-    protected override async Task OnParametersSetAsync()
-    {
-        _error = null;
-        _open = null;
-        _loaded = false;
-        try
-        {
-            _all = await Svc.ListDataEntitiesAsync(ProjectId);
-            _entity = _all.FirstOrDefault(e => string.Equals(e.Name, EntityName, StringComparison.OrdinalIgnoreCase));
-            if (_entity is null) return;
-            Ui.Set(_entity.Name, "business view · project data graph");
-            // Read through the project's isolated role; identifier comes from the registry, quoted.
-            _rows = await Svc.ExecuteProjectDataAsync(ProjectId, $"SELECT * FROM \"{_entity.TableName}\" LIMIT 500");
-            try { _charts = await Svc.ListProjectChartsAsync(ProjectId); } catch { }
-
-            // Search deep link: /entity/{name}?record={key} lands on the GRAPH, scoped to just
-            // that record's neighbourhood — the search result IS the node.
-            _focusKey = null;
-            if (RecordKey is { Length: > 0 } recordKey
-                && _rows is not null
-                && _rows.Rows.Any(r => r.Any(v => string.Equals(v, recordKey, StringComparison.OrdinalIgnoreCase))))
-            {
-                _focusKey = recordKey;
-                _viewTab = "graph";
-            }
-            await BuildInsightsAsync();
-            await BuildSectionGraphAsync();
-
-            // A new entity (or a fresh navigation to the same one) always starts unfiltered on page 1.
-            _search = "";
-            _pageNum = 1;
-            await LoadRecordsPageAsync();
-        }
-        catch (Exception ex) { _error = ex.Message; }
-        finally { _loaded = true; }
-    }
-
-    // ── Records tab: server-side pagination + search ────────────────────────────────────────────
-    private async Task LoadRecordsPageAsync()
-    {
-        if (_entity is null) return;
-        try
-        {
-            _page = await Svc.QueryProjectTablePageAsync(ProjectId, _entity.TableName, _search, _pageNum, RecordsPageSize);
-        }
-        catch (Exception ex) { _error = ex.Message; }
-    }
-
-    private static int TotalPages(PlaceContext.Application.Ports.ProjectTablePageResult page)
-        => Math.Max(1, (int)Math.Ceiling(page.TotalCount / (double)Math.Max(1, page.PageSize)));
-
-    private async Task GoToPageAsync(int page)
-    {
-        if (_page is null) return;
-        var target = Math.Clamp(page, 1, TotalPages(_page));
-        if (target == _pageNum) return;
-        _pageNum = target;
-        await LoadRecordsPageAsync();
-    }
-
-    // Debounced so every keystroke doesn't fire a round trip — only the last one, ~300ms after typing stops.
-    private async Task OnSearchInput(ChangeEventArgs e)
-    {
-        _search = e.Value?.ToString() ?? "";
-        _pageNum = 1;
-        _searchDebounce?.Cancel();
-        _searchDebounce?.Dispose();
-        var cts = new CancellationTokenSource();
-        _searchDebounce = cts;
-        try
-        {
-            await Task.Delay(300, cts.Token);
-        }
-        catch (TaskCanceledException) { return; }
-        if (cts.IsCancellationRequested) return;
-        await LoadRecordsPageAsync();
-        StateHasChanged();
     }
 
     public void Dispose()
     {
-        _searchDebounce?.Cancel();
-        _searchDebounce?.Dispose();
+        Vm.CancelSearchDebounce();
+        Vm.Detach();
     }
 
-    // The record label: the configured column when it exists; otherwise the first column that
-    // looks like text (skipping ids and provenance) — a lost label config must never reduce the
-    // graph to row numbers.
-    private string? LabelCol()
-    {
-        if (_rows is null) return _entity?.LabelColumn;
-        var cols = _rows.Columns;
-        if (_entity?.LabelColumn is { Length: > 0 } configured
-            && cols.FirstOrDefault(c => string.Equals(c, configured, StringComparison.OrdinalIgnoreCase)) is { } exact)
-            return exact;
-        for (var i = 0; i < cols.Count; i++)
-        {
-            var c = cols[i];
-            if (string.Equals(c, "id", StringComparison.OrdinalIgnoreCase)
-                || c.EndsWith("_id", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(c, "ingested_at", StringComparison.OrdinalIgnoreCase)) continue;
-            var v = _rows.Rows.FirstOrDefault() is { } first && i < first.Count ? first[i] : null;
-            if (v is null || double.TryParse(v, out _)) continue;
-            return c;
-        }
-        return cols.FirstOrDefault();
-    }
-
-    private string RecordLabel(IReadOnlyList<string?> row)
-    {
-        if (_rows is null) return _entity?.Name ?? "";
-        var idx = LabelCol() is { } c ? _rows.Columns.ToList().IndexOf(c) : 0;
-        return (idx >= 0 && idx < row.Count ? row[idx] : null) ?? _entity?.Name ?? "";
-    }
-
-    private readonly List<(RunArtifactLinkView Art, int Versions)> _artifacts = new();
-    private readonly List<Guid> _linkedRuns = new();
-    private readonly Dictionary<Guid, List<RunArtifactLinkView>> _runArtifacts = new();
-    private bool _showGraph;
+    private async Task OnSearchInput(ChangeEventArgs e)
+        => await Vm.OnSearchInputAsync(e.Value?.ToString() ?? "");
 
     private async Task OpenRecordAsync(IReadOnlyList<string?> row)
+        => await Vm.OpenRecordAsync(row);
+
+    private async Task OpenAnalyticsAsync()
+        => await Vm.OpenAnalyticsAsync();
+
+    private async Task ClearFocusAsync()
     {
-        _open = row;
-        _related.Clear();
-        _autoLinks = Array.Empty<RecordLink>();
-        _artifacts.Clear();
-        _linkedRuns.Clear();
-        _runArtifacts.Clear();
-        _showGraph = false;
-        if (_entity is null || _rows is null) return;
-        await LoadLinkedArtifactsAsync(row);
-        await LoadAutoLinksAsync(row);
-        foreach (var rel in _entity.Relations)
-        {
-            var target = _all.FirstOrDefault(e => string.Equals(e.Name, rel.TargetEntity, StringComparison.OrdinalIgnoreCase));
-            var colIdx = _rows.Columns.ToList().FindIndex(c => string.Equals(c, rel.Column, StringComparison.OrdinalIgnoreCase));
-            if (target is null || colIdx < 0 || colIdx >= row.Count || row[colIdx] is not { } value) continue;
-            try
-            {
-                // The graph hop: matching records on the related entity, value passed as a literal
-                // with quotes escaped (the query still runs as the isolated project role).
-                var related = await Svc.ExecuteProjectDataAsync(ProjectId,
-                    $"SELECT * FROM \"{target.TableName}\" WHERE \"{rel.TargetColumn}\"::text = '{value.Replace("'", "''")}' LIMIT 20");
-                _related.Add((rel, related));
-            }
-            catch { /* a broken relation must not break the record view */ }
-        }
+        Vm.FocusKey = null;
+        await Vm.BuildSectionGraphAsync();
     }
 
-    private async Task LoadAutoLinksAsync(IReadOnlyList<string?> row)
-    {
-        if (_entity is null || _rows is null) return;
-        try
+    private async Task SaveChartAsync()
+        => await Vm.SaveEntityChartAsync(async (id, current) =>
         {
-            var columns = await Svc.ListProjectTableColumnsAsync(ProjectId, _entity.TableName);
-            var rowKey = ComputeRowKey(_entity.TableName, row, _rows.Columns, _all, columns);
-            if (string.IsNullOrEmpty(rowKey)) return;
-            _autoLinks = await Svc.RelatedRecordLinksAsync(ProjectId, _entity.TableName, rowKey);
-        }
-        catch { /* auto-links are best-effort display sugar */ }
-    }
-
-    private void CloseRecordPanel()
-    {
-        _open = null;
-        _editing = _creating = false;
-        _editError = null;
-        _warnMessage = null;
-        _autoLinks = Array.Empty<RecordLink>();
-        _formValues.Clear();
-        _keySnapshot.Clear();
-    }
-
-    private static string ComputeRowKey(string table, IReadOnlyList<string?> row, IReadOnlyList<string> colNames,
-        IReadOnlyList<DataEntityView> entities, IReadOnlyList<ProjectColumnInfo> columns)
-    {
-        var colNamesList = colNames.ToList();
-        var entity = entities.FirstOrDefault(e => string.Equals(e.TableName, table, StringComparison.OrdinalIgnoreCase));
-        if (entity?.LabelColumn is { Length: > 0 } label)
-        {
-            var li = colNamesList.FindIndex(c => string.Equals(c, label, StringComparison.OrdinalIgnoreCase));
-            if (li >= 0 && li < row.Count && !string.IsNullOrEmpty(row[li])) return row[li]!;
-        }
-        var values = columns
-            .Where(c => c.Type is "text" or "citext" || c.Type.StartsWith("character", StringComparison.Ordinal) || c.Type.StartsWith("varchar", StringComparison.Ordinal))
-            .Select(c => c.Name)
-            .Take(3)
-            .Select(name => { var i = colNamesList.FindIndex(n => string.Equals(n, name, StringComparison.OrdinalIgnoreCase)); return i >= 0 && i < row.Count ? row[i] : null; })
-            .Where(v => !string.IsNullOrEmpty(v));
-        return string.Join(" · ", values);
-    }
-
-    private async Task StartEditAsync()
-    {
-        if (_entity is null) return;
-        _creating = false;
-        _editing = true;
-        _editError = null;
-        // Fetch column types for proper input rendering; fall back to "text".
-        var columnInfos = (await Svc.ListProjectTableColumnsAsync(ProjectId, _entity.TableName))
-            .ToDictionary(c => c.Name, c => c.Type, StringComparer.Ordinal);
-        _formColumns = (_rows?.Columns ?? Array.Empty<string>()).Select(c => new FormColumn(c, columnInfos.GetValueOrDefault(c, "text"))).ToList();
-        _formValues = new Dictionary<string, string?>(StringComparer.Ordinal);
-        _keySnapshot = new Dictionary<string, string?>(StringComparer.Ordinal);
-        for (var i = 0; i < _formColumns.Count; i++)
-        {
-            var v = i < (_open?.Count ?? 0) ? _open![i] : null;
-            _formValues[_formColumns[i].Name] = v;
-            _keySnapshot[_formColumns[i].Name] = v;
-        }
-        // Narrow keys to identity columns when possible.
-        var label = LabelCol();
-        if (label is not null && _keySnapshot.ContainsKey(label))
-            _keySnapshot = new Dictionary<string, string?>(StringComparer.Ordinal)
-                { [label] = _keySnapshot[label] };
-        else
-        {
-            var kept = _keySnapshot.Where(kv => !string.IsNullOrEmpty(kv.Value)).Take(3)
-                .ToDictionary(kv => kv.Key, kv => kv.Value, StringComparer.Ordinal);
-            if (kept.Count > 0) _keySnapshot = kept;
-        }
-    }
-
-    private async Task StartCreateAsync()
-    {
-        if (_entity is null) return;
-        _creating = true;
-        _editing = true;
-        _open = null;
-        _editError = null;
-        var columnInfos = await Svc.ListProjectTableColumnsAsync(ProjectId, _entity.TableName);
-        _formColumns = columnInfos.Select(c => new FormColumn(c.Name, c.Type)).ToList();
-        if (_formColumns.Count == 0 && _page is { Columns.Count: > 0 })
-            _formColumns = _page.Columns.Select(c => new FormColumn(c, "text")).ToList();
-        _formValues = _formColumns.ToDictionary(c => c.Name, _ => (string?)null, StringComparer.Ordinal);
-        _keySnapshot.Clear();
-    }
-
-    private async Task SaveRecordAsync()
-    {
-        if (_entity is null || _formValues.Count == 0) return;
-        _saving = true;
-        _editError = null;
-        _warnMessage = null;
-        try
-        {
-            if (_creating)
-            {
-                var created = await Svc.CreateEntityRecordAsync(ProjectId, _entity.TableName, _formValues);
-                _warnMessage = created.DuplicateWarnings.Count > 0
-                    ? "Created — possible duplicate(s): " + string.Join("; ", created.DuplicateWarnings)
-                    : null;
-            }
-            else
-            {
-                await Svc.UpdateEntityRecordAsync(ProjectId, _entity.TableName, _keySnapshot, _formValues);
-            }
-            CloseRecordPanel();
-            await ReloadPageAsync();
-        }
-        catch (Exception ex)
-        {
-            _editError = ex.Message;
-        }
-        finally { _saving = false; }
-    }
-
-    private async Task DeleteOpenAsync()
-    {
-        if (_entity is null || _open is null || _rows is null) return;
-        await StartEditAsync(); // build keys
-        _editing = false;
-        try
-        {
-            await Svc.DeleteEntityRecordAsync(ProjectId, _entity.TableName, _keySnapshot);
-            CloseRecordPanel();
-            await ReloadPageAsync();
-        }
-        catch (Exception ex)
-        {
-            _error = ex.Message;
-        }
-    }
-
-    private async Task ReloadPageAsync()
-    {
-        if (_entity is null) return;
-        try
-        {
-            _page = await Svc.QueryProjectTablePageAsync(ProjectId, _entity.TableName, _search, _page?.Page ?? 1, _page?.PageSize ?? 50);
-            _rows = await Svc.ExecuteProjectDataAsync(ProjectId, $"SELECT * FROM \"{_entity.TableName}\" LIMIT 500");
-        }
-        catch (Exception ex) { _error = ex.Message; }
-    }
-
-    // Artifacts join the graph through shared key values: any run whose recorded output mentions
-    // this record's label or relation-key values (searched in the project's own job_run_data
-    // table, as the isolated role) contributes its stored artifacts to the record.
-    private async Task LoadLinkedArtifactsAsync(IReadOnlyList<string?> row)
-    {
-        if (_entity is null || _rows is null) return;
-        var cols = _rows.Columns.ToList();
-        var keys = new List<string>();
-        if (LabelCol() is { } label)
-        {
-            var li = cols.FindIndex(c => string.Equals(c, label, StringComparison.OrdinalIgnoreCase));
-            if (li >= 0 && li < row.Count && row[li] is { Length: > 2 } lv) keys.Add(lv);
-        }
-        foreach (var rel in _entity.Relations)
-        {
-            var ci = cols.FindIndex(c => string.Equals(c, rel.Column, StringComparison.OrdinalIgnoreCase));
-            if (ci >= 0 && ci < row.Count && row[ci] is { Length: > 2 } cv) keys.Add(cv);
-        }
-
-        var runIds = new HashSet<Guid>();
-
-        // The persisted relation tree first: tags written when runs completed.
-        foreach (var key in keys.Distinct().Take(3))
-        {
-            try
-            {
-                foreach (var id in await Svc.ListTaggedRunsAsync(_entity.Id, key))
-                    runIds.Add(id);
-            }
-            catch { }
-        }
-
-        // Fallback for runs that predate tagging: scan the recorded run outputs.
-        foreach (var key in runIds.Count > 0 ? Enumerable.Empty<string>() : keys.Distinct().Take(3))
-        {
-            try
-            {
-                var hits = await Svc.ExecuteProjectDataAsync(ProjectId,
-                    $"SELECT DISTINCT run_id::text FROM job_run_data WHERE artifact ILIKE '%{key.Replace("'", "''")}%' LIMIT 10");
-                foreach (var r in hits.Rows)
-                    if (r.Count > 0 && Guid.TryParse(r[0], out var id))
-                        runIds.Add(id);
-            }
-            catch { /* no job_run_data yet, or the value trips the query — links are best-effort */ }
-        }
-
-        var collected = new List<RunArtifactLinkView>();
-        foreach (var runId in runIds.Take(8))
-        {
-            _linkedRuns.Add(runId);
-            try
-            {
-                var arts = (await Svc.ListRunArtifactsAsync(runId)).ToList();
-                _runArtifacts[runId] = arts;
-                collected.AddRange(arts);
-            }
-            catch { _runArtifacts[runId] = new List<RunArtifactLinkView>(); }
-        }
-        // Versioning: the same job re-running produces the same logical file — show only the
-        // newest per (kind, title), with the version count as its history.
-        _artifacts.AddRange(collected
-            .GroupBy(a => (a.Kind, a.Title))
-            .Select(g => (g.OrderByDescending(a => a.CreatedAt).First(), g.Count()))
-            .OrderByDescending(x => x.Item1.CreatedAt));
-    }
-
-    // ── Auto-insights: the intelligence layer over tagged data. Column types come from the
-    // schema, relation keys from the entity graph; every aggregate runs as the isolated role.
-    private sealed record Insight(string Title, string? Big, string? Sub,
-        IReadOnlyList<(string Label, string Count, int Frac)> Bars);
-
-    private readonly List<Insight> _insights = new();
-
-    private async Task BuildInsightsAsync()
-    {
-        _insights.Clear();
-        if (_entity is null) return;
-        var table = _entity.TableName.Replace("\"", "");
-        try
-        {
-            var columns = await Svc.ListProjectTableColumnsAsync(ProjectId, _entity.TableName);
-
-            _insights.Add(new Insight($"{_entity.Name} total",
-                (_rows?.Rows.Count ?? 0).ToString("N0"), "records", Array.Empty<(string, string, int)>()));
-
-            // Numeric columns → average + range.
-            foreach (var col in columns.Where(c => IsNumeric(c.Type)).Take(3))
-            {
-                var r = await Svc.ExecuteProjectDataAsync(ProjectId,
-                    $"SELECT round(avg(\"{col.Name}\")::numeric, 1), min(\"{col.Name}\"), max(\"{col.Name}\") FROM \"{table}\"");
-                if (r.Rows.Count == 1 && r.Rows[0][0] is { } avg)
-                    _insights.Add(new Insight($"avg {col.Name}", avg,
-                        $"range {r.Rows[0][1]} – {r.Rows[0][2]}", Array.Empty<(string, string, int)>()));
-            }
-
-            // Relation keys (plus label-ish text columns) → top-5 distribution bars.
-            var keyCols = _entity.Relations.Select(rel => rel.Column)
-                .Concat(columns.Where(c => c.Type.Contains("text") || c.Type.Contains("char")).Select(c => c.Name))
-                .Where(c => !string.Equals(c, _entity.LabelColumn, StringComparison.OrdinalIgnoreCase))
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .Take(2);
-            foreach (var col in keyCols)
-            {
-                var r = await Svc.ExecuteProjectDataAsync(ProjectId,
-                    $"SELECT \"{col}\"::text, count(*) FROM \"{table}\" GROUP BY 1 ORDER BY 2 DESC LIMIT 5");
-                if (r.Rows.Count == 0) continue;
-                var max = r.Rows.Max(x => long.TryParse(x[1], out var n) ? n : 0);
-                var bars = r.Rows
-                    .Select(x => (x[0] ?? "—", x[1] ?? "0",
-                        max > 0 && long.TryParse(x[1], out var n) ? (int)(n * 100 / max) : 0))
-                    .ToList();
-                _insights.Add(new Insight($"by {col}", null, null, bars));
-            }
-        }
-        catch { /* insights are derived sugar — the records table always renders */ }
-    }
-
-    private PlaceContext.Application.Dtos.GraphVizView? _brainGraph;
-    private readonly Dictionary<string, string> _nodeUrls = new();
-
-    private string? NodeUrl(PlaceContext.Application.Dtos.GraphNodeView node)
-        => _nodeUrls.GetValueOrDefault(node.Id);
-
-    // The entity's DATA graph: every record as a node, joined to its actual related records
-    // (bulk join per declared relation), the runs tagged with its key values, and each run's
-    // artifacts — all concrete, all clickable. Capped per column to stay readable.
-    private async Task BuildSectionGraphAsync()
-    {
-        _brainGraph = null;
-        if (_entity is null || _rows is null || _rows.Rows.Count == 0) return;
-        try
-        {
-            const int maxRecords = 12;
-            var cols = _rows.Columns.ToList();
-            // A focused graph (from search) keeps only the matched record's neighbourhood.
-            var sourceRows = _focusKey is { } focus
-                ? _rows.Rows.Where(r => r.Any(v => string.Equals(v, focus, StringComparison.OrdinalIgnoreCase))).ToList()
-                : _rows.Rows;
-            var labelIdx = LabelCol() is { } lc ? Math.Max(0, cols.FindIndex(c => string.Equals(c, lc, StringComparison.OrdinalIgnoreCase))) : 0;
-            var records = sourceRows.Take(maxRecords)
-                .Select(r => labelIdx < r.Count ? r[labelIdx] ?? "—" : "—").ToList();
-
-            // Which key values identify each record (label + relation columns) — mirrors the tagger.
-            var keyToRecord = new Dictionary<string, int>(StringComparer.Ordinal);
-            var keyCols = new List<int> { labelIdx };
-            foreach (var rel in _entity.Relations)
-            {
-                var ci = cols.FindIndex(c => string.Equals(c, rel.Column, StringComparison.OrdinalIgnoreCase));
-                if (ci >= 0) keyCols.Add(ci);
-            }
-            for (var i = 0; i < Math.Min(maxRecords, sourceRows.Count); i++)
-            {
-                foreach (var ci in keyCols.Distinct())
-                    if (ci < sourceRows[i].Count && sourceRows[i][ci] is { Length: > 2 } v)
-                        keyToRecord.TryAdd(v, i);
-            }
-
-            // Related records per relation, bulk-joined once (isolated role, capped).
-            var relatedNodes = new List<(string Entity, string Label)>();
-            var relEdges = new List<(int Record, int Related)>();
-            foreach (var rel in _entity.Relations.Take(2))
-            {
-                var target = _all.FirstOrDefault(e => string.Equals(e.Name, rel.TargetEntity, StringComparison.OrdinalIgnoreCase));
-                if (target is null) continue;
-                var tLabel = target.LabelColumn ?? rel.TargetColumn;
-                try
-                {
-                    var join = await Svc.ExecuteProjectDataAsync(ProjectId,
-                        $"SELECT a.\"{rel.Column}\"::text, b.\"{tLabel.Replace("\"", "")}\"::text FROM \"{_entity.TableName.Replace("\"", "")}\" a JOIN \"{target.TableName.Replace("\"", "")}\" b ON a.\"{rel.Column}\"::text = b.\"{rel.TargetColumn.Replace("\"", "")}\"::text LIMIT 40");
-                    foreach (var row in join.Rows)
-                    {
-                        if (row.Count < 2 || row[0] is not { } k || row[1] is not { } lbl) continue;
-                        if (!keyToRecord.TryGetValue(k, out var recIdx)) continue;
-                        var ni = relatedNodes.FindIndex(n => n.Entity == target.Name && n.Label == lbl);
-                        if (ni < 0) { relatedNodes.Add((target.Name, lbl)); ni = relatedNodes.Count - 1; }
-                        if (relatedNodes.Count > maxRecords) break;
-                        if (!relEdges.Contains((recIdx, ni))) relEdges.Add((recIdx, ni));
-                    }
-                }
-                catch { }
-            }
-
-            // Tagged runs joined to records via the persisted key pairs; artifacts per run.
-            var pairs = await Svc.ListEntityTagPairsAsync(_entity.Id);
-            var runNodes = new List<Guid>();
-            var runEdges = new List<(int Record, int Run)>();
-            foreach (var pair in pairs)
-            {
-                if (!keyToRecord.TryGetValue(pair.Key, out var recIdx)) continue;
-                var ri = runNodes.IndexOf(pair.RunId);
-                if (ri < 0)
-                {
-                    if (runNodes.Count >= 8) continue;
-                    runNodes.Add(pair.RunId);
-                    ri = runNodes.Count - 1;
-                }
-                if (!runEdges.Contains((recIdx, ri))) runEdges.Add((recIdx, ri));
-            }
-            // Versioning: the newest artifact per (kind, title) wins; its version count rides
-            // along so the graph shows one node per logical file, not one per run.
-            var allArts = new List<(int Run, RunArtifactLinkView Art)>();
-            for (var ri = 0; ri < runNodes.Count; ri++)
-            {
-                try
-                {
-                    foreach (var a in await Svc.ListRunArtifactsAsync(runNodes[ri]))
-                        allArts.Add((ri, a));
-                }
-                catch { }
-            }
-            var artNodes = allArts
-                .GroupBy(x => (x.Art.Kind, x.Art.Title))
-                .Select(g => (g.OrderByDescending(x => x.Art.CreatedAt).First(), Versions: g.Count()))
-                .OrderByDescending(x => x.Item1.Art.CreatedAt)
-                .Take(14)
-                .Select(x => (x.Item1.Run, x.Item1.Art, x.Versions))
-                .ToList();
-
-            _brainGraph = BuildBrain(records, relatedNodes, relEdges, runNodes, runEdges, artNodes);
-        }
-        catch { /* the graph is derived sugar — the view renders without it */ }
-    }
-
-    // Fold the collected data into the force-directed brain's shape: records are the hubs,
-    // related records / runs / artifacts orbit them via their concrete edges.
-    private PlaceContext.Application.Dtos.GraphVizView BuildBrain(
-        List<string> records,
-        List<(string Entity, string Label)> related,
-        List<(int Record, int Related)> relEdges,
-        List<Guid> runs,
-        List<(int Record, int Run)> runEdges,
-        List<(int Run, RunArtifactLinkView Art, int Versions)> arts)
-    {
-        var nodes = new List<PlaceContext.Application.Dtos.GraphNodeView>();
-        var links = new List<PlaceContext.Application.Dtos.GraphLinkView>();
-        var degree = new Dictionary<string, int>();
-
-        void Link(string a, string b)
-        {
-            links.Add(new PlaceContext.Application.Dtos.GraphLinkView(a, b, "Direct"));
-            degree[a] = degree.GetValueOrDefault(a) + 1;
-            degree[b] = degree.GetValueOrDefault(b) + 1;
-        }
-
-        for (var i = 0; i < records.Count; i++)
-            nodes.Add(new PlaceContext.Application.Dtos.GraphNodeView($"rec:{i}", records[i] ?? "—", 0, IsGod: true,
-                Content: $"{_entity?.Name} record"));
-        _nodeUrls.Clear();
-        for (var i = 0; i < related.Count; i++)
-        {
-            nodes.Add(new PlaceContext.Application.Dtos.GraphNodeView($"rel:{i}", related[i].Label, 0, false,
-                Content: $"{related[i].Entity} record (related)", Kind: "human"));
-            _nodeUrls[$"rel:{i}"] = $"/project/{ProjectId}/entity/{Uri.EscapeDataString(related[i].Entity)}?record={Uri.EscapeDataString(related[i].Label)}";
-        }
-        for (var i = 0; i < runs.Count; i++)
-        {
-            nodes.Add(new PlaceContext.Application.Dtos.GraphNodeView($"run:{i}", $"run {runs[i].ToString("N")[..8]}", 0, false,
-                Content: "tagged job run — its output mentioned the connected records"));
-            _nodeUrls[$"run:{i}"] = $"/observability?run={runs[i]}";
-        }
-        for (var i = 0; i < arts.Count; i++)
-        {
-            nodes.Add(new PlaceContext.Application.Dtos.GraphNodeView($"art:{i}",
-                arts[i].Versions > 1 ? $"{arts[i].Art.Title} · v{arts[i].Versions}" : arts[i].Art.Title, 0, false,
-                Content: arts[i].Versions > 1
-                    ? $"artifact · {arts[i].Art.Kind} · latest of {arts[i].Versions} versions"
-                    : $"artifact · {arts[i].Art.Kind}", Kind: "good", Labeled: true));
-            _nodeUrls[$"art:{i}"] = $"/artifacts?artifact={arts[i].Art.Id}";
-        }
-
-        foreach (var (rec, rel) in relEdges) Link($"rec:{rec}", $"rel:{rel}");
-        foreach (var (rec, run) in runEdges) Link($"rec:{rec}", $"run:{run}");
-        for (var i = 0; i < arts.Count; i++) Link($"run:{arts[i].Run}", $"art:{i}");
-
-        nodes = nodes.Select(n => n with { Degree = degree.GetValueOrDefault(n.Id) }).ToList();
-        return new PlaceContext.Application.Dtos.GraphVizView(ProjectId, nodes.Count, links.Count, nodes, links);
-    }
-
-    // The record's link graph as inline SVG (built in C# — razor's <text> tag shadows SVG's).
-    private string GraphSvg()
-    {
-        var sb = new System.Text.StringBuilder();
-        var relNodes = _related
-            .SelectMany(r => r.Rows.Rows.Take(3).Select(row => (r.Relation.TargetEntity, Label: row.FirstOrDefault() ?? "—")))
-            .Take(6).ToList();
-        var right = _linkedRuns.Sum(r => 44 + (_runArtifacts.GetValueOrDefault(r)?.Count ?? 0) * 26);
-        var height = Math.Max(160.0, Math.Max(right, relNodes.Count * 44) + 56);
-        var cy = height / 2.0;
-
-        sb.Append(FormattableString.Invariant(
-            $"<svg viewBox=\"0 0 520 {height}\" style=\"width:100%; border:1px solid var(--border); border-radius:8px; background:var(--card)\">"));
-
-        for (var i = 0; i < relNodes.Count; i++)
-        {
-            var y = 28 + i * 44;
-            sb.Append(FormattableString.Invariant($"<line x1='150' y1='{y}' x2='216' y2='{cy}' stroke='var(--border-2)' stroke-width='1.2'/>"));
-            sb.Append(FormattableString.Invariant($"<rect x='8' y='{y - 14}' width='142' height='28' rx='7' fill='var(--human-bg)' stroke='var(--human)'/>"));
-            sb.Append(FormattableString.Invariant($"<text x='16' y='{y - 1}' font-size='9.5' fill='var(--human)' font-family='JetBrains Mono, monospace'>{E(relNodes[i].TargetEntity)}</text>"));
-            sb.Append(FormattableString.Invariant($"<text x='16' y='{y + 10}' font-size='9' fill='var(--text-2)'>{E(Trunc(relNodes[i].Label, 22))}</text>"));
-        }
-
-        sb.Append(FormattableString.Invariant($"<rect x='216' y='{cy - 17}' width='120' height='34' rx='8' fill='var(--brand-bg)' stroke='var(--brand-2)' stroke-width='1.4'/>"));
-        sb.Append(FormattableString.Invariant($"<text x='276' y='{cy - 2}' font-size='10' font-weight='600' fill='var(--text)' text-anchor='middle'>{E(Trunc(_open is null ? "" : RecordLabel(_open), 18))}</text>"));
-        sb.Append(FormattableString.Invariant($"<text x='276' y='{cy + 10}' font-size='8.5' fill='var(--text-3)' text-anchor='middle'>{E(_entity?.Name ?? "")} record</text>"));
-
-        var yCursor = 28.0;
-        foreach (var runId in _linkedRuns)
-        {
-            var arts = _runArtifacts.GetValueOrDefault(runId) ?? new List<RunArtifactLinkView>();
-            var y = yCursor;
-            sb.Append(FormattableString.Invariant($"<line x1='336' y1='{cy}' x2='376' y2='{y}' stroke='var(--border-2)' stroke-width='1.2' stroke-dasharray='4 3'/>"));
-            sb.Append($"<a href='/observability?run={runId}'>");
-            sb.Append(FormattableString.Invariant($"<rect x='376' y='{y - 13}' width='132' height='26' rx='7' fill='var(--card-2)' stroke='var(--border-2)' style='cursor:pointer'/>"));
-            sb.Append(FormattableString.Invariant($"<text x='384' y='{y + 3}' font-size='9' fill='var(--text-2)' font-family='JetBrains Mono, monospace' style='cursor:pointer'>run {runId.ToString("N")[..8]} ↗</text>"));
-            sb.Append("</a>");
-            for (var k = 0; k < arts.Count; k++)
-            {
-                var ay = y + 26 + k * 26;
-                sb.Append(FormattableString.Invariant($"<line x1='442' y1='{y + 13}' x2='442' y2='{ay - 11}' stroke='var(--border-2)'/>"));
-                sb.Append($"<a href='/artifacts?artifact={arts[k].Id}'>");
-                sb.Append(FormattableString.Invariant($"<rect x='396' y='{ay - 11}' width='112' height='22' rx='6' fill='var(--good-bg)' stroke='var(--good)' style='cursor:pointer'/>"));
-                sb.Append(FormattableString.Invariant($"<text x='403' y='{ay + 3}' font-size='8.5' fill='var(--good)' font-family='JetBrains Mono, monospace' style='cursor:pointer'>{E(Trunc(arts[k].Title, 17))} ↗</text>"));
-                sb.Append("</a>");
-            }
-            yCursor += 44 + arts.Count * 26;
-        }
-
-        sb.Append("</svg>");
-        return sb.ToString();
-    }
-
-    private static string E(string s) => s.Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;").Replace("'", "&#39;");
-
-    private static string Trunc(string? s, int n) => string.IsNullOrEmpty(s) ? "—" : s.Length <= n ? s : s[..n] + "…";
+            try { return await JS.InvokeAsync<string>("pcmonaco.getValue", id); }
+            catch { return current; }
+        });
 
     private void ToggleBool(string colName, ChangeEventArgs e)
-    {
-        _formValues[colName] = e.Value?.ToString() == "true" ? "true" : "false";
-    }
-
-    private static bool IsNumeric(string type) =>
-        type.Contains("int") || type.Contains("numeric") || type.Contains("double") || type.Contains("real");
+        => Vm.FormValues[colName] = e.Value?.ToString() == "true" ? "true" : "false";
 }

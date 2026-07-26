@@ -116,6 +116,7 @@ builder.Services.AddScoped<BrandingService>();
 // ── Page ViewModels ──────────────────────────────────────────────────────────
 builder.Services.AddScoped<PlaceContext.Host.Components.ViewModels.ChatViewModel>();
 builder.Services.AddScoped<PlaceContext.Host.Components.ViewModels.JobsViewModel>();
+builder.Services.AddScoped<PlaceContext.Host.Components.ViewModels.EntityBrowseViewModel>();
 
 // Share the Data Protection key ring across replicas (persisted in Postgres) and pin the application
 // name, so the auth cookie one replica issues can be decrypted by any other — otherwise a token sign-in
