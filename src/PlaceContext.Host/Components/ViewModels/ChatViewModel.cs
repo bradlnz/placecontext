@@ -489,12 +489,10 @@ public sealed class ChatViewModel : PageViewModel
         NotifyStateChanged();
         await scrollToBottom();
 
-        string ragContext = "";
-        if (_ragEnabled)
-        {
-            try { ragContext = await _contextBuilder.BuildContextAsync(ProjectId.Value, text, _maxContextChunks); }
-            catch { }
-        }
+        // Build RAG context in parallel — don't block the typing indicator.
+        var ragTask = _ragEnabled
+            ? _contextBuilder.BuildContextAsync(ProjectId.Value, text, _maxContextChunks).ContinueWith(t => t.Status == TaskStatus.RanToCompletion ? t.Result : "")
+            : Task.FromResult("");
 
         try
         {
@@ -505,6 +503,7 @@ public sealed class ChatViewModel : PageViewModel
             while (round < maxToolRounds)
             {
                 round++;
+                var ragContext = ragTask.IsCompleted ? ragTask.Result : await ragTask;
                 var messages = BuildChatMessages(ragContext);
                 StreamBuffer = "";
                 CurrentToolCall = null;
