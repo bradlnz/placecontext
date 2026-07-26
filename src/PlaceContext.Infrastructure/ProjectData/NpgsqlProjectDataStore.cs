@@ -184,8 +184,22 @@ public sealed class NpgsqlProjectDataStore : IProjectDataStore
         return " WHERE " + string.Join(" OR ", predicates);
     }
 
+    /// <summary>
+    /// The ORDER BY for paged reads. <paramref name="sortColumn"/> is only used when it is one of
+    /// the table's actual columns (whitelist check — the value is never interpolated unchecked);
+    /// anything else falls back to the default first-column ordering. The first column stays as a
+    /// tiebreaker so paging remains stable when the sort key has duplicates.
+    /// </summary>
+    internal static string BuildOrderByClause(IReadOnlyList<string> columns, string? sortColumn, bool sortDescending)
+    {
+        if (string.IsNullOrWhiteSpace(sortColumn) || !columns.Contains(sortColumn, StringComparer.Ordinal))
+            return " ORDER BY 1";
+        var dir = sortDescending ? "DESC" : "ASC";
+        return $" ORDER BY {QuoteIdent(sortColumn)} {dir} NULLS LAST, 1";
+    }
+
     public async Task<ProjectTablePageResult> QueryTablePageAsync(Guid projectId, string tableName, string? search,
-        int page, int pageSize, CancellationToken ct = default)
+        int page, int pageSize, string? sortColumn = null, bool sortDescending = false, CancellationToken ct = default)
     {
         Ident(tableName, "table name");
         page = ClampPage(page);
@@ -238,20 +252,22 @@ public sealed class NpgsqlProjectDataStore : IProjectDataStore
 
         var rows = new List<IReadOnlyList<string?>>();
         var offset = OffsetFor(page, pageSize);
+        // ORDER BY 1 is the fallback anchor when no valid sort column is given (the table has
+        // no guaranteed primary key visible here). With cell encryption on, DB-side sorting
+        // sorts ciphertext — a known limitation (encryption is off by default).
+        var orderBy = BuildOrderByClause(columns, sortColumn, sortDescending);
         await using (var pageCmd = conn.CreateCommand())
         {
             pageCmd.Transaction = tx;
-            // ORDER BY 1 keeps paging stable/deterministic across requests (the table has no
-            // guaranteed primary key visible here — the first column is the best available anchor).
             if (searchInMemory)
             {
                 // Bounded decrypt-then-filter window (same cap as ExecuteAsync).
-                pageCmd.CommandText = $"SELECT * FROM {quoted} ORDER BY 1 LIMIT @take";
+                pageCmd.CommandText = $"SELECT * FROM {quoted}{orderBy} LIMIT @take";
                 pageCmd.Parameters.AddWithValue("take", MaxRows);
             }
             else
             {
-                pageCmd.CommandText = $"SELECT * FROM {quoted}{whereSql} ORDER BY 1 LIMIT @take OFFSET @skip";
+                pageCmd.CommandText = $"SELECT * FROM {quoted}{whereSql}{orderBy} LIMIT @take OFFSET @skip";
                 if (hasSearch) pageCmd.Parameters.AddWithValue("search", $"%{search}%");
                 pageCmd.Parameters.AddWithValue("take", pageSize);
                 pageCmd.Parameters.AddWithValue("skip", offset);

@@ -198,7 +198,7 @@ public class RecordLinkHookTests
         public Task<IReadOnlyList<ProjectTableInfo>> ListTablesAsync(Guid projectId, CancellationToken ct = default)
             => Task.FromResult<IReadOnlyList<ProjectTableInfo>>(Array.Empty<ProjectTableInfo>());
         public Task<ProjectTablePageResult> QueryTablePageAsync(Guid projectId, string tableName, string? search,
-            int page, int pageSize, CancellationToken ct = default) => throw new NotSupportedException();
+            int page, int pageSize, string? sortColumn = null, bool sortDescending = false, CancellationToken ct = default) => throw new NotSupportedException();
         public Task CreateTableAsync(Guid projectId, string tableName, IReadOnlyList<ProjectColumnSpec> columns, CancellationToken ct = default) => Task.CompletedTask;
         public Task RenameTableAsync(Guid projectId, string from, string to, CancellationToken ct = default) => Task.CompletedTask;
         public Task AddColumnAsync(Guid projectId, string tableName, ProjectColumnSpec column, CancellationToken ct = default) => Task.CompletedTask;

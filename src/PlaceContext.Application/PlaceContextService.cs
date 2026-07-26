@@ -200,8 +200,8 @@ public sealed class PlaceContextService : IPlaceContextService
         => _dispatcher.Query(new ListProjectDataTablesQuery(projectId), ct);
 
     public Task<Ports.ProjectTablePageResult> QueryProjectTablePageAsync(Guid projectId, string tableName, string? search,
-        int page, int pageSize, CancellationToken ct = default)
-        => _dispatcher.Query(new QueryProjectTablePageQuery(projectId, tableName, search, page, pageSize), ct);
+        int page, int pageSize, string? sortColumn = null, bool sortDescending = false, CancellationToken ct = default)
+        => _dispatcher.Query(new QueryProjectTablePageQuery(projectId, tableName, search, page, pageSize, sortColumn, sortDescending), ct);
 
     public Task CreateProjectTableAsync(Guid projectId, string tableName, IReadOnlyList<Ports.ProjectColumnSpec> columns, CancellationToken ct = default)
         => _dispatcher.Send(new CreateProjectTableCommand(projectId, tableName, columns), ct);

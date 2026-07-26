@@ -19,6 +19,7 @@
 @inject IObjectStore ObjectStore
 @inject PlaceContext.Domain.Repositories.IRunArtifactLinkRepository Links
 @inject ICurrentTenant Tenant
+@inject IContentIndexer ContentIndexer
 
 <PageTitle>placecontext — Agent Chat</PageTitle>
 
@@ -473,6 +474,21 @@
                     </div>
                 }
 
+                @if (_panelArtifacts.Count > 0)
+                {
+                    <div class="side-section">
+                        <h4>Artifacts</h4>
+                        @foreach (var a in _panelArtifacts)
+                        {
+                            <a class="artifact-item" href="/runs/@a.RunId/artifacts/@a.Id" target="_blank" title="Open @a.Title (@FormatBytes(a.SizeBytes))">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                                <span class="artifact-title">@a.Title</span>
+                                <span class="artifact-kind">@a.Kind</span>
+                            </a>
+                        }
+                    </div>
+                }
+
                 @if (_graphNodes.Count > 0)
                 {
                     <div class="side-section">
@@ -762,11 +778,11 @@
     private readonly List<ToolHistoryEntry> _toolHistory = new();
     private readonly List<GraphNodeView> _graphNodes = new();
     private int _graphLinks;
+    private readonly List<ArtifactFileView> _panelArtifacts = new();
     private ClarificationRequest? _pendingClarification;
     private readonly HashSet<string> _clarificationSelected = new();
     private TaskCompletionSource<ClarificationResult>? _clarificationTcs;
     private readonly HashSet<int> _renderedChartIds = new();
-    private readonly HashSet<int> _renderedMapIds = new();
     private byte[]? _attachedFile;
     private string? _attachedFileName;
     private string? _attachedFileText;
@@ -788,6 +804,7 @@
             await LoadAgentConfig();
             await LoadSessionsAsync();
             await LoadMcpConnectionsAsync();
+            await LoadPanelArtifactsAsync();
 
             // Load most recent session if one exists, otherwise create new
             if (_sessions.Count > 0)
@@ -799,6 +816,30 @@
                 NewSession();
             }
         }
+    }
+
+    /// <summary>Recent project artifacts for the side panel gallery (documents open in a new tab).</summary>
+    private async Task LoadPanelArtifactsAsync()
+    {
+        if (!_projectId.HasValue) return;
+        try
+        {
+            var artifacts = await Svc.ListProjectArtifactsAsync(_projectId.Value, 8, null);
+            _panelArtifacts.Clear();
+            _panelArtifacts.AddRange(artifacts);
+        }
+        catch { /* best-effort */ }
+    }
+
+    /// <summary>Bumps freshly discovered artifacts into the side panel (deduped, newest first).</summary>
+    private void MergePanelArtifacts(IEnumerable<ArtifactFileView> found)
+    {
+        var incoming = found.ToList();
+        if (incoming.Count == 0) return;
+        _panelArtifacts.RemoveAll(a => incoming.Any(f => f.Id == a.Id));
+        _panelArtifacts.InsertRange(0, incoming);
+        if (_panelArtifacts.Count > 10)
+            _panelArtifacts.RemoveRange(10, _panelArtifacts.Count - 10);
     }
 
     private async Task LoadAgentConfig()
@@ -826,6 +867,7 @@
             _toolHistory.Clear();
             await LoadSessionsAsync();
             await LoadMcpConnectionsAsync();
+            await LoadPanelArtifactsAsync();
             NewSession();
         }
     }
@@ -873,7 +915,6 @@
         _pendingClarification = null;
         _clarificationSelected.Clear();
         _renderedChartIds.Clear();
-        _renderedMapIds.Clear();
         _attachedFile = null;
         _attachedFileName = null;
         _attachedFileText = null;
@@ -911,7 +952,6 @@
         _pendingClarification = null;
         _clarificationSelected.Clear();
         _renderedChartIds.Clear();
-        _renderedMapIds.Clear();
         _attachedFile = null;
         _attachedFileName = null;
         _attachedFileText = null;
@@ -1164,7 +1204,7 @@
                 }
 
                 // Extract text content (strip tool call syntax), split thinking from the answer
-                var textContent = System.Text.RegularExpressions.Regex.Replace(_streamBuffer, @"\[\[tool:[^\]]*\]\]", "").Trim();
+                var textContent = StripToolCallSyntax(_streamBuffer).Trim();
                 var rawCleaned = textContent;
                 var split = SplitThinking(textContent);
                 textContent = split.Answer;
@@ -1416,12 +1456,58 @@
     private List<ToolCallInfo> ParseToolCalls(string response)
     {
         var calls = new List<ToolCallInfo>();
-        var pattern = @"\[\[tool:(\w+)\|([^\]]*)\]\]";
-        foreach (System.Text.RegularExpressions.Match m in System.Text.RegularExpressions.Regex.Matches(response, pattern))
+        foreach (var c in ScanToolCalls(response))
+            calls.Add(new ToolCallInfo { ToolName = c.Name, Args = c.Args });
+        return calls;
+    }
+
+    /// <summary>
+    /// Finds [[tool:name|args]] calls in model output. Unlike a regex, this tolerates ']' inside
+    /// the args (render_map's JSON spec is full of array brackets): a call ends at the LAST ']]'
+    /// before the next '[[tool:' or the end of the text. Incomplete calls (still streaming) are
+    /// skipped, same as the old regex.
+    /// </summary>
+    private static List<(string Name, string Args, int Start, int Length)> ScanToolCalls(string text)
+    {
+        var calls = new List<(string Name, string Args, int Start, int Length)>();
+        if (string.IsNullOrEmpty(text)) return calls;
+
+        var pos = 0;
+        while (pos < text.Length)
         {
-            calls.Add(new ToolCallInfo { ToolName = m.Groups[1].Value, Args = m.Groups[2].Value });
+            var start = text.IndexOf("[[tool:", pos, StringComparison.Ordinal);
+            if (start < 0) break;
+            var nameStart = start + "[[tool:".Length;
+            var pipe = text.IndexOf('|', nameStart);
+            var nextCall = text.IndexOf("[[tool:", nameStart, StringComparison.Ordinal);
+            if (pipe < 0 || (nextCall >= 0 && pipe > nextCall)) { pos = nameStart; continue; }
+
+            var searchEnd = nextCall >= 0 ? nextCall : text.Length;
+            var close = searchEnd - pipe - 1 > 0
+                ? text.LastIndexOf("]]", searchEnd - 1, searchEnd - pipe - 1, StringComparison.Ordinal)
+                : -1;
+            if (close < 0) { pos = nameStart; continue; }
+
+            calls.Add((text[nameStart..pipe], text[(pipe + 1)..close], start, close + 2 - start));
+            pos = close + 2;
         }
         return calls;
+    }
+
+    /// <summary>Removes every complete tool call from display text (see <see cref="ScanToolCalls"/>).</summary>
+    private static string StripToolCallSyntax(string text)
+    {
+        var calls = ScanToolCalls(text);
+        if (calls.Count == 0) return text;
+        var sb = new System.Text.StringBuilder(text.Length);
+        var pos = 0;
+        foreach (var c in calls)
+        {
+            sb.Append(text, pos, c.Start - pos);
+            pos = c.Start + c.Length;
+        }
+        sb.Append(text, pos, text.Length - pos);
+        return sb.ToString();
     }
 
 
@@ -1455,7 +1541,7 @@
         // Strip thinking/reasoning tags before encoding — belt-and-suspenders with CleanAssistantOutput
         raw = StripThinkTags(raw);
         // Strip raw tool call syntax from display
-        var cleaned = System.Text.RegularExpressions.Regex.Replace(raw, @"\[\[tool:[^\]]*\]\]", "").Trim();
+        var cleaned = StripToolCallSyntax(raw).Trim();
         // If only tool calls were present, return empty (tool results are shown separately)
         if (string.IsNullOrWhiteSpace(cleaned))
             return "";
@@ -1527,7 +1613,7 @@
         // Raw reasoning that isn't wrapped in tags — detect nested thinking patterns
         // where the model outputs its reasoning process about tool calls instead of calling them.
         // If the entire response is thinking lines with no [[tool:]] calls, it's all thinking.
-        if (!System.Text.RegularExpressions.Regex.IsMatch(raw, @"\[\[tool:[^\]]*\]\]") && IsAllReasoning(raw))
+        if (ScanToolCalls(raw).Count == 0 && IsAllReasoning(raw))
         {
             if (!string.IsNullOrWhiteSpace(raw)) thinking.Add(raw.Trim());
             raw = "";
@@ -1625,7 +1711,7 @@
         var lastAssistant = _messages.LastOrDefault(m => m.Role == "assistant");
         if (lastAssistant == null) return new() { Detected = false };
 
-        var content = System.Text.RegularExpressions.Regex.Replace(lastAssistant.Content, @"\[\[tool:[^\]]*\]\]", "").Trim();
+        var content = StripToolCallSyntax(lastAssistant.Content).Trim();
 
         // Collect all tool calls and their results from this conversation turn
         var allToolCalls = _messages
@@ -2655,6 +2741,8 @@
                     : $"No artifacts matched \"{query}\".");
             }
 
+            MergePanelArtifacts(artifacts);
+
             // If a specific query resolves to exactly one artifact, render it inline immediately.
             if (!string.IsNullOrEmpty(query) && artifacts.Count == 1)
             {
@@ -2783,6 +2871,22 @@
                     }
                 }
                 catch { /* fall back to metadata-only */ }
+            }
+
+            // Lazy RAG backfill: an artifact that gets viewed becomes searchable in future chats
+            // (its content was only indexed at creation time when embeddings were enabled).
+            if (ContentIndexer is { IsEnabled: true })
+            {
+                var indexText = extractedText ?? content;
+                if (!string.IsNullOrWhiteSpace(indexText))
+                {
+                    try
+                    {
+                        await ContentIndexer.IndexAsync(_projectId!.Value, ContentKind.Document,
+                            $"artifact:{link.Id}", $"{link.Title}\n\n{indexText}", ct);
+                    }
+                    catch { /* best-effort */ }
+                }
             }
 
             var payload = new
@@ -3337,11 +3441,11 @@
 
             foreach (var tc in msg.ToolCalls.Where(t => t.ResultType == "map" && t.Status == ToolCallStatus.Completed))
             {
-                if (_renderedMapIds.Contains(tc.Id)) continue;
+                // No "already rendered" skip: pcmap.render is idempotent and self-heals when
+                // Blazor replaced the container element (streaming/session re-renders).
                 try
                 {
                     await JS.InvokeVoidAsync("pcmap.render", $"map-{tc.Id}", tc.Result);
-                    _renderedMapIds.Add(tc.Id);
                 }
                 catch { /* container not in DOM yet — will retry next render */ }
             }

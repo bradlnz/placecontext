@@ -6,4 +6,6 @@ namespace PlaceContext.Domain.ValueObjects;
 /// <see cref="TreeNodeKind.JobRunOutput"/> nodes and cross-links the semantically-nearest ones, so the
 /// accumulated run outputs become the project's connective "brain" — queryable memory wired into the graph.
 /// </summary>
-public sealed record RunOutputNode(string Id, string Label, IReadOnlyList<float> Vector);
+public sealed record RunOutputNode(string Id, string Label, IReadOnlyList<float> Vector,
+    /// <summary>The job that produced this output — when known, the node links to its job instead of the root.</summary>
+    Guid? JobId = null);

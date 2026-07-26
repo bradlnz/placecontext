@@ -79,7 +79,7 @@ public interface IPlaceContextService
     Task<Ports.ProjectQueryResult> ExecuteProjectDataAsync(Guid projectId, string sql, CancellationToken ct = default);
     Task<IReadOnlyList<Ports.ProjectTableInfo>> ListProjectDataTablesAsync(Guid projectId, CancellationToken ct = default);
     Task<Ports.ProjectTablePageResult> QueryProjectTablePageAsync(Guid projectId, string tableName, string? search,
-        int page, int pageSize, CancellationToken ct = default);
+        int page, int pageSize, string? sortColumn = null, bool sortDescending = false, CancellationToken ct = default);
     Task CreateProjectTableAsync(Guid projectId, string tableName, IReadOnlyList<Ports.ProjectColumnSpec> columns, CancellationToken ct = default);
     Task<ImportCsvResult> ImportCsvToProjectTableAsync(Guid projectId, string tableName, IReadOnlyList<Ports.ProjectColumnSpec> columns,
         IReadOnlyList<IReadOnlyList<string?>> rows, bool createTable, CancellationToken ct = default);

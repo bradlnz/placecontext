@@ -79,7 +79,7 @@ public class ProjectDataTests
         public (int Page, int PageSize)? SawPaging;
 
         public Task<ProjectTablePageResult> QueryTablePageAsync(Guid projectId, string tableName, string? search,
-            int page, int pageSize, CancellationToken ct = default)
+            int page, int pageSize, string? sortColumn = null, bool sortDescending = false, CancellationToken ct = default)
         {
             SawProject = projectId;
             SawSearch = search;

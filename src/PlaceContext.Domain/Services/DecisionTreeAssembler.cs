@@ -28,7 +28,12 @@ public sealed class DecisionTreeAssembler
         IReadOnlyList<Decision> decisions,
         ActivityLog ledger,
         IReadOnlyList<ToolActivity> activity,
-        IReadOnlyList<RunOutputNode>? runOutputs = null)
+        IReadOnlyList<RunOutputNode>? runOutputs = null,
+        IReadOnlyList<Job>? jobs = null,
+        IReadOnlyList<JobChain>? chains = null,
+        IReadOnlyList<DataMapping>? mappings = null,
+        IReadOnlyList<string>? tables = null,
+        IReadOnlyList<DataEntity>? entities = null)
     {
         const string rootId = "root";
         var specs = new List<(string Id, string Label, TreeNodeKind Kind, string? Content)>
@@ -83,11 +88,101 @@ public sealed class DecisionTreeAssembler
         // and the MCP view.) The parameter is retained for API stability.
         _ = activity;
 
-        // Job-run outputs become the project's "brain": each embedded run output is a node off the root,
-        // then cross-linked to its most semantically-similar peers (cosine over the embedding vectors) so
-        // the accumulated outputs weave the dependency graph together into a queryable memory. The
-        // cross-links are Inferred — they are semantic, not extracted from a recorded relationship.
-        WeaveRunOutputs(runOutputs, rootId, edges, seen, AddNode);
+        // ── Project lineage: chains → their jobs, jobs → the tables they write (via data
+        // mappings). This is the structural dependency graph of the data platform — derived
+        // from recorded configuration, no embeddings needed. ──
+        var jobNodeIds = new Dictionary<Guid, string>();
+        foreach (var job in jobs ?? (IReadOnlyList<Job>)Array.Empty<Job>())
+        {
+            var id = "job:" + job.Id.ToString("N");
+            jobNodeIds[job.Id] = id;
+            AddNode(id, Clip(job.Name), TreeNodeKind.Job, job.Description);
+        }
+
+        var chainedJobIds = new HashSet<Guid>();
+        foreach (var chain in chains ?? (IReadOnlyList<JobChain>)Array.Empty<JobChain>())
+        {
+            var chainId = "chain:" + chain.Id.ToString("N");
+            AddNode(chainId, Clip(chain.Name), TreeNodeKind.Chain, chain.Description);
+            edges.Add(new DecisionTreeEdge(rootId, chainId, ConfidenceTag.Extracted));
+
+            // Chain membership edges plus stage-to-stage dependency edges (stage N feeds stage N+1).
+            string? previousStageJobId = null;
+            foreach (var stage in chain.Stages)
+            {
+                foreach (var jobId in stage.JobIds)
+                {
+                    if (!jobNodeIds.TryGetValue(jobId, out var jobNodeId)) continue;
+                    chainedJobIds.Add(jobId);
+                    edges.Add(new DecisionTreeEdge(chainId, jobNodeId, ConfidenceTag.Extracted));
+                    if (previousStageJobId is not null)
+                        edges.Add(new DecisionTreeEdge(previousStageJobId, jobNodeId, ConfidenceTag.Extracted));
+                }
+                // For parallel fan-out stages the dependency fans in from the single previous stage.
+                if (stage.JobIds.Count > 0 && jobNodeIds.TryGetValue(stage.JobIds[0], out var firstOfStage))
+                    previousStageJobId = firstOfStage;
+            }
+        }
+
+        // Jobs not in any chain hang directly off the root.
+        foreach (var (jobId, nodeId) in jobNodeIds)
+        {
+            if (!chainedJobIds.Contains(jobId))
+                edges.Add(new DecisionTreeEdge(rootId, nodeId, ConfidenceTag.Extracted));
+        }
+
+        // Tables written by jobs (data mappings) and any remaining project tables off the root.
+        var mappedTables = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var mapping in mappings ?? (IReadOnlyList<DataMapping>)Array.Empty<DataMapping>())
+        {
+            if (!jobNodeIds.TryGetValue(mapping.JobId, out var jobNodeId)) continue;
+            var tableId = "table:" + mapping.TargetTable;
+            mappedTables.Add(mapping.TargetTable);
+            AddNode(tableId, Clip(mapping.TargetTable), TreeNodeKind.Table);
+            edges.Add(new DecisionTreeEdge(jobNodeId, tableId, ConfidenceTag.Extracted));
+        }
+        foreach (var table in tables ?? (IReadOnlyList<string>)Array.Empty<string>())
+        {
+            if (mappedTables.Contains(table)) continue;
+            var tableId = "table:" + table;
+            AddNode(tableId, Clip(table), TreeNodeKind.Table);
+            edges.Add(new DecisionTreeEdge(rootId, tableId, ConfidenceTag.Extracted));
+        }
+
+        // Business entities: a tagged view over a project table, with declared relations
+        // between entities (this column matches that entity's column).
+        var entityNodeIds = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var entityList = entities ?? (IReadOnlyList<DataEntity>)Array.Empty<DataEntity>();
+        foreach (var entity in entityList)
+        {
+            var id = "entity:" + entity.Id.ToString("N");
+            entityNodeIds[entity.Name] = id;
+            var content = entity.Tags.Count > 0 ? "tags: " + string.Join(", ", entity.Tags) : null;
+            AddNode(id, Clip(entity.Name), TreeNodeKind.Entity, content);
+
+            // The entity reads from its table when that table is in the graph, else off the root.
+            var tableId = "table:" + entity.TableName;
+            var parentId = seen.Contains(tableId) ? tableId : rootId;
+            edges.Add(new DecisionTreeEdge(parentId, id, ConfidenceTag.Extracted));
+        }
+        foreach (var entity in entityList)
+        {
+            foreach (var relation in entity.Relations)
+            {
+                if (entityNodeIds.TryGetValue(entity.Name, out var from)
+                    && entityNodeIds.TryGetValue(relation.TargetEntity, out var to))
+                {
+                    edges.Add(new DecisionTreeEdge(from, to, ConfidenceTag.Extracted));
+                }
+            }
+        }
+
+        // Job-run outputs become the project's "brain": each embedded run output is a node off its
+        // job (or the root when the job is unknown), then cross-linked to its most semantically-similar
+        // peers (cosine over the embedding vectors) so the accumulated outputs weave the dependency
+        // graph together into a queryable memory. The cross-links are Inferred — they are semantic,
+        // not extracted from a recorded relationship.
+        WeaveRunOutputs(runOutputs, rootId, edges, seen, AddNode, jobNodeIds);
 
         // Degree = incident-edge count. For file nodes that equals the number of changes touching it.
         var degree = new Dictionary<string, int>();
@@ -111,7 +206,8 @@ public sealed class DecisionTreeAssembler
     }
 
     /// <summary>
-    /// Adds one <see cref="TreeNodeKind.JobRunOutput"/> node per embedded run output (hung off the root),
+    /// Adds one <see cref="TreeNodeKind.JobRunOutput"/> node per embedded run output (hung off its job
+    /// when <see cref="RunOutputNode.JobId"/> resolves to a job node, otherwise off the root),
     /// then links each to its top-<see cref="MaxSimilarLinks"/> nearest peers above
     /// <see cref="SimilarityThreshold"/> cosine similarity. Undirected — symmetric pairs are de-duplicated.
     /// </summary>
@@ -120,7 +216,8 @@ public sealed class DecisionTreeAssembler
         string rootId,
         List<DecisionTreeEdge> edges,
         HashSet<string> seen,
-        Action<string, string, TreeNodeKind, string?> addNode)
+        Action<string, string, TreeNodeKind, string?> addNode,
+        IReadOnlyDictionary<Guid, string>? jobNodeIds = null)
     {
         if (runOutputs is not { Count: > 0 }) return;
 
@@ -132,7 +229,10 @@ public sealed class DecisionTreeAssembler
             if (!seen.Contains(id))
             {
                 addNode(id, Clip(CleanLabel(o.Label, id)), TreeNodeKind.JobRunOutput, o.Label);
-                edges.Add(new DecisionTreeEdge(rootId, id, ConfidenceTag.Extracted));
+                var parentId = o.JobId is not null && jobNodeIds is not null && jobNodeIds.TryGetValue(o.JobId.Value, out var jobNodeId)
+                    ? jobNodeId
+                    : rootId;
+                edges.Add(new DecisionTreeEdge(parentId, id, ConfidenceTag.Extracted));
                 outputs.Add((id, o.Vector.ToArray()));
             }
         }

@@ -148,10 +148,13 @@ public static class DependencyInjection
         services.AddScoped<IChainRunRepository, EfChainRunRepository>();
         services.AddScoped<IEventRepository, EfEventRepository>();
 
-        // Embeddings: Voyage AI when a key is configured, else a no-op.
+        // Embeddings: Voyage AI when a key is configured, else the cluster shard server
+        // (self-hosted, vectors from the chat model's hidden states), else a no-op.
         // The pgvector-backed run-embedding store self-initializes lazily and degrades if unavailable.
         if (!string.IsNullOrWhiteSpace(configuration["PlaceContext:Voyage:ApiKey"]))
             services.AddSingleton<IEmbeddingGateway, Embeddings.VoyageEmbeddingGateway>();
+        else if (!string.IsNullOrWhiteSpace(configuration["PlaceContext:ClusterChat:Endpoint"]))
+            services.AddSingleton<IEmbeddingGateway, Embeddings.ClusterEmbeddingGateway>();
         else
             services.AddSingleton<IEmbeddingGateway, Embeddings.NullEmbeddingGateway>();
         services.AddScoped<IRunEmbeddingRepository, EfRunEmbeddingRepository>();

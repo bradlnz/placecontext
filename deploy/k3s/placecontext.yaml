@@ -219,6 +219,11 @@ spec:
               value: "qwen3.5-4b"
             - name: PlaceContext__ClusterChat__ShardEndpoints__0
               value: "http://100.83.58.75:8080"
+            # Self-hosted embeddings via the shard server's /v1/embeddings (mean-pooled hidden
+            # states of the chat model). Must equal the model's hidden size — it is used to
+            # create the pgvector columns. Powers RAG + dependency-graph "brain" nodes.
+            - name: PlaceContext__ClusterChat__EmbeddingDimensions
+              value: "2560"
           startupProbe:
             httpGet: { path: /healthz, port: 7700 }
             periodSeconds: 5

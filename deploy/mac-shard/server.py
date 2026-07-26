@@ -272,6 +272,58 @@ def render_chat_prompt(messages):
         )
 
 
+def _mlx_inner_model():
+    """Resolve the submodule that maps token ids → final hidden states
+    (embed_tokens + layers + norm), across mlx-lm model layouts
+    (e.g. <model>.language_model.model for qwen3_5, <model>.model for qwen3)."""
+    candidates = []
+    lm = getattr(model, "language_model", None)
+    if lm is not None and hasattr(lm, "model"):
+        candidates.append(lm.model)
+    if hasattr(model, "model"):
+        candidates.append(model.model)
+    candidates.append(model)
+    for c in candidates:
+        if all(hasattr(c, a) for a in ("embed_tokens", "layers", "norm")):
+            return c
+    raise RuntimeError("Cannot locate transformer body (embed_tokens/layers/norm) on this model")
+
+
+def embed_texts_mlx(texts):
+    """Embed texts via the full model: one forward pass → final hidden states →
+    mean-pool over the sequence → L2-normalize. Single-node mode only."""
+    import mlx.core as mx
+
+    inner = _mlx_inner_model()
+    vectors = []
+    for text in texts:
+        ids = mx.array([tokenizer.encode(text, add_special_tokens=True)[:2048]])
+        hs = inner(ids)  # (1, seq, hidden) — final hidden states, norm included
+        vec = mx.mean(hs, axis=1)[0]
+        vec = vec / mx.sqrt(mx.sum(vec * vec))
+        vec = vec.astype(mx.float32)  # model runs bfloat16 — numpy can't read it directly
+        vectors.append([float(x) for x in np.array(vec)])
+    return vectors
+
+
+def embed_texts_torch(texts):
+    """Torch equivalent of embed_texts_mlx (attention-mask-weighted mean pool)."""
+    import torch
+
+    vectors = []
+    device = next(model.parameters()).device
+    for text in texts:
+        inputs = tokenizer(text, return_tensors="pt", truncation=True, max_length=2048).to(device)
+        with torch.no_grad():
+            out = model.model(**inputs)
+            hs = model.model.norm(out.last_hidden_state)
+            mask = inputs["attention_mask"].unsqueeze(-1).float()
+            vec = (hs * mask).sum(dim=1) / mask.sum(dim=1).clamp(min=1e-9)
+            vec = torch.nn.functional.normalize(vec, p=2, dim=-1)
+        vectors.append(vec[0].cpu().float().tolist())
+    return vectors
+
+
 def chat_mlx(messages, temperature=0.7, top_p=0.9, max_tokens=2048):
     """Generate a chat completion via mlx-lm (full model, single-node)."""
     from mlx_lm import generate
@@ -488,6 +540,39 @@ async def chat(req: ChatRequest):
         }],
         "usage": usage,
         "elapsed_seconds": round(elapsed, 2),
+    }
+
+
+class EmbeddingRequest(BaseModel):
+    model: str = "qwen3.5-4b"
+    input: List[str]
+
+
+@app.post("/v1/embeddings")
+async def embeddings(req: EmbeddingRequest):
+    """OpenAI-compatible embeddings endpoint (single-node mode only).
+
+    Vectors come from the chat model itself (mean-pooled final hidden states,
+    L2-normalized) — a self-hosted semantic signal for RAG/graph linking without
+    a separate embedding model. Also returns the vector size so callers can
+    validate against their configured dimensions.
+    """
+    if model is None or tokenizer is None:
+        raise HTTPException(503, "Model not loaded")
+    if shard_config.total_shards > 1:
+        raise HTTPException(400, "Embeddings are only supported in single-node mode")
+    if not req.input:
+        raise HTTPException(400, "input must be a non-empty list of strings")
+
+    # Cap batch + per-text size defensively (the chat context window is shared).
+    texts = [t[:4000] for t in req.input[:32]]
+    vectors = embed_texts_mlx(texts) if backend == "mlx" else embed_texts_torch(texts)
+
+    return {
+        "object": "list",
+        "data": [{"object": "embedding", "index": i, "embedding": v} for i, v in enumerate(vectors)],
+        "model": req.model,
+        "dimensions": len(vectors[0]) if vectors else 0,
     }
 
 

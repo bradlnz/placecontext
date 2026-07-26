@@ -13,10 +13,17 @@ public sealed class DecisionTreeProvider : IDecisionTreeProvider
     private readonly IToolCallLog _log;
     private readonly DecisionTreeAssembler _assembler;
     private readonly IRunEmbeddingRepository? _runOutputs;
+    private readonly IJobRepository _jobs;
+    private readonly IJobChainRepository _chains;
+    private readonly IDataMappingRepository _mappings;
+    private readonly IProjectDataStore _projectData;
+    private readonly IDataEntityRepository _entities;
 
     public DecisionTreeProvider(
         IProjectRepository projects, IActivityLogRepository ledgers, IDecisionRepository decisions,
         IToolCallLog log, DecisionTreeAssembler assembler,
+        IJobRepository jobs, IJobChainRepository chains, IDataMappingRepository mappings,
+        IProjectDataStore projectData, IDataEntityRepository entities,
         // Optional: when the embedding store is present, embedded run outputs are woven into the graph
         // as semantically-linked "brain" nodes. The graph still assembles fully without it.
         IRunEmbeddingRepository? runOutputs = null)
@@ -26,6 +33,11 @@ public sealed class DecisionTreeProvider : IDecisionTreeProvider
         _decisions = decisions;
         _log = log;
         _assembler = assembler;
+        _jobs = jobs;
+        _chains = chains;
+        _mappings = mappings;
+        _projectData = projectData;
+        _entities = entities;
         _runOutputs = runOutputs;
     }
 
@@ -36,6 +48,22 @@ public sealed class DecisionTreeProvider : IDecisionTreeProvider
 
         var ledger = await _ledgers.GetForProjectAsync(projectId, ct);
         var decisions = await _decisions.ListForProjectAsync(projectId, ct);
+
+        // Structural lineage: jobs, the chains they belong to, the tables they write (data mappings),
+        // and the project's tables. This is the dependency graph of the data platform itself.
+        var jobs = await _jobs.ListForProjectAsync(projectId.Value, ct);
+        var chains = await _chains.ListForProjectAsync(projectId.Value, ct);
+        var mappings = await _mappings.ListForProjectAsync(projectId.Value, ct);
+        var entities = await _entities.ListForProjectAsync(projectId.Value, ct);
+        IReadOnlyList<string> tables = Array.Empty<string>();
+        try
+        {
+            tables = (await _projectData.ListTablesAsync(projectId.Value, ct)).Select(t => t.Name).ToList();
+        }
+        catch
+        {
+            // Project data store may be unavailable/unprovisioned — the graph still assembles without it.
+        }
 
         // The tool-call log is shared across projects; keep only this project's entries.
         var key = projectId.Value.ToString();
@@ -53,10 +81,11 @@ public sealed class DecisionTreeProvider : IDecisionTreeProvider
             var embeddings = await _runOutputs.ListForProjectAsync(projectId.Value, ct: ct);
             runOutputs = embeddings
                 .Where(e => e.Vector.Length > 0)
-                .Select(e => new RunOutputNode(e.JobRunId.ToString("N")[..8], e.Text, e.Vector))
+                .Select(e => new RunOutputNode(e.JobRunId.ToString("N")[..8], e.Text, e.Vector, e.JobId))
                 .ToList();
         }
 
-        return _assembler.Assemble(project.Name, decisions, ledger, activity, runOutputs);
+        return _assembler.Assemble(project.Name, decisions, ledger, activity, runOutputs,
+            jobs, chains, mappings, tables, entities);
     }
 }

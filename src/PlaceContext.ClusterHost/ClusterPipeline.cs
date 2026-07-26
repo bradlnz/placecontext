@@ -53,6 +53,26 @@ public sealed class ClusterPipeline
         yield return "[error: multi-shard pipeline not yet supported in ClusterHost]";
     }
 
+    public async Task<IReadOnlyList<float[]>> EmbedAsync(IReadOnlyList<string> texts, CancellationToken ct)
+    {
+        var shards = _opts.ShardEndpoints.Select(e => e.TrimEnd('/')).ToArray();
+        if (shards.Length == 0 || texts.Count == 0) return Array.Empty<float[]>();
+        if (shards.Length > 1)
+            _log.LogWarning("Embeddings use the first shard only — multi-shard pipeline is not supported");
+
+        var client = _http.CreateClient();
+        client.Timeout = TimeSpan.FromMinutes(2);
+        var payload = new { model = _opts.Model, input = texts };
+        using var resp = await client.PostAsJsonAsync($"{shards[0]}/v1/embeddings", payload, J, ct);
+        resp.EnsureSuccessStatusCode();
+
+        using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync(ct));
+        return doc.RootElement.GetProperty("data").EnumerateArray()
+            .OrderBy(e => e.GetProperty("index").GetInt32())
+            .Select(e => e.GetProperty("embedding").EnumerateArray().Select(v => (float)v.GetDouble()).ToArray())
+            .ToList();
+    }
+
     private async IAsyncEnumerable<string> StreamSingleShard(
         HttpClient client, string url, ClusterChatRequest req,
         float temp, float topP, int maxTokens,

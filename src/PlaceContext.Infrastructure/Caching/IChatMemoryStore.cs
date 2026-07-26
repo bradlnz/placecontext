@@ -40,7 +40,8 @@ public sealed record ChatMemoryMessage(
     string? AttachmentName = null,
     string? AttachmentKey = null,
     string? AttachmentContentType = null,
-    long AttachmentSizeBytes = 0);
+    long AttachmentSizeBytes = 0,
+    string? Thinking = null);
 
 /// <summary>A tool call within a message.</summary>
 public sealed record ChatMemoryToolCall(

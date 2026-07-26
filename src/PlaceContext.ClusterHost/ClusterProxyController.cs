@@ -56,6 +56,22 @@ public sealed class ClusterProxyController : ControllerBase
         }
     }
 
+    [HttpPost("embeddings")]
+    [AllowAnonymous]
+    public async Task<IActionResult> Embeddings([FromBody] ClusterEmbedRequest req)
+    {
+        try
+        {
+            var vectors = await _pipeline.EmbedAsync(req.Input, HttpContext.RequestAborted);
+            return Ok(new { vectors, dimensions = vectors.Count > 0 ? vectors[0].Length : 0 });
+        }
+        catch (Exception ex)
+        {
+            _log.LogError(ex, "Pipeline embeddings failed");
+            return StatusCode(502, new { error = ex.Message });
+        }
+    }
+
     [HttpPost("chat/stream")]
     [AllowAnonymous]
     public async Task ChatStream([FromBody] ClusterChatRequest req)

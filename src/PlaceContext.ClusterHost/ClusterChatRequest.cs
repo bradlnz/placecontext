@@ -15,3 +15,8 @@ public sealed class ClusterMessageDto
     [JsonPropertyName("role")] public string Role { get; set; } = "";
     [JsonPropertyName("content")] public string Content { get; set; } = "";
 }
+
+public sealed class ClusterEmbedRequest
+{
+    [JsonPropertyName("input")] public List<string> Input { get; set; } = new();
+}

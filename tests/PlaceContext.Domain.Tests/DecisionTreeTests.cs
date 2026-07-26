@@ -92,4 +92,115 @@ public class DecisionTreeTests
 
         Assert.Contains("hot.cs", tree.Answer("what are the hotspots?"));
     }
+
+    [Fact]
+    public void Lineage_links_chains_jobs_and_the_tables_jobs_write()
+    {
+        var pid = ProjectId.New();
+        var map = new MapSpec("img", new[] { "{}" }, new Dictionary<string, string>());
+        var jobA = Job.Create(pid.Value, "scrape", null, map, null, 1, ExitCodePolicy.Default, T0);
+        var jobB = Job.Create(pid.Value, "feasibility", null, map, null, 1, ExitCodePolicy.Default, T0);
+        var chain = JobChain.Create(pid.Value, "nightly", null, new[] { jobA.Id, jobB.Id }, T0);
+        var mapping = DataMapping.Create(pid.Value, jobB.Id, "feasibility_matrix", null,
+            new[] { new DataFieldMapping("$.margin", "margin_pct", "numeric") }, T0);
+
+        var tree = new DecisionTreeAssembler().Assemble(
+            ProjectName.From("alpha"), Array.Empty<Decision>(), ActivityLog.Start(pid),
+            Array.Empty<ToolActivity>(), runOutputs: null,
+            jobs: new[] { jobA, jobB }, chains: new[] { chain },
+            mappings: new[] { mapping }, tables: new[] { "feasibility_matrix", "job_run_data" });
+
+        var chainId = "chain:" + chain.Id.ToString("N");
+        var jobAId = "job:" + jobA.Id.ToString("N");
+        var jobBId = "job:" + jobB.Id.ToString("N");
+
+        Assert.Equal(2, tree.Nodes.Count(n => n.Kind == TreeNodeKind.Job));
+        Assert.Single(tree.Nodes, n => n.Kind == TreeNodeKind.Chain);
+        Assert.Equal(2, tree.Nodes.Count(n => n.Kind == TreeNodeKind.Table));
+
+        // Chain membership, stage-to-stage dependency, job→table lineage.
+        Assert.Contains(tree.Edges, e => e.ParentId == "root" && e.ChildId == chainId);
+        Assert.Contains(tree.Edges, e => e.ParentId == chainId && e.ChildId == jobAId);
+        Assert.Contains(tree.Edges, e => e.ParentId == jobAId && e.ChildId == jobBId);
+        Assert.Contains(tree.Edges, e => e.ParentId == jobBId && e.ChildId == "table:feasibility_matrix");
+
+        // Chained jobs do NOT also hang off the root; the unmapped table does.
+        Assert.DoesNotContain(tree.Edges, e => e.ParentId == "root" && e.ChildId == jobAId);
+        Assert.DoesNotContain(tree.Edges, e => e.ParentId == "root" && e.ChildId == jobBId);
+        Assert.Contains(tree.Edges, e => e.ParentId == "root" && e.ChildId == "table:job_run_data");
+    }
+
+    [Fact]
+    public void Unchained_jobs_hang_off_the_root()
+    {
+        var pid = ProjectId.New();
+        var map = new MapSpec("img", new[] { "{}" }, new Dictionary<string, string>());
+        var job = Job.Create(pid.Value, "ad-hoc", null, map, null, 1, ExitCodePolicy.Default, T0);
+
+        var tree = new DecisionTreeAssembler().Assemble(
+            ProjectName.From("alpha"), Array.Empty<Decision>(), ActivityLog.Start(pid),
+            Array.Empty<ToolActivity>(), jobs: new[] { job });
+
+        Assert.Contains(tree.Edges, e => e.ParentId == "root" && e.ChildId == "job:" + job.Id.ToString("N"));
+    }
+
+    [Fact]
+    public void Run_outputs_link_to_their_job_when_the_job_is_known()
+    {
+        var pid = ProjectId.New();
+        var map = new MapSpec("img", new[] { "{}" }, new Dictionary<string, string>());
+        var job = Job.Create(pid.Value, "nightly etl", null, map, null, 1, ExitCodePolicy.Default, T0);
+        var runOutputs = new[]
+        {
+            new RunOutputNode("aaaaaaaa", "## Organized run output: nightly etl", new[] { 1f, 0f }, job.Id),
+        };
+
+        var tree = new DecisionTreeAssembler().Assemble(
+            ProjectName.From("alpha"), Array.Empty<Decision>(), ActivityLog.Start(pid),
+            Array.Empty<ToolActivity>(), runOutputs, jobs: new[] { job });
+
+        var jobId = "job:" + job.Id.ToString("N");
+        Assert.Contains(tree.Edges, e => e.ParentId == jobId && e.ChildId == "runoutput:aaaaaaaa");
+        Assert.DoesNotContain(tree.Edges, e => e.ParentId == "root" && e.ChildId == "runoutput:aaaaaaaa");
+    }
+
+    [Fact]
+    public void Entities_link_to_their_table_and_to_related_entities()
+    {
+        var pid = ProjectId.New();
+        var sites = DataEntity.Create(pid.Value, "Sites", "feasibility_matrix", "address",
+            Array.Empty<EntityRelation>(), T0);
+        var listings = DataEntity.Create(pid.Value, "Listings", "listings", "address",
+            new[] { new EntityRelation("address", "Sites", "address") }, T0);
+
+        var tree = new DecisionTreeAssembler().Assemble(
+            ProjectName.From("alpha"), Array.Empty<Decision>(), ActivityLog.Start(pid),
+            Array.Empty<ToolActivity>(), entities: new[] { sites, listings });
+
+        var sitesId = "entity:" + sites.Id.ToString("N");
+        var listingsId = "entity:" + listings.Id.ToString("N");
+
+        Assert.Equal(2, tree.Nodes.Count(n => n.Kind == TreeNodeKind.Entity));
+        // Sites' table is not in the graph → hangs off the root; Listings' table isn't either.
+        Assert.Contains(tree.Edges, e => e.ParentId == "root" && e.ChildId == sitesId);
+        // Declared relation: Listings → Sites.
+        Assert.Contains(tree.Edges, e => e.ParentId == listingsId && e.ChildId == sitesId);
+    }
+
+    [Fact]
+    public void Entities_attach_to_their_table_node_when_the_table_is_in_the_graph()
+    {
+        var pid = ProjectId.New();
+        var sites = DataEntity.Create(pid.Value, "Sites", "feasibility_matrix", "address",
+            Array.Empty<EntityRelation>(), T0);
+
+        var tree = new DecisionTreeAssembler().Assemble(
+            ProjectName.From("alpha"), Array.Empty<Decision>(), ActivityLog.Start(pid),
+            Array.Empty<ToolActivity>(),
+            tables: new[] { "feasibility_matrix" }, entities: new[] { sites });
+
+        var sitesId = "entity:" + sites.Id.ToString("N");
+        Assert.Contains(tree.Edges, e => e.ParentId == "table:feasibility_matrix" && e.ChildId == sitesId);
+        Assert.DoesNotContain(tree.Edges, e => e.ParentId == "root" && e.ChildId == sitesId);
+    }
 }

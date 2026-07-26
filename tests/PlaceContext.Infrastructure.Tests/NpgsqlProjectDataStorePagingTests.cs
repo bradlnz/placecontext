@@ -64,6 +64,37 @@ public class NpgsqlProjectDataStorePagingTests
 
         Assert.Equal(" WHERE \"Order\"::text ILIKE @search OR \"select\"::text ILIKE @search", clause);
     }
+
+    [Fact]
+    public void BuildOrderByClause_falls_back_to_first_column_when_no_sort_is_given()
+    {
+        Assert.Equal(" ORDER BY 1", NpgsqlProjectDataStore.BuildOrderByClause(new[] { "name" }, null, false));
+        Assert.Equal(" ORDER BY 1", NpgsqlProjectDataStore.BuildOrderByClause(new[] { "name" }, "", false));
+        Assert.Equal(" ORDER BY 1", NpgsqlProjectDataStore.BuildOrderByClause(new[] { "name" }, "   ", true));
+    }
+
+    [Fact]
+    public void BuildOrderByClause_quotes_a_valid_sort_column_and_keeps_first_column_as_tiebreaker()
+    {
+        Assert.Equal(" ORDER BY \"amount\" ASC NULLS LAST, 1",
+            NpgsqlProjectDataStore.BuildOrderByClause(new[] { "id", "amount" }, "amount", false));
+        Assert.Equal(" ORDER BY \"amount\" DESC NULLS LAST, 1",
+            NpgsqlProjectDataStore.BuildOrderByClause(new[] { "id", "amount" }, "amount", true));
+    }
+
+    [Fact]
+    public void BuildOrderByClause_rejects_columns_that_do_not_exist_so_nothing_is_interpolated()
+    {
+        // Anything not in the table's actual column list — including injection attempts —
+        // falls back to the default ordering and never reaches the SQL text.
+        var evil = "amount; DROP TABLE users--";
+        var clause = NpgsqlProjectDataStore.BuildOrderByClause(new[] { "id", "amount" }, evil, false);
+
+        Assert.Equal(" ORDER BY 1", clause);
+        Assert.DoesNotContain("DROP", clause);
+        // Case must match exactly (Postgres identifiers are case-sensitive when quoted).
+        Assert.Equal(" ORDER BY 1", NpgsqlProjectDataStore.BuildOrderByClause(new[] { "id", "amount" }, "AMOUNT", false));
+    }
 }
 
 /// <summary>

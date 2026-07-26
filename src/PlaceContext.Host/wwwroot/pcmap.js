@@ -17,7 +17,20 @@ window.pcmap = (function () {
     try { spec = typeof specRaw === 'string' ? JSON.parse(specRaw) : specRaw; }
     catch { return; }
 
-    specs[containerId] = spec;
+    // Blazor can replace the container element on re-render (streaming updates, session
+    // loads) — the old Leaflet instance then sits on a detached node and the visible div
+    // stays blank. Cheap no-op only when the SAME element is still initialized with the
+    // SAME spec; otherwise tear down and rebuild.
+    const specKey = JSON.stringify(spec);
+    if (maps[containerId] && maps[containerId]._el === el && specs[containerId] === specKey) return;
+    if (maps[containerId]) {
+      try { maps[containerId].remove(); } catch { /* already detached */ }
+      delete maps[containerId];
+    }
+    // A recycled element Leaflet half-initialized earlier: wipe its state before re-creating.
+    if (el._leaflet_id) { try { el._leaflet_id = null; } catch { /* ignore */ } el.innerHTML = ''; }
+
+    specs[containerId] = specKey;
     el.innerHTML = '';
 
     const t = tokens();
@@ -83,6 +96,7 @@ window.pcmap = (function () {
 
     // Force a re-render after layout settles
     setTimeout(() => map.invalidateSize(), 100);
+    map._el = el;
     maps[containerId] = map;
   }
 

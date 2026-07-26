@@ -62,7 +62,7 @@ public class ProjectAnalyticsTests
             => Task.FromResult(0);
 
         public Task<ProjectTablePageResult> QueryTablePageAsync(Guid projectId, string tableName, string? search,
-            int page, int pageSize, CancellationToken ct = default)
+            int page, int pageSize, string? sortColumn = null, bool sortDescending = false, CancellationToken ct = default)
             => throw new NotSupportedException();
     }
 
@@ -218,7 +218,7 @@ public class ProjectAnalyticsTests
             => Task.FromResult(0);
 
         public Task<ProjectTablePageResult> QueryTablePageAsync(Guid projectId, string tableName, string? search,
-            int page, int pageSize, CancellationToken ct = default)
+            int page, int pageSize, string? sortColumn = null, bool sortDescending = false, CancellationToken ct = default)
             => throw new NotSupportedException();
     }
 }

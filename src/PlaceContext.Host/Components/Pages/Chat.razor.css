@@ -144,6 +144,95 @@
     background: var(--border);
 }
 
+/* Side panel artifact gallery */
+.artifact-item {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 6px 8px;
+    border-radius: 6px;
+    font-size: 0.78rem;
+    color: var(--text);
+    text-decoration: none;
+    border: 1px solid transparent;
+}
+
+.artifact-item:hover {
+    background: var(--bg-3);
+    border-color: var(--border);
+}
+
+.artifact-item svg {
+    flex-shrink: 0;
+    color: var(--muted);
+}
+
+.artifact-item .artifact-title {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.artifact-item .artifact-kind {
+    flex-shrink: 0;
+    font-size: 0.65rem;
+    font-family: var(--mono);
+    color: var(--muted);
+}
+
+/* Collapsible thinking view */
+.thinking-expandable {
+    margin: 6px 0;
+    border: 1px dashed var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.thinking-summary {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    font-size: 0.75rem;
+    font-family: var(--mono);
+    font-style: italic;
+    color: var(--muted);
+    cursor: pointer;
+    user-select: none;
+    list-style: none;
+}
+
+.thinking-summary::-webkit-details-marker {
+    display: none;
+}
+
+.thinking-summary svg {
+    transition: transform 0.15s;
+    flex-shrink: 0;
+}
+
+.thinking-expandable[open] > .thinking-summary svg {
+    transform: rotate(90deg);
+}
+
+.thinking-summary:hover {
+    background: var(--bg-3);
+}
+
+.thinking-content {
+    padding: 8px 10px;
+    font-size: 0.8rem;
+    color: var(--muted);
+    font-style: italic;
+    white-space: pre-wrap;
+    word-break: break-word;
+    border-top: 1px dashed var(--border);
+    max-height: 320px;
+    overflow-y: auto;
+}
+
 .tc-badge {
     font-size: 0.6rem;
     padding: 1px 5px;

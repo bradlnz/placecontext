@@ -46,9 +46,11 @@ public interface IProjectDataStore
     /// A server-side paginated, searchable page of one table's rows — the entity Records tab.
     /// <paramref name="search"/> (when non-empty) is bound as a query parameter and matched
     /// case-insensitively against every column cast to text; it is never concatenated into SQL.
+    /// <paramref name="sortColumn"/> must be one of the table's actual columns — anything else
+    /// falls back to the default first-column ordering (it is never interpolated into SQL).
     /// </summary>
     Task<ProjectTablePageResult> QueryTablePageAsync(Guid projectId, string tableName, string? search,
-        int page, int pageSize, CancellationToken ct = default);
+        int page, int pageSize, string? sortColumn = null, bool sortDescending = false, CancellationToken ct = default);
 
     /// <summary>The project's tables with an approximate row count, name-sorted.</summary>
     Task<IReadOnlyList<ProjectTableInfo>> ListTablesAsync(Guid projectId, CancellationToken ct = default);
