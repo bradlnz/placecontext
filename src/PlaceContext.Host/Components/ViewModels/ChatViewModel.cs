@@ -114,6 +114,8 @@ public sealed class ChatViewModel : PageViewModel
 
     public bool GatewayIsCluster => _gateway is ClusterChatGateway;
 
+    public bool GatewayReady => _gateway is ClusterChatGateway cg ? cg.IsEnabled : _gateway.IsEnabled;
+
     public IChatGateway Gateway => _gateway;
 
     // ── Lifecycle ────────────────────────────────────────────────────────────

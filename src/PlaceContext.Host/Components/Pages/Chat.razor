@@ -50,7 +50,7 @@
                 {
                     <div class="empty-note chat-empty">
                         <p>Ask me about your project data, job runs, or request a graph.</p>
-                        @if (Vm.ProjectId.HasValue)
+                        @if (Vm.ProjectId.HasValue && Vm.GatewayReady)
                         {
                             <div class="starter-actions">
                                 <button class="starter-btn" @onclick="@(() => StarterPromptAsync("Give me an overview of this project"))">
