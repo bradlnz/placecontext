@@ -209,7 +209,20 @@
                                         }
                                     </div>
                                 }
-                                <div class="msg-content">@((MarkupString)FormatContent(msg.Content))</div>
+                                @if (!string.IsNullOrWhiteSpace(msg.Thinking))
+                                {
+                                    <details class="thinking-expandable">
+                                        <summary class="thinking-summary">
+                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M9 18l6-6-6-6"/></svg>
+                                            <span>Thinking</span>
+                                        </summary>
+                                        <div class="thinking-content">@msg.Thinking</div>
+                                    </details>
+                                }
+                                @if (!string.IsNullOrWhiteSpace(msg.Content))
+                                {
+                                    <div class="msg-content">@((MarkupString)FormatContent(msg.Content))</div>
+                                }
                                 @{
                                     var parsedOptions = ParseNumberedOptions(msg.Content);
                                     if (parsedOptions.Count > 0 && msg.Role == "assistant" && !_streaming)
@@ -285,7 +298,21 @@
                             }
                             else if (!string.IsNullOrEmpty(_streamBuffer))
                             {
-                                <div class="msg-content">@((MarkupString)FormatContent(_streamBuffer))</div>
+                                var streamSplit = SplitThinking(_streamBuffer);
+                                @if (!string.IsNullOrWhiteSpace(streamSplit.Thinking))
+                                {
+                                    <details class="thinking-expandable" open>
+                                        <summary class="thinking-summary">
+                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M9 18l6-6-6-6"/></svg>
+                                            <span>Thinking…</span>
+                                        </summary>
+                                        <div class="thinking-content">@streamSplit.Thinking</div>
+                                    </details>
+                                }
+                                @if (!string.IsNullOrWhiteSpace(streamSplit.Answer))
+                                {
+                                    <div class="msg-content">@((MarkupString)FormatContent(streamSplit.Answer))</div>
+                                }
                             }
                         </div>
                     </div>
@@ -908,6 +935,7 @@
                 {
                     var msg = new AgentMessage(m.Role, m.Content)
                     {
+                        Thinking = m.Thinking,
                         AttachmentName = m.AttachmentName,
                         AttachmentKey = m.AttachmentKey,
                         AttachmentContentType = m.AttachmentContentType,
@@ -939,7 +967,7 @@
                 m.Role, m.Content, DateTimeOffset.Now,
                 m.ToolCalls.Select(tc => new ChatMemoryToolCall(
                     tc.ToolName, tc.Args, tc.Status.ToString(), tc.Result, tc.ResultType)).ToList(),
-                m.AttachmentName, m.AttachmentKey, m.AttachmentContentType, m.AttachmentSizeBytes)).ToList(),
+                m.AttachmentName, m.AttachmentKey, m.AttachmentContentType, m.AttachmentSizeBytes, m.Thinking)).ToList(),
             DateTimeOffset.Now, DateTimeOffset.Now);
         try { await MemoryStore.SaveSessionAsync(_sessionId.Value, memory); }
         catch { }
@@ -1044,6 +1072,13 @@
                     {
                         _streamBuffer += token;
                         tokenCount++;
+                        if (IsRepetitionLoopTail(_streamBuffer))
+                        {
+                            // Model is stuck in a repetition loop — stop the stream and
+                            // keep only the content before the loop started.
+                            _streamBuffer = TruncateRepeatedLines(_streamBuffer);
+                            break;
+                        }
                         await InvokeAsync(StateHasChanged);
                         await ScrollToBottom();
                     }
@@ -1128,10 +1163,11 @@
                     toolResults.Append("\n\n");
                 }
 
-                // Extract text content (strip tool call syntax and model noise)
+                // Extract text content (strip tool call syntax), split thinking from the answer
                 var textContent = System.Text.RegularExpressions.Regex.Replace(_streamBuffer, @"\[\[tool:[^\]]*\]\]", "").Trim();
                 var rawCleaned = textContent;
-                textContent = CleanAssistantOutput(textContent);
+                var split = SplitThinking(textContent);
+                textContent = split.Answer;
                 // If content was stripped because it was all reasoning (not tools),
                 // leave it empty — the hallucination guard will catch it and force a retry.
                 // Only add the quip if there truly was no tool call AND the raw content wasn't reasoning.
@@ -1139,6 +1175,7 @@
                     textContent = FriendlyLoadingQuip();
 
                 var assistantMsg = new AgentMessage("assistant", textContent);
+                assistantMsg.Thinking = string.IsNullOrWhiteSpace(split.Thinking) ? null : split.Thinking;
                 assistantMsg.ToolCalls.AddRange(toolCalls);
                 _messages.Add(assistantMsg);
                 _messages.Add(new AgentMessage("system", toolResults.ToString()));
@@ -1150,12 +1187,15 @@
             // Ensure we always have a final assistant message
             if (_messages.Count == 0 || _messages.Last().Role != "assistant")
             {
-                var finalContent = string.IsNullOrWhiteSpace(_streamBuffer)
+                var finalSplit = string.IsNullOrWhiteSpace(_streamBuffer)
+                    ? (Thinking: "", Answer: "")
+                    : SplitThinking(_streamBuffer);
+                var finalContent = string.IsNullOrWhiteSpace(finalSplit.Answer)
                     ? FriendlyLoadingQuip()
-                    : CleanAssistantOutput(_streamBuffer);
-                if (string.IsNullOrWhiteSpace(finalContent))
-                    finalContent = FriendlyLoadingQuip();
-                _messages.Add(new AgentMessage("assistant", finalContent));
+                    : finalSplit.Answer;
+                var finalMsg = new AgentMessage("assistant", finalContent);
+                finalMsg.Thinking = string.IsNullOrWhiteSpace(finalSplit.Thinking) ? null : finalSplit.Thinking;
+                _messages.Add(finalMsg);
             }
 
             // ── Hallucination guard ──────────────────────────────────────
@@ -1188,6 +1228,11 @@
                             await foreach (var token in cg2.ChatStreamAsync(messages, settings, ct))
                             {
                                 _streamBuffer += token;
+                                if (IsRepetitionLoopTail(_streamBuffer))
+                                {
+                                    _streamBuffer = TruncateRepeatedLines(_streamBuffer);
+                                    break;
+                                }
                                 await InvokeAsync(StateHasChanged);
                                 await ScrollToBottom();
                             }
@@ -1196,10 +1241,13 @@
                         {
                             _streamBuffer = await Gateway.ChatAsync(messages, settings, ct);
                         }
-                        var summarised = CleanAssistantOutput(_streamBuffer);
+                        var sumSplit = SplitThinking(_streamBuffer);
+                        var summarised = TruncateRepeatedLines(sumSplit.Answer);
                         if (!string.IsNullOrWhiteSpace(summarised))
                         {
-                            _messages.Add(new AgentMessage("assistant", summarised));
+                            var sumMsg = new AgentMessage("assistant", summarised);
+                            sumMsg.Thinking = string.IsNullOrWhiteSpace(sumSplit.Thinking) ? null : sumSplit.Thinking;
+                            _messages.Add(sumMsg);
                         }
                     }
                     else
@@ -1226,6 +1274,11 @@
                         await foreach (var token in cg3.ChatStreamAsync(messages, settings, ct))
                         {
                             _streamBuffer += token;
+                            if (IsRepetitionLoopTail(_streamBuffer))
+                            {
+                                _streamBuffer = TruncateRepeatedLines(_streamBuffer);
+                                break;
+                            }
                             await InvokeAsync(StateHasChanged);
                             await ScrollToBottom();
                         }
@@ -1234,10 +1287,17 @@
                     {
                         _streamBuffer = await Gateway.ChatAsync(messages, settings, ct);
                     }
-                    var retried = CleanAssistantOutput(_streamBuffer);
+                    var retrySplit = SplitThinking(_streamBuffer);
+                    var retried = TruncateRepeatedLines(retrySplit.Answer);
                     if (!string.IsNullOrWhiteSpace(retried))
                     {
-                        _messages.Add(new AgentMessage("assistant", retried));
+                        // The retry is not re-prompted again — if it's still looping,
+                        // don't show the garbage to the user.
+                        if (DetectGenericHallucination(retried).Detected)
+                            retried = "The model got stuck repeating itself — please try asking again.";
+                        var retryMsg = new AgentMessage("assistant", retried);
+                        retryMsg.Thinking = string.IsNullOrWhiteSpace(retrySplit.Thinking) ? null : retrySplit.Thinking;
+                        _messages.Add(retryMsg);
                     }
                     _streaming = false;
                     _streamBuffer = "";
@@ -1439,21 +1499,39 @@
 
     /// <summary>Removes chain-of-thought / meta-commentary and known backend error strings
     /// that some small models emit instead of an answer.</summary>
-    private static string CleanAssistantOutput(string raw)
+    private static string CleanAssistantOutput(string raw) => SplitThinking(raw).Answer;
+
+    /// <summary>Splits raw model output into the model's thinking (chain-of-thought,
+    /// meta-commentary, reasoning tags) and the actual answer. Thinking is kept so the
+    /// UI can show it in a collapsible view instead of discarding it.</summary>
+    private static (string Thinking, string Answer) SplitThinking(string raw)
     {
-        if (string.IsNullOrWhiteSpace(raw)) return raw;
+        if (string.IsNullOrWhiteSpace(raw)) return ("", raw ?? "");
+        var thinking = new List<string>();
 
-        // Strip explicit thinking/reasoning tags first (uses hex escapes to avoid
+        // Extract explicit thinking/reasoning tag blocks (uses hex escapes to avoid
         // the literal angle-bracket sequences that confuse the razor parser).
-        var tagPattern = @"\x3c(?:think|reasoning|reflection)\b[^>]*>.*?\x3c/(?:think|reasoning|reflection)\x3e";
-        raw = System.Text.RegularExpressions.Regex.Replace(raw, tagPattern, "",
-            System.Text.RegularExpressions.RegexOptions.Singleline | System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        // Also matches an unterminated block to end-of-string (stream cut off mid-think).
+        var tagPattern = @"\x3c(?:think|reasoning|reflection)\b[^>]*>(.*?)(?:\x3c/(?:think|reasoning|reflection)\x3e|$)";
+        raw = System.Text.RegularExpressions.Regex.Replace(raw, tagPattern, m =>
+        {
+            var inner = m.Groups[1].Value.Trim();
+            if (inner.Length > 0) thinking.Add(inner);
+            return "";
+        }, System.Text.RegularExpressions.RegexOptions.Singleline | System.Text.RegularExpressions.RegexOptions.IgnoreCase);
 
-        // Strip raw reasoning that isn't wrapped in tags — detect nested thinking patterns
+        // Drop stray closing tags (e.g. a lone "</think>" left after stripping).
+        raw = System.Text.RegularExpressions.Regex.Replace(raw, @"\x3c/(?:think|reasoning|reflection)\x3e", "",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+        // Raw reasoning that isn't wrapped in tags — detect nested thinking patterns
         // where the model outputs its reasoning process about tool calls instead of calling them.
-        // If the entire response is thinking lines with no [[tool:]] calls, nuke it all.
+        // If the entire response is thinking lines with no [[tool:]] calls, it's all thinking.
         if (!System.Text.RegularExpressions.Regex.IsMatch(raw, @"\[\[tool:[^\]]*\]\]") && IsAllReasoning(raw))
+        {
+            if (!string.IsNullOrWhiteSpace(raw)) thinking.Add(raw.Trim());
             raw = "";
+        }
 
         var lines = raw.Split('\n');
         var noiseStarts = new[]
@@ -1472,14 +1550,27 @@
             "first, let me call", "let me call", "i'll call", "i should call",
             "the correct tool", "the right tool", "using the tool"
         };
-        var cleaned = lines
-            .Where(l => !noiseStarts.Any(p => l.TrimStart().StartsWith(p, StringComparison.OrdinalIgnoreCase)))
-            .ToList();
+        var cleaned = new List<string>();
+        foreach (var l in lines)
+        {
+            // Noise lines are model meta-commentary — move them to the thinking view
+            // instead of dropping them. Error strings stay dropped.
+            if (noiseStarts.Any(p => l.TrimStart().StartsWith(p, StringComparison.OrdinalIgnoreCase)))
+            {
+                var t = l.Trim();
+                if (t.Length > 0 && !t.StartsWith("[", StringComparison.Ordinal))
+                    thinking.Add(t);
+            }
+            else
+            {
+                cleaned.Add(l);
+            }
+        }
         var result = string.Join("\n", cleaned).Trim();
 
         // Collapse a leading "answer:" or similar marker.
         result = System.Text.RegularExpressions.Regex.Replace(result, @"^(answer|final answer)[:\-]\s*", "", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
-        return result;
+        return (string.Join("\n", thinking).Trim(), result);
     }
 
     /// <summary>Returns true if the content is entirely reasoning/thinking lines
@@ -1548,6 +1639,18 @@
             .Select(m => m.Content)
             .ToList();
 
+        // ── 0. No answer at all: model produced only thinking (or nothing),
+        // so a placeholder quip / empty message is the final response ──────
+        if (content.Length == 0 || FriendlyLoadingQuips.Contains(content))
+        {
+            return new()
+            {
+                Detected = true,
+                Reason = "Model produced no answer — only thinking or an empty response",
+                CorrectionPrompt = "You did not answer the user's question. Answer it directly now, or call a tool with [[tool:name|args]] if you need data. Do not output your reasoning — just the answer or the tool call."
+            };
+        }
+
         // ── 1. Generic linguistic hallucination checks ────────────────────
         var genericResult = DetectGenericHallucination(content);
         if (genericResult.Detected) return genericResult;
@@ -1615,6 +1718,29 @@
             }
         }
 
+        // ── Line repetition: same line/bullet repeated 3+ times in a row ─
+        // Catches degeneration loops like the same bullet printed endlessly.
+        {
+            var significant = content.Split('\n')
+                .Select(NormalizeLineForRepetition)
+                .Where(l => l.Length > 10)
+                .ToList();
+            var run = 1;
+            for (var i = 1; i < significant.Count; i++)
+            {
+                run = significant[i] == significant[i - 1] ? run + 1 : 1;
+                if (run >= 3)
+                {
+                    return new()
+                    {
+                        Detected = true,
+                        Reason = $"Line repetition detected: same line repeated {run}+ times in a row",
+                        CorrectionPrompt = "Your response repeated the same line over and over. State each point once, then stop."
+                    };
+                }
+            }
+        }
+
         // ── Phrase repetition: same 3+ word phrase repeated ──────────────
         if (words.Length >= 6)
         {
@@ -1671,13 +1797,68 @@
                     {
                         Detected = true,
                         Reason = $"Repeated sentence start: '{maxStart.Key}' used {maxStart.Value} times",
-                        CorrectionPrompt = "Your response重复了相同的句子开头. Please vary your sentence structure."
+                        CorrectionPrompt = "Your response repeated the same sentence opening multiple times. Please vary your sentence structure."
                     };
                 }
             }
         }
 
         return new() { Detected = false };
+    }
+
+    /// <summary>Normalizes a line for repetition comparison: strips bullet/number
+    /// markers, collapses whitespace, lowercases.</summary>
+    private static string NormalizeLineForRepetition(string line)
+    {
+        var l = line.Trim().ToLowerInvariant();
+        l = System.Text.RegularExpressions.Regex.Replace(l, @"^(?:[-*•]|\d+[.)])\s*", "");
+        l = System.Text.RegularExpressions.Regex.Replace(l, @"\s+", " ");
+        return l;
+    }
+
+    /// <summary>Detects a repetition loop at the tail of (streaming) content: the same
+    /// normalized line repeated 3+ times in a row at the end of what has arrived so far.
+    /// Used to abort streaming early instead of waiting for max_tokens.</summary>
+    private static bool IsRepetitionLoopTail(string content)
+    {
+        if (string.IsNullOrEmpty(content)) return false;
+        // Only inspect the tail — the buffer is re-checked on every token.
+        var tail = content.Length > 4000 ? content[^4000..] : content;
+        var significant = tail.Split('\n')
+            .Select(NormalizeLineForRepetition)
+            .Where(l => l.Length > 10)
+            .ToList();
+        var run = 1;
+        for (var i = 1; i < significant.Count; i++)
+        {
+            run = significant[i] == significant[i - 1] ? run + 1 : 1;
+            if (run >= 3 && i == significant.Count - 1) return true;
+        }
+        return false;
+    }
+
+    /// <summary>Truncates content at the point where it devolves into a repetition loop
+    /// (same normalized line 3+ times in a row). Keeps everything up to and including
+    /// the first occurrence of the repeated line.</summary>
+    private static string TruncateRepeatedLines(string content)
+    {
+        if (string.IsNullOrWhiteSpace(content)) return content;
+        var lines = content.Split('\n');
+        var significant = lines
+            .Select((l, idx) => (norm: NormalizeLineForRepetition(l), idx))
+            .Where(x => x.norm.Length > 10)
+            .ToList();
+        var run = 1;
+        for (var k = 1; k < significant.Count; k++)
+        {
+            run = significant[k].norm == significant[k - 1].norm ? run + 1 : 1;
+            if (run >= 3)
+            {
+                var firstOccurrenceIndex = significant[k - run + 1].idx;
+                return string.Join("\n", lines.Take(firstOccurrenceIndex + 1)).TrimEnd();
+            }
+        }
+        return content;
     }
 
     /// <summary>Artifact hallucination: get_artifacts returned real artifacts but show_artifact was never called.</summary>
@@ -2354,7 +2535,7 @@
         var tableName = parts.Length > 0 ? parts[0].Trim() : "";
         var page = parts.Length > 1 ? int.Parse(parts[1]) : 1;
         AddActiveAction("query_table", $"Querying {tableName}...");
-        var result = await Svc.QueryProjectTablePageAsync(_projectId!.Value, tableName, null, page, 50, ct);
+        var result = await Svc.QueryProjectTablePageAsync(_projectId!.Value, tableName, null, page, 50, ct: ct);
         var preview = string.Join("\n", result.Rows.Take(3).Select(r => string.Join(", ", r.Take(4))));
         AddFetchedData(tableName, (int)result.TotalCount, preview);
         var sb = new System.Text.StringBuilder();
@@ -2656,7 +2837,7 @@
         {
             try
             {
-                var probe = await Svc.QueryProjectTablePageAsync(_projectId!.Value, tableName, null, 1, 1, ct);
+                var probe = await Svc.QueryProjectTablePageAsync(_projectId!.Value, tableName, null, 1, 1, ct: ct);
                 tableValid = probe.Columns.Count > 0;
             }
             catch { tableValid = false; }
@@ -2693,7 +2874,7 @@
         var columns = new List<string>();
         if (!string.IsNullOrEmpty(column))
         {
-            var probe = await Svc.QueryProjectTablePageAsync(_projectId!.Value, tableName, null, 1, 1, ct);
+            var probe = await Svc.QueryProjectTablePageAsync(_projectId!.Value, tableName, null, 1, 1, ct: ct);
             if (probe.Columns.Any(c => c.Equals(column, StringComparison.OrdinalIgnoreCase)))
             {
                 columns.Add(column);
@@ -2702,12 +2883,12 @@
 
         if (columns.Count == 0)
         {
-            var probe = await Svc.QueryProjectTablePageAsync(_projectId!.Value, tableName, null, 1, 1, ct);
+            var probe = await Svc.QueryProjectTablePageAsync(_projectId!.Value, tableName, null, 1, 1, ct: ct);
             if (probe.Columns.Count == 0)
                 return ToolCallResult.Fail($"Table '{tableName}' has no columns.");
 
             // Only show numeric columns for charting
-            var numericProbe = await Svc.QueryProjectTablePageAsync(_projectId!.Value, tableName, null, 1, 10, ct);
+            var numericProbe = await Svc.QueryProjectTablePageAsync(_projectId!.Value, tableName, null, 1, 10, ct: ct);
             var numericCols = new List<string>();
             for (var i = 0; i < numericProbe.Columns.Count; i++)
             {
@@ -2735,7 +2916,7 @@
         }
 
         // Query data and build chart (single or multi-series)
-        var result = await Svc.QueryProjectTablePageAsync(_projectId!.Value, tableName, null, 1, 100, ct);
+        var result = await Svc.QueryProjectTablePageAsync(_projectId!.Value, tableName, null, 1, 100, ct: ct);
         var labels = new List<string>();
         var seriesList = new List<(string Name, List<double> Values)>();
 
@@ -3407,6 +3588,8 @@ public sealed class AgentMessage
     public int Id { get; }
     public string Role { get; }
     public string Content { get; }
+    /// <summary>The model's chain-of-thought / meta-commentary, shown in a collapsible view.</summary>
+    public string? Thinking { get; set; }
     public List<ToolCallInfo> ToolCalls { get; } = new();
     public string? AttachmentName { get; set; }
     public string? AttachmentKey { get; set; }

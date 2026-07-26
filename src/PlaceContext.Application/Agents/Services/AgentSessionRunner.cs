@@ -66,7 +66,7 @@ public sealed class AgentSessionRunner
             {
                 try
                 {
-                    var page = await _dataStore.QueryTablePageAsync(projectId, sourceTable, null, 1, 200, ct);
+                    var page = await _dataStore.QueryTablePageAsync(projectId, sourceTable, null, 1, 200, ct: ct);
                     rowCount = page.TotalCount;
                     rowsBlock = TableRowsJson.Convert(page.Columns, page.Rows);
                 }

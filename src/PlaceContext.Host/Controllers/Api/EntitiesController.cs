@@ -69,7 +69,7 @@ public sealed class EntitiesController : ControllerBase
         if (entity is null) return NotFound(new { error = $"Unknown entity '{entityName}' in this project." });
 
         var result = await _svc.QueryProjectTablePageAsync(
-            entity.ProjectId, entity.TableName, search, page, pageSize, HttpContext.RequestAborted);
+            entity.ProjectId, entity.TableName, search, page, pageSize, ct: HttpContext.RequestAborted);
 
         return Ok(EntityApiMapper.ToRecords(entity, result));
     }
@@ -92,7 +92,7 @@ public sealed class EntitiesController : ControllerBase
         // narrow to an exact match on the label/first column client-side. Good enough for keys that
         // are unique-ish; avoids building ad-hoc SQL with untrusted identifiers beyond the table name.
         var result = await _svc.QueryProjectTablePageAsync(
-            entity.ProjectId, entity.TableName, key, page: 1, pageSize: 50, HttpContext.RequestAborted);
+            entity.ProjectId, entity.TableName, key, page: 1, pageSize: 50, ct: HttpContext.RequestAborted);
 
         var labelIdx = ResolveLabelIndex(entity, result.Columns);
         var matches = result.Rows

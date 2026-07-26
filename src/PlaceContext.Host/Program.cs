@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.AspNetCore.SignalR;
 using PlaceContext.Host;
 using PlaceContext.Host.Auth;
 using PlaceContext.Application;
@@ -81,6 +82,10 @@ builder.Services.AddInfrastructure(builder.Configuration);
 OAuthKeys.Init(builder.Configuration["PlaceContext:OAuth:SigningKeyPem"]);
 
 builder.Services.AddRazorComponents().AddInteractiveServerComponents();
+// The Blazor SignalR hub defaults to 32 KB for client→server messages. File-switching in the
+// Monaco editor syncs content back via JS interop (getValue), so large code files (>32 KB)
+// blow past the limit and kill the circuit. Raise it to 1 MB.
+builder.Services.Configure<HubOptions>(o => o.MaximumReceiveMessageSize = 100 * 1024 * 1024);
 // Compress dynamic responses (the initial Blazor HTML document is the portal's biggest payload —
 // inline CSS included — and it currently ships uncompressed). Brotli first, gzip fallback. The
 // Host terminates plain HTTP in-cluster (TLS ends at Traefik), so the default no-compression-

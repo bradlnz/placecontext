@@ -58,7 +58,7 @@ public class LaunchpadToolExecutor
         if (tableName.Length == 0)
             return "Error: usage: [[tool:query_table|tableName|page]]";
         var page = parts.Length > 1 && int.TryParse(parts[1].Trim(), out var p) && p > 0 ? p : 1;
-        var result = await _svc.QueryProjectTablePageAsync(projectId, tableName, null, page, 50, ct);
+        var result = await _svc.QueryProjectTablePageAsync(projectId, tableName, null, page, 50, ct: ct);
         var sb = new StringBuilder();
         sb.Append($"Table: {tableName} ({result.TotalCount} rows)\n");
         sb.Append(string.Join(" | ", result.Columns));
