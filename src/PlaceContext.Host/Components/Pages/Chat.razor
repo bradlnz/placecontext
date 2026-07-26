@@ -185,7 +185,7 @@
                                                 <span>@msg.AttachmentName</span>
                                                 @if (msg.AttachmentSizeBytes > 0)
                                                 {
-                                                    <span class="attachment-size">@FormatBytes(msg.AttachmentSizeBytes)</span>
+                                                    <span class="attachment-size">@FormatHelper.Bytes(msg.AttachmentSizeBytes)</span>
                                                 }
                                             </a>
                                         }
@@ -196,7 +196,7 @@
                                                 <span>@msg.AttachmentName</span>
                                                 @if (msg.AttachmentSizeBytes > 0)
                                                 {
-                                                    <span class="attachment-size">@FormatBytes(msg.AttachmentSizeBytes)</span>
+                                                    <span class="attachment-size">@FormatHelper.Bytes(msg.AttachmentSizeBytes)</span>
                                                 }
                                             </span>
                                         }
@@ -472,7 +472,7 @@
                         <h4>Artifacts</h4>
                         @foreach (var a in Vm.PanelArtifacts)
                         {
-                            <a class="artifact-item" href="/runs/@a.RunId/artifacts/@a.Id" target="_blank" title="Open @a.Title (@FormatBytes(a.SizeBytes))">
+                            <a class="artifact-item" href="/runs/@a.RunId/artifacts/@a.Id" target="_blank" title="Open @a.Title (@FormatHelper.Bytes(a.SizeBytes))">
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
                                 <span class="artifact-title">@a.Title</span>
                                 <span class="artifact-kind">@a.Kind</span>
@@ -1013,13 +1013,6 @@
 
     // ── Render helpers (Blazor-specific: MarkupString / RenderFragment) ──
 
-    private static string FormatBytes(long bytes) => bytes switch
-    {
-        < 1024 => $"{bytes} B",
-        < 1024 * 1024 => $"{bytes / 1024.0:0.#} KB",
-        _ => $"{bytes / (1024.0 * 1024.0):0.#} MB",
-    };
-
     private static string FormatToolResult(string result)
     {
         if (string.IsNullOrWhiteSpace(result)) return "<em>Empty result</em>";
@@ -1094,7 +1087,7 @@
             <div class="artifact-header">
                 <span class="artifact-title">{System.Net.WebUtility.HtmlEncode(info.Title)}</span>
                 <span class="artifact-ct">{System.Net.WebUtility.HtmlEncode(info.ContentType)}</span>
-                <span class="artifact-size">{FormatBytes(info.SizeBytes)}</span>
+                <span class="artifact-size">{FormatHelper.Bytes(info.SizeBytes)}</span>
                 <a class="artifact-open" href="{url}" target="_blank" rel="noopener">Open ↗</a>
             </div>
             """;

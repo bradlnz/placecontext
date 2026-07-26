@@ -890,8 +890,11 @@ public sealed class ChatViewModel : PageViewModel
             try { System.Text.Json.JsonDocument.Parse(call.Args); } catch { continue; }
             msg.ToolCalls.Add(new ToolCallInfo
             {
-                ToolName = "render_map", Args = call.Args, Status = AgentToolCallStatus.Completed,
-                Result = call.Args, ResultType = "map",
+                ToolName = "render_map",
+                Args = call.Args,
+                Status = AgentToolCallStatus.Completed,
+                Result = call.Args,
+                ResultType = "map",
             });
         }
     }
@@ -1156,10 +1159,15 @@ public sealed class ChatViewModel : PageViewModel
             if (words[i] == words[i - 1] && words[i - 1] == words[i - 2] && words[i].Length > 2)
                 return new() { Detected = true, Reason = $"Word repetition: '{words[i]}'", CorrectionPrompt = "Your response contained repeated words. Please provide a clear, concise answer without repeating words or phrases." };
         }
-        { var significant = content.Split('\n').Select(NormalizeLineForRepetition).Where(l => l.Length > 10).ToList();
-          var run = 1;
-          for (var i = 1; i < significant.Count; i++) { run = significant[i] == significant[i - 1] ? run + 1 : 1;
-              if (run >= 3) return new() { Detected = true, Reason = $"Line repetition: {run}+ times", CorrectionPrompt = "Your response repeated the same line over and over. State each point once, then stop." }; } }
+        {
+            var significant = content.Split('\n').Select(NormalizeLineForRepetition).Where(l => l.Length > 10).ToList();
+            var run = 1;
+            for (var i = 1; i < significant.Count; i++)
+            {
+                run = significant[i] == significant[i - 1] ? run + 1 : 1;
+                if (run >= 3) return new() { Detected = true, Reason = $"Line repetition: {run}+ times", CorrectionPrompt = "Your response repeated the same line over and over. State each point once, then stop." };
+            }
+        }
         if (words.Length >= 6)
         {
             var phraseCounts = new Dictionary<string, int>();
@@ -1286,12 +1294,12 @@ public sealed class ChatViewModel : PageViewModel
 
     private static readonly string[] FriendlyLoadingQuips = new[]
     {
-        "No worries mate — sussing that out for you…",
-        "Give us a sec — working out what you need…",
+        "Cool sussing that out for you…",
+        "Give us a sec working out what you need…",
         "Righto, figuring out the best way to answer this…",
-        "Hang tight cobber — I'm on it…",
-        "Sweet as — just pulling that together…",
-        "One sec legend — sorting it out…",
+        "Hang tight cobber, I'm on it…",
+        "Sweet as, just pulling that together…",
+        "One sec legend, sorting it out…",
     };
 
     private static string FriendlyLoadingQuip() => FriendlyLoadingQuips[Random.Shared.Next(FriendlyLoadingQuips.Length)];
