@@ -349,6 +349,8 @@
                 <div @ref="_scrollAnchor"></div>
             </div>
 
+            @if (Vm.WorkspaceLoaded)
+            {
             <div class="chat-input-wrap"
                  @ondragover="PreventDefault"
                  @ondragover:preventDefault="true"
@@ -375,6 +377,7 @@
                     </div>
                 }
             </div>
+            }
         </div>
 
         @if (Vm.ShowSidePanel)

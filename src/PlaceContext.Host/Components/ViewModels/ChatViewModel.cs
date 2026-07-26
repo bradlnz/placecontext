@@ -116,6 +116,9 @@ public sealed class ChatViewModel : PageViewModel
 
     public bool GatewayReady => _gateway is ClusterChatGateway cg ? cg.IsEnabled : _gateway.IsEnabled;
 
+    /// <summary>True once sessions, MCP, artifacts, and agent config have finished loading.</summary>
+    public bool WorkspaceLoaded { get; private set; }
+
     public IChatGateway Gateway => _gateway;
 
     // ── Lifecycle ────────────────────────────────────────────────────────────
@@ -147,6 +150,7 @@ public sealed class ChatViewModel : PageViewModel
                 await SelectSessionAsync(Sessions[0]);
         }
         catch { }
+        WorkspaceLoaded = true;
         NotifyStateChanged();
     }
 
