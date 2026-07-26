@@ -1,13 +1,15 @@
 @page "/project/{ProjectId:guid}/data"
 @attribute [Authorize]
 @layout PlaceContext.Host.Components.Layout.ProjectLayout
-@inject IPlaceContextService Svc
+@using PlaceContext.Application.Features
+@using PlaceContext.Application.Ports
+@using PlaceContext.Host.Components.ViewModels
+@using PlaceContext.Host.Components.ViewModels.Helpers
+@using Microsoft.AspNetCore.Components.Forms
+@inject ProjectDataViewModel Vm
 @inject PortalUiState Ui
 @inject NavigationManager Nav
 @inject IJSRuntime JS
-@using PlaceContext.Application.Features
-@using PlaceContext.Application.Ports
-@using Microsoft.AspNetCore.Components.Forms
 
 <PageTitle>PlaceContext — Data</PageTitle>
 
@@ -19,7 +21,7 @@
         <h2 class="head-title">Data</h2>
         <span class="head-sub">this project's own database — create tables, store data, query it with SQL</span>
     </div>
-    @if (_monacoLite)
+    @if (Vm.MonacoLite)
     {
         <div class="monaco-lite-note">basic editor (Monaco CDN unreachable) — SQL still runs.</div>
     }
@@ -30,31 +32,31 @@
         <div class="tables-col">
             <div class="tables-head">
                 <span class="col-label">Tables</span>
-                <button class="dcbtn btn-refresh" @onclick="RefreshTablesAsync" title="Refresh">↻</button>
+                <button class="dcbtn btn-refresh" @onclick="() => Vm.RefreshTablesAsync()" title="Refresh">↻</button>
             </div>
             <div class="new-btns">
-                <button class="dcbtn primary new-btn" @onclick="StartNewTable">+ Table</button>
-                <button class="dcbtn new-btn" @onclick="OpenNewView">+ View</button>
+                <button class="dcbtn primary new-btn" @onclick="() => Vm.StartNewTable()">+ Table</button>
+                <button class="dcbtn new-btn" @onclick="() => Vm.OpenNewView()">+ View</button>
             </div>
             <InputFile OnChange="OnCsvSelected" accept=".csv,text/csv" id="pccsv-input" style="display:none" />
             <label for="pccsv-input" class="dcbtn import-csv-label"
                    title="Create a table from a CSV file">⬆ Import CSV</label>
-            @if (_csvError is not null && _csvImport is null)
+            @if (Vm.CsvError is not null && Vm.CsvImport is null)
             {
-                <div class="csv-error">@_csvError</div>
+                <div class="csv-error">@Vm.CsvError</div>
             }
             <div class="tables-list">
-            @if (!_tablesReady)
+            @if (!Vm.TablesReady)
             {
                 <Skeleton Kind="text" Rows="5" />
             }
-            else if (_tables.Count == 0)
+            else if (Vm.Tables.Count == 0)
             {
                 <div class="empty-tables">
                     No tables yet — click <b>New table</b> or run a <code>CREATE TABLE …</code>.
                 </div>
             }
-            @foreach (var t in _tables)
+            @foreach (var t in Vm.Tables)
             {
                 <div class="dccard table-card">
                     <div class="table-row"
@@ -75,33 +77,33 @@
                     <div class="table-actions">
                         @if (!t.ReadOnly && !t.IsView)
                         {
-                            <button class="dclink" @onclick="@(() => StartEditAsync(t.Name))">edit</button>
-                            <button class="dclink" @onclick="@(() => StartRename(t.Name))">rename</button>
+                            <button class="dclink" @onclick="@(() => Vm.StartEditAsync(t.Name))">edit</button>
+                            <button class="dclink" @onclick="@(() => Vm.StartRename(t.Name))">rename</button>
                         }
                         <button class="dclink" @onclick="@(() => ExportAsync(t.Name))">export</button>
                         @if (t.IsView)
                         {
-                            <button class="dclink link-bad" @onclick="@(() => DropViewAsync(t.Name))">drop</button>
+                            <button class="dclink link-bad" @onclick="@(() => Vm.DropViewAsync(t.Name))">drop</button>
                         }
                         else if (!t.ReadOnly)
                         {
-                            <button class="dclink link-bad" @onclick="@(() => StartDrop(t.Name))">drop</button>
+                            <button class="dclink link-bad" @onclick="@(() => Vm.StartDrop(t.Name))">drop</button>
                         }
                     </div>
-                    @if (_renaming == t.Name)
+                    @if (Vm.Renaming == t.Name)
                     {
                         <div class="rename-row">
-                            <input @bind="_renameTo" @bind:event="oninput" placeholder="new name" class="rename-input" />
-                            <button class="dcbtn btn-sm" @onclick="ConfirmRename">✓</button>
-                            <button class="dcbtn btn-sm" @onclick="@(() => _renaming = null)">✕</button>
+                            <input @bind="Vm.RenameTo" @bind:event="oninput" placeholder="new name" class="rename-input" />
+                            <button class="dcbtn btn-sm" @onclick="() => Vm.ConfirmRenameAsync()">✓</button>
+                            <button class="dcbtn btn-sm" @onclick="() => Vm.CancelRename()">✕</button>
                         </div>
                     }
-                    @if (_dropping == t.Name)
+                    @if (Vm.Dropping == t.Name)
                     {
                         <div class="drop-row">
                             drop @t.Name?
-                            <button class="dcbtn btn-sm" @onclick="ConfirmDrop">yes</button>
-                            <button class="dcbtn btn-sm" @onclick="@(() => _dropping = null)">no</button>
+                            <button class="dcbtn btn-sm" @onclick="() => Vm.ConfirmDropAsync()">yes</button>
+                            <button class="dcbtn btn-sm" @onclick="() => Vm.CancelDrop()">no</button>
                         </div>
                     }
                 </div>
@@ -111,51 +113,51 @@
 
         @* ── Query + results ────────────────────────────────────────────────────────────── *@
         <div class="flex-min">
-            <div id="@EditorId" class="sql-editor"></div>
+            <div id="@ProjectDataViewModel.EditorId" class="sql-editor"></div>
             <div class="run-bar">
-                <button class="dcbtn primary" disabled="@_running" @onclick="RunAsync">@(_running ? "Running…" : "▶ Run (SQL)")</button>
-                @if (_result is { Columns.Count: > 0, Rows.Count: > 0 })
+                <button class="dcbtn primary" disabled="@Vm.Running" @onclick="RunAsync">@(Vm.Running ? "Running…" : "▶ Run (SQL)")</button>
+                @if (Vm.Result is { Columns.Count: > 0, Rows.Count: > 0 })
                 {
-                    <a class="dcbtn export-link" href="@ResultCsvUri()" download="query-result.csv">⬇ Export CSV</a>
+                    <a class="dcbtn export-link" href="@Vm.ResultCsvUri()" download="query-result.csv">⬇ Export CSV</a>
                 }
-                @if (_error is not null)
+                @if (Vm.Error is not null)
                 {
-                    <span class="msg-bad">@_error</span>
+                    <span class="msg-bad">@Vm.Error</span>
                 }
-                else if (_result is not null && _result.Columns.Count == 0)
+                else if (Vm.Result is not null && Vm.Result.Columns.Count == 0)
                 {
-                    <span class="msg-good">OK — @_result.AffectedRows row(s) affected.</span>
+                    <span class="msg-good">OK — @Vm.Result.AffectedRows row(s) affected.</span>
                 }
-                else if (_result is not null)
+                else if (Vm.Result is not null)
                 {
                     <span class="msg-muted">
-                        @_result.Rows.Count row(s)@(_result.Truncated ? " (truncated at 500)" : "")@(_result.AffectedRows > 0 ? $" · {_result.AffectedRows} affected" : "")
+                        @Vm.Result.Rows.Count row(s)@(Vm.Result.Truncated ? " (truncated at 500)" : "")@(Vm.Result.AffectedRows > 0 ? $" · {Vm.Result.AffectedRows} affected" : "")
                     </span>
                 }
             </div>
 
-            @if (_importWarnings.Count > 0)
+            @if (Vm.ImportWarnings.Count > 0)
             {
                 <div class="msg-warn">
-                    <strong>@_importWarnings.Count possible duplicate(s)</strong> — first: @_importWarnings[0]
-                    <button class="dclink" style="margin-left:8px" @onclick="@(() => _importWarnings = Array.Empty<string>())">dismiss</button>
+                    <strong>@Vm.ImportWarnings.Count possible duplicate(s)</strong> — first: @Vm.ImportWarnings[0]
+                    <button class="dclink" style="margin-left:8px" @onclick="() => Vm.DismissImportWarnings()">dismiss</button>
                 </div>
             }
 
-            @if (_result is { Columns.Count: > 0 })
+            @if (Vm.Result is { Columns.Count: > 0 })
             {
                 <div class="result-scroll">
                     <table class="result-table">
                         <thead>
                             <tr>
-                                @foreach (var c in _result.Columns)
+                                @foreach (var c in Vm.Result.Columns)
                                 {
                                     <th class="result-th">@c</th>
                                 }
                             </tr>
                         </thead>
                         <tbody>
-                            @foreach (var row in _result.Rows)
+                            @foreach (var row in Vm.Result.Rows)
                             {
                                 <tr>
                                     @foreach (var cell in row)
@@ -175,77 +177,77 @@
 </div>
 
 @* ── New-table wizard ───────────────────────────────────────────────────────────────────── *@
-@if (_newTable is not null)
+@if (Vm.NewTable is not null)
 {
-    <div class="dcslide-scrim" @onclick="@(() => _newTable = null)"></div>
+    <div class="dcslide-scrim" @onclick="() => Vm.CloseNewTable()"></div>
     <div class="dcslide slide-560">
         <div class="dcslide-head">
             <span class="slide-title-13">New table</span>
-            <button class="dcslide-x" @onclick="@(() => _newTable = null)">×</button>
+            <button class="dcslide-x" @onclick="() => Vm.CloseNewTable()">×</button>
         </div>
         <div class="slide-pad">
             <label class="field-label">Table name</label>
-            <input @bind="_newTable.Name" @bind:event="oninput" placeholder="e.g. readings"
+            <input @bind="Vm.NewTable.Name" @bind:event="oninput" placeholder="e.g. readings"
                    class="table-name-input" />
 
             <div class="columns-head">
                 <span class="field-sub">Columns</span>
-                <button class="dcbtn btn-add-col" @onclick="AddColumn">+ column</button>
+                <button class="dcbtn btn-add-col" @onclick="() => Vm.AddColumn()">+ column</button>
             </div>
             <div class="col-grid-head">
                 <span>name</span><span>type</span><span class="center">not null</span><span class="center">PK</span><span></span>
             </div>
-            @for (var i = 0; i < _newTable.Columns.Count; i++)
+            @for (var i = 0; i < Vm.NewTable.Columns.Count; i++)
             {
-                var col = _newTable.Columns[i];
+                var col = Vm.NewTable.Columns[i];
                 var idx = i;
                 <div class="col-grid-row">
                     <input @bind="col.Name" @bind:event="oninput" placeholder="column"
                            class="col-input" />
                     <select @bind="col.Type" class="col-select">
-                        @foreach (var t in ColumnTypes) { <option value="@t">@t</option> }
+                        @foreach (var t in ProjectDataViewModel.ColumnTypes) { <option value="@t">@t</option> }
                     </select>
                     <input type="checkbox" @bind="col.NotNull" class="center-self" />
                     <input type="checkbox" @bind="col.PrimaryKey" class="center-self" />
-                    <button class="dclink link-bad" @onclick="@(() => _newTable.Columns.RemoveAt(idx))">✕</button>
+                    <button class="dclink link-bad" @onclick="@(() => Vm.NewTable.Columns.RemoveAt(idx))">✕</button>
                 </div>
             }
 
-            @if (_newTableError is not null)
+            @if (Vm.NewTableError is not null)
             {
-                <div class="error-mt8">@_newTableError</div>
+                <div class="error-mt8">@Vm.NewTableError</div>
             }
             <div class="slide-actions">
-                <button class="dcbtn primary" disabled="@_creating" @onclick="CreateTableAsync">@(_creating ? "Creating…" : "Create table")</button>
-                <button class="dcbtn" @onclick="@(() => _newTable = null)">Cancel</button>
+                <button class="dcbtn primary" disabled="@Vm.Creating" @onclick="() => Vm.CreateTableAsync()">@(Vm.Creating ? "Creating…" : "Create table")</button>
+                <button class="dcbtn" @onclick="() => Vm.CloseNewTable()">Cancel</button>
             </div>
         </div>
     </div>
 }
 
 @* ── CSV import preview ─────────────────────────────────────────────────────────────────── *@
-@if (_csvImport is not null)
+@if (Vm.CsvImport is not null)
 {
-    <div class="dcslide-scrim" @onclick="@(() => _csvImport = null)"></div>
+    <div class="dcslide-scrim" @onclick="() => Vm.CloseCsvImport()"></div>
     <div class="dcslide slide-680">
         <div class="dcslide-head">
             <div class="flex-min">
                 <div class="slide-title-14">Import CSV</div>
                 <div class="csv-meta">
-                    @_csvImport.FileName · @_csvImport.DataRowCount row(s) · @_csvImport.Columns.Count column(s)
+                    @Vm.CsvImport.FileName · @Vm.CsvImport.DataRowCount row(s) · @Vm.CsvImport.Columns.Count column(s)
                 </div>
             </div>
-            <button class="dcslide-x" @onclick="@(() => _csvImport = null)">×</button>
+            <button class="dcslide-x" @onclick="() => Vm.CloseCsvImport()">×</button>
         </div>
         <div class="slide-pad-scroll">
             <div class="csv-name-row">
                 <div class="flex-1">
                     <label class="field-label">New table name</label>
-                    <input @bind="_csvImport.TableName" @bind:event="oninput" placeholder="e.g. contacts"
+                    <input @bind="Vm.CsvImport.TableName" @bind:event="oninput" placeholder="e.g. contacts"
                            class="csv-name-input" />
                 </div>
                 <label class="header-check-label">
-                    <input type="checkbox" checked="@_csvImport.HasHeader" @onchange="OnHeaderToggled" /> First row is a header
+                    <input type="checkbox" checked="@Vm.CsvImport.HasHeader" @onchange="OnHeaderToggled" /> First row is a header
                 </label>
             </div>
 
@@ -253,13 +255,13 @@
             <div class="csv-grid-head">
                 <span>name</span><span>type</span>
             </div>
-            @foreach (var col in _csvImport.Columns)
+            @foreach (var col in Vm.CsvImport.Columns)
             {
                 <div class="csv-grid-row">
                     <input @bind="col.Name" @bind:event="oninput"
                            class="col-input" />
                     <select @bind="col.Type" class="col-select">
-                        @foreach (var t in ColumnTypes) { <option value="@t">@t</option> }
+                        @foreach (var t in ProjectDataViewModel.ColumnTypes) { <option value="@t">@t</option> }
                     </select>
                 </div>
             }
@@ -269,17 +271,17 @@
                 <table class="preview-table">
                     <thead>
                         <tr>
-                            @foreach (var col in _csvImport.Columns)
+                            @foreach (var col in Vm.CsvImport.Columns)
                             {
                                 <th class="preview-th">@col.Name</th>
                             }
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var r in _csvImport.PreviewRows())
+                        @foreach (var r in Vm.CsvImport.PreviewRows())
                         {
                             <tr>
-                                @for (var i = 0; i < _csvImport.Columns.Count; i++)
+                                @for (var i = 0; i < Vm.CsvImport.Columns.Count; i++)
                                 {
                                     var cell = i < r.Length ? r[i] : null;
                                     <td class="preview-td">@(string.IsNullOrEmpty(cell) ? "∅" : cell)</td>
@@ -289,129 +291,56 @@
                     </tbody>
                 </table>
             </div>
-            @if (_csvError is not null)
+            @if (Vm.CsvError is not null)
             {
-                <div class="error-mt10">@_csvError</div>
+                <div class="error-mt10">@Vm.CsvError</div>
             }
         </div>
         <div class="dcslide-foot">
             <div class="foot-note">
                 Creates a new table. Empty cells import as NULL; blank/leading-zero codes may need type <code>text</code>.
             </div>
-            <button class="dcbtn" @onclick="@(() => _csvImport = null)">Cancel</button>
-            <button class="dcbtn primary" disabled="@_importing" @onclick="RunImportAsync">@(_importing ? "Importing…" : "Import")</button>
+            <button class="dcbtn" @onclick="() => Vm.CloseCsvImport()">Cancel</button>
+            <button class="dcbtn primary" disabled="@Vm.Importing" @onclick="() => Vm.RunImportAsync()">
+                @(Vm.Importing ? "Importing…" : $"Import {Vm.CsvImport.DataRowCount} rows")
+            </button>
         </div>
     </div>
 }
 
-@* ── Edit-table panel (add / remove columns) ────────────────────────────────────────────── *@
-@if (_editTable is not null)
+@* ── New-view wizard ────────────────────────────────────────────────────────────────────── *@
+@if (Vm.ShowNewView)
 {
-    <div class="dcslide-scrim" @onclick="CloseEdit"></div>
+    <div class="dcslide-scrim" @onclick="() => Vm.CloseNewView()"></div>
     <div class="dcslide slide-560">
         <div class="dcslide-head">
-            <span class="slide-title-13">Edit table — <span class="font-sans">@_editTable</span></span>
-            <button class="dcslide-x" @onclick="CloseEdit">×</button>
+            <span class="slide-title-13">New view</span>
+            <button class="dcslide-x" @onclick="() => Vm.CloseNewView()">×</button>
         </div>
         <div class="slide-pad">
-            <div class="edit-grid-head">
-                <span>name</span><span>type</span><span class="center">not null</span><span class="center">PK</span><span></span>
-            </div>
-            @foreach (var col in _editColumns)
+            <label class="field-label">View name</label>
+            <input @bind="Vm.NewViewName" @bind:event="oninput" placeholder="e.g. active_listings"
+                   class="table-name-input" />
+            <label class="field-label">SELECT statement</label>
+            @if (Vm.ViewMonaco)
             {
-                <div class="edit-grid-row">
-                    <span class="edit-col-name">@col.Name</span>
-                    <span class="text-2">@col.Type</span>
-                    <span class="center-3">@(col.NotNull ? "✓" : "")</span>
-                    <span class="center-3">@(col.PrimaryKey ? "🔑" : "")</span>
-                    @if (col.PrimaryKey)
-                    {
-                        <span></span>
-                    }
-                    else if (_confirmDropColumn == col.Name)
-                    {
-                        <span class="confirm-drop-col">
-                            <button class="dclink link-bad" @onclick="@(() => DropColumnAsync(col.Name))">yes</button>
-                            <button class="dclink" @onclick="@(() => _confirmDropColumn = null)">no</button>
-                        </span>
-                    }
-                    else
-                    {
-                        <button class="dclink link-bad-end" @onclick="@(() => _confirmDropColumn = col.Name)">✕ remove</button>
-                    }
-                </div>
+                <div id="@ProjectDataViewModel.ViewEditorId" class="monaco-box" style="height:220px"></div>
             }
-
-            <div class="divider"></div>
-            <div class="field-sub-mb6">Add a column</div>
-            <div class="add-col-grid">
-                <input @bind="_addCol.Name" @bind:event="oninput" placeholder="column"
-                       class="col-input" />
-                <select @bind="_addCol.Type" class="col-select">
-                    @foreach (var t in ColumnTypes) { <option value="@t">@t</option> }
-                </select>
-                <input type="checkbox" @bind="_addCol.NotNull" class="center-self" title="NOT NULL — fails if the table already has rows" />
-                <button class="dcbtn primary btn-add" disabled="@_alteringColumn" @onclick="AddColumnToTableAsync">
-                    @(_alteringColumn ? "…" : "+ Add")
-                </button>
-            </div>
-
-            @if (_editError is not null)
+            else
             {
-                <div class="error-mt10">@_editError</div>
+                <textarea @bind="Vm.NewViewSql" rows="10" spellcheck="false"
+                          placeholder="SELECT l.city, avg(l.price) FROM listings l JOIN suburbs s ON s.name = l.city GROUP BY 1"
+                          class="view-textarea"></textarea>
             }
-        </div>
-    </div>
-}
-
-<style>
-    .dclink { border:none; background:none; padding:0; cursor:pointer; font-size:11px; color:var(--brand-2); }
-    .dclink:hover { text-decoration:underline; }
-</style>
-
-@* ── New-view slide-out: name + a Monaco SQL editor for the defining SELECT ────────────── *@
-@if (_showNewView)
-{
-    <div class="dcslide-scrim" @onclick="CloseNewView"></div>
-    <div class="dcslide slide-560">
-        <div class="dcslide-head">
-            <div class="flex-min">
-                <div class="slide-title-14">New view</div>
-                <div class="field-sub-mt3">
-                    A saved SELECT over this project's tables — joins welcome. Views are queryable
-                    like tables, chartable, and always read-only.
-                </div>
-            </div>
-            <button class="dcslide-x" @onclick="CloseNewView">×</button>
-        </div>
-        <div class="dcslide-body new-view-body">
-            <div class="dcfield field-320">
-                <label>View name <span class="req">*</span></label>
-                <input class="dcinput font-sans" @bind="_newViewName"
-                       placeholder="sales_by_city" />
-            </div>
-            <div class="dcfield view-query-field">
-                <label>Defining query <span class="code select-only-tag">SELECT-only</span></label>
-                @if (_viewMonaco)
-                {
-                    <div id="@ViewEditorId" class="view-editor"></div>
-                }
-                else
-                {
-                    <textarea @bind="_newViewSql" rows="10" spellcheck="false"
-                              placeholder="SELECT l.city, avg(l.price) FROM listings l JOIN suburbs s ON s.name = l.city GROUP BY 1"
-                              class="view-textarea"></textarea>
-                }
-                <div class="dchint">One statement, starting with SELECT — writes and DDL are rejected, and the
-                    view runs as this project's isolated database role.</div>
-            </div>
+            <div class="dchint">One statement, starting with SELECT — writes and DDL are rejected, and the
+                view runs as this project's isolated database role.</div>
         </div>
         <div class="dcslide-foot">
-            @if (_viewError is not null)
+            @if (Vm.ViewError is not null)
             {
-                <div class="view-error">@_viewError</div>
+                <div class="view-error">@Vm.ViewError</div>
             }
-            <button class="dcbtn" @onclick="CloseNewView">Cancel</button>
+            <button class="dcbtn" @onclick="() => Vm.CloseNewView()">Cancel</button>
             <button class="dcbtn primary" @onclick="SaveViewAsync">Create view</button>
         </div>
     </div>
@@ -420,454 +349,79 @@
 @code {
     [Parameter] public Guid ProjectId { get; set; }
 
-    private static readonly string[] ColumnTypes =
-        { "text", "integer", "bigint", "numeric", "boolean", "timestamptz", "date", "uuid", "jsonb" };
-
-    private sealed class ColumnDraft { public string Name = ""; public string Type = "text"; public bool NotNull; public bool PrimaryKey; }
-    private sealed class TableDraft { public string Name = ""; public List<ColumnDraft> Columns = new(); }
-
-    private TableDraft? _newTable;
-    private string? _newTableError;
-    private bool _creating;
-    private string? _renaming, _renameTo, _dropping;
-
-    private const string EditorId = "pcdata-editor";
-    private const string StarterSql =
-        "-- This project's own database. Standard SQL — a few ideas:\n" +
-        "--   CREATE TABLE readings (at timestamptz DEFAULT now(), sensor text, value numeric);\n" +
-        "--   INSERT INTO readings (sensor, value) VALUES ('door', 21.5);\n" +
-        "--   SELECT sensor, avg(value) FROM readings GROUP BY sensor;\n\n";
-
-    private IReadOnlyList<ProjectTableInfo> _tables = Array.Empty<ProjectTableInfo>();
-    private bool _tablesReady;   // first table list loaded — gates the sidebar skeleton
-
-    // ── Views (saved SELECTs over the project's tables) ──────────────────────────────────────────
-    private bool _showNewView;
-    private string _newViewName = "";
-    private string _newViewSql = "";
-    private string? _viewError;
-    private bool _viewMonaco = true;   // degrade to the textarea when the Monaco CDN is unreachable
-    private bool _viewMonacoReady;
-    private const string ViewEditorId = "pcmonaco-newview";
-
-    private void OpenNewView()
-    {
-        _showNewView = true;
-        _viewMonacoReady = false;
-        _viewError = null;
-    }
-
-    private void CloseNewView() => _showNewView = false;
-
-    private async Task SyncViewSqlAsync()
-    {
-        if (!_viewMonaco || !_viewMonacoReady) return;
-        try { _newViewSql = await JS.InvokeAsync<string>("pcmonaco.getValue", ViewEditorId); } catch { }
-    }
-
-    private async Task SaveViewAsync()
-    {
-        _viewError = null;
-        try
-        {
-            await SyncViewSqlAsync();
-            await Svc.SaveProjectViewAsync(ProjectId, _newViewName, _newViewSql);
-            _showNewView = false;
-            _newViewName = "";
-            _newViewSql = "";
-            await RefreshTablesAsync();
-        }
-        catch (Exception ex) { _viewError = ex.Message; }
-    }
-
-    private async Task DropViewAsync(string name)
-    {
-        try
-        {
-            await Svc.DropProjectViewAsync(ProjectId, name);
-            await RefreshTablesAsync();
-        }
-        catch (Exception ex) { _viewError = ex.Message; }
-    }
-    private ProjectQueryResult? _result;
-    private string? _error;
-    private bool _running;
-    private bool _monacoReady;
-    private bool _monacoLite;
-
     protected override async Task OnParametersSetAsync()
     {
         Ui.Set("Data", "the project's own database");
-        await RefreshTablesAsync();
+        Vm.Initialize(ProjectId);
+        await Vm.LoadAsync();
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        // The new-view pane mounts its own Monaco instance each time it opens.
-        if (_showNewView && _viewMonaco && !_viewMonacoReady)
+        if (Vm.ShowNewView && Vm.ViewMonaco && !Vm.ViewMonacoReady)
         {
-            _viewMonacoReady = true;
+            Vm.ViewMonacoReady = true;
             try
             {
-                var richView = await JS.InvokeAsync<bool>("pcmonaco.init", ViewEditorId, _newViewSql, "sql", "vs-dark");
-                if (!richView) { _viewMonaco = false; StateHasChanged(); }
+                var richView = await JS.InvokeAsync<bool>("pcmonaco.init", ProjectDataViewModel.ViewEditorId, Vm.NewViewSql, "sql", "vs-dark");
+                if (!richView) { Vm.ViewMonaco = false; StateHasChanged(); }
             }
-            catch { _viewMonaco = false; StateHasChanged(); }
+            catch { Vm.ViewMonaco = false; StateHasChanged(); }
         }
 
-        if (_monacoReady) return;
-        _monacoReady = true;
+        if (Vm.MonacoReady) return;
+        Vm.MonacoReady = true;
         try
         {
-            var rich = await JS.InvokeAsync<bool>("pcmonaco.init", EditorId, StarterSql, "sql", "vs-dark");
-            if (!rich) { _monacoLite = true; StateHasChanged(); }
+            var rich = await JS.InvokeAsync<bool>("pcmonaco.init", ProjectDataViewModel.EditorId, ProjectDataViewModel.StarterSql, "sql", "vs-dark");
+            if (!rich) { Vm.MonacoLite = true; StateHasChanged(); }
         }
-        catch { _monacoLite = true; StateHasChanged(); }
-    }
-
-    private async Task RefreshTablesAsync()
-    {
-        try { _tables = await Svc.ListProjectDataTablesAsync(ProjectId); }
-        catch (Exception ex) { _error = ex.Message; }
-        finally { _tablesReady = true; }
+        catch { Vm.MonacoLite = true; StateHasChanged(); }
     }
 
     private async Task RunAsync()
-    {
-        _running = true;
-        _error = null;
-        try
-        {
-            var sql = await JS.InvokeAsync<string>("pcmonaco.getValue", EditorId);
-            _result = await Svc.ExecuteProjectDataAsync(ProjectId, sql);
-            await RefreshTablesAsync(); // DDL/DML may have changed the table list or row counts
-        }
-        catch (Exception ex)
-        {
-            _result = null;
-            _error = Trim(ex.Message);
-        }
-        finally { _running = false; }
-    }
+        => await Vm.RunAsync(async () => await JS.InvokeAsync<string>("pcmonaco.getValue", ProjectDataViewModel.EditorId));
 
     private async Task SelectTableAsync(string table)
-    {
-        var sql = $"SELECT * FROM \"{table.Replace("\"", "\"\"")}\" LIMIT 100;";
-        try { await JS.InvokeVoidAsync("pcmonaco.setValue", EditorId, sql, "sql"); } catch { }
-        await RunAsync();
-    }
-
-    // ── New-table wizard ──────────────────────────────────────────────────────────────────────
-    private void StartNewTable()
-    {
-        _newTableError = null;
-        _newTable = new TableDraft { Columns = { new ColumnDraft { Name = "id", Type = "uuid", NotNull = true, PrimaryKey = true } } };
-    }
-
-    private void AddColumn() => _newTable?.Columns.Add(new ColumnDraft());
-
-    private async Task CreateTableAsync()
-    {
-        if (_newTable is null) return;
-        _newTableError = null;
-        if (string.IsNullOrWhiteSpace(_newTable.Name)) { _newTableError = "Give the table a name."; return; }
-        var cols = _newTable.Columns.Where(c => !string.IsNullOrWhiteSpace(c.Name)).ToList();
-        if (cols.Count == 0) { _newTableError = "Add at least one named column."; return; }
-
-        _creating = true;
-        try
+        => await Vm.SelectTableAsync(table, async (sql) =>
         {
-            var specs = cols.Select(c => new ProjectColumnSpec(c.Name.Trim(), c.Type, c.NotNull, c.PrimaryKey)).ToList();
-            await Svc.CreateProjectTableAsync(ProjectId, _newTable.Name.Trim(), specs);
-            _newTable = null;
-            await RefreshTablesAsync();
-        }
-        catch (Exception ex) { _newTableError = Trim(ex.Message); }
-        finally { _creating = false; }
-    }
+            try { await JS.InvokeVoidAsync("pcmonaco.setValue", ProjectDataViewModel.EditorId, sql, "sql"); } catch { }
+            await RunAsync();
+        });
 
-    // ── CSV import ──────────────────────────────────────────────────────────────────────────────
-    private sealed class CsvImportDraft
-    {
-        public string FileName = "";
-        public string TableName = "";
-        public bool HasHeader = true;
-        public List<ColumnDraft> Columns = new();
-        public List<string[]> Records = new();   // every parsed record, header row included
+    private async Task SaveViewAsync()
+        => await Vm.SaveViewAsync(async (id) => await JS.InvokeAsync<string>("pcmonaco.getValue", id));
 
-        public IEnumerable<string[]> DataRecords => HasHeader ? Records.Skip(1) : Records;
-        public int DataRowCount => Math.Max(0, HasHeader ? Records.Count - 1 : Records.Count);
-        public IEnumerable<string[]> PreviewRows() => DataRecords.Take(8);
-    }
-
-    private CsvImportDraft? _csvImport;
-    private string? _csvError;
-    private IReadOnlyList<string> _importWarnings = Array.Empty<string>();
-    private bool _importing;
-
-    private const long MaxCsvBytes = 15L * 1024 * 1024;   // 15 MB upload cap
+    private async Task ExportAsync(string table)
+        => await Vm.ExportAsync(table, async (name, uri) => await JS.InvokeVoidAsync("pcdata.download", name, uri));
 
     private async Task OnCsvSelected(InputFileChangeEventArgs e)
     {
-        _csvError = null;
-        _csvImport = null;
         var file = e.File;
         if (file is null) return;
         try
         {
-            using var reader = new StreamReader(file.OpenReadStream(MaxCsvBytes));
+            using var reader = new StreamReader(file.OpenReadStream(ProjectDataViewModel.MaxCsvBytes));
             var text = await reader.ReadToEndAsync();
-            var records = ParseCsvRecords(text).Where(r => r.Any(f => !string.IsNullOrEmpty(f))).ToList();
-            if (records.Count == 0) { _csvError = "The CSV appears to be empty."; return; }
+            var records = ProjectDataViewModel.ParseCsvRecords(text).Where(r => r.Any(f => !string.IsNullOrEmpty(f))).ToList();
+            if (records.Count == 0) { Vm.SetCsvImport(new ProjectDataViewModel.CsvImportDraft { FileName = file.Name }); return; }
 
-            var draft = new CsvImportDraft
+            var draft = new ProjectDataViewModel.CsvImportDraft
             {
                 FileName = file.Name,
                 HasHeader = true,
                 Records = records,
-                TableName = SanitizeIdent(System.IO.Path.GetFileNameWithoutExtension(file.Name), 0),
+                TableName = ProjectDataViewModel.SanitizeIdent(System.IO.Path.GetFileNameWithoutExtension(file.Name), 0),
             };
-            BuildColumns(draft);
-            _csvImport = draft;
+            ProjectDataViewModel.BuildColumns(draft);
+            Vm.SetCsvImport(draft);
         }
-        catch (Exception ex) { _csvError = Trim(ex.Message); }
-    }
-
-    // Derive the column list (names + inferred types) from the parsed records, honouring HasHeader.
-    private static void BuildColumns(CsvImportDraft d)
-    {
-        var width = d.Records.Max(r => r.Length);
-        var header = d.Records[0];
-        var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var cols = new List<ColumnDraft>();
-        for (var c = 0; c < width; c++)
-        {
-            var raw = d.HasHeader && c < header.Length ? header[c] : $"col{c + 1}";
-            var name = SanitizeIdent(raw, c);
-            var baseName = name;
-            var n = 2;
-            while (!used.Add(name)) name = $"{baseName}_{n++}";
-            var sample = d.DataRecords.Take(200).Select(r => c < r.Length ? r[c] : null);
-            cols.Add(new ColumnDraft { Name = name, Type = InferType(sample) });
-        }
-        d.Columns = cols;
+        catch (Exception ex) { Vm.SetCsvImport(new ProjectDataViewModel.CsvImportDraft { FileName = file.Name }); /* CsvError set by VM */ }
     }
 
     private void OnHeaderToggled(ChangeEventArgs e)
     {
-        if (_csvImport is null) return;
-        _csvImport.HasHeader = e.Value is bool b ? b : bool.TryParse(e.Value?.ToString(), out var pb) && pb;
-        BuildColumns(_csvImport);
+        var b = e.Value is bool bv ? bv : bool.TryParse(e.Value?.ToString(), out var pb) && pb;
+        Vm.OnHeaderToggled(b);
     }
-
-    private async Task RunImportAsync()
-    {
-        if (_csvImport is null) return;
-        _csvError = null;
-        var d = _csvImport;
-        if (string.IsNullOrWhiteSpace(d.TableName)) { _csvError = "Give the table a name."; return; }
-        if (d.Columns.Any(c => string.IsNullOrWhiteSpace(c.Name))) { _csvError = "Every column needs a name."; return; }
-
-        _importing = true;
-        try
-        {
-            var specs = d.Columns.Select(c => new ProjectColumnSpec(c.Name.Trim(), c.Type, NotNull: false, PrimaryKey: false)).ToList();
-            var count = d.Columns.Count;
-            var rows = d.DataRecords
-                .Select(r => (IReadOnlyList<string?>)Enumerable.Range(0, count)
-                    .Select(i => i < r.Length && !string.IsNullOrEmpty(r[i]) ? r[i] : null).ToList())
-                .ToList();
-            var table = d.TableName.Trim();
-            var result = await Svc.ImportCsvToProjectTableAsync(ProjectId, table, specs, rows, createTable: true);
-            _csvImport = null;
-            _importWarnings = result.DuplicateWarnings;
-            await RefreshTablesAsync();
-            await SelectTableAsync(table);
-        }
-        catch (Exception ex) { _csvError = Trim(ex.Message); }
-        finally { _importing = false; }
-    }
-
-    // A minimal RFC-4180-ish parser: honours "quoted" fields, "" escapes, and newlines inside quotes.
-    private static List<string[]> ParseCsvRecords(string text)
-    {
-        var records = new List<string[]>();
-        var field = new System.Text.StringBuilder();
-        var row = new List<string>();
-        var inQuotes = false;
-        for (var i = 0; i < text.Length; i++)
-        {
-            var c = text[i];
-            if (inQuotes)
-            {
-                if (c == '"')
-                {
-                    if (i + 1 < text.Length && text[i + 1] == '"') { field.Append('"'); i++; }
-                    else inQuotes = false;
-                }
-                else field.Append(c);
-            }
-            else
-            {
-                switch (c)
-                {
-                    case '"': inQuotes = true; break;
-                    case ',': row.Add(field.ToString()); field.Clear(); break;
-                    case '\r': break;
-                    case '\n':
-                        row.Add(field.ToString()); field.Clear();
-                        records.Add(row.ToArray()); row = new List<string>();
-                        break;
-                    default: field.Append(c); break;
-                }
-            }
-        }
-        if (field.Length > 0 || row.Count > 0)
-        {
-            row.Add(field.ToString());
-            records.Add(row.ToArray());
-        }
-        return records;
-    }
-
-    // Pick the narrowest Postgres type from the allow-list that fits every sampled non-empty value.
-    private static string InferType(IEnumerable<string?> values)
-    {
-        var ci = System.Globalization.CultureInfo.InvariantCulture;
-        var sample = values.Where(v => !string.IsNullOrWhiteSpace(v)).Select(v => v!.Trim()).ToList();
-        if (sample.Count == 0) return "text";
-        bool All(Func<string, bool> f) => sample.All(f);
-        if (All(v => v is "true" or "false" or "TRUE" or "FALSE" or "True" or "False")) return "boolean";
-        if (All(v => long.TryParse(v, System.Globalization.NumberStyles.Integer, ci, out _))) return "bigint";
-        if (All(v => decimal.TryParse(v, System.Globalization.NumberStyles.Number, ci, out _))) return "numeric";
-        if (All(v => Guid.TryParse(v, out _))) return "uuid";
-        if (All(v => DateTime.TryParse(v, ci, System.Globalization.DateTimeStyles.None, out _))) return "timestamptz";
-        return "text";
-    }
-
-    // Fold an arbitrary CSV header into a safe Postgres identifier (lowercase, underscores, ≤63).
-    private static string SanitizeIdent(string raw, int ordinal)
-    {
-        var lowered = (raw ?? "").Trim().ToLowerInvariant();
-        var chars = lowered.Select(ch => char.IsLetterOrDigit(ch) ? ch : '_').ToArray();
-        var s = System.Text.RegularExpressions.Regex.Replace(new string(chars), "_+", "_").Trim('_');
-        if (string.IsNullOrEmpty(s)) return $"col{ordinal + 1}";
-        if (!char.IsLetter(s[0]) && s[0] != '_') s = "c_" + s;
-        return s.Length > 63 ? s[..63] : s;
-    }
-
-    // ── Edit table (add / remove columns) ────────────────────────────────────────────────────
-    private string? _editTable;
-    private IReadOnlyList<ProjectColumnInfo> _editColumns = Array.Empty<ProjectColumnInfo>();
-    private string? _editError, _confirmDropColumn;
-    private ColumnDraft _addCol = new();
-    private bool _alteringColumn;
-
-    private async Task StartEditAsync(string table)
-    {
-        _editTable = table;
-        _editError = null;
-        _confirmDropColumn = null;
-        _addCol = new ColumnDraft();
-        await RefreshColumnsAsync();
-    }
-
-    private void CloseEdit() { _editTable = null; }
-
-    private async Task RefreshColumnsAsync()
-    {
-        if (_editTable is null) return;
-        try { _editColumns = await Svc.ListProjectTableColumnsAsync(ProjectId, _editTable); }
-        catch (Exception ex) { _editError = Trim(ex.Message); }
-    }
-
-    private async Task AddColumnToTableAsync()
-    {
-        if (_editTable is null) return;
-        _editError = null;
-        if (string.IsNullOrWhiteSpace(_addCol.Name)) { _editError = "Give the column a name."; return; }
-        _alteringColumn = true;
-        try
-        {
-            await Svc.AddProjectTableColumnAsync(ProjectId, _editTable,
-                new ProjectColumnSpec(_addCol.Name.Trim(), _addCol.Type, _addCol.NotNull, PrimaryKey: false));
-            _addCol = new ColumnDraft();
-            await RefreshColumnsAsync();
-            await RefreshTablesAsync();
-        }
-        catch (Exception ex) { _editError = Trim(ex.Message); }
-        finally { _alteringColumn = false; }
-    }
-
-    private async Task DropColumnAsync(string column)
-    {
-        if (_editTable is null) return;
-        _editError = null;
-        _confirmDropColumn = null;
-        try
-        {
-            await Svc.DropProjectTableColumnAsync(ProjectId, _editTable, column);
-            await RefreshColumnsAsync();
-        }
-        catch (Exception ex) { _editError = Trim(ex.Message); }
-    }
-
-    // ── Rename / drop ─────────────────────────────────────────────────────────────────────────
-    private void StartRename(string table) { _dropping = null; _renaming = table; _renameTo = table; }
-    private void StartDrop(string table) { _renaming = null; _dropping = table; }
-
-    private async Task ConfirmRename()
-    {
-        if (_renaming is null || string.IsNullOrWhiteSpace(_renameTo)) return;
-        try
-        {
-            await Svc.RenameProjectTableAsync(ProjectId, _renaming, _renameTo!.Trim());
-            _renaming = null;
-            await RefreshTablesAsync();
-        }
-        catch (Exception ex) { _error = Trim(ex.Message); }
-    }
-
-    private async Task ConfirmDrop()
-    {
-        if (_dropping is null) return;
-        try
-        {
-            await Svc.DropProjectTableAsync(ProjectId, _dropping);
-            _dropping = null;
-            await RefreshTablesAsync();
-        }
-        catch (Exception ex) { _error = Trim(ex.Message); }
-    }
-
-    // ── Export ────────────────────────────────────────────────────────────────────────────────
-    private async Task ExportAsync(string table)
-    {
-        try
-        {
-            var csv = await Svc.ExportProjectTableCsvAsync(ProjectId, table);
-            var uri = "data:text/csv;charset=utf-8;base64," + Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(csv));
-            await JS.InvokeVoidAsync("pcdata.download", $"{table}.csv", uri);
-        }
-        catch (Exception ex) { _error = Trim(ex.Message); }
-    }
-
-    // A data: URI of the current result set, for the "Export CSV" download link.
-    private string ResultCsvUri()
-    {
-        if (_result is null) return "";
-        var sb = new System.Text.StringBuilder();
-        sb.AppendLine(string.Join(",", _result.Columns.Select(Csv)));
-        foreach (var row in _result.Rows)
-            sb.AppendLine(string.Join(",", row.Select(v => Csv(v ?? ""))));
-        return "data:text/csv;charset=utf-8;base64," + Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(sb.ToString()));
-    }
-
-    private static string Csv(string s) =>
-        s.Contains(',') || s.Contains('"') || s.Contains('\n') || s.Contains('\r')
-            ? "\"" + s.Replace("\"", "\"\"") + "\"" : s;
-
-    // Npgsql prefixes errors with exception type noise; keep the Postgres message.
-    private static string Trim(string message)
-        => message.Length > 400 ? message[..400] + "…" : message;
 }
