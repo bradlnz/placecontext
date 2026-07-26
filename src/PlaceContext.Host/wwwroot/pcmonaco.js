@@ -1,11 +1,12 @@
 // PlaceContext Monaco interop — the same editor AWS Lambda's console uses.
 // Loads the Monaco AMD bundle from a CDN once, then creates/controls editors by element id.
-// Mirrors the pcgraph.js shape: a single window.pcmonaco = { init, setValue, getValue, destroy } global,
-// invoked from Blazor via IJSRuntime.InvokeVoidAsync / InvokeAsync.
+// Uses model-per-file: each file gets its own TextModel keyed by "{editorId}::{path}",
+// so switching files is instant (editor.setModel) and edits are preserved across switches.
 window.pcmonaco = (function () {
   const VS = 'https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs';
   const LOAD_TIMEOUT_MS = 10000; // a hanging CDN must not hang the page
   const editors = new Map();   // id → Monaco editor
+  const models = new Map();    // "id::path" → Monaco TextModel
   const fallbacks = new Map(); // id → plain <textarea> (CDN unreachable)
   const initLocks = new Map(); // id → in-flight init Promise (serializes concurrent inits)
   let loaderPromise = null;
@@ -49,7 +50,27 @@ window.pcmonaco = (function () {
     themeWatcher.observe(shell, { attributes: true, attributeFilter: ['data-theme'] });
   }
 
-  async function init(id, value, language, theme) {
+  function modelKey(id, path) { return id + '::' + path; }
+
+  function getOrCreateModel(monaco, id, path, value, language) {
+    const key = modelKey(id, path);
+    const existing = models.get(key);
+    if (existing) {
+      if (value !== undefined && existing.getValue() !== value) {
+        existing.setValue(value || '');
+      }
+      if (language && existing.getLanguageId() !== language) {
+        monaco.editor.setModelLanguage(existing, language);
+      }
+      return existing;
+    }
+    const uri = monaco.Uri.parse('file:///' + id + '/' + path);
+    const model = monaco.editor.createModel(value || '', language || 'plaintext', uri);
+    models.set(key, model);
+    return model;
+  }
+
+  async function init(id, value, language, theme, path) {
     // Serialize concurrent inits for the same element: a rapid file switch during initial load
     // must not spawn two racing Monaco creates, or the visible editor can end up showing the
     // previous file (or a disposed instance) instead of the requested one.
@@ -63,9 +84,10 @@ window.pcmonaco = (function () {
         if (!el) return true;
         destroy(id);
         watchTheme(monaco);
+        const modelPath = path || '__active__';
+        const model = getOrCreateModel(monaco, id, modelPath, value, language);
         const editor = monaco.editor.create(el, {
-          value: value || '',
-          language: language || 'plaintext',
+          model: model,
           theme: shellTheme(),
           automaticLayout: true,
           minimap: { enabled: true },
@@ -101,16 +123,52 @@ window.pcmonaco = (function () {
     try { return await lock; } finally { initLocks.delete(id); }
   }
 
+  // Switch the editor to display a different file. Creates a model if one doesn't exist yet.
+  // This is the idiomatic Monaco multi-file pattern: instant switch, full edit preservation.
+  function openFile(id, path, value, language) {
+    try {
+      const ta = fallbacks.get(id);
+      if (ta) { ta.value = value || ''; return; }
+      const editor = editors.get(id);
+      if (!editor) {
+        if (initLocks.has(id)) {
+          initLocks.get(id).then(() => openFile(id, path, value, language));
+          return;
+        }
+        init(id, value, language);
+        return;
+      }
+      const monaco = window.monaco;
+      if (!monaco) return;
+      const model = getOrCreateModel(monaco, id, path, value, language);
+      if (editor.getModel() !== model) {
+        editor.setModel(model);
+      }
+    } catch (e) {
+      console.warn('pcmonaco.openFile error:', e);
+    }
+  }
+
+  // Remove a model from the cache (e.g. after file deletion). Disposes the TextModel.
+  function closeFile(id, path) {
+    try {
+      const key = modelKey(id, path);
+      const model = models.get(key);
+      if (model) {
+        model.dispose();
+        models.delete(key);
+      }
+    } catch (e) {
+      console.warn('pcmonaco.closeFile error:', e);
+    }
+  }
+
   function setValue(id, value, language) {
     try {
       const ta = fallbacks.get(id);
       if (ta) { ta.value = value || ''; return; }
       let editor = editors.get(id);
       if (!editor || !editor.getModel()) {
-        // No live editor for this id — Blazor thinks Monaco is up but the JS side has nothing
-        // (e.g. a file was clicked while the CDN bundle was still downloading). If an init is
-        // already in flight, wait for it and then apply the value; otherwise mount one now with
-        // the requested value instead of silently dropping the switch. init never throws.
         if (initLocks.has(id)) {
           initLocks.get(id).then(() => setValue(id, value, language));
           return;
@@ -152,12 +210,20 @@ window.pcmonaco = (function () {
       if (!editor) return;
       editor.dispose();
       editors.delete(id);
+      // Dispose all models belonging to this editor instance
+      const prefix = id + '::';
+      for (const [key, model] of models) {
+        if (key.startsWith(prefix)) {
+          try { model.dispose(); } catch { /* already disposed */ }
+          models.delete(key);
+        }
+      }
     } catch (e) {
       console.warn('pcmonaco.destroy error:', e);
     }
   }
 
-  return { init, setValue, getValue, destroy };
+  return { init, openFile, closeFile, setValue, getValue, destroy };
 })();
 
 // pcdata — small helpers for the project Data page (CSV download from a data: URI).

@@ -247,7 +247,7 @@ else
             // init returns false when Monaco's CDN was unreachable and the editor degraded to a
             // plain textarea. Belt-and-braces try/catch: an interop exception here would kill the
             // whole Blazor circuit and freeze the page on "Loading…".
-            var rich = await JS.InvokeAsync<bool>("pcmonaco.init", _editorId, active.Content, Language(active.Path), "vs-dark");
+            var rich = await JS.InvokeAsync<bool>("pcmonaco.init", _editorId, active.Content, Language(active.Path), "vs-dark", active.Path);
             if (!rich)
             {
                 _monacoLite = true;
@@ -278,7 +278,7 @@ else
 
     private async Task SetEditorValueAsync(EditorFile file)
     {
-        try { await JS.InvokeVoidAsync("pcmonaco.setValue", _editorId, file.Content, Language(file.Path)); }
+        try { await JS.InvokeVoidAsync("pcmonaco.openFile", _editorId, file.Path, file.Content, Language(file.Path)); }
         catch (Exception ex) { _message = ex.Message; }
     }
 
@@ -336,6 +336,10 @@ else
         _active = _active > idx ? _active - 1 : _active;
         if (_active >= _files.Count) _active = _files.Count - 1;
 
+        // Dispose the Monaco model for the deleted file
+        try { await JS.InvokeVoidAsync("pcmonaco.closeFile", _editorId, removed.Path); }
+        catch { /* best-effort cleanup */ }
+
         // A non-active file was deleted — the editor already shows the active file, leave it.
         if (!wasActive) return;
         await SetEditorValueAsync(_files[_active]);
@@ -376,9 +380,11 @@ else
         if (_entrypoint == old) _entrypoint = name;
         _renamingIdx = -1;
 
-        // A changed extension can change the language of the file that's on screen.
-        if (idx != _active || Language(name) == Language(old)) return;
+        // Dispose the old model (keyed by old path) and switch to the new model.
+        // This always runs after rename because model keys are path-based.
         await SyncActiveAsync();
+        try { await JS.InvokeVoidAsync("pcmonaco.closeFile", _editorId, old); }
+        catch { /* best-effort cleanup */ }
         await SetEditorValueAsync(_files[idx]);
     }
 

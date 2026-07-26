@@ -202,6 +202,10 @@ spec:
               value: "/etc/placecontext/ca/tls.crt"
             - name: PLACECONTEXT_HOSTNAME
               value: "feasibility.ossenpropertygroup.com.au"
+            # Pin the public origin so OAuth metadata and MCP Www-Authenticate headers use https://
+            # even when Traefik forwards X-Forwarded-Proto is not propagated to the app.
+            - name: PlaceContext__PublicBaseUrl
+              value: "https://feasibility.ossenpropertygroup.com.au"
             # Job placement: job pods always *prefer* worker (agent) nodes, so a cloud portal
             # server stays responsive while execution happens on the machines you joined over
             # Tailscale. Set "true" to *require* workers — jobs then never run on the control
