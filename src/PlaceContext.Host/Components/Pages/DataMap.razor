@@ -1,15 +1,16 @@
 @page "/project/{ProjectId:guid}/datamap"
 @attribute [Authorize]
 @layout PlaceContext.Host.Components.Layout.ProjectLayout
+@implements IDisposable
 @using PlaceContext.Application.Dtos
 @using PlaceContext.Application.Features
-@inject IPlaceContextService Svc
+@using PlaceContext.Host.Components.ViewModels
+@inject DataMapViewModel Vm
 @inject PortalUiState Ui
-@inject IJSRuntime JS
 
 <PageTitle>PlaceContext — Data map</PageTitle>
 
-@if (_loading)
+@if (Vm.Loading)
 {
     <Skeleton Kind="detail" Rows="5" Padded />
 }
@@ -27,16 +28,15 @@ else
                     drag a job's ＋ onto a table to connect them.
                 </div>
             </div>
-            <button class="dcbtn primary" @onclick="@(() => OpenEditor(null))">+ New mapping</button>
+            <button class="dcbtn primary" @onclick="@(() => Vm.OpenEditor(null))">+ New mapping</button>
         </div>
 
-        @if (_message is not null)
+        @if (Vm.Message is not null)
         {
-            <div style="margin-bottom:12px; padding:10px 14px; border-radius:8px; background:var(--card); font-size:12.5px; color:var(--text-2)">@_message</div>
+            <div style="margin-bottom:12px; padding:10px 14px; border-radius:8px; background:var(--card); font-size:12.5px; color:var(--text-2)">@Vm.Message</div>
         }
 
-        @* ── Interactive canvas: nodes drag, edges edit, ＋ drags a new connection ──────────── *@
-        <div style="position:relative; height:65vh; min-height:480px; border:1px solid var(--border); border-radius:10px; overflow:hidden; background:var(--card); background-image:radial-gradient(var(--border-2) 1px, transparent 1px); background-size:22px 22px; background-position:@(_panX)px @(_panY)px; user-select:none; touch-action:none; cursor:@(_panning ? "grabbing" : "grab")"
+        <div style="position:relative; height:65vh; min-height:480px; border:1px solid var(--border); border-radius:10px; overflow:hidden; background:var(--card); background-image:radial-gradient(var(--border-2) 1px, transparent 1px); background-size:22px 22px; background-position:@(Vm.PanX)px @(Vm.PanY)px; user-select:none; touch-action:none; cursor:@(Vm.Panning ? "grabbing" : "grab")"
              @onpointerdown="OnCanvasDown" @onpointermove="OnCanvasMove" @onpointerup="OnCanvasUp">
 
             <svg style="position:absolute; inset:0; width:100%; height:100%; pointer-events:none">
@@ -45,28 +45,28 @@ else
                         <path d="M0 0 L10 5 L0 10 Z" fill="var(--brand-2)" />
                     </marker>
                 </defs>
-                @foreach (var m in _mappings ?? Array.Empty<DataMappingView>())
+                @foreach (var m in Vm.Mappings ?? Array.Empty<DataMappingView>())
                 {
                     var mp = m;
-                    <path d="@EdgePath(mp)" fill="none" stroke="var(--brand-2)" stroke-width="1.6"
+                    <path d="@Vm.EdgePath(mp)" fill="none" stroke="var(--brand-2)" stroke-width="1.6"
                           stroke-dasharray="@(mp.Enabled ? "none" : "5 4")" opacity="@(mp.Enabled ? "0.9" : "0.4")"
                           marker-end="url(#pcarrow)" style="pointer-events:stroke; cursor:pointer"
-                          @onclick="@(() => OpenEditor(mp))">
+                          @onclick="@(() => Vm.OpenEditor(mp))">
                         <title>@mp.JobName → @mp.TargetTable (@mp.Fields.Count field(s)) — click to edit</title>
                     </path>
                 }
-                @if (_connectJob is not null || _connectChain is not null)
+                @if (Vm.ConnectJob is not null || Vm.ConnectChain is not null)
                 {
-                    <path d="@ConnectPath()" fill="none" stroke="var(--human)" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#pcarrow)" />
+                    <path d="@Vm.ConnectPath()" fill="none" stroke="var(--human)" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#pcarrow)" />
                 }
             </svg>
 
-            @foreach (var job in _jobs ?? Array.Empty<JobView>())
+            @foreach (var job in Vm.Jobs ?? Array.Empty<JobView>())
             {
                 var j = job;
                 var key = "job:" + j.Id;
-                var mapped = _mappings?.Any(m => m.JobId == j.Id) ?? false;
-                <div style="position:absolute; left:@(Pos(key).X + _panX)px; top:@(Pos(key).Y + _panY)px; width:190px; border:1px @(mapped ? "solid var(--border-2)" : "dashed var(--border-2)"); border-radius:9px; padding:8px 10px; background:var(--card-2); cursor:grab; box-shadow:var(--shadow)"
+                var mapped = Vm.Mappings?.Any(m => m.JobId == j.Id) ?? false;
+                <div style="position:absolute; left:@(Vm.GetPos(key).X + Vm.PanX)px; top:@(Vm.GetPos(key).Y + Vm.PanY)px; width:190px; border:1px @(mapped ? "solid var(--border-2)" : "dashed var(--border-2)"); border-radius:9px; padding:8px 10px; background:var(--card-2); cursor:grab; box-shadow:var(--shadow)"
                      @onpointerdown="@(e => StartDrag(key, e))" @onpointerdown:stopPropagation="true">
                     <div style="display:flex; align-items:center; gap:7px">
                         <span style="width:7px; height:7px; border-radius:50%; flex:none; background:@(mapped ? "var(--brand-2)" : "var(--border-2)")"></span>
@@ -82,12 +82,12 @@ else
                 </div>
             }
 
-            @foreach (var chain in _chains ?? Array.Empty<JobChainView>())
+            @foreach (var chain in Vm.Chains ?? Array.Empty<JobChainView>())
             {
                 var c = chain;
                 var key = "chain:" + c.Id;
-                var mapped = _mappings?.Any(m => m.SourceKind == "chain" && m.JobId == c.Id) ?? false;
-                <div style="position:absolute; left:@(Pos(key).X + _panX)px; top:@(Pos(key).Y + _panY)px; width:190px; border:1px @(mapped ? "solid var(--human)" : "dashed var(--human)"); border-radius:9px; padding:8px 10px; background:var(--human-bg); cursor:grab; box-shadow:var(--shadow)"
+                var mapped = Vm.Mappings?.Any(m => m.SourceKind == "chain" && m.JobId == c.Id) ?? false;
+                <div style="position:absolute; left:@(Vm.GetPos(key).X + Vm.PanX)px; top:@(Vm.GetPos(key).Y + Vm.PanY)px; width:190px; border:1px @(mapped ? "solid var(--human)" : "dashed var(--human)"); border-radius:9px; padding:8px 10px; background:var(--human-bg); cursor:grab; box-shadow:var(--shadow)"
                      @onpointerdown="@(e => StartDrag(key, e))" @onpointerdown:stopPropagation="true">
                     <div style="display:flex; align-items:center; gap:7px">
                         <span style="width:7px; height:7px; border-radius:50%; flex:none; background:var(--human)"></span>
@@ -103,16 +103,16 @@ else
                 </div>
             }
 
-            @foreach (var table in TableNodes())
+            @foreach (var table in Vm.TableNodes())
             {
                 var t = table;
                 var key = "table:" + t;
-                <div style="position:absolute; left:@(Pos(key).X + _panX)px; top:@(Pos(key).Y + _panY)px; width:210px; border:1px solid var(--brand-2); border-radius:10px; padding:9px 12px; background:var(--brand-bg); cursor:grab; box-shadow:var(--shadow)"
+                <div style="position:absolute; left:@(Vm.GetPos(key).X + Vm.PanX)px; top:@(Vm.GetPos(key).Y + Vm.PanY)px; width:210px; border:1px solid var(--brand-2); border-radius:10px; padding:9px 12px; background:var(--brand-bg); cursor:grab; box-shadow:var(--shadow)"
                      @onpointerdown="@(e => StartDrag(key, e))" @onpointerdown:stopPropagation="true"
                      @onpointerup="@(() => OnTableUp(t))" @onpointerup:stopPropagation="true">
                     <div style="font-size:12.5px; font-weight:600; font-family:var(--font-sans); white-space:nowrap; overflow:hidden; text-overflow:ellipsis" title="@t">@t</div>
                     <div style="font-size:10px; color:var(--text-3); margin-top:2px">
-                        @(TableRows(t) is { } n ? $"{n:N0} rows" : "created on first ingest") · append-only
+                        @(Vm.TableRows(t) is { } n ? $"{n:N0} rows" : "created on first ingest") · append-only
                     </div>
                 </div>
             }
@@ -120,17 +120,16 @@ else
     </div>
 }
 
-@* ── Mapping editor slide-out ─────────────────────────────────────────────────────────── *@
-@if (_showEditor)
+@if (Vm.ShowEditor)
 {
-    <div class="dcslide-scrim" @onclick="CloseEditor"></div>
+    <div class="dcslide-scrim" @onclick="Vm.CloseEditor"></div>
     <div class="dcslide" style="width:560px">
         <div class="dcslide-head">
             <div style="flex:1">
-                <div style="font-size:14px; font-weight:600">@(_editId.HasValue ? "Edit mapping" : "New mapping")</div>
+                <div style="font-size:14px; font-weight:600">@(Vm.EditId.HasValue ? "Edit mapping" : "New mapping")</div>
                 <div style="font-size:11.5px; color:var(--text-3); margin-top:3px">Job result → project table, after every completed run.</div>
             </div>
-            <button class="dcslide-x" @onclick="CloseEditor">×</button>
+            <button class="dcslide-x" @onclick="Vm.CloseEditor">×</button>
         </div>
         <div class="dcslide-body" style="flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:14px">
 
@@ -140,16 +139,16 @@ else
                     <span style="margin-left:8px; display:inline-flex; gap:4px">
                         @foreach (var kind in new[] { "job", "chain" })
                         {
-                            <button type="button" class="dcbtn" style="padding:1px 8px; font-size:10.5px; @(_edSourceKind == kind ? "color:var(--brand-2); border-color:var(--brand-2)" : "")"
-                                    @onclick="@(() => { _edSourceKind = kind; _edJobId = Guid.Empty; })">@kind</button>
+                            <button type="button" class="dcbtn" style="padding:1px 8px; font-size:10.5px; @(Vm.EdSourceKind == kind ? "color:var(--brand-2); border-color:var(--brand-2)" : "")"
+                                    @onclick="@(() => { Vm.EdSourceKind = kind; Vm.EdJobId = Guid.Empty; })">@kind</button>
                         }
                     </span>
                 </label>
-                @if (_edSourceKind == "chain")
+                @if (Vm.EdSourceKind == "chain")
                 {
-                    <select class="dcinput" @bind="_edJobId">
+                    <select class="dcinput" @bind="Vm.EdJobId">
                         <option value="@Guid.Empty">— pick a chain (its final output ingests) —</option>
-                        @foreach (var c in _chains ?? Array.Empty<JobChainView>())
+                        @foreach (var c in Vm.Chains ?? Array.Empty<JobChainView>())
                         {
                             <option value="@c.Id">@c.Name</option>
                         }
@@ -157,9 +156,9 @@ else
                 }
                 else
                 {
-                <select class="dcinput" @bind="_edJobId">
+                <select class="dcinput" @bind="Vm.EdJobId">
                     <option value="@Guid.Empty">— pick a job —</option>
-                    @foreach (var j in _jobs ?? Array.Empty<JobView>())
+                    @foreach (var j in Vm.Jobs ?? Array.Empty<JobView>())
                     {
                         <option value="@j.Id">@j.Name (@j.ReturnType)</option>
                     }
@@ -170,9 +169,9 @@ else
             <div style="display:flex; gap:10px">
                 <div class="dcfield" style="flex:1">
                     <label>Target table <span class="req">*</span></label>
-                    <input class="dcinput" @bind="_edTable" list="pc-datamap-tables" placeholder="listings" />
+                    <input class="dcinput" @bind="Vm.EdTable" list="pc-datamap-tables" placeholder="listings" />
                     <datalist id="pc-datamap-tables">
-                        @foreach (var t in _tables ?? Array.Empty<PlaceContext.Application.Ports.ProjectTableInfo>())
+                        @foreach (var t in Vm.Tables ?? Array.Empty<PlaceContext.Application.Ports.ProjectTableInfo>())
                         {
                             <option value="@t.Name" />
                         }
@@ -180,7 +179,7 @@ else
                 </div>
                 <div class="dcfield" style="flex:1">
                     <label>Records at <span class="code" style="margin-left:5px">dot path, blank = root</span></label>
-                    <input class="dcinput" @bind="_edRowsPath" placeholder="rows" />
+                    <input class="dcinput" @bind="Vm.EdRowsPath" placeholder="rows" />
                 </div>
             </div>
 
@@ -188,33 +187,33 @@ else
                 <div style="display:flex; align-items:center; justify-content:space-between">
                     <label>Fields</label>
                     <div style="display:flex; gap:6px">
-                        <button class="dcbtn" style="padding:3px 9px; font-size:11px" @onclick="SuggestFields"
-                                disabled="@(_edJobId == Guid.Empty || _edSourceKind == "chain")" title="Prefill from the job's latest run result (jobs only)">
-                            @(_suggesting ? "Reading last run…" : "Suggest from last run")
+                        <button class="dcbtn" style="padding:3px 9px; font-size:11px" @onclick="() => Vm.SuggestFieldsAsync()"
+                                disabled="@(Vm.EdJobId == Guid.Empty || Vm.EdSourceKind == "chain")" title="Prefill from the job's latest run result (jobs only)">
+                            @(Vm.Suggesting ? "Reading last run…" : "Suggest from last run")
                         </button>
-                        <button class="dcbtn" style="padding:3px 9px; font-size:11px" @onclick="AddField">+ field</button>
+                        <button class="dcbtn" style="padding:3px 9px; font-size:11px" @onclick="() => Vm.AddField()">+ field</button>
                     </div>
                 </div>
                 <div style="display:flex; flex-direction:column; gap:6px; margin-top:6px">
-                    @for (var i = 0; i < _edFields.Count; i++)
+                    @for (var i = 0; i < Vm.EdFields.Count; i++)
                     {
                         var idx = i;
                         <div style="display:flex; gap:6px; align-items:center">
                             <input class="dcinput" style="flex:1.2; font-size:12px" placeholder="source path (e.g. price)"
-                                   @bind="_edFields[idx].SourcePath" />
+                                   @bind="Vm.EdFields[idx].SourcePath" />
                             <span style="color:var(--text-3); flex:none">→</span>
                             <input class="dcinput" style="flex:1; font-size:12px; font-family:var(--font-sans)" placeholder="column"
-                                   @bind="_edFields[idx].Column" />
-                            <select class="dcinput" style="flex:none; width:110px; font-size:12px" @bind="_edFields[idx].Type">
-                                @foreach (var t in ColumnTypes)
+                                   @bind="Vm.EdFields[idx].Column" />
+                            <select class="dcinput" style="flex:none; width:110px; font-size:12px" @bind="Vm.EdFields[idx].Type">
+                                @foreach (var t in DataMapViewModel.ColumnTypes)
                                 {
                                     <option value="@t">@t</option>
                                 }
                             </select>
-                            <button class="dcbtn" style="padding:3px 8px; flex:none" title="Remove field" @onclick="@(() => _edFields.RemoveAt(idx))">×</button>
+                            <button class="dcbtn" style="padding:3px 8px; flex:none" title="Remove field" @onclick="@(() => Vm.RemoveField(idx))">×</button>
                         </div>
                     }
-                    @if (_edFields.Count == 0)
+                    @if (Vm.EdFields.Count == 0)
                     {
                         <div style="font-size:11.5px; color:var(--text-3)">No fields yet — add one, or suggest them from the job's latest run.</div>
                     }
@@ -222,7 +221,7 @@ else
             </div>
 
             <label style="display:flex; align-items:center; gap:8px; font-size:12.5px; color:var(--text-2); cursor:pointer; user-select:none">
-                <input type="checkbox" @bind="_edEnabled" style="width:15px; height:15px; accent-color:var(--brand-2); cursor:pointer" />
+                <input type="checkbox" @bind="Vm.EdEnabled" style="width:15px; height:15px; accent-color:var(--brand-2); cursor:pointer" />
                 Enabled — ingest after every completed run
             </label>
 
@@ -232,17 +231,17 @@ else
             </div>
         </div>
         <div class="dcslide-foot">
-            @if (_editorError is not null)
+            @if (Vm.EditorError is not null)
             {
-                <div style="flex:1; color:var(--bad); font-size:12px; min-width:0">@_editorError</div>
+                <div style="flex:1; color:var(--bad); font-size:12px; min-width:0">@Vm.EditorError</div>
             }
-            @if (_editId.HasValue)
+            @if (Vm.EditId.HasValue)
             {
-                <button class="dcbtn" style="color:var(--bad)" disabled="@_saving" @onclick="DeleteMapping">Delete</button>
+                <button class="dcbtn" style="color:var(--bad)" disabled="@Vm.Saving" @onclick="() => Vm.DeleteMappingAsync()">Delete</button>
             }
-            <button class="dcbtn" @onclick="CloseEditor">Cancel</button>
-            <button class="dcbtn primary" disabled="@_saving" @onclick="SaveMapping">
-                @(_saving ? "Saving…" : _editId.HasValue ? "Save changes" : "Create mapping")
+            <button class="dcbtn" @onclick="Vm.CloseEditor">Cancel</button>
+            <button class="dcbtn primary" disabled="@Vm.Saving" @onclick="() => Vm.SaveMappingAsync()">
+                @(Vm.Saving ? "Saving…" : Vm.EditId.HasValue ? "Save changes" : "Create mapping")
             </button>
         </div>
     </div>
@@ -251,435 +250,25 @@ else
 @code {
     [Parameter] public Guid ProjectId { get; set; }
 
-    private static readonly string[] ColumnTypes = { "text", "integer", "bigint", "numeric", "boolean", "timestamptz", "date", "uuid", "jsonb" };
-
-    private IReadOnlyList<DataMappingView>? _mappings;
-    private IReadOnlyList<JobView>? _jobs;
-    private IReadOnlyList<PlaceContext.Application.Ports.ProjectTableInfo>? _tables;
-    private string? _message;
-    private bool _loading = true;
-
-    // ── Editor state ──────────────────────────────────────────────────────────────────────────────
-    private bool _showEditor;
-    private bool _saving;
-    private bool _suggesting;
-    private Guid? _editId;
-    private Guid _edJobId;
-    private string _edSourceKind = "job";
-    private IReadOnlyList<JobChainView>? _chains;
-    private string _edTable = "";
-    private string _edRowsPath = "";
-    private bool _edEnabled = true;
-    private string? _editorError;
-    private readonly List<FieldEdit> _edFields = new();
-
-    private sealed class FieldEdit
-    {
-        public string SourcePath = "";
-        public string Column = "";
-        public string Type = "text";
-    }
-
     protected override async Task OnParametersSetAsync()
     {
-        _loading = true;
-        try
-        {
-            await ReloadAsync();
-            Ui.Set("Data map", "job results → project tables");
-        }
-        catch (Exception ex) { _message = ex.Message; }
-        finally { _loading = false; }
-    }
-
-    private async Task ReloadAsync()
-    {
-        _mappings = await Svc.ListDataMappingsAsync(ProjectId);
-        _jobs = await Svc.ListJobsAsync(ProjectId);
-        _chains = await Svc.ListJobChainsAsync(ProjectId);
-        try { _tables = await Svc.ListProjectDataTablesAsync(ProjectId); }
-        catch { _tables = Array.Empty<PlaceContext.Application.Ports.ProjectTableInfo>(); }
-    }
-
-    private string ReturnTypeOf(Guid jobId)
-        => _jobs?.FirstOrDefault(j => j.Id == jobId)?.ReturnType.ToString() ?? "?";
-
-    private long? TableRows(string table)
-        => _tables?.FirstOrDefault(t => string.Equals(t.Name, table, StringComparison.OrdinalIgnoreCase))?.RowEstimate;
-
-    private IReadOnlyList<JobView> UnmappedJobs()
-        => (_jobs ?? Array.Empty<JobView>())
-            .Where(j => _mappings?.All(m => m.JobId != j.Id) ?? true)
-            .ToList();
-
-    // ── Editor ────────────────────────────────────────────────────────────────────────────────────
-
-    // ── Canvas state: positions (persisted per project in the browser), drag + connect ───────────
-    private readonly Dictionary<string, (double X, double Y)> _pos = new();
-    private bool _posLoaded;
-    private string? _dragKey;
-    private double _panX, _panY;   // board pan offset — drag empty canvas to reach overflowed nodes
-    private bool _panning;
-    private string? _connectJobId;
-    private JobView? _connectJob;
-    private (double X, double Y) _connectEnd;
-    private double _lastX, _lastY;
-    private bool _moved;
-
-    private (double X, double Y) Pos(string key) => _pos.TryGetValue(key, out var p) ? p : (24, 24);
-
-    private IReadOnlyList<string> TableNodes()
-    {
-        var mapped = (_mappings ?? Array.Empty<DataMappingView>()).Select(m => m.TargetTable);
-        var real = (_tables ?? Array.Empty<PlaceContext.Application.Ports.ProjectTableInfo>())
-            .Where(t => !t.IsView).Select(t => t.Name);
-        return mapped.Concat(real).Distinct(StringComparer.OrdinalIgnoreCase).Take(14).ToList();
-    }
-
-    // Default layout: jobs stacked on the left, tables on the right — then every drag is remembered.
-    private void EnsureLayout()
-    {
-        var yJ = 24d;
-        foreach (var j in _jobs ?? Array.Empty<JobView>())
-        {
-            _pos.TryAdd("job:" + j.Id, (30, yJ));
-            yJ += 84;
-        }
-        foreach (var c in _chains ?? Array.Empty<JobChainView>())
-        {
-            _pos.TryAdd("chain:" + c.Id, (30, yJ));
-            yJ += 84;
-        }
-        var yT = 24d;
-        foreach (var t in TableNodes())
-        {
-            _pos.TryAdd("table:" + t, (660, yT));
-            yT += 96;
-        }
+        Vm.Initialize(ProjectId);
+        await Vm.LoadAsync();
+        Ui.Set("Data map", "job results → project tables");
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (_posLoaded || _loading) return;
-        _posLoaded = true;
-        try
-        {
-            var json = await JS.InvokeAsync<string?>("localStorage.getItem", $"pc-datamap-{ProjectId}");
-            if (!string.IsNullOrEmpty(json))
-            {
-                var saved = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, double[]>>(json);
-                if (saved is not null)
-                    foreach (var (k, v) in saved.Where(kv => kv.Value.Length == 2))
-                        _pos[k] = (v[0], v[1]);
-            }
-        }
-        catch { /* fresh browser — defaults apply */ }
-        EnsureLayout();
-        StateHasChanged();
+        if (firstRender) await Vm.EnsureLayoutAsync();
     }
 
-    private async Task SavePositionsAsync()
-    {
-        try
-        {
-            var payload = System.Text.Json.JsonSerializer.Serialize(
-                _pos.ToDictionary(kv => kv.Key, kv => new[] { kv.Value.X, kv.Value.Y }));
-            await JS.InvokeVoidAsync("localStorage.setItem", $"pc-datamap-{ProjectId}", payload);
-        }
-        catch { /* layout persistence is a nicety */ }
-    }
+    public void Dispose() => Vm.Detach();
 
-    private void StartDrag(string key, PointerEventArgs e)
-    {
-        _dragKey = key;
-        _lastX = e.ClientX;
-        _lastY = e.ClientY;
-        _moved = false;
-    }
-
-    // Pointer-down on empty canvas (node/edge handlers stop propagation) pans the whole board, so
-    // nodes laid out beyond the fixed-height viewport stay reachable.
-    private void OnCanvasDown(PointerEventArgs e)
-    {
-        _panning = true;
-        _lastX = e.ClientX;
-        _lastY = e.ClientY;
-    }
-
-    private JobChainView? _connectChain;
-
-    private void StartConnectChain(JobChainView chain, PointerEventArgs e)
-    {
-        _connectChain = chain;
-        _connectJobId = "chain:" + chain.Id;
-        var cp = Pos(_connectJobId);
-        _connectEnd = (cp.X + 190, cp.Y + 22);
-        _lastX = e.ClientX;
-        _lastY = e.ClientY;
-    }
-
-    private void StartConnect(JobView job, PointerEventArgs e)
-    {
-        _connectJob = job;
-        _connectJobId = "job:" + job.Id;
-        var p = Pos(_connectJobId);
-        _connectEnd = (p.X + 190, p.Y + 22);
-        _lastX = e.ClientX;
-        _lastY = e.ClientY;
-    }
-
-    private void OnCanvasMove(PointerEventArgs e)
-    {
-        var dx = e.ClientX - _lastX;
-        var dy = e.ClientY - _lastY;
-        if (_dragKey is { } key)
-        {
-            var p = Pos(key);
-            _pos[key] = (Math.Max(0, p.X + dx), Math.Max(0, p.Y + dy));
-            if (Math.Abs(dx) + Math.Abs(dy) > 1) _moved = true;
-        }
-        else if (_connectJob is not null || _connectChain is not null)
-        {
-            _connectEnd = (_connectEnd.X + dx, _connectEnd.Y + dy);
-        }
-        else if (_panning)
-        {
-            _panX += dx;
-            _panY += dy;
-        }
-        else
-        {
-            return;
-        }
-        _lastX = e.ClientX;
-        _lastY = e.ClientY;
-    }
-
-    private async Task OnCanvasUp()
-    {
-        if (_panning)
-        {
-            _panning = false;
-            return;
-        }
-        if (_dragKey is not null)
-        {
-            var clickedJob = !_moved && _dragKey.StartsWith("job:") ? _dragKey["job:".Length..] : null;
-            _dragKey = null;
-            await SavePositionsAsync();
-            // A click (no movement) on a job opens its mapping — or the editor to create one.
-            if (clickedJob is not null && Guid.TryParse(clickedJob, out var jobId))
-            {
-                if (_mappings?.FirstOrDefault(m => m.JobId == jobId) is { } existing) OpenEditor(existing);
-                else if (_jobs?.FirstOrDefault(j => j.Id == jobId) is { } job) OpenEditorForJob(job);
-            }
-        }
-        else if (_connectJob is { } job)
-        {
-            // Released on empty canvas: open the editor with just the job prefilled.
-            _connectJob = null;
-            OpenEditorForJob(job);
-        }
-        else if (_connectChain is { } chain)
-        {
-            _connectChain = null;
-            OpenEditorForChain(chain);
-        }
-    }
-
-    private void OpenEditorForChain(JobChainView chain)
-    {
-        OpenEditor(null);
-        _edSourceKind = "chain";
-        _edJobId = chain.Id;
-        _edTable = Sanitize(chain.Name);
-    }
-
-    // Released on a table: while connecting, prefill both ends of the new edge. The node stops
-    // pointerup propagation (so the canvas handler can't see it), which means it must ALSO finish
-    // any in-flight drag — otherwise the node stays glued to the pointer after a plain click.
-    private async Task OnTableUp(string table)
-    {
-        if (_connectJob is { } job)
-        {
-            _connectJob = null;
-            OpenEditorForJob(job);
-            _edTable = table;
-            return;
-        }
-        if (_connectChain is { } chain)
-        {
-            _connectChain = null;
-            OpenEditorForChain(chain);
-            _edTable = table;
-            return;
-        }
-        if (_dragKey is not null)
-        {
-            _dragKey = null;
-            await SavePositionsAsync();
-        }
-    }
-
-    // Cubic bezier from the job node's right edge to the table node's left edge.
-    private string EdgePath(DataMappingView m)
-    {
-        var from = Pos((m.SourceKind == "chain" ? "chain:" : "job:") + m.JobId);
-        var to = Pos("table:" + m.TargetTable);
-        var x1 = from.X + 190 + _panX; var y1 = from.Y + 26 + _panY;
-        var x2 = to.X + _panX; var y2 = to.Y + 26 + _panY;
-        var bend = Math.Max(40, (x2 - x1) / 2);
-        return FormattableString.Invariant($"M {x1} {y1} C {x1 + bend} {y1}, {x2 - bend} {y2}, {x2} {y2}");
-    }
-
-    private string ConnectPath()
-    {
-        if (_connectJobId is null) return "";
-        var from = Pos(_connectJobId);
-        var x1 = from.X + 190 + _panX; var y1 = from.Y + 22 + _panY;
-        return FormattableString.Invariant($"M {x1} {y1} L {_connectEnd.X + _panX} {_connectEnd.Y + _panY}");
-    }
-
-    private void OpenEditorForJob(JobView job)
-    {
-        OpenEditor(null);
-        _edSourceKind = "job";
-        _edJobId = job.Id;
-        _edTable = Sanitize(job.Name);
-    }
-
-    private void OpenEditor(DataMappingView? m)
-    {
-        _editId = m?.Id;
-        _edJobId = m?.JobId ?? Guid.Empty;
-        _edSourceKind = m?.SourceKind ?? "job";
-        _edTable = m?.TargetTable ?? "";
-        _edRowsPath = m?.RowsPath ?? "";
-        _edEnabled = m?.Enabled ?? true;
-        _edFields.Clear();
-        if (m is not null)
-            _edFields.AddRange(m.Fields.Select(f => new FieldEdit { SourcePath = f.SourcePath, Column = f.Column, Type = f.Type }));
-        _editorError = null;
-        _showEditor = true;
-    }
-
-    private void CloseEditor()
-    {
-        _showEditor = false;
-        _editorError = null;
-    }
-
-    private void AddField() => _edFields.Add(new FieldEdit());
-
-    private async Task SaveMapping()
-    {
-        _editorError = null;
-        if (_edJobId == Guid.Empty) { _editorError = _edSourceKind == "chain" ? "Pick a source chain." : "Pick a source job."; return; }
-        if (string.IsNullOrWhiteSpace(_edTable)) { _editorError = "Target table is required."; return; }
-        var fields = _edFields
-            .Where(f => !string.IsNullOrWhiteSpace(f.SourcePath) || !string.IsNullOrWhiteSpace(f.Column))
-            .Select(f => new DataFieldDto(f.SourcePath.Trim(), f.Column.Trim(), f.Type))
-            .ToList();
-        if (fields.Count == 0) { _editorError = "Add at least one field."; return; }
-
-        _saving = true;
-        try
-        {
-            await Svc.SaveDataMappingAsync(new SaveDataMappingCommand(
-                ProjectId, _edJobId, _edTable.Trim(),
-                string.IsNullOrWhiteSpace(_edRowsPath) ? null : _edRowsPath.Trim(),
-                fields, _edEnabled, _editId,
-                SourceKind: _edSourceKind));
-            await ReloadAsync();
-            _showEditor = false;
-        }
-        catch (Exception ex) { _editorError = ex.Message; }
-        finally { _saving = false; }
-    }
-
-    private async Task DeleteMapping()
-    {
-        if (_editId is not { } id) return;
-        _saving = true;
-        try
-        {
-            await Svc.DeleteDataMappingAsync(id);
-            await ReloadAsync();
-            _showEditor = false;
-        }
-        catch (Exception ex) { _editorError = ex.Message; }
-        finally { _saving = false; }
-    }
-
-    // ── Field suggestion from the job's latest run ────────────────────────────────────────────────
-
-    private async Task SuggestFields()
-    {
-        if (_edJobId == Guid.Empty) return;
-        _suggesting = true;
-        _editorError = null;
-        try
-        {
-            var runs = await Svc.ListJobRunsAsync(_edJobId);
-            var last = runs.FirstOrDefault(r => r.Status is "Succeeded" or "Partial") ?? runs.FirstOrDefault();
-            if (last is null) { _editorError = "This job has no runs yet — run it once, then suggest."; return; }
-            var detail = await Svc.GetJobRunAsync(last.Id);
-            var artifact = detail?.ReduceResult?.Artifact
-                ?? detail?.ShardResults.FirstOrDefault(s => !string.IsNullOrWhiteSpace(s.Artifact))?.Artifact;
-            if (string.IsNullOrWhiteSpace(artifact)) { _editorError = "The latest run has no result to sample."; return; }
-
-            using var doc = System.Text.Json.JsonDocument.Parse(artifact);
-            var el = doc.RootElement;
-
-            // Follow the declared records path; else auto-detect: root array, or the first array property.
-            if (!string.IsNullOrWhiteSpace(_edRowsPath))
-            {
-                foreach (var seg in _edRowsPath.Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-                {
-                    if (el.ValueKind != System.Text.Json.JsonValueKind.Object || !el.TryGetProperty(seg, out el))
-                    { _editorError = $"Path '{_edRowsPath}' not found in the latest result."; return; }
-                }
-            }
-            else if (el.ValueKind == System.Text.Json.JsonValueKind.Object)
-            {
-                var firstArray = el.EnumerateObject().FirstOrDefault(p => p.Value.ValueKind == System.Text.Json.JsonValueKind.Array);
-                if (firstArray.Value.ValueKind == System.Text.Json.JsonValueKind.Array)
-                {
-                    _edRowsPath = firstArray.Name;
-                    el = firstArray.Value;
-                }
-            }
-
-            var sample = el.ValueKind == System.Text.Json.JsonValueKind.Array
-                ? el.EnumerateArray().FirstOrDefault()
-                : el;
-            if (sample.ValueKind != System.Text.Json.JsonValueKind.Object)
-            { _editorError = "Couldn't find a record object to sample in the latest result."; return; }
-
-            _edFields.Clear();
-            foreach (var p in sample.EnumerateObject())
-                _edFields.Add(new FieldEdit { SourcePath = p.Name, Column = Sanitize(p.Name), Type = InferType(p.Value) });
-        }
-        catch (Exception ex) { _editorError = $"Couldn't sample the latest run: {ex.Message}"; }
-        finally { _suggesting = false; }
-    }
-
-    private static string InferType(System.Text.Json.JsonElement v) => v.ValueKind switch
-    {
-        System.Text.Json.JsonValueKind.Number => v.TryGetInt64(out _) ? "bigint" : "numeric",
-        System.Text.Json.JsonValueKind.True or System.Text.Json.JsonValueKind.False => "boolean",
-        System.Text.Json.JsonValueKind.Object or System.Text.Json.JsonValueKind.Array => "jsonb",
-        System.Text.Json.JsonValueKind.String when DateTimeOffset.TryParse(v.GetString(), out _) => "timestamptz",
-        _ => "text",
-    };
-
-    // Table/column identifiers: letters, digits, underscores; no leading digit.
-    private static string Sanitize(string name)
-    {
-        var s = new string(name.Trim().ToLowerInvariant()
-            .Select(c => char.IsLetterOrDigit(c) ? c : '_').ToArray()).Trim('_');
-        if (s.Length == 0) s = "col";
-        if (char.IsDigit(s[0])) s = "_" + s;
-        return s.Length > 63 ? s[..63] : s;
-    }
+    private void StartDrag(string key, PointerEventArgs e) => Vm.StartDrag(key, e.ClientX, e.ClientY);
+    private void OnCanvasDown(PointerEventArgs e) => Vm.OnCanvasDown(e.ClientX, e.ClientY);
+    private void StartConnect(JobView job, PointerEventArgs e) => Vm.StartConnect(job, e.ClientX, e.ClientY);
+    private void StartConnectChain(JobChainView chain, PointerEventArgs e) => Vm.StartConnectChain(chain, e.ClientX, e.ClientY);
+    private void OnCanvasMove(PointerEventArgs e) => Vm.OnCanvasMove(e.ClientX, e.ClientY);
+    private async Task OnCanvasUp() => await Vm.OnCanvasUpAsync();
+    private async Task OnTableUp(string table) => await Vm.OnTableUpAsync(table);
 }

@@ -118,6 +118,8 @@ builder.Services.AddScoped<PlaceContext.Host.Components.ViewModels.ChatViewModel
 builder.Services.AddScoped<PlaceContext.Host.Components.ViewModels.JobsViewModel>();
 builder.Services.AddScoped<PlaceContext.Host.Components.ViewModels.EntityBrowseViewModel>();
 builder.Services.AddScoped<PlaceContext.Host.Components.ViewModels.ProjectDataViewModel>();
+builder.Services.AddScoped<PlaceContext.Host.Components.ViewModels.JobChainsViewModel>();
+builder.Services.AddScoped<PlaceContext.Host.Components.ViewModels.DataMapViewModel>();
 
 // Share the Data Protection key ring across replicas (persisted in Postgres) and pin the application
 // name, so the auth cookie one replica issues can be decrypted by any other — otherwise a token sign-in
