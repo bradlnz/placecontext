@@ -146,7 +146,7 @@ public sealed class AgentSessionRunner
                 var toolResults = new StringBuilder("\n\n## Tool Results\n\n");
                 foreach (var (name, args) in toolCalls)
                 {
-                    var timeout = name is "run_job" or "run_job_chain" ? JobToolTimeout : DefaultToolTimeout;
+                    var timeout = name is AgentToolNames.RunJob or AgentToolNames.RunJobChain ? JobToolTimeout : DefaultToolTimeout;
                     string result;
                     string status;
                     using var timeoutCts = new CancellationTokenSource(timeout);

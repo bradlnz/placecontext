@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using PlaceContext.Application.Ports;
+using PlaceContext.Application.Shared;
 using PlaceContext.Domain.Entities;
 
 namespace PlaceContext.Application.Features;
@@ -17,18 +18,18 @@ public sealed class JobRunDataRecorder
     /// <summary>The table's shape. Order matters: rows are built positionally against this spec.</summary>
     internal static readonly IReadOnlyList<ProjectColumnSpec> Columns = new[]
     {
-        new ProjectColumnSpec("recorded_at", "timestamptz", NotNull: true, PrimaryKey: false),
-        new ProjectColumnSpec("run_id", "uuid", NotNull: true, PrimaryKey: false),
-        new ProjectColumnSpec("job_id", "uuid", NotNull: true, PrimaryKey: false),
-        new ProjectColumnSpec("job_name", "text", NotNull: true, PrimaryKey: false),
-        new ProjectColumnSpec("run_status", "text", NotNull: true, PrimaryKey: false),
-        new ProjectColumnSpec("step", "text", NotNull: true, PrimaryKey: false),
-        new ProjectColumnSpec("shard_index", "integer", NotNull: false, PrimaryKey: false),
-        new ProjectColumnSpec("exit_code", "integer", NotNull: true, PrimaryKey: false),
-        new ProjectColumnSpec("outcome", "text", NotNull: true, PrimaryKey: false),
-        new ProjectColumnSpec("artifact", "text", NotNull: false, PrimaryKey: false),
-        new ProjectColumnSpec("started_at", "timestamptz", NotNull: true, PrimaryKey: false),
-        new ProjectColumnSpec("finished_at", "timestamptz", NotNull: false, PrimaryKey: false),
+        new ProjectColumnSpec("recorded_at", DataColumnTypes.Timestamptz, NotNull: true, PrimaryKey: false),
+        new ProjectColumnSpec("run_id", DataColumnTypes.Uuid, NotNull: true, PrimaryKey: false),
+        new ProjectColumnSpec("job_id", DataColumnTypes.Uuid, NotNull: true, PrimaryKey: false),
+        new ProjectColumnSpec("job_name", DataColumnTypes.Text, NotNull: true, PrimaryKey: false),
+        new ProjectColumnSpec("run_status", DataColumnTypes.Text, NotNull: true, PrimaryKey: false),
+        new ProjectColumnSpec("step", DataColumnTypes.Text, NotNull: true, PrimaryKey: false),
+        new ProjectColumnSpec("shard_index", DataColumnTypes.Integer, NotNull: false, PrimaryKey: false),
+        new ProjectColumnSpec("exit_code", DataColumnTypes.Integer, NotNull: true, PrimaryKey: false),
+        new ProjectColumnSpec("outcome", DataColumnTypes.Text, NotNull: true, PrimaryKey: false),
+        new ProjectColumnSpec("artifact", DataColumnTypes.Text, NotNull: false, PrimaryKey: false),
+        new ProjectColumnSpec("started_at", DataColumnTypes.Timestamptz, NotNull: true, PrimaryKey: false),
+        new ProjectColumnSpec("finished_at", DataColumnTypes.Timestamptz, NotNull: false, PrimaryKey: false),
     };
 
     private readonly IProjectDataStore _store;

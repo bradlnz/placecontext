@@ -1,0 +1,80 @@
+using System.Text.Json;
+using PlaceContext.Application.Dtos;
+
+namespace PlaceContext.Host.Components.ViewModels.Helpers;
+
+/// <summary>
+/// Shared run-parameter prompt state for Jobs and JobChains.
+/// Form keys may be plain param names (single job) or disambiguated keys like
+/// <c>step0:address</c> (chain) — those keys never leave the UI.
+/// </summary>
+public sealed class ParameterPromptState
+{
+    public Dictionary<string, string> Args { get; private set; } = new(StringComparer.Ordinal);
+    public string? Error { get; private set; }
+
+    public string Get(string key) => Args.TryGetValue(key, out var v) ? v : "";
+
+    public void Set(string key, string value) => Args[key] = value;
+
+    public void Clear()
+    {
+        Args = new Dictionary<string, string>(StringComparer.Ordinal);
+        Error = null;
+    }
+
+    public void Reset(IEnumerable<KeyValuePair<string, string>> initial)
+    {
+        Args = new Dictionary<string, string>(initial, StringComparer.Ordinal);
+        Error = null;
+    }
+
+    public void SetError(string? error) => Error = error;
+
+    /// <summary>UI-only form key for a chain step parameter (never sent on the wire).</summary>
+    public static string ChainArgKey(int stepIndex, string param) => $"step{stepIndex}:{param}";
+
+    /// <summary>
+    /// Validate required fields. <paramref name="fields"/> is (formKey, displayLabel, required).
+    /// </summary>
+    public bool ValidateRequired(IEnumerable<(string Key, string Label, bool Required)> fields)
+    {
+        Error = null;
+        var missing = fields
+            .Where(f => f.Required && string.IsNullOrWhiteSpace(Get(f.Key)))
+            .Select(f => f.Label)
+            .ToList();
+        if (missing.Count == 0) return true;
+        Error = $"Required: {string.Join(", ", missing)}";
+        return false;
+    }
+
+    public bool ValidateJobParameters(IEnumerable<JobParameterDto> parameters)
+        => ValidateRequired(parameters.Select(p => (p.Name, p.Label ?? p.Name, p.Required)));
+
+    public bool ValidateChainStepParameters(IEnumerable<(int Index, JobView Job)> steps)
+        => ValidateRequired(steps.SelectMany(s => s.Job.Parameters.Select(p => (
+            ChainArgKey(s.Index, p.Name),
+            $"step {s.Index + 1}: {p.Label ?? p.Name}",
+            p.Required))));
+
+    /// <summary>Serialize bare parameter names → JSON object for job stdin / step override.</summary>
+    public static string ToJsonPayload(IEnumerable<JobParameterDto> parameters, Func<string, string> valueForName)
+        => JsonSerializer.Serialize(parameters.ToDictionary(p => p.Name, p => valueForName(p.Name)));
+
+    public string ToJobPayload(IEnumerable<JobParameterDto> parameters)
+        => ToJsonPayload(parameters, Get);
+
+    /// <summary>
+    /// Group chain form values into per-step JSON overrides keyed by flat step index.
+    /// Wire shape uses bare param names; form keys stay <c>stepN:param</c>.
+    /// </summary>
+    public IReadOnlyDictionary<int, string> ToStepPayloadOverrides(IEnumerable<(int Index, JobView Job)> steps)
+        => steps
+            .Where(s => s.Job.Parameters.Count > 0)
+            .ToDictionary(
+                s => s.Index,
+                s => ToJsonPayload(
+                    s.Job.Parameters,
+                    name => Get(ChainArgKey(s.Index, name))));
+}

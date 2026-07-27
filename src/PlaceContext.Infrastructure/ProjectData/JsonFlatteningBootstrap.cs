@@ -3,6 +3,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Npgsql;
+using PlaceContext.Application.Shared;
 using NpgsqlTypes;
 using PlaceContext.Application.Features;
 
@@ -256,15 +257,15 @@ public static class JsonFlatteningBootstrap
     // store's allowed-type vocabulary (anything exotic degrades to text, which any value casts to).
     private static string CastType(string pgTypeName) => pgTypeName switch
     {
-        "bool" => "boolean",
-        "int4" => "integer",
-        "int8" => "bigint",
-        "numeric" or "float4" or "float8" => "numeric",
-        "uuid" => "uuid",
-        "timestamptz" or "timestamp" => "timestamptz",
-        "date" => "date",
-        "jsonb" or "json" => "jsonb",
-        _ => "text",
+        "bool" => DataColumnTypes.Boolean,
+        "int4" => DataColumnTypes.Integer,
+        "int8" => DataColumnTypes.Bigint,
+        "numeric" or "float4" or "float8" => DataColumnTypes.Numeric,
+        "uuid" => DataColumnTypes.Uuid,
+        "timestamptz" or "timestamp" => DataColumnTypes.Timestamptz,
+        "date" => DataColumnTypes.Date,
+        "jsonb" or "json" => DataColumnTypes.Jsonb,
+        _ => DataColumnTypes.Text,
     };
 
     private static string QuoteIdent(string name) => "\"" + name.Replace("\"", "\"\"") + "\"";

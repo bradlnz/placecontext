@@ -1,4 +1,5 @@
 using PlaceContext.Application.Ports;
+using PlaceContext.Application.Shared;
 using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 
@@ -362,9 +363,9 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
         {
             e.ToTable("mcp_connections");
             e.HasKey(r => r.Id);
-            e.Property(r => r.Id).HasColumnType("uuid");
-            e.Property(r => r.ProjectId).HasColumnType("uuid");
-            e.Property(r => r.TenantId).HasColumnType("uuid");
+            e.Property(r => r.Id).HasColumnType(DataColumnTypes.Uuid);
+            e.Property(r => r.ProjectId).HasColumnType(DataColumnTypes.Uuid);
+            e.Property(r => r.TenantId).HasColumnType(DataColumnTypes.Uuid);
             e.Property(r => r.Name).HasMaxLength(100);
             e.Property(r => r.Transport).HasMaxLength(20);
             e.Property(r => r.EndpointUrl).HasMaxLength(500);

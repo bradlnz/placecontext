@@ -5,7 +5,9 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Npgsql;
 using PlaceContext.Application.Ports;
+using PlaceContext.Application.Shared;
 using PlaceContext.Infrastructure;
+using PlaceContext.Application.Agents;
 
 namespace PlaceContext.Infrastructure.ProjectData;
 
@@ -73,15 +75,15 @@ public sealed class NpgsqlProjectDataStore : IProjectDataStore
     // Column types the wizard offers — an allow-list, so a type string can't smuggle in SQL.
     internal static readonly IReadOnlyDictionary<string, string> AllowedTypes = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
     {
-        ["text"] = "text",
-        ["integer"] = "integer",
-        ["bigint"] = "bigint",
-        ["numeric"] = "numeric",
-        ["boolean"] = "boolean",
-        ["timestamptz"] = "timestamptz",
-        ["date"] = "date",
-        ["uuid"] = "uuid",
-        ["jsonb"] = "jsonb",
+        ["text"] = DataColumnTypes.Text,
+        ["integer"] = DataColumnTypes.Integer,
+        ["bigint"] = DataColumnTypes.Bigint,
+        ["numeric"] = DataColumnTypes.Numeric,
+        ["boolean"] = DataColumnTypes.Boolean,
+        ["timestamptz"] = DataColumnTypes.Timestamptz,
+        ["date"] = DataColumnTypes.Date,
+        ["uuid"] = DataColumnTypes.Uuid,
+        ["jsonb"] = DataColumnTypes.Jsonb,
     };
 
     private static string Ident(string name, string what)
@@ -246,7 +248,7 @@ public sealed class NpgsqlProjectDataStore : IProjectDataStore
             countCmd.Transaction = tx;
             countCmd.CommandText = $"SELECT count(*) FROM {quoted}{whereSql}";
             // The search term is always bound as a parameter — never interpolated into the SQL text.
-            if (hasSearch) countCmd.Parameters.AddWithValue("search", $"%{search}%");
+            if (hasSearch) countCmd.Parameters.AddWithValue(AgentToolNames.Search, $"%{search}%");
             total = Convert.ToInt64(await countCmd.ExecuteScalarAsync(ct) ?? 0L);
         }
 
@@ -268,7 +270,7 @@ public sealed class NpgsqlProjectDataStore : IProjectDataStore
             else
             {
                 pageCmd.CommandText = $"SELECT * FROM {quoted}{whereSql}{orderBy} LIMIT @take OFFSET @skip";
-                if (hasSearch) pageCmd.Parameters.AddWithValue("search", $"%{search}%");
+                if (hasSearch) pageCmd.Parameters.AddWithValue(AgentToolNames.Search, $"%{search}%");
                 pageCmd.Parameters.AddWithValue("take", pageSize);
                 pageCmd.Parameters.AddWithValue("skip", offset);
             }
@@ -512,7 +514,7 @@ public sealed class NpgsqlProjectDataStore : IProjectDataStore
             {
                 var cell = row[i];
                 // text/jsonb cells are encrypted at rest; typed columns stay native for joins/keys.
-                if (cell is not null && pgTypes[i] is "text" or "jsonb")
+                if (cell is not null && pgTypes[i] is DataColumnTypes.Text or DataColumnTypes.Jsonb)
                     cell = ProtectCell(cell);
                 insert.Parameters.Add(new NpgsqlParameter($"p{i}", NpgsqlTypes.NpgsqlDbType.Text)
                     { Value = (object?)cell ?? DBNull.Value });
@@ -582,7 +584,7 @@ public sealed class NpgsqlProjectDataStore : IProjectDataStore
             for (var i = 0; i < columns.Count; i++)
             {
                 var cell = row[i];
-                if (cell is not null && pgTypes[i] is "text" or "jsonb")
+                if (cell is not null && pgTypes[i] is DataColumnTypes.Text or DataColumnTypes.Jsonb)
                     cell = ProtectCell(cell);
                 insert.Parameters.Add(new NpgsqlParameter($"p{i}", NpgsqlTypes.NpgsqlDbType.Text)
                     { Value = (object?)cell ?? DBNull.Value });
@@ -627,7 +629,7 @@ public sealed class NpgsqlProjectDataStore : IProjectDataStore
             for (var i = 0; i < cols.Count; i++)
             {
                 var cell = values[cols[i]];
-                if (cell is not null && colTypes[cols[i]] is "text" or "jsonb" or "varchar")
+                if (cell is not null && colTypes[cols[i]] is DataColumnTypes.Text or DataColumnTypes.Jsonb or "varchar")
                     cell = ProtectCell(cell);
                 insert.Parameters.Add(new NpgsqlParameter($"p{i}", NpgsqlTypes.NpgsqlDbType.Text)
                     { Value = (object?)cell ?? DBNull.Value });
@@ -674,7 +676,7 @@ public sealed class NpgsqlProjectDataStore : IProjectDataStore
         for (var i = 0; i < valCols.Count; i++)
         {
             var cell = values[valCols[i]];
-            if (cell is not null && colTypes[valCols[i]] is "text" or "jsonb" or "varchar")
+            if (cell is not null && colTypes[valCols[i]] is DataColumnTypes.Text or DataColumnTypes.Jsonb or "varchar")
                 cell = ProtectCell(cell);
             cmd.Parameters.Add(new NpgsqlParameter($"v{i}", NpgsqlTypes.NpgsqlDbType.Text)
                 { Value = (object?)cell ?? DBNull.Value });
@@ -732,7 +734,7 @@ public sealed class NpgsqlProjectDataStore : IProjectDataStore
         NpgsqlConnection conn, NpgsqlTransaction tx, string tableName, IReadOnlyList<string> columns, CancellationToken ct)
     {
         // Default text; refine from information_schema when available.
-        var map = columns.ToDictionary(c => c, _ => "text", StringComparer.Ordinal);
+        var map = columns.ToDictionary(c => c, _ => DataColumnTypes.Text, StringComparer.Ordinal);
         await using var cmd = conn.CreateCommand();
         cmd.Transaction = tx;
         cmd.CommandText = """
@@ -749,15 +751,15 @@ public sealed class NpgsqlProjectDataStore : IProjectDataStore
             var udt = r.GetString(2);
             map[name] = udt switch
             {
-                "int4" => "integer",
-                "int8" => "bigint",
-                "bool" => "boolean",
-                "numeric" or "float4" or "float8" => "numeric",
-                "uuid" => "uuid",
-                "timestamptz" or "timestamp" => "timestamptz",
-                "date" => "date",
-                "jsonb" or "json" => "jsonb",
-                _ => "text",
+                "int4" => DataColumnTypes.Integer,
+                "int8" => DataColumnTypes.Bigint,
+                "bool" => DataColumnTypes.Boolean,
+                "numeric" or "float4" or "float8" => DataColumnTypes.Numeric,
+                "uuid" => DataColumnTypes.Uuid,
+                "timestamptz" or "timestamp" => DataColumnTypes.Timestamptz,
+                "date" => DataColumnTypes.Date,
+                "jsonb" or "json" => DataColumnTypes.Jsonb,
+                _ => DataColumnTypes.Text,
             };
         }
         return map;

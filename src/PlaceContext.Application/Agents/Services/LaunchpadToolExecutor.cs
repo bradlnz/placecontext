@@ -1,4 +1,5 @@
 using System.Text;
+using PlaceContext.Application.Agents;
 
 namespace PlaceContext.Application.Agents.Services;
 
@@ -21,17 +22,17 @@ public class LaunchpadToolExecutor
         {
             return toolName switch
             {
-                "list_tables" => await ListTablesAsync(projectId, ct),
-                "query_table" => await QueryTableAsync(projectId, args, ct),
-                "list_jobs" => await ListJobsAsync(projectId, ct),
-                "list_job_runs" => await ListJobRunsAsync(args, ct),
-                "list_chains" => await ListChainsAsync(projectId, ct),
-                "run_job" => await RunJobAsync(args, ct),
-                "run_job_chain" => await RunJobChainAsync(args, ct),
-                "search" => await SearchAsync(projectId, args, ct),
-                "query_graph" => await QueryGraphAsync(projectId, ct),
-                "get_artifacts" => await GetArtifactsAsync(projectId, ct),
-                "list_schedules" => await ListSchedulesAsync(projectId, args, ct),
+                AgentToolNames.ListTables => await ListTablesAsync(projectId, ct),
+                AgentToolNames.QueryTable => await QueryTableAsync(projectId, args, ct),
+                AgentToolNames.ListJobs => await ListJobsAsync(projectId, ct),
+                AgentToolNames.ListJobRuns => await ListJobRunsAsync(args, ct),
+                AgentToolNames.ListChains => await ListChainsAsync(projectId, ct),
+                AgentToolNames.RunJob => await RunJobAsync(args, ct),
+                AgentToolNames.RunJobChain => await RunJobChainAsync(args, ct),
+                AgentToolNames.Search => await SearchAsync(projectId, args, ct),
+                AgentToolNames.QueryGraph => await QueryGraphAsync(projectId, ct),
+                AgentToolNames.GetArtifacts => await GetArtifactsAsync(projectId, ct),
+                AgentToolNames.ListSchedules => await ListSchedulesAsync(projectId, args, ct),
                 _ => $"Error: unknown tool '{toolName}'",
             };
         }

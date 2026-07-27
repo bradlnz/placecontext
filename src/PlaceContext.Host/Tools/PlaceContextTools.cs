@@ -9,6 +9,7 @@ using PlaceContext.Application.Ports;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using ModelContextProtocol.Server;
+using PlaceContext.Application.Agents;
 
 namespace PlaceContext.Host.Tools;
 
@@ -126,9 +127,9 @@ public sealed class PlaceContextTools
             () => svc.AddDecisionAsync(projectId, question, choice, rationale));
 
     [Authorize(Policy = "Member")]
-    [McpServerTool(Name = "query_graph"), Description("Ask the project's knowledge graph a structured question (e.g. 'hotspots', 'decisions', 'unverified', 'activity'). Answered in-process from logged activity.")]
+    [McpServerTool(Name = AgentToolNames.QueryGraph), Description("Ask the project's knowledge graph a structured question (e.g. 'hotspots', 'decisions', 'unverified', 'activity'). Answered in-process from logged activity.")]
     public static Task<string> QueryGraph(IPlaceContextService svc, IToolCallLog log, Guid projectId, string question)
-        => Traced(log, "query_graph", projectId.ToString(), question, new { projectId, question },
+        => Traced(log, AgentToolNames.QueryGraph, projectId.ToString(), question, new { projectId, question },
             () => svc.QueryGraphAsync(projectId, question));
 
     [Authorize(Policy = "Member")]
@@ -257,9 +258,9 @@ public sealed class PlaceContextTools
     }
 
     [Authorize(Policy = "Member")]
-    [McpServerTool(Name = "list_jobs"), Description("List a project's jobs (map/reduce code workloads) with their run configuration: shard count, concurrency, runtime, and network-egress policy. Use this to discover jobs and their ids before running one.")]
+    [McpServerTool(Name = AgentToolNames.ListJobs), Description("List a project's jobs (map/reduce code workloads) with their run configuration: shard count, concurrency, runtime, and network-egress policy. Use this to discover jobs and their ids before running one.")]
     public static Task<string> ListJobs(IPlaceContextService svc, IToolCallLog log, Guid projectId)
-        => Traced(log, "list_jobs", projectId.ToString(), "list jobs", new { projectId },
+        => Traced(log, AgentToolNames.ListJobs, projectId.ToString(), "list jobs", new { projectId },
             () => svc.ListJobsAsync(projectId));
 
     [Authorize(Policy = "Member")]
@@ -269,16 +270,16 @@ public sealed class PlaceContextTools
             () => svc.GetJobAsync(jobId));
 
     [Authorize(Policy = Permission.JobsRun)]
-    [McpServerTool(Name = "run_job"), Description("Run a job now: executes its map shards (and reduce step, if defined) as isolated containers and waits for completion. Returns the run detail — overall status plus each shard's exit code, outcome, artifact, and log, and any reduce result. Pass 'inputPayload' to override the stored shards with a single shard carrying that payload (e.g. parameters for a job that declares input fields). Use list_job_runs/get_job_run to fetch results later.")]
+    [McpServerTool(Name = AgentToolNames.RunJob), Description("Run a job now: executes its map shards (and reduce step, if defined) as isolated containers and waits for completion. Returns the run detail — overall status plus each shard's exit code, outcome, artifact, and log, and any reduce result. Pass 'inputPayload' to override the stored shards with a single shard carrying that payload (e.g. parameters for a job that declares input fields). Use list_job_runs/get_job_run to fetch results later.")]
     public static Task<string> RunJob(IPlaceContextService svc, IToolCallLog log, Guid jobId,
         [Description("Optional input payload override (typically JSON); runs a single shard with it")] string? inputPayload = null)
-        => Traced(log, "run_job", jobId.ToString(), "run job", new { jobId, inputPayload },
+        => Traced(log, AgentToolNames.RunJob, jobId.ToString(), "run job", new { jobId, inputPayload },
             () => svc.RunJobAsync(jobId, inputPayload));
 
     [Authorize(Policy = "Member")]
-    [McpServerTool(Name = "list_job_runs"), Description("List a job's run history (most recent first): each run's status, start/finish times, and shard success/partial/failure counts. Use get_job_run for a run's full artifacts.")]
+    [McpServerTool(Name = AgentToolNames.ListJobRuns), Description("List a job's run history (most recent first): each run's status, start/finish times, and shard success/partial/failure counts. Use get_job_run for a run's full artifacts.")]
     public static Task<string> ListJobRuns(IPlaceContextService svc, IToolCallLog log, Guid jobId)
-        => Traced(log, "list_job_runs", jobId.ToString(), "list job runs", new { jobId },
+        => Traced(log, AgentToolNames.ListJobRuns, jobId.ToString(), "list job runs", new { jobId },
             () => svc.ListJobRunsAsync(jobId));
 
     [Authorize(Policy = "Member")]
@@ -288,11 +289,11 @@ public sealed class PlaceContextTools
             () => svc.GetJobRunAsync(runId));
 
     [Authorize(Policy = "Member")]
-    [McpServerTool(Name = "get_artifacts"), Description("List recent artifacts (reports, charts, CSVs) produced by job runs; returns metadata and download URLs, not file contents")]
+    [McpServerTool(Name = AgentToolNames.GetArtifacts), Description("List recent artifacts (reports, charts, CSVs) produced by job runs; returns metadata and download URLs, not file contents")]
     public static Task<string> GetArtifacts(IPlaceContextService svc, IToolCallLog log,
         [Description("Project id")] Guid projectId,
         [Description("Max artifacts to return (newest first)")] int take = 100)
-        => Traced(log, "get_artifacts", projectId.ToString(), "list artifacts", new { projectId, take },
+        => Traced(log, AgentToolNames.GetArtifacts, projectId.ToString(), "list artifacts", new { projectId, take },
             async () => (await svc.ListProjectArtifactsAsync(projectId, take))
                 .Select(a => new
                 {
@@ -345,10 +346,10 @@ public sealed class PlaceContextTools
             () => svc.ListJobChainsAsync(projectId));
 
     [Authorize(Policy = Permission.JobsRun)]
-    [McpServerTool(Name = "run_job_chain"), Description("Run a job chain now: executes every stage in order, waiting for completion. A stage with more than one job runs them all in parallel (a fan-out group) and is all-or-nothing — it only advances once every job in it finishes, and if any of them fails the whole chain fails and every later stage (including the join that would follow the fan-out) is skipped; a Partial job continues but downgrades the chain status. Each stage's primary output feeds the next stage's input (a fan-out group's branches are combined into one JSON array for the join). Pass 'inputPayload' to feed the FIRST stage; omit it to run the first job with its stored shard payloads. Returns the chain status, each executed step's run id + status (fetch full artifacts with get_job_run), and the final output — the last stage's output, i.e. the chain's result.")]
+    [McpServerTool(Name = AgentToolNames.RunJobChain), Description("Run a job chain now: executes every stage in order, waiting for completion. A stage with more than one job runs them all in parallel (a fan-out group) and is all-or-nothing — it only advances once every job in it finishes, and if any of them fails the whole chain fails and every later stage (including the join that would follow the fan-out) is skipped; a Partial job continues but downgrades the chain status. Each stage's primary output feeds the next stage's input (a fan-out group's branches are combined into one JSON array for the join). Pass 'inputPayload' to feed the FIRST stage; omit it to run the first job with its stored shard payloads. Returns the chain status, each executed step's run id + status (fetch full artifacts with get_job_run), and the final output — the last stage's output, i.e. the chain's result.")]
     public static Task<string> RunJobChain(IPlaceContextService svc, IToolCallLog log, Guid chainId,
         [Description("Optional input payload for the first step (typically JSON)")] string? inputPayload = null)
-        => Traced(log, "run_job_chain", chainId.ToString(), "run job chain", new { chainId, inputPayload },
+        => Traced(log, AgentToolNames.RunJobChain, chainId.ToString(), "run job chain", new { chainId, inputPayload },
             () => svc.RunJobChainAsync(chainId, inputPayload));
 
     [Authorize(Policy = "Member")]

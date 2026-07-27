@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using PlaceContext.Application.Ports;
+using PlaceContext.Application.Shared;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.Repositories;
 
@@ -21,8 +22,8 @@ public sealed class DataMappingIngestionService
 {
     private static readonly IReadOnlyList<ProjectColumnSpec> ProvenanceColumns = new[]
     {
-        new ProjectColumnSpec("ingested_at", "timestamptz", NotNull: true, PrimaryKey: false),
-        new ProjectColumnSpec("run_id", "uuid", NotNull: true, PrimaryKey: false),
+        new ProjectColumnSpec("ingested_at", DataColumnTypes.Timestamptz, NotNull: true, PrimaryKey: false),
+        new ProjectColumnSpec("run_id", DataColumnTypes.Uuid, NotNull: true, PrimaryKey: false),
     };
 
     private readonly IDataMappingRepository _mappings;

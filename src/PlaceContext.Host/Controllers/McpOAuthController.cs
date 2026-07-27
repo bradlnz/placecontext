@@ -5,6 +5,7 @@ using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using PlaceContext.Application.Ports;
+using PlaceContext.Domain.Mcp;
 using PlaceContext.Domain.Repositories;
 
 namespace PlaceContext.Host.Controllers;
@@ -214,7 +215,7 @@ public sealed class McpOAuthController : ControllerBase
     {
         var conn = await _mcpConnections.GetByIdAsync(connectionId, HttpContext.RequestAborted);
         if (conn is null) return NotFound("MCP connection not found.");
-        if (conn.AuthType != "oauth") return BadRequest("Not an OAuth connection.");
+        if (conn.AuthType != McpAuthType.OAuth) return BadRequest("Not an OAuth connection.");
         if (string.IsNullOrEmpty(conn.OAuthRefreshToken))
             return BadRequest("No refresh token available. Please re-authenticate.");
 
@@ -273,7 +274,7 @@ public sealed class McpOAuthController : ControllerBase
     {
         var conn = await _mcpConnections.GetByIdAsync(connectionId, HttpContext.RequestAborted);
         if (conn is null) return NotFound();
-        if (conn.AuthType != "oauth" || string.IsNullOrEmpty(conn.OAuthAccessToken))
+        if (conn.AuthType != McpAuthType.OAuth || string.IsNullOrEmpty(conn.OAuthAccessToken))
             return NotFound();
 
         // Auto-refresh if expired

@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using PlaceContext.Application.Shared;
 
 namespace PlaceContext.Application.Features;
 
@@ -89,18 +90,18 @@ public static class JsonFlattener
         var kind = value.ValueKind switch
         {
             JsonValueKind.Null or JsonValueKind.Undefined => null,
-            JsonValueKind.True or JsonValueKind.False => "boolean",
-            JsonValueKind.Number => "numeric",
-            JsonValueKind.String => "text",
-            _ => "jsonb", // arrays and empty objects (non-empty objects never reach a leaf)
+            JsonValueKind.True or JsonValueKind.False => DataColumnTypes.Boolean,
+            JsonValueKind.Number => DataColumnTypes.Numeric,
+            JsonValueKind.String => DataColumnTypes.Text,
+            _ => DataColumnTypes.Jsonb, // arrays and empty objects (non-empty objects never reach a leaf)
         };
         if (kind is null) return current;
         if (current is null || current == kind) return kind;
-        return "text"; // mixed kinds — the one type every value's text form casts to
+        return DataColumnTypes.Text; // mixed kinds — the one type every value's text form casts to
     }
 
     /// <summary>The inferred type once observation is done; defaults to "text" when only nulls were seen.</summary>
-    public static string InferredType(string? current) => current ?? "text";
+    public static string InferredType(string? current) => current ?? DataColumnTypes.Text;
 
     /// <summary>Values travel as text and are cast server-side to the column's declared type.</summary>
     public static string? ValueText(JsonElement? el) => el is not { } v ? null : v.ValueKind switch

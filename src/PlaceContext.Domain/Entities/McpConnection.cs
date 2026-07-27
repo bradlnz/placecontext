@@ -1,4 +1,5 @@
 using PlaceContext.Domain.Common;
+using PlaceContext.Domain.Mcp;
 
 namespace PlaceContext.Domain.Entities;
 
@@ -55,10 +56,10 @@ public sealed class McpConnection : AggregateRoot
         string? authToken, string? authHeader, DateTimeOffset now)
     {
         if (string.IsNullOrWhiteSpace(name)) throw new ArgumentException("Name required.", nameof(name));
-        if (transport is not ("http" or "sse" or "stdio")) throw new ArgumentException("Invalid transport.", nameof(transport));
+        if (transport is not (McpTransport.Http or McpTransport.Sse or McpTransport.Stdio)) throw new ArgumentException("Invalid transport.", nameof(transport));
         return new McpConnection(Guid.NewGuid(), projectId, name.Trim(), transport,
             endpointUrl?.Trim(), command?.Trim(), args?.Trim(),
-            authType ?? "none", authToken?.Trim(), authHeader?.Trim(), true, now);
+            authType ?? McpAuthType.None, authToken?.Trim(), authHeader?.Trim(), true, now);
     }
 
     public void Update(string name, string transport, string? endpointUrl, string? command, string? args,
@@ -69,7 +70,7 @@ public sealed class McpConnection : AggregateRoot
         EndpointUrl = endpointUrl?.Trim();
         Command = command?.Trim();
         Args = args?.Trim();
-        AuthType = authType ?? "none";
+        AuthType = authType ?? McpAuthType.None;
         AuthToken = authToken?.Trim();
         AuthHeader = authHeader?.Trim();
     }

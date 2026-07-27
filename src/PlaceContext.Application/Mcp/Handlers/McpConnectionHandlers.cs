@@ -3,6 +3,7 @@ using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Ports;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Domain.Entities;
+using PlaceContext.Domain.Mcp;
 using PlaceContext.Domain.Repositories;
 
 namespace PlaceContext.Application.Features;
@@ -25,7 +26,7 @@ public sealed class CreateMcpConnectionHandler : ICommandHandler<CreateMcpConnec
         var conn = McpConnection.Create(command.ProjectId, command.Name, command.Transport,
             command.EndpointUrl, command.Command, command.Args,
             command.AuthType, command.AuthToken, command.AuthHeader, _clock.UtcNow);
-        if (command.AuthType == "oauth")
+        if (command.AuthType == McpAuthType.OAuth)
             conn.SetOAuthCredentials(command.OAuthClientId, command.OAuthScopes, _clock.UtcNow);
         await _repo.AddAsync(conn, ct);
         await _uow.SaveChangesAsync(ct);
@@ -51,7 +52,7 @@ public sealed class UpdateMcpConnectionHandler : ICommandHandler<UpdateMcpConnec
         var conn = await _repo.GetByIdAsync(command.Id, ct) ?? throw new InvalidOperationException($"McpConnection {command.Id} not found.");
         conn.Update(command.Name, command.Transport, command.EndpointUrl, command.Command, command.Args,
             command.AuthType, command.AuthToken, command.AuthHeader, _clock.UtcNow);
-        if (command.AuthType == "oauth")
+        if (command.AuthType == McpAuthType.OAuth)
             conn.SetOAuthCredentials(command.OAuthClientId, command.OAuthScopes, _clock.UtcNow);
         await _repo.UpdateAsync(conn, ct);
         await _uow.SaveChangesAsync(ct);
@@ -115,21 +116,21 @@ public sealed class TestMcpConnectionHandler : ICommandHandler<TestMcpConnection
         var status = "unknown";
         try
         {
-            if (conn.Transport is "http" or "sse" && !string.IsNullOrEmpty(conn.EndpointUrl))
+            if (conn.Transport is McpTransport.Http or McpTransport.Sse && !string.IsNullOrEmpty(conn.EndpointUrl))
             {
                 var client = _http.CreateClient();
                 client.Timeout = TimeSpan.FromSeconds(10);
 
                 // Apply auth headers
-                if (conn.AuthType is "bearer" or "oauth" && !string.IsNullOrEmpty(conn.AuthToken))
+                if (conn.AuthType is McpAuthType.Bearer or McpAuthType.OAuth && !string.IsNullOrEmpty(conn.AuthToken))
                 {
                     client.DefaultRequestHeaders.Authorization = new("Bearer", conn.AuthToken);
                 }
-                else if (conn.AuthType == "apikey" && !string.IsNullOrEmpty(conn.AuthToken))
+                else if (conn.AuthType == McpAuthType.ApiKey && !string.IsNullOrEmpty(conn.AuthToken))
                 {
                     client.DefaultRequestHeaders.Add("X-API-Key", conn.AuthToken);
                 }
-                else if (conn.AuthType == "header" && !string.IsNullOrEmpty(conn.AuthHeader) && !string.IsNullOrEmpty(conn.AuthToken))
+                else if (conn.AuthType == McpAuthType.Header && !string.IsNullOrEmpty(conn.AuthHeader) && !string.IsNullOrEmpty(conn.AuthToken))
                 {
                     client.DefaultRequestHeaders.Add(conn.AuthHeader, conn.AuthToken);
                 }
@@ -154,19 +155,6 @@ public sealed class TestMcpConnectionHandler : ICommandHandler<TestMcpConnection
     }
 }
 
-// Commands
-public sealed record UpdateMcpConnectionCommand(
-    Guid Id, string Name, string Transport, string? EndpointUrl = null, string? Command = null, string? Args = null,
-    string? AuthType = null, string? AuthToken = null, string? AuthHeader = null,
-    string? OAuthClientId = null, string? OAuthScopes = null) : ICommand<McpConnectionView>;
-
-public sealed record DeleteMcpConnectionCommand(Guid Id) : ICommand<bool>;
-
-public sealed record ListMcpConnectionsQuery(Guid ProjectId) : IQuery<IReadOnlyList<McpConnectionView>>;
-
-public sealed record TestMcpConnectionCommand(Guid Id) : ICommand<McpConnectionView>;
-
-// Mapper
 internal static class McpConnectionMapper
 {
     internal static McpConnectionView ToView(McpConnection c) => new(

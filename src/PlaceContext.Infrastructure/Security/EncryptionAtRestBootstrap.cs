@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Npgsql;
 using PlaceContext.Application.Ports;
+using PlaceContext.Application.Shared;
 using PlaceContext.Infrastructure.Persistence;
 
 namespace PlaceContext.Infrastructure.Security;
@@ -339,12 +340,12 @@ public static class EncryptionAtRestBootstrap
                 // Skip absurdly large cells rather than OOM the Host.
                 if (plain.Length > DataProtectionEncryptor.MaxPlaintextChars) continue;
                 // jsonb::text wraps strings in quotes — strip JSON string encoding when present.
-                var value = typ == "jsonb" ? UnwrapJsonbText(plain) : plain;
+                var value = typ == DataColumnTypes.Jsonb ? UnwrapJsonbText(plain) : plain;
                 if (enc.IsProtected(value)) continue;
                 var cipher = enc.Protect(value, purpose);
                 await using var upd = conn.CreateCommand();
                 upd.Transaction = tx;
-                if (typ == "jsonb")
+                if (typ == DataColumnTypes.Jsonb)
                     upd.CommandText = $"UPDATE {qSchema}.{qTable} SET {qCol} = to_jsonb(@v::text) WHERE ctid = @ctid::tid";
                 else
                     upd.CommandText = $"UPDATE {qSchema}.{qTable} SET {qCol} = @v WHERE ctid = @ctid::tid";
