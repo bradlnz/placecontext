@@ -1,3 +1,4 @@
+using System.Threading;
 using Microsoft.Extensions.DependencyInjection;
 using PlaceContext.Application;
 using PlaceContext.Application.Dtos;
@@ -24,6 +25,7 @@ public sealed partial class JobChainsViewModel : PageViewModel
 
     // ── Parameters ────────────────────────────────────────────────────────────────────────────
     public Guid ProjectId { get; private set; }
+    private long _lastOpsChangeTick;
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────────────────────
     public void Initialize(Guid projectId)
@@ -53,6 +55,12 @@ public sealed partial class JobChainsViewModel : PageViewModel
 
     private void OnOpsChanged()
     {
+        // Debounce: ignore if less than 3s since last handled change
+        var now = Environment.TickCount64;
+        var last = Volatile.Read(ref _lastOpsChangeTick);
+        if (now - last < 3000) return;
+        Interlocked.Exchange(ref _lastOpsChangeTick, now);
+
         if (OpenRun is { } run)
             _ = RefreshRunsAsync(run.ChainId, openNewest: false);
     }

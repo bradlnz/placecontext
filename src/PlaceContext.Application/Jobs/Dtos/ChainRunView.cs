@@ -16,12 +16,15 @@ public sealed record ChainRunView(
     DateTimeOffset StartedAt,
     DateTimeOffset? FinishedAt)
 {
+    private IReadOnlyList<IReadOnlyList<ChainStepRunView>>? _stepsByStage;
+
     /// <summary>Steps grouped by stage, in run order — a group with more than one entry is a
     /// parallel fan-out stage (the join that follows one has a single entry, same as any other
     /// sequential step).</summary>
-    public IReadOnlyList<IReadOnlyList<ChainStepRunView>> StepsByStage => Steps
-        .GroupBy(s => s.StageIndex)
-        .OrderBy(g => g.Key)
-        .Select(g => (IReadOnlyList<ChainStepRunView>)g.OrderBy(s => s.BranchIndex).ToList())
-        .ToList();
+    public IReadOnlyList<IReadOnlyList<ChainStepRunView>> StepsByStage =>
+        _stepsByStage ??= Steps
+            .GroupBy(s => s.StageIndex)
+            .OrderBy(g => g.Key)
+            .Select(g => (IReadOnlyList<ChainStepRunView>)g.OrderBy(s => s.BranchIndex).ToList())
+            .ToList();
 }

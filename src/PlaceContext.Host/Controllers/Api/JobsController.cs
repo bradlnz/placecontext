@@ -98,6 +98,34 @@ public sealed class JobsController : ControllerBase
         return deleted ? NoContent() : NotFound();
     }
 
+    // ── Chain Trigger ────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// POST /api/v1/chains/{chainId}/trigger — start a fresh chain run. The chain executes from
+    /// the first stage, using the supplied input payload (or the first job's stored shard payloads
+    /// when null). Returns the new chain run view.
+    /// </summary>
+    [HttpPost("chains/{chainId:guid}/trigger")]
+    [Authorize(Policy = Permission.JobsEdit)]
+    public async Task<ActionResult<ChainRunView>> TriggerChain(
+        Guid chainId,
+        [FromBody] TriggerChainRequest? request = null)
+    {
+        var ct = HttpContext.RequestAborted;
+        try
+        {
+            var result = await _svc.RunJobChainAsync(
+                chainId,
+                inputPayload: request?.InputPayload,
+                ct: ct);
+            return Ok(result);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
     // ── Chain Replay ────────────────────────────────────────────────────────
 
     /// <summary>
@@ -132,6 +160,13 @@ public sealed class JobsController : ControllerBase
             return BadRequest(new { error = ex.Message });
         }
     }
+}
+
+public sealed class TriggerChainRequest
+{
+    /// <summary>Optional input payload for the first stage (JSON string). Omit to use the first
+    /// job's stored shard payloads.</summary>
+    public string? InputPayload { get; set; }
 }
 
 public sealed class ReplayChainRequest

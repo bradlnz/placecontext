@@ -1,3 +1,4 @@
+using System.Threading;
 using Microsoft.Extensions.DependencyInjection;
 using PlaceContext.Application;
 using PlaceContext.Application.Dtos;
@@ -16,6 +17,7 @@ public sealed partial class JobChainsViewModel
     public JobRunDetailView? StepRunDetail { get; private set; }
     public bool FollowNewest { get; set; }
     private CancellationTokenSource? _pollCts;
+    private readonly SemaphoreSlim _refreshLock = new(1, 1);
 
     // ── Run-input prompt state ────────────────────────────────────────────────────────────────
     public JobChainView? RunPromptChain { get; private set; }
@@ -129,6 +131,7 @@ public sealed partial class JobChainsViewModel
 
     private async Task RefreshRunsAsync(Guid chainId, bool openNewest)
     {
+        if (!await _refreshLock.WaitAsync(0)) return; // skip if a refresh is already in-flight
         try
         {
             ChainRuns = await _svc.ListChainRunsAsync(chainId);
@@ -146,6 +149,7 @@ public sealed partial class JobChainsViewModel
             }
         }
         catch { }
+        finally { _refreshLock.Release(); }
         NotifyStateChanged();
     }
 
@@ -158,12 +162,17 @@ public sealed partial class JobChainsViewModel
         {
             while (!ct.IsCancellationRequested)
             {
-                await Task.Delay(2000, ct).ConfigureAwait(false);
+                await Task.Delay(5000, ct).ConfigureAwait(false);
                 if (ct.IsCancellationRequested) break;
                 try
                 {
                     if (OpenRun is { } run)
+                    {
                         await RefreshRunsAsync(run.ChainId, openNewest: false);
+                        // Stop polling once the run reaches a terminal state
+                        if (OpenRun is { Status: "Succeeded" or "Failed" or "Partial" })
+                            break;
+                    }
                 }
                 catch { }
             }
