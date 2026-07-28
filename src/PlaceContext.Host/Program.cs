@@ -170,7 +170,7 @@ builder.Services
         // Blazor JS client would try to parse as JSON → "unexpected token" errors.
         o.Events.OnRedirectToLogin = ctx =>
         {
-            if (ctx.Request.Path.StartsWithSegments("/_blazor"))
+            if (ctx.Request.Path.StartsWithSegments("/_blazor") || ctx.Request.Path.StartsWithSegments("/api"))
             {
                 ctx.Response.StatusCode = StatusCodes.Status401Unauthorized;
                 ctx.Response.ContentType = "application/json";
@@ -181,7 +181,7 @@ builder.Services
         };
         o.Events.OnRedirectToAccessDenied = ctx =>
         {
-            if (ctx.Request.Path.StartsWithSegments("/_blazor"))
+            if (ctx.Request.Path.StartsWithSegments("/_blazor") || ctx.Request.Path.StartsWithSegments("/api"))
             {
                 ctx.Response.StatusCode = StatusCodes.Status401Unauthorized;
                 ctx.Response.ContentType = "application/json";
