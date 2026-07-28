@@ -63,12 +63,6 @@ public sealed partial class ProjectDataViewModel
         finally { Running = false; NotifyStateChanged(); }
     }
 
-    public async Task SelectTableAsync(string table, Func<string, Task> setSqlAndRun)
-    {
-        var sql = $"SELECT * FROM \"{table.Replace("\"", "\"\"")}\" LIMIT 100;";
-        await setSqlAndRun(sql);
-    }
-
     // ── New table wizard ──────────────────────────────────────────────────────────────────────
     public void StartNewTable()
     {

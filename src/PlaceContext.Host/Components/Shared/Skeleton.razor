@@ -1,6 +1,7 @@
 @* Reusable skeleton loader. Pick a Kind that mirrors the component's real layout so the swap to
    loaded content doesn't shift the page:
      "card-grid" — responsive grid of cards (dashboards, chart walls, entity tiles)
+     "tile-grid" — small tiles with an icon, title, meta, and action bar (table browser)
      "table"     — header + rows (data tables, run lists)
      "list"      — stacked rows with an avatar dot + two lines (jobs, chains, reports, schedules)
      "detail"    — a title bar + paragraph lines (slide-outs, run/artifact detail)
@@ -18,6 +19,29 @@
                     <div class="dcskel dcskel-line lg" style="width:@Pct(38 + (i * 13) % 34)%"></div>
                     <div class="dcskel skel-block"></div>
                     <div class="dcskel dcskel-line sm" style="width:@Pct(50 + (i * 7) % 30)%"></div>
+                </div>
+            }
+        </div>
+        break;
+
+    case "tile-grid":
+        <div class="dcskel-grid" style="@Wrap">
+            @for (var i = 0; i < Cards; i++)
+            {
+                <div class="dccard dcskel-tile">
+                    <div class="dcskel-tile-head">
+                        <div class="dcskel circle skel-tile-icon"></div>
+                        <div class="dcskel-tile-lines">
+                            <div class="dcskel dcskel-line lg" style="width:@Pct(55 + (i * 13) % 30)%"></div>
+                            <div class="dcskel dcskel-line sm" style="width:@Pct(40 + (i * 7) % 35)%"></div>
+                        </div>
+                    </div>
+                    <div class="dcskel-tile-actions">
+                        @for (var a = 0; a < 4; a++)
+                        {
+                            <div class="dcskel dcskel-line sm skel-tile-action"></div>
+                        }
+                    </div>
                 </div>
             }
         </div>
@@ -94,7 +118,7 @@
 }
 
 @code {
-    /// <summary>Layout shape: card-grid | chart | table | detail | list | text.</summary>
+    /// <summary>Layout shape: card-grid | tile-grid | chart | table | detail | list | text.</summary>
     [Parameter] public string Kind { get; set; } = "text";
 
     /// <summary>Row count for table/list/detail/text shapes.</summary>

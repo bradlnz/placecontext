@@ -46,7 +46,7 @@
             <div class="tables-list">
             @if (!Vm.TablesReady)
             {
-                <Skeleton Kind="text" Rows="5" />
+                <Skeleton Kind="tile-grid" Cards="8" />
             }
             else if (Vm.Tables.Count == 0)
             {
@@ -54,39 +54,54 @@
                     No tables yet — click <b>New table</b> or run a <code>CREATE TABLE …</code>.
                 </div>
             }
+            <div class="tables-grid">
             @foreach (var t in Vm.Tables)
             {
-                <div class="dccard table-card">
-                    <div class="table-row"
-                         @onclick="@(() => SelectTableAsync(t.Name))" title="SELECT the first rows">
-                        <span class="table-name">@t.Name</span>
-                        <span class="table-meta">
+                <div class="table-tile">
+                    <button class="tile-main" @onclick="@(() => OpenTableModal(t.Name))" title="Open query view for @t.Name">
+                        <div class="tile-icon">
                             @if (t.IsView)
                             {
-                                <span title="A saved SELECT over the project's tables — query it like a table." class="tag-view">view</span>
+                                <span title="View">V</span>
                             }
                             else if (t.ReadOnly)
                             {
-                                <span title="System table — written by PlaceContext (job run results); query and export only." class="tag-readonly">read-only</span>
+                                <span title="Read-only system table">R</span>
                             }
-                            @(t.IsView ? "" : $"~{t.RowEstimate}")
-                        </span>
-                    </div>
-                    <div class="table-actions">
-                        <button class="dclink link-primary" @onclick="@(() => OpenTableModal(t.Name))" title="Open full-screen query view">open table</button>
+                            else
+                            {
+                                <span title="Table">T</span>
+                            }
+                        </div>
+                        <div class="tile-info">
+                            <span class="tile-name">@t.Name</span>
+                            <span class="tile-meta">
+                                @if (t.IsView)
+                                {
+                                    <span class="tag-view">view</span>
+                                }
+                                else if (t.ReadOnly)
+                                {
+                                    <span class="tag-readonly">read-only</span>
+                                }
+                                <span class="tile-rows">@(t.IsView ? "" : $"~{t.RowEstimate:N0} rows")</span>
+                            </span>
+                        </div>
+                    </button>
+                    <div class="tile-actions">
                         @if (!t.ReadOnly && !t.IsView)
                         {
-                            <button class="dclink" @onclick="@(() => Vm.StartEditAsync(t.Name))">edit</button>
-                            <button class="dclink" @onclick="@(() => Vm.StartRename(t.Name))">rename</button>
+                            <button class="tile-btn" @onclick="@(() => Vm.StartEditAsync(t.Name))" title="Edit schema">edit</button>
+                            <button class="tile-btn" @onclick="@(() => Vm.StartRename(t.Name))" title="Rename">rename</button>
                         }
-                        <button class="dclink" @onclick="@(() => ExportAsync(t.Name))">export</button>
+                        <button class="tile-btn" @onclick="@(() => ExportAsync(t.Name))" title="Export CSV">export</button>
                         @if (t.IsView)
                         {
-                            <button class="dclink link-bad" @onclick="@(() => Vm.DropViewAsync(t.Name))">drop</button>
+                            <button class="tile-btn tile-btn-bad" @onclick="@(() => Vm.DropViewAsync(t.Name))" title="Drop view">drop</button>
                         }
                         else if (!t.ReadOnly)
                         {
-                            <button class="dclink link-bad" @onclick="@(() => Vm.StartDrop(t.Name))">drop</button>
+                            <button class="tile-btn tile-btn-bad" @onclick="@(() => Vm.StartDrop(t.Name))" title="Drop table">drop</button>
                         }
                     </div>
                     @if (Vm.Renaming == t.Name)
@@ -107,6 +122,7 @@
                     }
                 </div>
             }
+            </div>
             </div>
         </div>
 
@@ -475,13 +491,6 @@
     private void OpenTableModal(string table) => Vm.OpenTableModal(table);
 
     private void CloseTableModal() => Vm.CloseTableModal();
-
-    private async Task SelectTableAsync(string table)
-        => await Vm.SelectTableAsync(table, async (sql) =>
-        {
-            try { await JS.InvokeVoidAsync("pcmonaco.setValue", ProjectDataViewModel.EditorId, sql, "sql"); } catch { }
-            await RunAsync();
-        });
 
     private async Task SaveViewAsync()
         => await Vm.SaveViewAsync(async (id) => await JS.InvokeAsync<string>("pcmonaco.getValue", id));

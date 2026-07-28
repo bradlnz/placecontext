@@ -48,7 +48,7 @@
 }
 
 .tables-col {
-    width: 250px;
+    width: 320px;
     flex: none;
     display: flex;
     flex-direction: column;
@@ -59,6 +59,7 @@
     flex: 1;
     min-height: 0;
     overflow-y: auto;
+    padding-right: 2px;
 }
 
 .tables-head {
@@ -106,30 +107,95 @@
 }
 
 .empty-tables {
-    font-size: 11.5px;
+    font-size: 12px;
     color: var(--text-3);
     line-height: 1.5;
+    padding: 14px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    margin-bottom: 10px;
 }
 
-.table-card {
-    padding: 8px 10px;
-    margin-bottom: 6px;
+.tables-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 10px;
 }
 
-.table-row {
+.table-tile {
     display: flex;
-    justify-content: space-between;
-    align-items: baseline;
+    flex-direction: column;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    transition: border-color .12s, box-shadow .12s, transform .12s;
+}
+
+.table-tile:hover {
+    border-color: var(--border-2);
+    box-shadow: var(--shadow);
+    transform: translateY(-1px);
+}
+
+.tile-main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 14px;
+    background: transparent;
+    border: none;
     cursor: pointer;
+    text-align: left;
+    width: 100%;
+    color: inherit;
+    font-family: inherit;
 }
 
-.table-name {
+.tile-main:hover {
+    background: var(--hover);
+}
+
+.tile-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 9px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     font-size: 12px;
-    font-family: var(--font-sans);
+    font-weight: 700;
+    color: var(--text-2);
+    background: var(--card-2);
+    border: 1px solid var(--border);
+    flex: none;
 }
 
-.table-meta {
-    font-size: 10.5px;
+.tile-info {
+    min-width: 0;
+    width: 100%;
+}
+
+.tile-name {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-bottom: 4px;
+}
+
+.tile-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 5px;
+    font-size: 10px;
     color: var(--text-3);
 }
 
@@ -137,36 +203,66 @@
     border: 1px solid var(--brand-2);
     color: var(--brand-2);
     border-radius: 4px;
-    padding: 0 4px;
-    margin-right: 5px;
+    padding: 1px 5px;
 }
 
 .tag-readonly {
     border: 1px solid var(--border);
+    color: var(--text-3);
     border-radius: 4px;
-    padding: 0 4px;
-    margin-right: 5px;
+    padding: 1px 5px;
 }
 
-.table-actions {
+.tile-rows {
+    font-family: var(--font-sans);
+}
+
+.tile-actions {
     display: flex;
-    gap: 10px;
-    margin-top: 5px;
+    gap: 0;
+    border-top: 1px solid var(--border);
+    background: var(--card);
 }
 
-.link-bad {
+.tile-btn {
+    flex: 1;
+    appearance: none;
+    background: transparent;
+    border: none;
+    border-right: 1px solid var(--border);
+    color: var(--text-3);
+    cursor: pointer;
+    font-size: 10px;
+    font-family: inherit;
+    font-weight: 500;
+    padding: 7px 0;
+    text-align: center;
+    transition: color .12s, background .12s;
+}
+
+.tile-btn:last-child {
+    border-right: none;
+}
+
+.tile-btn:hover {
+    color: var(--text);
+    background: var(--hover);
+}
+
+.tile-btn-bad {
     color: var(--bad);
 }
 
-.link-primary {
-    color: var(--brand-2);
-    font-weight: 600;
+.tile-btn-bad:hover {
+    background: var(--bad-bg);
 }
 
 .rename-row {
     display: flex;
     gap: 6px;
-    margin-top: 6px;
+    padding: 8px;
+    background: var(--card-2);
+    border-top: 1px solid var(--border);
 }
 
 .rename-input {
@@ -190,9 +286,11 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    margin-top: 6px;
+    padding: 8px;
     font-size: 11px;
     color: var(--bad);
+    background: var(--bad-bg);
+    border-top: 1px solid var(--border);
 }
 
 .flex-min {
@@ -802,8 +900,12 @@
     .tables-col {
         width: 100%;
         min-height: 0;
-        max-height: 180px;
+        max-height: 220px;
         flex: none;
+    }
+
+    .tables-grid {
+        grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
     }
 
     .flex-min {
