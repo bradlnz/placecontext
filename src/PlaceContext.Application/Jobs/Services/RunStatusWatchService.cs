@@ -65,14 +65,23 @@ public sealed class RunStatusWatchService
         var now = _clock.UtcNow;
         var since = state.Cursor == default ? now - StartupLookback : state.Cursor;
 
+        Evict(state, now);
+
         var chains = await _reader.ListChainRunsAsync(since, ct);
         var jobRuns = await _reader.ListJobRunsAsync(since, ct);
 
-        // Fast path: nothing running and nothing newly finished — skip processing.
-        var hasActive = chains.Any(c => c.Status == ChainRunStatus.Running)
+        // Fast path: nothing running, nothing newly finished, and no stale tracked state — skip processing.
+        var hasActive = state.JobRuns.Count > 0
+                     || state.Chains.Count > 0
+                     || chains.Any(c => c.Status == ChainRunStatus.Running)
                      || jobRuns.Any(r => r.Status is JobRunStatus.Running or JobRunStatus.Queued);
-        var hasNewTerminal = chains.Any(c => c.Status != ChainRunStatus.Running && !state.NotifiedTerminal.ContainsKey(c.RunId))
-                          || jobRuns.Any(r => r.Status is not (JobRunStatus.Running or JobRunStatus.Queued) && !state.NotifiedTerminal.ContainsKey(r.RunId));
+        var floor = now - MemoryRetention;
+        var hasNewTerminal = chains.Any(c => c.Status != ChainRunStatus.Running
+                                         && (c.FinishedAt ?? now) >= floor
+                                         && !state.NotifiedTerminal.ContainsKey(c.RunId))
+                          || jobRuns.Any(r => r.Status is not (JobRunStatus.Running or JobRunStatus.Queued)
+                                          && (r.FinishedAt ?? now) >= floor
+                                          && !state.NotifiedTerminal.ContainsKey(r.RunId));
         if (!hasActive && !hasNewTerminal)
         {
             state.Cursor = now - CursorOverlap;
@@ -85,13 +94,13 @@ public sealed class RunStatusWatchService
 
         SweepChains(state, chains, now);
         SweepJobRuns(state, jobRuns, now);
-        Evict(state, now);
 
         state.Cursor = now - CursorOverlap;
     }
 
     private void SweepChains(RunWatchState state, IReadOnlyList<ChainRunStatusRow> chains, DateTimeOffset now)
     {
+        var floor = now - MemoryRetention;
         var seen = new HashSet<Guid>();
         foreach (var chain in chains)
         {
@@ -111,6 +120,8 @@ public sealed class RunStatusWatchService
             else
             {
                 state.Chains.Remove(chain.RunId);
+                // Suppress re-notification of terminal rows outside the retention floor.
+                if ((chain.FinishedAt ?? now) < floor) continue;
                 if (!state.NotifiedTerminal.TryAdd(chain.RunId, chain.FinishedAt ?? now)) continue;
                 _notifier.Sync(new RunStatusUpdate(key, chain.ProjectId, title, MapChain(chain.Status),
                     $"chain finished — {chain.Status} ({chain.FinishedSteps} step(s) ran)",
@@ -125,6 +136,7 @@ public sealed class RunStatusWatchService
 
     private void SweepJobRuns(RunWatchState state, IReadOnlyList<JobRunStatusRow> jobRuns, DateTimeOffset now)
     {
+        var floor = now - MemoryRetention;
         var seen = new HashSet<Guid>();
         foreach (var run in jobRuns)
         {
@@ -144,6 +156,8 @@ public sealed class RunStatusWatchService
             else
             {
                 state.JobRuns.Remove(run.RunId);
+                // Suppress re-notification of terminal rows outside the retention floor.
+                if ((run.FinishedAt ?? now) < floor) continue;
                 if (!state.NotifiedTerminal.TryAdd(run.RunId, run.FinishedAt ?? now)) continue;
                 _notifier.Sync(new RunStatusUpdate(key, run.ProjectId, title, Map(run.Status),
                     $"run finished — {run.Status}", link, run.StartedAt, run.FinishedAt));

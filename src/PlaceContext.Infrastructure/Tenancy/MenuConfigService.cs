@@ -33,46 +33,38 @@ public sealed class MenuConfigService : IMenuConfigService
     /// <summary>Built-in catalog — ids are stable; do not rename without a migration of stored layouts.</summary>
     internal static readonly CatalogItem[] WorkspaceCatalog =
     {
-        new("dashboard", "Dashboard", "link", "/", null, Permission.ProjectsView, "grid", null),
-        new("jobs", "Jobs", "link", "/project/{projectId}/jobs", null, Permission.JobsView, "box", null),
-        new("chains", "Chains", "link", "/project/{projectId}/chains", null, Permission.JobsView, "chain", null),
-        new("chat", "Chat", "link", "/chat", null, Permission.AgentsChat, "chat", null),
-        new("schedules", "Schedules", "link", "/project/{projectId}/schedules", null, Permission.JobsView, "clock", null),
-        new("data", "Data", "link", "/project/{projectId}/data", null, Permission.DataRead, "map", null),
-        new("vault", "Vault", "link", "/project/{projectId}/secrets", null, Permission.SecretsManage, "key", null),
-        new("artifacts", "Artifacts", "link", "/artifacts", null, Permission.ArtifactsView, "file", null),
-        new("observability", "Observability", "link", "/observability", null, Permission.JobsView, "pulse", null),
-        new("sec-workspace", "Workspace", "section", null, null, null, null, "Workspace"),
-        new("overview", "Projects overview", "link", "/overview", null, Permission.ProjectsView, "pulse", "Workspace"),
-        new("onboarding", "Onboarding", "link", "/onboarding", null, Permission.ProjectsView, "rocket", "Workspace"),
-        new("wiki", "Wiki", "link", "/wiki", null, null, "ledger", "Workspace"),
-        new("settings", "Settings", "link", "/settings/branding", null, Permission.SettingsManage, "key", "Workspace"),
-        new("about", "About", "link", "/about", null, null, "grid", "Workspace"),
-    };
-
-    internal static readonly CatalogItem[] ProjectCatalog =
-    {
-        new("project.overview", "Overview", "link", null, "", Permission.ProjectsView, null, null),
-        new("project.jobs", "Jobs", "link", null, "jobs", Permission.JobsView, null, null),
-        new("project.chains", "Chains", "link", null, "chains", Permission.JobsView, null, null),
-        new("project.schedules", "Schedules", "link", null, "schedules", Permission.JobsView, null, null),
-        new("project.data", "Data", "link", null, "data", Permission.DataRead, null, null),
-        new("project.vault", "Vault", "link", null, "secrets", Permission.SecretsManage, null, null),
-        new("project.events", "Events", "link", null, "events", Permission.EventsManage, null, null),
-        new("project.entities", "Business", "entities", null, null, Permission.DataRead, null, "Business"),
+        new("dashboard", "Dashboard", "link", "/", Permission.ProjectsView, "grid", null),
+        new("project.overview", "Project overview", "link", "/project/{projectId}", Permission.ProjectsView, "grid", null),
+        new("jobs", "Jobs", "link", "/project/{projectId}/jobs", Permission.JobsView, "box", null),
+        new("chains", "Chains", "link", "/project/{projectId}/chains", Permission.JobsView, "chain", null),
+        new("schedules", "Schedules", "link", "/project/{projectId}/schedules", Permission.JobsView, "clock", null),
+        new("data", "Data", "link", "/project/{projectId}/data", Permission.DataRead, "map", null),
+        new("data.analytics", "Analytics", "link", "/project/{projectId}/analytics", Permission.DataRead, null, null, "data"),
+        new("data.datamap", "Data map", "link", "/project/{projectId}/datamap", Permission.DataRead, null, null, "data"),
+        new("project.entities", "Business", "entities", null, Permission.DataRead, "briefcase", null),
+        new("project.entities.registry", "Entities", "link", "/project/{projectId}/entities", Permission.DataRead, null, null, "project.entities"),
+        new("vault", "Vault", "link", "/project/{projectId}/secrets", Permission.SecretsManage, "key", null),
+        new("project.events", "Events", "link", "/project/{projectId}/events", Permission.EventsManage, "pulse", null),
+        new("chat", "Chat", "link", "/chat", Permission.AgentsChat, "chat", null),
+        new("artifacts", "Artifacts", "link", "/artifacts", Permission.ArtifactsView, "file", null),
+        new("observability", "Observability", "link", "/observability", Permission.JobsView, "pulse", null),
+        new("sec-workspace", "Workspace", "section", null, null, null, "Workspace"),
+        new("overview", "Projects overview", "link", "/overview", Permission.ProjectsView, "pulse", "Workspace"),
+        new("onboarding", "Onboarding", "link", "/onboarding", Permission.ProjectsView, "rocket", "Workspace"),
+        new("wiki", "Wiki", "link", "/wiki", null, "ledger", "Workspace"),
+        new("settings", "Settings", "link", "/settings/branding", Permission.SettingsManage, "key", "Workspace"),
+        new("about", "About", "link", "/about", null, "grid", "Workspace"),
     };
 
     internal sealed record CatalogItem(
-        string Id, string DefaultLabel, string Kind, string? HrefTemplate, string? ProjectPath,
-        string? RequiredPermission, string? Icon, string? DefaultSection);
+        string Id, string DefaultLabel, string Kind, string? HrefTemplate,
+        string? RequiredPermission, string? Icon, string? DefaultSection, string? Parent = null);
 
     public MenuLayout DefaultLayout()
     {
         var ws = WorkspaceCatalog.Select((c, i) => new MenuItemOverride(
             c.Id, null, i * 10, true, c.DefaultSection)).ToList();
-        var pr = ProjectCatalog.Select((c, i) => new MenuItemOverride(
-            c.Id, null, i * 10, true, c.DefaultSection)).ToList();
-        return new MenuLayout(ws, pr);
+        return new MenuLayout(ws);
     }
 
     public async Task<MenuLayout> GetLayoutAsync(CancellationToken ct = default)
@@ -106,8 +98,7 @@ public sealed class MenuConfigService : IMenuConfigService
         var row = await db.Tenants.FirstOrDefaultAsync(t => t.Id == _tenant.TenantId, ct);
         if (row is null) return;
         var dto = new MenuLayoutDto(
-            layout.Workspace.Select(x => new MenuItemDto(x.Id, x.Label, x.Order, x.Visible, x.Section)).ToList(),
-            layout.Project.Select(x => new MenuItemDto(x.Id, x.Label, x.Order, x.Visible, x.Section)).ToList());
+            layout.Workspace.Select(x => new MenuItemDto(x.Id, x.Label, x.Order, x.Visible, x.Section)).ToList());
         row.MenuJson = JsonSerializer.Serialize(dto, Json);
         await db.SaveChangesAsync(ct);
     }
@@ -130,6 +121,9 @@ public sealed class MenuConfigService : IMenuConfigService
             // Project-scoped links need a selected project.
             if (cat.HrefTemplate?.Contains("{projectId}", StringComparison.Ordinal) == true && projectId is null)
                 continue;
+            // Entity accordion groups only make sense inside a project context.
+            if (cat.Kind == "entities" && projectId is null)
+                continue;
             // Settings: show if any of settings/members/backup
             if (cat.Id == "settings" && !perms.Contains(Permission.SettingsManage)
                 && !perms.Contains(Permission.MembersManage) && !perms.Contains(Permission.BackupManage))
@@ -141,29 +135,7 @@ public sealed class MenuConfigService : IMenuConfigService
                 .Replace("{projectId}", projectId?.ToString() ?? "", StringComparison.Ordinal);
             items.Add(new ResolvedMenuItem(
                 cat.Id, o.Label ?? cat.DefaultLabel, cat.Kind, href, cat.Icon,
-                o.Section ?? cat.DefaultSection, o.Order));
-        }
-        return items;
-    }
-
-    public async Task<IReadOnlyList<ResolvedMenuItem>> GetProjectMenuAsync(Guid projectId, CancellationToken ct = default)
-    {
-        var layout = await GetLayoutAsync(ct);
-        var perms = await SafePermsAsync(ct);
-        var byId = ProjectCatalog.ToDictionary(c => c.Id, StringComparer.Ordinal);
-        var items = new List<ResolvedMenuItem>();
-        foreach (var o in layout.Project.OrderBy(x => x.Order))
-        {
-            if (!o.Visible || !byId.TryGetValue(o.Id, out var cat)) continue;
-            if (cat.RequiredPermission is not null && !perms.Contains(cat.RequiredPermission)) continue;
-            string? href = cat.Kind == "entities"
-                ? null
-                : cat.ProjectPath is { Length: 0 }
-                    ? $"/project/{projectId}"
-                    : $"/project/{projectId}/{cat.ProjectPath}";
-            items.Add(new ResolvedMenuItem(
-                cat.Id, o.Label ?? cat.DefaultLabel, cat.Kind, href, cat.Icon,
-                o.Section ?? cat.DefaultSection, o.Order));
+                o.Section ?? cat.DefaultSection, o.Order, cat.Parent));
         }
         return items;
     }
@@ -184,35 +156,51 @@ public sealed class MenuConfigService : IMenuConfigService
     /// <summary>Ensure every catalog id appears once; unknown stored ids are dropped.</summary>
     private MenuLayout MergeWithCatalog(MenuLayoutDto stored)
     {
-        var ws = MergeSide(stored.Workspace, WorkspaceCatalog);
-        var pr = MergeSide(stored.Project, ProjectCatalog);
-        return new MenuLayout(ws, pr);
+        return new MenuLayout(MergeSide(stored.Workspace, WorkspaceCatalog));
     }
 
     private static List<MenuItemOverride> MergeSide(List<MenuItemDto>? stored, CatalogItem[] catalog)
     {
-        var map = (stored ?? new()).Where(x => !string.IsNullOrWhiteSpace(x.Id))
-            .GroupBy(x => x.Id, StringComparer.Ordinal)
-            .ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
-        var result = new List<MenuItemOverride>();
-        var order = 0;
-        // Keep stored order first for known ids
-        foreach (var s in (stored ?? new()).OrderBy(x => x.Order))
+        var knownIds = catalog.Select(c => c.Id).ToHashSet(StringComparer.Ordinal);
+        var result = (stored ?? new())
+            .Where(x => knownIds.Contains(x.Id))
+            .OrderBy(x => x.Order)
+            .DistinctBy(x => x.Id, StringComparer.Ordinal)
+            .Select(x => new MenuItemOverride(x.Id, x.Label, x.Order, x.Visible, x.Section))
+            .ToList();
+
+        // Preserve customized order, but place newly shipped entries beside their nearest
+        // catalog predecessor rather than appending them after the Workspace section.
+        for (var catalogIndex = 0; catalogIndex < catalog.Length; catalogIndex++)
         {
-            if (catalog.All(c => c.Id != s.Id)) continue;
-            result.Add(new MenuItemOverride(s.Id, s.Label, s.Order, s.Visible, s.Section));
-            order = Math.Max(order, s.Order + 10);
+            var item = catalog[catalogIndex];
+            if (result.Any(x => x.Id == item.Id)) continue;
+
+            var insertAt = result.Count;
+            for (var previous = catalogIndex - 1; previous >= 0; previous--)
+            {
+                var previousIndex = result.FindIndex(x => x.Id == catalog[previous].Id);
+                if (previousIndex < 0) continue;
+                insertAt = previousIndex + 1;
+                break;
+            }
+            if (insertAt == result.Count)
+            {
+                for (var next = catalogIndex + 1; next < catalog.Length; next++)
+                {
+                    var nextIndex = result.FindIndex(x => x.Id == catalog[next].Id);
+                    if (nextIndex < 0) continue;
+                    insertAt = nextIndex;
+                    break;
+                }
+            }
+
+            result.Insert(insertAt, new MenuItemOverride(item.Id, null, 0, true, item.DefaultSection));
         }
-        // Append any new catalog items not in stored layout
-        foreach (var c in catalog)
-        {
-            if (result.Any(r => r.Id == c.Id)) continue;
-            result.Add(new MenuItemOverride(c.Id, null, order, true, c.DefaultSection));
-            order += 10;
-        }
-        return result;
+
+        return result.Select((item, index) => item with { Order = index * 10 }).ToList();
     }
 
-    private sealed record MenuLayoutDto(List<MenuItemDto>? Workspace, List<MenuItemDto>? Project);
+    private sealed record MenuLayoutDto(List<MenuItemDto>? Workspace);
     private sealed record MenuItemDto(string Id, string? Label, int Order, bool Visible, string? Section);
 }

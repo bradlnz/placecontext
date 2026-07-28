@@ -8,10 +8,8 @@ public sealed record MenuItemOverride(
     bool Visible = true,
     string? Section = null);
 
-/// <summary>Tenant-owned menu layout for workspace shell and project sidebar.</summary>
-public sealed record MenuLayout(
-    IReadOnlyList<MenuItemOverride> Workspace,
-    IReadOnlyList<MenuItemOverride> Project);
+/// <summary>Tenant-owned menu layout for the workspace shell.</summary>
+public sealed record MenuLayout(IReadOnlyList<MenuItemOverride> Workspace);
 
 /// <summary>Resolved item ready to render (after layout + permissions).</summary>
 public sealed record ResolvedMenuItem(
@@ -21,7 +19,9 @@ public sealed record ResolvedMenuItem(
     string? Href,
     string? Icon,
     string? Section,
-    int Order);
+    int Order,
+    /// <summary>Id of the accordion group this item renders under; null = top level.</summary>
+    string? Parent = null);
 
 /// <summary>
 /// Built-in menu catalog + per-tenant layout. Layout controls order, labels, visibility, and
@@ -41,6 +41,4 @@ public interface IMenuConfigService
     /// <summary>Workspace sidebar items for the current caller.</summary>
     Task<IReadOnlyList<ResolvedMenuItem>> GetWorkspaceMenuAsync(Guid? projectId, CancellationToken ct = default);
 
-    /// <summary>Project secondary nav for the current caller.</summary>
-    Task<IReadOnlyList<ResolvedMenuItem>> GetProjectMenuAsync(Guid projectId, CancellationToken ct = default);
 }
