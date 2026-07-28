@@ -272,8 +272,20 @@ else
                                         </span>
                                     }
                                 </div>
-                                <button class="dcbtn btn-2-8" title="Add the picked job as a parallel branch of this stage"
-                                        disabled="@(string.IsNullOrEmpty(Vm.EdAddJobId))" @onclick="@(() => Vm.AddBranch(stageIndex))">+ branch</button>
+                                <div class="stage-branch-row">
+                                    <select class="dcinput branch-select" title="Pick a job to add as a parallel branch"
+                                            value="@Vm.EdBranchJobIds.GetValueOrDefault(stageIndex, "")"
+                                            @onchange="@((e) => Vm.EdBranchJobIds[stageIndex] = e.Value?.ToString() ?? "")">
+                                        <option value="">— pick a job —</option>
+                                        @foreach (var job in Vm.Jobs ?? Array.Empty<JobView>())
+                                        {
+                                            <option value="@job.Id">@job.Name</option>
+                                        }
+                                    </select>
+                                    <button class="dcbtn btn-2-8" title="Add the picked job as a parallel branch of this stage"
+                                            disabled="@(string.IsNullOrEmpty(Vm.EdBranchJobIds.GetValueOrDefault(stageIndex, "")))"
+                                            @onclick="@(() => Vm.AddBranch(stageIndex))">+ branch</button>
+                                </div>
                                 <button class="dcbtn btn-2-8" disabled="@(stageIndex == 0)" @onclick="@(() => Vm.MoveStage(stageIndex, -1))">↑</button>
                                 <button class="dcbtn btn-2-8" disabled="@(stageIndex == Vm.EdStages.Count - 1)" @onclick="@(() => Vm.MoveStage(stageIndex, +1))">↓</button>
                                 <button class="dcbtn btn-2-8-del" @onclick="@(() => Vm.EdStages.RemoveAt(stageIndex))">×</button>

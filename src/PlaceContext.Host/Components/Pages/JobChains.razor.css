@@ -58,6 +58,8 @@
 .stage-item { align-items:flex-start }
 .stage-jobs { flex:1; min-width:0; display:flex; flex-wrap:wrap; gap:6px }
 .stage-job-chip { display:inline-flex; align-items:center; gap:4px; padding:2px 4px 2px 8px; border-radius:6px; background:var(--card); font-size:12px }
+.stage-branch-row { display:flex; align-items:center; gap:6px; min-width:0 }
+.branch-select { flex:1; min-width:0; padding:2px 6px; font-size:11px; min-height:26px }
 .btn-2-8 { padding:2px 8px }
 .btn-2-8-del { padding:2px 8px; color:var(--bad) }
 .add-row { display:flex; gap:8px; margin-top:4px }
@@ -81,6 +83,9 @@
     .stage-group { flex-wrap:wrap; }
     .stage-item { flex-wrap:wrap; gap:8px; }
     .stage-jobs { width:100%; }
+    .stage-branch-row { width:100%; }
+    .stage-branch-row .branch-select { min-height:34px; }
+    .stage-branch-row .dcbtn { flex:0; min-height:34px; }
     .add-row { flex-wrap:wrap; }
     .add-row .dcbtn { flex:1; min-height:40px; }
     .dcslide-foot { flex-wrap:wrap; gap:10px; }

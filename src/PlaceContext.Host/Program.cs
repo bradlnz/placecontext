@@ -17,6 +17,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Server.Circuits;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.DependencyInjection;
@@ -99,6 +100,13 @@ builder.Services.AddResponseCompression(o =>
 // under Controllers/ — attribute-routed, same paths/auth, wired below with MapControllers().
 builder.Services.AddControllers();
 builder.Services.AddHttpClient();
+// Blazor components (e.g. SecuritySettings) use a scoped HttpClient for same-origin API calls.
+// Resolve its BaseAddress from the current circuit's NavigationManager so relative URLs work.
+builder.Services.AddScoped(sp =>
+{
+    var nav = sp.GetRequiredService<NavigationManager>();
+    return new HttpClient { BaseAddress = new Uri(nav.BaseUri) };
+});
 
 // Log chat gateway config at startup
 var chatSection = builder.Configuration.GetSection("PlaceContext:ClusterChat");

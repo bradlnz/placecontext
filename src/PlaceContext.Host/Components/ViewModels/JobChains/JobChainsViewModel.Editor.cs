@@ -30,6 +30,7 @@ public sealed partial class JobChainsViewModel
         EdStages.Clear();
         EdStages.Add(new List<Guid>());
         EdAddJobId = "";
+        EdBranchJobIds.Clear();
         EditorError = null;
         EditorTab = "details";
         ShowEditor = true;
@@ -52,6 +53,7 @@ public sealed partial class JobChainsViewModel
             EdStages.Add(stage.Jobs.Select(j => j.JobId).ToList());
         if (EdStages.Count == 0) EdStages.Add(new List<Guid>());
         EdAddJobId = "";
+        EdBranchJobIds.Clear();
         EditorError = null;
         EditorTab = "details";
         OpenRun = null;
@@ -79,11 +81,16 @@ public sealed partial class JobChainsViewModel
         NotifyStateChanged();
     }
 
+    public Dictionary<int, string> EdBranchJobIds { get; } = new();
+
     public void AddBranch(int stageIndex)
     {
-        if (stageIndex >= 0 && stageIndex < EdStages.Count && Guid.TryParse(EdAddJobId, out var jobId))
+        if (stageIndex >= 0 && stageIndex < EdStages.Count
+            && EdBranchJobIds.TryGetValue(stageIndex, out var selectedId)
+            && Guid.TryParse(selectedId, out var jobId))
         {
             EdStages[stageIndex].Add(jobId);
+            EdBranchJobIds.Remove(stageIndex);
             NotifyStateChanged();
         }
     }
