@@ -366,7 +366,14 @@
                            placeholder="@(Vm.PendingClarification != null ? "Respond to the question above…" : "Ask about data, jobs, or request a graph…")"
                            disabled="@(Vm.Streaming && Vm.PendingClarification == null)"
                            @onkeydown="InputKeydown" />
-                    <button class="dcbtn primary" disabled="@((Vm.Streaming && Vm.PendingClarification == null) || string.IsNullOrWhiteSpace(Vm.Input))" @onclick="Send">Send</button>
+                    @if (Vm.Streaming && Vm.PendingClarification == null)
+                    {
+                        <button class="dcbtn danger" @onclick="Stop">Stop</button>
+                    }
+                    else
+                    {
+                        <button class="dcbtn primary" disabled="@string.IsNullOrWhiteSpace(Vm.Input)" @onclick="Send">Send</button>
+                    }
                 </div>
                 @if (Vm.AttachedFileName != null)
                 {
@@ -748,13 +755,17 @@
     private ElementReference _scrollAnchor;
     private ElementReference _fileInputRef;
     private bool _oauthListenerRegistered;
+    private Action? _onUiChangedHandler;
+    private EventHandler? _onMcpOAuthCompletedHandler;
 
     protected override void OnInitialized()
     {
         base.OnInitialized();
-        Vm.Attach(StateHasChanged);
-        Ui.OnChanged += OnUiChanged;
-        OnMcpOAuthCompleted += OnMcpOAuthCompletedHandler;
+        Vm.Attach(() => InvokeAsync(StateHasChanged));
+        _onUiChangedHandler = async () => await InvokeAsync(OnUiChanged);
+        _onMcpOAuthCompletedHandler = async (_, __) => await InvokeAsync(OnMcpOAuthCompletedHandler);
+        Ui.OnChanged += _onUiChangedHandler;
+        OnMcpOAuthCompleted += _onMcpOAuthCompletedHandler;
     }
 
     protected override async Task OnInitializedAsync()
@@ -816,30 +827,32 @@
     public void Dispose()
     {
         Vm.Detach();
-        Ui.OnChanged -= OnUiChanged;
-        OnMcpOAuthCompleted -= OnMcpOAuthCompletedHandler;
+        if (_onUiChangedHandler is not null) Ui.OnChanged -= _onUiChangedHandler;
+        if (_onMcpOAuthCompletedHandler is not null) OnMcpOAuthCompleted -= _onMcpOAuthCompletedHandler;
     }
 
-    private async void OnUiChanged()
+    private async Task OnUiChanged()
     {
         Vm.OnProjectChanged();
-        await InvokeAsync(StateHasChanged);
+        StateHasChanged();
     }
 
-    private async void OnMcpOAuthCompletedHandler(object? _, EventArgs __)
+    private async Task OnMcpOAuthCompletedHandler()
     {
-        await InvokeAsync(async () =>
-        {
-            await Vm.LoadMcpConnectionsAsync();
-            StateHasChanged();
-        });
+        await Vm.LoadMcpConnectionsAsync();
+        StateHasChanged();
     }
 
     // ── Thin event handler wrappers ──────────────────────────────────────
 
     private async Task Send()
     {
-        await Vm.SendAsync(ScrollToBottom, ScrollAfterRender);
+        await Vm.SendAsync(() => InvokeAsync(ScrollToBottom), () => InvokeAsync(ScrollAfterRender));
+    }
+
+    private async Task Stop()
+    {
+        await Vm.StopAsync();
     }
 
     private void NewSession()

@@ -91,7 +91,9 @@ else
                                 {
                                     <button class="dcbtn" @onclick:stopPropagation="true" @onclick="@(() => Vm.ConfirmDeleteId = chain.Id)">Delete</button>
                                 }
-                                <button class="dcbtn primary" @onclick:stopPropagation="true" @onclick="@(() => Vm.RunChainAsync(chain))">▶ Run</button>
+                                <button class="dcbtn primary" disabled="@Vm.IsRunningChain(chain.Id)" @onclick:stopPropagation="true" @onclick="@(() => Vm.RunChainAsync(chain))">
+                                    @(Vm.IsRunningChain(chain.Id) ? "running…" : "▶ Run")
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -117,7 +119,9 @@ else
             </div>
             @if (Vm.EditChainId.HasValue && Vm.Chains?.FirstOrDefault(c => c.Id == Vm.EditChainId) is { } runnable)
             {
-                <button class="dcbtn primary mr-10" @onclick="@(() => Vm.RunChainAsync(runnable))">▶ Run</button>
+                <button class="dcbtn primary mr-10" disabled="@Vm.IsRunningChain(runnable.Id)" @onclick="@(() => Vm.RunChainAsync(runnable))">
+                    @(Vm.IsRunningChain(runnable.Id) ? "running…" : "▶ Run")
+                </button>
             }
             <button class="dcslide-x" @onclick="() => Vm.CloseEditor()">×</button>
         </div>
@@ -169,7 +173,7 @@ else
                 }
                 else
                 {
-                    <button class="dcbtn btn-start" @onclick="@(() => Vm.CloseStepRun())">← All runs</button>
+                    <button class="dcbtn btn-start" @onclick="@(() => Vm.CloseChainRun())">← All runs</button>
 
                     <div class="status-row">
                         <span class="status-chip-lg" style="color:@JobChainsViewModel.StatusColor(Vm.OpenRun.Status); background:@JobChainsViewModel.StatusBg(Vm.OpenRun.Status)">@Vm.OpenRun.Status</span>
@@ -355,7 +359,9 @@ else
             </div>
             <div class="dcmodal-foot">
                 <button class="dcbtn" @onclick="() => Vm.CancelRunPrompt()">Cancel</button>
-                <button class="dcbtn primary" @onclick="() => Vm.SubmitRunPromptAsync()">▶ Run chain</button>
+                <button class="dcbtn primary" disabled="@(Vm.RunPromptChain is not null && Vm.IsRunningChain(Vm.RunPromptChain.Id))" @onclick="() => Vm.SubmitRunPromptAsync()">
+                    @(Vm.RunPromptChain is not null && Vm.IsRunningChain(Vm.RunPromptChain.Id) ? "running…" : "▶ Run chain")
+                </button>
             </div>
         </div>
     </div>
@@ -364,7 +370,7 @@ else
 @code {
     [Parameter] public Guid ProjectId { get; set; }
 
-    protected override void OnInitialized() => Vm.Attach(StateHasChanged);
+    protected override void OnInitialized() => Vm.Attach(() => InvokeAsync(StateHasChanged));
 
     protected override async Task OnParametersSetAsync()
     {

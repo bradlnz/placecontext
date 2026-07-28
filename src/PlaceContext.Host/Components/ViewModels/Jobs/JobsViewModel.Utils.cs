@@ -58,7 +58,7 @@ public sealed partial class JobsViewModel
         (PlaceContext.Domain.ValueObjects.JobReturnType.Video, "Video — file emitted to /out (mp4/webm/…)"),
     };
 
-    public bool IsRunningJob(Guid jobId) => RunningJobId == jobId;
+    public bool IsRunningJob(Guid jobId) => RunningJobId == jobId || PendingRunJobId == jobId;
 
     // ── Utilities ─────────────────────────────────────────────────────────────────────────────
     public static int[] ParseInts(string raw, out string? error)

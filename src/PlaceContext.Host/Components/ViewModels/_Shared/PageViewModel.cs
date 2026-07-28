@@ -1,27 +1,46 @@
 namespace PlaceContext.Host.Components.ViewModels;
 
 /// <summary>
-/// Lightweight base class for page ViewModels. Holds a <see cref="StateHasChanged"/>
+/// Lightweight base class for page ViewModels. Holds a dispatcher-safe <c>StateHasChanged</c>
 /// callback so the ViewModel can trigger a Blazor re-render without depending on
 /// any Blazor types — keeping it testable and framework-agnostic.
 ///
 /// Usage in a razor file:
 ///   @inject MyPageViewModel Vm
 ///   @code {
-///       protected override void OnInitialized() => Vm.Attach(StateHasChanged);
+///       protected override void OnInitialized() => Vm.Attach(() => InvokeAsync(StateHasChanged));
 ///       public void Dispose() => Vm.Detach();
 ///   }
 /// </summary>
 public abstract class PageViewModel
 {
-    private Action? _stateHasChanged;
+    private Func<Task>? _stateHasChanged;
 
     /// <summary>Wire the component's <c>StateHasChanged</c> into the ViewModel.</summary>
-    public void Attach(Action stateHasChanged) => _stateHasChanged = stateHasChanged;
+    /// <remarks>
+    /// Pass a Func<Task> that marshals to the Blazor dispatcher, e.g.
+    /// <c>() => InvokeAsync(StateHasChanged)</c>.
+    /// </remarks>
+    public void Attach(Func<Task> stateHasChanged) => _stateHasChanged = stateHasChanged;
 
     /// <summary>Detach when the component is disposed.</summary>
     public void Detach() => _stateHasChanged = null;
 
-    /// <summary>Call from any property setter or method that mutates visible state.</summary>
-    protected void NotifyStateChanged() => _stateHasChanged?.Invoke();
+    /// <summary>
+    /// Call from any property setter or method that mutates visible state.
+    /// The callback is invoked asynchronously and exceptions are observed so
+    /// background updates never crash the caller or leak unobserved tasks.
+    /// </summary>
+    protected void NotifyStateChanged()
+    {
+        var callback = _stateHasChanged;
+        if (callback is null) return;
+        _ = SafeNotifyAsync(callback);
+    }
+
+    private static async Task SafeNotifyAsync(Func<Task> callback)
+    {
+        try { await callback(); }
+        catch (Exception ex) { Console.WriteLine($"NotifyStateChanged failed: {ex}"); }
+    }
 }

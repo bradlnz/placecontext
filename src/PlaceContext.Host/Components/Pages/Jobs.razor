@@ -786,8 +786,8 @@ else
             </div>
             <div class="dcmodal-foot">
                 <button class="dcbtn" @onclick="() => Vm.CancelRunPrompt()">Cancel</button>
-                <button class="dcbtn primary" disabled="@(Vm.RunningJobId == Vm.RunPromptJob.Id)" @onclick="() => Vm.SubmitRunPromptAsync()">
-                    @(Vm.RunningJobId == Vm.RunPromptJob.Id ? "Running…" : "▶ Run job")
+                <button class="dcbtn primary" disabled="@Vm.IsRunningJob(Vm.RunPromptJob.Id)" @onclick="() => Vm.SubmitRunPromptAsync()">
+                    @(Vm.IsRunningJob(Vm.RunPromptJob.Id) ? "Running…" : "▶ Run job")
                 </button>
             </div>
         </div>
@@ -797,7 +797,7 @@ else
 @code {
     [Parameter] public Guid ProjectId { get; set; }
 
-    protected override void OnInitialized() => Vm.Attach(StateHasChanged);
+    protected override void OnInitialized() => Vm.Attach(() => InvokeAsync(StateHasChanged));
 
     protected override async Task OnParametersSetAsync()
     {

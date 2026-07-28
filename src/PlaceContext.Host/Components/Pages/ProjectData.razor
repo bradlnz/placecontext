@@ -15,8 +15,6 @@
 
 <div class="page">
 
-    <DataTabs ProjectId="ProjectId" Active="tables" />
-
     <div class="head-row">
         <h2 class="head-title">Data</h2>
         <span class="head-sub">this project's own database — create tables, store data, query it with SQL</span>
@@ -75,6 +73,7 @@
                         </span>
                     </div>
                     <div class="table-actions">
+                        <button class="dclink link-primary" @onclick="@(() => OpenTableModal(t.Name))" title="Open full-screen query view">open table</button>
                         @if (!t.ReadOnly && !t.IsView)
                         {
                             <button class="dclink" @onclick="@(() => Vm.StartEditAsync(t.Name))">edit</button>
@@ -175,6 +174,83 @@
         </div>
     </div>
 </div>
+
+@* ── Full-screen table query modal (Supabase / Log Analytics style) ─────────────────────── *@
+@if (Vm.ShowTableModal)
+{
+    <div class="table-modal-overlay" @onclick="CloseTableModal">
+        <div class="table-modal" @onclick:stopPropagation>
+            <div class="table-modal-head">
+                <div class="table-modal-title">
+                    <span class="modal-table-name">@Vm.ModalTableName</span>
+                    <span class="modal-hint">query editor</span>
+                </div>
+                <div class="table-modal-actions">
+                    <button class="dcbtn primary" disabled="@Vm.ModalRunning" @onclick="RunModalAsync">@(Vm.ModalRunning ? "Running…" : "▶ Run")</button>
+                    @if (Vm.ModalResult is { Columns.Count: > 0, Rows.Count: > 0 })
+                    {
+                        <a class="dcbtn export-link" href="@Vm.ModalResultCsvUri()" download="@($"{Vm.ModalTableName}.csv")">⬇ Export CSV</a>
+                    }
+                    <button class="dcbtn" @onclick="CloseTableModal">Close</button>
+                </div>
+            </div>
+
+            <div class="table-modal-body">
+                <div id="@ProjectDataViewModel.TableModalEditorId" class="table-modal-editor"></div>
+            </div>
+
+            <div class="table-modal-status">
+                @if (Vm.ModalError is not null)
+                {
+                    <span class="modal-status-bad">@Vm.ModalError</span>
+                }
+                else if (Vm.ModalResult is not null && Vm.ModalResult.Columns.Count == 0)
+                {
+                    <span class="modal-status-good">OK — @Vm.ModalResult.AffectedRows row(s) affected.</span>
+                }
+                else if (Vm.ModalResult is not null)
+                {
+                    <span class="modal-status-muted">
+                        @Vm.ModalResult.Rows.Count row(s)@(Vm.ModalResult.Truncated ? " (truncated at 500)" : "")@(Vm.ModalResult.AffectedRows > 0 ? $" · {Vm.ModalResult.AffectedRows} affected" : "")
+                    </span>
+                }
+                else
+                {
+                    <span class="modal-status-muted">Run a query to see results</span>
+                }
+            </div>
+
+            @if (Vm.ModalResult is { Columns.Count: > 0 })
+            {
+                <div class="table-modal-results">
+                    <table class="result-table modal-result-table">
+                        <thead>
+                            <tr>
+                                @foreach (var c in Vm.ModalResult.Columns)
+                                {
+                                    <th class="result-th">@c</th>
+                                }
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var row in Vm.ModalResult.Rows)
+                            {
+                                <tr>
+                                    @foreach (var cell in row)
+                                    {
+                                        <td class="result-td" style="color:@(cell is null ? "var(--text-3)" : "var(--text-2)")">
+                                            @(cell ?? "∅")
+                                        </td>
+                                    }
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    </div>
+}
 
 @* ── New-table wizard ───────────────────────────────────────────────────────────────────── *@
 @if (Vm.NewTable is not null)
@@ -369,6 +445,17 @@
             catch { Vm.ViewMonaco = false; StateHasChanged(); }
         }
 
+        if (Vm.ShowTableModal && !Vm.ModalEditorReady)
+        {
+            Vm.ModalEditorReady = true;
+            try
+            {
+                var richModal = await JS.InvokeAsync<bool>("pcmonaco.init", ProjectDataViewModel.TableModalEditorId, Vm.ModalSql, "sql", "vs-dark");
+                if (!richModal) { Vm.CloseTableModal(); StateHasChanged(); }
+            }
+            catch { Vm.CloseTableModal(); StateHasChanged(); }
+        }
+
         if (Vm.MonacoReady) return;
         Vm.MonacoReady = true;
         try
@@ -381,6 +468,13 @@
 
     private async Task RunAsync()
         => await Vm.RunAsync(async () => await JS.InvokeAsync<string>("pcmonaco.getValue", ProjectDataViewModel.EditorId));
+
+    private async Task RunModalAsync()
+        => await Vm.RunModalAsync(async () => await JS.InvokeAsync<string>("pcmonaco.getValue", ProjectDataViewModel.TableModalEditorId));
+
+    private void OpenTableModal(string table) => Vm.OpenTableModal(table);
+
+    private void CloseTableModal() => Vm.CloseTableModal();
 
     private async Task SelectTableAsync(string table)
         => await Vm.SelectTableAsync(table, async (sql) =>
@@ -416,7 +510,7 @@
             ProjectDataViewModel.BuildColumns(draft);
             Vm.SetCsvImport(draft);
         }
-        catch (Exception ex) { Vm.SetCsvImport(new ProjectDataViewModel.CsvImportDraft { FileName = file.Name }); /* CsvError set by VM */ }
+        catch { Vm.SetCsvImport(new ProjectDataViewModel.CsvImportDraft { FileName = file.Name }); /* CsvError set by VM */ }
     }
 
     private void OnHeaderToggled(ChangeEventArgs e)

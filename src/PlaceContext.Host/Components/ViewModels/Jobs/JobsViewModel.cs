@@ -33,8 +33,12 @@ public sealed partial class JobsViewModel : PageViewModel
     public IReadOnlyList<JobRunTelemetry>? JobTelemetry { get; private set; }
     public Guid? SelectedJobId { get; private set; }
     public Guid? RunningJobId { get; private set; }
+    public Guid? PendingRunId { get; private set; }
+    public Guid? PendingRunJobId { get; private set; }
     public string? Message { get; private set; }
     public bool Loading { get; private set; } = true;
+
+    private CancellationTokenSource? _runPollCts;
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────────────────────
     public void Initialize(Guid projectId)
@@ -43,7 +47,11 @@ public sealed partial class JobsViewModel : PageViewModel
         _opCenter.Changed += OnOpsChanged;
     }
 
-    public void DetachEvents() => _opCenter.Changed -= OnOpsChanged;
+    public void DetachEvents()
+    {
+        _opCenter.Changed -= OnOpsChanged;
+        StopRunPolling();
+    }
 
     public async Task LoadAsync()
     {

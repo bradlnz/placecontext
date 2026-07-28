@@ -78,6 +78,7 @@
     .chain-row { flex-wrap:wrap; gap:12px; }
     .chain-actions { flex-wrap:wrap; width:100%; }
     .chain-actions .dcbtn { flex:1; min-height:40px; }
+    .stage-group { flex-wrap:wrap; }
     .stage-item { flex-wrap:wrap; gap:8px; }
     .stage-jobs { width:100%; }
     .add-row { flex-wrap:wrap; }

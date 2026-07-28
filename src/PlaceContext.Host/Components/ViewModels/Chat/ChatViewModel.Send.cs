@@ -62,6 +62,10 @@ public sealed partial class ChatViewModel
         if (Messages.Count(m => m.Role == "user") == 1)
             _sessionTitle = text.Length > 50 ? text[..50] + "…" : text;
 
+        // Replace any previous cancellation source so a fresh send always starts clean.
+        _sendCts?.Dispose();
+        _sendCts = new CancellationTokenSource();
+
         NotifyStateChanged();
         await scrollToBottom();
 
@@ -72,7 +76,7 @@ public sealed partial class ChatViewModel
 
         try
         {
-            var ct = CancellationToken.None;
+            var ct = _sendCts.Token;
             var maxToolRounds = 3;
             var round = 0;
 
@@ -92,6 +96,7 @@ public sealed partial class ChatViewModel
                 {
                     var settings = new ChatSettings(Temperature: _temperature, MaxTokens: _maxTokens);
                     var tokenCount = 0;
+                    var renderThrottle = System.Diagnostics.Stopwatch.StartNew();
                     await foreach (var token in cg.ChatStreamAsync(messages, settings, ct))
                     {
                         StreamBuffer += token;
@@ -101,9 +106,16 @@ public sealed partial class ChatViewModel
                             StreamBuffer = TruncateRepeatedLines(StreamBuffer);
                             break;
                         }
-                        NotifyStateChanged();
-                        await scrollAfterRender();
+                        // Throttle renders so the SignalR circuit isn't saturated by fast token streams.
+                        if (renderThrottle.Elapsed > TimeSpan.FromMilliseconds(80))
+                        {
+                            renderThrottle.Restart();
+                            NotifyStateChanged();
+                            await scrollAfterRender();
+                        }
                     }
+                    NotifyStateChanged();
+                    await scrollAfterRender();
                     if (tokenCount == 0)
                         StreamBuffer = ChatCopy.EmptyModelResponse;
                 }
@@ -220,13 +232,20 @@ public sealed partial class ChatViewModel
                         var settings = new ChatSettings(Temperature: _temperature, MaxTokens: _maxTokens);
                         if (_gateway is ClusterChatGateway cg2 && cg2.IsEnabled)
                         {
+                            var renderThrottle = System.Diagnostics.Stopwatch.StartNew();
                             await foreach (var token in cg2.ChatStreamAsync(retryMessages, settings, ct))
                             {
                                 StreamBuffer += token;
                                 if (IsRepetitionLoopTail(StreamBuffer)) { StreamBuffer = TruncateRepeatedLines(StreamBuffer); break; }
-                                NotifyStateChanged();
-                                await scrollAfterRender();
+                                if (renderThrottle.Elapsed > TimeSpan.FromMilliseconds(80))
+                                {
+                                    renderThrottle.Restart();
+                                    NotifyStateChanged();
+                                    await scrollAfterRender();
+                                }
                             }
+                            NotifyStateChanged();
+                            await scrollAfterRender();
                         }
                         else { StreamBuffer = await _gateway.ChatAsync(retryMessages, settings, ct); }
                         var sumSplit = SplitThinking(StreamBuffer);
@@ -257,13 +276,20 @@ public sealed partial class ChatViewModel
                     var settings = new ChatSettings(Temperature: _temperature, MaxTokens: _maxTokens);
                     if (_gateway is ClusterChatGateway cg3 && cg3.IsEnabled)
                     {
+                        var renderThrottle = System.Diagnostics.Stopwatch.StartNew();
                         await foreach (var token in cg3.ChatStreamAsync(retryMessages, settings, ct))
                         {
                             StreamBuffer += token;
                             if (IsRepetitionLoopTail(StreamBuffer)) { StreamBuffer = TruncateRepeatedLines(StreamBuffer); break; }
-                            NotifyStateChanged();
-                            await scrollAfterRender();
+                            if (renderThrottle.Elapsed > TimeSpan.FromMilliseconds(80))
+                            {
+                                renderThrottle.Restart();
+                                NotifyStateChanged();
+                                await scrollAfterRender();
+                            }
                         }
+                        NotifyStateChanged();
+                        await scrollAfterRender();
                     }
                     else { StreamBuffer = await _gateway.ChatAsync(retryMessages, settings, ct); }
                     var retrySplit = SplitThinking(StreamBuffer);
@@ -283,6 +309,11 @@ public sealed partial class ChatViewModel
                 }
             }
         }
+        catch (OperationCanceledException)
+        {
+            if (!Messages.Any(m => m.Role == "assistant" && m.Content.StartsWith("[stopped")))
+                Messages.Add(new AgentMessage("assistant", "[stopped — generation cancelled by user]"));
+        }
         catch (Exception ex)
         {
             Messages.Add(new AgentMessage("assistant", $"[error: {ex.Message}]"));
@@ -298,6 +329,8 @@ public sealed partial class ChatViewModel
             await SaveCurrentSessionAsync();
             NotifyStateChanged();
             await scrollAfterRender();
+            _sendCts?.Dispose();
+            _sendCts = null;
         }
     }
 

@@ -106,6 +106,19 @@ public sealed partial class ChatViewModel : PageViewModel
     public Guid? SessionId => _sessionId;
     private TaskCompletionSource<ClarificationResult>? _clarificationTcs;
     private bool _attachmentsBucketEnsured;
+    private CancellationTokenSource? _sendCts;
+
+    /// <summary>Cancels the currently running chat send loop.</summary>
+    public async Task StopAsync()
+    {
+        try
+        {
+            var cts = _sendCts;
+            if (cts is not null && !cts.IsCancellationRequested) cts.Cancel();
+        }
+        catch (ObjectDisposedException) { }
+        await Task.CompletedTask;
+    }
 
     private const string AttachmentsBucket = ChatCopy.AttachmentsBucket;
     private const int MaxArtifactInlineBytes = 512 * 1024;

@@ -35,6 +35,16 @@ public sealed partial class JobsViewModel
                 RunArtifacts = await _svc.ListRunArtifactsAsync(open.Id);
             }
             Runs = runs;
+
+            // Clear pending state once the launched run reaches a terminal status.
+            if (PendingRunId is { } pending
+                && runs.FirstOrDefault(r => r.Id == pending) is { } p
+                && p.Status is "Succeeded" or "Failed" or "Partial")
+            {
+                PendingRunId = null;
+                PendingRunJobId = null;
+            }
+
             NotifyStateChanged();
         }
         catch { }
@@ -61,7 +71,6 @@ public sealed partial class JobsViewModel
     private async Task RunJobCoreAsync(Guid jobId, string? payload)
     {
         Message = null;
-        RunningJobId = jobId;
         var jobName = Jobs?.FirstOrDefault(j => j.Id == jobId)?.Name ?? "job";
         var runId = Guid.NewGuid();
         var err = _ops.TryRun(ProjectId, $"Run job — {jobName}", $"/observability?run={runId}",
@@ -74,19 +83,88 @@ public sealed partial class JobsViewModel
         if (err is not null)
         {
             Message = err;
-            RunningJobId = null;
             NotifyStateChanged();
             return;
         }
+
         RunPromptJob = null;
         _runPrompt.Clear();
         RunningJobId = null;
-        Message = $"Run of {jobName} started in the background — follow it in the notifications bell.";
-        if (SelectedJobId == jobId)
-        {
-            try { Runs = await _svc.ListJobRunsAsync(jobId); } catch { }
-        }
+        PendingRunId = runId;
+        PendingRunJobId = jobId;
+
+        // Open the editor/runs view so the user sees the run appear live.
+        SelectedJobId = jobId;
+        EditorTab = "runs";
+        ShowEditor = true;
+        RunDetail = null;
+        try { Runs = await _svc.ListJobRunsAsync(jobId); } catch { }
         NotifyStateChanged();
+
+        Message = $"Run of {jobName} started in the background — follow it in the notifications bell.";
+        StartRunPolling(jobId, runId);
+    }
+
+    private void StartRunPolling(Guid jobId, Guid runId)
+    {
+        StopRunPolling();
+        _runPollCts = new CancellationTokenSource();
+        var ct = _runPollCts.Token;
+        var started = DateTimeOffset.UtcNow;
+        _ = Task.Run(async () =>
+        {
+            while (!ct.IsCancellationRequested)
+            {
+                await Task.Delay(2000, ct).ConfigureAwait(false);
+                if (ct.IsCancellationRequested) break;
+
+                // Stop polling after a generous timeout even if the run never appeared.
+                if (DateTimeOffset.UtcNow - started > TimeSpan.FromMinutes(2))
+                {
+                    PendingRunId = null;
+                    PendingRunJobId = null;
+                    NotifyStateChanged();
+                    break;
+                }
+
+                try
+                {
+                    var runs = await _svc.ListJobRunsAsync(jobId);
+                    if (ct.IsCancellationRequested) break;
+
+                    var found = runs.FirstOrDefault(r => r.Id == runId);
+                    if (found is not null)
+                    {
+                        Runs = runs;
+                        RunDetail = await _svc.GetJobRunAsync(runId);
+                        RunArtifacts = await _svc.ListRunArtifactsAsync(runId);
+                        NotifyStateChanged();
+                        if (found.Status is "Succeeded" or "Failed" or "Partial")
+                        {
+                            PendingRunId = null;
+                            PendingRunJobId = null;
+                            NotifyStateChanged();
+                            break;
+                        }
+                    }
+                }
+                catch { }
+            }
+        }, ct);
+    }
+
+    private void StopRunPolling()
+    {
+        _runPollCts?.Cancel();
+        _runPollCts?.Dispose();
+        _runPollCts = null;
+    }
+
+    public void ClearPendingRun()
+    {
+        PendingRunId = null;
+        PendingRunJobId = null;
+        StopRunPolling();
     }
 
     public string GetArg(string name) => _runPrompt.Get(name);

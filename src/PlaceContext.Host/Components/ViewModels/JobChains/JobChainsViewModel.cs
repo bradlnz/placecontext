@@ -27,6 +27,12 @@ public sealed partial class JobChainsViewModel : PageViewModel
     public Guid ProjectId { get; private set; }
     private long _lastOpsChangeTick;
 
+    public Guid? PendingChainRunId { get; private set; }
+    public Guid? PendingChainId { get; private set; }
+
+    public bool IsRunningChain(Guid chainId)
+        => PendingChainId == chainId;
+
     // ── Lifecycle ─────────────────────────────────────────────────────────────────────────────
     public void Initialize(Guid projectId)
     {
@@ -62,7 +68,7 @@ public sealed partial class JobChainsViewModel : PageViewModel
         Interlocked.Exchange(ref _lastOpsChangeTick, now);
 
         if (OpenRun is { } run)
-            _ = RefreshRunsAsync(run.ChainId, openNewest: false);
+            _ = RefreshRunsAsync(run.ChainId);
     }
 
 }

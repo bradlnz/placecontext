@@ -342,13 +342,64 @@ public class JobChainTests
         Assert.All(view.Steps, s => Assert.Equal(0, s.BranchIndex));
     }
 
+    [Fact]
+    public async Task Run_falls_back_to_named_artifacts_when_stdout_is_null()
+    {
+        var jobs = new InMemoryJobRepository();
+        var a = MakeJob("extract"); var b = MakeJob("report");
+        await jobs.AddAsync(a); await jobs.AddAsync(b);
+        var chains = new InMemoryJobChainRepository();
+        var chain = JobChain.Create(ProjectId, "pipeline", null, new[] { a.Id, b.Id }, T0);
+        await chains.AddAsync(chain);
+
+        var dispatcher = new FakeRunDispatcher();
+        dispatcher.Results[a.Id] = Run(a.Id, "Succeeded",
+            shardArtifacts: new[] { "" },
+            shardNamedArtifacts: new[] { new[] { new RunArtifactView("report.html", "<h1>Report</h1>") } });
+        dispatcher.Results[b.Id] = Run(b.Id, "Succeeded", shardArtifacts: new[] { "{\"ok\":true}" });
+
+        var view = await RunHandler(chains, jobs, dispatcher)
+            .HandleAsync(new RunJobChainCommand(chain.Id));
+
+        Assert.Equal("Succeeded", view.Status);
+        Assert.Equal("<h1>Report</h1>", dispatcher.Payloads[1]);
+        Assert.Equal("{\"ok\":true}", view.FinalOutput);
+    }
+
+    [Fact]
+    public void PrimaryOutput_uses_named_artifacts_when_no_stdout()
+    {
+        var run = Run(Guid.NewGuid(), "Succeeded",
+            shardArtifacts: new[] { "", "" },
+            shardNamedArtifacts: new[]
+            {
+                new[] { new RunArtifactView("data.json", "{\"k\":1}") },
+                new[] { new RunArtifactView("log.txt", "all good") },
+            });
+        Assert.Equal("[{\"k\":1},\"all good\"]", RunJobChainHandler.PrimaryOutput(run));
+    }
+
+    [Fact]
+    public void PrimaryOutput_returns_null_when_no_artifacts_at_all()
+    {
+        var run = Run(Guid.NewGuid(), "Succeeded");
+        Assert.Null(RunJobChainHandler.PrimaryOutput(run));
+    }
+
     // ── fakes ───────────────────────────────────────────────────────────────────────────────────────
 
     private static JobRunDetailView Run(Guid jobId, string status,
-        string[]? shardArtifacts = null, string? reduceArtifact = null)
+        string[]? shardArtifacts = null, string? reduceArtifact = null,
+        RunArtifactView[][]? shardNamedArtifacts = null)
     {
         var shards = (shardArtifacts ?? Array.Empty<string>())
-            .Select((a, i) => new ShardResultView(i, 0, "Succeeded", a, null, Array.Empty<RunArtifactView>()))
+            .Select((a, i) =>
+            {
+                var named = shardNamedArtifacts is { } && i < shardNamedArtifacts.Length
+                    ? shardNamedArtifacts[i]
+                    : Array.Empty<RunArtifactView>();
+                return new ShardResultView(i, 0, "Succeeded", a, null, named);
+            })
             .ToList();
         var reduce = reduceArtifact is null
             ? null

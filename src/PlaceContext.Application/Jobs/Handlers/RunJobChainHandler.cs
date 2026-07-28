@@ -241,7 +241,9 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
 
     /// <summary>The run's primary output, as the next stage's stdin payload: the reduce artifact when
     /// present (the final aggregate), a lone shard's artifact as-is, else a JSON array of the shard
-    /// artifacts (raw values when they are JSON, JSON-encoded strings otherwise).</summary>
+    /// artifacts (raw values when they are JSON, JSON-encoded strings otherwise). When no stdout
+    /// artifact was produced, non-binary named output files (<see cref="RunArtifactView"/>) are
+    /// used as a fallback so downstream chain stages still receive the run's data.</summary>
     internal static string? PrimaryOutput(JobRunDetailView run)
     {
         if (run.ReduceResult?.Artifact is { Length: > 0 } reduce) return reduce;
@@ -251,9 +253,18 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
             .Where(s => !string.IsNullOrWhiteSpace(s.Artifact))
             .Select(s => s.Artifact!)
             .ToList();
-        if (artifacts.Count == 0) return null;
-        if (artifacts.Count == 1) return artifacts[0];
-        return CombineJsonValues(artifacts);
+        if (artifacts.Count > 0)
+            return artifacts.Count == 1 ? artifacts[0] : CombineJsonValues(artifacts);
+
+        var namedContents = run.ShardResults
+            .OrderBy(s => s.Index)
+            .SelectMany(s => s.Artifacts)
+            .Where(a => !a.IsBinary && !string.IsNullOrWhiteSpace(a.Content))
+            .Select(a => a.Content)
+            .ToList();
+        if (namedContents.Count == 0) return null;
+        if (namedContents.Count == 1) return namedContents[0];
+        return CombineJsonValues(namedContents);
     }
 
     /// <summary>The join's stdin input: every fan-out branch's primary output, in branch order,

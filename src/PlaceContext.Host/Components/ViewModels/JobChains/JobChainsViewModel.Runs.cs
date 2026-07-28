@@ -98,10 +98,17 @@ public sealed partial class JobChainsViewModel
         RunPromptChain = null;
         RunPromptSteps.Clear();
         _runPrompt.Clear();
+        PendingChainRunId = chainRunId;
+        PendingChainId = chain.Id;
         Message = $"Run of {chain.Name} started — follow it in the notifications bell.";
-        StopPolling();
+
+        // Open the editor and switch to the runs tab so the user sees the run appear live.
+        EditChainId = chain.Id;
+        EditorTab = "runs";
+        ShowEditor = true;
         OpenRun = null;
-        await RefreshRunsAsync(chain.Id, openNewest: true);
+        StopPolling();
+        await RefreshRunsAsync(chain.Id, pendingChainRunId: chainRunId);
     }
 
     // ── Runs tab ──────────────────────────────────────────────────────────────────────────────
@@ -110,12 +117,19 @@ public sealed partial class JobChainsViewModel
         EditorTab = "runs";
         StepRunDetail = null;
         if (EditChainId is { } chainId)
-            await RefreshRunsAsync(chainId, openNewest: false);
+            await RefreshRunsAsync(chainId);
     }
 
     public void OpenChainRun(ChainRunView run)
     {
         OpenRun = run;
+        StepRunDetail = null;
+        NotifyStateChanged();
+    }
+
+    public void CloseChainRun()
+    {
+        OpenRun = null;
         StepRunDetail = null;
         NotifyStateChanged();
     }
@@ -129,16 +143,28 @@ public sealed partial class JobChainsViewModel
 
     public void CloseStepRun() { StepRunDetail = null; NotifyStateChanged(); }
 
-    private async Task RefreshRunsAsync(Guid chainId, bool openNewest)
+    private async Task RefreshRunsAsync(Guid chainId, Guid? pendingChainRunId = null)
     {
         if (!await _refreshLock.WaitAsync(0)) return; // skip if a refresh is already in-flight
         try
         {
             ChainRuns = await _svc.ListChainRunsAsync(chainId);
-            if (openNewest && ChainRuns.Count > 0)
+
+            var targetId = pendingChainRunId ?? PendingChainRunId;
+            if (targetId is { } pending)
             {
-                OpenRun = ChainRuns[0];
-                FollowNewest = true;
+                // If the pending run has appeared, open it and start/continue polling.
+                if (ChainRuns.FirstOrDefault(r => r.Id == pending) is { } pendingRun)
+                {
+                    OpenRun = pendingRun;
+                    FollowNewest = true;
+                    if (pendingRun.Status is "Succeeded" or "Failed" or "Partial")
+                    {
+                        PendingChainRunId = null;
+                        PendingChainId = null;
+                    }
+                }
+                // Keep polling until the pending run is found and terminal.
                 StartPolling();
             }
             else if (OpenRun is { } current)
@@ -146,6 +172,15 @@ public sealed partial class JobChainsViewModel
                 var updated = ChainRuns.FirstOrDefault(r => r.Id == current.Id);
                 if (updated is not null && updated.Status != current.Status)
                     OpenRun = updated;
+            }
+
+            // If the pending run is terminal and no longer needed, clear it.
+            if (PendingChainRunId is { } stillPending
+                && ChainRuns.FirstOrDefault(r => r.Id == stillPending) is { } sp
+                && sp.Status is "Succeeded" or "Failed" or "Partial")
+            {
+                PendingChainRunId = null;
+                PendingChainId = null;
             }
         }
         catch { }
@@ -158,17 +193,28 @@ public sealed partial class JobChainsViewModel
         StopPolling();
         _pollCts = new CancellationTokenSource();
         var ct = _pollCts.Token;
+        var started = DateTimeOffset.UtcNow;
         _ = Task.Run(async () =>
         {
             while (!ct.IsCancellationRequested)
             {
                 await Task.Delay(5000, ct).ConfigureAwait(false);
                 if (ct.IsCancellationRequested) break;
+
+                // Stop polling after a generous timeout.
+                if (DateTimeOffset.UtcNow - started > TimeSpan.FromMinutes(5))
+                {
+                    PendingChainRunId = null;
+                    PendingChainId = null;
+                    NotifyStateChanged();
+                    break;
+                }
+
                 try
                 {
                     if (OpenRun is { } run)
                     {
-                        await RefreshRunsAsync(run.ChainId, openNewest: false);
+                        await RefreshRunsAsync(run.ChainId);
                         // Stop polling once the run reaches a terminal state
                         if (OpenRun is { Status: "Succeeded" or "Failed" or "Partial" })
                             break;

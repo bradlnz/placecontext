@@ -415,7 +415,7 @@
 
     [SupplyParameterFromQuery(Name = "record")] public string? RecordKey { get; set; }
 
-    protected override void OnInitialized() => Vm.Attach(StateHasChanged);
+    protected override void OnInitialized() => Vm.Attach(() => InvokeAsync(StateHasChanged));
 
     protected override async Task OnParametersSetAsync()
     {
