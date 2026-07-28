@@ -30,7 +30,8 @@ public class AgentHandlerTests
     {
         var repo = new InMemoryAgentConfigRepository();
         var config = AgentConfig.Create(Guid.NewGuid(), T0);
-        config.Update("custom-model", "test prompt", 10, 0.5f, 0.8f, true, T0);
+        config.Update("custom-model", "test prompt", AgentConfig.DefaultPreamble, AgentConfig.DefaultToolCatalog,
+            AgentConfig.DefaultLaunchpadToolCatalog, 10, 0.5f, 0.8f, true, T0);
         await repo.AddAsync(config);
 
         var handler = new GetAgentConfigHandler(repo);
@@ -53,7 +54,9 @@ public class AgentHandlerTests
 
         var projectId = Guid.NewGuid();
         var view = await handler.HandleAsync(new UpdateAgentConfigCommand(
-            projectId, "my-model", "You are helpful.", 8, 0.9f, 0.95f, true));
+            projectId, "my-model", "You are helpful.", AgentConfig.DefaultPreamble,
+            AgentConfig.DefaultToolCatalog, AgentConfig.DefaultLaunchpadToolCatalog,
+            8, 0.9f, 0.95f, true));
 
         Assert.Equal("my-model", view.BaseModel);
         Assert.Equal("You are helpful.", view.SystemPrompt);
@@ -76,10 +79,13 @@ public class AgentHandlerTests
 
         var projectId = Guid.NewGuid();
         await handler.HandleAsync(new UpdateAgentConfigCommand(
-            projectId, "model-v1", "prompt v1", 5, 0.7f, 0.9f, true));
+            projectId, "model-v1", "prompt v1", AgentConfig.DefaultPreamble,
+            AgentConfig.DefaultToolCatalog, AgentConfig.DefaultLaunchpadToolCatalog,
+            5, 0.7f, 0.9f, true));
 
         var view = await handler.HandleAsync(new UpdateAgentConfigCommand(
-            projectId, "model-v2", "prompt v2", 10, 0.5f, 0.8f, false));
+            projectId, "model-v2", "prompt v2", "Custom preamble.", "Custom catalog.",
+            AgentConfig.DefaultLaunchpadToolCatalog, 10, 0.5f, 0.8f, false));
 
         Assert.Equal("model-v2", view.BaseModel);
         Assert.False(view.Enabled);

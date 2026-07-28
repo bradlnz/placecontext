@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using System.Text.Json;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -20,10 +21,8 @@ namespace PlaceContext.Host.Controllers;
 /// to /setup or /login instead of signing anyone in. The pctl TUI's HMAC-token machine path
 /// (/auth/portal) is untouched — it never counts towards "configured" (see IAuthService.GetOrCreateOperatorAsync),
 /// so it can keep bootstrapping a headless session without ever needing a password. /join turns an
-/// invite token into a member. All actions here are anonymous by design — they run before a session
-/// cookie exists.
+/// invite token into a member. Login and setup actions are anonymous; 2FA management endpoints require authentication.
 /// </summary>
-[AllowAnonymous]
 public sealed class AuthController : ControllerBase
 {
     private readonly IAuthService _auth;
@@ -32,9 +31,10 @@ public sealed class AuthController : ControllerBase
     private readonly IAntiforgery _antiforgery;
     private readonly IConfiguration _config;
     private readonly IWebHostEnvironment _env;
+    private readonly IDataEncryptor _encryptor;
 
     public AuthController(IAuthService auth, PortalToken portal, IMembershipService members,
-        IAntiforgery antiforgery, IConfiguration config, IWebHostEnvironment env)
+        IAntiforgery antiforgery, IConfiguration config, IWebHostEnvironment env, IDataEncryptor encryptor)
     {
         _auth = auth;
         _portal = portal;
@@ -42,6 +42,7 @@ public sealed class AuthController : ControllerBase
         _antiforgery = antiforgery;
         _config = config;
         _env = env;
+        _encryptor = encryptor;
     }
 
     // Token sign-in (self-hosted; the pctl TUI mints the token and opens /auth/portal).
@@ -49,6 +50,7 @@ public sealed class AuthController : ControllerBase
     // PlaceContext:Portal:SigningKey) signs the cluster operator into the cookie. In Development with no
     // key configured, sign-in is automatic so `./run.sh` + opening localhost just works with no cluster.
     [HttpGet("/auth/portal")]
+    [AllowAnonymous]
     public async Task<IActionResult> Portal(string? token, string? returnUrl)
     {
         var portalSigningKey = _config["PlaceContext:Portal:SigningKey"];
@@ -67,6 +69,7 @@ public sealed class AuthController : ControllerBase
     //   • Everywhere else: no more password-less auto-login. Send the operator to /setup (tenant has no
     //     admin with a real password yet) or /login (it does), carrying the return URL through either way.
     [HttpGet("/locked")]
+    [AllowAnonymous]
     public async Task<IActionResult> Locked()
     {
         if (_env.IsDevelopment())
@@ -88,6 +91,7 @@ public sealed class AuthController : ControllerBase
     // Blazor circuit) so the response can set the auth cookie directly, same as every other sign-in path
     // on this controller.
     [HttpPost("/auth/setup")]
+    [AllowAnonymous]
     public async Task<IActionResult> Setup([FromForm] string email, [FromForm] string? displayName,
         [FromForm] string password, [FromForm] string confirmPassword)
     {
@@ -118,6 +122,7 @@ public sealed class AuthController : ControllerBase
     /// to prompt for the default admin account.
     /// </summary>
     [HttpGet("/auth/setup/status")]
+    [AllowAnonymous]
     public async Task<IActionResult> SetupStatus()
     {
         var unconfigured = await _auth.IsUnconfiguredAsync(HttpContext.RequestAborted);
@@ -130,6 +135,7 @@ public sealed class AuthController : ControllerBase
     /// Does not set a cookie (install is headless); the operator signs in at /login afterward.
     /// </summary>
     [HttpPost("/auth/setup/cli")]
+    [AllowAnonymous]
     public async Task<IActionResult> SetupCli([FromBody] SetupCliRequest? body)
     {
         if (!await _auth.IsUnconfiguredAsync(HttpContext.RequestAborted))
@@ -156,6 +162,7 @@ public sealed class AuthController : ControllerBase
     // member with no password set) so a response can't be used to enumerate accounts, and applies a small
     // fixed delay on failure (see LoginThrottle) so a naive brute-force loop can't run at line rate.
     [HttpPost("/auth/login")]
+    [AllowAnonymous]
     public async Task<IActionResult> Login([FromForm] string email, [FromForm] string password, [FromForm] string? returnUrl)
     {
         if (!await ValidAntiforgeryAsync())
@@ -169,6 +176,20 @@ public sealed class AuthController : ControllerBase
         }
 
         LoginThrottle.Clear(email ?? "");
+
+        if (await _auth.IsTwoFactorEnabledAsync(user.Id, HttpContext.RequestAborted))
+        {
+            var stateToken = _encryptor.Protect(JsonSerializer.Serialize(new TotpState
+            {
+                UserId = user.Id, TenantId = user.TenantId, Email = user.Email,
+                DisplayName = user.DisplayName, Role = user.Role.ToString(),
+            }), IDataEncryptor.Purpose.TotpState);
+            var qs = $"state={Uri.EscapeDataString(stateToken)}";
+            if (!string.IsNullOrEmpty(returnUrl))
+                qs += $"&returnUrl={Uri.EscapeDataString(returnUrl)}";
+            return Redirect($"/auth/totp-verify?{qs}");
+        }
+
         await SignInAsync(HttpContext, user);
         return Redirect(LocalOrHome(returnUrl));
     }
@@ -201,6 +222,7 @@ public sealed class AuthController : ControllerBase
 
     // Invite acceptance (join page).
     [HttpGet("/join")]
+    [AllowAnonymous]
     public async Task<IActionResult> Join(string? token, string? error)
     {
         var info = string.IsNullOrEmpty(token) ? null : await _members.GetInviteAsync(token, HttpContext.RequestAborted);
@@ -210,6 +232,7 @@ public sealed class AuthController : ControllerBase
     }
 
     [HttpPost("/auth/accept-invite")]
+    [AllowAnonymous]
     public async Task<IActionResult> AcceptInvite([FromForm] string token, [FromForm] string password, [FromForm] string? displayName)
     {
         if (!await ValidAntiforgeryAsync())
@@ -235,6 +258,7 @@ public sealed class AuthController : ControllerBase
     }
 
     [HttpPost("/auth/logout")]
+    [AllowAnonymous]
     public async Task<IActionResult> Logout()
     {
         await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
@@ -265,4 +289,134 @@ public sealed class AuthController : ControllerBase
             && Uri.TryCreate(returnUrl, UriKind.Relative, out _)
             && returnUrl.StartsWith('/') && !returnUrl.StartsWith("//") && !returnUrl.StartsWith("/\\")
                 ? returnUrl : "/";
+
+    // ── TOTP 2FA ───────────────────────────────────────────────────────────────────────────────
+
+    [HttpGet("/auth/totp-verify")]
+    [AllowAnonymous]
+    public IActionResult TotpVerify([FromQuery] string? state, [FromQuery] string? error)
+    {
+        if (string.IsNullOrEmpty(state))
+            return Redirect("/login");
+        var tokens = _antiforgery.GetAndStoreTokens(HttpContext);
+        return Content(AuthPages.TotpVerify(tokens, state, error), "text/html");
+    }
+
+    [HttpPost("/auth/totp-verify")]
+    [AllowAnonymous]
+    public async Task<IActionResult> TotpVerifyPost([FromForm] string state, [FromForm] string code,
+        [FromForm] string? useRecovery)
+    {
+        if (!await ValidAntiforgeryAsync())
+            return Redirect($"/auth/totp-verify?error={Uri.EscapeDataString("Your session expired — please try again.")}");
+
+        if (string.IsNullOrEmpty(state))
+            return Redirect("/login");
+
+        var pending = DecryptState(state);
+        if (pending is null)
+            return Redirect("/login");
+
+        bool ok;
+        if (useRecovery == "1")
+            ok = await _auth.ConsumeRecoveryCodeAsync(pending.UserId, code ?? "", HttpContext.RequestAborted);
+        else
+            ok = await _auth.VerifyTotpCodeAsync(pending.UserId, code ?? "", HttpContext.RequestAborted);
+
+        if (!ok)
+        {
+            var qs = $"state={Uri.EscapeDataString(state)}&error={Uri.EscapeDataString("Invalid code — try again.")}";
+            return Redirect($"/auth/totp-verify?{qs}");
+        }
+
+        var user = new AuthUser(pending.UserId, pending.TenantId, pending.Email,
+            pending.DisplayName, Enum.Parse<UserRole>(pending.Role));
+        await SignInAsync(HttpContext, user);
+        return Redirect(LocalOrHome(pending.ReturnUrl));
+    }
+
+    private TotpState? DecryptState(string state)
+    {
+        try
+        {
+            var json = _encryptor.Unprotect(state, IDataEncryptor.Purpose.TotpState);
+            if (string.IsNullOrEmpty(json)) return null;
+            return JsonSerializer.Deserialize<TotpState>(json);
+        }
+        catch { return null; }
+    }
+
+    private sealed class TotpState
+    {
+        public Guid UserId { get; set; }
+        public Guid TenantId { get; set; }
+        public string Email { get; set; } = "";
+        public string DisplayName { get; set; } = "";
+        public string Role { get; set; } = "";
+        public string? ReturnUrl { get; set; }
+    }
+
+    // ── 2FA Management API ─────────────────────────────────────────────────────────────────────
+
+    [HttpGet("/api/2fa/status")]
+    [Authorize]
+    public async Task<IActionResult> TwoFactorStatus()
+    {
+        var userId = GetCurrentUserId();
+        if (userId is null) return Unauthorized();
+        var enabled = await _auth.IsTwoFactorEnabledAsync(userId.Value, HttpContext.RequestAborted);
+        return Ok(new { enabled });
+    }
+
+    [HttpPost("/api/2fa/setup")]
+    [Authorize]
+    public async Task<IActionResult> TwoFactorSetup()
+    {
+        var userId = GetCurrentUserId();
+        if (userId is null) return Unauthorized();
+
+        if (await _auth.IsTwoFactorEnabledAsync(userId.Value, HttpContext.RequestAborted))
+            return BadRequest(new { error = "2FA is already enabled." });
+
+        var (secret, recoveryCodes) = await _auth.SetupTwoFactorAsync(userId.Value, HttpContext.RequestAborted);
+        var issuer = Uri.EscapeDataString("PlaceContext");
+        var email = Uri.EscapeDataString(User.FindFirstValue(ClaimTypes.Email) ?? "");
+        var otpauthUri = $"otpauth://totp/{issuer}:{email}?secret={secret}&issuer={issuer}&digits=6&period=30";
+
+        return Ok(new { otpauthUri, recoveryCodes, secret });
+    }
+
+    [HttpPost("/api/2fa/confirm")]
+    [Authorize]
+    public async Task<IActionResult> TwoFactorConfirm([FromBody] TotpConfirmRequest? body)
+    {
+        var userId = GetCurrentUserId();
+        if (userId is null) return Unauthorized();
+        if (body?.Code is null) return BadRequest(new { error = "Code required." });
+
+        var ok = await _auth.VerifyTotpCodeAsync(userId.Value, body.Code, HttpContext.RequestAborted);
+        if (!ok) return BadRequest(new { error = "Invalid code." });
+        return Ok(new { confirmed = true });
+    }
+
+    [HttpPost("/api/2fa/disable")]
+    [Authorize]
+    public async Task<IActionResult> TwoFactorDisable([FromBody] TotpConfirmRequest? body)
+    {
+        var userId = GetCurrentUserId();
+        if (userId is null) return Unauthorized();
+        if (body?.Code is null) return BadRequest(new { error = "Code required." });
+
+        var ok = await _auth.DisableTwoFactorAsync(userId.Value, body.Code, HttpContext.RequestAborted);
+        if (!ok) return BadRequest(new { error = "Invalid code." });
+        return Ok(new { disabled = true });
+    }
+
+    private Guid? GetCurrentUserId()
+    {
+        var claim = User.FindFirst(ClaimTypes.NameIdentifier);
+        return claim is not null && Guid.TryParse(claim.Value, out var id) ? id : null;
+    }
+
+    public sealed record TotpConfirmRequest(string Code);
 }

@@ -28,7 +28,7 @@ public class LaunchpadToolExecutor
                 AgentToolNames.ListJobRuns => await ListJobRunsAsync(args, ct),
                 AgentToolNames.ListChains => await ListChainsAsync(projectId, ct),
                 AgentToolNames.RunJob => await RunJobAsync(args, ct),
-                AgentToolNames.RunJobChain => await RunJobChainAsync(args, ct),
+                AgentToolNames.RunJobChain => await RunJobChainAsync(projectId, args, ct),
                 AgentToolNames.Search => await SearchAsync(projectId, args, ct),
                 AgentToolNames.QueryGraph => await QueryGraphAsync(projectId, ct),
                 AgentToolNames.GetArtifacts => await GetArtifactsAsync(projectId, ct),
@@ -112,19 +112,21 @@ public class LaunchpadToolExecutor
         return $"Job run started: {run.Id}\nStatus: {run.Status}\nStarted: {run.StartedAt:yyyy-MM-dd HH:mm}";
     }
 
-    private async Task<string> RunJobChainAsync(string args, CancellationToken ct)
+    private async Task<string> RunJobChainAsync(Guid projectId, string args, CancellationToken ct)
     {
-        // args: "chainId" or "chainId|payloadJson" — split only on the FIRST pipe so the
+        // args: "chainIdOrName" or "chainIdOrName|payloadJson" — split only on the FIRST pipe so the
         // payload may itself contain pipes.
         var pipeIdx = args.IndexOf('|');
-        var idText = (pipeIdx >= 0 ? args[..pipeIdx] : args).Trim();
+        var key = (pipeIdx >= 0 ? args[..pipeIdx] : args).Trim();
         var payload = pipeIdx >= 0 ? args[(pipeIdx + 1)..].Trim() : null;
         if (string.IsNullOrEmpty(payload))
             payload = null;
-        if (!Guid.TryParse(idText, out var chainId) || chainId == Guid.Empty)
-            return $"Error: invalid chainId '{idText}'";
 
-        var run = await _svc.RunJobChainAsync(chainId, payload, chainRunId: null, stepPayloadOverrides: null, ct: ct);
+        var resolved = await ResolveChainIdAsync(projectId, key, ct);
+        if (resolved.Error is not null)
+            return $"Error: {resolved.Error}";
+
+        var run = await _svc.RunJobChainAsync(resolved.ChainId, payload, chainRunId: null, stepPayloadOverrides: null, ct: ct);
         var sb = new StringBuilder();
         sb.Append($"Chain run: {run.Id}\nStatus: {run.Status}\n");
         foreach (var step in run.Steps)
@@ -135,6 +137,28 @@ public class LaunchpadToolExecutor
             sb.Append($"\nFinal output:\n{output}");
         }
         return sb.ToString();
+    }
+
+    private async Task<(Guid ChainId, string? Error)> ResolveChainIdAsync(Guid projectId, string key, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(key))
+            return (Guid.Empty, "usage: run_job_chain|chainIdOrName|payloadJson");
+        if (Guid.TryParse(key, out var chainId) && chainId != Guid.Empty)
+            return (chainId, null);
+
+        var chains = await _svc.ListJobChainsAsync(projectId, ct);
+        var matches = chains
+            .Where(c => string.Equals(c.Name, key, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        if (matches.Count == 1)
+            return (matches[0].Id, null);
+        if (matches.Count > 1)
+            return (Guid.Empty, $"multiple chains named '{key}' — use the chain id instead");
+
+        var available = chains.Count == 0
+            ? "(none)"
+            : string.Join(", ", chains.Select(c => $"{c.Name} ({c.Id})"));
+        return (Guid.Empty, $"unknown chain '{key}'. Available: {available}");
     }
 
     private async Task<string> SearchAsync(Guid projectId, string args, CancellationToken ct)

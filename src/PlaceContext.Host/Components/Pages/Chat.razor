@@ -533,9 +533,24 @@
                     @if (Vm.SettingsTab == "prompt")
                     {
                         <div class="dcfield system-prompt-field">
-                            <label>System Prompt <span class="field-hint">— saved per project</span></label>
-                            <textarea class="dcinput textarea prompt-textarea" @bind="Vm.PendingSystemPrompt" rows="16"
+                            <label>Persona <span class="field-hint">— the agent's personality and instructions</span></label>
+                            <textarea class="dcinput textarea prompt-textarea" @bind="Vm.PendingSystemPrompt" rows="10"
                                 placeholder="You are a PlaceContext agent. You can query project data, inspect job runs, render artifacts, and render graphs."></textarea>
+                        </div>
+                        <div class="dcfield system-prompt-field">
+                            <label>Preamble <span class="field-hint">— prepended before the persona (e.g., anti-chain-of-thought)</span></label>
+                            <textarea class="dcinput textarea prompt-textarea" @bind="Vm.PendingPreamble" rows="6"
+                                placeholder="CRITICAL: NEVER think out loud..."></textarea>
+                        </div>
+                        <div class="dcfield system-prompt-field">
+                            <label>Chat Tool Catalog <span class="field-hint">— tool descriptions shown to the interactive chat agent</span></label>
+                            <textarea class="dcinput textarea prompt-textarea" @bind="Vm.PendingToolCatalog" rows="14"
+                                placeholder="Available tools (use [[tool:toolName|args]] syntax)..."></textarea>
+                        </div>
+                        <div class="dcfield system-prompt-field">
+                            <label>Launchpad Tool Catalog <span class="field-hint">— tool descriptions shown to unattended launchpad agents</span></label>
+                            <textarea class="dcinput textarea prompt-textarea" @bind="Vm.PendingLaunchpadToolCatalog" rows="14"
+                                placeholder="Available tools (use [[tool:toolName|args]] syntax)..."></textarea>
                         </div>
                         <div class="settings-row">
                             <div class="dcfield">

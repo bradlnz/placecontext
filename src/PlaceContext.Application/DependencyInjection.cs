@@ -91,9 +91,10 @@ public static class DependencyInjection
         // Job execution orchestrator (applies per-job retry policy).
         services.AddScoped<IJobRunner, JobRunner>();
 
-        // Launchpads: unattended agent sessions driven by the [[tool:...]] protocol.
+        // Launchpads / Slack: unattended agent sessions driven by the [[tool:...]] protocol.
         services.AddScoped<Agents.Services.LaunchpadToolExecutor>();
         services.AddScoped<Agents.Services.AgentSessionRunner>();
+        services.AddScoped<Agents.Services.SlackAgentBridge>();
 
         // MCP connections
         services.AddScoped<ICommandHandler<Features.CreateMcpConnectionCommand, Dtos.McpConnectionView>, Features.CreateMcpConnectionHandler>();

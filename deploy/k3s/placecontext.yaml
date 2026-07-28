@@ -219,11 +219,41 @@ spec:
               value: "qwen3.5-4b"
             - name: PlaceContext__ClusterChat__ShardEndpoints__0
               value: "http://100.83.58.75:8080"
-            # Self-hosted embeddings via the shard server's /v1/embeddings (mean-pooled hidden
-            # states of the chat model). Must equal the model's hidden size — it is used to
-            # create the pgvector columns. Powers RAG + dependency-graph "brain" nodes.
+            # Voyage AI embeddings (fast). Takes precedence over cluster mean-pool embeddings
+            # whenever PlaceContext__Voyage__ApiKey is set (see DependencyInjection). Dimensions
+            # must match voyage-3 (1024) — pgvector tables self-init to this size on first use.
+            - name: PlaceContext__Voyage__ApiKey
+              valueFrom:
+                secretKeyRef:
+                  name: placecontext-voyage
+                  key: api-key
+            - name: PlaceContext__Voyage__Model
+              value: "voyage-3"
+            - name: PlaceContext__Voyage__Dimensions
+              value: "1024"
+            # Kept for reference if Voyage is unset and cluster embeddings are used instead.
             - name: PlaceContext__ClusterChat__EmbeddingDimensions
               value: "2560"
+            # Slack Events API → agent (optional). Create secret placecontext-slack with
+            # signing-secret, bot-token, project-id to enable POST /slack/events.
+            - name: PlaceContext__Slack__SigningSecret
+              valueFrom:
+                secretKeyRef:
+                  name: placecontext-slack
+                  key: signing-secret
+                  optional: true
+            - name: PlaceContext__Slack__BotToken
+              valueFrom:
+                secretKeyRef:
+                  name: placecontext-slack
+                  key: bot-token
+                  optional: true
+            - name: PlaceContext__Slack__ProjectId
+              valueFrom:
+                secretKeyRef:
+                  name: placecontext-slack
+                  key: project-id
+                  optional: true
           startupProbe:
             httpGet: { path: /healthz, port: 7700 }
             periodSeconds: 5

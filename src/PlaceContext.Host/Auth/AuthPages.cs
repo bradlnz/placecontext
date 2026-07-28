@@ -29,6 +29,18 @@ public static class AuthPages
     public static string JoinInvalid() => Cache.GetOrAdd("joininvalid", static name =>
         File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Auth", "templates", name + ".html")));
 
+    public static string TotpVerify(AntiforgeryTokenSet tokens, string state, string? error)
+    {
+        var html = Cache.GetOrAdd("totp-verify", static name =>
+            File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Auth", "templates", name + ".html")));
+        return html
+            .Replace("{{afName}}", tokens.FormFieldName)
+            .Replace("{{afValue}}", tokens.RequestToken)
+            .Replace("{{state}}", WebUtility.HtmlEncode(state))
+            .Replace("{{errorClass}}", string.IsNullOrEmpty(error) ? "hidden" : "")
+            .Replace("{{error}}", WebUtility.HtmlEncode(error ?? string.Empty));
+    }
+
     private static string Render(string template, AntiforgeryTokenSet tokens, string? error, string? returnUrl = null)
     {
         var html = Cache.GetOrAdd(template, static name =>

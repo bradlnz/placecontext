@@ -68,6 +68,9 @@ public sealed partial class ChatViewModel : PageViewModel
     public string NewMcpAuthHeader { get; set; } = "";
     public string NewMcpOAuthScopes { get; set; } = "";
     public string PendingSystemPrompt { get; set; } = "";
+    public string PendingPreamble { get; set; } = "";
+    public string PendingToolCatalog { get; set; } = "";
+    public string PendingLaunchpadToolCatalog { get; set; } = "";
     public float PendingTemperature { get; set; }
     public int PendingMaxTokens { get; set; }
     public bool PendingRagEnabled { get; set; } = true;
@@ -90,6 +93,9 @@ public sealed partial class ChatViewModel : PageViewModel
     // ── Private state ────────────────────────────────────────────────────────
 
     private string _systemPrompt = ChatCopy.DefaultSystemPrompt;
+    private string _preamble = ChatCopy.DefaultPreamble;
+    private string _toolCatalog = ChatCopy.DefaultToolCatalog;
+    private string _launchpadToolCatalog = ChatCopy.DefaultLaunchpadToolCatalog;
     private bool _ragEnabled = true;
     private int _maxContextChunks = 5;
     private float _temperature = 0.7f;

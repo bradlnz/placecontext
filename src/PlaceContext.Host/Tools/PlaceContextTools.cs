@@ -564,12 +564,15 @@ public sealed class PlaceContextTools
         [Description("Project id")] Guid projectId,
         [Description("Model name (e.g. gemma3:4b)")] string baseModel,
         [Description("System prompt")] string systemPrompt,
+        [Description("Preamble text prepended before the system prompt")] string preamble,
+        [Description("Tool catalog text describing available tools")] string toolCatalog,
+        [Description("Launchpad tool catalog text")] string launchpadToolCatalog,
         [Description("Max context chunks from RAG (default 5)")] int maxContextChunks = 5,
         [Description("Temperature 0-2 (default 0.7)")] float temperature = 0.7f,
         [Description("Top-p 0-1 (default 0.9)")] float topP = 0.9f,
         [Description("Whether the agent is enabled")] bool enabled = true)
         => Traced(log, "update_agent_config", projectId.ToString(), $"update agent config: {baseModel}", new { projectId, baseModel, maxContextChunks, temperature, topP, enabled },
-            () => svc.UpdateAgentConfigAsync(new Application.Features.UpdateAgentConfigCommand(projectId, baseModel, systemPrompt, maxContextChunks, temperature, topP, enabled)));
+            () => svc.UpdateAgentConfigAsync(new Application.Features.UpdateAgentConfigCommand(projectId, baseModel, systemPrompt, preamble, toolCatalog, launchpadToolCatalog, maxContextChunks, temperature, topP, enabled)));
 
     private static IReadOnlyList<CodeFileDto> ParseFiles(string filesJson)
     {

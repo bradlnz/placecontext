@@ -1,7 +1,9 @@
+using System.Text.Json;
 using PlaceContext.Application.Auth;
 using PlaceContext.Application.Ports;
 using PlaceContext.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using OtpNet;
 
 namespace PlaceContext.Infrastructure.Auth;
 
@@ -14,16 +16,18 @@ public sealed class AuthService : IAuthService
 {
     private readonly AppDbContext _db;
     private readonly ICurrentTenant _tenant;
+    private readonly IDataEncryptor _encryptor;
 
     // A fixed, precomputed hash verified against on every *unknown* login attempt, so the real PBKDF2
     // work happens whether or not the email exists — otherwise a "known email, wrong password" request
     // and an "unknown email" request would take measurably different time and leak account existence.
     private static readonly string DummyHashForTiming = PasswordHasher.Hash(Guid.NewGuid().ToString("N"));
 
-    public AuthService(AppDbContext db, ICurrentTenant tenant)
+    public AuthService(AppDbContext db, ICurrentTenant tenant, IDataEncryptor encryptor)
     {
         _db = db;
         _tenant = tenant;
+        _encryptor = encryptor;
     }
 
     public async Task<bool> EmailExistsAsync(string email, CancellationToken ct = default)
@@ -139,4 +143,80 @@ public sealed class AuthService : IAuthService
         Enum.TryParse<UserRole>(r.Role, out var role) ? role : UserRole.Member);
 
     private static string Normalize(string email) => (email ?? string.Empty).Trim().ToLowerInvariant();
+
+    public async Task<bool> IsTwoFactorEnabledAsync(Guid userId, CancellationToken ct = default)
+        => await _db.Users.AsNoTracking()
+            .AnyAsync(u => u.Id == userId && u.TwoFactorEnabled, ct);
+
+    public async Task<(string Secret, string[] RecoveryCodes)> SetupTwoFactorAsync(Guid userId, CancellationToken ct = default)
+    {
+        var row = await _db.Users.FirstOrDefaultAsync(u => u.Id == userId, ct);
+        if (row is null) return ("", Array.Empty<string>());
+
+        var secret = new byte[20];
+        using (var rng = System.Security.Cryptography.RandomNumberGenerator.Create())
+            rng.GetBytes(secret);
+        var secretBase32 = Base32Encoding.ToString(secret);
+
+        var recoveryCodes = Enumerable.Range(0, 10)
+            .Select(_ => Guid.NewGuid().ToString("N")[..8].ToUpperInvariant())
+            .ToArray();
+
+        row.TotpSecret = _encryptor.Protect(secretBase32, IDataEncryptor.Purpose.Totp);
+        row.RecoveryCodesJson = _encryptor.Protect(
+            JsonSerializer.Serialize(recoveryCodes), IDataEncryptor.Purpose.Totp);
+        row.TwoFactorEnabled = true;
+        await _db.SaveChangesAsync(ct);
+
+        return (secretBase32, recoveryCodes);
+    }
+
+    public async Task<bool> VerifyTotpCodeAsync(Guid userId, string code, CancellationToken ct = default)
+    {
+        var row = await _db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userId && u.TwoFactorEnabled, ct);
+        if (row?.TotpSecret is null) return false;
+
+        var secretBase32 = _encryptor.Unprotect(row.TotpSecret, IDataEncryptor.Purpose.Totp);
+        if (string.IsNullOrEmpty(secretBase32)) return false;
+
+        var secretBytes = Base32Encoding.ToBytes(secretBase32);
+        var totp = new Totp(secretBytes);
+        return totp.VerifyTotp(code.Trim(), out _, new VerificationWindow(1, 1));
+    }
+
+    public async Task<bool> ConsumeRecoveryCodeAsync(Guid userId, string code, CancellationToken ct = default)
+    {
+        var row = await _db.Users.FirstOrDefaultAsync(u => u.Id == userId && u.TwoFactorEnabled, ct);
+        if (row?.RecoveryCodesJson is null) return false;
+
+        var json = _encryptor.Unprotect(row.RecoveryCodesJson, IDataEncryptor.Purpose.Totp);
+        if (string.IsNullOrEmpty(json)) return false;
+
+        var codes = JsonSerializer.Deserialize<string[]>(json);
+        if (codes is null) return false;
+
+        var normalized = code.Trim().ToUpperInvariant();
+        var idx = Array.FindIndex(codes, c => c == normalized);
+        if (idx < 0) return false;
+
+        codes[idx] = Guid.NewGuid().ToString("N")[..8].ToUpperInvariant(); // consume and rotate
+        row.RecoveryCodesJson = _encryptor.Protect(
+            JsonSerializer.Serialize(codes), IDataEncryptor.Purpose.Totp);
+        await _db.SaveChangesAsync(ct);
+        return true;
+    }
+
+    public async Task<bool> DisableTwoFactorAsync(Guid userId, string currentCode, CancellationToken ct = default)
+    {
+        if (!await VerifyTotpCodeAsync(userId, currentCode, ct)) return false;
+
+        var row = await _db.Users.FirstOrDefaultAsync(u => u.Id == userId, ct);
+        if (row is null) return false;
+
+        row.TwoFactorEnabled = false;
+        row.TotpSecret = null;
+        row.RecoveryCodesJson = null;
+        await _db.SaveChangesAsync(ct);
+        return true;
+    }
 }

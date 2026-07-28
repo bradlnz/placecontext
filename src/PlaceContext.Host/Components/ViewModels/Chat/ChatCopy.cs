@@ -1,3 +1,5 @@
+using PlaceContext.Domain.Entities;
+
 namespace PlaceContext.Host.Components.ViewModels;
 
 /// <summary>User- and model-facing copy for the chat page — no inline string literals in the VM.</summary>
@@ -22,10 +24,15 @@ public static class ChatCopy
         "When data is needed, call the right tool immediately without explaining why. " +
         "Keep answers short unless the user asks for detail. Never use formal corporate language — you're a mate, not a robot.";
 
+    public static string DefaultPreamble => AgentConfig.DefaultPreamble;
+    public static string DefaultToolCatalog => AgentConfig.DefaultToolCatalog;
+    public static string DefaultLaunchpadToolCatalog => AgentConfig.DefaultLaunchpadToolCatalog;
+
     public const string NoProjectSelected = "No project selected";
     public const string ArtifactNotFound = "Artifact not found.";
     public const string LoadingTables = "Loading tables...";
     public const string LoadingJobs = "Loading jobs...";
+    public const string LoadingChains = "Loading job chains...";
     public const string RenderingMap = "Rendering map...";
     public const string MapRendered = "Map rendered";
     public const string NoArtifactsYet = "No artifacts found for this project yet.";
@@ -37,6 +44,7 @@ public static class ChatCopy
     public static string ArtifactsMatchedNone(string query) => $"No artifacts matched \"{query}\".";
     public static string ArtifactsCount(int count) => $"{count} artifacts";
     public static string RunningJob(string shortId) => $"Running job {shortId}...";
+    public static string RunningChain(string shortId) => $"Running chain {shortId}...";
     public static string CallingMcp(string server, string tool) => $"Calling {server}.{tool}...";
     public static string McpServerNotFound(string server, string available) =>
         $"MCP server '{server}' not found. Available: {available}";

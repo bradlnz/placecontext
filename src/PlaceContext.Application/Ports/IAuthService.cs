@@ -41,4 +41,22 @@ public interface IAuthService
     /// "invalid email or password" message without revealing which part was wrong (no user enumeration).
     /// </summary>
     Task<AuthUser?> ValidateCredentialsAsync(string email, string password, CancellationToken ct = default);
+
+    /// <summary>True when the given user has TOTP 2FA enabled.</summary>
+    Task<bool> IsTwoFactorEnabledAsync(Guid userId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Generates a TOTP secret and recovery codes, stores them encrypted, and enables 2FA.
+    /// Returns the raw secret (for QR code generation) and the plaintext recovery codes.
+    /// </summary>
+    Task<(string Secret, string[] RecoveryCodes)> SetupTwoFactorAsync(Guid userId, CancellationToken ct = default);
+
+    /// <summary>Verifies a 6-digit TOTP code against the user's stored secret.</summary>
+    Task<bool> VerifyTotpCodeAsync(Guid userId, string code, CancellationToken ct = default);
+
+    /// <summary>Consumes a single-use recovery code. Returns true if valid and consumed.</summary>
+    Task<bool> ConsumeRecoveryCodeAsync(Guid userId, string code, CancellationToken ct = default);
+
+    /// <summary>Disables 2FA for the user (requires current TOTP code to confirm).</summary>
+    Task<bool> DisableTwoFactorAsync(Guid userId, string currentCode, CancellationToken ct = default);
 }

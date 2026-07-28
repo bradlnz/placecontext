@@ -4,6 +4,7 @@ using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Features;
 using PlaceContext.Application.Mcp;
 using PlaceContext.Application.Ports;
+using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.Repositories;
 using PlaceContext.Infrastructure.Chat;
 using PlaceContext.Infrastructure.Caching;
@@ -133,18 +134,21 @@ public sealed partial class ChatViewModel
                     tc.Status = AgentToolCallStatus.Running;
                     NotifyStateChanged();
 
-                    const int maxRetries = 2;
-                    const int timeoutSeconds = 15;
+                    // run_job / run_job_chain have side effects — no retries, and a long timeout
+                    // (matches AgentSessionRunner launchpad behaviour).
+                    var isJobTool = tc.ToolName is AgentToolNames.RunJob or AgentToolNames.RunJobChain;
+                    var maxRetries = isJobTool ? 0 : 2;
+                    var timeout = isJobTool ? TimeSpan.FromMinutes(15) : TimeSpan.FromSeconds(15);
                     ToolCallResult result = ToolCallResult.Fail("uninitialized");
                     for (var attempt = 0; attempt <= maxRetries; attempt++)
                     {
                         tc.RetryCount = attempt;
                         NotifyStateChanged();
-                        using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSeconds));
+                        using var timeoutCts = new CancellationTokenSource(timeout);
                         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct, timeoutCts.Token);
                         try { result = await ExecuteToolAsync(tc.ToolName, tc.Args, linkedCts.Token); }
                         catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested)
-                        { result = ToolCallResult.Fail($"Timed out after {timeoutSeconds}s"); }
+                        { result = ToolCallResult.Fail($"Timed out after {(int)timeout.TotalSeconds}s"); }
                         if (result.Success || !IsTransientError(result.Error ?? "")) break;
                         if (attempt < maxRetries) await Task.Delay(1000, ct);
                     }
@@ -301,36 +305,10 @@ public sealed partial class ChatViewModel
 
     internal List<ChatMessage> BuildChatMessages(string ragContext = "")
     {
-        var antiCoT = "CRITICAL: NEVER think out loud. NEVER write your thought process, reasoning, self-correction, or commentary about the conversation. " +
-            "NEVER output text like 'Looking at the conversation', 'Let me think', 'I notice', 'Actually', 'Re-reading', or 'Hmm'. " +
-            "NEVER wrap your answer in <think>, <reasoning>, or <reflection> tags. " +
-            "If you catch yourself starting to explain your reasoning, STOP and give the answer directly. " +
-            "You are a casual Australian mate. Talk like one: use 'mate', 'no worries', 'righto', 'cheers', 'sweet as'. " +
-            "Provide only the final answer or the tool call. If a tool is needed, emit it immediately without explanation.\n\n";
+        var preamble = string.IsNullOrWhiteSpace(_preamble) ? AgentConfig.DefaultPreamble : _preamble;
+        var toolDesc = string.IsNullOrWhiteSpace(_toolCatalog) ? AgentConfig.DefaultToolCatalog : _toolCatalog;
 
-        var toolDesc = "Available tools (use [[tool:toolName|args]] syntax). " +
-            "IMPORTANT: Always pass ALL known parameters (table names, column names, IDs, etc.) from the conversation context. " +
-            "Do not ask the user for information you already have. " +
-            "Tool routing: use get_artifacts for reports/files/artifacts, search only for run output text, query_table for table data.\n\n" +
-            "Built-in tools:\n" +
-            "- [[tool:list_tables|]] - List all project data tables\n" +
-            "- [[tool:query_table|tableName|page]] - Query a table (pass table name from context)\n" +
-            "- [[tool:list_jobs|]] - List all jobs\n" +
-            "- [[tool:list_job_runs|jobId]] - List runs for a job\n" +
-            "- [[tool:render_graph|chartType|tableName|columnName]] - Render a chart (pass table AND column names from context, e.g. [[tool:render_graph|bar|cashflow_runs|amount]])\n" +
-            "- [[tool:query_graph|]] - Query project dependency graph\n" +
-            "- [[tool:search|query]] - Semantic search over job run output text/logs only (not files/reports)\n" +
-            "- [[tool:get_artifacts|query]] - Search project artifacts by title/kind. Returns METADATA ONLY: title, kind, size, and id. Does NOT return file content. Use this to find the artifact id, then ALWAYS call show_artifact to get the actual content. Do NOT summarize or describe artifact content based on get_artifacts results alone — you have not seen the content yet.\n" +
-            "- [[tool:show_artifact|artifactId]] - Fetches and returns the ACTUAL CONTENT of an artifact (extracted text for docs, raw content for text files). You MUST call this after get_artifacts before summarizing, describing, or answering questions about artifact content. This is the only way to see what's inside an artifact.\n" +
-            "- [[tool:schedule_job|jobId|name|cron]] - Create a cron schedule\n" +
-            "- [[tool:list_schedules|jobId]] - List job schedules\n" +
-            "- [[tool:toggle_schedule|triggerId|true|false]] - Enable/disable schedule\n" +
-            "- [[tool:run_job|jobId]] - Run a job now\n" +
-            "- [[tool:call_mcp|serverName|toolName|argsJson]] - Call a tool on an external MCP server\n" +
-            "- [[tool:list_mcp_tools|serverName]] - List available tools on an MCP server\n" +
-            "- [[tool:render_map|specJson]] - Render a Leaflet map (JSON spec with {markers:[{lat,lng,label,color}], polygons:[{coords,color}], center:[lat,lng], zoom}). Example: [[tool:render_map|{\\\"markers\\\":[{\\\"lat\\\":48.135,\\\"lng\\\":11.582,\\\"label\\\":\\\"Munich\\\"}]}]]";
-
-        var systemPrompt = antiCoT + _systemPrompt + "\n\n" + toolDesc;
+        var systemPrompt = preamble + _systemPrompt + "\n\n" + toolDesc;
         if (!string.IsNullOrWhiteSpace(ragContext))
             systemPrompt += "\n\n## Project context (retrieved automatically)\n\n" + ragContext;
 

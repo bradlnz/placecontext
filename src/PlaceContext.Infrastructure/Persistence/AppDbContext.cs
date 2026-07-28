@@ -116,6 +116,7 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
             e.HasIndex(x => new { x.TenantId, x.Email }).IsUnique(); // email unique within a tenant
             e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
             e.Property(x => x.PasswordSet).HasDefaultValue(false);
+            e.Property(x => x.TwoFactorEnabled).HasDefaultValue(false);
         });
 
         b.Entity<InviteRow>(e =>
@@ -346,6 +347,9 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
             e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
             e.Property(x => x.BaseModel).HasDefaultValue("qwen3.5:0.8b");
             e.Property(x => x.SystemPrompt).HasDefaultValue("");
+            e.Property(x => x.Preamble).HasDefaultValue("");
+            e.Property(x => x.ToolCatalog).HasDefaultValue("");
+            e.Property(x => x.LaunchpadToolCatalog).HasDefaultValue("");
             e.Property(x => x.MaxContextChunks).HasDefaultValue(5);
             e.Property(x => x.Temperature).HasDefaultValue(0.7f);
             e.Property(x => x.TopP).HasDefaultValue(0.9f);

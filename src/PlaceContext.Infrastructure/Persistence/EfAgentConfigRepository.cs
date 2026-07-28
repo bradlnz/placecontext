@@ -28,6 +28,9 @@ public sealed class EfAgentConfigRepository : IAgentConfigRepository
         var updated = ToRow(config);
         existing.BaseModel = updated.BaseModel;
         existing.SystemPrompt = updated.SystemPrompt;
+        existing.Preamble = updated.Preamble;
+        existing.ToolCatalog = updated.ToolCatalog;
+        existing.LaunchpadToolCatalog = updated.LaunchpadToolCatalog;
         existing.MaxContextChunks = updated.MaxContextChunks;
         existing.Temperature = updated.Temperature;
         existing.TopP = updated.TopP;
@@ -41,6 +44,9 @@ public sealed class EfAgentConfigRepository : IAgentConfigRepository
         ProjectId = c.ProjectId,
         BaseModel = c.BaseModel,
         SystemPrompt = c.SystemPrompt,
+        Preamble = c.Preamble,
+        ToolCatalog = c.ToolCatalog,
+        LaunchpadToolCatalog = c.LaunchpadToolCatalog,
         MaxContextChunks = c.MaxContextChunks,
         Temperature = c.Temperature,
         TopP = c.TopP,
@@ -51,6 +57,7 @@ public sealed class EfAgentConfigRepository : IAgentConfigRepository
 
     private static AgentConfig ToDomain(AgentConfigRow r) => AgentConfig.Rehydrate(
         r.Id, r.ProjectId, r.BaseModel, r.SystemPrompt,
+        r.Preamble, r.ToolCatalog, r.LaunchpadToolCatalog,
         r.MaxContextChunks, r.Temperature, r.TopP, r.Enabled,
         r.CreatedAt, r.UpdatedAt);
 }

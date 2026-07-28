@@ -19,4 +19,10 @@ public sealed class UserRow : ITenantOwned
     public bool PasswordSet { get; set; }
     public string Role { get; set; } = "Member";   // UserRole name
     public DateTimeOffset CreatedAt { get; set; }
+
+    /// <summary>Encrypted TOTP secret (base64). Null when 2FA is not enabled.</summary>
+    public string? TotpSecret { get; set; }
+    /// <summary>JSON array of encrypted recovery codes. Null when 2FA is not enabled.</summary>
+    public string? RecoveryCodesJson { get; set; }
+    public bool TwoFactorEnabled { get; set; }
 }

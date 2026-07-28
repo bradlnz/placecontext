@@ -18,7 +18,7 @@ public static class LaunchpadToolCatalog
         "- [[tool:list_job_runs|jobId]] - List runs for a job\n" +
         "- [[tool:list_chains|]] - List all job chains\n" +
         "- [[tool:run_job|jobId]] - Run a job now\n" +
-        "- [[tool:run_job_chain|chainId|payloadJson]] - Run a job chain now (payloadJson optional)\n" +
+        "- [[tool:run_job_chain|chainIdOrName|payloadJson]] - Run a job chain now (id or exact name; payloadJson optional). Prefer list_chains first if unsure.\n" +
         "- [[tool:search|query]] - Semantic search over project run outputs and data\n" +
         "- [[tool:query_graph|]] - Query project dependency graph\n" +
         "- [[tool:get_artifacts|]] - List recent project artifacts (reports, charts, CSVs) with download links\n" +

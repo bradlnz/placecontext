@@ -25,6 +25,7 @@ internal static class AgentConfigViewMapper
 {
     public static AgentConfigView ToView(AgentConfig c) => new(
         c.Id, c.ProjectId, c.BaseModel, c.SystemPrompt,
+        c.Preamble, c.ToolCatalog, c.LaunchpadToolCatalog,
         c.MaxContextChunks, c.Temperature, c.TopP, c.Enabled,
         c.CreatedAt, c.UpdatedAt);
 
@@ -32,6 +33,9 @@ internal static class AgentConfigViewMapper
         Guid.Empty, projectId,
         AgentConfig.DefaultBaseModel,
         "You are a helpful assistant for this project. Use the provided context to answer questions accurately.",
+        AgentConfig.DefaultPreamble,
+        AgentConfig.DefaultToolCatalog,
+        AgentConfig.DefaultLaunchpadToolCatalog,
         AgentConfig.DefaultMaxContextChunks, AgentConfig.DefaultTemperature, AgentConfig.DefaultTopP,
         false, DateTimeOffset.MinValue, DateTimeOffset.MinValue);
 }

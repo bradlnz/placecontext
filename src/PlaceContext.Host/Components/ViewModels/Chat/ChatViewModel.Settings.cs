@@ -20,6 +20,9 @@ public sealed partial class ChatViewModel
         {
             var config = await _svc.GetAgentConfigAsync(ProjectId.Value);
             _systemPrompt = config.SystemPrompt;
+            _preamble = string.IsNullOrWhiteSpace(config.Preamble) ? ChatCopy.DefaultPreamble : config.Preamble;
+            _toolCatalog = string.IsNullOrWhiteSpace(config.ToolCatalog) ? ChatCopy.DefaultToolCatalog : config.ToolCatalog;
+            _launchpadToolCatalog = string.IsNullOrWhiteSpace(config.LaunchpadToolCatalog) ? ChatCopy.DefaultLaunchpadToolCatalog : config.LaunchpadToolCatalog;
             _temperature = config.Temperature;
             _maxContextChunks = config.MaxContextChunks;
         }
@@ -29,6 +32,9 @@ public sealed partial class ChatViewModel
     public void OpenSettings()
     {
         PendingSystemPrompt = _systemPrompt;
+        PendingPreamble = _preamble;
+        PendingToolCatalog = _toolCatalog;
+        PendingLaunchpadToolCatalog = _launchpadToolCatalog;
         PendingTemperature = _temperature;
         PendingMaxTokens = _maxTokens;
         PendingRagEnabled = _ragEnabled;
@@ -44,6 +50,9 @@ public sealed partial class ChatViewModel
     public async Task SaveSettingsAsync()
     {
         _systemPrompt = PendingSystemPrompt;
+        _preamble = PendingPreamble;
+        _toolCatalog = PendingToolCatalog;
+        _launchpadToolCatalog = PendingLaunchpadToolCatalog;
         _temperature = PendingTemperature;
         _maxTokens = PendingMaxTokens;
         _ragEnabled = PendingRagEnabled;
@@ -55,7 +64,8 @@ public sealed partial class ChatViewModel
             {
                 var config = await _svc.GetAgentConfigAsync(ProjectId.Value);
                 await _svc.UpdateAgentConfigAsync(new UpdateAgentConfigCommand(
-                    config.ProjectId, config.BaseModel, _systemPrompt, _maxContextChunks,
+                    config.ProjectId, config.BaseModel, _systemPrompt, _preamble, _toolCatalog,
+                    _launchpadToolCatalog, _maxContextChunks,
                     _temperature, config.TopP, config.Enabled));
             }
             catch { }

@@ -93,98 +93,9 @@ public sealed class AgentSessionRunner
             userContent.Append("```");
             messages.Add(new AgentSessionMessage("user", userContent.ToString(), _clock.UtcNow));
 
-            if (!_gateway.IsEnabled)
-            {
-                messages.Add(new AgentSessionMessage("assistant",
-                    "No chat model configured — launchpad cannot run.", _clock.UtcNow));
-                await PersistAsync(sessionId, projectId, title, messages, createdAt);
-                return sessionId;
-            }
-
-            // Per-project agent config (fall back to defaults when none exists).
-            AgentConfig? config = null;
-            try { config = await _configs.GetByProjectIdAsync(projectId, ct); }
-            catch { /* best-effort: defaults below */ }
-
-            var systemPrompt = (config?.SystemPrompt ?? DefaultSystemPrompt)
-                + "\n\n" + LaunchpadToolCatalog.Catalog
-                + "\n\nYou are running unattended on a schedule. Never ask clarifying questions — " +
-                  "decide and act. When finished, reply with a brief summary of what you did.";
-
-            string ragContext = "";
-            try
-            {
-                ragContext = await _contextBuilder.BuildContextAsync(
-                    projectId, prompt, config?.MaxContextChunks ?? AgentConfig.DefaultMaxContextChunks, ct);
-            }
-            catch { /* best-effort */ }
-            if (!string.IsNullOrWhiteSpace(ragContext))
-                systemPrompt += "\n\n## Project context (retrieved automatically)\n\n" + ragContext;
-
-            var temperature = config?.Temperature ?? AgentConfig.DefaultTemperature;
-
-            for (var round = 0; round < MaxToolRounds; round++)
-            {
-                var chatMessages = BuildChatMessages(systemPrompt, messages);
-                var response = await _gateway.ChatAsync(
-                    chatMessages, new ChatSettings(Temperature: temperature), ct);
-
-                var toolCalls = AgentToolCallParser.Parse(response);
-                if (toolCalls.Count == 0)
-                {
-                    // Final answer.
-                    messages.Add(new AgentSessionMessage("assistant",
-                        string.IsNullOrWhiteSpace(response)
-                            ? "I've completed the requested actions."
-                            : response,
-                        _clock.UtcNow));
-                    break;
-                }
-
-                // Execute the round's calls. NO retries — run_job/run_job_chain have side effects.
-                var executed = new List<AgentSessionToolCall>();
-                var toolResults = new StringBuilder("\n\n## Tool Results\n\n");
-                foreach (var (name, args) in toolCalls)
-                {
-                    var timeout = name is AgentToolNames.RunJob or AgentToolNames.RunJobChain ? JobToolTimeout : DefaultToolTimeout;
-                    string result;
-                    string status;
-                    using var timeoutCts = new CancellationTokenSource(timeout);
-                    using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct, timeoutCts.Token);
-                    try
-                    {
-                        result = await _executor.ExecuteAsync(projectId, name, args, linkedCts.Token);
-                        status = result.StartsWith("Error:", StringComparison.OrdinalIgnoreCase)
-                            ? "Error" : "Completed";
-                    }
-                    catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested && !ct.IsCancellationRequested)
-                    {
-                        result = $"Error: timed out after {(int)timeout.TotalSeconds}s";
-                        status = "Error";
-                    }
-                    catch (Exception ex)
-                    {
-                        result = $"Error: {ex.Message}";
-                        status = "Error";
-                    }
-
-                    executed.Add(new AgentSessionToolCall(name, args, status, result, "text"));
-
-                    toolResults.Append("### " + name + "\n");
-                    toolResults.Append("Args: " + args + "\n");
-                    toolResults.Append(status == "Completed" ? "Result:\n" : "Error:\n");
-                    toolResults.Append(result);
-                    toolResults.Append("\n\n");
-                }
-
-                // Assistant message carrying the tool calls + system tool-results message
-                // (Chat.razor shape so /chat renders the transcript).
-                messages.Add(new AgentSessionMessage("assistant",
-                    AgentToolCallParser.StripToolCalls(response), _clock.UtcNow, executed));
-                messages.Add(new AgentSessionMessage("system", toolResults.ToString(), _clock.UtcNow));
-
-                await PersistAsync(sessionId, projectId, title, messages, createdAt);
-            }
+            await RunToolLoopAsync(projectId, sessionId, title, messages, createdAt,
+                userPromptForRag: prompt, channelInstruction: UnattendedInstruction,
+                disabledMessage: "No chat model configured — launchpad cannot run.", ct);
         }
         catch (Exception ex)
         {
@@ -195,10 +106,166 @@ public sealed class AgentSessionRunner
         return sessionId;
     }
 
+    /// <summary>
+    /// One conversational turn for an external channel (e.g. Slack): appends <paramref name="userText"/>
+    /// to an existing session (or starts one), runs the tool loop, and returns the final assistant
+    /// text. Never throws — failures become assistant messages and/or a short error string.
+    /// </summary>
+    public async Task<string> RunChannelTurnAsync(Guid projectId, Guid sessionId, string title,
+        string userText, CancellationToken ct = default)
+    {
+        var existing = await _sessions.GetSessionAsync(sessionId, ct);
+        var createdAt = existing?.CreatedAt ?? _clock.UtcNow;
+        var messages = existing?.Messages.ToList() ?? new List<AgentSessionMessage>();
+        var sessionTitle = string.IsNullOrWhiteSpace(existing?.Title) ? title : existing!.Title;
+
+        messages.Add(new AgentSessionMessage("user", userText, _clock.UtcNow));
+
+        string? finalReply = null;
+        try
+        {
+            finalReply = await RunToolLoopAsync(projectId, sessionId, sessionTitle, messages, createdAt,
+                userPromptForRag: userText, channelInstruction: ChannelInstruction,
+                disabledMessage: "No chat model configured — I can't reply right now.", ct);
+        }
+        catch (Exception ex)
+        {
+            finalReply = $"Sorry — something went wrong: {ex.Message}";
+            messages.Add(new AgentSessionMessage("assistant", $"[error: {ex.Message}]", _clock.UtcNow));
+        }
+
+        await PersistAsync(sessionId, projectId, sessionTitle, messages, createdAt);
+        return finalReply ?? LastAssistantText(messages) ?? "Done.";
+    }
+
+    /// <summary>
+    /// Shared model/tool loop used by launchpads and external channels. Appends assistant/system
+    /// messages onto <paramref name="messages"/>. Returns the final assistant text when the model
+    /// stops calling tools (or the disabled/error fallback).
+    /// </summary>
+    private async Task<string> RunToolLoopAsync(
+        Guid projectId, Guid sessionId, string title, List<AgentSessionMessage> messages,
+        DateTimeOffset createdAt, string userPromptForRag, string channelInstruction,
+        string disabledMessage, CancellationToken ct)
+    {
+        if (!_gateway.IsEnabled)
+        {
+            messages.Add(new AgentSessionMessage("assistant", disabledMessage, _clock.UtcNow));
+            return disabledMessage;
+        }
+
+        AgentConfig? config = null;
+        try { config = await _configs.GetByProjectIdAsync(projectId, ct); }
+        catch { /* best-effort: defaults below */ }
+
+        var systemPrompt = (string.IsNullOrWhiteSpace(config?.SystemPrompt) ? DefaultSystemPrompt : config!.SystemPrompt)
+            + "\n\n" + (string.IsNullOrWhiteSpace(config?.LaunchpadToolCatalog) ? AgentConfig.DefaultLaunchpadToolCatalog : config!.LaunchpadToolCatalog)
+            + "\n\n" + channelInstruction;
+
+        string ragContext = "";
+        try
+        {
+            ragContext = await _contextBuilder.BuildContextAsync(
+                projectId, userPromptForRag, config?.MaxContextChunks ?? AgentConfig.DefaultMaxContextChunks, ct);
+        }
+        catch { /* best-effort */ }
+        if (!string.IsNullOrWhiteSpace(ragContext))
+            systemPrompt += "\n\n## Project context (retrieved automatically)\n\n" + ragContext;
+
+        var temperature = config?.Temperature ?? AgentConfig.DefaultTemperature;
+        string finalText = "I've completed the requested actions.";
+
+        for (var round = 0; round < MaxToolRounds; round++)
+        {
+            var chatMessages = BuildChatMessages(systemPrompt, messages);
+            var response = await _gateway.ChatAsync(
+                chatMessages, new ChatSettings(Temperature: temperature), ct);
+
+            var toolCalls = AgentToolCallParser.Parse(response);
+            if (toolCalls.Count == 0)
+            {
+                finalText = string.IsNullOrWhiteSpace(response)
+                    ? "I've completed the requested actions."
+                    : response;
+                messages.Add(new AgentSessionMessage("assistant", finalText, _clock.UtcNow));
+                break;
+            }
+
+            // Execute the round's calls. NO retries — run_job/run_job_chain have side effects.
+            var executed = new List<AgentSessionToolCall>();
+            var toolResults = new StringBuilder("\n\n## Tool Results\n\n");
+            foreach (var (name, args) in toolCalls)
+            {
+                var timeout = name is AgentToolNames.RunJob or AgentToolNames.RunJobChain ? JobToolTimeout : DefaultToolTimeout;
+                string result;
+                string status;
+                using var timeoutCts = new CancellationTokenSource(timeout);
+                using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct, timeoutCts.Token);
+                try
+                {
+                    result = await _executor.ExecuteAsync(projectId, name, args, linkedCts.Token);
+                    status = result.StartsWith("Error:", StringComparison.OrdinalIgnoreCase)
+                        ? "Error" : "Completed";
+                }
+                catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested && !ct.IsCancellationRequested)
+                {
+                    result = $"Error: timed out after {(int)timeout.TotalSeconds}s";
+                    status = "Error";
+                }
+                catch (Exception ex)
+                {
+                    result = $"Error: {ex.Message}";
+                    status = "Error";
+                }
+
+                executed.Add(new AgentSessionToolCall(name, args, status, result, "text"));
+
+                toolResults.Append("### " + name + "\n");
+                toolResults.Append("Args: " + args + "\n");
+                toolResults.Append(status == "Completed" ? "Result:\n" : "Error:\n");
+                toolResults.Append(result);
+                toolResults.Append("\n\n");
+            }
+
+            // Assistant message carrying the tool calls + system tool-results message
+            // (Chat.razor shape so /chat renders the transcript).
+            messages.Add(new AgentSessionMessage("assistant",
+                AgentToolCallParser.StripToolCalls(response), _clock.UtcNow, executed));
+            messages.Add(new AgentSessionMessage("system", toolResults.ToString(), _clock.UtcNow));
+
+            await PersistAsync(sessionId, projectId, title, messages, createdAt);
+
+            if (round == MaxToolRounds - 1)
+            {
+                finalText = "I hit the tool-round limit before finishing. Check the session in chat for details.";
+                messages.Add(new AgentSessionMessage("assistant", finalText, _clock.UtcNow));
+            }
+        }
+
+        return finalText;
+    }
+
+    private static string? LastAssistantText(IReadOnlyList<AgentSessionMessage> messages)
+    {
+        for (var i = messages.Count - 1; i >= 0; i--)
+            if (messages[i].Role == "assistant" && !string.IsNullOrWhiteSpace(messages[i].Content))
+                return messages[i].Content;
+        return null;
+    }
+
     private const string DefaultSystemPrompt =
         "You are a helpful assistant for this project. Use the provided context to answer questions " +
         "accurately. Answer directly and concisely: no preamble, no restating the question, no " +
         "visible chain-of-thought. Keep answers short unless the user asks for detail.";
+
+    private const string UnattendedInstruction =
+        "You are running unattended on a schedule. Never ask clarifying questions — " +
+        "decide and act. When finished, reply with a brief summary of what you did.";
+
+    private const string ChannelInstruction =
+        "You are replying in Slack. Keep answers short and plain text. Prefer list_chains / " +
+        "run_job_chain / list_jobs when the user asks to run work. Never invent chain or job ids — " +
+        "look them up first. When finished, reply with a brief summary the user can read in Slack.";
 
     /// <summary>
     /// System prompt + history with assistant tool calls re-serialized as <c>[[tool:name|args]]</c>

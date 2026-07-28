@@ -61,7 +61,7 @@ public sealed class SendAgentMessageHandler : ICommandHandler<SendAgentMessageCo
         // 4. Build the message list for the LLM.
         var messages = new List<ChatMessage>
         {
-            new("system", BuildSystemPrompt(config.SystemPrompt, context)),
+            new("system", BuildSystemPrompt(config, context)),
         };
 
         // Include conversation history.
@@ -84,12 +84,14 @@ public sealed class SendAgentMessageHandler : ICommandHandler<SendAgentMessageCo
         return AgentSessionViewMapper.ToView(session);
     }
 
-    private static string BuildSystemPrompt(string basePrompt, string context)
+    private static string BuildSystemPrompt(AgentConfig config, string context)
     {
+        var preamble = string.IsNullOrWhiteSpace(config.Preamble) ? AgentConfig.DefaultPreamble : config.Preamble;
+        var prompt = preamble + config.SystemPrompt;
         if (string.IsNullOrWhiteSpace(context))
-            return basePrompt;
+            return prompt;
 
-        return $"{basePrompt}\n\n## Project context (retrieved automatically)\n\n{context}";
+        return $"{prompt}\n\n## Project context (retrieved automatically)\n\n{context}";
     }
 
     private static AgentChatSessionView DisabledSession(SendAgentMessageCommand command)

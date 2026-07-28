@@ -11,6 +11,9 @@ public sealed class AgentConfigRow : ITenantOwned
     public Guid ProjectId { get; set; }
     public string BaseModel { get; set; } = "qwen3.5:0.8b";
     public string SystemPrompt { get; set; } = "";
+    public string Preamble { get; set; } = "";
+    public string ToolCatalog { get; set; } = "";
+    public string LaunchpadToolCatalog { get; set; } = "";
     public int MaxContextChunks { get; set; } = 5;
     public float Temperature { get; set; } = 0.7f;
     public float TopP { get; set; } = 0.9f;

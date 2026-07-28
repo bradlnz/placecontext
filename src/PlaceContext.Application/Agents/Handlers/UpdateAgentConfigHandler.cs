@@ -25,13 +25,15 @@ public sealed class UpdateAgentConfigHandler : ICommandHandler<UpdateAgentConfig
         if (config is null)
         {
             config = AgentConfig.Create(command.ProjectId, _clock.UtcNow);
-            config.Update(command.BaseModel, command.SystemPrompt, command.MaxContextChunks,
+            config.Update(command.BaseModel, command.SystemPrompt, command.Preamble, command.ToolCatalog,
+                command.LaunchpadToolCatalog, command.MaxContextChunks,
                 command.Temperature, command.TopP, command.Enabled, _clock.UtcNow);
             await _configs.AddAsync(config, ct);
         }
         else
         {
-            config.Update(command.BaseModel, command.SystemPrompt, command.MaxContextChunks,
+            config.Update(command.BaseModel, command.SystemPrompt, command.Preamble, command.ToolCatalog,
+                command.LaunchpadToolCatalog, command.MaxContextChunks,
                 command.Temperature, command.TopP, command.Enabled, _clock.UtcNow);
             await _configs.UpdateAsync(config, ct);
         }

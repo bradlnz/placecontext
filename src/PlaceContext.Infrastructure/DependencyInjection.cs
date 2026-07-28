@@ -131,6 +131,18 @@ public static class DependencyInjection
         // Launchpad agent sessions persist through the Application port onto the chat memory store.
         services.AddScoped<IAgentSessionStore, Caching.ChatMemoryAgentSessionStore>();
 
+        // Slack Events API → agent → chat.postMessage (disabled when PlaceContext:Slack is incomplete).
+        services.Configure<Slack.SlackOptions>(configuration.GetSection(Slack.SlackOptions.SectionName));
+        var slackOpts = configuration.GetSection(Slack.SlackOptions.SectionName).Get<Slack.SlackOptions>() ?? new Slack.SlackOptions();
+        if (slackOpts.IsConfigured)
+            services.AddSingleton<ISlackClient, Slack.SlackApiClient>();
+        else
+            services.AddSingleton<ISlackClient, Slack.NullSlackClient>();
+        if (!string.IsNullOrWhiteSpace(redisConn))
+            services.AddSingleton<ISlackThreadSessionStore, Slack.DistributedCacheSlackThreadSessionStore>();
+        else
+            services.AddSingleton<ISlackThreadSessionStore, Slack.MemorySlackThreadSessionStore>();
+
         // Job / JobRun repositories.
         services.AddScoped<IJobRepository, EfJobRepository>();
         services.AddScoped<IJobRunRepository, EfJobRunRepository>();

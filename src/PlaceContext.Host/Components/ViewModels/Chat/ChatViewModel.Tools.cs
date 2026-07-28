@@ -25,6 +25,7 @@ public sealed partial class ChatViewModel
                 AgentToolNames.ListTables => await ExecuteListTablesAsync(ct),
                 AgentToolNames.ListJobs => await ExecuteListJobsAsync(ct),
                 AgentToolNames.ListJobRuns => await ExecuteListJobRunsAsync(args, ct),
+                AgentToolNames.ListChains => await ExecuteListChainsAsync(ct),
                 AgentToolNames.RenderGraph => await ExecuteRenderGraphAsync(args, ct),
                 AgentToolNames.QueryGraph => await ExecuteQueryGraphAsync(ct),
                 AgentToolNames.Search => await ExecuteSearchAsync(args, ct),
@@ -34,6 +35,7 @@ public sealed partial class ChatViewModel
                 AgentToolNames.ListSchedules => await ExecuteListSchedulesAsync(args, ct),
                 AgentToolNames.ToggleSchedule => await ExecuteToggleScheduleAsync(args, ct),
                 AgentToolNames.RunJob => await ExecuteRunJobAsync(args, ct),
+                AgentToolNames.RunJobChain => await ExecuteRunJobChainAsync(args, ct),
                 AgentToolNames.CallMcp => await ExecuteCallMcpAsync(args, ct),
                 AgentToolNames.ListMcpTools => await ExecuteListMcpToolsAsync(args, ct),
                 AgentToolNames.RenderMap => await ExecuteRenderMapAsync(args, ct),
@@ -314,6 +316,18 @@ public sealed partial class ChatViewModel
         return ToolCallResult.Ok($"Schedule '{trigger.Name}' {(enabled ? "enabled" : "disabled")}.\nNext run: {trigger.NextRunAt?.ToString("yyyy-MM-dd HH:mm") ?? "—"}");
     }
 
+    private async Task<ToolCallResult> ExecuteListChainsAsync(CancellationToken ct)
+    {
+        AddActiveAction(AgentToolNames.ListChains, ChatCopy.LoadingChains);
+        var chains = await _svc.ListJobChainsAsync(ProjectId!.Value, ct);
+        var sb = new System.Text.StringBuilder();
+        sb.Append($"Job chains: {chains.Count}\n");
+        foreach (var c in chains) sb.Append($"- {c.Name} (id: {c.Id}, {c.Steps.Count} steps)\n");
+        CompleteActiveAction(AgentToolNames.ListChains, true);
+        AddToolHistory(AgentToolNames.ListChains, true, $"{chains.Count} chains");
+        return ToolCallResult.Ok(sb.ToString());
+    }
+
     private async Task<ToolCallResult> ExecuteRunJobAsync(string args, CancellationToken ct)
     {
         var jobId = Guid.TryParse(args.Trim(), out var id) ? id : Guid.Empty;
@@ -322,6 +336,60 @@ public sealed partial class ChatViewModel
         var run = await _svc.RunJobAsync(jobId, null, null, ct);
         CompleteActiveAction(AgentToolNames.RunJob, true); AddToolHistory(AgentToolNames.RunJob, true, run.Status);
         return ToolCallResult.Ok($"Job run started: {run.Id}\nStatus: {run.Status}\nStarted: {run.StartedAt:yyyy-MM-dd HH:mm}");
+    }
+
+    private async Task<ToolCallResult> ExecuteRunJobChainAsync(string args, CancellationToken ct)
+    {
+        // args: "chainIdOrName" or "chainIdOrName|payloadJson" — split only on the FIRST pipe so the
+        // payload may itself contain pipes.
+        var pipeIdx = args.IndexOf('|');
+        var key = (pipeIdx >= 0 ? args[..pipeIdx] : args).Trim();
+        var payload = pipeIdx >= 0 ? args[(pipeIdx + 1)..].Trim() : null;
+        if (string.IsNullOrEmpty(payload)) payload = null;
+
+        var resolved = await ResolveChainIdAsync(key, ct);
+        if (resolved.Error is not null)
+            return ToolCallResult.Fail(resolved.Error);
+
+        var chainId = resolved.ChainId;
+        AddActiveAction(AgentToolNames.RunJobChain, ChatCopy.RunningChain(chainId.ToString()[..8]));
+        var run = await _svc.RunJobChainAsync(chainId, payload, chainRunId: null, stepPayloadOverrides: null, ct: ct);
+        var sb = new System.Text.StringBuilder();
+        sb.Append($"Chain run: {run.Id}\nStatus: {run.Status}\n");
+        foreach (var step in run.Steps)
+            sb.Append($"- {step.JobName}: {step.Status}\n");
+        if (!string.IsNullOrEmpty(run.FinalOutput))
+        {
+            var output = run.FinalOutput.Length > 2000 ? run.FinalOutput[..2000] + "…" : run.FinalOutput;
+            sb.Append($"\nFinal output:\n{output}");
+        }
+        CompleteActiveAction(AgentToolNames.RunJobChain, true);
+        AddToolHistory(AgentToolNames.RunJobChain, true, run.Status);
+        return ToolCallResult.Ok(sb.ToString());
+    }
+
+    private async Task<(Guid ChainId, string? Error)> ResolveChainIdAsync(string key, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(key))
+            return (Guid.Empty, "Usage: run_job_chain|chainIdOrName|payloadJson");
+        if (Guid.TryParse(key, out var chainId) && chainId != Guid.Empty)
+            return (chainId, null);
+        if (!ProjectId.HasValue)
+            return (Guid.Empty, ChatCopy.NoProjectSelected);
+
+        var chains = await _svc.ListJobChainsAsync(ProjectId.Value, ct);
+        var matches = chains
+            .Where(c => string.Equals(c.Name, key, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        if (matches.Count == 1)
+            return (matches[0].Id, null);
+        if (matches.Count > 1)
+            return (Guid.Empty, $"Multiple chains named '{key}' — use the chain id instead");
+
+        var available = chains.Count == 0
+            ? "(none)"
+            : string.Join(", ", chains.Select(c => $"{c.Name} ({c.Id})"));
+        return (Guid.Empty, $"Unknown chain '{key}'. Available: {available}");
     }
 
     private async Task<ToolCallResult> ExecuteCallMcpAsync(string args, CancellationToken ct)

@@ -104,6 +104,35 @@ public class AgentSessionRunnerTests
         Assert.Equal("Recovered after the failure.", memory.Messages[3].Content);
     }
 
+    [Fact]
+    public async Task RunChannelTurn_continues_existing_session_and_returns_final_text()
+    {
+        var projectId = Guid.NewGuid();
+        var sessionId = Guid.NewGuid();
+        var store = new FakeAgentSessionStore();
+        store.Saves.Add(new AgentSessionMemory(
+            sessionId, projectId, "💬 Slack C1",
+            new List<AgentSessionMessage>
+            {
+                new("user", "hi", T0),
+                new("assistant", "hello", T0),
+            },
+            T0, T0));
+
+        var gateway = new ScriptedChatGateway("Plain reply from channel.");
+        var runner = CreateRunner(gateway, new RecordingExecutor(), store);
+
+        var reply = await runner.RunChannelTurnAsync(projectId, sessionId, "💬 Slack C1", "run the report");
+
+        Assert.Equal("Plain reply from channel.", reply);
+        var memory = store.Saves.Last(s => s.Id == sessionId);
+        Assert.Equal(4, memory.Messages.Count);
+        Assert.Equal("user", memory.Messages[2].Role);
+        Assert.Contains("run the report", memory.Messages[2].Content);
+        Assert.Equal("assistant", memory.Messages[3].Role);
+        Assert.Equal("Plain reply from channel.", memory.Messages[3].Content);
+    }
+
     private static AgentSessionRunner CreateRunner(
         ScriptedChatGateway gateway, RecordingExecutor executor, FakeAgentSessionStore store)
         => new(

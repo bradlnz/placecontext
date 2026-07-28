@@ -21,7 +21,7 @@ public class AuthServiceTests
             .UseInMemoryDatabase(Guid.NewGuid().ToString("N"))
             .Options;
         var db = new AppDbContext(options, tenant);
-        return (new AuthService(db, tenant), db);
+        return (new AuthService(db, tenant, new FakeDataEncryptor()), db);
     }
 
     // ── First-run detection ──────────────────────────────────────────────────────────────────────
