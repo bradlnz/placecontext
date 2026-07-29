@@ -38,7 +38,7 @@ else
         <div class="dctabs tabs">
             @foreach (var (key, label) in new[] { ("overview", "Overview"), ("requirements", "Requirements"), ("activity", "Activity"), ("mcp", "MCP") })
             {
-                <button class="dctab @(_tab == key ? "active" : "")" @onclick="@(() => { _tab = key; StateHasChanged(); })">@label</button>
+                <button class="dctab @(_tab == key ? "active" : "")" @onclick="@(() => SwitchTab(key))">@label</button>
             }
         </div>
 
@@ -511,9 +511,8 @@ else
         var timelineTask = LoadTimelineAsync();
         var requirementsTask = LoadRequirementsAsync();
         var decisionsTask = LoadDecisionsAsync();
-        var mcpTask = LoadMcpConnectionsAsync();
 
-        await Task.WhenAll(graphTask, timelineTask, requirementsTask, decisionsTask, mcpTask);
+        await Task.WhenAll(graphTask, timelineTask, requirementsTask, decisionsTask);
         await InvokeAsync(StateHasChanged);
     }
 
@@ -601,6 +600,16 @@ if (!window.__projectMcpOAuthListener) {
         }
         catch (Exception ex) { _message = ex.Message; }
         finally { _savingReq = false; }
+    }
+
+    private async Task SwitchTab(string key)
+    {
+        _tab = key;
+        if (key == "mcp" && _mcpConnections is null)
+        {
+            await LoadMcpConnectionsAsync();
+        }
+        StateHasChanged();
     }
 
     private void ShowAddMcp()
