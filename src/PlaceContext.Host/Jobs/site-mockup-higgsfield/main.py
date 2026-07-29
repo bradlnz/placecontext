@@ -1,75 +1,100 @@
 import sys, json, os, urllib.request, urllib.error, base64
 
-# Prompt template — placeholders are filled from the input JSON.
-PROMPT_TEMPLATE = """An isometric, miniature-style architectural mockup of a suburban property subdivision, presented on a clean, beveled white studio plinth. The scene depicts the development potential for "{address}". On the left, a detailed existing Queenslander-style house (cream weatherboard, corrugated metal roof, veranda) sits on a fenced lot labeled "Lot 1: {lot1_area}, {lot1_label}". Behind it, a newly created "New Access Handle" leads to a rear lot. On the right, a modern, two-story dwelling is shown on a lot labeled "Lot 2: {lot2_area}, {lot2_label}". The entire original property is outlined with a precise boundary line. Manicured hedges, varied miniature trees, and realistic grass detail the landscaping. The surrounding streets, "{street1}" and "{street2}", are asphalt with white markings and include miniature street signs, one of which reads "{park_name} {park_distance}". Professional, vector-sharp text overlays and thin leader lines annotate all key features, including the header: "{address}. Total Area: {total_area}" and the footer plaque: "SITE MOCKUP: SUBDIVISION POTENTIAL, {address_upper}". The lighting is soft, even, and studio-quality, casting subtle, realistic shadows."""
-
+# Higgsfield's image generation tool name.
 TOOL_NAME = "generate_image"
 
 
-REQUIRED_FIELDS = [
-    "address", "total_area", "lot1_area", "lot1_label",
-    "lot2_area", "lot2_label", "street1", "street2",
-    "park_name", "park_distance",
-]
-
-
 def main():
-    # Read the input payload (address, lot details, etc.).
-    input_data = json.loads(sys.stdin.read() or "{}")
+    payload = json.loads(sys.stdin.read() or "{}")
 
-    # Validate every required field is present and non-empty.
-    missing = [f for f in REQUIRED_FIELDS if not input_data.get(f)]
+    # ── Extract data from the nested payload ─────────────────────────────────
+    site = payload.get("site") or {}
+    subdiv = payload.get("subdiv_plan") or {}
+    aerial = payload.get("aerial") or {}
+
+    address = site.get("address", "").strip()
+    land_m2 = site.get("land_m2")
+    frontage_m = subdiv.get("frontage_m")
+    layout = subdiv.get("layout", "")
+
+    # Lot details from the subdivision plan.
+    lots = subdiv.get("lots", [])
+    lot_front = next((l for l in lots if l.get("role") == "lot_front"), {})
+    lot_rear = next((l for l in lots if l.get("role") == "lot_rear"), {})
+
+    lot_front_area = lot_front.get("area_m2")
+    lot_rear_area = lot_rear.get("area_m2")
+    lot_front_label = lot_front.get("label", "Lot A (front)")
+    lot_rear_label = lot_rear.get("label", "Lot B (rear)")
+
+    # Nearest facility.
+    nearest = site.get("nearest_facility") or {}
+    park_name = nearest.get("name", "")
+    park_distance = nearest.get("distance_m", "")
+    if park_name.startswith("("):
+        park_name = "Local park"
+
+    # Streets from the address.
+    street1 = site.get("suburb", "")
+    street2 = ""
+
+    # Validate required fields.
+    required = {
+        "address": address,
+        "total_area": land_m2,
+        "lot1_area": lot_front_area,
+        "lot2_area": lot_rear_area,
+        "frontage": frontage_m,
+    }
+    missing = [k for k, v in required.items() if v is None or v == ""]
     if missing:
-        print(f"Missing required input fields: {', '.join(missing)}", file=sys.stderr)
+        print(f"Missing required fields: {', '.join(missing)}", file=sys.stderr)
         sys.exit(1)
 
-    # Fill the prompt template with the validated input values.
-    prompt = PROMPT_TEMPLATE.format(
-        address=input_data["address"],
-        address_upper=input_data["address"].upper(),
-        total_area=input_data["total_area"],
-        lot1_area=input_data["lot1_area"],
-        lot1_label=input_data["lot1_label"],
-        lot2_area=input_data["lot2_area"],
-        lot2_label=input_data["lot2_label"],
-        street1=input_data["street1"],
-        street2=input_data["street2"],
-        park_name=input_data["park_name"],
-        park_distance=input_data["park_distance"],
+    # Build a data-driven prompt.
+    prompt = build_prompt(
+        address=address,
+        total_area=f"{land_m2} m²",
+        lot1_area=f"{lot_front_area:.0f} m²",
+        lot1_label=lot_front_label,
+        lot2_area=f"{lot_rear_area:.0f} m²",
+        lot2_label=lot_rear_label,
+        layout=layout,
+        frontage=f"{frontage_m:.0f} m",
+        street1=street1,
+        street2=street2,
+        park_name=park_name,
+        park_distance=f"{park_distance}m" if park_distance else "",
     )
 
-    # Load the MCP connection details injected at runtime by the job system.
+    # Load MCP connection details injected at runtime.
     mcp_json = os.environ.get("MCP_CONNECTIONS_JSON", "[]")
     connections = json.loads(mcp_json)
     if not connections:
         print("No MCP connections configured for this job", file=sys.stderr)
         sys.exit(1)
 
-    # Find the Higgsfield connection.
     conn = next(
         (c for c in connections if "higgsfield" in c.get("Name", "").lower()),
         connections[0],
     )
-
     url = conn.get("Url", "")
     token = conn.get("Token", "")
     if not url or not token:
         print(f"MCP connection {conn.get('Name')} missing URL or token", file=sys.stderr)
         sys.exit(1)
 
-    # Call the Higgsfield image generation tool.
+    # Call Higgsfield.
     result = call_tool(url, token, TOOL_NAME, {"prompt": prompt})
     if not result:
         print("tool call returned no result", file=sys.stderr)
         sys.exit(1)
 
-    # Extract the generated image.
     image_b64 = extract_image(result)
     if not image_b64:
         print("could not extract image from result", file=sys.stderr)
         sys.exit(1)
 
-    # Write the image and metadata to /out.
     os.makedirs("/out", exist_ok=True)
     with open("/out/mockup.png", "wb") as f:
         f.write(base64.b64decode(image_b64))
@@ -78,6 +103,22 @@ def main():
     with open("/out/result.json", "w") as f:
         json.dump(output, f)
     print(json.dumps(output))
+
+
+def build_prompt(address, total_area, lot1_area, lot1_label, lot2_area, lot2_label,
+                 layout, frontage, street1, street2, park_name, park_distance):
+    """Build a detailed isometric mockup prompt from the actual property data."""
+
+    layout_desc = "battle-axe" if layout == "battle_axe" else "side-by-side"
+    access_handle = "A narrow access handle connects the front street to the rear lot." if layout == "battle_axe" else ""
+
+    prompt = f"""An isometric, miniature-style architectural mockup of a suburban property subdivision, presented on a clean, beveled white studio plinth. The scene depicts the development potential for "{address}". The original property is a {layout_desc} layout with {frontage} frontage and a total area of {total_area}.
+
+On the left side, a detailed existing Queenslander-style house (cream weatherboard, corrugated metal roof, wrap-around veranda) sits on a fenced lot labeled "{lot1_label}: {lot1_area}". Behind it, a newly created access handle leads to a rear lot. On the right, a modern, two-story contemporary dwelling is shown on a lot labeled "{lot2_label}: {lot2_area}". The entire original property is outlined with a precise red boundary line. Manicured hedges, varied miniature trees, and realistic grass detail the landscaping.
+
+The surrounding suburban streets are asphalt with white markings and include miniature street signs. Professional, vector-sharp text overlays and thin leader lines annotate all key features. The header reads "{address}. Total Area: {total_area}" and the footer plaque reads "SITE MOCKUP: SUBDIVISION POTENTIAL, {address.upper()}". The lighting is soft, even, and studio-quality, casting subtle, realistic shadows. Highly detailed, photorealistic miniature model style."""
+
+    return prompt
 
 
 def call_tool(url, token, tool_name, arguments):
@@ -115,7 +156,6 @@ def extract_image(body):
     if not isinstance(body, dict):
         return None
 
-    # result.content is the standard MCP content array.
     result = body.get("result")
     if isinstance(result, dict):
         content = result.get("content", [])
@@ -124,7 +164,6 @@ def extract_image(body):
                 if isinstance(item, dict) and item.get("type") == "image":
                     return item.get("data", "")
 
-    # Also try the raw response fields as fallbacks.
     for key in ("image_b64", "image_base64", "b64", "data"):
         val = body.get(key)
         if val:
