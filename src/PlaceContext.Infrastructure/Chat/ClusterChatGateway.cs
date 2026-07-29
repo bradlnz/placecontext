@@ -65,6 +65,7 @@ public sealed class ClusterChatGateway : IChatGateway, IDisposable
         if (messages.Count == 0) return string.Empty;
 
         var client = _http.CreateClient();
+        client.Timeout = TimeSpan.FromMinutes(5);
         var url = $"{_endpoint}/chat";
 
         var payload = new ClusterChatDto
@@ -108,6 +109,7 @@ public sealed class ClusterChatGateway : IChatGateway, IDisposable
         if (messages.Count == 0) yield break;
 
         var client = _http.CreateClient();
+        client.Timeout = TimeSpan.FromMinutes(10);
         var url = $"{_endpoint}/chat/stream";
 
         var payload = new ClusterChatDto

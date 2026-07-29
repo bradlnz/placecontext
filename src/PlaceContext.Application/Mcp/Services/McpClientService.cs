@@ -1,4 +1,5 @@
 using System.Net.Http.Json;
+using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using PlaceContext.Application.Dtos;
@@ -12,6 +13,7 @@ namespace PlaceContext.Application.Mcp;
 public sealed class McpClientService : IMcpClientService
 {
     private readonly IMcpConnectionRepository _repo;
+    private readonly IUnitOfWork _uow;
     private readonly IHttpClientFactory _http;
     private readonly IDataEncryptor _encryptor;
     private readonly ILogger<McpClientService> _log;
@@ -19,11 +21,13 @@ public sealed class McpClientService : IMcpClientService
 
     public McpClientService(
         IMcpConnectionRepository repo,
+        IUnitOfWork uow,
         IHttpClientFactory http,
         IDataEncryptor encryptor,
         ILogger<McpClientService> log)
     {
         _repo = repo;
+        _uow = uow;
         _http = http;
         _encryptor = encryptor;
         _log = log;
@@ -42,7 +46,7 @@ public sealed class McpClientService : IMcpClientService
 
         try
         {
-            var client = CreateClient(connection);
+            var client = await CreateClientAsync(connection, ct);
             var request = new
             {
                 jsonrpc = "2.0",
@@ -83,7 +87,7 @@ public sealed class McpClientService : IMcpClientService
 
         try
         {
-            var client = CreateClient(connection);
+            var client = await CreateClientAsync(connection, ct);
             var request = new
             {
                 jsonrpc = "2.0",
@@ -133,14 +137,14 @@ public sealed class McpClientService : IMcpClientService
         return new McpToolResult(false, null, "Unexpected response format");
     }
 
-    private HttpClient CreateClient(McpConnection connection)
+    private async Task<HttpClient> CreateClientAsync(McpConnection connection, CancellationToken ct)
     {
         var client = _http.CreateClient();
         client.Timeout = TimeSpan.FromSeconds(30);
 
         if (connection.AuthType == McpAuthType.OAuth)
         {
-            var token = ResolveOAuthToken(connection);
+            var token = await ResolveOAuthTokenAsync(connection, ct);
             if (!string.IsNullOrEmpty(token))
             {
                 client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
@@ -168,12 +172,114 @@ public sealed class McpClientService : IMcpClientService
         return client;
     }
 
-    private string? ResolveOAuthToken(McpConnection connection)
+    private async Task<string?> ResolveOAuthTokenAsync(McpConnection connection, CancellationToken ct)
     {
         if (string.IsNullOrEmpty(connection.OAuthAccessToken))
             return null;
 
-        return _encryptor.Unprotect(connection.OAuthAccessToken, EncryptPurpose);
+        if (!connection.OAuthTokenExpired)
+            return _encryptor.Unprotect(connection.OAuthAccessToken, EncryptPurpose);
+
+        if (string.IsNullOrEmpty(connection.OAuthRefreshToken) || string.IsNullOrEmpty(connection.EndpointUrl))
+            return null;
+
+        try
+        {
+            var (tokenEndpoint, regEndpoint) = await DiscoverOAuthMetadataAsync(connection.EndpointUrl, ct);
+            if (string.IsNullOrEmpty(tokenEndpoint))
+                return null;
+
+            var clientId = connection.OAuthClientId;
+            if (string.IsNullOrEmpty(clientId) && !string.IsNullOrEmpty(regEndpoint))
+            {
+                try { clientId = await RegisterClientAsync(regEndpoint, ct); }
+                catch { }
+            }
+            if (string.IsNullOrEmpty(clientId))
+                return null;
+
+            var refreshToken = _encryptor.Unprotect(connection.OAuthRefreshToken, EncryptPurpose);
+            if (string.IsNullOrEmpty(refreshToken))
+                return null;
+
+            var http = _http.CreateClient();
+            http.Timeout = TimeSpan.FromSeconds(15);
+
+            var form = new Dictionary<string, string>
+            {
+                ["grant_type"] = "refresh_token",
+                ["refresh_token"] = refreshToken,
+                ["client_id"] = clientId,
+            };
+            var resp = await http.PostAsync(tokenEndpoint, new FormUrlEncodedContent(form), ct);
+            resp.EnsureSuccessStatusCode();
+
+            var json = await resp.Content.ReadFromJsonAsync<JsonElement>(ct);
+            var newAccessToken = json.GetProperty("access_token").GetString() ?? "";
+            var newRefreshToken = json.TryGetProperty("refresh_token", out var rt) ? rt.GetString() : null;
+            var expiresIn = json.GetProperty("expires_in").GetInt64();
+            var expiresAt = DateTimeOffset.UtcNow.AddSeconds(expiresIn);
+
+            var encryptedAccess = _encryptor.Protect(newAccessToken, EncryptPurpose);
+            var encryptedRefresh = string.IsNullOrEmpty(newRefreshToken)
+                ? connection.OAuthRefreshToken
+                : _encryptor.Protect(newRefreshToken, EncryptPurpose);
+
+            connection.StoreOAuthTokens(encryptedAccess, encryptedRefresh, expiresAt, DateTimeOffset.UtcNow);
+            connection.RecordConnection("oauth:connected", DateTimeOffset.UtcNow);
+            await _repo.UpdateAsync(connection, ct);
+            await _uow.SaveChangesAsync(ct);
+
+            _log.LogInformation("OAuth token refreshed for connection {ConnectionId}", connection.Id);
+            return newAccessToken;
+        }
+        catch (Exception ex)
+        {
+            _log.LogWarning(ex, "OAuth token refresh failed for connection {ConnectionId}", connection.Id);
+            return null;
+        }
+    }
+
+    private async Task<(string? tokenEndpoint, string? registrationEndpoint)> DiscoverOAuthMetadataAsync(string endpointUrl, CancellationToken ct)
+    {
+        var uri = new Uri(endpointUrl);
+        var baseUri = $"{uri.Scheme}://{uri.Host}:{uri.Port}";
+        var http = _http.CreateClient();
+        http.Timeout = TimeSpan.FromSeconds(10);
+
+        try
+        {
+            var metaResp = await http.GetAsync($"{baseUri}/.well-known/oauth-authorization-server", ct);
+            if (metaResp.IsSuccessStatusCode)
+            {
+                var metaJson = await metaResp.Content.ReadFromJsonAsync<JsonElement>(ct);
+                var tokenEndpoint = metaJson.TryGetProperty("token_endpoint", out var te) ? te.GetString() : null;
+                var regEndpoint = metaJson.TryGetProperty("registration_endpoint", out var re) ? re.GetString() : null;
+                return (tokenEndpoint, regEndpoint);
+            }
+        }
+        catch { }
+
+        return (null, null);
+    }
+
+    private async Task<string> RegisterClientAsync(string registrationEndpoint, CancellationToken ct)
+    {
+        var http = _http.CreateClient();
+        http.Timeout = TimeSpan.FromSeconds(10);
+
+        var body = JsonSerializer.Serialize(new
+        {
+            redirect_uris = Array.Empty<string>(),
+            client_name = "PlaceContext",
+        });
+        var content = new StringContent(body, Encoding.UTF8, "application/json");
+        var resp = await http.PostAsync(registrationEndpoint, content, ct);
+        resp.EnsureSuccessStatusCode();
+
+        var json = await resp.Content.ReadFromJsonAsync<JsonElement>(ct);
+        return json.GetProperty("client_id").GetString()
+            ?? throw new InvalidOperationException("No client_id in DCR response.");
     }
 
     private string GetEndpoint(McpConnection connection)

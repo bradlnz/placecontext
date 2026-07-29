@@ -67,27 +67,13 @@
                     continue;
                 }
                 var expanded = _expanded.Contains(item.Id);
+                var groupActive = href is not null && PathMatches(new Uri(Nav.Uri).AbsolutePath.TrimEnd('/'), href);
                 <div class="nav-group">
-                    @if (href is not null)
-                    {
-                        @* Group header is still a link (e.g. Data → Tables); caret toggles the accordion. *@
-                        <div class="nav-parent">
-                            <NavLink class="dcnav" href="@href" Match="@MatchFor(item, href)">
-                                <span class="bar"></span>@Icon(item.Icon ?? "grid")<span class="nav-label">@item.Label</span>
-                            </NavLink>
-                            <button class="nav-caret @(expanded ? "open" : null)" @onclick="@(() => ToggleGroup(item.Id))"
-                                    title="@(expanded ? "Collapse" : "Expand")" aria-label="@(expanded ? "Collapse" : "Expand") @item.Label">
-                                @Caret()
-                            </button>
-                        </div>
-                    }
-                    else
-                    {
-                        <button class="dcnav nav-group-toggle" @onclick="@(() => ToggleGroup(item.Id))">
-                            <span class="bar"></span>@Icon(item.Icon ?? "grid")<span class="nav-label">@item.Label</span>
-                            <span class="nav-caret-icon @(expanded ? "open" : null)">@Caret()</span>
-                        </button>
-                    }
+                    <button class="dcnav nav-group-toggle@(groupActive ? " active" : null)"
+                            @onclick="@(() => { ToggleGroup(item.Id); if (href is not null) Nav.NavigateTo(href); })">
+                        <span class="bar"></span>@Icon(item.Icon ?? "grid")<span class="nav-label">@item.Label</span>
+                        <span class="nav-caret-icon @(expanded ? "open" : null)">@Caret()</span>
+                    </button>
                     @if (expanded)
                     {
                         <div class="nav-children">
