@@ -103,6 +103,7 @@ public sealed class McpOAuthController : ControllerBase
             ClientId = clientId,
             TokenEndpoint = meta.TokenEndpoint,
             CallbackUrl = callbackUrl,
+            State = state,
         });
         Response.Cookies.Append(StateCookie, statePayload, new CookieOptions
         {
@@ -114,7 +115,6 @@ public sealed class McpOAuthController : ControllerBase
         });
 
         // Build the authorization URL
-        var scopes = string.IsNullOrEmpty(conn.OAuthScopes) ? "openid" : conn.OAuthScopes;
         var sep = meta.AuthorizationEndpoint.Contains('?') ? "&" : "?";
         var authUrl = $"{meta.AuthorizationEndpoint}{sep}"
             + $"response_type=code"
@@ -123,7 +123,7 @@ public sealed class McpOAuthController : ControllerBase
             + $"&code_challenge={Uri.EscapeDataString(codeChallenge)}"
             + $"&code_challenge_method=S256"
             + $"&state={Uri.EscapeDataString(state)}"
-            + $"&scope={Uri.EscapeDataString(scopes)}";
+            + (string.IsNullOrEmpty(conn.OAuthScopes) ? "" : $"&scope={Uri.EscapeDataString(conn.OAuthScopes)}");
 
         return Redirect(authUrl);
     }
@@ -158,13 +158,13 @@ public sealed class McpOAuthController : ControllerBase
         if (oauthState is null)
             return ReturnToOpener("Invalid OAuth session.", false);
 
-        // Verify state matches
-        if (!CryptographicOperations.FixedTimeEquals(
+        // Verify state matches the one we sent to the provider
+        if (string.IsNullOrEmpty(oauthState.State)
+            || !CryptographicOperations.FixedTimeEquals(
                 Encoding.UTF8.GetBytes(state),
-                Encoding.UTF8.GetBytes(oauthState.State ?? state)))
+                Encoding.UTF8.GetBytes(oauthState.State)))
         {
-            // State from cookie doesn't match query — but we stored state in the cookie, not in the query
-            // The state parameter comes back from the external server
+            return ReturnToOpener("State mismatch — possible CSRF attack.", false);
         }
 
         // Exchange authorization code for tokens

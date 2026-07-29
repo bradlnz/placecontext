@@ -395,4 +395,15 @@ public sealed class PlaceContextService : IPlaceContextService
         => _dispatcher.Send(new Features.TestMcpConnectionCommand(id), ct);
     public Task<IReadOnlyList<Dtos.McpConnectionView>> ListMcpConnectionsAsync(Guid projectId, CancellationToken ct = default)
         => _dispatcher.Query(new Features.ListMcpConnectionsQuery(projectId), ct);
+
+    // ── Chat commands ──────────────────────────────────────────────────────────────────────────────
+
+    public Task<Dtos.ChatCommandView> CreateChatCommandAsync(Features.CreateChatCommandCommand command, CancellationToken ct = default)
+        => _dispatcher.Send(command, ct);
+    public Task<Dtos.ChatCommandView> UpdateChatCommandAsync(Features.UpdateChatCommandCommand command, CancellationToken ct = default)
+        => _dispatcher.Send(command, ct);
+    public Task<bool> DeleteChatCommandAsync(Guid commandId, CancellationToken ct = default)
+        => _dispatcher.Send(new Features.DeleteChatCommandCommand(commandId), ct);
+    public Task<IReadOnlyList<Dtos.ChatCommandView>> ListChatCommandsAsync(Guid projectId, CancellationToken ct = default)
+        => _dispatcher.Query(new Features.ListChatCommandsQuery(projectId), ct);
 }

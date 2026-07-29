@@ -14,8 +14,13 @@ public enum TriggerKind
     Event,
 
     /// <summary>
-    /// Fires on a recurring cron schedule, but instead of enqueueing a job run it launches an
+    /// Fires on a recurring cron schedule, but instead of enqueuing a job run it launches an
     /// agent session (prompt + fetched table rows) that autonomously runs job chains.
     /// </summary>
-    Launchpad
+    Launchpad,
+
+    /// <summary>
+    /// Fires on a recurring cron schedule and executes a predefined chat command (tool).
+    /// </summary>
+    Command
 }

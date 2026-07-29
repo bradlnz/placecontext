@@ -197,6 +197,7 @@ public static class DependencyInjection
         services.AddScoped<IAgentConfigRepository, EfAgentConfigRepository>();
         services.AddScoped<IAgentChatSessionRepository, EfAgentChatSessionRepository>();
         services.AddScoped<Domain.Repositories.IMcpConnectionRepository, Persistence.EfMcpConnectionRepository>();
+        services.AddScoped<IChatCommandRepository, EfChatCommandRepository>();
 
         // Dependency-graph assembly is expensive (full ledger + decisions + O(n²) embedding weave);
         // wrap the Application provider in a short-TTL cache so page opens and brain rollups don't

@@ -395,8 +395,27 @@ public sealed partial class ChatViewModel
     private async Task<ToolCallResult> ExecuteCallMcpAsync(string args, CancellationToken ct)
     {
         var parts = args.Split('|');
-        if (parts.Length < 2) return ToolCallResult.Fail("Usage: call_mcp|serverName|toolName|[jsonArgs]");
-        var serverName = parts[0].Trim(); var toolName = parts[1].Trim(); var jsonArgs = parts.Length > 2 ? parts[2].Trim() : "{}";
+        var serverName = parts.Length > 0 ? parts[0].Trim() : "";
+        var toolName = parts.Length > 1 ? parts[1].Trim() : "";
+        var jsonArgs = parts.Length > 2 ? parts[2].Trim() : "{}";
+
+        if (string.IsNullOrEmpty(serverName))
+        {
+            var mcps = await _svc.ListMcpConnectionsAsync(ProjectId!.Value, ct);
+            if (mcps.Count == 0)
+                return ToolCallResult.Ok("No MCP servers configured. Add one in Settings → MCP Servers.");
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine("Available MCP servers:");
+            foreach (var c in mcps)
+                sb.AppendLine($"- {c.Name} ({c.Transport}) - {(c.Enabled ? "enabled" : "disabled")}");
+            sb.AppendLine("\nUsage: call_mcp|serverName|toolName|[jsonArgs]");
+            sb.Append("Use list_mcp_tools|serverName to see available tools.");
+            return ToolCallResult.Ok(sb.ToString());
+        }
+
+        if (string.IsNullOrEmpty(toolName))
+            return ToolCallResult.Fail("Usage: call_mcp|serverName|toolName|[jsonArgs]");
+
         AddActiveAction(AgentToolNames.CallMcp, ChatCopy.CallingMcp(serverName, toolName));
         var connections = await _svc.ListMcpConnectionsAsync(ProjectId!.Value, ct);
         var connection = connections.FirstOrDefault(c => c.Name.Equals(serverName, StringComparison.OrdinalIgnoreCase));

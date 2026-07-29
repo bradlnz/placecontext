@@ -308,4 +308,17 @@ public sealed partial class JobsViewModel
         }
     }
 
+    public async Task DeleteJobAsync(Guid jobId)
+    {
+        try
+        {
+            await _svc.DeleteJobAsync(jobId);
+            Jobs = await _svc.ListJobsAsync(ProjectId);
+            ConfirmDeleteId = null;
+            if (EditJobId == jobId) CloseEditor();
+            Message = "Job deleted.";
+        }
+        catch (Exception ex) { Message = ex.Message; }
+        NotifyStateChanged();
+    }
 }

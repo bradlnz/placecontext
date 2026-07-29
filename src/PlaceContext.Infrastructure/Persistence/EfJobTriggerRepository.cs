@@ -61,7 +61,7 @@ public sealed class EfJobTriggerRepository : IJobTriggerRepository
     public async Task<IReadOnlyList<JobTrigger>> ListDueSchedulesAsync(DateTimeOffset now, CancellationToken ct = default)
     {
         var rows = await _db.JobTriggers.AsNoTracking()
-            .Where(t => t.Enabled && (t.Kind == "Schedule" || t.Kind == "Launchpad")
+            .Where(t => t.Enabled && (t.Kind == "Schedule" || t.Kind == "Launchpad" || t.Kind == "Command")
                         && t.NextRunAt != null && t.NextRunAt <= now)
             .ToListAsync(ct);
         return rows.Select(ToDomain).ToList();
@@ -89,6 +89,7 @@ public sealed class EfJobTriggerRepository : IJobTriggerRepository
         ChainId = t.ChainId,
         SourceTable = t.SourceTable,
         Prompt = t.Prompt,
+        CommandId = t.CommandId,
         NextRunAt = t.NextRunAt,
         LastFiredAt = t.LastFiredAt,
         CreatedAt = t.CreatedAt,
@@ -99,5 +100,5 @@ public sealed class EfJobTriggerRepository : IJobTriggerRepository
         r.Id, r.ProjectId, r.JobId, r.Name,
         Enum.Parse<TriggerKind>(r.Kind), r.Enabled,
         r.CronExpression, r.EventName, r.ChainId, r.SourceTable, r.Prompt,
-        r.NextRunAt, r.LastFiredAt, r.CreatedAt, r.UpdatedAt);
+        r.CommandId, r.NextRunAt, r.LastFiredAt, r.CreatedAt, r.UpdatedAt);
 }

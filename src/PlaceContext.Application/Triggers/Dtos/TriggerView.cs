@@ -6,7 +6,7 @@ public sealed record TriggerView(
     /// <summary>Null for launchpads (they target a chain, not a job).</summary>
     Guid? JobId,
     string Name,
-    /// <summary>"Schedule" | "Event" | "Launchpad".</summary>
+    /// <summary>"Schedule" | "Event" | "Launchpad" | "Command".</summary>
     string Kind,
     bool Enabled,
     string? CronExpression,
@@ -14,6 +14,7 @@ public sealed record TriggerView(
     Guid? ChainId,
     string? SourceTable,
     string? Prompt,
+    Guid? CommandId,
     DateTimeOffset? NextRunAt,
     DateTimeOffset? LastFiredAt,
     DateTimeOffset CreatedAt);

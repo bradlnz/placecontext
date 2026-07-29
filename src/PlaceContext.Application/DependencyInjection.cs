@@ -103,6 +103,12 @@ public static class DependencyInjection
         services.AddScoped<ICommandHandler<Features.TestMcpConnectionCommand, Dtos.McpConnectionView>, Features.TestMcpConnectionHandler>();
         services.AddScoped<IQueryHandler<Features.ListMcpConnectionsQuery, IReadOnlyList<Dtos.McpConnectionView>>, Features.ListMcpConnectionsHandler>();
 
+        // Chat commands
+        services.AddScoped<ICommandHandler<Features.CreateChatCommandCommand, Dtos.ChatCommandView>, Features.CreateChatCommandHandler>();
+        services.AddScoped<ICommandHandler<Features.UpdateChatCommandCommand, Dtos.ChatCommandView>, Features.UpdateChatCommandHandler>();
+        services.AddScoped<ICommandHandler<Features.DeleteChatCommandCommand, bool>, Features.DeleteChatCommandHandler>();
+        services.AddScoped<IQueryHandler<Features.ListChatCommandsQuery, IReadOnlyList<Dtos.ChatCommandView>>, Features.ListChatCommandsHandler>();
+
         // Queries.
         services.AddScoped<IQueryHandler<GetProjectsQuery, IReadOnlyList<ProjectSummaryView>>, GetProjectsHandler>();
         services.AddScoped<IQueryHandler<GetProjectByIdQuery, ProjectSummaryView?>, GetProjectByIdHandler>();

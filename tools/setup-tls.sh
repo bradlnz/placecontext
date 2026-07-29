@@ -10,7 +10,7 @@ set -euo pipefail
 HOST="feasibility.ossenpropertygroup.com.au"
 EXPECTED_IP="170.64.208.233"
 SECRET_NAME="feasibility-tls"
-NAMESPACE="default"
+NAMESPACE="placecontext"
 TIMEOUT=300  # 5 minutes for challenge completion
 
 info()  { printf "\033[1;34m▸ %s\033[0m\n" "$*"; }

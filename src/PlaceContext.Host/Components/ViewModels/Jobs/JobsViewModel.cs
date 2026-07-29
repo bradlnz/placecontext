@@ -37,6 +37,7 @@ public sealed partial class JobsViewModel : PageViewModel
     public Guid? PendingRunJobId { get; private set; }
     public string? Message { get; private set; }
     public bool Loading { get; private set; } = true;
+    public Guid? ConfirmDeleteId { get; set; }
 
     private CancellationTokenSource? _runPollCts;
 

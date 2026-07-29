@@ -27,6 +27,9 @@ public sealed class JobTriggerRow : ITenantOwned
     /// <summary>Prompt the launchpad session runs autonomously (launchpads only).</summary>
     public string? Prompt { get; set; }
 
+    /// <summary>Optional command executed when this trigger fires (command triggers).</summary>
+    public Guid? CommandId { get; set; }
+
     public DateTimeOffset? NextRunAt { get; set; }
     public DateTimeOffset? LastFiredAt { get; set; }
     public DateTimeOffset CreatedAt { get; set; }

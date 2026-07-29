@@ -68,6 +68,15 @@ else
                                 </div>
                             </div>
                             <div class="job-actions">
+                                @if (Vm.ConfirmDeleteId == job.Id)
+                                {
+                                    <button class="dcbtn c-bad" @onclick:stopPropagation="true" @onclick="@(() => Vm.DeleteJobAsync(job.Id))">Confirm delete</button>
+                                    <button class="dcbtn" @onclick:stopPropagation="true" @onclick="@(() => Vm.ConfirmDeleteId = null)">Keep</button>
+                                }
+                                else
+                                {
+                                    <button class="dcbtn" @onclick:stopPropagation="true" @onclick="@(() => Vm.ConfirmDeleteId = job.Id)">Delete</button>
+                                }
                                 @if (job.MapSourceKind == "code")
                                 {
                                     <button class="dcbtn" @onclick:stopPropagation="true"

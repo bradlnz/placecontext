@@ -18,6 +18,7 @@ internal static class TriggerViewMapper
         ChainId: t.ChainId,
         SourceTable: t.SourceTable,
         Prompt: t.Prompt,
+        CommandId: t.CommandId,
         NextRunAt: t.NextRunAt,
         LastFiredAt: t.LastFiredAt,
         CreatedAt: t.CreatedAt);

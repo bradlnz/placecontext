@@ -11,6 +11,7 @@ public sealed class CreateTriggerHandler : ICommandHandler<CreateTriggerCommand,
 {
     private readonly IJobRepository _jobs;
     private readonly IJobChainRepository _chains;
+    private readonly IChatCommandRepository _commands;
     private readonly IJobTriggerRepository _triggers;
     private readonly ICronSchedule _cron;
     private readonly ICurrentTenant _tenant;
@@ -18,11 +19,13 @@ public sealed class CreateTriggerHandler : ICommandHandler<CreateTriggerCommand,
     private readonly IClock _clock;
 
     public CreateTriggerHandler(
-        IJobRepository jobs, IJobChainRepository chains, IJobTriggerRepository triggers, ICronSchedule cron,
+        IJobRepository jobs, IJobChainRepository chains, IChatCommandRepository commands,
+        IJobTriggerRepository triggers, ICronSchedule cron,
         ICurrentTenant tenant, IUnitOfWork uow, IClock clock)
     {
         _jobs = jobs;
         _chains = chains;
+        _commands = commands;
         _triggers = triggers;
         _cron = cron;
         _tenant = tenant;
@@ -33,12 +36,26 @@ public sealed class CreateTriggerHandler : ICommandHandler<CreateTriggerCommand,
     public async Task<TriggerView> HandleAsync(CreateTriggerCommand command, CancellationToken ct = default)
     {
         if (!Enum.TryParse<TriggerKind>(command.Kind, ignoreCase: true, out var kind))
-            throw new ArgumentException($"Unknown trigger kind '{command.Kind}'. Expected 'Schedule', 'Event', or 'Launchpad'.");
+            throw new ArgumentException($"Unknown trigger kind '{command.Kind}'. Expected 'Schedule', 'Event', 'Launchpad', or 'Command'.");
 
         var now = _clock.UtcNow;
         JobTrigger trigger;
 
-        if (kind == TriggerKind.Launchpad)
+        if (kind == TriggerKind.Command)
+        {
+            var cron = command.CronExpression?.Trim()
+                ?? throw new ArgumentException("A command trigger requires a cron expression.");
+            if (!_cron.IsValid(cron))
+                throw new ArgumentException($"'{cron}' is not a valid cron expression.");
+            if (command.CommandId is not { } commandId || commandId == Guid.Empty)
+                throw new ArgumentException("A command trigger requires a command.");
+            var cmd = await _commands.GetByIdAsync(commandId, ct)
+                ?? throw new InvalidOperationException($"Chat command {commandId} not found.");
+            var next = _cron.Next(cron, now, _tenant.TimeZoneId);
+            trigger = JobTrigger.CreateCommandTrigger(
+                cmd.ProjectId, command.Name, cron, commandId, next, now);
+        }
+        else if (kind == TriggerKind.Launchpad)
         {
             var cron = command.CronExpression?.Trim()
                 ?? throw new ArgumentException("A launchpad requires a cron expression.");
