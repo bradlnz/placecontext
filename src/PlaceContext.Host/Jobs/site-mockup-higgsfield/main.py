@@ -142,9 +142,17 @@ def call_tool(url, token, tool_name, arguments):
     )
     try:
         with urllib.request.urlopen(req, timeout=300) as resp:
-            return json.loads(resp.read())
+            raw = resp.read()
+            print(f"MCP response status={resp.status} content-type={resp.headers.get('Content-Type')} len={len(raw)}", file=sys.stderr)
+            if not raw:
+                print("MCP response body is empty", file=sys.stderr)
+                return None
+            preview = raw[:500].decode('utf-8', errors='replace')
+            print(f"MCP response preview: {preview}", file=sys.stderr)
+            return json.loads(raw)
     except urllib.error.HTTPError as e:
-        print(f"MCP call failed: {e.code} {e.reason} — {e.read().decode()}", file=sys.stderr)
+        body = e.read().decode()
+        print(f"MCP call failed HTTP {e.code}: {body}", file=sys.stderr)
         return None
     except Exception as e:
         print(f"MCP call failed: {e}", file=sys.stderr)
