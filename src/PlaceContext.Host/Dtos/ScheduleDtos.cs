@@ -15,11 +15,14 @@ public sealed record CreateScheduleRequest(
     string? EventName);
 
 /// <summary>
-/// Request body for PUT /api/v1/schedules/{id}. The only supported mutation on an existing schedule is
-/// enabling/pausing it — cron expression, name, and event are immutable after creation (delete and
-/// recreate to change them), matching the one write operation the domain exposes on an existing trigger.
+/// Request body for PUT /api/v1/schedules/{id}. All fields are optional — only provided fields are
+/// updated. Use this to rename, reschedule, change the event name, or enable/pause a trigger.
 /// </summary>
-public sealed record UpdateScheduleRequest(bool Enabled);
+public sealed record UpdateScheduleRequest(
+    string? Name = null,
+    string? CronExpression = null,
+    string? EventName = null,
+    bool? Enabled = null);
 
 /// <summary>Public read model for a schedule (cron) or event trigger.</summary>
 public sealed record ScheduleResponse(

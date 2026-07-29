@@ -294,6 +294,9 @@ public sealed class PlaceContextService : IPlaceContextService
     public Task<TriggerView> CreateTriggerAsync(CreateTriggerCommand command, CancellationToken ct = default)
         => _dispatcher.Send(command, ct);
 
+    public Task<TriggerView> UpdateTriggerAsync(UpdateTriggerCommand command, CancellationToken ct = default)
+        => _dispatcher.Send(command, ct);
+
     public Task<TriggerView> SetTriggerEnabledAsync(Guid triggerId, bool enabled, CancellationToken ct = default)
         => _dispatcher.Send(new SetTriggerEnabledCommand(triggerId, enabled), ct);
 

@@ -74,6 +74,7 @@ public static class DependencyInjection
         services.AddScoped<ICommandHandler<UpdateEntityRecordCommand, int>, UpdateEntityRecordHandler>();
         services.AddScoped<ICommandHandler<DeleteEntityRecordCommand, int>, DeleteEntityRecordHandler>();
         services.AddScoped<ICommandHandler<CreateTriggerCommand, TriggerView>, CreateTriggerHandler>();
+        services.AddScoped<ICommandHandler<UpdateTriggerCommand, TriggerView>, UpdateTriggerHandler>();
         services.AddScoped<ICommandHandler<SetTriggerEnabledCommand, TriggerView>, SetTriggerEnabledHandler>();
         services.AddScoped<ICommandHandler<DeleteTriggerCommand, bool>, DeleteTriggerHandler>();
         services.AddScoped<ICommandHandler<DefineEventTypeCommand, EventTypeView>, DefineEventTypeHandler>();

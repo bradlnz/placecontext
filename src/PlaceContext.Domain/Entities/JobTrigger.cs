@@ -221,6 +221,15 @@ public sealed class JobTrigger : AggregateRoot
         UpdatedAt = now;
     }
 
+    /// <summary>Changes the event name this trigger subscribes to.</summary>
+    public void RenameEvent(string eventName, DateTimeOffset now)
+    {
+        if (string.IsNullOrWhiteSpace(eventName))
+            throw new ArgumentException("Event name must not be empty.", nameof(eventName));
+        EventName = eventName.Trim();
+        UpdatedAt = now;
+    }
+
     /// <summary>Enables the trigger. For schedules, supply the recomputed next-run time.</summary>
     public void Enable(DateTimeOffset? nextRunAt, DateTimeOffset now)
     {

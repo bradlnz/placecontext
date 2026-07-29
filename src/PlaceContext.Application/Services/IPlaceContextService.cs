@@ -117,6 +117,7 @@ public interface IPlaceContextService
 
     // Triggers (schedule + event) and events.
     Task<TriggerView> CreateTriggerAsync(CreateTriggerCommand command, CancellationToken ct = default);
+    Task<TriggerView> UpdateTriggerAsync(UpdateTriggerCommand command, CancellationToken ct = default);
     Task<TriggerView> SetTriggerEnabledAsync(Guid triggerId, bool enabled, CancellationToken ct = default);
     Task<bool> DeleteTriggerAsync(Guid triggerId, CancellationToken ct = default);
     Task<IReadOnlyList<TriggerView>> ListTriggersAsync(Guid projectId, CancellationToken ct = default);

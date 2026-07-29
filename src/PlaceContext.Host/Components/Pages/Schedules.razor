@@ -174,28 +174,68 @@
         {
             @foreach (var t in _triggers)
             {
-                <div class="trigger-grid trigger-row">
-                    <span class="state-cell" style="color:@(t.Enabled ? "var(--good)" : "var(--text-3)")">
-                        <span class="state-dot" style="background:@(t.Enabled ? "var(--good)" : "var(--border-2)")"></span>@(t.Enabled ? "ON" : "PAUSED")
-                    </span>
-                    <span class="trigger-name">@t.Name</span>
-                    <span class="cell-job">@TargetLabel(t)</span>
-                    <span class="cell-2">
-                        @if (t.Kind == "Event")
-                        {
-                            <text>event @t.EventName</text>
-                        }
-                        else
-                        {
-                            <text>cron @t.CronExpression</text>
-                        }
-                    </span>
-                    <span class="cell-2">@(t.NextRunAt?.ToWorkspaceTime().ToString("MMM d · HH:mm") ?? "—")</span>
-                    <span class="cell-3">@(t.LastFiredAt?.ToWorkspaceTime().ToString("MMM d · HH:mm") ?? "never")</span>
-                    <span class="row-actions">
-                        <button class="dcbtn btn-sm" @onclick="@(() => Toggle(t))">@(t.Enabled ? "Pause" : "Resume")</button>
-                        <button class="dcbtn btn-sm btn-danger" @onclick="@(() => Remove(t.Id))">Delete</button>
-                    </span>
+                var isEditing = _editingId == t.Id;
+                <div class="trigger-grid trigger-row@(isEditing ? " editing" : "")">
+                    @if (isEditing)
+                    {
+                        <span class="state-cell" style="color:@(t.Enabled ? "var(--good)" : "var(--text-3)")">
+                            <span class="state-dot" style="background:@(t.Enabled ? "var(--good)" : "var(--border-2)")"></span>@(t.Enabled ? "ON" : "PAUSED")
+                        </span>
+                        <span class="trigger-name">
+                            <input class="dcinput edit-name" @bind="_editName" />
+                        </span>
+                        <span class="cell-job">@TargetLabel(t)</span>
+                        <span class="cell-2">
+                            @if (t.Kind == "Event")
+                            {
+                                <select class="dcinput edit-event" @bind="_editEvent">
+                                    @foreach (var e in _eventTypes ?? Array.Empty<EventTypeView>())
+                                    {
+                                        <option value="@e.Name">@e.Name</option>
+                                    }
+                                </select>
+                            }
+                            else
+                            {
+                                <input class="dcinput edit-cron" @bind="_editCron" placeholder="0 0 * * *" />
+                            }
+                        </span>
+                        <span class="cell-2">@(t.NextRunAt?.ToWorkspaceTime().ToString("MMM d · HH:mm") ?? "—")</span>
+                        <span class="cell-3">@(t.LastFiredAt?.ToWorkspaceTime().ToString("MMM d · HH:mm") ?? "never")</span>
+                        <span class="row-actions">
+                            @if (_editError is not null)
+                            {
+                                <span class="err-text">@_editError</span>
+                            }
+                            <button class="dcbtn btn-sm" disabled="@_editingBusy" @onclick="SaveEdit">Save</button>
+                            <button class="dcbtn btn-sm" disabled="@_editingBusy" @onclick="CancelEdit">Cancel</button>
+                        </span>
+                    }
+                    else
+                    {
+                        <span class="state-cell" style="color:@(t.Enabled ? "var(--good)" : "var(--text-3)")">
+                            <span class="state-dot" style="background:@(t.Enabled ? "var(--good)" : "var(--border-2)")"></span>@(t.Enabled ? "ON" : "PAUSED")
+                        </span>
+                        <span class="trigger-name">@t.Name</span>
+                        <span class="cell-job">@TargetLabel(t)</span>
+                        <span class="cell-2">
+                            @if (t.Kind == "Event")
+                            {
+                                <text>event @t.EventName</text>
+                            }
+                            else
+                            {
+                                <text>cron @t.CronExpression</text>
+                            }
+                        </span>
+                        <span class="cell-2">@(t.NextRunAt?.ToWorkspaceTime().ToString("MMM d · HH:mm") ?? "—")</span>
+                        <span class="cell-3">@(t.LastFiredAt?.ToWorkspaceTime().ToString("MMM d · HH:mm") ?? "never")</span>
+                        <span class="row-actions">
+                            <button class="dcbtn btn-sm" @onclick="@(() => Toggle(t))">@(t.Enabled ? "Pause" : "Resume")</button>
+                            <button class="dcbtn btn-sm" @onclick="@(() => StartEdit(t))">Edit</button>
+                            <button class="dcbtn btn-sm btn-danger" @onclick="@(() => Remove(t.Id))">Delete</button>
+                        </span>
+                    }
                 </div>
             }
         }
@@ -321,5 +361,49 @@
             _triggers = await Svc.ListTriggersAsync(ProjectId);
         }
         catch (Exception ex) { _error = ex.Message; }
+    }
+
+    // ── Inline editing ─────────────────────────────────────────────────────────────────
+
+    private Guid? _editingId;
+    private string? _editName, _editCron, _editEvent;
+    private string? _editError;
+    private bool _editingBusy;
+
+    private void StartEdit(TriggerView t)
+    {
+        _editingId = t.Id;
+        _editName = t.Name;
+        _editCron = t.CronExpression;
+        _editEvent = t.EventName;
+        _editError = null;
+    }
+
+    private void CancelEdit()
+    {
+        _editingId = null;
+        _editName = _editCron = _editEvent = null;
+        _editError = null;
+    }
+
+    private async Task SaveEdit()
+    {
+        _editError = null;
+        if (string.IsNullOrWhiteSpace(_editName)) { _editError = "Name is required."; return; }
+        _editingBusy = true;
+        try
+        {
+            var cmd = new UpdateTriggerCommand(
+                _editingId!.Value,
+                Name: _editName?.Trim(),
+                CronExpression: _editCron?.Trim(),
+                EventName: _editEvent?.Trim(),
+                Enabled: null);
+            await Svc.UpdateTriggerAsync(cmd);
+            _triggers = await Svc.ListTriggersAsync(ProjectId);
+            CancelEdit();
+        }
+        catch (Exception ex) { _editError = ex.Message; }
+        finally { _editingBusy = false; }
     }
 }

@@ -75,9 +75,10 @@ public sealed class SchedulesController : ControllerBase
     }
 
     /// <summary>
-    /// PUT /api/v1/schedules/{id} — enables or pauses the schedule (re-enabling a cron schedule
-    /// recomputes its next-run time). This is the only supported mutation on an existing schedule; change
-    /// the cron/name/event by deleting and recreating. 404 if it doesn't exist.
+    /// PUT /api/v1/schedules/{id} — updates a trigger. Any combination of name, cron expression, event
+    /// name, and enabled flag can be supplied (null fields are left unchanged). Re-enabling a cron
+    /// schedule recomputes its next-run time; changing the cron expression also recomputes it. 404 if
+    /// the trigger doesn't exist.
     /// </summary>
     [HttpPut("schedules/{id:guid}")]
     public async Task<ActionResult<ScheduleResponse>> Update(Guid id, [FromBody] UpdateScheduleRequest request)
@@ -85,8 +86,20 @@ public sealed class SchedulesController : ControllerBase
         var ct = HttpContext.RequestAborted;
         if (await _svc.GetTriggerAsync(id, ct) is null) return NotFound();
 
-        var trigger = await _svc.SetTriggerEnabledAsync(id, request.Enabled, ct);
-        return Ok(ScheduleApiMapper.ToResponse(trigger));
+        try
+        {
+            var trigger = await _svc.UpdateTriggerAsync(
+                new UpdateTriggerCommand(id, request.Name, request.CronExpression, request.EventName, request.Enabled), ct);
+            return Ok(ScheduleApiMapper.ToResponse(trigger));
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return NotFound(new { error = ex.Message });
+        }
     }
 
     /// <summary>DELETE /api/v1/schedules/{id} — permanently removes the schedule. 204 on success, 404 if
