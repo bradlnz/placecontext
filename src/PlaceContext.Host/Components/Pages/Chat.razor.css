@@ -1350,6 +1350,13 @@
     background-size: 800px 100%;
 }
 
+.skeleton-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 4px;
+}
+
 /* ── Clarification panel (HITL) ───────────────────────────────────── */
 .clarification-panel {
     margin: 8px 0;
