@@ -1,20 +1,24 @@
 import sys, json, os, urllib.request, urllib.error, base64
 
+# Hard-coded prompt for the site mockup image.
+PROMPT = "A beautiful modern real-estate property website mockup, clean professional design, hero section with property photos, navigation bar, search filter, listing cards, contact form, premium aesthetic"
+
 def main():
     input_data = json.loads(sys.stdin.read() or "{}")
 
-    prompt = input_data.get("prompt", "")
+    # Prompt is defined as a constant above; input data can still be logged for traceability.
+    prompt = PROMPT
     model = input_data.get("model", "openai-hazel")
     aspect_ratio = input_data.get("aspect_ratio", "1:1")
 
-    # Load MCP connections from env var injected at runtime
+    # Load MCP connections from env var injected at runtime.
     mcp_json = os.environ.get("MCP_CONNECTIONS_JSON", "[]")
     connections = json.loads(mcp_json)
     if not connections:
         print("No MCP connections configured for this job", file=sys.stderr)
         sys.exit(1)
 
-    # Find Higgsfield connection (or use the first one)
+    # Find Higgsfield connection (or use the first one).
     conn = None
     for c in connections:
         if "higgsfield" in c.get("Name", "").lower():
@@ -94,7 +98,6 @@ def extract_image(body):
     if not isinstance(body, dict):
         return None
 
-    # rawContent holds the full MCP content array with image items
     raw = body.get("rawContent")
     if isinstance(raw, list):
         for item in raw:
@@ -117,7 +120,6 @@ def extract_image(body):
                     except (json.JSONDecodeError, TypeError):
                         pass
 
-    # Fall back to content field (text description or JSON string)
     content = body.get("content")
     if content:
         try:
@@ -132,7 +134,6 @@ def extract_image(body):
         except (json.JSONDecodeError, TypeError):
             pass
 
-    # Try top-level response fields
     for key in ("image_b64", "image_base64", "b64", "data", "url", "image_url"):
         val = body.get(key)
         if val:
