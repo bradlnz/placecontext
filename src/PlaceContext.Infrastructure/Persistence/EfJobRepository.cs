@@ -182,8 +182,9 @@ public sealed class EfJobRepository : IJobRepository
 
         var returnType = Enum.TryParse<JobReturnType>(row.ReturnType, out var rt) ? rt : JobReturnType.Json;
 
-        var mcpConnectionIds = JsonSerializer.Deserialize<List<Guid>>(row.McpConnectionIdsJson, Json)
-            ?? new List<Guid>();
+        var mcpConnectionIds = string.IsNullOrWhiteSpace(row.McpConnectionIdsJson)
+            ? new List<Guid>()
+            : (JsonSerializer.Deserialize<List<Guid>>(row.McpConnectionIdsJson, Json) ?? new List<Guid>());
 
         return Job.Rehydrate(
             row.Id, row.ProjectId, row.Name, row.Description,
