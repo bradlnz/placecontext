@@ -18,8 +18,8 @@ public sealed class WorkloadRunnerOptions
     /// </summary>
     public string ArtifactFileName { get; set; } = "result.json";
 
-    /// <summary>Per-container timeout in seconds. Default: 300 (5 minutes).</summary>
-    public int DefaultTimeoutSeconds { get; set; } = 300;
+    /// <summary>Per-container timeout in seconds. Default: 1800 (30 minutes).</summary>
+    public int DefaultTimeoutSeconds { get; set; } = 1800;
 
     // ── Sandbox defaults ─────────────────────────────────────────────────────────────────────────
     // Applied to every container run. Overridable via configuration. All off-by-default options

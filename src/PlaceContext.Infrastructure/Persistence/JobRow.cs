@@ -69,14 +69,17 @@ public sealed class JobRow : ITenantOwned
     /// <summary>True when containers may make outbound network calls. Default false (network-none sandbox).</summary>
     public bool AllowNetworkEgress { get; set; }
 
-    /// <summary>Per-container wall-clock timeout in seconds. Default 300 (5 minutes).</summary>
-    public int TimeoutSeconds { get; set; } = 300;
+    /// <summary>Per-container wall-clock timeout in seconds. Default 1800 (30 minutes).</summary>
+    public int TimeoutSeconds { get; set; } = 1800;
 
     /// <summary>Maximum number of automatic retry attempts when a run fails. Default 0 (no retries).</summary>
     public int RetryCount { get; set; }
 
     /// <summary>Fixed delay in seconds between automatic retry attempts. Default 0.</summary>
     public int RetryDelaySeconds { get; set; }
+
+    /// <summary>JSON array of MCP connection GUIDs this job can access. Empty = none.</summary>
+    public string McpConnectionIdsJson { get; set; } = "[]";
 
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }

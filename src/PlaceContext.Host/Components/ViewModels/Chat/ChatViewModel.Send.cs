@@ -20,6 +20,23 @@ public sealed partial class ChatViewModel
         var text = Input.Trim();
         if (string.IsNullOrEmpty(text) || Streaming || !ProjectId.HasValue) return;
 
+        // Expand /commands into tool calls before sending to the LLM.
+        if (text.StartsWith("/"))
+        {
+            var parts = text[1..].Split(' ', 2, StringSplitOptions.TrimEntries);
+            var cmdName = parts[0];
+            var cmdArgs = parts.Length > 1 ? parts[1] : "";
+            var match = Commands.FirstOrDefault(c =>
+                string.Equals(c.Name, cmdName, StringComparison.OrdinalIgnoreCase));
+            if (match is not null)
+            {
+                var toolArgs = string.IsNullOrEmpty(match.Args) ? cmdArgs
+                    : string.IsNullOrEmpty(cmdArgs) ? match.Args
+                    : $"{match.Args} {cmdArgs}";
+                text = AgentToolNames.FormatCall(match.ToolName, toolArgs);
+            }
+        }
+
         var userText = text;
         if (AttachedFileName != null && AttachedFileText != null)
             userText += $"\n\n## Attached file: {AttachedFileName}\n\n{AttachedFileText}";

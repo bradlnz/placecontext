@@ -53,7 +53,8 @@ public sealed class UpdateJobHandler : ICommandHandler<UpdateJobCommand, JobView
             returnType: command.ReturnType,
             returnFileName: command.ReturnFileName,
             retryCount: command.RetryCount,
-            retryDelaySeconds: command.RetryDelaySeconds);
+            retryDelaySeconds: command.RetryDelaySeconds,
+            mcpConnectionIds: command.McpConnectionIds);
 
         await _jobs.UpdateAsync(job, ct);
         await _uow.SaveChangesAsync(ct);

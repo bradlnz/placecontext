@@ -29,6 +29,7 @@ public sealed class Job : AggregateRoot
         string? returnFileName,
         int retryCount,
         int retryDelaySeconds,
+        IReadOnlyList<Guid> mcpConnectionIds,
         DateTimeOffset createdAt,
         DateTimeOffset updatedAt)
     {
@@ -48,12 +49,13 @@ public sealed class Job : AggregateRoot
         ReturnFileName = string.IsNullOrWhiteSpace(returnFileName) ? null : returnFileName.Trim();
         RetryCount = retryCount;
         RetryDelaySeconds = retryDelaySeconds;
+        McpConnectionIds = mcpConnectionIds;
         CreatedAt = createdAt;
         UpdatedAt = updatedAt;
     }
 
     /// <summary>Default per-container timeout when a job doesn't specify one.</summary>
-    public const int DefaultTimeoutSeconds = 300;
+    public const int DefaultTimeoutSeconds = 1800;
 
     /// <summary>Hard ceiling for a per-job timeout (1 hour) — guards against runaway containers.</summary>
     public const int MaxTimeoutSeconds = 3600;
@@ -117,6 +119,8 @@ public sealed class Job : AggregateRoot
     /// <summary>Fixed delay in seconds between automatic retry attempts.</summary>
     public int RetryDelaySeconds { get; private set; }
 
+    public IReadOnlyList<Guid> McpConnectionIds { get; private set; } = Array.Empty<Guid>();
+
     public DateTimeOffset CreatedAt { get; }
     public DateTimeOffset UpdatedAt { get; private set; }
 
@@ -145,7 +149,8 @@ public sealed class Job : AggregateRoot
         JobReturnType returnType = JobReturnType.Json,
         string? returnFileName = null,
         int retryCount = 0,
-        int retryDelaySeconds = 0)
+        int retryDelaySeconds = 0,
+        IReadOnlyList<Guid>? mcpConnectionIds = null)
     {
         if (projectId == Guid.Empty)
             throw new ArgumentException("ProjectId must not be empty.", nameof(projectId));
@@ -167,6 +172,7 @@ public sealed class Job : AggregateRoot
             mapSpec, reduceSpec, concurrencyLimit, exitCodePolicy,
             allowNetworkEgress, NormalizeTimeout(timeoutSeconds), parameters ?? Array.Empty<JobParameter>(),
             DistinctActions(postJobActions), returnType, returnFileName, retryCount, retryDelaySeconds,
+            mcpConnectionIds ?? Array.Empty<Guid>(),
             createdAt, createdAt);
     }
 
@@ -197,10 +203,12 @@ public sealed class Job : AggregateRoot
         JobReturnType returnType = JobReturnType.Json,
         string? returnFileName = null,
         int retryCount = 0,
-        int retryDelaySeconds = 0)
+        int retryDelaySeconds = 0,
+        IReadOnlyList<Guid>? mcpConnectionIds = null)
         => new(id, projectId, name, description, mapSpec, reduceSpec, concurrencyLimit, exitCodePolicy,
                allowNetworkEgress, NormalizeTimeout(timeoutSeconds), parameters ?? Array.Empty<JobParameter>(),
                DistinctActions(postJobActions), returnType, returnFileName, retryCount, retryDelaySeconds,
+               mcpConnectionIds ?? Array.Empty<Guid>(),
                createdAt, updatedAt);
 
     // ── Behaviour ─────────────────────────────────────────────────────────────────────────────────
@@ -223,7 +231,8 @@ public sealed class Job : AggregateRoot
         JobReturnType returnType = JobReturnType.Json,
         string? returnFileName = null,
         int retryCount = 0,
-        int retryDelaySeconds = 0)
+        int retryDelaySeconds = 0,
+        IReadOnlyList<Guid>? mcpConnectionIds = null)
     {
         if (string.IsNullOrWhiteSpace(name))
             throw new ArgumentException("Job name must not be empty.", nameof(name));
@@ -252,6 +261,7 @@ public sealed class Job : AggregateRoot
         ReturnFileName = string.IsNullOrWhiteSpace(returnFileName) ? null : returnFileName.Trim();
         RetryCount = retryCount;
         RetryDelaySeconds = retryDelaySeconds;
+        if (mcpConnectionIds is not null) McpConnectionIds = mcpConnectionIds;
         UpdatedAt = updatedAt;
     }
 

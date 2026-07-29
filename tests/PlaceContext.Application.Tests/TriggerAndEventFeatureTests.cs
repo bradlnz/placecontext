@@ -20,6 +20,7 @@ public class TriggerAndEventFeatureTests
     {
         public InMemoryJobRepository Jobs = new();
         public InMemoryJobChainRepository Chains = new();
+        public InMemoryChatCommandRepository Commands = new();
         public InMemoryJobTriggerRepository Triggers = new();
         public InMemoryEventRepository Events = new();
         public FakeJobRunQueue Queue = new();
@@ -47,7 +48,7 @@ public class TriggerAndEventFeatureTests
     {
         var c = new Ctx();
         var job = c.SeedJob();
-        var handler = new CreateTriggerHandler(c.Jobs, c.Chains, c.Triggers, c.Cron, c.Tenant, c.Uow, c.Clock);
+        var handler = new CreateTriggerHandler(c.Jobs, c.Chains, c.Commands, c.Triggers, c.Cron, c.Tenant, c.Uow, c.Clock);
 
         var view = await handler.HandleAsync(
             new CreateTriggerCommand(job.Id, "nightly", "Schedule", "0 0 * * *", null));
@@ -64,7 +65,7 @@ public class TriggerAndEventFeatureTests
         var c = new Ctx();
         var job = c.SeedJob();
         c.Cron.ValidOverride = false;
-        var handler = new CreateTriggerHandler(c.Jobs, c.Chains, c.Triggers, c.Cron, c.Tenant, c.Uow, c.Clock);
+        var handler = new CreateTriggerHandler(c.Jobs, c.Chains, c.Commands, c.Triggers, c.Cron, c.Tenant, c.Uow, c.Clock);
 
         await Assert.ThrowsAsync<ArgumentException>(() =>
             handler.HandleAsync(new CreateTriggerCommand(job.Id, "x", "Schedule", "nonsense", null)));
@@ -75,7 +76,7 @@ public class TriggerAndEventFeatureTests
     {
         var c = new Ctx();
         var job = c.SeedJob();
-        var handler = new CreateTriggerHandler(c.Jobs, c.Chains, c.Triggers, c.Cron, c.Tenant, c.Uow, c.Clock);
+        var handler = new CreateTriggerHandler(c.Jobs, c.Chains, c.Commands, c.Triggers, c.Cron, c.Tenant, c.Uow, c.Clock);
 
         var view = await handler.HandleAsync(
             new CreateTriggerCommand(job.Id, "on-deploy", "Event", null, "deploy.finished"));
@@ -93,7 +94,7 @@ public class TriggerAndEventFeatureTests
         var c = new Ctx();
         var chain = JobChain.Create(Guid.NewGuid(), "enrich", null, new[] { Guid.NewGuid() }, T0);
         await c.Chains.AddAsync(chain);
-        var handler = new CreateTriggerHandler(c.Jobs, c.Chains, c.Triggers, c.Cron, c.Tenant, c.Uow, c.Clock);
+        var handler = new CreateTriggerHandler(c.Jobs, c.Chains, c.Commands, c.Triggers, c.Cron, c.Tenant, c.Uow, c.Clock);
 
         var view = await handler.HandleAsync(new CreateTriggerCommand(
             null, "daily-enrich", "Launchpad", "0 6 * * *", null,
@@ -114,7 +115,7 @@ public class TriggerAndEventFeatureTests
         var c = new Ctx();
         var chain = JobChain.Create(Guid.NewGuid(), "enrich", null, new[] { Guid.NewGuid() }, T0);
         await c.Chains.AddAsync(chain);
-        var handler = new CreateTriggerHandler(c.Jobs, c.Chains, c.Triggers, c.Cron, c.Tenant, c.Uow, c.Clock);
+        var handler = new CreateTriggerHandler(c.Jobs, c.Chains, c.Commands, c.Triggers, c.Cron, c.Tenant, c.Uow, c.Clock);
 
         await Assert.ThrowsAsync<ArgumentException>(() => handler.HandleAsync(
             new CreateTriggerCommand(null, "x", "Launchpad", "0 6 * * *", null, chain.Id, null, "")));
@@ -124,7 +125,7 @@ public class TriggerAndEventFeatureTests
     public async Task CreateTrigger_launchpad_requires_existing_chain()
     {
         var c = new Ctx();
-        var handler = new CreateTriggerHandler(c.Jobs, c.Chains, c.Triggers, c.Cron, c.Tenant, c.Uow, c.Clock);
+        var handler = new CreateTriggerHandler(c.Jobs, c.Chains, c.Commands, c.Triggers, c.Cron, c.Tenant, c.Uow, c.Clock);
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => handler.HandleAsync(
             new CreateTriggerCommand(null, "x", "Launchpad", "0 6 * * *", null, Guid.NewGuid(), null, "do it")));

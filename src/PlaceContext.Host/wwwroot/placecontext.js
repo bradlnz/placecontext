@@ -78,6 +78,12 @@ window.placecontext = {
     });
   },
 
+  scrollLogs() {
+    document.querySelectorAll('.log-pre').forEach(el => {
+      el.scrollTop = el.scrollHeight;
+    });
+  },
+
   dropFile() {
     return new Promise(resolve => {
       if (this._pendingDrop) {

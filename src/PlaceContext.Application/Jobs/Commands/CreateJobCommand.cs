@@ -65,5 +65,8 @@ public sealed record CreateJobCommand(
     int RetryCount = 0,
 
     /// <summary>Fixed delay in seconds between automatic retry attempts.</summary>
-    int RetryDelaySeconds = 0)
+    int RetryDelaySeconds = 0,
+
+    /// <summary>MCP connection IDs the job can access. Injected as env vars at runtime.</summary>
+    IReadOnlyList<Guid>? McpConnectionIds = null)
     : ICommand<JobView>;

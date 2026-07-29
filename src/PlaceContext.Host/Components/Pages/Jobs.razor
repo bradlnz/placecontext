@@ -271,8 +271,14 @@ else
                             }
                             @if (!string.IsNullOrWhiteSpace(shard.Log))
                             {
-                                <details class="mt-4">
-                                    <summary class="log-summary">Log</summary>
+                                <details class="mt-4" open="@(Vm.RunDetail.Status == "Running")">
+                                    <summary class="log-summary">
+                                        Log
+                                        @if (Vm.RunDetail.Status == "Running")
+                                        {
+                                            <span class="live-badge">LIVE</span>
+                                        }
+                                    </summary>
                                     <pre class="log-pre">@shard.Log</pre>
                                 </details>
                             }
@@ -307,6 +313,19 @@ else
                                            href="@JobsViewModel.DataUri(a)" download="@a.Name">⬇ @a.Name</a>
                                     }
                                 </div>
+                            }
+                            @if (!string.IsNullOrWhiteSpace(reduce.Log))
+                            {
+                                <details class="mt-4" open="@(Vm.RunDetail.Status == "Running")">
+                                    <summary class="log-summary">
+                                        Reduce log
+                                        @if (Vm.RunDetail.Status == "Running")
+                                        {
+                                            <span class="live-badge">LIVE</span>
+                                        }
+                                    </summary>
+                                    <pre class="log-pre">@reduce.Log</pre>
+                                </details>
                             }
                         </div>
                     }
@@ -658,6 +677,52 @@ else
                 </div>
             </div>
 
+            @* ── MCP Servers ───────────────────────────────────────────────────────────────── *@
+            <div class="dcform-section">
+                <span class="dcform-title">MCP Servers</span>
+                <div class="mcp-section">
+                    @if (Vm.ProjectMcpConnections is { Count: > 0 })
+                    {
+                        <div class="mcp-list">
+                            @foreach (var mcp in Vm.ProjectMcpConnections)
+                            {
+                                var connId = mcp.Id.ToString();
+                                var isEnabled = Vm.EdMcpConnectionIds.Contains(connId);
+                                var isOAuth = mcp.AuthType == "oauth";
+                                var isExpired = mcp.OAuthTokenExpiresAt.HasValue && mcp.OAuthTokenExpiresAt.Value <= DateTimeOffset.UtcNow;
+                                var isConnected = mcp.LastStatus?.StartsWith("oauth:connected") == true;
+
+                                <label class="mcp-item @(isEnabled ? "" : "disabled")">
+                                    <input type="checkbox" class="checkbox-15 mcp-checkbox"
+                                           checked="@isEnabled"
+                                           @onchange="@(e => Vm.ToggleMcpConnection(mcp.Id, (bool)e.Value!))" />
+                                    <span class="mcp-name">@mcp.Name</span>
+                                    <span class="mcp-badge">@mcp.Transport</span>
+                                    <span class="mcp-url">@mcp.EndpointUrl</span>
+                                    @if (isOAuth)
+                                    {
+                                        <span class="mcp-badge oauth @(isExpired ? "expired" : isConnected ? "active" : "")">
+                                            @(isExpired ? "token expired" : isConnected ? "oauth connected" : "oauth")
+                                        </span>
+                                        <button type="button" class="dcbtn xs"
+                                                @onclick="@(() => Js.InvokeVoidAsync("open", Vm.GetOAuthUrl(mcp.Id), "_blank"))">
+                                            @(isExpired ? "Reconnect" : "Auth")
+                                        </button>
+                                    }
+                                </label>
+                            }
+                        </div>
+                        <div class="dchint mt-6">
+                            Enabled MCP connections are injected as env vars at runtime. Auth via the project's MCP settings.
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="text-3-11-5">No MCP servers configured for this project. Add them in the chat settings to use from jobs.</div>
+                    }
+                </div>
+            </div>
+
             <div class="dcform-section">
                 <span class="dcform-title">Execution</span>
                 <div class="row-gap-10">
@@ -805,8 +870,33 @@ else
 
 @code {
     [Parameter] public Guid ProjectId { get; set; }
+    [Inject] private IJSRuntime Js { get; set; } = null!;
 
-    protected override void OnInitialized() => Vm.Attach(() => InvokeAsync(StateHasChanged));
+    protected override void OnInitialized()
+    {
+        Vm.Attach(() => InvokeAsync(StateHasChanged));
+        McpOAuthCompleted += async (_, _) =>
+        {
+            await Vm.LoadMcpConnectionsAsync();
+            StateHasChanged();
+        };
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await Js.InvokeVoidAsync("eval", @"
+if (!window.__jobsMcpOAuthListener) {
+    window.__jobsMcpOAuthListener = function(e) {
+        if (e.data && e.data.startsWith && e.data.startsWith('mcp-oauth-')) {
+            DotNet.invokeMethodAsync('PlaceContext.Host', 'OnJobsMcpOAuthCallback', e.data);
+        }
+    };
+    window.addEventListener('message', window.__jobsMcpOAuthListener);
+}");
+        }
+    }
 
     protected override async Task OnParametersSetAsync()
     {
@@ -818,5 +908,14 @@ else
     {
         Vm.DetachEvents();
         Vm.Detach();
+    }
+
+    private static event EventHandler? McpOAuthCompleted;
+
+    [JSInvokable]
+    public static async Task OnJobsMcpOAuthCallback(string message)
+    {
+        McpOAuthCompleted?.Invoke(null, EventArgs.Empty);
+        await Task.CompletedTask;
     }
 }

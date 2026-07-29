@@ -55,7 +55,15 @@ public sealed class McpClientService : IMcpClientService
                 @params = new { }
             };
 
-            var response = await client.PostAsJsonAsync(GetEndpoint(connection), request, ct);
+            var endpoint = GetEndpoint(connection);
+            _log.LogInformation("Sending tools/list to {Endpoint}", endpoint);
+            var requestMsg = new HttpRequestMessage(HttpMethod.Post, endpoint)
+            {
+                Content = JsonContent.Create(request)
+            };
+            requestMsg.Headers.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("*/*"));
+            var response = await client.SendAsync(requestMsg, ct);
+            _log.LogInformation("Received tools/list response {StatusCode} from {Endpoint}", (int)response.StatusCode, endpoint);
             response.EnsureSuccessStatusCode();
 
             var result = await response.Content.ReadFromJsonAsync<JsonElement>(ct);
@@ -100,7 +108,15 @@ public sealed class McpClientService : IMcpClientService
                 }
             };
 
-            var response = await client.PostAsJsonAsync(GetEndpoint(connection), request, ct);
+            var endpoint = GetEndpoint(connection);
+            _log.LogInformation("Sending tools/call to {Endpoint}", endpoint);
+            var requestMsg = new HttpRequestMessage(HttpMethod.Post, endpoint)
+            {
+                Content = JsonContent.Create(request)
+            };
+            requestMsg.Headers.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("*/*"));
+            var response = await client.SendAsync(requestMsg, ct);
+            _log.LogInformation("Received tools/call response {StatusCode} from {Endpoint}", (int)response.StatusCode, endpoint);
             response.EnsureSuccessStatusCode();
 
             var result = await response.Content.ReadFromJsonAsync<JsonElement>(ct);
@@ -112,7 +128,7 @@ public sealed class McpClientService : IMcpClientService
                         .Where(c => c.TryGetProperty("type", out var t) && t.GetString() == "text")
                         .Select(c => c.GetProperty("text").GetString())
                         .FirstOrDefault();
-                    return new McpToolResult(true, text, null);
+                    return new McpToolResult(true, text, null, RawContent: content);
                 }
                 if (resultObj.TryGetProperty("isError", out var isError) && isError.GetBoolean())
                 {

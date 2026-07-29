@@ -58,7 +58,9 @@ public sealed record JobRequest(
     /// <summary>Maximum number of automatic retry attempts when a run fails. 0 = no retries.</summary>
     int RetryCount = 0,
     /// <summary>Fixed delay in seconds between automatic retry attempts.</summary>
-    int RetryDelaySeconds = 0);
+    int RetryDelaySeconds = 0,
+    /// <summary>MCP connection IDs the job can access. Injected as env vars at runtime.</summary>
+    IReadOnlyList<Guid>? McpConnectionIds = null);
 
 /// <summary>Public read model for a job definition, including its full workload source.</summary>
 public sealed record JobResponse(
@@ -92,6 +94,7 @@ public sealed record JobResponse(
     string? ReturnFileName,
     int RetryCount,
     int RetryDelaySeconds,
+    IReadOnlyList<Guid> McpConnectionIds,
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt);
 
@@ -116,7 +119,8 @@ internal static class JobApiMapper
         ParseReturnType(r.ReturnType),
         r.ReturnFileName,
         r.RetryCount,
-        r.RetryDelaySeconds);
+        r.RetryDelaySeconds,
+        McpConnectionIds: r.McpConnectionIds);
 
     public static UpdateJobCommand ToUpdateCommand(Guid jobId, JobRequest r) => new(
         jobId, r.Name, r.Description,
@@ -135,7 +139,8 @@ internal static class JobApiMapper
         ParseReturnType(r.ReturnType),
         r.ReturnFileName,
         r.RetryCount,
-        r.RetryDelaySeconds);
+        r.RetryDelaySeconds,
+        McpConnectionIds: r.McpConnectionIds);
 
     public static JobResponse ToResponse(JobView v) => new(
         v.Id, v.ProjectId, v.Name, v.Description,
@@ -152,6 +157,7 @@ internal static class JobApiMapper
         v.ReturnFileName,
         v.RetryCount,
         v.RetryDelaySeconds,
+        v.McpConnectionIds.ToList(),
         v.CreatedAt, v.UpdatedAt);
 
     private static IReadOnlyList<CodeFileDto>? ToCodeFiles(IReadOnlyList<JobCodeFile>? files)

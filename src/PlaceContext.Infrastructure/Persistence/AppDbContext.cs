@@ -203,7 +203,7 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
             e.Property(x => x.MapSourceKind).HasDefaultValue("image");
             e.Property(x => x.UpdatedAt).HasDefaultValueSql("now()");
             e.Property(x => x.AllowNetworkEgress).HasDefaultValue(false);
-            e.Property(x => x.TimeoutSeconds).HasDefaultValue(300);
+            e.Property(x => x.TimeoutSeconds).HasDefaultValue(1800);
             e.Property(x => x.ParametersJson).HasDefaultValue("[]");
             e.Property(x => x.PostJobActionsJson).HasDefaultValue("[]");
             e.Property(x => x.ReturnType).HasDefaultValue("Json");

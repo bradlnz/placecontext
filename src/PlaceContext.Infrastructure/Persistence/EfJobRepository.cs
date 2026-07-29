@@ -53,6 +53,7 @@ public sealed class EfJobRepository : IJobRepository
         existing.ReturnFileName = updated.ReturnFileName;
         existing.RetryCount = updated.RetryCount;
         existing.RetryDelaySeconds = updated.RetryDelaySeconds;
+        existing.McpConnectionIdsJson = updated.McpConnectionIdsJson;
         existing.UpdatedAt = updated.UpdatedAt;
     }
 
@@ -99,6 +100,7 @@ public sealed class EfJobRepository : IJobRepository
             ReturnFileName = job.ReturnFileName,
             RetryCount = job.RetryCount,
             RetryDelaySeconds = job.RetryDelaySeconds,
+            McpConnectionIdsJson = JsonSerializer.Serialize(job.McpConnectionIds.ToList(), Json),
             CreatedAt = job.CreatedAt,
             UpdatedAt = job.UpdatedAt,
         };
@@ -180,13 +182,17 @@ public sealed class EfJobRepository : IJobRepository
 
         var returnType = Enum.TryParse<JobReturnType>(row.ReturnType, out var rt) ? rt : JobReturnType.Json;
 
+        var mcpConnectionIds = JsonSerializer.Deserialize<List<Guid>>(row.McpConnectionIdsJson, Json)
+            ?? new List<Guid>();
+
         return Job.Rehydrate(
             row.Id, row.ProjectId, row.Name, row.Description,
             mapSpec, reduceSpec, row.ConcurrencyLimit, policy, row.CreatedAt, row.UpdatedAt,
             allowNetworkEgress: row.AllowNetworkEgress, parameters: parameters,
             timeoutSeconds: row.TimeoutSeconds, postJobActions: postJobActions,
             returnType: returnType, returnFileName: row.ReturnFileName,
-            retryCount: row.RetryCount, retryDelaySeconds: row.RetryDelaySeconds);
+            retryCount: row.RetryCount, retryDelaySeconds: row.RetryDelaySeconds,
+            mcpConnectionIds: mcpConnectionIds);
     }
 
     private static WorkloadSource DeserialiseSource(

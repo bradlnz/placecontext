@@ -362,10 +362,31 @@
                         </svg>
                     </button>
                     <input type="file" @ref="_fileInputRef" @onchange="OnFileSelected" accept=".csv,.pdf,.doc,.docx" class="hidden-file-input" />
-                    <input class="dcinput chat-input" @bind="Vm.Input" @bind:event="oninput"
-                           placeholder="@(Vm.PendingClarification != null ? "Respond to the question above…" : "Ask about data, jobs, or request a graph…")"
-                           disabled="@(Vm.Streaming && Vm.PendingClarification == null)"
-                           @onkeydown="InputKeydown" />
+                    <div class="chat-input-outer">
+                        @if (_showCmdSuggest)
+                        {
+                            <div class="cmd-suggest">
+                                @foreach (var cmd in _filteredCmds)
+                                {
+                                    <div class="cmd-suggest-item @(cmd == _filteredCmds[_selectedCmdIdx] ? "hover" : "")"
+                                         @onmousedown="@(() => SelectCommand(cmd))"
+                                         @onmouseenter="@(() => _selectedCmdIdx = _filteredCmds.IndexOf(cmd))">
+                                        <span class="cmd-suggest-name">/<span>@cmd.Name</span></span>
+                                        @if (!string.IsNullOrWhiteSpace(cmd.Description))
+                                        {
+                                            <span class="cmd-suggest-desc">@cmd.Description</span>
+                                        }
+                                        <span class="cmd-suggest-tool">@cmd.ToolName</span>
+                                    </div>
+                                }
+                            </div>
+                        }
+                        <input class="dcinput chat-input" @bind="Vm.Input" @bind:event="oninput"
+                               @bind:after="OnInputChanged"
+                               placeholder="@(Vm.PendingClarification != null ? "Respond to the question above…" : "Ask about data, jobs, or request a graph…")"
+                               disabled="@(Vm.Streaming && Vm.PendingClarification == null)"
+                               @onkeydown="InputKeydown" />
+                    </div>
                     @if (Vm.Streaming && Vm.PendingClarification == null)
                     {
                         <button class="dcbtn danger" @onclick="Stop">Stop</button>
@@ -563,6 +584,7 @@
                         <button class="tab-btn @(Vm.SettingsTab == "prompt" ? "active" : "")" @onclick="@(() => Vm.SettingsTab = "prompt")">Prompt</button>
                         <button class="tab-btn @(Vm.SettingsTab == "rag" ? "active" : "")" @onclick="@(() => Vm.SettingsTab = "rag")">RAG</button>
                         <button class="tab-btn @(Vm.SettingsTab == "mcp" ? "active" : "")" @onclick="SwitchToMcpTab">MCP Servers</button>
+                        <button class="tab-btn @(Vm.SettingsTab == "commands" ? "active" : "")" @onclick="@(() => Vm.SettingsTab = "commands")">Commands</button>
                     </div>
 
                     @if (Vm.SettingsTab == "prompt")
@@ -619,6 +641,63 @@
                                     <div class="slider-row">
                                         <input type="range" class="dcslider" @bind="Vm.PendingMaxContextChunks" min="1" max="20" step="1" />
                                         <span class="slider-val">@Vm.PendingMaxContextChunks</span>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                    else if (Vm.SettingsTab == "commands")
+                    {
+                        <div class="cmd-section">
+                            <p class="cmd-hint">Typing <code>/name</code> in chat expands into a tool call. The command name is shown in the auto-suggest when you type <code>/</code>.</p>
+                            @if (Vm.Commands.Count == 0)
+                            {
+                                <div class="cmd-empty">
+                                    <p>No commands defined yet.</p>
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="cmd-list">
+                                    @foreach (var cmd in Vm.Commands)
+                                    {
+                                        <div class="cmd-item">
+                                            <div class="cmd-info">
+                                                <span class="cmd-name">/<span>@cmd.Name</span></span>
+                                                @if (!string.IsNullOrWhiteSpace(cmd.Description))
+                                                {
+                                                    <span class="cmd-desc">@cmd.Description</span>
+                                                }
+                                                <span class="cmd-tool">→ @cmd.ToolName</span>
+                                            </div>
+                                            <button class="dcbtn xs danger" @onclick="@(() => Vm.DeleteCommandAsync(cmd.Id))">×</button>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                            <button class="dcbtn sm primary add-cmd-btn" @onclick="@(() => Vm.ShowAddCommand = !Vm.ShowAddCommand)">+ Add Command</button>
+                            @if (Vm.ShowAddCommand)
+                            {
+                                <div class="cmd-form">
+                                    <div class="dcfield">
+                                        <label>Name <span class="hint-10-5">(without the /)</span></label>
+                                        <input class="dcinput" @bind="Vm.NewCmdName" placeholder="latest-runs" />
+                                    </div>
+                                    <div class="dcfield">
+                                        <label>Description</label>
+                                        <input class="dcinput" @bind="Vm.NewCmdDescription" placeholder="Show recent job runs" />
+                                    </div>
+                                    <div class="dcfield">
+                                        <label>Tool name</label>
+                                        <input class="dcinput" @bind="Vm.NewCmdToolName" placeholder="list_job_runs" />
+                                    </div>
+                                    <div class="dcfield">
+                                        <label>Default args (optional)</label>
+                                        <input class="dcinput" @bind="Vm.NewCmdArgs" placeholder="" />
+                                    </div>
+                                    <div class="cmd-form-actions">
+                                        <button class="dcbtn xs" @onclick="@(() => Vm.ShowAddCommand = false)">Cancel</button>
+                                        <button class="dcbtn xs primary" @onclick="AddCommandAsync">Add</button>
                                     </div>
                                 </div>
                             }
@@ -785,6 +864,9 @@
     private bool _oauthListenerRegistered;
     private Action? _onUiChangedHandler;
     private EventHandler? _onMcpOAuthCompletedHandler;
+    private bool _showCmdSuggest;
+    private List<PlaceContext.Application.Dtos.ChatCommandView> _filteredCmds = [];
+    private int _selectedCmdIdx;
 
     protected override void OnInitialized()
     {
@@ -986,6 +1068,33 @@
 
     private async Task InputKeydown(KeyboardEventArgs e)
     {
+        if (_showCmdSuggest)
+        {
+            if (e.Key == "ArrowDown")
+            {
+                _selectedCmdIdx = Math.Min(_selectedCmdIdx + 1, _filteredCmds.Count - 1);
+                return;
+            }
+            if (e.Key == "ArrowUp")
+            {
+                _selectedCmdIdx = Math.Max(_selectedCmdIdx - 1, 0);
+                return;
+            }
+            if (e.Key is "Enter" or "Tab")
+            {
+                if (_filteredCmds.Count > 0 && _selectedCmdIdx >= 0 && _selectedCmdIdx < _filteredCmds.Count)
+                {
+                    SelectCommand(_filteredCmds[_selectedCmdIdx]);
+                    if (e.Key == "Enter") await Send();
+                }
+                return;
+            }
+            if (e.Key == "Escape")
+            {
+                _showCmdSuggest = false;
+                return;
+            }
+        }
         if (e.Key == "Enter" && !e.ShiftKey)
         {
             await Send();
@@ -996,6 +1105,37 @@
     {
         Vm.RemoveAttachment();
     }
+
+    private void OnInputChanged()
+    {
+        var input = Vm.Input;
+        if (input.StartsWith('/') && Vm.Commands.Count > 0)
+        {
+            var partial = input[1..].ToLowerInvariant();
+            _filteredCmds = string.IsNullOrEmpty(partial)
+                ? [..Vm.Commands]
+                : Vm.Commands.Where(c => c.Name.Contains(partial, StringComparison.OrdinalIgnoreCase)).ToList();
+            _showCmdSuggest = _filteredCmds.Count > 0;
+            _selectedCmdIdx = 0;
+        }
+        else
+        {
+            _showCmdSuggest = false;
+        }
+    }
+
+    private void SelectCommand(PlaceContext.Application.Dtos.ChatCommandView cmd)
+    {
+        Vm.Input = "/" + cmd.Name + " ";
+        _showCmdSuggest = false;
+    }
+
+    private async Task AddCommandAsync()
+    {
+        await Vm.AddCommandAsync();
+    }
+
+    private static string? GetMcpUrl(string f) => f?.StartsWith("http") == true ? f : null;
 
     private async Task CopyMessageAsync(string content)
     {

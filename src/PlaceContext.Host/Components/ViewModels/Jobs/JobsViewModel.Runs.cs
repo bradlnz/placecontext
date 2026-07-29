@@ -194,6 +194,9 @@ public sealed partial class JobsViewModel
         {
             RunDetail = await _svc.GetJobRunAsync(runId);
             RunArtifacts = await _svc.ListRunArtifactsAsync(runId);
+
+            if (RunDetail?.Status is "Queued" or "Running")
+                StartRunDetailPolling(runId);
         }
         catch (Exception ex) { Message = ex.Message; }
         NotifyStateChanged();
@@ -208,6 +211,7 @@ public sealed partial class JobsViewModel
     public void CloseRunDetail()
     {
         RunDetail = null;
+        StopRunDetailPolling();
         NotifyStateChanged();
     }
 

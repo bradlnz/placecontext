@@ -273,11 +273,11 @@ public sealed class TriggerSchedulerService : BackgroundService
 
         await using var cmd = conn.CreateCommand();
         // Each run reaps against its own job's timeout (+slack); runs whose job is gone fall back
-        // to the default 300s bound.
+        // to the default 1800s bound.
         cmd.CommandText = """
             UPDATE job_runs r
             SET "Status" = 'Failed', "FinishedAt" = now()
-            FROM (SELECT r2."Id", COALESCE(j."TimeoutSeconds", 300) AS timeout_s
+            FROM (SELECT r2."Id", COALESCE(j."TimeoutSeconds", 1800) AS timeout_s
                   FROM job_runs r2 LEFT JOIN jobs j ON j."Id" = r2."JobId"
                   WHERE r2."Status" = 'Running') bounds
             WHERE r."Id" = bounds."Id"

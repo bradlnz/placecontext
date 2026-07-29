@@ -51,5 +51,8 @@ public sealed record JobView(
     /// <summary>Fixed delay in seconds between automatic retry attempts.</summary>
     int RetryDelaySeconds,
 
+    /// <summary>MCP connection IDs the job can access. Empty = none.</summary>
+    IReadOnlyList<Guid> McpConnectionIds,
+
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt);

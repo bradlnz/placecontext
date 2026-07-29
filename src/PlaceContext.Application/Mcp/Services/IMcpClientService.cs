@@ -33,7 +33,8 @@ public sealed record McpToolDefinition(
 public sealed record McpToolResult(
     bool Success,
     string? Content,
-    string? Error);
+    string? Error,
+    JsonElement? RawContent = null);
 
 public sealed record McpConnectionInfo(
     Guid Id,

@@ -468,7 +468,7 @@
 }
 
 .chat-input {
-    flex: 1;
+    width: 100%;
     font-size: 0.85rem;
 }
 
@@ -810,7 +810,8 @@
 .settings-body > .dcfield,
 .settings-body > .settings-row,
 .settings-body > .rag-settings,
-.settings-body > .mcp-section {
+.settings-body > .mcp-section,
+.settings-body > .cmd-section {
     padding: 16px 18px;
 }
 
@@ -1898,4 +1899,137 @@ a.attachment-chip:hover {
     .artifact-json {
         max-height: 260px;
     }
+}
+
+/* ── Command auto-suggest ── */
+.chat-input-outer {
+    position: relative;
+    flex: 1;
+}
+
+.cmd-suggest {
+    position: absolute;
+    bottom: 100%;
+    left: 0;
+    right: 0;
+    background: var(--bg-1);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin-bottom: 4px;
+    max-height: 200px;
+    overflow-y: auto;
+    z-index: 100;
+    box-shadow: 0 -4px 16px rgba(0,0,0,0.15);
+}
+
+.cmd-suggest-item {
+    padding: 8px 12px;
+    cursor: pointer;
+    display: flex;
+    gap: 8px;
+    align-items: baseline;
+    font-size: 0.85rem;
+}
+
+.cmd-suggest-item.hover,
+.cmd-suggest-item:hover {
+    background: var(--bg-hover);
+}
+
+.cmd-suggest-name {
+    color: var(--good);
+    font-weight: 600;
+    flex-shrink: 0;
+}
+
+.cmd-suggest-desc {
+    color: var(--text-3);
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.cmd-suggest-tool {
+    color: var(--text-2);
+    font-size: 0.75rem;
+    flex-shrink: 0;
+}
+
+/* ── Commands settings tab ── */
+.cmd-hint {
+    color: var(--text-3);
+    margin-bottom: 16px;
+    font-size: 0.85rem;
+}
+
+.cmd-empty {
+    color: var(--text-3);
+    font-style: italic;
+    margin-bottom: 12px;
+}
+
+.cmd-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-bottom: 12px;
+}
+
+.cmd-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    background: var(--bg-1);
+    border-radius: 6px;
+}
+
+.cmd-info {
+    flex: 1;
+    display: flex;
+    gap: 8px;
+    align-items: baseline;
+    font-size: 0.85rem;
+    overflow: hidden;
+}
+
+.cmd-name {
+    color: var(--good);
+    font-weight: 600;
+    flex-shrink: 0;
+}
+
+.cmd-desc {
+    color: var(--text-3);
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.cmd-tool {
+    color: var(--text-2);
+    font-size: 0.75rem;
+    flex-shrink: 0;
+}
+
+.add-cmd-btn {
+    margin-top: 4px;
+}
+
+.cmd-form {
+    margin-top: 12px;
+    padding: 12px;
+    background: var(--bg-1);
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.cmd-form-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
 }

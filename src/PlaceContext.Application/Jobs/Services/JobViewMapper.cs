@@ -38,6 +38,7 @@ internal static class JobViewMapper
         ReturnFileName: job.ReturnFileName,
         RetryCount: job.RetryCount,
         RetryDelaySeconds: job.RetryDelaySeconds,
+        McpConnectionIds: job.McpConnectionIds.ToList(),
         CreatedAt: job.CreatedAt,
         UpdatedAt: job.UpdatedAt);
 

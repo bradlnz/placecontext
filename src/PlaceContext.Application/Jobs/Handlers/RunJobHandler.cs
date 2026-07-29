@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Text.Json;
 using System.Text;
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Dtos;
@@ -40,7 +41,10 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
     private readonly JobRunDataRecorder? _runData;
     private readonly DataMappingIngestionService? _dataMappings;
     private readonly EntityTagService? _entityTags;
+    private readonly IMcpConnectionRepository? _mcpRepo;
+    private readonly IDataEncryptor? _encryptor;
     private IReadOnlyDictionary<string, string> _runSecrets = new Dictionary<string, string>();
+    private IReadOnlyDictionary<string, string> _mcpEnv = new Dictionary<string, string>();
 
     public RunJobHandler(
         IJobRepository jobs,
@@ -58,7 +62,9 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
         PostJobActionService? postActions = null,
         JobRunDataRecorder? runData = null,
         DataMappingIngestionService? dataMappings = null,
-        EntityTagService? entityTags = null)
+        EntityTagService? entityTags = null,
+        IMcpConnectionRepository? mcpRepo = null,
+        IDataEncryptor? encryptor = null)
     {
         _secretRepo = secretRepo;
         _secretProtector = secretProtector;
@@ -66,6 +72,8 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
         _runData = runData;
         _dataMappings = dataMappings;
         _entityTags = entityTags;
+        _mcpRepo = mcpRepo;
+        _encryptor = encryptor;
         _jobs = jobs;
         _runs = runs;
         _runner = runner;
@@ -96,6 +104,9 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
         // Load the project's vault secrets (decrypted) for injection as env into each sandbox. Never
         // persisted to the run snapshot — only merged into the live WorkloadRunRequest below.
         _runSecrets = await LoadSecretsAsync(job.ProjectId, ct);
+
+        // Load MCP connection tokens for the job's enabled connections. Injected as env var.
+        _mcpEnv = await LoadMcpEnvAsync(job.McpConnectionIds, ct);
 
         // Resolve the execution plan: replaying a prior run reproduces its captured snapshot verbatim,
         // otherwise we run the job's current spec (optionally with a single-shard input override).
@@ -242,7 +253,7 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
             var correlationId = $"{runId:N}-map-{index}";
             // Source/env/egress come from the effective plan (job spec or a replayed snapshot); the
             // exit-code policy and timeout are job metadata not captured in the snapshot.
-            var request = BuildRequest(map.Source, payload, MergeSecrets(map.Env),
+            var request = BuildRequest(map.Source, payload, MergeMcpEnv(MergeSecrets(map.Env)),
                 Array.Empty<(string, string)>(), correlationId, allowEgress, job.TimeoutSeconds);
 
             var result = await _runner.RunAsync(request, ct);
@@ -283,7 +294,7 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
             .ToList();
 
         var correlationId = $"{runId:N}-reduce";
-        var request = BuildRequest(reduceSpec.Source, "{}", MergeSecrets(reduceSpec.Env),
+        var request = BuildRequest(reduceSpec.Source, "{}", MergeMcpEnv(MergeSecrets(reduceSpec.Env)),
             artifactMounts, correlationId, allowEgress, job.TimeoutSeconds);
 
         var result = await _runner.RunAsync(request, ct);
@@ -361,6 +372,46 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
         var merged = new Dictionary<string, string>(_runSecrets);
         foreach (var (k, v) in env) merged[k] = v;
         return merged;
+    }
+
+    // MCP connection tokens are injected on top of the merged env.
+    private IReadOnlyDictionary<string, string> MergeMcpEnv(IReadOnlyDictionary<string, string> env)
+    {
+        if (_mcpEnv.Count == 0) return env;
+        var merged = new Dictionary<string, string>(env);
+        foreach (var (k, v) in _mcpEnv) merged[k] = v;
+        return merged;
+    }
+
+    // Load MCP connection tokens for the job's enabled connections. Returns empty if none.
+    private async Task<IReadOnlyDictionary<string, string>> LoadMcpEnvAsync(IReadOnlyList<Guid> mcpConnectionIds, CancellationToken ct)
+    {
+        if (_mcpRepo is null || _encryptor is null || mcpConnectionIds.Count == 0)
+            return new Dictionary<string, string>();
+
+        var env = new Dictionary<string, string>();
+        var connections = new List<(string Name, string Url, string Token)>();
+        var purpose = "mcp.oauth.tokens";
+
+        foreach (var connId in mcpConnectionIds)
+        {
+            var conn = await _mcpRepo.GetByIdAsync(connId, ct);
+            if (conn is null) continue;
+
+            var token = conn.AuthType == "oauth"
+                ? (_encryptor.Unprotect(conn.OAuthAccessToken, purpose) ?? "")
+                : conn.AuthToken ?? "";
+
+            connections.Add((conn.Name, conn.EndpointUrl ?? "", token));
+        }
+
+        if (connections.Count > 0)
+        {
+            env["MCP_CONNECTIONS_JSON"] = JsonSerializer.Serialize(
+                connections.Select(c => new { c.Name, Url = c.Url, Token = c.Token }));
+        }
+
+        return env;
     }
 
     // ---- RUN SUMMARY EMBEDDING ----

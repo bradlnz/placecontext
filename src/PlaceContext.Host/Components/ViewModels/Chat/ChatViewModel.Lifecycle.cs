@@ -39,6 +39,7 @@ public sealed partial class ChatViewModel
                 LoadAgentConfigAsync(),
                 LoadSessionsAsync(),
                 LoadMcpConnectionsAsync(),
+                LoadCommandsAsync(),
                 LoadPanelArtifactsAsync());
             if (Sessions.Count > 0)
                 await SelectSessionAsync(Sessions[0]);
@@ -68,6 +69,7 @@ public sealed partial class ChatViewModel
         ToolHistory.Clear();
         await LoadSessionsAsync();
         await LoadMcpConnectionsAsync();
+        await LoadCommandsAsync();
         await LoadPanelArtifactsAsync();
         NewSession();
         WorkspaceLoaded = true;

@@ -98,6 +98,7 @@ public sealed partial class JobsViewModel
         EdPostJobActions.Clear();
         EdReturnType = PlaceContext.Domain.ValueObjects.JobReturnType.Json;
         EdReturnFileName = "";
+        EdMcpConnectionIds.Clear();
         EditorError = null;
         EditorTab = "details";
         ShowEditor = true;
@@ -129,6 +130,9 @@ public sealed partial class JobsViewModel
         EdPostJobActions.AddRange(job.PostJobActions);
         EdReturnType = job.ReturnType;
         EdReturnFileName = job.ReturnFileName ?? "";
+        EdMcpConnectionIds.Clear();
+        foreach (var id in job.McpConnectionIds)
+            EdMcpConnectionIds.Add(id.ToString());
         EditorError = null;
         EditorTab = "details";
         SelectedTriggerId = null;
@@ -232,6 +236,8 @@ public sealed partial class JobsViewModel
                     mapFiles = EdMapFiles.Select(f => f.Path == entry ? f with { Content = EdMapSource } : f).ToList();
                 }
 
+                var mcpIds = EdMcpConnectionIds.Select(id => Guid.Parse(id)).ToList();
+
                 var cmd = new UpdateJobCommand(
                     JobId: EditJobId.Value,
                     Name: EdName.Trim(),
@@ -257,13 +263,16 @@ public sealed partial class JobsViewModel
                     ReturnType: EdReturnType,
                     ReturnFileName: string.IsNullOrWhiteSpace(EdReturnFileName) ? null : EdReturnFileName.Trim(),
                     RetryCount: EdRetryCount,
-                    RetryDelaySeconds: EdRetryDelaySeconds);
+                    RetryDelaySeconds: EdRetryDelaySeconds,
+                    McpConnectionIds: mcpIds);
 
                 await _svc.UpdateJobAsync(cmd);
                 Message = $"Job '{EdName.Trim()}' updated.";
             }
             else
             {
+                var mcpIds = EdMcpConnectionIds.Select(id => Guid.Parse(id)).ToList();
+
                 var cmd = new CreateJobCommand(
                     ProjectId: ProjectId,
                     Name: EdName.Trim(),
@@ -288,7 +297,8 @@ public sealed partial class JobsViewModel
                     ReturnType: EdReturnType,
                     ReturnFileName: string.IsNullOrWhiteSpace(EdReturnFileName) ? null : EdReturnFileName.Trim(),
                     RetryCount: EdRetryCount,
-                    RetryDelaySeconds: EdRetryDelaySeconds);
+                    RetryDelaySeconds: EdRetryDelaySeconds,
+                    McpConnectionIds: mcpIds);
 
                 await _svc.CreateJobAsync(cmd);
                 Message = $"Job '{EdName.Trim()}' created.";
