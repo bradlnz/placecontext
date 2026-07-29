@@ -583,7 +583,6 @@
                     <div class="settings-tabs">
                         <button class="tab-btn @(Vm.SettingsTab == "prompt" ? "active" : "")" @onclick="@(() => Vm.SettingsTab = "prompt")">Prompt</button>
                         <button class="tab-btn @(Vm.SettingsTab == "rag" ? "active" : "")" @onclick="@(() => Vm.SettingsTab = "rag")">RAG</button>
-                        <button class="tab-btn @(Vm.SettingsTab == "mcp" ? "active" : "")" @onclick="SwitchToMcpTab">MCP Servers</button>
                         <button class="tab-btn @(Vm.SettingsTab == "commands" ? "active" : "")" @onclick="@(() => Vm.SettingsTab = "commands")">Commands</button>
                     </div>
 
@@ -703,148 +702,7 @@
                             }
                         </div>
                     }
-                    else if (Vm.SettingsTab == "mcp")
-                    {
-                        <div class="mcp-section">
-                            @if (Vm.McpConnections.Count == 0)
-                            {
-                                <div class="mcp-empty">
-                                    <p>No MCP servers configured yet.</p>
-                                    <span>Add external tool servers to extend agent capabilities.</span>
-                                </div>
-                            }
-                            else
-                            {
-                                <div class="mcp-list">
-                                    @foreach (var mcp in Vm.McpConnections)
-                                    {
-                                        <div class="mcp-item @(mcp.Enabled ? "" : "disabled")">
-                                            <div class="mcp-info">
-                                                <span class="mcp-name">@mcp.Name</span>
-                                                <span class="mcp-badge">@mcp.Transport</span>
-                                                @if (mcp.AuthType == "oauth")
-                                                {
-                                                    var isExpired = mcp.OAuthTokenExpiresAt.HasValue && mcp.OAuthTokenExpiresAt.Value <= DateTimeOffset.UtcNow;
-                                                    var isConnected = mcp.LastStatus?.StartsWith("oauth:connected") == true;
-                                                    <span class="mcp-badge oauth @(isExpired ? "expired" : isConnected ? "active" : "")">
-                                                        @(isExpired ? "token expired" : isConnected ? "oauth connected" : "oauth")
-                                                    </span>
-                                                }
-                                                @if (!string.IsNullOrEmpty(mcp.LastStatus))
-                                                {
-                                                    <span class="mcp-status @(mcp.LastStatus.StartsWith("connected") || mcp.LastStatus.StartsWith("http:2") || mcp.LastStatus.StartsWith("oauth:connected") ? "ok" : "err")">@mcp.LastStatus</span>
-                                                }
-                                            </div>
-                                            <div class="mcp-actions">
-                                                @if (mcp.AuthType == "oauth")
-                                                {
-                                                    <button class="dcbtn xs" @onclick="@(() => StartOAuthFlow(mcp.Id))">
-                                                        @(mcp.OAuthTokenExpiresAt.HasValue && mcp.OAuthTokenExpiresAt.Value <= DateTimeOffset.UtcNow ? "Reconnect" : "Auth")
-                                                    </button>
-                                                }
-                                                <button class="dcbtn xs" @onclick="@(() => TestMcpConnectionAsync(mcp.Id))">Test</button>
-                                                <button class="dcbtn xs danger" @onclick="@(() => DeleteMcpConnectionAsync(mcp.Id))">×</button>
-                                            </div>
-                                        </div>
-                                    }
-                                </div>
-                            }
-                            <button class="dcbtn sm primary add-mcp-btn" @onclick="ShowAddMcp">+ Add MCP Server</button>
 
-                            @if (Vm.ShowAddMcp)
-                            {
-                                <div class="mcp-form">
-                                    <div class="mcp-form-title">New MCP Server</div>
-                                    <div class="dcfield">
-                                        <label>Name</label>
-                                        <input class="dcinput" @bind="Vm.NewMcpName" placeholder="My MCP Server" />
-                                    </div>
-                                    <div class="dcfield">
-                                        <label>Transport</label>
-                                        <select class="dcinput" @bind="Vm.NewMcpTransport">
-                                            <option value="http">HTTP</option>
-                                            <option value="sse">SSE</option>
-                                            <option value="stdio">Stdio</option>
-                                        </select>
-                                    </div>
-                                    @if (Vm.NewMcpTransport != "stdio")
-                                    {
-                                        <div class="dcfield">
-                                            <label>Endpoint URL</label>
-                                            <input class="dcinput" @bind="Vm.NewMcpEndpoint" placeholder="http://localhost:3001/mcp" />
-                                        </div>
-                                    }
-                                    else
-                                    {
-                                        <div class="dcfield">
-                                            <label>Command</label>
-                                            <input class="dcinput" @bind="Vm.NewMcpCommand" placeholder="npx" />
-                                        </div>
-                                        <div class="dcfield">
-                                            <label>Args (JSON array)</label>
-                                            <input class="dcinput" @bind="Vm.NewMcpArgs" placeholder='["-y", "@@modelcontextprotocol/server-filesystem", "/path"]' />
-                                        </div>
-                                    }
-                                    <div class="mcp-auth-section">
-                                        <div class="mcp-auth-header" @onclick="@(() => Vm.ShowAuthFields = !Vm.ShowAuthFields)">
-                                            <span>Authentication</span>
-                                            <span class="mcp-auth-chevron">@(Vm.ShowAuthFields ? "▾" : "▸")</span>
-                                        </div>
-                                        @if (Vm.ShowAuthFields)
-                                        {
-                                            <div class="dcfield">
-                                                <label>Auth Type</label>
-                                                <select class="dcinput" @bind="Vm.NewMcpAuthType">
-                                                    <option value="none">None</option>
-                                                    <option value="bearer">Bearer Token</option>
-                                                    <option value="apikey">API Key</option>
-                                                    <option value="header">Custom Header</option>
-                                                    <option value="oauth">OAuth 2.1</option>
-                                                </select>
-                                            </div>
-                                            @if (Vm.NewMcpAuthType == "bearer")
-                                            {
-                                                <div class="dcfield">
-                                                    <label>Bearer Token</label>
-                                                    <input class="dcinput" type="password" @bind="Vm.NewMcpAuthToken" placeholder="eyJhbGci..." />
-                                                </div>
-                                            }
-                                            else if (Vm.NewMcpAuthType == "apikey")
-                                            {
-                                                <div class="dcfield">
-                                                    <label>API Key</label>
-                                                    <input class="dcinput" type="password" @bind="Vm.NewMcpAuthToken" placeholder="sk-..." />
-                                                </div>
-                                            }
-                                            else if (Vm.NewMcpAuthType == "header")
-                                            {
-                                                <div class="dcfield">
-                                                    <label>Header Name</label>
-                                                    <input class="dcinput" @bind="Vm.NewMcpAuthHeader" placeholder="X-API-Key" />
-                                                </div>
-                                                <div class="dcfield">
-                                                    <label>Header Value</label>
-                                                    <input class="dcinput" type="password" @bind="Vm.NewMcpAuthToken" placeholder="value" />
-                                                </div>
-                                            }
-                                            else if (Vm.NewMcpAuthType == "oauth")
-                                            {
-                                                <div class="dcfield">
-                                                    <label>Scopes (optional)</label>
-                                                    <input class="dcinput" @bind="Vm.NewMcpOAuthScopes" placeholder="openid profile" />
-                                                </div>
-                                                <div class="dchint">The OAuth flow will open in a popup. The external server must expose <code>/.well-known/oauth-authorization-server</code>.</div>
-                                            }
-                                        }
-                                    </div>
-                                    <div class="mcp-form-actions">
-                                        <button class="dcbtn xs" @onclick="@(() => Vm.ShowAddMcp = false)">Cancel</button>
-                                        <button class="dcbtn xs primary" @onclick="AddMcpConnectionAsync">Add</button>
-                                    </div>
-                                </div>
-                            }
-                        </div>
-                    }
                 </div>
                 <div class="dcmodal-foot">
                     <button class="dcbtn" @onclick="CloseSettings">Cancel</button>
@@ -861,9 +719,7 @@
     private ElementReference _messagesRef;
     private ElementReference _scrollAnchor;
     private ElementReference _fileInputRef;
-    private bool _oauthListenerRegistered;
     private Action? _onUiChangedHandler;
-    private EventHandler? _onMcpOAuthCompletedHandler;
     private bool _showCmdSuggest;
     private List<PlaceContext.Application.Dtos.ChatCommandView> _filteredCmds = [];
     private int _selectedCmdIdx;
@@ -873,9 +729,7 @@
         base.OnInitialized();
         Vm.Attach(() => InvokeAsync(StateHasChanged));
         _onUiChangedHandler = async () => await InvokeAsync(OnUiChanged);
-        _onMcpOAuthCompletedHandler = async (_, __) => await InvokeAsync(OnMcpOAuthCompletedHandler);
         Ui.OnChanged += _onUiChangedHandler;
-        OnMcpOAuthCompleted += _onMcpOAuthCompletedHandler;
     }
 
     protected override async Task OnInitializedAsync()
@@ -887,18 +741,6 @@
     {
         if (firstRender)
         {
-            if (!_oauthListenerRegistered)
-            {
-                _oauthListenerRegistered = true;
-                await JS.InvokeVoidAsync("eval", @"
-                    window.__mcpOAuthListener = function(e) {
-                        if (e.data && e.data.startsWith && e.data.startsWith('mcp-oauth-')) {
-                            DotNet.invokeMethodAsync('PlaceContext.Host', 'OnMcpOAuthCallback', e.data);
-                        }
-                    };
-                    window.addEventListener('message', window.__mcpOAuthListener);
-                ");
-            }
             await JS.InvokeVoidAsync("placecontext.setupDropZone", _fileInputRef);
             try
             {
@@ -938,25 +780,11 @@
     {
         Vm.Detach();
         if (_onUiChangedHandler is not null) Ui.OnChanged -= _onUiChangedHandler;
-        if (_onMcpOAuthCompletedHandler is not null) OnMcpOAuthCompleted -= _onMcpOAuthCompletedHandler;
     }
 
     private async Task OnUiChanged()
     {
         Vm.OnProjectChanged();
-        StateHasChanged();
-    }
-
-    private async Task SwitchToMcpTab()
-    {
-        Vm.SettingsTab = "mcp";
-        await Vm.LoadMcpConnectionsAsync();
-        StateHasChanged();
-    }
-
-    private async Task OnMcpOAuthCompletedHandler()
-    {
-        await Vm.LoadMcpConnectionsAsync();
         StateHasChanged();
     }
 
@@ -1010,26 +838,6 @@
     private async Task SaveSettings()
     {
         await Vm.SaveSettingsAsync();
-    }
-
-    private void ShowAddMcp()
-    {
-        Vm.ShowAddMcpForm();
-    }
-
-    private async Task AddMcpConnectionAsync()
-    {
-        await Vm.AddMcpConnectionAsync();
-    }
-
-    private async Task TestMcpConnectionAsync(Guid id)
-    {
-        await Vm.TestMcpConnectionAsync(id);
-    }
-
-    private async Task DeleteMcpConnectionAsync(Guid id)
-    {
-        await Vm.DeleteMcpConnectionAsync(id);
     }
 
     private async Task StarterPromptAsync(string prompt)
@@ -1203,19 +1011,6 @@
         Vm.Input = $"Please summarize the attached file \"{Vm.AttachedFileName}\" and ask what I would like to do with it.";
         await Send();
     }
-
-    private async Task StartOAuthFlow(Guid connectionId)
-    {
-        await JS.InvokeVoidAsync("open", $"/mcp-oauth/start?connectionId={connectionId}", "_blank");
-    }
-
-    [JSInvokable]
-    public static async Task OnMcpOAuthCallback(string message)
-    {
-        OnMcpOAuthCompleted?.Invoke(null, EventArgs.Empty);
-    }
-
-    internal static event EventHandler? OnMcpOAuthCompleted;
 
     // ── Render helpers (Blazor-specific: MarkupString / RenderFragment) ──
 

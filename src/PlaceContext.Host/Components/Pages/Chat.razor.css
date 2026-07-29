@@ -810,7 +810,6 @@
 .settings-body > .dcfield,
 .settings-body > .settings-row,
 .settings-body > .rag-settings,
-.settings-body > .mcp-section,
 .settings-body > .cmd-section {
     padding: 16px 18px;
 }
@@ -1026,146 +1025,6 @@
     color: white;
 }
 
-/* MCP connections */
-.mcp-section {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-}
-
-.mcp-empty {
-    text-align: center;
-    padding: 24px 16px;
-    color: var(--text-3);
-}
-
-.mcp-empty p {
-    margin: 0 0 4px 0;
-    font-size: 13px;
-    color: var(--text-2);
-    font-weight: 500;
-}
-
-.mcp-empty span {
-    font-size: 12px;
-}
-
-.mcp-list {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-}
-
-.mcp-item {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 10px 12px;
-    background: var(--card-2);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    font-size: 13px;
-    transition: border-color 0.15s;
-}
-
-.mcp-item:hover {
-    border-color: var(--border-2);
-}
-
-.mcp-item.disabled {
-    opacity: 0.5;
-}
-
-.mcp-info {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    min-width: 0;
-}
-
-.mcp-name {
-    font-weight: 500;
-    color: var(--text);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.mcp-badge {
-    font-size: 10px;
-    font-weight: 600;
-    letter-spacing: 0.4px;
-    text-transform: uppercase;
-    color: var(--brand-2);
-    background: var(--brand-bg);
-    padding: 2px 6px;
-    border-radius: 4px;
-    font-family: var(--font-mono);
-    flex-shrink: 0;
-}
-
-.mcp-status {
-    font-size: 11px;
-    font-family: var(--font-mono);
-    color: var(--text-3);
-}
-
-.mcp-status.ok {
-    color: var(--good);
-}
-
-.mcp-status.err {
-    color: var(--bad);
-}
-
-.mcp-actions {
-    display: flex;
-    gap: 4px;
-    flex-shrink: 0;
-}
-
-.dcbtn.xs {
-    padding: 4px 8px;
-    font-size: 11px;
-}
-
-.dcbtn.xs.danger {
-    color: var(--bad);
-}
-
-.add-mcp-btn {
-    align-self: flex-start;
-}
-
-.mcp-form {
-    padding: 14px;
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-}
-
-.mcp-form-title {
-    font-size: 10px;
-    font-weight: 700;
-    letter-spacing: 0.6px;
-    text-transform: uppercase;
-    color: var(--text-3);
-}
-
-.mcp-form .dcfield {
-    gap: 4px;
-}
-
-.mcp-form-actions {
-    display: flex;
-    gap: 6px;
-    justify-content: flex-end;
-    margin-top: 4px;
-}
-
 /* RAG settings */
 .rag-settings {
     display: flex;
@@ -1271,33 +1130,6 @@
 
 .qa-btn svg {
     flex-shrink: 0;
-}
-
-/* MCP auth section */
-.mcp-auth-section {
-    margin-top: 8px;
-    border-top: 1px solid var(--border);
-    padding-top: 10px;
-}
-
-.mcp-auth-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 4px 0;
-    cursor: pointer;
-    font-size: 12px;
-    font-weight: 500;
-    color: var(--text-2);
-}
-
-.mcp-auth-header:hover {
-    color: var(--text);
-}
-
-.mcp-auth-chevron {
-    font-size: 10px;
-    color: var(--text-3);
 }
 
 /* ── Skeleton loaders ─────────────────────────────────────────────── */
