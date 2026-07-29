@@ -70,7 +70,7 @@
                 var groupActive = href is not null && PathMatches(new Uri(Nav.Uri).AbsolutePath.TrimEnd('/'), href);
                 <div class="nav-group">
                     <button class="dcnav nav-group-toggle@(groupActive ? " active" : null)"
-                            @onclick="@(() => { ToggleGroup(item.Id); if (href is not null) Nav.NavigateTo(href); })">
+                            @onclick="@(() => ToggleGroup(item.Id))">
                         <span class="bar"></span>@Icon(item.Icon ?? "grid")<span class="nav-label">@item.Label</span>
                         <span class="nav-caret-icon @(expanded ? "open" : null)">@Caret()</span>
                     </button>
