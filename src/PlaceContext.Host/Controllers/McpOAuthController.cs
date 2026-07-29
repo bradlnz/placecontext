@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Mvc;
 using PlaceContext.Application.Ports;
 using PlaceContext.Domain.Mcp;
 using PlaceContext.Domain.Repositories;
+using PlaceContext.Application;
 
 namespace PlaceContext.Host.Controllers;
 
@@ -18,6 +19,7 @@ namespace PlaceContext.Host.Controllers;
 public sealed class McpOAuthController : ControllerBase
 {
     private readonly IMcpConnectionRepository _mcpConnections;
+    private readonly IUnitOfWork _uow;
     private readonly IDataEncryptor _encryptor;
     private readonly IHttpClientFactory _http;
     private readonly IConfiguration _config;
@@ -30,12 +32,14 @@ public sealed class McpOAuthController : ControllerBase
 
     public McpOAuthController(
         IMcpConnectionRepository mcpConnections,
+        IUnitOfWork uow,
         IDataEncryptor encryptor,
         IHttpClientFactory http,
         IConfiguration config,
         ILogger<McpOAuthController> log)
     {
         _mcpConnections = mcpConnections;
+        _uow = uow;
         _encryptor = encryptor;
         _http = http;
         _config = config;
@@ -194,6 +198,7 @@ public sealed class McpOAuthController : ControllerBase
                 conn.SetOAuthCredentials(oauthState.ClientId, conn.OAuthScopes, DateTimeOffset.UtcNow);
             conn.RecordConnection("oauth:connected", DateTimeOffset.UtcNow);
             await _mcpConnections.UpdateAsync(conn, HttpContext.RequestAborted);
+            await _uow.SaveChangesAsync(HttpContext.RequestAborted);
 
             // Clear the state cookie
             Response.Cookies.Delete(StateCookie);
@@ -254,6 +259,7 @@ public sealed class McpOAuthController : ControllerBase
             conn.StoreOAuthTokens(encryptedAccess, encryptedRefresh, expiresAt, DateTimeOffset.UtcNow);
             conn.RecordConnection("oauth:connected", DateTimeOffset.UtcNow);
             await _mcpConnections.UpdateAsync(conn, HttpContext.RequestAborted);
+            await _uow.SaveChangesAsync(HttpContext.RequestAborted);
 
             return Ok(new { accessToken = tokenResponse.AccessToken, expiresAt });
         }
@@ -262,6 +268,7 @@ public sealed class McpOAuthController : ControllerBase
             _log.LogError(ex, "Token refresh failed for connection {ConnectionId}", connectionId);
             conn.RecordConnection("oauth:expired", DateTimeOffset.UtcNow);
             await _mcpConnections.UpdateAsync(conn, HttpContext.RequestAborted);
+            await _uow.SaveChangesAsync(HttpContext.RequestAborted);
             return BadRequest($"Token refresh failed: {ex.Message}");
         }
     }
