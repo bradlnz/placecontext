@@ -6,23 +6,36 @@ PROMPT_TEMPLATE = """An isometric, miniature-style architectural mockup of a sub
 TOOL_NAME = "generate_image"
 
 
+REQUIRED_FIELDS = [
+    "address", "total_area", "lot1_area", "lot1_label",
+    "lot2_area", "lot2_label", "street1", "street2",
+    "park_name", "park_distance",
+]
+
+
 def main():
     # Read the input payload (address, lot details, etc.).
     input_data = json.loads(sys.stdin.read() or "{}")
 
-    # Fill the prompt template with input values (or sensible defaults).
+    # Validate every required field is present and non-empty.
+    missing = [f for f in REQUIRED_FIELDS if not input_data.get(f)]
+    if missing:
+        print(f"Missing required input fields: {', '.join(missing)}", file=sys.stderr)
+        sys.exit(1)
+
+    # Fill the prompt template with the validated input values.
     prompt = PROMPT_TEMPLATE.format(
-        address=input_data.get("address", "36 Southern Cross Ave, Darra"),
-        address_upper=input_data.get("address", "36 Southern Cross Ave, Darra").upper(),
-        total_area=input_data.get("total_area", "1012 m²"),
-        lot1_area=input_data.get("lot1_area", "506 m²"),
-        lot1_label=input_data.get("lot1_label", "Existing Dwelling"),
-        lot2_area=input_data.get("lot2_area", "506 m²"),
-        lot2_label=input_data.get("lot2_label", "Proposed New Dwelling"),
-        street1=input_data.get("street1", "Southern Cross Ave"),
-        street2=input_data.get("street2", "Monier Rd"),
-        park_name=input_data.get("park_name", "Monier Road Park"),
-        park_distance=input_data.get("park_distance", "408m"),
+        address=input_data["address"],
+        address_upper=input_data["address"].upper(),
+        total_area=input_data["total_area"],
+        lot1_area=input_data["lot1_area"],
+        lot1_label=input_data["lot1_label"],
+        lot2_area=input_data["lot2_area"],
+        lot2_label=input_data["lot2_label"],
+        street1=input_data["street1"],
+        street2=input_data["street2"],
+        park_name=input_data["park_name"],
+        park_distance=input_data["park_distance"],
     )
 
     # Load the MCP connection details injected at runtime by the job system.
