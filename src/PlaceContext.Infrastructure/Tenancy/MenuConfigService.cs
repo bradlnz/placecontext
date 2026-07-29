@@ -39,6 +39,7 @@ public sealed class MenuConfigService : IMenuConfigService
         new("chains", "Chains", "link", "/project/{projectId}/chains", Permission.JobsView, "chain", null),
         new("schedules", "Schedules", "link", "/project/{projectId}/schedules", Permission.JobsView, "clock", null),
         new("data", "Data", "link", "/project/{projectId}/data", Permission.DataRead, "map", null),
+        new("data.tables", "Tables", "link", "/project/{projectId}/data", Permission.DataRead, null, null, "data"),
         new("data.analytics", "Analytics", "link", "/project/{projectId}/analytics", Permission.DataRead, null, null, "data"),
         new("data.datamap", "Data map", "link", "/project/{projectId}/datamap", Permission.DataRead, null, null, "data"),
         new("project.entities", "Business", "entities", null, Permission.DataRead, "briefcase", null),
