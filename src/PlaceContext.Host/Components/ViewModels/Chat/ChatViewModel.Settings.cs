@@ -29,7 +29,7 @@ public sealed partial class ChatViewModel
         catch { }
     }
 
-    public void OpenSettings()
+    public async Task OpenSettingsAsync()
     {
         PendingSystemPrompt = _systemPrompt;
         PendingPreamble = _preamble;
@@ -43,6 +43,7 @@ public sealed partial class ChatViewModel
         ShowAddMcp = false;
         ShowSettings = true;
         NotifyStateChanged();
+        await LoadMcpConnectionsAsync();
     }
 
     public void CloseSettings() { ShowSettings = false; NotifyStateChanged(); }

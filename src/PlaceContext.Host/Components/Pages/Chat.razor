@@ -38,7 +38,7 @@
             @if (Vm.ProjectId.HasValue)
             {
                 <button class="dcbtn sm" @onclick="ToggleSidePanel">@(Vm.ShowSidePanel ? "Hide Panel" : "Show Panel")</button>
-                <button class="dcbtn sm" @onclick="OpenSettings">⚙ Settings</button>
+                <button class="dcbtn sm" @onclick="OpenSettingsAsync">⚙ Settings</button>
             }
         </div>
     </div>
@@ -534,7 +534,7 @@
                     <div class="settings-tabs">
                         <button class="tab-btn @(Vm.SettingsTab == "prompt" ? "active" : "")" @onclick="@(() => Vm.SettingsTab = "prompt")">Prompt</button>
                         <button class="tab-btn @(Vm.SettingsTab == "rag" ? "active" : "")" @onclick="@(() => Vm.SettingsTab = "rag")">RAG</button>
-                        <button class="tab-btn @(Vm.SettingsTab == "mcp" ? "active" : "")" @onclick="@(() => Vm.SettingsTab = "mcp")">MCP Servers</button>
+                        <button class="tab-btn @(Vm.SettingsTab == "mcp" ? "active" : "")" @onclick="SwitchToMcpTab">MCP Servers</button>
                     </div>
 
                     @if (Vm.SettingsTab == "prompt")
@@ -837,6 +837,13 @@
         StateHasChanged();
     }
 
+    private async Task SwitchToMcpTab()
+    {
+        Vm.SettingsTab = "mcp";
+        await Vm.LoadMcpConnectionsAsync();
+        StateHasChanged();
+    }
+
     private async Task OnMcpOAuthCompletedHandler()
     {
         await Vm.LoadMcpConnectionsAsync();
@@ -880,9 +887,9 @@
         Vm.ShowSidePanel = !Vm.ShowSidePanel;
     }
 
-    private void OpenSettings()
+    private async Task OpenSettingsAsync()
     {
-        Vm.OpenSettings();
+        await Vm.OpenSettingsAsync();
     }
 
     private void CloseSettings()

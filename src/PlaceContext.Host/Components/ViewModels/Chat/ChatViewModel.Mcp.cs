@@ -19,6 +19,7 @@ public sealed partial class ChatViewModel
         if (!ProjectId.HasValue) return;
         try { McpConnections = await _svc.ListMcpConnectionsAsync(ProjectId.Value); }
         catch { McpConnections = Array.Empty<McpConnectionView>(); }
+        NotifyStateChanged();
     }
 
     public void ShowAddMcpForm()
