@@ -95,6 +95,7 @@ def call_tool(url, token, tool_name, arguments):
             "Content-Type": "application/json",
             "Accept": "*/*",
             "Authorization": f"Bearer {token}",
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
         },
         method="POST",
     )
