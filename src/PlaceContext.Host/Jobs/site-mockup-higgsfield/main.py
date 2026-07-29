@@ -134,7 +134,7 @@ def call_tool(url, token, tool_name, arguments):
         data=json.dumps(payload).encode(),
         headers={
             "Content-Type": "application/json",
-            "Accept": "*/*",
+            "Accept": "application/json, text/event-stream",
             "Authorization": f"Bearer {token}",
             "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
         },
