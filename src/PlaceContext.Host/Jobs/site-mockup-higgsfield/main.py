@@ -147,9 +147,18 @@ def call_tool(url, token, tool_name, arguments):
             if not raw:
                 print("MCP response body is empty", file=sys.stderr)
                 return None
-            preview = raw[:500].decode('utf-8', errors='replace')
-            print(f"MCP response preview: {preview}", file=sys.stderr)
-            return json.loads(raw)
+            text = raw.decode('utf-8', errors='replace')
+            # Parse SSE (text/event-stream): extract data: lines.
+            data_lines = []
+            for line in text.splitlines():
+                if line.startswith("data:"):
+                    data_lines.append(line[5:].strip())
+            if data_lines:
+                payload_text = "\n".join(data_lines)
+                print(f"MCP SSE payload preview: {payload_text[:300]}", file=sys.stderr)
+                return json.loads(payload_text)
+            # Fallback: try parsing entire body as JSON.
+            return json.loads(text)
     except urllib.error.HTTPError as e:
         body = e.read().decode()
         print(f"MCP call failed HTTP {e.code}: {body}", file=sys.stderr)
