@@ -31,6 +31,7 @@ using Microsoft.AspNetCore.DataProtection.XmlEncryption;
 using Microsoft.AspNetCore.DataProtection.KeyManagement;
 using PlaceContext.Infrastructure.Persistence;
 using Microsoft.AspNetCore.ResponseCompression;
+using Microsoft.AspNetCore.StaticFiles;
 
 // PlaceContext is a single hosted web app on http://localhost:7700, serving two surfaces from one
 // process and the same Postgres store:
@@ -367,8 +368,11 @@ else
 // product is no longer gated by an activation key.
 
 app.UseResponseCompression();
+var staticContentTypes = new FileExtensionContentTypeProvider();
+staticContentTypes.Mappings[".sh"] = "text/x-shellscript";
 app.UseStaticFiles(new StaticFileOptions
 {
+    ContentTypeProvider = staticContentTypes,
     // The vendored scripts (chart.umd.min.js, pcmonaco.js, pcgraph.js) and CSS were revalidated on
     // every page view. An hour of client caching removes that chatter without pinning upgrades:
     // assets are not fingerprinted, so keep the window modest rather than immutable.

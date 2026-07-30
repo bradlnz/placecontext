@@ -65,10 +65,6 @@
     margin-bottom: 16px;
 }
 
-.graph-card {
-    overflow: hidden;
-}
-
 .section-card {
     margin-top: 14px;
     overflow: hidden;
@@ -99,59 +95,8 @@
     color: var(--text-3);
 }
 
-.graph-legend {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    font-size: 10.5px;
-    color: var(--text-3);
-}
-
-.legend-item {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-}
-
-.legend-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: var(--brand);
-}
-
-.legend-dash {
-    width: 14px;
-    height: 0;
-    border-top: 1.5px dashed var(--warn);
-}
-
-.graph-body {
-    padding: 8px;
-    background: var(--bg);
-}
-
-.graph-empty {
-    height: 320px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: var(--text-3);
-    font-size: 12.5px;
-    text-align: center;
-}
-
-.graph-loading {
-    height: 320px;
-    padding: 20px;
-}
-
 .section-loading {
     padding: 12px 16px;
-}
-
-.inline-code {
-    margin: 0 5px;
 }
 
 .pad-card {

@@ -18,5 +18,8 @@ public sealed class TenantRow
     /// <summary>Portal menu layout JSON (order, labels, visibility); null = built-in defaults.</summary>
     public string? MenuJson { get; set; }
 
+    /// <summary>Artifacts page category/prefix rules JSON; null = built-in defaults.</summary>
+    public string? ArtifactViewJson { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; }
 }

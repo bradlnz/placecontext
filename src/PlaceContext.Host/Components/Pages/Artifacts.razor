@@ -7,6 +7,7 @@
 @inject PortalUiState Ui
 @inject NavigationManager Nav
 @inject PlaceContext.Application.Ports.IObjectStore Store
+@inject PlaceContext.Application.Ports.IArtifactViewConfigService ArtifactConfig
 @inject PlaceContext.Domain.Repositories.IRunArtifactLinkRepository Links
 @inject IPermissionService Permissions
 
@@ -29,6 +30,31 @@
                     <option value="@p.Id">@p.Name</option>
                 }
             </select>
+            <div class="artifact-type-bar" aria-label="Artifact type filters">
+                <button class="type-toggle @(string.IsNullOrEmpty(_categoryFilter) ? "active" : null)"
+                        @onclick="@(() => SetCategoryFilter(null))">
+                    <span>All</span><small>@BaseFiltered().Count</small>
+                </button>
+                @foreach (var category in _artifactConfig.Categories)
+                {
+                    <button class="type-toggle @(_categoryFilter == category.Id ? "active" : null)"
+                            title="Prefixes: @string.Join(", ", category.Prefixes)"
+                            @onclick="@(() => SetCategoryFilter(category.Id))">
+                        <span>@category.Label</span><small>@CategoryCount(category.Id)</small>
+                    </button>
+                }
+                @if (OtherCount() > 0)
+                {
+                    <button class="type-toggle @(_categoryFilter == OtherCategory ? "active" : null)"
+                            @onclick="@(() => SetCategoryFilter(OtherCategory))">
+                        <span>Other</span><small>@OtherCount()</small>
+                    </button>
+                }
+                @if (_canManageSettings)
+                {
+                    <a class="type-config" href="/settings/artifacts" title="Configure artifact filters">⚙</a>
+                }
+            </div>
             @if (_canDelete && _selected.Count > 0)
             {
                 <div class="bulk-bar">
@@ -57,9 +83,7 @@
             @if (totalGroups == 0)
             {
                 <div class="empty-note">
-                    @(string.IsNullOrWhiteSpace(_filter)
-                        ? "No stored artifacts here yet — every completed run generates one from its job's return type."
-                        : "No files match your search.")
+                    @EmptyMessage()
                 </div>
             }
             else
@@ -244,6 +268,12 @@
                     }
                 </div>
             }
+            else if (IsImage(_active))
+            {
+                <div class="image-view">
+                    <img src="@Url(_active)" class="artifact-image" alt="@_active.Title" />
+                </div>
+            }
             else if (Previewable(_active.ContentType))
             {
                 @* Relative /runs/… — browser keeps the public DNS host (never rewrite to in-cluster name).
@@ -273,6 +303,8 @@
     private ArtifactFileView? _active;
     private string _filter = "";
     private string _projectFilter = "";
+    private string? _categoryFilter;
+    private PlaceContext.Application.Ports.ArtifactViewConfig _artifactConfig = new([]);
     private System.Text.Json.JsonElement? _content;
     private string? _rawText;
     private (IReadOnlyList<string> Header, IReadOnlyList<IReadOnlyList<string>> Rows)? _csv;
@@ -287,9 +319,11 @@
     // UI-level hiding only — the actual DeleteArtifact(s) commands are also gated server-side (the
     // dispatcher rejects them for a caller lacking artifacts.delete regardless of what the UI shows).
     private bool _canDelete;
+    private bool _canManageSettings;
 
     private const int MaxInlineBytes = 2 * 1024 * 1024;
     private const int MaxCsvRows = 500;
+    private const string OtherCategory = "__other";
 
     // ── Pagination over the grouped (version-stacked) file list ─────────────────────────────────
     private const int FilesPageSize = 25;
@@ -306,6 +340,8 @@
     {
         Ui.Set("Artifacts", "every file your runs produced — click to view");
         _canDelete = await Permissions.HasAsync(Permission.ArtifactsDelete);
+        _canManageSettings = await Permissions.HasAsync(Permission.SettingsManage);
+        try { _artifactConfig = await ArtifactConfig.GetAsync(); } catch { }
         try { _projects = await Svc.GetProjectsAsync(); } catch { }
         // Default the filter to the project the sidebar is on; a project-scoped load pulls ALL of
         // that project's artifacts, so older files aren't hidden behind a global "recent" cap.
@@ -418,6 +454,14 @@
 
     private void GoToFilesPage(int page) => _filesPage = Math.Max(1, page);
 
+    private void SetCategoryFilter(string? category)
+    {
+        _categoryFilter = category;
+        _filesPage = 1;
+        _expanded = null;
+        _selected.Clear();
+    }
+
     public void Dispose()
     {
         _searchDebounce?.Cancel();
@@ -470,12 +514,47 @@
 
     private IReadOnlyList<ArtifactFileView> Filtered()
     {
+        IEnumerable<ArtifactFileView> q = BaseFiltered();
+        if (_categoryFilter == OtherCategory)
+            q = q.Where(file => _artifactConfig.CategoryFor(file.Title) is null);
+        else if (!string.IsNullOrWhiteSpace(_categoryFilter))
+            q = q.Where(file => string.Equals(
+                _artifactConfig.CategoryFor(file.Title),
+                _categoryFilter,
+                StringComparison.OrdinalIgnoreCase));
+        return q.ToList();
+    }
+
+    private IReadOnlyList<ArtifactFileView> BaseFiltered()
+    {
         IEnumerable<ArtifactFileView> q = _files;
         if (Guid.TryParse(_projectFilter, out var pid)) q = q.Where(f => f.ProjectId == pid);
         if (!string.IsNullOrWhiteSpace(_filter))
             q = q.Where(f => f.Title.Contains(_filter, StringComparison.OrdinalIgnoreCase)
                           || f.Kind.Contains(_filter, StringComparison.OrdinalIgnoreCase));
         return q.ToList();
+    }
+
+    private int CategoryCount(string categoryId) => BaseFiltered().Count(file =>
+        string.Equals(
+            _artifactConfig.CategoryFor(file.Title),
+            categoryId,
+            StringComparison.OrdinalIgnoreCase));
+
+    private int OtherCount() => BaseFiltered().Count(file =>
+        _artifactConfig.CategoryFor(file.Title) is null);
+
+    private string EmptyMessage()
+    {
+        if (!string.IsNullOrWhiteSpace(_filter)) return "No files match your search and selected filters.";
+        if (_categoryFilter == OtherCategory) return "No uncategorized artifact files match the selected project.";
+        if (!string.IsNullOrWhiteSpace(_categoryFilter))
+        {
+            var label = _artifactConfig.Categories
+                .FirstOrDefault(category => category.Id == _categoryFilter)?.Label ?? "this category";
+            return $"No {label} files match the selected project.";
+        }
+        return "No stored artifacts here yet — every completed run generates one from its job's return type.";
     }
 
     private async Task OpenAsync(ArtifactFileView a)
@@ -655,6 +734,18 @@
 
     private static bool IsJson(string ct) => ct.Contains("json", StringComparison.OrdinalIgnoreCase);
     private static bool IsCsv(string ct) => ct.Contains("csv", StringComparison.OrdinalIgnoreCase);
+    private static bool IsImage(ArtifactFileView artifact)
+    {
+        if (artifact.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase)) return true;
+        var extension = Path.GetExtension(artifact.Title);
+        return extension.Equals(".png", StringComparison.OrdinalIgnoreCase)
+            || extension.Equals(".jpg", StringComparison.OrdinalIgnoreCase)
+            || extension.Equals(".jpeg", StringComparison.OrdinalIgnoreCase)
+            || extension.Equals(".gif", StringComparison.OrdinalIgnoreCase)
+            || extension.Equals(".webp", StringComparison.OrdinalIgnoreCase)
+            || extension.Equals(".svg", StringComparison.OrdinalIgnoreCase)
+            || extension.Equals(".bmp", StringComparison.OrdinalIgnoreCase);
+    }
 
     private static bool Previewable(string ct) =>
         ct.StartsWith("text/") || ct.StartsWith("image/") || ct == "application/pdf"

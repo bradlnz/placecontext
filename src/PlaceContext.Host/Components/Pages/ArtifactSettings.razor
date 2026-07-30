@@ -1,0 +1,166 @@
+@page "/settings/artifacts"
+@layout PlaceContext.Host.Components.Layout.SettingsLayout
+@attribute [Authorize(Policy = Permission.SettingsManage)]
+@inject PlaceContext.Application.Ports.IArtifactViewConfigService Config
+@inject PortalUiState Ui
+
+<PageTitle>placecontext — Artifact filters</PageTitle>
+
+<div class="page">
+    <h2 class="page-title">Artifact filters</h2>
+    <div class="page-sub">
+        Group artifact files into named filter buttons using filename prefixes. Rules are checked
+        from top to bottom and matching is case-insensitive.
+    </div>
+
+    @if (_message is not null)
+    {
+        <div class="message @(_saved ? "ok" : null)">@_message</div>
+    }
+
+    <div class="dccard panel">
+        <div class="panel-head">
+            <div>
+                <div class="panel-title">Filter buttons</div>
+                <div class="panel-note">
+                    Example: <code>feasibility_v1_</code> → <strong>Feasibility Reports</strong>
+                </div>
+            </div>
+            <button class="dcbtn" @onclick="Reset">Reset defaults</button>
+        </div>
+
+        <div class="rules">
+            @if (_rows.Count == 0)
+            {
+                <div class="empty">No custom artifact filters. The page will show All and Other.</div>
+            }
+            @for (var index = 0; index < _rows.Count; index++)
+            {
+                var row = _rows[index];
+                var rowIndex = index;
+                <div class="rule">
+                    <div class="rule-order">
+                        <button class="dcbtn move" title="Move up" disabled="@(rowIndex == 0)"
+                                @onclick="@(() => Move(rowIndex, -1))">↑</button>
+                        <button class="dcbtn move" title="Move down" disabled="@(rowIndex == _rows.Count - 1)"
+                                @onclick="@(() => Move(rowIndex, 1))">↓</button>
+                    </div>
+                    <div class="rule-fields">
+                        <label>
+                            <span>Button label</span>
+                            <input class="dcinput" @bind="row.Label" placeholder="Feasibility Reports" />
+                        </label>
+                        <label>
+                            <span>Filename prefixes</span>
+                            <textarea class="dcinput prefixes" @bind="row.PrefixText"
+                                      placeholder="feasibility_v1_&#10;feasibility_v2_"></textarea>
+                            <small>One per line or comma-separated.</small>
+                        </label>
+                    </div>
+                    <button class="dcbtn remove" title="Remove filter"
+                            @onclick="@(() => Remove(row))">Remove</button>
+                </div>
+            }
+        </div>
+
+        <button class="dcbtn add" @onclick="AddRule">＋ Add filter</button>
+    </div>
+
+    <div class="actions">
+        <button class="dcbtn primary" disabled="@_saving" @onclick="SaveAsync">
+            @(_saving ? "Saving…" : "Save artifact filters")
+        </button>
+    </div>
+</div>
+
+@code {
+    private sealed class RuleRow
+    {
+        public string Id { get; set; } = "";
+        public string Label { get; set; } = "";
+        public string PrefixText { get; set; } = "";
+    }
+
+    private readonly List<RuleRow> _rows = [];
+    private bool _saving;
+    private bool _saved;
+    private string? _message;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Ui.Set("Settings", "Artifact filters");
+        LoadRows(await Config.GetAsync());
+    }
+
+    private void LoadRows(PlaceContext.Application.Ports.ArtifactViewConfig config)
+    {
+        _rows.Clear();
+        _rows.AddRange(config.Categories.Select(category => new RuleRow
+        {
+            Id = category.Id,
+            Label = category.Label,
+            PrefixText = string.Join(Environment.NewLine, category.Prefixes),
+        }));
+    }
+
+    private void AddRule() => _rows.Add(new RuleRow
+    {
+        Id = $"category-{Guid.NewGuid():N}",
+    });
+
+    private void Remove(RuleRow row) => _rows.Remove(row);
+
+    private void Move(int index, int delta)
+    {
+        var target = index + delta;
+        if (target < 0 || target >= _rows.Count) return;
+        (_rows[index], _rows[target]) = (_rows[target], _rows[index]);
+    }
+
+    private void Reset()
+    {
+        LoadRows(Config.DefaultConfig());
+        _saved = false;
+        _message = "Defaults restored locally. Save to apply them.";
+    }
+
+    private async Task SaveAsync()
+    {
+        _saving = true;
+        _saved = false;
+        _message = null;
+        try
+        {
+            var invalid = _rows.FirstOrDefault(row =>
+                string.IsNullOrWhiteSpace(row.Label) || ParsePrefixes(row.PrefixText).Count == 0);
+            if (invalid is not null)
+            {
+                _message = "Every filter needs a button label and at least one filename prefix.";
+                return;
+            }
+
+            var config = new PlaceContext.Application.Ports.ArtifactViewConfig(
+                _rows.Select(row => new PlaceContext.Application.Ports.ArtifactCategoryRule(
+                    row.Id,
+                    row.Label.Trim(),
+                    ParsePrefixes(row.PrefixText))).ToList());
+            await Config.SaveAsync(config);
+            LoadRows(await Config.GetAsync());
+            _saved = true;
+            _message = "Artifact filters saved.";
+        }
+        catch (Exception ex)
+        {
+            _message = ex.Message;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private static IReadOnlyList<string> ParsePrefixes(string value) =>
+        value.Split([',', '\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+}

@@ -28,6 +28,10 @@
 
   <ItemGroup>
     <Content Include="Auth\templates\*.html" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\join.sh"
+             Link="wwwroot\join.sh"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest" />
     <EmbeddedResource Include="Wiki\*.md" />
   </ItemGroup>
 

@@ -5,8 +5,6 @@
 @inject PortalUiState Ui
 @inject NavigationManager Nav
 @inject IJSRuntime JS
-@inject PlaceContext.Infrastructure.Operations.OperationCenter OpCenter
-@using Microsoft.Extensions.DependencyInjection
 @using PlaceContext.Application.Dtos
 
 <PageTitle>PlaceContext — Project</PageTitle>
@@ -29,7 +27,6 @@ else
                 </div>
                 <div class="project-path">@_overview.Path</div>
             </div>
-            <button class="dcbtn" @onclick="Rebuild" disabled="@_busy">@(_busy ? "running…" : "rebuild tree")</button>
         </div>
 
         @if (_message is not null) { <div class="message">@_message</div> }
@@ -44,38 +41,6 @@ else
 
         @if (_tab == "overview")
         {
-        <!-- graph (full width) -->
-        <div class="dccard graph-card">
-                <div class="card-head">
-                    <div class="head-title-group">
-                        <span class="card-title">Dependency graph</span>
-                        <span class="meta-mono">@(_graph?.NodeCount ?? 0) nodes · @(_graph?.LinkCount ?? 0) links</span>
-                    </div>
-                    <div class="graph-legend">
-                        <span class="legend-item"><span class="legend-dot"></span>god-node</span>
-                        <span class="legend-item"><span class="legend-dash"></span>ambiguous</span>
-                    </div>
-                </div>
-                <div class="graph-body">
-                    @if (_graph is null)
-                    {
-                        <div class="graph-loading">
-                            <Skeleton Kind="detail" Rows="4" />
-                        </div>
-                    }
-                    else if (_graph.NodeCount == 0)
-                    {
-                        <div class="graph-empty">
-                            No tree yet — click <code class="inline-code">rebuild tree</code> to build it from logged activity.
-                        </div>
-                    }
-                    else
-                    {
-                        <GraphCanvas Graph="_graph" Height="420" Searchable="true" AllowFullscreen="true" NodeUrl="OverviewNodeUrl" />
-                    }
-                </div>
-        </div>
-
         <!-- god-nodes -->
         <div class="dccard section-card pad-card">
                 <div class="god-head">
@@ -342,121 +307,12 @@ else
     [Parameter] public Guid Id { get; set; }
 
     private ProjectOverviewView? _overview;
-    private GraphVizView? _graph;
-
-    // The dependency graph carries ALL the related data: on top of the knowledge graph, every
-    // entity joins as a hub with sampled records, entity↔entity relations, tagged runs, and the
-    // latest version of each artifact — one brain for the whole project.
-    private readonly Dictionary<string, string> _overviewNodeUrls = new();
-
-    private string? OverviewNodeUrl(GraphNodeView node) => _overviewNodeUrls.GetValueOrDefault(node.Id);
-
-    private async Task<GraphVizView?> MergeDataGraphAsync(GraphVizView? graph)
-    {
-        _overviewNodeUrls.Clear();
-        try
-        {
-            var entities = await Svc.ListDataEntitiesAsync(Id);
-            if (entities.Count == 0) return graph;
-
-            var nodes = new List<GraphNodeView>(graph?.Nodes ?? Array.Empty<GraphNodeView>());
-            var links = new List<GraphLinkView>(graph?.Links ?? Array.Empty<GraphLinkView>());
-            // Membership by id — the run/artifact dedup checks below were O(nodes) list scans
-            // inside nested loops, which crawled once the graph grew.
-            var nodeIds = new HashSet<string>(nodes.Select(n => n.Id), StringComparer.Ordinal);
-            var degree = new Dictionary<string, int>();
-            void Link(string a, string b)
-            {
-                links.Add(new GraphLinkView(a, b, "Direct"));
-                degree[a] = degree.GetValueOrDefault(a) + 1;
-                degree[b] = degree.GetValueOrDefault(b) + 1;
-            }
-
-            // Each entity costs a live SQL sample + tagged-run + artifact lookups, all sequential
-            // on the circuit — bound the fan-out so the overview stays snappy on data-heavy projects.
-            foreach (var entity in entities.Take(12))
-            {
-                var eId = $"entity:{entity.Id}";
-                nodes.Add(new GraphNodeView(eId, entity.Name, 0, IsGod: true,
-                    Content: $"business entity · {entity.TableName}"));
-                _overviewNodeUrls[eId] = $"/project/{Id}/entity/{Uri.EscapeDataString(entity.Name)}";
-
-                foreach (var rel in entity.Relations)
-                {
-                    var target = entities.FirstOrDefault(x => string.Equals(x.Name, rel.TargetEntity, StringComparison.OrdinalIgnoreCase));
-                    if (target is not null) Link(eId, $"entity:{target.Id}");
-                }
-
-                // A sample of records under each entity hub (first text-looking column labels them).
-                try
-                {
-                    var rows = await Svc.ExecuteProjectDataAsync(Id, $"SELECT * FROM \"{entity.TableName.Replace("\"", "")}\" LIMIT 8");
-                    var labelIdx = 0;
-                    for (var c = 0; c < rows.Columns.Count; c++)
-                    {
-                        var v = rows.Rows.FirstOrDefault() is { } fr && c < fr.Count ? fr[c] : null;
-                        if (!string.Equals(rows.Columns[c], "id", StringComparison.OrdinalIgnoreCase)
-                            && v is not null && !double.TryParse(v, out _)) { labelIdx = c; break; }
-                    }
-                    for (var r = 0; r < rows.Rows.Count; r++)
-                    {
-                        var label = labelIdx < rows.Rows[r].Count ? rows.Rows[r][labelIdx] ?? "—" : "—";
-                        var rid = $"record:{entity.Id}:{r}";
-                        nodes.Add(new GraphNodeView(rid, label, 0, false, Content: $"{entity.Name} record", Kind: "human"));
-                        _overviewNodeUrls[rid] = $"/project/{Id}/entity/{Uri.EscapeDataString(entity.Name)}?record={Uri.EscapeDataString(label ?? "")}";
-                        Link(eId, rid);
-                    }
-                }
-                catch { }
-
-                // Tagged runs + the latest version of each artifact.
-                try
-                {
-                    var runIds = (await Svc.ListEntityRunsAsync(entity.Id)).Take(5).ToList();
-                    var arts = new List<PlaceContext.Application.Features.RunArtifactLinkView>();
-                    foreach (var runId in runIds)
-                    {
-                        var rid = $"run:{runId}";
-                        if (nodeIds.Add(rid))
-                        {
-                            nodes.Add(new GraphNodeView(rid, $"run {runId.ToString("N")[..8]}", 0, false, Content: "tagged job run"));
-                            _overviewNodeUrls[rid] = $"/observability?run={runId}";
-                        }
-                        Link(eId, rid);
-                        try { arts.AddRange(await Svc.ListRunArtifactsAsync(runId)); } catch { }
-                    }
-                    foreach (var g in arts.GroupBy(a => (a.Kind, a.Title)))
-                    {
-                        var latest = g.OrderByDescending(a => a.CreatedAt).First();
-                        var aid = $"art:{latest.Id}";
-                        var label = g.Count() > 1 ? $"{latest.Title} · v{g.Count()}" : latest.Title;
-                        if (nodeIds.Add(aid))
-                        {
-                            nodes.Add(new GraphNodeView(aid, label, 0, false,
-                                Content: $"artifact · {latest.Kind}", Kind: "good", Labeled: true));
-                            _overviewNodeUrls[aid] = $"/artifacts?artifact={latest.Id}";
-                        }
-                        Link($"run:{latest.RunId}", aid);
-                    }
-                }
-                catch { }
-            }
-
-            nodes = nodes.Select(n => degree.TryGetValue(n.Id, out var d) ? n with { Degree = n.Degree + d } : n).ToList();
-            return new GraphVizView(Id, nodes.Count, links.Count, nodes, links);
-        }
-        catch
-        {
-            return graph; // the knowledge graph alone is still a fine overview
-        }
-    }
     private ActivityTimelineView? _timeline;
     private IReadOnlyList<DecisionView>? _decisions;
 
     private string _tab = "overview";
 
     private string? _message;
-    private bool _busy;
 
     private RequirementsView? _requirements;
     private string _reqDraft = string.Empty;
@@ -507,12 +363,11 @@ else
 
     private async Task LoadDetailsAsync()
     {
-        var graphTask = LoadGraphAsync();
         var timelineTask = LoadTimelineAsync();
         var requirementsTask = LoadRequirementsAsync();
         var decisionsTask = LoadDecisionsAsync();
 
-        await Task.WhenAll(graphTask, timelineTask, requirementsTask, decisionsTask);
+        await Task.WhenAll(timelineTask, requirementsTask, decisionsTask);
         await InvokeAsync(StateHasChanged);
     }
 
@@ -520,19 +375,6 @@ else
     {
         try { _mcpConnections = await Svc.ListMcpConnectionsAsync(Id); }
         catch (Exception ex) { _message = $"Could not load MCP connections: {ex.Message}"; }
-    }
-
-    private async Task LoadGraphAsync()
-    {
-        try
-        {
-            var graph = await Svc.GetGraphVizAsync(Id);
-            _graph = await MergeDataGraphAsync(graph);
-        }
-        catch (Exception ex)
-        {
-            _message = $"Could not load dependency graph: {ex.Message}";
-        }
     }
 
     private async Task LoadTimelineAsync()
@@ -682,22 +524,4 @@ if (!window.__projectMcpOAuthListener) {
 
     private static event EventHandler? ProjectMcpOAuthCompleted;
 
-    private Task Rebuild()
-    {
-        _message = null;
-        _busy = true;
-        var tenant = PlaceContext.Infrastructure.Tenancy.CurrentTenant.Current;
-        if (tenant is null) { _message = "No tenant resolved — sign in again."; _busy = false; return Task.CompletedTask; }
-        // Background portal operation: navigating away doesn't interrupt the rebuild; the
-        // notifications bell carries the outcome.
-        OpCenter.Run(tenant, Id, $"Rebuild dependency graph — {_overview?.Name ?? "project"}", $"/project/{Id}",
-            async (sp, ct) =>
-            {
-                await sp.GetRequiredService<IPlaceContextService>().RebuildGraphAsync(Id, ct: ct);
-                return "graph rebuilt";
-            });
-        _busy = false;
-        _message = "Rebuild started in the background — follow it in the notifications bell.";
-        return Task.CompletedTask;
-    }
 }

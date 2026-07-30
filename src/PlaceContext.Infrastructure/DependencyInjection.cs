@@ -32,6 +32,7 @@ public static class DependencyInjection
         services.AddScoped<ITenantStore, EfTenantStore>();
         services.AddScoped<ITenantSettingsPort, EfTenantSettingsPort>();
         services.AddScoped<IMenuConfigService, Tenancy.MenuConfigService>();
+        services.AddScoped<IArtifactViewConfigService, Tenancy.ArtifactViewConfigService>();
 
         // Portal authentication (tenant-scoped users) + persisted OAuth clients.
         services.AddScoped<IAuthService, Auth.AuthService>();
@@ -271,11 +272,14 @@ public static class DependencyInjection
         using var scope = provider.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         db.Database.Migrate();
-        // Additive column for menu customization (safe if already present).
+        // Additive columns for workspace UI customization (safe if already present).
         try
         {
             db.Database.ExecuteSqlRaw(
-                """ALTER TABLE tenants ADD COLUMN IF NOT EXISTS "MenuJson" text NULL""");
+                """
+                ALTER TABLE tenants ADD COLUMN IF NOT EXISTS "MenuJson" text NULL;
+                ALTER TABLE tenants ADD COLUMN IF NOT EXISTS "ArtifactViewJson" text NULL;
+                """);
         }
         catch { /* non-Postgres or already applied via migration */ }
 
