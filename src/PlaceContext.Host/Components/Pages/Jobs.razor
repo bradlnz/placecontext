@@ -183,6 +183,11 @@ else
                                                 @JobsViewModel.FormatDuration(run.StartedAt, run.FinishedAt.Value)
                                             </span>
                                         }
+                                        @if (run.Status is "Queued" or "Running")
+                                        {
+                                            <button class="dcbtn btn-2-8 text-bad" @onclick:stopPropagation="true"
+                                                    @onclick="@(() => Vm.CancelRunAsync(run.Id))">Cancel</button>
+                                        }
                                     </div>
                                 </div>
                             }
@@ -208,6 +213,11 @@ else
                             </span>
                         }
                     </div>
+
+                    @if (Vm.RunDetail.Status is "Queued" or "Running")
+                    {
+                        <button class="dcbtn text-bad mb-8" @onclick="@(() => Vm.CancelRunAsync(Vm.RunDetail.Id))">Cancel run</button>
+                    }
 
                     <div class="snapshot-line">
                         Ran as: <code>@Vm.RunDetail.Snapshot.MapSourceKind</code> · @Vm.RunDetail.Snapshot.MapSourceLabel

@@ -119,14 +119,16 @@ public sealed class ChainRun : AggregateRoot
     public bool StagePartial(int stageIndex)
         => _steps.Where(s => s.StageIndex == stageIndex).Any(s => s.Status == ChainStepStatus.Partial);
 
-    /// <summary>Finishes the run; steps that never started (after a failure) become Skipped.</summary>
+    /// <summary>Finishes the run; steps that never started (after a failure) become Skipped;
+    /// when the run was Cancelled, pending steps become Cancelled instead.</summary>
     public void Complete(ChainRunStatus status, string? finalOutput, DateTimeOffset now)
     {
         if (status == ChainRunStatus.Running)
             throw new ArgumentException("A completed run needs a terminal status.", nameof(status));
+        var cancelled = status == ChainRunStatus.Cancelled;
         for (var i = 0; i < _steps.Count; i++)
             if (_steps[i].Status == ChainStepStatus.Pending)
-                _steps[i] = _steps[i] with { Status = ChainStepStatus.Skipped };
+                _steps[i] = _steps[i] with { Status = cancelled ? ChainStepStatus.Cancelled : ChainStepStatus.Skipped };
         Status = status;
         FinalOutput = finalOutput;
         FinishedAt = now;

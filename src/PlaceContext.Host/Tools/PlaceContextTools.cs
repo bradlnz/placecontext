@@ -10,6 +10,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using ModelContextProtocol.Server;
 using PlaceContext.Application.Agents;
+using PlaceContext.Domain.ValueObjects;
 
 namespace PlaceContext.Host.Tools;
 
@@ -312,31 +313,35 @@ public sealed class PlaceContextTools
     // ── Job chains ────────────────────────────────────────────────────────────────────────────────
 
     [Authorize(Policy = Permission.ChainsManage)]
-    [McpServerTool(Name = "create_job_chain"), Description("Define a job chain: an ordered pipeline of stages of existing jobs, where each stage's primary output becomes the next stage's stdin input payload. 'jobIdsJson' is a JSON array where each element is either a single job id (an ordinary sequential stage) or a JSON array of job ids (a stage that fans out — every job in it runs in parallel; the NEXT stage is the join and receives every branch's output as a JSON array). Example: [\"<guidA>\", [\"<guidB1>\",\"<guidB2>\"], \"<guidJoin>\"] runs A, then B1+B2 in parallel, then Join once both finish — Join fails the whole chain if either B1 or B2 fails. A plain flat array like [\"<guid>\",\"<guid>\"] is an ordinary linear chain (every stage size 1). The same job id may appear more than once. All jobs must belong to the project. Use run_job_chain to execute it.")]
+    [McpServerTool(Name = "create_job_chain"), Description("Define a job chain: an ordered pipeline of stages of existing jobs, where each stage's primary output becomes the next stage's stdin input payload. 'jobIdsJson' is a JSON array where each element is either a single job id (an ordinary sequential stage) or a JSON array of job ids (a stage that fans out — every job in it runs in parallel; the NEXT stage is the join and receives every branch's output as a JSON array). Example: [\"<guidA>\", [\"<guidB1>\",\"<guidB2>\"], \"<guidJoin>\"] runs A, then B1+B2 in parallel, then Join once both finish — Join fails the whole chain if either B1 or B2 fails. A plain flat array like [\"<guid>\",\"<guid>\"] is an ordinary linear chain (every stage size 1). The same job id may appear more than once. All jobs must belong to the project. Use run_job_chain to execute it. Optional 'gatesJson' lets you attach flow-control gates between stages: a JSON array of objects (or null entries) parallel to the stages — {\"type\":\"wait\",\"duration\":30} pauses before that stage; {\"type\":\"condition\",\"expression\":\"exists:data.value\"} skips the stage when the condition is false.")]
     public static Task<string> CreateJobChain(IPlaceContextService svc, IToolCallLog log,
         Guid projectId, string name,
         [Description("JSON array of job ids and/or job-id arrays (for a parallel fan-out stage), in run order")] string jobIdsJson,
-        string? description = null)
+        string? description = null,
+        [Description("Optional JSON array of gate objects (or null) — one per stage, in order. null = no gate. Example: [null, {\"type\":\"wait\",\"duration\":30}, {\"type\":\"condition\",\"expression\":\"exists:data.value\"}]")] string? gatesJson = null)
     {
         var stages = ParseChainStages(jobIdsJson);
         var flat = stages.SelectMany(s => s).ToList();
+        var gates = gatesJson is not null ? ParseChainGates(gatesJson, stages.Count) : null;
         return Traced(log, "create_job_chain", projectId.ToString(),
-            $"create chain '{name}' ({stages.Count} stage(s), {flat.Count} step(s))", new { projectId, name, stages, description },
-            () => svc.CreateJobChainAsync(projectId, name, description, flat, stages));
+            $"create chain '{name}' ({stages.Count} stage(s), {flat.Count} step(s))", new { projectId, name, stages, description, gates },
+            () => svc.CreateJobChainAsync(projectId, name, description, flat, stages, gates));
     }
 
     [Authorize(Policy = Permission.ChainsManage)]
-    [McpServerTool(Name = "update_job_chain"), Description("Replace a job chain's name, description, and stages. 'jobIdsJson' follows the same shape as create_job_chain: a flat array of job ids for a linear chain, or a mix of single ids and job-id arrays to author fan-out stages.")]
+    [McpServerTool(Name = "update_job_chain"), Description("Replace a job chain's name, description, and stages. 'jobIdsJson' follows the same shape as create_job_chain: a flat array of job ids for a linear chain, or a mix of single ids and job-id arrays to author fan-out stages. Optional 'gatesJson' replaces gates in the same format as create_job_chain.")]
     public static Task<string> UpdateJobChain(IPlaceContextService svc, IToolCallLog log,
         Guid chainId, string name,
         [Description("JSON array of job ids and/or job-id arrays (for a parallel fan-out stage), in run order")] string jobIdsJson,
-        string? description = null)
+        string? description = null,
+        [Description("Optional JSON array of gate objects (or null) — one per stage, in order. null = no gate.")] string? gatesJson = null)
     {
         var stages = ParseChainStages(jobIdsJson);
         var flat = stages.SelectMany(s => s).ToList();
+        var gates = gatesJson is not null ? ParseChainGates(gatesJson, stages.Count) : null;
         return Traced(log, "update_job_chain", chainId.ToString(),
-            $"update chain '{name}' ({stages.Count} stage(s), {flat.Count} step(s))", new { chainId, name, stages, description },
-            () => svc.UpdateJobChainAsync(chainId, name, description, flat, stages));
+            $"update chain '{name}' ({stages.Count} stage(s), {flat.Count} step(s))", new { chainId, name, stages, description, gates },
+            () => svc.UpdateJobChainAsync(chainId, name, description, flat, stages, gates));
     }
 
     [Authorize(Policy = "Member")]
@@ -395,6 +400,56 @@ public sealed class PlaceContextTools
                 : new List<Guid> { ParseJobIdElement(element) });
         }
         return stages;
+    }
+
+    private static List<ChainGate?>? ParseChainGates(string gatesJson, int stageCount)
+    {
+        JsonElement root;
+        try { root = JsonDocument.Parse(gatesJson).RootElement; }
+        catch (JsonException e)
+        {
+            throw new ArgumentException($"gatesJson must be a JSON array: {e.Message}");
+        }
+        if (root.ValueKind != JsonValueKind.Array)
+            throw new ArgumentException("gatesJson must be a JSON array.");
+
+        var gates = new List<ChainGate?>();
+        foreach (var element in root.EnumerateArray())
+        {
+            if (element.ValueKind == JsonValueKind.Null)
+            {
+                gates.Add(null);
+                continue;
+            }
+            if (element.ValueKind != JsonValueKind.Object)
+                throw new ArgumentException("Each gate entry must be a JSON object or null.");
+
+            if (!element.TryGetProperty("type", out var typeProp))
+                throw new ArgumentException("Each gate object must have a 'type' property ('wait' or 'condition').");
+
+            var type = typeProp.GetString();
+            gates.Add(type switch
+            {
+                "wait" => element.TryGetProperty("duration", out var durProp)
+                    ? new WaitGate(TimeSpan.FromSeconds(durProp.GetDouble()))
+                    : new WaitGate(TimeSpan.FromSeconds(30)),
+                "condition" => element.TryGetProperty("expression", out var exprProp)
+                    ? new ConditionGate(exprProp.GetString() ?? "exists:data")
+                    : new ConditionGate("exists:data"),
+                _ => throw new ArgumentException($"Unknown gate type '{type}'. Use 'wait' or 'condition'."),
+            });
+        }
+
+        if (gates.Count > stageCount)
+            gates = gates.Take(stageCount).ToList();
+        else if (gates.Count < stageCount)
+        {
+            // Pad with null for stages beyond the gates array
+            var pad = Enumerable.Repeat((ChainGate?)null, stageCount - gates.Count);
+            gates.AddRange(pad);
+        }
+
+        return gates;
     }
 
     private static Guid ParseJobIdElement(JsonElement element)

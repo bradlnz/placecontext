@@ -59,8 +59,11 @@ public interface IPlaceContextService
     // Job chains (staged pipelines: each stage's output feeds the next stage's input; a stage with
     // more than one job id is a parallel fan-out group, and the stage right after it is the join).
     // `stages`, when supplied, wins over the backward-compatible flat `stepJobIds` (one job per stage).
-    Task<JobChainView> CreateJobChainAsync(Guid projectId, string name, string? description, IReadOnlyList<Guid> stepJobIds, IReadOnlyList<IReadOnlyList<Guid>>? stages = null, CancellationToken ct = default);
-    Task<JobChainView> UpdateJobChainAsync(Guid chainId, string name, string? description, IReadOnlyList<Guid> stepJobIds, IReadOnlyList<IReadOnlyList<Guid>>? stages = null, CancellationToken ct = default);
+    // `stageGates` is an optional parallel list of flow-control gates, one per stage (null = no gate).
+    Task<JobChainView> CreateJobChainAsync(Guid projectId, string name, string? description, IReadOnlyList<Guid> stepJobIds, IReadOnlyList<IReadOnlyList<Guid>>? stages = null, IReadOnlyList<Domain.ValueObjects.ChainGate?>? stageGates = null, CancellationToken ct = default);
+    Task<JobChainView> UpdateJobChainAsync(Guid chainId, string name, string? description, IReadOnlyList<Guid> stepJobIds, IReadOnlyList<IReadOnlyList<Guid>>? stages = null, IReadOnlyList<Domain.ValueObjects.ChainGate?>? stageGates = null, CancellationToken ct = default);
+    Task<bool> CancelJobRunAsync(Guid runId, CancellationToken ct = default);
+    Task<bool> CancelChainRunAsync(Guid chainRunId, CancellationToken ct = default);
     Task<bool> DeleteJobChainAsync(Guid chainId, CancellationToken ct = default);
     Task<IReadOnlyList<JobChainView>> ListJobChainsAsync(Guid projectId, CancellationToken ct = default);
     Task<ChainRunView> RunJobChainAsync(Guid chainId, string? inputPayload = null, Guid? chainRunId = null, IReadOnlyDictionary<int, string>? stepPayloadOverrides = null, CancellationToken ct = default);
@@ -147,6 +150,7 @@ public interface IPlaceContextService
     Task<Ports.PromoteMasterResult> PromoteNodeToMasterAsync(string nodeName, CancellationToken ct = default);
     Task<Ports.ClusterJoinMaterial?> GetClusterJoinMaterialAsync(CancellationToken ct = default);
     Task<Cluster.LaunchAgentResult> LaunchClusterAgentAsync(CancellationToken ct = default);
+    Task<string> CreateAgentJoinTokenAsync(CancellationToken ct = default);
     Task<Ports.JobTelemetrySnapshot> GetJobTelemetrySnapshotAsync(CancellationToken ct = default);
     Task<IReadOnlyList<Ports.JobRunTelemetry>> ListRecentJobRunTelemetryAsync(int take = 50, CancellationToken ct = default);
     Task<IReadOnlyList<Ports.JobRunTelemetry>> ListJobRunTelemetryAsync(Guid jobId, int take = 20, CancellationToken ct = default);

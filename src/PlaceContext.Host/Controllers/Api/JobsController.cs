@@ -98,6 +98,35 @@ public sealed class JobsController : ControllerBase
         return deleted ? NoContent() : NotFound();
     }
 
+    // ── Job Run Cancel ─────────────────────────────────────────────────────
+
+    /// <summary>
+    /// POST /api/v1/job-runs/{runId}/cancel — cancels a running job run: kills its workload
+    /// containers/pods and marks the run as Cancelled. Idempotent — safe to call on a run that
+    /// already reached a terminal state. Returns 200 with true/false.
+    /// </summary>
+    [HttpPost("job-runs/{runId:guid}/cancel")]
+    [Authorize(Policy = Permission.JobsManage)]
+    public async Task<ActionResult<bool>> CancelJobRun(Guid runId)
+    {
+        var ct = HttpContext.RequestAborted;
+        return Ok(await _svc.CancelJobRunAsync(runId, ct));
+    }
+
+    // ── Chain Run Cancel ──────────────────────────────────────────────────
+
+    /// <summary>
+    /// POST /api/v1/chain-runs/{chainRunId}/cancel — cancels a running chain run: cancels every
+    /// still-running step job run and marks the chain run as Cancelled. Idempotent.
+    /// </summary>
+    [HttpPost("chain-runs/{chainRunId:guid}/cancel")]
+    [Authorize(Policy = Permission.JobsManage)]
+    public async Task<ActionResult<bool>> CancelChainRun(Guid chainRunId)
+    {
+        var ct = HttpContext.RequestAborted;
+        return Ok(await _svc.CancelChainRunAsync(chainRunId, ct));
+    }
+
     // ── Chain Trigger ────────────────────────────────────────────────────────
 
     /// <summary>

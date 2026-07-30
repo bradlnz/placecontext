@@ -125,6 +125,17 @@ public sealed class JobRun : AggregateRoot
     /// Pure status-aggregation: if any shard failed → Failed; if any partial → Partial;
     /// if reduce step present and failed → Failed; otherwise → Succeeded.
     /// </summary>
+    /// <summary>
+    /// Cancels the run: sets the terminal status to Cancelled, discarding any partial results.
+    /// Safe to call on a running run only — no-op if already terminal.
+    /// </summary>
+    public void Cancel(DateTimeOffset finishedAt)
+    {
+        if (Status != JobRunStatus.Running) return;
+        FinishedAt = finishedAt;
+        Status = JobRunStatus.Cancelled;
+    }
+
     public static JobRunStatus DeriveStatus(
         IReadOnlyList<ShardResult> shardResults,
         ReduceResult? reduceResult)

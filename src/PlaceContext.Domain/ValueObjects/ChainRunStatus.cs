@@ -8,6 +8,8 @@ public enum ChainRunStatus
     /// <summary>Every step ran, but at least one was Partial.</summary>
     Partial,
     Failed,
+    /// <summary>The chain run was cancelled by a user.</summary>
+    Cancelled,
 }
 
 /// <summary>Lifecycle of one stage within a chain run.</summary>
@@ -20,4 +22,6 @@ public enum ChainStepStatus
     Failed,
     /// <summary>Never started — an earlier stage failed.</summary>
     Skipped,
+    /// <summary>Cancelled by a user.</summary>
+    Cancelled,
 }

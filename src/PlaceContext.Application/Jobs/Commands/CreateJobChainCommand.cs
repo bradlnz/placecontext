@@ -1,5 +1,6 @@
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Dtos;
+using PlaceContext.Domain.ValueObjects;
 
 namespace PlaceContext.Application.Features;
 
@@ -10,8 +11,10 @@ namespace PlaceContext.Application.Features;
 /// that run in parallel when there is more than one (the stage right after a fan-out group is its
 /// join). When <paramref name="Stages"/> is supplied it wins; <paramref name="StepJobIds"/> is
 /// otherwise required so existing callers are unaffected.
+/// <paramref name="StageGates"/> is an optional parallel list of gates, one per stage (null = no gate).
 /// </summary>
 public sealed record CreateJobChainCommand(
     Guid ProjectId, string Name, string? Description, IReadOnlyList<Guid> StepJobIds,
-    IReadOnlyList<IReadOnlyList<Guid>>? Stages = null)
+    IReadOnlyList<IReadOnlyList<Guid>>? Stages = null,
+    IReadOnlyList<ChainGate?>? StageGates = null)
     : ICommand<JobChainView>;

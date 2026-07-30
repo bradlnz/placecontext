@@ -14,6 +14,13 @@ public interface IWorkloadRunner
     /// (e.g. docker not found, timeout from caller cancellation).
     /// </summary>
     Task<WorkloadRunResult> RunAsync(WorkloadRunRequest request, CancellationToken ct = default);
+
+    /// <summary>
+    /// Cancels a running workload identified by <paramref name="correlationId"/>.
+    /// For Docker: kills the container. For Kubernetes: deletes the Job.
+    /// Best-effort — does not throw if the workload no longer exists.
+    /// </summary>
+    Task CancelAsync(string correlationId, CancellationToken ct = default);
 }
 
 /// <summary>

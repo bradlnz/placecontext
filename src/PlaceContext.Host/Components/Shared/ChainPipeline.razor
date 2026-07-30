@@ -26,6 +26,11 @@
                                 ? step.Status + " " + FormatDuration(step.StartedAt.Value, step.FinishedAt.Value)
                                 : step.Status.ToLowerInvariant())
                     </div>
+                    @if (step.Status == "Running" && step.RunId.HasValue)
+                    {
+                        <button class="dcbtn btn-2-8 text-bad mt-4" @onclick:stopPropagation="true"
+                                @onclick="@(() => OnStepCancel.InvokeAsync(step))">Cancel</button>
+                    }
                 </div>
             }
         </div>
@@ -35,6 +40,7 @@
 @code {
     [Parameter, EditorRequired] public ChainRunView Run { get; set; } = null!;
     [Parameter] public EventCallback<ChainStepRunView> OnStepClick { get; set; }
+    [Parameter] public EventCallback<ChainStepRunView> OnStepCancel { get; set; }
 
     private static string StepIcon(string status) => status switch
     {

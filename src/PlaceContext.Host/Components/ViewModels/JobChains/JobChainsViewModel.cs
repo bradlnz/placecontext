@@ -14,12 +14,15 @@ public sealed partial class JobChainsViewModel : PageViewModel
     private readonly IPlaceContextService _svc;
     private readonly OperationCenter _opCenter;
     private readonly BackgroundOperationRunner _ops;
+    private readonly IWorkloadOutputBuffer _outputBuffer;
     private readonly ParameterPromptState _runPrompt = new();
 
-    public JobChainsViewModel(IPlaceContextService svc, OperationCenter opCenter)
+    public JobChainsViewModel(
+        IPlaceContextService svc, OperationCenter opCenter, IWorkloadOutputBuffer outputBuffer)
     {
         _svc = svc;
         _opCenter = opCenter;
+        _outputBuffer = outputBuffer;
         _ops = new BackgroundOperationRunner(opCenter);
     }
 

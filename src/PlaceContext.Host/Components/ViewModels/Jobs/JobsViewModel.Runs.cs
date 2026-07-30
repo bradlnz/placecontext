@@ -188,6 +188,20 @@ public sealed partial class JobsViewModel
         NotifyStateChanged();
     }
 
+    public async Task CancelRunAsync(Guid runId)
+    {
+        try
+        {
+            await _svc.CancelJobRunAsync(runId);
+            Message = "Run cancellation requested.";
+            if (RunDetail?.Id == runId)
+                RunDetail = await _svc.GetJobRunAsync(runId);
+            StopRunDetailPolling();
+        }
+        catch (Exception ex) { Message = ex.Message; }
+        NotifyStateChanged();
+    }
+
     public async Task OpenRunDetailAsync(Guid runId)
     {
         try

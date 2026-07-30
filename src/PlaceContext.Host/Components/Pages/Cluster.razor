@@ -1,0 +1,284 @@
+@page "/cluster"
+@attribute [Authorize(Policy = Permission.SettingsManage)]
+@implements IDisposable
+@inject IPlaceContextService Svc
+@inject PortalUiState Ui
+@inject IJSRuntime JS
+@inject NavigationManager Nav
+@inject PlaceContext.Application.Ports.ICurrentTenant Tenant
+@inject PlaceContext.Infrastructure.Operations.OperationCenter OpCenter
+
+<PageTitle>PlaceContext — Cluster</PageTitle>
+
+@if (_loading)
+{
+    <Skeleton Kind="list" Rows="6" Padded />
+}
+else
+{
+    <div class="cluster-page">
+        <section class="cluster-hero">
+            <div class="hero-copy">
+                <div class="eyebrow"><span class="live-dot"></span> Infrastructure</div>
+                <h1>Cluster overview</h1>
+                <p>Monitor the machines running your workloads and grow the fleet when capacity changes.</p>
+            </div>
+            <div class="hero-actions">
+                <button class="icon-button" @onclick="() => RefreshAsync(false)" disabled="@_busy" title="Refresh nodes" aria-label="Refresh nodes">
+                    <span class="@(_busy ? "spin" : "")">↻</span>
+                </button>
+                <button class="add-worker" @onclick="AddWorkerAsync" disabled="@_busy">
+                    <span class="button-plus">+</span>
+                    Add worker
+                </button>
+            </div>
+        </section>
+
+        @if (_message is not null)
+        {
+            <div class="message-banner @(_messageOk ? "" : "err")">@_message</div>
+        }
+
+        <section class="metrics-grid">
+            <article class="metric-card">
+                <div class="metric-icon nodes-icon">⌘</div>
+                <div>
+                    <span class="metric-label">Total nodes</span>
+                    <strong>@(_nodes?.Count ?? 0)</strong>
+                    <small>@(_cluster?.IsRealCluster == true ? "Kubernetes fleet" : "Local environment")</small>
+                </div>
+            </article>
+            <article class="metric-card">
+                <div class="metric-icon ready-icon">✓</div>
+                <div>
+                    <span class="metric-label">Healthy</span>
+                    <strong>@(_nodes?.Count(n => n.Ready) ?? 0)</strong>
+                    <small>@ReadyPercent.ToString("0")% ready</small>
+                </div>
+            </article>
+            <article class="metric-card">
+                <div class="metric-icon control-icon">◇</div>
+                <div>
+                    <span class="metric-label">Control plane</span>
+                    <strong>@(_nodes?.Count(n => n.IsControlPlane) ?? 0)</strong>
+                    <small>@(_cluster?.DesignatedMasterName ?? "No master selected")</small>
+                </div>
+            </article>
+            <article class="metric-card">
+                <div class="metric-icon worker-icon">↗</div>
+                <div>
+                    <span class="metric-label">Workers</span>
+                    <strong>@(_nodes?.Count(n => !n.IsControlPlane) ?? 0)</strong>
+                    <small>Available for jobs</small>
+                </div>
+            </article>
+        </section>
+
+        <section class="fleet-section">
+            <div class="section-heading">
+                <div>
+                    <h2>Fleet nodes</h2>
+                    <p>Live health, network identity and available compute.</p>
+                </div>
+                <span class="last-sync">Updated @DateTimeOffset.Now.ToString("HH:mm:ss")</span>
+            </div>
+
+            @if (_nodes is null || _nodes.Count == 0)
+            {
+                <div class="empty-fleet">
+                    <div class="empty-orbit">○</div>
+                    <strong>No nodes found</strong>
+                    <span>Add a worker to start building this cluster.</span>
+                </div>
+            }
+            else
+            {
+                <div class="node-grid">
+                    @foreach (var n in _nodes)
+                    {
+                        <article class="node-card @(!n.Ready ? "node-warning" : "")">
+                            <div class="node-top">
+                                <div class="node-avatar @(n.IsControlPlane ? "master-avatar" : "")">
+                                    @(n.IsControlPlane ? "◇" : "◆")
+                                    <span class="status-pin @(n.Ready ? "online" : "offline")"></span>
+                                </div>
+                                <div class="node-title">
+                                    <div>
+                                        <h3>@n.Name</h3>
+                                        @if (n.IsSelf)
+                                        {
+                                            <span class="you-badge">this host</span>
+                                        }
+                                    </div>
+                                    <span class="node-status @(n.Ready ? "ready" : "not-ready")">
+                                        <i></i>@(n.Ready ? "Ready" : "Not ready")
+                                    </span>
+                                </div>
+                            </div>
+
+                            <div class="role-row">
+                                @if (n.IsDesignatedMaster)
+                                {
+                                    <span class="role-chip master-chip">★ Fleet master</span>
+                                }
+                                @foreach (var role in n.Roles.Take(3))
+                                {
+                                    <span class="role-chip">@role</span>
+                                }
+                            </div>
+
+                            <div class="resource-row">
+                                <div class="resource">
+                                    <span>CPU</span>
+                                    <strong>@(n.CpuCapacity ?? "—")</strong>
+                                </div>
+                                <div class="resource-divider"></div>
+                                <div class="resource">
+                                    <span>Memory</span>
+                                    <strong>@(n.MemoryCapacity ?? "—")</strong>
+                                </div>
+                            </div>
+
+                            <dl class="node-details">
+                                <div><dt>Address</dt><dd class="mono">@(n.PreferredIp ?? "—")</dd></div>
+                                <div><dt>Platform</dt><dd>@PlatformLabel(n)</dd></div>
+                                <div><dt>Kubelet</dt><dd class="mono">@n.KubeletVersion</dd></div>
+                                <div><dt>Joined</dt><dd>@RelativeAge(n.CreatedAt)</dd></div>
+                            </dl>
+                        </article>
+                    }
+                </div>
+            }
+        </section>
+
+        @* ── Join command modal ─────────────────────────────────────────────────────── *@
+        @if (_joinCommand is not null)
+        {
+            <div class="cluster-overlay" @onclick="DismissJoin">
+                <div class="join-dialog" @onclick:stopPropagation="true">
+                    <div class="join-head">
+                        <div class="join-symbol">＋</div>
+                        <div>
+                            <h3>Add a worker</h3>
+                            <p>Connect another machine to this fleet.</p>
+                        </div>
+                        <button class="dialog-close" @onclick="DismissJoin">×</button>
+                    </div>
+                    <div class="join-body">
+                        <div class="join-step">
+                            <span>1</span>
+                            <p>Open a terminal on the machine you want to add.</p>
+                        </div>
+                        <div class="join-step">
+                            <span>2</span>
+                            <p>Run this one-time command:</p>
+                        </div>
+                        <div class="command-shell">
+                            <code>@_joinCommand</code>
+                            <button @onclick="CopyCommandAsync">@(_copied ? "✓ Copied" : "Copy")</button>
+                        </div>
+                        <div class="security-note">
+                            <span>⌁</span>
+                            This join token is short-lived. Generate a new command for each worker.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+
+    </div>
+}
+
+@code {
+    private bool _loading = true;
+    private bool _busy;
+    private string? _message;
+    private bool _messageOk;
+    private List<PlaceContext.Application.Ports.ClusterNode>? _nodes;
+    private PlaceContext.Application.Ports.ClusterInfo? _cluster;
+    private string? _joinCommand;
+    private bool _copied;
+
+    private double ReadyPercent => _nodes is { Count: > 0 }
+        ? _nodes.Count(n => n.Ready) * 100d / _nodes.Count
+        : 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Ui.Set("Cluster", "nodes · agents · join workers");
+        await RefreshAsync();
+    }
+
+    private async Task RefreshAsync(bool showLoading = true)
+    {
+        if (showLoading) _loading = true;
+        _busy = !showLoading;
+        _message = null;
+        try
+        {
+            var info = await Svc.GetClusterInfoAsync();
+            _cluster = info;
+            _nodes = info.Nodes.ToList();
+        }
+        catch (Exception ex)
+        {
+            _message = $"Failed to load cluster info: {ex.Message}";
+            _messageOk = false;
+        }
+        _loading = false;
+        _busy = false;
+    }
+
+    private async Task AddWorkerAsync()
+    {
+        _busy = true;
+        _message = null;
+        _joinCommand = null;
+        _copied = false;
+        try
+        {
+            var token = await Svc.CreateAgentJoinTokenAsync();
+            var host = Nav.BaseUri.TrimEnd('/');
+            _joinCommand = $"curl -fsSL {host}/join.sh | bash -s -- --portal {host} --token {token}";
+        }
+        catch (Exception ex)
+        {
+            _message = $"Failed to create join token: {ex.Message}";
+            _messageOk = false;
+        }
+        _busy = false;
+    }
+
+    private async Task CopyCommandAsync()
+    {
+        if (_joinCommand is not null)
+        {
+            await JS.InvokeVoidAsync("navigator.clipboard.writeText", _joinCommand);
+            _copied = true;
+        }
+    }
+
+    private void DismissJoin()
+    {
+        _joinCommand = null;
+        _copied = false;
+    }
+
+    private static string PlatformLabel(PlaceContext.Application.Ports.ClusterNode node)
+    {
+        var os = string.IsNullOrWhiteSpace(node.OperatingSystem) ? "Unknown OS" : node.OperatingSystem;
+        return $"{os} · {node.Architecture}";
+    }
+
+    private static string RelativeAge(DateTimeOffset? createdAt)
+    {
+        if (createdAt is null) return "Local";
+        var age = DateTimeOffset.UtcNow - createdAt.Value;
+        if (age.TotalMinutes < 2) return "Just now";
+        if (age.TotalHours < 1) return $"{(int)age.TotalMinutes}m ago";
+        if (age.TotalDays < 1) return $"{(int)age.TotalHours}h ago";
+        return $"{(int)age.TotalDays}d ago";
+    }
+
+    public void Dispose() { }
+}

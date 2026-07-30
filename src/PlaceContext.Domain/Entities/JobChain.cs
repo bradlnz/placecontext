@@ -94,11 +94,11 @@ public sealed class JobChain : AggregateRoot
         // Defensive copy — each ChainStage already validated its own job ids at construction, and a
         // stage may legitimately repeat a job (e.g. transform → verify → transform, or fan-out
         // branches sharing a job) — no dedup.
-        return stages.Select(s => new ChainStage(s.JobIds)).ToList();
+        return stages.Select(s => new ChainStage(s.JobIds, s.Gate, s.ElseBranch)).ToList();
     }
 
     public static JobChain Rehydrate(Guid id, Guid projectId, string name, string? description,
         IReadOnlyList<ChainStage> stages, DateTimeOffset createdAt, DateTimeOffset updatedAt)
         => new(id, projectId, name, description,
-            stages.Select(s => new ChainStage(s.JobIds)).ToList(), createdAt, updatedAt);
+            stages.Select(s => new ChainStage(s.JobIds, s.Gate, s.ElseBranch)).ToList(), createdAt, updatedAt);
 }

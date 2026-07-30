@@ -186,6 +186,7 @@ public sealed class RunStatusWatchService
     {
         JobRunStatus.Succeeded => RunOutcome.Succeeded,
         JobRunStatus.Partial => RunOutcome.Partial,
+        JobRunStatus.Cancelled => RunOutcome.Cancelled,
         _ => RunOutcome.Failed,
     };
 
@@ -193,6 +194,7 @@ public sealed class RunStatusWatchService
     {
         ChainRunStatus.Succeeded => RunOutcome.Succeeded,
         ChainRunStatus.Partial => RunOutcome.Partial,
+        ChainRunStatus.Cancelled => RunOutcome.Cancelled,
         _ => RunOutcome.Failed,
     };
 }

@@ -1,0 +1,91 @@
+.chain-canvas {
+    border:1px solid color-mix(in srgb, var(--border) 84%, var(--brand-2));
+    border-radius:14px;
+    background:var(--card);
+    overflow:hidden;
+    box-shadow:0 18px 50px rgba(0,0,0,.12);
+}
+.canvas-toolbar { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:13px 16px; border-bottom:1px solid var(--border); background:color-mix(in srgb, var(--card-2) 55%, transparent) }
+.toolbar-title { font-size:12.5px; font-weight:700; color:var(--text-1) }
+.canvas-hint { margin-top:2px; font-size:10.5px; color:var(--text-3) }
+.canvas-add-stage { display:flex; align-items:center; gap:7px }
+.canvas-select { min-width:148px; max-width:210px; height:31px; padding:0 28px 0 9px; border:1px solid var(--border); border-radius:7px; background:var(--bg); color:var(--text-2); font:11px var(--font-sans) }
+.canvas-button { height:31px; padding:0 11px; border:0; border-radius:7px; font:600 11px var(--font-sans); cursor:pointer }
+.canvas-button.primary { color:#fff; background:var(--brand-2) }
+.canvas-button:disabled, .picker-confirm:disabled { opacity:.45; cursor:not-allowed }
+.canvas-viewport {
+    overflow:auto;
+    min-height:355px;
+    background-color:var(--bg);
+    background-image:radial-gradient(color-mix(in srgb, var(--text-3) 23%, transparent) .7px, transparent .7px);
+    background-size:18px 18px;
+    overscroll-behavior:contain;
+}
+.canvas-pipeline { display:flex; align-items:center; min-width:max-content; min-height:355px; padding:32px 28px }
+.start-node, .finish-node { display:flex; align-items:center; gap:7px; padding:8px 12px; border-radius:999px; background:var(--card); border:1px solid var(--border); color:var(--text-2); font-size:10px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; box-shadow:0 5px 18px rgba(0,0,0,.1) }
+.start-pulse { width:7px; height:7px; border-radius:50%; background:var(--good); box-shadow:0 0 0 4px var(--good-bg) }
+.flow-group { display:flex; align-items:center }
+.connector { display:flex; align-items:center; width:92px }
+.connector-line { height:1px; flex:1; background:var(--border) }
+.arrow-line::after { content:"›"; display:block; transform:translateY(-10px) translateX(1px); color:var(--text-3); font-size:17px }
+.gate-node { flex:0 0 38px; width:38px; height:38px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1px; border-radius:10px; cursor:pointer; transition:transform .15s, box-shadow .15s, border-color .15s; box-shadow:0 3px 12px rgba(0,0,0,.09) }
+.gate-node:hover { transform:translateY(-2px); box-shadow:0 7px 17px rgba(0,0,0,.14) }
+.gate-none { background:var(--card); border:1px dashed var(--text-3); color:var(--text-3) }
+.gate-none:hover { border-color:var(--brand-2); color:var(--brand-2) }
+.gate-wait { background:var(--warn-bg); border:1px solid color-mix(in srgb, var(--warn) 60%, var(--border)); color:var(--warn) }
+.gate-condition { transform:rotate(45deg); border-radius:7px; background:var(--brand-bg); border:1px solid var(--brand-2); color:var(--brand-2) }
+.gate-condition:hover { transform:rotate(45deg) translate(-2px, -2px) }
+.gate-condition > * { transform:rotate(-45deg) }
+.gate-icon { font-size:14px; line-height:1 }
+.gate-label { font-size:7px; line-height:1; font-weight:800; letter-spacing:.05em }
+.canvas-stage { width:190px; flex:none; border:1px solid var(--border); border-radius:12px; background:var(--card); box-shadow:0 10px 28px rgba(0,0,0,.12); transition:border-color .15s, box-shadow .15s, transform .15s; overflow:hidden }
+.canvas-stage.drag-over { transform:translateY(-3px); border-color:var(--brand-2); box-shadow:0 0 0 3px var(--brand-bg), 0 16px 34px rgba(0,0,0,.16) }
+.stage-head { display:flex; align-items:center; gap:6px; min-height:36px; padding:0 9px; border-bottom:1px solid var(--border); background:color-mix(in srgb, var(--card-2) 68%, transparent); cursor:grab; user-select:none }
+.stage-head:active { cursor:grabbing }
+.drag-handle { color:var(--text-3); font-size:14px; line-height:1 }
+.stage-num { display:inline-flex; align-items:center; justify-content:center; width:18px; height:18px; border-radius:6px; background:var(--brand-bg); color:var(--brand-2); font-size:9px; font-weight:800 }
+.stage-label { color:var(--text-2); font-size:10px; font-weight:750; text-transform:uppercase; letter-spacing:.06em }
+.parallel-badge { margin-left:auto; padding:2px 5px; border-radius:5px; background:var(--good-bg); color:var(--good); font-size:8px; font-weight:700 }
+.stage-menu { margin-left:auto; width:22px; height:22px; padding:0; border:0; border-radius:5px; background:transparent; color:var(--text-3); cursor:pointer }
+.parallel-badge + .stage-menu { margin-left:0 }
+.stage-menu:hover, .path-remove:hover { background:var(--bad-bg); color:var(--bad) }
+.stage-paths { display:flex; flex-direction:column; gap:6px; padding:10px 10px 6px }
+.job-path { display:flex; align-items:center; gap:7px; min-height:34px; padding:0 7px; border:1px solid color-mix(in srgb, var(--border) 82%, var(--brand-2)); border-radius:8px; background:var(--card-2); cursor:grab }
+.job-path:active { cursor:grabbing }
+.job-path:hover { border-color:color-mix(in srgb, var(--brand-2) 55%, var(--border)) }
+.job-icon { color:var(--brand-2); font-size:8px }
+.job-name { min-width:0; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text-1); font-size:11px; font-weight:600 }
+.path-remove { width:20px; height:20px; padding:0; border:0; border-radius:5px; background:transparent; color:var(--text-3); cursor:pointer }
+.add-path { width:calc(100% - 20px); height:31px; margin:2px 10px 10px; display:flex; align-items:center; justify-content:center; gap:6px; border:1px dashed var(--border); border-radius:8px; background:transparent; color:var(--text-3); font:600 10px var(--font-sans); cursor:pointer }
+.add-path:hover { border-color:var(--brand-2); background:var(--brand-bg); color:var(--brand-2) }
+.plus-ring { width:17px; height:17px; display:inline-flex; align-items:center; justify-content:center; border-radius:50%; background:var(--card-2); font-size:13px }
+.path-picker { display:grid; grid-template-columns:minmax(0,1fr) auto auto; gap:4px; padding:4px 10px 10px }
+.path-picker .canvas-select { min-width:0; width:100%; height:29px }
+.picker-confirm, .picker-cancel { height:29px; padding:0 8px; border:1px solid var(--border); border-radius:6px; background:var(--card-2); color:var(--text-2); font:600 10px var(--font-sans); cursor:pointer }
+.picker-confirm { border-color:var(--brand-2); background:var(--brand-2); color:#fff }
+.condition-strip, .wait-strip { display:flex; align-items:center; gap:5px; min-height:25px; padding:0 10px; border-top:1px solid var(--border); font-size:8.5px; overflow:hidden }
+.condition-strip { color:var(--brand-2); background:var(--brand-bg) }
+.condition-strip span { font-weight:900 }
+.condition-strip code { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:inherit; font-size:8.5px }
+.wait-strip { color:var(--warn); background:var(--warn-bg); font-weight:700 }
+.finish-connector { width:58px; display:flex; align-items:center; color:var(--text-3) }
+.finish-connector span { height:1px; flex:1; background:var(--border) }
+.finish-connector b { font-size:17px; font-weight:400 }
+.empty-canvas { width:270px; height:120px; margin-left:32px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; border:1px dashed var(--border); border-radius:12px; color:var(--text-3); font-size:11px }
+.empty-icon { width:30px; height:30px; display:flex; align-items:center; justify-content:center; border-radius:50%; background:var(--card); color:var(--brand-2); font-size:18px }
+.canvas-legend { display:flex; align-items:center; gap:16px; min-height:36px; padding:0 15px; border-top:1px solid var(--border); color:var(--text-3); font-size:9px }
+.canvas-legend > span { display:flex; align-items:center; gap:5px }
+.legend-dot { width:6px; height:6px; border-radius:2px }
+.stage-dot { background:var(--brand-2) }
+.condition-dot { transform:rotate(45deg); background:color-mix(in srgb, var(--brand-2) 70%, transparent) }
+.wait-dot { background:var(--warn) }
+.legend-help { margin-left:auto }
+
+@media (max-width: 720px) {
+    .canvas-toolbar { align-items:flex-start; flex-direction:column }
+    .canvas-add-stage { width:100% }
+    .canvas-add-stage .canvas-select { flex:1; min-width:0 }
+    .canvas-viewport, .canvas-pipeline { min-height:315px }
+    .canvas-pipeline { padding:26px 18px }
+    .legend-help { display:none }
+}

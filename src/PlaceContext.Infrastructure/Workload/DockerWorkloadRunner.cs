@@ -33,14 +33,25 @@ public sealed class DockerWorkloadRunner : IWorkloadRunner
 {
     private readonly WorkloadRunnerOptions _options;
     private readonly ILogger<DockerWorkloadRunner>? _log;
+    private readonly IWorkloadOutputBuffer? _output;
 
     // One builder per dependency-layer tag: a shard fan-out (same manifest) builds its warm image
     // once and every other shard reuses it within the same run. Different layers build in parallel.
     private readonly ConcurrentDictionary<string, SemaphoreSlim> _buildGates = new();
     private static readonly TimeSpan WarmBuildTimeout = TimeSpan.FromMinutes(10);
 
-    public DockerWorkloadRunner(IOptions<WorkloadRunnerOptions> options, ILogger<DockerWorkloadRunner>? log = null)
-        => (_options, _log) = (options.Value, log);
+    public DockerWorkloadRunner(IOptions<WorkloadRunnerOptions> options, ILogger<DockerWorkloadRunner>? log = null,
+        IWorkloadOutputBuffer? output = null)
+        => (_options, _log, _output) = (options.Value, log, output);
+
+    public async Task CancelAsync(string correlationId, CancellationToken ct = default)
+    {
+        var name = SafeContainerName(correlationId);
+        // Kill the container; --rm will clean it up on stop, but kill + rm handles the edge case
+        // where the container is stuck and won't auto-remove.
+        try { await RunDockerAsync(ct, "kill", name); } catch { /* best-effort */ }
+        try { await RunDockerAsync(ct, "rm", "--force", name); } catch { /* best-effort */ }
+    }
 
     public async Task<WorkloadRunResult> RunAsync(WorkloadRunRequest request, CancellationToken ct = default)
     {
@@ -163,8 +174,8 @@ public sealed class DockerWorkloadRunner : IWorkloadRunner
             await proc.StandardInput.WriteAsync(request.StdinPayload);
             proc.StandardInput.Close();
 
-            var stdoutTask = proc.StandardOutput.ReadToEndAsync(timeoutCts.Token);
-            var stderrTask = proc.StandardError.ReadToEndAsync(timeoutCts.Token);
+            var stdoutTask = CaptureStreamAsync(proc.StandardOutput, request.CorrelationId, isError: false, timeoutCts.Token);
+            var stderrTask = CaptureStreamAsync(proc.StandardError, request.CorrelationId, isError: true, timeoutCts.Token);
             await proc.WaitForExitAsync(timeoutCts.Token);
 
             var stdout = await stdoutTask;
@@ -190,12 +201,29 @@ public sealed class DockerWorkloadRunner : IWorkloadRunner
         }
         finally
         {
+            _output?.Complete(request.CorrelationId);
             try { Directory.Delete(hostOutDir, recursive: true); } catch { /* best-effort */ }
             if (request.ArtifactMounts.Count > 0)
                 try { Directory.Delete(mountDir, recursive: true); } catch { /* best-effort */ }
             if (workDir is not null)
                 try { Directory.Delete(workDir, recursive: true); } catch { /* best-effort */ }
         }
+    }
+
+    private async Task<string> CaptureStreamAsync(
+        StreamReader reader, string correlationId, bool isError, CancellationToken ct)
+    {
+        var captured = new StringBuilder();
+        var buffer = new char[2048];
+        while (true)
+        {
+            var read = await reader.ReadAsync(buffer.AsMemory(), ct);
+            if (read == 0) break;
+            var chunk = new string(buffer, 0, read);
+            captured.Append(chunk);
+            _output?.Append(correlationId, chunk, isError);
+        }
+        return captured.ToString();
     }
 
     /// <summary>
@@ -277,6 +305,23 @@ public sealed class DockerWorkloadRunner : IWorkloadRunner
             throw;
         }
         return (proc.ExitCode, await stdout + await stderr);
+    }
+
+    /// <summary>Produces a safe Docker container name from a correlation id.
+    /// Docker container names: [a-zA-Z0-9][a-zA-Z0-9_.-]+, max 128 chars.</summary>
+    internal static string SafeContainerName(string correlationId)
+    {
+        const int maxLen = 120;
+        var sb = new StringBuilder("pcw-");
+        foreach (var c in correlationId)
+        {
+            if (sb.Length >= maxLen) break;
+            if (char.IsAsciiLetterOrDigit(c) || c is '-' or '_' or '.')
+                sb.Append(c);
+            else if (c is ':')
+                sb.Append('-');
+        }
+        return sb.ToString().TrimEnd('-', '_', '.');
     }
 
     // Docker repository names: lowercase letters, digits, and - _ . only.
@@ -365,6 +410,10 @@ public sealed class DockerWorkloadRunner : IWorkloadRunner
         bool depsBaked)
     {
         var args = new List<string> { "run", "--rm", "-i" };
+
+        // Named so CancelAsync can find and kill it.
+        args.Add("--name");
+        args.Add(SafeContainerName(request.CorrelationId));
 
         // ── Sandbox: resource limits ──────────────────────────────────────────────────────────────
         if (_options.SandboxPidsLimit > 0)

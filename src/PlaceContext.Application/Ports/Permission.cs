@@ -15,6 +15,7 @@ public static class Permission
     public const string JobsEdit = "jobs.edit";
     public const string JobsRun = "jobs.run";
     public const string JobsReplay = "jobs.replay";
+    public const string JobsManage = "jobs.manage";
     public const string ChainsManage = "chains.manage";
     public const string TriggersManage = "triggers.manage";
     public const string DataRead = "data.read";
@@ -32,7 +33,7 @@ public static class Permission
     /// <summary>The whole catalog, in declaration order — drives the admin UI's matrix and policy registration.</summary>
     public static readonly IReadOnlyList<string> All = new[]
     {
-        ProjectsView, ProjectsManage, JobsView, JobsEdit, JobsRun, JobsReplay,
+        ProjectsView, ProjectsManage, JobsView, JobsEdit, JobsRun, JobsReplay, JobsManage,
         ChainsManage, TriggersManage, DataRead, DataWrite, ArtifactsView, ArtifactsDelete,
         SecretsManage, BackupManage, MembersManage, SettingsManage, EventsManage,
         AgentsChat, AgentsManage,

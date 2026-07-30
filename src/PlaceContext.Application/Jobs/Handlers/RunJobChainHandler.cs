@@ -101,6 +101,29 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
         for (var stageIndex = 0; stageIndex < chain.Stages.Count; stageIndex++)
         {
             var stage = chain.Stages[stageIndex];
+
+            // ── Evaluate gate before the stage ────────────────────────────────────────────────
+            if (stage.Gate is { } gate)
+            {
+                var gateResult = gate.Evaluate(payload);
+                if (gateResult.WaitDuration is { } wait)
+                {
+                    await Task.Delay(wait, ct);
+                }
+                if (!gateResult.Proceed)
+                {
+                    // Condition gate false: skip this stage, keep payload unchanged.
+                    for (var b = 0; b < stage.JobIds.Count; b++)
+                    {
+                        var idx = flatIndex + b;
+                        chainRun.MarkStepFinished(idx, runId: null, ChainStepStatus.Skipped, _clock.UtcNow);
+                    }
+                    flatIndex += stage.JobIds.Count;
+                    await SaveProgressAsync(chainRun, ct);
+                    continue;
+                }
+            }
+
             var stageStartFlat = flatIndex;
             var stagePayload = payload; // every branch of this stage reads the same upstream payload
             var branchOutputs = new string?[stage.JobIds.Count];
@@ -166,6 +189,12 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
                 // the join that would have followed a fan-out group — stays Pending here and is
                 // turned into Skipped by ChainRun.Complete below; it never runs.
                 status = ChainRunStatus.Failed;
+                break;
+            }
+            if (Array.IndexOf(branchStatuses, ChainStepStatus.Cancelled) >= 0)
+            {
+                // A cancelled branch also halts the chain, but marks it Cancelled not Failed.
+                status = ChainRunStatus.Cancelled;
                 break;
             }
             if (Array.IndexOf(branchStatuses, ChainStepStatus.Partial) >= 0)
@@ -236,6 +265,7 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
     {
         "Succeeded" => ChainStepStatus.Succeeded,
         "Partial" => ChainStepStatus.Partial,
+        "Cancelled" => ChainStepStatus.Cancelled,
         _ => ChainStepStatus.Failed,
     };
 

@@ -35,6 +35,17 @@ public sealed class FakeWorkloadRunner : IWorkloadRunner
     public void EnqueuePartialResult(int exitCode, string artifact = @"{""partial"":true}")
         => _canned.Enqueue(new WorkloadRunResult(exitCode, artifact, "partial stdout", ""));
 
+    /// <summary>Best-effort no-op — tests that verify cancellation track it here.</summary>
+    public int CancelCallCount { get; private set; }
+    public List<string> CancelledCorrelationIds { get; } = new();
+
+    public Task CancelAsync(string correlationId, CancellationToken ct = default)
+    {
+        CancelCallCount++;
+        CancelledCorrelationIds.Add(correlationId);
+        return Task.CompletedTask;
+    }
+
     public Task<WorkloadRunResult> RunAsync(WorkloadRunRequest request, CancellationToken ct = default)
     {
         ReceivedRequests.Add(request);

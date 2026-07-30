@@ -13,4 +13,6 @@ public enum JobRunStatus
     Partial,
     /// <summary>One or more shards returned a failed exit code, or the reduce step failed.</summary>
     Failed,
+    /// <summary>The run was cancelled by a user before it completed.</summary>
+    Cancelled,
 }

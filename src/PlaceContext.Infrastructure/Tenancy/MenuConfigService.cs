@@ -48,6 +48,7 @@ public sealed class MenuConfigService : IMenuConfigService
         new("chat", "Chat", "link", "/chat", Permission.AgentsChat, "chat", null),
         new("artifacts", "Artifacts", "link", "/artifacts", Permission.ArtifactsView, "file", null),
         new("observability", "Observability", "link", "/observability", Permission.JobsView, "pulse", null),
+        new("cluster", "Cluster", "link", "/cluster", Permission.SettingsManage, "box", null),
         new("sec-workspace", "Workspace", "section", null, null, null, "Workspace"),
         new("overview", "Projects overview", "link", "/overview", Permission.ProjectsView, "pulse", "Workspace"),
         new("onboarding", "Onboarding", "link", "/onboarding", Permission.ProjectsView, "rocket", "Workspace"),

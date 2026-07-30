@@ -73,6 +73,7 @@ public static class DependencyInjection
         // Kubernetes Jobs via the API + the Host's ServiceAccount/RBAC; otherwise (local dev) Docker.
         services.Configure<WorkloadRunnerOptions>(
             configuration.GetSection("PlaceContext:WorkloadRunner"));
+        services.AddSingleton<IWorkloadOutputBuffer, InMemoryWorkloadOutputBuffer>();
         if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("KUBERNETES_SERVICE_HOST")))
             services.AddSingleton<IWorkloadRunner, KubernetesWorkloadRunner>();
         else
@@ -249,6 +250,9 @@ public static class DependencyInjection
 
         // Mints fresh Tailscale auth keys from vaulted OAuth client credentials for agent join codes.
         services.AddSingleton<ITailscaleKeyMinter, Cluster.TailscaleApiKeyMinter>();
+
+        // Agent join tokens — short-lived, one-time tokens exchanged for join codes from join.sh.
+        services.AddSingleton<IAgentTokenManager, Cluster.InMemoryAgentTokenManager>();
 
         services.AddSingleton<Observability.JobTelemetryCollector>();
         services.AddSingleton<IJobTelemetryReader>(sp => sp.GetRequiredService<Observability.JobTelemetryCollector>());

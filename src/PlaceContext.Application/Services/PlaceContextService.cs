@@ -157,11 +157,17 @@ public sealed class PlaceContextService : IPlaceContextService
     public Task<int> DeleteArtifactsAsync(IReadOnlyList<Guid> artifactIds, CancellationToken ct = default)
         => _dispatcher.Send(new DeleteArtifactsCommand(artifactIds), ct);
 
-    public Task<JobChainView> CreateJobChainAsync(Guid projectId, string name, string? description, IReadOnlyList<Guid> stepJobIds, IReadOnlyList<IReadOnlyList<Guid>>? stages = null, CancellationToken ct = default)
-        => _dispatcher.Send(new CreateJobChainCommand(projectId, name, description, stepJobIds, stages), ct);
+    public Task<JobChainView> CreateJobChainAsync(Guid projectId, string name, string? description, IReadOnlyList<Guid> stepJobIds, IReadOnlyList<IReadOnlyList<Guid>>? stages = null, IReadOnlyList<Domain.ValueObjects.ChainGate?>? stageGates = null, CancellationToken ct = default)
+        => _dispatcher.Send(new CreateJobChainCommand(projectId, name, description, stepJobIds, stages, stageGates), ct);
 
-    public Task<JobChainView> UpdateJobChainAsync(Guid chainId, string name, string? description, IReadOnlyList<Guid> stepJobIds, IReadOnlyList<IReadOnlyList<Guid>>? stages = null, CancellationToken ct = default)
-        => _dispatcher.Send(new UpdateJobChainCommand(chainId, name, description, stepJobIds, stages), ct);
+    public Task<JobChainView> UpdateJobChainAsync(Guid chainId, string name, string? description, IReadOnlyList<Guid> stepJobIds, IReadOnlyList<IReadOnlyList<Guid>>? stages = null, IReadOnlyList<Domain.ValueObjects.ChainGate?>? stageGates = null, CancellationToken ct = default)
+        => _dispatcher.Send(new UpdateJobChainCommand(chainId, name, description, stepJobIds, stages, stageGates), ct);
+
+    public Task<bool> CancelJobRunAsync(Guid runId, CancellationToken ct = default)
+        => _dispatcher.Send(new CancelJobRunCommand(runId), ct);
+
+    public Task<bool> CancelChainRunAsync(Guid chainRunId, CancellationToken ct = default)
+        => _dispatcher.Send(new CancelChainRunCommand(chainRunId), ct);
 
     public Task<bool> DeleteJobChainAsync(Guid chainId, CancellationToken ct = default)
         => _dispatcher.Send(new DeleteJobChainCommand(chainId), ct);
@@ -358,6 +364,9 @@ public sealed class PlaceContextService : IPlaceContextService
 
     public Task<Cluster.LaunchAgentResult> LaunchClusterAgentAsync(CancellationToken ct = default)
         => _dispatcher.Send(new PlaceContext.Application.Cluster.LaunchClusterAgentCommand(), ct);
+
+    public Task<string> CreateAgentJoinTokenAsync(CancellationToken ct = default)
+        => _dispatcher.Send(new PlaceContext.Application.Cluster.CreateAgentJoinTokenCommand(), ct);
 
     public Task<Ports.JobTelemetrySnapshot> GetJobTelemetrySnapshotAsync(CancellationToken ct = default)
         => _dispatcher.Query(new Observability.GetJobTelemetrySnapshotQuery(), ct);

@@ -30,7 +30,7 @@ public sealed class LaunchClusterAgentHandler : ICommandHandler<LaunchClusterAge
     public const string ClientIdSecretName = "TS_CLIENT_ID";
     public const string ClientSecretSecretName = "TS_CLIENT_SECRET";
     public const string TagSecretName = "TS_TAG";
-    private const string DefaultTag = "tag:agent";
+    public const string DefaultTag = "tag:agent";
 
     private readonly IProjectSecretRepository _secrets;
     private readonly ISecretProtector _protector;

@@ -61,6 +61,8 @@ public static class DependencyInjection
         services.AddScoped<ICommandHandler<UpdateJobChainCommand, JobChainView>, UpdateJobChainHandler>();
         services.AddScoped<ICommandHandler<DeleteJobChainCommand, bool>, DeleteJobChainHandler>();
         services.AddScoped<ICommandHandler<RunJobChainCommand, ChainRunView>, RunJobChainHandler>();
+        services.AddScoped<ICommandHandler<CancelJobRunCommand, bool>, CancelJobRunHandler>();
+        services.AddScoped<ICommandHandler<CancelChainRunCommand, bool>, CancelChainRunHandler>();
         services.AddScoped<ICommandHandler<ReplayJobChainCommand, ChainRunView>, ReplayJobChainHandler>();
         services.AddScoped<ICommandHandler<SaveDataMappingCommand, DataMappingView>, SaveDataMappingHandler>();
         services.AddScoped<ICommandHandler<DeleteDataMappingCommand, bool>, DeleteDataMappingHandler>();
@@ -190,6 +192,8 @@ public static class DependencyInjection
             PlaceContext.Application.Cluster.GetClusterJoinMaterialHandler>();
         services.AddScoped<ICommandHandler<PlaceContext.Application.Cluster.LaunchClusterAgentCommand, PlaceContext.Application.Cluster.LaunchAgentResult>,
             PlaceContext.Application.Cluster.LaunchClusterAgentHandler>();
+        services.AddScoped<ICommandHandler<PlaceContext.Application.Cluster.CreateAgentJoinTokenCommand, string>,
+            PlaceContext.Application.Cluster.CreateAgentJoinTokenHandler>();
         services.AddScoped<IQueryHandler<GetJobTelemetrySnapshotQuery, Ports.JobTelemetrySnapshot>, GetJobTelemetrySnapshotHandler>();
         services.AddScoped<IQueryHandler<ListRecentJobRunTelemetryQuery, IReadOnlyList<Ports.JobRunTelemetry>>, ListRecentJobRunTelemetryHandler>();
         services.AddScoped<IQueryHandler<ListJobRunTelemetryQuery, IReadOnlyList<Ports.JobRunTelemetry>>, ListJobRunTelemetryHandler>();

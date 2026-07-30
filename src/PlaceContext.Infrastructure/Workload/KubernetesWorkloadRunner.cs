@@ -37,6 +37,7 @@ public sealed class KubernetesWorkloadRunner : IWorkloadRunner
     private readonly WorkloadRunnerOptions _options;
     private readonly IObjectStore? _store;
     private readonly ILogger<KubernetesWorkloadRunner>? _log;
+    private readonly IWorkloadOutputBuffer? _output;
 
     // One bake per dependency-layer key (in-process); a failed bake is forgotten so the next run retries.
     private readonly ConcurrentDictionary<string, Lazy<Task<string?>>> _bakes = new();
@@ -44,8 +45,17 @@ public sealed class KubernetesWorkloadRunner : IWorkloadRunner
     private const string BakeUploaderImage = "curlimages/curl:8.10.1";
 
     public KubernetesWorkloadRunner(IOptions<WorkloadRunnerOptions> options, IObjectStore? store = null,
-        ILogger<KubernetesWorkloadRunner>? log = null)
-        => (_options, _store, _log) = (options.Value, store, log);
+        ILogger<KubernetesWorkloadRunner>? log = null, IWorkloadOutputBuffer? output = null)
+        => (_options, _store, _log, _output) = (options.Value, store, log, output);
+
+    public async Task CancelAsync(string correlationId, CancellationToken ct = default)
+    {
+        var name = MakeName(correlationId);
+        var cfg = KubernetesClientConfiguration.InClusterConfig();
+        var ns = string.IsNullOrWhiteSpace(cfg.Namespace) ? "placecontext" : cfg.Namespace;
+        using var client = new Kubernetes(cfg);
+        await CleanupAsync(client, ns, name, hadEgress: false);
+    }
 
     public async Task<WorkloadRunResult> RunAsync(WorkloadRunRequest request, CancellationToken ct = default)
     {
@@ -222,16 +232,18 @@ public sealed class KubernetesWorkloadRunner : IWorkloadRunner
         try
         {
             await client.BatchV1.CreateNamespacedJobAsync(job, ns, cancellationToken: ct);
-            return await AwaitResultAsync(client, ns, name, timeoutSeconds, ct);
+            return await AwaitResultAsync(client, ns, name, request.CorrelationId, timeoutSeconds, ct);
         }
         finally
         {
+            _output?.Complete(request.CorrelationId);
             await CleanupAsync(client, ns, name, request.AllowNetworkEgress);
         }
     }
 
     // Poll the Job to completion (or the deadline), then read the pod's exit code + logs (the artifact).
-    private async Task<WorkloadRunResult> AwaitResultAsync(Kubernetes client, string ns, string name, int timeoutSeconds, CancellationToken ct)
+    private async Task<WorkloadRunResult> AwaitResultAsync(
+        Kubernetes client, string ns, string name, string correlationId, int timeoutSeconds, CancellationToken ct)
     {
         // Give the poller a small grace beyond the pod's own ActiveDeadlineSeconds so we observe the
         // Job's Failed status (deadline-exceeded) rather than timing out the poll first.
@@ -240,11 +252,17 @@ public sealed class KubernetesWorkloadRunner : IWorkloadRunner
         // fixed 1.5s tick, without hammering the API server on runs that take minutes.
         var deadline = DateTimeOffset.UtcNow.AddSeconds(timeoutSeconds + 30);
         var delay = TimeSpan.FromMilliseconds(200);
+        var nextLogRead = DateTimeOffset.MinValue;
         while (DateTimeOffset.UtcNow < deadline)
         {
             var job = await client.BatchV1.ReadNamespacedJobStatusAsync(name, ns, cancellationToken: ct);
             if ((job.Status?.Succeeded ?? 0) >= 1 || (job.Status?.Failed ?? 0) >= 1)
                 break;
+            if (_output is not null && DateTimeOffset.UtcNow >= nextLogRead)
+            {
+                await CaptureLivePodLogAsync(client, ns, name, correlationId, ct);
+                nextLogRead = DateTimeOffset.UtcNow.AddSeconds(1);
+            }
             await Task.Delay(delay, ct);
             if (delay < TimeSpan.FromMilliseconds(1500))
                 delay = TimeSpan.FromMilliseconds(Math.Min(delay.TotalMilliseconds * 1.5, 1500));
@@ -268,7 +286,30 @@ public sealed class KubernetesWorkloadRunner : IWorkloadRunner
 
         // stdout is the artifact (the authoring contract); framed /out files ride behind the marker.
         var (stdout, files) = SplitFramedLogs(logs);
+        _output?.Set(correlationId, stdout);
         return new WorkloadRunResult(exit, string.IsNullOrEmpty(stdout) ? null : stdout, stdout, "", files);
+    }
+
+    private async Task CaptureLivePodLogAsync(
+        Kubernetes client, string ns, string jobName, string correlationId, CancellationToken ct)
+    {
+        try
+        {
+            var pods = await client.CoreV1.ListNamespacedPodAsync(
+                ns, labelSelector: "job-name=" + jobName, cancellationToken: ct);
+            var pod = pods.Items.OrderByDescending(p => p.Metadata.CreationTimestamp).FirstOrDefault();
+            if (pod?.Metadata?.Name is not { Length: > 0 } podName) return;
+            await using var stream = await client.CoreV1.ReadNamespacedPodLogAsync(
+                podName, ns, container: "run", cancellationToken: ct);
+            using var reader = new StreamReader(stream);
+            var logs = await reader.ReadToEndAsync(ct);
+            var (stdout, _) = SplitFramedLogs(logs);
+            _output?.Set(correlationId, stdout);
+        }
+        catch
+        {
+            // Pods can be Pending or between container states; the next poll retries.
+        }
     }
 
     // ── Warm dependency cache (bake once per manifest hash, reuse from the object store) ──────────

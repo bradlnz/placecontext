@@ -38,6 +38,22 @@ public class JobChainStageTests
     public void ChainStage_of_a_single_job_is_not_parallel()
         => Assert.False(ChainStage.Of(Guid.NewGuid()).IsParallel);
 
+    [Theory]
+    [InlineData("notexists:missing", true)]
+    [InlineData("neq:status:failed", true)]
+    [InlineData("contains:message:ready", true)]
+    [InlineData("starts:message:cluster", true)]
+    [InlineData("ends:message:ready", true)]
+    [InlineData("in:status:queued,ready,done", true)]
+    [InlineData("empty:items", true)]
+    [InlineData("notempty:status", true)]
+    public void Condition_gate_supports_richer_path_operators(string expression, bool expected)
+    {
+        const string payload = """{"status":"ready","message":"Cluster is ready","items":[]}""";
+
+        Assert.Equal(expected, new ConditionGate(expression).Evaluate(payload).Proceed);
+    }
+
     // ── JobChain stages ─────────────────────────────────────────────────────────────────────────────
 
     [Fact]
