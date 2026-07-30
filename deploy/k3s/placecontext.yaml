@@ -191,7 +191,7 @@ spec:
               value: "ossenfeasibility"
             # Redis cache for job_runs ShardResultsJson (keeps Postgres lean).
             - name: PlaceContext__Redis__ConnectionString
-              value: "redis:6379"
+              value: "redis:6379,abortConnect=false,connectRetry=5,keepAlive=60,syncTimeout=10000,connectTimeout=5000,responseTimeout=10000,"
             # Qdrant vector DB (for future RAG enhancements)
             - name: PlaceContext__Qdrant__Endpoint
               value: "http://qdrant:6333"

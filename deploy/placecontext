@@ -48,6 +48,10 @@ BASE_URL="${PLACECONTEXT_BASE_URL:-${PLACECONTEXT_BUCKET_URL:-}}"
 [ -z "$BASE_URL" ] && [ -f "$ROOT/BUCKET_URL" ] && BASE_URL="$(tr -d '[:space:]' < "$ROOT/BUCKET_URL")"
 BASE_URL="${BASE_URL:-https://placecontext.syd1.cdn.digitaloceanspaces.com}"
 KUBECTL="${PCTL_KUBECTL:-kubectl}"
+# Tailscale OAuth client file paths — saved once by `placecontext ts-oauth`, then join codes
+# auto-mint a fresh key from these credentials instead of needing --ts-authkey every time.
+TS_OAUTH_FILE_ROOT="/etc/placecontext/ts-oauth.env"
+TS_OAUTH_FILE_USER="${XDG_CONFIG_HOME:-$HOME/.config}/placecontext/ts-oauth.env"
 # 0 = normal (step-by-step progress), 1 = -v (tool stdout), 2 = -vv (extra diagnostics)
 VERBOSE="${PLACECONTEXT_VERBOSE:-${PCTL_VERBOSE:-0}}"
 case "$VERBOSE" in true|yes|on) VERBOSE=1;; false|no|off|'') VERBOSE=0;; esac
@@ -680,6 +684,68 @@ install_service() {
   systemctl is-enabled k3s >/dev/null 2>&1 || systemctl enable k3s
   ok "PlaceContext installed (k3s + systemd). Portal: $(portal_base)/"
   setup_default_admin
+}
+
+# ── Tailscale OAuth —─────────────────────────────────────────────────────────
+# Save OAuth client creds once; join-code / join then mint fresh keys automatically.
+
+# Load saved OAuth credentials into PCTL_TS_OAUTH_ID / PCTL_TS_OAUTH_SECRET.
+load_ts_oauth() {
+  { [ -n "${PCTL_TS_OAUTH_ID:-}" ] && [ -n "${PCTL_TS_OAUTH_SECRET:-}" ]; } && return 0
+  local f
+  for f in "$TS_OAUTH_FILE_ROOT" "$TS_OAUTH_FILE_USER"; do
+    if [ -r "$f" ]; then . "$f"; return 0; fi
+  done
+  return 0
+}
+
+# Mint a short-lived, single-use, preauthorized Tailscale auth key using the
+# OAuth client credentials.  Needs: id, secret (+ optional tag, default tag:agent).
+ts_mint_authkey() {
+  local id="$1" secret="$2" tag="${3:-tag:agent}"
+  have curl || die "curl is required for Tailscale OAuth."
+  local tok
+  tok="$(curl -fsSL https://api.tailscale.com/api/v2/oauth/token \
+    -d "client_id=${id}" -d "client_secret=${secret}" \
+    | sed -n 's/.*"access_token"[: ]*"\([^"]*\)".*/\1/p')"
+  [ -n "$tok" ] || die "Tailscale OAuth token request failed (check --ts-oauth-client-id/secret)."
+  local body key
+  body="$(printf '{"capabilities":{"devices":{"create":{"reusable":false,"ephemeral":true,"preauthorized":true,"tags":["%s"]}}},"expirySeconds":600}' "${tag}")"
+  key="$(curl -fsSL -H "Authorization: Bearer ${tok}" -H 'Content-Type: application/json' \
+    -d "$body" https://api.tailscale.com/api/v2/tailnet/-/keys \
+    | sed -n 's/.*"key"[: ]*"\([^"]*\)".*/\1/p')"
+  [ -n "$key" ] || die "Tailscale auth key minting failed (does the OAuth client have the '${tag}' tag + key write scope?)."
+  printf '%s' "$key"
+}
+
+cmd_ts_oauth() {
+  local id="" secret="" status=0 clear=0
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --client-id) id="$2"; shift 2;;
+      --secret)    secret="$2"; shift 2;;
+      --status)    status=1; shift;;
+      --clear)     clear=1; shift;;
+      *) die "ts-oauth: unknown arg $1";;
+    esac
+  done
+  local f="$TS_OAUTH_FILE_USER"; [ "$(id -u)" = 0 ] && f="$TS_OAUTH_FILE_ROOT"
+  if [ "$status" = 1 ]; then
+    load_ts_oauth
+    if [ -n "${PCTL_TS_OAUTH_ID:-}" ]; then ok "Tailscale OAuth client configured (id: ${PCTL_TS_OAUTH_ID%????}****)."
+    else warn "No Tailscale OAuth client configured — joins need --ts-authkey or an already-joined tailnet."; fi
+    return 0
+  fi
+  if [ "$clear" = 1 ]; then
+    rm -f "$TS_OAUTH_FILE_ROOT" "$TS_OAUTH_FILE_USER" 2>/dev/null
+    ok "Tailscale OAuth client cleared."
+    return 0
+  fi
+  [ -n "$id" ] && [ -n "$secret" ] || die "usage: placecontext ts-oauth --client-id ID --secret SECRET  (or --status / --clear)"
+  mkdir -p "$(dirname "$f")"
+  umask 077
+  printf 'PCTL_TS_OAUTH_ID=%q\nPCTL_TS_OAUTH_SECRET=%q\n' "$id" "$secret" > "$f"
+  ok "Tailscale OAuth client saved to $f — join codes now mint their own keys."
 }
 
 cmd_doctor() {

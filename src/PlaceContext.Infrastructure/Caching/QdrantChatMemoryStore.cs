@@ -114,7 +114,7 @@ public sealed class QdrantChatMemoryStore : IChatMemoryStore
                 matches.Add(new ChatMemoryMatch(
                     payload.GetProperty("content").GetString() ?? "",
                     payload.GetProperty("role").GetString() ?? "",
-                    Guid.ParseExact(payload.GetProperty("session_id").GetString()!, "N"),
+                    Guid.Parse(payload.GetProperty("session_id").GetString()!),
                     point.TryGetProperty("score", out var score) ? score.GetSingle() : 0f));
             }
         }

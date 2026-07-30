@@ -164,16 +164,39 @@ public static class DependencyInjection
 
         // Embeddings: Voyage AI when a key is configured, else the cluster shard server
         // (self-hosted, vectors from the chat model's hidden states), else a no-op.
-        // The pgvector-backed run-embedding store self-initializes lazily and degrades if unavailable.
         if (!string.IsNullOrWhiteSpace(configuration["PlaceContext:Voyage:ApiKey"]))
             services.AddSingleton<IEmbeddingGateway, Embeddings.VoyageEmbeddingGateway>();
         else if (!string.IsNullOrWhiteSpace(configuration["PlaceContext:ClusterChat:Endpoint"]))
             services.AddSingleton<IEmbeddingGateway, Embeddings.ClusterEmbeddingGateway>();
         else
             services.AddSingleton<IEmbeddingGateway, Embeddings.NullEmbeddingGateway>();
-        services.AddScoped<IRunEmbeddingRepository, EfRunEmbeddingRepository>();
-        // Universal RAG: any content kind, encrypted source text + pgvector.
-        services.AddScoped<IContentIndexer, Embeddings.ContentIndexer>();
+
+        // Vector stores: Qdrant when an endpoint is configured, otherwise pgvector (with lazy init).
+        var qdrantUrl2 = configuration["PlaceContext:Qdrant:Endpoint"];
+        if (!string.IsNullOrWhiteSpace(qdrantUrl2))
+        {
+            services.AddScoped<IRunEmbeddingRepository>(sp =>
+            {
+                var embeddings = sp.GetRequiredService<IEmbeddingGateway>();
+                var tenant = sp.GetRequiredService<ICurrentTenant>();
+                var httpFactory = sp.GetRequiredService<IHttpClientFactory>();
+                return new VectorStore.QdrantRunEmbeddingRepository(embeddings, tenant, httpFactory, qdrantUrl2);
+            });
+            services.AddScoped<IContentIndexer>(sp =>
+            {
+                var gateway = sp.GetRequiredService<IEmbeddingGateway>();
+                var tenant = sp.GetRequiredService<ICurrentTenant>();
+                var httpFactory = sp.GetRequiredService<IHttpClientFactory>();
+                return new VectorStore.QdrantContentIndexer(gateway, tenant, httpFactory, qdrantUrl2);
+            });
+            // One-shot migration from pgvector tables on first startup.
+            services.AddHostedService<VectorStore.MigrateToQdrantService>();
+        }
+        else
+        {
+            services.AddScoped<IRunEmbeddingRepository, Persistence.EfRunEmbeddingRepository>();
+            services.AddScoped<IContentIndexer, Embeddings.ContentIndexer>();
+        }
 
         // Chat gateway: cluster (SafeTensors shard server) takes precedence,
         // then Ollama, else a no-op.

@@ -17,4 +17,7 @@ public sealed class PlaceContextOptions
     /// </summary>
     public string DataRoot { get; set; } =
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".placecontext", "data");
+
+    /// <summary>Qdrant vector-db endpoint URL (e.g. <c>http://qdrant:6333</c>).</summary>
+    public string? QdrantEndpoint { get; set; }
 }
