@@ -35,6 +35,7 @@ public sealed partial class ChatViewModel
         AttachedFile = null;
         AttachedFileName = null;
         AttachedFileText = null;
+        AttachmentError = null;
         StreamBuffer = "";
         NotifyStateChanged();
     }
@@ -66,6 +67,7 @@ public sealed partial class ChatViewModel
         AttachedFile = null;
         AttachedFileName = null;
         AttachedFileText = null;
+        AttachmentError = null;
         StreamBuffer = "";
         await LoadSessionsAsync();
         NotifyStateChanged();
@@ -91,6 +93,8 @@ public sealed partial class ChatViewModel
                         AttachmentKey = m.AttachmentKey,
                         AttachmentContentType = m.AttachmentContentType,
                         AttachmentSizeBytes = m.AttachmentSizeBytes,
+                        AttachmentParsed = m.AttachmentParsed,
+                        AttachmentExtractedChars = m.AttachmentExtractedChars,
                     };
                     if (m.ToolCalls != null)
                         msg.ToolCalls.AddRange(m.ToolCalls.Select(tc => new ToolCallInfo
@@ -119,7 +123,8 @@ public sealed partial class ChatViewModel
                 m.Role, m.Content, DateTimeOffset.Now,
                 m.ToolCalls.Select(tc => new ChatMemoryToolCall(
                     tc.ToolName, tc.Args, tc.Status.ToString(), tc.Result, tc.ResultType)).ToList(),
-                m.AttachmentName, m.AttachmentKey, m.AttachmentContentType, m.AttachmentSizeBytes, m.Thinking)).ToList(),
+                m.AttachmentName, m.AttachmentKey, m.AttachmentContentType, m.AttachmentSizeBytes,
+                m.Thinking, m.AttachmentParsed, m.AttachmentExtractedChars)).ToList(),
             DateTimeOffset.Now, DateTimeOffset.Now);
         try { await _memoryStore.SaveSessionAsync(_sessionId.Value, memory); } catch { }
         await LoadSessionsAsync();

@@ -56,62 +56,30 @@ window.placecontext = {
     return window.matchMedia('(max-width: 950px)').matches;
   },
 
-  // File upload helpers
-  _pendingDrop: null,
-
-  clickElement(el) {
-    if (el) el.click();
-  },
-
-  readFileInput(el) {
-    return new Promise(resolve => {
-      if (!el || !el.files || el.files.length === 0) { resolve(null); return; }
-      const file = el.files[0];
-      const reader = new FileReader();
-      reader.onload = () => {
-        const bytes = new Uint8Array(reader.result);
-        resolve({ name: file.name, size: file.size, data: Array.from(bytes) });
-        el.value = '';
-      };
-      reader.onerror = () => resolve(null);
-      reader.readAsArrayBuffer(file);
-    });
-  },
-
   scrollLogs() {
     document.querySelectorAll('.log-pre').forEach(el => {
       el.scrollTop = el.scrollHeight;
     });
   },
 
-  dropFile() {
-    return new Promise(resolve => {
-      if (this._pendingDrop) {
-        const f = this._pendingDrop;
-        this._pendingDrop = null;
-        const reader = new FileReader();
-        reader.onload = () => {
-          const bytes = new Uint8Array(reader.result);
-          resolve({ name: f.name, size: f.size, data: Array.from(bytes) });
-        };
-        reader.onerror = () => resolve(null);
-        reader.readAsArrayBuffer(f);
-      } else {
-        resolve(null);
-      }
-    });
-  },
-
-  setupDropZone(el) {
-    if (!el) return;
+  setupDropZone(el, inputId) {
+    if (!(el instanceof Element)) return false;
+    if (el.dataset.pcDropZone === '1') return true;
+    el.dataset.pcDropZone = '1';
     el.addEventListener('dragover', e => { e.preventDefault(); el.classList.add('drag-over'); });
     el.addEventListener('dragleave', () => el.classList.remove('drag-over'));
     el.addEventListener('drop', e => {
       e.preventDefault();
       el.classList.remove('drag-over');
       if (e.dataTransfer.files.length > 0) {
-        this._pendingDrop = e.dataTransfer.files[0];
+        const input = document.getElementById(inputId);
+        if (!(input instanceof HTMLInputElement)) return;
+        const transfer = new DataTransfer();
+        transfer.items.add(e.dataTransfer.files[0]);
+        input.files = transfer.files;
+        input.dispatchEvent(new Event('change', { bubbles: true }));
       }
     });
+    return true;
   }
 };

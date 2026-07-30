@@ -438,10 +438,15 @@ public sealed partial class ChatViewModel
         System.IO.Path.GetExtension(fileName).ToLowerInvariant() switch
         {
             ".csv" => "text/csv",
+            ".tsv" => "text/tab-separated-values",
+            ".json" => "application/json",
+            ".xml" => "application/xml",
+            ".yaml" or ".yml" => "application/yaml",
             ".pdf" => "application/pdf",
             ".doc" => "application/msword",
             ".docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            ".txt" or ".md" => "text/plain",
+            ".xlsx" => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            ".txt" or ".md" or ".log" or ".sql" => "text/plain",
             ".png" => "image/png",
             ".jpg" or ".jpeg" => "image/jpeg",
             _ => "application/octet-stream",

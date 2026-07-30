@@ -20,6 +20,18 @@ public sealed partial class ChatViewModel
         AttachedFile = data;
         AttachedFileName = name;
         AttachedFileText = extractedText;
+        AttachmentError = extractedText is null
+            ? "The file is attached, but no readable text could be extracted from it."
+            : null;
+        NotifyStateChanged();
+    }
+
+    public void SetAttachmentError(string message)
+    {
+        AttachedFile = null;
+        AttachedFileName = null;
+        AttachedFileText = null;
+        AttachmentError = message;
         NotifyStateChanged();
     }
 
@@ -28,6 +40,7 @@ public sealed partial class ChatViewModel
         AttachedFile = null;
         AttachedFileName = null;
         AttachedFileText = null;
+        AttachmentError = null;
         NotifyStateChanged();
     }
 

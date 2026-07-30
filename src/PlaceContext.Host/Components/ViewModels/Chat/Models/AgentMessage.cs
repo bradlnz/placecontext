@@ -18,4 +18,6 @@ public sealed class AgentMessage
     public string? AttachmentKey { get; set; }
     public string? AttachmentContentType { get; set; }
     public long AttachmentSizeBytes { get; set; }
+    public bool AttachmentParsed { get; set; }
+    public int AttachmentExtractedChars { get; set; }
 }

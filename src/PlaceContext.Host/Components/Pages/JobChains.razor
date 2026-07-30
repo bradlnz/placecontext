@@ -193,8 +193,14 @@ else
                         }
                     </div>
 
-                    <ChainPipeline Run="Vm.OpenRun" OnStepClick="@Vm.OpenStepRunAsync"
-                                   OnStepCancel="@(step => Vm.CancelStepRunAsync(step.RunId!.Value))" />
+                    <div class="running-steps-panel">
+                        <div class="running-steps-head">
+                            <span>Running steps</span>
+                            <span>@Vm.OpenRun.Steps.Count(s => s.Status == "Succeeded")/@Vm.OpenRun.Steps.Count complete</span>
+                        </div>
+                        <ChainPipeline Run="Vm.OpenRun" OnStepClick="@Vm.OpenStepRunAsync"
+                                       OnStepCancel="@(step => Vm.CancelStepRunAsync(step.RunId!.Value))" />
+                    </div>
 
                     @if (Vm.OpenRun.FinalOutput is { Length: > 0 })
                     {

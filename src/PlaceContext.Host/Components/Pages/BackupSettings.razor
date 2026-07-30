@@ -15,14 +15,27 @@
         manifest's own <span class="code">notes</span> field.
     </div>
 
-    <div class="dccard card-export">
-        <div class="card-title">Export backup</div>
-        <div class="card-desc">
-            Downloads projects, jobs, chains, triggers, event types, data mappings, and workspace
-            settings (timezone, branding, GitHub login) as one JSON file.
+    <div class="export-grid">
+        <div class="dccard card-export">
+            <div class="card-title">Export backup</div>
+            <div class="card-desc">
+                Downloads projects, jobs, chains, triggers, event types, data mappings, and workspace
+                settings (timezone, branding, GitHub login) as one JSON file.
+            </div>
+            <div>
+                <a class="dcbtn primary link-btn" href="/backup/export">Download backup</a>
+            </div>
         </div>
-        <div>
-            <a class="dcbtn primary link-btn" href="/backup/export">Download backup</a>
+
+        <div class="dccard card-export code-export">
+            <div class="card-title">Export job code</div>
+            <div class="card-desc">
+                Downloads every job's map and reduce source files as a ZIP, organised into project and
+                job folders. Environment values and vault secrets are excluded.
+            </div>
+            <div>
+                <a class="dcbtn primary link-btn" href="/backup/jobs-code">Download job code</a>
+            </div>
         </div>
     </div>
 

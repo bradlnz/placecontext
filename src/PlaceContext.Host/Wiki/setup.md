@@ -1,45 +1,50 @@
-# Setting up PlaceContext
+# Setup and settings
 
-*From a fresh machine to a working platform: the guided wizard, dev vs fleet, Tailscale, and the feature keys.*
+*Install PlaceContext, check it, and configure the workspace.*
 
-## The one command
+## Install
+
+Install the client:
 
 ```bash
-./deploy/pctl setup
+curl -fsSL https://get.placecontext.ai/install.sh | bash
 ```
 
-The wizard walks every step in order and each one maps to a plain `pctl` command, so nothing is
-magic. The long-form version of this journey lives in the repo at `docs/SETUP.md`.
+Then run the guided installer:
 
-1. **Doctor** — checks Docker, k3d, kubectl (and tells you how to get what's missing).
-2. **Mode** — what this machine should be:
-   - **dev** — everything on this machine (a real 1-server + 2-agent k3d cluster).
-   - **server** — production master of a new fleet.
-   - **join** — a worker joining an existing fleet with a join code.
-3. **Tailscale** — fleet nodes connect via Tailscale. Paste an OAuth client once
-   (`pctl ts-oauth`); every join afterwards mints its own single-use tailnet key —
-   you never handle keys again.
-4. **Platform keys** — generate the event-ingest key (or skip).
-   They're kept in a local overlay that every deploy re-applies, so redeploys never
-   silently disable the gateways.
-5. **Bring-up** — `dev up`, `server up`, or `join --code …` for the chosen mode.
+```bash
+placecontext
+```
 
-## Adding fleet machines
+You can also choose a mode directly:
 
-On the master: `sudo pctl join-code` prints one string (a `PC2.` code) carrying the master's
-tailnet address, the cluster token, and a fresh Tailscale key. On the new machine:
-`sudo pctl join --code '…'` — or press `[j]` in the TUI. One string, on the tailnet, in the
-cluster. Codes stay valid for an hour; the node itself is a durable tailnet device.
+```bash
+placecontext install --docker   # laptop or single-machine install
+placecontext install --service  # server or fleet master
+```
 
-## What the feature keys unlock
+The portal is normally available at `http://localhost:7700`.
 
-| Key | Feature |
-|---|---|
-| Ingest key | External systems `POST /ingest/{event}` to fire event triggers |
+## Useful commands
 
-## After setup
+```bash
+placecontext status
+placecontext logs -f
+placecontext url
+placecontext doctor
+placecontext upgrade
+```
 
-- **First project**: portal → **Onboarding**, or have an agent create one over MCP.
-- **Agents**: connect MCP at `http://<host>:7700/mcp` and let an agent author and run jobs
-  against the project (see *MCP and agents*).
-- **Dashboard**: `pctl tui` — the live cluster view.
+## Workspace settings
+
+- **Branding** changes the workspace name, logo, and colours.
+- **Menu** controls navigation labels, order, and visibility.
+- **Locality** sets the timezone used by schedules and displayed dates.
+- **Backup** exports or imports workspace configuration. It can also download all job source
+  files as a ZIP arranged by project and job.
+- **Access** manages members, roles, and permission overrides.
+- **Security** manages sign-in security.
+- **API tokens** creates personal tokens for the entity data API.
+
+Backup exports do not include run history or vault secrets. The job-code ZIP also excludes
+environment values.

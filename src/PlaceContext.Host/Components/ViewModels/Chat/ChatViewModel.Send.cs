@@ -18,10 +18,12 @@ public sealed partial class ChatViewModel
     public async Task SendAsync(Func<Task> scrollToBottom, Func<Task> scrollAfterRender)
     {
         var text = Input.Trim();
-        if (string.IsNullOrEmpty(text) || Streaming || !ProjectId.HasValue) return;
+        var hasAttachment = AttachedFile is { Length: > 0 } && !string.IsNullOrWhiteSpace(AttachedFileName);
+        var sentAttachmentName = AttachedFileName;
+        if ((string.IsNullOrEmpty(text) && !hasAttachment) || Streaming || !ProjectId.HasValue) return;
 
         // Expand /commands into tool calls before sending to the LLM.
-        if (text.StartsWith("/"))
+        if (!string.IsNullOrEmpty(text) && text.StartsWith("/"))
         {
             var parts = text[1..].Split(' ', 2, StringSplitOptions.TrimEntries);
             var cmdName = parts[0];
@@ -37,11 +39,26 @@ public sealed partial class ChatViewModel
             }
         }
 
-        var userText = text;
-        if (AttachedFileName != null && AttachedFileText != null)
-            userText += $"\n\n## Attached file: {AttachedFileName}\n\n{AttachedFileText}";
+        var requestText = string.IsNullOrWhiteSpace(text)
+            ? $"Please read and summarize the attached file \"{AttachedFileName}\"."
+            : text;
+        var userText = requestText;
+        if (AttachedFileName != null)
+        {
+            var parsedText = AttachedFileText ??
+                "[No readable text could be extracted from this attachment.]";
+            userText += $"\n\n## Attached file: {AttachedFileName}\n\n{parsedText}";
+        }
 
         var userMsg = new AgentMessage("user", userText);
+        if (AttachedFileName != null)
+        {
+            userMsg.AttachmentName = AttachedFileName;
+            userMsg.AttachmentContentType = ContentTypeFor(AttachedFileName);
+            userMsg.AttachmentSizeBytes = AttachedFile?.Length ?? 0;
+            userMsg.AttachmentParsed = AttachedFileText is not null;
+            userMsg.AttachmentExtractedChars = AttachedFileText?.Length ?? 0;
+        }
 
         if (AttachedFile != null && AttachedFileName != null && _sessionId.HasValue && _objectStore.IsEnabled)
         {
@@ -52,20 +69,11 @@ public sealed partial class ChatViewModel
                     await _objectStore.EnsureBucketAsync(AttachmentsBucket);
                     _attachmentsBucketEnsured = true;
                 }
-                var contentType = ContentTypeFor(AttachedFileName);
                 var key = $"chat/{_tenant.TenantId}/{ProjectId!.Value}/{_sessionId.Value}/{Guid.NewGuid():N}-{SanitizeFileName(AttachedFileName)}";
-                await _objectStore.PutAsync(AttachmentsBucket, key, AttachedFile, contentType);
-                userMsg.AttachmentName = AttachedFileName;
+                await _objectStore.PutAsync(AttachmentsBucket, key, AttachedFile, userMsg.AttachmentContentType!);
                 userMsg.AttachmentKey = key;
-                userMsg.AttachmentContentType = contentType;
-                userMsg.AttachmentSizeBytes = AttachedFile.Length;
             }
             catch { }
-        }
-        else if (AttachedFileName != null)
-        {
-            userMsg.AttachmentName = AttachedFileName;
-            userMsg.AttachmentSizeBytes = AttachedFile?.Length ?? 0;
         }
 
         Messages.Add(userMsg);
@@ -73,11 +81,14 @@ public sealed partial class ChatViewModel
         AttachedFile = null;
         AttachedFileName = null;
         AttachedFileText = null;
+        AttachmentError = null;
         Streaming = true;
         StreamBuffer = "";
 
         if (Messages.Count(m => m.Role == "user") == 1)
-            _sessionTitle = text.Length > 50 ? text[..50] + "…" : text;
+            _sessionTitle = text.Length > 50
+                ? text[..50] + "…"
+                : string.IsNullOrWhiteSpace(text) ? sentAttachmentName ?? "File upload" : text;
 
         // Replace any previous cancellation source so a fresh send always starts clean.
         _sendCts?.Dispose();
@@ -88,7 +99,7 @@ public sealed partial class ChatViewModel
 
         // Build RAG context in parallel — don't block the typing indicator.
         var ragTask = _ragEnabled
-            ? _contextBuilder.BuildContextAsync(ProjectId.Value, text, _maxContextChunks).ContinueWith(t => t.Status == TaskStatus.RanToCompletion ? t.Result : "")
+            ? _contextBuilder.BuildContextAsync(ProjectId.Value, requestText, _maxContextChunks).ContinueWith(t => t.Status == TaskStatus.RanToCompletion ? t.Result : "")
             : Task.FromResult("");
 
         try

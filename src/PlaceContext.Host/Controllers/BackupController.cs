@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 using PlaceContext.Application;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Ports;
+using PlaceContext.Host.Backup;
 
 namespace PlaceContext.Host.Controllers;
 
@@ -31,6 +32,15 @@ public sealed class BackupController : ControllerBase
         var json = JsonSerializer.Serialize(manifest, new JsonSerializerOptions { WriteIndented = true });
         var fileName = $"placecontext-backup-{DateTimeOffset.UtcNow:yyyy-MM-dd}.json";
         return File(Encoding.UTF8.GetBytes(json), "application/json", fileName);
+    }
+
+    [HttpGet("jobs-code")]
+    public async Task<IActionResult> ExportJobsCode()
+    {
+        var manifest = await _svc.ExportManifestAsync(HttpContext.RequestAborted);
+        var archive = JobsCodeArchiveBuilder.Build(manifest);
+        var fileName = $"placecontext-jobs-code-{manifest.ExportedAt:yyyy-MM-dd}.zip";
+        return File(archive, "application/zip", fileName);
     }
 
     [HttpPost("import")]

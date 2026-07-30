@@ -89,6 +89,7 @@ public sealed partial class ChatViewModel : PageViewModel
     public byte[]? AttachedFile { get; private set; }
     public string? AttachedFileName { get; private set; }
     public string? AttachedFileText { get; private set; }
+    public string? AttachmentError { get; private set; }
 
     // ── Private state ────────────────────────────────────────────────────────
 
