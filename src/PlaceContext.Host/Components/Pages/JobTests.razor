@@ -141,6 +141,9 @@
                                                 @onclick="@(() => RunAsync(test.Id))">▶</button>
                                         <button class="icon-action" title="Edit test" aria-label="Edit @test.Name"
                                                 @onclick="@(() => EditTest(test))">✎</button>
+                                        <button class="icon-action code-action" title="Open test code editor"
+                                                aria-label="Open code editor for @test.Name"
+                                                @onclick="@(() => OpenCodeEditor(test.Id))">&lt;/&gt;</button>
                                         <button class="icon-action" title="Delete test" aria-label="Delete @test.Name"
                                                 @onclick="@(() => _confirmDelete = test.Id)">⋯</button>
                                     }
@@ -214,6 +217,23 @@
                     <input type="checkbox" @bind="_editEnabled" />
                     <span><strong>Enabled</strong><small>Included when Run all is selected.</small></span>
                 </label>
+
+                <div class="code-editor-callout">
+                    <div>
+                        <strong>Test code</strong>
+                        <small>Add multi-file validation code in Python, Node, Go, Ruby, or C#.</small>
+                    </div>
+                    @if (_editId is { } testId)
+                    {
+                        <button class="dcbtn" @onclick="@(() => OpenCodeEditor(testId))">
+                            &lt;/&gt; Open code editor
+                        </button>
+                    }
+                    else
+                    {
+                        <small>Save this test first, then open its code editor.</small>
+                    }
+                </div>
             </div>
 
             <footer>
@@ -311,6 +331,8 @@
     }
 
     private void CloseEditor() => _editing = false;
+    private void OpenCodeEditor(Guid testId)
+        => Nav.NavigateTo($"/project/{ProjectId}/tests/{testId}");
 
     private async Task SaveAsync()
     {

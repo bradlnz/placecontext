@@ -27,4 +27,8 @@ public sealed record JobTestCaseView(
     DateTimeOffset? LastRunAt,
     long? LastDurationMs,
     DateTimeOffset CreatedAt,
-    DateTimeOffset UpdatedAt);
+    DateTimeOffset UpdatedAt,
+    string? RuntimeId,
+    string? Entrypoint,
+    IReadOnlyList<CodeFileDto> CodeFiles,
+    bool AllowNetworkEgress);

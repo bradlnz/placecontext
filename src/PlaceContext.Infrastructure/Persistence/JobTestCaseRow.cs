@@ -20,4 +20,8 @@ public sealed class JobTestCaseRow : ITenantOwned
     public long? LastDurationMs { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
+    public string? RuntimeId { get; set; }
+    public string? Entrypoint { get; set; }
+    public string CodeFilesJson { get; set; } = "[]";
+    public bool AllowNetworkEgress { get; set; }
 }

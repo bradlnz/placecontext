@@ -150,6 +150,14 @@ public sealed class PlaceContextService : IPlaceContextService
         Guid projectId, CancellationToken ct = default)
         => _dispatcher.Query(new ListJobTestCasesQuery(projectId), ct);
 
+    public Task<JobTestCaseView?> GetJobTestCaseAsync(
+        Guid testId, CancellationToken ct = default)
+        => _dispatcher.Query(new GetJobTestCaseQuery(testId), ct);
+
+    public Task<JobTestCaseView> UpdateJobTestCodeAsync(
+        UpdateJobTestCodeCommand command, CancellationToken ct = default)
+        => _dispatcher.Send(command, ct);
+
     public Task<IReadOnlyList<OpenSearchIndexView>> ListOpenSearchIndicesAsync(
         Guid projectId, CancellationToken ct = default)
         => _dispatcher.Query(new ListOpenSearchIndicesQuery(projectId), ct);

@@ -231,6 +231,8 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
             e.Property(x => x.AssertionType).HasDefaultValue("Succeeds");
             e.Property(x => x.Enabled).HasDefaultValue(true);
             e.Property(x => x.LastStatus).HasDefaultValue("NotRun");
+            e.Property(x => x.CodeFilesJson).HasDefaultValue("[]");
+            e.Property(x => x.AllowNetworkEgress).HasDefaultValue(false);
             e.Property(x => x.CreatedAt).HasDefaultValueSql("now()");
             e.Property(x => x.UpdatedAt).HasDefaultValueSql("now()");
             e.HasOne<JobRow>()

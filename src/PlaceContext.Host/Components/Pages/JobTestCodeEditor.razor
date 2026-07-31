@@ -1,0 +1,502 @@
+@page "/project/{ProjectId:guid}/tests/{TestId:guid}"
+@attribute [Authorize(Policy = Permission.JobsEdit)]
+@layout PlaceContext.Host.Components.Layout.ProjectLayout
+@implements IAsyncDisposable
+@inject IPlaceContextService Svc
+@inject PortalUiState Ui
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+<PageTitle>PlaceContext — @(_test?.Name ?? "Test code")</PageTitle>
+
+@if (_loading)
+{
+    <Skeleton Kind="detail" Rows="8" Padded />
+}
+else if (_test is null)
+{
+    <div class="notice">Test not found. <a href="@($"/project/{ProjectId}/tests")">Back to Tests</a></div>
+}
+else
+{
+    <div class="page">
+        <header class="toolbar">
+            <button class="dcbtn back-button" @onclick="@(() => Nav.NavigateTo($"/project/{ProjectId}/tests"))">←</button>
+            <div class="title-block">
+                <strong>@_test.Name</strong>
+                <span>@_test.JobName</span>
+            </div>
+            <select class="runtime-select" @bind="_runtimeId" @bind:after="RuntimeChanged">
+                <option value="python">Python</option>
+                <option value="node">Node.js</option>
+                <option value="go">Go</option>
+                <option value="ruby">Ruby</option>
+                <option value="dotnet">.NET / C#</option>
+            </select>
+            @if (_monacoLite)
+            {
+                <span class="editor-warning">basic editor</span>
+            }
+            <span class="spacer"></span>
+            @if (_message is not null)
+            {
+                <span class="toolbar-message">@_message</span>
+            }
+            <label class="egress-toggle" title="Allow this test's validation code to access external services">
+                <input type="checkbox" @bind="_allowNetworkEgress" />
+                <span>Network</span>
+            </label>
+            <button class="dcbtn" disabled="@_busy" @onclick="ResetStarterAsync">Starter</button>
+            <button class="dcbtn" disabled="@_busy" @onclick="RunAsync">
+                @(_running ? "Running…" : "▶ Run test")
+            </button>
+            <button class="dcbtn primary" disabled="@_busy" @onclick="SaveAsync">
+                @(_saving ? "Saving…" : "Save code")
+            </button>
+        </header>
+
+        <div class="contract-bar">
+            <strong>stdin</strong>
+            <code>{ "input": …, "run": { "status": "Succeeded", "output": …, "shards": […] } }</code>
+            <span>Exit <b>0</b> to pass; any other exit code fails. Stdout becomes the test message.</span>
+        </div>
+
+        <main class="workspace">
+            <aside class="file-tree">
+                <div class="file-tree-head">
+                    <span>Test files</span>
+                    <button class="add-file-button" @onclick="StartAddFile" title="Add file">+</button>
+                </div>
+
+                @if (_addingFile)
+                {
+                    <div class="add-file-row">
+                        <input class="dcinput" placeholder="path/name.py"
+                               @bind="_newFileName" @bind:event="oninput"
+                               @onkeydown="AddFileKey" @ref="_newFileInput" />
+                        <button @onclick="ConfirmAddFile">✓</button>
+                    </div>
+                }
+
+                <div class="file-list">
+                    @for (var index = 0; index < _files.Count; index++)
+                    {
+                        var fileIndex = index;
+                        var file = _files[fileIndex];
+                        <div class="file-row @(fileIndex == _active ? "active" : null)"
+                             @onclick="@(() => SwitchFileAsync(fileIndex))">
+                            <span title="@file.Path">@file.Path</span>
+                            @if (file.Path == _entrypoint)
+                            {
+                                <b title="Entrypoint">★</b>
+                            }
+                            else
+                            {
+                                <button title="Set as entrypoint" @onclick:stopPropagation="true"
+                                        @onclick="@(() => _entrypoint = file.Path)">☆</button>
+                            }
+                            @if (_files.Count > 1)
+                            {
+                                <button class="delete-file" title="Delete file"
+                                        @onclick:stopPropagation="true"
+                                        @onclick="@(() => DeleteFileAsync(fileIndex))">×</button>
+                            }
+                        </div>
+                    }
+                </div>
+
+                <div class="file-foot">
+                    <span>Entrypoint</span>
+                    <code>@(_entrypoint ?? DefaultEntrypoint(_runtimeId))</code>
+                    <small>Dependency manifests are supported and use the same warm-cache path as Jobs.</small>
+                </div>
+            </aside>
+
+            <section class="editor-pane">
+                <div id="@_editorId" class="editor-host"></div>
+
+                <div class="result-panel @(_panelOpen ? "open" : null)">
+                    <button class="result-bar" @onclick="@(() => _panelOpen = !_panelOpen)">
+                        <span>Test result</span>
+                        @if (_lastResult is not null)
+                        {
+                            <b class="@_lastResult.LastStatus.ToLowerInvariant()">@_lastResult.LastStatus</b>
+                            @if (_lastResult.LastDurationMs is { } duration)
+                            {
+                                <small>@FormatDuration(duration)</small>
+                            }
+                        }
+                        <i></i>
+                        <span>@(_panelOpen ? "▾" : "▴")</span>
+                    </button>
+                    @if (_panelOpen)
+                    {
+                        <div class="result-body">
+                            @if (_lastResult is null)
+                            {
+                                <span>Run the test to execute the Job, apply its built-in assertion, then run this validation code.</span>
+                            }
+                            else
+                            {
+                                <strong class="@_lastResult.LastStatus.ToLowerInvariant()">@_lastResult.LastMessage</strong>
+                                @if (!string.IsNullOrWhiteSpace(_lastResult.LastActualOutput))
+                                {
+                                    <details>
+                                        <summary>Job output</summary>
+                                        <pre>@PrettyJson(_lastResult.LastActualOutput)</pre>
+                                    </details>
+                                }
+                            }
+                        </div>
+                    }
+                </div>
+            </section>
+        </main>
+    </div>
+}
+
+@code {
+    [Parameter] public Guid ProjectId { get; set; }
+    [Parameter] public Guid TestId { get; set; }
+
+    private readonly string _editorId = "pctestmonaco-" + Guid.NewGuid().ToString("N");
+    private JobTestCaseView? _test;
+    private JobTestCaseView? _lastResult;
+    private readonly List<EditorFile> _files = new();
+    private string _runtimeId = "python";
+    private string? _entrypoint;
+    private bool _allowNetworkEgress;
+    private int _active;
+    private bool _loading = true;
+    private bool _saving;
+    private bool _running;
+    private bool _panelOpen = true;
+    private bool _monacoReady;
+    private bool _monacoLite;
+    private bool _addingFile;
+    private string _newFileName = "";
+    private ElementReference _newFileInput;
+    private string? _message;
+    private bool _busy => _saving || _running;
+
+    private sealed class EditorFile
+    {
+        public string Path { get; set; } = "";
+        public string Content { get; set; } = "";
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _loading = true;
+        _monacoReady = false;
+        try
+        {
+            _test = await Svc.GetJobTestCaseAsync(TestId);
+            if (_test is not null && _test.ProjectId != ProjectId)
+            {
+                _test = null;
+                return;
+            }
+            if (_test is not null)
+            {
+                _runtimeId = _test.RuntimeId ?? "python";
+                _entrypoint = _test.Entrypoint;
+                _allowNetworkEgress = _test.AllowNetworkEgress;
+                _files.Clear();
+                foreach (var file in _test.CodeFiles)
+                    _files.Add(new EditorFile { Path = file.Path, Content = file.Content });
+                if (_files.Count == 0) ApplyStarter(_runtimeId);
+                _active = Math.Max(0, _files.FindIndex(file => file.Path == _entrypoint));
+                _lastResult = _test.LastStatus == "NotRun" ? null : _test;
+                Ui.Set(_test.Name, "test code · " + _runtimeId);
+            }
+        }
+        catch (Exception ex) { _message = ex.Message; }
+        finally { _loading = false; }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_monacoReady || _test is null || _files.Count == 0) return;
+        _monacoReady = true;
+        var active = _files[_active];
+        try
+        {
+            var rich = await JS.InvokeAsync<bool>(
+                "pcmonaco.init", _editorId, active.Content, Language(active.Path), "vs-dark", active.Path);
+            if (!rich) { _monacoLite = true; StateHasChanged(); }
+        }
+        catch
+        {
+            _monacoLite = true;
+            StateHasChanged();
+        }
+    }
+
+    private async Task SyncActiveAsync()
+    {
+        if (!_monacoReady || _files.Count == 0) return;
+        try
+        {
+            var content = await JS.InvokeAsync<string?>("pcmonaco.getValue", _editorId);
+            if (content is not null) _files[_active].Content = content;
+        }
+        catch { }
+    }
+
+    private async Task OpenFileAsync(EditorFile file)
+    {
+        try
+        {
+            await JS.InvokeVoidAsync(
+                "pcmonaco.openFile", _editorId, file.Path, file.Content, Language(file.Path));
+        }
+        catch (Exception ex) { _message = ex.Message; }
+    }
+
+    private async Task SwitchFileAsync(int index)
+    {
+        if (index == _active) return;
+        await SyncActiveAsync();
+        _active = index;
+        await OpenFileAsync(_files[_active]);
+    }
+
+    private async Task StartAddFile()
+    {
+        _addingFile = true;
+        _newFileName = "";
+        StateHasChanged();
+        await Task.Yield();
+        try { await _newFileInput.FocusAsync(); } catch { }
+    }
+
+    private async Task AddFileKey(KeyboardEventArgs args)
+    {
+        if (args.Key == "Enter") await ConfirmAddFile();
+        else if (args.Key == "Escape") _addingFile = false;
+    }
+
+    private async Task ConfirmAddFile()
+    {
+        var path = NormalizePath(_newFileName);
+        if (string.IsNullOrWhiteSpace(path)) { _addingFile = false; return; }
+        if (_files.Any(file => file.Path == path))
+        {
+            _message = $"'{path}' already exists.";
+            return;
+        }
+        await SyncActiveAsync();
+        _files.Add(new EditorFile { Path = path });
+        _active = _files.Count - 1;
+        _addingFile = false;
+        await OpenFileAsync(_files[_active]);
+    }
+
+    private async Task DeleteFileAsync(int index)
+    {
+        if (_files.Count <= 1) return;
+        await SyncActiveAsync();
+        var removed = _files[index];
+        _files.RemoveAt(index);
+        if (_entrypoint == removed.Path) _entrypoint = _files[0].Path;
+        _active = Math.Clamp(_active > index ? _active - 1 : _active, 0, _files.Count - 1);
+        try { await JS.InvokeVoidAsync("pcmonaco.closeFile", _editorId, removed.Path); } catch { }
+        await OpenFileAsync(_files[_active]);
+    }
+
+    private void RuntimeChanged()
+    {
+        Ui.Set(_test?.Name ?? "Test code", "test code · " + _runtimeId);
+        _message = "Runtime changed. Use Starter to replace the files with a matching example.";
+    }
+
+    private async Task ResetStarterAsync()
+    {
+        await SyncActiveAsync();
+        foreach (var file in _files)
+            try { await JS.InvokeVoidAsync("pcmonaco.closeFile", _editorId, file.Path); } catch { }
+        ApplyStarter(_runtimeId);
+        await OpenFileAsync(_files[0]);
+        _message = $"{RuntimeLabel(_runtimeId)} starter loaded. Save to keep it.";
+    }
+
+    private void ApplyStarter(string runtime)
+    {
+        var starter = Starter(runtime);
+        _files.Clear();
+        _files.Add(new EditorFile { Path = starter.Path, Content = starter.Content });
+        _entrypoint = starter.Path;
+        _active = 0;
+    }
+
+    private async Task<JobTestCaseView> SaveCoreAsync()
+    {
+        await SyncActiveAsync();
+        var entrypoint = _entrypoint;
+        if (string.IsNullOrWhiteSpace(entrypoint)) entrypoint = _files[0].Path;
+        var updated = await Svc.UpdateJobTestCodeAsync(new UpdateJobTestCodeCommand(
+            TestId, _runtimeId, entrypoint,
+            _files.Select(file => new CodeFileDto(file.Path, file.Content)).ToList(),
+            _allowNetworkEgress));
+        _test = updated;
+        _entrypoint = updated.Entrypoint ?? entrypoint;
+        return updated;
+    }
+
+    private async Task SaveAsync()
+    {
+        _saving = true;
+        _message = null;
+        try
+        {
+            await SaveCoreAsync();
+            _message = "Test code saved.";
+        }
+        catch (Exception ex) { _message = ex.Message; }
+        finally { _saving = false; }
+    }
+
+    private async Task RunAsync()
+    {
+        _running = true;
+        _message = null;
+        try
+        {
+            await SaveCoreAsync();
+            _lastResult = await Svc.RunJobTestCaseAsync(TestId);
+            _test = _lastResult;
+            _panelOpen = true;
+            _message = _lastResult.LastStatus;
+        }
+        catch (Exception ex) { _message = ex.Message; }
+        finally { _running = false; }
+    }
+
+    private static (string Path, string Content) Starter(string runtime) => runtime switch
+    {
+        "node" => ("test.js", """
+            const fs = require("fs");
+            const test = JSON.parse(fs.readFileSync(0, "utf8"));
+
+            if (test.run.status !== "Succeeded") {
+              console.error(`Expected Succeeded, got ${test.run.status}`);
+              process.exit(1);
+            }
+
+            // Add assertions against test.run.output here.
+            console.log("Job output passed validation");
+            """),
+        "go" => ("test.go", """
+            package main
+
+            import (
+                "encoding/json"
+                "fmt"
+                "os"
+            )
+
+            func main() {
+                var test struct {
+                    Run struct {
+                        Status string `json:"status"`
+                        Output any    `json:"output"`
+                    } `json:"run"`
+                }
+                if err := json.NewDecoder(os.Stdin).Decode(&test); err != nil {
+                    fmt.Fprintln(os.Stderr, err)
+                    os.Exit(1)
+                }
+                if test.Run.Status != "Succeeded" {
+                    fmt.Fprintf(os.Stderr, "expected Succeeded, got %s\n", test.Run.Status)
+                    os.Exit(1)
+                }
+                // Add assertions against test.Run.Output here.
+                fmt.Println("Job output passed validation")
+            }
+            """),
+        "ruby" => ("test.rb", """
+            require "json"
+
+            test = JSON.parse($stdin.read)
+            unless test.dig("run", "status") == "Succeeded"
+              warn "Expected the Job to succeed"
+              exit 1
+            end
+
+            # Add assertions against test.dig("run", "output") here.
+            puts "Job output passed validation"
+            """),
+        "dotnet" => ("test.cs", """
+            using System.Text.Json;
+
+            using var document = JsonDocument.Parse(Console.In.ReadToEnd());
+            var run = document.RootElement.GetProperty("run");
+            if (run.GetProperty("status").GetString() != "Succeeded")
+            {
+                Console.Error.WriteLine("Expected the Job to succeed");
+                return 1;
+            }
+
+            // Add assertions against run.GetProperty("output") here.
+            Console.WriteLine("Job output passed validation");
+            return 0;
+            """),
+        _ => ("test.py", """
+            import json
+            import sys
+
+            test = json.load(sys.stdin)
+            if test["run"]["status"] != "Succeeded":
+                raise AssertionError(f'Expected Succeeded, got {test["run"]["status"]}')
+
+            # Add assertions against test["run"]["output"] here.
+            print("Job output passed validation")
+            """),
+    };
+
+    private static string DefaultEntrypoint(string runtime) => Starter(runtime).Path;
+    private static string RuntimeLabel(string runtime) => runtime switch
+    {
+        "node" => "Node.js",
+        "go" => "Go",
+        "ruby" => "Ruby",
+        "dotnet" => ".NET / C#",
+        _ => "Python",
+    };
+    private static string NormalizePath(string value)
+        => value.Trim().Replace('\\', '/').TrimStart('/');
+    private static string Language(string path) => System.IO.Path.GetExtension(path).ToLowerInvariant() switch
+    {
+        ".js" or ".cjs" or ".mjs" => "javascript",
+        ".ts" => "typescript",
+        ".py" => "python",
+        ".go" => "go",
+        ".rb" => "ruby",
+        ".cs" => "csharp",
+        ".json" => "json",
+        ".sh" => "shell",
+        ".md" => "markdown",
+        ".html" => "html",
+        ".css" => "css",
+        ".yml" or ".yaml" => "yaml",
+        _ => "plaintext",
+    };
+    private static string FormatDuration(long milliseconds)
+        => milliseconds < 1000 ? $"{milliseconds} ms" : $"{milliseconds / 1000d:0.0} s";
+    private static string PrettyJson(string raw)
+    {
+        try
+        {
+            using var document = System.Text.Json.JsonDocument.Parse(raw);
+            return System.Text.Json.JsonSerializer.Serialize(document.RootElement,
+                new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+        }
+        catch { return raw; }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        try { await JS.InvokeVoidAsync("pcmonaco.destroy", _editorId); } catch { }
+    }
+}

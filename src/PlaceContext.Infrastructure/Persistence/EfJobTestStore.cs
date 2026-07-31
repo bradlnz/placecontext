@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Ports;
 
@@ -47,6 +48,10 @@ public sealed class EfJobTestStore : IJobTestStore
         row.LastDurationMs = test.LastDurationMs;
         row.CreatedAt = test.CreatedAt;
         row.UpdatedAt = test.UpdatedAt;
+        row.RuntimeId = test.RuntimeId;
+        row.Entrypoint = test.Entrypoint;
+        row.CodeFilesJson = JsonSerializer.Serialize(test.CodeFiles);
+        row.AllowNetworkEgress = test.AllowNetworkEgress;
         await _db.SaveChangesAsync(ct);
     }
 
@@ -80,6 +85,21 @@ public sealed class EfJobTestStore : IJobTestStore
             row.LastRunAt,
             row.LastDurationMs,
             row.CreatedAt,
-            row.UpdatedAt);
+            row.UpdatedAt,
+            row.RuntimeId,
+            row.Entrypoint,
+            DeserializeFiles(row.CodeFilesJson),
+            row.AllowNetworkEgress);
+    }
+
+    private static IReadOnlyList<CodeFileDto> DeserializeFiles(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json)) return Array.Empty<CodeFileDto>();
+        try
+        {
+            var files = JsonSerializer.Deserialize<List<CodeFileDto>>(json);
+            return files is null ? Array.Empty<CodeFileDto>() : files;
+        }
+        catch (JsonException) { return Array.Empty<CodeFileDto>(); }
     }
 }

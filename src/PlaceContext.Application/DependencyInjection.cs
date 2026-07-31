@@ -58,6 +58,7 @@ public static class DependencyInjection
         services.AddScoped<ICommandHandler<SaveJobTestCaseCommand, JobTestCaseView>, SaveJobTestCaseHandler>();
         services.AddScoped<ICommandHandler<DeleteJobTestCaseCommand, bool>, DeleteJobTestCaseHandler>();
         services.AddScoped<ICommandHandler<RunJobTestCaseCommand, JobTestCaseView>, RunJobTestCaseHandler>();
+        services.AddScoped<ICommandHandler<UpdateJobTestCodeCommand, JobTestCaseView>, UpdateJobTestCodeHandler>();
         services.AddScoped<ICommandHandler<SaveOpenSearchDashboardCommand, OpenSearchDashboardView>, SaveOpenSearchDashboardHandler>();
         services.AddScoped<ICommandHandler<DeleteOpenSearchDashboardCommand, bool>, DeleteOpenSearchDashboardHandler>();
         services.AddScoped<ICommandHandler<ReplayRunCommand, JobRunDetailView>, ReplayRunHandler>();
@@ -169,6 +170,7 @@ public static class DependencyInjection
         services.AddScoped<IQueryHandler<EntityTagPairsQuery, IReadOnlyList<EntityTagPair>>, EntityTagPairsHandler>();
         services.AddScoped<IQueryHandler<GetJobRunQuery, JobRunDetailView?>, GetJobRunHandler>();
         services.AddScoped<IQueryHandler<ListJobTestCasesQuery, IReadOnlyList<JobTestCaseView>>, ListJobTestCasesHandler>();
+        services.AddScoped<IQueryHandler<GetJobTestCaseQuery, JobTestCaseView?>, GetJobTestCaseHandler>();
         services.AddScoped<IQueryHandler<ListOpenSearchIndicesQuery, IReadOnlyList<OpenSearchIndexView>>, ListOpenSearchIndicesHandler>();
         services.AddScoped<IQueryHandler<ListOpenSearchFieldsQuery, IReadOnlyList<OpenSearchFieldView>>, ListOpenSearchFieldsHandler>();
         services.AddScoped<IQueryHandler<SearchOpenSearchQuery, OpenSearchSearchView>, SearchOpenSearchHandler>();

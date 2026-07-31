@@ -232,6 +232,7 @@
 }
 
 .icon-action:disabled { opacity: .35; cursor: default; }
+.code-action { width: 34px; font-family: var(--font-mono); font-size: 9px; }
 
 .actual-output {
     margin-top: 8px;
@@ -366,6 +367,26 @@
 }
 
 .enabled-field small { color: var(--text-3); }
+
+.code-editor-callout {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px;
+    border: 1px solid color-mix(in srgb, var(--brand-2) 35%, var(--border));
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--brand-2) 5%, transparent);
+}
+
+.code-editor-callout > div {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    font-size: 12px;
+}
+
+.code-editor-callout small { color: var(--text-3); font-size: 10.5px; }
 
 .test-editor > footer {
     padding: 14px 20px;

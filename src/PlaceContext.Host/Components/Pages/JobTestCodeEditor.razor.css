@@ -1,0 +1,234 @@
+.notice { padding: 24px; color: var(--text-3); }
+
+.page {
+    height: calc(100vh - 54px);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.toolbar {
+    min-height: 53px;
+    padding: 8px 14px;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    border-bottom: 1px solid var(--border);
+    background: var(--card);
+}
+
+.back-button { border: 0; background: transparent; color: var(--text-3); }
+.title-block { min-width: 120px; display: flex; flex-direction: column; gap: 1px; }
+.title-block strong { font-size: 13px; }
+.title-block span { color: var(--text-3); font-size: 9.5px; }
+
+.runtime-select {
+    height: 30px;
+    padding: 0 25px 0 9px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--bg);
+    color: var(--brand-2);
+    font-size: 11px;
+}
+
+.editor-warning {
+    padding: 2px 7px;
+    border-radius: 4px;
+    background: var(--warn-bg);
+    color: var(--warn);
+    font-size: 9.5px;
+}
+
+.spacer { flex: 1; }
+.toolbar-message {
+    max-width: 260px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--text-3);
+    font-size: 10.5px;
+}
+
+.egress-toggle {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    color: var(--text-3);
+    font-size: 10.5px;
+}
+
+.contract-bar {
+    min-height: 34px;
+    padding: 6px 14px;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    border-bottom: 1px solid var(--border);
+    background: color-mix(in srgb, var(--brand-2) 4%, var(--card));
+    color: var(--text-3);
+    font-size: 9.5px;
+}
+
+.contract-bar strong { color: var(--brand-2); text-transform: uppercase; letter-spacing: .08em; }
+.contract-bar code {
+    max-width: 520px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--text-2);
+}
+.contract-bar b { color: var(--good); }
+
+.workspace { flex: 1; min-height: 0; display: flex; }
+
+.file-tree {
+    width: 245px;
+    flex: none;
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid var(--border);
+    background: var(--card);
+}
+
+.file-tree-head {
+    padding: 10px 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    color: var(--text-3);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+}
+
+.add-file-button,
+.add-file-row button {
+    border: 0;
+    background: transparent;
+    color: var(--brand-2);
+    cursor: pointer;
+}
+
+.add-file-button { font-size: 17px; }
+.add-file-row { padding: 4px 8px 8px; display: flex; gap: 4px; }
+.add-file-row input { min-width: 0; flex: 1; font-size: 11px; }
+
+.file-list { flex: 1; overflow-y: auto; padding: 2px 6px; }
+.file-row {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 6px 7px;
+    border-radius: 5px;
+    color: var(--text-2);
+    cursor: pointer;
+    font-family: var(--font-sans);
+    font-size: 11.5px;
+}
+.file-row.active { background: var(--card-2); color: var(--text); }
+.file-row > span {
+    min-width: 0;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.file-row b { color: var(--brand-2); font-size: 10px; }
+.file-row button {
+    border: 0;
+    background: transparent;
+    color: var(--text-3);
+    cursor: pointer;
+    font-size: 11px;
+}
+.file-row .delete-file:hover { color: var(--bad); }
+
+.file-foot {
+    padding: 9px 11px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    border-top: 1px solid var(--border);
+    color: var(--text-3);
+    font-size: 9.5px;
+}
+.file-foot code { color: var(--brand-2); }
+.file-foot small { line-height: 1.45; color: var(--text-4); }
+
+.editor-pane { min-width: 0; flex: 1; display: flex; flex-direction: column; }
+.editor-host { min-height: 0; flex: 1; }
+
+.result-panel {
+    height: 34px;
+    flex: none;
+    overflow: hidden;
+    border-top: 1px solid var(--border);
+    background: var(--card);
+    transition: height .12s ease;
+}
+.result-panel.open { height: 220px; }
+.result-bar {
+    width: 100%;
+    height: 34px;
+    padding: 0 13px;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    border: 0;
+    background: transparent;
+    color: var(--text-3);
+    cursor: pointer;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+}
+.result-bar i { flex: 1; }
+.result-bar b {
+    padding: 2px 7px;
+    border-radius: 99px;
+    font-size: 9px;
+}
+.passed { color: var(--good) !important; }
+.failed { color: var(--bad) !important; }
+.result-bar small { color: var(--text-4); font-family: var(--font-mono); }
+
+.result-body {
+    height: calc(100% - 34px);
+    overflow: auto;
+    padding: 11px 14px;
+    color: var(--text-3);
+    font-size: 11px;
+}
+.result-body strong { display: block; margin-bottom: 9px; font-weight: 500; }
+.result-body summary { cursor: pointer; }
+.result-body pre {
+    max-height: 120px;
+    overflow: auto;
+    padding: 8px;
+    border-radius: 6px;
+    background: var(--bg);
+    color: var(--text-2);
+    white-space: pre-wrap;
+    font-family: var(--font-mono);
+    font-size: 10px;
+}
+
+@media (max-width: 760px) {
+    .toolbar { flex-wrap: wrap; padding: 8px 10px; }
+    .title-block { flex: 1; }
+    .spacer, .toolbar-message { display: none; }
+    .contract-bar span { display: none; }
+    .contract-bar code { max-width: calc(100vw - 90px); }
+    .workspace { flex-direction: column; }
+    .file-tree {
+        width: 100%;
+        height: 145px;
+        border-right: 0;
+        border-bottom: 1px solid var(--border);
+    }
+    .file-foot { display: none; }
+    .file-list { display: flex; gap: 4px; }
+    .file-row { min-width: 140px; height: 32px; }
+    .result-panel.open { height: 180px; }
+}

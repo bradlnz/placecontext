@@ -5,3 +5,6 @@ namespace PlaceContext.Application.Features;
 
 public sealed record ListJobTestCasesQuery(Guid ProjectId)
     : IQuery<IReadOnlyList<JobTestCaseView>>;
+
+public sealed record GetJobTestCaseQuery(Guid TestId)
+    : IQuery<JobTestCaseView?>;

@@ -18,7 +18,11 @@ public sealed record JobTestCaseRecord(
     DateTimeOffset? LastRunAt,
     long? LastDurationMs,
     DateTimeOffset CreatedAt,
-    DateTimeOffset UpdatedAt);
+    DateTimeOffset UpdatedAt,
+    string? RuntimeId,
+    string? Entrypoint,
+    IReadOnlyList<CodeFileDto> CodeFiles,
+    bool AllowNetworkEgress);
 
 /// <summary>Tenant-scoped persistence for job verification cases and their latest result.</summary>
 public interface IJobTestStore

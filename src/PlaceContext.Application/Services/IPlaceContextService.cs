@@ -54,6 +54,9 @@ public interface IPlaceContextService
     Task<JobTestCaseView> RunJobTestCaseAsync(Guid testId, CancellationToken ct = default);
     Task<IReadOnlyList<JobTestCaseView>> ListJobTestCasesAsync(
         Guid projectId, CancellationToken ct = default);
+    Task<JobTestCaseView?> GetJobTestCaseAsync(Guid testId, CancellationToken ct = default);
+    Task<JobTestCaseView> UpdateJobTestCodeAsync(
+        UpdateJobTestCodeCommand command, CancellationToken ct = default);
     Task<IReadOnlyList<OpenSearchIndexView>> ListOpenSearchIndicesAsync(
         Guid projectId, CancellationToken ct = default);
     Task<IReadOnlyList<OpenSearchFieldView>> ListOpenSearchFieldsAsync(

@@ -28,3 +28,13 @@ public sealed record RunJobTestCaseCommand(Guid TestId)
 {
     public string RequiredPermission => Permission.JobsRun;
 }
+
+public sealed record UpdateJobTestCodeCommand(
+    Guid TestId,
+    string RuntimeId,
+    string? Entrypoint,
+    IReadOnlyList<CodeFileDto> CodeFiles,
+    bool AllowNetworkEgress) : ICommand<JobTestCaseView>, IRequiresPermission
+{
+    public string RequiredPermission => Permission.JobsEdit;
+}
