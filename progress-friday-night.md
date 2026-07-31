@@ -58,18 +58,14 @@ Production infrastructure already in place:
   - 62 passed, 0 failed.
   - Existing EF Core package-version warnings remain in the host test project.
 
-## Previous production checkpoint
+## Tonight's production checkpoint
 
-Before tonight's changes:
-
-- Last deployed PlaceContext commit: `76a03a96231555758dee7344342c1ac4c93c3139`
-- Last deployed image digest:
-  `sha256:3a5e9d5f17f1bb82fa9fa1c103765b0d75d576c678ac371936295ee720619537`
-- Last known healthy pod: `placecontext-6848976f4d-mcwzv` (2/2 ready)
+- Deployed PlaceContext commit: `39deb2c`
+- Deployed image digest:
+  `sha256:c804314a7eb564f90f068a58181bbaa500709674ee44c662241eac5f0070b6e0`
+- Healthy pod after rollout: `placecontext-75469fd7cf-rcm58` (2/2 ready)
 - Property/OpenSearch repository: `/home/brad/code/property_intelligence_local_opensearch`
 - Property repository last known commit: `6c8ec92`
-
-Update this section after tonight's deployment with the new commit, image digest, and pod.
 
 ## Tomorrow: remaining work
 
