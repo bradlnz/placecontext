@@ -1,0 +1,305 @@
+@page "/settings/communications"
+@layout PlaceContext.Host.Components.Layout.SettingsLayout
+@attribute [Authorize(Policy = Permission.SettingsManage)]
+@attribute [Authorize(Policy = Permission.SecretsManage)]
+@inject IPlaceContextService Svc
+@inject HttpClient Http
+@inject PortalUiState Ui
+
+<PageTitle>PlaceContext — Communications</PageTitle>
+
+<div class="communications-page">
+    <header class="communications-header">
+        <div>
+            <span class="settings-kicker">Customer communications</span>
+            <h2>Transactional email</h2>
+            <p>Use a Postmark Server API Token stored securely in a project Vault.</p>
+        </div>
+        @if (_status?.Ready == true)
+        {
+            <span class="connection-pill ready"><i></i>Ready to send</span>
+        }
+        else if (_status?.Configured == true)
+        {
+            <span class="connection-pill"><i></i>Vault secret missing</span>
+        }
+    </header>
+
+    @if (_loading)
+    {
+        <div class="dccard loading-card">Loading Postmark settings…</div>
+    }
+    else if (_loadError is not null)
+    {
+        <div class="settings-alert error">@_loadError</div>
+    }
+    else if (_status is not null)
+    {
+        @if (_message is not null)
+        {
+            <div class="settings-alert @(_messageIsError ? "error" : "success")">@_message</div>
+        }
+
+        <section class="dccard provider-card">
+            <div class="provider-head">
+                <span class="postmark-logo">P</span>
+                <span>
+                    <strong>Postmark</strong>
+                    <small>Transactional email provider</small>
+                </span>
+                <span class="provider-state @(_status.Ready ? "connected" : "")">
+                    @(_status.Ready ? "Configured" : "Setup required")
+                </span>
+            </div>
+
+            <div class="vault-callout">
+                <span class="vault-icon">◆</span>
+                <span>
+                    <strong>The API token stays in Vault</strong>
+                    <small>Create a Vault secret containing the Postmark <em>Server API Token</em>, then reference it below. The value is decrypted only when an email is sent.</small>
+                </span>
+            </div>
+
+            <div class="settings-form">
+                <div class="field-grid">
+                    <div class="dcfield">
+                        <label>Vault project</label>
+                        <select class="dcinput" value="@_vaultProjectId" @onchange="ProjectChanged">
+                            <option value="">Select a project…</option>
+                            @foreach (var project in _projects)
+                            {
+                                <option value="@project.Id">@project.Name</option>
+                            }
+                        </select>
+                        <small>The project whose Vault contains the token.</small>
+                    </div>
+                    <div class="dcfield">
+                        <label>Server API Token secret</label>
+                        <select class="dcinput" @bind="_secretName" disabled="@(_vaultProjectId is null)">
+                            <option value="">Select a Vault secret…</option>
+                            @foreach (var secret in _secrets)
+                            {
+                                <option value="@secret.Name">@secret.Name</option>
+                            }
+                        </select>
+                        @if (_vaultProjectId is not null && _secrets.Count == 0)
+                        {
+                            <small class="warning">No Vault secrets exist in this project yet.</small>
+                        }
+                        else
+                        {
+                            <small>The secret value must be the token from Postmark → Server → API Tokens.</small>
+                        }
+                    </div>
+                </div>
+
+                <div class="field-grid">
+                    <div class="dcfield">
+                        <label>Verified sender email</label>
+                        <input class="dcinput" type="email" @bind="_fromEmail"
+                               placeholder="hello@yourdomain.com" />
+                        <small>This address or its domain must be verified in Postmark.</small>
+                    </div>
+                    <div class="dcfield">
+                        <label>Sender name</label>
+                        <input class="dcinput" @bind="_fromName" placeholder="Your company" />
+                        <small>The friendly name clients see in their inbox.</small>
+                    </div>
+                </div>
+
+                <div class="dcfield stream-field">
+                    <label>Transactional message stream</label>
+                    <input class="dcinput" @bind="_messageStream" placeholder="outbound" />
+                    <small>Use <code>outbound</code> unless you created a dedicated transactional stream.</small>
+                </div>
+
+                <div class="configuration-preview">
+                    <span>
+                        <small>Credential</small>
+                        <strong>@(_secretName.Length > 0 ? _secretName : "Choose a Vault secret")</strong>
+                    </span>
+                    <i>→</i>
+                    <span>
+                        <small>Postmark stream</small>
+                        <strong>@(string.IsNullOrWhiteSpace(_messageStream) ? "outbound" : _messageStream)</strong>
+                    </span>
+                    <i>→</i>
+                    <span>
+                        <small>CRM</small>
+                        <strong>Comms email</strong>
+                    </span>
+                </div>
+
+                <div class="form-actions">
+                    <button class="dcbtn primary"
+                            disabled="@(_saving || _vaultProjectId is null || string.IsNullOrWhiteSpace(_secretName))"
+                            @onclick="SaveAsync">
+                        @(_saving ? "Saving…" : "Save Postmark settings")
+                    </button>
+                    @if (_status.Configured)
+                    {
+                        @if (_confirmDisconnect)
+                        {
+                            <button class="dcbtn danger" disabled="@_saving" @onclick="DisconnectAsync">
+                                Confirm disconnect
+                            </button>
+                            <button class="dcbtn" @onclick="@(() => _confirmDisconnect = false)">Keep settings</button>
+                        }
+                        else
+                        {
+                            <button class="dcbtn quiet-danger" @onclick="@(() => _confirmDisconnect = true)">Remove settings</button>
+                        }
+                    }
+                </div>
+            </div>
+        </section>
+
+        <section class="delivery-notes">
+            <article class="dccard">
+                <span class="note-icon">✓</span>
+                <span><strong>Verified identity</strong><small>Postmark requires a confirmed sender signature or authenticated domain.</small></span>
+            </article>
+            <article class="dccard">
+                <span class="note-icon">↗</span>
+                <span><strong>Transactional stream</strong><small>CRM messages are tagged <code>crm-transactional</code> for reporting.</small></span>
+            </article>
+            <article class="dccard">
+                <span class="note-icon">◆</span>
+                <span><strong>Live Vault lookup</strong><small>Rotating the secret in Vault takes effect without storing the token in CRM settings.</small></span>
+            </article>
+        </section>
+    }
+</div>
+
+@code {
+    private PostmarkStatus? _status;
+    private IReadOnlyList<ProjectSummaryView> _projects = Array.Empty<ProjectSummaryView>();
+    private IReadOnlyList<ProjectSecretView> _secrets = Array.Empty<ProjectSecretView>();
+    private bool _loading = true;
+    private bool _saving;
+    private bool _confirmDisconnect;
+    private string? _loadError;
+    private string? _message;
+    private bool _messageIsError;
+    private Guid? _vaultProjectId;
+    private string _secretName = "";
+    private string _fromEmail = "";
+    private string _fromName = "PlaceContext";
+    private string _messageStream = "outbound";
+
+    protected override async Task OnInitializedAsync()
+    {
+        Ui.Set("Settings", "Postmark · transactional email");
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _loadError = null;
+        try
+        {
+            var statusTask = Http.GetFromJsonAsync<PostmarkStatus>("/api/settings/postmark");
+            var projectsTask = Svc.GetProjectsAsync();
+            await Task.WhenAll(statusTask, projectsTask);
+            _status = await statusTask;
+            _projects = await projectsTask;
+            ApplyStatus();
+            await LoadSecretsAsync();
+        }
+        catch (Exception ex) { _loadError = ex.Message; }
+        finally { _loading = false; }
+    }
+
+    private void ApplyStatus()
+    {
+        if (_status is null) return;
+        _vaultProjectId = _status.VaultProjectId;
+        _secretName = _status.ServerTokenSecretName;
+        _fromEmail = _status.FromEmail;
+        _fromName = _status.FromName;
+        _messageStream = _status.MessageStream;
+    }
+
+    private async Task ProjectChanged(ChangeEventArgs args)
+    {
+        _vaultProjectId = Guid.TryParse(args.Value?.ToString(), out var id) ? id : null;
+        _secretName = "";
+        await LoadSecretsAsync();
+    }
+
+    private async Task LoadSecretsAsync()
+    {
+        _secrets = _vaultProjectId is { } id
+            ? await Svc.ListProjectSecretsAsync(id)
+            : Array.Empty<ProjectSecretView>();
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_vaultProjectId is null) return;
+        _saving = true;
+        _message = null;
+        try
+        {
+            using var response = await Http.PostAsJsonAsync("/api/settings/postmark", new
+            {
+                VaultProjectId = _vaultProjectId.Value,
+                ServerTokenSecretName = _secretName,
+                FromEmail = _fromEmail,
+                FromName = _fromName,
+                MessageStream = _messageStream,
+            });
+            if (!response.IsSuccessStatusCode)
+            {
+                var error = await response.Content.ReadFromJsonAsync<ErrorResponse>();
+                throw new InvalidOperationException(error?.Error ?? "Could not save Postmark settings.");
+            }
+            _status = await response.Content.ReadFromJsonAsync<PostmarkStatus>();
+            ApplyStatus();
+            _message = "Postmark is ready for transactional CRM email.";
+            _messageIsError = false;
+        }
+        catch (Exception ex)
+        {
+            _message = ex.Message;
+            _messageIsError = true;
+        }
+        finally { _saving = false; }
+    }
+
+    private async Task DisconnectAsync()
+    {
+        _saving = true;
+        _message = null;
+        try
+        {
+            using var response = await Http.DeleteAsync("/api/settings/postmark");
+            response.EnsureSuccessStatusCode();
+            _confirmDisconnect = false;
+            _message = "Postmark settings removed.";
+            _messageIsError = false;
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            _message = ex.Message;
+            _messageIsError = true;
+        }
+        finally { _saving = false; }
+    }
+
+    private sealed class PostmarkStatus
+    {
+        public bool Configured { get; set; }
+        public bool Ready { get; set; }
+        public Guid? VaultProjectId { get; set; }
+        public string ServerTokenSecretName { get; set; } = "";
+        public string FromEmail { get; set; } = "";
+        public string FromName { get; set; } = "PlaceContext";
+        public string MessageStream { get; set; } = "outbound";
+        public DateTimeOffset? ConfiguredAt { get; set; }
+    }
+
+    private sealed class ErrorResponse { public string? Error { get; set; } }
+}

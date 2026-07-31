@@ -39,6 +39,8 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
     public DbSet<ToolCallRow> ToolCalls => Set<ToolCallRow>();
     public DbSet<JobRow> Jobs => Set<JobRow>();
     public DbSet<JobRunRow> JobRuns => Set<JobRunRow>();
+    public DbSet<JobTestCaseRow> JobTestCases => Set<JobTestCaseRow>();
+    public DbSet<OpenSearchDashboardRow> OpenSearchDashboards => Set<OpenSearchDashboardRow>();
     public DbSet<CrmClientRow> CrmClients => Set<CrmClientRow>();
     public DbSet<CrmJobRunRow> CrmJobRuns => Set<CrmJobRunRow>();
     public DbSet<CrmChainRunRow> CrmChainRuns => Set<CrmChainRunRow>();
@@ -46,6 +48,7 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
     public DbSet<CrmClientArtifactRow> CrmClientArtifacts => Set<CrmClientArtifactRow>();
     public DbSet<CrmAutomationRuleRow> CrmAutomationRules => Set<CrmAutomationRuleRow>();
     public DbSet<CrmAutomationQueueRow> CrmAutomationQueue => Set<CrmAutomationQueueRow>();
+    public DbSet<PostmarkConnectionRow> PostmarkConnections => Set<PostmarkConnectionRow>();
     public DbSet<RunArtifactLinkRow> RunArtifacts => Set<RunArtifactLinkRow>();
     public DbSet<JobSecretRow> JobSecrets => Set<JobSecretRow>();
     public DbSet<JobTriggerRow> JobTriggers => Set<JobTriggerRow>();
@@ -218,6 +221,38 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
             e.Property(x => x.RetryDelaySeconds).HasDefaultValue(0);
         });
 
+        b.Entity<JobTestCaseRow>(e =>
+        {
+            e.ToTable("job_test_cases");
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => new { x.ProjectId, x.JobId });
+            e.HasIndex(x => new { x.JobId, x.Name }).IsUnique();
+            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
+            e.Property(x => x.AssertionType).HasDefaultValue("Succeeds");
+            e.Property(x => x.Enabled).HasDefaultValue(true);
+            e.Property(x => x.LastStatus).HasDefaultValue("NotRun");
+            e.Property(x => x.CreatedAt).HasDefaultValueSql("now()");
+            e.Property(x => x.UpdatedAt).HasDefaultValueSql("now()");
+            e.HasOne<JobRow>()
+                .WithMany()
+                .HasForeignKey(x => x.JobId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        b.Entity<OpenSearchDashboardRow>(e =>
+        {
+            e.ToTable("opensearch_dashboards");
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => new { x.ProjectId, x.Name }).IsUnique();
+            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
+            e.Property(x => x.IndexPattern).HasDefaultValue("*");
+            e.Property(x => x.BucketType).HasDefaultValue("terms");
+            e.Property(x => x.ChartType).HasDefaultValue("bar");
+            e.Property(x => x.MetricType).HasDefaultValue("count");
+            e.Property(x => x.CreatedAt).HasDefaultValueSql("now()");
+            e.Property(x => x.UpdatedAt).HasDefaultValueSql("now()");
+        });
+
         b.Entity<CrmClientRow>(e =>
         {
             e.ToTable("crm_clients");
@@ -285,6 +320,18 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
             e.ToTable("crm_automation_queue");
             e.HasKey(x => x.Id);
             e.HasIndex(x => new { x.FailedAt, x.ClaimedAt, x.NextAttemptAt });
+        });
+
+        b.Entity<PostmarkConnectionRow>(e =>
+        {
+            e.ToTable("postmark_connections");
+            e.HasKey(x => x.TenantId);
+            e.Property(x => x.TenantId).ValueGeneratedNever();
+            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
+            e.Property(x => x.FromName).HasDefaultValue("PlaceContext");
+            e.Property(x => x.MessageStream).HasDefaultValue("outbound");
+            e.Property(x => x.ConfiguredAt).HasDefaultValueSql("now()");
+            e.Property(x => x.UpdatedAt).HasDefaultValueSql("now()");
         });
 
         b.Entity<RunArtifactLinkRow>(e =>

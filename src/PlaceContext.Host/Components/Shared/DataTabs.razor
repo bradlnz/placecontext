@@ -4,6 +4,7 @@
 <div class="dctabs tabs-strip">
     <button class="dctab @(Active == "tables" ? "active" : "")" @onclick='@(() => Nav.NavigateTo($"/project/{ProjectId}/data"))'>Tables</button>
     <button class="dctab @(Active == "analytics" ? "active" : "")" @onclick='@(() => Nav.NavigateTo($"/project/{ProjectId}/analytics"))'>Analytics</button>
+    <button class="dctab @(Active == "search" ? "active" : "")" @onclick='@(() => Nav.NavigateTo($"/project/{ProjectId}/data-search"))'>Search</button>
     <button class="dctab @(Active == "datamap" ? "active" : "")" @onclick='@(() => Nav.NavigateTo($"/project/{ProjectId}/datamap"))'>Data map</button>
     <button class="dctab @(Active == "entities" ? "active" : "")" @onclick='@(() => Nav.NavigateTo($"/project/{ProjectId}/entities"))'>Entities</button>
 </div>

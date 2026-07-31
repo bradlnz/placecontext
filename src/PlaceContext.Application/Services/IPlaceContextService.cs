@@ -48,6 +48,24 @@ public interface IPlaceContextService
     Task<IReadOnlyList<JobView>> ListJobsAsync(Guid projectId, CancellationToken ct = default);
     Task<IReadOnlyList<JobRunView>> ListJobRunsAsync(Guid jobId, CancellationToken ct = default);
     Task<JobRunDetailView?> GetJobRunAsync(Guid runId, CancellationToken ct = default);
+    Task<JobTestCaseView> SaveJobTestCaseAsync(
+        SaveJobTestCaseCommand command, CancellationToken ct = default);
+    Task<bool> DeleteJobTestCaseAsync(Guid testId, CancellationToken ct = default);
+    Task<JobTestCaseView> RunJobTestCaseAsync(Guid testId, CancellationToken ct = default);
+    Task<IReadOnlyList<JobTestCaseView>> ListJobTestCasesAsync(
+        Guid projectId, CancellationToken ct = default);
+    Task<IReadOnlyList<OpenSearchIndexView>> ListOpenSearchIndicesAsync(
+        Guid projectId, CancellationToken ct = default);
+    Task<IReadOnlyList<OpenSearchFieldView>> ListOpenSearchFieldsAsync(
+        Guid projectId, string indexPattern, CancellationToken ct = default);
+    Task<OpenSearchSearchView> SearchOpenSearchAsync(
+        OpenSearchSearchRequest request, CancellationToken ct = default);
+    Task<IReadOnlyList<OpenSearchDashboardView>> ListOpenSearchDashboardsAsync(
+        Guid projectId, CancellationToken ct = default);
+    Task<OpenSearchDashboardView> SaveOpenSearchDashboardAsync(
+        SaveOpenSearchDashboardCommand command, CancellationToken ct = default);
+    Task<bool> DeleteOpenSearchDashboardAsync(
+        Guid dashboardId, CancellationToken ct = default);
     Task<IReadOnlyList<RunArtifactLinkView>> ListRunArtifactsAsync(Guid runId, CancellationToken ct = default);
     Task<IReadOnlyList<RunArtifactLinkView>> ListJobRunArtifactsAsync(Guid jobId, CancellationToken ct = default);
     Task<bool> DeleteJobAsync(Guid jobId, CancellationToken ct = default);

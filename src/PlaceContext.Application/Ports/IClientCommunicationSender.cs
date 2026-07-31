@@ -10,7 +10,9 @@ public sealed record ClientMessageDelivery(string Provider, string? ExternalId);
 
 public interface IClientCommunicationSender
 {
-    ClientCommsCapabilities Capabilities { get; }
+    string EmailProvider { get; }
+    string SmsProvider { get; }
+    Task<ClientCommsCapabilities> GetCapabilitiesAsync(CancellationToken ct = default);
     Task<ClientMessageDelivery> SendEmailAsync(
         string recipient,
         string recipientName,

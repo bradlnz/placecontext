@@ -1259,7 +1259,7 @@ else
     private string ChannelHelp(string channel) => channel switch
     {
         "Email" when _selected?.Email is null => "Add an email address to this client first.",
-        "Email" when !(_commsCapabilities?.EmailEnabled ?? false) => "Configure SendGrid to enable email.",
+        "Email" when !(_commsCapabilities?.EmailEnabled ?? false) => "Connect Postmark in Settings → Communications.",
         "Sms" when _selected?.Phone is null => "Add a phone number to this client first.",
         "Sms" when !(_commsCapabilities?.SmsEnabled ?? false) => "Configure Twilio to enable SMS.",
         _ => ChannelLabel(channel),

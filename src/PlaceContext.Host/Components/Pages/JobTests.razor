@@ -1,0 +1,427 @@
+@page "/project/{ProjectId:guid}/tests"
+@attribute [Authorize(Policy = Permission.JobsView)]
+@layout PlaceContext.Host.Components.Layout.ProjectLayout
+@inject IPlaceContextService Svc
+@inject PortalUiState Ui
+@inject NavigationManager Nav
+
+<PageTitle>PlaceContext — Tests</PageTitle>
+
+<div class="tests-page">
+    <header class="tests-head">
+        <div>
+            <h2>Tests</h2>
+            <p>Run saved inputs against real Job code and verify the primary output.</p>
+        </div>
+        <div class="head-actions">
+            <button class="dcbtn" disabled="@(_running.Count > 0 || EnabledTests.Count == 0)"
+                    @onclick="RunAllAsync">
+                @(_running.Count > 0 ? "Running…" : "Run all")
+            </button>
+            <button class="dcbtn primary" disabled="@(_jobs.Count == 0)" @onclick="NewTest">+ New test</button>
+        </div>
+    </header>
+
+    @if (_message is not null)
+    {
+        <div class="test-message @(_messageIsError ? "error" : null)">@_message</div>
+    }
+
+    @if (_loading)
+    {
+        <Skeleton Kind="list" Rows="5" />
+    }
+    else if (_jobs.Count == 0)
+    {
+        <div class="dccard empty-state">
+            <div class="empty-icon">⌁</div>
+            <strong>Create a Job before adding tests</strong>
+            <span>Tests execute the same code and runtime configuration as a normal Job run.</span>
+            <button class="dcbtn primary" @onclick="@(() => Nav.NavigateTo($"/project/{ProjectId}/jobs"))">Open Jobs</button>
+        </div>
+    }
+    else if (_tests.Count == 0)
+    {
+        <div class="dccard empty-state">
+            <div class="empty-icon">✓</div>
+            <strong>No tests yet</strong>
+            <span>Add an input and assertion to start verifying Job code.</span>
+            <button class="dcbtn primary" @onclick="NewTest">Create first test</button>
+        </div>
+    }
+    else
+    {
+        <section class="summary-strip" aria-label="Test summary">
+            <div class="summary-count"><strong>@_tests.Count</strong><span>total</span></div>
+            <div class="summary-count passed"><strong>@PassedCount</strong><span>passed</span></div>
+            <div class="summary-count failed"><strong>@FailedCount</strong><span>failed</span></div>
+            <div class="summary-count"><strong>@NotRunCount</strong><span>not run</span></div>
+            <div class="summary-progress">
+                <span style="width:@PassPercent%"></span>
+            </div>
+        </section>
+
+        <div class="suite-list">
+            @foreach (var suite in Suites)
+            {
+                <section class="dccard test-suite">
+                    <header class="suite-head">
+                        <div>
+                            <span class="suite-caret">⌄</span>
+                            <strong>@suite.Key</strong>
+                            <span>@suite.Count() test@(suite.Count() == 1 ? "" : "s")</span>
+                        </div>
+                        <span class="suite-result">@suite.Count(t => t.LastStatus == "Passed") / @suite.Count() passing</span>
+                    </header>
+
+                    <div class="test-rows">
+                        @foreach (var test in suite)
+                        {
+                            var isRunning = _running.Contains(test.Id);
+                            <article class="test-row @StatusClass(test, isRunning)">
+                                <div class="status-icon" aria-label="@StatusLabel(test, isRunning)">
+                                    @if (isRunning)
+                                    {
+                                        <span class="spinner"></span>
+                                    }
+                                    else if (test.LastStatus == "Passed")
+                                    {
+                                        <span>✓</span>
+                                    }
+                                    else if (test.LastStatus == "Failed")
+                                    {
+                                        <span>×</span>
+                                    }
+                                    else
+                                    {
+                                        <span>○</span>
+                                    }
+                                </div>
+                                <div class="test-copy">
+                                    <div class="test-title">
+                                        <strong>@test.Name</strong>
+                                        @if (!test.Enabled)
+                                        {
+                                            <span class="disabled-chip">disabled</span>
+                                        }
+                                        <span class="assertion-chip">@AssertionLabel(test.AssertionType)</span>
+                                    </div>
+                                    <div class="test-detail">
+                                        @if (isRunning)
+                                        {
+                                            <span>Executing the Job…</span>
+                                        }
+                                        else
+                                        {
+                                            <span>@(test.LastMessage ?? "Not run yet")</span>
+                                            @if (test.LastDurationMs is { } duration)
+                                            {
+                                                <span class="duration">@FormatDuration(duration)</span>
+                                            }
+                                        }
+                                    </div>
+                                    @if (!isRunning && test.LastStatus == "Failed" && !string.IsNullOrWhiteSpace(test.LastActualOutput))
+                                    {
+                                        <details class="actual-output">
+                                            <summary>Actual output</summary>
+                                            <pre>@test.LastActualOutput</pre>
+                                        </details>
+                                    }
+                                </div>
+                                <div class="test-actions">
+                                    @if (_confirmDelete == test.Id)
+                                    {
+                                        <button class="dcbtn danger" @onclick="@(() => DeleteAsync(test.Id))">Delete</button>
+                                        <button class="dcbtn" @onclick="@(() => _confirmDelete = null)">Keep</button>
+                                    }
+                                    else
+                                    {
+                                        <button class="icon-action" title="Run test" aria-label="Run @test.Name"
+                                                disabled="@(isRunning || !test.Enabled)"
+                                                @onclick="@(() => RunAsync(test.Id))">▶</button>
+                                        <button class="icon-action" title="Edit test" aria-label="Edit @test.Name"
+                                                @onclick="@(() => EditTest(test))">✎</button>
+                                        <button class="icon-action" title="Delete test" aria-label="Delete @test.Name"
+                                                @onclick="@(() => _confirmDelete = test.Id)">⋯</button>
+                                    }
+                                </div>
+                            </article>
+                        }
+                    </div>
+                </section>
+            }
+        </div>
+    }
+</div>
+
+@if (_editing)
+{
+    <div class="editor-backdrop" @onclick="CloseEditor">
+        <aside class="test-editor" @onclick:stopPropagation="true" role="dialog" aria-modal="true"
+               aria-labelledby="test-editor-title">
+            <header>
+                <div>
+                    <span class="eyebrow">JOB TEST</span>
+                    <h3 id="test-editor-title">@(_editId is null ? "New test" : "Edit test")</h3>
+                </div>
+                <button class="close-button" aria-label="Close" @onclick="CloseEditor">×</button>
+            </header>
+
+            <div class="editor-body">
+                <label class="field">
+                    <span>Job</span>
+                    <select class="dcinput" @bind="_editJobId">
+                        @foreach (var job in _jobs)
+                        {
+                            <option value="@job.Id">@job.Name</option>
+                        }
+                    </select>
+                </label>
+
+                <label class="field">
+                    <span>Test name</span>
+                    <input class="dcinput" @bind="_editName" placeholder="returns an active customer" />
+                </label>
+
+                <label class="field">
+                    <span>Input payload <small>optional</small></span>
+                    <textarea class="dcinput code-input" rows="7" @bind="_editInput"
+                              placeholder='{"customerId":"example"}'></textarea>
+                    <small>Passed to the Job as its single input payload.</small>
+                </label>
+
+                <label class="field">
+                    <span>Assertion</span>
+                    <select class="dcinput" @bind="_editAssertion">
+                        @foreach (var assertion in Enum.GetValues<JobTestAssertionType>())
+                        {
+                            <option value="@assertion">@AssertionLabel(assertion)</option>
+                        }
+                    </select>
+                </label>
+
+                @if (_editAssertion != JobTestAssertionType.Succeeds)
+                {
+                    <label class="field">
+                        <span>Expected value</span>
+                        <textarea class="dcinput code-input" rows="7" @bind="_editExpected"
+                                  placeholder="@ExpectedPlaceholder"></textarea>
+                        <small>@AssertionHelp</small>
+                    </label>
+                }
+
+                <label class="enabled-field">
+                    <input type="checkbox" @bind="_editEnabled" />
+                    <span><strong>Enabled</strong><small>Included when Run all is selected.</small></span>
+                </label>
+            </div>
+
+            <footer>
+                <button class="dcbtn" @onclick="CloseEditor">Cancel</button>
+                <button class="dcbtn primary" disabled="@_saving" @onclick="SaveAsync">
+                    @(_saving ? "Saving…" : "Save test")
+                </button>
+            </footer>
+        </aside>
+    </div>
+}
+
+@code {
+    [Parameter] public Guid ProjectId { get; set; }
+
+    private IReadOnlyList<JobView> _jobs = Array.Empty<JobView>();
+    private List<JobTestCaseView> _tests = new();
+    private readonly HashSet<Guid> _running = new();
+    private bool _loading = true;
+    private bool _editing;
+    private bool _saving;
+    private string? _message;
+    private bool _messageIsError;
+    private Guid? _confirmDelete;
+
+    private Guid? _editId;
+    private Guid _editJobId;
+    private string _editName = "";
+    private string _editInput = "";
+    private JobTestAssertionType _editAssertion = JobTestAssertionType.Succeeds;
+    private string _editExpected = "";
+    private bool _editEnabled = true;
+
+    private IEnumerable<IGrouping<string, JobTestCaseView>> Suites
+        => _tests.GroupBy(test => test.JobName).OrderBy(group => group.Key);
+    private List<JobTestCaseView> EnabledTests => _tests.Where(test => test.Enabled).ToList();
+    private int PassedCount => _tests.Count(test => test.LastStatus == "Passed");
+    private int FailedCount => _tests.Count(test => test.LastStatus == "Failed");
+    private int NotRunCount => _tests.Count - PassedCount - FailedCount;
+    private int PassPercent => _tests.Count == 0 ? 0 : (int)Math.Round(PassedCount * 100d / _tests.Count);
+    private string ExpectedPlaceholder => _editAssertion == JobTestAssertionType.JsonSubset
+        ? "{\"status\":\"ok\"}"
+        : "Expected output";
+    private string AssertionHelp => _editAssertion switch
+    {
+        JobTestAssertionType.JsonSubset => "Object properties may be a subset; arrays are compared by position.",
+        JobTestAssertionType.OutputContains => "Passes when the primary output contains this exact text.",
+        _ => "Passes when the trimmed primary output is exactly this value.",
+    };
+
+    protected override async Task OnParametersSetAsync()
+    {
+        Ui.Set("Tests", "verify Job code");
+        _loading = true;
+        try
+        {
+            var jobsTask = Svc.ListJobsAsync(ProjectId);
+            var testsTask = Svc.ListJobTestCasesAsync(ProjectId);
+            await Task.WhenAll(jobsTask, testsTask);
+            _jobs = await jobsTask;
+            _tests = (await testsTask).ToList();
+        }
+        catch (Exception ex)
+        {
+            ShowMessage(ex.Message, true);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void NewTest()
+    {
+        _editId = null;
+        _editJobId = _jobs.FirstOrDefault()?.Id ?? Guid.Empty;
+        _editName = "";
+        _editInput = "";
+        _editAssertion = JobTestAssertionType.Succeeds;
+        _editExpected = "";
+        _editEnabled = true;
+        _editing = true;
+    }
+
+    private void EditTest(JobTestCaseView test)
+    {
+        _editId = test.Id;
+        _editJobId = test.JobId;
+        _editName = test.Name;
+        _editInput = test.InputPayload ?? "";
+        _editAssertion = test.AssertionType;
+        _editExpected = test.ExpectedValue ?? "";
+        _editEnabled = test.Enabled;
+        _editing = true;
+    }
+
+    private void CloseEditor() => _editing = false;
+
+    private async Task SaveAsync()
+    {
+        if (_editJobId == Guid.Empty || string.IsNullOrWhiteSpace(_editName))
+        {
+            ShowMessage("Choose a Job and enter a test name.", true);
+            return;
+        }
+        if (_editAssertion != JobTestAssertionType.Succeeds && string.IsNullOrWhiteSpace(_editExpected))
+        {
+            ShowMessage("Enter the expected value for this assertion.", true);
+            return;
+        }
+
+        _saving = true;
+        try
+        {
+            var saved = await Svc.SaveJobTestCaseAsync(new SaveJobTestCaseCommand(
+                ProjectId, _editJobId, _editName, _editInput, _editAssertion,
+                _editExpected, _editEnabled, _editId));
+            Replace(saved);
+            _editing = false;
+            ShowMessage($"Saved “{saved.Name}”.");
+        }
+        catch (Exception ex)
+        {
+            ShowMessage(ex.Message, true);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task RunAsync(Guid id)
+    {
+        if (!_running.Add(id)) return;
+        _confirmDelete = null;
+        try
+        {
+            StateHasChanged();
+            Replace(await Svc.RunJobTestCaseAsync(id));
+        }
+        catch (Exception ex)
+        {
+            ShowMessage(ex.Message, true);
+        }
+        finally
+        {
+            _running.Remove(id);
+            StateHasChanged();
+        }
+    }
+
+    private async Task RunAllAsync()
+    {
+        _message = null;
+        foreach (var test in EnabledTests)
+            await RunAsync(test.Id);
+
+        var failed = FailedCount;
+        ShowMessage(failed == 0
+            ? $"All {EnabledTests.Count} enabled tests passed."
+            : $"{failed} test{(failed == 1 ? "" : "s")} failed.", failed > 0);
+    }
+
+    private async Task DeleteAsync(Guid id)
+    {
+        try
+        {
+            if (await Svc.DeleteJobTestCaseAsync(id))
+            {
+                _tests.RemoveAll(test => test.Id == id);
+                ShowMessage("Test deleted.");
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowMessage(ex.Message, true);
+        }
+        finally
+        {
+            _confirmDelete = null;
+        }
+    }
+
+    private void Replace(JobTestCaseView updated)
+    {
+        var index = _tests.FindIndex(test => test.Id == updated.Id);
+        if (index < 0) _tests.Add(updated);
+        else _tests[index] = updated;
+    }
+
+    private void ShowMessage(string message, bool error = false)
+    {
+        _message = message;
+        _messageIsError = error;
+    }
+
+    private static string StatusClass(JobTestCaseView test, bool running)
+        => running ? "running" : test.LastStatus.ToLowerInvariant();
+    private static string StatusLabel(JobTestCaseView test, bool running)
+        => running ? "Running" : test.LastStatus == "NotRun" ? "Not run" : test.LastStatus;
+    private static string AssertionLabel(JobTestAssertionType assertion) => assertion switch
+    {
+        JobTestAssertionType.Succeeds => "Run succeeds",
+        JobTestAssertionType.OutputEquals => "Output equals",
+        JobTestAssertionType.OutputContains => "Output contains",
+        JobTestAssertionType.JsonSubset => "JSON subset",
+        _ => assertion.ToString(),
+    };
+    private static string FormatDuration(long ms)
+        => ms < 1000 ? $"{ms} ms" : $"{ms / 1000d:0.0} s";
+}

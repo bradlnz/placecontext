@@ -45,6 +45,7 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
     private readonly IMcpConnectionRepository? _mcpRepo;
     private readonly IDataEncryptor? _encryptor;
     private readonly IObjectStore? _objectStore;
+    private readonly IOpenSearchConnectionResolver? _openSearchConnections;
     private IReadOnlyDictionary<string, string> _runSecrets = new Dictionary<string, string>();
     private IReadOnlyDictionary<string, string> _mcpEnv = new Dictionary<string, string>();
 
@@ -67,7 +68,8 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
         EntityTagService? entityTags = null,
         IMcpConnectionRepository? mcpRepo = null,
         IDataEncryptor? encryptor = null,
-        IObjectStore? objectStore = null)
+        IObjectStore? objectStore = null,
+        IOpenSearchConnectionResolver? openSearchConnections = null)
     {
         _secretRepo = secretRepo;
         _secretProtector = secretProtector;
@@ -78,6 +80,7 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
         _mcpRepo = mcpRepo;
         _encryptor = encryptor;
         _objectStore = objectStore;
+        _openSearchConnections = openSearchConnections;
         _jobs = jobs;
         _runs = runs;
         _runner = runner;
@@ -108,6 +111,13 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
         // Load the project's vault secrets (decrypted) for injection as env into each sandbox. Never
         // persisted to the run snapshot — only merged into the live WorkloadRunRequest below.
         _runSecrets = await LoadSecretsAsync(job.ProjectId, ct);
+        if (_openSearchConnections is not null)
+        {
+            var merged = new Dictionary<string, string>(_runSecrets);
+            foreach (var (name, value) in await _openSearchConnections.GetJobEnvironmentAsync(job.ProjectId, ct))
+                merged[name] = value;
+            _runSecrets = merged;
+        }
 
         // Load MCP connection tokens for the job's enabled connections. Injected as env var.
         _mcpEnv = await LoadMcpEnvAsync(job.McpConnectionIds, ct);

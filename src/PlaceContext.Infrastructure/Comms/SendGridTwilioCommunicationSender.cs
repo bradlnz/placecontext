@@ -9,19 +9,32 @@ namespace PlaceContext.Infrastructure.Comms;
 
 public sealed class SendGridTwilioCommunicationSender : IClientCommunicationSender
 {
+    private static readonly JsonSerializerOptions PostmarkJson = new()
+    {
+        PropertyNamingPolicy = null,
+    };
     private readonly IHttpClientFactory _httpFactory;
     private readonly ClientCommsOptions _options;
+    private readonly PostmarkConnectionService _postmark;
 
     public SendGridTwilioCommunicationSender(
         IHttpClientFactory httpFactory,
-        IOptions<ClientCommsOptions> options)
-        => (_httpFactory, _options) = (httpFactory, options.Value);
+        IOptions<ClientCommsOptions> options,
+        PostmarkConnectionService postmark)
+        => (_httpFactory, _options, _postmark) = (httpFactory, options.Value, postmark);
 
-    public ClientCommsCapabilities Capabilities => new(
-        _options.Email.IsConfigured,
-        _options.Sms.IsConfigured,
-        "SendGrid",
-        "Twilio");
+    public string EmailProvider => "Postmark";
+    public string SmsProvider => "Twilio";
+
+    public async Task<ClientCommsCapabilities> GetCapabilitiesAsync(CancellationToken ct = default)
+    {
+        var postmark = await _postmark.GetStatusAsync(ct);
+        return new ClientCommsCapabilities(
+            postmark.Ready || _options.Email.IsConfigured,
+            _options.Sms.IsConfigured,
+            postmark.Configured || !_options.Email.IsConfigured ? "Postmark" : "SendGrid",
+            "Twilio");
+    }
 
     public async Task<ClientMessageDelivery> SendEmailAsync(
         string recipient,
@@ -30,9 +43,15 @@ public sealed class SendGridTwilioCommunicationSender : IClientCommunicationSend
         string body,
         CancellationToken ct = default)
     {
+        var postmark = await _postmark.GetSendingCredentialAsync(ct);
+        if (postmark is not null)
+            return await SendPostmarkEmailAsync(
+                postmark, recipient, recipientName, subject, body, ct);
+
         var options = _options.Email;
         if (!options.IsConfigured)
-            throw new InvalidOperationException("Email is not configured. Add the SendGrid API key and sender address.");
+            throw new InvalidOperationException(
+                "Email is not configured. Connect Postmark in Settings → Communications.");
 
         using var request = new HttpRequestMessage(HttpMethod.Post, options.Endpoint);
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", options.ApiKey);
@@ -50,6 +69,50 @@ public sealed class SendGridTwilioCommunicationSender : IClientCommunicationSend
             ? values.FirstOrDefault()
             : null;
         return new ClientMessageDelivery("SendGrid", externalId);
+    }
+
+    private async Task<ClientMessageDelivery> SendPostmarkEmailAsync(
+        PostmarkSendingCredential credential,
+        string recipient,
+        string recipientName,
+        string subject,
+        string body,
+        CancellationToken ct)
+    {
+        var endpoint = $"{_options.Postmark.ApiEndpoint.TrimEnd('/')}/email";
+        using var request = new HttpRequestMessage(HttpMethod.Post, endpoint);
+        request.Headers.TryAddWithoutValidation("X-Postmark-Server-Token", credential.ServerToken);
+        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        request.Content = JsonContent.Create(new
+        {
+            From = Address(credential.FromEmail, credential.FromName),
+            To = Address(recipient, recipientName),
+            Subject = subject,
+            TextBody = body,
+            MessageStream = credential.MessageStream,
+            Tag = "crm-transactional",
+        }, options: PostmarkJson);
+        using var response = await _httpFactory.CreateClient().SendAsync(request, ct);
+        var payload = await response.Content.ReadAsStringAsync(ct);
+        if (!response.IsSuccessStatusCode)
+            throw new InvalidOperationException(
+                $"Postmark rejected the message ({(int)response.StatusCode}): {Trim(payload)}");
+
+        using var json = JsonDocument.Parse(payload);
+        var errorCode = json.RootElement.TryGetProperty("ErrorCode", out var error)
+            ? error.GetInt32()
+            : 0;
+        if (errorCode != 0)
+        {
+            var detail = json.RootElement.TryGetProperty("Message", out var message)
+                ? message.GetString()
+                : payload;
+            throw new InvalidOperationException($"Postmark rejected the message ({errorCode}): {detail}");
+        }
+        var externalId = json.RootElement.TryGetProperty("MessageID", out var messageId)
+            ? messageId.GetString()
+            : null;
+        return new ClientMessageDelivery("Postmark", externalId);
     }
 
     public async Task<ClientMessageDelivery> SendSmsAsync(
@@ -89,4 +152,14 @@ public sealed class SendGridTwilioCommunicationSender : IClientCommunicationSend
         if (detail.Length > 400) detail = detail[..400];
         return $"{provider} rejected the message ({(int)response.StatusCode}): {detail}";
     }
+
+    private static string Address(string email, string name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return email;
+        var safeName = name.Replace("\\", "\\\\", StringComparison.Ordinal)
+            .Replace("\"", "\\\"", StringComparison.Ordinal);
+        return $"\"{safeName}\" <{email}>";
+    }
+
+    private static string Trim(string value) => value.Length > 500 ? value[..500] : value;
 }

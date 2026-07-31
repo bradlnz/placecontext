@@ -136,6 +136,44 @@ public sealed class PlaceContextService : IPlaceContextService
     public Task<JobRunDetailView?> GetJobRunAsync(Guid runId, CancellationToken ct = default)
         => _dispatcher.Query(new GetJobRunQuery(runId), ct);
 
+    public Task<JobTestCaseView> SaveJobTestCaseAsync(
+        SaveJobTestCaseCommand command, CancellationToken ct = default)
+        => _dispatcher.Send(command, ct);
+
+    public Task<bool> DeleteJobTestCaseAsync(Guid testId, CancellationToken ct = default)
+        => _dispatcher.Send(new DeleteJobTestCaseCommand(testId), ct);
+
+    public Task<JobTestCaseView> RunJobTestCaseAsync(Guid testId, CancellationToken ct = default)
+        => _dispatcher.Send(new RunJobTestCaseCommand(testId), ct);
+
+    public Task<IReadOnlyList<JobTestCaseView>> ListJobTestCasesAsync(
+        Guid projectId, CancellationToken ct = default)
+        => _dispatcher.Query(new ListJobTestCasesQuery(projectId), ct);
+
+    public Task<IReadOnlyList<OpenSearchIndexView>> ListOpenSearchIndicesAsync(
+        Guid projectId, CancellationToken ct = default)
+        => _dispatcher.Query(new ListOpenSearchIndicesQuery(projectId), ct);
+
+    public Task<IReadOnlyList<OpenSearchFieldView>> ListOpenSearchFieldsAsync(
+        Guid projectId, string indexPattern, CancellationToken ct = default)
+        => _dispatcher.Query(new ListOpenSearchFieldsQuery(projectId, indexPattern), ct);
+
+    public Task<OpenSearchSearchView> SearchOpenSearchAsync(
+        OpenSearchSearchRequest request, CancellationToken ct = default)
+        => _dispatcher.Query(new SearchOpenSearchQuery(request), ct);
+
+    public Task<IReadOnlyList<OpenSearchDashboardView>> ListOpenSearchDashboardsAsync(
+        Guid projectId, CancellationToken ct = default)
+        => _dispatcher.Query(new ListOpenSearchDashboardsQuery(projectId), ct);
+
+    public Task<OpenSearchDashboardView> SaveOpenSearchDashboardAsync(
+        SaveOpenSearchDashboardCommand command, CancellationToken ct = default)
+        => _dispatcher.Send(command, ct);
+
+    public Task<bool> DeleteOpenSearchDashboardAsync(
+        Guid dashboardId, CancellationToken ct = default)
+        => _dispatcher.Send(new DeleteOpenSearchDashboardCommand(dashboardId), ct);
+
     public Task<IReadOnlyList<RunArtifactLinkView>> ListRunArtifactsAsync(Guid runId, CancellationToken ct = default)
         => _dispatcher.Query(new ListRunArtifactsQuery(runId), ct);
 

@@ -321,9 +321,10 @@ public sealed class SendCrmClientMessageHandler
         }
         catch (Exception ex)
         {
+            var capabilities = await _sender.GetCapabilitiesAsync(ct);
             var provider = command.Channel == Domain.ValueObjects.CrmCommunicationChannel.Email
-                ? _sender.Capabilities.EmailProvider
-                : _sender.Capabilities.SmsProvider;
+                ? capabilities.EmailProvider
+                : capabilities.SmsProvider;
             message.MarkFailed(provider, ex.Message);
         }
 
@@ -356,13 +357,13 @@ public sealed class GetCrmCommsCapabilitiesHandler
 
     public GetCrmCommsCapabilitiesHandler(IClientCommunicationSender sender) => _sender = sender;
 
-    public Task<CrmCommsCapabilitiesView> HandleAsync(
+    public async Task<CrmCommsCapabilitiesView> HandleAsync(
         GetCrmCommsCapabilitiesQuery query,
         CancellationToken ct = default)
     {
-        var value = _sender.Capabilities;
-        return Task.FromResult(new CrmCommsCapabilitiesView(
-            value.EmailEnabled, value.SmsEnabled, value.EmailProvider, value.SmsProvider));
+        var value = await _sender.GetCapabilitiesAsync(ct);
+        return new CrmCommsCapabilitiesView(
+            value.EmailEnabled, value.SmsEnabled, value.EmailProvider, value.SmsProvider);
     }
 }
 

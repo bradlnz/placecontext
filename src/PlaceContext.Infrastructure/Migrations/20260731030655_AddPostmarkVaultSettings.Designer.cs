@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using PlaceContext.Infrastructure.Persistence;
@@ -11,9 +12,11 @@ using PlaceContext.Infrastructure.Persistence;
 namespace PlaceContext.Infrastructure.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260731030655_AddPostmarkVaultSettings")]
+    partial class AddPostmarkVaultSettings
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1209,83 +1212,6 @@ namespace PlaceContext.Infrastructure.Migrations
                     b.ToTable("job_secrets", (string)null);
                 });
 
-            modelBuilder.Entity("PlaceContext.Infrastructure.Persistence.JobTestCaseRow", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("AssertionType")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("text")
-                        .HasDefaultValue("Succeeds");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasDefaultValueSql("now()");
-
-                    b.Property<bool>("Enabled")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(true);
-
-                    b.Property<string>("ExpectedValue")
-                        .HasColumnType("text");
-
-                    b.Property<string>("InputPayload")
-                        .HasColumnType("text");
-
-                    b.Property<Guid>("JobId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("LastActualOutput")
-                        .HasColumnType("text");
-
-                    b.Property<long?>("LastDurationMs")
-                        .HasColumnType("bigint");
-
-                    b.Property<Guid?>("LastJobRunId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("LastMessage")
-                        .HasColumnType("text");
-
-                    b.Property<DateTimeOffset?>("LastRunAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("LastStatus")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("text")
-                        .HasDefaultValue("NotRun");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<Guid>("ProjectId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("TenantId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTimeOffset>("UpdatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasDefaultValueSql("now()");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("JobId", "Name")
-                        .IsUnique();
-
-                    b.HasIndex("ProjectId", "JobId");
-
-                    b.ToTable("job_test_cases", (string)null);
-                });
-
             modelBuilder.Entity("PlaceContext.Infrastructure.Persistence.JobTriggerRow", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1525,81 +1451,6 @@ namespace PlaceContext.Infrastructure.Migrations
                     b.HasIndex("ExpiresAt");
 
                     b.ToTable("oauth_refresh_tokens", (string)null);
-                });
-
-            modelBuilder.Entity("PlaceContext.Infrastructure.Persistence.OpenSearchDashboardRow", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("BucketField")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("BucketType")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("text")
-                        .HasDefaultValue("terms");
-
-                    b.Property<string>("ChartSpecJson")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("ChartType")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("text")
-                        .HasDefaultValue("bar");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasDefaultValueSql("now()");
-
-                    b.Property<string>("DateInterval")
-                        .HasColumnType("text");
-
-                    b.Property<string>("IndexPattern")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("text")
-                        .HasDefaultValue("*");
-
-                    b.Property<string>("MetricField")
-                        .HasColumnType("text");
-
-                    b.Property<string>("MetricType")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("text")
-                        .HasDefaultValue("count");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<Guid>("ProjectId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("QueryText")
-                        .HasColumnType("text");
-
-                    b.Property<Guid>("TenantId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTimeOffset>("UpdatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasDefaultValueSql("now()");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ProjectId", "Name")
-                        .IsUnique();
-
-                    b.ToTable("opensearch_dashboards", (string)null);
                 });
 
             modelBuilder.Entity("PlaceContext.Infrastructure.Persistence.PendingRunRow", b =>
@@ -2127,15 +1978,6 @@ namespace PlaceContext.Infrastructure.Migrations
                         .IsUnique();
 
                     b.ToTable("users", (string)null);
-                });
-
-            modelBuilder.Entity("PlaceContext.Infrastructure.Persistence.JobTestCaseRow", b =>
-                {
-                    b.HasOne("PlaceContext.Infrastructure.Persistence.JobRow", null)
-                        .WithMany()
-                        .HasForeignKey("JobId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
                 });
 #pragma warning restore 612, 618
         }

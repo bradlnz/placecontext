@@ -21,6 +21,8 @@ public static class DependencyInjection
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
         services.Configure<PlaceContextOptions>(configuration.GetSection("PlaceContext"));
+        services.Configure<OpenSearch.OpenSearchOptions>(
+            configuration.GetSection("PlaceContext:OpenSearch"));
 
         services.AddSingleton<IClock, SystemClock>();
 
@@ -58,6 +60,14 @@ public static class DependencyInjection
 
         // EF repositories.
         services.AddScoped<IProjectRepository, EfProjectRepository>();
+        services.AddScoped<IJobTestStore, EfJobTestStore>();
+        services.AddScoped<IOpenSearchDashboardStore, EfOpenSearchDashboardStore>();
+        services.AddScoped<IOpenSearchConnectionResolver, OpenSearch.OpenSearchConnectionResolver>();
+        services.AddScoped<IOpenSearchDataGateway, OpenSearch.OpenSearchDataGateway>();
+        services.AddHttpClient("opensearch", client =>
+        {
+            client.Timeout = TimeSpan.FromSeconds(30);
+        });
         services.AddScoped<IActivityLogRepository, EfActivityLogRepository>();
         services.AddScoped<IDecisionRepository, EfDecisionRepository>();
         services.AddScoped<IRequirementsRepository, EfRequirementsRepository>();
@@ -157,7 +167,8 @@ public static class DependencyInjection
         services.AddScoped<ICrmAutomationQueue, Scheduling.DbCrmAutomationQueue>();
         services.Configure<Comms.ClientCommsOptions>(
             configuration.GetSection(Comms.ClientCommsOptions.SectionName));
-        services.AddSingleton<IClientCommunicationSender, Comms.SendGridTwilioCommunicationSender>();
+        services.AddScoped<Comms.PostmarkConnectionService>();
+        services.AddScoped<IClientCommunicationSender, Comms.SendGridTwilioCommunicationSender>();
 
         // Data map (declarative job-result → project-table ingestion rules).
         services.AddScoped<IDataMappingRepository, EfDataMappingRepository>();
