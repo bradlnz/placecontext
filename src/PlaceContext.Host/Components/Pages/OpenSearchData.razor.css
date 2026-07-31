@@ -161,6 +161,19 @@
     font-size: 9.5px;
 }
 
+.generated-section { margin-bottom: 16px; }
+.generated-head { align-items: center; }
+.generated-head .dcbtn { height: 30px; font-size: 10px; }
+.generated-loading {
+    padding: 28px;
+    color: var(--text-3);
+    font-size: 11px;
+    text-align: center;
+}
+.generated-card {
+    border-color: color-mix(in srgb, var(--brand-2) 18%, var(--border));
+}
+
 .search-builder { padding: 14px 16px; }
 .query-row {
     display: grid;
@@ -263,6 +276,7 @@ td code { color: var(--text-3); font-size: 9.5px; }
     .index-grid { grid-template-columns: 1fr; }
     .dashboard-card > header,
     .chart-preview > header { flex-direction: column; }
+    .generated-head { align-items: flex-start; }
     .save-chart { width: 100%; }
     .save-chart input { min-width: 0; flex: 1; }
     .preview-canvas { height: 260px; }

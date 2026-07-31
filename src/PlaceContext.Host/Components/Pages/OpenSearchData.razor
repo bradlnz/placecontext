@@ -83,6 +83,48 @@
         </section>
     }
 
+    @if (_fields.Count > 0)
+    {
+        <section class="generated-section">
+            <div class="section-head generated-head">
+                <div>
+                    <strong>Generated insights</strong>
+                    <span>@(_generatingCharts ? "analysing fields…" : $"{_generatedCharts.Count} charts from {_indexPattern}")</span>
+                </div>
+                <button class="dcbtn" disabled="@(_generatingCharts || _loading)" @onclick="GenerateChartsAsync">
+                    @(_generatingCharts ? "Generating…" : "Regenerate charts")
+                </button>
+            </div>
+            @if (_generatingCharts)
+            {
+                <div class="generated-loading dccard">Finding useful date, category, and numeric fields…</div>
+            }
+            else if (_generatedCharts.Count == 0)
+            {
+                <div class="generated-loading dccard">No chartable values were found in this index for the current query.</div>
+            }
+            else
+            {
+                <div class="dashboard-grid">
+                    @foreach (var chart in _generatedCharts)
+                    {
+                        <article class="dccard dashboard-card generated-card">
+                            <header>
+                                <div>
+                                    <strong>@chart.Title</strong>
+                                    <span>@chart.Subtitle</span>
+                                </div>
+                            </header>
+                            <div class="saved-chart">
+                                <canvas id="@GeneratedCanvasId(chart.Id)"></canvas>
+                            </div>
+                        </article>
+                    }
+                </div>
+            }
+        </section>
+    }
+
     <section class="dccard search-builder">
         <div class="query-row">
             <label class="index-field">
@@ -263,12 +305,15 @@
     private bool _loading;
     private bool _searching;
     private bool _savingDashboard;
+    private bool _generatingCharts;
     private Guid? _editingDashboardId;
     private Guid? _refreshing;
     private int _page = 1;
     private readonly int _pageSize = 25;
     private string? _lastPreviewSpec;
     private readonly Dictionary<Guid, DateTimeOffset> _renderedDashboards = new();
+    private readonly HashSet<string> _renderedGeneratedCharts = new();
+    private List<GeneratedOpenSearchChart> _generatedCharts = new();
 
     private IEnumerable<OpenSearchFieldView> AggregatableFields
         => _fields.Where(item => item.Aggregatable);
@@ -292,8 +337,9 @@
             _indices = await indicesTask;
             _dashboards = (await dashboardsTask).ToList();
             if (_indices.Count > 0)
-                _indexPattern = _indices[0].Name;
+                _indexPattern = DefaultIndex(_indices).Name;
             await LoadFieldsAsync();
+            await GenerateChartsAsync();
             _error = null;
         }
         catch (Exception ex)
@@ -331,6 +377,17 @@
             }
             catch (JSException) { }
         }
+
+        foreach (var chart in _generatedCharts)
+        {
+            if (_renderedGeneratedCharts.Contains(chart.Id)) continue;
+            try
+            {
+                await JS.InvokeVoidAsync("pcchart.render", GeneratedCanvasId(chart.Id), chart.ChartSpecJson);
+                _renderedGeneratedCharts.Add(chart.Id);
+            }
+            catch (JSException) { }
+        }
     }
 
     private async Task LoadFieldsAsync()
@@ -354,6 +411,155 @@
         _page = 1;
         _result = null;
         await LoadFieldsAsync();
+        await GenerateChartsAsync();
+    }
+
+    private async Task GenerateChartsAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_indexPattern) || _fields.Count == 0) return;
+        _generatingCharts = true;
+        _generatedCharts = new();
+        _renderedGeneratedCharts.Clear();
+        try
+        {
+            var candidates = ChartCandidates();
+            var generated = await Task.WhenAll(candidates.Select(async candidate =>
+            {
+                try
+                {
+                    var result = await Svc.SearchOpenSearchAsync(new OpenSearchSearchRequest(
+                        ProjectId, _indexPattern, _queryText, 1, 1,
+                        candidate.BucketField, candidate.BucketType, candidate.ChartType,
+                        candidate.MetricType, candidate.MetricField, candidate.DateInterval));
+                    return result.ChartSpecJson is null
+                        ? null
+                        : new GeneratedOpenSearchChart(
+                            candidate.Id, candidate.Title, candidate.Subtitle, result.ChartSpecJson);
+                }
+                catch
+                {
+                    // A sparse or incompatible field should not suppress other useful charts.
+                    return null;
+                }
+            }));
+            _generatedCharts = generated.Where(chart => chart is not null).Cast<GeneratedOpenSearchChart>().ToList();
+        }
+        finally
+        {
+            _generatingCharts = false;
+        }
+    }
+
+    private IReadOnlyList<GeneratedChartCandidate> ChartCandidates()
+    {
+        var date = _fields
+            .Where(field => field.Aggregatable && field.Type == "date")
+            .OrderBy(FieldPriority)
+            .FirstOrDefault();
+        var categories = _fields
+            .Where(IsUsefulCategory)
+            .OrderBy(FieldPriority)
+            .Take(2)
+            .ToList();
+        var numerics = _fields
+            .Where(IsNumeric)
+            .OrderBy(FieldPriority)
+            .GroupBy(MetricFamily)
+            .Select(group => group.First())
+            .Take(2)
+            .ToList();
+
+        var candidates = new List<GeneratedChartCandidate>();
+        if (date is not null)
+        {
+            candidates.Add(new(
+                $"date-{date.Name}", $"{Humanize(date.Name)} over time",
+                $"Monthly document count by {date.Name}", date.Name,
+                "date_histogram", "line", "count", null, "month"));
+        }
+        if (categories.Count > 0)
+        {
+            var category = categories[0];
+            candidates.Add(new(
+                $"terms-{category.Name}", $"Top {Humanize(category.Name)} values",
+                $"Document count by {category.Name}", category.Name,
+                "terms", "bar", "count", null, null));
+        }
+        foreach (var numeric in numerics)
+        {
+            if (categories.Count > 0)
+            {
+                var category = categories[0];
+                candidates.Add(new(
+                    $"avg-{numeric.Name}-by-{category.Name}",
+                    $"Average {Humanize(numeric.Name)} by {Humanize(category.Name)}",
+                    $"Average {numeric.Name} grouped by {category.Name}", category.Name,
+                    "terms", "bar", "avg", numeric.Name, null));
+            }
+            else if (date is not null)
+            {
+                candidates.Add(new(
+                    $"avg-{numeric.Name}-over-{date.Name}",
+                    $"Average {Humanize(numeric.Name)} over time",
+                    $"Monthly average of {numeric.Name}", date.Name,
+                    "date_histogram", "line", "avg", numeric.Name, "month"));
+            }
+        }
+        if (categories.Count > 1)
+        {
+            var category = categories[1];
+            candidates.Add(new(
+                $"terms-{category.Name}", $"Top {Humanize(category.Name)} values",
+                $"Document count by {category.Name}", category.Name,
+                "terms", "bar", "count", null, null));
+        }
+        return candidates.Take(4).ToList();
+    }
+
+    private static OpenSearchIndexView DefaultIndex(IReadOnlyList<OpenSearchIndexView> indices)
+        => indices.FirstOrDefault(index => index.DocumentCount > 0
+                && index.Name.Contains("property-feasibility-assessments", StringComparison.OrdinalIgnoreCase))
+            ?? indices.FirstOrDefault(index => index.DocumentCount > 0
+                && index.Name.Contains("development-applications", StringComparison.OrdinalIgnoreCase))
+            ?? indices.OrderByDescending(index => index.DocumentCount).First();
+
+    private static bool IsUsefulCategory(OpenSearchFieldView field)
+    {
+        if (!field.Aggregatable || field.Type is not ("keyword" or "boolean")) return false;
+        var name = field.Name.ToLowerInvariant();
+        return !new[] { "id", "hash", "url", "path", "geometry", "coordinate", "description", "address", "title", "raw" }
+            .Any(token => name.EndsWith(token) || name.Contains($"_{token}") || name.Contains($".{token}"));
+    }
+
+    private static bool IsNumeric(OpenSearchFieldView field)
+        => field.Aggregatable && field.Type is
+            "byte" or "short" or "integer" or "long" or "half_float" or "float" or "double" or "scaled_float";
+
+    private static string MetricFamily(OpenSearchFieldView field)
+    {
+        var name = field.Name.ToLowerInvariant();
+        string[] families = ["profit", "cashflow", "margin", "yield", "cost", "rent", "value", "amount", "debt"];
+        return families.FirstOrDefault(name.Contains) ?? name;
+    }
+
+    private static int FieldPriority(OpenSearchFieldView field)
+    {
+        var name = field.Name.ToLowerInvariant();
+        string[] priorities =
+        [
+            "profit", "cashflow", "margin", "yield", "status", "outcome", "authority", "council",
+            "suburb", "locality", "category", "type", "source", "cost", "rent", "value", "amount",
+            "debt", "lodged", "decision", "created", "updated", "date", "timestamp"
+        ];
+        var match = Array.FindIndex(priorities, name.Contains);
+        return match < 0 ? priorities.Length : match;
+    }
+
+    private static string Humanize(string field)
+    {
+        var leaf = field.Split('.').Last().Replace('_', ' ').Replace('-', ' ');
+        return string.Join(' ', leaf.Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            .Select(word => char.ToUpperInvariant(word[0]) + word[1..]));
     }
 
     private void BucketChanged()
@@ -513,6 +719,9 @@
     private static string CanvasId(string value)
         => "oschart-" + Convert.ToHexString(System.Security.Cryptography.MD5.HashData(
             System.Text.Encoding.UTF8.GetBytes(value)))[..12];
+    private static string GeneratedCanvasId(string value)
+        => "osgenerated-" + Convert.ToHexString(System.Security.Cryptography.MD5.HashData(
+            System.Text.Encoding.UTF8.GetBytes(value)))[..12];
     private static string? NullIfBlank(string? value)
         => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
     private static string? Value(OpenSearchHitView hit, string field)
@@ -521,4 +730,10 @@
         => value is null ? "—" : value.Length > 90 ? value[..87] + "…" : value;
     private static string FriendlyError(Exception ex)
         => ex is UnauthorizedAccessException ? "You do not have permission to search project data." : ex.Message;
+
+    private sealed record GeneratedOpenSearchChart(
+        string Id, string Title, string Subtitle, string ChartSpecJson);
+    private sealed record GeneratedChartCandidate(
+        string Id, string Title, string Subtitle, string BucketField, string BucketType,
+        string ChartType, string MetricType, string? MetricField, string? DateInterval);
 }
