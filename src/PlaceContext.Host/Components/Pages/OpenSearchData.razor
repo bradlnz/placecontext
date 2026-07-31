@@ -62,6 +62,27 @@
         </section>
     }
 
+    @if (_indices.Count > 0)
+    {
+        <section class="index-section">
+            <div class="section-head">
+                <div><strong>Indexes</strong><span>@_indices.Count available</span></div>
+            </div>
+            <div class="index-grid">
+                @foreach (var index in _indices)
+                {
+                    <button type="button"
+                            class="dccard index-card @(index.Name == _indexPattern ? "selected" : "")"
+                            @onclick="@(() => SelectIndexAsync(index))">
+                        <code>@index.Name</code>
+                        <span><strong>@index.DocumentCount.ToString("N0")</strong> documents</span>
+                        <small>@(index.StoreSize ?? "size unavailable")</small>
+                    </button>
+                }
+            </div>
+        </section>
+    }
+
     <section class="dccard search-builder">
         <div class="query-row">
             <label class="index-field">
@@ -325,6 +346,14 @@
             _error = FriendlyError(ex);
             _fields = Array.Empty<OpenSearchFieldView>();
         }
+    }
+
+    private async Task SelectIndexAsync(OpenSearchIndexView index)
+    {
+        _indexPattern = index.Name;
+        _page = 1;
+        _result = null;
+        await LoadFieldsAsync();
     }
 
     private void BucketChanged()
