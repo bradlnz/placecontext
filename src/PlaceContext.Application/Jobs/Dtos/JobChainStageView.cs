@@ -1,3 +1,5 @@
+using PlaceContext.Domain.ValueObjects;
+
 namespace PlaceContext.Application.Dtos;
 
 /// <summary>One stage of a chain: the job(s) that run at this point. A stage with more than one job
@@ -5,11 +7,25 @@ namespace PlaceContext.Application.Dtos;
 public sealed record JobChainStageView(
     IReadOnlyList<JobChainStepView> Jobs,
     ChainGateView? Gate = null,
-    IReadOnlyList<JobChainStageView>? ElseBranch = null)
+    IReadOnlyList<JobChainStageView>? ElseBranch = null,
+    ChainActionView? Action = null)
 {
     /// <summary>True when this stage fans out to more than one job.</summary>
     public bool IsParallel => Jobs.Count > 1;
 }
+
+public abstract record ChainActionView(string Type, string DisplayName);
+
+public sealed record SendEmailChainActionView(
+    string Recipient,
+    string RecipientName,
+    string Subject,
+    string Body,
+    string AttachmentPath = "")
+    : ChainActionView(SendEmailChainAction.ActionType, "Send email");
+
+public sealed record SendSmsChainActionView(string Recipient, string Body)
+    : ChainActionView(SendSmsChainAction.ActionType, "Send SMS");
 
 /// <summary>Read model for a flow-control gate on a chain stage.</summary>
 public abstract record ChainGateView;

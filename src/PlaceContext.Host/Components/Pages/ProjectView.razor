@@ -1,5 +1,5 @@
 @page "/project/{Id:guid}"
-@attribute [Authorize]
+@attribute [Authorize(Policy = Permission.ProjectsView)]
 @layout PlaceContext.Host.Components.Layout.ProjectLayout
 @inject IPlaceContextService Svc
 @inject PortalUiState Ui
@@ -33,7 +33,7 @@ else
 
 
         <div class="dctabs tabs">
-            @foreach (var (key, label) in new[] { ("overview", "Overview"), ("requirements", "Requirements"), ("activity", "Activity"), ("mcp", "MCP") })
+            @foreach (var (key, label) in new[] { ("overview", "Overview"), ("requirements", "Requirements"), ("activity", "Activity") })
             {
                 <button class="dctab @(_tab == key ? "active" : "")" @onclick="@(() => SwitchTab(key))">@label</button>
             }
@@ -160,146 +160,6 @@ else
         </div>
         }
 
-        @if (_tab == "mcp")
-        {
-        <div class="dccard section-card">
-            <div class="card-head">
-                <div class="head-title-group">
-                    <span class="card-title">MCP Servers</span>
-                    <span class="meta-mono">external tool servers available to jobs in this project</span>
-                </div>
-                <button class="dcbtn primary" @onclick="ShowAddMcp">+ Add MCP Server</button>
-            </div>
-            <div class="mcp-list">
-                @if (_mcpConnections is null)
-                {
-                    <Skeleton Kind="list" Rows="3" />
-                }
-                else if (_mcpConnections.Count == 0)
-                {
-                    <div class="empty-note">No MCP servers configured yet. Add one to make it available to jobs.</div>
-                }
-                else
-                {
-                    @foreach (var mcp in _mcpConnections)
-                    {
-                        var isExpired = mcp.OAuthTokenExpiresAt.HasValue && mcp.OAuthTokenExpiresAt.Value <= DateTimeOffset.UtcNow;
-                        var isConnected = mcp.LastStatus?.StartsWith("oauth:connected") == true;
-                        <div class="mcp-item @(mcp.Enabled ? "" : "disabled")">
-                            <div class="mcp-info">
-                                <span class="mcp-name">@mcp.Name</span>
-                                <span class="mcp-badge">@mcp.Transport</span>
-                                @if (mcp.AuthType == "oauth")
-                                {
-                                    <span class="mcp-badge oauth @(isExpired ? "expired" : isConnected ? "active" : "")">
-                                        @(isExpired ? "token expired" : isConnected ? "oauth connected" : "oauth")
-                                    </span>
-                                }
-                                @if (!string.IsNullOrEmpty(mcp.LastStatus))
-                                {
-                                    <span class="mcp-status @(mcp.LastStatus.StartsWith("connected") || mcp.LastStatus.StartsWith("http:2") || mcp.LastStatus.StartsWith("oauth:connected") ? "ok" : "err")">@mcp.LastStatus</span>
-                                }
-                            </div>
-                            <div class="mcp-actions">
-                                @if (mcp.AuthType == "oauth")
-                                {
-                                    <button class="dcbtn xs" @onclick="@(() => StartOAuthFlow(mcp.Id))">@(isExpired ? "Reconnect" : "Auth")</button>
-                                }
-                                <button class="dcbtn xs" @onclick="@(() => TestMcpConnectionAsync(mcp.Id))">Test</button>
-                                <button class="dcbtn xs danger" @onclick="@(() => DeleteMcpConnectionAsync(mcp.Id))">×</button>
-                            </div>
-                        </div>
-                    }
-                }
-            </div>
-            @if (_showAddMcp)
-            {
-                <div class="mcp-form">
-                    <div class="mcp-form-title">New MCP Server</div>
-                    <div class="dcfield">
-                        <label>Name</label>
-                        <input class="dcinput" @bind="_newMcpName" placeholder="My MCP Server" />
-                    </div>
-                    <div class="dcfield">
-                        <label>Transport</label>
-                        <select class="dcinput" @bind="_newMcpTransport">
-                            <option value="http">HTTP</option>
-                            <option value="sse">SSE</option>
-                            <option value="stdio">Stdio</option>
-                        </select>
-                    </div>
-                    @if (_newMcpTransport != "stdio")
-                    {
-                        <div class="dcfield">
-                            <label>Endpoint URL</label>
-                            <input class="dcinput" @bind="_newMcpEndpoint" placeholder="https://mcp.example.com/mcp" />
-                        </div>
-                    }
-                    else
-                    {
-                        <div class="dcfield">
-                            <label>Command</label>
-                            <input class="dcinput" @bind="_newMcpCommand" placeholder="npx" />
-                        </div>
-                        <div class="dcfield">
-                            <label>Args (JSON array)</label>
-                            <input class="dcinput" @bind="_newMcpArgs" placeholder='["-y", "server"]' />
-                        </div>
-                    }
-                    <div class="mcp-auth-section">
-                        <div class="mcp-auth-header" @onclick="@(() => _showMcpAuthFields = !_showMcpAuthFields)">
-                            <span>Authentication</span>
-                            <span class="mcp-auth-chevron">@(_showMcpAuthFields ? "▾" : "▸")</span>
-                        </div>
-                        @if (_showMcpAuthFields)
-                        {
-                            <div class="dcfield">
-                                <label>Auth Type</label>
-                                <select class="dcinput" @bind="_newMcpAuthType">
-                                    <option value="none">None</option>
-                                    <option value="bearer">Bearer Token</option>
-                                    <option value="apikey">API Key</option>
-                                    <option value="header">Custom Header</option>
-                                    <option value="oauth">OAuth 2.1</option>
-                                </select>
-                            </div>
-                            @if (_newMcpAuthType == "bearer" || _newMcpAuthType == "apikey")
-                            {
-                                <div class="dcfield">
-                                    <label>Token</label>
-                                    <input class="dcinput" type="password" @bind="_newMcpAuthToken" placeholder="token" />
-                                </div>
-                            }
-                            else if (_newMcpAuthType == "header")
-                            {
-                                <div class="dcfield">
-                                    <label>Header Name</label>
-                                    <input class="dcinput" @bind="_newMcpAuthHeader" placeholder="X-API-Key" />
-                                </div>
-                                <div class="dcfield">
-                                    <label>Header Value</label>
-                                    <input class="dcinput" type="password" @bind="_newMcpAuthToken" placeholder="value" />
-                                </div>
-                            }
-                            else if (_newMcpAuthType == "oauth")
-                            {
-                                <div class="dcfield">
-                                    <label>Scopes (optional)</label>
-                                    <input class="dcinput" @bind="_newMcpOAuthScopes" placeholder="openid profile" />
-                                </div>
-                                <div class="dchint">The OAuth flow will open in a popup.</div>
-                            }
-                        }
-                    </div>
-                    <div class="mcp-form-actions">
-                        <button class="dcbtn xs" @onclick="@(() => _showAddMcp = false)">Cancel</button>
-                        <button class="dcbtn xs primary" @onclick="AddMcpConnectionAsync">Add</button>
-                    </div>
-                </div>
-            }
-        </div>
-        }
-
     </div>
 }
 
@@ -322,20 +182,6 @@ else
 
     private bool _scrollPending;
 
-    // ── MCP state ─────────────────────────────────────────────────────────────
-    private IReadOnlyList<McpConnectionView>? _mcpConnections;
-    private bool _showAddMcp;
-    private bool _showMcpAuthFields;
-    private string _newMcpName = "";
-    private string _newMcpTransport = "http";
-    private string _newMcpEndpoint = "";
-    private string _newMcpCommand = "";
-    private string _newMcpArgs = "";
-    private string _newMcpAuthType = "none";
-    private string _newMcpAuthToken = "";
-    private string _newMcpAuthHeader = "";
-    private string _newMcpOAuthScopes = "";
-
     // OnParametersSet (not OnInitialized) so navigating between projects reloads the data.
     protected override async Task OnParametersSetAsync()
     {
@@ -343,7 +189,7 @@ else
         var query = System.Web.HttpUtility.ParseQueryString(new Uri(Nav.Uri).Query);
         // Unknown/retired tab values in old deep links (e.g. "board", "knowledge") fall back to overview.
         if (query["tab"] is { Length: > 0 } tab)
-            _tab = tab is "overview" or "requirements" or "activity" or "mcp" ? tab : "overview";
+            _tab = tab is "overview" or "requirements" or "activity" ? tab : "overview";
         await Load();
     }
 
@@ -371,12 +217,6 @@ else
         await InvokeAsync(StateHasChanged);
     }
 
-    private async Task LoadMcpConnectionsAsync()
-    {
-        try { _mcpConnections = await Svc.ListMcpConnectionsAsync(Id); }
-        catch (Exception ex) { _message = $"Could not load MCP connections: {ex.Message}"; }
-    }
-
     private async Task LoadTimelineAsync()
     {
         try { _timeline = await Svc.GetTimelineAsync(Id, 8); }
@@ -399,31 +239,10 @@ else
         catch (Exception ex) { _message = $"Could not load decisions: {ex.Message}"; }
     }
 
-    protected override void OnInitialized()
-    {
-        ProjectMcpOAuthCompleted += async (_, _) =>
-        {
-            await LoadMcpConnectionsAsync();
-            await InvokeAsync(StateHasChanged);
-        };
-    }
-
     // After the loaded page renders, scroll to (and flash) the section/decision named in the URL
     // fragment — e.g. /project/{id}#changes or #decision-{id} from a search hit.
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (firstRender)
-        {
-            await JS.InvokeVoidAsync("eval", @"
-if (!window.__projectMcpOAuthListener) {
-    window.__projectMcpOAuthListener = function(e) {
-        if (e.data && e.data.startsWith && e.data.startsWith('mcp-oauth-')) {
-            DotNet.invokeMethodAsync('PlaceContext.Host', 'OnProjectMcpOAuthCallback', e.data);
-        }
-    };
-    window.addEventListener('message', window.__projectMcpOAuthListener);
-}");
-        }
         if (_scrollPending && _overview is not null)
         {
             _scrollPending = false;
@@ -447,81 +266,7 @@ if (!window.__projectMcpOAuthListener) {
     private async Task SwitchTab(string key)
     {
         _tab = key;
-        if (key == "mcp" && _mcpConnections is null)
-        {
-            await LoadMcpConnectionsAsync();
-        }
         StateHasChanged();
     }
-
-    private void ShowAddMcp()
-    {
-        _showAddMcp = true;
-        _showMcpAuthFields = false;
-        _newMcpName = "";
-        _newMcpTransport = "http";
-        _newMcpEndpoint = "";
-        _newMcpCommand = "";
-        _newMcpArgs = "";
-        _newMcpAuthType = "none";
-        _newMcpAuthToken = "";
-        _newMcpAuthHeader = "";
-        _newMcpOAuthScopes = "";
-    }
-
-    private async Task AddMcpConnectionAsync()
-    {
-        _message = null;
-        try
-        {
-            await Svc.CreateMcpConnectionAsync(new(
-                Id, _newMcpName, _newMcpTransport, _newMcpEndpoint, _newMcpCommand, _newMcpArgs,
-                _newMcpAuthType, _newMcpAuthToken, _newMcpAuthHeader, null, _newMcpOAuthScopes));
-            _showAddMcp = false;
-            _message = "MCP server added.";
-            await LoadMcpConnectionsAsync();
-        }
-        catch (Exception ex) { _message = ex.Message; }
-        await InvokeAsync(StateHasChanged);
-    }
-
-    private async Task TestMcpConnectionAsync(Guid connectionId)
-    {
-        _message = null;
-        try
-        {
-            var result = await Svc.TestMcpConnectionAsync(connectionId);
-            _message = $"{result.Name}: {result.LastStatus ?? "unknown"}";
-            await LoadMcpConnectionsAsync();
-        }
-        catch (Exception ex) { _message = ex.Message; }
-        await InvokeAsync(StateHasChanged);
-    }
-
-    private async Task DeleteMcpConnectionAsync(Guid connectionId)
-    {
-        _message = null;
-        try
-        {
-            await Svc.DeleteMcpConnectionAsync(connectionId);
-            _message = "MCP server deleted.";
-            await LoadMcpConnectionsAsync();
-        }
-        catch (Exception ex) { _message = ex.Message; }
-        await InvokeAsync(StateHasChanged);
-    }
-
-    private async Task StartOAuthFlow(Guid connectionId)
-    {
-        await JS.InvokeVoidAsync("open", $"/mcp-oauth/start?connectionId={connectionId}", "_blank");
-    }
-
-    [JSInvokable]
-    public static async Task OnProjectMcpOAuthCallback(string message)
-    {
-        ProjectMcpOAuthCompleted?.Invoke(null, EventArgs.Empty);
-    }
-
-    private static event EventHandler? ProjectMcpOAuthCompleted;
 
 }

@@ -32,8 +32,18 @@ internal static class JobChainMapper
             elseBranchView = await Task.WhenAll(elseBranch.Select(s => ToStageViewAsync(s, jobs, ct)));
         }
 
-        return new JobChainStageView(stepViews, ToGateView(stage.Gate), elseBranchView);
+        return new JobChainStageView(
+            stepViews, ToGateView(stage.Gate), elseBranchView, ToActionView(stage.Action));
     }
+
+    private static ChainActionView? ToActionView(ChainAction? action) => action switch
+    {
+        null => null,
+        SendEmailChainAction email => new SendEmailChainActionView(
+            email.Recipient, email.RecipientName, email.Subject, email.Body, email.AttachmentPath),
+        SendSmsChainAction sms => new SendSmsChainActionView(sms.Recipient, sms.Body),
+        _ => throw new InvalidOperationException($"Unsupported chain action '{action.Type}'."),
+    };
 
     private static ChainGateView? ToGateView(ChainGate? gate) => gate switch
     {

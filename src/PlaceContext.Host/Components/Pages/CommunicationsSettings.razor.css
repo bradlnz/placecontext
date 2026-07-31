@@ -93,13 +93,58 @@
     overflow: hidden;
 }
 
+.channel-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.channel-card {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px;
+}
+
+.channel-icon {
+    display: grid;
+    width: 30px;
+    height: 30px;
+    flex: none;
+    place-items: center;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--card-2);
+    color: var(--brand-2);
+}
+
+.channel-card > span:nth-child(2) {
+    display: flex;
+    min-width: 0;
+    flex: 1;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.channel-card strong { color: var(--text); font-size: 11px; }
+.channel-card small { color: var(--text-3); font-size: 9px; }
+
+.channel-state {
+    color: var(--text-3);
+    font-size: 9px;
+    font-weight: 650;
+}
+
+.channel-state.connected { color: var(--good); }
+
 .provider-head {
     display: flex;
     align-items: center;
     gap: 11px;
     padding: 14px 16px;
     border-bottom: 1px solid var(--border);
-    background: linear-gradient(110deg, color-mix(in srgb, #ffde00 7%, var(--card)), var(--card) 45%);
+    background: var(--card);
 }
 
 .postmark-logo {
@@ -434,6 +479,7 @@
     }
 
     .connected-summary,
+    .channel-grid,
     .field-grid,
     .delivery-notes {
         grid-template-columns: 1fr;

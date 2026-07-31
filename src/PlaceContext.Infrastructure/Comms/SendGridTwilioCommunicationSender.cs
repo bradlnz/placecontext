@@ -41,12 +41,13 @@ public sealed class SendGridTwilioCommunicationSender : IClientCommunicationSend
         string recipientName,
         string subject,
         string body,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        IReadOnlyList<ClientEmailAttachment>? attachments = null)
     {
         var postmark = await _postmark.GetSendingCredentialAsync(ct);
         if (postmark is not null)
             return await SendPostmarkEmailAsync(
-                postmark, recipient, recipientName, subject, body, ct);
+                postmark, recipient, recipientName, subject, body, "crm-transactional", ct, attachments);
 
         var options = _options.Email;
         if (!options.IsConfigured)
@@ -55,13 +56,24 @@ public sealed class SendGridTwilioCommunicationSender : IClientCommunicationSend
 
         using var request = new HttpRequestMessage(HttpMethod.Post, options.Endpoint);
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", options.ApiKey);
-        request.Content = JsonContent.Create(new
+        var sendGridPayload = new Dictionary<string, object?>
         {
-            personalizations = new[] { new { to = new[] { new { email = recipient, name = recipientName } } } },
-            from = new { email = options.FromEmail, name = options.FromName },
-            subject,
-            content = new[] { new { type = "text/plain", value = body } },
-        });
+            ["personalizations"] = new[] { new { to = new[] { new { email = recipient, name = recipientName } } } },
+            ["from"] = new { email = options.FromEmail, name = options.FromName },
+            ["subject"] = subject,
+            ["content"] = new[] { new { type = "text/plain", value = body } },
+        };
+        if (attachments is { Count: > 0 })
+        {
+            sendGridPayload["attachments"] = attachments.Select(a => new
+            {
+                content = a.ContentBase64,
+                type = a.ContentType,
+                filename = a.Name,
+                disposition = "attachment",
+            }).ToArray();
+        }
+        request.Content = JsonContent.Create(sendGridPayload);
         using var response = await _httpFactory.CreateClient().SendAsync(request, ct);
         if (!response.IsSuccessStatusCode)
             throw new InvalidOperationException(await DeliveryError("SendGrid", response, ct));
@@ -71,27 +83,54 @@ public sealed class SendGridTwilioCommunicationSender : IClientCommunicationSend
         return new ClientMessageDelivery("SendGrid", externalId);
     }
 
+    public async Task<ClientMessageDelivery> SendAuthenticationEmailAsync(
+        string recipient,
+        string recipientName,
+        string subject,
+        string body,
+        CancellationToken ct = default)
+    {
+        var postmark = await _postmark.GetSendingCredentialAsync(ct);
+        if (postmark is null)
+            throw new InvalidOperationException(
+                "Authentication email requires Postmark. Connect it in Settings → Communications.");
+        return await SendPostmarkEmailAsync(
+            postmark, recipient, recipientName, subject, body, "authentication", ct);
+    }
+
     private async Task<ClientMessageDelivery> SendPostmarkEmailAsync(
         PostmarkSendingCredential credential,
         string recipient,
         string recipientName,
         string subject,
         string body,
-        CancellationToken ct)
+        string tag,
+        CancellationToken ct,
+        IReadOnlyList<ClientEmailAttachment>? attachments = null)
     {
         var endpoint = $"{_options.Postmark.ApiEndpoint.TrimEnd('/')}/email";
         using var request = new HttpRequestMessage(HttpMethod.Post, endpoint);
         request.Headers.TryAddWithoutValidation("X-Postmark-Server-Token", credential.ServerToken);
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-        request.Content = JsonContent.Create(new
+        var postmarkPayload = new Dictionary<string, object?>
         {
-            From = Address(credential.FromEmail, credential.FromName),
-            To = Address(recipient, recipientName),
-            Subject = subject,
-            TextBody = body,
-            MessageStream = credential.MessageStream,
-            Tag = "crm-transactional",
-        }, options: PostmarkJson);
+            ["From"] = Address(credential.FromEmail, credential.FromName),
+            ["To"] = Address(recipient, recipientName),
+            ["Subject"] = subject,
+            ["TextBody"] = body,
+            ["MessageStream"] = credential.MessageStream,
+            ["Tag"] = tag,
+        };
+        if (attachments is { Count: > 0 })
+        {
+            postmarkPayload["Attachments"] = attachments.Select(a => new
+            {
+                Name = a.Name,
+                Content = a.ContentBase64,
+                ContentType = a.ContentType,
+            }).ToArray();
+        }
+        request.Content = JsonContent.Create(postmarkPayload, options: PostmarkJson);
         using var response = await _httpFactory.CreateClient().SendAsync(request, ct);
         var payload = await response.Content.ReadAsStringAsync(ct);
         if (!response.IsSuccessStatusCode)

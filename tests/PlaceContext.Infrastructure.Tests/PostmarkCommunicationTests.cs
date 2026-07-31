@@ -51,7 +51,11 @@ public sealed class PostmarkCommunicationTests
 
         var sender = new SendGridTwilioCommunicationSender(factory, options, connection);
         var delivery = await sender.SendEmailAsync(
-            "ada@example.test", "Ada Lovelace", "Welcome", "Hello Ada");
+            "ada@example.test", "Ada Lovelace", "Welcome", "Hello Ada",
+            attachments: new[]
+            {
+                new ClientEmailAttachment("report.pdf", "application/pdf", "UERG")
+            });
 
         Assert.Equal("Postmark", delivery.Provider);
         Assert.Equal("message-123", delivery.ExternalId);
@@ -60,6 +64,12 @@ public sealed class PostmarkCommunicationTests
         Assert.Contains("\"MessageStream\":\"outbound\"", captured.Body);
         Assert.Contains("\"Tag\":\"crm-transactional\"", captured.Body);
         Assert.Contains("\"From\":\"\\u0022Example Team\\u0022 \\u003Chello@example.test\\u003E\"", captured.Body);
+        Assert.Contains("\"Attachments\":[{\"Name\":\"report.pdf\",\"Content\":\"UERG\",\"ContentType\":\"application/pdf\"}]", captured.Body);
+
+        await sender.SendAuthenticationEmailAsync(
+            "ada@example.test", "Ada Lovelace", "Verification code", "Code: 123456");
+
+        Assert.Contains("\"Tag\":\"authentication\"", captured.Body);
     }
 
     [Fact]

@@ -19,6 +19,12 @@
             <button class="canvas-button primary" disabled="@(!Guid.TryParse(_addJobId, out _))" @onclick="AddStageAsync">
                 <span>+</span> Add stage
             </button>
+            @if (CanAddSmsAction)
+            {
+                <button class="canvas-button" @onclick="@(() => OnAddSmsAction.InvokeAsync())">
+                    <span>▣</span> Send SMS
+                </button>
+            }
         </div>
     </div>
 
@@ -76,7 +82,7 @@
                              @ondragend="EndDrag">
                             <span class="drag-handle" title="Drag to reorder">⠿</span>
                             <span class="stage-num">@(stageIndex + 1)</span>
-                            <span class="stage-label">Stage</span>
+                            <span class="stage-label">@(stage.Action is null ? "Stage" : "Action")</span>
                             @if (stage.IsParallel)
                             {
                                 <span class="parallel-badge">@stage.Jobs.Count paths</span>
@@ -86,6 +92,22 @@
                         </div>
 
                         <div class="stage-paths">
+                            @if (stage.Action is SendEmailChainActionView email)
+                            {
+                                <button class="job-path" title="Edit Send Email action"
+                                        @onclick="@(() => OnEditEmailAction.InvokeAsync(stageIndex))">
+                                    <span class="job-icon">✉</span>
+                                    <span class="job-name">Send email · @email.Recipient</span>
+                                </button>
+                            }
+                            else if (stage.Action is SendSmsChainActionView sms)
+                            {
+                                <button class="job-path" title="Edit Send SMS action"
+                                        @onclick="@(() => OnEditSmsAction.InvokeAsync(stageIndex))">
+                                    <span class="job-icon">▣</span>
+                                    <span class="job-name">Send SMS · @sms.Recipient</span>
+                                </button>
+                            }
                             @foreach (var (job, branchIndex) in stage.Jobs.Select((job, index) => (job, index)))
                             {
                                 <div class="job-path" draggable="true"
@@ -100,7 +122,7 @@
                             }
                         </div>
 
-                        @if (_pathPickerStage == stageIndex)
+                        @if (stage.Action is null && _pathPickerStage == stageIndex)
                         {
                             <div class="path-picker">
                                 <select class="canvas-select" @bind="_pathJobId" aria-label="Job for new path">
@@ -115,7 +137,7 @@
                                 <button class="picker-cancel" @onclick="ClosePathPicker">×</button>
                             </div>
                         }
-                        else
+                        else if (stage.Action is null)
                         {
                             <button class="add-path" @onclick="@(() => OpenPathPicker(stageIndex))">
                                 <span class="plus-ring">+</span>
@@ -161,6 +183,10 @@
     [Parameter] public EventCallback<int> OnAddGate { get; set; }
     [Parameter] public EventCallback<(int StageIndex, ChainGateView Gate)> OnEditGate { get; set; }
     [Parameter] public EventCallback<Guid> OnAddStage { get; set; }
+    [Parameter] public EventCallback<int> OnEditEmailAction { get; set; }
+    [Parameter] public EventCallback OnAddSmsAction { get; set; }
+    [Parameter] public bool CanAddSmsAction { get; set; }
+    [Parameter] public EventCallback<int> OnEditSmsAction { get; set; }
     [Parameter] public EventCallback<(int StageIndex, Guid JobId)> OnAddPath { get; set; }
     [Parameter] public EventCallback<(int SourceIndex, int TargetIndex)> OnMoveStage { get; set; }
     [Parameter] public EventCallback<(int SourceStage, int SourceBranch, int TargetStage)> OnMovePath { get; set; }

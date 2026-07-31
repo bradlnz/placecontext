@@ -1,5 +1,5 @@
 @page "/project/{ProjectId:guid}/schedules"
-@attribute [Authorize]
+@attribute [Authorize(Policy = Permission.TriggersManage)]
 @layout PlaceContext.Host.Components.Layout.ProjectLayout
 @using PlaceContext.Application.Dtos
 @using PlaceContext.Application.Features

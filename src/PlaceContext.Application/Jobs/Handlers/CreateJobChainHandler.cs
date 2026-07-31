@@ -25,7 +25,8 @@ public sealed class CreateJobChainHandler : ICommandHandler<CreateJobChainComman
     public async Task<JobChainView> HandleAsync(CreateJobChainCommand command, CancellationToken ct = default)
     {
         var chain = command.Stages is { Count: > 0 } stages
-            ? JobChain.Create(command.ProjectId, command.Name, command.Description, ToStages(stages, command.StageGates), _clock.UtcNow)
+            ? JobChain.Create(command.ProjectId, command.Name, command.Description,
+                ToStages(stages, command.StageGates, command.StageActions), _clock.UtcNow)
             : JobChain.Create(command.ProjectId, command.Name, command.Description, command.StepJobIds, _clock.UtcNow);
         await ValidateStepsAsync(_jobs, chain, ct);
         await _chains.AddAsync(chain, ct);
@@ -34,8 +35,12 @@ public sealed class CreateJobChainHandler : ICommandHandler<CreateJobChainComman
     }
 
     internal static List<ChainStage> ToStages(IReadOnlyList<IReadOnlyList<Guid>> stages,
-        IReadOnlyList<ChainGate?>? gates = null)
-        => stages.Select((s, i) => new ChainStage(s, gate: gates is not null && i < gates.Count ? gates[i] : null)).ToList();
+        IReadOnlyList<ChainGate?>? gates = null,
+        IReadOnlyList<ChainAction?>? actions = null)
+        => stages.Select((s, i) => new ChainStage(
+            s,
+            gate: gates is not null && i < gates.Count ? gates[i] : null,
+            action: actions is not null && i < actions.Count ? actions[i] : null)).ToList();
 
     /// <summary>Every step must reference an existing job in the chain's project — a typo'd or foreign
     /// job id should fail at definition time, not at run time.</summary>

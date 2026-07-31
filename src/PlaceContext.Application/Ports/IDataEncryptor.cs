@@ -25,8 +25,7 @@ public interface IDataEncryptor
         public const string Chart = "project.chart.v1";
         /// <summary>Source text stored with embedding rows (vectors stay searchable in pgvector).</summary>
         public const string EmbeddingText = "content.embedding.text.v1";
-        public const string Totp = "auth.totp.v1";
-        public const string TotpState = "auth.totp.state.v1";
+        public const string EmailTwoFactorState = "auth.email-2fa.state.v1";
         public const string CrmCommunication = "crm.communication.v1";
     }
 

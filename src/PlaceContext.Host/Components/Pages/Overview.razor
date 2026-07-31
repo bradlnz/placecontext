@@ -1,5 +1,5 @@
 @page "/overview"
-@attribute [Authorize]
+@attribute [Authorize(Policy = Permission.ProjectsView)]
 @inject IPlaceContextService Svc
 @inject PortalUiState Ui
 @inject NavigationManager Nav

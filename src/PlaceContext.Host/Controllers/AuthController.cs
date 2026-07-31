@@ -179,15 +179,25 @@ public sealed class AuthController : ControllerBase
 
         if (await _auth.IsTwoFactorEnabledAsync(user.Id, HttpContext.RequestAborted))
         {
-            var stateToken = _encryptor.Protect(JsonSerializer.Serialize(new TotpState
+            try
+            {
+                await _auth.IssueTwoFactorCodeAsync(user.Id, HttpContext.RequestAborted);
+            }
+            catch (Exception)
+            {
+                return Redirect(BuildLoginErrorUrl(
+                    "We could not send a verification code. Ask an owner to check Postmark in Settings → Communications.",
+                    returnUrl, email));
+            }
+
+            var stateToken = _encryptor.Protect(JsonSerializer.Serialize(new EmailTwoFactorState
             {
                 UserId = user.Id, TenantId = user.TenantId, Email = user.Email,
                 DisplayName = user.DisplayName, Role = user.Role.ToString(),
-            }), IDataEncryptor.Purpose.TotpState);
+                ReturnUrl = LocalOrHome(returnUrl),
+            }), IDataEncryptor.Purpose.EmailTwoFactorState);
             var qs = $"state={Uri.EscapeDataString(stateToken)}";
-            if (!string.IsNullOrEmpty(returnUrl))
-                qs += $"&returnUrl={Uri.EscapeDataString(returnUrl)}";
-            return Redirect($"/auth/totp-verify?{qs}");
+            return Redirect($"/auth/email-verify?{qs}");
         }
 
         await SignInAsync(HttpContext, user);
@@ -290,43 +300,38 @@ public sealed class AuthController : ControllerBase
             && returnUrl.StartsWith('/') && !returnUrl.StartsWith("//") && !returnUrl.StartsWith("/\\")
                 ? returnUrl : "/";
 
-    // ── TOTP 2FA ───────────────────────────────────────────────────────────────────────────────
+    // ── Email 2FA ──────────────────────────────────────────────────────────────────────────────
 
-    [HttpGet("/auth/totp-verify")]
+    [HttpGet("/auth/email-verify")]
     [AllowAnonymous]
-    public IActionResult TotpVerify([FromQuery] string? state, [FromQuery] string? error)
+    public IActionResult EmailVerify([FromQuery] string? state, [FromQuery] string? error)
     {
-        if (string.IsNullOrEmpty(state))
-            return Redirect("/login");
+        if (string.IsNullOrEmpty(state)) return Redirect("/login");
+        var pending = DecryptEmailState(state);
+        if (pending is null) return Redirect("/login");
         var tokens = _antiforgery.GetAndStoreTokens(HttpContext);
-        return Content(AuthPages.TotpVerify(tokens, state, error), "text/html");
+        return Content(AuthPages.EmailVerify(
+            tokens, state, MaskEmail(pending.Email), error), "text/html");
     }
 
-    [HttpPost("/auth/totp-verify")]
+    [HttpPost("/auth/email-verify")]
     [AllowAnonymous]
-    public async Task<IActionResult> TotpVerifyPost([FromForm] string state, [FromForm] string code,
-        [FromForm] string? useRecovery)
+    public async Task<IActionResult> EmailVerifyPost(
+        [FromForm] string state, [FromForm] string code)
     {
-        if (!await ValidAntiforgeryAsync())
-            return Redirect($"/auth/totp-verify?error={Uri.EscapeDataString("Your session expired — please try again.")}");
-
-        if (string.IsNullOrEmpty(state))
+        if (!await ValidAntiforgeryAsync() || string.IsNullOrEmpty(state))
             return Redirect("/login");
 
-        var pending = DecryptState(state);
-        if (pending is null)
-            return Redirect("/login");
+        var pending = DecryptEmailState(state);
+        if (pending is null) return Redirect("/login");
 
-        bool ok;
-        if (useRecovery == "1")
-            ok = await _auth.ConsumeRecoveryCodeAsync(pending.UserId, code ?? "", HttpContext.RequestAborted);
-        else
-            ok = await _auth.VerifyTotpCodeAsync(pending.UserId, code ?? "", HttpContext.RequestAborted);
-
+        var ok = await _auth.VerifyTwoFactorCodeAsync(
+            pending.UserId, code ?? "", HttpContext.RequestAborted);
         if (!ok)
         {
-            var qs = $"state={Uri.EscapeDataString(state)}&error={Uri.EscapeDataString("Invalid code — try again.")}";
-            return Redirect($"/auth/totp-verify?{qs}");
+            var qs = $"state={Uri.EscapeDataString(state)}&error="
+                + Uri.EscapeDataString("Invalid or expired code — request another code if needed.");
+            return Redirect($"/auth/email-verify?{qs}");
         }
 
         var user = new AuthUser(pending.UserId, pending.TenantId, pending.Email,
@@ -335,18 +340,40 @@ public sealed class AuthController : ControllerBase
         return Redirect(LocalOrHome(pending.ReturnUrl));
     }
 
-    private TotpState? DecryptState(string state)
+    [HttpPost("/auth/email-verify/resend")]
+    [AllowAnonymous]
+    public async Task<IActionResult> EmailVerifyResend([FromForm] string state)
+    {
+        if (!await ValidAntiforgeryAsync()) return Redirect("/login");
+        var pending = DecryptEmailState(state);
+        if (pending is null) return Redirect("/login");
+        if (!await _auth.IsTwoFactorEnabledAsync(pending.UserId, HttpContext.RequestAborted))
+            return Redirect("/login");
+        try
+        {
+            await _auth.IssueTwoFactorCodeAsync(pending.UserId, HttpContext.RequestAborted);
+            return Redirect($"/auth/email-verify?state={Uri.EscapeDataString(state)}");
+        }
+        catch (Exception ex)
+        {
+            var qs = $"state={Uri.EscapeDataString(state)}&error={Uri.EscapeDataString(ex.Message)}";
+            return Redirect($"/auth/email-verify?{qs}");
+        }
+    }
+
+    private EmailTwoFactorState? DecryptEmailState(string state)
     {
         try
         {
-            var json = _encryptor.Unprotect(state, IDataEncryptor.Purpose.TotpState);
-            if (string.IsNullOrEmpty(json)) return null;
-            return JsonSerializer.Deserialize<TotpState>(json);
+            var json = _encryptor.Unprotect(state, IDataEncryptor.Purpose.EmailTwoFactorState);
+            return string.IsNullOrEmpty(json)
+                ? null
+                : JsonSerializer.Deserialize<EmailTwoFactorState>(json);
         }
         catch { return null; }
     }
 
-    private sealed class TotpState
+    private sealed class EmailTwoFactorState
     {
         public Guid UserId { get; set; }
         public Guid TenantId { get; set; }
@@ -378,37 +405,56 @@ public sealed class AuthController : ControllerBase
         if (await _auth.IsTwoFactorEnabledAsync(userId.Value, HttpContext.RequestAborted))
             return BadRequest(new { error = "2FA is already enabled." });
 
-        var (secret, recoveryCodes) = await _auth.SetupTwoFactorAsync(userId.Value, HttpContext.RequestAborted);
-        var issuer = Uri.EscapeDataString("PlaceContext");
-        var email = Uri.EscapeDataString(User.FindFirstValue(ClaimTypes.Email) ?? "");
-        var otpauthUri = $"otpauth://totp/{issuer}:{email}?secret={secret}&issuer={issuer}&digits=6&period=30";
-
-        return Ok(new { otpauthUri, recoveryCodes, secret });
+        try
+        {
+            var challenge = await _auth.IssueTwoFactorCodeAsync(
+                userId.Value, HttpContext.RequestAborted);
+            return Ok(new { sent = true, email = challenge.MaskedEmail, challenge.ExpiresAt });
+        }
+        catch (Exception ex) { return BadRequest(new { error = ex.Message }); }
     }
 
     [HttpPost("/api/2fa/confirm")]
     [Authorize]
-    public async Task<IActionResult> TwoFactorConfirm([FromBody] TotpConfirmRequest? body)
+    public async Task<IActionResult> TwoFactorConfirm([FromBody] EmailCodeRequest? body)
     {
         var userId = GetCurrentUserId();
         if (userId is null) return Unauthorized();
         if (body?.Code is null) return BadRequest(new { error = "Code required." });
 
-        var ok = await _auth.VerifyTotpCodeAsync(userId.Value, body.Code, HttpContext.RequestAborted);
-        if (!ok) return BadRequest(new { error = "Invalid code." });
+        var ok = await _auth.ConfirmTwoFactorSetupAsync(
+            userId.Value, body.Code, HttpContext.RequestAborted);
+        if (!ok) return BadRequest(new { error = "Invalid or expired code." });
         return Ok(new { confirmed = true });
+    }
+
+    [HttpPost("/api/2fa/code")]
+    [Authorize]
+    public async Task<IActionResult> TwoFactorCode()
+    {
+        var userId = GetCurrentUserId();
+        if (userId is null) return Unauthorized();
+        if (!await _auth.IsTwoFactorEnabledAsync(userId.Value, HttpContext.RequestAborted))
+            return BadRequest(new { error = "2FA is not enabled." });
+        try
+        {
+            var challenge = await _auth.IssueTwoFactorCodeAsync(
+                userId.Value, HttpContext.RequestAborted);
+            return Ok(new { sent = true, email = challenge.MaskedEmail, challenge.ExpiresAt });
+        }
+        catch (Exception ex) { return BadRequest(new { error = ex.Message }); }
     }
 
     [HttpPost("/api/2fa/disable")]
     [Authorize]
-    public async Task<IActionResult> TwoFactorDisable([FromBody] TotpConfirmRequest? body)
+    public async Task<IActionResult> TwoFactorDisable([FromBody] EmailCodeRequest? body)
     {
         var userId = GetCurrentUserId();
         if (userId is null) return Unauthorized();
         if (body?.Code is null) return BadRequest(new { error = "Code required." });
 
         var ok = await _auth.DisableTwoFactorAsync(userId.Value, body.Code, HttpContext.RequestAborted);
-        if (!ok) return BadRequest(new { error = "Invalid code." });
+        if (!ok) return BadRequest(new { error = "Invalid or expired code." });
         return Ok(new { disabled = true });
     }
 
@@ -418,5 +464,14 @@ public sealed class AuthController : ControllerBase
         return claim is not null && Guid.TryParse(claim.Value, out var id) ? id : null;
     }
 
-    public sealed record TotpConfirmRequest(string Code);
+    public sealed record EmailCodeRequest(string Code);
+
+    private static string MaskEmail(string email)
+    {
+        var at = email.IndexOf('@');
+        if (at <= 0) return email;
+        var local = email[..at];
+        var visible = local.Length <= 2 ? local[..1] : local[..2];
+        return visible + new string('•', Math.Max(2, local.Length - visible.Length)) + email[at..];
+    }
 }

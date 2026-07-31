@@ -3,6 +3,7 @@ using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Ports;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.Repositories;
+using PlaceContext.Domain.ValueObjects;
 
 namespace PlaceContext.Application.Features;
 
@@ -51,7 +52,7 @@ public sealed class ExportManifestHandler : IQueryHandler<ExportManifestQuery, B
             jobManifests.AddRange((await _jobs.ListForProjectAsync(projectId, ct)).Select(ToJobManifest));
 
             chainManifests.AddRange((await _chains.ListForProjectAsync(projectId, ct))
-                .Select(c => new JobChainManifest(c.Id, c.ProjectId, c.Name, c.Description, c.StepJobIds.ToList())));
+                .Select(ToChainManifest));
 
             triggerManifests.AddRange((await _triggers.ListForProjectAsync(projectId, ct))
                 .Select(t => new TriggerManifest(t.Id, t.ProjectId, t.JobId, t.Name, t.Kind.ToString(), t.Enabled,
@@ -89,4 +90,34 @@ public sealed class ExportManifestHandler : IQueryHandler<ExportManifestQuery, B
             v.Parameters, v.PostJobActions, v.ReturnType, v.ReturnFileName,
             job.RetryCount, job.RetryDelaySeconds);
     }
+
+    private static JobChainManifest ToChainManifest(JobChain chain) => new(
+        chain.Id,
+        chain.ProjectId,
+        chain.Name,
+        chain.Description,
+        chain.StepJobIds.ToList(),
+        chain.Stages.Select(stage => new JobChainStageManifest(
+            stage.JobIds.ToList(),
+            stage.Gate switch
+            {
+                WaitGate wait => new ChainGateManifest("wait", wait.Duration.TotalSeconds),
+                ConditionGate condition => new ChainGateManifest("condition", Expression: condition.Expression),
+                _ => null,
+            },
+            stage.Action switch
+            {
+                SendEmailChainAction email => new ChainActionManifest(
+                    SendEmailChainAction.ActionType,
+                    email.Recipient,
+                    email.RecipientName,
+                    email.Subject,
+                    email.Body,
+                    email.AttachmentPath),
+                SendSmsChainAction sms => new ChainActionManifest(
+                    SendSmsChainAction.ActionType,
+                    sms.Recipient,
+                    Body: sms.Body),
+                _ => null,
+            })).ToList());
 }

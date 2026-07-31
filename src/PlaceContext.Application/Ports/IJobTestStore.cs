@@ -22,7 +22,8 @@ public sealed record JobTestCaseRecord(
     string? RuntimeId,
     string? Entrypoint,
     IReadOnlyList<CodeFileDto> CodeFiles,
-    bool AllowNetworkEgress);
+    bool AllowNetworkEgress,
+    IReadOnlyList<JobTestMethodResult>? MethodResults = null);
 
 /// <summary>Tenant-scoped persistence for job verification cases and their latest result.</summary>
 public interface IJobTestStore

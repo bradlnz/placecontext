@@ -34,12 +34,11 @@ public sealed class MenuConfigService : IMenuConfigService
     internal static readonly CatalogItem[] WorkspaceCatalog =
     {
         new("dashboard", "Dashboard", "link", "/", Permission.ProjectsView, "grid", null),
-        new("project.overview", "Project overview", "link", "/project/{projectId}", Permission.ProjectsView, "grid", null),
-        new("crm", "CRM", "link", "/project/{projectId}/crm", Permission.DataRead, "users", null),
+        new("crm", "CRM", "link", "/project/{projectId}/crm", Permission.CrmView, "users", null),
         new("jobs", "Jobs", "link", "/project/{projectId}/jobs", Permission.JobsView, "box", null),
         new("tests", "Tests", "link", "/project/{projectId}/tests", Permission.JobsView, "test", null),
-        new("chains", "Chains", "link", "/project/{projectId}/chains", Permission.JobsView, "chain", null),
-        new("schedules", "Schedules", "link", "/project/{projectId}/schedules", Permission.JobsView, "clock", null),
+        new("chains", "Chains", "link", "/project/{projectId}/chains", Permission.ChainsManage, "chain", null),
+        new("schedules", "Schedules", "link", "/project/{projectId}/schedules", Permission.TriggersManage, "clock", null),
         new("data", "Data", "entities", "/project/{projectId}/data", Permission.DataRead, "map", null),
         new("data.tables", "Tables", "link", "/project/{projectId}/data", Permission.DataRead, null, null, "data"),
         new("data.analytics", "Analytics", "link", "/project/{projectId}/analytics", Permission.DataRead, null, null, "data"),

@@ -1,5 +1,5 @@
 @page "/project/{ProjectId:guid}/jobs"
-@attribute [Authorize]
+@attribute [Authorize(Policy = Permission.JobsView)]
 @layout PlaceContext.Host.Components.Layout.ProjectLayout
 @implements IDisposable
 @inject JobsViewModel Vm

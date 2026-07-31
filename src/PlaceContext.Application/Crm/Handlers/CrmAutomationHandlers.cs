@@ -52,9 +52,9 @@ public sealed class SaveCrmAutomationRuleHandler
     internal static async Task<CrmAutomationRuleView> MapAsync(
         CrmAutomationRule rule, JobChain? chain, IJobRepository jobs, CancellationToken ct)
     {
-        var stepCount = chain?.StepJobIds.Count ?? 0;
+        var stepCount = chain?.ExecutionStepCount ?? 0;
         // Resolve at least one step to distinguish a deleted chain from an empty display.
-        if (chain is not null && stepCount > 0) _ = await jobs.GetByIdAsync(chain.StepJobIds[0], ct);
+        if (chain?.StepJobIds is { Count: > 0 } jobIds) _ = await jobs.GetByIdAsync(jobIds[0], ct);
         return new CrmAutomationRuleView(
             rule.Id, rule.ProjectId, rule.Name, rule.EventType.ToString(),
             rule.LifecycleStage?.ToString(), rule.ChainId, chain?.Name ?? "Deleted job chain",

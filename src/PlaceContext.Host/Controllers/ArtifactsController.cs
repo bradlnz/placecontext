@@ -10,7 +10,7 @@ namespace PlaceContext.Host.Controllers;
 /// previewable types in a same-origin <c>iframe</c>; the <see cref="IRunArtifactLinkRepository"/>
 /// tenant filter scopes the lookup so one tenant cannot read another's artifacts.
 /// </summary>
-[Authorize]
+[Authorize(Policy = Permission.ArtifactsView)]
 public sealed class ArtifactsController : ControllerBase
 {
     private readonly IRunArtifactLinkRepository _links;

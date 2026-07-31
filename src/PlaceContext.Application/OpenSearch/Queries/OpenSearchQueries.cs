@@ -9,6 +9,10 @@ public sealed record ListOpenSearchIndicesQuery(Guid ProjectId)
 public sealed record ListOpenSearchFieldsQuery(Guid ProjectId, string IndexPattern)
     : IQuery<IReadOnlyList<OpenSearchFieldView>>;
 
+public sealed record GetOpenSearchLastUpdatedQuery(
+    Guid ProjectId, string IndexPattern, IReadOnlyList<string> CandidateFields)
+    : IQuery<OpenSearchLastUpdatedView>;
+
 public sealed record SearchOpenSearchQuery(OpenSearchSearchRequest Request)
     : IQuery<OpenSearchSearchView>;
 

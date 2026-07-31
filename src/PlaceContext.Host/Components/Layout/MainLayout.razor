@@ -300,8 +300,6 @@
 
     private static NavLinkMatch MatchFor(ResolvedMenuItem item, string? href)
     {
-        // Project overview is /project/{id} and must NOT be active for every deeper project page.
-        if (item.Id == "project.overview") return NavLinkMatch.All;
         return string.Equals(href, "/", StringComparison.Ordinal) ? NavLinkMatch.All : NavLinkMatch.Prefix;
     }
 

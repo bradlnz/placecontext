@@ -61,6 +61,11 @@
 .section-head > div { display: flex; align-items: baseline; gap: 8px; }
 .section-head strong { font-size: 13px; }
 .section-head span { color: var(--text-3); font-size: 10.5px; }
+.section-head .last-updated {
+    align-self: center;
+    color: var(--text-2);
+    font-size: 10.5px;
+}
 
 .dashboard-grid {
     display: grid;

@@ -5,6 +5,7 @@
 @using PlaceContext.Infrastructure.Comms
 @inject IPlaceContextService Svc
 @inject PostmarkConnectionService Postmark
+@inject IClientCommunicationSender Communications
 @inject PortalUiState Ui
 
 <PageTitle>PlaceContext — Communications</PageTitle>
@@ -12,13 +13,13 @@
 <div class="communications-page">
     <header class="communications-header">
         <div>
-            <span class="settings-kicker">Customer communications</span>
-            <h2>Transactional email</h2>
-            <p>Use a Postmark Server API Token stored securely in a project Vault.</p>
+            <span class="settings-kicker">Workspace integrations</span>
+            <h2>Communications</h2>
+            <p>Connect the providers used by chain actions and customer workflows. Credentials stay in project Vaults.</p>
         </div>
         @if (_status?.Ready == true)
         {
-            <span class="connection-pill ready"><i></i>Ready to send</span>
+            <span class="connection-pill ready"><i></i>Email ready</span>
         }
         else if (_status?.Configured == true)
         {
@@ -41,11 +42,24 @@
             <div class="settings-alert @(_messageIsError ? "error" : "success")">@_message</div>
         }
 
+        <section class="channel-grid" aria-label="Communication channels">
+            <article class="dccard channel-card">
+                <span class="channel-icon">✉</span>
+                <span><strong>Email</strong><small>@(_status.Ready ? "Postmark connected" : "Provider setup required")</small></span>
+                <span class="channel-state @(_status.Ready ? "connected" : "")">@(_status.Ready ? "Ready" : "Not ready")</span>
+            </article>
+            <article class="dccard channel-card">
+                <span class="channel-icon">▣</span>
+                <span><strong>SMS</strong><small>@(_capabilities?.SmsEnabled == true ? $"{_capabilities.SmsProvider} connected" : "Provider setup coming next")</small></span>
+                <span class="channel-state @(_capabilities?.SmsEnabled == true ? "connected" : "")">@(_capabilities?.SmsEnabled == true ? "Ready" : "Not configured")</span>
+            </article>
+        </section>
+
         <section class="dccard provider-card">
             <div class="provider-head">
                 <span class="postmark-logo">P</span>
                 <span>
-                    <strong>Postmark</strong>
+                    <strong>Email · Postmark</strong>
                     <small>Transactional email provider</small>
                 </span>
                 <span class="provider-state @(_status.Ready ? "connected" : "")">
@@ -56,7 +70,7 @@
             <div class="vault-callout">
                 <span class="vault-icon">◆</span>
                 <span>
-                    <strong>The API token stays in Vault</strong>
+                        <strong>Provider credentials stay in Vault</strong>
                     <small>Create a Vault secret containing the Postmark <em>Server API Token</em>, then reference it below. The value is decrypted only when an email is sent.</small>
                 </span>
             </div>
@@ -126,8 +140,8 @@
                     </span>
                     <i>→</i>
                     <span>
-                        <small>CRM</small>
-                        <strong>Comms email</strong>
+                        <small>Consumers</small>
+                        <strong>Chain actions + CRM</strong>
                     </span>
                 </div>
 
@@ -162,11 +176,11 @@
             </article>
             <article class="dccard">
                 <span class="note-icon">↗</span>
-                <span><strong>Transactional stream</strong><small>CRM messages are tagged <code>crm-transactional</code> for reporting.</small></span>
+                <span><strong>Transactional stream</strong><small>Email actions use the configured transactional message stream.</small></span>
             </article>
             <article class="dccard">
                 <span class="note-icon">◆</span>
-                <span><strong>Live Vault lookup</strong><small>Rotating the secret in Vault takes effect without storing the token in CRM settings.</small></span>
+                <span><strong>Live Vault lookup</strong><small>Rotating the secret in Vault takes effect without storing provider tokens in settings.</small></span>
             </article>
         </section>
     }
@@ -174,6 +188,7 @@
 
 @code {
     private PostmarkConnectionStatus? _status;
+    private ClientCommsCapabilities? _capabilities;
     private IReadOnlyList<ProjectSummaryView> _projects = Array.Empty<ProjectSummaryView>();
     private IReadOnlyList<ProjectSecretView> _secrets = Array.Empty<ProjectSecretView>();
     private bool _loading = true;
@@ -190,7 +205,7 @@
 
     protected override async Task OnInitializedAsync()
     {
-        Ui.Set("Settings", "Postmark · transactional email");
+        Ui.Set("Settings", "Communications");
         await LoadAsync();
     }
 
@@ -201,6 +216,7 @@
         try
         {
             _status = await Postmark.GetStatusAsync();
+            _capabilities = await Communications.GetCapabilitiesAsync();
             _projects = await Svc.GetProjectsAsync();
             ApplyStatus();
             await LoadSecretsAsync();
@@ -248,7 +264,7 @@
                 _messageStream);
             _status = await Postmark.GetStatusAsync();
             ApplyStatus();
-            _message = "Postmark is ready for transactional CRM email.";
+            _message = "Postmark is ready for transactional email.";
             _messageIsError = false;
         }
         catch (Exception ex)

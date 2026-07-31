@@ -1,5 +1,5 @@
 @page "/artifacts"
-@attribute [Authorize]
+@attribute [Authorize(Policy = Permission.ArtifactsView)]
 @implements IDisposable
 @using PlaceContext.Application.Features
 @using PlaceContext.Application.Dtos

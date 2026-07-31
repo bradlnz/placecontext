@@ -71,8 +71,10 @@ public sealed class ReplayJobChainHandler : ICommandHandler<ReplayJobChainComman
         // fromStep onward, threading outputs as inputs, exactly like the chain handler does.
         // This avoids needing to modify the chain definition.
 
-        var chainRun = ChainRun.Start(chain, chain.StepJobIds.Select((_, i) => $"(replay)").ToList(),
-            DateTimeOffset.UtcNow);
+        var replayNames = chain.Stages.SelectMany(stage => stage.Action is { } action
+            ? new[] { action.DisplayName }
+            : stage.JobIds.Select(_ => "(replay)")).ToList();
+        var chainRun = ChainRun.Start(chain, replayNames, DateTimeOffset.UtcNow);
         await _runs.AddAsync(chainRun, ct);
 
         var status = ChainRunStatus.Succeeded;
@@ -82,6 +84,25 @@ public sealed class ReplayJobChainHandler : ICommandHandler<ReplayJobChainComman
         for (var stageIndex = 0; stageIndex < chain.Stages.Count; stageIndex++)
         {
             var stage = chain.Stages[stageIndex];
+
+            if (stage.Action is not null)
+            {
+                var actionIndex = flatIndex++;
+                chainRun.MarkStepRunning(actionIndex, null, DateTimeOffset.UtcNow);
+                if (actionIndex < fromStep)
+                {
+                    chainRun.MarkStepFinished(actionIndex, null,
+                        ChainStepStatus.Skipped, DateTimeOffset.UtcNow);
+                    continue;
+                }
+
+                chainRun.MarkStepFinished(actionIndex, null, ChainStepStatus.Failed,
+                    DateTimeOffset.UtcNow, error:
+                    "Typed chain actions are not replayed automatically. Run the chain again to repeat the side effect.");
+                await _runs.UpdateAsync(chainRun, ct);
+                status = ChainRunStatus.Failed;
+                break;
+            }
 
             for (var branchIndex = 0; branchIndex < stage.JobIds.Count; branchIndex++)
             {

@@ -15,14 +15,17 @@ public sealed partial class JobChainsViewModel : PageViewModel
     private readonly OperationCenter _opCenter;
     private readonly BackgroundOperationRunner _ops;
     private readonly IWorkloadOutputBuffer _outputBuffer;
+    private readonly IPermissionService _permissions;
     private readonly ParameterPromptState _runPrompt = new();
 
     public JobChainsViewModel(
-        IPlaceContextService svc, OperationCenter opCenter, IWorkloadOutputBuffer outputBuffer)
+        IPlaceContextService svc, OperationCenter opCenter, IWorkloadOutputBuffer outputBuffer,
+        IPermissionService permissions)
     {
         _svc = svc;
         _opCenter = opCenter;
         _outputBuffer = outputBuffer;
+        _permissions = permissions;
         _ops = new BackgroundOperationRunner(opCenter);
     }
 
@@ -35,6 +38,9 @@ public sealed partial class JobChainsViewModel : PageViewModel
 
     public bool IsRunningChain(Guid chainId)
         => PendingChainId == chainId;
+
+    public bool CanSendEmailAction { get; private set; }
+    public bool CanSendSmsAction { get; private set; }
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────────────────────
     public void Initialize(Guid projectId)
@@ -57,6 +63,8 @@ public sealed partial class JobChainsViewModel : PageViewModel
         {
             Chains = await _svc.ListJobChainsAsync(ProjectId);
             Jobs = await _svc.ListJobsAsync(ProjectId);
+            CanSendEmailAction = await _permissions.HasAsync(Permission.EmailSend);
+            CanSendSmsAction = await _permissions.HasAsync(Permission.SmsSend);
         }
         catch (Exception ex) { Message = ex.Message; }
         finally { Loading = false; NotifyStateChanged(); }

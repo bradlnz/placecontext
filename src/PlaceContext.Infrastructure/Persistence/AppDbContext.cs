@@ -48,6 +48,7 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
     public DbSet<CrmClientArtifactRow> CrmClientArtifacts => Set<CrmClientArtifactRow>();
     public DbSet<CrmAutomationRuleRow> CrmAutomationRules => Set<CrmAutomationRuleRow>();
     public DbSet<CrmAutomationQueueRow> CrmAutomationQueue => Set<CrmAutomationQueueRow>();
+    public DbSet<CrmIngestionSettingsRow> CrmIngestionSettings => Set<CrmIngestionSettingsRow>();
     public DbSet<PostmarkConnectionRow> PostmarkConnections => Set<PostmarkConnectionRow>();
     public DbSet<RunArtifactLinkRow> RunArtifacts => Set<RunArtifactLinkRow>();
     public DbSet<JobSecretRow> JobSecrets => Set<JobSecretRow>();
@@ -128,6 +129,7 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
             e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
             e.Property(x => x.PasswordSet).HasDefaultValue(false);
             e.Property(x => x.TwoFactorEnabled).HasDefaultValue(false);
+            e.Property(x => x.TwoFactorCodeFailedAttempts).HasDefaultValue(0);
         });
 
         b.Entity<InviteRow>(e =>
@@ -232,6 +234,7 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
             e.Property(x => x.Enabled).HasDefaultValue(true);
             e.Property(x => x.LastStatus).HasDefaultValue("NotRun");
             e.Property(x => x.CodeFilesJson).HasDefaultValue("[]");
+            e.Property(x => x.MethodResultsJson).HasDefaultValue("[]");
             e.Property(x => x.AllowNetworkEgress).HasDefaultValue(false);
             e.Property(x => x.CreatedAt).HasDefaultValueSql("now()");
             e.Property(x => x.UpdatedAt).HasDefaultValueSql("now()");
@@ -263,6 +266,17 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
             e.HasIndex(x => new { x.ProjectId, x.Email });
             e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
             e.Property(x => x.LifecycleStage).HasDefaultValue("Lead");
+            e.Property(x => x.CreatedAt).HasDefaultValueSql("now()");
+            e.Property(x => x.UpdatedAt).HasDefaultValueSql("now()");
+        });
+
+        b.Entity<CrmIngestionSettingsRow>(e =>
+        {
+            e.ToTable("crm_ingestion_settings");
+            e.HasKey(x => x.ProjectId);
+            e.HasIndex(x => x.TokenHash).IsUnique();
+            e.HasIndex(x => x.AllowedOrigin);
+            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
             e.Property(x => x.CreatedAt).HasDefaultValueSql("now()");
             e.Property(x => x.UpdatedAt).HasDefaultValueSql("now()");
         });

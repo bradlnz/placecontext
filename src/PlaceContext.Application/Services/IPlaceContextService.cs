@@ -62,6 +62,9 @@ public interface IPlaceContextService
         Guid projectId, CancellationToken ct = default);
     Task<IReadOnlyList<OpenSearchFieldView>> ListOpenSearchFieldsAsync(
         Guid projectId, string indexPattern, CancellationToken ct = default);
+    Task<OpenSearchLastUpdatedView> GetOpenSearchLastUpdatedAsync(
+        Guid projectId, string indexPattern, IReadOnlyList<string> candidateFields,
+        CancellationToken ct = default);
     Task<OpenSearchSearchView> SearchOpenSearchAsync(
         OpenSearchSearchRequest request, CancellationToken ct = default);
     Task<IReadOnlyList<OpenSearchDashboardView>> ListOpenSearchDashboardsAsync(
@@ -126,8 +129,8 @@ public interface IPlaceContextService
     // more than one job id is a parallel fan-out group, and the stage right after it is the join).
     // `stages`, when supplied, wins over the backward-compatible flat `stepJobIds` (one job per stage).
     // `stageGates` is an optional parallel list of flow-control gates, one per stage (null = no gate).
-    Task<JobChainView> CreateJobChainAsync(Guid projectId, string name, string? description, IReadOnlyList<Guid> stepJobIds, IReadOnlyList<IReadOnlyList<Guid>>? stages = null, IReadOnlyList<Domain.ValueObjects.ChainGate?>? stageGates = null, CancellationToken ct = default);
-    Task<JobChainView> UpdateJobChainAsync(Guid chainId, string name, string? description, IReadOnlyList<Guid> stepJobIds, IReadOnlyList<IReadOnlyList<Guid>>? stages = null, IReadOnlyList<Domain.ValueObjects.ChainGate?>? stageGates = null, CancellationToken ct = default);
+    Task<JobChainView> CreateJobChainAsync(Guid projectId, string name, string? description, IReadOnlyList<Guid> stepJobIds, IReadOnlyList<IReadOnlyList<Guid>>? stages = null, IReadOnlyList<Domain.ValueObjects.ChainGate?>? stageGates = null, IReadOnlyList<Domain.ValueObjects.ChainAction?>? stageActions = null, CancellationToken ct = default);
+    Task<JobChainView> UpdateJobChainAsync(Guid chainId, string name, string? description, IReadOnlyList<Guid> stepJobIds, IReadOnlyList<IReadOnlyList<Guid>>? stages = null, IReadOnlyList<Domain.ValueObjects.ChainGate?>? stageGates = null, IReadOnlyList<Domain.ValueObjects.ChainAction?>? stageActions = null, CancellationToken ct = default);
     Task<bool> CancelJobRunAsync(Guid runId, CancellationToken ct = default);
     Task<bool> CancelChainRunAsync(Guid chainRunId, CancellationToken ct = default);
     Task<bool> DeleteJobChainAsync(Guid chainId, CancellationToken ct = default);

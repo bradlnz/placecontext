@@ -1,5 +1,5 @@
 @page "/chat"
-@attribute [Authorize]
+@attribute [Authorize(Policy = Permission.AgentsChat)]
 @layout PlaceContext.Host.Components.Layout.MainLayout
 @implements IDisposable
 @using PlaceContext.Application.Dtos

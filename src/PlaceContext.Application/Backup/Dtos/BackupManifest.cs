@@ -25,7 +25,7 @@ public sealed record BackupManifest(
         "(Data-Protection-encrypted ciphertext, non-portable across deployments).")
 {
     /// <summary>Schema version this build writes and can read. Bump when a manifest shape changes.</summary>
-    public const int CurrentSchemaVersion = 1;
+    public const int CurrentSchemaVersion = 2;
 }
 
 /// <summary>Tenant registry settings safe to carry across a backup (see <c>ITenantSettingsPort</c>).</summary>
@@ -76,7 +76,29 @@ public sealed record JobManifest(
 
 /// <summary>An ordered job pipeline. Steps are old JobIds, rewired through the import's job map.
 /// Natural key on import is (ProjectId, Name).</summary>
-public sealed record JobChainManifest(Guid ChainId, Guid ProjectId, string Name, string? Description, IReadOnlyList<Guid> StepJobIds);
+public sealed record JobChainManifest(
+    Guid ChainId,
+    Guid ProjectId,
+    string Name,
+    string? Description,
+    IReadOnlyList<Guid> StepJobIds,
+    IReadOnlyList<JobChainStageManifest>? Stages = null);
+
+/// <summary>Version-2 staged chain shape. Null preserves version-1 flat-manifest compatibility.</summary>
+public sealed record JobChainStageManifest(
+    IReadOnlyList<Guid> JobIds,
+    ChainGateManifest? Gate = null,
+    ChainActionManifest? Action = null);
+
+public sealed record ChainGateManifest(string Type, double? DurationSeconds = null, string? Expression = null);
+
+public sealed record ChainActionManifest(
+    string Type,
+    string? Recipient = null,
+    string? RecipientName = null,
+    string? Subject = null,
+    string? Body = null,
+    string? AttachmentPath = null);
 
 /// <summary>A schedule/event trigger on a job, or a launchpad on a chain. Natural key on import is (JobId, Name).</summary>
 public sealed record TriggerManifest(

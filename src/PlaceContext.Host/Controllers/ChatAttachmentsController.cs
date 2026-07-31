@@ -12,7 +12,7 @@ namespace PlaceContext.Host.Controllers;
 /// attachments. Previewable types render inline under the same CSP sandbox as post-job artifacts
 /// (<see cref="InlinePreview"/>); everything else downloads as an attachment.
 /// </summary>
-[Authorize]
+[Authorize(Policy = Permission.AgentsChat)]
 public sealed class ChatAttachmentsController : ControllerBase
 {
     /// <summary>The bucket the chat uploader writes attachment bytes to.</summary>

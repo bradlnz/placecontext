@@ -24,4 +24,5 @@ public sealed class JobTestCaseRow : ITenantOwned
     public string? Entrypoint { get; set; }
     public string CodeFilesJson { get; set; } = "[]";
     public bool AllowNetworkEgress { get; set; }
+    public string MethodResultsJson { get; set; } = "[]";
 }

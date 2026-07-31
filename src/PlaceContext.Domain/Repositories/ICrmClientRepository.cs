@@ -8,5 +8,8 @@ public interface ICrmClientRepository
     Task UpdateAsync(CrmClient client, CancellationToken ct = default);
     Task DeleteAsync(Guid clientId, CancellationToken ct = default);
     Task<CrmClient?> GetByIdAsync(Guid clientId, CancellationToken ct = default);
+    Task<CrmClient?> FindByContactAsync(
+        Guid projectId, string? email, string? phone, CancellationToken ct = default)
+        => Task.FromResult<CrmClient?>(null);
     Task<IReadOnlyList<CrmClient>> ListForProjectAsync(Guid projectId, CancellationToken ct = default);
 }

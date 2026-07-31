@@ -27,11 +27,10 @@ else
                 <span>@_test.JobName</span>
             </div>
             <select class="runtime-select" @bind="_runtimeId" @bind:after="RuntimeChanged">
-                <option value="python">Python</option>
-                <option value="node">Node.js</option>
-                <option value="go">Go</option>
-                <option value="ruby">Ruby</option>
-                <option value="dotnet">.NET / C#</option>
+                <option value="python">Python · unittest</option>
+                <option value="node">Node.js · node:test</option>
+                <option value="go">Go · testing</option>
+                <option value="ruby">Ruby · Minitest</option>
             </select>
             @if (_monacoLite)
             {
@@ -47,7 +46,7 @@ else
             </span>
             <button class="dcbtn" disabled="@_busy" @onclick="ResetStarterAsync">Starter</button>
             <button class="dcbtn" disabled="@_busy" @onclick="RunAsync">
-                @(_running ? "Running…" : "▶ Run test")
+                @(_running ? "Running…" : "▶ Run block")
             </button>
             <button class="dcbtn primary" disabled="@_busy" @onclick="SaveAsync">
                 @(_saving ? "Saving…" : "Save code")
@@ -55,13 +54,38 @@ else
         </header>
 
         <div class="contract-bar">
-            <strong>stdin</strong>
+            <strong>@JobTestFramework.Label(_runtimeId)</strong>
             <code>{ "input": …, "run": { "status": "Succeeded", "output": …, "shards": […] } }</code>
-            <span>Job and validator run without network, secrets, or persisted Job side effects. Exit <b>0</b> to pass.</span>
+            <span>Every framework method runs against the isolated Job result. Network, secrets, and production side effects stay disabled.</span>
         </div>
 
         <main class="workspace">
             <aside class="file-tree">
+                <div class="method-tree-head">
+                    <span>Test methods</span>
+                    <b>@Methods.Count</b>
+                </div>
+                <div class="method-list">
+                    @if (Methods.Count == 0)
+                    {
+                        <span class="method-empty">Add a framework test method, then save or run the block.</span>
+                    }
+                    else
+                    {
+                        @foreach (var method in Methods)
+                        {
+                            <div class="method-row @method.Status.ToLowerInvariant()" title="@method.Message">
+                                <span class="method-status">@MethodIcon(method.Status)</span>
+                                <span>@method.Name</span>
+                                @if (method.DurationMs is { } methodDuration)
+                                {
+                                    <small>@FormatDuration(methodDuration)</small>
+                                }
+                            </div>
+                        }
+                    }
+                </div>
+
                 <div class="file-tree-head">
                     <span>Test files</span>
                     <button class="add-file-button" @onclick="StartAddFile" title="Add file">+</button>
@@ -116,7 +140,7 @@ else
 
                 <div class="result-panel @(_panelOpen ? "open" : null)">
                     <button class="result-bar" @onclick="@(() => _panelOpen = !_panelOpen)">
-                        <span>Test result</span>
+                    <span>Block result</span>
                         @if (_lastResult is not null)
                         {
                             <b class="@_lastResult.LastStatus.ToLowerInvariant()">@_lastResult.LastStatus</b>
@@ -133,7 +157,7 @@ else
                         <div class="result-body">
                             @if (_lastResult is null)
                             {
-                                <span>Run the test to execute the Job in an isolated sandbox, apply its assertion, then run this validation code.</span>
+                                <span>Run the block to execute the Job once, then run every discovered framework test method against its result.</span>
                             }
                             else
                             {
@@ -176,6 +200,15 @@ else
     private ElementReference _newFileInput;
     private string? _message;
     private bool _busy => _saving || _running;
+    private IReadOnlyList<JobTestMethodResult> Methods
+    {
+        get
+        {
+            if (_lastResult?.MethodResults is { Count: > 0 } results) return results;
+            return JobTestFramework.Discover(_runtimeId,
+                _files.Select(file => new CodeFileDto(file.Path, file.Content)).ToList());
+        }
+    }
 
     private sealed class EditorFile
     {
@@ -323,6 +356,8 @@ else
         var starter = Starter(runtime);
         _files.Clear();
         _files.Add(new EditorFile { Path = starter.Path, Content = starter.Content });
+        if (runtime == "go")
+            _files.Add(new EditorFile { Path = "go.mod", Content = "module placecontext_tests\n\ngo 1.23\n" });
         _entrypoint = starter.Path;
         _active = 0;
     }
@@ -338,6 +373,7 @@ else
             false));
         _test = updated;
         _entrypoint = updated.Entrypoint ?? entrypoint;
+        _lastResult = updated.LastStatus == "NotRun" ? null : updated;
         return updated;
     }
 
@@ -372,83 +408,92 @@ else
 
     private static (string Path, string Content) Starter(string runtime) => runtime switch
     {
-        "node" => ("test.js", """
-            const fs = require("fs");
-            const test = JSON.parse(fs.readFileSync(0, "utf8"));
+        "node" => ("job.test.js", """
+            const test = require("node:test");
+            const assert = require("node:assert/strict");
 
-            if (test.run.status !== "Succeeded") {
-              console.error(`Expected Succeeded, got ${test.run.status}`);
-              process.exit(1);
-            }
+            const context = JSON.parse(process.env.PC_TEST_CONTEXT);
 
-            // Add assertions against test.run.output here.
-            console.log("Job output passed validation");
+            test("job succeeds", () => {
+              assert.equal(context.run.status, "Succeeded");
+            });
+
+            test("job reports its shard results", () => {
+              assert.ok(Array.isArray(context.run.shards));
+              assert.ok(context.run.shards.length > 0);
+            });
             """),
-        "go" => ("test.go", """
+        "go" => ("job_test.go", """
             package main
 
             import (
                 "encoding/json"
-                "fmt"
                 "os"
+                "testing"
             )
 
-            func main() {
-                var test struct {
-                    Run struct {
-                        Status string `json:"status"`
-                        Output any    `json:"output"`
-                    } `json:"run"`
+            type testContext struct {
+                Run struct {
+                    Status string `json:"status"`
+                    Shards []any  `json:"shards"`
+                } `json:"run"`
+            }
+
+            func context(t *testing.T) testContext {
+                t.Helper()
+                var value testContext
+                if err := json.Unmarshal([]byte(os.Getenv("PC_TEST_CONTEXT")), &value); err != nil {
+                    t.Fatal(err)
                 }
-                if err := json.NewDecoder(os.Stdin).Decode(&test); err != nil {
-                    fmt.Fprintln(os.Stderr, err)
-                    os.Exit(1)
+                return value
+            }
+
+            func TestJobSucceeds(t *testing.T) {
+                value := context(t)
+                if value.Run.Status != "Succeeded" {
+                    t.Fatalf("expected Succeeded, got %s", value.Run.Status)
                 }
-                if test.Run.Status != "Succeeded" {
-                    fmt.Fprintf(os.Stderr, "expected Succeeded, got %s\n", test.Run.Status)
-                    os.Exit(1)
+            }
+
+            func TestJobReportsShardResults(t *testing.T) {
+                value := context(t)
+                if len(value.Run.Shards) == 0 {
+                    t.Fatal("expected at least one shard result")
                 }
-                // Add assertions against test.Run.Output here.
-                fmt.Println("Job output passed validation")
             }
             """),
-        "ruby" => ("test.rb", """
+        "ruby" => ("job_test.rb", """
             require "json"
+            require "minitest/test"
 
-            test = JSON.parse($stdin.read)
-            unless test.dig("run", "status") == "Succeeded"
-              warn "Expected the Job to succeed"
-              exit 1
+            class JobOutputTest < Minitest::Test
+              def setup
+                @context = JSON.parse(ENV.fetch("PC_TEST_CONTEXT"))
+              end
+
+              def test_job_succeeds
+                assert_equal "Succeeded", @context.dig("run", "status")
+              end
+
+              def test_job_reports_shard_results
+                refute_empty @context.dig("run", "shards")
+              end
             end
-
-            # Add assertions against test.dig("run", "output") here.
-            puts "Job output passed validation"
             """),
-        "dotnet" => ("test.cs", """
-            using System.Text.Json;
-
-            using var document = JsonDocument.Parse(Console.In.ReadToEnd());
-            var run = document.RootElement.GetProperty("run");
-            if (run.GetProperty("status").GetString() != "Succeeded")
-            {
-                Console.Error.WriteLine("Expected the Job to succeed");
-                return 1;
-            }
-
-            // Add assertions against run.GetProperty("output") here.
-            Console.WriteLine("Job output passed validation");
-            return 0;
-            """),
-        _ => ("test.py", """
+        _ => ("test_job.py", """
             import json
-            import sys
+            import os
+            import unittest
 
-            test = json.load(sys.stdin)
-            if test["run"]["status"] != "Succeeded":
-                raise AssertionError(f'Expected Succeeded, got {test["run"]["status"]}')
+            class JobOutputTest(unittest.TestCase):
+                def setUp(self):
+                    self.context = json.loads(os.environ["PC_TEST_CONTEXT"])
 
-            # Add assertions against test["run"]["output"] here.
-            print("Job output passed validation")
+                def test_job_succeeds(self):
+                    self.assertEqual("Succeeded", self.context["run"]["status"])
+
+                def test_job_reports_shard_results(self):
+                    self.assertGreater(len(self.context["run"]["shards"]), 0)
             """),
     };
 
@@ -458,8 +503,14 @@ else
         "node" => "Node.js",
         "go" => "Go",
         "ruby" => "Ruby",
-        "dotnet" => ".NET / C#",
         _ => "Python",
+    };
+    private static string MethodIcon(string status) => status switch
+    {
+        "Passed" => "✓",
+        "Failed" => "×",
+        "Skipped" => "–",
+        _ => "○",
     };
     private static string NormalizePath(string value)
         => value.Trim().Replace('\\', '/').TrimStart('/');

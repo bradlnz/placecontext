@@ -26,6 +26,14 @@
                                 ? step.Status + " " + FormatDuration(step.StartedAt.Value, step.FinishedAt.Value)
                                 : step.Status.ToLowerInvariant())
                     </div>
+                    @if (!string.IsNullOrWhiteSpace(step.Provider))
+                    {
+                        <div class="stage-sub">@step.Provider@(string.IsNullOrWhiteSpace(step.ExternalId) ? "" : $" · {step.ExternalId}")</div>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(step.Error))
+                    {
+                        <div class="stage-sub" title="@step.Error">@step.Error</div>
+                    }
                     @if (step.Status == "Running" && step.RunId.HasValue)
                     {
                         <button class="dcbtn btn-2-8 text-bad mt-4" @onclick:stopPropagation="true"

@@ -52,6 +52,8 @@ public sealed class EfJobTestStore : IJobTestStore
         row.Entrypoint = test.Entrypoint;
         row.CodeFilesJson = JsonSerializer.Serialize(test.CodeFiles);
         row.AllowNetworkEgress = test.AllowNetworkEgress;
+        row.MethodResultsJson = JsonSerializer.Serialize(
+            test.MethodResults ?? Array.Empty<JobTestMethodResult>());
         await _db.SaveChangesAsync(ct);
     }
 
@@ -89,7 +91,8 @@ public sealed class EfJobTestStore : IJobTestStore
             row.RuntimeId,
             row.Entrypoint,
             DeserializeFiles(row.CodeFilesJson),
-            row.AllowNetworkEgress);
+            row.AllowNetworkEgress,
+            DeserializeMethodResults(row.MethodResultsJson));
     }
 
     private static IReadOnlyList<CodeFileDto> DeserializeFiles(string? json)
@@ -101,5 +104,16 @@ public sealed class EfJobTestStore : IJobTestStore
             return files is null ? Array.Empty<CodeFileDto>() : files;
         }
         catch (JsonException) { return Array.Empty<CodeFileDto>(); }
+    }
+
+    private static IReadOnlyList<JobTestMethodResult> DeserializeMethodResults(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json)) return Array.Empty<JobTestMethodResult>();
+        try
+        {
+            return JsonSerializer.Deserialize<List<JobTestMethodResult>>(json)
+                ?? new List<JobTestMethodResult>();
+        }
+        catch (JsonException) { return Array.Empty<JobTestMethodResult>(); }
     }
 }

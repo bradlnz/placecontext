@@ -1,5 +1,8 @@
 using System.Diagnostics;
+using System.Net.Mail;
+using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Observability;
@@ -48,11 +51,15 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
     private readonly IUnitOfWork _uow;
     private readonly IClock _clock;
     private readonly IJobRunner _jobRunner;
+    private readonly IClientCommunicationSender? _communications;
+    private readonly IPermissionService? _permissions;
 
     public RunJobChainHandler(IJobChainRepository chains, IJobRepository jobs, IChainRunRepository runs,
         IUnitOfWork uow, IClock clock, IJobRunner jobRunner,
         // Optional so unit tests construct the handler unchanged; DI always supplies it.
-        DataMappingIngestionService? dataMappings = null)
+        DataMappingIngestionService? dataMappings = null,
+        IClientCommunicationSender? communications = null,
+        IPermissionService? permissions = null)
     {
         _dataMappings = dataMappings;
         _chains = chains;
@@ -61,6 +68,8 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
         _uow = uow;
         _clock = clock;
         _jobRunner = jobRunner;
+        _communications = communications;
+        _permissions = permissions;
     }
 
     private readonly DataMappingIngestionService? _dataMappings;
@@ -71,10 +80,23 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
             ?? throw new InvalidOperationException($"Chain {command.ChainId} not found.");
 
         // Snapshot every step's job up front — names go on the run so its history stands alone.
-        var stepJobs = new List<Job?>(chain.StepJobIds.Count);
-        foreach (var jobId in chain.StepJobIds)
-            stepJobs.Add(await _jobs.GetByIdAsync(jobId, ct));
-        var names = stepJobs.Select((j, i) => j?.Name ?? "(deleted)").ToList();
+        var stepJobs = new List<Job?>(chain.ExecutionStepCount);
+        var names = new List<string>(chain.ExecutionStepCount);
+        foreach (var stage in chain.Stages)
+        {
+            if (stage.Action is { } action)
+            {
+                stepJobs.Add(null);
+                names.Add(action.DisplayName);
+                continue;
+            }
+            foreach (var jobId in stage.JobIds)
+            {
+                var job = await _jobs.GetByIdAsync(jobId, ct);
+                stepJobs.Add(job);
+                names.Add(job?.Name ?? "(deleted)");
+            }
+        }
 
         using var chainSpan = JobTelemetry.Activity.StartActivity("job.chain", ActivityKind.Internal);
         chainSpan?.SetTag("chain.id", chain.Id);
@@ -113,15 +135,104 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
                 if (!gateResult.Proceed)
                 {
                     // Condition gate false: skip this stage, keep payload unchanged.
-                    for (var b = 0; b < stage.JobIds.Count; b++)
+                    for (var b = 0; b < stage.ExecutionCount; b++)
                     {
                         var idx = flatIndex + b;
                         chainRun.MarkStepFinished(idx, runId: null, ChainStepStatus.Skipped, _clock.UtcNow);
                     }
-                    flatIndex += stage.JobIds.Count;
+                    flatIndex += stage.ExecutionCount;
                     await SaveProgressAsync(chainRun, ct);
                     continue;
                 }
+            }
+
+            if (stage.Action is SendEmailChainAction email)
+            {
+                var actionIndex = flatIndex++;
+                chainRun.MarkStepRunning(actionIndex, runId: null, _clock.UtcNow);
+                await SaveProgressAsync(chainRun, ct);
+                try
+                {
+                    if (_communications is null || _permissions is null
+                        || !await _permissions.HasAsync(Permission.EmailSend, ct))
+                        throw new UnauthorizedAccessException(
+                            $"The '{Permission.EmailSend}' permission is required to send chain email.");
+                    EnsureEmailReleaseAllowed(payload);
+                    var recipient = RenderTemplate(email.Recipient, payload);
+                    var recipientName = RenderTemplate(email.RecipientName, payload);
+                    var subject = RenderTemplate(email.Subject, payload);
+                    var body = RenderTemplate(email.Body, payload);
+                    var attachments = ResolveEmailAttachments(email.AttachmentPath, payload);
+                    _ = new MailAddress(recipient);
+                    if (string.IsNullOrWhiteSpace(subject) || string.IsNullOrWhiteSpace(body))
+                        throw new InvalidOperationException(
+                            "Email subject and body must not be empty after payload substitution.");
+
+                    var delivery = await _communications.SendEmailAsync(
+                        recipient, recipientName, subject, body, ct, attachments);
+                    chainRun.MarkStepFinished(actionIndex, runId: null,
+                        ChainStepStatus.Succeeded, _clock.UtcNow,
+                        delivery.Provider, delivery.ExternalId);
+                    await SaveProgressAsync(chainRun, ct);
+                }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    chainRun.MarkStepFinished(actionIndex, runId: null,
+                        ChainStepStatus.Failed, _clock.UtcNow,
+                        _communications?.EmailProvider, error: ShortError(ex.Message));
+                    await SaveProgressAsync(chainRun, ct);
+                    status = ChainRunStatus.Failed;
+                    break;
+                }
+                continue;
+            }
+
+            if (stage.Action is SendSmsChainAction sms)
+            {
+                var actionIndex = flatIndex++;
+                chainRun.MarkStepRunning(actionIndex, runId: null, _clock.UtcNow);
+                await SaveProgressAsync(chainRun, ct);
+                try
+                {
+                    if (_communications is null || _permissions is null
+                        || !await _permissions.HasAsync(Permission.SmsSend, ct))
+                        throw new UnauthorizedAccessException(
+                            $"The '{Permission.SmsSend}' permission is required to send chain SMS.");
+                    EnsureReleaseAllowed(payload, "sms");
+                    var recipient = RenderTemplate(sms.Recipient, payload);
+                    var body = RenderTemplate(sms.Body, payload);
+                    var digits = new string(recipient.Where(char.IsDigit).ToArray());
+                    if (!recipient.StartsWith('+') || digits.Length is < 8 or > 15)
+                        throw new InvalidOperationException(
+                            "SMS recipient must be an international number such as +61412345678.");
+                    if (string.IsNullOrWhiteSpace(body))
+                        throw new InvalidOperationException(
+                            "SMS body must not be empty after payload substitution.");
+
+                    var delivery = await _communications.SendSmsAsync(recipient, body, ct);
+                    chainRun.MarkStepFinished(actionIndex, runId: null,
+                        ChainStepStatus.Succeeded, _clock.UtcNow,
+                        delivery.Provider, delivery.ExternalId);
+                    await SaveProgressAsync(chainRun, ct);
+                }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    chainRun.MarkStepFinished(actionIndex, runId: null,
+                        ChainStepStatus.Failed, _clock.UtcNow,
+                        _communications?.SmsProvider, error: ShortError(ex.Message));
+                    await SaveProgressAsync(chainRun, ct);
+                    status = ChainRunStatus.Failed;
+                    break;
+                }
+                continue;
             }
 
             var stageStartFlat = flatIndex;
@@ -325,6 +436,203 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
         });
         return "[" + string.Join(",", parts) + "]";
     }
+
+    private static readonly Regex TemplatePath = new(
+        "\\{\\{\\s*([^{}]+?)\\s*\\}\\}", RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
+    internal static string RenderTemplate(string template, string? payload)
+    {
+        if (string.IsNullOrEmpty(template) || !TemplatePath.IsMatch(template)) return template;
+        if (string.IsNullOrWhiteSpace(payload))
+            throw new InvalidOperationException("Message template needs a previous-stage payload.");
+        using var document = JsonDocument.Parse(payload);
+        return TemplatePath.Replace(template, match =>
+        {
+            if (!TryResolvePath(document.RootElement, match.Groups[1].Value, out var value))
+                throw new InvalidOperationException(
+                    $"Message template path '{match.Groups[1].Value}' was not found in the previous-stage payload.");
+            return value.ValueKind == JsonValueKind.String
+                ? value.GetString() ?? ""
+                : value.ToString();
+        });
+    }
+
+    /// <summary>
+    /// Resolves a provider-neutral attachment object (or array) from the previous stage JSON.
+    /// Supported keys are <c>name</c>/<c>fileName</c>, <c>content</c>/<c>data</c> or
+    /// <c>contentBase64</c>, and <c>contentType</c>/<c>mimeType</c>. Binary content must either use
+    /// the explicit base64 key or set <c>isBinary</c>/<c>isBase64</c> to true. URLs are deliberately
+    /// not fetched, avoiding an SSRF path from workload output into the portal network.
+    /// </summary>
+    internal static IReadOnlyList<ClientEmailAttachment> ResolveEmailAttachments(
+        string attachmentPath,
+        string? payload)
+    {
+        if (string.IsNullOrWhiteSpace(attachmentPath)) return Array.Empty<ClientEmailAttachment>();
+        if (string.IsNullOrWhiteSpace(payload))
+            throw new InvalidOperationException("Email attachments need a previous-stage JSON payload.");
+
+        var path = attachmentPath.Trim();
+        var templateMatch = TemplatePath.Match(path);
+        if (templateMatch.Success && templateMatch.Length == path.Length)
+            path = templateMatch.Groups[1].Value;
+        else if (TemplatePath.IsMatch(path))
+            throw new InvalidOperationException("Attachment mapping must contain one JSON path only.");
+
+        using var document = JsonDocument.Parse(payload);
+        if (!TryResolvePath(document.RootElement, path, out var value))
+            throw new InvalidOperationException(
+                $"Email attachment path '{path}' was not found in the previous-stage payload.");
+
+        var values = value.ValueKind == JsonValueKind.Array
+            ? value.EnumerateArray().Select(item => item.Clone()).ToList()
+            : new List<JsonElement> { value.Clone() };
+        if (values.Count == 0) return Array.Empty<ClientEmailAttachment>();
+        if (values.Count > 20)
+            throw new InvalidOperationException("An email action can attach at most 20 files.");
+
+        var result = new List<ClientEmailAttachment>(values.Count);
+        long totalBytes = 0;
+        foreach (var (item, index) in values.Select((item, index) => (item, index)))
+        {
+            if (item.ValueKind != JsonValueKind.Object)
+                throw new InvalidOperationException(
+                    $"Email attachment {index + 1} must be a JSON object with name and content fields.");
+
+            var name = JsonString(item, "name", "fileName", "filename");
+            if (string.IsNullOrWhiteSpace(name))
+                throw new InvalidOperationException($"Email attachment {index + 1} is missing its file name.");
+            name = Path.GetFileName(name.Trim());
+            if (name.Length == 0 || name.Length > 255)
+                throw new InvalidOperationException($"Email attachment {index + 1} has an invalid file name.");
+
+            var explicitBase64 = TryJsonString(item, out var content, "contentBase64", "base64");
+            if (!explicitBase64 && !TryJsonString(item, out content, "content", "data"))
+                throw new InvalidOperationException($"Email attachment '{name}' is missing its content.");
+            var binary = explicitBase64 || JsonBool(item, "isBinary", "isBase64");
+            byte[] bytes;
+            if (binary)
+            {
+                try { bytes = Convert.FromBase64String(content!); }
+                catch (FormatException)
+                {
+                    throw new InvalidOperationException($"Email attachment '{name}' is not valid base64.");
+                }
+            }
+            else
+            {
+                bytes = Encoding.UTF8.GetBytes(content!);
+            }
+
+            totalBytes += bytes.LongLength;
+            if (totalBytes > 10 * 1024 * 1024)
+                throw new InvalidOperationException("Email attachments exceed the 10 MB total limit.");
+            var contentType = JsonString(item, "contentType", "mimeType");
+            if (string.IsNullOrWhiteSpace(contentType))
+                contentType = binary ? "application/octet-stream" : "text/plain; charset=utf-8";
+            result.Add(new ClientEmailAttachment(name, contentType, Convert.ToBase64String(bytes)));
+        }
+        return result;
+    }
+
+    private static string? JsonString(JsonElement item, params string[] names)
+        => TryJsonString(item, out var value, names) ? value : null;
+
+    private static bool TryJsonString(JsonElement item, out string? value, params string[] names)
+    {
+        foreach (var property in item.EnumerateObject())
+        {
+            if (!names.Any(name => property.Name.Equals(name, StringComparison.OrdinalIgnoreCase))) continue;
+            if (property.Value.ValueKind != JsonValueKind.String) break;
+            value = property.Value.GetString();
+            return value is not null;
+        }
+        value = null;
+        return false;
+    }
+
+    private static bool JsonBool(JsonElement item, params string[] names)
+    {
+        foreach (var property in item.EnumerateObject())
+        {
+            if (!names.Any(name => property.Name.Equals(name, StringComparison.OrdinalIgnoreCase))) continue;
+            return property.Value.ValueKind == JsonValueKind.True;
+        }
+        return false;
+    }
+
+    internal static void EnsureEmailReleaseAllowed(string? payload)
+        => EnsureReleaseAllowed(payload, "email");
+
+    private static void EnsureReleaseAllowed(string? payload, string channel)
+    {
+        if (string.IsNullOrWhiteSpace(payload)) return;
+        JsonDocument document;
+        try { document = JsonDocument.Parse(payload); }
+        catch (JsonException) { return; }
+        using (document)
+        {
+            var flags = new List<bool>();
+            CollectReleaseFlags(document.RootElement, flags, channel);
+            if (flags.Count > 0 && flags.Any(flag => !flag))
+                throw new InvalidOperationException(
+                    $"Client {channel} delivery is blocked because the previous-stage release object does not permit {channel}/client release.");
+        }
+    }
+
+    private static void CollectReleaseFlags(
+        JsonElement element, ICollection<bool> flags, string channel)
+    {
+        if (element.ValueKind == JsonValueKind.Object)
+        {
+            foreach (var property in element.EnumerateObject())
+            {
+                var normalized = new string(property.Name
+                    .Where(char.IsLetterOrDigit).Select(char.ToLowerInvariant).ToArray());
+                if (normalized is "clientrelease" or "clientallowed" or "releaseclient"
+                    || normalized == channel + "release"
+                    || normalized == channel + "allowed"
+                    || normalized == "release" + channel)
+                {
+                    if (property.Value.ValueKind is JsonValueKind.True or JsonValueKind.False)
+                        flags.Add(property.Value.GetBoolean());
+                }
+                CollectReleaseFlags(property.Value, flags, channel);
+            }
+        }
+        else if (element.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var item in element.EnumerateArray()) CollectReleaseFlags(item, flags, channel);
+        }
+    }
+
+    private static bool TryResolvePath(JsonElement root, string rawPath, out JsonElement value)
+    {
+        value = root;
+        var path = rawPath.Trim().TrimStart('$').TrimStart('.');
+        if (path.Length == 0) return true;
+        foreach (var segment in path.Split('.', StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (value.ValueKind == JsonValueKind.Object
+                && value.TryGetProperty(segment, out var property))
+            {
+                value = property;
+                continue;
+            }
+            if (value.ValueKind == JsonValueKind.Array
+                && int.TryParse(segment, out var index)
+                && index >= 0 && index < value.GetArrayLength())
+            {
+                value = value[index];
+                continue;
+            }
+            return false;
+        }
+        return true;
+    }
+
+    private static string ShortError(string value)
+        => value.Length <= 500 ? value : value[..497] + "…";
 
     /// <summary>
     /// The chain's step summary, attached to the <c>job.chain</c> span as a single tag when the run

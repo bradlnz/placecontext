@@ -80,14 +80,19 @@ public sealed class JobTestCaseTests
         var workloads = new FakeWorkloadRunner();
         workloads.EnqueueResult(new WorkloadRunResult(
             0, """{"status":"active"}""", "", ""));
-        workloads.EnqueueResult(new WorkloadRunResult(0, null, "2 assertions passed", ""));
+        workloads.EnqueueResult(new WorkloadRunResult(0, null,
+            JobTestFramework.ResultPrefix +
+            """[{"name":"test_active","status":"Passed","durationMs":4},{"name":"test_shards","status":"Passed","durationMs":2}]""",
+            ""));
         var handler = new RunJobTestCaseHandler(
             store, jobs, workloads, new FakeClock(Now.AddMinutes(1)));
 
         var result = await handler.HandleAsync(new RunJobTestCaseCommand(test.Id));
 
         Assert.Equal("Passed", result.LastStatus);
-        Assert.Contains("2 assertions passed", result.LastMessage);
+        Assert.Equal("unittest: 2/2 passed.", result.LastMessage);
+        Assert.Equal(2, result.MethodResults!.Count);
+        Assert.All(result.MethodResults, method => Assert.Equal("Passed", method.Status));
         Assert.Null(result.LastJobRunId);
         Assert.Equal(2, workloads.ReceivedRequests.Count);
         var jobRequest = workloads.ReceivedRequests[0];
@@ -97,7 +102,9 @@ public sealed class JobTestCaseTests
         Assert.Equal("""{"id":"123"}""", jobRequest.StdinPayload);
         var validatorRequest = workloads.ReceivedRequests[1];
         Assert.Equal("python", validatorRequest.RuntimeId);
-        Assert.Equal("test.py", validatorRequest.Entrypoint);
+        Assert.Equal("_placecontext_test_runner.py", validatorRequest.Entrypoint);
+        Assert.Contains(validatorRequest.CodeFiles!, file => file.Path == "test.py");
+        Assert.Contains(validatorRequest.CodeFiles!, file => file.Path == "_placecontext_test_runner.py");
         Assert.Empty(validatorRequest.Env);
         Assert.False(validatorRequest.AllowNetworkEgress);
         using var stdin = System.Text.Json.JsonDocument.Parse(validatorRequest.StdinPayload);
@@ -128,15 +135,49 @@ public sealed class JobTestCaseTests
         var store = new MemoryTestStore(test);
         var workloads = new FakeWorkloadRunner();
         workloads.EnqueueResult(new WorkloadRunResult(0, "{}", "", ""));
-        workloads.EnqueueResult(new WorkloadRunResult(7, null, "", "expected total 3"));
+        workloads.EnqueueResult(new WorkloadRunResult(7, null,
+            JobTestFramework.ResultPrefix +
+            """[{"name":"returns total","status":"Failed","durationMs":3,"message":"expected total 3"}]""",
+            "expected total 3"));
         var handler = new RunJobTestCaseHandler(
             store, jobs, workloads, new FakeClock(Now));
 
         var result = await handler.HandleAsync(new RunJobTestCaseCommand(test.Id));
 
         Assert.Equal("Failed", result.LastStatus);
-        Assert.Contains("exited 7", result.LastMessage);
-        Assert.Contains("expected total 3", result.LastMessage);
+        Assert.Equal("Node test: 0/1 passed, 1 failed.", result.LastMessage);
+        var method = Assert.Single(result.MethodResults!);
+        Assert.Equal("Failed", method.Status);
+        Assert.Equal("expected total 3", method.Message);
+    }
+
+    [Theory]
+    [InlineData("python", "def test_customer():\n    pass", "test_customer")]
+    [InlineData("node", "test('customer loads', () => {});", "customer loads")]
+    [InlineData("go", "func TestCustomerLoads(t *testing.T) {}", "TestCustomerLoads")]
+    [InlineData("ruby", "def test_customer_loads\nend", "test_customer_loads")]
+    public void Framework_discovers_test_methods(
+        string runtime, string source, string expectedName)
+    {
+        var methods = JobTestFramework.Discover(runtime, [new CodeFileDto("test", source)]);
+
+        var method = Assert.Single(methods);
+        Assert.Equal(expectedName, method.Name);
+        Assert.Equal("NotRun", method.Status);
+    }
+
+    [Theory]
+    [InlineData("python", "_placecontext_test_runner.py")]
+    [InlineData("node", "_placecontext_test_runner.cjs")]
+    [InlineData("go", "_placecontext_test_runner.go")]
+    [InlineData("ruby", "_placecontext_test_runner.rb")]
+    public void Framework_builds_an_isolated_runner(string runtime, string expectedEntrypoint)
+    {
+        var (runner, entrypoint) = JobTestFramework.BuildRunner(runtime, "user_test.py");
+
+        Assert.Equal(expectedEntrypoint, entrypoint);
+        Assert.Equal(expectedEntrypoint, runner.Path);
+        Assert.Contains(JobTestFramework.ResultPrefix, runner.Content);
     }
 
     private static JobTestCaseRecord Test(JobTestAssertionType assertion, string? expected) => new(

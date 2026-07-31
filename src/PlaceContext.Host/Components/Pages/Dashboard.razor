@@ -1,5 +1,5 @@
 @page "/"
-@attribute [Authorize]
+@attribute [Authorize(Policy = Permission.ProjectsView)]
 @implements IDisposable
 @inject IPlaceContextService Svc
 @inject PortalUiState Ui

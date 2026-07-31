@@ -47,6 +47,8 @@
                             </div>
                             <div class="card-actions">
                                 <button title="Open in builder" @onclick="@(() => LoadDashboardAsync(dashboard))">✎</button>
+                                <button title="Duplicate dashboard" disabled="@(_replicating == dashboard.Id)"
+                                        @onclick="@(() => DuplicateDashboardAsync(dashboard))">⧉</button>
                                 <button title="Refresh chart" disabled="@(_refreshing == dashboard.Id)"
                                         @onclick="@(() => RefreshDashboardAsync(dashboard))">↻</button>
                                 <button title="Delete chart" class="delete"
@@ -67,6 +69,9 @@
         <section class="index-section">
             <div class="section-head">
                 <div><strong>Indexes</strong><span>@_indices.Count available</span></div>
+                <span class="last-updated" title="@LastUpdatedTitle">
+                    Last updated: @LastUpdatedLabel
+                </span>
             </div>
             <div class="index-grid">
                 @foreach (var index in _indices)
@@ -141,7 +146,7 @@
                 <span>Query</span>
                 <input class="dcinput" @bind="_queryText"
                        @onkeydown="OnQueryKeyDown"
-                       placeholder="status:active AND customer.city:Brisbane" />
+                       placeholder="Search words or phrases across all fields" />
             </label>
             <button class="dcbtn fields-button" disabled="@_loading" @onclick="LoadFieldsAsync">Fields</button>
             <button class="dcbtn primary search-button" disabled="@_searching" @onclick="SearchAsync">
@@ -149,7 +154,7 @@
             </button>
         </div>
         <div class="query-help">
-            OpenSearch query syntax is supported. Blank searches match all documents. Results are capped at 100 per page.
+            Free-text searches run across all searchable fields. Blank searches match all documents. Results are capped at 100 per page.
         </div>
 
         <div class="chart-controls">
@@ -311,12 +316,14 @@
     private bool _generatingCharts;
     private Guid? _editingDashboardId;
     private Guid? _refreshing;
+    private Guid? _replicating;
     private int _page = 1;
     private readonly int _pageSize = 25;
     private string? _lastPreviewSpec;
     private readonly Dictionary<Guid, DateTimeOffset> _renderedDashboards = new();
     private readonly HashSet<string> _renderedGeneratedCharts = new();
     private List<GeneratedOpenSearchChart> _generatedCharts = new();
+    private OpenSearchLastUpdatedView? _lastUpdated;
 
     private IEnumerable<OpenSearchFieldView> AggregatableFields
         => _fields.Where(item => item.Aggregatable);
@@ -407,13 +414,49 @@
         try
         {
             _fields = await Svc.ListOpenSearchFieldsAsync(ProjectId, _indexPattern);
+            var dateFields = _fields
+                .Where(field => field.Aggregatable && field.Type is "date" or "date_nanos")
+                .OrderBy(field => LastUpdatedFieldPriority(field.Name))
+                .ThenBy(field => field.Name)
+                .Select(field => field.Name)
+                .ToList();
+            _lastUpdated = null;
+            try
+            {
+                _lastUpdated = await Svc.GetOpenSearchLastUpdatedAsync(
+                    ProjectId, _indexPattern, dateFields);
+            }
+            catch
+            {
+                // Last-updated metadata is optional; field browsing remains usable if an
+                // index has an incompatible date mapping or denies aggregations.
+            }
             _error = null;
         }
         catch (Exception ex)
         {
             _error = FriendlyError(ex);
             _fields = Array.Empty<OpenSearchFieldView>();
+            _lastUpdated = null;
         }
+    }
+
+    private string LastUpdatedLabel => _lastUpdated?.Value is { } value
+        ? value.UtcDateTime.ToString("d MMM yyyy, h:mm tt 'UTC'", System.Globalization.CultureInfo.InvariantCulture)
+        : "Unavailable";
+
+    private string LastUpdatedTitle => _lastUpdated?.Field is { } timestampField
+        ? $"Newest document value in {timestampField}"
+        : "No aggregatable date field is available for this index";
+
+    private static int LastUpdatedFieldPriority(string field)
+    {
+        var name = field.ToLowerInvariant();
+        if (name.Contains("updated") || name.Contains("last_modified")) return 0;
+        if (name.Contains("modified")) return 1;
+        if (name.Contains("timestamp")) return 2;
+        if (name.Contains("created")) return 3;
+        return 4;
     }
 
     private async Task SelectIndexAsync(OpenSearchIndexView index)
@@ -677,6 +720,35 @@
         finally
         {
             _refreshing = null;
+        }
+    }
+
+    private async Task DuplicateDashboardAsync(OpenSearchDashboardView dashboard)
+    {
+        _replicating = dashboard.Id;
+        try
+        {
+            var baseName = $"{dashboard.Name} copy";
+            var name = baseName;
+            var suffix = 2;
+            while (_dashboards.Any(item => item.Name.Equals(name, StringComparison.OrdinalIgnoreCase)))
+                name = $"{baseName} {suffix++}";
+
+            var duplicate = await Svc.SaveOpenSearchDashboardAsync(new SaveOpenSearchDashboardCommand(
+                ProjectId, name, dashboard.IndexPattern, dashboard.QueryText,
+                dashboard.BucketField, dashboard.BucketType, dashboard.ChartType,
+                dashboard.MetricType, dashboard.MetricField, dashboard.DateInterval,
+                dashboard.ChartSpecJson));
+            ReplaceDashboard(duplicate);
+            _renderedDashboards.Remove(duplicate.Id);
+        }
+        catch (Exception ex)
+        {
+            _error = FriendlyError(ex);
+        }
+        finally
+        {
+            _replicating = null;
         }
     }
 

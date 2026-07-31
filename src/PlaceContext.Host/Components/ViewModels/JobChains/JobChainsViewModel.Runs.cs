@@ -32,11 +32,22 @@ public sealed partial class JobChainsViewModel
     public async Task RunChainAsync(JobChainView chain)
     {
         // Only steps with declared parameters appear in the prompt (UI keys: stepN:param).
-        var paramSteps = chain.Steps
-            .Select((step, i) => (Index: i, Job: Jobs?.FirstOrDefault(j => j.Id == step.JobId)))
-            .Where(x => x.Job is { Parameters.Count: > 0 })
-            .Select(x => (x.Index, x.Job!))
-            .ToList();
+        var paramSteps = new List<(int Index, JobView Job)>();
+        var executionIndex = 0;
+        foreach (var stage in chain.Stages)
+        {
+            if (stage.Action is not null)
+            {
+                executionIndex++;
+                continue;
+            }
+            foreach (var step in stage.Jobs)
+            {
+                var job = Jobs?.FirstOrDefault(item => item.Id == step.JobId);
+                if (job is { Parameters.Count: > 0 }) paramSteps.Add((executionIndex, job));
+                executionIndex++;
+            }
+        }
 
         if (paramSteps.Count > 0)
         {

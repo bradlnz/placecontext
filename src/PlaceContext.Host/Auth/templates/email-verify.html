@@ -9,26 +9,25 @@
 <body>
   <div class="card">
     <div class="brand"><div class="logo">P</div><strong>PlaceContext</strong></div>
-    <h1>Two-factor verification</h1>
-    <p class="alt" style="text-align:left;margin:0 0 16px">Enter the 6-digit code from your authenticator app.</p>
+    <h1>Check your email</h1>
+    <p class="alt" style="text-align:left;margin:0 0 16px">
+      Enter the 6-digit verification code sent through Postmark to <strong>{{email}}</strong>.
+      The code expires in 10 minutes.
+    </p>
     <div class="err {{errorClass}}">{{error}}</div>
-    <form method="post" action="/auth/totp-verify">
+    <form method="post" action="/auth/email-verify">
       <input type="hidden" name="state" value="{{state}}">
       <input type="hidden" name="{{afName}}" value="{{afValue}}">
-      <label>Code
+      <label>Verification code
         <input type="text" name="code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6"
                autocomplete="one-time-code" required autofocus placeholder="000000">
       </label>
-      <button type="submit">Verify</button>
+      <button type="submit">Verify and sign in</button>
     </form>
-    <form method="post" action="/auth/totp-verify" style="margin-top:12px">
+    <form method="post" action="/auth/email-verify/resend" style="margin-top:12px">
       <input type="hidden" name="state" value="{{state}}">
       <input type="hidden" name="{{afName}}" value="{{afValue}}">
-      <input type="hidden" name="useRecovery" value="1">
-      <label>Recovery code
-        <input type="text" name="code" autocomplete="off" placeholder="XXXXXXXX">
-      </label>
-      <button type="submit" style="background:#262a31">Use a recovery code</button>
+      <button type="submit" style="background:#262a31">Send another code</button>
     </form>
   </div>
 </body>

@@ -42,7 +42,7 @@ public sealed class OpenSearchDataGatewayTests
     }
 
     [Fact]
-    public async Task Search_builds_constrained_query_and_maps_hits_and_chart()
+    public async Task Search_builds_free_text_query_and_maps_hits_and_chart()
     {
         HttpRequestMessage? captured = null;
         string? capturedBody = null;
@@ -92,6 +92,8 @@ public sealed class OpenSearchDataGatewayTests
         Assert.Equal(25, body.RootElement.GetProperty("size").GetInt32());
         Assert.Equal("status:active", body.RootElement.GetProperty("query")
             .GetProperty("simple_query_string").GetProperty("query").GetString());
+        Assert.False(body.RootElement.GetProperty("query")
+            .GetProperty("simple_query_string").TryGetProperty("fields", out _));
         Assert.Equal("status.keyword", body.RootElement.GetProperty("aggs")
             .GetProperty("chart").GetProperty("terms").GetProperty("field").GetString());
     }
@@ -115,6 +117,39 @@ public sealed class OpenSearchDataGatewayTests
         Assert.Equal(2, fields.Count);
         Assert.True(fields.Single(field => field.Name == "createdAt").Aggregatable);
         Assert.False(fields.Single(field => field.Name == "message").Aggregatable);
+    }
+
+    [Fact]
+    public async Task Last_updated_uses_the_newest_document_timestamp()
+    {
+        string? capturedBody = null;
+        var gateway = new OpenSearchDataGateway(
+            new StubHttpClientFactory(new StubHandler(async request =>
+            {
+                capturedBody = await request.Content!.ReadAsStringAsync();
+                return Json("""
+                    {
+                      "hits": {"total":{"value":12,"relation":"eq"},"hits":[]},
+                      "aggregations": {
+                        "last_updated": {
+                          "value": 1785556800000,
+                          "value_as_string": "2026-08-01T04:00:00.000Z"
+                        }
+                      }
+                    }
+                    """);
+            })),
+            new StubConnectionResolver());
+
+        var result = await gateway.GetLastUpdatedAsync(
+            Guid.NewGuid(), "reports-*", ["updated_at", "created_at"]);
+
+        Assert.Equal("updated_at", result.Field);
+        Assert.Equal(DateTimeOffset.Parse("2026-08-01T04:00:00Z"), result.Value);
+        using var body = JsonDocument.Parse(capturedBody!);
+        Assert.Equal(0, body.RootElement.GetProperty("size").GetInt32());
+        Assert.Equal("updated_at", body.RootElement.GetProperty("aggs")
+            .GetProperty("last_updated").GetProperty("max").GetProperty("field").GetString());
     }
 
     [Theory]

@@ -67,7 +67,8 @@ public sealed class SaveJobTestCaseHandler
             existing?.RuntimeId,
             existing?.Entrypoint,
             existing?.CodeFiles ?? Array.Empty<CodeFileDto>(),
-            existing?.AllowNetworkEgress ?? false);
+            existing?.AllowNetworkEgress ?? false,
+            definitionChanged ? Array.Empty<JobTestMethodResult>() : existing?.MethodResults);
 
         await _tests.SaveAsync(record, ct);
         return ToView(record, job.Name);
@@ -81,7 +82,7 @@ public sealed class SaveJobTestCaseHandler
         test.AssertionType, test.ExpectedValue, test.Enabled, test.LastStatus,
         test.LastMessage, test.LastActualOutput, test.LastJobRunId, test.LastRunAt,
         test.LastDurationMs, test.CreatedAt, test.UpdatedAt, test.RuntimeId,
-        test.Entrypoint, test.CodeFiles, test.AllowNetworkEgress);
+        test.Entrypoint, test.CodeFiles, test.AllowNetworkEgress, test.MethodResults);
 }
 
 public sealed class DeleteJobTestCaseHandler : ICommandHandler<DeleteJobTestCaseCommand, bool>
@@ -167,6 +168,8 @@ public sealed class UpdateJobTestCodeHandler
             LastJobRunId = null,
             LastRunAt = null,
             LastDurationMs = null,
+            MethodResults = JobTestFramework.Discover(code.RuntimeId,
+                code.Files.Select(file => new CodeFileDto(file.Path, file.Content)).ToList()),
             UpdatedAt = _clock.UtcNow,
         };
         await _tests.SaveAsync(updated, ct);
@@ -204,6 +207,8 @@ public sealed class RunJobTestCaseHandler
         var stopwatch = Stopwatch.StartNew();
         JobRunDetailView? run = null;
         string? actual = null;
+        IReadOnlyList<JobTestMethodResult> methodResults =
+            test.MethodResults ?? Array.Empty<JobTestMethodResult>();
         string status;
         string message;
 
@@ -213,7 +218,9 @@ public sealed class RunJobTestCaseHandler
             actual = RunJobChainHandler.PrimaryOutput(run);
             (status, message) = Evaluate(test, run, actual);
             if (status == "Passed" && test.CodeFiles.Count > 0)
-                (status, message) = await RunTestCodeAsync(test, run, actual, ct);
+                (status, message, methodResults) = await RunTestCodeAsync(test, run, actual, ct);
+            else if (test.CodeFiles.Count == 0)
+                methodResults = new[] { new JobTestMethodResult(test.Name, status, null, message) };
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -235,20 +242,30 @@ public sealed class RunJobTestCaseHandler
             LastJobRunId = null,
             LastRunAt = _clock.UtcNow,
             LastDurationMs = stopwatch.ElapsedMilliseconds,
+            MethodResults = methodResults,
             UpdatedAt = _clock.UtcNow,
         };
         await _tests.SaveAsync(completed, ct);
         return SaveJobTestCaseHandler.ToView(completed, job.Name);
     }
 
-    private async Task<(string Status, string Message)> RunTestCodeAsync(
+    private async Task<(string Status, string Message, IReadOnlyList<JobTestMethodResult> Methods)> RunTestCodeAsync(
         JobTestCaseRecord test,
         JobRunDetailView run,
         string? actual,
         CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(test.RuntimeId))
-            return ("Failed", "Test code has no runtime selected.");
+            return ("Failed", "Test block has no framework selected.", Array.Empty<JobTestMethodResult>());
+
+        var target = test.Entrypoint ?? test.CodeFiles.FirstOrDefault()?.Path;
+        if (string.IsNullOrWhiteSpace(target))
+            return ("Failed", "Test block has no test entrypoint.", Array.Empty<JobTestMethodResult>());
+        var (runner, runnerEntrypoint) = JobTestFramework.BuildRunner(test.RuntimeId, target);
+        var files = test.CodeFiles
+            .Where(file => !string.Equals(file.Path, runner.Path, StringComparison.Ordinal))
+            .Append(runner)
+            .ToList();
 
         var stdin = JsonSerializer.Serialize(new
         {
@@ -273,18 +290,30 @@ public sealed class RunJobTestCaseHandler
             Env: new Dictionary<string, string>(),
             ArtifactMounts: Array.Empty<(string, string)>(),
             CorrelationId: $"job-test-{test.Id:N}-{Guid.NewGuid():N}",
-            CodeFiles: test.CodeFiles.Select(file => (file.Path, file.Content)).ToList(),
+            CodeFiles: files.Select(file => (file.Path, file.Content)).ToList(),
             RuntimeId: test.RuntimeId,
-            Entrypoint: test.Entrypoint,
+            Entrypoint: runnerEntrypoint,
             AllowNetworkEgress: false,
             TimeoutSeconds: 300), ct);
 
-        var output = FirstNonBlank(result.Artifact, result.Stdout, result.Stderr);
-        return result.ExitCode == 0
-            ? ("Passed", string.IsNullOrWhiteSpace(output)
-                ? "Test code passed."
-                : $"Test code passed: {TruncateMessage(output)}")
-            : ("Failed", $"Test code exited {result.ExitCode}: {TruncateMessage(output ?? "No output.")}");
+        var methods = JobTestFramework.ParseResults(result.Stdout, result.Stderr, result.Artifact);
+        if (methods.Count == 0)
+        {
+            var output = FirstNonBlank(result.Stderr, result.Stdout, result.Artifact);
+            return ("Failed",
+                $"{JobTestFramework.Label(test.RuntimeId)} did not report any test methods: "
+                + TruncateMessage(output ?? "No output."),
+                methods);
+        }
+
+        var failed = methods.Count(method => method.Status == "Failed");
+        var skipped = methods.Count(method => method.Status == "Skipped");
+        var passed = methods.Count - failed - skipped;
+        var status = result.ExitCode == 0 && failed == 0 ? "Passed" : "Failed";
+        var summary = $"{JobTestFramework.Label(test.RuntimeId)}: {passed}/{methods.Count} passed";
+        if (skipped > 0) summary += $", {skipped} skipped";
+        if (failed > 0) summary += $", {failed} failed";
+        return (status, summary + ".", methods);
     }
 
     private async Task<JobRunDetailView> RunMockJobAsync(

@@ -14,7 +14,8 @@ internal static class ChainRunMapper
         Steps: run.Steps
             .Select(s => new ChainStepRunView(
                 s.Index, s.StageIndex, s.BranchIndex, s.JobId, s.JobName, s.RunId,
-                s.Status.ToString(), s.StartedAt, s.FinishedAt))
+                s.Status.ToString(), s.StartedAt, s.FinishedAt,
+                s.ActionType, s.Provider, s.ExternalId, s.Error))
             .ToList(),
         FinalOutput: run.FinalOutput,
         StartedAt: run.StartedAt,

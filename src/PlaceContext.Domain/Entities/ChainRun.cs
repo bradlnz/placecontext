@@ -68,8 +68,8 @@ public sealed class ChainRun : AggregateRoot
     public static ChainRun Start(JobChain chain, IReadOnlyList<string> stepJobNames, DateTimeOffset now,
         Guid? id = null)
     {
-        if (stepJobNames.Count != chain.StepJobIds.Count)
-            throw new ArgumentException("One job name per chain step is required.", nameof(stepJobNames));
+        if (stepJobNames.Count != chain.ExecutionStepCount)
+            throw new ArgumentException("One display name per chain step is required.", nameof(stepJobNames));
         if (id == Guid.Empty)
             throw new ArgumentException("A pre-allocated run id must not be empty.", nameof(id));
 
@@ -78,6 +78,14 @@ public sealed class ChainRun : AggregateRoot
         for (var stageIndex = 0; stageIndex < chain.Stages.Count; stageIndex++)
         {
             var stage = chain.Stages[stageIndex];
+            if (stage.Action is { } action)
+            {
+                steps.Add(new ChainStepRun(flatIndex, stageIndex, 0, Guid.Empty,
+                    stepJobNames[flatIndex], null, ChainStepStatus.Pending, null, null,
+                    action.Type));
+                flatIndex++;
+                continue;
+            }
             for (var branchIndex = 0; branchIndex < stage.JobIds.Count; branchIndex++)
             {
                 steps.Add(new ChainStepRun(flatIndex, stageIndex, branchIndex, stage.JobIds[branchIndex],
@@ -96,11 +104,20 @@ public sealed class ChainRun : AggregateRoot
     public void MarkStepRunning(int index, Guid? runId, DateTimeOffset now)
         => _steps[index] = _steps[index] with { Status = ChainStepStatus.Running, RunId = runId, StartedAt = now };
 
-    public void MarkStepFinished(int index, Guid? runId, ChainStepStatus outcome, DateTimeOffset now)
+    public void MarkStepFinished(int index, Guid? runId, ChainStepStatus outcome, DateTimeOffset now,
+        string? provider = null, string? externalId = null, string? error = null)
     {
         if (outcome is ChainStepStatus.Pending or ChainStepStatus.Running)
             throw new ArgumentException("A finished step needs a terminal outcome.", nameof(outcome));
-        _steps[index] = _steps[index] with { RunId = runId, Status = outcome, FinishedAt = now };
+        _steps[index] = _steps[index] with
+        {
+            RunId = runId,
+            Status = outcome,
+            FinishedAt = now,
+            Provider = provider,
+            ExternalId = externalId,
+            Error = error,
+        };
     }
 
     /// <summary>True once every step in the given stage has reached a terminal (non-pending,
@@ -156,4 +173,8 @@ public sealed record ChainStepRun(
     Guid? RunId,
     ChainStepStatus Status,
     DateTimeOffset? StartedAt,
-    DateTimeOffset? FinishedAt);
+    DateTimeOffset? FinishedAt,
+    string? ActionType = null,
+    string? Provider = null,
+    string? ExternalId = null,
+    string? Error = null);

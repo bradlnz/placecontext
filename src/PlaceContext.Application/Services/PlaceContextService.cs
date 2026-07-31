@@ -169,6 +169,12 @@ public sealed class PlaceContextService : IPlaceContextService
         Guid projectId, string indexPattern, CancellationToken ct = default)
         => _dispatcher.Query(new ListOpenSearchFieldsQuery(projectId, indexPattern), ct);
 
+    public Task<OpenSearchLastUpdatedView> GetOpenSearchLastUpdatedAsync(
+        Guid projectId, string indexPattern, IReadOnlyList<string> candidateFields,
+        CancellationToken ct = default)
+        => _dispatcher.Query(new GetOpenSearchLastUpdatedQuery(
+            projectId, indexPattern, candidateFields), ct);
+
     public Task<OpenSearchSearchView> SearchOpenSearchAsync(
         OpenSearchSearchRequest request, CancellationToken ct = default)
         => _dispatcher.Query(new SearchOpenSearchQuery(request), ct);
@@ -292,11 +298,11 @@ public sealed class PlaceContextService : IPlaceContextService
         Guid projectId, CancellationToken ct = default)
         => _dispatcher.Query(new ListCrmAutomationRulesQuery(projectId), ct);
 
-    public Task<JobChainView> CreateJobChainAsync(Guid projectId, string name, string? description, IReadOnlyList<Guid> stepJobIds, IReadOnlyList<IReadOnlyList<Guid>>? stages = null, IReadOnlyList<Domain.ValueObjects.ChainGate?>? stageGates = null, CancellationToken ct = default)
-        => _dispatcher.Send(new CreateJobChainCommand(projectId, name, description, stepJobIds, stages, stageGates), ct);
+    public Task<JobChainView> CreateJobChainAsync(Guid projectId, string name, string? description, IReadOnlyList<Guid> stepJobIds, IReadOnlyList<IReadOnlyList<Guid>>? stages = null, IReadOnlyList<Domain.ValueObjects.ChainGate?>? stageGates = null, IReadOnlyList<Domain.ValueObjects.ChainAction?>? stageActions = null, CancellationToken ct = default)
+        => _dispatcher.Send(new CreateJobChainCommand(projectId, name, description, stepJobIds, stages, stageGates, stageActions), ct);
 
-    public Task<JobChainView> UpdateJobChainAsync(Guid chainId, string name, string? description, IReadOnlyList<Guid> stepJobIds, IReadOnlyList<IReadOnlyList<Guid>>? stages = null, IReadOnlyList<Domain.ValueObjects.ChainGate?>? stageGates = null, CancellationToken ct = default)
-        => _dispatcher.Send(new UpdateJobChainCommand(chainId, name, description, stepJobIds, stages, stageGates), ct);
+    public Task<JobChainView> UpdateJobChainAsync(Guid chainId, string name, string? description, IReadOnlyList<Guid> stepJobIds, IReadOnlyList<IReadOnlyList<Guid>>? stages = null, IReadOnlyList<Domain.ValueObjects.ChainGate?>? stageGates = null, IReadOnlyList<Domain.ValueObjects.ChainAction?>? stageActions = null, CancellationToken ct = default)
+        => _dispatcher.Send(new UpdateJobChainCommand(chainId, name, description, stepJobIds, stages, stageGates, stageActions), ct);
 
     public Task<bool> CancelJobRunAsync(Guid runId, CancellationToken ct = default)
         => _dispatcher.Send(new CancelJobRunCommand(runId), ct);

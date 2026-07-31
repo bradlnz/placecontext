@@ -26,7 +26,7 @@ public sealed class UpdateJobChainHandler : ICommandHandler<UpdateJobChainComman
             ?? throw new InvalidOperationException($"Chain {command.ChainId} not found.");
         if (command.Stages is { Count: > 0 } stages)
             chain.Update(command.Name, command.Description,
-                CreateJobChainHandler.ToStages(stages, command.StageGates), _clock.UtcNow);
+                CreateJobChainHandler.ToStages(stages, command.StageGates, command.StageActions), _clock.UtcNow);
         else
             chain.Update(command.Name, command.Description, command.StepJobIds, _clock.UtcNow);
         await CreateJobChainHandler.ValidateStepsAsync(_jobs, chain, ct);

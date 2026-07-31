@@ -1,5 +1,5 @@
 @page "/project/{ProjectId:guid}/datamap"
-@attribute [Authorize]
+@attribute [Authorize(Policy = Permission.DataRead)]
 @layout PlaceContext.Host.Components.Layout.ProjectLayout
 @implements IDisposable
 @using PlaceContext.Application.Dtos

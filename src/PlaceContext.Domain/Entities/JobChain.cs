@@ -46,6 +46,9 @@ public sealed class JobChain : AggregateRoot
     /// </summary>
     public IReadOnlyList<Guid> StepJobIds => _stages.SelectMany(s => s.JobIds).ToList();
 
+    /// <summary>Total executable jobs and typed actions represented in run history.</summary>
+    public int ExecutionStepCount => _stages.Sum(stage => stage.ExecutionCount);
+
     public DateTimeOffset CreatedAt { get; }
     public DateTimeOffset UpdatedAt { get; private set; }
 
@@ -94,11 +97,11 @@ public sealed class JobChain : AggregateRoot
         // Defensive copy — each ChainStage already validated its own job ids at construction, and a
         // stage may legitimately repeat a job (e.g. transform → verify → transform, or fan-out
         // branches sharing a job) — no dedup.
-        return stages.Select(s => new ChainStage(s.JobIds, s.Gate, s.ElseBranch)).ToList();
+        return stages.Select(s => new ChainStage(s.JobIds, s.Gate, s.ElseBranch, s.Action)).ToList();
     }
 
     public static JobChain Rehydrate(Guid id, Guid projectId, string name, string? description,
         IReadOnlyList<ChainStage> stages, DateTimeOffset createdAt, DateTimeOffset updatedAt)
         => new(id, projectId, name, description,
-            stages.Select(s => new ChainStage(s.JobIds, s.Gate, s.ElseBranch)).ToList(), createdAt, updatedAt);
+            stages.Select(s => new ChainStage(s.JobIds, s.Gate, s.ElseBranch, s.Action)).ToList(), createdAt, updatedAt);
 }

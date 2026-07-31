@@ -18,6 +18,7 @@ public class AccessPermissionsTests
         Assert.Equal(
             new HashSet<string> { Permission.ProjectsView, Permission.JobsView, Permission.DataRead, Permission.ArtifactsView },
             defaults);
+        Assert.DoesNotContain(Permission.CrmView, defaults);
     }
 
     [Fact]
@@ -34,6 +35,7 @@ public class AccessPermissionsTests
         Assert.Contains(Permission.DataWrite, defaults);
         Assert.Contains(Permission.ArtifactsDelete, defaults);
         Assert.Contains(Permission.EventsManage, defaults);
+        Assert.Contains(Permission.CrmView, defaults);
 
         // But not the workspace-administration bucket.
         Assert.DoesNotContain(Permission.SecretsManage, defaults);

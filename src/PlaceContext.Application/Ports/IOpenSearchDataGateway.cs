@@ -23,6 +23,9 @@ public interface IOpenSearchDataGateway
         Guid projectId, CancellationToken ct = default);
     Task<IReadOnlyList<OpenSearchFieldView>> ListFieldsAsync(
         Guid projectId, string indexPattern, CancellationToken ct = default);
+    Task<OpenSearchLastUpdatedView> GetLastUpdatedAsync(
+        Guid projectId, string indexPattern, IReadOnlyList<string> candidateFields,
+        CancellationToken ct = default);
     Task<OpenSearchSearchView> SearchAsync(
         OpenSearchSearchRequest request, CancellationToken ct = default);
 }

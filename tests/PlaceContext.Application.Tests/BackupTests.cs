@@ -155,6 +155,35 @@ public class BackupTests
     }
 
     [Fact]
+    public async Task Backup_round_trips_typed_email_action_and_stage_shape()
+    {
+        var (source, project, job) = await SeedAsync();
+        var chain = Assert.Single(await source.Chains.ListForProjectAsync(project.Id.Value));
+        chain.Update(chain.Name, chain.Description, new ChainStage[]
+        {
+            ChainStage.Of(job.Id),
+            new(Array.Empty<Guid>(), new ConditionGate("eq:release.email_release:true"),
+                action: new SendEmailChainAction(
+                    "{{client.email}}", "{{client.name}}", "Your report", "Hello {{client.name}}")),
+        }, T0.AddMinutes(1));
+
+        var manifest = await source.Exporter().HandleAsync(new ExportManifestQuery());
+        var exported = Assert.Single(manifest.JobChains);
+        Assert.Equal(2, exported.Stages!.Count);
+        Assert.Equal(SendEmailChainAction.ActionType, exported.Stages[1].Action!.Type);
+
+        var target = new Ctx();
+        await target.Importer().HandleAsync(new ImportManifestCommand(manifest));
+
+        var importedProject = Assert.Single(await target.Projects.ListAsync());
+        var imported = Assert.Single(await target.Chains.ListForProjectAsync(importedProject.Id.Value));
+        Assert.Equal(2, imported.Stages.Count);
+        var email = Assert.IsType<SendEmailChainAction>(imported.Stages[1].Action);
+        Assert.Equal("{{client.email}}", email.Recipient);
+        Assert.IsType<ConditionGate>(imported.Stages[1].Gate);
+    }
+
+    [Fact]
     public async Task Reimporting_the_same_manifest_is_idempotent()
     {
         var (source, _, _) = await SeedAsync();

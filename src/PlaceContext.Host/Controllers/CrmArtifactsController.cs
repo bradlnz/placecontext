@@ -5,7 +5,7 @@ using PlaceContext.Domain.Repositories;
 
 namespace PlaceContext.Host.Controllers;
 
-[Authorize(Policy = Permission.DataRead)]
+[Authorize(Policy = Permission.CrmView)]
 public sealed class CrmArtifactsController : ControllerBase
 {
     private readonly ICrmClientArtifactRepository _artifacts;

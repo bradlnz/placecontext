@@ -93,6 +93,10 @@ public sealed class EfChainRunRepository : IChainRunRepository
         public string Status { get; set; } = "";
         public DateTimeOffset? StartedAt { get; set; }
         public DateTimeOffset? FinishedAt { get; set; }
+        public string? ActionType { get; set; }
+        public string? Provider { get; set; }
+        public string? ExternalId { get; set; }
+        public string? Error { get; set; }
 
         public static StepJson From(ChainStepRun s) => new()
         {
@@ -105,10 +109,15 @@ public sealed class EfChainRunRepository : IChainRunRepository
             Status = s.Status.ToString(),
             StartedAt = s.StartedAt,
             FinishedAt = s.FinishedAt,
+            ActionType = s.ActionType,
+            Provider = s.Provider,
+            ExternalId = s.ExternalId,
+            Error = s.Error,
         };
 
         public ChainStepRun ToDomain() => new(
             Index, StageIndex ?? Index, BranchIndex ?? 0, JobId, JobName, RunId,
-            Enum.Parse<ChainStepStatus>(Status), StartedAt, FinishedAt);
+            Enum.Parse<ChainStepStatus>(Status), StartedAt, FinishedAt,
+            ActionType, Provider, ExternalId, Error);
     }
 }

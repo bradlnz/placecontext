@@ -9,8 +9,8 @@
 <div class="page">
     <h2 class="page-title">Security</h2>
     <div class="page-sub">
-        Two-factor authentication (TOTP) adds a second layer of security to your account.
-        When enabled, you'll need to enter a code from your authenticator app after your password.
+        Email two-factor authentication adds a second layer of security after your password.
+        Verification codes are delivered by the transactional Postmark provider.
     </div>
 
     @if (_loading)
@@ -24,17 +24,19 @@
     else if (_enabled)
     {
         <div class="dccard">
-            <div class="card-title">Two-factor authentication is enabled</div>
-            <p class="note-11" style="margin:6px 0 14px">Your account is protected with TOTP 2FA.</p>
+            <div class="card-title">Email two-factor authentication is enabled</div>
+            <p class="note-11" style="margin:6px 0 14px">
+                After a valid password, PlaceContext sends a single-use 6-digit code through Postmark.
+            </p>
             @if (_showDisable)
             {
                 <div class="field-group">
-                    <label class="field-label">Enter your current authenticator code to disable 2FA</label>
+                    <label class="field-label">Code sent to @_codeSentTo</label>
                     <input class="dcinput" @bind="_disableCode" placeholder="000000" maxlength="6"
-                           inputmode="numeric" style="max-width:180px" />
+                           inputmode="numeric" autocomplete="one-time-code" style="max-width:180px" />
                     <button class="dcbtn" style="color:var(--bad);border-color:var(--bad);margin-top:8px"
                             disabled="@(_busy || string.IsNullOrWhiteSpace(_disableCode))"
-                            @onclick="DisableAsync">@(_busy ? "Disabling…" : "Disable 2FA")</button>
+                            @onclick="DisableAsync">@(_busy ? "Disabling…" : "Confirm and disable")</button>
                     @if (_msg is not null)
                     {
                         <div class="note-11" style="color:var(--bad);margin-top:6px">@_msg</div>
@@ -43,82 +45,47 @@
             }
             else
             {
-                <button class="dcbtn" @onclick="@(() => _showDisable = true)">Disable 2FA</button>
+                <button class="dcbtn" disabled="@_busy" @onclick="StartDisableAsync">
+                    @(_busy ? "Sending code…" : "Disable 2FA")
+                </button>
+                @if (_msg is not null)
+                {
+                    <div class="note-11" style="color:var(--bad);margin-top:6px">@_msg</div>
+                }
             }
         </div>
     }
     else
     {
-        @if (!_setupStarted)
-        {
-            <div class="dccard">
-                <div class="card-title">Enable two-factor authentication</div>
-                <p class="note-11" style="margin:6px 0 14px">
-                    You'll need an authenticator app like Google Authenticator, Authy, or 1Password.
-                </p>
+        <div class="dccard">
+            <div class="card-title">Enable email two-factor authentication</div>
+            <p class="note-11" style="margin:6px 0 14px">
+                Postmark must be connected in Settings → Communications. We will send a code to your account email to confirm delivery.
+            </p>
+            @if (!_setupStarted)
+            {
                 <button class="dcbtn primary" disabled="@_busy" @onclick="StartSetupAsync">
-                    @(_busy ? "Setting up…" : "Set up 2FA")
+                    @(_busy ? "Sending code…" : "Send verification code")
                 </button>
-            </div>
-        }
-        else if (_otpauthUri is not null)
-        {
-            <div class="dccard">
-                <div class="card-title">Step 1 — Add to your authenticator</div>
-                <p class="note-11" style="margin:6px 0 10px">
-                    Copy this secret into your authenticator app, or scan the otpauth URI below.
-                </p>
+            }
+            else
+            {
                 <div class="field-group">
-                    <label class="field-label">Secret key (manual entry)</label>
-                    <div style="display:flex;gap:8px;align-items:center">
-                        <code class="code" style="font-size:13px;letter-spacing:1.5px">@_secret</code>
-                        <button class="dcbtn" style="padding:4px 10px;font-size:11px"
-                                @onclick="() => CopyToClipboard(_secret)">Copy</button>
-                    </div>
-                </div>
-                <div class="field-group" style="margin-top:12px">
-                    <label class="field-label">otpauth URI</label>
-                    <input class="dcinput" value="@_otpauthUri" readonly style="font-size:11px" />
-                </div>
-            </div>
-
-            <div class="dccard" style="margin-top:12px">
-                <div class="card-title">Step 2 — Verify</div>
-                <p class="note-11" style="margin:6px 0 10px">
-                    Enter the 6-digit code from your authenticator to confirm setup.
-                </p>
-                <div class="field-group">
+                    <label class="field-label">Code sent to @_codeSentTo</label>
                     <input class="dcinput" @bind="_confirmCode" placeholder="000000" maxlength="6"
-                           inputmode="numeric" style="max-width:180px" />
+                           inputmode="numeric" autocomplete="one-time-code" style="max-width:180px" />
                     <button class="dcbtn primary" style="margin-top:8px"
-                            disabled="@(_busy || string.IsNullOrWhiteSpace(_confirmCode) || _confirmed)"
+                            disabled="@(_busy || string.IsNullOrWhiteSpace(_confirmCode))"
                             @onclick="ConfirmAsync">
-                        @(_busy ? "Verifying…" : (_confirmed ? "Confirmed ✓" : "Confirm"))
+                        @(_busy ? "Verifying…" : "Confirm and enable")
                     </button>
                     @if (_confirmError is not null)
                     {
                         <div class="note-11" style="color:var(--bad);margin-top:6px">@_confirmError</div>
                     }
                 </div>
-            </div>
-
-            @if (_confirmed)
-            {
-                <div class="dccard" style="margin-top:12px;border-color:var(--good)">
-                    <div class="card-title">Step 3 — Save your recovery codes</div>
-                    <p class="note-11" style="margin:6px 0 10px">
-                        Store these codes somewhere safe. Each code can be used once if you lose access to your authenticator.
-                    </p>
-                    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:6px">
-                        @foreach (var rc in _recoveryCodes)
-                        {
-                            <code class="code" style="font-size:12px;text-align:center;padding:4px">@rc</code>
-                        }
-                    </div>
-                    <button class="dcbtn" style="margin-top:10px" @onclick="CopyRecoveryCodes">Copy all codes</button>
-                </div>
             }
-        }
+        </div>
     }
 </div>
 
@@ -127,19 +94,12 @@
     private bool _busy;
     private bool _enabled;
     private string? _error;
-
-    // Setup flow
     private bool _setupStarted;
-    private string? _otpauthUri;
-    private string? _secret;
     private string? _confirmCode;
-    private bool _confirmed;
     private string? _confirmError;
-    private string[] _recoveryCodes = Array.Empty<string>();
-
-    // Disable flow
     private bool _showDisable;
     private string? _disableCode;
+    private string? _codeSentTo;
     private string? _msg;
 
     protected override async Task OnInitializedAsync()
@@ -147,10 +107,9 @@
         Ui.Set("Settings", "Security");
         try
         {
-            var resp = await Http.GetAsync("/api/2fa/status");
-            resp.EnsureSuccessStatusCode();
-            var json = await resp.Content.ReadFromJsonAsync<TwoFactorStatus>();
-            _enabled = json?.Enabled ?? false;
+            var response = await Http.GetAsync("/api/2fa/status");
+            response.EnsureSuccessStatusCode();
+            _enabled = (await response.Content.ReadFromJsonAsync<TwoFactorStatus>())?.Enabled ?? false;
         }
         catch (Exception ex) { _error = ex.Message; }
         finally { _loading = false; }
@@ -162,17 +121,14 @@
         _error = null;
         try
         {
-            var resp = await Http.PostAsync("/api/2fa/setup", null);
-            if (!resp.IsSuccessStatusCode)
+            var response = await Http.PostAsync("/api/2fa/setup", null);
+            if (!response.IsSuccessStatusCode)
             {
-                var body = await resp.Content.ReadFromJsonAsync<ErrorResp>();
-                _error = body?.Error ?? "Setup failed.";
+                _error = (await response.Content.ReadFromJsonAsync<ErrorResponse>())?.Error ?? "Could not send the code.";
                 return;
             }
-            var data = await resp.Content.ReadFromJsonAsync<SetupResp>();
-            _otpauthUri = data?.OtpauthUri;
-            _secret = data?.Secret;
-            _recoveryCodes = data?.RecoveryCodes ?? Array.Empty<string>();
+            var result = await response.Content.ReadFromJsonAsync<ChallengeResponse>();
+            _codeSentTo = result?.Email;
             _setupStarted = true;
         }
         catch (Exception ex) { _error = ex.Message; }
@@ -185,17 +141,36 @@
         _confirmError = null;
         try
         {
-            var resp = await Http.PostAsJsonAsync("/api/2fa/confirm", new { Code = _confirmCode });
-            if (!resp.IsSuccessStatusCode)
+            var response = await Http.PostAsJsonAsync("/api/2fa/confirm", new { Code = _confirmCode });
+            if (!response.IsSuccessStatusCode)
             {
-                var body = await resp.Content.ReadFromJsonAsync<ErrorResp>();
-                _confirmError = body?.Error ?? "Invalid code.";
+                _confirmError = (await response.Content.ReadFromJsonAsync<ErrorResponse>())?.Error ?? "Invalid code.";
                 return;
             }
-            _confirmed = true;
             _enabled = true;
+            _setupStarted = false;
         }
         catch (Exception ex) { _confirmError = ex.Message; }
+        finally { _busy = false; }
+    }
+
+    private async Task StartDisableAsync()
+    {
+        _busy = true;
+        _msg = null;
+        try
+        {
+            var response = await Http.PostAsync("/api/2fa/code", null);
+            if (!response.IsSuccessStatusCode)
+            {
+                _msg = (await response.Content.ReadFromJsonAsync<ErrorResponse>())?.Error ?? "Could not send the code.";
+                return;
+            }
+            var result = await response.Content.ReadFromJsonAsync<ChallengeResponse>();
+            _codeSentTo = result?.Email;
+            _showDisable = true;
+        }
+        catch (Exception ex) { _msg = ex.Message; }
         finally { _busy = false; }
     }
 
@@ -205,33 +180,21 @@
         _msg = null;
         try
         {
-            var resp = await Http.PostAsJsonAsync("/api/2fa/disable", new { Code = _disableCode });
-            if (!resp.IsSuccessStatusCode)
+            var response = await Http.PostAsJsonAsync("/api/2fa/disable", new { Code = _disableCode });
+            if (!response.IsSuccessStatusCode)
             {
-                var body = await resp.Content.ReadFromJsonAsync<ErrorResp>();
-                _msg = body?.Error ?? "Invalid code.";
+                _msg = (await response.Content.ReadFromJsonAsync<ErrorResponse>())?.Error ?? "Invalid code.";
                 return;
             }
             _enabled = false;
             _showDisable = false;
             _disableCode = null;
-            _msg = null;
         }
         catch (Exception ex) { _msg = ex.Message; }
         finally { _busy = false; }
     }
 
-    private void CopyToClipboard(string? text)
-    {
-        // Handled via JS interop if needed; for now rely on user selecting the text
-    }
-
-    private void CopyRecoveryCodes()
-    {
-        // Handled via JS interop if needed
-    }
-
     private sealed class TwoFactorStatus { public bool Enabled { get; set; } }
-    private sealed class SetupResp { public string? OtpauthUri { get; set; } public string? Secret { get; set; } public string[]? RecoveryCodes { get; set; } }
-    private sealed class ErrorResp { public string? Error { get; set; } }
+    private sealed class ChallengeResponse { public string? Email { get; set; } }
+    private sealed class ErrorResponse { public string? Error { get; set; } }
 }

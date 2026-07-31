@@ -38,6 +38,39 @@ public class JobChainStageTests
     public void ChainStage_of_a_single_job_is_not_parallel()
         => Assert.False(ChainStage.Of(Guid.NewGuid()).IsParallel);
 
+    [Fact]
+    public void ChainStage_supports_a_typed_email_action_without_a_job_id()
+    {
+        var action = new SendEmailChainAction(
+            "client@example.com", "Client", "Report ready", "Your report is ready.");
+
+        var stage = ChainStage.ForAction(action);
+
+        Assert.Empty(stage.JobIds);
+        Assert.Same(action, stage.Action);
+        Assert.Equal(1, stage.ExecutionCount);
+        Assert.False(stage.IsParallel);
+    }
+
+    [Fact]
+    public void SendEmail_action_validates_required_fields_and_literal_recipient()
+    {
+        Assert.Throws<ArgumentException>(() =>
+            new SendEmailChainAction("not-an-email", "Client", "Subject", "Body"));
+        Assert.Throws<ArgumentException>(() =>
+            new SendEmailChainAction("client@example.com", "Client", " ", "Body"));
+        Assert.Throws<ArgumentException>(() =>
+            new SendEmailChainAction("client@example.com", "Client", "Subject", " "));
+    }
+
+    [Fact]
+    public void SendSms_action_validates_international_literal_recipient()
+    {
+        var action = new SendSmsChainAction("+61412345678", "Report ready");
+        Assert.Equal("+61412345678", action.Recipient);
+        Assert.Throws<ArgumentException>(() => new SendSmsChainAction("0412345678", "Report ready"));
+    }
+
     [Theory]
     [InlineData("notexists:missing", true)]
     [InlineData("neq:status:failed", true)]
@@ -145,6 +178,23 @@ public class JobChainStageTests
         Assert.Single(byStage[0]);
         Assert.Equal(2, byStage[1].Count); // the fan-out group
         Assert.Single(byStage[2]);         // the join
+    }
+
+    [Fact]
+    public void Start_includes_typed_actions_in_stage_aware_run_history()
+    {
+        var jobId = Guid.NewGuid();
+        var action = new SendEmailChainAction(
+            "client@example.com", "Client", "Report", "Ready");
+        var chain = JobChain.Create(ProjectId, "deliver", null,
+            new[] { ChainStage.Of(jobId), ChainStage.ForAction(action) }, T0);
+
+        var run = ChainRun.Start(chain, new[] { "report", "Send email" }, T0);
+
+        Assert.Equal(2, run.Steps.Count);
+        Assert.Equal(SendEmailChainAction.ActionType, run.Steps[1].ActionType);
+        Assert.Equal(Guid.Empty, run.Steps[1].JobId);
+        Assert.Equal(1, run.Steps[1].StageIndex);
     }
 
     [Fact]

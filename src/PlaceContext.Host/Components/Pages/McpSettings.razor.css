@@ -1,0 +1,24 @@
+.mcp-settings-page { width:min(920px,100%); margin:0 auto; padding:30px 28px 56px; box-sizing:border-box; }
+.settings-head { display:flex; align-items:flex-end; justify-content:space-between; gap:18px; margin-bottom:18px; }
+.settings-kicker { color:var(--brand-2); font-size:9px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; }
+.settings-head h2 { margin:6px 0 5px; color:var(--text); font-size:24px; }
+.settings-head p { margin:0; color:var(--text-2); font-size:11.5px; }
+.project-picker { max-width:440px; margin-bottom:14px; }
+.settings-message { margin-bottom:12px; padding:10px 12px; border:1px solid var(--border); border-radius:9px; color:var(--text-2); font-size:10.5px; }
+.server-card { padding:0; overflow:hidden; }
+.empty-note { padding:24px; color:var(--text-3); font-size:11px; }
+.server-row { display:flex; align-items:center; justify-content:space-between; gap:14px; padding:13px 15px; border-bottom:1px solid var(--border); }
+.server-row:last-child { border-bottom:0; }
+.server-row.disabled { opacity:.6; }
+.server-info { display:flex; min-width:0; align-items:center; flex-wrap:wrap; gap:7px; }
+.server-info strong { color:var(--text); font-size:11.5px; }
+.server-info span { padding:2px 6px; border-radius:5px; background:var(--card-2); color:var(--text-3); font-size:9px; }
+.server-info .oauth-state.ready { color:var(--good); }
+.server-info .oauth-state.error { color:var(--bad); }
+.server-info small { width:100%; color:var(--text-3); font-size:9px; }
+.server-actions,.form-actions { display:flex; align-items:center; gap:7px; }
+.add-card { display:flex; flex-direction:column; gap:14px; margin-top:12px; padding:16px; }
+.form-title { color:var(--text); font-size:13px; font-weight:650; }
+.field-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+.form-actions { justify-content:flex-end; }
+@media (max-width:700px) { .mcp-settings-page{padding:20px 12px 38px}.settings-head{align-items:flex-start;flex-direction:column}.field-grid{grid-template-columns:1fr}.server-row{align-items:flex-start;flex-direction:column}.server-actions{width:100%} }

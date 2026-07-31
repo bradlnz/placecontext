@@ -1,9 +1,8 @@
-using System.Text.Json;
+using System.Security.Cryptography;
 using PlaceContext.Application.Auth;
 using PlaceContext.Application.Ports;
 using PlaceContext.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
-using OtpNet;
 
 namespace PlaceContext.Infrastructure.Auth;
 
@@ -15,19 +14,19 @@ namespace PlaceContext.Infrastructure.Auth;
 public sealed class AuthService : IAuthService
 {
     private readonly AppDbContext _db;
-    private readonly ICurrentTenant _tenant;
-    private readonly IDataEncryptor _encryptor;
+    private readonly IClientCommunicationSender _communications;
 
     // A fixed, precomputed hash verified against on every *unknown* login attempt, so the real PBKDF2
     // work happens whether or not the email exists — otherwise a "known email, wrong password" request
     // and an "unknown email" request would take measurably different time and leak account existence.
     private static readonly string DummyHashForTiming = PasswordHasher.Hash(Guid.NewGuid().ToString("N"));
 
-    public AuthService(AppDbContext db, ICurrentTenant tenant, IDataEncryptor encryptor)
+    public AuthService(
+        AppDbContext db,
+        IClientCommunicationSender communications)
     {
         _db = db;
-        _tenant = tenant;
-        _encryptor = encryptor;
+        _communications = communications;
     }
 
     public async Task<bool> EmailExistsAsync(string email, CancellationToken ct = default)
@@ -148,75 +147,127 @@ public sealed class AuthService : IAuthService
         => await _db.Users.AsNoTracking()
             .AnyAsync(u => u.Id == userId && u.TwoFactorEnabled, ct);
 
-    public async Task<(string Secret, string[] RecoveryCodes)> SetupTwoFactorAsync(Guid userId, CancellationToken ct = default)
+    public async Task<EmailTwoFactorChallenge> IssueTwoFactorCodeAsync(
+        Guid userId, CancellationToken ct = default)
     {
         var row = await _db.Users.FirstOrDefaultAsync(u => u.Id == userId, ct);
-        if (row is null) return ("", Array.Empty<string>());
+        if (row is null) throw new InvalidOperationException("User not found.");
 
-        var secret = new byte[20];
-        using (var rng = System.Security.Cryptography.RandomNumberGenerator.Create())
-            rng.GetBytes(secret);
-        var secretBase32 = Base32Encoding.ToString(secret);
+        var now = DateTimeOffset.UtcNow;
+        if (row.TwoFactorCodeHash is not null
+            && row.TwoFactorCodeLastSentAt is { } sentAt
+            && sentAt > now.AddMinutes(-1))
+            throw new InvalidOperationException("Wait one minute before requesting another code.");
 
-        var recoveryCodes = Enumerable.Range(0, 10)
-            .Select(_ => Guid.NewGuid().ToString("N")[..8].ToUpperInvariant())
-            .ToArray();
-
-        row.TotpSecret = _encryptor.Protect(secretBase32, IDataEncryptor.Purpose.Totp);
-        row.RecoveryCodesJson = _encryptor.Protect(
-            JsonSerializer.Serialize(recoveryCodes), IDataEncryptor.Purpose.Totp);
-        row.TwoFactorEnabled = true;
+        var code = RandomNumberGenerator.GetInt32(0, 1_000_000).ToString("D6");
+        row.TwoFactorCodeHash = PasswordHasher.Hash(code);
+        row.TwoFactorCodeExpiresAt = now.AddMinutes(10);
+        row.TwoFactorCodeLastSentAt = now;
+        row.TwoFactorCodeFailedAttempts = 0;
         await _db.SaveChangesAsync(ct);
 
-        return (secretBase32, recoveryCodes);
+        try
+        {
+            await _communications.SendAuthenticationEmailAsync(
+                row.Email,
+                row.DisplayName,
+                "Your PlaceContext verification code",
+                $"Your PlaceContext verification code is {code}.\n\n"
+                + "This code expires in 10 minutes and can only be used once. "
+                + "If you did not request it, you can ignore this email.",
+                ct);
+        }
+        catch
+        {
+            ClearChallenge(row);
+            await _db.SaveChangesAsync(ct);
+            throw;
+        }
+
+        return new EmailTwoFactorChallenge(MaskEmail(row.Email), row.TwoFactorCodeExpiresAt.Value);
     }
 
-    public async Task<bool> VerifyTotpCodeAsync(Guid userId, string code, CancellationToken ct = default)
+    public async Task<bool> ConfirmTwoFactorSetupAsync(
+        Guid userId, string code, CancellationToken ct = default)
     {
-        var row = await _db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userId && u.TwoFactorEnabled, ct);
-        if (row?.TotpSecret is null) return false;
-
-        var secretBase32 = _encryptor.Unprotect(row.TotpSecret, IDataEncryptor.Purpose.Totp);
-        if (string.IsNullOrEmpty(secretBase32)) return false;
-
-        var secretBytes = Base32Encoding.ToBytes(secretBase32);
-        var totp = new Totp(secretBytes);
-        return totp.VerifyTotp(code.Trim(), out _, new VerificationWindow(1, 1));
+        var row = await VerifyChallengeAsync(userId, code, requireEnabled: false, ct);
+        if (row is null) return false;
+        row.TwoFactorEnabled = true;
+        row.TotpSecret = null;
+        row.RecoveryCodesJson = null;
+        ClearChallenge(row);
+        await _db.SaveChangesAsync(ct);
+        return true;
     }
 
-    public async Task<bool> ConsumeRecoveryCodeAsync(Guid userId, string code, CancellationToken ct = default)
+    public async Task<bool> VerifyTwoFactorCodeAsync(
+        Guid userId, string code, CancellationToken ct = default)
     {
-        var row = await _db.Users.FirstOrDefaultAsync(u => u.Id == userId && u.TwoFactorEnabled, ct);
-        if (row?.RecoveryCodesJson is null) return false;
-
-        var json = _encryptor.Unprotect(row.RecoveryCodesJson, IDataEncryptor.Purpose.Totp);
-        if (string.IsNullOrEmpty(json)) return false;
-
-        var codes = JsonSerializer.Deserialize<string[]>(json);
-        if (codes is null) return false;
-
-        var normalized = code.Trim().ToUpperInvariant();
-        var idx = Array.FindIndex(codes, c => c == normalized);
-        if (idx < 0) return false;
-
-        codes[idx] = Guid.NewGuid().ToString("N")[..8].ToUpperInvariant(); // consume and rotate
-        row.RecoveryCodesJson = _encryptor.Protect(
-            JsonSerializer.Serialize(codes), IDataEncryptor.Purpose.Totp);
+        var row = await VerifyChallengeAsync(userId, code, requireEnabled: true, ct);
+        if (row is null) return false;
+        ClearChallenge(row);
         await _db.SaveChangesAsync(ct);
         return true;
     }
 
     public async Task<bool> DisableTwoFactorAsync(Guid userId, string currentCode, CancellationToken ct = default)
     {
-        if (!await VerifyTotpCodeAsync(userId, currentCode, ct)) return false;
-
-        var row = await _db.Users.FirstOrDefaultAsync(u => u.Id == userId, ct);
+        var row = await VerifyChallengeAsync(userId, currentCode, requireEnabled: true, ct);
         if (row is null) return false;
 
         row.TwoFactorEnabled = false;
         row.TotpSecret = null;
         row.RecoveryCodesJson = null;
+        ClearChallenge(row);
         await _db.SaveChangesAsync(ct);
         return true;
+    }
+
+    private async Task<UserRow?> VerifyChallengeAsync(
+        Guid userId,
+        string code,
+        bool requireEnabled,
+        CancellationToken ct)
+    {
+        var row = await _db.Users.FirstOrDefaultAsync(u => u.Id == userId, ct);
+        if (row is null || requireEnabled && !row.TwoFactorEnabled
+            || string.IsNullOrWhiteSpace(row.TwoFactorCodeHash)
+            || row.TwoFactorCodeExpiresAt is null)
+            return null;
+
+        if (row.TwoFactorCodeExpiresAt <= DateTimeOffset.UtcNow)
+        {
+            ClearChallenge(row);
+            await _db.SaveChangesAsync(ct);
+            return null;
+        }
+
+        var normalized = (code ?? string.Empty).Trim();
+        if (normalized.Length != 6 || !normalized.All(char.IsDigit)
+            || !PasswordHasher.Verify(normalized, row.TwoFactorCodeHash))
+        {
+            row.TwoFactorCodeFailedAttempts++;
+            if (row.TwoFactorCodeFailedAttempts >= 5) ClearChallenge(row);
+            await _db.SaveChangesAsync(ct);
+            return null;
+        }
+
+        return row;
+    }
+
+    private static void ClearChallenge(UserRow row)
+    {
+        row.TwoFactorCodeHash = null;
+        row.TwoFactorCodeExpiresAt = null;
+        row.TwoFactorCodeFailedAttempts = 0;
+    }
+
+    private static string MaskEmail(string email)
+    {
+        var at = email.IndexOf('@');
+        if (at <= 0) return email;
+        var local = email[..at];
+        var visible = local.Length <= 2 ? local[..1] : local[..2];
+        return visible + new string('•', Math.Max(2, local.Length - visible.Length)) + email[at..];
     }
 }

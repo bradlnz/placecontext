@@ -35,6 +35,7 @@ public static class DependencyInjection
         services.AddScoped<ITenantSettingsPort, EfTenantSettingsPort>();
         services.AddScoped<IMenuConfigService, Tenancy.MenuConfigService>();
         services.AddScoped<IArtifactViewConfigService, Tenancy.ArtifactViewConfigService>();
+        services.AddScoped<Crm.CrmIngestionSettingsService>();
 
         // Portal authentication (tenant-scoped users) + persisted OAuth clients.
         services.AddScoped<IAuthService, Auth.AuthService>();

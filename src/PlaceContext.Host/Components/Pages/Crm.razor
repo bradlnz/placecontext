@@ -1,9 +1,13 @@
 @page "/project/{ProjectId:guid}/crm"
-@attribute [Authorize(Policy = Permission.DataRead)]
+@attribute [Authorize(Policy = Permission.CrmView)]
 @layout PlaceContext.Host.Components.Layout.ProjectLayout
 @inject IPlaceContextService Svc
 @inject PortalUiState Ui
+@inject HttpClient Http
+@inject IJSRuntime Js
+@inject NavigationManager Nav
 @using PlaceContext.Domain.ValueObjects
+@using PlaceContext.Infrastructure.Crm
 
 <PageTitle>PlaceContext — CRM</PageTitle>
 
@@ -26,11 +30,11 @@ else
                     </span>
                     Customer operations
                 </div>
-                <h2>@(_crmSection == "clients" ? "Clients" : "Automations")</h2>
-                <p>@(_crmSection == "clients"
-                    ? "Manage customers through their lifecycle and run project automations in customer context."
-                    : "Connect customer lifecycle events to durable job-chain workflows.")</p>
+                <h2>@CrmSectionTitle()</h2>
+                <p>@CrmSectionDescription()</p>
             </div>
+            @if (_crmSection != "settings")
+            {
             <button class="dcbtn primary add-client-btn"
                     @onclick="NewPrimary">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -38,8 +42,10 @@ else
                 </svg>
                 @(_crmSection == "clients" ? "Add client" : "Add automation")
             </button>
+            }
         </div>
 
+        <div class="crm-tab-row">
         <nav class="crm-section-tabs" aria-label="CRM sections">
             <button class="@(_crmSection == "clients" ? "active" : "")"
                     @onclick="@(() => _crmSection = "clients")">
@@ -49,14 +55,41 @@ else
                 Clients <span>@_clients.Count</span>
             </button>
             <button class="@(_crmSection == "automations" ? "active" : "")"
-                    @onclick="@(() => _crmSection = "automations")">
+                    @onclick="@(() => OpenCrmSection("automations"))">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
                     <path d="M8 4h8v5H8zM4 15h6v5H4zM14 15h6v5h-6z"></path>
                     <path d="M12 9v3M7 12h10M7 12v3M17 12v3"></path>
                 </svg>
                 Automations <span>@_automationRules.Count</span>
             </button>
+            <button class="@(_crmSection == "settings" ? "active" : "")"
+                    @onclick="@(() => OpenCrmSection("settings"))">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                    <circle cx="12" cy="12" r="3"></circle>
+                    <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.6v-.2h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1z"></path>
+                </svg>
+                Settings
+            </button>
         </nav>
+        @if (_crmSection == "clients")
+        {
+            <div class="crm-toolbar">
+                <div class="crm-search">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                        <circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path>
+                    </svg>
+                    <input class="dcinput" @bind="_search" @bind:event="oninput"
+                           placeholder="Search name, company, email, or phone…" />
+                </div>
+                @if (_stageFilter is not null)
+                {
+                    <button class="dcbtn xs clear-filter" @onclick="@(() => _stageFilter = null)">
+                        Clear filter <span>×</span>
+                    </button>
+                }
+            </div>
+        }
+        </div>
 
         @if (_message is not null)
         {
@@ -109,22 +142,6 @@ else
                     </span>
                 </div>
                 <span class="result-count">@FilteredClients.Count() result@(FilteredClients.Count() == 1 ? "" : "s")</span>
-            </div>
-
-            <div class="crm-toolbar">
-                <div class="crm-search">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-                        <circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path>
-                    </svg>
-                    <input class="dcinput" @bind="_search" @bind:event="oninput"
-                           placeholder="Search name, company, email, or phone…" />
-                </div>
-                @if (_stageFilter is not null)
-                {
-                    <button class="dcbtn xs clear-filter" @onclick="@(() => _stageFilter = null)">
-                        Clear filter <span>×</span>
-                    </button>
-                }
             </div>
 
             @if (!FilteredClients.Any())
@@ -208,7 +225,7 @@ else
             }
         </section>
         }
-        else
+        else if (_crmSection == "automations")
         {
             <section class="automations-workspace">
                 <div class="automation-overview dccard">
@@ -305,6 +322,104 @@ else
                         }
                     </div>
                 }
+            </section>
+        }
+        else
+        {
+            <section class="crm-ingestion-settings">
+                <div class="dccard ingestion-card">
+                    <div class="ingestion-card-head">
+                        <span class="ingestion-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                                <path d="M5 12h14M13 6l6 6-6 6"></path><path d="M4 5v14"></path>
+                            </svg>
+                        </span>
+                        <div>
+                            <strong>Lead ingestion API</strong>
+                            <span>Accept contact-form leads into this project's CRM using a scoped header token.</span>
+                        </div>
+                        <span class="ingestion-status @(_ingestionSettings?.Enabled == true ? "enabled" : "")">
+                            @(_ingestionSettings?.Enabled == true ? "Enabled" : "Disabled")
+                        </span>
+                    </div>
+
+                    @if (_loadingIngestionSettings)
+                    {
+                        <div class="ingestion-loading">Loading CRM ingestion settings…</div>
+                    }
+                    else
+                    {
+                        <div class="ingestion-form-grid">
+                            <div class="dcfield">
+                                <label>Allowed contact-form origin</label>
+                                <input class="dcinput" @bind="_ingestionOrigin" placeholder="https://www.example.com" />
+                                <small>Exact HTTPS origin only. Requests from any other browser origin are rejected.</small>
+                            </div>
+                            <div class="dcfield">
+                                <label>Endpoint</label>
+                                <div class="ingestion-copy-field">
+                                    <code>@IngestionEndpoint</code>
+                                    <button @onclick="() => CopyAsync(IngestionEndpoint)">Copy</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="ingestion-token-row">
+                            <span>
+                                <small>Header</small>
+                                <code>@CrmIngestionSettingsService.TokenHeader</code>
+                            </span>
+                            <span>
+                                <small>Current token</small>
+                                <code>@(_ingestionSettings?.TokenPrefix ?? "Not generated")</code>
+                            </span>
+                        </div>
+
+                        @if (!string.IsNullOrWhiteSpace(_newIngestionToken))
+                        {
+                            <div class="ingestion-token-once">
+                                <div><strong>Copy this token now</strong><span>It is shown once and stored only as a hash.</span></div>
+                                <div class="ingestion-copy-field secret">
+                                    <code>@_newIngestionToken</code>
+                                    <button @onclick="() => CopyAsync(_newIngestionToken!)">Copy token</button>
+                                </div>
+                            </div>
+                        }
+
+                        <details class="ingestion-example">
+                            <summary>Contact-form request example</summary>
+                            <pre>@IngestionExample()</pre>
+                        </details>
+
+                        @if (_ingestionError is not null)
+                        {
+                            <div class="form-error">@_ingestionError</div>
+                        }
+                        @if (_ingestionMessage is not null)
+                        {
+                            <div class="ingestion-message">@_ingestionMessage</div>
+                        }
+
+                        <div class="ingestion-actions">
+                            <button class="dcbtn" disabled="@_savingIngestion" @onclick="SaveIngestionOrigin">
+                                @(_savingIngestion ? "Saving…" : "Save origin")
+                            </button>
+                            <button class="dcbtn primary" disabled="@_savingIngestion" @onclick="RotateIngestionToken">
+                                @(_ingestionSettings?.Enabled == true ? "Rotate token" : "Generate token")
+                            </button>
+                            @if (_ingestionSettings?.Enabled == true)
+                            {
+                                <button class="dcbtn ingestion-disable" disabled="@_savingIngestion" @onclick="DisableIngestion">
+                                    Disable endpoint
+                                </button>
+                            }
+                        </div>
+                    }
+                </div>
+                <div class="ingestion-security-note">
+                    <strong>Designed for lead capture only</strong>
+                    <span>The token can create or update Lead records through this endpoint; it does not grant access to CRM reads or other APIs. The configured origin is checked on every request.</span>
+                </div>
             </section>
         }
     </div>
@@ -742,9 +857,13 @@ else
                     else if (_clientArtifacts.Count == 0)
                     {
                         <div class="artifact-empty">
-                            <span class="artifact-empty-icon">⌁</span>
-                            <strong>No artifacts attached</strong>
-                            <span>Attach a file here. Outputs from client automations will be tagged automatically.</span>
+                            <span class="artifact-empty-icon">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7">
+                                    <path d="M4 7h6l2 2h8v10H4z"></path><path d="M12 12v4M10 14h4"></path>
+                                </svg>
+                            </span>
+                            <strong>No client files yet</strong>
+                            <span>Upload the first file above. Outputs created by client automations will appear here automatically.</span>
                         </div>
                     }
                     else
@@ -788,14 +907,19 @@ else
                         }
                         else
                         {
+                        <div class="artifact-list-head" aria-hidden="true">
+                            <span>File</span><span>Source</span><span>Actions</span>
+                        </div>
                         <div class="client-artifact-list">
                             @foreach (var artifact in FilteredClientArtifacts)
                             {
                                 <article class="client-artifact-row @ArtifactTypeClass(artifact.ContentType)">
                                     <a class="artifact-open" href="/crm/artifacts/@artifact.Id" target="_blank"
-                                       title="Open @artifact.Title">
+                                        title="Open @artifact.Title">
                                         <span class="artifact-file-icon">
-                                            <span>@ArtifactIcon(artifact.ContentType)</span>
+                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7">
+                                                <path d="M6 3h8l4 4v14H6z"></path><path d="M14 3v5h5"></path>
+                                            </svg>
                                             <small>@ArtifactExtension(artifact.Title)</small>
                                         </span>
                                         <span class="artifact-file-copy">
@@ -912,6 +1036,15 @@ else
     private Guid? _automationChainId;
     private bool _automationEnabled = true;
     private string? _automationError;
+    private CrmIngestionSettingsView? _ingestionSettings;
+    private bool _loadingIngestionSettings;
+    private bool _savingIngestion;
+    private string _ingestionOrigin = "";
+    private string? _newIngestionToken;
+    private string? _ingestionError;
+    private string? _ingestionMessage;
+
+    private string IngestionEndpoint => $"{Nav.BaseUri.TrimEnd('/')}/api/crm/ingest";
 
     private IEnumerable<CrmClientView> FilteredClients => _clients.Where(client =>
         (_stageFilter is null || ParseStage(client.LifecycleStage) == _stageFilter) &&
@@ -935,6 +1068,154 @@ else
         catch (Exception ex) { _message = ex.Message; }
         finally { _loading = false; }
     }
+
+    private string CrmSectionTitle() => _crmSection switch
+    {
+        "clients" => "Clients",
+        "automations" => "Automations",
+        _ => "CRM settings",
+    };
+
+    private string CrmSectionDescription() => _crmSection switch
+    {
+        "clients" => "Manage customers through their lifecycle and run project automations in customer context.",
+        "automations" => "Connect customer lifecycle events to durable job-chain workflows.",
+        _ => "Connect external lead forms without exposing the rest of your CRM.",
+    };
+
+    private async Task OpenCrmSection(string section)
+    {
+        _crmSection = section;
+        if (section == "settings" && _ingestionSettings is null)
+            await LoadIngestionSettings();
+    }
+
+    private async Task LoadIngestionSettings()
+    {
+        _loadingIngestionSettings = true;
+        _ingestionError = null;
+        try
+        {
+            var response = await Http.GetAsync($"/api/crm/ingestion/settings?projectId={ProjectId}");
+            if (!response.IsSuccessStatusCode)
+            {
+                _ingestionError = response.StatusCode == System.Net.HttpStatusCode.Forbidden
+                    ? "The settings.manage permission is required to configure CRM ingestion."
+                    : await ReadApiError(response, "Could not load CRM ingestion settings.");
+                return;
+            }
+            _ingestionSettings = await response.Content.ReadFromJsonAsync<CrmIngestionSettingsView>();
+            _ingestionOrigin = _ingestionSettings?.AllowedOrigin ?? "";
+        }
+        catch (Exception ex) { _ingestionError = ex.Message; }
+        finally { _loadingIngestionSettings = false; }
+    }
+
+    private async Task SaveIngestionOrigin()
+    {
+        _savingIngestion = true;
+        _ingestionError = null;
+        _ingestionMessage = null;
+        _newIngestionToken = null;
+        try
+        {
+            var response = await Http.PutAsJsonAsync("/api/crm/ingestion/settings",
+                new { ProjectId, AllowedOrigin = _ingestionOrigin });
+            if (!response.IsSuccessStatusCode)
+            {
+                _ingestionError = await ReadApiError(response, "Could not save the allowed origin.");
+                return;
+            }
+            _ingestionSettings = await response.Content.ReadFromJsonAsync<CrmIngestionSettingsView>();
+            _ingestionOrigin = _ingestionSettings?.AllowedOrigin ?? _ingestionOrigin;
+            _ingestionMessage = "Allowed origin saved.";
+        }
+        catch (Exception ex) { _ingestionError = ex.Message; }
+        finally { _savingIngestion = false; }
+    }
+
+    private async Task RotateIngestionToken()
+    {
+        _savingIngestion = true;
+        _ingestionError = null;
+        _ingestionMessage = null;
+        _newIngestionToken = null;
+        try
+        {
+            var response = await Http.PostAsJsonAsync("/api/crm/ingestion/settings/rotate",
+                new { ProjectId, AllowedOrigin = _ingestionOrigin });
+            if (!response.IsSuccessStatusCode)
+            {
+                _ingestionError = await ReadApiError(response, "Could not generate the ingestion token.");
+                return;
+            }
+            var result = await response.Content.ReadFromJsonAsync<CrmIngestionTokenResult>();
+            _ingestionSettings = result?.Settings;
+            _newIngestionToken = result?.Token;
+            _ingestionOrigin = result?.Settings.AllowedOrigin ?? _ingestionOrigin;
+            _ingestionMessage = "CRM lead ingestion is enabled.";
+        }
+        catch (Exception ex) { _ingestionError = ex.Message; }
+        finally { _savingIngestion = false; }
+    }
+
+    private async Task DisableIngestion()
+    {
+        _savingIngestion = true;
+        _ingestionError = null;
+        _ingestionMessage = null;
+        _newIngestionToken = null;
+        try
+        {
+            var response = await Http.DeleteAsync($"/api/crm/ingestion/settings?projectId={ProjectId}");
+            if (!response.IsSuccessStatusCode)
+            {
+                _ingestionError = await ReadApiError(response, "Could not disable CRM ingestion.");
+                return;
+            }
+            await LoadIngestionSettings();
+            _ingestionMessage = "CRM lead ingestion disabled.";
+        }
+        catch (Exception ex) { _ingestionError = ex.Message; }
+        finally { _savingIngestion = false; }
+    }
+
+    private async Task CopyAsync(string value)
+    {
+        await Js.InvokeVoidAsync("navigator.clipboard.writeText", value);
+        _ingestionMessage = "Copied to clipboard.";
+    }
+
+    private string IngestionExample()
+        => $$"""
+           fetch("{{IngestionEndpoint}}", {
+             method: "POST",
+             headers: {
+               "Content-Type": "application/json",
+               "{{CrmIngestionSettingsService.TokenHeader}}": "{{_newIngestionToken ?? "YOUR_TOKEN"}}"
+             },
+             body: JSON.stringify({
+               name: "Ada Lovelace",
+               email: "ada@example.com",
+               phone: "+61412345678",
+               company: "Analytical Engines",
+               message: "Please contact me about a feasibility report.",
+               source: "website-contact-form"
+             })
+           });
+           """;
+
+    private static async Task<string> ReadApiError(HttpResponseMessage response, string fallback)
+    {
+        try
+        {
+            var error = await response.Content.ReadFromJsonAsync<ApiError>();
+            return error?.Error ?? fallback;
+        }
+        catch { return fallback; }
+    }
+
+    private sealed record ApiError(string Error);
 
     private void NewPrimary()
     {

@@ -15,4 +15,8 @@ public sealed record ChainStepRunView(
     Guid? RunId,
     string Status,
     DateTimeOffset? StartedAt,
-    DateTimeOffset? FinishedAt);
+    DateTimeOffset? FinishedAt,
+    string? ActionType = null,
+    string? Provider = null,
+    string? ExternalId = null,
+    string? Error = null);

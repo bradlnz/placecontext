@@ -34,6 +34,17 @@ public sealed class SearchOpenSearchHandler
         => _gateway.SearchAsync(query.Request, ct);
 }
 
+public sealed class GetOpenSearchLastUpdatedHandler
+    : IQueryHandler<GetOpenSearchLastUpdatedQuery, OpenSearchLastUpdatedView>
+{
+    private readonly IOpenSearchDataGateway _gateway;
+    public GetOpenSearchLastUpdatedHandler(IOpenSearchDataGateway gateway) => _gateway = gateway;
+    public Task<OpenSearchLastUpdatedView> HandleAsync(
+        GetOpenSearchLastUpdatedQuery query, CancellationToken ct = default)
+        => _gateway.GetLastUpdatedAsync(
+            query.ProjectId, query.IndexPattern, query.CandidateFields, ct);
+}
+
 public sealed class ListOpenSearchDashboardsHandler
     : IQueryHandler<ListOpenSearchDashboardsQuery, IReadOnlyList<OpenSearchDashboardView>>
 {

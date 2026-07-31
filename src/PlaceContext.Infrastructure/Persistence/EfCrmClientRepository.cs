@@ -47,6 +47,21 @@ public sealed class EfCrmClientRepository : ICrmClientRepository
         return row is null ? null : ToDomain(row);
     }
 
+    public async Task<CrmClient?> FindByContactAsync(
+        Guid projectId,
+        string? email,
+        string? phone,
+        CancellationToken ct = default)
+    {
+        var normalizedEmail = email?.Trim().ToLower();
+        var normalizedPhone = phone?.Trim();
+        var row = await _db.CrmClients.AsNoTracking().FirstOrDefaultAsync(c =>
+            c.ProjectId == projectId
+            && ((normalizedEmail != null && c.Email != null && c.Email.ToLower() == normalizedEmail)
+                || (normalizedPhone != null && c.Phone == normalizedPhone)), ct);
+        return row is null ? null : ToDomain(row);
+    }
+
     public async Task<IReadOnlyList<CrmClient>> ListForProjectAsync(
         Guid projectId,
         CancellationToken ct = default)

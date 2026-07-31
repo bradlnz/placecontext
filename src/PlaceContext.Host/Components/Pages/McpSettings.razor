@@ -1,0 +1,273 @@
+@page "/settings/mcp"
+@layout PlaceContext.Host.Components.Layout.SettingsLayout
+@attribute [Authorize(Policy = Permission.SettingsManage)]
+@attribute [Authorize(Policy = Permission.SecretsManage)]
+@using PlaceContext.Application.Mcp
+@using PlaceContext.Domain.Mcp
+@inject IPlaceContextService Svc
+@inject PortalUiState Ui
+@inject IJSRuntime JS
+@implements IDisposable
+
+<PageTitle>PlaceContext — MCP servers</PageTitle>
+
+<div class="mcp-settings-page">
+    <header class="settings-head">
+        <div>
+            <span class="settings-kicker">Project integrations</span>
+            <h2>MCP servers</h2>
+            <p>Connect external tool servers and make them available to jobs and agents in the selected project.</p>
+        </div>
+        <button class="dcbtn primary" disabled="@(_projectId is null)" @onclick="ShowAddMcp">+ Add server</button>
+    </header>
+
+    <div class="dcfield project-picker">
+        <label>Project</label>
+        <select class="dcinput" value="@_projectId" @onchange="ProjectChanged">
+            <option value="">Select a project…</option>
+            @foreach (var project in _projects)
+            {
+                <option value="@project.Id">@project.Name</option>
+            }
+        </select>
+    </div>
+
+    @if (_message is not null)
+    {
+        <div class="settings-message">@_message</div>
+    }
+
+    <section class="dccard server-card">
+        @if (_loading)
+        {
+            <Skeleton Kind="list" Rows="3" />
+        }
+        else if (_projectId is null)
+        {
+            <div class="empty-note">Choose a project to manage its MCP servers.</div>
+        }
+        else if (_connections.Count == 0)
+        {
+            <div class="empty-note">No MCP servers configured for this project.</div>
+        }
+        else
+        {
+            @foreach (var mcp in _connections)
+            {
+                var expired = mcp.OAuthTokenExpiresAt.HasValue && mcp.OAuthTokenExpiresAt <= DateTimeOffset.UtcNow;
+                var connected = mcp.LastStatus?.StartsWith("oauth:connected") == true;
+                <article class="server-row @(!mcp.Enabled ? "disabled" : "")">
+                    <div class="server-info">
+                        <strong>@mcp.Name</strong>
+                        <span>@mcp.Transport</span>
+                        @if (mcp.AuthType == McpAuthType.OAuth)
+                        {
+                            <span class="oauth-state @(expired ? "error" : connected ? "ready" : "")">
+                                @(expired ? "OAuth expired" : connected ? "OAuth connected" : "OAuth")
+                            </span>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(mcp.LastStatus))
+                        {
+                            <small>@mcp.LastStatus</small>
+                        }
+                    </div>
+                    <div class="server-actions">
+                        @if (mcp.AuthType == McpAuthType.OAuth)
+                        {
+                            <button class="dcbtn xs" @onclick="@(() => StartOAuthFlow(mcp.Id))">@(expired ? "Reconnect" : "Authorize")</button>
+                        }
+                        <button class="dcbtn xs" @onclick="@(() => TestAsync(mcp.Id))">Test</button>
+                        <button class="dcbtn xs danger" @onclick="@(() => DeleteAsync(mcp.Id))">Delete</button>
+                    </div>
+                </article>
+            }
+        }
+    </section>
+
+    @if (_showAdd && _projectId is not null)
+    {
+        <section class="dccard add-card">
+            <div class="form-title">New MCP server</div>
+            <div class="field-grid">
+                <div class="dcfield"><label>Name</label><input class="dcinput" @bind="_name" placeholder="Property tools" /></div>
+                <div class="dcfield">
+                    <label>Transport</label>
+                    <select class="dcinput" @bind="_transport">
+                        <option value="http">HTTP</option><option value="sse">SSE</option><option value="stdio">Stdio</option>
+                    </select>
+                </div>
+            </div>
+            @if (_transport == McpTransport.Stdio)
+            {
+                <div class="field-grid">
+                    <div class="dcfield"><label>Command</label><input class="dcinput" @bind="_command" placeholder="npx" /></div>
+                    <div class="dcfield"><label>Args (JSON array)</label><input class="dcinput" @bind="_args" placeholder='["-y", "server"]' /></div>
+                </div>
+            }
+            else
+            {
+                <div class="dcfield"><label>Endpoint URL</label><input class="dcinput" @bind="_endpoint" placeholder="https://mcp.example.com/mcp" /></div>
+            }
+            <div class="field-grid">
+                <div class="dcfield">
+                    <label>Authentication</label>
+                    <select class="dcinput" @bind="_authType">
+                        <option value="none">None</option><option value="bearer">Bearer token</option>
+                        <option value="apikey">API key</option><option value="header">Custom header</option>
+                        <option value="oauth">OAuth 2.1</option>
+                    </select>
+                </div>
+                @if (_authType is McpAuthType.Bearer or McpAuthType.ApiKey)
+                {
+                    <div class="dcfield"><label>Token</label><input class="dcinput" type="password" @bind="_authToken" /></div>
+                }
+                else if (_authType == McpAuthType.Header)
+                {
+                    <div class="dcfield"><label>Header name</label><input class="dcinput" @bind="_authHeader" placeholder="X-API-Key" /></div>
+                }
+            </div>
+            @if (_authType == McpAuthType.Header)
+            {
+                <div class="dcfield"><label>Header value</label><input class="dcinput" type="password" @bind="_authToken" /></div>
+            }
+            else if (_authType == McpAuthType.OAuth)
+            {
+                <div class="dcfield"><label>OAuth scopes</label><input class="dcinput" @bind="_oauthScopes" placeholder="openid profile" /></div>
+            }
+            <div class="form-actions">
+                <button class="dcbtn" @onclick="@(() => _showAdd = false)">Cancel</button>
+                <button class="dcbtn primary" disabled="@(string.IsNullOrWhiteSpace(_name))" @onclick="AddAsync">Add server</button>
+            </div>
+        </section>
+    }
+</div>
+
+@code {
+    private IReadOnlyList<ProjectSummaryView> _projects = Array.Empty<ProjectSummaryView>();
+    private IReadOnlyList<McpConnectionView> _connections = Array.Empty<McpConnectionView>();
+    private Guid? _projectId;
+    private bool _loading = true;
+    private bool _showAdd;
+    private string? _message;
+    private string _name = "";
+    private string _transport = McpTransport.Http;
+    private string _endpoint = "";
+    private string _command = "";
+    private string _args = "";
+    private string _authType = McpAuthType.None;
+    private string _authToken = "";
+    private string _authHeader = "";
+    private string _oauthScopes = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        Ui.Set("Settings", "MCP servers");
+        McpOAuthCompleted += OnOAuthCompleted;
+        _projects = await Svc.GetProjectsAsync();
+        _projectId = _projects.FirstOrDefault()?.Id;
+        await LoadConnectionsAsync();
+    }
+
+    private async void OnOAuthCompleted(object? sender, EventArgs args)
+    {
+        await LoadConnectionsAsync();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task ProjectChanged(ChangeEventArgs args)
+    {
+        _projectId = Guid.TryParse(args.Value?.ToString(), out var id) ? id : null;
+        _showAdd = false;
+        await LoadConnectionsAsync();
+    }
+
+    private async Task LoadConnectionsAsync()
+    {
+        _loading = true;
+        try
+        {
+            _connections = _projectId is { } id
+                ? await Svc.ListMcpConnectionsAsync(id)
+                : Array.Empty<McpConnectionView>();
+        }
+        catch (Exception ex) { _message = ex.Message; }
+        finally { _loading = false; }
+    }
+
+    private void ShowAddMcp()
+    {
+        _name = _endpoint = _command = _args = _authToken = _authHeader = _oauthScopes = "";
+        _transport = McpTransport.Http;
+        _authType = McpAuthType.None;
+        _showAdd = true;
+    }
+
+    private async Task AddAsync()
+    {
+        if (_projectId is null) return;
+        try
+        {
+            await Svc.CreateMcpConnectionAsync(new(
+                _projectId.Value, _name, _transport,
+                _transport == McpTransport.Stdio ? null : _endpoint,
+                _transport == McpTransport.Stdio ? _command : null,
+                _transport == McpTransport.Stdio ? _args : null,
+                _authType, _authToken, _authHeader, null, _oauthScopes));
+            _showAdd = false;
+            _message = "MCP server added.";
+            await LoadConnectionsAsync();
+        }
+        catch (Exception ex) { _message = ex.Message; }
+    }
+
+    private async Task TestAsync(Guid id)
+    {
+        try
+        {
+            var result = await Svc.TestMcpConnectionAsync(id);
+            _message = $"{result.Name}: {result.LastStatus ?? "unknown"}";
+            await LoadConnectionsAsync();
+        }
+        catch (Exception ex) { _message = ex.Message; }
+    }
+
+    private async Task DeleteAsync(Guid id)
+    {
+        try
+        {
+            await Svc.DeleteMcpConnectionAsync(id);
+            _message = "MCP server deleted.";
+            await LoadConnectionsAsync();
+        }
+        catch (Exception ex) { _message = ex.Message; }
+    }
+
+    private Task StartOAuthFlow(Guid id)
+        => JS.InvokeVoidAsync("open", $"/mcp-oauth/start?connectionId={id}", "_blank").AsTask();
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        await JS.InvokeVoidAsync("eval", """
+            if (!window.__settingsMcpOAuthListener) {
+                window.__settingsMcpOAuthListener = function(e) {
+                    if (e.data && e.data.startsWith && e.data.startsWith('mcp-oauth-')) {
+                        DotNet.invokeMethodAsync('PlaceContext.Host', 'OnSettingsMcpOAuthCallback', e.data);
+                    }
+                };
+                window.addEventListener('message', window.__settingsMcpOAuthListener);
+            }
+            """);
+    }
+
+    [JSInvokable]
+    public static Task OnSettingsMcpOAuthCallback(string message)
+    {
+        McpOAuthCompleted?.Invoke(null, EventArgs.Empty);
+        return Task.CompletedTask;
+    }
+
+    private static event EventHandler? McpOAuthCompleted;
+
+    public void Dispose() => McpOAuthCompleted -= OnOAuthCompleted;
+}

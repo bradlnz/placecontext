@@ -5,6 +5,9 @@ public sealed record OpenSearchIndexView(string Name, long DocumentCount, string
 public sealed record OpenSearchFieldView(
     string Name, string Type, bool Searchable, bool Aggregatable);
 
+public sealed record OpenSearchLastUpdatedView(
+    DateTimeOffset? Value, string? Field);
+
 public sealed record OpenSearchHitView(
     string Index,
     string Id,

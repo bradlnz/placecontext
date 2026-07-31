@@ -14,14 +14,16 @@ namespace PlaceContext.Infrastructure.Tests;
 /// </summary>
 public class AuthServiceTests
 {
-    private static (AuthService Service, AppDbContext Db) NewService(Guid? tenantId = null)
+    private static (AuthService Service, AppDbContext Db) NewService(
+        Guid? tenantId = null,
+        FakeCommunicationSender? communications = null)
     {
         var tenant = new FakeCurrentTenant(tenantId ?? Guid.NewGuid());
         var options = new DbContextOptionsBuilder<AppDbContext>()
             .UseInMemoryDatabase(Guid.NewGuid().ToString("N"))
             .Options;
         var db = new AppDbContext(options, tenant);
-        return (new AuthService(db, tenant, new FakeDataEncryptor()), db);
+        return (new AuthService(db, communications ?? new FakeCommunicationSender()), db);
     }
 
     // ── First-run detection ──────────────────────────────────────────────────────────────────────
@@ -172,5 +174,96 @@ public class AuthServiceTests
         var user = await auth.ValidateCredentialsAsync(operatorUser.Email, "any-guess-at-all-here");
 
         Assert.Null(user);
+    }
+
+    [Fact]
+    public async Task Email_two_factor_code_is_sent_by_Postmark_and_consumed_once()
+    {
+        var email = new FakeCommunicationSender();
+        var (auth, db) = NewService(communications: email);
+        var user = await auth.CreateFirstAdminAsync(
+            "owner@example.com", "Owner", "Zx7!qLmP4#vRw2");
+
+        var challenge = await auth.IssueTwoFactorCodeAsync(user!.Id);
+
+        Assert.Equal("ow•••@example.com", challenge.MaskedEmail);
+        var sent = Assert.Single(email.AuthenticationEmails);
+        Assert.Equal("owner@example.com", sent.Recipient);
+        var code = System.Text.RegularExpressions.Regex.Match(sent.Body, @"\b\d{6}\b").Value;
+        Assert.NotEmpty(code);
+        var row = await db.Users.SingleAsync(item => item.Id == user.Id);
+        Assert.NotEqual(code, row.TwoFactorCodeHash);
+
+        Assert.True(await auth.ConfirmTwoFactorSetupAsync(user.Id, code));
+        Assert.True(await auth.IsTwoFactorEnabledAsync(user.Id));
+        Assert.False(await auth.VerifyTwoFactorCodeAsync(user.Id, code));
+    }
+
+    [Fact]
+    public async Task Email_two_factor_invalidates_a_challenge_after_five_wrong_codes()
+    {
+        var email = new FakeCommunicationSender();
+        var (auth, _) = NewService(communications: email);
+        var user = await auth.CreateFirstAdminAsync(
+            "owner@example.com", "Owner", "Zx7!qLmP4#vRw2");
+        await auth.IssueTwoFactorCodeAsync(user!.Id);
+        var code = System.Text.RegularExpressions.Regex.Match(
+            email.AuthenticationEmails.Single().Body, @"\b\d{6}\b").Value;
+
+        for (var attempt = 0; attempt < 5; attempt++)
+            Assert.False(await auth.ConfirmTwoFactorSetupAsync(user.Id, Wrong(code)));
+
+        Assert.False(await auth.ConfirmTwoFactorSetupAsync(user.Id, code));
+        Assert.False(await auth.IsTwoFactorEnabledAsync(user.Id));
+    }
+
+    [Fact]
+    public async Task Email_two_factor_disable_requires_a_fresh_emailed_code()
+    {
+        var email = new FakeCommunicationSender();
+        var (auth, _) = NewService(communications: email);
+        var user = await auth.CreateFirstAdminAsync(
+            "owner@example.com", "Owner", "Zx7!qLmP4#vRw2");
+        await auth.IssueTwoFactorCodeAsync(user!.Id);
+        var setupCode = Code(email.AuthenticationEmails[^1].Body);
+        Assert.True(await auth.ConfirmTwoFactorSetupAsync(user.Id, setupCode));
+
+        await auth.IssueTwoFactorCodeAsync(user.Id);
+        var disableCode = Code(email.AuthenticationEmails[^1].Body);
+        Assert.False(await auth.DisableTwoFactorAsync(user.Id, Wrong(disableCode)));
+        Assert.True(await auth.DisableTwoFactorAsync(user.Id, disableCode));
+        Assert.False(await auth.IsTwoFactorEnabledAsync(user.Id));
+    }
+
+    private static string Code(string body)
+        => System.Text.RegularExpressions.Regex.Match(body, @"\b\d{6}\b").Value;
+    private static string Wrong(string code) => code == "000000" ? "111111" : "000000";
+
+    private sealed class FakeCommunicationSender : IClientCommunicationSender
+    {
+        public string EmailProvider => "Postmark";
+        public string SmsProvider => "Twilio";
+        public List<(string Recipient, string Body)> AuthenticationEmails { get; } = new();
+
+        public Task<ClientCommsCapabilities> GetCapabilitiesAsync(CancellationToken ct = default)
+            => Task.FromResult(new ClientCommsCapabilities(true, false, "Postmark", "Twilio"));
+
+        public Task<ClientMessageDelivery> SendEmailAsync(
+            string recipient, string recipientName, string subject, string body,
+            CancellationToken ct = default,
+            IReadOnlyList<ClientEmailAttachment>? attachments = null)
+            => Task.FromResult(new ClientMessageDelivery("Postmark", "email-id"));
+
+        public Task<ClientMessageDelivery> SendAuthenticationEmailAsync(
+            string recipient, string recipientName, string subject, string body,
+            CancellationToken ct = default)
+        {
+            AuthenticationEmails.Add((recipient, body));
+            return Task.FromResult(new ClientMessageDelivery("Postmark", "auth-id"));
+        }
+
+        public Task<ClientMessageDelivery> SendSmsAsync(
+            string recipient, string body, CancellationToken ct = default)
+            => throw new NotSupportedException();
     }
 }

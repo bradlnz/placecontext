@@ -71,16 +71,38 @@ public sealed class EfJobChainRepository : IJobChainRepository
     /// (backward compatible), or as an object when gates/else-branch are present.</summary>
     private static object SerializeStage(ChainStage s)
     {
-        if (s.Gate is null && s.ElseBranch is null)
+        if (s.Gate is null && s.ElseBranch is null && s.Action is null)
             return s.JobIds; // plain array — legacy compat
 
         return new
         {
             jobs = s.JobIds,
+            action = SerializeAction(s.Action),
             gate = SerializeGate(s.Gate),
             elseBranch = s.ElseBranch?.Select(SerializeStage).ToList()
         };
     }
+
+    private static object? SerializeAction(ChainAction? action) => action switch
+    {
+        null => null,
+        SendEmailChainAction email => new
+        {
+            type = SendEmailChainAction.ActionType,
+            recipient = email.Recipient,
+            recipientName = email.RecipientName,
+            subject = email.Subject,
+            body = email.Body,
+            attachmentPath = email.AttachmentPath,
+        },
+        SendSmsChainAction sms => new
+        {
+            type = SendSmsChainAction.ActionType,
+            recipient = sms.Recipient,
+            body = sms.Body,
+        },
+        _ => throw new InvalidOperationException($"Unsupported chain action '{action.Type}'."),
+    };
 
     private static object? SerializeGate(ChainGate? gate) => gate switch
     {
@@ -122,15 +144,20 @@ public sealed class EfJobChainRepository : IJobChainRepository
     {
         if (element.ValueKind == JsonValueKind.Object)
         {
-            var jobs = element.GetProperty("jobs")
-                .EnumerateArray().Select(e => e.GetGuid());
+            var jobs = element.TryGetProperty("jobs", out var jobsElement)
+                && jobsElement.ValueKind == JsonValueKind.Array
+                ? jobsElement.EnumerateArray().Select(e => e.GetGuid()).ToList()
+                : new List<Guid>();
+            var action = element.TryGetProperty("action", out var actionElement)
+                ? DeserializeActionElement(actionElement)
+                : null;
             var gateObj = element.TryGetProperty("gate", out var g) ? DeserializeGateElement(g) : null;
             IReadOnlyList<ChainStage>? elseBranch = null;
             if (element.TryGetProperty("elseBranch", out var eb) && eb.ValueKind == JsonValueKind.Array)
             {
                 elseBranch = eb.EnumerateArray().Select(DeserializeStageElement).ToList();
             }
-            return new ChainStage(jobs, gateObj, elseBranch);
+            return new ChainStage(jobs, gateObj, elseBranch, action);
         }
 
         if (element.ValueKind == JsonValueKind.Array)
@@ -138,6 +165,27 @@ public sealed class EfJobChainRepository : IJobChainRepository
 
         // Legacy: a single guid
         return ChainStage.Of(element.GetGuid());
+    }
+
+    private static ChainAction? DeserializeActionElement(JsonElement element)
+    {
+        if (element.ValueKind != JsonValueKind.Object
+            || !element.TryGetProperty("type", out var type)) return null;
+        return type.GetString() switch
+        {
+            SendEmailChainAction.ActionType => new SendEmailChainAction(
+                element.TryGetProperty("recipient", out var recipient) ? recipient.GetString() ?? "" : "",
+                element.TryGetProperty("recipientName", out var name) ? name.GetString() ?? "" : "",
+                element.TryGetProperty("subject", out var subject) ? subject.GetString() ?? "" : "",
+                element.TryGetProperty("body", out var body) ? body.GetString() ?? "" : "",
+                element.TryGetProperty("attachmentPath", out var attachmentPath)
+                    ? attachmentPath.GetString() ?? ""
+                    : ""),
+            SendSmsChainAction.ActionType => new SendSmsChainAction(
+                element.TryGetProperty("recipient", out var smsRecipient) ? smsRecipient.GetString() ?? "" : "",
+                element.TryGetProperty("body", out var smsBody) ? smsBody.GetString() ?? "" : ""),
+            _ => throw new InvalidOperationException($"Unsupported persisted chain action '{type.GetString()}'."),
+        };
     }
 
     private static ChainGate? DeserializeGateElement(JsonElement element)

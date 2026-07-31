@@ -562,6 +562,45 @@ namespace PlaceContext.Infrastructure.Migrations
                     b.ToTable("crm_clients", (string)null);
                 });
 
+            modelBuilder.Entity("PlaceContext.Infrastructure.Persistence.CrmIngestionSettingsRow", b =>
+                {
+                    b.Property<Guid>("ProjectId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AllowedOrigin")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("TokenHash")
+                        .HasColumnType("text");
+
+                    b.Property<string>("TokenPrefix")
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("now()");
+
+                    b.HasKey("ProjectId");
+
+                    b.HasIndex("AllowedOrigin");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique();
+
+                    b.ToTable("crm_ingestion_settings", (string)null);
+                });
+
             modelBuilder.Entity("PlaceContext.Infrastructure.Persistence.CrmCommunicationRow", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1274,6 +1313,12 @@ namespace PlaceContext.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("text")
                         .HasDefaultValue("NotRun");
+
+                    b.Property<string>("MethodResultsJson")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("[]");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -2137,6 +2182,20 @@ namespace PlaceContext.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
                         .HasDefaultValue(false);
+
+                    b.Property<int>("TwoFactorCodeFailedAttempts")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
+
+                    b.Property<DateTimeOffset?>("TwoFactorCodeExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("TwoFactorCodeHash")
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset?>("TwoFactorCodeLastSentAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.HasKey("Id");
 

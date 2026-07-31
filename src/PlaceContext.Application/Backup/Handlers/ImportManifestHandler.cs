@@ -217,12 +217,32 @@ public sealed class ImportManifestHandler : ICommandHandler<ImportManifestComman
                 continue;
             }
 
-            var steps = new List<Guid>(cm.StepJobIds.Count);
+            var stages = new List<ChainStage>();
             var dangling = false;
-            foreach (var oldJobId in cm.StepJobIds)
+            if (cm.Stages is { Count: > 0 })
             {
-                if (jobMap.TryGetValue(oldJobId, out var job)) steps.Add(job.Id);
-                else { dangling = true; break; }
+                foreach (var stageManifest in cm.Stages)
+                {
+                    var jobs = new List<Guid>(stageManifest.JobIds.Count);
+                    foreach (var oldJobId in stageManifest.JobIds)
+                    {
+                        if (jobMap.TryGetValue(oldJobId, out var job)) jobs.Add(job.Id);
+                        else { dangling = true; break; }
+                    }
+                    if (dangling) break;
+                    stages.Add(new ChainStage(
+                        jobs,
+                        ToGate(stageManifest.Gate),
+                        action: ToAction(stageManifest.Action)));
+                }
+            }
+            else
+            {
+                foreach (var oldJobId in cm.StepJobIds)
+                {
+                    if (jobMap.TryGetValue(oldJobId, out var job)) stages.Add(ChainStage.Of(job.Id));
+                    else { dangling = true; break; }
+                }
             }
             if (dangling)
             {
@@ -235,14 +255,14 @@ public sealed class ImportManifestHandler : ICommandHandler<ImportManifestComman
             var match = siblings.FirstOrDefault(c => string.Equals(c.Name, cm.Name.Trim(), StringComparison.OrdinalIgnoreCase));
             if (match is not null)
             {
-                match.Update(cm.Name, cm.Description, steps, now);
+                match.Update(cm.Name, cm.Description, stages, now);
                 await _chains.UpdateAsync(match, ct);
                 chainMap[cm.ChainId] = match.Id;
                 updated++;
             }
             else
             {
-                var chain = JobChain.Create(newProjectId, cm.Name, cm.Description, steps, now);
+                var chain = JobChain.Create(newProjectId, cm.Name, cm.Description, stages, now);
                 await _chains.AddAsync(chain, ct);
                 chainMap[cm.ChainId] = chain.Id;
                 created++;
@@ -251,6 +271,29 @@ public sealed class ImportManifestHandler : ICommandHandler<ImportManifestComman
 
         return (chainMap, created, updated, skipped);
     }
+
+    private static ChainGate? ToGate(ChainGateManifest? gate) => gate?.Type switch
+    {
+        "wait" => new WaitGate(TimeSpan.FromSeconds(gate.DurationSeconds ?? 0)),
+        "condition" => new ConditionGate(gate.Expression ?? ""),
+        _ => null,
+    };
+
+    private static ChainAction? ToAction(ChainActionManifest? action) => action?.Type switch
+    {
+        SendEmailChainAction.ActionType => new SendEmailChainAction(
+            action.Recipient ?? "",
+            action.RecipientName ?? "",
+            action.Subject ?? "",
+            action.Body ?? "",
+            action.AttachmentPath ?? ""),
+        SendSmsChainAction.ActionType => new SendSmsChainAction(
+            action.Recipient ?? "",
+            action.Body ?? ""),
+        null => null,
+        _ => throw new InvalidOperationException(
+            $"Unsupported chain action '{action.Type}' in backup manifest."),
+    };
 
     // ── Triggers: natural key = (JobId, Name) ───────────────────────────────────────────────────
 

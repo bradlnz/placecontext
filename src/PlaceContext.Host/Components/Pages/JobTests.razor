@@ -18,7 +18,7 @@
                     @onclick="RunAllAsync">
                 @(_running.Count > 0 ? "Running…" : "Run all")
             </button>
-            <button class="dcbtn primary" disabled="@(_jobs.Count == 0)" @onclick="NewTest">+ New test</button>
+            <button class="dcbtn primary" disabled="@(_jobs.Count == 0)" @onclick="NewTest">+ New block</button>
         </div>
     </header>
 
@@ -44,15 +44,15 @@
     {
         <div class="dccard empty-state">
             <div class="empty-icon">✓</div>
-            <strong>No tests yet</strong>
-            <span>Add an input and assertion to start verifying Job code.</span>
-            <button class="dcbtn primary" @onclick="NewTest">Create first test</button>
+            <strong>No test blocks yet</strong>
+            <span>Add a framework-backed block with multiple test methods to start verifying Job code.</span>
+            <button class="dcbtn primary" @onclick="NewTest">Create first block</button>
         </div>
     }
     else
     {
         <section class="summary-strip" aria-label="Test summary">
-            <div class="summary-count"><strong>@_tests.Count</strong><span>total</span></div>
+            <div class="summary-count"><strong>@TotalMethodCount</strong><span>methods</span></div>
             <div class="summary-count passed"><strong>@PassedCount</strong><span>passed</span></div>
             <div class="summary-count failed"><strong>@FailedCount</strong><span>failed</span></div>
             <div class="summary-count"><strong>@NotRunCount</strong><span>not run</span></div>
@@ -69,9 +69,9 @@
                         <div>
                             <span class="suite-caret">⌄</span>
                             <strong>@suite.Key</strong>
-                            <span>@suite.Count() test@(suite.Count() == 1 ? "" : "s")</span>
+                            <span>@suite.Count() block@(suite.Count() == 1 ? "" : "s") · @suite.Sum(MethodCount) methods</span>
                         </div>
-                        <span class="suite-result">@suite.Count(t => t.LastStatus == "Passed") / @suite.Count() passing</span>
+                        <span class="suite-result">@suite.SelectMany(MethodResults).Count(t => t.Status == "Passed") / @suite.Sum(MethodCount) passing</span>
                     </header>
 
                     <div class="test-rows">
@@ -105,6 +105,7 @@
                                             <span class="disabled-chip">disabled</span>
                                         }
                                         <span class="assertion-chip">@AssertionLabel(test.AssertionType)</span>
+                                        <span class="assertion-chip">@JobTestFramework.Label(test.RuntimeId) · @MethodCount(test) methods</span>
                                     </div>
                                     <div class="test-detail">
                                         @if (isRunning)
@@ -164,8 +165,8 @@
                aria-labelledby="test-editor-title">
             <header>
                 <div>
-                    <span class="eyebrow">JOB TEST</span>
-                    <h3 id="test-editor-title">@(_editId is null ? "New test" : "Edit test")</h3>
+                    <span class="eyebrow">JOB TEST BLOCK</span>
+                    <h3 id="test-editor-title">@(_editId is null ? "New block" : "Edit block")</h3>
                 </div>
                 <button class="close-button" aria-label="Close" @onclick="CloseEditor">×</button>
             </header>
@@ -182,8 +183,8 @@
                 </label>
 
                 <label class="field">
-                    <span>Test name</span>
-                    <input class="dcinput" @bind="_editName" placeholder="returns an active customer" />
+                    <span>Block name</span>
+                    <input class="dcinput" @bind="_editName" placeholder="customer output contract" />
                 </label>
 
                 <label class="field">
@@ -220,8 +221,8 @@
 
                 <div class="code-editor-callout">
                     <div>
-                        <strong>Test code</strong>
-                        <small>Add multi-file validation code in Python, Node, Go, Ruby, or C#.</small>
+                        <strong>Framework test methods</strong>
+                        <small>Add multiple methods using Python unittest, Node test, Go testing, or Ruby Minitest.</small>
                     </div>
                     @if (_editId is { } testId)
                     {
@@ -231,7 +232,7 @@
                     }
                     else
                     {
-                        <small>Save this test first, then open its code editor.</small>
+                        <small>Save this block first, then add its test methods in the code editor.</small>
                     }
                 </div>
             </div>
@@ -239,7 +240,7 @@
             <footer>
                 <button class="dcbtn" @onclick="CloseEditor">Cancel</button>
                 <button class="dcbtn primary" disabled="@_saving" @onclick="SaveAsync">
-                    @(_saving ? "Saving…" : "Save test")
+                    @(_saving ? "Saving…" : "Save block")
                 </button>
             </footer>
         </aside>
@@ -270,10 +271,13 @@
     private IEnumerable<IGrouping<string, JobTestCaseView>> Suites
         => _tests.GroupBy(test => test.JobName).OrderBy(group => group.Key);
     private List<JobTestCaseView> EnabledTests => _tests.Where(test => test.Enabled).ToList();
-    private int PassedCount => _tests.Count(test => test.LastStatus == "Passed");
-    private int FailedCount => _tests.Count(test => test.LastStatus == "Failed");
-    private int NotRunCount => _tests.Count - PassedCount - FailedCount;
-    private int PassPercent => _tests.Count == 0 ? 0 : (int)Math.Round(PassedCount * 100d / _tests.Count);
+    private int TotalMethodCount => _tests.Sum(MethodCount);
+    private int PassedCount => _tests.SelectMany(MethodResults).Count(result => result.Status == "Passed");
+    private int FailedCount => _tests.SelectMany(MethodResults).Count(result => result.Status == "Failed");
+    private int NotRunCount => Math.Max(0, TotalMethodCount - PassedCount - FailedCount);
+    private int PassPercent => TotalMethodCount == 0
+        ? 0
+        : (int)Math.Round(PassedCount * 100d / TotalMethodCount);
     private string ExpectedPlaceholder => _editAssertion == JobTestAssertionType.JsonSubset
         ? "{\"status\":\"ok\"}"
         : "Expected output";
@@ -338,7 +342,7 @@
     {
         if (_editJobId == Guid.Empty || string.IsNullOrWhiteSpace(_editName))
         {
-            ShowMessage("Choose a Job and enter a test name.", true);
+            ShowMessage("Choose a Job and enter a block name.", true);
             return;
         }
         if (_editAssertion != JobTestAssertionType.Succeeds && string.IsNullOrWhiteSpace(_editExpected))
@@ -355,7 +359,7 @@
                 _editExpected, _editEnabled, _editId));
             Replace(saved);
             _editing = false;
-            ShowMessage($"Saved “{saved.Name}”.");
+            ShowMessage($"Saved block “{saved.Name}”.");
         }
         catch (Exception ex)
         {
@@ -395,8 +399,8 @@
 
         var failed = FailedCount;
         ShowMessage(failed == 0
-            ? $"All {EnabledTests.Count} enabled tests passed."
-            : $"{failed} test{(failed == 1 ? "" : "s")} failed.", failed > 0);
+            ? $"All {EnabledTests.Sum(MethodCount)} enabled test methods passed."
+            : $"{failed} test method{(failed == 1 ? "" : "s")} failed.", failed > 0);
     }
 
     private async Task DeleteAsync(Guid id)
@@ -406,7 +410,7 @@
             if (await Svc.DeleteJobTestCaseAsync(id))
             {
                 _tests.RemoveAll(test => test.Id == id);
-                ShowMessage("Test deleted.");
+                ShowMessage("Test block deleted.");
             }
         }
         catch (Exception ex)
@@ -436,6 +440,11 @@
         => running ? "running" : test.LastStatus.ToLowerInvariant();
     private static string StatusLabel(JobTestCaseView test, bool running)
         => running ? "Running" : test.LastStatus == "NotRun" ? "Not run" : test.LastStatus;
+    private static IReadOnlyList<JobTestMethodResult> MethodResults(JobTestCaseView test)
+        => test.MethodResults is { Count: > 0 } results
+            ? results
+            : JobTestFramework.Discover(test.RuntimeId, test.CodeFiles);
+    private static int MethodCount(JobTestCaseView test) => MethodResults(test).Count;
     private static string AssertionLabel(JobTestAssertionType assertion) => assertion switch
     {
         JobTestAssertionType.Succeeds => "Run succeeds",

@@ -122,3 +122,70 @@
     .dcslide-foot .dcbtn { flex:1; min-height:40px; }
     .field-row { flex-wrap:wrap; }
 }
+.node-picker-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.node-picker-tile {
+    display: flex;
+    min-height: 112px;
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 5px;
+    padding: 14px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--card);
+    color: var(--text-2);
+    cursor: pointer;
+    text-align: left;
+}
+
+.node-picker-tile:hover { border-color: var(--brand); background: var(--card-2); }
+.node-picker-tile:disabled { cursor: not-allowed; opacity: .45; }
+.node-picker-icon {
+    display: inline-flex;
+    width: 28px;
+    height: 28px;
+    align-items: center;
+    justify-content: center;
+    color: var(--brand-2);
+}
+.node-picker-icon svg {
+    width: 24px;
+    height: 24px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+.node-picker-tile strong { color: var(--text); font-size: 12px; }
+.node-picker-tile small { color: var(--text-3); font-size: 9.5px; }
+
+.email-action-modal { width:min(720px, calc(100vw - 32px)); max-height:88vh; display:flex; flex-direction:column; }
+.email-action-modal .dcmodal-body { overflow-y:auto; }
+.email-json-panel { margin-bottom:14px; border:1px solid var(--border); border-radius:9px; background:var(--card-2); overflow:hidden; }
+.email-json-head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; padding:10px 12px; border-bottom:1px solid var(--border); }
+.email-json-head strong { display:block; color:var(--text); font-size:11px; }
+.email-json-head small { display:block; margin-top:2px; color:var(--text-3); font-size:9.5px; }
+.email-json-loading { color:var(--brand-2); font-size:10px; }
+.email-json-paths { max-height:210px; overflow-y:auto; }
+.email-json-row { display:flex; align-items:center; gap:8px; padding:7px 9px; border-top:1px solid color-mix(in srgb, var(--border) 65%, transparent); }
+.email-json-row:first-child { border-top:0; }
+.email-json-key { display:flex; min-width:0; flex:1; flex-direction:column; gap:1px; border:0; background:transparent; text-align:left; cursor:pointer; }
+.email-json-key code { overflow:hidden; color:var(--brand-2); font-size:10px; text-overflow:ellipsis; white-space:nowrap; }
+.email-json-key span { overflow:hidden; color:var(--text-3); font-size:9px; text-overflow:ellipsis; white-space:nowrap; }
+.email-json-actions { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:4px; }
+.email-json-actions button { display:inline-flex; align-items:center; gap:3px; padding:3px 6px; border:1px solid var(--border); border-radius:5px; background:var(--card); color:var(--text-2); font-size:9px; cursor:pointer; }
+.email-json-actions button:hover { border-color:var(--brand); color:var(--brand-2); }
+.email-json-actions .attachment-action { color:var(--brand-2); }
+.attachment-action svg { width:11px; height:11px; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
+.email-json-empty { padding:10px 12px; color:var(--text-3); font-size:9.5px; }
+
+@media (max-width: 620px) {
+    .email-json-row { align-items:flex-start; flex-direction:column; }
+    .email-json-actions { justify-content:flex-start; }
+}

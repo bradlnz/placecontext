@@ -65,6 +65,46 @@ public sealed class OpenSearchDataGateway : IOpenSearchDataGateway
         return result.OrderBy(field => field.Name).ToList();
     }
 
+    public async Task<OpenSearchLastUpdatedView> GetLastUpdatedAsync(
+        Guid projectId,
+        string indexPattern,
+        IReadOnlyList<string> candidateFields,
+        CancellationToken ct = default)
+    {
+        var field = candidateFields
+            .Where(item => !string.IsNullOrWhiteSpace(item))
+            .Select(SafeField)
+            .FirstOrDefault();
+        if (field is null) return new OpenSearchLastUpdatedView(null, null);
+
+        var connection = await RequiredConnectionAsync(projectId, ct);
+        var body = new JsonObject
+        {
+            ["size"] = 0,
+            ["aggs"] = new JsonObject
+            {
+                ["last_updated"] = new JsonObject
+                {
+                    ["max"] = new JsonObject
+                    {
+                        ["field"] = field,
+                        ["format"] = "strict_date_time",
+                    },
+                },
+            },
+        };
+        using var response = await SendAsync(connection, HttpMethod.Post,
+            $"/{SafeIndex(indexPattern)}/_search", body.ToJsonString(), ct);
+        using var document = await ReadSuccessAsync(response, ct);
+        var aggregation = document.RootElement.GetProperty("aggregations")
+            .GetProperty("last_updated");
+        if (aggregation.TryGetProperty("value_as_string", out var value)
+            && DateTimeOffset.TryParse(value.GetString(), CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeUniversal, out var parsed))
+            return new OpenSearchLastUpdatedView(parsed, field);
+        return new OpenSearchLastUpdatedView(null, field);
+    }
+
     public async Task<OpenSearchSearchView> SearchAsync(
         OpenSearchSearchRequest request, CancellationToken ct = default)
     {
@@ -101,7 +141,6 @@ public sealed class OpenSearchDataGateway : IOpenSearchDataGateway
                     ["simple_query_string"] = new JsonObject
                     {
                         ["query"] = request.QueryText.Trim(),
-                        ["fields"] = new JsonArray("*"),
                         ["default_operator"] = "and",
                     },
                 },

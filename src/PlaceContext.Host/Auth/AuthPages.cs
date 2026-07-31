@@ -29,14 +29,19 @@ public static class AuthPages
     public static string JoinInvalid() => Cache.GetOrAdd("joininvalid", static name =>
         File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Auth", "templates", name + ".html")));
 
-    public static string TotpVerify(AntiforgeryTokenSet tokens, string state, string? error)
+    public static string EmailVerify(
+        AntiforgeryTokenSet tokens,
+        string state,
+        string maskedEmail,
+        string? error)
     {
-        var html = Cache.GetOrAdd("totp-verify", static name =>
+        var html = Cache.GetOrAdd("email-verify", static name =>
             File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Auth", "templates", name + ".html")));
         return html
             .Replace("{{afName}}", tokens.FormFieldName)
             .Replace("{{afValue}}", tokens.RequestToken)
             .Replace("{{state}}", WebUtility.HtmlEncode(state))
+            .Replace("{{email}}", WebUtility.HtmlEncode(maskedEmail))
             .Replace("{{errorClass}}", string.IsNullOrEmpty(error) ? "hidden" : "")
             .Replace("{{error}}", WebUtility.HtmlEncode(error ?? string.Empty));
     }
