@@ -470,7 +470,7 @@
         if (term.Length < 2) { _results = null; return; }
 
         _searching = true;
-        try { _results = await Svc.SearchAsync(term); }
+        try { _results = await Svc.SearchAsync(term, Ui.CurrentProjectId); }
         catch { _results = null; }
         finally { _searching = false; }
     }

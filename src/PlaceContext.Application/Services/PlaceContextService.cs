@@ -91,6 +91,9 @@ public sealed class PlaceContextService : IPlaceContextService
     public Task<SearchResultsView> SearchAsync(string term, CancellationToken ct = default)
         => _dispatcher.Query(new SearchQuery(term), ct);
 
+    public Task<SearchResultsView> SearchAsync(string term, Guid? projectId, CancellationToken ct = default)
+        => _dispatcher.Query(new SearchQuery(term, ProjectId: projectId), ct);
+
     public Task<FocusView> GetFocusAsync(CancellationToken ct = default)
         => _dispatcher.Query(new GetFocusQuery(), ct);
 

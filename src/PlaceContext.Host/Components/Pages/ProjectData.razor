@@ -1,5 +1,5 @@
 @page "/project/{ProjectId:guid}/data"
-@attribute [Authorize]
+@attribute [Authorize(Policy = Permission.DataRead)]
 @layout PlaceContext.Host.Components.Layout.ProjectLayout
 @using PlaceContext.Application.Features
 @using PlaceContext.Application.Ports
@@ -175,10 +175,12 @@
                             @foreach (var row in Vm.Result.Rows)
                             {
                                 <tr>
-                                    @foreach (var cell in row)
+                                    @for (var cellIndex = 0; cellIndex < Vm.Result.Columns.Count; cellIndex++)
                                     {
+                                        var cell = cellIndex < row.Count ? row[cellIndex] : null;
                                         <td class="result-td" style="color:@(cell is null ? "var(--text-3)" : "var(--text-2)")">
-                                            @(cell ?? "∅")
+                                            <OpenSearchDataValue ProjectId="ProjectId" Column="@Vm.Result.Columns[cellIndex]"
+                                                                 Value="@cell" NullText="∅" />
                                         </td>
                                     }
                                 </tr>
@@ -252,10 +254,12 @@
                             @foreach (var row in Vm.ModalResult.Rows)
                             {
                                 <tr>
-                                    @foreach (var cell in row)
+                                    @for (var cellIndex = 0; cellIndex < Vm.ModalResult.Columns.Count; cellIndex++)
                                     {
+                                        var cell = cellIndex < row.Count ? row[cellIndex] : null;
                                         <td class="result-td" style="color:@(cell is null ? "var(--text-3)" : "var(--text-2)")">
-                                            @(cell ?? "∅")
+                                            <OpenSearchDataValue ProjectId="ProjectId" Column="@Vm.ModalResult.Columns[cellIndex]"
+                                                                 Value="@cell" NullText="∅" />
                                         </td>
                                     }
                                 </tr>

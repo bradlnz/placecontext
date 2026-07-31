@@ -262,7 +262,7 @@
                         <tbody>
                             @foreach (var hit in _result.Hits)
                             {
-                                <tr>
+                                <tr class="@(hit.Id == RequestedDocument ? "linked-document" : null)">
                                     <td><code>@hit.Index</code></td>
                                     <td><code>@hit.Id</code></td>
                                     @foreach (var column in VisibleColumns)
@@ -286,6 +286,9 @@
 
 @code {
     [Parameter] public Guid ProjectId { get; set; }
+    [SupplyParameterFromQuery(Name = "index")] public string? RequestedIndex { get; set; }
+    [SupplyParameterFromQuery(Name = "q")] public string? RequestedQuery { get; set; }
+    [SupplyParameterFromQuery(Name = "document")] public string? RequestedDocument { get; set; }
     private const string PreviewCanvasId = "opensearch-chart-preview";
 
     private IReadOnlyList<OpenSearchIndexView> _indices = Array.Empty<OpenSearchIndexView>();
@@ -337,9 +340,17 @@
             _indices = await indicesTask;
             _dashboards = (await dashboardsTask).ToList();
             if (_indices.Count > 0)
-                _indexPattern = DefaultIndex(_indices).Name;
+                _indexPattern = !string.IsNullOrWhiteSpace(RequestedIndex)
+                    && _indices.Any(item => item.Name.Equals(RequestedIndex, StringComparison.Ordinal))
+                        ? RequestedIndex
+                        : DefaultIndex(_indices).Name;
+            if (!string.IsNullOrWhiteSpace(RequestedQuery))
+                _queryText = RequestedQuery;
             await LoadFieldsAsync();
-            await GenerateChartsAsync();
+            if (!string.IsNullOrWhiteSpace(RequestedQuery))
+                await SearchAsync();
+            else
+                await GenerateChartsAsync();
             _error = null;
         }
         catch (Exception ex)

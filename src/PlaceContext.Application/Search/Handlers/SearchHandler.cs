@@ -13,6 +13,8 @@ public sealed class SearchHandler : IQueryHandler<SearchQuery, SearchResultsView
     private readonly IRunArtifactLinkRepository? _artifacts;
     private readonly IEntityTagStore? _tagIndex;
     private readonly IContentIndexer? _contentIndex;
+    private readonly IOpenSearchDataGateway? _openSearch;
+    private readonly IPermissionService? _permissions;
 
     public SearchHandler(
         IProjectRepository projects, IActivityLogRepository ledgers,
@@ -20,7 +22,9 @@ public sealed class SearchHandler : IQueryHandler<SearchQuery, SearchResultsView
         // Optional so existing tests construct the handler unchanged; DI always supplies it.
         IRunArtifactLinkRepository? artifacts = null,
         IEntityTagStore? tagIndex = null,
-        IContentIndexer? contentIndex = null)
+        IContentIndexer? contentIndex = null,
+        IOpenSearchDataGateway? openSearch = null,
+        IPermissionService? permissions = null)
     {
         _projects = projects;
         _ledgers = ledgers;
@@ -28,6 +32,8 @@ public sealed class SearchHandler : IQueryHandler<SearchQuery, SearchResultsView
         _artifacts = artifacts;
         _tagIndex = tagIndex;
         _contentIndex = contentIndex;
+        _openSearch = openSearch;
+        _permissions = permissions;
     }
 
     public async Task<SearchResultsView> HandleAsync(SearchQuery query, CancellationToken ct = default)
@@ -39,6 +45,38 @@ public sealed class SearchHandler : IQueryHandler<SearchQuery, SearchResultsView
         bool Match(string? s) => s is not null && s.Contains(term, StringComparison.OrdinalIgnoreCase);
 
         var hits = new List<SearchHit>();
+
+        // One bounded OpenSearch request for the active project. Keep it best-effort so a missing
+        // connection cannot break workspace search, and permission-check it independently so users
+        // without data.read still receive the ordinary project/change results.
+        if (query.ProjectId is { } openSearchProjectId
+            && _openSearch is not null
+            && (_permissions is null || await _permissions.HasAsync(Permission.DataRead, ct)))
+        {
+            try
+            {
+                var result = await _openSearch.SearchAsync(new OpenSearchSearchRequest(
+                    openSearchProjectId, "*", term, PageSize: 8), ct);
+                foreach (var hit in result.Hits)
+                {
+                    var title = FirstField(hit, "full_address", "site_address", "property_address",
+                        "address", "official_name", "display_name", "name", "title")
+                        ?? $"{hit.Index} document";
+                    var detail = FirstOtherField(hit, title, "suburb", "locality", "council",
+                        "authority", "description", "status", "type");
+                    var subtitle = detail is null ? hit.Index : $"{hit.Index} · {detail}";
+                    var url = $"/project/{openSearchProjectId}/data-search"
+                        + $"?index={Uri.EscapeDataString(hit.Index)}"
+                        + $"&q={Uri.EscapeDataString(term)}"
+                        + $"&document={Uri.EscapeDataString(hit.Id)}";
+                    hits.Add(new SearchHit("opensearch", openSearchProjectId, title, subtitle, url));
+                }
+            }
+            catch
+            {
+                // Search remains useful when OpenSearch is unavailable or not configured.
+            }
+        }
 
         // The tag index: every tagged piece of data is searchable, answered as graph nodes —
         // hits land on the record inside its entity's business view.
@@ -86,6 +124,27 @@ public sealed class SearchHandler : IQueryHandler<SearchQuery, SearchResultsView
 
         return new SearchResultsView(term, hits.Take(query.Limit).ToList());
     }
+
+    private static string? FirstField(OpenSearchHitView hit, params string[] names)
+    {
+        foreach (var name in names)
+        {
+            var value = hit.Fields.FirstOrDefault(field =>
+                field.Key.Equals(name, StringComparison.OrdinalIgnoreCase)
+                || field.Key.EndsWith('.' + name, StringComparison.OrdinalIgnoreCase)).Value;
+            if (!string.IsNullOrWhiteSpace(value)) return Short(value);
+        }
+        return null;
+    }
+
+    private static string? FirstOtherField(OpenSearchHitView hit, string title, params string[] names)
+    {
+        var value = FirstField(hit, names);
+        return string.Equals(value, title, StringComparison.OrdinalIgnoreCase) ? null : value;
+    }
+
+    private static string Short(string value)
+        => value.Length <= 120 ? value : value[..117] + "…";
 
     private static string ContentUrl(Guid projectId, string kind)
         => kind switch

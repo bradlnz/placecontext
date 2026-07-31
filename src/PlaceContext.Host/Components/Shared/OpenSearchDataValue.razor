@@ -1,0 +1,43 @@
+@using PlaceContext.Application.Features
+
+@if (IsAddress)
+{
+    <a class="dclink" href="@SearchUrl" title="Search this address in OpenSearch"
+       @onclick:stopPropagation="true">@(Value ?? "") <span aria-hidden="true">↗</span></a>
+}
+else
+{
+    <text>@(Value ?? NullText)</text>
+}
+
+@code {
+    [Parameter, EditorRequired] public Guid ProjectId { get; set; }
+    [Parameter, EditorRequired] public string Column { get; set; } = "";
+    [Parameter] public string? Value { get; set; }
+    [Parameter] public string NullText { get; set; } = "";
+
+    // A lone suburb/state/postcode is useful in broad search, but it is not an address link. Keep
+    // direct links conservative: explicit address/street columns or a street-number shaped value.
+    private bool IsAddress
+    {
+        get
+        {
+            if (string.IsNullOrWhiteSpace(Value)
+                || LinkValues.Classify(Column, Value) != LinkValues.AddressKind)
+                return false;
+            var column = Column.ToLowerInvariant();
+            return column.Contains("address", StringComparison.Ordinal)
+                || column.Contains("street", StringComparison.Ordinal)
+                || System.Text.RegularExpressions.Regex.IsMatch(Value, @"^\s*\d+[A-Za-z]?(?:[-/]\d+[A-Za-z]?)?\s+\S+");
+        }
+    }
+
+    private string SearchUrl
+    {
+        get
+        {
+            var phrase = "\"" + (Value ?? "").Replace("\"", "\\\"", StringComparison.Ordinal) + "\"";
+            return $"/project/{ProjectId}/data-search?index=*&q={Uri.EscapeDataString(phrase)}";
+        }
+    }
+}
