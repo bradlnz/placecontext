@@ -2,8 +2,9 @@
 @layout PlaceContext.Host.Components.Layout.SettingsLayout
 @attribute [Authorize(Policy = Permission.SettingsManage)]
 @attribute [Authorize(Policy = Permission.SecretsManage)]
+@using PlaceContext.Infrastructure.Comms
 @inject IPlaceContextService Svc
-@inject HttpClient Http
+@inject PostmarkConnectionService Postmark
 @inject PortalUiState Ui
 
 <PageTitle>PlaceContext — Communications</PageTitle>
@@ -172,7 +173,7 @@
 </div>
 
 @code {
-    private PostmarkStatus? _status;
+    private PostmarkConnectionStatus? _status;
     private IReadOnlyList<ProjectSummaryView> _projects = Array.Empty<ProjectSummaryView>();
     private IReadOnlyList<ProjectSecretView> _secrets = Array.Empty<ProjectSecretView>();
     private bool _loading = true;
@@ -199,11 +200,8 @@
         _loadError = null;
         try
         {
-            var statusTask = Http.GetFromJsonAsync<PostmarkStatus>("/api/settings/postmark");
-            var projectsTask = Svc.GetProjectsAsync();
-            await Task.WhenAll(statusTask, projectsTask);
-            _status = await statusTask;
-            _projects = await projectsTask;
+            _status = await Postmark.GetStatusAsync();
+            _projects = await Svc.GetProjectsAsync();
             ApplyStatus();
             await LoadSecretsAsync();
         }
@@ -242,20 +240,13 @@
         _message = null;
         try
         {
-            using var response = await Http.PostAsJsonAsync("/api/settings/postmark", new
-            {
-                VaultProjectId = _vaultProjectId.Value,
-                ServerTokenSecretName = _secretName,
-                FromEmail = _fromEmail,
-                FromName = _fromName,
-                MessageStream = _messageStream,
-            });
-            if (!response.IsSuccessStatusCode)
-            {
-                var error = await response.Content.ReadFromJsonAsync<ErrorResponse>();
-                throw new InvalidOperationException(error?.Error ?? "Could not save Postmark settings.");
-            }
-            _status = await response.Content.ReadFromJsonAsync<PostmarkStatus>();
+            await Postmark.SaveSettingsAsync(
+                _vaultProjectId.Value,
+                _secretName,
+                _fromEmail,
+                _fromName,
+                _messageStream);
+            _status = await Postmark.GetStatusAsync();
             ApplyStatus();
             _message = "Postmark is ready for transactional CRM email.";
             _messageIsError = false;
@@ -274,8 +265,7 @@
         _message = null;
         try
         {
-            using var response = await Http.DeleteAsync("/api/settings/postmark");
-            response.EnsureSuccessStatusCode();
+            await Postmark.DisconnectAsync();
             _confirmDisconnect = false;
             _message = "Postmark settings removed.";
             _messageIsError = false;
@@ -289,17 +279,4 @@
         finally { _saving = false; }
     }
 
-    private sealed class PostmarkStatus
-    {
-        public bool Configured { get; set; }
-        public bool Ready { get; set; }
-        public Guid? VaultProjectId { get; set; }
-        public string ServerTokenSecretName { get; set; } = "";
-        public string FromEmail { get; set; } = "";
-        public string FromName { get; set; } = "PlaceContext";
-        public string MessageStream { get; set; } = "outbound";
-        public DateTimeOffset? ConfiguredAt { get; set; }
-    }
-
-    private sealed class ErrorResponse { public string? Error { get; set; } }
 }
