@@ -29,6 +29,7 @@ public static class Permission
     public const string EventsManage = "events.manage";
     public const string AgentsChat = "agents.chat";
     public const string AgentsManage = "agents.manage";
+    public const string CrmCommsSend = "crm.comms.send";
 
     /// <summary>The whole catalog, in declaration order — drives the admin UI's matrix and policy registration.</summary>
     public static readonly IReadOnlyList<string> All = new[]
@@ -36,6 +37,6 @@ public static class Permission
         ProjectsView, ProjectsManage, JobsView, JobsEdit, JobsRun, JobsReplay, JobsManage,
         ChainsManage, TriggersManage, DataRead, DataWrite, ArtifactsView, ArtifactsDelete,
         SecretsManage, BackupManage, MembersManage, SettingsManage, EventsManage,
-        AgentsChat, AgentsManage,
+        AgentsChat, AgentsManage, CrmCommsSend,
     };
 }

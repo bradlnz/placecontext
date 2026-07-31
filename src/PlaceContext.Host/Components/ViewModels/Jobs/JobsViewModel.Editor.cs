@@ -188,8 +188,8 @@ public sealed partial class JobsViewModel
     }
 
     private void ComposePayloadFromForm()
-        => EdInputPayloadsRaw = System.Text.Json.JsonSerializer.Serialize(
-            DeclaredParams().ToDictionary(p => p.Name, p => (object)PayloadFormValue(p.Name)));
+        => EdInputPayloadsRaw = ParameterPromptState.ToJsonPayload(
+            DeclaredParams(), PayloadFormValue);
 
     public void TogglePostJobAction(PlaceContext.Domain.ValueObjects.PostJobActionKind kind, bool on)
     {

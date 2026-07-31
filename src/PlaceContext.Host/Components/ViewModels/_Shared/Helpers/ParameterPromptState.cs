@@ -60,7 +60,39 @@ public sealed class ParameterPromptState
 
     /// <summary>Serialize bare parameter names → JSON object for job stdin / step override.</summary>
     public static string ToJsonPayload(IEnumerable<JobParameterDto> parameters, Func<string, string> valueForName)
-        => JsonSerializer.Serialize(parameters.ToDictionary(p => p.Name, p => valueForName(p.Name)));
+    {
+        var payload = new Dictionary<string, object?>(StringComparer.Ordinal);
+        foreach (var parameter in parameters)
+        {
+            var value = valueForName(parameter.Name);
+            payload[parameter.Name] = parameter.Type == "file" && TryParseFileReference(value, out var reference)
+                ? reference
+                : value;
+        }
+        return JsonSerializer.Serialize(payload);
+    }
+
+    private static bool TryParseFileReference(string value, out JsonElement reference)
+    {
+        reference = default;
+        if (string.IsNullOrWhiteSpace(value)) return false;
+
+        try
+        {
+            using var document = JsonDocument.Parse(value);
+            if (document.RootElement.ValueKind != JsonValueKind.Object
+                || !document.RootElement.TryGetProperty("$file", out var file)
+                || file.ValueKind != JsonValueKind.Object)
+                return false;
+
+            reference = document.RootElement.Clone();
+            return true;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
 
     public string ToJobPayload(IEnumerable<JobParameterDto> parameters)
         => ToJsonPayload(parameters, Get);

@@ -27,4 +27,17 @@ public sealed class JsonPayloadHelperTests
         var result = JsonPayloadHelper.FlattenScalars(new[] { "not-json", """{"a":"1"}""" });
         Assert.Equal(new Dictionary<string, string> { ["a"] = "1" }, result);
     }
+
+    [Fact]
+    public void FlattenScalars_retains_file_marker_as_json()
+    {
+        var result = JsonPayloadHelper.FlattenScalars(new[]
+        {
+            """{"source_file":{"$file":{"bucket":"reports","key":"job-inputs/p/plan.pdf"}}}""",
+        });
+
+        Assert.Equal(
+            """{"$file":{"bucket":"reports","key":"job-inputs/p/plan.pdf"}}""",
+            result["source_file"]);
+    }
 }

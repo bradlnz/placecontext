@@ -12,7 +12,7 @@ public sealed class ParamEdit
 
     public JobParameterDto ToDto() => new(Name.Trim(),
         string.IsNullOrWhiteSpace(Label) ? null : Label.Trim(), Required, Type,
-        Type == "select"
+        Type is "select" or "file"
             ? OptionsRaw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             : null);
 

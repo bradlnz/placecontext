@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text;
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Dtos;
@@ -43,6 +44,7 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
     private readonly EntityTagService? _entityTags;
     private readonly IMcpConnectionRepository? _mcpRepo;
     private readonly IDataEncryptor? _encryptor;
+    private readonly IObjectStore? _objectStore;
     private IReadOnlyDictionary<string, string> _runSecrets = new Dictionary<string, string>();
     private IReadOnlyDictionary<string, string> _mcpEnv = new Dictionary<string, string>();
 
@@ -64,7 +66,8 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
         DataMappingIngestionService? dataMappings = null,
         EntityTagService? entityTags = null,
         IMcpConnectionRepository? mcpRepo = null,
-        IDataEncryptor? encryptor = null)
+        IDataEncryptor? encryptor = null,
+        IObjectStore? objectStore = null)
     {
         _secretRepo = secretRepo;
         _secretProtector = secretProtector;
@@ -74,6 +77,7 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
         _entityTags = entityTags;
         _mcpRepo = mcpRepo;
         _encryptor = encryptor;
+        _objectStore = objectStore;
         _jobs = jobs;
         _runs = runs;
         _runner = runner;
@@ -253,7 +257,8 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
             var correlationId = $"{runId:N}-map-{index}";
             // Source/env/egress come from the effective plan (job spec or a replayed snapshot); the
             // exit-code policy and timeout are job metadata not captured in the snapshot.
-            var request = BuildRequest(map.Source, payload, MergeMcpEnv(MergeSecrets(map.Env)),
+            var resolvedPayload = await ResolveFileInputsAsync(payload, job.ProjectId, job.TimeoutSeconds, ct);
+            var request = BuildRequest(map.Source, resolvedPayload, MergeMcpEnv(MergeSecrets(map.Env)),
                 Array.Empty<(string, string)>(), correlationId, allowEgress, job.TimeoutSeconds);
 
             var result = await _runner.RunAsync(request, ct);
@@ -275,6 +280,81 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
         {
             semaphore.Release();
         }
+    }
+
+    /// <summary>
+    /// Turns durable private-object markers into short-lived download links immediately before a
+    /// shard starts. The run snapshot keeps only bucket/key metadata, so retries and replays get a
+    /// fresh URL and no signed credential is persisted.
+    /// </summary>
+    private async Task<string> ResolveFileInputsAsync(
+        string payload, Guid projectId, int timeoutSeconds, CancellationToken ct)
+    {
+        JsonNode? root;
+        try { root = JsonNode.Parse(payload); }
+        catch (JsonException) { return payload; }
+        if (root is null) return payload;
+
+        var changed = await ResolveFileInputsNodeAsync(root, projectId, timeoutSeconds, ct);
+        return changed ? root.ToJsonString() : payload;
+    }
+
+    private async Task<bool> ResolveFileInputsNodeAsync(
+        JsonNode node, Guid projectId, int timeoutSeconds, CancellationToken ct)
+    {
+        if (node is JsonObject obj
+            && obj.TryGetPropertyValue("$file", out var marker)
+            && marker is JsonObject file)
+        {
+            file.Remove("download_url");
+            file.Remove("download_error");
+            file.Remove("resolved_by_devcontext");
+
+            try
+            {
+                if (_objectStore is null || !_objectStore.IsEnabled)
+                    return SetFileError(file, "File storage is not configured.");
+
+                var bucket = file["bucket"]?.GetValue<string>();
+                var key = file["key"]?.GetValue<string>();
+                var allowedPrefix = $"job-inputs/{projectId:N}/";
+                if (!string.Equals(bucket, _objectStore.ReportsBucket, StringComparison.Ordinal)
+                    || string.IsNullOrWhiteSpace(key)
+                    || !key.StartsWith(allowedPrefix, StringComparison.Ordinal))
+                    return SetFileError(file, "The uploaded file reference is invalid for this project.");
+
+                if (!await _objectStore.ExistsAsync(bucket!, key!, ct))
+                    return SetFileError(file, "The uploaded file is no longer available.");
+
+                var ttl = TimeSpan.FromSeconds(Math.Max(3600, timeoutSeconds + 900));
+                file["download_url"] = await _objectStore.PresignDownloadAsync(bucket!, key!, ttl, ct);
+                file["resolved_by_devcontext"] = true;
+                return true;
+            }
+            catch
+            {
+                return SetFileError(file, "Could not create a secure download link.");
+            }
+        }
+
+        var changed = false;
+        if (node is JsonObject container)
+        {
+            foreach (var child in container.Select(pair => pair.Value).Where(value => value is not null).ToList())
+                changed |= await ResolveFileInputsNodeAsync(child!, projectId, timeoutSeconds, ct);
+        }
+        else if (node is JsonArray array)
+        {
+            foreach (var child in array.Where(value => value is not null).ToList())
+                changed |= await ResolveFileInputsNodeAsync(child!, projectId, timeoutSeconds, ct);
+        }
+        return changed;
+    }
+
+    private static bool SetFileError(JsonObject file, string message)
+    {
+        file["download_error"] = message;
+        return true;
     }
 
     // ---- REDUCE PHASE ----

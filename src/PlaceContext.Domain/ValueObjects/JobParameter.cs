@@ -16,8 +16,8 @@ public sealed record JobParameter
         Name = name.Trim();
         Label = string.IsNullOrWhiteSpace(label) ? null : label.Trim();
         Required = required;
-        Type = type is "number" or "select" or "checkbox" ? type : "text";
-        Options = Type == "select"
+        Type = type is "number" or "select" or "checkbox" or "file" ? type : "text";
+        Options = Type is "select" or "file"
             ? (options ?? Array.Empty<string>()).Where(o => !string.IsNullOrWhiteSpace(o)).Select(o => o.Trim()).ToList()
             : Array.Empty<string>();
     }
@@ -31,9 +31,9 @@ public sealed record JobParameter
     /// <summary>Whether a value must be supplied before the job can run.</summary>
     public bool Required { get; }
 
-    /// <summary>Input kind rendered in run forms: "text" | "number" | "select" | "checkbox".</summary>
+    /// <summary>Input kind rendered in run forms: "text" | "number" | "select" | "checkbox" | "file".</summary>
     public string Type { get; }
 
-    /// <summary>The choices offered when <see cref="Type"/> is "select"; empty otherwise.</summary>
+    /// <summary>Select choices, or accepted MIME/extension filters for a file input.</summary>
     public IReadOnlyList<string> Options { get; }
 }

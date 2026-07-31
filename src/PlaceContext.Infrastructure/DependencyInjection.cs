@@ -148,6 +148,16 @@ public static class DependencyInjection
         // Job / JobRun repositories.
         services.AddScoped<IJobRepository, EfJobRepository>();
         services.AddScoped<IJobRunRepository, EfJobRunRepository>();
+        services.AddScoped<ICrmClientRepository, EfCrmClientRepository>();
+        services.AddScoped<ICrmJobRunRepository, EfCrmJobRunRepository>();
+        services.AddScoped<ICrmChainRunRepository, EfCrmChainRunRepository>();
+        services.AddScoped<ICrmCommunicationRepository, EfCrmCommunicationRepository>();
+        services.AddScoped<ICrmClientArtifactRepository, EfCrmClientArtifactRepository>();
+        services.AddScoped<ICrmAutomationRuleRepository, EfCrmAutomationRuleRepository>();
+        services.AddScoped<ICrmAutomationQueue, Scheduling.DbCrmAutomationQueue>();
+        services.Configure<Comms.ClientCommsOptions>(
+            configuration.GetSection(Comms.ClientCommsOptions.SectionName));
+        services.AddSingleton<IClientCommunicationSender, Comms.SendGridTwilioCommunicationSender>();
 
         // Data map (declarative job-result → project-table ingestion rules).
         services.AddScoped<IDataMappingRepository, EfDataMappingRepository>();
@@ -236,6 +246,7 @@ public static class DependencyInjection
         services.AddSingleton<ICronSchedule, Scheduling.CronosCronSchedule>();
         services.AddScoped<IJobRunQueue, Scheduling.DbJobRunQueue>();
         services.AddHostedService<Scheduling.TriggerSchedulerService>();
+        services.AddHostedService<Scheduling.CrmAutomationWorker>();
 
         // Background portal operations (the notifications-pane ledger) + the analytics chart sweep
         // worker (generation can be slow; the portal only enqueues and reads stored charts).

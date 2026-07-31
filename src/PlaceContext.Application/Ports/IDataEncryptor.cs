@@ -27,6 +27,7 @@ public interface IDataEncryptor
         public const string EmbeddingText = "content.embedding.text.v1";
         public const string Totp = "auth.totp.v1";
         public const string TotpState = "auth.totp.state.v1";
+        public const string CrmCommunication = "crm.communication.v1";
     }
 
     /// <summary>True when <paramref name="value"/> is already in the protected wire format.</summary>

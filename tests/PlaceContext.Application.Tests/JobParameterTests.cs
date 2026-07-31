@@ -1,4 +1,6 @@
+using System.Text.Json;
 using PlaceContext.Application.Features;
+using PlaceContext.Application.Ports;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.ValueObjects;
 using PlaceContext.TestSupport;
@@ -17,6 +19,17 @@ public class JobParameterTests
     [Fact]
     public void JobParameter_rejects_empty_name()
         => Assert.Throws<ArgumentException>(() => new JobParameter("  "));
+
+    [Fact]
+    public void JobParameter_file_preserves_accept_filters()
+    {
+        var parameter = new JobParameter(
+            "source_file", "Plan", type: "file",
+            options: new[] { "application/pdf", "image/*" });
+
+        Assert.Equal("file", parameter.Type);
+        Assert.Equal(new[] { "application/pdf", "image/*" }, parameter.Options);
+    }
 
     [Fact]
     public void Job_with_parameters_requires_input()
@@ -52,6 +65,73 @@ public class JobParameterTests
         Assert.Equal("{\"customerEmail\":\"a@b.com\"}", request.StdinPayload);
         Assert.Single(detail.ShardResults);
         Assert.Equal(1, detail.Snapshot.ShardCount);
+    }
+
+    [Fact]
+    public async Task RunJob_resolves_file_marker_without_persisting_signed_url()
+    {
+        var jobs = new InMemoryJobRepository();
+        var runs = new InMemoryJobRunRepository();
+        var runner = new FakeWorkloadRunner();
+        var projectId = Guid.NewGuid();
+        var key = $"job-inputs/{projectId:N}/abc-plan.pdf";
+        var payload = JsonSerializer.Serialize(new
+        {
+            source_file = new Dictionary<string, object>
+            {
+                ["$file"] = new
+                {
+                    bucket = "placecontext-reports",
+                    key,
+                    filename = "plan.pdf",
+                },
+            },
+        });
+        var map = new MapSpec("img/worker:latest", new[] { payload }, new Dictionary<string, string>());
+        var job = Job.Create(projectId, "file-job", null, map, null, 1, ExitCodePolicy.Default, T0);
+        await jobs.AddAsync(job);
+        var store = new FileStore(key);
+        var handler = new RunJobHandler(
+            jobs, runs, runner, new RecordingUnitOfWork(), new FakeClock(T0), objectStore: store);
+
+        var detail = await handler.HandleAsync(new RunJobCommand(job.Id));
+
+        using var executed = JsonDocument.Parse(Assert.Single(runner.ReceivedRequests).StdinPayload);
+        var resolved = executed.RootElement.GetProperty("source_file").GetProperty("$file");
+        Assert.Equal("https://spaces.invalid/fresh-download", resolved.GetProperty("download_url").GetString());
+        Assert.True(resolved.GetProperty("resolved_by_devcontext").GetBoolean());
+        var persisted = await runs.GetByIdAsync(detail.Id);
+        Assert.NotNull(persisted);
+        Assert.DoesNotContain("download_url", Assert.Single(persisted.Snapshot.InputPayloads));
+        Assert.Equal((store.ReportsBucket, key), Assert.Single(store.Presigned));
+    }
+
+    private sealed class FileStore(string existingKey) : IObjectStore
+    {
+        public List<(string Bucket, string Key)> Presigned { get; } = new();
+        public bool IsEnabled => true;
+        public string ReportsBucket => "placecontext-reports";
+        public string DepsBucket => "placecontext-deps";
+
+        public Task PutAsync(string bucket, string key, byte[] content, string contentType, CancellationToken ct = default)
+            => Task.CompletedTask;
+        public Task<ObjectDownload?> OpenReadAsync(string bucket, string key, CancellationToken ct = default)
+            => Task.FromResult<ObjectDownload?>(null);
+        public Task DeleteAsync(string bucket, string key, CancellationToken ct = default)
+            => Task.CompletedTask;
+        public Task<bool> ExistsAsync(string bucket, string key, CancellationToken ct = default)
+            => Task.FromResult(key == existingKey);
+        public Task EnsureBucketAsync(string bucket, CancellationToken ct = default)
+            => Task.CompletedTask;
+        public Task<string> PresignDownloadAsync(
+            string bucket, string key, TimeSpan ttl, CancellationToken ct = default)
+        {
+            Presigned.Add((bucket, key));
+            return Task.FromResult("https://spaces.invalid/fresh-download");
+        }
+        public Task<string> PresignUploadAsync(
+            string bucket, string key, TimeSpan ttl, CancellationToken ct = default)
+            => Task.FromResult("");
     }
 
     [Fact]

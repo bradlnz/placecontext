@@ -39,6 +39,13 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
     public DbSet<ToolCallRow> ToolCalls => Set<ToolCallRow>();
     public DbSet<JobRow> Jobs => Set<JobRow>();
     public DbSet<JobRunRow> JobRuns => Set<JobRunRow>();
+    public DbSet<CrmClientRow> CrmClients => Set<CrmClientRow>();
+    public DbSet<CrmJobRunRow> CrmJobRuns => Set<CrmJobRunRow>();
+    public DbSet<CrmChainRunRow> CrmChainRuns => Set<CrmChainRunRow>();
+    public DbSet<CrmCommunicationRow> CrmCommunications => Set<CrmCommunicationRow>();
+    public DbSet<CrmClientArtifactRow> CrmClientArtifacts => Set<CrmClientArtifactRow>();
+    public DbSet<CrmAutomationRuleRow> CrmAutomationRules => Set<CrmAutomationRuleRow>();
+    public DbSet<CrmAutomationQueueRow> CrmAutomationQueue => Set<CrmAutomationQueueRow>();
     public DbSet<RunArtifactLinkRow> RunArtifacts => Set<RunArtifactLinkRow>();
     public DbSet<JobSecretRow> JobSecrets => Set<JobSecretRow>();
     public DbSet<JobTriggerRow> JobTriggers => Set<JobTriggerRow>();
@@ -209,6 +216,75 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
             e.Property(x => x.ReturnType).HasDefaultValue("Json");
             e.Property(x => x.RetryCount).HasDefaultValue(0);
             e.Property(x => x.RetryDelaySeconds).HasDefaultValue(0);
+        });
+
+        b.Entity<CrmClientRow>(e =>
+        {
+            e.ToTable("crm_clients");
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => new { x.ProjectId, x.LifecycleStage });
+            e.HasIndex(x => new { x.ProjectId, x.Email });
+            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
+            e.Property(x => x.LifecycleStage).HasDefaultValue("Lead");
+            e.Property(x => x.CreatedAt).HasDefaultValueSql("now()");
+            e.Property(x => x.UpdatedAt).HasDefaultValueSql("now()");
+        });
+
+        b.Entity<CrmJobRunRow>(e =>
+        {
+            e.ToTable("crm_job_runs");
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => new { x.ClientId, x.StartedAt });
+            e.HasIndex(x => x.RunId).IsUnique();
+            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
+            e.Property(x => x.StartedAt).HasDefaultValueSql("now()");
+        });
+
+        b.Entity<CrmChainRunRow>(e =>
+        {
+            e.ToTable("crm_chain_runs");
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => new { x.ClientId, x.StartedAt });
+            e.HasIndex(x => x.ChainRunId).IsUnique();
+            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
+            e.Property(x => x.StartedAt).HasDefaultValueSql("now()");
+        });
+
+        b.Entity<CrmCommunicationRow>(e =>
+        {
+            e.ToTable("crm_communications");
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => new { x.ClientId, x.CreatedAt });
+            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
+            e.Property(x => x.CreatedAt).HasDefaultValueSql("now()");
+        });
+
+        b.Entity<CrmClientArtifactRow>(e =>
+        {
+            e.ToTable("crm_client_artifacts");
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => new { x.ClientId, x.CreatedAt });
+            e.HasIndex(x => new { x.ClientId, x.SourceArtifactId }).IsUnique();
+            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
+            e.Property(x => x.CreatedAt).HasDefaultValueSql("now()");
+        });
+
+        b.Entity<CrmAutomationRuleRow>(e =>
+        {
+            e.ToTable("crm_automation_rules");
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => new { x.ProjectId, x.EventType, x.LifecycleStage });
+            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
+            e.Property(x => x.Enabled).HasDefaultValue(true);
+            e.Property(x => x.CreatedAt).HasDefaultValueSql("now()");
+            e.Property(x => x.UpdatedAt).HasDefaultValueSql("now()");
+        });
+
+        b.Entity<CrmAutomationQueueRow>(e =>
+        {
+            e.ToTable("crm_automation_queue");
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => new { x.FailedAt, x.ClaimedAt, x.NextAttemptAt });
         });
 
         b.Entity<RunArtifactLinkRow>(e =>

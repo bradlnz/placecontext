@@ -36,6 +36,23 @@ public sealed class ParameterPromptStateTests
     }
 
     [Fact]
+    public void ToJobPayload_serializes_file_marker_as_an_object()
+    {
+        var marker = """
+            {"$file":{"bucket":"reports","key":"job-inputs/project/plan.pdf","filename":"plan.pdf"}}
+            """;
+        var prompt = new ParameterPromptState();
+        prompt.Set("source_file", marker);
+
+        var json = prompt.ToJobPayload(new[] { new JobParameterDto("source_file", Type: "file") });
+
+        using var document = JsonDocument.Parse(json);
+        var file = document.RootElement.GetProperty("source_file").GetProperty("$file");
+        Assert.Equal("plan.pdf", file.GetProperty("filename").GetString());
+        Assert.Equal(JsonValueKind.Object, document.RootElement.GetProperty("source_file").ValueKind);
+    }
+
+    [Fact]
     public void ToStepPayloadOverrides_groups_by_step_with_bare_param_names()
     {
         var prompt = new ParameterPromptState();
@@ -141,6 +158,7 @@ public sealed class ParameterPromptStateTests
         ReturnFileName: null,
         RetryCount: 0,
         RetryDelaySeconds: 0,
+        McpConnectionIds: Array.Empty<Guid>(),
         CreatedAt: DateTimeOffset.UtcNow,
         UpdatedAt: DateTimeOffset.UtcNow);
 }

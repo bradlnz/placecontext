@@ -7,7 +7,8 @@ public static class JsonPayloadHelper
 {
     /// <summary>
     /// Flatten scalar properties from one or more JSON object payloads.
-    /// Nested objects/arrays are skipped. First occurrence of each key wins.
+    /// Nested objects/arrays are skipped, except a structured <c>$file</c> marker which is retained
+    /// as JSON for the file input control. First occurrence of each key wins.
     /// </summary>
     public static Dictionary<string, string> FlattenScalars(IEnumerable<string> payloads)
     {
@@ -21,8 +22,14 @@ public static class JsonPayloadHelper
                 if (doc.RootElement.ValueKind != JsonValueKind.Object) continue;
                 foreach (var prop in doc.RootElement.EnumerateObject())
                 {
-                    if (prop.Value.ValueKind is JsonValueKind.Object or JsonValueKind.Array) continue;
-                    var value = prop.Value.ValueKind == JsonValueKind.String
+                    var isFileMarker = prop.Value.ValueKind == JsonValueKind.Object
+                        && prop.Value.TryGetProperty("$file", out var file)
+                        && file.ValueKind == JsonValueKind.Object;
+                    if (prop.Value.ValueKind is JsonValueKind.Object or JsonValueKind.Array && !isFileMarker)
+                        continue;
+                    var value = isFileMarker
+                        ? prop.Value.GetRawText()
+                        : prop.Value.ValueKind == JsonValueKind.String
                         ? prop.Value.GetString() ?? ""
                         : prop.Value.ToString();
                     result.TryAdd(prop.Name, value);

@@ -157,6 +157,92 @@ public sealed class PlaceContextService : IPlaceContextService
     public Task<int> DeleteArtifactsAsync(IReadOnlyList<Guid> artifactIds, CancellationToken ct = default)
         => _dispatcher.Send(new DeleteArtifactsCommand(artifactIds), ct);
 
+    public Task<CrmClientView> SaveCrmClientAsync(SaveCrmClientCommand command, CancellationToken ct = default)
+        => _dispatcher.Send(command, ct);
+
+    public Task<CrmClientView> MoveCrmClientAsync(
+        Guid clientId,
+        Domain.ValueObjects.CustomerLifecycleStage stage,
+        CancellationToken ct = default)
+        => _dispatcher.Send(new MoveCrmClientCommand(clientId, stage), ct);
+
+    public Task<bool> DeleteCrmClientAsync(Guid clientId, CancellationToken ct = default)
+        => _dispatcher.Send(new DeleteCrmClientCommand(clientId), ct);
+
+    public Task<IReadOnlyList<CrmClientView>> ListCrmClientsAsync(Guid projectId, CancellationToken ct = default)
+        => _dispatcher.Query(new ListCrmClientsQuery(projectId), ct);
+
+    public Task<CrmChainRunView> RunCrmClientAutomationAsync(
+        Guid clientId,
+        Guid chainId,
+        CancellationToken ct = default)
+        => _dispatcher.Send(new RunCrmClientAutomationCommand(clientId, chainId), ct);
+
+    public Task<IReadOnlyList<CrmChainRunView>> ListCrmClientChainRunsAsync(
+        Guid clientId,
+        int take = 20,
+        CancellationToken ct = default)
+        => _dispatcher.Query(new ListCrmClientChainRunsQuery(clientId, take), ct);
+
+    public Task<CrmCommunicationView> AddCrmClientNoteAsync(
+        Guid clientId,
+        string body,
+        CancellationToken ct = default)
+        => _dispatcher.Send(new AddCrmClientNoteCommand(clientId, body), ct);
+
+    public Task<CrmCommunicationView> SendCrmClientMessageAsync(
+        Guid clientId,
+        Domain.ValueObjects.CrmCommunicationChannel channel,
+        string? subject,
+        string body,
+        CancellationToken ct = default)
+        => _dispatcher.Send(new SendCrmClientMessageCommand(clientId, channel, subject, body), ct);
+
+    public Task<IReadOnlyList<CrmCommunicationView>> ListCrmClientCommunicationsAsync(
+        Guid clientId,
+        int take = 100,
+        CancellationToken ct = default)
+        => _dispatcher.Query(new ListCrmClientCommunicationsQuery(clientId, take), ct);
+
+    public Task<CrmCommsCapabilitiesView> GetCrmCommsCapabilitiesAsync(CancellationToken ct = default)
+        => _dispatcher.Query(new GetCrmCommsCapabilitiesQuery(), ct);
+
+    public Task<CrmClientArtifactView> AttachCrmClientArtifactAsync(
+        Guid clientId,
+        string fileName,
+        string? contentType,
+        byte[] content,
+        CancellationToken ct = default)
+        => _dispatcher.Send(new AttachCrmClientArtifactCommand(
+            clientId, fileName, contentType, content), ct);
+
+    public Task<IReadOnlyList<CrmClientArtifactView>> ListCrmClientArtifactsAsync(
+        Guid clientId,
+        int take = 200,
+        CancellationToken ct = default)
+        => _dispatcher.Query(new ListCrmClientArtifactsQuery(clientId, take), ct);
+
+    public Task<bool> RemoveCrmClientArtifactAsync(
+        Guid artifactId,
+        CancellationToken ct = default)
+        => _dispatcher.Send(new RemoveCrmClientArtifactCommand(artifactId), ct);
+
+    public Task<CrmAutomationRuleView> SaveCrmAutomationRuleAsync(
+        SaveCrmAutomationRuleCommand command, CancellationToken ct = default)
+        => _dispatcher.Send(command, ct);
+
+    public Task<CrmAutomationRuleView> SetCrmAutomationEnabledAsync(
+        Guid ruleId, bool enabled, CancellationToken ct = default)
+        => _dispatcher.Send(new SetCrmAutomationEnabledCommand(ruleId, enabled), ct);
+
+    public Task<bool> DeleteCrmAutomationRuleAsync(
+        Guid ruleId, CancellationToken ct = default)
+        => _dispatcher.Send(new DeleteCrmAutomationRuleCommand(ruleId), ct);
+
+    public Task<IReadOnlyList<CrmAutomationRuleView>> ListCrmAutomationRulesAsync(
+        Guid projectId, CancellationToken ct = default)
+        => _dispatcher.Query(new ListCrmAutomationRulesQuery(projectId), ct);
+
     public Task<JobChainView> CreateJobChainAsync(Guid projectId, string name, string? description, IReadOnlyList<Guid> stepJobIds, IReadOnlyList<IReadOnlyList<Guid>>? stages = null, IReadOnlyList<Domain.ValueObjects.ChainGate?>? stageGates = null, CancellationToken ct = default)
         => _dispatcher.Send(new CreateJobChainCommand(projectId, name, description, stepJobIds, stages, stageGates), ct);
 

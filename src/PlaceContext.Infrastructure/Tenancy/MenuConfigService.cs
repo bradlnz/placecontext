@@ -35,6 +35,7 @@ public sealed class MenuConfigService : IMenuConfigService
     {
         new("dashboard", "Dashboard", "link", "/", Permission.ProjectsView, "grid", null),
         new("project.overview", "Project overview", "link", "/project/{projectId}", Permission.ProjectsView, "grid", null),
+        new("crm", "CRM", "link", "/project/{projectId}/crm", Permission.DataRead, "users", null),
         new("jobs", "Jobs", "link", "/project/{projectId}/jobs", Permission.JobsView, "box", null),
         new("chains", "Chains", "link", "/project/{projectId}/chains", Permission.JobsView, "chain", null),
         new("schedules", "Schedules", "link", "/project/{projectId}/schedules", Permission.JobsView, "clock", null),

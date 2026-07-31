@@ -1,4 +1,10 @@
 @using PlaceContext.Application.Dtos
+@using PlaceContext.Application.Ports
+@using Microsoft.AspNetCore.Components.Forms
+@using System.Net.Http.Headers
+@using System.Text.Json
+@inject IObjectStore ObjectStore
+@inject IHttpClientFactory HttpClientFactory
 
 @* One declared job input, rendered by its type — the same control everywhere a run form appears. *@
 @switch (Parameter.Type)
@@ -23,6 +29,23 @@
             @(Parameter.Label ?? Parameter.Name)
         </label>
         break;
+    case "file":
+        <div class="file-input-field">
+            <InputFile OnChange="OnFileSelected" accept="@Accept" disabled="@_uploading" />
+            @if (_uploading)
+            {
+                <small>Uploading to private storage…</small>
+            }
+            else if (_uploadError is not null)
+            {
+                <small class="error">@_uploadError</small>
+            }
+            else if (SelectedFileName is { } selected)
+            {
+                <small>Uploaded: @selected</small>
+            }
+        </div>
+        break;
     default:
         <input class="dcinput" value="@Value"
                @oninput="@(e => ValueChanged.InvokeAsync(e.Value?.ToString() ?? ""))" />
@@ -31,6 +54,116 @@
 
 @code {
     [Parameter, EditorRequired] public JobParameterDto Parameter { get; set; } = default!;
+    [Parameter] public Guid ProjectId { get; set; }
     [Parameter] public string Value { get; set; } = "";
     [Parameter] public EventCallback<string> ValueChanged { get; set; }
+
+    private const long MaxFileBytes = 40L * 1024 * 1024;
+    private bool _uploading;
+    private string? _uploadError;
+
+    private string Accept => Parameter.Options is { Count: > 0 }
+        ? string.Join(",", Parameter.Options)
+        : "application/pdf,image/*";
+
+    private string? SelectedFileName
+    {
+        get
+        {
+            if (string.IsNullOrWhiteSpace(Value)) return null;
+            try
+            {
+                using var document = JsonDocument.Parse(Value);
+                return document.RootElement.GetProperty("$file").GetProperty("filename").GetString();
+            }
+            catch
+            {
+                return null;
+            }
+        }
+    }
+
+    private async Task OnFileSelected(InputFileChangeEventArgs args)
+    {
+        _uploadError = null;
+        var file = args.File;
+        if (ProjectId == Guid.Empty)
+        {
+            _uploadError = "A project is required before uploading.";
+            return;
+        }
+        if (!ObjectStore.IsEnabled)
+        {
+            _uploadError = "File storage is not configured.";
+            return;
+        }
+        if (file.Size <= 0 || file.Size > MaxFileBytes)
+        {
+            _uploadError = "Choose a non-empty PDF or image no larger than 40 MB.";
+            return;
+        }
+
+        _uploading = true;
+        try
+        {
+            var filename = SanitizeFilename(file.Name);
+            var contentType = ContentTypeFor(filename, file.ContentType);
+            var key = $"job-inputs/{ProjectId:N}/{Guid.NewGuid():N}-{filename}";
+
+            await ObjectStore.EnsureBucketAsync(ObjectStore.ReportsBucket);
+            var uploadUrl = await ObjectStore.PresignUploadAsync(
+                ObjectStore.ReportsBucket, key, TimeSpan.FromMinutes(20));
+
+            using var content = new StreamContent(file.OpenReadStream(MaxFileBytes));
+            content.Headers.ContentType = new MediaTypeHeaderValue(contentType);
+            using var response = await HttpClientFactory.CreateClient().PutAsync(uploadUrl, content);
+            response.EnsureSuccessStatusCode();
+
+            var marker = JsonSerializer.Serialize(new Dictionary<string, object?>
+            {
+                ["$file"] = new
+                {
+                    bucket = ObjectStore.ReportsBucket,
+                    key,
+                    filename,
+                    content_type = contentType,
+                    size_bytes = file.Size,
+                },
+            });
+            await ValueChanged.InvokeAsync(marker);
+        }
+        catch (Exception ex)
+        {
+            _uploadError = $"Upload failed: {ex.Message}";
+        }
+        finally
+        {
+            _uploading = false;
+        }
+    }
+
+    private static string SanitizeFilename(string name)
+    {
+        var leaf = Path.GetFileName(name);
+        var invalid = Path.GetInvalidFileNameChars();
+        var cleaned = new string(leaf.Select(c => invalid.Contains(c) ? '_' : c).ToArray()).Trim();
+        return string.IsNullOrWhiteSpace(cleaned) ? "upload.bin" : cleaned;
+    }
+
+    private static string ContentTypeFor(string filename, string browserContentType)
+    {
+        if (!string.IsNullOrWhiteSpace(browserContentType)
+            && !string.Equals(browserContentType, "application/octet-stream", StringComparison.OrdinalIgnoreCase))
+            return browserContentType;
+
+        return Path.GetExtension(filename).ToLowerInvariant() switch
+        {
+            ".pdf" => "application/pdf",
+            ".png" => "image/png",
+            ".jpg" or ".jpeg" => "image/jpeg",
+            ".webp" => "image/webp",
+            ".tif" or ".tiff" => "image/tiff",
+            _ => "application/octet-stream",
+        };
+    }
 }

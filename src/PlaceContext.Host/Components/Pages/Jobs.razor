@@ -600,7 +600,7 @@ else
                                     @(p.Label ?? p.Name)@(p.Required ? " *" : "")
                                 </span>
                                 <div class="flex-1">
-                                    <ParamInput Parameter="p" Value="@Vm.PayloadFormValue(p.Name)"
+                                    <ParamInput Parameter="p" ProjectId="@ProjectId" Value="@Vm.PayloadFormValue(p.Name)"
                                                 ValueChanged="@(v => Vm.SetPayloadFormValue(p.Name, v))" />
                                 </div>
                             </div>
@@ -632,11 +632,13 @@ else
                                     <option value="number">number</option>
                                     <option value="select">select</option>
                                     <option value="checkbox">checkbox</option>
+                                    <option value="file">file upload</option>
                                 </select>
-                                @if (Vm.EdParams[idx].Type == "select")
+                                @if (Vm.EdParams[idx].Type is "select" or "file")
                                 {
                                     <input class="dcinput param-options-input"
-                                           placeholder="options, comma-separated" @bind="Vm.EdParams[idx].OptionsRaw" />
+                                           placeholder="@(Vm.EdParams[idx].Type == "file" ? "accepted types, e.g. application/pdf, image/*" : "options, comma-separated")"
+                                           @bind="Vm.EdParams[idx].OptionsRaw" />
                                 }
                                 <label class="param-required-label">
                                     <input type="checkbox" @bind="Vm.EdParams[idx].Required" class="accent-brand" /> required
@@ -859,7 +861,7 @@ else
                             }
                             <span class="code ml-5">@p.Name</span>
                         </label>
-                        <ParamInput Parameter="p" Value="@Vm.GetArg(p.Name)"
+                        <ParamInput Parameter="p" ProjectId="@ProjectId" Value="@Vm.GetArg(p.Name)"
                                     ValueChanged="@(v => Vm.SetArg(p.Name, v))" />
                     </div>
                 }

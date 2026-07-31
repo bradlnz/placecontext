@@ -1,0 +1,1443 @@
+@page "/project/{ProjectId:guid}/crm"
+@attribute [Authorize(Policy = Permission.DataRead)]
+@layout PlaceContext.Host.Components.Layout.ProjectLayout
+@inject IPlaceContextService Svc
+@inject PortalUiState Ui
+@using PlaceContext.Domain.ValueObjects
+
+<PageTitle>PlaceContext — CRM</PageTitle>
+
+@if (_loading)
+{
+    <Skeleton Kind="card-grid" Cards="6" Padded />
+}
+else
+{
+    <div class="crm-page">
+        <div class="crm-header">
+            <div class="crm-header-copy">
+                <div class="crm-eyebrow">
+                    <span class="eyebrow-mark">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                            <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
+                            <circle cx="9" cy="7" r="4"></circle>
+                            <path d="M22 21v-2a4 4 0 0 0-3-3.87"></path>
+                        </svg>
+                    </span>
+                    Customer operations
+                </div>
+                <h2>@(_crmSection == "clients" ? "Clients" : "Automations")</h2>
+                <p>@(_crmSection == "clients"
+                    ? "Manage customers through their lifecycle and run project automations in customer context."
+                    : "Connect customer lifecycle events to durable job-chain workflows.")</p>
+            </div>
+            <button class="dcbtn primary add-client-btn"
+                    @onclick="NewPrimary">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 5v14M5 12h14"></path>
+                </svg>
+                @(_crmSection == "clients" ? "Add client" : "Add automation")
+            </button>
+        </div>
+
+        <nav class="crm-section-tabs" aria-label="CRM sections">
+            <button class="@(_crmSection == "clients" ? "active" : "")"
+                    @onclick="@(() => _crmSection = "clients")">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                    <circle cx="9" cy="7" r="4"></circle><path d="M3 21v-2a6 6 0 0 1 12 0v2M17 8h4M19 6v4"></path>
+                </svg>
+                Clients <span>@_clients.Count</span>
+            </button>
+            <button class="@(_crmSection == "automations" ? "active" : "")"
+                    @onclick="@(() => _crmSection = "automations")">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                    <path d="M8 4h8v5H8zM4 15h6v5H4zM14 15h6v5h-6z"></path>
+                    <path d="M12 9v3M7 12h10M7 12v3M17 12v3"></path>
+                </svg>
+                Automations <span>@_automationRules.Count</span>
+            </button>
+        </nav>
+
+        @if (_message is not null)
+        {
+            <div class="crm-message">@_message</div>
+        }
+
+        @if (_crmSection == "clients")
+        {
+        <section class="dccard lifecycle-panel">
+            <div class="lifecycle-head">
+                <div>
+                    <span class="section-kicker">Lifecycle overview</span>
+                    <span class="section-caption">Select a stage to filter the client directory</span>
+                </div>
+                <span class="total-clients">
+                    <strong>@_clients.Count</strong>
+                    total
+                </span>
+            </div>
+            <div class="lifecycle-strip" aria-label="Customer lifecycle">
+                @foreach (var stage in Stages)
+                {
+                    var count = Count(stage);
+                    <button class="lifecycle-step @StageClass(stage) @(_stageFilter == stage ? "selected" : "")"
+                            @onclick="@(() => ToggleStageFilter(stage))">
+                        <span class="stage-dot"></span>
+                        <span class="stage-copy">
+                            <span class="stage-label">@StageLabel(stage)</span>
+                            <span class="stage-description">@StageDescription(stage)</span>
+                        </span>
+                        <span class="stage-count">@count</span>
+                    </button>
+                }
+            </div>
+        </section>
+
+        <section class="client-directory">
+            <div class="directory-head">
+                <div>
+                    <span class="directory-title">Client directory</span>
+                    <span class="directory-subtitle">
+                        @if (_stageFilter is { } filteredStage)
+                        {
+                            <text>Showing @StageLabel(filteredStage).ToLowerInvariant() clients</text>
+                        }
+                        else
+                        {
+                            <text>All customer relationships in this project</text>
+                        }
+                    </span>
+                </div>
+                <span class="result-count">@FilteredClients.Count() result@(FilteredClients.Count() == 1 ? "" : "s")</span>
+            </div>
+
+            <div class="crm-toolbar">
+                <div class="crm-search">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                        <circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path>
+                    </svg>
+                    <input class="dcinput" @bind="_search" @bind:event="oninput"
+                           placeholder="Search name, company, email, or phone…" />
+                </div>
+                @if (_stageFilter is not null)
+                {
+                    <button class="dcbtn xs clear-filter" @onclick="@(() => _stageFilter = null)">
+                        Clear filter <span>×</span>
+                    </button>
+                }
+            </div>
+
+            @if (!FilteredClients.Any())
+            {
+                <div class="dccard crm-empty">
+                    <div class="empty-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+                            <circle cx="9" cy="8" r="4"></circle>
+                            <path d="M3 21v-2a6 6 0 0 1 12 0v2M17 8h5M19.5 5.5v5"></path>
+                        </svg>
+                    </div>
+                    <strong>@(_clients.Count == 0 ? "Add your first client" : "No clients match this view")</strong>
+                    <span>@(_clients.Count == 0
+                        ? "Build your customer pipeline, track each relationship, and run work in context."
+                        : "Try a different search or clear the lifecycle filter.")</span>
+                    @if (_clients.Count == 0)
+                    {
+                        <button class="dcbtn primary" @onclick="NewClient">Add a client</button>
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="client-grid">
+                    @foreach (var client in FilteredClients)
+                    {
+                        var stage = ParseStage(client.LifecycleStage);
+                        <article class="dccard client-card @StageClass(stage)" @onclick="@(() => OpenClient(client))">
+                            <div class="client-accent"></div>
+                            <div class="client-card-head">
+                                <span class="client-avatar @StageClass(stage)">@Initials(client.Name)</span>
+                                <span class="stage-badge @StageClass(stage)">
+                                    <span class="badge-dot"></span>@StageLabel(stage)
+                                </span>
+                            </div>
+                            <div class="client-name">@client.Name</div>
+                            <div class="client-company">@(client.Company ?? "Individual client")</div>
+                            <div class="client-contact">
+                                @if (client.Email is not null)
+                                {
+                                    <span title="@client.Email">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                                            <path d="M4 4h16v16H4z"></path><path d="m4 6 8 6 8-6"></path>
+                                        </svg>
+                                        @client.Email
+                                    </span>
+                                }
+                                @if (client.Phone is not null)
+                                {
+                                    <span>
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                                            <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.79 19.79 0 0 1 2.12 4.18 2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.12.9.33 1.78.62 2.63a2 2 0 0 1-.45 2.11L8 9.73a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.85.29 1.73.5 2.63.62A2 2 0 0 1 22 16.92z"></path>
+                                        </svg>
+                                        @client.Phone
+                                    </span>
+                                }
+                                @if (client.Email is null && client.Phone is null)
+                                {
+                                    <span class="contact-missing">No contact details yet</span>
+                                }
+                            </div>
+                            <div class="client-card-foot" @onclick:stopPropagation="true">
+                                <select class="dcinput stage-select"
+                                        value="@client.LifecycleStage"
+                                        @onchange="@(e => MoveClient(client, e))"
+                                        aria-label="Lifecycle stage for @client.Name">
+                                    @foreach (var option in Stages)
+                                    {
+                                        <option value="@option.ToString()">@StageLabel(option)</option>
+                                    }
+                                </select>
+                                <button class="open-client" @onclick="@(() => OpenClient(client))" aria-label="Open @client.Name">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9">
+                                        <path d="M5 12h14M13 6l6 6-6 6"></path>
+                                    </svg>
+                                </button>
+                            </div>
+                        </article>
+                    }
+                </div>
+            }
+        </section>
+        }
+        else
+        {
+            <section class="automations-workspace">
+                <div class="automation-overview dccard">
+                    <div class="automation-overview-copy">
+                        <span class="automation-mark">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7">
+                                <path d="M12 3v4M12 17v4M3 12h4M17 12h4"></path>
+                                <circle cx="12" cy="12" r="5"></circle><circle cx="12" cy="12" r="1.5"></circle>
+                            </svg>
+                        </span>
+                        <span>
+                            <strong>Lifecycle workflow rules</strong>
+                            <small>When a customer event matches, its job chain is queued with the client context.</small>
+                        </span>
+                    </div>
+                    <div class="automation-stats">
+                        <span><strong>@_automationRules.Count(rule => rule.Enabled)</strong> active</span>
+                        <span><strong>@_automationRules.Select(rule => rule.EventType).Distinct().Count()</strong> events</span>
+                        <span><strong>@_chains.Count</strong> chains</span>
+                    </div>
+                </div>
+
+                @if (_automationRules.Count == 0)
+                {
+                    <div class="dccard automation-empty">
+                        <span class="automation-empty-icon">⌁</span>
+                        <strong>Turn lifecycle moments into workflows</strong>
+                        <span>Run a job chain when a client is created, enters a stage, receives a note or file, or gets a communication.</span>
+                        <button class="dcbtn primary" @onclick="NewAutomation">Create automation</button>
+                    </div>
+                }
+                else
+                {
+                    <div class="automation-list-head">
+                        <div>
+                            <strong>Rules</strong>
+                            <span>@_automationRules.Count workflow@(_automationRules.Count == 1 ? "" : "s") configured</span>
+                        </div>
+                        <button class="dcbtn primary" @onclick="NewAutomation">Add automation</button>
+                    </div>
+                    <div class="automation-rule-grid">
+                        @foreach (var rule in _automationRules)
+                        {
+                            <article class="dccard automation-rule-card @(!rule.Enabled ? "disabled" : "")">
+                                <div class="automation-card-head">
+                                    <span class="automation-event-icon">@AutomationEventIcon(rule.EventType)</span>
+                                    <span class="automation-card-title">
+                                        <strong>@rule.Name</strong>
+                                        <small>Updated @rule.UpdatedAt.ToWorkspaceTime().ToString("dd MMM yyyy")</small>
+                                    </span>
+                                    <button class="rule-toggle @(rule.Enabled ? "on" : "")"
+                                            title="@(rule.Enabled ? "Disable automation" : "Enable automation")"
+                                            @onclick="@(() => ToggleAutomation(rule))">
+                                        <span></span>
+                                    </button>
+                                </div>
+                                <div class="automation-flow">
+                                    <span class="flow-node event">
+                                        <small>When</small>
+                                        <strong>@AutomationEventLabel(rule.EventType)</strong>
+                                        <em>@AutomationStageLabel(rule.LifecycleStage)</em>
+                                    </span>
+                                    <span class="flow-arrow">
+                                        <span></span>
+                                        <svg viewBox="0 0 20 10"><path d="M1 5h16M13 1l4 4-4 4"></path></svg>
+                                    </span>
+                                    <span class="flow-node chain">
+                                        <small>Run chain</small>
+                                        <strong>@rule.ChainName</strong>
+                                        <em>@rule.ChainSteps step@(rule.ChainSteps == 1 ? "" : "s")</em>
+                                    </span>
+                                </div>
+                                <div class="automation-card-foot">
+                                    <span class="rule-status @(rule.Enabled ? "active" : "")">
+                                        <span></span>@(rule.Enabled ? "Listening" : "Paused")
+                                    </span>
+                                    <div>
+                                        <button class="rule-action" @onclick="@(() => EditAutomation(rule))">Edit</button>
+                                        @if (_confirmAutomationDeleteId == rule.Id)
+                                        {
+                                            <button class="rule-action delete confirm"
+                                                    @onclick="@(() => DeleteAutomation(rule))">Confirm delete</button>
+                                            <button class="rule-action"
+                                                    @onclick="@(() => _confirmAutomationDeleteId = null)">Keep</button>
+                                        }
+                                        else
+                                        {
+                                            <button class="rule-action delete"
+                                                    @onclick="@(() => _confirmAutomationDeleteId = rule.Id)">Delete</button>
+                                        }
+                                    </div>
+                                </div>
+                            </article>
+                        }
+                    </div>
+                }
+            </section>
+        }
+    </div>
+}
+
+@if (_showEditor)
+{
+    <div class="dcslide-scrim" @onclick="CloseEditor"></div>
+    <div class="dcslide crm-editor">
+        <div class="dcslide-head">
+            <div>
+                <div class="title-14">@(_editId is null ? "Add client" : "Edit client")</div>
+                <div class="subtitle-11-5">Contact details and current lifecycle position</div>
+            </div>
+            <button class="dcslide-x" @onclick="CloseEditor">×</button>
+        </div>
+        <div class="dcslide-body crm-form">
+            <div class="dcfield">
+                <label>Name</label>
+                <input class="dcinput" @bind="_editName" placeholder="Client name" />
+            </div>
+            <div class="dcfield">
+                <label>Company</label>
+                <input class="dcinput" @bind="_editCompany" placeholder="Company or organisation" />
+            </div>
+            <div class="form-row">
+                <div class="dcfield">
+                    <label>Email</label>
+                    <input class="dcinput" type="email" @bind="_editEmail" placeholder="name@example.com" />
+                </div>
+                <div class="dcfield">
+                    <label>Phone</label>
+                    <input class="dcinput" type="tel" @bind="_editPhone" placeholder="+61…" />
+                </div>
+            </div>
+            <div class="dcfield">
+                <label>Lifecycle stage</label>
+                <select class="dcinput" @bind="_editStage">
+                    @foreach (var stage in Stages)
+                    {
+                        <option value="@stage">@StageLabel(stage)</option>
+                    }
+                </select>
+            </div>
+            <div class="dcfield">
+                <label>Notes</label>
+                <textarea class="dcinput notes-input" rows="6" @bind="_editNotes"
+                          placeholder="Goals, context, next steps…"></textarea>
+            </div>
+            @if (_formError is not null)
+            {
+                <div class="form-error">@_formError</div>
+            }
+            <div class="form-actions">
+                <button class="dcbtn" @onclick="CloseEditor">Cancel</button>
+                <button class="dcbtn primary" disabled="@_saving" @onclick="SaveClient">
+                    @(_saving ? "Saving…" : "Save client")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@if (_showAutomationEditor)
+{
+    <div class="dcslide-scrim" @onclick="CloseAutomationEditor"></div>
+    <div class="dcslide crm-editor automation-editor">
+        <div class="dcslide-head">
+            <div>
+                <div class="title-14">@(_editAutomationId is null ? "Add automation" : "Edit automation")</div>
+                <div class="subtitle-11-5">Connect a customer lifecycle event to a job chain</div>
+            </div>
+            <button class="dcslide-x" @onclick="CloseAutomationEditor">×</button>
+        </div>
+        <div class="dcslide-body crm-form">
+            <div class="automation-editor-intro">
+                <span>⌁</span>
+                <p><strong>Event-driven customer work</strong>Matching events are queued and run with the client’s current details, stage, notes, and artifacts.</p>
+            </div>
+            <div class="dcfield">
+                <label>Automation name</label>
+                <input class="dcinput" @bind="_automationName"
+                       placeholder="e.g. Send onboarding pack" />
+            </div>
+            <div class="dcfield">
+                <label>Customer event</label>
+                <select class="dcinput" @bind="_automationEvent">
+                    @foreach (var eventType in AutomationEvents)
+                    {
+                        <option value="@eventType">@AutomationEventLabel(eventType)</option>
+                    }
+                </select>
+                <small class="field-help">@AutomationEventDescription(_automationEvent)</small>
+            </div>
+            <div class="dcfield">
+                <label>Lifecycle stage</label>
+                <select class="dcinput" @bind="_automationStage">
+                    <option value="">Any lifecycle stage</option>
+                    @foreach (var stage in Stages)
+                    {
+                        <option value="@stage">@StageLabel(stage)</option>
+                    }
+                </select>
+                <small class="field-help">Optionally limit this rule to clients in one stage.</small>
+            </div>
+            <div class="dcfield">
+                <label>Job chain</label>
+                <select class="dcinput" @bind="_automationChainId">
+                    <option value="">Select a job chain…</option>
+                    @foreach (var chain in _chains)
+                    {
+                        <option value="@chain.Id">@chain.Name (@chain.Steps.Count step@(chain.Steps.Count == 1 ? "" : "s"))</option>
+                    }
+                </select>
+                @if (_chains.Count == 0)
+                {
+                    <small class="field-help warning">Create a job chain in this project before enabling an automation.</small>
+                }
+            </div>
+            <label class="automation-enabled-field">
+                <span>
+                    <strong>Enable automation</strong>
+                    <small>Begin listening for matching events as soon as this rule is saved.</small>
+                </span>
+                <input type="checkbox" @bind="_automationEnabled" />
+                <i></i>
+            </label>
+            <div class="automation-preview">
+                <span class="preview-node">
+                    <small>When</small>
+                    <strong>@AutomationEventLabel(_automationEvent)</strong>
+                    <em>@AutomationStageLabel(_automationStage?.ToString())</em>
+                </span>
+                <span class="preview-arrow">→</span>
+                <span class="preview-node">
+                    <small>Run</small>
+                    <strong>@SelectedAutomationChainName</strong>
+                    <em>with client context</em>
+                </span>
+            </div>
+            @if (_automationError is not null)
+            {
+                <div class="form-error">@_automationError</div>
+            }
+            <div class="form-actions">
+                <button class="dcbtn" @onclick="CloseAutomationEditor">Cancel</button>
+                <button class="dcbtn primary" disabled="@_savingAutomation" @onclick="SaveAutomation">
+                    @(_savingAutomation ? "Saving…" : "Save automation")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@if (_selected is not null)
+{
+    <div class="dcslide-scrim" @onclick="CloseClient"></div>
+    <div class="dcslide crm-detail">
+        <div class="dcslide-head">
+            <div class="detail-heading">
+                <span class="client-avatar large @StageClass(ParseStage(_selected.LifecycleStage))">@Initials(_selected.Name)</span>
+                <span>
+                    <span class="title-14">@_selected.Name</span>
+                    <span class="subtitle-11-5">@(_selected.Company ?? StageLabel(ParseStage(_selected.LifecycleStage)))</span>
+                </span>
+            </div>
+            <button class="dcslide-x" @onclick="CloseClient">×</button>
+        </div>
+        <div class="dcslide-body detail-body">
+            <div class="detail-hero @StageClass(ParseStage(_selected.LifecycleStage))">
+                <span class="hero-stage">
+                    <span class="badge-dot"></span>
+                    @StageLabel(ParseStage(_selected.LifecycleStage))
+                </span>
+                <span class="hero-updated">Updated @_selected.UpdatedAt.ToWorkspaceTime().ToString("dd MMM yyyy")</span>
+            </div>
+            <div class="detail-tabs" role="tablist" aria-label="Client details">
+                <button class="@(_detailTab == "overview" ? "active" : "")"
+                        role="tab" aria-selected="@(_detailTab == "overview")"
+                        @onclick="@(() => _detailTab = "overview")">
+                    Overview
+                </button>
+                <button class="@(_detailTab == "comms" ? "active" : "")"
+                        role="tab" aria-selected="@(_detailTab == "comms")"
+                        @onclick="@(() => _detailTab = "comms")">
+                    Comms <span class="tab-count">@_communications.Count</span>
+                </button>
+                <button class="@(_detailTab == "artifacts" ? "active" : "")"
+                        role="tab" aria-selected="@(_detailTab == "artifacts")"
+                        @onclick="@(() => _detailTab = "artifacts")">
+                    Artifacts <span class="tab-count">@_clientArtifacts.Count</span>
+                </button>
+            </div>
+
+            @if (_detailTab == "overview")
+            {
+                <div class="detail-actions">
+                    <button class="dcbtn" @onclick="@(() => EditClient(_selected))">Edit client</button>
+                    @if (_confirmDelete)
+                    {
+                        <button class="dcbtn danger" @onclick="DeleteClient">Confirm delete</button>
+                        <button class="dcbtn" @onclick="@(() => _confirmDelete = false)">Keep</button>
+                    }
+                    else
+                    {
+                        <button class="dcbtn" @onclick="@(() => _confirmDelete = true)">Delete</button>
+                    }
+                </div>
+
+                <section class="detail-section">
+                    <div class="section-label">Lifecycle</div>
+                    <select class="dcinput" value="@_selected.LifecycleStage"
+                            @onchange="@(e => MoveClient(_selected, e))">
+                        @foreach (var stage in Stages)
+                        {
+                            <option value="@stage.ToString()">@StageLabel(stage)</option>
+                        }
+                    </select>
+                </section>
+
+                <section class="detail-section">
+                    <div class="section-label">Contact</div>
+                    <div class="detail-list">
+                        <span class="detail-contact">
+                            <span class="contact-icon">@@</span>
+                            <span><small>Email</small>@(_selected.Email ?? "Not provided")</span>
+                        </span>
+                        <span class="detail-contact">
+                            <span class="contact-icon">⌕</span>
+                            <span><small>Phone</small>@(_selected.Phone ?? "Not provided")</span>
+                        </span>
+                    </div>
+                </section>
+
+                @if (_selected.Notes is not null)
+                {
+                    <section class="detail-section">
+                        <div class="section-label">Notes</div>
+                        <p class="client-notes">@_selected.Notes</p>
+                    </section>
+                }
+
+                <section class="detail-section run-section action-panel">
+                    <div class="section-label">Run a lifecycle automation</div>
+                    <p class="section-help">The chain starts with this client’s contact details, notes, and lifecycle stage as JSON.</p>
+                    @if (_chains.Count == 0)
+                    {
+                        <div class="run-empty">No job chains exist in this project yet.</div>
+                    }
+                    else
+                    {
+                        <div class="run-controls">
+                            <select class="dcinput" @bind="_selectedChainId">
+                                <option value="">Select an automation…</option>
+                                @foreach (var chain in _chains)
+                                {
+                                    <option value="@chain.Id">@chain.Name (@chain.Steps.Count step@(chain.Steps.Count == 1 ? "" : "s"))</option>
+                                }
+                            </select>
+                            <button class="dcbtn primary" disabled="@(_running || _selectedChainId is null)" @onclick="RunAutomation">
+                                @(_running ? "Running…" : "Run automation")
+                            </button>
+                        </div>
+                    }
+                </section>
+
+                <section class="detail-section">
+                    <div class="section-label">Customer automation history</div>
+                    @if (_loadingRuns)
+                    {
+                        <div class="history-empty">Loading history…</div>
+                    }
+                    else if (_clientRuns.Count == 0)
+                    {
+                        <div class="history-empty">No automations have been run for this client.</div>
+                    }
+                    else
+                    {
+                        <div class="run-history">
+                            @foreach (var run in _clientRuns)
+                            {
+                                <div class="run-row">
+                                    <span class="run-status @run.Status.ToLowerInvariant()"></span>
+                                    <span class="run-copy">
+                                        <strong>@run.ChainName</strong>
+                                        <small>@StageLabel(ParseStage(run.LifecycleStage)) · @run.StartedAt.ToWorkspaceTime().ToString("dd MMM yyyy, HH:mm")</small>
+                                    </span>
+                                    <span class="status-text">@run.Status</span>
+                                </div>
+                            }
+                        </div>
+                    }
+                </section>
+            }
+            else if (_detailTab == "comms")
+            {
+                <div class="comms-pane">
+                    @if (_loadingComms)
+                    {
+                        <div class="comms-empty">Loading conversation…</div>
+                    }
+                    else if (_communications.Count == 0)
+                    {
+                        <div class="comms-empty">
+                            <span class="comms-empty-icon">✦</span>
+                            <strong>Start the conversation</strong>
+                            <span>Add an internal note, or contact @_selected.Name by email or SMS.</span>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="comms-timeline">
+                            @foreach (var item in _communications.Reverse())
+                            {
+                                <article class="message-row @item.Channel.ToLowerInvariant() @item.Status.ToLowerInvariant()">
+                                    <div class="message-bubble">
+                                        <div class="message-meta">
+                                            <span class="channel-mark">@ChannelIcon(item.Channel)</span>
+                                            <strong>@ChannelLabel(item.Channel)</strong>
+                                            @if (item.Status == "Failed")
+                                            {
+                                                <span class="delivery-state failed">Failed</span>
+                                            }
+                                            else if (item.Status == "Sent")
+                                            {
+                                                <span class="delivery-state">Sent</span>
+                                            }
+                                        </div>
+                                        @if (item.Subject is not null)
+                                        {
+                                            <div class="message-subject">@item.Subject</div>
+                                        }
+                                        <div class="message-body">@item.Body</div>
+                                        @if (item.Error is not null)
+                                        {
+                                            <div class="message-error">@item.Error</div>
+                                        }
+                                        <time>@item.CreatedAt.ToWorkspaceTime().ToString("dd MMM, HH:mm")</time>
+                                    </div>
+                                </article>
+                            }
+                        </div>
+                    }
+
+                    <div class="comms-composer">
+                        <div class="channel-picker" role="tablist" aria-label="Communication type">
+                            @foreach (var channel in CommsChannels)
+                            {
+                                var enabled = ChannelAvailable(channel);
+                                <button class="@(_composeChannel == channel ? "active" : "")"
+                                        disabled="@(!enabled)"
+                                        title="@ChannelHelp(channel)"
+                                        @onclick="@(() => SelectChannel(channel))">
+                                    <span>@ChannelIcon(channel)</span>@ChannelLabel(channel)
+                                </button>
+                            }
+                        </div>
+
+                        @if (_composeChannel == "Email")
+                        {
+                            <input class="dcinput composer-subject" @bind="_composeSubject"
+                                   placeholder="Email subject" aria-label="Email subject" />
+                        }
+
+                        <textarea class="dcinput composer-body" rows="4" @bind="_composeBody"
+                                  placeholder="@ComposerPlaceholder()" aria-label="Message"></textarea>
+
+                        @if (_commsError is not null)
+                        {
+                            <div class="form-error">@_commsError</div>
+                        }
+
+                        <div class="composer-foot">
+                            <span class="recipient-hint">@RecipientHint()</span>
+                            <button class="dcbtn primary send-comms"
+                                    disabled="@(!CanSubmitComms)"
+                                    @onclick="SubmitCommunication">
+                                @(_sendingComms ? "Sending…" : SubmitLabel())
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <div class="client-artifacts-pane">
+                    <div class="artifact-workspace-head">
+                        <div class="artifact-workspace-title">
+                            <span class="artifact-folder-mark">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7">
+                                    <path d="M3 6.5h6l2 2h10v10.5H3z"></path>
+                                    <path d="M3 10h18"></path>
+                                </svg>
+                            </span>
+                            <span>
+                                <strong>Client files</strong>
+                                <small>Everything connected to @_selected.Name</small>
+                            </span>
+                        </div>
+                        <div class="artifact-summary">
+                            <span><strong>@_clientArtifacts.Count</strong> file@(_clientArtifacts.Count == 1 ? "" : "s")</span>
+                            <span>@FormatBytes(_clientArtifacts.Sum(item => item.SizeBytes))</span>
+                        </div>
+                    </div>
+
+                    @if (_artifactError is not null)
+                    {
+                        <div class="form-error">@_artifactError</div>
+                    }
+
+                    <label class="artifact-dropzone @(_uploadingArtifact ? "uploading" : "")">
+                        <InputFile OnChange="AttachArtifact" disabled="@_uploadingArtifact" />
+                        <span class="dropzone-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                                <path d="M12 16V4M7 9l5-5 5 5"></path>
+                                <path d="M4 15v5h16v-5"></path>
+                            </svg>
+                        </span>
+                        <span class="dropzone-copy">
+                            <strong>@(_uploadingArtifact ? "Uploading file…" : "Drop a file here or browse")</strong>
+                            <small>PDF, images, documents and data files · up to 20 MB</small>
+                        </span>
+                        <span class="dropzone-action">@(_uploadingArtifact ? "Please wait" : "Choose file")</span>
+                    </label>
+
+                    @if (_loadingArtifacts)
+                    {
+                        <div class="artifact-loading">
+                            @for (var i = 0; i < 3; i++)
+                            {
+                                <span></span>
+                            }
+                        </div>
+                    }
+                    else if (_clientArtifacts.Count == 0)
+                    {
+                        <div class="artifact-empty">
+                            <span class="artifact-empty-icon">⌁</span>
+                            <strong>No artifacts attached</strong>
+                            <span>Attach a file here. Outputs from client automations will be tagged automatically.</span>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="artifact-toolbar">
+                            <label class="artifact-search">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                                    <circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path>
+                                </svg>
+                                <input value="@_artifactSearch" @oninput="OnArtifactSearch"
+                                       placeholder="Search client files…" aria-label="Search client files" />
+                                @if (!string.IsNullOrWhiteSpace(_artifactSearch))
+                                {
+                                    <button type="button" title="Clear search"
+                                            @onclick="@(() => _artifactSearch = "")">×</button>
+                                }
+                            </label>
+                            <div class="artifact-source-filter" aria-label="Artifact source">
+                                <button class="@(_artifactSourceFilter == "all" ? "active" : "")"
+                                        @onclick="@(() => _artifactSourceFilter = "all")">
+                                    All <span>@_clientArtifacts.Count</span>
+                                </button>
+                                <button class="@(_artifactSourceFilter == "upload" ? "active" : "")"
+                                        @onclick="@(() => _artifactSourceFilter = "upload")">
+                                    Uploaded <span>@ArtifactSourceCount("Upload")</span>
+                                </button>
+                                <button class="@(_artifactSourceFilter == "automation" ? "active" : "")"
+                                        @onclick="@(() => _artifactSourceFilter = "automation")">
+                                    Automation <span>@ArtifactSourceCount("Automation")</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        @if (!FilteredClientArtifacts.Any())
+                        {
+                            <div class="artifact-no-results">
+                                <strong>No matching files</strong>
+                                <span>Try another search or source filter.</span>
+                                <button class="dcbtn xs" @onclick="ClearArtifactFilters">Clear filters</button>
+                            </div>
+                        }
+                        else
+                        {
+                        <div class="client-artifact-list">
+                            @foreach (var artifact in FilteredClientArtifacts)
+                            {
+                                <article class="client-artifact-row @ArtifactTypeClass(artifact.ContentType)">
+                                    <a class="artifact-open" href="/crm/artifacts/@artifact.Id" target="_blank"
+                                       title="Open @artifact.Title">
+                                        <span class="artifact-file-icon">
+                                            <span>@ArtifactIcon(artifact.ContentType)</span>
+                                            <small>@ArtifactExtension(artifact.Title)</small>
+                                        </span>
+                                        <span class="artifact-file-copy">
+                                            <strong>@artifact.Title</strong>
+                                            <span class="artifact-file-meta">
+                                                <span>@FormatBytes(artifact.SizeBytes)</span>
+                                                <span>@ArtifactTypeLabel(artifact.ContentType)</span>
+                                                <span>@RelativeArtifactDate(artifact.CreatedAt)</span>
+                                            </span>
+                                        </span>
+                                    </a>
+                                    <span class="artifact-source-badge @artifact.Source.ToLowerInvariant()">
+                                        @if (artifact.Source == "Automation")
+                                        {
+                                            <span class="source-dot"></span><text>Automation output</text>
+                                        }
+                                        else
+                                        {
+                                            <span class="source-dot"></span><text>Uploaded</text>
+                                        }
+                                    </span>
+                                    <div class="artifact-row-actions">
+                                        <a href="/crm/artifacts/@artifact.Id" target="_blank"
+                                           class="artifact-action open" title="Open file" aria-label="Open @artifact.Title">
+                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                                                <path d="M14 5h5v5M19 5l-8 8"></path><path d="M19 13v6H5V5h6"></path>
+                                            </svg>
+                                        </a>
+                                        @if (_confirmArtifactRemoveId == artifact.Id)
+                                        {
+                                            <button class="artifact-confirm-remove"
+                                                    title="Confirm removal"
+                                                    @onclick="@(() => RemoveArtifact(artifact))">Remove</button>
+                                            <button class="artifact-action"
+                                                    title="Cancel"
+                                                    @onclick="@(() => _confirmArtifactRemoveId = null)">×</button>
+                                        }
+                                        else
+                                        {
+                                            <button class="artifact-action remove"
+                                                    title="Remove from client"
+                                                    aria-label="Remove @artifact.Title from client"
+                                                    @onclick="@(() => _confirmArtifactRemoveId = artifact.Id)">
+                                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                                                    <path d="M4 7h16M9 7V4h6v3M8 10v8M12 10v8M16 10v8M6 7l1 14h10l1-14"></path>
+                                                </svg>
+                                            </button>
+                                        }
+                                    </div>
+                                </article>
+                            }
+                        </div>
+                        }
+                    }
+                </div>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public Guid ProjectId { get; set; }
+
+    private static readonly CustomerLifecycleStage[] Stages = Enum.GetValues<CustomerLifecycleStage>();
+    private static readonly CrmAutomationEventType[] AutomationEvents = Enum.GetValues<CrmAutomationEventType>();
+    private static readonly string[] CommsChannels = ["Note", "Email", "Sms"];
+    private string _crmSection = "clients";
+    private IReadOnlyList<CrmClientView> _clients = Array.Empty<CrmClientView>();
+    private IReadOnlyList<JobChainView> _chains = Array.Empty<JobChainView>();
+    private IReadOnlyList<CrmAutomationRuleView> _automationRules = Array.Empty<CrmAutomationRuleView>();
+    private IReadOnlyList<CrmChainRunView> _clientRuns = Array.Empty<CrmChainRunView>();
+    private IReadOnlyList<CrmCommunicationView> _communications = Array.Empty<CrmCommunicationView>();
+    private IReadOnlyList<CrmClientArtifactView> _clientArtifacts = Array.Empty<CrmClientArtifactView>();
+    private CrmCommsCapabilitiesView? _commsCapabilities;
+    private bool _loading = true;
+    private bool _loadingRuns;
+    private bool _loadingComms;
+    private bool _sendingComms;
+    private bool _loadingArtifacts;
+    private bool _uploadingArtifact;
+    private bool _showEditor;
+    private bool _showAutomationEditor;
+    private bool _saving;
+    private bool _savingAutomation;
+    private bool _running;
+    private bool _confirmDelete;
+    private string? _message;
+    private string? _formError;
+    private string? _commsError;
+    private string? _artifactError;
+    private string _artifactSearch = "";
+    private string _artifactSourceFilter = "all";
+    private string _detailTab = "overview";
+    private string _composeChannel = "Note";
+    private string _composeSubject = "";
+    private string _composeBody = "";
+    private string _search = "";
+    private CustomerLifecycleStage? _stageFilter;
+    private CrmClientView? _selected;
+    private Guid? _selectedChainId;
+    private Guid? _confirmArtifactRemoveId;
+    private Guid? _editId;
+    private Guid? _editAutomationId;
+    private Guid? _confirmAutomationDeleteId;
+    private string _editName = "";
+    private string? _editCompany;
+    private string? _editEmail;
+    private string? _editPhone;
+    private CustomerLifecycleStage _editStage = CustomerLifecycleStage.Lead;
+    private string? _editNotes;
+    private string _automationName = "";
+    private CrmAutomationEventType _automationEvent = CrmAutomationEventType.StageEntered;
+    private CustomerLifecycleStage? _automationStage;
+    private Guid? _automationChainId;
+    private bool _automationEnabled = true;
+    private string? _automationError;
+
+    private IEnumerable<CrmClientView> FilteredClients => _clients.Where(client =>
+        (_stageFilter is null || ParseStage(client.LifecycleStage) == _stageFilter) &&
+        (string.IsNullOrWhiteSpace(_search) ||
+         Searchable(client).Contains(_search.Trim(), StringComparison.OrdinalIgnoreCase)));
+
+    protected override async Task OnParametersSetAsync()
+    {
+        Ui.Set("CRM", "clients · lifecycle · automations");
+        _loading = true;
+        try
+        {
+            var clientsTask = Svc.ListCrmClientsAsync(ProjectId);
+            var chainsTask = Svc.ListJobChainsAsync(ProjectId);
+            var automationsTask = Svc.ListCrmAutomationRulesAsync(ProjectId);
+            await Task.WhenAll(clientsTask, chainsTask, automationsTask);
+            _clients = await clientsTask;
+            _chains = await chainsTask;
+            _automationRules = await automationsTask;
+        }
+        catch (Exception ex) { _message = ex.Message; }
+        finally { _loading = false; }
+    }
+
+    private void NewPrimary()
+    {
+        if (_crmSection == "automations") NewAutomation();
+        else NewClient();
+    }
+
+    private void NewClient()
+    {
+        _editId = null;
+        _editName = "";
+        _editCompany = _editEmail = _editPhone = _editNotes = null;
+        _editStage = CustomerLifecycleStage.Lead;
+        _formError = null;
+        _showEditor = true;
+    }
+
+    private void EditClient(CrmClientView client)
+    {
+        _editId = client.Id;
+        _editName = client.Name;
+        _editCompany = client.Company;
+        _editEmail = client.Email;
+        _editPhone = client.Phone;
+        _editStage = ParseStage(client.LifecycleStage);
+        _editNotes = client.Notes;
+        _formError = null;
+        _selected = null;
+        _clientRuns = Array.Empty<CrmChainRunView>();
+        _confirmDelete = false;
+        _showEditor = true;
+    }
+
+    private void CloseEditor() => _showEditor = false;
+
+    private void NewAutomation()
+    {
+        _editAutomationId = null;
+        _automationName = "";
+        _automationEvent = CrmAutomationEventType.StageEntered;
+        _automationStage = null;
+        _automationChainId = null;
+        _automationEnabled = true;
+        _automationError = null;
+        _showAutomationEditor = true;
+    }
+
+    private void EditAutomation(CrmAutomationRuleView rule)
+    {
+        _editAutomationId = rule.Id;
+        _automationName = rule.Name;
+        _automationEvent = Enum.TryParse<CrmAutomationEventType>(rule.EventType, out var eventType)
+            ? eventType
+            : CrmAutomationEventType.StageEntered;
+        _automationStage = rule.LifecycleStage is not null
+            && Enum.TryParse<CustomerLifecycleStage>(rule.LifecycleStage, out var stage)
+                ? stage
+                : null;
+        _automationChainId = rule.ChainId;
+        _automationEnabled = rule.Enabled;
+        _automationError = null;
+        _showAutomationEditor = true;
+    }
+
+    private void CloseAutomationEditor()
+    {
+        _showAutomationEditor = false;
+        _automationError = null;
+    }
+
+    private async Task SaveAutomation()
+    {
+        _automationError = null;
+        if (string.IsNullOrWhiteSpace(_automationName))
+        {
+            _automationError = "Enter an automation name.";
+            return;
+        }
+        if (_automationChainId is null)
+        {
+            _automationError = "Select a job chain.";
+            return;
+        }
+
+        _savingAutomation = true;
+        try
+        {
+            await Svc.SaveCrmAutomationRuleAsync(new SaveCrmAutomationRuleCommand(
+                ProjectId, _automationName, _automationEvent, _automationStage,
+                _automationChainId.Value, _automationEnabled, _editAutomationId));
+            await RefreshAutomationRules();
+            _showAutomationEditor = false;
+            _message = _editAutomationId is null ? "Automation created." : "Automation updated.";
+        }
+        catch (Exception ex) { _automationError = ex.Message; }
+        finally { _savingAutomation = false; }
+    }
+
+    private async Task ToggleAutomation(CrmAutomationRuleView rule)
+    {
+        try
+        {
+            await Svc.SetCrmAutomationEnabledAsync(rule.Id, !rule.Enabled);
+            await RefreshAutomationRules();
+            _message = $"{rule.Name} {(rule.Enabled ? "paused" : "enabled")}.";
+        }
+        catch (Exception ex) { _message = ex.Message; }
+    }
+
+    private async Task DeleteAutomation(CrmAutomationRuleView rule)
+    {
+        try
+        {
+            await Svc.DeleteCrmAutomationRuleAsync(rule.Id);
+            _confirmAutomationDeleteId = null;
+            await RefreshAutomationRules();
+            _message = $"{rule.Name} deleted.";
+        }
+        catch (Exception ex) { _message = ex.Message; }
+    }
+
+    private async Task SaveClient()
+    {
+        _formError = null;
+        _saving = true;
+        try
+        {
+            var saved = await Svc.SaveCrmClientAsync(new SaveCrmClientCommand(
+                ProjectId, _editName, _editCompany, _editEmail, _editPhone,
+                _editStage, _editNotes, _editId));
+            await RefreshClients();
+            if (_selected?.Id == saved.Id) _selected = saved;
+            _showEditor = false;
+            _message = _editId is null ? "Client added." : "Client updated.";
+        }
+        catch (Exception ex) { _formError = ex.Message; }
+        finally { _saving = false; }
+    }
+
+    private async Task OpenClient(CrmClientView client)
+    {
+        _selected = client;
+        _selectedChainId = null;
+        _confirmDelete = false;
+        _detailTab = "overview";
+        _composeChannel = "Note";
+        _composeSubject = _composeBody = "";
+        _commsError = null;
+        _artifactError = null;
+        _artifactSearch = "";
+        _artifactSourceFilter = "all";
+        _confirmArtifactRemoveId = null;
+        await Task.WhenAll(LoadRuns(), LoadCommunications(), LoadArtifacts());
+    }
+
+    private void CloseClient()
+    {
+        _selected = null;
+        _clientRuns = Array.Empty<CrmChainRunView>();
+        _communications = Array.Empty<CrmCommunicationView>();
+        _clientArtifacts = Array.Empty<CrmClientArtifactView>();
+    }
+
+    private async Task MoveClient(CrmClientView client, ChangeEventArgs args)
+    {
+        if (!Enum.TryParse<CustomerLifecycleStage>(args.Value?.ToString(), out var stage)) return;
+        try
+        {
+            var moved = await Svc.MoveCrmClientAsync(client.Id, stage);
+            await RefreshClients();
+            if (_selected?.Id == moved.Id) _selected = moved;
+            _message = $"{moved.Name} moved to {StageLabel(stage)}.";
+        }
+        catch (Exception ex) { _message = ex.Message; }
+    }
+
+    private async Task RunAutomation()
+    {
+        if (_selected is null || _selectedChainId is null) return;
+        _running = true;
+        _message = null;
+        try
+        {
+            var run = await Svc.RunCrmClientAutomationAsync(_selected.Id, _selectedChainId.Value);
+            _message = $"{run.ChainName} finished with status {run.Status}.";
+            await Task.WhenAll(LoadRuns(), LoadArtifacts());
+        }
+        catch (Exception ex) { _message = ex.Message; }
+        finally { _running = false; }
+    }
+
+    private async Task DeleteClient()
+    {
+        if (_selected is null) return;
+        try
+        {
+            var name = _selected.Name;
+            await Svc.DeleteCrmClientAsync(_selected.Id);
+            CloseClient();
+            await RefreshClients();
+            _message = $"{name} deleted.";
+        }
+        catch (Exception ex) { _message = ex.Message; }
+    }
+
+    private async Task LoadRuns()
+    {
+        if (_selected is null) return;
+        _loadingRuns = true;
+        try { _clientRuns = await Svc.ListCrmClientChainRunsAsync(_selected.Id); }
+        catch (Exception ex) { _message = ex.Message; }
+        finally { _loadingRuns = false; }
+    }
+
+    private async Task LoadCommunications()
+    {
+        if (_selected is null) return;
+        _loadingComms = true;
+        try
+        {
+            var communicationsTask = Svc.ListCrmClientCommunicationsAsync(_selected.Id);
+            var capabilitiesTask = Svc.GetCrmCommsCapabilitiesAsync();
+            await Task.WhenAll(communicationsTask, capabilitiesTask);
+            _communications = await communicationsTask;
+            _commsCapabilities = await capabilitiesTask;
+        }
+        catch (Exception ex) { _commsError = ex.Message; }
+        finally { _loadingComms = false; }
+    }
+
+    private async Task LoadArtifacts()
+    {
+        if (_selected is null) return;
+        _loadingArtifacts = true;
+        try { _clientArtifacts = await Svc.ListCrmClientArtifactsAsync(_selected.Id); }
+        catch (Exception ex) { _artifactError = ex.Message; }
+        finally { _loadingArtifacts = false; }
+    }
+
+    private async Task AttachArtifact(InputFileChangeEventArgs args)
+    {
+        if (_selected is null) return;
+        const long maxBytes = 20L * 1024 * 1024;
+        _uploadingArtifact = true;
+        _artifactError = null;
+        try
+        {
+            var file = args.File;
+            if (file.Size > maxBytes) throw new InvalidOperationException("Files must be 20 MB or smaller.");
+            await using var input = file.OpenReadStream(maxBytes);
+            using var buffer = new MemoryStream();
+            await input.CopyToAsync(buffer);
+            await Svc.AttachCrmClientArtifactAsync(
+                _selected.Id, file.Name, file.ContentType, buffer.ToArray());
+            await LoadArtifacts();
+        }
+        catch (Exception ex) { _artifactError = ex.Message; }
+        finally { _uploadingArtifact = false; }
+    }
+
+    private async Task RemoveArtifact(CrmClientArtifactView artifact)
+    {
+        _artifactError = null;
+        try
+        {
+            await Svc.RemoveCrmClientArtifactAsync(artifact.Id);
+            _confirmArtifactRemoveId = null;
+            await LoadArtifacts();
+        }
+        catch (Exception ex) { _artifactError = ex.Message; }
+    }
+
+    private void SelectChannel(string channel)
+    {
+        if (!ChannelAvailable(channel)) return;
+        _composeChannel = channel;
+        _commsError = null;
+    }
+
+    private async Task SubmitCommunication()
+    {
+        if (_selected is null || !CanSubmitComms) return;
+        _sendingComms = true;
+        _commsError = null;
+        try
+        {
+            CrmCommunicationView result;
+            if (_composeChannel == "Note")
+            {
+                result = await Svc.AddCrmClientNoteAsync(_selected.Id, _composeBody);
+            }
+            else
+            {
+                var channel = _composeChannel == "Email"
+                    ? PlaceContext.Domain.ValueObjects.CrmCommunicationChannel.Email
+                    : PlaceContext.Domain.ValueObjects.CrmCommunicationChannel.Sms;
+                result = await Svc.SendCrmClientMessageAsync(
+                    _selected.Id, channel, _composeSubject, _composeBody);
+            }
+            _composeBody = "";
+            _composeSubject = "";
+            await LoadCommunications();
+            if (result.Status == "Failed") _commsError = result.Error ?? "Message delivery failed.";
+        }
+        catch (Exception ex) { _commsError = ex.Message; }
+        finally { _sendingComms = false; }
+    }
+
+    private bool CanSubmitComms =>
+        !_sendingComms &&
+        !string.IsNullOrWhiteSpace(_composeBody) &&
+        (_composeChannel != "Email" || !string.IsNullOrWhiteSpace(_composeSubject)) &&
+        ChannelAvailable(_composeChannel);
+
+    private bool ChannelAvailable(string channel) => channel switch
+    {
+        "Email" => _selected?.Email is not null && (_commsCapabilities?.EmailEnabled ?? false),
+        "Sms" => _selected?.Phone is not null && (_commsCapabilities?.SmsEnabled ?? false),
+        _ => true,
+    };
+
+    private string ChannelHelp(string channel) => channel switch
+    {
+        "Email" when _selected?.Email is null => "Add an email address to this client first.",
+        "Email" when !(_commsCapabilities?.EmailEnabled ?? false) => "Configure SendGrid to enable email.",
+        "Sms" when _selected?.Phone is null => "Add a phone number to this client first.",
+        "Sms" when !(_commsCapabilities?.SmsEnabled ?? false) => "Configure Twilio to enable SMS.",
+        _ => ChannelLabel(channel),
+    };
+
+    private string RecipientHint() => _composeChannel switch
+    {
+        "Email" => $"To: {_selected?.Email}",
+        "Sms" => $"To: {_selected?.Phone}",
+        _ => "Visible to your CRM team",
+    };
+
+    private string ComposerPlaceholder() => _composeChannel switch
+    {
+        "Email" => $"Write an email to {_selected?.Name}…",
+        "Sms" => $"Write an SMS to {_selected?.Name}…",
+        _ => "Add context, a follow-up, or the next step…",
+    };
+
+    private string SubmitLabel() => _composeChannel switch
+    {
+        "Email" => "Send email",
+        "Sms" => "Send SMS",
+        _ => "Add note",
+    };
+
+    private static string ChannelLabel(string channel) => channel == "Sms" ? "SMS" : channel;
+    private static string ChannelIcon(string channel) => channel switch
+    {
+        "Email" => "✉",
+        "Sms" => "◌",
+        _ => "✦",
+    };
+
+    private static string ArtifactIcon(string contentType)
+    {
+        if (contentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase)) return "▧";
+        if (contentType.Contains("pdf", StringComparison.OrdinalIgnoreCase)) return "PDF";
+        if (contentType.Contains("json", StringComparison.OrdinalIgnoreCase)) return "{}";
+        if (contentType.Contains("csv", StringComparison.OrdinalIgnoreCase)) return "CSV";
+        return "DOC";
+    }
+
+    private static string FormatBytes(long bytes) => bytes switch
+    {
+        >= 1024 * 1024 => $"{bytes / 1024d / 1024d:0.#} MB",
+        >= 1024 => $"{bytes / 1024d:0.#} KB",
+        _ => $"{bytes} B",
+    };
+
+    private IEnumerable<CrmClientArtifactView> FilteredClientArtifacts =>
+        _clientArtifacts.Where(item =>
+            (_artifactSourceFilter == "all"
+             || item.Source.Equals(_artifactSourceFilter, StringComparison.OrdinalIgnoreCase))
+            && (string.IsNullOrWhiteSpace(_artifactSearch)
+                || item.Title.Contains(_artifactSearch.Trim(), StringComparison.OrdinalIgnoreCase)
+                || ArtifactTypeLabel(item.ContentType).Contains(
+                    _artifactSearch.Trim(), StringComparison.OrdinalIgnoreCase)));
+
+    private void OnArtifactSearch(ChangeEventArgs args)
+        => _artifactSearch = args.Value?.ToString() ?? "";
+
+    private void ClearArtifactFilters()
+    {
+        _artifactSearch = "";
+        _artifactSourceFilter = "all";
+    }
+
+    private int ArtifactSourceCount(string source)
+        => _clientArtifacts.Count(item => item.Source == source);
+
+    private static string ArtifactExtension(string title)
+    {
+        var extension = Path.GetExtension(title).TrimStart('.');
+        return string.IsNullOrWhiteSpace(extension) ? "FILE" : extension[..Math.Min(4, extension.Length)].ToUpperInvariant();
+    }
+
+    private static string ArtifactTypeClass(string contentType)
+    {
+        if (contentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase)) return "type-image";
+        if (contentType.Contains("pdf", StringComparison.OrdinalIgnoreCase)) return "type-pdf";
+        if (contentType.Contains("json", StringComparison.OrdinalIgnoreCase)
+            || contentType.Contains("csv", StringComparison.OrdinalIgnoreCase)) return "type-data";
+        return "type-document";
+    }
+
+    private static string ArtifactTypeLabel(string contentType)
+    {
+        if (contentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase)) return "Image";
+        if (contentType.Contains("pdf", StringComparison.OrdinalIgnoreCase)) return "PDF";
+        if (contentType.Contains("json", StringComparison.OrdinalIgnoreCase)) return "JSON data";
+        if (contentType.Contains("csv", StringComparison.OrdinalIgnoreCase)) return "CSV data";
+        if (contentType.StartsWith("text/", StringComparison.OrdinalIgnoreCase)) return "Text";
+        if (contentType.Contains("spreadsheet", StringComparison.OrdinalIgnoreCase)) return "Spreadsheet";
+        if (contentType.Contains("word", StringComparison.OrdinalIgnoreCase)) return "Document";
+        return "File";
+    }
+
+    private static string RelativeArtifactDate(DateTimeOffset value)
+    {
+        var local = value.ToWorkspaceTime();
+        var today = DateTimeOffset.Now.Date;
+        if (local.Date == today) return $"Today, {local:HH:mm}";
+        if (local.Date == today.AddDays(-1)) return $"Yesterday, {local:HH:mm}";
+        return local.ToString("dd MMM yyyy");
+    }
+
+    private async Task RefreshClients() => _clients = await Svc.ListCrmClientsAsync(ProjectId);
+    private async Task RefreshAutomationRules()
+        => _automationRules = await Svc.ListCrmAutomationRulesAsync(ProjectId);
+    private string SelectedAutomationChainName
+        => _chains.FirstOrDefault(chain => chain.Id == _automationChainId)?.Name ?? "Choose a chain";
+    private static string AutomationEventLabel(string value)
+        => Enum.TryParse<CrmAutomationEventType>(value, out var eventType)
+            ? AutomationEventLabel(eventType)
+            : value;
+    private static string AutomationEventLabel(CrmAutomationEventType eventType) => eventType switch
+    {
+        CrmAutomationEventType.ClientCreated => "Client created",
+        CrmAutomationEventType.ClientUpdated => "Client updated",
+        CrmAutomationEventType.StageEntered => "Stage entered",
+        CrmAutomationEventType.NoteAdded => "Note added",
+        CrmAutomationEventType.ArtifactAttached => "Artifact attached",
+        CrmAutomationEventType.CommunicationSent => "Communication sent",
+        _ => eventType.ToString(),
+    };
+    private static string AutomationEventDescription(CrmAutomationEventType eventType) => eventType switch
+    {
+        CrmAutomationEventType.ClientCreated => "Runs when a new client is added to this project.",
+        CrmAutomationEventType.ClientUpdated => "Runs when client contact details or notes are edited.",
+        CrmAutomationEventType.StageEntered => "Runs when a client moves into a lifecycle stage.",
+        CrmAutomationEventType.NoteAdded => "Runs when an internal note is added in Comms.",
+        CrmAutomationEventType.ArtifactAttached => "Runs when a file is attached directly to the client.",
+        CrmAutomationEventType.CommunicationSent => "Runs after an email or SMS is sent successfully.",
+        _ => "",
+    };
+    private static string AutomationEventIcon(string value)
+        => Enum.TryParse<CrmAutomationEventType>(value, out var eventType)
+            ? eventType switch
+            {
+                CrmAutomationEventType.ClientCreated => "+",
+                CrmAutomationEventType.ClientUpdated => "↻",
+                CrmAutomationEventType.StageEntered => "→",
+                CrmAutomationEventType.NoteAdded => "✦",
+                CrmAutomationEventType.ArtifactAttached => "⇧",
+                CrmAutomationEventType.CommunicationSent => "✉",
+                _ => "⌁",
+            }
+            : "⌁";
+    private static string AutomationStageLabel(string? value)
+        => value is not null && Enum.TryParse<CustomerLifecycleStage>(value, out var stage)
+            ? StageLabel(stage)
+            : "Any lifecycle stage";
+    private int Count(CustomerLifecycleStage stage) => _clients.Count(c => ParseStage(c.LifecycleStage) == stage);
+    private void ToggleStageFilter(CustomerLifecycleStage stage) => _stageFilter = _stageFilter == stage ? null : stage;
+    private static CustomerLifecycleStage ParseStage(string value)
+        => Enum.TryParse<CustomerLifecycleStage>(value, out var stage) ? stage : CustomerLifecycleStage.Lead;
+    private static string StageLabel(CustomerLifecycleStage stage) => stage switch
+    {
+        CustomerLifecycleStage.AtRisk => "At risk",
+        _ => stage.ToString(),
+    };
+    private static string StageDescription(CustomerLifecycleStage stage) => stage switch
+    {
+        CustomerLifecycleStage.Lead => "New prospects",
+        CustomerLifecycleStage.Qualified => "Ready to engage",
+        CustomerLifecycleStage.Onboarding => "Getting started",
+        CustomerLifecycleStage.Active => "Current customers",
+        CustomerLifecycleStage.AtRisk => "Needs attention",
+        CustomerLifecycleStage.Churned => "Closed accounts",
+        _ => "",
+    };
+    private static string StageClass(CustomerLifecycleStage stage) => $"stage-{stage.ToString().ToLowerInvariant()}";
+    private static string Searchable(CrmClientView client)
+        => $"{client.Name} {client.Company} {client.Email} {client.Phone}";
+    private static string Initials(string name)
+    {
+        var parts = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return string.Concat(parts.Take(2).Select(part => char.ToUpperInvariant(part[0])));
+    }
+}

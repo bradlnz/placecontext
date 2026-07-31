@@ -547,7 +547,7 @@ else
                                     }
                                     <span class="code ml-5">@p.Name</span>
                                 </label>
-                                <ParamInput Parameter="p" Value="@Vm.GetArg(key)"
+                                <ParamInput Parameter="p" ProjectId="@ProjectId" Value="@Vm.GetArg(key)"
                                             ValueChanged="@(v => Vm.SetArg(key, v))" />
                             </div>
                         }

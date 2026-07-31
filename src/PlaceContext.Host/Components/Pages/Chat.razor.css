@@ -1329,10 +1329,10 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 7px;
-    min-width: 92px;
+    width: 38px;
+    min-width: 38px;
     height: 38px;
-    padding: 0 13px;
+    padding: 0;
     border: 1px solid color-mix(in srgb, var(--primary) 34%, var(--border));
     background: color-mix(in srgb, var(--primary) 9%, var(--bg-2));
     color: var(--text);
@@ -1405,6 +1405,16 @@
     color: var(--fg);
 }
 
+.attached-file-tile {
+    gap: 7px;
+    min-width: 0;
+    max-width: min(360px, calc(100% - 24px));
+    min-height: 30px;
+    padding: 4px 6px;
+    margin: 4px 12px 0;
+    border-radius: 7px;
+}
+
 .attached-file-tile .file-tile-copy,
 .attachment-tile .file-tile-copy {
     display: flex;
@@ -1412,6 +1422,16 @@
     min-width: 0;
     flex-direction: column;
     gap: 2px;
+}
+
+.attached-file-tile .file-tile-copy {
+    flex-direction: row;
+    align-items: baseline;
+    gap: 6px;
+}
+
+.attached-file-tile .file-tile-copy small {
+    flex: none;
 }
 
 .file-tile-copy strong,
@@ -1447,13 +1467,20 @@
     font-weight: 700;
 }
 
+.file-tile-icon.compact {
+    width: 23px;
+    height: 23px;
+    border-radius: 5px;
+    font-size: .52rem;
+}
+
 .file-tile-open {
     color: var(--text-3);
     font-size: 0.8rem;
 }
 
 .attachment-error {
-    margin: 5px 0 0 44px;
+    margin: 5px 12px 0;
     color: var(--bad);
     font-size: 0.72rem;
 }
@@ -1748,6 +1775,10 @@ a.attachment-tile:hover {
         min-height: 40px;
     }
 
+    .attached-file-tile {
+        max-width: calc(100% - 24px);
+    }
+
     /* Side panel slides over the chat instead of squeezing it */
     .side-panel {
         position: absolute;
@@ -1802,7 +1833,7 @@ a.attachment-tile:hover {
         padding: 0;
     }
 
-    .chat-attach-btn > span {
+    .attached-file-tile .file-tile-copy small {
         display: none;
     }
 }

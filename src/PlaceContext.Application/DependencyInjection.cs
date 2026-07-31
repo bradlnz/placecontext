@@ -38,6 +38,7 @@ public static class DependencyInjection
         services.AddScoped<RecordLinkService>();
         services.AddScoped<ProjectChartService>();
         services.AddScoped<ObsidianVaultImporter>();
+        services.AddScoped<CrmAutomationDispatcher>();
 
         // Commands.
         services.AddScoped<ICommandHandler<CreateProjectCommand, ProjectSummaryView>, CreateProjectHandler>();
@@ -57,6 +58,17 @@ public static class DependencyInjection
         services.AddScoped<ICommandHandler<ReplayRunCommand, JobRunDetailView>, ReplayRunHandler>();
         services.AddScoped<ICommandHandler<UploadJobCodeCommand, JobView>, UploadJobCodeHandler>();
         services.AddScoped<ICommandHandler<DeleteJobCommand, bool>, DeleteJobHandler>();
+        services.AddScoped<ICommandHandler<SaveCrmClientCommand, CrmClientView>, SaveCrmClientHandler>();
+        services.AddScoped<ICommandHandler<MoveCrmClientCommand, CrmClientView>, MoveCrmClientHandler>();
+        services.AddScoped<ICommandHandler<DeleteCrmClientCommand, bool>, DeleteCrmClientHandler>();
+        services.AddScoped<ICommandHandler<RunCrmClientAutomationCommand, CrmChainRunView>, RunCrmClientAutomationHandler>();
+        services.AddScoped<ICommandHandler<AddCrmClientNoteCommand, CrmCommunicationView>, AddCrmClientNoteHandler>();
+        services.AddScoped<ICommandHandler<SendCrmClientMessageCommand, CrmCommunicationView>, SendCrmClientMessageHandler>();
+        services.AddScoped<ICommandHandler<AttachCrmClientArtifactCommand, CrmClientArtifactView>, AttachCrmClientArtifactHandler>();
+        services.AddScoped<ICommandHandler<RemoveCrmClientArtifactCommand, bool>, RemoveCrmClientArtifactHandler>();
+        services.AddScoped<ICommandHandler<SaveCrmAutomationRuleCommand, CrmAutomationRuleView>, SaveCrmAutomationRuleHandler>();
+        services.AddScoped<ICommandHandler<SetCrmAutomationEnabledCommand, CrmAutomationRuleView>, SetCrmAutomationEnabledHandler>();
+        services.AddScoped<ICommandHandler<DeleteCrmAutomationRuleCommand, bool>, DeleteCrmAutomationRuleHandler>();
         services.AddScoped<ICommandHandler<CreateJobChainCommand, JobChainView>, CreateJobChainHandler>();
         services.AddScoped<ICommandHandler<UpdateJobChainCommand, JobChainView>, UpdateJobChainHandler>();
         services.AddScoped<ICommandHandler<DeleteJobChainCommand, bool>, DeleteJobChainHandler>();
@@ -135,6 +147,12 @@ public static class DependencyInjection
         services.AddScoped<IQueryHandler<GetRecentToolCallsQuery, IReadOnlyList<ToolCallView>>, GetRecentToolCallsHandler>();
         services.AddScoped<IQueryHandler<ListJobsQuery, IReadOnlyList<JobView>>, ListJobsHandler>();
         services.AddScoped<IQueryHandler<ListJobRunsQuery, IReadOnlyList<JobRunView>>, ListJobRunsHandler>();
+        services.AddScoped<IQueryHandler<ListCrmClientsQuery, IReadOnlyList<CrmClientView>>, ListCrmClientsHandler>();
+        services.AddScoped<IQueryHandler<ListCrmClientChainRunsQuery, IReadOnlyList<CrmChainRunView>>, ListCrmClientChainRunsHandler>();
+        services.AddScoped<IQueryHandler<ListCrmClientCommunicationsQuery, IReadOnlyList<CrmCommunicationView>>, ListCrmClientCommunicationsHandler>();
+        services.AddScoped<IQueryHandler<GetCrmCommsCapabilitiesQuery, CrmCommsCapabilitiesView>, GetCrmCommsCapabilitiesHandler>();
+        services.AddScoped<IQueryHandler<ListCrmClientArtifactsQuery, IReadOnlyList<CrmClientArtifactView>>, ListCrmClientArtifactsHandler>();
+        services.AddScoped<IQueryHandler<ListCrmAutomationRulesQuery, IReadOnlyList<CrmAutomationRuleView>>, ListCrmAutomationRulesHandler>();
         services.AddScoped<IQueryHandler<ListDataMappingsQuery, IReadOnlyList<DataMappingView>>, ListDataMappingsHandler>();
         services.AddScoped<IQueryHandler<ListRecentArtifactsQuery, IReadOnlyList<ArtifactFileView>>, ListRecentArtifactsHandler>();
         services.AddScoped<IQueryHandler<ListProjectArtifactsQuery, IReadOnlyList<ArtifactFileView>>, ListProjectArtifactsHandler>();
