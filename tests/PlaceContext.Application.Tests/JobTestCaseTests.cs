@@ -64,8 +64,11 @@ public sealed class JobTestCaseTests
     {
         var projectId = Guid.NewGuid();
         var job = Job.Create(projectId, "customer lookup", null,
-            new MapSpec("image", new[] { "{}" }, new Dictionary<string, string>()),
-            null, 1, ExitCodePolicy.Default, Now);
+            new MapSpec("image", new[] { "{}" }, new Dictionary<string, string>
+            {
+                ["REAL_SERVICE_TOKEN"] = "must-not-enter-test",
+            }),
+            null, 1, ExitCodePolicy.Default, Now, allowNetworkEgress: true);
         var jobs = new InMemoryJobRepository();
         await jobs.AddAsync(job);
         var test = new JobTestCaseRecord(
@@ -75,22 +78,37 @@ public sealed class JobTestCaseTests
             new[] { new CodeFileDto("test.py", "print('ok')") }, false);
         var store = new MemoryTestStore(test);
         var workloads = new FakeWorkloadRunner();
+        workloads.EnqueueResult(new WorkloadRunResult(
+            0, """{"status":"active"}""", "", ""));
         workloads.EnqueueResult(new WorkloadRunResult(0, null, "2 assertions passed", ""));
-        var runner = new StubJobRunner(Run("""{"status":"active"}"""));
         var handler = new RunJobTestCaseHandler(
-            store, jobs, runner, workloads, new FakeClock(Now.AddMinutes(1)));
+            store, jobs, workloads, new FakeClock(Now.AddMinutes(1)));
 
         var result = await handler.HandleAsync(new RunJobTestCaseCommand(test.Id));
 
         Assert.Equal("Passed", result.LastStatus);
         Assert.Contains("2 assertions passed", result.LastMessage);
-        var request = Assert.Single(workloads.ReceivedRequests);
-        Assert.Equal("python", request.RuntimeId);
-        Assert.Equal("test.py", request.Entrypoint);
-        using var stdin = System.Text.Json.JsonDocument.Parse(request.StdinPayload);
+        Assert.Null(result.LastJobRunId);
+        Assert.Equal(2, workloads.ReceivedRequests.Count);
+        var jobRequest = workloads.ReceivedRequests[0];
+        Assert.Equal("image", jobRequest.Image);
+        Assert.Empty(jobRequest.Env);
+        Assert.False(jobRequest.AllowNetworkEgress);
+        Assert.Equal("""{"id":"123"}""", jobRequest.StdinPayload);
+        var validatorRequest = workloads.ReceivedRequests[1];
+        Assert.Equal("python", validatorRequest.RuntimeId);
+        Assert.Equal("test.py", validatorRequest.Entrypoint);
+        Assert.Empty(validatorRequest.Env);
+        Assert.False(validatorRequest.AllowNetworkEgress);
+        using var stdin = System.Text.Json.JsonDocument.Parse(validatorRequest.StdinPayload);
         Assert.Equal("active", stdin.RootElement.GetProperty("run")
             .GetProperty("output").GetProperty("status").GetString());
         Assert.Equal("123", stdin.RootElement.GetProperty("input").GetProperty("id").GetString());
+        var shard = stdin.RootElement.GetProperty("run").GetProperty("shards")[0];
+        Assert.Equal(0, shard.GetProperty("index").GetInt32());
+        Assert.Equal(0, shard.GetProperty("exitCode").GetInt32());
+        Assert.Equal("Succeeded", shard.GetProperty("outcome").GetString());
+        Assert.False(shard.TryGetProperty("Index", out _));
     }
 
     [Fact]
@@ -109,9 +127,10 @@ public sealed class JobTestCaseTests
             new[] { new CodeFileDto("test.js", "process.exit(1)") }, false);
         var store = new MemoryTestStore(test);
         var workloads = new FakeWorkloadRunner();
+        workloads.EnqueueResult(new WorkloadRunResult(0, "{}", "", ""));
         workloads.EnqueueResult(new WorkloadRunResult(7, null, "", "expected total 3"));
         var handler = new RunJobTestCaseHandler(
-            store, jobs, new StubJobRunner(Run("{}")), workloads, new FakeClock(Now));
+            store, jobs, workloads, new FakeClock(Now));
 
         var result = await handler.HandleAsync(new RunJobTestCaseCommand(test.Id));
 
@@ -134,16 +153,6 @@ public sealed class JobTestCaseTests
         },
         null,
         new JobRunSnapshotView("code", "test.py", null, null, 1, 1, false));
-
-    private sealed class StubJobRunner : IJobRunner
-    {
-        private readonly JobRunDetailView _result;
-        public StubJobRunner(JobRunDetailView result) => _result = result;
-        public Task<JobRunDetailView> RunAsync(
-            Guid jobId, string? inputPayload = null, Guid? runId = null,
-            Guid? replayOfRunId = null, CancellationToken ct = default)
-            => Task.FromResult(_result);
-    }
 
     private sealed class MemoryTestStore : IJobTestStore
     {

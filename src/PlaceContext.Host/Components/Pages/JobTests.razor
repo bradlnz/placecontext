@@ -11,7 +11,7 @@
     <header class="tests-head">
         <div>
             <h2>Tests</h2>
-            <p>Run saved inputs against real Job code and verify the primary output.</p>
+            <p>Verify Job code in isolated sandboxes with mocked dependencies and no production side effects.</p>
         </div>
         <div class="head-actions">
             <button class="dcbtn" disabled="@(_running.Count > 0 || EnabledTests.Count == 0)"
@@ -36,7 +36,7 @@
         <div class="dccard empty-state">
             <div class="empty-icon">⌁</div>
             <strong>Create a Job before adding tests</strong>
-            <span>Tests execute the same code and runtime configuration as a normal Job run.</span>
+            <span>Tests execute Job source without network, secrets, post-actions, or production data writes.</span>
             <button class="dcbtn primary" @onclick="@(() => Nav.NavigateTo($"/project/{ProjectId}/jobs"))">Open Jobs</button>
         </div>
     }
@@ -109,7 +109,7 @@
                                     <div class="test-detail">
                                         @if (isRunning)
                                         {
-                                            <span>Executing the Job…</span>
+                                            <span>Executing isolated Job code…</span>
                                         }
                                         else
                                         {

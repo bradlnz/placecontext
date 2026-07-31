@@ -42,10 +42,9 @@ else
             {
                 <span class="toolbar-message">@_message</span>
             }
-            <label class="egress-toggle" title="Allow this test's validation code to access external services">
-                <input type="checkbox" @bind="_allowNetworkEgress" />
-                <span>Network</span>
-            </label>
+            <span class="mocked-badge" title="No network, Vault secrets, external services, or production Job side effects">
+                Isolated
+            </span>
             <button class="dcbtn" disabled="@_busy" @onclick="ResetStarterAsync">Starter</button>
             <button class="dcbtn" disabled="@_busy" @onclick="RunAsync">
                 @(_running ? "Running…" : "▶ Run test")
@@ -58,7 +57,7 @@ else
         <div class="contract-bar">
             <strong>stdin</strong>
             <code>{ "input": …, "run": { "status": "Succeeded", "output": …, "shards": […] } }</code>
-            <span>Exit <b>0</b> to pass; any other exit code fails. Stdout becomes the test message.</span>
+            <span>Job and validator run without network, secrets, or persisted Job side effects. Exit <b>0</b> to pass.</span>
         </div>
 
         <main class="workspace">
@@ -134,7 +133,7 @@ else
                         <div class="result-body">
                             @if (_lastResult is null)
                             {
-                                <span>Run the test to execute the Job, apply its built-in assertion, then run this validation code.</span>
+                                <span>Run the test to execute the Job in an isolated sandbox, apply its assertion, then run this validation code.</span>
                             }
                             else
                             {
@@ -165,7 +164,6 @@ else
     private readonly List<EditorFile> _files = new();
     private string _runtimeId = "python";
     private string? _entrypoint;
-    private bool _allowNetworkEgress;
     private int _active;
     private bool _loading = true;
     private bool _saving;
@@ -201,7 +199,6 @@ else
             {
                 _runtimeId = _test.RuntimeId ?? "python";
                 _entrypoint = _test.Entrypoint;
-                _allowNetworkEgress = _test.AllowNetworkEgress;
                 _files.Clear();
                 foreach (var file in _test.CodeFiles)
                     _files.Add(new EditorFile { Path = file.Path, Content = file.Content });
@@ -338,7 +335,7 @@ else
         var updated = await Svc.UpdateJobTestCodeAsync(new UpdateJobTestCodeCommand(
             TestId, _runtimeId, entrypoint,
             _files.Select(file => new CodeFileDto(file.Path, file.Content)).ToList(),
-            _allowNetworkEgress));
+            false));
         _test = updated;
         _entrypoint = updated.Entrypoint ?? entrypoint;
         return updated;

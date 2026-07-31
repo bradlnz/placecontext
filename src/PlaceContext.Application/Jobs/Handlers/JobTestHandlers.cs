@@ -4,7 +4,9 @@ using System.Text.Json.Nodes;
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Ports;
+using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.Repositories;
+using PlaceContext.Domain.ValueObjects;
 
 namespace PlaceContext.Application.Features;
 
@@ -158,7 +160,7 @@ public sealed class UpdateJobTestCodeHandler
             RuntimeId = code.RuntimeId,
             Entrypoint = code.Entrypoint,
             CodeFiles = code.Files.Select(file => new CodeFileDto(file.Path, file.Content)).ToList(),
-            AllowNetworkEgress = command.AllowNetworkEgress,
+            AllowNetworkEgress = false,
             LastStatus = "NotRun",
             LastMessage = null,
             LastActualOutput = null,
@@ -178,28 +180,17 @@ public sealed class RunJobTestCaseHandler
     private const int MaxStoredOutputLength = 65_536;
     private readonly IJobTestStore _tests;
     private readonly IJobRepository _jobs;
-    private readonly IJobRunner _runner;
     private readonly IWorkloadRunner _workloads;
     private readonly IClock _clock;
-    private readonly IProjectSecretRepository? _secretRepository;
-    private readonly ISecretProtector? _secretProtector;
-    private readonly IOpenSearchConnectionResolver? _openSearchConnections;
 
     public RunJobTestCaseHandler(
         IJobTestStore tests,
         IJobRepository jobs,
-        IJobRunner runner,
         IWorkloadRunner workloads,
-        IClock clock,
-        IProjectSecretRepository? secretRepository = null,
-        ISecretProtector? secretProtector = null,
-        IOpenSearchConnectionResolver? openSearchConnections = null)
+        IClock clock)
     {
-        (_tests, _jobs, _runner, _workloads, _clock)
-            = (tests, jobs, runner, workloads, clock);
-        _secretRepository = secretRepository;
-        _secretProtector = secretProtector;
-        _openSearchConnections = openSearchConnections;
+        (_tests, _jobs, _workloads, _clock)
+            = (tests, jobs, workloads, clock);
     }
 
     public async Task<JobTestCaseView> HandleAsync(
@@ -218,7 +209,7 @@ public sealed class RunJobTestCaseHandler
 
         try
         {
-            run = await _runner.RunAsync(test.JobId, test.InputPayload, ct: ct);
+            run = await RunMockJobAsync(job, test.InputPayload, ct);
             actual = RunJobChainHandler.PrimaryOutput(run);
             (status, message) = Evaluate(test, run, actual);
             if (status == "Passed" && test.CodeFiles.Count > 0)
@@ -240,7 +231,8 @@ public sealed class RunJobTestCaseHandler
             LastStatus = status,
             LastMessage = message,
             LastActualOutput = Truncate(actual),
-            LastJobRunId = run?.Id,
+            // Mocked Job executions are intentionally not persisted in job_runs.
+            LastJobRunId = null,
             LastRunAt = _clock.UtcNow,
             LastDurationMs = stopwatch.ElapsedMilliseconds,
             UpdatedAt = _clock.UtcNow,
@@ -258,7 +250,6 @@ public sealed class RunJobTestCaseHandler
         if (string.IsNullOrWhiteSpace(test.RuntimeId))
             return ("Failed", "Test code has no runtime selected.");
 
-        var environment = await LoadEnvironmentAsync(test.ProjectId, ct);
         var stdin = JsonSerializer.Serialize(new
         {
             input = JsonValue(test.InputPayload),
@@ -269,9 +260,9 @@ public sealed class RunJobTestCaseHandler
                 output = JsonValue(actual),
                 shards = run.ShardResults.Select(shard => new
                 {
-                    shard.Index,
-                    shard.ExitCode,
-                    shard.Outcome,
+                    index = shard.Index,
+                    exitCode = shard.ExitCode,
+                    outcome = shard.Outcome,
                     artifact = JsonValue(shard.Artifact),
                 }),
             },
@@ -279,13 +270,13 @@ public sealed class RunJobTestCaseHandler
         var result = await _workloads.RunAsync(new WorkloadRunRequest(
             Image: null,
             StdinPayload: stdin,
-            Env: environment,
+            Env: new Dictionary<string, string>(),
             ArtifactMounts: Array.Empty<(string, string)>(),
             CorrelationId: $"job-test-{test.Id:N}-{Guid.NewGuid():N}",
             CodeFiles: test.CodeFiles.Select(file => (file.Path, file.Content)).ToList(),
             RuntimeId: test.RuntimeId,
             Entrypoint: test.Entrypoint,
-            AllowNetworkEgress: test.AllowNetworkEgress,
+            AllowNetworkEgress: false,
             TimeoutSeconds: 300), ct);
 
         var output = FirstNonBlank(result.Artifact, result.Stdout, result.Stderr);
@@ -296,22 +287,108 @@ public sealed class RunJobTestCaseHandler
             : ("Failed", $"Test code exited {result.ExitCode}: {TruncateMessage(output ?? "No output.")}");
     }
 
-    private async Task<IReadOnlyDictionary<string, string>> LoadEnvironmentAsync(
-        Guid projectId, CancellationToken ct)
+    private async Task<JobRunDetailView> RunMockJobAsync(
+        Job job, string? inputPayload, CancellationToken ct)
     {
-        var environment = new Dictionary<string, string>();
-        if (_secretRepository is not null && _secretProtector is not null)
+        var startedAt = _clock.UtcNow;
+        var mockRunId = Guid.NewGuid();
+        var mapResult = await _workloads.RunAsync(BuildMockRequest(
+            job.MapSpec.Source,
+            inputPayload ?? "{}",
+            Array.Empty<(string, string)>(),
+            $"job-test-mock-{job.Id:N}-{mockRunId:N}-map",
+            job.TimeoutSeconds), ct);
+        var mapOutcome = job.ExitCodePolicy.Classify(mapResult.ExitCode);
+        var shard = new ShardResultView(
+            0,
+            mapResult.ExitCode,
+            mapOutcome.ToString(),
+            mapResult.Artifact,
+            CombineLog(mapResult.Stdout, mapResult.Stderr),
+            ToArtifactViews(mapResult.Artifacts));
+
+        ReduceResultView? reduce = null;
+        if (mapOutcome == WorkloadOutcome.Succeeded && job.ReduceSpec is { } reduceSpec)
         {
-            foreach (var (name, cipher) in await _secretRepository.GetCiphersAsync(projectId, ct))
-            {
-                try { environment[name] = _secretProtector.Unprotect(cipher); }
-                catch { /* Ignore damaged unrelated Vault entries. */ }
-            }
+            var mounts = mapResult.Artifact is null
+                ? Array.Empty<(string, string)>()
+                : new[] { (mapResult.Artifact, "/in/0/result.json") };
+            var reduceResult = await _workloads.RunAsync(BuildMockRequest(
+                reduceSpec.Source,
+                "{}",
+                mounts,
+                $"job-test-mock-{job.Id:N}-{mockRunId:N}-reduce",
+                job.TimeoutSeconds), ct);
+            reduce = new ReduceResultView(
+                reduceResult.ExitCode,
+                job.ExitCodePolicy.SuccessCodes.Contains(reduceResult.ExitCode),
+                reduceResult.Artifact,
+                CombineLog(reduceResult.Stdout, reduceResult.Stderr),
+                ToArtifactViews(reduceResult.Artifacts));
         }
-        if (_openSearchConnections is not null)
-            foreach (var (name, value) in await _openSearchConnections.GetJobEnvironmentAsync(projectId, ct))
-                environment[name] = value;
-        return environment;
+
+        var status = mapOutcome switch
+        {
+            WorkloadOutcome.Failed => "Failed",
+            WorkloadOutcome.Partial => "Partial",
+            _ when reduce is { Succeeded: false } => "Failed",
+            _ => "Succeeded",
+        };
+        var sourceKind = job.MapSpec.Source is WorkloadSource.CodeWorkload ? "code" : "image";
+        return new JobRunDetailView(
+            mockRunId,
+            job.Id,
+            job.ProjectId,
+            status,
+            startedAt,
+            _clock.UtcNow,
+            new[] { shard },
+            reduce,
+            new JobRunSnapshotView(
+                sourceKind,
+                job.MapSpec.Source.Label,
+                job.ReduceSpec is null
+                    ? null
+                    : job.ReduceSpec.Source is WorkloadSource.CodeWorkload ? "code" : "image",
+                job.ReduceSpec?.Source.Label,
+                1,
+                1,
+                false));
+    }
+
+    private static WorkloadRunRequest BuildMockRequest(
+        WorkloadSource source,
+        string stdinPayload,
+        IReadOnlyList<(string Content, string ContainerPath)> artifactMounts,
+        string correlationId,
+        int timeoutSeconds)
+        => source switch
+        {
+            WorkloadSource.ImageWorkload image => new WorkloadRunRequest(
+                image.Image, stdinPayload, new Dictionary<string, string>(), artifactMounts,
+                correlationId, null, null, null, false, timeoutSeconds),
+            WorkloadSource.CodeWorkload code => new WorkloadRunRequest(
+                null, stdinPayload, new Dictionary<string, string>(), artifactMounts,
+                correlationId,
+                code.Files.Select(file => (file.Path, file.Content)).ToList(),
+                code.RuntimeId, code.Entrypoint, false, timeoutSeconds),
+            _ => throw new InvalidOperationException(
+                $"Unsupported workload source type {source.GetType().Name}."),
+        };
+
+    private static IReadOnlyList<RunArtifactView> ToArtifactViews(
+        IReadOnlyList<WorkloadArtifact>? artifacts)
+        => artifacts is null
+            ? Array.Empty<RunArtifactView>()
+            : artifacts.Select(artifact =>
+                new RunArtifactView(artifact.Name, artifact.Content, artifact.IsBinary)).ToList();
+
+    private static string? CombineLog(string stdout, string stderr)
+    {
+        if (string.IsNullOrWhiteSpace(stdout) && string.IsNullOrWhiteSpace(stderr)) return null;
+        if (string.IsNullOrWhiteSpace(stderr)) return stdout;
+        if (string.IsNullOrWhiteSpace(stdout)) return stderr;
+        return stdout + "\n--- stderr ---\n" + stderr;
     }
 
     private static JsonNode? JsonValue(string? value)
