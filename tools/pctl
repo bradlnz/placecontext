@@ -718,10 +718,10 @@ cmd_db() {
 }
 
 # Join THIS local node to the cross-site HA cluster as a hot-standby (etcd member #2 + Patroni replica
-# streaming async from the DO primary over the mesh). The DO primary + witness are provisioned by
-# deploy/terraform-app/; this is the local side. Pass the passwords from its outputs, e.g.:
-#   REPLICATION_PASSWORD=$(terraform -chdir=deploy/terraform-app output -raw replication_password) \
-#   SUPERUSER_PASSWORD=$(terraform -chdir=deploy/terraform-app output -raw superuser_password) \
+# streaming async from the DO primary over the mesh). Provision the DO primary + witness outside this
+# repository; this is the local side. Pass the matching database passwords, e.g.:
+#   REPLICATION_PASSWORD='<replication-password>' \
+#   SUPERUSER_PASSWORD='<superuser-password>' \
 #   sudo -E ./deploy/pctl db-ha-join
 # See deploy/ha/README.md for the full runbook.
 cmd_db_ha_join() {

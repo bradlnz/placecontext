@@ -2,12 +2,11 @@
 
 Runs the `placecontext` database as a **2-site, auto-failover HA cluster**:
 
-- **PRIMARY** (read-write leader) on a **DigitalOcean droplet** — provisioned by
-  [`deploy/terraform-app/`](../terraform-app/).
+- **PRIMARY** (read-write leader) on an externally provisioned **DigitalOcean droplet**.
 - **Hot-standby REPLICA(s)** on the **local k3s node(s)** — brought up by
   [`join-local-replica.sh`](./join-local-replica.sh) / `pctl db-ha-join`.
-- **WITNESS** (tiebreaker) on a small second DO droplet in a **different region** — provisioned by
-  `deploy/terraform-app/` (`enable_witness = true`).
+- **WITNESS** (tiebreaker) on an externally provisioned small second DO droplet in a **different
+  region**.
 
 Replication is **asynchronous** and streams over the **Tailscale/Headscale mesh** (private tailnet
 IPs — never the public internet). If DO goes offline the database stays **readable and writable
@@ -123,7 +122,7 @@ PlaceContext__ConnectionString =
 `Target Session Attributes=primary` makes Npgsql probe each host (`pg_is_in_recovery()`) and open the
 session against whichever is the **current read-write leader**. After a failover the old primary is
 down or read-only and Npgsql transparently uses the promoted local node — **no config change, no
-redeploy**. Get the password with `terraform -chdir=deploy/terraform-app output -raw superuser_password`.
+redeploy**. Use the PostgreSQL superuser password configured on the primary.
 
 **Round-robin DNS (the user's "DNS-wise it will round robin"):** the two `Host=` names above are
 Headscale **MagicDNS** names, one per node — that *is* a round-robin set of endpoints, and it's the
@@ -141,26 +140,22 @@ tailnet IPs and `kubectl apply` it.
 
 ## Bring-up order
 
-1. **Mesh must exist** — the Headscale control server from [`deploy/terraform/`](../terraform/), and the
-   local cluster already joined (`pctl server up` / `pctl join`).
+1. **Mesh must exist** — an externally provisioned Headscale control server, with the local cluster
+   already joined (`pctl server up` / `pctl join`).
 2. **Build & push the Patroni image** (both sites pull it):
    ```bash
    docker build -f deploy/postgres/Dockerfile.patroni -t ghcr.io/bradlnz/placecontext-patroni:16-pgvector .
    docker push ghcr.io/bradlnz/placecontext-patroni:16-pgvector
    ```
-3. **Provision the DO primary + witness:**
-   ```bash
-   cd deploy/terraform-app
-   cp terraform.tfvars.example terraform.tfvars   # fill mesh keys, ssh key, image, etc.
-   terraform init && terraform apply
-   ```
-   Mint the two mesh pre-auth keys on the mesh server: `pctl mesh authkey --tenant <id>` (one for the
-   primary → `mesh_authkey`, one for the witness → `witness_mesh_authkey`).
+3. **Provision the DO primary + witness outside this repository.** Install Docker and Tailscale,
+   configure the three-member etcd/Patroni topology described above, and use the Patroni image from
+   step 2. Mint two mesh pre-auth keys with `pctl mesh authkey --tenant <id>` and join the primary and
+   witness using their stable hostnames.
 4. **Join the local node as a standby** (on the local k3s node, already meshed as
    `placecontext-db-local`):
    ```bash
-   REPLICATION_PASSWORD=$(terraform -chdir=deploy/terraform-app output -raw replication_password) \
-   SUPERUSER_PASSWORD=$(terraform -chdir=deploy/terraform-app output -raw superuser_password) \
+   REPLICATION_PASSWORD='<replication-password>' \
+   SUPERUSER_PASSWORD='<superuser-password>' \
    sudo -E ./deploy/pctl db-ha-join
    ```
    The three etcd members form the DCS (state `new`, quorum once 2 are up); Patroni bootstraps the
@@ -238,13 +233,12 @@ If the old primary's data volume was destroyed, delete its stale PGDATA and let 
   optional edge 80/443 are public.
 - **Least-privilege replication role** (`replicator`): `LOGIN` + `REPLICATION` only, no table access.
   `pg_hba` restricts it (and the superuser) to the tailnet CIDRs with `scram-sha-256`.
-- **Secrets** are Terraform-sensitive vars, auto-generated when unset, and read back with
-  `terraform output -raw`. They are never committed (`terraform.tfvars` + state are gitignored).
+- **Secrets** are supplied through environment variables and must come from your infrastructure
+  secret store. They are never committed to this repository.
 
 ## What is NOT live-verifiable here
 
-This was validated by **inspection + `terraform validate`** only — there is no real cluster/mesh in
-this environment. Confirm on real infrastructure:
+There is no real cluster/mesh in this environment. Confirm on real infrastructure:
 
 - **pgvector in the image:** `postgresql-16-pgvector` availability from PGDG and that `CREATE
   EXTENSION vector;` succeeds — verify by building `Dockerfile.patroni` and running the post-bootstrap.

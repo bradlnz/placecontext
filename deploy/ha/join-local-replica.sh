@@ -10,10 +10,10 @@
 # node + the witness keep a 2-of-3 quorum and Patroni AUTO-PROMOTES this standby to read-write. The
 # app (Npgsql Target Session Attributes=primary) then follows the new leader with no config change.
 #
-# Required env (get the passwords from the terraform-app outputs):
-#   REPLICATION_PASSWORD   terraform -chdir=deploy/terraform-app output -raw replication_password
-#   SUPERUSER_PASSWORD     terraform -chdir=deploy/terraform-app output -raw superuser_password
-# Optional env (defaults match terraform-app defaults — override only if you changed them there):
+# Required env (use the credentials configured on the externally provisioned primary):
+#   REPLICATION_PASSWORD   replication user's password
+#   SUPERUSER_PASSWORD     PostgreSQL superuser password
+# Optional env (override when the remote deployment uses different values):
 #   PATRONI_SCOPE=placecontext
 #   SUPERUSER_USERNAME=postgres
 #   REPLICATION_USERNAME=replicator
@@ -34,8 +34,8 @@ MESH_HOSTNAME_LOCAL="${MESH_HOSTNAME_LOCAL:-placecontext-db-local}"
 PATRONI_IMAGE="${PATRONI_IMAGE:-ghcr.io/bradlnz/placecontext-patroni:16-pgvector}"
 ETCD_IMAGE="${ETCD_IMAGE:-quay.io/coreos/etcd:v3.5.16}"
 
-: "${REPLICATION_PASSWORD:?set REPLICATION_PASSWORD (terraform output -raw replication_password)}"
-: "${SUPERUSER_PASSWORD:?set SUPERUSER_PASSWORD (terraform output -raw superuser_password)}"
+: "${REPLICATION_PASSWORD:?set REPLICATION_PASSWORD to the primary's replication password}"
+: "${SUPERUSER_PASSWORD:?set SUPERUSER_PASSWORD to the primary's PostgreSQL superuser password}"
 
 command -v docker >/dev/null 2>&1 || { echo "docker is required"; exit 1; }
 command -v tailscale >/dev/null 2>&1 || { echo "tailscale is required (join the mesh first: pctl join)"; exit 1; }

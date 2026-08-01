@@ -11,7 +11,7 @@
 # local node), then:  kubectl -n placecontext apply -f deploy/ha/app-db-endpoints.yaml
 # Tailnet IPs are stable per node in Headscale; if you rebuild a node, update its Endpoints IP here.
 #
-# Then set the app connection string (password from: terraform -chdir=deploy/terraform-app output -raw superuser_password):
+# Then set the app connection string using the primary's PostgreSQL superuser password:
 #   kubectl -n placecontext set env deploy/placecontext \
 #     'PlaceContext__ConnectionString=Host=placecontext-db-primary,placecontext-db-local;Port=5432;Database=placecontext;Username=postgres;Password=REDACTED;Target Session Attributes=primary;Load Balance Hosts=false'
 ---

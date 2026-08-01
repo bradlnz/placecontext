@@ -137,8 +137,8 @@ sudo ./deploy/pctl mesh up --domain mesh.example.com   # your own control server
 sudo ./deploy/pctl server up --vpn-control https://mesh.example.com:443 --vpn-authkey <KEY>
 ```
 
-Provision the control-server droplet (reserved IP, firewall, DNS, cloud-init) with Terraform —
-see [`deploy/terraform/`](../deploy/terraform/README.md).
+Provision the control server and its DNS/firewall outside this repository, then run the mesh commands
+above on that host.
 
 ---
 
