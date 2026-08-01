@@ -12,7 +12,7 @@
 <div id="dcshell" data-theme="@_theme" class="shell" style="@_brand.CssOverrides()">
 
     <!-- SIDEBAR — structure from tenant menu config; still filtered by effective permissions. -->
-    <aside class="sidebar @(_navOpen ? "open" : null)">
+    <aside class="sidebar @(_navOpen ? "open" : null)" aria-label="Primary navigation">
         <div class="brand-row">
             @if (_brand.LogoDataUri is { } logo)
             {
@@ -28,6 +28,7 @@
                 <span class="title-14">@(_brand.ProductName ?? "placecontext")</span>
                 <span class="org-name">@OrgName</span>
             </div>
+            <button class="sidebar-close" @onclick="CloseNav" aria-label="Close navigation">×</button>
         </div>
 
         <div class="nav-list">
@@ -205,7 +206,8 @@
     @if (_searchOpen)
     {
         <div class="dcsearch-overlay" @onclick="CloseSearch">
-            <div class="dcsearch-modal" @onclick:stopPropagation="true">
+            <div class="dcsearch-modal" role="dialog" aria-modal="true" aria-label="Search workspace"
+                 @onclick:stopPropagation="true">
                 <input class="dcsearch-input" placeholder="Search projects, changes, context, decisions…"
                        value="@_term" @oninput="OnSearchInput" @onkeydown="OnSearchKey" @ref="_searchInput" />
                 <div class="dcsearch-results">

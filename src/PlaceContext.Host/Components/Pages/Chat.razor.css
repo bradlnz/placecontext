@@ -486,6 +486,12 @@
     display: flex;
     flex-direction: column;
     flex-shrink: 0;
+    overscroll-behavior: contain;
+}
+
+.side-panel-scrim,
+.side-panel-close {
+    display: none;
 }
 
 .side-panel-head {
@@ -1789,6 +1795,14 @@ a.attachment-tile:hover {
     }
 
     /* Side panel slides over the chat instead of squeezing it */
+    .side-panel-scrim {
+        display: block;
+        position: absolute;
+        inset: 0;
+        z-index: 29;
+        background: rgba(0, 0, 0, 0.45);
+    }
+
     .side-panel {
         position: absolute;
         top: 0;
@@ -1797,6 +1811,22 @@ a.attachment-tile:hover {
         width: min(320px, 88vw);
         z-index: 30;
         box-shadow: -8px 0 24px rgba(0, 0, 0, 0.3);
+    }
+
+    .side-panel-close {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 34px;
+        height: 34px;
+        flex: none;
+        margin-left: auto;
+        border: 1px solid var(--border);
+        border-radius: 7px;
+        background: var(--bg-3);
+        color: var(--muted);
+        font: 20px/1 var(--font-sans);
+        cursor: pointer;
     }
 
     .starter-actions {
