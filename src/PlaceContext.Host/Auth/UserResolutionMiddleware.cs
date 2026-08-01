@@ -39,7 +39,9 @@ public sealed class UserResolutionMiddleware
         if (principal.Identity?.IsAuthenticated != true) return null;
         var idClaim = principal.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? principal.FindFirst("sub")?.Value;
         var roleClaim = principal.FindFirst(ClaimTypes.Role)?.Value ?? principal.FindFirst("role")?.Value;
-        if (!Guid.TryParse(idClaim, out var id) || !Enum.TryParse<UserRole>(roleClaim, out var role)) return null;
-        return new UserIdentity(id, role);
+        // The role claim is kept as its name (a role_definitions row or a UserRole enum name) so custom
+        // roles resolve by name downstream; an absent claim fails closed exactly as before.
+        if (!Guid.TryParse(idClaim, out var id) || string.IsNullOrWhiteSpace(roleClaim)) return null;
+        return new UserIdentity(id, roleClaim);
     }
 }

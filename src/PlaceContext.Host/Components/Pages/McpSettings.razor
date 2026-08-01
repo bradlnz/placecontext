@@ -1,7 +1,6 @@
 @page "/settings/mcp"
 @layout PlaceContext.Host.Components.Layout.SettingsLayout
-@attribute [Authorize(Policy = Permission.SettingsManage)]
-@attribute [Authorize(Policy = Permission.SecretsManage)]
+@attribute [Authorize(Policy = Policies.DefaultAdmin)]
 @using PlaceContext.Application.Mcp
 @using PlaceContext.Domain.Mcp
 @inject IPlaceContextService Svc

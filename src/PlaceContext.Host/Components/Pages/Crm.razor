@@ -3,11 +3,12 @@
 @layout PlaceContext.Host.Components.Layout.ProjectLayout
 @inject IPlaceContextService Svc
 @inject PortalUiState Ui
-@inject HttpClient Http
 @inject IJSRuntime Js
 @inject NavigationManager Nav
 @using PlaceContext.Domain.ValueObjects
 @using PlaceContext.Infrastructure.Crm
+@inject CrmIngestionSettingsService IngestionSettings
+@inject IPermissionService Permissions
 
 <PageTitle>PlaceContext — CRM</PageTitle>
 
@@ -1096,15 +1097,11 @@ else
         _ingestionError = null;
         try
         {
-            var response = await Http.GetAsync($"/api/crm/ingestion/settings?projectId={ProjectId}");
-            if (!response.IsSuccessStatusCode)
+            if (!await CanManageIngestion())
             {
-                _ingestionError = response.StatusCode == System.Net.HttpStatusCode.Forbidden
-                    ? "The settings.manage permission is required to configure CRM ingestion."
-                    : await ReadApiError(response, "Could not load CRM ingestion settings.");
                 return;
             }
-            _ingestionSettings = await response.Content.ReadFromJsonAsync<CrmIngestionSettingsView>();
+            _ingestionSettings = await IngestionSettings.GetAsync(ProjectId);
             _ingestionOrigin = _ingestionSettings?.AllowedOrigin ?? "";
         }
         catch (Exception ex) { _ingestionError = ex.Message; }
@@ -1119,14 +1116,8 @@ else
         _newIngestionToken = null;
         try
         {
-            var response = await Http.PutAsJsonAsync("/api/crm/ingestion/settings",
-                new { ProjectId, AllowedOrigin = _ingestionOrigin });
-            if (!response.IsSuccessStatusCode)
-            {
-                _ingestionError = await ReadApiError(response, "Could not save the allowed origin.");
-                return;
-            }
-            _ingestionSettings = await response.Content.ReadFromJsonAsync<CrmIngestionSettingsView>();
+            if (!await CanManageIngestion()) return;
+            _ingestionSettings = await IngestionSettings.SaveOriginAsync(ProjectId, _ingestionOrigin);
             _ingestionOrigin = _ingestionSettings?.AllowedOrigin ?? _ingestionOrigin;
             _ingestionMessage = "Allowed origin saved.";
         }
@@ -1142,14 +1133,8 @@ else
         _newIngestionToken = null;
         try
         {
-            var response = await Http.PostAsJsonAsync("/api/crm/ingestion/settings/rotate",
-                new { ProjectId, AllowedOrigin = _ingestionOrigin });
-            if (!response.IsSuccessStatusCode)
-            {
-                _ingestionError = await ReadApiError(response, "Could not generate the ingestion token.");
-                return;
-            }
-            var result = await response.Content.ReadFromJsonAsync<CrmIngestionTokenResult>();
+            if (!await CanManageIngestion()) return;
+            var result = await IngestionSettings.RotateAsync(ProjectId, _ingestionOrigin);
             _ingestionSettings = result?.Settings;
             _newIngestionToken = result?.Token;
             _ingestionOrigin = result?.Settings.AllowedOrigin ?? _ingestionOrigin;
@@ -1167,12 +1152,8 @@ else
         _newIngestionToken = null;
         try
         {
-            var response = await Http.DeleteAsync($"/api/crm/ingestion/settings?projectId={ProjectId}");
-            if (!response.IsSuccessStatusCode)
-            {
-                _ingestionError = await ReadApiError(response, "Could not disable CRM ingestion.");
-                return;
-            }
+            if (!await CanManageIngestion()) return;
+            await IngestionSettings.DisableAsync(ProjectId);
             await LoadIngestionSettings();
             _ingestionMessage = "CRM lead ingestion disabled.";
         }
@@ -1184,6 +1165,13 @@ else
     {
         await Js.InvokeVoidAsync("navigator.clipboard.writeText", value);
         _ingestionMessage = "Copied to clipboard.";
+    }
+
+    private async Task<bool> CanManageIngestion()
+    {
+        if (await Permissions.HasAsync(Permission.SettingsManage)) return true;
+        _ingestionError = "The settings.manage permission is required to configure CRM ingestion.";
+        return false;
     }
 
     private string IngestionExample()
@@ -1204,18 +1192,6 @@ else
              })
            });
            """;
-
-    private static async Task<string> ReadApiError(HttpResponseMessage response, string fallback)
-    {
-        try
-        {
-            var error = await response.Content.ReadFromJsonAsync<ApiError>();
-            return error?.Error ?? fallback;
-        }
-        catch { return fallback; }
-    }
-
-    private sealed record ApiError(string Error);
 
     private void NewPrimary()
     {

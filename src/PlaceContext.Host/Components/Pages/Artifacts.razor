@@ -6,6 +6,7 @@
 @inject IPlaceContextService Svc
 @inject PortalUiState Ui
 @inject NavigationManager Nav
+@inject IJSRuntime Js
 @inject PlaceContext.Application.Ports.IObjectStore Store
 @inject PlaceContext.Application.Ports.IArtifactViewConfigService ArtifactConfig
 @inject PlaceContext.Domain.Repositories.IRunArtifactLinkRepository Links
@@ -310,6 +311,7 @@
     private (IReadOnlyList<string> Header, IReadOnlyList<IReadOnlyList<string>> Rows)? _csv;
     private bool _truncated;
     private bool _loading;
+    private int _openGeneration;
     private bool _loadFailed;
     private string? _loadError;
     private bool _confirmDelete;
@@ -559,9 +561,16 @@
 
     private async Task OpenAsync(ArtifactFileView a)
     {
+        var openGeneration = ++_openGeneration;
         _active = a;
         // Keep the URL shareable: every opened file lands in ?artifact= without growing history.
-        Nav.NavigateTo($"/artifacts?artifact={a.Id}", replace: true);
+        // Replacing the browser URL directly avoids re-running the page's route lifecycle while
+        // the viewer is opening (which otherwise causes a visible flash and can race this load).
+        try
+        {
+            await Js.InvokeVoidAsync("history.replaceState", null, "", $"/artifacts?artifact={a.Id}");
+        }
+        catch (JSDisconnectedException) { }
         _content = null;
         _csv = null;
         _rawText = null;
@@ -574,6 +583,7 @@
         try
         {
             var text = await ReadTextAsync(a);
+            if (openGeneration != _openGeneration) return;
             if (text is null) { _loadFailed = true; _loadError ??= "the object store returned nothing for this file"; return; }
             _rawText = text;
             if (IsJson(a.ContentType))
@@ -588,7 +598,10 @@
                 _csv = ParseCsv(text);
             }
         }
-        finally { _loading = false; }
+        finally
+        {
+            if (openGeneration == _openGeneration) _loading = false;
+        }
     }
 
     // Server-side fetch through the tenant-scoped link → object store (same objects the stream
@@ -716,6 +729,7 @@
         catch { }
         finally { _deleting = false; }
         _files = _files.Where(f => f.Id != id).ToList();
+        ++_openGeneration;
         _active = null;
         _confirmDelete = false;
         // Drop the ?artifact= deep link so a refresh doesn't try to reopen the deleted file.
@@ -728,6 +742,7 @@
 
     private void CloseViewer()
     {
+        ++_openGeneration;
         _active = null;
         Nav.NavigateTo("/artifacts", replace: true);
     }

@@ -201,7 +201,7 @@ public class SearchTests
                 : new HashSet<string>());
 
         public Task<IReadOnlySet<string>> GetEffectivePermissionsForUserAsync(
-            Guid userId, UserRole role, CancellationToken ct = default)
+            Guid userId, string roleName, CancellationToken ct = default)
             => GetEffectivePermissionsAsync(ct);
     }
 }

@@ -31,6 +31,7 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
     public DbSet<UserRow> Users => Set<UserRow>();
     public DbSet<InviteRow> Invites => Set<InviteRow>();
     public DbSet<UserPermissionGrantRow> UserPermissionGrants => Set<UserPermissionGrantRow>();
+    public DbSet<RoleDefinitionRow> RoleDefinitions => Set<RoleDefinitionRow>();
     public DbSet<ProjectRow> Projects => Set<ProjectRow>();
     public DbSet<ActivityRecordRow> ActivityRecords => Set<ActivityRecordRow>();
     public DbSet<DecisionRow> Decisions => Set<DecisionRow>();
@@ -49,7 +50,7 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
     public DbSet<CrmAutomationRuleRow> CrmAutomationRules => Set<CrmAutomationRuleRow>();
     public DbSet<CrmAutomationQueueRow> CrmAutomationQueue => Set<CrmAutomationQueueRow>();
     public DbSet<CrmIngestionSettingsRow> CrmIngestionSettings => Set<CrmIngestionSettingsRow>();
-    public DbSet<PostmarkConnectionRow> PostmarkConnections => Set<PostmarkConnectionRow>();
+    public DbSet<CommunicationProviderRow> CommunicationProviders => Set<CommunicationProviderRow>();
     public DbSet<RunArtifactLinkRow> RunArtifacts => Set<RunArtifactLinkRow>();
     public DbSet<JobSecretRow> JobSecrets => Set<JobSecretRow>();
     public DbSet<JobTriggerRow> JobTriggers => Set<JobTriggerRow>();
@@ -128,7 +129,9 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
             e.HasIndex(x => new { x.TenantId, x.Email }).IsUnique(); // email unique within a tenant
             e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
             e.Property(x => x.PasswordSet).HasDefaultValue(false);
+            e.Property(x => x.IsDefaultAdmin).HasDefaultValue(false);
             e.Property(x => x.TwoFactorEnabled).HasDefaultValue(false);
+            e.Property(x => x.TwoFactorChannel).HasDefaultValue("email");
             e.Property(x => x.TwoFactorCodeFailedAttempts).HasDefaultValue(0);
         });
 
@@ -155,6 +158,17 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
             e.HasKey(x => x.Id);
             e.HasIndex(x => new { x.TenantId, x.UserId, x.Permission }).IsUnique(); // one override per (user, permission)
             e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
+        });
+
+        b.Entity<RoleDefinitionRow>(e =>
+        {
+            e.ToTable("role_definitions");
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => new { x.TenantId, x.Name }).IsUnique(); // role name unique within a tenant
+            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
+            e.Property(x => x.Name).HasMaxLength(64);
+            e.Property(x => x.IsSystem).HasDefaultValue(false);
+            e.Property(x => x.PermissionsJson).HasDefaultValue("[]");
         });
 
         b.Entity<ProjectRow>(e =>
@@ -338,15 +352,23 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
             e.HasIndex(x => new { x.FailedAt, x.ClaimedAt, x.NextAttemptAt });
         });
 
-        b.Entity<PostmarkConnectionRow>(e =>
+        b.Entity<CommunicationProviderRow>(e =>
         {
-            e.ToTable("postmark_connections");
-            e.HasKey(x => x.TenantId);
-            e.Property(x => x.TenantId).ValueGeneratedNever();
+            e.ToTable("communication_providers");
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => new { x.TenantId, x.Channel });
             e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
-            e.Property(x => x.FromName).HasDefaultValue("PlaceContext");
-            e.Property(x => x.MessageStream).HasDefaultValue("outbound");
-            e.Property(x => x.ConfiguredAt).HasDefaultValueSql("now()");
+            e.Property(x => x.Channel).HasMaxLength(10);
+            e.Property(x => x.Kind).HasMaxLength(20);
+            e.Property(x => x.Name).HasMaxLength(100);
+            e.Property(x => x.AuthType).HasMaxLength(10);
+            e.Property(x => x.AuthHeaderName).HasMaxLength(100);
+            e.Property(x => x.ApiKeySecretName).HasMaxLength(200);
+            e.Property(x => x.Enabled).HasDefaultValue(true);
+            e.Property(x => x.IsDefault).HasDefaultValue(false);
+            e.Property(x => x.UseForTwoFactor).HasDefaultValue(false);
+            e.Property(x => x.SettingsJson).HasDefaultValue("{}");
+            e.Property(x => x.CreatedAt).HasDefaultValueSql("now()");
             e.Property(x => x.UpdatedAt).HasDefaultValueSql("now()");
         });
 

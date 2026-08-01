@@ -20,3 +20,4 @@ button:hover { background: #6d70f2; }
 .alt a { color: #8b8df5; text-decoration: none; }
 .err { background: #3a1d22; border: 1px solid #7f2c38; color: #f1a7b0; padding: 9px 11px; border-radius: 8px; font-size: 12.5px; margin-bottom: 16px; }
 .err.hidden { display: none; }
+.hidden { display: none; }

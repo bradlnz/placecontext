@@ -34,6 +34,12 @@ window.placecontext = {
   scrollToBottom(el) {
     if (el) el.scrollTop = el.scrollHeight;
   },
+  scrollToElement(id) {
+    requestAnimationFrame(() => {
+      const el = document.getElementById(id);
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+  },
   scrollToHash() {
     const hash = location.hash;
     if (!hash) return;

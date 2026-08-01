@@ -33,4 +33,8 @@ public interface IClientCommunicationSender
         string recipient,
         string body,
         CancellationToken ct = default);
+    Task<ClientMessageDelivery> SendAuthenticationSmsAsync(
+        string recipient,
+        string body,
+        CancellationToken ct = default);
 }

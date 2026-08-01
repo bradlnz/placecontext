@@ -1,6 +1,6 @@
 @page "/settings/backup"
 @layout PlaceContext.Host.Components.Layout.SettingsLayout
-@attribute [Authorize(Policy = Permission.BackupManage)]
+@attribute [Authorize(Policy = Policies.DefaultAdmin)]
 @inject IPlaceContextService Svc
 @inject PortalUiState Ui
 @inject NavigationManager Nav

@@ -9,26 +9,34 @@
 <body>
   <div class="card">
     <div class="brand"><div class="logo">P</div><strong>PlaceContext</strong></div>
-    <h1>Check your email</h1>
+    <h1>{{heading}}</h1>
     <p class="alt" style="text-align:left;margin:0 0 16px">
-      Enter the 6-digit verification code sent through Postmark to <strong>{{email}}</strong>.
+      {{hint}}
       The code expires in 10 minutes.
     </p>
     <div class="err {{errorClass}}">{{error}}</div>
     <form method="post" action="/auth/email-verify">
       <input type="hidden" name="state" value="{{state}}">
       <input type="hidden" name="{{afName}}" value="{{afValue}}">
-      <label>Verification code
-        <input type="text" name="code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6"
-               autocomplete="one-time-code" required autofocus placeholder="000000">
-      </label>
+      <div class="{{phoneClass}}">
+        <label>Mobile number
+          <input type="tel" name="phone" autocomplete="tel" placeholder="+15551234567" autofocus>
+        </label>
+      </div>
+      <div class="{{codeClass}}">
+        <label>Verification code
+          <input type="text" name="code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6"
+                 autocomplete="one-time-code" required autofocus placeholder="000000">
+        </label>
+      </div>
       <button type="submit">Verify and sign in</button>
     </form>
-    <form method="post" action="/auth/email-verify/resend" style="margin-top:12px">
+    <form method="post" action="/auth/email-verify/resend" style="margin-top:12px" class="{{codeClass}}">
       <input type="hidden" name="state" value="{{state}}">
       <input type="hidden" name="{{afName}}" value="{{afValue}}">
       <button type="submit" style="background:#262a31">Send another code</button>
     </form>
+    <p class="alt {{switchClass}}" style="margin-top:12px"><a href="{{switchHref}}">{{switchLabel}}</a></p>
   </div>
 </body>
 </html>

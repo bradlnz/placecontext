@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.Mvc;
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Features;
@@ -13,6 +14,7 @@ namespace PlaceContext.Host.Controllers;
 [ApiController]
 [Route("api/crm/ingest")]
 [AllowAnonymous]
+[EnableRateLimiting("public-ingestion")]
 public sealed class CrmIngestionController : ControllerBase
 {
     private readonly CrmIngestionSettingsService _settings;

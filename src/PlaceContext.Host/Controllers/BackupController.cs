@@ -5,16 +5,17 @@ using Microsoft.AspNetCore.Mvc;
 using PlaceContext.Application;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Ports;
+using PlaceContext.Host.Auth;
 using PlaceContext.Host.Backup;
 
 namespace PlaceContext.Host.Controllers;
 
 /// <summary>
-/// Backup / restore — tenant settings + job definitions as a portable JSON manifest. Gated on the
-/// backup.manage permission (Admin/Owner have it by default; a Member can be granted it via an
-/// override): a manifest can recreate/modify jobs and settings for the whole workspace on import.
+/// Backup / restore — tenant settings + job definitions as a portable JSON manifest. Restricted to the
+/// default admin (like the /settings/backup page it backs): a manifest can recreate/modify jobs and
+/// settings for the whole workspace on import.
 /// </summary>
-[Authorize(Policy = Permission.BackupManage)]
+[Authorize(Policy = Policies.DefaultAdmin)]
 [Route("backup")]
 public sealed class BackupController : ControllerBase
 {

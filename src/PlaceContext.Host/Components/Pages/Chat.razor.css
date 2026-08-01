@@ -472,6 +472,11 @@
     font-size: 0.85rem;
 }
 
+.chat-input-outer {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
 /* Side panel */
 .side-panel {
     width: 300px;

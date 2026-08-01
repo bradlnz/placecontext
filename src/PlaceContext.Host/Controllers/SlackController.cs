@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Options;
 using PlaceContext.Application.Agents.Services;
 using PlaceContext.Application.Ports;
@@ -16,6 +17,7 @@ namespace PlaceContext.Host.Controllers;
 /// Disabled (404) when Slack is not configured.
 /// </summary>
 [AllowAnonymous]
+[EnableRateLimiting("public-ingestion")]
 public sealed class SlackController : ControllerBase
 {
     private readonly SlackOptions _opts;
@@ -39,6 +41,7 @@ public sealed class SlackController : ControllerBase
     }
 
     [HttpPost("/slack/events")]
+    [RequestSizeLimit(1024 * 1024)]
     public async Task<IActionResult> Events()
     {
         if (!_opts.IsConfigured)

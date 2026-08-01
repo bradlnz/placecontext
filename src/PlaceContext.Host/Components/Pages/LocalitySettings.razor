@@ -1,6 +1,6 @@
 @page "/settings/locality"
 @layout PlaceContext.Host.Components.Layout.SettingsLayout
-@attribute [Authorize(Policy = Permission.SettingsManage)]
+@attribute [Authorize(Policy = Policies.DefaultAdmin)]
 @inject PlaceContext.Infrastructure.Tenancy.ITenantStore Tenants
 @inject PlaceContext.Application.Ports.ICurrentTenant Tenant
 @inject PortalUiState Ui

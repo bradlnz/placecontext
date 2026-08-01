@@ -379,6 +379,10 @@ public class JobChainTests
             SmsMessages.Add((recipient, body));
             return Task.FromResult(new ClientMessageDelivery("Twilio", "sms-123"));
         }
+
+        public Task<ClientMessageDelivery> SendAuthenticationSmsAsync(
+            string recipient, string body, CancellationToken ct = default)
+            => Task.FromResult(new ClientMessageDelivery("Twilio", "auth-sms-123"));
     }
 
     private sealed class FakePermissionService : IPermissionService
@@ -391,7 +395,7 @@ public class JobChainTests
         public Task<IReadOnlySet<string>> GetEffectivePermissionsAsync(CancellationToken ct = default)
             => Task.FromResult<IReadOnlySet<string>>(new HashSet<string>());
         public Task<IReadOnlySet<string>> GetEffectivePermissionsForUserAsync(
-            Guid userId, UserRole role, CancellationToken ct = default)
+            Guid userId, string roleName, CancellationToken ct = default)
             => GetEffectivePermissionsAsync(ct);
     }
 

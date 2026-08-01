@@ -42,25 +42,77 @@ public interface IAuthService
     /// </summary>
     Task<AuthUser?> ValidateCredentialsAsync(string email, string password, CancellationToken ct = default);
 
-    /// <summary>True when the given user has email 2FA enabled.</summary>
+    /// <summary>
+    /// True when 2FA is mandatory for the whole organisation — i.e. at least one enabled communication
+    /// provider is flagged <c>UseForTwoFactor</c>. Supersedes the legacy per-user opt-in
+    /// (<see cref="IsTwoFactorEnabledAsync"/>, kept for the legacy column only).
+    /// </summary>
+    Task<bool> IsTwoFactorRequiredAsync(CancellationToken ct = default);
+
+    /// <summary>Legacy per-user 2FA opt-in flag — no longer consulted by the login flow.</summary>
     Task<bool> IsTwoFactorEnabledAsync(Guid userId, CancellationToken ct = default);
 
-    /// <summary>Sends a short-lived, single-use code through the configured Postmark provider.</summary>
-    Task<EmailTwoFactorChallenge> IssueTwoFactorCodeAsync(
-        Guid userId, CancellationToken ct = default);
+    /// <summary>
+    /// How a verification code would reach this user right now: the effective channel (the user's
+    /// preferred channel when flagged, else whichever channel is flagged — email preferred), the
+    /// masked destination, and whether a phone number must be collected before a code can be sent.
+    /// <paramref name="channel"/> overrides the effective channel (used by the channel-switch link).
+    /// </summary>
+    Task<TwoFactorDeliveryInfo> GetTwoFactorDeliveryInfoAsync(
+        Guid userId, string? channel = null, CancellationToken ct = default);
 
-    /// <summary>Consumes an emailed setup code and enables 2FA.</summary>
+    /// <summary>Org-wide 2FA status plus the user's own phone / preferred channel (settings page).</summary>
+    Task<TwoFactorSettingsInfo> GetTwoFactorSettingsAsync(Guid userId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Sends a short-lived, single-use code through the effective channel (email → the account email;
+    /// sms → <c>PhoneNumber</c>). <paramref name="channel"/> forces a specific flagged channel.
+    /// Throws a friendly <see cref="InvalidOperationException"/> when the SMS channel has no phone
+    /// number on file.
+    /// </summary>
+    Task<TwoFactorChallenge> IssueTwoFactorCodeAsync(
+        Guid userId, string? channel = null, CancellationToken ct = default);
+
+    /// <summary>
+    /// Stores the user's mobile number (E.164) and switches their preferred channel to SMS — the
+    /// enrollment step when SMS is the required channel and no number is on file. An empty value
+    /// clears the number (and resets the channel to email).
+    /// </summary>
+    Task SetTwoFactorPhoneNumberAsync(Guid userId, string? phoneNumber, CancellationToken ct = default);
+
+    /// <summary>Sets the user's preferred 2FA channel; the channel must have a flagged provider.</summary>
+    Task SetTwoFactorChannelAsync(Guid userId, string channel, CancellationToken ct = default);
+
+    /// <summary>Consumes an emailed setup code and enables 2FA (legacy opt-in flow).</summary>
     Task<bool> ConfirmTwoFactorSetupAsync(
         Guid userId, string code, CancellationToken ct = default);
 
-    /// <summary>Consumes an emailed login code for a user who already has 2FA enabled.</summary>
+    /// <summary>Consumes a login verification code.</summary>
     Task<bool> VerifyTwoFactorCodeAsync(
         Guid userId, string code, CancellationToken ct = default);
 
-    /// <summary>Disables 2FA for the user after consuming a current emailed code.</summary>
+    /// <summary>Disables 2FA for the user after consuming a current emailed code (legacy opt-in flow).</summary>
     Task<bool> DisableTwoFactorAsync(Guid userId, string currentCode, CancellationToken ct = default);
 }
 
-public sealed record EmailTwoFactorChallenge(
-    string MaskedEmail,
+/// <summary>A verification code dispatched to the user.</summary>
+public sealed record TwoFactorChallenge(
+    string Channel,
+    string MaskedDestination,
     DateTimeOffset ExpiresAt);
+
+/// <summary>Delivery routing for the login verify page (see <see cref="IAuthService.GetTwoFactorDeliveryInfoAsync"/>).</summary>
+public sealed record TwoFactorDeliveryInfo(
+    string Channel,
+    string MaskedDestination,
+    bool RequiresPhoneEnrollment,
+    bool EmailAvailable,
+    bool SmsAvailable);
+
+/// <summary>Org-wide 2FA requirement + the user's own delivery preferences (settings page).</summary>
+public sealed record TwoFactorSettingsInfo(
+    bool Required,
+    string PreferredChannel,
+    string? PhoneNumber,
+    bool EmailAvailable,
+    bool SmsAvailable);

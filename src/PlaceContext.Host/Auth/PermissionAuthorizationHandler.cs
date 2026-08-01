@@ -22,10 +22,12 @@ public sealed class PermissionAuthorizationHandler : AuthorizationHandler<Permis
     {
         var idClaim = context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? context.User.FindFirst("sub")?.Value;
         var roleClaim = context.User.FindFirst(ClaimTypes.Role)?.Value ?? context.User.FindFirst("role")?.Value;
-        if (!Guid.TryParse(idClaim, out var userId) || !Enum.TryParse<UserRole>(roleClaim, out var role))
+        // The role claim is a name (a role_definitions row or a UserRole enum name), not the enum:
+        // custom roles resolve their grant set from role_definitions by that name.
+        if (!Guid.TryParse(idClaim, out var userId) || string.IsNullOrWhiteSpace(roleClaim))
             return; // no parseable identity/role — deny
 
-        var effective = await _permissions.GetEffectivePermissionsForUserAsync(userId, role);
+        var effective = await _permissions.GetEffectivePermissionsForUserAsync(userId, roleClaim);
         if (effective.Contains(requirement.Permission))
             context.Succeed(requirement);
     }

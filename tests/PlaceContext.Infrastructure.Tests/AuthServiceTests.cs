@@ -1,5 +1,6 @@
 using PlaceContext.Application.Ports;
 using PlaceContext.Infrastructure.Auth;
+using PlaceContext.Infrastructure.Comms;
 using PlaceContext.Infrastructure.Persistence;
 using PlaceContext.TestSupport;
 using Microsoft.EntityFrameworkCore;
@@ -23,7 +24,31 @@ public class AuthServiceTests
             .UseInMemoryDatabase(Guid.NewGuid().ToString("N"))
             .Options;
         var db = new AppDbContext(options, tenant);
-        return (new AuthService(db, communications ?? new FakeCommunicationSender()), db);
+        var providers = new CommunicationProviderService(
+            db, new EfProjectSecretRepository(db), new PlaintextSecretProtector());
+        return (new AuthService(db, communications ?? new FakeCommunicationSender(), providers), db);
+    }
+
+    /// <summary>Seeds a communication provider row directly (2FA routing reads only the flags).</summary>
+    private static CommunicationProviderRow AddProvider(
+        AppDbContext db, string channel, bool useForTwoFactor, bool enabled = true)
+    {
+        var now = DateTimeOffset.UtcNow;
+        var row = new CommunicationProviderRow
+        {
+            Id = Guid.NewGuid(),
+            Channel = channel,
+            Kind = channel == "sms" ? "twilio" : "postmark",
+            Name = $"{channel} provider",
+            Enabled = enabled,
+            IsDefault = true,
+            UseForTwoFactor = useForTwoFactor,
+            AuthType = "none",
+            CreatedAt = now,
+            UpdatedAt = now,
+        };
+        db.CommunicationProviders.Add(row);
+        return row;
     }
 
     // ── First-run detection ──────────────────────────────────────────────────────────────────────
@@ -69,7 +94,7 @@ public class AuthServiceTests
         var admin = await auth.CreateFirstAdminAsync("owner@example.com", "Owner Person", "Zx7!qLmP4#vRw2");
 
         Assert.NotNull(admin);
-        Assert.Equal(UserRole.Owner, admin!.Role);
+        Assert.Equal(UserRole.Owner.ToString(), admin!.Role);
         Assert.Equal("owner@example.com", admin.Email);
 
         var row = await db.Users.AsNoTracking().SingleAsync(u => u.Id == admin.Id);
@@ -139,7 +164,7 @@ public class AuthServiceTests
         var user = await auth.ValidateCredentialsAsync("owner@example.com", "Zx7!qLmP4#vRw2");
 
         Assert.NotNull(user);
-        Assert.Equal(UserRole.Owner, user!.Role);
+        Assert.Equal(UserRole.Owner.ToString(), user!.Role);
     }
 
     [Fact]
@@ -186,7 +211,8 @@ public class AuthServiceTests
 
         var challenge = await auth.IssueTwoFactorCodeAsync(user!.Id);
 
-        Assert.Equal("ow•••@example.com", challenge.MaskedEmail);
+        Assert.Equal("email", challenge.Channel);
+        Assert.Equal("ow•••@example.com", challenge.MaskedDestination);
         var sent = Assert.Single(email.AuthenticationEmails);
         Assert.Equal("owner@example.com", sent.Recipient);
         var code = System.Text.RegularExpressions.Regex.Match(sent.Body, @"\b\d{6}\b").Value;
@@ -239,11 +265,149 @@ public class AuthServiceTests
         => System.Text.RegularExpressions.Regex.Match(body, @"\b\d{6}\b").Value;
     private static string Wrong(string code) => code == "000000" ? "111111" : "000000";
 
+    // ── Org-wide mandatory 2FA + multi-channel delivery ────────────────────────────────────────
+
+    [Fact]
+    public async Task Two_factor_is_required_only_when_an_enabled_provider_is_flagged()
+    {
+        var (auth, db) = NewService();
+
+        Assert.False(await auth.IsTwoFactorRequiredAsync());
+
+        var provider = AddProvider(db, "email", useForTwoFactor: true);
+        await db.SaveChangesAsync();
+        Assert.True(await auth.IsTwoFactorRequiredAsync());
+
+        // A flagged but disabled provider does not make 2FA mandatory.
+        provider.Enabled = false;
+        await db.SaveChangesAsync();
+        Assert.False(await auth.IsTwoFactorRequiredAsync());
+
+        // Unflagging every provider switches mandatory 2FA back off.
+        provider.Enabled = true;
+        provider.UseForTwoFactor = false;
+        await db.SaveChangesAsync();
+        Assert.False(await auth.IsTwoFactorRequiredAsync());
+    }
+
+    [Fact]
+    public async Task Sms_channel_codes_are_sent_by_authentication_sms_to_the_phone_on_file()
+    {
+        var sender = new FakeCommunicationSender();
+        var (auth, db) = NewService(communications: sender);
+        AddProvider(db, "sms", useForTwoFactor: true);
+        var user = await auth.CreateFirstAdminAsync("owner@example.com", "Owner", "Zx7!qLmP4#vRw2");
+        await auth.SetTwoFactorPhoneNumberAsync(user!.Id, "+15551234567");
+
+        var challenge = await auth.IssueTwoFactorCodeAsync(user.Id);
+
+        Assert.Equal("sms", challenge.Channel);
+        Assert.Equal("••••67", challenge.MaskedDestination);
+        var sent = Assert.Single(sender.AuthenticationSmses);
+        Assert.Equal("+15551234567", sent.Recipient);
+        Assert.Matches(@"\b\d{6}\b", sent.Body);
+        Assert.Empty(sender.AuthenticationEmails);
+
+        // The issued code verifies (org-wide 2FA does not consult the legacy per-user flag).
+        Assert.True(await auth.VerifyTwoFactorCodeAsync(user.Id, Code(sent.Body)));
+    }
+
+    [Fact]
+    public async Task Sms_channel_without_a_phone_number_throws_a_friendly_error_and_reports_enrollment()
+    {
+        var sender = new FakeCommunicationSender();
+        var (auth, db) = NewService(communications: sender);
+        AddProvider(db, "sms", useForTwoFactor: true);
+        var user = await auth.CreateFirstAdminAsync("owner@example.com", "Owner", "Zx7!qLmP4#vRw2");
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => auth.IssueTwoFactorCodeAsync(user!.Id));
+        Assert.Contains("phone number", ex.Message);
+        Assert.Empty(sender.AuthenticationSmses);
+
+        var info = await auth.GetTwoFactorDeliveryInfoAsync(user!.Id);
+        Assert.Equal("sms", info.Channel);
+        Assert.True(info.RequiresPhoneEnrollment);
+        Assert.False(info.EmailAvailable);
+        Assert.True(info.SmsAvailable);
+    }
+
+    [Fact]
+    public async Task Phone_enrollment_validates_and_stores_the_number_and_switches_the_channel()
+    {
+        var (auth, db) = NewService();
+        var user = await auth.CreateFirstAdminAsync("owner@example.com", "Owner", "Zx7!qLmP4#vRw2");
+
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => auth.SetTwoFactorPhoneNumberAsync(user!.Id, "not-a-number"));
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => auth.SetTwoFactorPhoneNumberAsync(user!.Id, "123"));
+
+        await auth.SetTwoFactorPhoneNumberAsync(user!.Id, "+15551234567");
+
+        var row = await db.Users.AsNoTracking().SingleAsync(u => u.Id == user.Id);
+        Assert.Equal("+15551234567", row.PhoneNumber);
+        Assert.Equal("sms", row.TwoFactorChannel);
+
+        // Clearing the number resets the preference to email.
+        await auth.SetTwoFactorPhoneNumberAsync(user.Id, "");
+        row = await db.Users.AsNoTracking().SingleAsync(u => u.Id == user.Id);
+        Assert.Null(row.PhoneNumber);
+        Assert.Equal("email", row.TwoFactorChannel);
+    }
+
+    [Fact]
+    public async Task The_effective_channel_falls_back_to_whichever_channel_is_flagged()
+    {
+        var sender = new FakeCommunicationSender();
+        var (auth, db) = NewService(communications: sender);
+        // The user prefers SMS (they enrolled a phone), but only an email provider is flagged.
+        AddProvider(db, "email", useForTwoFactor: true);
+        var user = await auth.CreateFirstAdminAsync("owner@example.com", "Owner", "Zx7!qLmP4#vRw2");
+        await auth.SetTwoFactorPhoneNumberAsync(user!.Id, "+15551234567");
+
+        var challenge = await auth.IssueTwoFactorCodeAsync(user.Id);
+
+        Assert.Equal("email", challenge.Channel);
+        Assert.Single(sender.AuthenticationEmails);
+        Assert.Empty(sender.AuthenticationSmses);
+    }
+
+    [Fact]
+    public async Task The_users_preferred_channel_wins_when_it_is_flagged()
+    {
+        var sender = new FakeCommunicationSender();
+        var (auth, db) = NewService(communications: sender);
+        AddProvider(db, "email", useForTwoFactor: true);
+        AddProvider(db, "sms", useForTwoFactor: true);
+        var user = await auth.CreateFirstAdminAsync("owner@example.com", "Owner", "Zx7!qLmP4#vRw2");
+        await auth.SetTwoFactorPhoneNumberAsync(user!.Id, "+15551234567"); // preference → sms
+
+        var challenge = await auth.IssueTwoFactorCodeAsync(user.Id);
+
+        Assert.Equal("sms", challenge.Channel);
+        Assert.Single(sender.AuthenticationSmses);
+        Assert.Empty(sender.AuthenticationEmails);
+
+        // An explicit channel request (the verify page's "send via email instead" link) is honoured
+        // for routing — checked through the delivery info so the resend cooldown isn't tripped.
+        var info = await auth.GetTwoFactorDeliveryInfoAsync(user.Id, "email");
+        Assert.Equal("email", info.Channel);
+        Assert.True(info is { EmailAvailable: true, SmsAvailable: true, RequiresPhoneEnrollment: false });
+    }
+
+    private sealed class PlaintextSecretProtector : ISecretProtector
+    {
+        public string Protect(string plaintext) => plaintext;
+        public string Unprotect(string ciphertext) => ciphertext;
+    }
+
     private sealed class FakeCommunicationSender : IClientCommunicationSender
     {
         public string EmailProvider => "Postmark";
         public string SmsProvider => "Twilio";
         public List<(string Recipient, string Body)> AuthenticationEmails { get; } = new();
+        public List<(string Recipient, string Body)> AuthenticationSmses { get; } = new();
 
         public Task<ClientCommsCapabilities> GetCapabilitiesAsync(CancellationToken ct = default)
             => Task.FromResult(new ClientCommsCapabilities(true, false, "Postmark", "Twilio"));
@@ -265,5 +429,12 @@ public class AuthServiceTests
         public Task<ClientMessageDelivery> SendSmsAsync(
             string recipient, string body, CancellationToken ct = default)
             => throw new NotSupportedException();
+
+        public Task<ClientMessageDelivery> SendAuthenticationSmsAsync(
+            string recipient, string body, CancellationToken ct = default)
+        {
+            AuthenticationSmses.Add((recipient, body));
+            return Task.FromResult(new ClientMessageDelivery("Twilio", "auth-sms-id"));
+        }
     }
 }

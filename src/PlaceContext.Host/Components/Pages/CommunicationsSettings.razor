@@ -1,11 +1,13 @@
 @page "/settings/communications"
 @layout PlaceContext.Host.Components.Layout.SettingsLayout
-@attribute [Authorize(Policy = Permission.SettingsManage)]
-@attribute [Authorize(Policy = Permission.SecretsManage)]
+@attribute [Authorize(Policy = Policies.DefaultAdmin)]
+@using System.Text.Json
+@using System.Text.Json.Nodes
 @using PlaceContext.Infrastructure.Comms
 @inject IPlaceContextService Svc
-@inject PostmarkConnectionService Postmark
+@inject CommunicationProviderService Providers
 @inject IClientCommunicationSender Communications
+@inject HttpClient Http
 @inject PortalUiState Ui
 
 <PageTitle>PlaceContext — Communications</PageTitle>
@@ -15,27 +17,20 @@
         <div>
             <span class="settings-kicker">Workspace integrations</span>
             <h2>Communications</h2>
-            <p>Connect the providers used by chain actions and customer workflows. Credentials stay in project Vaults.</p>
+            <p>Connect the email and SMS providers used by chain actions, customer workflows and sign-in codes. Each channel can have multiple providers — one default handles delivery, one can be flagged for two-factor codes. Credentials stay in project Vaults.</p>
         </div>
-        @if (_status?.Ready == true)
-        {
-            <span class="connection-pill ready"><i></i>Email ready</span>
-        }
-        else if (_status?.Configured == true)
-        {
-            <span class="connection-pill"><i></i>Vault secret missing</span>
-        }
+        <button class="dcbtn primary" @onclick="ShowAdd">+ Add provider</button>
     </header>
 
     @if (_loading)
     {
-        <div class="dccard loading-card">Loading Postmark settings…</div>
+        <div class="dccard loading-card">Loading communication providers…</div>
     }
     else if (_loadError is not null)
     {
         <div class="settings-alert error">@_loadError</div>
     }
-    else if (_status is not null)
+    else
     {
         @if (_message is not null)
         {
@@ -45,163 +40,276 @@
         <section class="channel-grid" aria-label="Communication channels">
             <article class="dccard channel-card">
                 <span class="channel-icon">✉</span>
-                <span><strong>Email</strong><small>@(_status.Ready ? "Postmark connected" : "Provider setup required")</small></span>
-                <span class="channel-state @(_status.Ready ? "connected" : "")">@(_status.Ready ? "Ready" : "Not ready")</span>
+                <span>
+                    <strong>Email</strong>
+                    <small>@(_capabilities?.EmailEnabled == true ? $"{_capabilities.EmailProvider} connected" : "Provider setup required")</small>
+                </span>
+                <span class="channel-state @(_capabilities?.EmailEnabled == true ? "connected" : "")">
+                    @(_capabilities?.EmailEnabled == true ? "Ready" : "Not configured")
+                </span>
             </article>
             <article class="dccard channel-card">
                 <span class="channel-icon">▣</span>
-                <span><strong>SMS</strong><small>@(_capabilities?.SmsEnabled == true ? $"{_capabilities.SmsProvider} connected" : "Provider setup coming next")</small></span>
-                <span class="channel-state @(_capabilities?.SmsEnabled == true ? "connected" : "")">@(_capabilities?.SmsEnabled == true ? "Ready" : "Not configured")</span>
+                <span>
+                    <strong>SMS</strong>
+                    <small>@(_capabilities?.SmsEnabled == true ? $"{_capabilities.SmsProvider} connected" : "Provider setup required")</small>
+                </span>
+                <span class="channel-state @(_capabilities?.SmsEnabled == true ? "connected" : "")">
+                    @(_capabilities?.SmsEnabled == true ? "Ready" : "Not configured")
+                </span>
             </article>
         </section>
 
-        <section class="dccard provider-card">
-            <div class="provider-head">
-                <span class="postmark-logo">P</span>
-                <span>
-                    <strong>Email · Postmark</strong>
-                    <small>Transactional email provider</small>
-                </span>
-                <span class="provider-state @(_status.Ready ? "connected" : "")">
-                    @(_status.Ready ? "Configured" : "Setup required")
-                </span>
-            </div>
+        <div class="vault-callout">
+            <span class="vault-icon">◆</span>
+            <span>
+                <strong>Provider credentials stay in Vault</strong>
+                <small>API keys and tokens are referenced as Vault secrets, never stored in settings. The value is decrypted only when a message is sent, so rotating the secret in Vault takes effect immediately.</small>
+            </span>
+        </div>
 
-            <div class="vault-callout">
-                <span class="vault-icon">◆</span>
-                <span>
-                        <strong>Provider credentials stay in Vault</strong>
-                    <small>Create a Vault secret containing the Postmark <em>Server API Token</em>, then reference it below. The value is decrypted only when an email is sent.</small>
-                </span>
-            </div>
+        @foreach (var channel in CommunicationProviderService.Channels)
+        {
+            var providers = _providers.Where(p => p.Channel == channel).ToList();
+            <section class="dccard provider-list-card">
+                <div class="provider-list-title">@(channel == "email" ? "Email providers" : "SMS providers")</div>
+                @if (providers.Count == 0)
+                {
+                    <div class="empty-note">No @(channel == "email" ? "email" : "SMS") providers configured.</div>
+                }
+                else
+                {
+                    @foreach (var provider in providers)
+                    {
+                        <article class="provider-row @(!provider.Enabled ? "disabled" : "")">
+                            <div class="provider-info">
+                                <strong>@provider.Name</strong>
+                                <span class="kind-badge">@provider.Kind</span>
+                                <label class="enabled-toggle">
+                                    <input type="checkbox" checked="@provider.Enabled"
+                                           @onchange="@(() => ToggleEnabledAsync(provider))" />
+                                    Enabled
+                                </label>
+                                @if (provider.IsDefault)
+                                {
+                                    <span class="flag-badge default">Default</span>
+                                }
+                                @if (provider.UseForTwoFactor)
+                                {
+                                    <span class="flag-badge twofactor">2FA</span>
+                                }
+                            </div>
+                            <div class="provider-actions">
+                                @if (!provider.IsDefault)
+                                {
+                                    <button class="dcbtn xs" @onclick="@(() => SetDefaultAsync(provider.Id))">Set default</button>
+                                }
+                                <button class="dcbtn xs" @onclick="@(() => ToggleTwoFactorAsync(provider))">
+                                    @(provider.UseForTwoFactor ? "Unset 2FA" : "Use for 2FA")
+                                </button>
+                                <button class="dcbtn xs" @onclick="@(() => StartTest(provider))">Send test</button>
+                                <button class="dcbtn xs" @onclick="@(() => StartEdit(provider))">Edit</button>
+                                @if (_confirmDeleteId == provider.Id)
+                                {
+                                    <button class="dcbtn xs danger" @onclick="@(() => DeleteAsync(provider.Id))">Confirm delete</button>
+                                    <button class="dcbtn xs" @onclick="@(() => _confirmDeleteId = null)">Keep</button>
+                                }
+                                else
+                                {
+                                    <button class="dcbtn xs danger" @onclick="@(() => _confirmDeleteId = provider.Id)">Delete</button>
+                                }
+                            </div>
+                        </article>
+                        @if (_testProviderId == provider.Id)
+                        {
+                            <div class="test-row">
+                                <input class="dcinput" @bind="_testRecipient"
+                                       placeholder="@(provider.Channel == "email" ? "recipient@example.com" : "+15551234567")" />
+                                <button class="dcbtn xs primary" disabled="@(_testSending || string.IsNullOrWhiteSpace(_testRecipient))"
+                                        @onclick="@(() => SendTestAsync(provider.Id))">
+                                    @(_testSending ? "Sending…" : "Send")
+                                </button>
+                                <button class="dcbtn xs" @onclick="@(() => _testProviderId = null)">Cancel</button>
+                            </div>
+                        }
+                    }
+                }
+            </section>
+        }
 
-            <div class="settings-form">
+        @if (_showForm)
+        {
+            <section class="dccard add-card">
+                <div class="form-title">@(_editingId is null ? "New provider" : $"Edit {_name}")</div>
                 <div class="field-grid">
                     <div class="dcfield">
-                        <label>Vault project</label>
-                        <select class="dcinput" value="@_vaultProjectId" @onchange="ProjectChanged">
-                            <option value="">Select a project…</option>
-                            @foreach (var project in _projects)
-                            {
-                                <option value="@project.Id">@project.Name</option>
-                            }
+                        <label>Channel</label>
+                        <select class="dcinput" value="@_channel" @onchange="ChannelChanged">
+                            <option value="email">Email</option>
+                            <option value="sms">SMS</option>
                         </select>
-                        <small>The project whose Vault contains the token.</small>
                     </div>
                     <div class="dcfield">
-                        <label>Server API Token secret</label>
-                        <select class="dcinput" @bind="_secretName" disabled="@(_vaultProjectId is null)">
-                            <option value="">Select a Vault secret…</option>
-                            @foreach (var secret in _secrets)
+                        <label>Provider kind</label>
+                        <select class="dcinput" value="@_kind" @onchange="KindChanged">
+                            @foreach (var kind in KindsForChannel(_channel))
                             {
-                                <option value="@secret.Name">@secret.Name</option>
+                                <option value="@kind">@KindLabel(kind)</option>
                             }
                         </select>
-                        @if (_vaultProjectId is not null && _secrets.Count == 0)
-                        {
-                            <small class="warning">No Vault secrets exist in this project yet.</small>
-                        }
-                        else
-                        {
-                            <small>The secret value must be the token from Postmark → Server → API Tokens.</small>
-                        }
                     </div>
                 </div>
-
                 <div class="field-grid">
                     <div class="dcfield">
-                        <label>Verified sender email</label>
-                        <input class="dcinput" type="email" @bind="_fromEmail"
-                               placeholder="hello@yourdomain.com" />
-                        <small>This address or its domain must be verified in Postmark.</small>
+                        <label>Display name</label>
+                        <input class="dcinput" @bind="_name" placeholder="Transactional email" />
                     </div>
                     <div class="dcfield">
-                        <label>Sender name</label>
-                        <input class="dcinput" @bind="_fromName" placeholder="Your company" />
-                        <small>The friendly name clients see in their inbox.</small>
+                        <label>Authentication</label>
+                        <select class="dcinput" value="@_authType" @onchange="AuthTypeChanged">
+                            <option value="none">None</option>
+                            <option value="bearer">Bearer token</option>
+                            <option value="header">API key header</option>
+                            <option value="basic">Basic auth</option>
+                        </select>
                     </div>
                 </div>
+                <label class="enabled-toggle form-enabled">
+                    <input type="checkbox" @bind="_enabled" /> Enabled
+                </label>
 
+                @if (_authType == "header")
+                {
+                    <div class="dcfield">
+                        <label>Header name</label>
+                        <input class="dcinput" @bind="_authHeaderName" placeholder="X-Api-Key" />
+                        <small>The header that carries the API key. Postmark uses <code>X-Postmark-Server-Token</code>.</small>
+                    </div>
+                }
+                @if (_authType is "bearer" or "header" or "basic")
+                {
+                    @if (_authType == "basic")
+                    {
+                        <div class="settings-alert">
+                            Basic auth takes its username from the Account SID field below; the Vault secret is the auth token used as the password.
+                        </div>
+                    }
+                    <div class="field-grid">
+                        <div class="dcfield">
+                            <label>Vault project</label>
+                            <select class="dcinput" value="@_vaultProjectId" @onchange="ProjectChanged">
+                                <option value="">Select a project…</option>
+                                @foreach (var project in _projects)
+                                {
+                                    <option value="@project.Id">@project.Name</option>
+                                }
+                            </select>
+                            <small>The project whose Vault contains the API key.</small>
+                        </div>
+                        <div class="dcfield">
+                            <label>API key secret</label>
+                            <select class="dcinput" @bind="_secretName" disabled="@(_vaultProjectId is null)">
+                                <option value="">Select a Vault secret…</option>
+                                @foreach (var secret in _secrets)
+                                {
+                                    <option value="@secret.Name">@secret.Name</option>
+                                }
+                            </select>
+                            @if (_vaultProjectId is not null && _secrets.Count == 0)
+                            {
+                                <small class="warning">No Vault secrets exist in this project yet.</small>
+                            }
+                        </div>
+                    </div>
+                }
+
+                @if (_kind is "postmark" or "sendgrid")
+                {
+                    <div class="field-grid">
+                        <div class="dcfield">
+                            <label>Verified sender email</label>
+                            <input class="dcinput" type="email" @bind="_fromEmail" placeholder="hello@yourdomain.com" />
+                            <small>This address or its domain must be verified with the provider.</small>
+                        </div>
+                        <div class="dcfield">
+                            <label>Sender name</label>
+                            <input class="dcinput" @bind="_fromName" placeholder="Your company" />
+                        </div>
+                    </div>
+                    @if (_kind == "postmark")
+                    {
+                        <div class="dcfield stream-field">
+                            <label>Message stream</label>
+                            <input class="dcinput" @bind="_messageStream" placeholder="outbound" />
+                            <small>Use <code>outbound</code> unless you created a dedicated transactional stream.</small>
+                        </div>
+                    }
+                }
+                else if (_kind == "twilio")
+                {
+                    <div class="field-grid">
+                        <div class="dcfield">
+                            <label>Account SID</label>
+                            <input class="dcinput" @bind="_accountSid" placeholder="AC…" />
+                            <small>Also used as the basic-auth username.</small>
+                        </div>
+                        <div class="dcfield">
+                            <label>From number</label>
+                            <input class="dcinput" @bind="_fromNumber" placeholder="+15551234567" />
+                        </div>
+                    </div>
+                }
                 <div class="dcfield stream-field">
-                    <label>Transactional message stream</label>
-                    <input class="dcinput" @bind="_messageStream" placeholder="outbound" />
-                    <small>Use <code>outbound</code> unless you created a dedicated transactional stream.</small>
-                </div>
-
-                <div class="configuration-preview">
-                    <span>
-                        <small>Credential</small>
-                        <strong>@(_secretName.Length > 0 ? _secretName : "Choose a Vault secret")</strong>
-                    </span>
-                    <i>→</i>
-                    <span>
-                        <small>Postmark stream</small>
-                        <strong>@(string.IsNullOrWhiteSpace(_messageStream) ? "outbound" : _messageStream)</strong>
-                    </span>
-                    <i>→</i>
-                    <span>
-                        <small>Consumers</small>
-                        <strong>Chain actions + CRM</strong>
-                    </span>
+                    <label>Endpoint override <small>(optional)</small></label>
+                    <input class="dcinput" @bind="_endpoint" placeholder="Leave empty for the provider default" />
                 </div>
 
                 <div class="form-actions">
-                    <button class="dcbtn primary"
-                            disabled="@(_saving || _vaultProjectId is null || string.IsNullOrWhiteSpace(_secretName))"
+                    <button class="dcbtn" @onclick="@(() => _showForm = false)">Cancel</button>
+                    <button class="dcbtn primary" disabled="@(_saving || string.IsNullOrWhiteSpace(_name))"
                             @onclick="SaveAsync">
-                        @(_saving ? "Saving…" : "Save Postmark settings")
+                        @(_saving ? "Saving…" : _editingId is null ? "Add provider" : "Save changes")
                     </button>
-                    @if (_status.Configured)
-                    {
-                        @if (_confirmDisconnect)
-                        {
-                            <button class="dcbtn danger" disabled="@_saving" @onclick="DisconnectAsync">
-                                Confirm disconnect
-                            </button>
-                            <button class="dcbtn" @onclick="@(() => _confirmDisconnect = false)">Keep settings</button>
-                        }
-                        else
-                        {
-                            <button class="dcbtn quiet-danger" @onclick="@(() => _confirmDisconnect = true)">Remove settings</button>
-                        }
-                    }
                 </div>
-            </div>
-        </section>
-
-        <section class="delivery-notes">
-            <article class="dccard">
-                <span class="note-icon">✓</span>
-                <span><strong>Verified identity</strong><small>Postmark requires a confirmed sender signature or authenticated domain.</small></span>
-            </article>
-            <article class="dccard">
-                <span class="note-icon">↗</span>
-                <span><strong>Transactional stream</strong><small>Email actions use the configured transactional message stream.</small></span>
-            </article>
-            <article class="dccard">
-                <span class="note-icon">◆</span>
-                <span><strong>Live Vault lookup</strong><small>Rotating the secret in Vault takes effect without storing provider tokens in settings.</small></span>
-            </article>
-        </section>
+            </section>
+        }
     }
 </div>
 
 @code {
-    private PostmarkConnectionStatus? _status;
+    private IReadOnlyList<CommunicationProviderView> _providers = Array.Empty<CommunicationProviderView>();
     private ClientCommsCapabilities? _capabilities;
     private IReadOnlyList<ProjectSummaryView> _projects = Array.Empty<ProjectSummaryView>();
     private IReadOnlyList<ProjectSecretView> _secrets = Array.Empty<ProjectSecretView>();
     private bool _loading = true;
-    private bool _saving;
-    private bool _confirmDisconnect;
     private string? _loadError;
     private string? _message;
     private bool _messageIsError;
+    private Guid? _confirmDeleteId;
+
+    // Add/edit form state.
+    private bool _showForm;
+    private bool _saving;
+    private Guid? _editingId;
+    private string _channel = "email";
+    private string _kind = "postmark";
+    private string _name = "";
+    private bool _enabled = true;
+    private string _authType = "none";
+    private string _authHeaderName = "";
     private Guid? _vaultProjectId;
     private string _secretName = "";
     private string _fromEmail = "";
-    private string _fromName = "PlaceContext";
+    private string _fromName = "";
     private string _messageStream = "outbound";
+    private string _accountSid = "";
+    private string _fromNumber = "";
+    private string _endpoint = "";
+
+    // Test-send state.
+    private Guid? _testProviderId;
+    private string _testRecipient = "";
+    private bool _testSending;
 
     protected override async Task OnInitializedAsync()
     {
@@ -215,24 +323,58 @@
         _loadError = null;
         try
         {
-            _status = await Postmark.GetStatusAsync();
+            _providers = await Providers.ListAsync();
             _capabilities = await Communications.GetCapabilitiesAsync();
             _projects = await Svc.GetProjectsAsync();
-            ApplyStatus();
-            await LoadSecretsAsync();
         }
         catch (Exception ex) { _loadError = ex.Message; }
         finally { _loading = false; }
     }
 
-    private void ApplyStatus()
+    private async Task ReloadAsync()
     {
-        if (_status is null) return;
-        _vaultProjectId = _status.VaultProjectId;
-        _secretName = _status.ServerTokenSecretName;
-        _fromEmail = _status.FromEmail;
-        _fromName = _status.FromName;
-        _messageStream = _status.MessageStream;
+        _providers = await Providers.ListAsync();
+        _capabilities = await Communications.GetCapabilitiesAsync();
+    }
+
+    private void Report(string message, bool isError = false)
+        => (_message, _messageIsError) = (message, isError);
+
+    private static string[] KindsForChannel(string channel)
+        => channel == "sms" ? ["twilio"] : ["postmark", "sendgrid"];
+
+    private static string KindLabel(string kind) => kind switch
+    {
+        "postmark" => "Postmark",
+        "sendgrid" => "SendGrid",
+        "twilio" => "Twilio",
+        _ => kind,
+    };
+
+    private static string DefaultHeaderName(string kind)
+        => kind == "postmark" ? "X-Postmark-Server-Token" : "";
+
+    private void ChannelChanged(ChangeEventArgs args)
+    {
+        _channel = args.Value?.ToString() ?? "email";
+        if (!KindsForChannel(_channel).Contains(_kind))
+            _kind = KindsForChannel(_channel)[0];
+        if (_authType == "header")
+            _authHeaderName = DefaultHeaderName(_kind);
+    }
+
+    private void KindChanged(ChangeEventArgs args)
+    {
+        _kind = args.Value?.ToString() ?? "postmark";
+        if (_authType == "header")
+            _authHeaderName = DefaultHeaderName(_kind);
+    }
+
+    private void AuthTypeChanged(ChangeEventArgs args)
+    {
+        _authType = args.Value?.ToString() ?? "none";
+        if (_authType == "header" && string.IsNullOrWhiteSpace(_authHeaderName))
+            _authHeaderName = DefaultHeaderName(_kind);
     }
 
     private async Task ProjectChanged(ChangeEventArgs args)
@@ -249,50 +391,215 @@
             : Array.Empty<ProjectSecretView>();
     }
 
+    private void ResetForm()
+    {
+        _editingId = null;
+        _channel = "email";
+        _kind = "postmark";
+        _name = "";
+        _enabled = true;
+        _authType = "none";
+        _authHeaderName = "";
+        _vaultProjectId = null;
+        _secretName = "";
+        _secrets = Array.Empty<ProjectSecretView>();
+        _fromEmail = "";
+        _fromName = "";
+        _messageStream = "outbound";
+        _accountSid = "";
+        _fromNumber = "";
+        _endpoint = "";
+    }
+
+    private void ShowAdd()
+    {
+        ResetForm();
+        _showForm = true;
+    }
+
+    private async Task StartEdit(CommunicationProviderView provider)
+    {
+        ResetForm();
+        _editingId = provider.Id;
+        _channel = provider.Channel;
+        _kind = provider.Kind;
+        _name = provider.Name;
+        _enabled = provider.Enabled;
+        _authType = provider.AuthType;
+        _authHeaderName = provider.AuthHeaderName ?? DefaultHeaderName(provider.Kind);
+        _vaultProjectId = provider.VaultProjectId;
+        _secretName = provider.ApiKeySecretName ?? "";
+        _fromEmail = ReadSetting(provider.SettingsJson, "fromEmail");
+        _fromName = ReadSetting(provider.SettingsJson, "fromName");
+        _messageStream = ReadSetting(provider.SettingsJson, "messageStream") is { Length: > 0 } stream
+            ? stream : "outbound";
+        _accountSid = ReadSetting(provider.SettingsJson, "accountSid");
+        _fromNumber = ReadSetting(provider.SettingsJson, "fromNumber");
+        _endpoint = ReadSetting(provider.SettingsJson, "endpoint");
+        _showForm = true;
+        await LoadSecretsAsync();
+    }
+
+    private string BuildSettingsJson()
+    {
+        var settings = new JsonObject();
+        if (_kind is "postmark" or "sendgrid")
+        {
+            settings["fromEmail"] = _fromEmail.Trim();
+            settings["fromName"] = _fromName.Trim();
+            if (_kind == "postmark")
+                settings["messageStream"] = string.IsNullOrWhiteSpace(_messageStream)
+                    ? "outbound" : _messageStream.Trim();
+        }
+        else if (_kind == "twilio")
+        {
+            settings["accountSid"] = _accountSid.Trim();
+            settings["fromNumber"] = _fromNumber.Trim();
+        }
+        if (!string.IsNullOrWhiteSpace(_endpoint))
+            settings["endpoint"] = _endpoint.Trim();
+        return settings.ToJsonString();
+    }
+
+    private CommunicationProviderInput CurrentInput()
+        => new(
+            _channel,
+            _kind,
+            _name,
+            _enabled,
+            _authType,
+            _authType == "header" ? _authHeaderName : null,
+            RequiresSecret(_authType) ? _vaultProjectId : null,
+            RequiresSecret(_authType) ? _secretName : null,
+            BuildSettingsJson());
+
+    private static bool RequiresSecret(string authType)
+        => authType is "bearer" or "header" or "basic";
+
     private async Task SaveAsync()
     {
-        if (_vaultProjectId is null) return;
         _saving = true;
         _message = null;
         try
         {
-            await Postmark.SaveSettingsAsync(
-                _vaultProjectId.Value,
-                _secretName,
-                _fromEmail,
-                _fromName,
-                _messageStream);
-            _status = await Postmark.GetStatusAsync();
-            ApplyStatus();
-            _message = "Postmark is ready for transactional email.";
-            _messageIsError = false;
+            if (_editingId is { } id)
+                await Providers.UpdateAsync(id, CurrentInput());
+            else
+                await Providers.CreateAsync(CurrentInput());
+            _showForm = false;
+            Report(_editingId is null ? "Provider added." : "Provider updated.");
+            await ReloadAsync();
         }
-        catch (Exception ex)
-        {
-            _message = ex.Message;
-            _messageIsError = true;
-        }
+        catch (Exception ex) { Report(ex.Message, isError: true); }
         finally { _saving = false; }
     }
 
-    private async Task DisconnectAsync()
+    private static CommunicationProviderInput ToInput(CommunicationProviderView provider)
+        => new(
+            provider.Channel, provider.Kind, provider.Name, provider.Enabled,
+            provider.AuthType, provider.AuthHeaderName,
+            provider.VaultProjectId, provider.ApiKeySecretName, provider.SettingsJson);
+
+    private async Task ToggleEnabledAsync(CommunicationProviderView provider)
     {
-        _saving = true;
+        try
+        {
+            var input = ToInput(provider) with { Enabled = !provider.Enabled };
+            await Providers.UpdateAsync(provider.Id, input);
+            Report($"Provider '{provider.Name}' {(input.Enabled ? "enabled" : "disabled")}.");
+            await ReloadAsync();
+        }
+        catch (Exception ex) { Report(ex.Message, isError: true); }
+    }
+
+    private async Task SetDefaultAsync(Guid id)
+    {
+        try
+        {
+            await Providers.SetDefaultAsync(id);
+            Report("Default provider updated.");
+            await ReloadAsync();
+        }
+        catch (Exception ex) { Report(ex.Message, isError: true); }
+    }
+
+    private async Task ToggleTwoFactorAsync(CommunicationProviderView provider)
+    {
+        try
+        {
+            await Providers.SetTwoFactorAsync(provider.Id, !provider.UseForTwoFactor);
+            Report(provider.UseForTwoFactor
+                ? $"Provider '{provider.Name}' is no longer used for two-factor codes."
+                : $"Provider '{provider.Name}' now delivers two-factor codes.");
+            await ReloadAsync();
+        }
+        catch (Exception ex) { Report(ex.Message, isError: true); }
+    }
+
+    private async Task DeleteAsync(Guid id)
+    {
+        try
+        {
+            await Providers.DeleteAsync(id);
+            _confirmDeleteId = null;
+            Report("Provider deleted.");
+            await ReloadAsync();
+        }
+        catch (Exception ex) { Report(ex.Message, isError: true); }
+    }
+
+    private void StartTest(CommunicationProviderView provider)
+    {
+        _confirmDeleteId = null;
+        _testProviderId = _testProviderId == provider.Id ? null : provider.Id;
+        _testRecipient = "";
+    }
+
+    private async Task SendTestAsync(Guid id)
+    {
+        _testSending = true;
         _message = null;
         try
         {
-            await Postmark.DisconnectAsync();
-            _confirmDisconnect = false;
-            _message = "Postmark settings removed.";
-            _messageIsError = false;
-            await LoadAsync();
+            var response = await Http.PostAsJsonAsync(
+                $"/api/settings/communication-providers/{id}/test",
+                new { Recipient = _testRecipient });
+            if (!response.IsSuccessStatusCode)
+            {
+                var error = await response.Content.ReadFromJsonAsync<ErrorResponse>();
+                Report(error?.Error ?? "The test message could not be sent.", isError: true);
+                return;
+            }
+            var delivery = await response.Content.ReadFromJsonAsync<TestDelivery>();
+            Report($"Test message sent via {delivery?.Provider ?? "provider"}.");
+            _testProviderId = null;
         }
-        catch (Exception ex)
-        {
-            _message = ex.Message;
-            _messageIsError = true;
-        }
-        finally { _saving = false; }
+        catch (Exception ex) { Report(ex.Message, isError: true); }
+        finally { _testSending = false; }
     }
 
+    private static string ReadSetting(string json, string key)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(
+                string.IsNullOrWhiteSpace(json) ? "{}" : json);
+            return document.RootElement.TryGetProperty(key, out var value)
+                && value.ValueKind == JsonValueKind.String
+                    ? value.GetString() ?? ""
+                    : "";
+        }
+        catch (JsonException) { return ""; }
+    }
+
+    private sealed class TestDelivery
+    {
+        public string? Provider { get; set; }
+        public string? ExternalId { get; set; }
+    }
+
+    private sealed class ErrorResponse
+    {
+        public string? Error { get; set; }
+    }
 }

@@ -1,6 +1,6 @@
 @page "/settings/artifacts"
 @layout PlaceContext.Host.Components.Layout.SettingsLayout
-@attribute [Authorize(Policy = Permission.SettingsManage)]
+@attribute [Authorize(Policy = Policies.DefaultAdmin)]
 @inject PlaceContext.Application.Ports.IArtifactViewConfigService Config
 @inject PortalUiState Ui
 

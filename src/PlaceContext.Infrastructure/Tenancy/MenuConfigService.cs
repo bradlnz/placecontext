@@ -22,12 +22,14 @@ public sealed class MenuConfigService : IMenuConfigService
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ICurrentTenant _tenant;
     private readonly IPermissionService _perms;
+    private readonly ICurrentUser _currentUser;
 
-    public MenuConfigService(IServiceScopeFactory scopeFactory, ICurrentTenant tenant, IPermissionService perms)
+    public MenuConfigService(IServiceScopeFactory scopeFactory, ICurrentTenant tenant, IPermissionService perms, ICurrentUser currentUser)
     {
         _scopeFactory = scopeFactory;
         _tenant = tenant;
         _perms = perms;
+        _currentUser = currentUser;
     }
 
     /// <summary>Built-in catalog — ids are stable; do not rename without a migration of stored layouts.</summary>
@@ -110,6 +112,7 @@ public sealed class MenuConfigService : IMenuConfigService
     {
         var layout = await GetLayoutAsync(ct);
         var perms = await SafePermsAsync(ct);
+        var isDefaultAdmin = await SafeIsDefaultAdminAsync(ct);
         var byId = WorkspaceCatalog.ToDictionary(c => c.Id, StringComparer.Ordinal);
         var items = new List<ResolvedMenuItem>();
         foreach (var o in layout.Workspace.OrderBy(x => x.Order))
@@ -127,9 +130,12 @@ public sealed class MenuConfigService : IMenuConfigService
             // Entity accordion groups only make sense inside a project context.
             if (cat.Kind == "entities" && projectId is null)
                 continue;
-            // Settings: show if any of settings/members/backup
-            if (cat.Id == "settings" && !perms.Contains(Permission.SettingsManage)
-                && !perms.Contains(Permission.MembersManage) && !perms.Contains(Permission.BackupManage))
+            // Settings: default admin only (the /settings/* area beyond the self-service Security and
+            // API tokens pages is gated by the DefaultAdmin policy), and only when they hold one of the
+            // settings-ish permissions.
+            if (cat.Id == "settings" && (!isDefaultAdmin
+                || (!perms.Contains(Permission.SettingsManage)
+                    && !perms.Contains(Permission.MembersManage) && !perms.Contains(Permission.BackupManage))))
                 continue;
             if (cat.Id == "mcp" && !perms.Contains(Permission.ProjectsView) && !perms.Contains(Permission.JobsView))
                 continue;
@@ -153,6 +159,26 @@ public sealed class MenuConfigService : IMenuConfigService
         catch
         {
             return new HashSet<string>(StringComparer.Ordinal);
+        }
+    }
+
+    /// <summary>Whether the current caller is the tenant's default admin. Same isolated-scope pattern
+    /// as <see cref="GetLayoutAsync"/> — runs during layout render on the circuit.</summary>
+    private async Task<bool> SafeIsDefaultAdminAsync(CancellationToken ct)
+    {
+        if (!_currentUser.IsAuthenticated) return false;
+        try
+        {
+            await using var scope = _scopeFactory.CreateAsyncScope();
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            return await db.Users.AsNoTracking()
+                .Where(u => u.Id == _currentUser.UserId)
+                .Select(u => u.IsDefaultAdmin)
+                .FirstOrDefaultAsync(ct);
+        }
+        catch
+        {
+            return false;
         }
     }
 

@@ -1,10 +1,12 @@
 @page "/settings/access"
 @layout PlaceContext.Host.Components.Layout.SettingsLayout
-@attribute [Authorize(Policy = Permission.MembersManage)]
+@attribute [Authorize(Policy = Policies.DefaultAdmin)]
 @inject IMembershipService Members
 @inject IPlaceContextService Svc
+@inject ICurrentUser CurrentUser
 @inject PortalUiState Ui
 @inject NavigationManager Nav
+@inject IJSRuntime JS
 
 <PageTitle>placecontext — Access</PageTitle>
 
@@ -38,9 +40,9 @@ else
                 <div class="invite-role">
                     <label class="field-label">Role</label>
                     <select class="dcinput input-full" @bind="_inviteRole">
-                        @foreach (var r in Roles)
+                        @foreach (var r in AssignableRoles)
                         {
-                            <option value="@r">@r</option>
+                            <option value="@r.Name">@r.Name</option>
                         }
                     </select>
                 </div>
@@ -65,27 +67,60 @@ else
         }
         else
         {
+            <div class="manage-row">
+                <label class="field-label">Manage member</label>
+                <select class="dcinput manage-select" value="" @onchange="ManageMemberAsync">
+                    <option value="">Select a member…</option>
+                    @foreach (var m in _members.Where(x => !x.IsDefaultAdmin))
+                    {
+                        <option value="@m.Id">@m.DisplayName · @m.Email</option>
+                    }
+                </select>
+            </div>
             <div class="member-list">
                 @foreach (var m in _members)
                 {
-                    <div class="dccard member-card">
+                    <div class="dccard member-card" id="member-@m.Id">
                         <div class="member-row">
                             <div class="member-info">
                                 <div class="member-name">
                                     @m.DisplayName <span class="member-email">· @m.Email</span>
+                                    @if (m.IsDefaultAdmin)
+                                    {
+                                        <span class="flag-badge default">Default admin</span>
+                                    }
                                 </div>
                                 <div class="note-11">member since @m.CreatedAt.ToWorkspaceTime().ToString("yyyy-MM-dd")</div>
                             </div>
-                            <select class="dcinput role-select" value="@m.Role" disabled="@_busy"
+                            <select class="dcinput role-select" value="@m.Role" disabled="@(_busy || m.IsDefaultAdmin)"
                                     @onchange="@(e => SetRoleAsync(m.Id, e.Value?.ToString() ?? m.Role))">
-                                @foreach (var r in Roles)
+                                @foreach (var r in AssignableRoles)
                                 {
-                                    <option value="@r">@r</option>
+                                    <option value="@r.Name">@r.Name</option>
+                                }
+                                @* Keep the member's current role selectable when it isn't assignable
+                                   (Owner, or a since-deleted custom role) so the select shows it. *@
+                                @if (!AssignableRoles.Any(r => r.Name == m.Role))
+                                {
+                                    <option value="@m.Role">@m.Role</option>
                                 }
                             </select>
                             <button class="dcbtn perm-toggle" @onclick="@(() => ToggleMatrixAsync(m.Id))">
                                 @(_expanded == m.Id ? "Hide permissions" : "Permissions")
                             </button>
+                            @if (CanRemove(m))
+                            {
+                                @if (_confirmRemoveId == m.Id)
+                                {
+                                    <button class="dcbtn perm-toggle danger" disabled="@_busy"
+                                            @onclick="@(() => RemoveMemberAsync(m.Id))">Confirm remove</button>
+                                    <button class="dcbtn perm-toggle" @onclick="@(() => _confirmRemoveId = null)">Keep</button>
+                                }
+                                else
+                                {
+                                    <button class="dcbtn perm-toggle danger" @onclick="@(() => _confirmRemoveId = m.Id)">Remove</button>
+                                }
+                            }
                         </div>
                         @if (_expanded == m.Id)
                         {
@@ -123,15 +158,109 @@ else
                 }
             </div>
         }
+
+        @* ── Roles & permissions ───────────────────────────────────────────────────────────── *@
+        <div class="dccard roles-card">
+            <div class="invite-title">Roles &amp; permissions</div>
+            <div class="note-11">
+                A role is a named set of permissions. System roles ship with the workspace — you can edit
+                what they grant (except Owner) but not remove them. Custom roles can be assigned to
+                members and deleted while nobody holds them.
+            </div>
+
+            <div class="role-list">
+                @foreach (var role in _roles)
+                {
+                    <div class="role-item">
+                        <div class="role-row">
+                            <div class="role-info">
+                                <span class="role-name">@role.Name</span>
+                                @if (role.IsSystem)
+                                {
+                                    <span class="flag-badge system">System</span>
+                                }
+                                <span class="note-11">@role.MemberCount @(role.MemberCount == 1 ? "member" : "members")</span>
+                            </div>
+                            <div class="role-actions">
+                                @if (!IsOwnerRole(role))
+                                {
+                                    <button class="dcbtn perm-toggle" @onclick="@(() => ToggleRoleEdit(role))">
+                                        @(_editRoleId == role.Id ? "Close" : "Edit")
+                                    </button>
+                                }
+                                @if (!role.IsSystem && role.MemberCount == 0)
+                                {
+                                    @if (_confirmDeleteRoleId == role.Id)
+                                    {
+                                        <button class="dcbtn perm-toggle danger" disabled="@_busy"
+                                                @onclick="@(() => DeleteRoleAsync(role.Id))">Confirm delete</button>
+                                        <button class="dcbtn perm-toggle" @onclick="@(() => _confirmDeleteRoleId = null)">Keep</button>
+                                    }
+                                    else
+                                    {
+                                        <button class="dcbtn perm-toggle danger" @onclick="@(() => _confirmDeleteRoleId = role.Id)">Delete</button>
+                                    }
+                                }
+                            </div>
+                        </div>
+                        <div class="note-11 role-perms">@PermissionSummary(role)</div>
+                        @if (_editRoleId == role.Id)
+                        {
+                            <div class="perm-grid">
+                                @foreach (var p in Permission.All)
+                                {
+                                    <label class="perm-check">
+                                        <input type="checkbox" checked="@_editRolePerms.Contains(p)"
+                                               @onchange="@(e => TogglePerm(_editRolePerms, p, e.Value))" />
+                                        @p
+                                    </label>
+                                }
+                            </div>
+                            <div class="role-edit-actions">
+                                <button class="dcbtn primary" disabled="@_busy"
+                                        @onclick="@(() => SaveRolePermissionsAsync(role.Id))">Save permissions</button>
+                                <button class="dcbtn" @onclick="@(() => _editRoleId = null)">Cancel</button>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+
+            <div class="role-create">
+                <div class="invite-title">Create a role</div>
+                <div class="role-create-name">
+                    <label class="field-label">Name</label>
+                    <input class="dcinput input-full-sans" @bind="_newRoleName" placeholder="Support" />
+                </div>
+                <div class="perm-grid">
+                    @foreach (var p in Permission.All)
+                    {
+                        <label class="perm-check">
+                            <input type="checkbox" checked="@_newRolePerms.Contains(p)"
+                                   @onchange="@(e => TogglePerm(_newRolePerms, p, e.Value))" />
+                            @p
+                        </label>
+                    }
+                </div>
+                <div>
+                    <button class="dcbtn primary" disabled="@(_busy || string.IsNullOrWhiteSpace(_newRoleName))"
+                            @onclick="CreateRoleAsync">Create role</button>
+                </div>
+            </div>
+        </div>
     </div>
 }
 
 @code {
     // Owner is not assignable via invite/role dropdown — ownership transfer is a separate path.
-    private static readonly string[] Roles = Enum.GetNames<UserRole>()
-        .Where(r => r != nameof(UserRole.Owner)).ToArray();
+    private IEnumerable<RoleView> AssignableRoles
+        => _roles.Where(r => !IsOwnerRole(r));
+
+    private static bool IsOwnerRole(RoleView role)
+        => string.Equals(role.Name, nameof(UserRole.Owner), StringComparison.OrdinalIgnoreCase);
 
     private IReadOnlyList<MemberView> _members = Array.Empty<MemberView>();
+    private IReadOnlyList<RoleView> _roles = Array.Empty<RoleView>();
     private bool _loading = true;
     private bool _busy;
     private string? _message;
@@ -144,6 +273,14 @@ else
 
     private Guid? _expanded;
     private UserPermissionsView? _matrix;
+    private Guid? _confirmRemoveId;
+    private string? _pendingScrollId;
+
+    private Guid? _editRoleId;
+    private HashSet<string> _editRolePerms = new();
+    private Guid? _confirmDeleteRoleId;
+    private string _newRoleName = "";
+    private readonly HashSet<string> _newRolePerms = new();
 
     protected override async Task OnInitializedAsync()
     {
@@ -151,12 +288,31 @@ else
         await LoadAsync();
     }
 
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // Scroll after the render that expanded the member's card, so the card is in the DOM.
+        if (_pendingScrollId is { } elementId)
+        {
+            _pendingScrollId = null;
+            try { await JS.InvokeVoidAsync("placecontext.scrollToElement", elementId); }
+            catch (InvalidOperationException) { } // JS interop unavailable during prerender
+            catch (JSException) { }
+        }
+    }
+
     private async Task LoadAsync()
     {
         _loading = true;
-        try { _members = await Members.ListMembersAsync(); }
+        try
+        {
+            _members = await Members.ListMembersAsync();
+            _roles = await Svc.ListRolesAsync();
+        }
         finally { _loading = false; }
     }
+
+    private async Task LoadMembersAsync() => _members = await Members.ListMembersAsync();
+    private async Task LoadRolesAsync() => _roles = await Svc.ListRolesAsync();
 
     private async Task InviteAsync()
     {
@@ -170,8 +326,7 @@ else
         _inviting = true;
         try
         {
-            var role = Enum.Parse<UserRole>(_inviteRole);
-            var invite = await Members.CreateInviteAsync(_inviteEmail.Trim(), role);
+            var invite = await Members.CreateInviteAsync(_inviteEmail.Trim(), _inviteRole);
             _inviteLink = $"{Nav.BaseUri.TrimEnd('/')}/join?token={invite.Token}";
             _inviteEmail = "";
             _message = $"Invite sent for {invite.Email}.";
@@ -182,17 +337,49 @@ else
 
     private async Task SetRoleAsync(Guid userId, string role)
     {
-        if (!Enum.TryParse<UserRole>(role, out var parsed)) return;
         _busy = true;
         try
         {
-            await Members.SetRoleAsync(userId, parsed);
-            await LoadAsync();
+            await Members.SetRoleAsync(userId, role);
+            await LoadMembersAsync();
+            await LoadRolesAsync(); // member counts changed
             if (_expanded == userId) await LoadMatrixAsync(userId);
             _message = "Role updated.";
         }
         catch (Exception ex) { _message = ex.Message; }
         finally { _busy = false; }
+    }
+
+    private bool CanRemove(MemberView m)
+        => !m.IsDefaultAdmin
+           && !string.Equals(m.Role, nameof(UserRole.Owner), StringComparison.OrdinalIgnoreCase)
+           && m.Id != CurrentUser.UserId;
+
+    private async Task RemoveMemberAsync(Guid userId)
+    {
+        _busy = true;
+        try
+        {
+            await Members.DeleteMemberAsync(userId);
+            _confirmRemoveId = null;
+            if (_expanded == userId) { _expanded = null; _matrix = null; }
+            await LoadMembersAsync();
+            await LoadRolesAsync(); // member counts changed
+            _message = "Member removed.";
+        }
+        catch (Exception ex) { _message = ex.Message; }
+        finally { _busy = false; }
+    }
+
+    private async Task ManageMemberAsync(ChangeEventArgs e)
+    {
+        if (!Guid.TryParse(e.Value?.ToString(), out var userId)) return;
+        if (_expanded != userId)
+        {
+            _expanded = userId;
+            await LoadMatrixAsync(userId);
+        }
+        _pendingScrollId = $"member-{userId}";
     }
 
     private async Task ToggleMatrixAsync(Guid userId)
@@ -213,6 +400,72 @@ else
     {
         _busy = true;
         try { _matrix = await Svc.SetUserPermissionOverrideAsync(userId, permission, allowed); }
+        catch (Exception ex) { _message = ex.Message; }
+        finally { _busy = false; }
+    }
+
+    // ── Roles & permissions ─────────────────────────────────────────────────────
+
+    private static string PermissionSummary(RoleView role)
+        => role.Permissions.Count == 0
+            ? "No permissions granted"
+            : role.Permissions.Count == Permission.All.Count
+                ? $"All permissions ({Permission.All.Count})"
+                : string.Join(", ", role.Permissions);
+
+    private static void TogglePerm(HashSet<string> set, string permission, object? value)
+    {
+        if (value is true) set.Add(permission);
+        else set.Remove(permission);
+    }
+
+    private void ToggleRoleEdit(RoleView role)
+    {
+        if (_editRoleId == role.Id) { _editRoleId = null; return; }
+        _editRoleId = role.Id;
+        _editRolePerms = new HashSet<string>(role.Permissions);
+        _confirmDeleteRoleId = null;
+    }
+
+    private async Task SaveRolePermissionsAsync(Guid roleId)
+    {
+        _busy = true;
+        try
+        {
+            await Svc.UpdateRolePermissionsAsync(roleId, _editRolePerms.ToList());
+            _editRoleId = null;
+            await LoadRolesAsync();
+            _message = "Role permissions updated.";
+        }
+        catch (Exception ex) { _message = ex.Message; }
+        finally { _busy = false; }
+    }
+
+    private async Task DeleteRoleAsync(Guid roleId)
+    {
+        _busy = true;
+        try
+        {
+            await Svc.DeleteRoleAsync(roleId);
+            _confirmDeleteRoleId = null;
+            await LoadRolesAsync();
+            _message = "Role deleted.";
+        }
+        catch (Exception ex) { _message = ex.Message; }
+        finally { _busy = false; }
+    }
+
+    private async Task CreateRoleAsync()
+    {
+        _busy = true;
+        try
+        {
+            await Svc.CreateRoleAsync(_newRoleName.Trim(), _newRolePerms.ToList());
+            _newRoleName = "";
+            _newRolePerms.Clear();
+            await LoadRolesAsync();
+            _message = "Role created.";
+        }
         catch (Exception ex) { _message = ex.Message; }
         finally { _busy = false; }
     }

@@ -3,6 +3,8 @@
 @implements IDisposable
 @inject NavigationManager Nav
 @inject PortalUiState Ui
+@inject IMembershipService Members
+@inject ICurrentUser CurrentUser
 
 @* The settings area mirrors the project area: a vertical menu, tabs inside the pages. *@
 <div class="shell">
@@ -12,7 +14,7 @@
             Main menu
         </button>
         <div class="side-head">Settings</div>
-        @foreach (var (label, path) in Items)
+        @foreach (var (label, path) in VisibleItems)
         {
             <button class="dcnav nav-btn @(Nav.Uri.Contains($"/settings/{path}") ? "active" : "")"
                     @onclick="@(() => GoTo($"/settings/{path}"))">
@@ -49,15 +51,24 @@
         Ui.OpenMainNav?.Invoke();
     }
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
         Ui.SetSubNav(true, ToggleNav);
+        // /settings/* is default-admin-only except the self-service Security and API tokens pages —
+        // the nav mirrors that so members only see entries they can actually open.
+        _isDefaultAdmin = CurrentUser.IsAuthenticated
+            && await Members.IsDefaultAdminAsync(CurrentUser.UserId);
     }
 
     public void Dispose()
     {
         Ui.SetSubNav(false, null);
     }
+
+    private bool _isDefaultAdmin;
+
+    private IEnumerable<(string Label, string Path)> VisibleItems =>
+        _isDefaultAdmin ? Items : Items.Where(i => i.Path is "security" or "api-tokens");
 
     private static readonly (string Label, string Path)[] Items =
     {

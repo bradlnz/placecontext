@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using PlaceContext.Application.Ports;
+using PlaceContext.Host.Auth;
 using PlaceContext.Host.Controllers;
 using Pages = PlaceContext.Host.Components.Pages;
 
@@ -25,13 +26,48 @@ public sealed class SectionAuthorizationTests
         { typeof(Pages.JobEditor), Permission.JobsEdit },
         { typeof(Pages.Schedules), Permission.TriggersManage },
         { typeof(Pages.Inspector), Permission.JobsView },
-        { typeof(Pages.McpSettings), Permission.SettingsManage },
     };
 
     [Theory]
     [MemberData(nameof(SensitivePages))]
     public void Sensitive_pages_enforce_their_section_permission(Type page, string expectedPolicy)
         => AssertPolicy(page, expectedPolicy);
+
+    // Every /settings/* page is default-admin-only, except the self-service Security and API tokens
+    // pages which keep a bare [Authorize] (any authenticated member).
+    public static TheoryData<Type> DefaultAdminPages => new()
+    {
+        typeof(Pages.AccessSettings),
+        typeof(Pages.ArtifactSettings),
+        typeof(Pages.BackupSettings),
+        typeof(Pages.BrandingSettings),
+        typeof(Pages.CommunicationsSettings),
+        typeof(Pages.LocalitySettings),
+        typeof(Pages.McpSettings),
+        typeof(Pages.MenuSettings),
+    };
+
+    [Theory]
+    [MemberData(nameof(DefaultAdminPages))]
+    public void Settings_pages_require_the_default_admin(Type page)
+        => AssertPolicy(page, Policies.DefaultAdmin);
+
+    public static TheoryData<Type> SelfServiceSettingsPages => new()
+    {
+        typeof(Pages.SecuritySettings),
+        typeof(Pages.ApiTokensSettings),
+    };
+
+    [Theory]
+    [MemberData(nameof(SelfServiceSettingsPages))]
+    public void Self_service_settings_pages_stay_open_to_any_member(Type page)
+    {
+        var attributes = page.GetCustomAttributes(typeof(AuthorizeAttribute), inherit: true)
+            .Cast<AuthorizeAttribute>()
+            .ToList();
+        Assert.Contains(attributes, attribute => attribute.Policy is null);
+        Assert.DoesNotContain(attributes, attribute => attribute.Policy == Policies.DefaultAdmin);
+    }
 
     public static TheoryData<Type, string> SensitiveControllers => new()
     {
@@ -46,9 +82,18 @@ public sealed class SectionAuthorizationTests
         Type controller, string expectedPolicy)
         => AssertPolicy(controller, expectedPolicy);
 
-    [Fact]
-    public void Mcp_settings_also_requires_secret_management_permission()
-        => AssertPolicy(typeof(Pages.McpSettings), Permission.SecretsManage);
+    // Controllers backing default-admin-only settings pages are gated by the same policy.
+    public static TheoryData<Type> DefaultAdminControllers => new()
+    {
+        typeof(BackupController),
+        typeof(CommunicationProvidersController),
+        typeof(JobMcpController),
+    };
+
+    [Theory]
+    [MemberData(nameof(DefaultAdminControllers))]
+    public void Settings_controllers_require_the_default_admin(Type controller)
+        => AssertPolicy(controller, Policies.DefaultAdmin);
 
     private static void AssertPolicy(Type type, string expectedPolicy)
     {

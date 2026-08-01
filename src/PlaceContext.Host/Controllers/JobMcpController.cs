@@ -2,11 +2,13 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using PlaceContext.Application.Mcp;
+using PlaceContext.Application.Ports;
 using PlaceContext.Domain.Repositories;
+using PlaceContext.Host.Auth;
 
 namespace PlaceContext.Host.Controllers;
 
-[AllowAnonymous]
+[Authorize(Policy = Policies.DefaultAdmin)]
 [Route("api/job-mcp/{projectId:guid}/{connectionName}")]
 public sealed class JobMcpController : ControllerBase
 {

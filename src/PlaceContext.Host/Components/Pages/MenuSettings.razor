@@ -1,6 +1,6 @@
 @page "/settings/menu"
 @layout PlaceContext.Host.Components.Layout.SettingsLayout
-@attribute [Authorize(Policy = Permission.SettingsManage)]
+@attribute [Authorize(Policy = Policies.DefaultAdmin)]
 @inject PlaceContext.Application.Ports.IMenuConfigService Menu
 @inject PortalUiState Ui
 

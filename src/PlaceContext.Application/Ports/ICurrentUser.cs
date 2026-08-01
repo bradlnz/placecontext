@@ -11,6 +11,9 @@ namespace PlaceContext.Application.Ports;
 public interface ICurrentUser
 {
     Guid UserId { get; }
-    UserRole Role { get; }
+    /// <summary>The caller's role <em>name</em> — a <c>role_definitions</c> row or a
+    /// <see cref="UserRole"/> enum name. Custom roles flow through here as plain names; the coarse
+    /// Member/Admin/Owner policies enum-parse claims themselves and intentionally do not match them.</summary>
+    string Role { get; }
     bool IsAuthenticated { get; }
 }

@@ -48,6 +48,7 @@ public static class DependencyInjection
         // permission resolution + the tenant-scoped override store.
         services.AddSingleton<ICurrentUser, CurrentUser>();
         services.AddScoped<IUserPermissionGrantRepository, EfUserPermissionGrantRepository>();
+        services.AddScoped<IRoleDefinitionRepository, EfRoleDefinitionRepository>();
         services.AddScoped<IPermissionService, Auth.PermissionService>();
 
         // EF Core code-first store. The DbContext is the request-scoped unit of work.
@@ -168,8 +169,10 @@ public static class DependencyInjection
         services.AddScoped<ICrmAutomationQueue, Scheduling.DbCrmAutomationQueue>();
         services.Configure<Comms.ClientCommsOptions>(
             configuration.GetSection(Comms.ClientCommsOptions.SectionName));
-        services.AddScoped<Comms.PostmarkConnectionService>();
-        services.AddScoped<IClientCommunicationSender, Comms.SendGridTwilioCommunicationSender>();
+        services.AddScoped<Comms.CommunicationProviderService>();
+        services.AddScoped<Comms.DatabaseCommunicationSender>();
+        services.AddScoped<IClientCommunicationSender>(
+            sp => sp.GetRequiredService<Comms.DatabaseCommunicationSender>());
 
         // Data map (declarative job-result → project-table ingestion rules).
         services.AddScoped<IDataMappingRepository, EfDataMappingRepository>();

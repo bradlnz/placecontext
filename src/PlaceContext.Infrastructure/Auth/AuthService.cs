@@ -1,6 +1,8 @@
 using System.Security.Cryptography;
+using System.Text.RegularExpressions;
 using PlaceContext.Application.Auth;
 using PlaceContext.Application.Ports;
+using PlaceContext.Infrastructure.Comms;
 using PlaceContext.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -13,8 +15,13 @@ namespace PlaceContext.Infrastructure.Auth;
 /// </summary>
 public sealed class AuthService : IAuthService
 {
+    // E.164-ish: optional leading plus, 7–15 digits.
+    private static readonly Regex PhoneNumberPattern = new(
+        @"^\+?[0-9]{7,15}$", RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
     private readonly AppDbContext _db;
     private readonly IClientCommunicationSender _communications;
+    private readonly CommunicationProviderService _providers;
 
     // A fixed, precomputed hash verified against on every *unknown* login attempt, so the real PBKDF2
     // work happens whether or not the email exists — otherwise a "known email, wrong password" request
@@ -23,10 +30,12 @@ public sealed class AuthService : IAuthService
 
     public AuthService(
         AppDbContext db,
-        IClientCommunicationSender communications)
+        IClientCommunicationSender communications,
+        CommunicationProviderService providers)
     {
         _db = db;
         _communications = communications;
+        _providers = providers;
     }
 
     public async Task<bool> EmailExistsAsync(string email, CancellationToken ct = default)
@@ -107,6 +116,7 @@ public sealed class AuthService : IAuthService
             PasswordHash = PasswordHasher.Hash(password),
             PasswordSet = true,
             Role = UserRole.Owner.ToString(),
+            IsDefaultAdmin = true, // the first real Owner is the tenant's bootstrap administrator
             CreatedAt = DateTimeOffset.UtcNow,
         };
         await _db.Users.AddAsync(row, ct);
@@ -139,16 +149,51 @@ public sealed class AuthService : IAuthService
 
     private static AuthUser ToAuthUser(UserRow r) => new(
         r.Id, r.TenantId, r.Email, r.DisplayName,
-        Enum.TryParse<UserRole>(r.Role, out var role) ? role : UserRole.Member);
+        string.IsNullOrWhiteSpace(r.Role) ? nameof(UserRole.Member) : r.Role);
 
     private static string Normalize(string email) => (email ?? string.Empty).Trim().ToLowerInvariant();
+
+    public async Task<bool> IsTwoFactorRequiredAsync(CancellationToken ct = default)
+        => (await _providers.TwoFactorChannelsAsync(ct)).Count > 0;
 
     public async Task<bool> IsTwoFactorEnabledAsync(Guid userId, CancellationToken ct = default)
         => await _db.Users.AsNoTracking()
             .AnyAsync(u => u.Id == userId && u.TwoFactorEnabled, ct);
 
-    public async Task<EmailTwoFactorChallenge> IssueTwoFactorCodeAsync(
+    public async Task<TwoFactorDeliveryInfo> GetTwoFactorDeliveryInfoAsync(
+        Guid userId, string? channel = null, CancellationToken ct = default)
+    {
+        var row = await _db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userId, ct);
+        if (row is null) throw new InvalidOperationException("User not found.");
+
+        var flagged = await _providers.TwoFactorChannelsAsync(ct);
+        var effective = ResolveChannel(row, flagged, channel);
+        var needsPhone = effective == "sms" && string.IsNullOrWhiteSpace(row.PhoneNumber);
+        var destination = effective == "sms"
+            ? needsPhone ? "" : MaskPhone(row.PhoneNumber!)
+            : MaskEmail(row.Email);
+        return new TwoFactorDeliveryInfo(
+            effective, destination, needsPhone,
+            flagged.Contains("email"), flagged.Contains("sms"));
+    }
+
+    public async Task<TwoFactorSettingsInfo> GetTwoFactorSettingsAsync(
         Guid userId, CancellationToken ct = default)
+    {
+        var row = await _db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userId, ct);
+        if (row is null) throw new InvalidOperationException("User not found.");
+
+        var flagged = await _providers.TwoFactorChannelsAsync(ct);
+        return new TwoFactorSettingsInfo(
+            flagged.Count > 0,
+            row.TwoFactorChannel,
+            row.PhoneNumber,
+            flagged.Contains("email"),
+            flagged.Contains("sms"));
+    }
+
+    public async Task<TwoFactorChallenge> IssueTwoFactorCodeAsync(
+        Guid userId, string? channel = null, CancellationToken ct = default)
     {
         var row = await _db.Users.FirstOrDefaultAsync(u => u.Id == userId, ct);
         if (row is null) throw new InvalidOperationException("User not found.");
@@ -159,6 +204,12 @@ public sealed class AuthService : IAuthService
             && sentAt > now.AddMinutes(-1))
             throw new InvalidOperationException("Wait one minute before requesting another code.");
 
+        var flagged = await _providers.TwoFactorChannelsAsync(ct);
+        var effective = ResolveChannel(row, flagged, channel);
+        if (effective == "sms" && string.IsNullOrWhiteSpace(row.PhoneNumber))
+            throw new InvalidOperationException(
+                "Add a phone number to receive verification codes by SMS.");
+
         var code = RandomNumberGenerator.GetInt32(0, 1_000_000).ToString("D6");
         row.TwoFactorCodeHash = PasswordHasher.Hash(code);
         row.TwoFactorCodeExpiresAt = now.AddMinutes(10);
@@ -166,16 +217,24 @@ public sealed class AuthService : IAuthService
         row.TwoFactorCodeFailedAttempts = 0;
         await _db.SaveChangesAsync(ct);
 
+        var body = $"Your PlaceContext verification code is {code}.\n\n"
+            + "This code expires in 10 minutes and can only be used once. "
+            + "If you did not request it, you can ignore this message.";
         try
         {
-            await _communications.SendAuthenticationEmailAsync(
-                row.Email,
-                row.DisplayName,
-                "Your PlaceContext verification code",
-                $"Your PlaceContext verification code is {code}.\n\n"
-                + "This code expires in 10 minutes and can only be used once. "
-                + "If you did not request it, you can ignore this email.",
-                ct);
+            if (effective == "sms")
+            {
+                await _communications.SendAuthenticationSmsAsync(row.PhoneNumber!, body, ct);
+            }
+            else
+            {
+                await _communications.SendAuthenticationEmailAsync(
+                    row.Email,
+                    row.DisplayName,
+                    "Your PlaceContext verification code",
+                    body,
+                    ct);
+            }
         }
         catch
         {
@@ -184,7 +243,60 @@ public sealed class AuthService : IAuthService
             throw;
         }
 
-        return new EmailTwoFactorChallenge(MaskEmail(row.Email), row.TwoFactorCodeExpiresAt.Value);
+        var destination = effective == "sms" ? MaskPhone(row.PhoneNumber!) : MaskEmail(row.Email);
+        return new TwoFactorChallenge(effective, destination, row.TwoFactorCodeExpiresAt.Value);
+    }
+
+    public async Task SetTwoFactorPhoneNumberAsync(
+        Guid userId, string? phoneNumber, CancellationToken ct = default)
+    {
+        var row = await _db.Users.FirstOrDefaultAsync(u => u.Id == userId, ct);
+        if (row is null) throw new InvalidOperationException("User not found.");
+
+        var normalized = (phoneNumber ?? string.Empty).Trim();
+        if (normalized.Length == 0)
+        {
+            row.PhoneNumber = null;
+            if (row.TwoFactorChannel == "sms") row.TwoFactorChannel = "email";
+        }
+        else
+        {
+            if (!PhoneNumberPattern.IsMatch(normalized))
+                throw new ArgumentException(
+                    "Enter a valid mobile number (7–15 digits, e.g. +15551234567).");
+            row.PhoneNumber = normalized;
+            row.TwoFactorChannel = "sms";
+        }
+        await _db.SaveChangesAsync(ct);
+    }
+
+    public async Task SetTwoFactorChannelAsync(
+        Guid userId, string channel, CancellationToken ct = default)
+    {
+        channel = (channel ?? string.Empty).Trim().ToLowerInvariant();
+        if (channel is not ("email" or "sms"))
+            throw new ArgumentException("Channel must be 'email' or 'sms'.");
+
+        var flagged = await _providers.TwoFactorChannelsAsync(ct);
+        if (!flagged.Contains(channel))
+            throw new InvalidOperationException(
+                $"The {channel} channel is not available for verification codes.");
+
+        var row = await _db.Users.FirstOrDefaultAsync(u => u.Id == userId, ct);
+        if (row is null) throw new InvalidOperationException("User not found.");
+        row.TwoFactorChannel = channel;
+        await _db.SaveChangesAsync(ct);
+    }
+
+    // The user's preferred channel wins when it has a 2FA-flagged provider; otherwise whichever
+    // channel is flagged (email preferred). With nothing flagged at all, email is the legacy default.
+    private static string ResolveChannel(
+        UserRow row, IReadOnlyCollection<string> flagged, string? requested)
+    {
+        if (requested is not null && flagged.Contains(requested)) return requested;
+        if (flagged.Contains(row.TwoFactorChannel)) return row.TwoFactorChannel;
+        if (flagged.Contains("email")) return "email";
+        return flagged.FirstOrDefault() ?? "email";
     }
 
     public async Task<bool> ConfirmTwoFactorSetupAsync(
@@ -203,7 +315,9 @@ public sealed class AuthService : IAuthService
     public async Task<bool> VerifyTwoFactorCodeAsync(
         Guid userId, string code, CancellationToken ct = default)
     {
-        var row = await VerifyChallengeAsync(userId, code, requireEnabled: true, ct);
+        // 2FA is org-wide mandatory now (driven by flagged providers, not the legacy per-user flag),
+        // so login verification only checks the challenge itself.
+        var row = await VerifyChallengeAsync(userId, code, requireEnabled: false, ct);
         if (row is null) return false;
         ClearChallenge(row);
         await _db.SaveChangesAsync(ct);
@@ -269,5 +383,11 @@ public sealed class AuthService : IAuthService
         var local = email[..at];
         var visible = local.Length <= 2 ? local[..1] : local[..2];
         return visible + new string('•', Math.Max(2, local.Length - visible.Length)) + email[at..];
+    }
+
+    private static string MaskPhone(string phone)
+    {
+        var digits = phone.Length >= 2 ? phone[^2..] : phone;
+        return "••••" + digits;
     }
 }

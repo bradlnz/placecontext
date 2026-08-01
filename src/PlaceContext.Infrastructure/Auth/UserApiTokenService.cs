@@ -99,8 +99,8 @@ public sealed class UserApiTokenService : IUserApiTokenService
         row.LastUsedAt = DateTimeOffset.UtcNow;
         await _db.SaveChangesAsync(ct);
 
-        var role = Enum.TryParse<UserRole>(user.Role, out var r) ? r : UserRole.Member;
-        return new AuthUser(user.Id, user.TenantId, user.Email, user.DisplayName, role);
+        return new AuthUser(user.Id, user.TenantId, user.Email, user.DisplayName,
+            string.IsNullOrWhiteSpace(user.Role) ? nameof(UserRole.Member) : user.Role);
     }
 
     private static string Hash(string raw)

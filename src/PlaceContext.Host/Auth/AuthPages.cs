@@ -29,10 +29,18 @@ public static class AuthPages
     public static string JoinInvalid() => Cache.GetOrAdd("joininvalid", static name =>
         File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Auth", "templates", name + ".html")));
 
+    /// <summary>View data for the login verification-code page (email or SMS delivery).</summary>
+    public sealed record EmailVerifyModel(
+        string Heading,
+        string DestinationHint,
+        bool RequiresPhone,
+        string? SwitchHref,
+        string? SwitchLabel);
+
     public static string EmailVerify(
         AntiforgeryTokenSet tokens,
         string state,
-        string maskedEmail,
+        EmailVerifyModel model,
         string? error)
     {
         var html = Cache.GetOrAdd("email-verify", static name =>
@@ -41,7 +49,14 @@ public static class AuthPages
             .Replace("{{afName}}", tokens.FormFieldName)
             .Replace("{{afValue}}", tokens.RequestToken)
             .Replace("{{state}}", WebUtility.HtmlEncode(state))
-            .Replace("{{email}}", WebUtility.HtmlEncode(maskedEmail))
+            // {{heading}} is fixed copy; {{hint}} embeds an already-encoded masked destination.
+            .Replace("{{heading}}", WebUtility.HtmlEncode(model.Heading))
+            .Replace("{{hint}}", model.DestinationHint)
+            .Replace("{{phoneClass}}", model.RequiresPhone ? "" : "hidden")
+            .Replace("{{codeClass}}", model.RequiresPhone ? "hidden" : "")
+            .Replace("{{switchClass}}", model.SwitchHref is null ? "hidden" : "")
+            .Replace("{{switchHref}}", WebUtility.HtmlEncode(model.SwitchHref ?? string.Empty))
+            .Replace("{{switchLabel}}", WebUtility.HtmlEncode(model.SwitchLabel ?? string.Empty))
             .Replace("{{errorClass}}", string.IsNullOrEmpty(error) ? "hidden" : "")
             .Replace("{{error}}", WebUtility.HtmlEncode(error ?? string.Empty));
     }

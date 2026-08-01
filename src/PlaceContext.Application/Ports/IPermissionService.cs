@@ -19,6 +19,7 @@ public interface IPermissionService
     /// <summary>The effective permission set for an arbitrary member (role + overrides), independent of
     /// who is asking — used by the Access Settings admin UI and the authorization policy handler, which
     /// both already know the target user's id and role from elsewhere (a claim, a member row) without
-    /// needing them to be the ambient caller.</summary>
-    Task<IReadOnlySet<string>> GetEffectivePermissionsForUserAsync(Guid userId, UserRole role, CancellationToken ct = default);
+    /// needing them to be the ambient caller. <paramref name="roleName"/> is the role's name — a
+    /// <c>role_definitions</c> row (custom roles included) or a <see cref="UserRole"/> enum name.</summary>
+    Task<IReadOnlySet<string>> GetEffectivePermissionsForUserAsync(Guid userId, string roleName, CancellationToken ct = default);
 }

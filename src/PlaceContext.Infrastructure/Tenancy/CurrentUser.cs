@@ -20,9 +20,9 @@ public sealed class CurrentUser : ICurrentUser
     public static void Clear() => _current.Value = null;
 
     public Guid UserId => _current.Value?.Id ?? Guid.Empty;
-    public UserRole Role => _current.Value?.Role ?? UserRole.Viewer;
+    public string Role => _current.Value?.Role ?? nameof(UserRole.Viewer);
     public bool IsAuthenticated => _current.Value is not null;
 }
 
-/// <summary>The id + role resolved off a request's authenticated principal.</summary>
-public sealed record UserIdentity(Guid Id, UserRole Role);
+/// <summary>The id + role name resolved off a request's authenticated principal.</summary>
+public sealed record UserIdentity(Guid Id, string Role);

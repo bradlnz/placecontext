@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using PlaceContext.Application;
 using PlaceContext.Infrastructure.Security;
 
@@ -11,6 +12,7 @@ namespace PlaceContext.Host.Controllers;
 /// they replace.
 /// </summary>
 [AllowAnonymous]
+[EnableRateLimiting("public-ingestion")]
 public sealed class IngestController : ControllerBase
 {
     private readonly IPlaceContextService _svc;
@@ -27,8 +29,11 @@ public sealed class IngestController : ControllerBase
     // the JSON body injected as the triggered runs' input payload. Gated by a shared ingest key
     // (PlaceContext:Ingest:Key); disabled when no key is configured to avoid an open relay.
     [HttpPost("/ingest/{eventName}")]
+    [RequestSizeLimit(1024 * 1024)]
     public async Task<IActionResult> Ingest(string eventName, Guid? projectId)
     {
+        if (string.IsNullOrWhiteSpace(eventName) || eventName.Length > 200)
+            return BadRequest(new { error = "Event name is required and must not exceed 200 characters." });
         var configuredKey = _config["PlaceContext:Ingest:Key"];
         if (string.IsNullOrWhiteSpace(configuredKey))
             return StatusCode(StatusCodes.Status404NotFound);

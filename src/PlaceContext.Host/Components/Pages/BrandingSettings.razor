@@ -1,6 +1,6 @@
 @page "/settings/branding"
 @layout PlaceContext.Host.Components.Layout.SettingsLayout
-@attribute [Authorize(Policy = Permission.SettingsManage)]
+@attribute [Authorize(Policy = Policies.DefaultAdmin)]
 @using PlaceContext.Host.Branding
 @inject BrandingService Branding
 @inject PortalUiState Ui

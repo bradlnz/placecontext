@@ -52,7 +52,7 @@ public sealed class ClusterProxyController : ControllerBase
         catch (Exception ex)
         {
             _log.LogError(ex, "Pipeline chat failed");
-            return StatusCode(502, new { error = ex.Message });
+            return StatusCode(502, new { error = "The cluster chat request failed." });
         }
     }
 
@@ -68,7 +68,7 @@ public sealed class ClusterProxyController : ControllerBase
         catch (Exception ex)
         {
             _log.LogError(ex, "Pipeline embeddings failed");
-            return StatusCode(502, new { error = ex.Message });
+            return StatusCode(502, new { error = "The cluster embedding request failed." });
         }
     }
 
@@ -93,7 +93,12 @@ public sealed class ClusterProxyController : ControllerBase
         catch (Exception ex)
         {
             _log.LogError(ex, "Pipeline stream failed");
-            try { await Response.WriteAsync($"data: {{\"error\":\"{ex.Message}\"}}\n\ndata: [DONE]\n\n"); } catch { }
+            try
+            {
+                var error = JsonSerializer.Serialize(new { error = "The cluster streaming request failed." });
+                await Response.WriteAsync($"data: {error}\n\ndata: [DONE]\n\n");
+            }
+            catch { }
         }
     }
 }

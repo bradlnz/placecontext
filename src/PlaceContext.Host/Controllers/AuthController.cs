@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using System.Net;
 using System.Text.Json;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authentication;
@@ -177,25 +178,40 @@ public sealed class AuthController : ControllerBase
 
         LoginThrottle.Clear(email ?? "");
 
-        if (await _auth.IsTwoFactorEnabledAsync(user.Id, HttpContext.RequestAborted))
+        if (await _auth.IsTwoFactorRequiredAsync(HttpContext.RequestAborted))
         {
-            try
+            var delivery = await _auth.GetTwoFactorDeliveryInfoAsync(
+                user.Id, channel: null, HttpContext.RequestAborted);
+            var channel = delivery.Channel;
+            var destination = delivery.MaskedDestination;
+            if (!delivery.RequiresPhoneEnrollment)
             {
-                await _auth.IssueTwoFactorCodeAsync(user.Id, HttpContext.RequestAborted);
-            }
-            catch (Exception)
-            {
-                return Redirect(BuildLoginErrorUrl(
-                    "We could not send a verification code. Ask an owner to check Postmark in Settings → Communications.",
-                    returnUrl, email));
+                try
+                {
+                    var challenge = await _auth.IssueTwoFactorCodeAsync(
+                        user.Id, channel: null, HttpContext.RequestAborted);
+                    channel = challenge.Channel;
+                    destination = challenge.MaskedDestination;
+                }
+                catch (Exception)
+                {
+                    return Redirect(BuildLoginErrorUrl(
+                        "We could not send a verification code. Ask an owner to check Settings → Communications.",
+                        returnUrl, email));
+                }
             }
 
-            var stateToken = _encryptor.Protect(JsonSerializer.Serialize(new EmailTwoFactorState
+            var stateToken = ProtectEmailState(new EmailTwoFactorState
             {
                 UserId = user.Id, TenantId = user.TenantId, Email = user.Email,
                 DisplayName = user.DisplayName, Role = user.Role.ToString(),
                 ReturnUrl = LocalOrHome(returnUrl),
-            }), IDataEncryptor.Purpose.EmailTwoFactorState);
+                Channel = channel,
+                Destination = destination,
+                NeedsPhone = delivery.RequiresPhoneEnrollment,
+                EmailAvailable = delivery.EmailAvailable,
+                SmsAvailable = delivery.SmsAvailable,
+            });
             var qs = $"state={Uri.EscapeDataString(stateToken)}";
             return Redirect($"/auth/email-verify?{qs}");
         }
@@ -268,9 +284,10 @@ public sealed class AuthController : ControllerBase
     }
 
     [HttpPost("/auth/logout")]
-    [AllowAnonymous]
+    [Authorize]
     public async Task<IActionResult> Logout()
     {
+        if (!await ValidAntiforgeryAsync()) return BadRequest();
         await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
         return Redirect("/locked");
     }
@@ -300,7 +317,7 @@ public sealed class AuthController : ControllerBase
             && returnUrl.StartsWith('/') && !returnUrl.StartsWith("//") && !returnUrl.StartsWith("/\\")
                 ? returnUrl : "/";
 
-    // ── Email 2FA ──────────────────────────────────────────────────────────────────────────────
+    // ── Login 2FA (verification code by email or SMS) ──────────────────────────────────────────
 
     [HttpGet("/auth/email-verify")]
     [AllowAnonymous]
@@ -309,21 +326,52 @@ public sealed class AuthController : ControllerBase
         if (string.IsNullOrEmpty(state)) return Redirect("/login");
         var pending = DecryptEmailState(state);
         if (pending is null) return Redirect("/login");
-        var tokens = _antiforgery.GetAndStoreTokens(HttpContext);
-        return Content(AuthPages.EmailVerify(
-            tokens, state, MaskEmail(pending.Email), error), "text/html");
+        return RenderVerify(pending, state, error);
     }
 
     [HttpPost("/auth/email-verify")]
     [AllowAnonymous]
     public async Task<IActionResult> EmailVerifyPost(
-        [FromForm] string state, [FromForm] string code)
+        [FromForm] string state, [FromForm] string? code, [FromForm] string? phone)
     {
         if (!await ValidAntiforgeryAsync() || string.IsNullOrEmpty(state))
             return Redirect("/login");
 
         var pending = DecryptEmailState(state);
         if (pending is null) return Redirect("/login");
+
+        // Phone enrollment: the code goes by SMS but no number is on file yet — collect it first,
+        // then send the code to the freshly stored number.
+        if (pending.NeedsPhone || !string.IsNullOrWhiteSpace(phone))
+        {
+            if (string.IsNullOrWhiteSpace(phone))
+                return RenderVerify(pending, state, "Enter your mobile number so we can text you the code.");
+            try
+            {
+                await _auth.SetTwoFactorPhoneNumberAsync(
+                    pending.UserId, phone, HttpContext.RequestAborted);
+            }
+            catch (ArgumentException ex)
+            {
+                return RenderVerify(pending, state, ex.Message);
+            }
+
+            try
+            {
+                var challenge = await _auth.IssueTwoFactorCodeAsync(
+                    pending.UserId, "sms", HttpContext.RequestAborted);
+                pending.Channel = challenge.Channel;
+                pending.Destination = challenge.MaskedDestination;
+                pending.NeedsPhone = false;
+            }
+            catch (Exception)
+            {
+                return RenderVerify(pending, state,
+                    "We could not send the code. Please try again shortly.");
+            }
+            var enrolled = ProtectEmailState(pending);
+            return Redirect($"/auth/email-verify?state={Uri.EscapeDataString(enrolled)}");
+        }
 
         var ok = await _auth.VerifyTwoFactorCodeAsync(
             pending.UserId, code ?? "", HttpContext.RequestAborted);
@@ -335,7 +383,7 @@ public sealed class AuthController : ControllerBase
         }
 
         var user = new AuthUser(pending.UserId, pending.TenantId, pending.Email,
-            pending.DisplayName, Enum.Parse<UserRole>(pending.Role));
+            pending.DisplayName, pending.Role);
         await SignInAsync(HttpContext, user);
         return Redirect(LocalOrHome(pending.ReturnUrl));
     }
@@ -347,19 +395,108 @@ public sealed class AuthController : ControllerBase
         if (!await ValidAntiforgeryAsync()) return Redirect("/login");
         var pending = DecryptEmailState(state);
         if (pending is null) return Redirect("/login");
-        if (!await _auth.IsTwoFactorEnabledAsync(pending.UserId, HttpContext.RequestAborted))
+        if (!await _auth.IsTwoFactorRequiredAsync(HttpContext.RequestAborted))
             return Redirect("/login");
+        if (pending.NeedsPhone)
+            return Redirect($"/auth/email-verify?state={Uri.EscapeDataString(state)}");
         try
         {
-            await _auth.IssueTwoFactorCodeAsync(pending.UserId, HttpContext.RequestAborted);
-            return Redirect($"/auth/email-verify?state={Uri.EscapeDataString(state)}");
+            var challenge = await _auth.IssueTwoFactorCodeAsync(
+                pending.UserId, pending.Channel, HttpContext.RequestAborted);
+            pending.Channel = challenge.Channel;
+            pending.Destination = challenge.MaskedDestination;
+            var resent = ProtectEmailState(pending);
+            return Redirect($"/auth/email-verify?state={Uri.EscapeDataString(resent)}");
         }
-        catch (Exception ex)
+        catch (InvalidOperationException ex)
         {
             var qs = $"state={Uri.EscapeDataString(state)}&error={Uri.EscapeDataString(ex.Message)}";
             return Redirect($"/auth/email-verify?{qs}");
         }
+        catch (Exception)
+        {
+            var qs = $"state={Uri.EscapeDataString(state)}&error="
+                + Uri.EscapeDataString("We could not send a new code. Please try again shortly.");
+            return Redirect($"/auth/email-verify?{qs}");
+        }
     }
+
+    // "Send via SMS/email instead" — re-issues the code on the other channel (offered only when both
+    // channels have a 2FA-flagged provider). The usual one-minute resend cooldown still applies.
+    [HttpGet("/auth/email-verify/channel")]
+    [AllowAnonymous]
+    public async Task<IActionResult> EmailVerifyChannel(
+        [FromQuery] string? state, [FromQuery] string? channel)
+    {
+        if (string.IsNullOrEmpty(state)) return Redirect("/login");
+        var pending = DecryptEmailState(state);
+        if (pending is null || channel is not ("email" or "sms")) return Redirect("/login");
+        if (!(pending.EmailAvailable && pending.SmsAvailable))
+            return Redirect($"/auth/email-verify?state={Uri.EscapeDataString(state)}");
+
+        string? error = null;
+        var delivery = await _auth.GetTwoFactorDeliveryInfoAsync(
+            pending.UserId, channel, HttpContext.RequestAborted);
+        pending.Channel = delivery.Channel;
+        pending.Destination = delivery.MaskedDestination;
+        pending.NeedsPhone = delivery.RequiresPhoneEnrollment;
+        if (!delivery.RequiresPhoneEnrollment)
+        {
+            try
+            {
+                var challenge = await _auth.IssueTwoFactorCodeAsync(
+                    pending.UserId, channel, HttpContext.RequestAborted);
+                pending.Channel = challenge.Channel;
+                pending.Destination = challenge.MaskedDestination;
+            }
+            catch (InvalidOperationException ex) { error = ex.Message; }
+            catch (Exception)
+            {
+                error = "We could not send a new code. Please try again shortly.";
+            }
+        }
+
+        var switched = ProtectEmailState(pending);
+        var qs = $"state={Uri.EscapeDataString(switched)}";
+        if (error is not null) qs += $"&error={Uri.EscapeDataString(error)}";
+        return Redirect($"/auth/email-verify?{qs}");
+    }
+
+    private IActionResult RenderVerify(EmailTwoFactorState pending, string state, string? error)
+    {
+        var tokens = _antiforgery.GetAndStoreTokens(HttpContext);
+        string? switchHref = null;
+        string? switchLabel = null;
+        if (pending is { EmailAvailable: true, SmsAvailable: true, NeedsPhone: false })
+        {
+            var other = pending.Channel == "sms" ? "email" : "sms";
+            switchHref = $"/auth/email-verify/channel?state={Uri.EscapeDataString(state)}&channel={other}";
+            switchLabel = other == "sms"
+                ? "Send the code by SMS instead"
+                : "Send the code to your email instead";
+        }
+
+        var destination = WebUtility.HtmlEncode(pending.Destination);
+        var model = pending.NeedsPhone
+            ? new AuthPages.EmailVerifyModel(
+                "Add your phone number",
+                "Verification codes are delivered by SMS. Enter your mobile number and we'll text you a code.",
+                RequiresPhone: true, switchHref, switchLabel)
+            : pending.Channel == "sms"
+                ? new AuthPages.EmailVerifyModel(
+                    "Check your phone",
+                    $"Enter the 6-digit verification code sent by SMS to <strong>{destination}</strong>.",
+                    RequiresPhone: false, switchHref, switchLabel)
+                : new AuthPages.EmailVerifyModel(
+                    "Check your email",
+                    $"Enter the 6-digit verification code sent to <strong>{destination}</strong>.",
+                    RequiresPhone: false, switchHref, switchLabel);
+        return Content(AuthPages.EmailVerify(tokens, state, model, error), "text/html");
+    }
+
+    private string ProtectEmailState(EmailTwoFactorState state)
+        => _encryptor.Protect(
+            JsonSerializer.Serialize(state), IDataEncryptor.Purpose.EmailTwoFactorState);
 
     private EmailTwoFactorState? DecryptEmailState(string state)
     {
@@ -381,9 +518,20 @@ public sealed class AuthController : ControllerBase
         public string DisplayName { get; set; } = "";
         public string Role { get; set; } = "";
         public string? ReturnUrl { get; set; }
+        /// <summary>Channel the code was (or will be) delivered on: "email" | "sms".</summary>
+        public string Channel { get; set; } = "email";
+        /// <summary>Masked delivery target shown on the page (masked email or phone).</summary>
+        public string Destination { get; set; } = "";
+        /// <summary>True when SMS delivery is required but no phone number is on file yet.</summary>
+        public bool NeedsPhone { get; set; }
+        public bool EmailAvailable { get; set; }
+        public bool SmsAvailable { get; set; }
     }
 
     // ── 2FA Management API ─────────────────────────────────────────────────────────────────────
+    // 2FA is org-wide: mandatory for everyone once any communication provider is flagged
+    // UseForTwoFactor (Settings → Communications). These self-service endpoints only manage the
+    // user's own delivery details — phone number and preferred channel.
 
     [HttpGet("/api/2fa/status")]
     [Authorize]
@@ -391,71 +539,46 @@ public sealed class AuthController : ControllerBase
     {
         var userId = GetCurrentUserId();
         if (userId is null) return Unauthorized();
-        var enabled = await _auth.IsTwoFactorEnabledAsync(userId.Value, HttpContext.RequestAborted);
-        return Ok(new { enabled });
+        var info = await _auth.GetTwoFactorSettingsAsync(userId.Value, HttpContext.RequestAborted);
+        return Ok(new
+        {
+            required = info.Required,
+            channel = info.PreferredChannel,
+            phoneNumber = info.PhoneNumber,
+            emailAvailable = info.EmailAvailable,
+            smsAvailable = info.SmsAvailable,
+        });
     }
 
-    [HttpPost("/api/2fa/setup")]
+    [HttpPost("/api/2fa/phone")]
     [Authorize]
-    public async Task<IActionResult> TwoFactorSetup()
+    public async Task<IActionResult> TwoFactorPhone([FromBody] TwoFactorPhoneRequest? body)
     {
         var userId = GetCurrentUserId();
         if (userId is null) return Unauthorized();
-
-        if (await _auth.IsTwoFactorEnabledAsync(userId.Value, HttpContext.RequestAborted))
-            return BadRequest(new { error = "2FA is already enabled." });
-
         try
         {
-            var challenge = await _auth.IssueTwoFactorCodeAsync(
-                userId.Value, HttpContext.RequestAborted);
-            return Ok(new { sent = true, email = challenge.MaskedEmail, challenge.ExpiresAt });
+            await _auth.SetTwoFactorPhoneNumberAsync(
+                userId.Value, body?.PhoneNumber, HttpContext.RequestAborted);
+            return Ok(new { saved = true });
         }
-        catch (Exception ex) { return BadRequest(new { error = ex.Message }); }
+        catch (ArgumentException ex) { return BadRequest(new { error = ex.Message }); }
     }
 
-    [HttpPost("/api/2fa/confirm")]
+    [HttpPost("/api/2fa/channel")]
     [Authorize]
-    public async Task<IActionResult> TwoFactorConfirm([FromBody] EmailCodeRequest? body)
+    public async Task<IActionResult> TwoFactorChannel([FromBody] TwoFactorChannelRequest? body)
     {
         var userId = GetCurrentUserId();
         if (userId is null) return Unauthorized();
-        if (body?.Code is null) return BadRequest(new { error = "Code required." });
-
-        var ok = await _auth.ConfirmTwoFactorSetupAsync(
-            userId.Value, body.Code, HttpContext.RequestAborted);
-        if (!ok) return BadRequest(new { error = "Invalid or expired code." });
-        return Ok(new { confirmed = true });
-    }
-
-    [HttpPost("/api/2fa/code")]
-    [Authorize]
-    public async Task<IActionResult> TwoFactorCode()
-    {
-        var userId = GetCurrentUserId();
-        if (userId is null) return Unauthorized();
-        if (!await _auth.IsTwoFactorEnabledAsync(userId.Value, HttpContext.RequestAborted))
-            return BadRequest(new { error = "2FA is not enabled." });
+        if (body?.Channel is null) return BadRequest(new { error = "Channel required." });
         try
         {
-            var challenge = await _auth.IssueTwoFactorCodeAsync(
-                userId.Value, HttpContext.RequestAborted);
-            return Ok(new { sent = true, email = challenge.MaskedEmail, challenge.ExpiresAt });
+            await _auth.SetTwoFactorChannelAsync(userId.Value, body.Channel, HttpContext.RequestAborted);
+            return Ok(new { saved = true });
         }
-        catch (Exception ex) { return BadRequest(new { error = ex.Message }); }
-    }
-
-    [HttpPost("/api/2fa/disable")]
-    [Authorize]
-    public async Task<IActionResult> TwoFactorDisable([FromBody] EmailCodeRequest? body)
-    {
-        var userId = GetCurrentUserId();
-        if (userId is null) return Unauthorized();
-        if (body?.Code is null) return BadRequest(new { error = "Code required." });
-
-        var ok = await _auth.DisableTwoFactorAsync(userId.Value, body.Code, HttpContext.RequestAborted);
-        if (!ok) return BadRequest(new { error = "Invalid or expired code." });
-        return Ok(new { disabled = true });
+        catch (ArgumentException ex) { return BadRequest(new { error = ex.Message }); }
+        catch (InvalidOperationException ex) { return BadRequest(new { error = ex.Message }); }
     }
 
     private Guid? GetCurrentUserId()
@@ -464,14 +587,6 @@ public sealed class AuthController : ControllerBase
         return claim is not null && Guid.TryParse(claim.Value, out var id) ? id : null;
     }
 
-    public sealed record EmailCodeRequest(string Code);
-
-    private static string MaskEmail(string email)
-    {
-        var at = email.IndexOf('@');
-        if (at <= 0) return email;
-        var local = email[..at];
-        var visible = local.Length <= 2 ? local[..1] : local[..2];
-        return visible + new string('•', Math.Max(2, local.Length - visible.Length)) + email[at..];
-    }
+    public sealed record TwoFactorPhoneRequest(string? PhoneNumber);
+    public sealed record TwoFactorChannelRequest(string Channel);
 }

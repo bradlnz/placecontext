@@ -214,6 +214,13 @@ public interface IPlaceContextService
     Task<UserPermissionsView> GetUserPermissionsAsync(Guid userId, CancellationToken ct = default);
     Task<UserPermissionsView> SetUserPermissionOverrideAsync(Guid userId, string permission, bool? allowed, CancellationToken ct = default);
 
+    // Editable roles: list definitions (with member counts), create custom roles, edit any non-Owner
+    // role's grant set, and delete custom roles no member holds.
+    Task<IReadOnlyList<RoleView>> ListRolesAsync(CancellationToken ct = default);
+    Task<RoleView> CreateRoleAsync(string name, IReadOnlyList<string> permissions, CancellationToken ct = default);
+    Task<RoleView> UpdateRolePermissionsAsync(Guid roleId, IReadOnlyList<string> permissions, CancellationToken ct = default);
+    Task<bool> DeleteRoleAsync(Guid roleId, CancellationToken ct = default);
+
     // Cluster page: node inventory, promote-to-master, join codes (Tailscale fleet).
     Task<Ports.ClusterInfo> GetClusterInfoAsync(CancellationToken ct = default);
     Task<Ports.PromoteMasterResult> PromoteNodeToMasterAsync(string nodeName, CancellationToken ct = default);

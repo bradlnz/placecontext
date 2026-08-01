@@ -1,4 +1,7 @@
 using System.Security.Claims;
+using System.Security.Cryptography;
+using System.Text;
+using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.SignalR;
@@ -11,6 +14,7 @@ using PlaceContext.Host.Controllers;
 using PlaceContext.Host.Tenancy;
 using PlaceContext.Host.Tools;
 using PlaceContext.Infrastructure;
+using PlaceContext.Infrastructure.Crm;
 using PlaceContext.Infrastructure.Tenancy;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authentication;
@@ -31,6 +35,7 @@ using Microsoft.AspNetCore.DataProtection.XmlEncryption;
 using Microsoft.AspNetCore.DataProtection.KeyManagement;
 using PlaceContext.Infrastructure.Persistence;
 using Microsoft.AspNetCore.ResponseCompression;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.StaticFiles;
 
 // PlaceContext is a single hosted web app on http://localhost:7700, serving two surfaces from one
@@ -87,7 +92,7 @@ builder.Services.AddRazorComponents().AddInteractiveServerComponents();
 // The Blazor SignalR hub defaults to 32 KB for client→server messages. File-switching in the
 // Monaco editor syncs content back via JS interop (getValue), so large code files (>32 KB)
 // blow past the limit and kill the circuit. Raise it to 1 MB.
-builder.Services.Configure<HubOptions>(o => o.MaximumReceiveMessageSize = 100 * 1024 * 1024);
+builder.Services.Configure<HubOptions>(o => o.MaximumReceiveMessageSize = 1 * 1024 * 1024);
 // Compress dynamic responses (the initial Blazor HTML document is the portal's biggest payload —
 // inline CSS included — and it currently ships uncompressed). Brotli first, gzip fallback. The
 // Host terminates plain HTTP in-cluster (TLS ends at Traefik), so the default no-compression-
@@ -100,6 +105,31 @@ builder.Services.AddResponseCompression(o =>
 // The former minimal-API endpoints (ingest, backup, auth, artifacts, health) now live as controllers
 // under Controllers/ — attribute-routed, same paths/auth, wired below with MapControllers().
 builder.Services.AddControllers();
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.AddPolicy("public-ingestion", context =>
+    {
+        // Valid webhook credentials receive independent limits. Invalid/credential-less traffic is
+        // grouped by host and peer address so it cannot consume a valid integration's allowance.
+        var credential = context.Request.Headers[CrmIngestionSettingsService.TokenHeader].ToString();
+        if (string.IsNullOrEmpty(credential))
+            credential = context.Request.Headers["X-Ingest-Key"].ToString();
+        if (string.IsNullOrEmpty(credential))
+            credential = context.Request.Headers["X-Slack-Signature"].ToString();
+        var partition = string.IsNullOrEmpty(credential)
+            ? $"{context.Request.Host.Host}:{context.Connection.RemoteIpAddress}"
+            : Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(credential)));
+        return RateLimitPartition.GetFixedWindowLimiter(partition, _ =>
+            new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 120,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0,
+                AutoReplenishment = true,
+            });
+    });
+});
 builder.Services.AddHttpClient();
 // Blazor components (e.g. SecuritySettings) use a scoped HttpClient for same-origin API calls.
 // Resolve its BaseAddress from the current circuit's NavigationManager so relative URLs work.
@@ -295,10 +325,15 @@ builder.Services.AddAuthorization(o =>
     foreach (var permission in PlaceContext.Application.Ports.Permission.All)
         o.AddPolicy(permission, p => p.RequireAuthenticatedUser()
             .AddRequirements(new PermissionRequirement(permission)));
+    // Default-admin-only policy — gates the /settings/* area (beyond the self-service Security and
+    // API tokens pages) and the controllers backing it to the tenant's bootstrap administrator.
+    o.AddPolicy(Policies.DefaultAdmin, p => p.RequireAuthenticatedUser()
+        .AddRequirements(new DefaultAdminRequirement()));
 });
 // Scoped, not singleton: it depends on the scoped IPermissionService (which in turn depends on the
 // scoped IUserPermissionGrantRepository / DbContext).
 builder.Services.AddScoped<IAuthorizationHandler, PermissionAuthorizationHandler>();
+builder.Services.AddScoped<IAuthorizationHandler, DefaultAdminAuthorizationHandler>();
 builder.Services.AddSingleton<IAuthorizationHandler, BlazorHubBypassHandler>();
 builder.Services.AddScoped<IOAuthAuthCodeStore, PlaceContext.Infrastructure.Persistence.EfOAuthAuthCodeStore>();
 builder.Services.AddSingleton<PortalToken>();
@@ -396,6 +431,7 @@ app.UseMiddleware<TenantResolutionMiddleware>(); // resolve {user}.placecontext.
 app.UseMiddleware<ProjectResolutionMiddleware>();
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseRateLimiter();
 // After UseAuthorization deliberately — see UserResolutionMiddleware for why.
 app.UseMiddleware<UserResolutionMiddleware>();
 app.UseAntiforgery();
@@ -418,6 +454,10 @@ await app.RunAsync();
 
 // Reads the principal's role (from either the cookie's ClaimTypes.Role or the JWT's "role" claim) and
 // returns whether it meets the minimum. Backs the Member/Admin/Owner authorization policies.
+// Deliberately enum-only: a custom role_definitions name does not parse, so custom-role members never
+// match these coarse policies — their access comes exclusively from the per-permission policies, which
+// resolve the role's grant set from role_definitions by name. The coarse ladder stays reserved for the
+// four built-in roles.
 static bool RoleAtLeast(ClaimsPrincipal user, UserRole min)
 {
     var value = user.FindFirst(ClaimTypes.Role)?.Value ?? user.FindFirst("role")?.Value;

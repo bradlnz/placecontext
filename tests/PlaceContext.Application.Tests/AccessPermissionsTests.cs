@@ -120,4 +120,28 @@ public class AccessPermissionsTests
         Assert.DoesNotContain(Permission.ProjectsView, effective);
         Assert.Contains(Permission.JobsView, effective); // untouched Viewer default
     }
+
+    // ── Default-admin gate on settings.manage ────────────────────────────────────────────────────
+
+    [Fact]
+    public void Settings_manage_is_never_effective_for_a_non_default_admin()
+    {
+        // The full catalog plus an explicit allow override — neither helps a non-default-admin.
+        var overrides = new Dictionary<string, bool> { [Permission.SettingsManage] = true };
+        var effective = EffectivePermissionsResolver.Resolve(
+            RolePermissionDefaults.GetDefaults(UserRole.Owner), overrides, isDefaultAdmin: false);
+
+        Assert.DoesNotContain(Permission.SettingsManage, effective);
+        Assert.Contains(Permission.MembersManage, effective); // every other grant is untouched
+    }
+
+    [Fact]
+    public void Settings_manage_is_effective_for_the_default_admin()
+    {
+        var effective = EffectivePermissionsResolver.Resolve(
+            RolePermissionDefaults.GetDefaults(UserRole.Owner),
+            new Dictionary<string, bool>(), isDefaultAdmin: true);
+
+        Assert.Contains(Permission.SettingsManage, effective);
+    }
 }
