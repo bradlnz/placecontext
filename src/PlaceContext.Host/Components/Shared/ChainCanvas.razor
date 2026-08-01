@@ -19,12 +19,6 @@
             <button class="canvas-button primary" disabled="@(!Guid.TryParse(_addJobId, out _))" @onclick="AddStageAsync">
                 <span>+</span> Add stage
             </button>
-            @if (CanAddSmsAction)
-            {
-                <button class="canvas-button" @onclick="@(() => OnAddSmsAction.InvokeAsync())">
-                    <span>▣</span> Send SMS
-                </button>
-            }
         </div>
     </div>
 
@@ -184,8 +178,6 @@
     [Parameter] public EventCallback<(int StageIndex, ChainGateView Gate)> OnEditGate { get; set; }
     [Parameter] public EventCallback<Guid> OnAddStage { get; set; }
     [Parameter] public EventCallback<int> OnEditEmailAction { get; set; }
-    [Parameter] public EventCallback OnAddSmsAction { get; set; }
-    [Parameter] public bool CanAddSmsAction { get; set; }
     [Parameter] public EventCallback<int> OnEditSmsAction { get; set; }
     [Parameter] public EventCallback<(int StageIndex, Guid JobId)> OnAddPath { get; set; }
     [Parameter] public EventCallback<(int SourceIndex, int TargetIndex)> OnMoveStage { get; set; }

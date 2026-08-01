@@ -17,12 +17,16 @@
 else
 {
     <div class="jobs-page">
-
-
-        <div class="page-header">
-            <h2 class="page-title">Jobs</h2>
-            <button class="dcbtn primary" @onclick="() => Vm.NewJob()">+ New job</button>
-        </div>
+        <header class="jobs-head">
+            <div>
+                <h2>Jobs</h2>
+                <p>Build reusable workloads, run them on demand, and connect them to automated triggers.</p>
+            </div>
+            <div class="head-actions">
+                <button class="dcbtn" @onclick="@(() => Nav.NavigateTo($"/project/{ProjectId}/tests"))">View tests</button>
+                <button class="dcbtn primary" @onclick="() => Vm.NewJob()">+ New job</button>
+            </div>
+        </header>
 
         @if (Vm.Message is not null)
         {
@@ -32,66 +36,97 @@ else
         @if (Vm.Jobs is null || Vm.Jobs.Count == 0)
         {
             <div class="dccard empty-state">
-                No jobs defined for this project yet. Click <strong>+ New job</strong> to create one.
+                <div class="empty-icon">⌁</div>
+                <strong>No jobs yet</strong>
+                <span>Create a reusable workload, then run it manually or connect it to a schedule or event.</span>
+                <button class="dcbtn primary" @onclick="() => Vm.NewJob()">Create first job</button>
             </div>
         }
         else
         {
-            <div class="jobs-list">
-                @foreach (var job in Vm.Jobs)
-                {
-                    var isSelected = Vm.SelectedJobId == job.Id;
-                    <div class="dccard @(isSelected ? "selected" : "") job-card"
-                         @onclick="@(() => Vm.OpenJobAsync(job))">
-                        <div class="job-card-row">
-                            <div class="min-w-0">
-                                <div class="job-name">@job.Name</div>
-                                @if (!string.IsNullOrWhiteSpace(job.Description))
+            <section class="summary-strip" aria-label="Job summary">
+                <div class="summary-count"><strong>@Vm.Jobs.Count</strong><span>jobs</span></div>
+                <div class="summary-count"><strong>@Vm.Jobs.Sum(job => job.ShardCount)</strong><span>shards</span></div>
+                <div class="summary-count automated"><strong>@AutomatedJobCount</strong><span>automated</span></div>
+                <div class="summary-count"><strong>@EnabledTriggerCount</strong><span>active triggers</span></div>
+                <div class="summary-progress" title="@AutomationPercent% of jobs have an active trigger">
+                    <span style="width:@AutomationPercent%"></span>
+                </div>
+            </section>
+
+            <section class="dccard job-suite">
+                <header class="suite-head">
+                    <div>
+                        <span class="suite-caret">⌄</span>
+                        <strong>Job catalogue</strong>
+                        <span>@Vm.Jobs.Count reusable workload@(Vm.Jobs.Count == 1 ? "" : "s")</span>
+                    </div>
+                    <span class="suite-result">@AutomatedJobCount automated</span>
+                </header>
+
+                <div class="job-rows">
+                    @foreach (var job in Vm.Jobs)
+                    {
+                        var triggerCount = EnabledTriggersFor(job.Id);
+                        var isRunning = Vm.IsRunningJob(job.Id);
+                        <article class="job-row @(isRunning ? "running" : null)"
+                                 @onclick="@(() => Vm.OpenJobAsync(job))">
+                            <div class="status-icon @(isRunning ? "is-running" : null)" aria-label="@(isRunning ? "Running" : WorkloadLabel(job))">
+                                @if (isRunning)
                                 {
-                                    <div class="job-desc">@job.Description</div>
+                                    <span class="spinner"></span>
                                 }
-                                <div class="job-meta">
-                                    @if (job.MapSourceKind == "code")
-                                    {
-                                        <span class="brand-2-text">[@job.MapRuntimeId]</span>
-                                    }
-                                    else
-                                    {
-                                        <span>@job.MapImage</span>
-                                    }
-                                    <span>@job.ShardCount shard(s)</span>
-                                    <span>concurrency @job.ConcurrencyLimit</span>
+                                else
+                                {
+                                    <span>@(job.MapSourceKind == "code" ? "⌁" : "□")</span>
+                                }
+                            </div>
+                            <div class="job-copy">
+                                <div class="job-title">
+                                    <strong>@job.Name</strong>
+                                    <span class="job-chip">@WorkloadLabel(job)</span>
+                                    <span class="job-chip">@job.ReturnType output</span>
                                     @if (job.ReduceSourceKind is not null)
                                     {
-                                        <span class="brand-2-text">+ reduce</span>
+                                        <span class="job-chip brand-chip">reduce step</span>
                                     }
+                                    @if (triggerCount > 0)
+                                    {
+                                        <span class="job-chip automated-chip">@triggerCount active trigger@(triggerCount == 1 ? "" : "s")</span>
+                                    }
+                                </div>
+                                <div class="job-detail">
+                                    <span>@(string.IsNullOrWhiteSpace(job.Description) ? "No description" : job.Description)</span>
+                                    <span class="job-facts">@job.ShardCount shard@(job.ShardCount == 1 ? "" : "s") · concurrency @job.ConcurrencyLimit · updated @job.UpdatedAt.ToWorkspaceTime().ToString("yyyy-MM-dd")</span>
                                 </div>
                             </div>
                             <div class="job-actions">
                                 @if (Vm.ConfirmDeleteId == job.Id)
                                 {
-                                    <button class="dcbtn c-bad" @onclick:stopPropagation="true" @onclick="@(() => Vm.DeleteJobAsync(job.Id))">Confirm delete</button>
+                                    <button class="dcbtn danger" @onclick:stopPropagation="true" @onclick="@(() => Vm.DeleteJobAsync(job.Id))">Delete</button>
                                     <button class="dcbtn" @onclick:stopPropagation="true" @onclick="@(() => Vm.ConfirmDeleteId = null)">Keep</button>
                                 }
                                 else
                                 {
-                                    <button class="dcbtn" @onclick:stopPropagation="true" @onclick="@(() => Vm.ConfirmDeleteId = job.Id)">Delete</button>
+                                    <button class="icon-action run-action" title="Run job" aria-label="Run @job.Name"
+                                            disabled="@isRunning" @onclick:stopPropagation="true"
+                                            @onclick="@(() => Vm.RunJobAsync(job.Id))">▶</button>
+                                    <button class="icon-action" title="Edit job" aria-label="Edit @job.Name"
+                                            @onclick:stopPropagation="true" @onclick="@(() => Vm.OpenJobAsync(job))">✎</button>
+                                    @if (job.MapSourceKind == "code")
+                                    {
+                                        <button class="icon-action code-action" title="Open code editor" aria-label="Open code editor for @job.Name"
+                                                @onclick:stopPropagation="true"
+                                                @onclick="@(() => Nav.NavigateTo($"/project/{ProjectId}/jobs/{job.Id}"))">&lt;/&gt;</button>
+                                    }
+                                    <button class="icon-action danger-action" title="Delete job" aria-label="Delete @job.Name"
+                                            @onclick:stopPropagation="true" @onclick="@(() => Vm.ConfirmDeleteId = job.Id)">⋯</button>
                                 }
-                                @if (job.MapSourceKind == "code")
-                                {
-                                    <button class="dcbtn" @onclick:stopPropagation="true"
-                                            @onclick="@(() => Nav.NavigateTo($"/project/{ProjectId}/jobs/{job.Id}"))">⌁ Editor</button>
-                                }
-                                <button class="dcbtn primary" disabled="@Vm.IsRunningJob(job.Id)"
-                                        @onclick:stopPropagation="true"
-                                        @onclick="@(() => Vm.RunJobAsync(job.Id))">
-                                    @(Vm.IsRunningJob(job.Id) ? "running…" : "Run")
-                                </button>
                             </div>
-                        </div>
-                    </div>
-                }
-            </div>
+                        </article>
+                    }
+                </div>
+            </section>
         }
 
     </div>
@@ -883,6 +918,20 @@ else
 @code {
     [Parameter] public Guid ProjectId { get; set; }
     [Inject] private IJSRuntime Js { get; set; } = null!;
+
+    private int EnabledTriggerCount => Vm.Triggers?.Count(trigger => trigger.Enabled) ?? 0;
+    private int AutomatedJobCount => Vm.Jobs?.Count(job => EnabledTriggersFor(job.Id) > 0) ?? 0;
+    private int AutomationPercent => Vm.Jobs is not { Count: > 0 }
+        ? 0
+        : (int)Math.Round(AutomatedJobCount * 100d / Vm.Jobs.Count);
+
+    private int EnabledTriggersFor(Guid jobId) =>
+        Vm.Triggers?.Count(trigger => trigger.JobId == jobId && trigger.Enabled) ?? 0;
+
+    private static string WorkloadLabel(PlaceContext.Application.Dtos.JobView job) =>
+        job.MapSourceKind == "code"
+            ? $"{(string.IsNullOrWhiteSpace(job.MapRuntimeId) ? "code" : job.MapRuntimeId)} code"
+            : "container";
 
     protected override void OnInitialized()
     {

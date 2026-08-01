@@ -22,11 +22,18 @@ public interface IDataEncryptor
         public const string Activity = "project.activity.v1";
         public const string ToolCall = "mcp.toolcall.v1";
         public const string PendingRun = "job.pending.v1";
+        /// <summary>Persisted step details and outputs for job-chain executions.</summary>
+        public const string ChainRun = "job.chain.run.v1";
         public const string Chart = "project.chart.v1";
         /// <summary>Source text stored with embedding rows (vectors stay searchable in pgvector).</summary>
         public const string EmbeddingText = "content.embedding.text.v1";
         public const string EmailTwoFactorState = "auth.email-2fa.state.v1";
+        /// <summary>Customer identity and contact fields stored on CRM client rows.</summary>
+        public const string CrmClient = "crm.client.v1";
         public const string CrmCommunication = "crm.communication.v1";
+        /// <summary>Customer-facing filenames and storage references on CRM artifact rows.</summary>
+        public const string CrmArtifactMetadata = "crm.artifact.metadata.v1";
+        public const string CrmAutomation = "crm.automation.v1";
     }
 
     /// <summary>True when <paramref name="value"/> is already in the protected wire format.</summary>

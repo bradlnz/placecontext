@@ -1132,7 +1132,7 @@
         if (!string.IsNullOrEmpty(info.ExtractedText))
         {
             if (info.ContentType == "application/pdf")
-                builder.AddMarkupContent(1, $"<iframe class='artifact-frame' src='{url}' title='{System.Net.WebUtility.HtmlEncode(info.Title)}' loading='lazy' referrerpolicy='no-referrer'></iframe>");
+                builder.AddMarkupContent(1, PdfPreviewMarkup(info, url));
             var details = $"""
                 <details class="artifact-extracted">
                     <summary>Extracted text {(info.ExtractedTruncated ? "(truncated)" : "")}</summary>
@@ -1194,6 +1194,8 @@
                 builder.AddMarkupContent(1, $"<img class='artifact-image' src='{url}' alt='{System.Net.WebUtility.HtmlEncode(info.Title)}' loading='lazy' />");
             else if (info.ContentType.StartsWith("video/"))
                 builder.AddMarkupContent(1, $"<video class='artifact-frame' src='{url}' controls preload='metadata' />");
+            else if (info.ContentType == "application/pdf")
+                builder.AddMarkupContent(1, PdfPreviewMarkup(info, url));
             else
                 builder.AddMarkupContent(1, $"<iframe class='artifact-frame' src='{url}' title='{System.Net.WebUtility.HtmlEncode(info.Title)}' loading='lazy' referrerpolicy='no-referrer'></iframe>");
         }
@@ -1219,6 +1221,21 @@
 
     private static bool IsJson(string ct) => ct.Contains("json", StringComparison.OrdinalIgnoreCase);
     private static bool IsCsv(string ct) => ct.Contains("csv", StringComparison.OrdinalIgnoreCase);
+
+    private static string PdfPreviewMarkup(ArtifactRenderInfo info, string url)
+    {
+        var title = System.Net.WebUtility.HtmlEncode(info.Title);
+        return $"""
+            <div class="artifact-pdf-wrap">
+                <div id="chat-artifact-pdf-{info.Id:N}" class="artifact-pdf-mobile"
+                     data-pc-pdf data-pdf-url="{url}" aria-label="PDF pages">
+                    <div class="pdf-loading">Preparing all PDF pages…</div>
+                </div>
+                <iframe class="artifact-frame pdf-desktop-frame" src="{url}" title="{title}"
+                        loading="lazy" referrerpolicy="no-referrer"></iframe>
+            </div>
+            """;
+    }
 
     private static bool PreviewableArtifact(string ct) =>
         ct.StartsWith("text/") || ct.StartsWith("image/") || ct == "application/pdf"

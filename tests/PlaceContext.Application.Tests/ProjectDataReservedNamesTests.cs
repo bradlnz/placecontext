@@ -10,6 +10,7 @@ public class ProjectDataReservedNamesTests
     [InlineData("JOBS", true)]
     [InlineData("schedules", true)]
     [InlineData("entities", true)]
+    [InlineData("search", true)]
     [InlineData("my_projects", false)]
     [InlineData("project", false)]
     [InlineData("sites", false)]

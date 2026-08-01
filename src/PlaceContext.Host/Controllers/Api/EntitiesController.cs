@@ -17,7 +17,8 @@ namespace PlaceContext.Host.Controllers.Api;
 ///   <item><c>GET /api/v1/{entity-name}/{key}</c> — rows matching the label column (or first column)</item>
 /// </list>
 /// Auth: personal user API tokens or the workspace admin key. Requires <c>data.read</c>.
-/// Route segments reserved by the management API (<c>projects</c>, <c>jobs</c>, <c>schedules</c>)
+/// Route segments reserved by the management API (<c>projects</c>, <c>jobs</c>, <c>schedules</c>,
+/// <c>entities</c>, <c>search</c>)
 /// never match as entity names.
 /// </summary>
 [ApiController]

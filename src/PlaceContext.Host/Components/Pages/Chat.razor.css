@@ -1602,6 +1602,10 @@
     background: var(--bg-1);
 }
 
+.artifact-pdf-mobile {
+    display: none;
+}
+
 .artifact-image {
     max-width: 100%;
     height: auto;
@@ -1823,6 +1827,65 @@ a.attachment-tile:hover {
 
     .artifact-frame {
         height: 260px;
+    }
+
+    .artifact-pdf-wrap .pdf-desktop-frame {
+        display: none;
+    }
+
+    .artifact-pdf-mobile {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        width: 100%;
+        padding: 8px;
+        border-radius: 8px;
+        background: var(--bg);
+    }
+
+    .artifact-pdf-mobile .pdf-loading,
+    .artifact-pdf-mobile ::deep .pdf-loading,
+    .artifact-pdf-mobile ::deep .pdf-render-error {
+        min-height: 150px;
+        display: grid;
+        place-items: center;
+        padding: 20px;
+        color: var(--text-3);
+        font-size: 11px;
+        text-align: center;
+    }
+
+    .artifact-pdf-mobile ::deep .pdf-render-error {
+        color: var(--bad);
+    }
+
+    .artifact-pdf-mobile ::deep .pdf-page-shell {
+        position: relative;
+        min-height: min(68vh, 680px);
+        overflow: hidden;
+        border: 1px solid var(--border);
+        border-radius: 7px;
+        background: #fff;
+        box-shadow: var(--shadow);
+    }
+
+    .artifact-pdf-mobile ::deep .pdf-page-label {
+        position: absolute;
+        z-index: 1;
+        top: 6px;
+        right: 6px;
+        padding: 3px 7px;
+        border-radius: 99px;
+        background: rgb(17 24 39 / 72%);
+        color: #fff;
+        font-size: 9px;
+    }
+
+    .artifact-pdf-mobile ::deep .pdf-page-shell canvas {
+        display: block;
+        width: 100%;
+        height: auto;
+        background: #fff;
     }
 
     .artifact-pre,

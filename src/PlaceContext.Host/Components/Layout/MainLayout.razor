@@ -9,7 +9,7 @@
 @inject NavigationManager Nav
 @inject IServiceScopeFactory ScopeFactory
 
-<div id="dcshell" data-theme="dark" class="shell" style="@_brand.CssOverrides()">
+<div id="dcshell" data-theme="@_theme" class="shell" style="@_brand.CssOverrides()">
 
     <!-- SIDEBAR — structure from tenant menu config; still filtered by effective permissions. -->
     <aside class="sidebar @(_navOpen ? "open" : null)">
@@ -150,8 +150,17 @@
                         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><path d="M16 17l5-5-5-5"></path><path d="M21 12H9"></path></svg>
                     </button>
                 </form>
-                <button @onclick="ToggleTheme" title="Toggle theme" class="icon-btn">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5L19 19M19 5l-1.5 1.5M6.5 17.5L5 19"></path></svg>
+                <button @onclick="ToggleTheme" title="Switch to @(_theme == "dark" ? "light" : "dark") mode"
+                        aria-label="Switch to @(_theme == "dark" ? "light" : "dark") mode"
+                        aria-pressed="@(_theme == "light")" class="icon-btn">
+                    @if (_theme == "dark")
+                    {
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5L19 19M19 5l-1.5 1.5M6.5 17.5L5 19"></path></svg>
+                    }
+                    else
+                    {
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 14.3A8.5 8.5 0 0 1 9.7 3.5 8.5 8.5 0 1 0 20.5 14.3Z"></path></svg>
+                    }
                 </button>
             </div>
         </div>
@@ -248,6 +257,7 @@
     }
 
     private PlaceContext.Host.Branding.TenantBranding _brand = new();
+    private string _theme = "dark";
     private IReadOnlyList<ResolvedMenuItem> _menu = Array.Empty<ResolvedMenuItem>();
     private readonly HashSet<string> _expanded = new(StringComparer.Ordinal);
     private IReadOnlyList<string> _entities = Array.Empty<string>();
@@ -442,7 +452,11 @@
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (firstRender)
-            await JS.InvokeVoidAsync("placecontext.initTheme");
+        {
+            var storedTheme = await JS.InvokeAsync<string>("placecontext.initTheme");
+            _theme = NormalizeTheme(storedTheme);
+            StateHasChanged();
+        }
         await JS.InvokeVoidAsync("placecontext.animateMeters");
 
         if (_focusSearch)
@@ -452,7 +466,13 @@
         }
     }
 
-    private async Task ToggleTheme() => await JS.InvokeVoidAsync("placecontext.toggleTheme");
+    private async Task ToggleTheme()
+    {
+        _theme = NormalizeTheme(await JS.InvokeAsync<string>("placecontext.toggleTheme"));
+    }
+
+    private static string NormalizeTheme(string? theme)
+        => string.Equals(theme, "light", StringComparison.OrdinalIgnoreCase) ? "light" : "dark";
 
     // ---- Workspace search ----
     private bool _searchOpen;

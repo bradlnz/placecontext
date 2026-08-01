@@ -7,125 +7,227 @@
 
 <PageTitle>PlaceContext — Events</PageTitle>
 
-@if (_loading)
-{
-    <Skeleton Kind="card-grid" Cards="4" Padded />
-}
-else
-{
-    <div class="page">
-
-
-        <h2 class="page-title">Events</h2>
-        <div class="page-sub">
-            Define event types, emit them, and watch the log. Event triggers on a job fire whenever a matching event is emitted.
+<div class="events-page">
+    <header class="events-head">
+        <div>
+            <h2>Events</h2>
+            <p>See what happened in the workspace and manage the event types that can start Jobs automatically.</p>
         </div>
+        <div class="head-actions">
+            <button class="dcbtn" @onclick="@(() => Nav.NavigateTo($"/project/{ProjectId}/jobs"))">Manage triggers</button>
+            <button class="dcbtn primary" @onclick="BeginDefine">+ New event type</button>
+        </div>
+    </header>
 
-        @if (_message is not null)
-        {
-            <div class="message-bar">@_message</div>
-        }
+    @if (_message is not null)
+    {
+        <div class="event-message @(_messageIsError ? "error" : null)">@_message</div>
+    }
 
-        <div class="columns">
-
-            @* ── Event types ─────────────────────────────────────────────── *@
-            <div class="column">
-                <div class="column-title">Event types</div>
-
-                <div class="stack">
-                    @foreach (var e in _types ?? Array.Empty<EventTypeView>())
-                    {
-                        <div class="dccard type-card">
-                            <div class="card-row">
-                                <span class="type-name">@e.Name</span>
-                                @if (e.IsBuiltIn)
-                                {
-                                    <span class="builtin-badge">built-in</span>
-                                }
-                            </div>
-                            @if (!string.IsNullOrWhiteSpace(e.Description))
-                            {
-                                <div class="type-desc">@e.Description</div>
-                            }
-                            <button class="dcbtn btn-emit"
-                                    @onclick="@(() => Emit(e.Name))">Emit</button>
-                        </div>
-                    }
-                </div>
-
-                <div class="dccard define-card">
-                    <div class="define-title">Define event type</div>
-                    <input class="dcinput" @bind="_defName" placeholder="deploy.finished" />
-                    <input class="dcinput" @bind="_defDescription" placeholder="Description (optional)" />
-                    <textarea class="dcinput va-textarea" rows="2"
-                              @bind="_defSchema" placeholder="Payload fields (optional freetext/JSON)"></textarea>
-                    @if (_defError is not null)
-                    {
-                        <div class="error-inline">@_defError</div>
-                    }
-                    <button class="dcbtn primary btn-self-start" disabled="@_defBusy" @onclick="Define">Define</button>
-                </div>
+    @if (_loading)
+    {
+        <Skeleton Kind="list" Rows="5" />
+    }
+    else
+    {
+        <section class="summary-strip" aria-label="Event summary">
+            <div class="summary-count"><strong>@(_types?.Count ?? 0)</strong><span>event types</span></div>
+            <div class="summary-count"><strong>@CustomTypeCount</strong><span>custom</span></div>
+            <div class="summary-count active"><strong>@ActiveSubscriptionCount</strong><span>active triggers</span></div>
+            <div class="summary-count"><strong>@(_log?.Count ?? 0)</strong><span>recent events</span></div>
+            <div class="summary-progress" title="@SubscriptionPercent% of event types have an active trigger">
+                <span style="width:@SubscriptionPercent%"></span>
             </div>
+        </section>
 
-            @* ── Event log ───────────────────────────────────────────────── *@
-            <div class="column">
-                <div class="column-title">Recent events</div>
+        <div class="event-layout">
+            <section class="dccard event-panel type-panel">
+                <header class="panel-head">
+                    <div>
+                        <span class="panel-caret">⌄</span>
+                        <strong>Event types</strong>
+                        <span>Choose one to emit it manually</span>
+                    </div>
+                    <span>@(_types?.Count ?? 0) available</span>
+                </header>
 
-                @if (_log is null || _log.Count == 0)
+                @if (_types is null or { Count: 0 })
                 {
-                    <div class="hint">No events emitted yet.</div>
+                    <div class="panel-empty">
+                        <span class="empty-icon">◇</span>
+                        <strong>No event types yet</strong>
+                        <span>Create one to connect external activity to a Job.</span>
+                        <button class="dcbtn primary" @onclick="BeginDefine">Create event type</button>
+                    </div>
                 }
                 else
                 {
-                    <div class="stack">
-                        @foreach (var o in _log)
+                    <div class="type-rows">
+                        @foreach (var eventType in _types)
                         {
-                            <div class="dccard log-card">
-                                <div class="card-row">
-                                    <span class="log-name">@o.Name</span>
-                                    <span class="source-badge"
-                                          style="color:@(o.Source == "Domain" ? "var(--brand-2)" : "var(--text-2)")">@o.Source</span>
-                                    <span class="log-time">@o.OccurredAt.ToWorkspaceTime().ToString("MM-dd HH:mm:ss")</span>
+                            var subscriberCount = SubscriberCount(eventType.Name);
+                            <article class="type-row">
+                                <div class="type-icon" aria-hidden="true">@(eventType.IsBuiltIn ? "◆" : "◇")</div>
+                                <div class="type-copy">
+                                    <div class="type-title">
+                                        <strong>@eventType.Name</strong>
+                                        <span class="type-chip">@(eventType.IsBuiltIn ? "built-in" : "custom")</span>
+                                        @if (subscriberCount > 0)
+                                        {
+                                            <span class="type-chip subscribed">@subscriberCount active trigger@(subscriberCount == 1 ? "" : "s")</span>
+                                        }
+                                    </div>
+                                    <p>@(string.IsNullOrWhiteSpace(eventType.Description) ? "No description provided." : eventType.Description)</p>
+                                    @if (!string.IsNullOrWhiteSpace(eventType.PayloadSchema))
+                                    {
+                                        <details class="schema-details">
+                                            <summary>Payload guidance</summary>
+                                            <pre>@eventType.PayloadSchema</pre>
+                                        </details>
+                                    }
                                 </div>
-                                @if (!string.IsNullOrWhiteSpace(o.Payload))
-                                {
-                                    <pre class="payload-pre">@o.Payload</pre>
-                                }
-                            </div>
+                                <button class="dcbtn emit-button" @onclick="@(() => Emit(eventType.Name))">Emit</button>
+                            </article>
                         }
                     </div>
                 }
+            </section>
 
-            </div>
+            <section class="dccard event-panel activity-panel">
+                <header class="panel-head">
+                    <div>
+                        <span class="activity-mark" aria-hidden="true">●</span>
+                        <strong>Recent activity</strong>
+                        <span>Newest first</span>
+                    </div>
+                    <span>latest 50</span>
+                </header>
+
+                @if (_log is null or { Count: 0 })
+                {
+                    <div class="panel-empty">
+                        <span class="empty-icon">↯</span>
+                        <strong>No events emitted yet</strong>
+                        <span>Emitted events will appear here with their source, time, and payload.</span>
+                    </div>
+                }
+                else
+                {
+                    <div class="activity-rows">
+                        @foreach (var occurrence in _log)
+                        {
+                            <article class="activity-row">
+                                <div class="timeline">
+                                    <span class="timeline-dot @SourceClass(occurrence.Source)"></span>
+                                </div>
+                                <div class="activity-copy">
+                                    <div class="activity-title">
+                                        <strong>@occurrence.Name</strong>
+                                        <span class="source-chip @SourceClass(occurrence.Source)">@SourceLabel(occurrence.Source)</span>
+                                    </div>
+                                    <time datetime="@occurrence.OccurredAt.ToString("O")">
+                                        @occurrence.OccurredAt.ToWorkspaceTime().ToString("yyyy-MM-dd · HH:mm:ss")
+                                    </time>
+                                    @if (!string.IsNullOrWhiteSpace(occurrence.Payload))
+                                    {
+                                        <details class="payload-details">
+                                            <summary>View payload</summary>
+                                            <pre>@occurrence.Payload</pre>
+                                        </details>
+                                    }
+                                    else
+                                    {
+                                        <span class="no-payload">No payload</span>
+                                    }
+                                </div>
+                            </article>
+                        }
+                    </div>
+                }
+            </section>
         </div>
+    }
+</div>
+
+@if (_showDefinition)
+{
+    <div class="editor-backdrop" @onclick="CloseDefinition">
+        <aside class="event-editor" @onclick:stopPropagation="true" role="dialog" aria-modal="true"
+               aria-labelledby="event-definition-title">
+            <header>
+                <div>
+                    <span class="eyebrow">EVENT TYPE</span>
+                    <h3 id="event-definition-title">Define an event</h3>
+                    <p>Name an activity that Jobs can listen for.</p>
+                </div>
+                <button class="close-button" aria-label="Close" @onclick="CloseDefinition">×</button>
+            </header>
+            <div class="editor-body">
+                <label class="field">
+                    <span>Name</span>
+                    <input class="dcinput" @bind="_defName" placeholder="deploy.finished" />
+                    <small>Use a short, stable name such as customer.created or invoice.paid.</small>
+                </label>
+                <label class="field">
+                    <span>Description <small>optional</small></span>
+                    <input class="dcinput" @bind="_defDescription" placeholder="What does this event mean?" />
+                </label>
+                <label class="field">
+                    <span>Payload guidance <small>optional</small></span>
+                    <textarea class="dcinput code-input" rows="8" @bind="_defSchema"
+                              placeholder="Describe the fields people should include, or paste a JSON example."></textarea>
+                    <small>This helps people prepare the event payload; it does not expose the event publicly.</small>
+                </label>
+                @if (_defError is not null)
+                {
+                    <div class="error-inline">@_defError</div>
+                }
+            </div>
+            <footer>
+                <button class="dcbtn" @onclick="CloseDefinition">Cancel</button>
+                <button class="dcbtn primary" disabled="@_defBusy" @onclick="Define">
+                    @(_defBusy ? "Creating…" : "Create event type")
+                </button>
+            </footer>
+        </aside>
     </div>
 }
 
-@* ── Emit modal ──────────────────────────────────────────────────────────────────────── *@
 @if (_emitName is not null)
 {
-    <div class="dcslide-scrim" @onclick="@(() => _emitName = null)"></div>
-    <div class="dcslide emit-slide">
-        <div class="dcslide-head">
-            <span class="emit-title">Emit @_emitName</span>
-            <button class="dcslide-x" @onclick="@(() => _emitName = null)">×</button>
-        </div>
-        <div class="dcslide-body emit-body">
-            <div class="hint">
-                Every enabled event trigger subscribed to <code>@_emitName</code> will fire; the payload is passed through as run parameters.
+    <div class="editor-backdrop" @onclick="CloseEmit">
+        <aside class="event-editor emit-editor" @onclick:stopPropagation="true" role="dialog" aria-modal="true"
+               aria-labelledby="emit-event-title">
+            <header>
+                <div>
+                    <span class="eyebrow">EMIT EVENT</span>
+                    <h3 id="emit-event-title">@_emitName</h3>
+                    <p>Every enabled Job trigger listening for this name will start.</p>
+                </div>
+                <button class="close-button" aria-label="Close" @onclick="CloseEmit">×</button>
+            </header>
+            <div class="editor-body">
+                <div class="impact-note">
+                    <strong>@SubscriberCount(_emitName) active trigger@(SubscriberCount(_emitName) == 1 ? "" : "s")</strong>
+                    <span>The payload becomes the input for each triggered Job.</span>
+                </div>
+                <label class="field">
+                    <span>Payload <small>optional JSON</small></span>
+                    <textarea class="dcinput code-input" rows="10" @bind="_emitPayload"
+                              placeholder="{&quot;customerEmail&quot;: &quot;a@b.com&quot;}"></textarea>
+                </label>
+                @if (_emitError is not null)
+                {
+                    <div class="error-inline">@_emitError</div>
+                }
             </div>
-            <label class="hint">Payload (optional JSON)</label>
-            <textarea class="dcinput va-textarea" rows="6"
-                      @bind="_emitPayload" placeholder="{&quot;customerEmail&quot;: &quot;a@b.com&quot;}"></textarea>
-            @if (_emitError is not null)
-            {
-                <div class="error-inline">@_emitError</div>
-            }
-            <div class="emit-actions">
-                <button class="dcbtn" @onclick="@(() => _emitName = null)">Cancel</button>
-                <button class="dcbtn primary" disabled="@_emitBusy" @onclick="DoEmit">Emit</button>
-            </div>
-        </div>
+            <footer>
+                <button class="dcbtn" @onclick="CloseEmit">Cancel</button>
+                <button class="dcbtn primary" disabled="@_emitBusy" @onclick="DoEmit">
+                    @(_emitBusy ? "Emitting…" : "Emit event")
+                </button>
+            </footer>
+        </aside>
     </div>
 }
 
@@ -134,9 +236,12 @@ else
 
     private IReadOnlyList<EventTypeView>? _types;
     private IReadOnlyList<EventOccurrenceView>? _log;
+    private IReadOnlyList<TriggerView>? _triggers;
     private bool _loading = true;
     private string? _message;
+    private bool _messageIsError;
 
+    private bool _showDefinition;
     private string _defName = "";
     private string _defDescription = "";
     private string _defSchema = "";
@@ -148,37 +253,87 @@ else
     private bool _emitBusy;
     private string? _emitError;
 
+    private int CustomTypeCount => _types?.Count(eventType => !eventType.IsBuiltIn) ?? 0;
+    private int ActiveSubscriptionCount => _triggers?.Count(trigger => trigger.Enabled && trigger.Kind == "Event") ?? 0;
+    private int SubscribedTypeCount => _types?.Count(eventType => SubscriberCount(eventType.Name) > 0) ?? 0;
+    private int SubscriptionPercent => _types is not { Count: > 0 }
+        ? 0
+        : (int)Math.Round(SubscribedTypeCount * 100d / _types.Count);
+
     protected override async Task OnParametersSetAsync()
     {
         _loading = true;
         _message = null;
+        _messageIsError = false;
         try
         {
             await ReloadAsync();
-            Ui.Set("Events", "workspace event log + types");
+            Ui.Set("Events", "workspace activity and event types");
         }
-        catch (Exception ex) { _message = ex.Message; }
+        catch (Exception ex)
+        {
+            _message = ex.Message;
+            _messageIsError = true;
+        }
         finally { _loading = false; }
     }
 
     private async Task ReloadAsync()
     {
-        _types = await Svc.ListEventTypesAsync();
-        _log = await Svc.ListEventOccurrencesAsync(50);
+        var typesTask = Svc.ListEventTypesAsync();
+        var logTask = Svc.ListEventOccurrencesAsync(50);
+        var triggersTask = Svc.ListTriggersAsync(ProjectId);
+        await Task.WhenAll(typesTask, logTask, triggersTask);
+        _types = await typesTask;
+        _log = await logTask;
+        _triggers = await triggersTask;
+    }
+
+    private int SubscriberCount(string? eventName) => string.IsNullOrWhiteSpace(eventName)
+        ? 0
+        : _triggers?.Count(trigger => trigger.Enabled && trigger.Kind == "Event" &&
+            string.Equals(trigger.EventName, eventName, StringComparison.OrdinalIgnoreCase)) ?? 0;
+
+    private static string SourceClass(string source) =>
+        string.Equals(source, "Domain", StringComparison.OrdinalIgnoreCase) ? "domain" : "user";
+
+    private static string SourceLabel(string source) =>
+        string.Equals(source, "Domain", StringComparison.OrdinalIgnoreCase) ? "system" : "manual";
+
+    private void BeginDefine()
+    {
+        _defName = "";
+        _defDescription = "";
+        _defSchema = "";
+        _defError = null;
+        _showDefinition = true;
+    }
+
+    private void CloseDefinition()
+    {
+        if (!_defBusy) _showDefinition = false;
     }
 
     private async Task Define()
     {
         _defError = null;
-        if (string.IsNullOrWhiteSpace(_defName)) { _defError = "Name is required."; return; }
+        if (string.IsNullOrWhiteSpace(_defName))
+        {
+            _defError = "Name is required.";
+            return;
+        }
+
         _defBusy = true;
         try
         {
-            await Svc.DefineEventTypeAsync(_defName.Trim(),
+            var eventName = _defName.Trim();
+            await Svc.DefineEventTypeAsync(eventName,
                 string.IsNullOrWhiteSpace(_defDescription) ? null : _defDescription.Trim(),
                 string.IsNullOrWhiteSpace(_defSchema) ? null : _defSchema.Trim());
-            _defName = ""; _defDescription = ""; _defSchema = "";
             await ReloadAsync();
+            _showDefinition = false;
+            _messageIsError = false;
+            _message = $"Created event type '{eventName}'.";
         }
         catch (Exception ex) { _defError = ex.Message; }
         finally { _defBusy = false; }
@@ -191,6 +346,11 @@ else
         _emitError = null;
     }
 
+    private void CloseEmit()
+    {
+        if (!_emitBusy) _emitName = null;
+    }
+
     private async Task DoEmit()
     {
         if (_emitName is null) return;
@@ -198,11 +358,13 @@ else
         _emitBusy = true;
         try
         {
-            var result = await Svc.EmitEventAsync(_emitName,
+            var eventName = _emitName;
+            var result = await Svc.EmitEventAsync(eventName,
                 ProjectId, string.IsNullOrWhiteSpace(_emitPayload) ? null : _emitPayload);
-            _message = $"Emitted '{_emitName}' — {result.TriggeredRuns} trigger(s) fired.";
-            _emitName = null;
             await ReloadAsync();
+            _emitName = null;
+            _messageIsError = false;
+            _message = $"Emitted '{eventName}' — {result.TriggeredRuns} trigger(s) fired.";
         }
         catch (Exception ex) { _emitError = ex.Message; }
         finally { _emitBusy = false; }

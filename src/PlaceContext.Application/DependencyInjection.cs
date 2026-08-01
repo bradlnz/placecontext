@@ -3,6 +3,7 @@ using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Features;
 using PlaceContext.Application.Mcp;
 using PlaceContext.Application.Observability;
+using PlaceContext.Application.Ports;
 using PlaceContext.Domain.Services;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -164,6 +165,9 @@ public static class DependencyInjection
         services.AddScoped<IQueryHandler<ListProjectArtifactsQuery, IReadOnlyList<ArtifactFileView>>, ListProjectArtifactsHandler>();
         services.AddScoped<ICommandHandler<DeleteArtifactCommand, bool>, DeleteArtifactHandler>();
         services.AddScoped<ICommandHandler<DeleteArtifactsCommand, int>, DeleteArtifactsHandler>();
+        services.AddScoped<ICommandHandler<CreateArtifactShareCommand, ArtifactShareCreated>, CreateArtifactShareHandler>();
+        services.AddScoped<ICommandHandler<RevokeArtifactShareCommand, bool>, RevokeArtifactShareHandler>();
+        services.AddScoped<IQueryHandler<GetArtifactShareStatusQuery, ArtifactShareStatus?>, GetArtifactShareStatusHandler>();
         services.AddScoped<IQueryHandler<ListDataEntitiesQuery, IReadOnlyList<DataEntityView>>, ListDataEntitiesHandler>();
         services.AddScoped<IQueryHandler<TaggedRunsQuery, IReadOnlyList<Guid>>, TaggedRunsHandler>();
         services.AddScoped<IQueryHandler<EntityRunsQuery, IReadOnlyList<Guid>>, EntityRunsHandler>();

@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using PlaceContext.Application.Ports;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.Repositories;
 using PlaceContext.Domain.ValueObjects;
@@ -8,8 +9,11 @@ namespace PlaceContext.Infrastructure.Persistence;
 public sealed class EfCrmClientRepository : ICrmClientRepository
 {
     private readonly AppDbContext _db;
+    private readonly IDataEncryptor _encryptor;
+    private static string Purpose => IDataEncryptor.Purpose.CrmClient;
 
-    public EfCrmClientRepository(AppDbContext db) => _db = db;
+    public EfCrmClientRepository(AppDbContext db, IDataEncryptor encryptor)
+        => (_db, _encryptor) = (db, encryptor);
 
     public async Task AddAsync(CrmClient client, CancellationToken ct = default)
         => await _db.CrmClients.AddAsync(ToRow(client), ct);
@@ -18,12 +22,12 @@ public sealed class EfCrmClientRepository : ICrmClientRepository
     {
         var row = await _db.CrmClients.FindAsync(new object[] { client.Id }, ct);
         if (row is null) return;
-        row.Name = client.Name;
-        row.Company = client.Company;
-        row.Email = client.Email;
-        row.Phone = client.Phone;
+        row.Name = Protect(client.Name);
+        row.Company = ProtectNullable(client.Company);
+        row.Email = ProtectNullable(client.Email);
+        row.Phone = ProtectNullable(client.Phone);
         row.LifecycleStage = client.LifecycleStage.ToString();
-        row.Notes = client.Notes;
+        row.Notes = ProtectNullable(client.Notes);
         row.UpdatedAt = client.UpdatedAt;
     }
 
@@ -53,13 +57,22 @@ public sealed class EfCrmClientRepository : ICrmClientRepository
         string? phone,
         CancellationToken ct = default)
     {
-        var normalizedEmail = email?.Trim().ToLower();
+        var normalizedEmail = email?.Trim();
         var normalizedPhone = phone?.Trim();
-        var row = await _db.CrmClients.AsNoTracking().FirstOrDefaultAsync(c =>
-            c.ProjectId == projectId
-            && ((normalizedEmail != null && c.Email != null && c.Email.ToLower() == normalizedEmail)
-                || (normalizedPhone != null && c.Phone == normalizedPhone)), ct);
-        return row is null ? null : ToDomain(row);
+        if (normalizedEmail is null && normalizedPhone is null) return null;
+
+        // Data Protection uses randomized authenticated encryption, so equality over ciphertext is
+        // deliberately impossible. Scope by the non-sensitive ProjectId in SQL, then compare the
+        // small CRM candidate set after decrypting in-process. This also keeps legacy plaintext rows
+        // readable until the startup backfill rewrites them.
+        var rows = await _db.CrmClients.AsNoTracking()
+            .Where(c => c.ProjectId == projectId)
+            .ToListAsync(ct);
+        return rows.Select(ToDomain).FirstOrDefault(client =>
+            (normalizedEmail is not null
+                && string.Equals(client.Email, normalizedEmail, StringComparison.OrdinalIgnoreCase))
+            || (normalizedPhone is not null
+                && string.Equals(client.Phone, normalizedPhone, StringComparison.Ordinal)));
     }
 
     public async Task<IReadOnlyList<CrmClient>> ListForProjectAsync(
@@ -67,38 +80,43 @@ public sealed class EfCrmClientRepository : ICrmClientRepository
         CancellationToken ct = default)
         => (await _db.CrmClients.AsNoTracking()
             .Where(c => c.ProjectId == projectId)
-            .OrderBy(c => c.LifecycleStage)
-            .ThenBy(c => c.Name)
             .ToListAsync(ct))
             .Select(ToDomain)
+            .OrderBy(c => c.LifecycleStage.ToString(), StringComparer.Ordinal)
+            .ThenBy(c => c.Name, StringComparer.Ordinal)
             .ToList();
 
-    private static CrmClientRow ToRow(CrmClient client) => new()
+    private CrmClientRow ToRow(CrmClient client) => new()
     {
         Id = client.Id,
         ProjectId = client.ProjectId,
-        Name = client.Name,
-        Company = client.Company,
-        Email = client.Email,
-        Phone = client.Phone,
+        Name = Protect(client.Name),
+        Company = ProtectNullable(client.Company),
+        Email = ProtectNullable(client.Email),
+        Phone = ProtectNullable(client.Phone),
         LifecycleStage = client.LifecycleStage.ToString(),
-        Notes = client.Notes,
+        Notes = ProtectNullable(client.Notes),
         CreatedAt = client.CreatedAt,
         UpdatedAt = client.UpdatedAt,
     };
 
-    private static CrmClient ToDomain(CrmClientRow row)
+    private CrmClient ToDomain(CrmClientRow row)
         => CrmClient.Rehydrate(
             row.Id,
             row.ProjectId,
-            row.Name,
-            row.Company,
-            row.Email,
-            row.Phone,
+            Unprotect(row.Name),
+            UnprotectNullable(row.Company),
+            UnprotectNullable(row.Email),
+            UnprotectNullable(row.Phone),
             Enum.TryParse<CustomerLifecycleStage>(row.LifecycleStage, out var stage)
                 ? stage
                 : CustomerLifecycleStage.Lead,
-            row.Notes,
+            UnprotectNullable(row.Notes),
             row.CreatedAt,
             row.UpdatedAt);
+
+    private string Protect(string value) => _encryptor.Protect(value, Purpose);
+    private string Unprotect(string value) => _encryptor.Unprotect(value, Purpose);
+    private string? ProtectNullable(string? value) => value is null ? null : Protect(value);
+    private string? UnprotectNullable(string? value) => value is null ? null : Unprotect(value);
 }

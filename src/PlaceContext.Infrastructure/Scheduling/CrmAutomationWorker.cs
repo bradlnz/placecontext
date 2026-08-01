@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using PlaceContext.Application.Ports;
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Features;
 using PlaceContext.Infrastructure.Persistence;
@@ -118,10 +119,12 @@ public sealed class CrmAutomationWorker : BackgroundService
     {
         await using var scope = _scopes.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var encryptor = scope.ServiceProvider.GetRequiredService<IDataEncryptor>();
         var row = await db.CrmAutomationQueue.FirstOrDefaultAsync(x => x.Id == id, ct);
         if (row is null) return;
         row.Attempts++;
-        row.LastError = error.Length > 1000 ? error[..1000] : error;
+        var boundedError = error.Length > 1000 ? error[..1000] : error;
+        row.LastError = encryptor.Protect(boundedError, IDataEncryptor.Purpose.CrmAutomation);
         row.ClaimedAt = null;
         row.ClaimedBy = null;
         if (row.Attempts >= MaxAttempts) row.FailedAt = DateTimeOffset.UtcNow;

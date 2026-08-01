@@ -16,8 +16,8 @@ else
     <div class="page">
         <h2 class="page-title">API tokens</h2>
         <div class="page-sub">
-            Personal tokens authenticate you against the <strong>entity data API</strong>
-            (<code>/api/v1/data/…</code>), which is generated from the workspace's registered data entities.
+            Personal tokens authenticate you against the <strong>project data and search APIs</strong>
+            (<code>/api/v1/…</code>), including collections generated from registered data entities.
             Tokens act as you — same role and permissions. The raw secret is shown once when created.
         </div>
 
@@ -64,7 +64,7 @@ else
         </div>
 
         <div class="api-docs dccard">
-            <div class="add-title">Entity data API</div>
+            <div class="add-title">Project data and search API</div>
             <div class="page-sub" style="margin-bottom:.5rem">
                 Scope the request with <code>X-Project-Id: &lt;guid&gt;</code> or <code>X-Project: &lt;name&gt;</code>
                 (project is resolved by middleware — not in the path).
@@ -73,13 +73,14 @@ else
                 <li><code>GET /api/v1/entities</code> — registry (name, slug, table)</li>
                 <li><code>GET /api/v1/{{entity-name}}</code> — rows (<code>?page=&amp;search=</code>)</li>
                 <li><code>GET /api/v1/{{entity-name}}/{{key}}</code> — rows matching the label column</li>
+                <li><code>GET /api/v1/search?q={{term}}&amp;limit=25</code> — project activity, files, decisions, entities, and indexed data</li>
             </ul>
             <div class="page-sub">Auth: <code>Authorization: Bearer pct_…</code> or <code>X-Api-Key: pct_…</code>. Requires <code>data.read</code>.</div>
         </div>
 
         @if (_tokens.Count == 0)
         {
-            <div class="dccard empty">No active tokens. Create one above to call the entity API from scripts or integrations.</div>
+            <div class="dccard empty">No active tokens. Create one above to call the project APIs from scripts or integrations.</div>
         }
         else
         {
@@ -123,7 +124,7 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        Ui.Set("API tokens", "personal tokens for the entity data API");
+        Ui.Set("API tokens", "personal tokens for project data and search");
         await ReloadAsync();
     }
 

@@ -1,6 +1,7 @@
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Features;
+using PlaceContext.Application.Ports;
 
 namespace PlaceContext.Application;
 
@@ -36,6 +37,7 @@ public interface IPlaceContextService
     Task<RootCostView> GetRootCostAsync(CancellationToken ct = default);
     Task<SearchResultsView> SearchAsync(string term, CancellationToken ct = default);
     Task<SearchResultsView> SearchAsync(string term, Guid? projectId, CancellationToken ct = default);
+    Task<SearchResultsView> SearchAsync(string term, Guid? projectId, int limit, CancellationToken ct = default);
     Task<FocusView> GetFocusAsync(CancellationToken ct = default);
     Task<ImprovementsView> SuggestImprovementsAsync(Guid projectId, CancellationToken ct = default);
     Task<SkillScaffoldView> ScaffoldSkillAsync(Guid projectId, string skillName, string? description, CancellationToken ct = default);
@@ -80,6 +82,9 @@ public interface IPlaceContextService
     Task<IReadOnlyList<Features.ArtifactFileView>> ListProjectArtifactsAsync(Guid projectId, int take = 2000, string? search = null, CancellationToken ct = default);
     Task<bool> DeleteArtifactAsync(Guid artifactId, CancellationToken ct = default);
     Task<int> DeleteArtifactsAsync(IReadOnlyList<Guid> artifactIds, CancellationToken ct = default);
+    Task<ArtifactShareCreated> CreateArtifactShareAsync(Guid artifactId, int lifetimeDays = 7, CancellationToken ct = default);
+    Task<ArtifactShareStatus?> GetArtifactShareStatusAsync(Guid artifactId, CancellationToken ct = default);
+    Task<bool> RevokeArtifactShareAsync(Guid artifactId, CancellationToken ct = default);
 
     // CRM mode: project-scoped customers and customer-linked job execution.
     Task<CrmClientView> SaveCrmClientAsync(SaveCrmClientCommand command, CancellationToken ct = default);

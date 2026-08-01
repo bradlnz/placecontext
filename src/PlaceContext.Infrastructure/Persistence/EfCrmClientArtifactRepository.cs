@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using PlaceContext.Application.Ports;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.Repositories;
 
@@ -7,8 +8,11 @@ namespace PlaceContext.Infrastructure.Persistence;
 public sealed class EfCrmClientArtifactRepository : ICrmClientArtifactRepository
 {
     private readonly AppDbContext _db;
+    private readonly IDataEncryptor _encryptor;
+    private static string Purpose => IDataEncryptor.Purpose.CrmArtifactMetadata;
 
-    public EfCrmClientArtifactRepository(AppDbContext db) => _db = db;
+    public EfCrmClientArtifactRepository(AppDbContext db, IDataEncryptor encryptor)
+        => (_db, _encryptor) = (db, encryptor);
 
     public async Task AddAsync(CrmClientArtifact artifact, CancellationToken ct = default)
         => await _db.CrmClientArtifacts.AddAsync(ToRow(artifact), ct);
@@ -44,23 +48,27 @@ public sealed class EfCrmClientArtifactRepository : ICrmClientArtifactRepository
         if (row is not null) _db.CrmClientArtifacts.Remove(row);
     }
 
-    private static CrmClientArtifactRow ToRow(CrmClientArtifact value) => new()
+    private CrmClientArtifactRow ToRow(CrmClientArtifact value) => new()
     {
         Id = value.Id,
         ProjectId = value.ProjectId,
         ClientId = value.ClientId,
         SourceArtifactId = value.SourceArtifactId,
         ChainRunId = value.ChainRunId,
-        Title = value.Title,
+        Title = Protect(value.Title),
         Bucket = value.Bucket,
-        ObjectKey = value.ObjectKey,
+        ObjectKey = Protect(value.ObjectKey),
         ContentType = value.ContentType,
         SizeBytes = value.SizeBytes,
         CreatedAt = value.CreatedAt,
     };
 
-    private static CrmClientArtifact ToDomain(CrmClientArtifactRow row)
+    private CrmClientArtifact ToDomain(CrmClientArtifactRow row)
         => CrmClientArtifact.Rehydrate(
             row.Id, row.ProjectId, row.ClientId, row.SourceArtifactId, row.ChainRunId,
-            row.Title, row.Bucket, row.ObjectKey, row.ContentType, row.SizeBytes, row.CreatedAt);
+            Unprotect(row.Title), row.Bucket, Unprotect(row.ObjectKey), row.ContentType,
+            row.SizeBytes, row.CreatedAt);
+
+    private string Protect(string value) => _encryptor.Protect(value, Purpose);
+    private string Unprotect(string value) => _encryptor.Unprotect(value, Purpose);
 }

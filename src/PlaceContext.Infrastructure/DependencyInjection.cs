@@ -35,6 +35,7 @@ public static class DependencyInjection
         services.AddScoped<ITenantSettingsPort, EfTenantSettingsPort>();
         services.AddScoped<IMenuConfigService, Tenancy.MenuConfigService>();
         services.AddScoped<IArtifactViewConfigService, Tenancy.ArtifactViewConfigService>();
+        services.AddScoped<IArtifactShareTokenService, Artifacts.ArtifactShareTokenService>();
         services.AddScoped<Crm.CrmIngestionSettingsService>();
 
         // Portal authentication (tenant-scoped users) + persisted OAuth clients.
@@ -401,4 +402,11 @@ public static class DependencyInjection
     /// </summary>
     public static Task EncryptExistingDataAsync(IServiceProvider provider, CancellationToken ct = default)
         => Security.EncryptionAtRestBootstrap.RunAsync(provider, ct);
+
+    /// <summary>
+    /// Bounded, idempotent CRM-only backfill. Runs on every Host launch so customer data created by
+    /// versions predating CRM field encryption cannot remain plaintext after an upgrade.
+    /// </summary>
+    public static Task EncryptExistingCrmDataAsync(IServiceProvider provider, CancellationToken ct = default)
+        => Security.EncryptionAtRestBootstrap.RunCrmAsync(provider, ct);
 }
