@@ -52,6 +52,7 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
     public DbSet<CrmIngestionSettingsRow> CrmIngestionSettings => Set<CrmIngestionSettingsRow>();
     public DbSet<CommunicationProviderRow> CommunicationProviders => Set<CommunicationProviderRow>();
     public DbSet<RunArtifactLinkRow> RunArtifacts => Set<RunArtifactLinkRow>();
+    public DbSet<ArtifactShareTokenRow> ArtifactShareTokens => Set<ArtifactShareTokenRow>();
     public DbSet<JobSecretRow> JobSecrets => Set<JobSecretRow>();
     public DbSet<JobTriggerRow> JobTriggers => Set<JobTriggerRow>();
     public DbSet<JobChainRow> JobChains => Set<JobChainRow>();
@@ -379,6 +380,21 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
             e.HasIndex(x => x.RunId);
             e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
             e.Property(x => x.CreatedAt).HasDefaultValueSql("now()");
+        });
+
+        b.Entity<ArtifactShareTokenRow>(e =>
+        {
+            e.ToTable("artifact_share_tokens");
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => x.ArtifactId).IsUnique();
+            e.HasIndex(x => x.TokenHash).IsUnique();
+            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
+            e.Property(x => x.TokenHash).HasMaxLength(64);
+            e.Property(x => x.TokenPrefix).HasMaxLength(20);
+            e.HasOne<RunArtifactLinkRow>()
+                .WithMany()
+                .HasForeignKey(x => x.ArtifactId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         b.Entity<ProjectChartRow>(e =>

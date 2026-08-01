@@ -20,14 +20,19 @@ public sealed record TenantBranding(
 {
     public bool IsDefault => this == new TenantBranding();
 
-    /// <summary>Inline CSS-variable overrides for #dcshell — only the set fields override.</summary>
+    /// <summary>
+    /// Inline tenant palette inputs for #dcshell. These deliberately use dedicated variable names:
+    /// the shell consumes background/panel/text only in dark mode, while the accent applies to both
+    /// themes. Writing --bg/--panel/--text inline would outrank the light-theme stylesheet and make
+    /// the theme switch appear broken for every workspace that has saved branding.
+    /// </summary>
     public string CssOverrides()
     {
         var css = "";
-        if (!string.IsNullOrWhiteSpace(BgColor)) css += $"--bg:{S(BgColor)};";
-        if (!string.IsNullOrWhiteSpace(PanelColor)) css += $"--panel:{S(PanelColor)};--card:{S(PanelColor)};";
-        if (!string.IsNullOrWhiteSpace(TextColor)) css += $"--text:{S(TextColor)};";
-        if (!string.IsNullOrWhiteSpace(AccentColor)) css += $"--brand:{S(AccentColor)};--brand-2:{S(AccentColor)};--good:{S(AccentColor)};";
+        if (!string.IsNullOrWhiteSpace(BgColor)) css += $"--tenant-bg:{S(BgColor)};";
+        if (!string.IsNullOrWhiteSpace(PanelColor)) css += $"--tenant-panel:{S(PanelColor)};";
+        if (!string.IsNullOrWhiteSpace(TextColor)) css += $"--tenant-text:{S(TextColor)};";
+        if (!string.IsNullOrWhiteSpace(AccentColor)) css += $"--tenant-accent:{S(AccentColor)};";
         return css;
     }
 

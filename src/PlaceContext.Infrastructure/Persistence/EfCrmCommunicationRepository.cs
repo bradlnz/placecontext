@@ -23,7 +23,7 @@ public sealed class EfCrmCommunicationRepository : ICrmCommunicationRepository
         if (row is null) return;
         row.Status = communication.Status.ToString();
         row.Provider = communication.Provider;
-        row.ExternalId = communication.ExternalId;
+        row.ExternalId = Protect(communication.ExternalId);
         row.ErrorProtected = Protect(communication.Error);
         row.SentAt = communication.SentAt;
     }
@@ -51,7 +51,7 @@ public sealed class EfCrmCommunicationRepository : ICrmCommunicationRepository
         RecipientProtected = Protect(value.Recipient),
         Status = value.Status.ToString(),
         Provider = value.Provider,
-        ExternalId = value.ExternalId,
+        ExternalId = Protect(value.ExternalId),
         ErrorProtected = Protect(value.Error),
         CreatedByUserId = value.CreatedByUserId,
         CreatedAt = value.CreatedAt,
@@ -71,7 +71,7 @@ public sealed class EfCrmCommunicationRepository : ICrmCommunicationRepository
             Enum.TryParse<CrmCommunicationStatus>(row.Status, out var status)
                 ? status : CrmCommunicationStatus.Added,
             row.Provider,
-            row.ExternalId,
+            Unprotect(row.ExternalId),
             Unprotect(row.ErrorProtected),
             row.CreatedByUserId,
             row.CreatedAt,

@@ -401,7 +401,9 @@ public sealed class AttachCrmClientArtifactHandler
 
         var id = Guid.NewGuid();
         var title = SafeFileName(command.FileName);
-        var key = $"crm-clients/{client.ProjectId:N}/{client.Id:N}/{id:N}/{title}";
+        // Keep the object-store key opaque: the user-visible filename is encrypted in the CRM
+        // artifact row, and file bytes are encrypted by IObjectStore itself.
+        var key = $"crm-clients/{client.ProjectId:N}/{client.Id:N}/{id:N}/content";
         var value = CrmClientArtifact.CreateUpload(
             id, client.ProjectId, client.Id, title, _store.ReportsBucket, key,
             command.ContentType ?? "application/octet-stream", command.Content.LongLength, _clock.UtcNow);

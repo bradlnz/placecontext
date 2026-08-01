@@ -14,6 +14,7 @@ public static class ProjectDataReservedNames
         "jobs",
         "schedules",
         "entities",
+        "search",
     };
 
     /// <summary>True when <paramref name="name"/> collides with a reserved segment (raw, slug, or underscore form).</summary>
@@ -41,7 +42,7 @@ public static class ProjectDataReservedNames
     {
         if (IsReserved(name))
             throw new ArgumentException(
-                $"'{name.Trim()}' is reserved for the /api/v1 API (projects, jobs, schedules, entities). Choose a different {what}.");
+                $"'{name.Trim()}' is reserved for the /api/v1 API ({string.Join(", ", All.Order())}). Choose a different {what}.");
     }
 
     /// <summary>

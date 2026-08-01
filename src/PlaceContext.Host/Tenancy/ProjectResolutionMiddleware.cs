@@ -10,8 +10,8 @@ namespace PlaceContext.Host.Tenancy;
 ///   <item><c>X-Project</c> header (project name, case-insensitive)</item>
 ///   <item><c>projectId</c> / <c>project</c> query string (same shapes)</item>
 /// </list>
-/// Missing headers are fine — portal/MCP paths don't need a project. Entity endpoints require it
-/// and return 400 when unresolved. Runs after tenant resolution so the project lookup is
+/// Missing headers are fine — portal/MCP paths don't need a project. Entity and search endpoints
+/// require it and return 400 when unresolved. Runs after tenant resolution so the project lookup is
 /// tenant-scoped by EF's global filter.
 /// </summary>
 public sealed class ProjectResolutionMiddleware

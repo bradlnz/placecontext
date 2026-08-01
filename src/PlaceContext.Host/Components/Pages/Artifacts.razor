@@ -189,6 +189,11 @@
                 <span class="viewer-ct">@_active.ContentType</span>
                 <a class="dcbtn viewer-open-btn" target="_blank" rel="noopener"
                    href="@Url(_active)">Open ↗</a>
+                @if (_canShare)
+                {
+                    <button class="dcbtn viewer-btn" title="Create or manage a public share link"
+                            @onclick="ToggleShareAsync">@(_shareOpen ? "Close share" : "Share")</button>
+                }
                 @if (_canDelete && _confirmDelete)
                 {
                     <button class="dcbtn viewer-btn-danger"
@@ -202,6 +207,61 @@
                             @onclick="@(() => _confirmDelete = true)">Delete</button>
                 }
             </div>
+            @if (_shareOpen)
+            {
+                <div class="share-panel">
+                    <div class="share-copy">
+                        <strong>Public share link</strong>
+                        <span>Anyone with the code can open this artifact without signing in. Links expire and can be revoked.</span>
+                    </div>
+                    @if (_shareBusy)
+                    {
+                        <span class="share-status">Working…</span>
+                    }
+                    else if (_shareUrl is not null)
+                    {
+                        <div class="share-link-row">
+                            <input class="dcinput share-link" value="@_shareUrl" readonly />
+                            <button class="dcbtn viewer-btn" @onclick="CopyShareAsync">Copy link</button>
+                        </div>
+                        <span class="share-status">
+                            This link is shown once and expires @_shareCreatedExpiresAt?.ToWorkspaceTime().ToString("MMM d, yyyy · HH:mm").
+                        </span>
+                    }
+                    else if (_shareStatus?.IsActive == true)
+                    {
+                        <div class="share-actions">
+                            <span class="share-status">
+                                Active code @_shareStatus.TokenPrefix · expires @_shareStatus.ExpiresAt.ToWorkspaceTime().ToString("MMM d, yyyy · HH:mm")
+                                @if (_shareStatus.LastAccessedAt is { } accessed)
+                                {
+                                    <span> · last opened @accessed.ToWorkspaceTime().ToString("MMM d · HH:mm")</span>
+                                }
+                            </span>
+                            <button class="dcbtn viewer-btn" @onclick="CreateShareAsync">Rotate link</button>
+                            <button class="dcbtn viewer-btn-danger" @onclick="RevokeShareAsync">Revoke</button>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="share-actions">
+                            <label class="share-duration">
+                                Expires after
+                                <select class="dcinput" @bind="_shareLifetimeDays">
+                                    <option value="1">1 day</option>
+                                    <option value="7">7 days</option>
+                                    <option value="30">30 days</option>
+                                </select>
+                            </label>
+                            <button class="dcbtn viewer-btn" @onclick="CreateShareAsync">Create public link</button>
+                        </div>
+                    }
+                    @if (_shareMessage is not null)
+                    {
+                        <span class="share-message">@_shareMessage</span>
+                    }
+                </div>
+            }
             @if (_loadFailed)
             {
                 <div class="viewer-error">
@@ -275,6 +335,20 @@
                     <img src="@Url(_active)" class="artifact-image" alt="@_active.Title" />
                 </div>
             }
+            else if (IsPdf(_active.ContentType))
+            {
+                @* Mobile Safari and several Android webviews only expose the first page of an
+                   embedded PDF. On compact screens PDF.js renders every page into this scrollable
+                   canvas list. Desktop retains the browser's native viewer and toolbar. *@
+                <div class="pdf-view">
+                    <div id="@PdfMobileId(_active)" class="pdf-mobile-view" aria-label="PDF pages"
+                         data-pc-pdf data-pdf-url="@Url(_active)">
+                        <div class="pdf-loading">Preparing all PDF pages…</div>
+                    </div>
+                    <iframe src="@Url(_active)" class="preview-frame pdf-desktop-frame" title="@_active.Title"
+                            loading="lazy" referrerpolicy="no-referrer"></iframe>
+                </div>
+            }
             else if (Previewable(_active.ContentType))
             {
                 @* Relative /runs/… — browser keeps the public DNS host (never rewrite to in-cluster name).
@@ -321,7 +395,15 @@
     // UI-level hiding only — the actual DeleteArtifact(s) commands are also gated server-side (the
     // dispatcher rejects them for a caller lacking artifacts.delete regardless of what the UI shows).
     private bool _canDelete;
+    private bool _canShare;
     private bool _canManageSettings;
+    private bool _shareOpen;
+    private bool _shareBusy;
+    private int _shareLifetimeDays = 7;
+    private ArtifactShareStatus? _shareStatus;
+    private string? _shareUrl;
+    private string? _shareMessage;
+    private DateTimeOffset? _shareCreatedExpiresAt;
 
     private const int MaxInlineBytes = 2 * 1024 * 1024;
     private const int MaxCsvRows = 500;
@@ -342,6 +424,7 @@
     {
         Ui.Set("Artifacts", "every file your runs produced — click to view");
         _canDelete = await Permissions.HasAsync(Permission.ArtifactsDelete);
+        _canShare = await Permissions.HasAsync(Permission.ArtifactsShare);
         _canManageSettings = await Permissions.HasAsync(Permission.SettingsManage);
         try { _artifactConfig = await ArtifactConfig.GetAsync(); } catch { }
         try { _projects = await Svc.GetProjectsAsync(); } catch { }
@@ -351,6 +434,20 @@
         await LoadFilesAsync();
 
         await ApplyDeepLinkAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_active is null || !IsPdf(_active.ContentType)) return;
+
+        try
+        {
+            await Js.InvokeVoidAsync("placecontext.renderPdf", PdfMobileId(_active), Url(_active));
+        }
+        catch
+        {
+            // The native desktop frame and Open link remain available if client rendering fails.
+        }
     }
 
     // Loads the file list for the current filter: project-scoped (complete, and search-widened —
@@ -428,6 +525,7 @@
         _projectFilter = e.Value?.ToString() ?? "";
         _active = null;
         _confirmDelete = false;
+        ResetShareUi();
         _selected.Clear();
         _filesPage = 1;
         await LoadFilesAsync();
@@ -495,6 +593,7 @@
         if (_active is { } a && idSet.Contains(a.Id))
         {
             _active = null;
+            ResetShareUi();
             Nav.NavigateTo("/artifacts", replace: true);
         }
     }
@@ -577,6 +676,7 @@
         _truncated = false;
         _loadFailed = false;
         _confirmDelete = false;
+        ResetShareUi();
         if (!IsJson(a.ContentType) && !IsCsv(a.ContentType)) return;
 
         _loading = true;
@@ -732,6 +832,7 @@
         ++_openGeneration;
         _active = null;
         _confirmDelete = false;
+        ResetShareUi();
         // Drop the ?artifact= deep link so a refresh doesn't try to reopen the deleted file.
         Nav.NavigateTo("/artifacts", replace: true);
     }
@@ -744,11 +845,86 @@
     {
         ++_openGeneration;
         _active = null;
+        ResetShareUi();
         Nav.NavigateTo("/artifacts", replace: true);
+    }
+
+    private async Task ToggleShareAsync()
+    {
+        if (_active is null || _shareBusy) return;
+        if (_shareOpen)
+        {
+            ResetShareUi();
+            return;
+        }
+
+        _shareOpen = true;
+        _shareBusy = true;
+        _shareMessage = null;
+        try { _shareStatus = await Svc.GetArtifactShareStatusAsync(_active.Id); }
+        catch { _shareMessage = "Couldn't load this artifact's share status."; }
+        finally { _shareBusy = false; }
+    }
+
+    private async Task CreateShareAsync()
+    {
+        if (_active is null || _shareBusy) return;
+        _shareBusy = true;
+        _shareMessage = null;
+        try
+        {
+            var created = await Svc.CreateArtifactShareAsync(_active.Id, _shareLifetimeDays);
+            _shareUrl = Nav.ToAbsoluteUri($"/share/artifacts/{created.Token}").AbsoluteUri;
+            _shareCreatedExpiresAt = created.ExpiresAt;
+            _shareStatus = new ArtifactShareStatus(
+                true, created.TokenPrefix, DateTimeOffset.UtcNow, created.ExpiresAt, null);
+        }
+        catch { _shareMessage = "Couldn't create a public link."; }
+        finally { _shareBusy = false; }
+    }
+
+    private async Task RevokeShareAsync()
+    {
+        if (_active is null || _shareBusy) return;
+        _shareBusy = true;
+        _shareMessage = null;
+        try
+        {
+            await Svc.RevokeArtifactShareAsync(_active.Id);
+            _shareStatus = null;
+            _shareUrl = null;
+            _shareCreatedExpiresAt = null;
+            _shareMessage = "Public access revoked.";
+        }
+        catch { _shareMessage = "Couldn't revoke the public link."; }
+        finally { _shareBusy = false; }
+    }
+
+    private async Task CopyShareAsync()
+    {
+        if (_shareUrl is null) return;
+        try
+        {
+            await Js.InvokeVoidAsync("navigator.clipboard.writeText", _shareUrl);
+            _shareMessage = "Link copied.";
+        }
+        catch { _shareMessage = "Copy failed — select and copy the link manually."; }
+    }
+
+    private void ResetShareUi()
+    {
+        _shareOpen = false;
+        _shareBusy = false;
+        _shareStatus = null;
+        _shareUrl = null;
+        _shareMessage = null;
+        _shareCreatedExpiresAt = null;
     }
 
     private static bool IsJson(string ct) => ct.Contains("json", StringComparison.OrdinalIgnoreCase);
     private static bool IsCsv(string ct) => ct.Contains("csv", StringComparison.OrdinalIgnoreCase);
+    private static bool IsPdf(string ct) => ct.Equals("application/pdf", StringComparison.OrdinalIgnoreCase);
+    private static string PdfMobileId(ArtifactFileView artifact) => $"artifact-pdf-{artifact.Id:N}";
     private static bool IsImage(ArtifactFileView artifact)
     {
         if (artifact.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase)) return true;

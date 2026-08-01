@@ -1,4 +1,5 @@
 using System.Text.Json;
+using PlaceContext.Application.Ports;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.Repositories;
 using PlaceContext.Domain.ValueObjects;
@@ -11,8 +12,11 @@ public sealed class EfChainRunRepository : IChainRunRepository
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
     private readonly AppDbContext _db;
+    private readonly IDataEncryptor _encryptor;
+    private static string Purpose => IDataEncryptor.Purpose.ChainRun;
 
-    public EfChainRunRepository(AppDbContext db) => _db = db;
+    public EfChainRunRepository(AppDbContext db, IDataEncryptor encryptor)
+        => (_db, _encryptor) = (db, encryptor);
 
     public async Task AddAsync(ChainRun run, CancellationToken ct = default)
         => await _db.ChainRuns.AddAsync(ToRow(run), ct);
@@ -23,8 +27,8 @@ public sealed class EfChainRunRepository : IChainRunRepository
         if (existing is null) return;
 
         existing.Status = run.Status.ToString();
-        existing.StepsJson = JsonSerializer.Serialize(run.Steps.Select(StepJson.From), Json);
-        existing.FinalOutput = run.FinalOutput;
+        existing.StepsJson = Encrypt(JsonSerializer.Serialize(run.Steps.Select(StepJson.From), Json));
+        existing.FinalOutput = EncryptNullable(run.FinalOutput);
         existing.FinishedAt = run.FinishedAt;
     }
 
@@ -53,27 +57,33 @@ public sealed class EfChainRunRepository : IChainRunRepository
         return rows.Select(ToDomain).ToList();
     }
 
-    private static ChainRunRow ToRow(ChainRun r) => new()
+    private ChainRunRow ToRow(ChainRun r) => new()
     {
         Id = r.Id,
         ChainId = r.ChainId,
         ProjectId = r.ProjectId,
         ChainName = r.ChainName,
         Status = r.Status.ToString(),
-        StepsJson = JsonSerializer.Serialize(r.Steps.Select(StepJson.From), Json),
-        FinalOutput = r.FinalOutput,
+        StepsJson = Encrypt(JsonSerializer.Serialize(r.Steps.Select(StepJson.From), Json)),
+        FinalOutput = EncryptNullable(r.FinalOutput),
         StartedAt = r.StartedAt,
         FinishedAt = r.FinishedAt,
     };
 
-    private static ChainRun ToDomain(ChainRunRow r)
+    private ChainRun ToDomain(ChainRunRow r)
     {
-        var steps = (JsonSerializer.Deserialize<List<StepJson>>(r.StepsJson, Json) ?? new())
+        var steps = (JsonSerializer.Deserialize<List<StepJson>>(Decrypt(r.StepsJson), Json) ?? new())
             .Select(s => s.ToDomain())
             .ToList();
         return ChainRun.Rehydrate(r.Id, r.ChainId, r.ProjectId, r.ChainName,
-            Enum.Parse<ChainRunStatus>(r.Status), steps, r.FinalOutput, r.StartedAt, r.FinishedAt);
+            Enum.Parse<ChainRunStatus>(r.Status), steps, DecryptNullable(r.FinalOutput),
+            r.StartedAt, r.FinishedAt);
     }
+
+    private string Encrypt(string value) => _encryptor.Protect(value, Purpose);
+    private string Decrypt(string value) => _encryptor.Unprotect(value, Purpose);
+    private string? EncryptNullable(string? value) => value is null ? null : Encrypt(value);
+    private string? DecryptNullable(string? value) => value is null ? null : Decrypt(value);
 
     /// <summary>
     /// Wire shape of one persisted step. <c>StageIndex</c>/<c>BranchIndex</c> are nullable so rows

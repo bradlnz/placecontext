@@ -221,6 +221,54 @@ namespace PlaceContext.Infrastructure.Migrations
                     b.ToTable("agent_configs", (string)null);
                 });
 
+            modelBuilder.Entity("PlaceContext.Infrastructure.Persistence.ArtifactShareTokenRow", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ArtifactId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("CreatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("LastAccessedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("RevokedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("TokenPrefix")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ArtifactId")
+                        .IsUnique();
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique();
+
+                    b.ToTable("artifact_share_tokens", (string)null);
+                });
+
             modelBuilder.Entity("PlaceContext.Infrastructure.Persistence.ChainRunRow", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2285,6 +2333,15 @@ namespace PlaceContext.Infrastructure.Migrations
                         .IsUnique();
 
                     b.ToTable("users", (string)null);
+                });
+
+            modelBuilder.Entity("PlaceContext.Infrastructure.Persistence.ArtifactShareTokenRow", b =>
+                {
+                    b.HasOne("PlaceContext.Infrastructure.Persistence.RunArtifactLinkRow", null)
+                        .WithMany()
+                        .HasForeignKey("ArtifactId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("PlaceContext.Infrastructure.Persistence.JobTestCaseRow", b =>

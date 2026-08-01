@@ -129,6 +129,20 @@ builder.Services.AddRateLimiter(options =>
                 AutoReplenishment = true,
             });
     });
+    options.AddPolicy("artifact-share", context =>
+    {
+        // Share credentials are deliberately high entropy. Rate-limit by caller address rather
+        // than token so rotating random path values cannot bypass brute-force protection.
+        var partition = $"{context.Request.Host.Host}:{context.Connection.RemoteIpAddress}";
+        return RateLimitPartition.GetFixedWindowLimiter(partition, _ =>
+            new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 60,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0,
+                AutoReplenishment = true,
+            });
+    });
 });
 builder.Services.AddHttpClient();
 
@@ -374,6 +388,10 @@ app.Use(async (ctx, next) =>
 });
 
 PlaceContext.Infrastructure.DependencyInjection.MigrateDatabase(app.Services);
+// CRM records are small, and older releases stored client identity/contact fields in plaintext.
+// Rewrite those legacy rows in bounded batches before accepting requests. New writes are encrypted
+// in their repositories, so this normally becomes a quick no-op after the first upgraded launch.
+await PlaceContext.Infrastructure.DependencyInjection.EncryptExistingCrmDataAsync(app.Services);
 // Legacy JSON blob flattening is OFF by default: the data map now stores objects/arrays as JSON
 // text in their declared column, so huge nested payloads don't explode into hundreds of leaf
 // columns. The bootstrap remains available via PlaceContext:DataMapFlattening:BootstrapOnStartup=true
@@ -420,7 +438,7 @@ app.Use(async (ctx, next) =>
     await next();
 });
 app.UseMiddleware<TenantResolutionMiddleware>(); // resolve {user}.placecontext.ai → tenant, before any data access
-// Project for the entity data API: X-Project-Id / X-Project (optional; entity routes require it).
+// Project for the entity data and search APIs: X-Project-Id / X-Project (optional elsewhere).
 app.UseMiddleware<ProjectResolutionMiddleware>();
 app.UseAuthentication();
 app.UseAuthorization();

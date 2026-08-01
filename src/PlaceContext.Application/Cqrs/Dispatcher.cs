@@ -14,7 +14,7 @@ namespace PlaceContext.Application.Cqrs;
 /// and without per-dispatch isolation they would share, and collide on, a single <c>DbContext</c>.
 /// Handlers return detached DTO views, so disposing the scope once the handler completes is safe.
 ///
-/// Commands that implement <see cref="IRequiresPermission"/> are also authorization-checked here,
+/// Commands and queries that implement <see cref="IRequiresPermission"/> are also authorization-checked here,
 /// against the caller's effective permissions, before the handler ever runs — see that interface for
 /// why this single choke point matters more than any UI-level hiding of the triggering control.
 /// </summary>
@@ -43,6 +43,12 @@ public sealed class Dispatcher : IDispatcher
     {
         ArgumentNullException.ThrowIfNull(query);
         await using var scope = _scopeFactory.CreateAsyncScope();
+        if (query is IRequiresPermission gated)
+        {
+            var permissions = scope.ServiceProvider.GetRequiredService<IPermissionService>();
+            if (!await permissions.HasAsync(gated.RequiredPermission, ct))
+                throw new UnauthorizedAccessException($"Missing permission '{gated.RequiredPermission}'.");
+        }
         var handlerType = typeof(IQueryHandler<,>).MakeGenericType(query.GetType(), typeof(TResult));
         var handler = scope.ServiceProvider.GetRequiredService(handlerType);
         return await Invoke<TResult>(handler, query, ct);

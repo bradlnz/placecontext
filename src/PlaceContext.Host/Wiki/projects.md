@@ -21,6 +21,10 @@ A project owns:
 - chat sessions and agent settings;
 - run history and artifacts.
 
+When CRM is enabled, the project also owns its client directory, customer messages, files, and
+lifecycle automations. Keeping these inside the project prevents one project's customers from
+appearing in another project.
+
 Select a project from the project switcher before using project pages or Agent Chat.
 
 ## Project overview
@@ -31,3 +35,6 @@ high-degree files. Agents can keep it current with `record_activity`, `add_decis
 
 Projects and workspaces are tenant-scoped. Users only see the areas allowed by their effective
 permissions.
+
+For a plain-language explanation of protected customer information, public file links, and access
+codes, see [Security, privacy, and sharing](/wiki/security-and-sharing).

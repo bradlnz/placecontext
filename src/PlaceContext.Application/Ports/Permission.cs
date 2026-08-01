@@ -22,6 +22,7 @@ public static class Permission
     public const string DataRead = "data.read";
     public const string DataWrite = "data.write";
     public const string ArtifactsView = "artifacts.view";
+    public const string ArtifactsShare = "artifacts.share";
     public const string ArtifactsDelete = "artifacts.delete";
     public const string SecretsManage = "secrets.manage";
     public const string BackupManage = "backup.manage";
@@ -38,7 +39,7 @@ public static class Permission
     public static readonly IReadOnlyList<string> All = new[]
     {
         ProjectsView, ProjectsManage, JobsView, JobsEdit, JobsRun, JobsReplay, JobsManage,
-        ChainsManage, TriggersManage, CrmView, DataRead, DataWrite, ArtifactsView, ArtifactsDelete,
+        ChainsManage, TriggersManage, CrmView, DataRead, DataWrite, ArtifactsView, ArtifactsShare, ArtifactsDelete,
         SecretsManage, BackupManage, MembersManage, SettingsManage, EventsManage,
         AgentsChat, AgentsManage, CrmCommsSend, EmailSend, SmsSend,
     };

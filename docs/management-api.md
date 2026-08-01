@@ -6,7 +6,7 @@ IaC/CI client). It is separate from the Blazor portal (cookie auth) and the MCP 
 (OAuth bearer auth): the management API uses its own single-key **ApiKey** authentication scheme and
 speaks plain JSON over HTTP, no protocol framing.
 
-There is also a **personal entity data API** at `/api/v1/{entity-name}` (project via
+There is also a **personal project data API** for entities and search at `/api/v1` (project via
 `X-Project-Id` / `X-Project` middleware) authenticated with user API tokens from
 **Settings → API tokens** (`pct_…`). See the end of this document.
 
@@ -401,7 +401,7 @@ Every non-2xx response with a body uses:
 
 ---
 
-## Entity data API (`/api/v1/{entity-name}`)
+## Project data and search API (`/api/v1`)
 
 Auto-built from the workspace's registered **data entities** (portal: project → Entities). The
 **project is not in the path** — `ProjectResolutionMiddleware` reads it from headers (or query):
@@ -430,9 +430,10 @@ Personal tokens act as the minting user (same role + fine-grained permissions). 
 | `GET` | `/api/v1/entities` | Entity registry for the resolved project (name, slug, table, relations) |
 | `GET` | `/api/v1/{entity-name}` | Paginated rows (`?page=&pageSize=&search=`) |
 | `GET` | `/api/v1/{entity-name}/{key}` | Rows whose label column matches `key` |
+| `GET` | `/api/v1/search` | Project-scoped search (`?q=&limit=`, limit 1–100) |
 
 `{entity-name}` matches the entity's display name, table name, or slug (e.g. `Sites` → `sites`).
-Reserved segments used by the management API (`projects`, `jobs`, `schedules`, `entities`) never
+Reserved segments used by the management API (`projects`, `jobs`, `schedules`, `entities`, `search`) never
 resolve as entity names — and **project data will not let you create tables, views, or entities
 with those names** (enforced in the store and on entity save).
 
@@ -445,3 +446,15 @@ curl -H "Authorization: Bearer pct_…" \
      -H "X-Project: storefront-api" \
      https://ws.placecontext.ai/api/v1/sites
 ```
+
+Search example:
+
+```bash
+curl -H "Authorization: Bearer pct_…" \
+     -H "X-Project: storefront-api" \
+     "https://ws.placecontext.ai/api/v1/search?q=customer&limit=25"
+```
+
+The search response contains `query`, `projectId`, `count`, and a `hits` array. Each hit includes
+`kind`, `projectId`, `title`, `subtitle`, and a portal `url`. The endpoint searches the same sources
+as portal search, then returns only hits belonging to the resolved project.

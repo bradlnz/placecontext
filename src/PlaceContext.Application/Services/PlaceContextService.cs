@@ -1,6 +1,7 @@
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Features;
+using PlaceContext.Application.Ports;
 
 namespace PlaceContext.Application;
 
@@ -93,6 +94,9 @@ public sealed class PlaceContextService : IPlaceContextService
 
     public Task<SearchResultsView> SearchAsync(string term, Guid? projectId, CancellationToken ct = default)
         => _dispatcher.Query(new SearchQuery(term, ProjectId: projectId), ct);
+
+    public Task<SearchResultsView> SearchAsync(string term, Guid? projectId, int limit, CancellationToken ct = default)
+        => _dispatcher.Query(new SearchQuery(term, Limit: Math.Clamp(limit, 1, 100), ProjectId: projectId), ct);
 
     public Task<FocusView> GetFocusAsync(CancellationToken ct = default)
         => _dispatcher.Query(new GetFocusQuery(), ct);
@@ -211,6 +215,17 @@ public sealed class PlaceContextService : IPlaceContextService
 
     public Task<int> DeleteArtifactsAsync(IReadOnlyList<Guid> artifactIds, CancellationToken ct = default)
         => _dispatcher.Send(new DeleteArtifactsCommand(artifactIds), ct);
+
+    public Task<ArtifactShareCreated> CreateArtifactShareAsync(
+        Guid artifactId, int lifetimeDays = 7, CancellationToken ct = default)
+        => _dispatcher.Send(new CreateArtifactShareCommand(artifactId, lifetimeDays), ct);
+
+    public Task<ArtifactShareStatus?> GetArtifactShareStatusAsync(
+        Guid artifactId, CancellationToken ct = default)
+        => _dispatcher.Query(new GetArtifactShareStatusQuery(artifactId), ct);
+
+    public Task<bool> RevokeArtifactShareAsync(Guid artifactId, CancellationToken ct = default)
+        => _dispatcher.Send(new RevokeArtifactShareCommand(artifactId), ct);
 
     public Task<CrmClientView> SaveCrmClientAsync(SaveCrmClientCommand command, CancellationToken ct = default)
         => _dispatcher.Send(command, ct);

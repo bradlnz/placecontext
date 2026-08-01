@@ -127,6 +127,10 @@
     gap: 10px;
 }
 
+.pipeline-modal-close {
+    margin-left: auto;
+}
+
 .node-picker-tile {
     display: flex;
     min-height: 112px;
