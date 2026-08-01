@@ -64,6 +64,219 @@ window.placecontext = {
     return window.matchMedia('(max-width: 950px)').matches;
   },
 
+  initFocusLayers() {
+    if (this.focusLayerObserver) return;
+
+    const mobile = window.matchMedia('(max-width: 950px)');
+    const layerSelector = [
+      '.dcmodal-overlay',
+      '.dcsearch-overlay',
+      '.table-modal-overlay',
+      '.cluster-overlay',
+      '.editor-backdrop',
+      '.dcslide',
+      '.sidebar.open',
+      '.side-panel'
+    ].join(',');
+    const dialogSelector = [
+      '[role="dialog"]',
+      '.dcmodal',
+      '.dcsearch-modal',
+      '.table-modal',
+      '.join-dialog'
+    ].join(',');
+    const focusableSelector = [
+      'a[href]',
+      'area[href]',
+      'button:not([disabled])',
+      'input:not([disabled]):not([type="hidden"])',
+      'select:not([disabled])',
+      'textarea:not([disabled])',
+      '[contenteditable="true"]',
+      '[tabindex]:not([tabindex="-1"])'
+    ].join(',');
+
+    let activeLayer = null;
+    let activeDialog = null;
+    let semanticState = null;
+    let syncQueued = false;
+    const openers = new WeakMap();
+    const isolated = new Map();
+
+    const isVisible = element => {
+      const style = window.getComputedStyle(element);
+      return style.display !== 'none' && style.visibility !== 'hidden';
+    };
+
+    const isEligibleLayer = element => {
+      if (!isVisible(element)) return false;
+      if (element.matches('.sidebar.open, .side-panel')) return mobile.matches;
+      return true;
+    };
+
+    const dialogFor = layer => {
+      if (layer.matches('.dcslide, .sidebar.open, .side-panel')) return layer;
+      return layer.querySelector(dialogSelector) || layer;
+    };
+
+    const focusablesIn = dialog => Array.from(dialog.querySelectorAll(focusableSelector))
+      .filter(element => isVisible(element)
+        && !element.closest('[aria-hidden="true"]')
+        && !element.closest('[inert]'));
+
+    const focusFirst = (dialog, backwards = false) => {
+      const focusables = focusablesIn(dialog);
+      const target = backwards ? focusables.at(-1) : focusables[0];
+      (target || dialog).focus({ preventScroll: true });
+    };
+
+    const restoreSemantics = () => {
+      if (!semanticState) return;
+      const { element, role, ariaModal, tabIndex } = semanticState;
+      if (role === null) element.removeAttribute('role');
+      else element.setAttribute('role', role);
+      if (ariaModal === null) element.removeAttribute('aria-modal');
+      else element.setAttribute('aria-modal', ariaModal);
+      if (tabIndex === null) element.removeAttribute('tabindex');
+      else element.setAttribute('tabindex', tabIndex);
+      semanticState = null;
+    };
+
+    const applySemantics = dialog => {
+      if (semanticState?.element === dialog) return;
+      restoreSemantics();
+      semanticState = {
+        element: dialog,
+        role: dialog.getAttribute('role'),
+        ariaModal: dialog.getAttribute('aria-modal'),
+        tabIndex: dialog.getAttribute('tabindex')
+      };
+      dialog.setAttribute('role', 'dialog');
+      dialog.setAttribute('aria-modal', 'true');
+      if (!dialog.hasAttribute('tabindex')) dialog.setAttribute('tabindex', '-1');
+    };
+
+    const clearIsolation = () => {
+      isolated.forEach((wasInert, element) => { element.inert = wasInert; });
+      isolated.clear();
+      document.documentElement.classList.remove('pc-focus-layer-open');
+    };
+
+    const companionsFor = layer => {
+      const companions = new Set();
+      const previous = layer.previousElementSibling;
+      const next = layer.nextElementSibling;
+      if (layer.matches('.dcslide') && previous?.matches('.dcslide-scrim')) companions.add(previous);
+      if (layer.matches('.side-panel') && previous?.matches('.side-panel-scrim')) companions.add(previous);
+      if (layer.matches('.sidebar.open') && next?.matches('.nav-backdrop')) companions.add(next);
+      return companions;
+    };
+
+    const isolateBackground = layer => {
+      clearIsolation();
+      const companions = companionsFor(layer);
+      let branch = layer;
+      let parent = layer.parentElement;
+      while (parent) {
+        Array.from(parent.children).forEach(sibling => {
+          if (sibling === branch || companions.has(sibling) || isolated.has(sibling)) return;
+          isolated.set(sibling, sibling.inert);
+          sibling.inert = true;
+        });
+        branch = parent;
+        parent = parent.parentElement;
+      }
+      document.documentElement.classList.add('pc-focus-layer-open');
+    };
+
+    const sync = () => {
+      syncQueued = false;
+      const layers = Array.from(document.querySelectorAll(layerSelector)).filter(isEligibleLayer);
+      const nextLayer = layers.reduce((top, layer) => {
+        const zIndex = Number.parseInt(window.getComputedStyle(layer).zIndex, 10) || 0;
+        return !top || zIndex >= top.zIndex ? { layer, zIndex } : top;
+      }, null)?.layer || null;
+      const previousLayer = activeLayer;
+      const restoreTarget = previousLayer && previousLayer !== nextLayer
+        ? openers.get(previousLayer)
+        : null;
+      const previousLayerClosed = previousLayer
+        && previousLayer !== nextLayer
+        && !layers.includes(previousLayer);
+
+      if (!nextLayer) {
+        activeLayer = null;
+        activeDialog = null;
+        restoreSemantics();
+        clearIsolation();
+        if (restoreTarget?.isConnected && !restoreTarget.closest('[inert]')) {
+          restoreTarget.focus({ preventScroll: true });
+        }
+        if (previousLayerClosed) openers.delete(previousLayer);
+        return;
+      }
+
+      const nextDialog = dialogFor(nextLayer);
+      if (!openers.has(nextLayer)) openers.set(nextLayer, document.activeElement);
+      activeLayer = nextLayer;
+      activeDialog = nextDialog;
+      applySemantics(nextDialog);
+      isolateBackground(nextLayer);
+
+      if (restoreTarget?.isConnected && nextDialog.contains(restoreTarget)) {
+        restoreTarget.focus({ preventScroll: true });
+      } else if (!nextDialog.contains(document.activeElement)) {
+        focusFirst(nextDialog);
+      }
+      if (previousLayerClosed) openers.delete(previousLayer);
+    };
+
+    const queueSync = () => {
+      if (syncQueued) return;
+      syncQueued = true;
+      queueMicrotask(sync);
+    };
+
+    document.addEventListener('keydown', event => {
+      if (event.key !== 'Tab' || !activeDialog) return;
+      const focusables = focusablesIn(activeDialog);
+      if (focusables.length === 0) {
+        event.preventDefault();
+        activeDialog.focus({ preventScroll: true });
+        return;
+      }
+
+      const current = document.activeElement;
+      const first = focusables[0];
+      const last = focusables.at(-1);
+      if (!activeDialog.contains(current)) {
+        event.preventDefault();
+        focusFirst(activeDialog, event.shiftKey);
+      } else if (event.shiftKey && current === first) {
+        event.preventDefault();
+        last.focus({ preventScroll: true });
+      } else if (!event.shiftKey && current === last) {
+        event.preventDefault();
+        first.focus({ preventScroll: true });
+      }
+    }, true);
+
+    document.addEventListener('focusin', event => {
+      if (activeDialog && !activeDialog.contains(event.target)) focusFirst(activeDialog);
+    });
+
+    this.focusLayerObserver = new MutationObserver(queueSync);
+    this.focusLayerObserver.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['class']
+    });
+    if (mobile.addEventListener) mobile.addEventListener('change', queueSync);
+    else mobile.addListener(queueSync);
+    sync();
+  },
+
   async renderPdf(elementId, url) {
     const container = document.getElementById(elementId);
     if (!container || !window.matchMedia('(max-width: 950px)').matches) return;
@@ -192,3 +405,4 @@ window.placecontext = {
 };
 
 window.placecontext.initPdfObserver();
+window.placecontext.initFocusLayers();

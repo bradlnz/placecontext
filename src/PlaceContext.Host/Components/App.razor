@@ -43,6 +43,7 @@
         }
         * { box-sizing:border-box; }
         html, body { margin:0; padding:0; height:100%; }
+        html.pc-focus-layer-open, html.pc-focus-layer-open body { overscroll-behavior:none; }
         body { font-family:var(--font-sans); background:#0a0b0d; -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility; }
         #dcshell { font-family:var(--font-sans); color:var(--text); font-variant-numeric:tabular-nums; letter-spacing:-0.006em; }
         a { color:inherit; text-decoration:none; }
@@ -96,7 +97,7 @@
         .dcsearch-trigger:hover { border-color:var(--border-2); color:var(--text-2); }
         .dcsearch-trigger kbd { margin-left:auto; font-family:var(--font-sans); font-size:10.5px; color:var(--text-3); border:1px solid var(--border); border-radius:4px; padding:0 4px; }
         .dcsearch-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.5); display:flex; align-items:flex-start; justify-content:center; padding-top:12vh; z-index:50; }
-        .dcsearch-modal { width:560px; max-width:92vw; background:var(--panel); border:1px solid var(--border-2); border-radius:14px; overflow:hidden; box-shadow:0 24px 70px rgba(0,0,0,.55); }
+        .dcsearch-modal { width:560px; max-width:92vw; background:var(--panel); border:1px solid var(--border-2); border-radius:14px; overflow:hidden; overscroll-behavior:contain; box-shadow:0 24px 70px rgba(0,0,0,.55); }
         .dcsearch-input { width:100%; border:none; border-bottom:1px solid var(--border); background:transparent; color:var(--text); font-size:15px; padding:16px 18px; outline:none; }
         .dcsearch-results { max-height:52vh; overflow-y:auto; }
         .dcsearch-hit { display:flex; align-items:center; gap:12px; padding:11px 18px; cursor:pointer; border-bottom:1px solid var(--border); text-align:left; width:100%; background:transparent; border-left:none; border-right:none; border-top:none; }
@@ -125,7 +126,7 @@
         .dctab.active { color:var(--text); border-bottom-color:var(--brand); }
         .dctab .n { font-family:var(--font-sans); font-size:11px; color:var(--text-3); margin-left:6px; }
         .dcslide-scrim { position:fixed; inset:0; background:rgba(0,0,0,.4); z-index:40; }
-        .dcslide { position:fixed; top:0; right:0; height:100vh; width:420px; max-width:92vw; background:var(--panel); border-left:1px solid var(--border-2); box-shadow:-16px 0 50px rgba(0,0,0,.4); z-index:41; display:flex; flex-direction:column; }
+        .dcslide { position:fixed; top:0; right:0; height:100vh; height:100dvh; width:420px; max-width:92vw; background:var(--panel); border-left:1px solid var(--border-2); box-shadow:-16px 0 50px rgba(0,0,0,.4); z-index:41; display:flex; flex-direction:column; overscroll-behavior:contain; }
         .dcslide-head { display:flex; align-items:center; gap:10px; padding:16px 18px; border-bottom:1px solid var(--border); }
         .dcslide-body { padding:18px; overflow-y:auto; }
         .dcslide-x { appearance:none; background:transparent; border:none; color:var(--text-3); font-size:18px; cursor:pointer; line-height:1; }
@@ -155,7 +156,7 @@
         .dcseg button.on { background:var(--panel); color:var(--text); box-shadow:0 1px 2px rgba(0,0,0,.25); }
 
         .dcmodal-overlay { position:fixed; inset:0; background:rgba(0,0,0,.5); display:flex; align-items:center; justify-content:center; padding:20px; z-index:50; }
-        .dcmodal { width:480px; max-width:94vw; max-height:86vh; background:var(--panel); border:1px solid var(--border-2); border-radius:14px;
+        .dcmodal { width:480px; max-width:94vw; max-height:86vh; max-height:86dvh; background:var(--panel); border:1px solid var(--border-2); border-radius:14px;
             box-shadow:0 24px 70px rgba(0,0,0,.55); display:flex; flex-direction:column; overflow:hidden; }
         .dcmodal-head { display:flex; align-items:flex-start; gap:10px; padding:15px 18px; border-bottom:1px solid var(--border); flex:none; }
         .dcmodal-body { padding:18px; overflow-y:auto; display:flex; flex-direction:column; gap:13px; }
@@ -176,7 +177,7 @@
 <body>
     <Routes @rendermode="new InteractiveServerRenderMode(prerender: false)" />
     <script src="_framework/blazor.web.js"></script>
-    <script src="placecontext.js?v=5"></script>
+    <script src="placecontext.js?v=6"></script>
     <script src="pcgraph.js?v=2"></script>
     <script src="pcmonaco.js?v=2"></script>
     <script src="vendor/chart.umd.min.js"></script>

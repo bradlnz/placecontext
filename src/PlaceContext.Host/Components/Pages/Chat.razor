@@ -427,13 +427,15 @@
 
         @if (Vm.ShowSidePanel)
         {
-            <div class="side-panel">
+            <div class="side-panel-scrim" aria-hidden="true" @onclick="ToggleSidePanel"></div>
+            <div class="side-panel" aria-label="Agent workspace">
                 <div class="side-panel-head">
                     <h3>Agent Workspace</h3>
                     @if (Vm.GraphNodes.Count > 0)
                     {
                         <span class="graph-badge">@Vm.GraphNodes.Count nodes · @Vm.GraphLinks links</span>
                     }
+                    <button class="side-panel-close" aria-label="Close agent workspace" @onclick="ToggleSidePanel">×</button>
                 </div>
 
                 @if (!Vm.WorkspaceLoaded)

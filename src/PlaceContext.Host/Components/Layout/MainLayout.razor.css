@@ -48,6 +48,20 @@
     line-height: 1.15;
 }
 
+.sidebar-close {
+    display: none;
+    margin-left: auto;
+    width: 34px;
+    height: 34px;
+    flex: none;
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    background: var(--card);
+    color: var(--text-2);
+    font: 20px/1 var(--font-sans);
+    cursor: pointer;
+}
+
 .title-14 {
     font-size: 14px;
     font-weight: 600;
@@ -440,6 +454,12 @@
 
     .sidebar.open {
         transform: translateX(0);
+    }
+
+    .sidebar-close {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
     }
 
     .nav-backdrop {
