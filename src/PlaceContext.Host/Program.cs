@@ -131,13 +131,6 @@ builder.Services.AddRateLimiter(options =>
     });
 });
 builder.Services.AddHttpClient();
-// Blazor components (e.g. SecuritySettings) use a scoped HttpClient for same-origin API calls.
-// Resolve its BaseAddress from the current circuit's NavigationManager so relative URLs work.
-builder.Services.AddScoped(sp =>
-{
-    var nav = sp.GetRequiredService<NavigationManager>();
-    return new HttpClient { BaseAddress = new Uri(nav.BaseUri) };
-});
 
 // Log chat gateway config at startup
 var chatSection = builder.Configuration.GetSection("PlaceContext:ClusterChat");
@@ -325,8 +318,8 @@ builder.Services.AddAuthorization(o =>
     foreach (var permission in PlaceContext.Application.Ports.Permission.All)
         o.AddPolicy(permission, p => p.RequireAuthenticatedUser()
             .AddRequirements(new PermissionRequirement(permission)));
-    // Default-admin-only policy — gates the /settings/* area (beyond the self-service Security and
-    // API tokens pages) and the controllers backing it to the tenant's bootstrap administrator.
+    // Default-admin-only policy — gates the /settings/* area (beyond the self-service API tokens
+    // page) and the controllers backing it to the tenant's bootstrap administrator.
     o.AddPolicy(Policies.DefaultAdmin, p => p.RequireAuthenticatedUser()
         .AddRequirements(new DefaultAdminRequirement()));
 });

@@ -130,8 +130,8 @@ public sealed class MenuConfigService : IMenuConfigService
             // Entity accordion groups only make sense inside a project context.
             if (cat.Kind == "entities" && projectId is null)
                 continue;
-            // Settings: default admin only (the /settings/* area beyond the self-service Security and
-            // API tokens pages is gated by the DefaultAdmin policy), and only when they hold one of the
+            // Settings: default admin only (the /settings/* area beyond the self-service API tokens
+            // page is gated by the DefaultAdmin policy), and only when they hold one of the
             // settings-ish permissions.
             if (cat.Id == "settings" && (!isDefaultAdmin
                 || (!perms.Contains(Permission.SettingsManage)

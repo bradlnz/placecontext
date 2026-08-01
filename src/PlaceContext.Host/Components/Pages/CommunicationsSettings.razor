@@ -3,21 +3,19 @@
 @attribute [Authorize(Policy = Policies.DefaultAdmin)]
 @using System.Text.Json
 @using System.Text.Json.Nodes
+@using Microsoft.Extensions.DependencyInjection
 @using PlaceContext.Infrastructure.Comms
-@inject IPlaceContextService Svc
-@inject CommunicationProviderService Providers
-@inject IClientCommunicationSender Communications
-@inject HttpClient Http
+@inject IServiceScopeFactory ScopeFactory
 @inject PortalUiState Ui
 
 <PageTitle>PlaceContext — Communications</PageTitle>
 
 <div class="communications-page">
-    <header class="communications-header">
+    <header class="settings-head">
         <div>
             <span class="settings-kicker">Workspace integrations</span>
             <h2>Communications</h2>
-            <p>Connect the email and SMS providers used by chain actions, customer workflows and sign-in codes. Each channel can have multiple providers — one default handles delivery, one can be flagged for two-factor codes. Credentials stay in project Vaults.</p>
+            <p>Connect providers for workflows and sign-in codes. Credentials are referenced from project Vaults and resolved only when a message is sent.</p>
         </div>
         <button class="dcbtn primary" @onclick="ShowAdd">+ Add provider</button>
     </header>
@@ -37,105 +35,73 @@
             <div class="settings-alert @(_messageIsError ? "error" : "success")">@_message</div>
         }
 
-        <section class="channel-grid" aria-label="Communication channels">
-            <article class="dccard channel-card">
-                <span class="channel-icon">✉</span>
-                <span>
-                    <strong>Email</strong>
-                    <small>@(_capabilities?.EmailEnabled == true ? $"{_capabilities.EmailProvider} connected" : "Provider setup required")</small>
-                </span>
-                <span class="channel-state @(_capabilities?.EmailEnabled == true ? "connected" : "")">
-                    @(_capabilities?.EmailEnabled == true ? "Ready" : "Not configured")
-                </span>
-            </article>
-            <article class="dccard channel-card">
-                <span class="channel-icon">▣</span>
-                <span>
-                    <strong>SMS</strong>
-                    <small>@(_capabilities?.SmsEnabled == true ? $"{_capabilities.SmsProvider} connected" : "Provider setup required")</small>
-                </span>
-                <span class="channel-state @(_capabilities?.SmsEnabled == true ? "connected" : "")">
-                    @(_capabilities?.SmsEnabled == true ? "Ready" : "Not configured")
-                </span>
-            </article>
-        </section>
-
-        <div class="vault-callout">
-            <span class="vault-icon">◆</span>
-            <span>
-                <strong>Provider credentials stay in Vault</strong>
-                <small>API keys and tokens are referenced as Vault secrets, never stored in settings. The value is decrypted only when a message is sent, so rotating the secret in Vault takes effect immediately.</small>
-            </span>
-        </div>
-
-        @foreach (var channel in CommunicationProviderService.Channels)
-        {
-            var providers = _providers.Where(p => p.Channel == channel).ToList();
-            <section class="dccard provider-list-card">
-                <div class="provider-list-title">@(channel == "email" ? "Email providers" : "SMS providers")</div>
-                @if (providers.Count == 0)
+        <section class="dccard provider-card">
+            @if (_providers.Count == 0)
+            {
+                <div class="empty-note">No communication providers configured.</div>
+            }
+            else
+            {
+                @foreach (var provider in _providers)
                 {
-                    <div class="empty-note">No @(channel == "email" ? "email" : "SMS") providers configured.</div>
-                }
-                else
-                {
-                    @foreach (var provider in providers)
+                    <article class="provider-row @(!provider.Enabled ? "disabled" : "")">
+                        <div class="provider-info">
+                            <strong>@provider.Name</strong>
+                            <span class="channel-badge">@ChannelLabel(provider.Channel)</span>
+                            <span class="kind-badge">@KindLabel(provider.Kind)</span>
+                            @if (provider.IsDefault)
+                            {
+                                <span class="flag-badge default">Default</span>
+                            }
+                            @if (provider.UseForTwoFactor)
+                            {
+                                <span class="flag-badge twofactor">2FA</span>
+                            }
+                            <label class="enabled-toggle">
+                                <input type="checkbox" checked="@provider.Enabled"
+                                       @onchange="@(() => ToggleEnabledAsync(provider))" />
+                                Enabled
+                            </label>
+                        </div>
+                        <div class="provider-actions">
+                            @if (!provider.IsDefault)
+                            {
+                                <button class="dcbtn xs" @onclick="@(() => SetDefaultAsync(provider.Id))">Make default</button>
+                            }
+                            <button class="dcbtn xs" @onclick="@(() => ToggleTwoFactorAsync(provider))">
+                                @(provider.UseForTwoFactor ? "Remove 2FA" : "Use for 2FA")
+                            </button>
+                            <button class="dcbtn xs" @onclick="@(() => StartTest(provider))">Test</button>
+                            <button class="dcbtn xs" @onclick="@(() => StartEdit(provider))">Edit</button>
+                            @if (_confirmDeleteId == provider.Id)
+                            {
+                                <button class="dcbtn xs danger" @onclick="@(() => DeleteAsync(provider.Id))">Confirm</button>
+                                <button class="dcbtn xs" @onclick="@(() => _confirmDeleteId = null)">Keep</button>
+                            }
+                            else
+                            {
+                                <button class="dcbtn xs danger" @onclick="@(() => _confirmDeleteId = provider.Id)">Delete</button>
+                            }
+                        </div>
+                    </article>
+                    @if (_testProviderId == provider.Id)
                     {
-                        <article class="provider-row @(!provider.Enabled ? "disabled" : "")">
-                            <div class="provider-info">
-                                <strong>@provider.Name</strong>
-                                <span class="kind-badge">@provider.Kind</span>
-                                <label class="enabled-toggle">
-                                    <input type="checkbox" checked="@provider.Enabled"
-                                           @onchange="@(() => ToggleEnabledAsync(provider))" />
-                                    Enabled
-                                </label>
-                                @if (provider.IsDefault)
-                                {
-                                    <span class="flag-badge default">Default</span>
-                                }
-                                @if (provider.UseForTwoFactor)
-                                {
-                                    <span class="flag-badge twofactor">2FA</span>
-                                }
-                            </div>
-                            <div class="provider-actions">
-                                @if (!provider.IsDefault)
-                                {
-                                    <button class="dcbtn xs" @onclick="@(() => SetDefaultAsync(provider.Id))">Set default</button>
-                                }
-                                <button class="dcbtn xs" @onclick="@(() => ToggleTwoFactorAsync(provider))">
-                                    @(provider.UseForTwoFactor ? "Unset 2FA" : "Use for 2FA")
-                                </button>
-                                <button class="dcbtn xs" @onclick="@(() => StartTest(provider))">Send test</button>
-                                <button class="dcbtn xs" @onclick="@(() => StartEdit(provider))">Edit</button>
-                                @if (_confirmDeleteId == provider.Id)
-                                {
-                                    <button class="dcbtn xs danger" @onclick="@(() => DeleteAsync(provider.Id))">Confirm delete</button>
-                                    <button class="dcbtn xs" @onclick="@(() => _confirmDeleteId = null)">Keep</button>
-                                }
-                                else
-                                {
-                                    <button class="dcbtn xs danger" @onclick="@(() => _confirmDeleteId = provider.Id)">Delete</button>
-                                }
-                            </div>
-                        </article>
-                        @if (_testProviderId == provider.Id)
-                        {
-                            <div class="test-row">
+                        <div class="test-row">
+                            <div class="dcfield test-recipient">
+                                <label>Test recipient</label>
                                 <input class="dcinput" @bind="_testRecipient"
                                        placeholder="@(provider.Channel == "email" ? "recipient@example.com" : "+15551234567")" />
-                                <button class="dcbtn xs primary" disabled="@(_testSending || string.IsNullOrWhiteSpace(_testRecipient))"
-                                        @onclick="@(() => SendTestAsync(provider.Id))">
-                                    @(_testSending ? "Sending…" : "Send")
-                                </button>
-                                <button class="dcbtn xs" @onclick="@(() => _testProviderId = null)">Cancel</button>
                             </div>
-                        }
+                            <button class="dcbtn xs primary" disabled="@(_testSending || string.IsNullOrWhiteSpace(_testRecipient))"
+                                    @onclick="@(() => SendTestAsync(provider.Id))">
+                                @(_testSending ? "Sending…" : "Send test")
+                            </button>
+                            <button class="dcbtn xs" @onclick="@(() => _testProviderId = null)">Cancel</button>
+                        </div>
                     }
                 }
-            </section>
-        }
+            }
+        </section>
 
         @if (_showForm)
         {
@@ -278,7 +244,6 @@
 
 @code {
     private IReadOnlyList<CommunicationProviderView> _providers = Array.Empty<CommunicationProviderView>();
-    private ClientCommsCapabilities? _capabilities;
     private IReadOnlyList<ProjectSummaryView> _projects = Array.Empty<ProjectSummaryView>();
     private IReadOnlyList<ProjectSecretView> _secrets = Array.Empty<ProjectSecretView>();
     private bool _loading = true;
@@ -323,19 +288,18 @@
         _loadError = null;
         try
         {
-            _providers = await Providers.ListAsync();
-            _capabilities = await Communications.GetCapabilitiesAsync();
-            _projects = await Svc.GetProjectsAsync();
+            _providers = await InScopeAsync<CommunicationProviderService, IReadOnlyList<CommunicationProviderView>>(
+                service => service.ListAsync());
+            _projects = await InScopeAsync<IPlaceContextService, IReadOnlyList<ProjectSummaryView>>(
+                service => service.GetProjectsAsync());
         }
         catch (Exception ex) { _loadError = ex.Message; }
         finally { _loading = false; }
     }
 
     private async Task ReloadAsync()
-    {
-        _providers = await Providers.ListAsync();
-        _capabilities = await Communications.GetCapabilitiesAsync();
-    }
+        => _providers = await InScopeAsync<CommunicationProviderService, IReadOnlyList<CommunicationProviderView>>(
+            service => service.ListAsync());
 
     private void Report(string message, bool isError = false)
         => (_message, _messageIsError) = (message, isError);
@@ -350,6 +314,9 @@
         "twilio" => "Twilio",
         _ => kind,
     };
+
+    private static string ChannelLabel(string channel)
+        => channel == "sms" ? "SMS" : "Email";
 
     private static string DefaultHeaderName(string kind)
         => kind == "postmark" ? "X-Postmark-Server-Token" : "";
@@ -387,7 +354,8 @@
     private async Task LoadSecretsAsync()
     {
         _secrets = _vaultProjectId is { } id
-            ? await Svc.ListProjectSecretsAsync(id)
+            ? await InScopeAsync<IPlaceContextService, IReadOnlyList<ProjectSecretView>>(
+                service => service.ListProjectSecretsAsync(id))
             : Array.Empty<ProjectSecretView>();
     }
 
@@ -483,9 +451,11 @@
         try
         {
             if (_editingId is { } id)
-                await Providers.UpdateAsync(id, CurrentInput());
+                await InScopeAsync<CommunicationProviderService>(
+                    async service => { await service.UpdateAsync(id, CurrentInput()); });
             else
-                await Providers.CreateAsync(CurrentInput());
+                await InScopeAsync<CommunicationProviderService>(
+                    async service => { await service.CreateAsync(CurrentInput()); });
             _showForm = false;
             Report(_editingId is null ? "Provider added." : "Provider updated.");
             await ReloadAsync();
@@ -505,7 +475,8 @@
         try
         {
             var input = ToInput(provider) with { Enabled = !provider.Enabled };
-            await Providers.UpdateAsync(provider.Id, input);
+            await InScopeAsync<CommunicationProviderService>(
+                async service => { await service.UpdateAsync(provider.Id, input); });
             Report($"Provider '{provider.Name}' {(input.Enabled ? "enabled" : "disabled")}.");
             await ReloadAsync();
         }
@@ -516,7 +487,8 @@
     {
         try
         {
-            await Providers.SetDefaultAsync(id);
+            await InScopeAsync<CommunicationProviderService>(
+                async service => { await service.SetDefaultAsync(id); });
             Report("Default provider updated.");
             await ReloadAsync();
         }
@@ -527,7 +499,8 @@
     {
         try
         {
-            await Providers.SetTwoFactorAsync(provider.Id, !provider.UseForTwoFactor);
+            await InScopeAsync<CommunicationProviderService>(
+                async service => { await service.SetTwoFactorAsync(provider.Id, !provider.UseForTwoFactor); });
             Report(provider.UseForTwoFactor
                 ? $"Provider '{provider.Name}' is no longer used for two-factor codes."
                 : $"Provider '{provider.Name}' now delivers two-factor codes.");
@@ -540,7 +513,7 @@
     {
         try
         {
-            await Providers.DeleteAsync(id);
+            await InScopeAsync<CommunicationProviderService>(service => service.DeleteAsync(id));
             _confirmDeleteId = null;
             Report("Provider deleted.");
             await ReloadAsync();
@@ -561,17 +534,9 @@
         _message = null;
         try
         {
-            var response = await Http.PostAsJsonAsync(
-                $"/api/settings/communication-providers/{id}/test",
-                new { Recipient = _testRecipient });
-            if (!response.IsSuccessStatusCode)
-            {
-                var error = await response.Content.ReadFromJsonAsync<ErrorResponse>();
-                Report(error?.Error ?? "The test message could not be sent.", isError: true);
-                return;
-            }
-            var delivery = await response.Content.ReadFromJsonAsync<TestDelivery>();
-            Report($"Test message sent via {delivery?.Provider ?? "provider"}.");
+            var delivery = await InScopeAsync<DatabaseCommunicationSender, ClientMessageDelivery>(
+                sender => sender.SendTestAsync(id, _testRecipient.Trim()));
+            Report($"Test message sent via {delivery.Provider}.");
             _testProviderId = null;
         }
         catch (Exception ex) { Report(ex.Message, isError: true); }
@@ -592,14 +557,18 @@
         catch (JsonException) { return ""; }
     }
 
-    private sealed class TestDelivery
+    private async Task<TResult> InScopeAsync<TService, TResult>(Func<TService, Task<TResult>> action)
+        where TService : notnull
     {
-        public string? Provider { get; set; }
-        public string? ExternalId { get; set; }
+        using var scope = ScopeFactory.CreateScope();
+        return await action(scope.ServiceProvider.GetRequiredService<TService>());
     }
 
-    private sealed class ErrorResponse
+    private async Task InScopeAsync<TService>(Func<TService, Task> action)
+        where TService : notnull
     {
-        public string? Error { get; set; }
+        using var scope = ScopeFactory.CreateScope();
+        await action(scope.ServiceProvider.GetRequiredService<TService>());
     }
+
 }

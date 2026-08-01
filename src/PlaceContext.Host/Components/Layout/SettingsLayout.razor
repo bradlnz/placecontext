@@ -1,9 +1,10 @@
 @inherits LayoutComponentBase
 @layout MainLayout
 @implements IDisposable
+@using Microsoft.Extensions.DependencyInjection
 @inject NavigationManager Nav
 @inject PortalUiState Ui
-@inject IMembershipService Members
+@inject IServiceScopeFactory ScopeFactory
 @inject ICurrentUser CurrentUser
 
 @* The settings area mirrors the project area: a vertical menu, tabs inside the pages. *@
@@ -54,10 +55,15 @@
     protected override async Task OnInitializedAsync()
     {
         Ui.SetSubNav(true, ToggleNav);
-        // /settings/* is default-admin-only except the self-service Security and API tokens pages —
-        // the nav mirrors that so members only see entries they can actually open.
-        _isDefaultAdmin = CurrentUser.IsAuthenticated
-            && await Members.IsDefaultAdminAsync(CurrentUser.UserId);
+        // /settings/* is default-admin-only except the self-service API tokens page. The nav mirrors
+        // that policy so members only see entries they can actually open.
+        if (CurrentUser.IsAuthenticated)
+        {
+            await using var scope = ScopeFactory.CreateAsyncScope();
+            _isDefaultAdmin = await scope.ServiceProvider
+                .GetRequiredService<IMembershipService>()
+                .IsDefaultAdminAsync(CurrentUser.UserId);
+        }
     }
 
     public void Dispose()
@@ -68,7 +74,7 @@
     private bool _isDefaultAdmin;
 
     private IEnumerable<(string Label, string Path)> VisibleItems =>
-        _isDefaultAdmin ? Items : Items.Where(i => i.Path is "security" or "api-tokens");
+        _isDefaultAdmin ? Items : Items.Where(i => i.Path == "api-tokens");
 
     private static readonly (string Label, string Path)[] Items =
     {
@@ -80,7 +86,6 @@
         ("Locality", "locality"),
         ("Backup", "backup"),
         ("Access", "access"),
-        ("Security", "security"),
         ("API tokens", "api-tokens"),
     };
 }

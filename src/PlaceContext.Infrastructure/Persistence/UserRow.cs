@@ -23,7 +23,7 @@ public sealed class UserRow : ITenantOwned
     /// /setup (<c>AuthService.CreateFirstAdminAsync</c>) or by the AddDefaultAdminAndRoleDefinitions
     /// migration for existing installs. The default admin cannot be deleted, demoted, or have
     /// <c>settings.manage</c> revoked, and is the only member the /settings/* area (beyond the
-    /// self-service Security / API tokens pages) is open to.
+    /// self-service API tokens page) is open to.
     /// </summary>
     public bool IsDefaultAdmin { get; set; }
     public DateTimeOffset CreatedAt { get; set; }

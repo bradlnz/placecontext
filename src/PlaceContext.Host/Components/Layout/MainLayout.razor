@@ -1,15 +1,13 @@
 @inherits LayoutComponentBase
 @implements IDisposable
+@using Microsoft.Extensions.DependencyInjection
 @inject PortalUiState Ui
 @inject IConfiguration Config
-@inject IPlaceContextService Svc
 @inject PlaceContext.Application.Ports.ICurrentTenant Tenant
 @inject PlaceContext.Infrastructure.Operations.OperationCenter OpCenter
-@inject PlaceContext.Host.Branding.BrandingService Branding
 @inject IJSRuntime JS
 @inject NavigationManager Nav
-@inject PlaceContext.Application.Ports.IPermissionService Perms
-@inject PlaceContext.Application.Ports.IMenuConfigService MenuCfg
+@inject IServiceScopeFactory ScopeFactory
 
 <div id="dcshell" data-theme="dark" class="shell" style="@_brand.CssOverrides()">
 
@@ -257,8 +255,18 @@
 
     protected override async Task OnInitializedAsync()
     {
-        try { _brand = await Branding.GetAsync(); } catch { }
-        try { _projects = await Svc.GetProjectsAsync(); } catch { _projects = Array.Empty<ProjectSummaryView>(); }
+        try
+        {
+            _brand = await InScopeAsync<PlaceContext.Host.Branding.BrandingService, PlaceContext.Host.Branding.TenantBranding>(
+                service => service.GetAsync());
+        }
+        catch { }
+        try
+        {
+            _projects = await InScopeAsync<IPlaceContextService, IReadOnlyList<ProjectSummaryView>>(
+                service => service.GetProjectsAsync());
+        }
+        catch { _projects = Array.Empty<ProjectSummaryView>(); }
         // Default the switcher: the project in the current URL, else the first project.
         SyncProjectFromUrl(Nav.Uri);
         if (Ui.CurrentProjectId is null && _projects.Count > 0)
@@ -269,11 +277,12 @@
 
     private async Task ReloadMenuAsync()
     {
-        // Keep the previous sidebar on a transient failure (e.g. the shared-circuit DbContext race in
-        // GetLayoutAsync) or an empty result (ambient user not yet resolved) instead of blanking it.
+        // Keep the previous sidebar on a transient failure or an empty result (ambient user not yet
+        // resolved) instead of blanking it.
         try
         {
-            var menu = await MenuCfg.GetWorkspaceMenuAsync(Ui.CurrentProjectId);
+            var menu = await InScopeAsync<PlaceContext.Application.Ports.IMenuConfigService, IReadOnlyList<ResolvedMenuItem>>(
+                service => service.GetWorkspaceMenuAsync(Ui.CurrentProjectId));
             if (menu.Count > 0) _menu = menu;
         }
         catch { /* keep previous _menu so the sidebar does not vanish */ }
@@ -363,7 +372,8 @@
         _entitiesFor = null;
         try
         {
-            _entities = (await Svc.ListDataEntitiesAsync(pid.Value)).Select(e => e.Name).ToList();
+            _entities = (await InScopeAsync<IPlaceContextService, IReadOnlyList<DataEntityView>>(
+                service => service.ListDataEntitiesAsync(pid.Value))).Select(e => e.Name).ToList();
             _entitiesFor = pid;
         }
         catch { /* keep previous entity list on transient failures */ }
@@ -469,7 +479,11 @@
         if (term.Length < 2) { _results = null; return; }
 
         _searching = true;
-        try { _results = await Svc.SearchAsync(term, Ui.CurrentProjectId); }
+        try
+        {
+            _results = await InScopeAsync<IPlaceContextService, SearchResultsView>(
+                service => service.SearchAsync(term, Ui.CurrentProjectId));
+        }
         catch { _results = null; }
         finally { _searching = false; }
     }
@@ -483,6 +497,17 @@
     {
         CloseSearch();
         Nav.NavigateTo(hit.Url);
+    }
+
+    // A Blazor scoped service lives for the whole circuit. Database services resolved directly by
+    // this layout would therefore share one AppDbContext with every nested page, whose lifecycle and
+    // event callbacks can overlap the layout's own loads. Each operation instead owns a short-lived
+    // scope and DbContext.
+    private async Task<TResult> InScopeAsync<TService, TResult>(Func<TService, Task<TResult>> operation)
+        where TService : notnull
+    {
+        await using var scope = ScopeFactory.CreateAsyncScope();
+        return await operation(scope.ServiceProvider.GetRequiredService<TService>());
     }
 
     private static string Initials(string? name)

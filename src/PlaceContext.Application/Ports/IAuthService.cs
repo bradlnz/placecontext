@@ -61,7 +61,7 @@ public interface IAuthService
     Task<TwoFactorDeliveryInfo> GetTwoFactorDeliveryInfoAsync(
         Guid userId, string? channel = null, CancellationToken ct = default);
 
-    /// <summary>Org-wide 2FA status plus the user's own phone / preferred channel (settings page).</summary>
+    /// <summary>Org-wide 2FA status plus the user's own phone and preferred delivery channel.</summary>
     Task<TwoFactorSettingsInfo> GetTwoFactorSettingsAsync(Guid userId, CancellationToken ct = default);
 
     /// <summary>
@@ -109,7 +109,7 @@ public sealed record TwoFactorDeliveryInfo(
     bool EmailAvailable,
     bool SmsAvailable);
 
-/// <summary>Org-wide 2FA requirement + the user's own delivery preferences (settings page).</summary>
+/// <summary>Org-wide 2FA requirement plus the user's own delivery preferences.</summary>
 public sealed record TwoFactorSettingsInfo(
     bool Required,
     string PreferredChannel,

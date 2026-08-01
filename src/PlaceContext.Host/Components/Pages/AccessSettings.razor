@@ -1,28 +1,30 @@
 @page "/settings/access"
 @layout PlaceContext.Host.Components.Layout.SettingsLayout
 @attribute [Authorize(Policy = Policies.DefaultAdmin)]
-@inject IMembershipService Members
-@inject IPlaceContextService Svc
+@using Microsoft.Extensions.DependencyInjection
+@inject IServiceScopeFactory ScopeFactory
 @inject ICurrentUser CurrentUser
 @inject PortalUiState Ui
 @inject NavigationManager Nav
 @inject IJSRuntime JS
 
-<PageTitle>placecontext — Access</PageTitle>
+<PageTitle>PlaceContext — Access</PageTitle>
 
-@if (_loading)
-{
-    <Skeleton Kind="list" Rows="4" Padded />
-}
-else
-{
-    <div class="page">
-        <h2 class="page-title">Access</h2>
-        <div class="page-sub">
-            Members, their role, and fine-grained permission overrides on top of that role's defaults.
-            An override always wins over the role default — Allow grants a permission the role wouldn't
-            otherwise have, Revoke removes one it would.
+<div class="access-settings-page">
+    <header class="settings-head">
+        <div>
+            <span class="settings-kicker">Workspace administration</span>
+            <h2>Access</h2>
+            <p>Manage members, roles and permission overrides. Explicit overrides take precedence over role permissions.</p>
         </div>
+    </header>
+
+    @if (_loading)
+    {
+        <Skeleton Kind="list" Rows="4" />
+    }
+    else
+    {
 
         @if (_message is not null)
         {
@@ -248,8 +250,8 @@ else
                 </div>
             </div>
         </div>
-    </div>
-}
+    }
+</div>
 
 @code {
     // Owner is not assignable via invite/role dropdown — ownership transfer is a separate path.
@@ -284,7 +286,7 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        Ui.Set("Access", "members, roles, and fine-grained permission overrides");
+        Ui.Set("Settings", "Access");
         await LoadAsync();
     }
 
@@ -305,14 +307,21 @@ else
         _loading = true;
         try
         {
-            _members = await Members.ListMembersAsync();
-            _roles = await Svc.ListRolesAsync();
+            _members = await InScopeAsync<IMembershipService, IReadOnlyList<MemberView>>(
+                service => service.ListMembersAsync());
+            _roles = await InScopeAsync<IPlaceContextService, IReadOnlyList<RoleView>>(
+                service => service.ListRolesAsync());
         }
         finally { _loading = false; }
     }
 
-    private async Task LoadMembersAsync() => _members = await Members.ListMembersAsync();
-    private async Task LoadRolesAsync() => _roles = await Svc.ListRolesAsync();
+    private async Task LoadMembersAsync()
+        => _members = await InScopeAsync<IMembershipService, IReadOnlyList<MemberView>>(
+            service => service.ListMembersAsync());
+
+    private async Task LoadRolesAsync()
+        => _roles = await InScopeAsync<IPlaceContextService, IReadOnlyList<RoleView>>(
+            service => service.ListRolesAsync());
 
     private async Task InviteAsync()
     {
@@ -326,7 +335,8 @@ else
         _inviting = true;
         try
         {
-            var invite = await Members.CreateInviteAsync(_inviteEmail.Trim(), _inviteRole);
+            var invite = await InScopeAsync<IMembershipService, InviteView>(
+                service => service.CreateInviteAsync(_inviteEmail.Trim(), _inviteRole));
             _inviteLink = $"{Nav.BaseUri.TrimEnd('/')}/join?token={invite.Token}";
             _inviteEmail = "";
             _message = $"Invite sent for {invite.Email}.";
@@ -340,7 +350,7 @@ else
         _busy = true;
         try
         {
-            await Members.SetRoleAsync(userId, role);
+            await InScopeAsync<IMembershipService>(service => service.SetRoleAsync(userId, role));
             await LoadMembersAsync();
             await LoadRolesAsync(); // member counts changed
             if (_expanded == userId) await LoadMatrixAsync(userId);
@@ -360,7 +370,7 @@ else
         _busy = true;
         try
         {
-            await Members.DeleteMemberAsync(userId);
+            await InScopeAsync<IMembershipService>(service => service.DeleteMemberAsync(userId));
             _confirmRemoveId = null;
             if (_expanded == userId) { _expanded = null; _matrix = null; }
             await LoadMembersAsync();
@@ -392,14 +402,22 @@ else
     private async Task LoadMatrixAsync(Guid userId)
     {
         _matrix = null;
-        try { _matrix = await Svc.GetUserPermissionsAsync(userId); }
+        try
+        {
+            _matrix = await InScopeAsync<IPlaceContextService, UserPermissionsView>(
+                service => service.GetUserPermissionsAsync(userId));
+        }
         catch (Exception ex) { _message = ex.Message; }
     }
 
     private async Task SetOverrideAsync(Guid userId, string permission, bool? allowed)
     {
         _busy = true;
-        try { _matrix = await Svc.SetUserPermissionOverrideAsync(userId, permission, allowed); }
+        try
+        {
+            _matrix = await InScopeAsync<IPlaceContextService, UserPermissionsView>(
+                service => service.SetUserPermissionOverrideAsync(userId, permission, allowed));
+        }
         catch (Exception ex) { _message = ex.Message; }
         finally { _busy = false; }
     }
@@ -432,7 +450,8 @@ else
         _busy = true;
         try
         {
-            await Svc.UpdateRolePermissionsAsync(roleId, _editRolePerms.ToList());
+            await InScopeAsync<IPlaceContextService>(
+                service => service.UpdateRolePermissionsAsync(roleId, _editRolePerms.ToList()));
             _editRoleId = null;
             await LoadRolesAsync();
             _message = "Role permissions updated.";
@@ -446,7 +465,7 @@ else
         _busy = true;
         try
         {
-            await Svc.DeleteRoleAsync(roleId);
+            await InScopeAsync<IPlaceContextService>(service => service.DeleteRoleAsync(roleId));
             _confirmDeleteRoleId = null;
             await LoadRolesAsync();
             _message = "Role deleted.";
@@ -460,7 +479,8 @@ else
         _busy = true;
         try
         {
-            await Svc.CreateRoleAsync(_newRoleName.Trim(), _newRolePerms.ToList());
+            await InScopeAsync<IPlaceContextService>(
+                service => service.CreateRoleAsync(_newRoleName.Trim(), _newRolePerms.ToList()));
             _newRoleName = "";
             _newRolePerms.Clear();
             await LoadRolesAsync();
@@ -468,5 +488,19 @@ else
         }
         catch (Exception ex) { _message = ex.Message; }
         finally { _busy = false; }
+    }
+
+    private async Task<TResult> InScopeAsync<TService, TResult>(Func<TService, Task<TResult>> operation)
+        where TService : notnull
+    {
+        await using var scope = ScopeFactory.CreateAsyncScope();
+        return await operation(scope.ServiceProvider.GetRequiredService<TService>());
+    }
+
+    private async Task InScopeAsync<TService>(Func<TService, Task> operation)
+        where TService : notnull
+    {
+        await using var scope = ScopeFactory.CreateAsyncScope();
+        await operation(scope.ServiceProvider.GetRequiredService<TService>());
     }
 }

@@ -33,8 +33,8 @@ public sealed class SectionAuthorizationTests
     public void Sensitive_pages_enforce_their_section_permission(Type page, string expectedPolicy)
         => AssertPolicy(page, expectedPolicy);
 
-    // Every /settings/* page is default-admin-only, except the self-service Security and API tokens
-    // pages which keep a bare [Authorize] (any authenticated member).
+    // Every /settings/* page is default-admin-only, except the self-service API tokens page which
+    // keeps a bare [Authorize] (any authenticated member).
     public static TheoryData<Type> DefaultAdminPages => new()
     {
         typeof(Pages.AccessSettings),
@@ -54,7 +54,6 @@ public sealed class SectionAuthorizationTests
 
     public static TheoryData<Type> SelfServiceSettingsPages => new()
     {
-        typeof(Pages.SecuritySettings),
         typeof(Pages.ApiTokensSettings),
     };
 

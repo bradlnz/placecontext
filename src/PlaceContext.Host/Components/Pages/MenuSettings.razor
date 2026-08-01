@@ -4,33 +4,63 @@
 @inject PlaceContext.Application.Ports.IMenuConfigService Menu
 @inject PortalUiState Ui
 
-<PageTitle>placecontext — Menu</PageTitle>
+<PageTitle>PlaceContext — Menu</PageTitle>
 
-<div class="page">
-    <h2 class="page-title">Menu</h2>
-    <div class="page-sub">
-        Customize the sidebar for this organisation: reorder, rename, hide, and group items.
-        Each viewer still only sees items their role and permission overrides allow.
-    </div>
+<div class="menu-settings-page">
+    <header class="settings-head">
+        <div>
+            <span class="settings-kicker">Workspace navigation</span>
+            <h2>Menu</h2>
+            <p>Reorder, rename and group sidebar items. Permission rules still control what each member can see.</p>
+        </div>
+        <div class="head-actions">
+            <button class="dcbtn" disabled="@_saving" @onclick="Reset">Reset defaults</button>
+            <button class="dcbtn primary" disabled="@_saving" @onclick="SaveAsync">
+                @(_saving ? "Saving…" : "Save menu")
+            </button>
+        </div>
+    </header>
 
     @if (_message is not null)
     {
-        <div class="message">@_message</div>
+        <div class="settings-message">@_message</div>
     }
 
-    <div class="dccard panel">
-        <div class="panel-head">
-            <div class="panel-title">Sidebar</div>
-            <button class="dcbtn" @onclick="Reset">Reset defaults</button>
+    <section class="dccard menu-card">
+        <div class="menu-card-head">
+            <strong>Sidebar items</strong>
+            <span>@_workspace.Count items</span>
         </div>
-        @RenderEditor(_workspace)
-    </div>
-
-    <div class="actions">
-        <button class="dcbtn primary" disabled="@_saving" @onclick="SaveAsync">
-            @(_saving ? "Saving…" : "Save menu")
-        </button>
-    </div>
+        @foreach (var (row, idx) in _workspace.Select((row, index) => (row, index)))
+        {
+            <article class="menu-row @(!row.Visible ? "muted" : "")">
+                <div class="row-move" aria-label="Move @row.DefaultLabel">
+                    <button class="dcbtn move" disabled="@(idx == 0)" @onclick="@(() => Move(idx, -1))" title="Move up">↑</button>
+                    <button class="dcbtn move" disabled="@(idx >= _workspace.Count - 1)" @onclick="@(() => Move(idx, 1))" title="Move down">↓</button>
+                </div>
+                <div class="menu-item-body">
+                    <div class="menu-item-head">
+                        <strong>@row.DefaultLabel</strong>
+                        <span>@row.Id</span>
+                    </div>
+                    <div class="field-grid">
+                        <div class="dcfield">
+                            <label>Label <small>(optional)</small></label>
+                            <input class="dcinput" @bind="row.Label" placeholder="Use default" />
+                        </div>
+                        <div class="dcfield">
+                            <label>Section <small>(optional)</small></label>
+                            <input class="dcinput" @bind="row.Section" placeholder="No section heading" />
+                        </div>
+                    </div>
+                </div>
+                <label class="visible-toggle">
+                    <input type="checkbox" @bind="row.Visible" />
+                    Visible
+                </label>
+            </article>
+        }
+    </section>
 </div>
 
 @code {
@@ -97,71 +127,6 @@
         }
         return rows.OrderBy(r => r.Order).ToList();
     }
-
-    private RenderFragment RenderEditor(List<Row> rows) => __builder =>
-    {
-        __builder.OpenElement(0, "div");
-        __builder.AddAttribute(1, "class", "editor");
-        for (var i = 0; i < rows.Count; i++)
-        {
-            var row = rows[i];
-            var idx = i;
-            __builder.OpenElement(2, "div");
-            __builder.AddAttribute(3, "class", "row" + (row.Visible ? "" : " muted"));
-            __builder.OpenElement(4, "div");
-            __builder.AddAttribute(5, "class", "row-move");
-            __builder.OpenElement(6, "button");
-            __builder.AddAttribute(7, "class", "dcbtn move");
-            __builder.AddAttribute(8, "disabled", idx == 0);
-            __builder.AddAttribute(9, "onclick", EventCallback.Factory.Create(this, () => Move(idx, -1)));
-            __builder.AddContent(10, "↑");
-            __builder.CloseElement();
-            __builder.OpenElement(11, "button");
-            __builder.AddAttribute(12, "class", "dcbtn move");
-            __builder.AddAttribute(13, "disabled", idx >= rows.Count - 1);
-            __builder.AddAttribute(14, "onclick", EventCallback.Factory.Create(this, () => Move(idx, 1)));
-            __builder.AddContent(15, "↓");
-            __builder.CloseElement();
-            __builder.CloseElement();
-
-            __builder.OpenElement(16, "div");
-            __builder.AddAttribute(17, "class", "row-main");
-            __builder.OpenElement(18, "div");
-            __builder.AddAttribute(19, "class", "id");
-            __builder.AddContent(20, row.DefaultLabel);
-            __builder.AddMarkupContent(21, $" <span class=\"code\">{row.Id}</span>");
-            __builder.CloseElement();
-            __builder.OpenElement(22, "input");
-            __builder.AddAttribute(23, "class", "dcinput");
-            __builder.AddAttribute(24, "placeholder", "Custom label (optional)");
-            __builder.AddAttribute(25, "value", row.Label);
-            __builder.AddAttribute(26, "oninput", EventCallback.Factory.Create<ChangeEventArgs>(this, e => row.Label = e.Value?.ToString() ?? ""));
-            __builder.CloseElement();
-            __builder.OpenElement(27, "input");
-            __builder.AddAttribute(28, "class", "dcinput section");
-            __builder.AddAttribute(29, "placeholder", "Section header");
-            __builder.AddAttribute(30, "value", row.Section);
-            __builder.AddAttribute(31, "oninput", EventCallback.Factory.Create<ChangeEventArgs>(this, e => row.Section = e.Value?.ToString() ?? ""));
-            __builder.CloseElement();
-            __builder.CloseElement();
-
-            __builder.OpenElement(32, "label");
-            __builder.AddAttribute(33, "class", "vis");
-            __builder.OpenElement(34, "input");
-            __builder.AddAttribute(35, "type", "checkbox");
-            __builder.AddAttribute(36, "checked", row.Visible);
-            __builder.AddAttribute(37, "onchange", EventCallback.Factory.Create<ChangeEventArgs>(this, e =>
-            {
-                row.Visible = e.Value is bool b ? b : bool.TryParse(e.Value?.ToString(), out var x) && x;
-            }));
-            __builder.CloseElement();
-            __builder.AddContent(38, " Visible");
-            __builder.CloseElement();
-
-            __builder.CloseElement();
-        }
-        __builder.CloseElement();
-    };
 
     private void Move(int index, int delta)
     {
