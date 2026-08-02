@@ -14,9 +14,11 @@ namespace PlaceContext.Application.Features;
 /// resolves each field's dot-path, and appends the rows to the mapping's target table in the
 /// project database. Field values are stored as-is in their declared column: objects and arrays
 /// land as JSON text (so huge nested objects don't explode into hundreds of leaf columns).
-/// Tables are system-owned append-only (created on first ingest) with <c>ingested_at</c>/<c>run_id</c>
-/// provenance columns, so lineage back to the run is always queryable. Entirely best-effort — a
-/// mapping failure is logged and never fails the run.
+/// Tables are system-owned append-only (created on first ingest) with <c>ingested_at</c>,
+/// <c>run_id</c>, <c>source_kind</c>, <c>source_id</c>, and <c>mapping_id</c> provenance columns, so
+/// lineage remains queryable when several jobs or chains contribute complementary fields to one
+/// dataset. Missing nullable columns are added transactionally by the store as mapped outputs evolve.
+/// Entirely best-effort — a mapping failure is logged and never fails the run.
 /// </summary>
 public sealed class DataMappingIngestionService
 {
@@ -24,6 +26,13 @@ public sealed class DataMappingIngestionService
     {
         new ProjectColumnSpec("ingested_at", DataColumnTypes.Timestamptz, NotNull: true, PrimaryKey: false),
         new ProjectColumnSpec("run_id", DataColumnTypes.Uuid, NotNull: true, PrimaryKey: false),
+    };
+
+    private static readonly IReadOnlyList<ProjectColumnSpec> SourceLineageColumns = new[]
+    {
+        new ProjectColumnSpec("source_kind", DataColumnTypes.Text, NotNull: true, PrimaryKey: false),
+        new ProjectColumnSpec("source_id", DataColumnTypes.Uuid, NotNull: true, PrimaryKey: false),
+        new ProjectColumnSpec("mapping_id", DataColumnTypes.Uuid, NotNull: true, PrimaryKey: false),
     };
 
     private readonly IDataMappingRepository _mappings;
@@ -142,19 +151,27 @@ public sealed class DataMappingIngestionService
             .ToList();
 
         var columns = new List<ProjectColumnSpec>(ProvenanceColumns);
-        var taken = new HashSet<string>(ProvenanceColumns.Select(c => c.Name), StringComparer.OrdinalIgnoreCase);
-        var columnIndex = new Dictionary<string, int>(StringComparer.Ordinal);
+        var taken = ProvenanceColumns.Concat(SourceLineageColumns)
+            .Select(c => c.Name)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var columnIndex = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         for (var i = 0; i < ProvenanceColumns.Count; i++) columnIndex[ProvenanceColumns[i].Name] = i;
         foreach (var field in mapping.Fields)
         {
             if (!taken.Add(field.Column))
             {
-                _log?.LogWarning("Data map → '{Table}': declared column '{Column}' collides with an earlier column — skipped.",
+                _log?.LogWarning("Data map → '{Table}': declared column '{Column}' is duplicated or reserved — skipped.",
                     mapping.TargetTable, field.Column);
                 continue;
             }
             columnIndex[field.Column] = columns.Count;
             columns.Add(new ProjectColumnSpec(field.Column, field.Type, NotNull: false, PrimaryKey: false));
+        }
+
+        foreach (var column in SourceLineageColumns)
+        {
+            columnIndex[column.Name] = columns.Count;
+            columns.Add(column);
         }
 
         var now = _clock.UtcNow.ToString("O");
@@ -163,9 +180,16 @@ public sealed class DataMappingIngestionService
         {
             var row = new string?[columns.Count];
             var written = new bool[columns.Count];
-            row[0] = now;
-            row[1] = runId.ToString();
-            written[0] = written[1] = true;
+            row[columnIndex["ingested_at"]] = now;
+            row[columnIndex["run_id"]] = runId.ToString();
+            row[columnIndex["source_kind"]] = mapping.SourceKind;
+            row[columnIndex["source_id"]] = mapping.JobId.ToString();
+            row[columnIndex["mapping_id"]] = mapping.Id.ToString();
+            written[columnIndex["ingested_at"]] = true;
+            written[columnIndex["run_id"]] = true;
+            written[columnIndex["source_kind"]] = true;
+            written[columnIndex["source_id"]] = true;
+            written[columnIndex["mapping_id"]] = true;
             foreach (var (_, col, text) in cells)
             {
                 if (!columnIndex.TryGetValue(col, out var idx) || written[idx]) continue;
@@ -175,23 +199,9 @@ public sealed class DataMappingIngestionService
             rows.Add(row);
         }
 
-        // Pre-flight: when the target table already exists, a field pointed at a column it doesn't
-        // have makes EVERY insert fail — the whole batch is dropped. Catch it up front and surface
-        // a precise, actionable error instead of silently losing data on a "Succeeded" run.
-        var existing = await _store.ListColumnsAsync(projectId, mapping.TargetTable, ct);
-        if (existing.Count > 0)
-        {
-            var have = existing.Select(c => c.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
-            var missing = mapping.Fields.Select(f => f.Column).Where(c => !have.Contains(c)).Distinct().ToList();
-            if (missing.Count > 0)
-            {
-                Surface(projectId, runId, mapping.TargetTable,
-                    $"{rows.Count} row(s) dropped — target column(s) {Quote(missing)} don't exist on '{mapping.TargetTable}'. " +
-                    $"Its columns are: {string.Join(", ", existing.Select(c => c.Name))}. " +
-                    "Point the field(s) at an existing column, or add the column on the Data tab first.");
-                return;
-            }
-        }
+        // The system table writer reconciles missing nullable columns transactionally. This is
+        // essential when different jobs contribute complementary fields to the same correlated
+        // dataset: schema growth preserves both outputs instead of dropping the later batch.
 
         try
         {
@@ -250,8 +260,6 @@ public sealed class DataMappingIngestionService
             RunOutcome.Failed, detail, $"/observability?run={runId}", at, at));
     }
 
-    private static string Quote(IEnumerable<string> names) => string.Join(", ", names.Select(n => $"'{n}'"));
-
     // The run's primary data: the reduce artifact (final aggregate) when present, else the lone
     // shard's artifact, else a JSON array of all shard artifacts — same shape chains thread forward.
     private static string? PrimaryArtifact(JobRun run)
@@ -270,12 +278,9 @@ public sealed class DataMappingIngestionService
         };
     }
 
-    // A job's stdout can carry leading noise before its JSON — pip-install logs from a runtime that
-    // installs requirements, framework warnings, etc. — and some jobs print more than one JSON line.
-    // Parse the whole artifact first (the clean case, unchanged); only on failure fall back to the LAST
-    // line that parses as a JSON value. Jobs emit their result as a final single-line json.dumps, so the
-    // last parseable line is the payload. Multi-line pretty-printed JSON behind noise still can't be
-    // recovered — but nothing that parses today changes behaviour.
+    // Parse the whole artifact first (the clean case); on failure, use the last line that parses as
+    // JSON. If no JSON exists, preserve the complete text as a JSON string so a `$` field mapping
+    // can still ingest logs, summaries, model answers, and other scalar job results.
     private static JsonDocument ParsePayload(string primary)
     {
         try { return JsonDocument.Parse(primary); }
@@ -289,28 +294,32 @@ public sealed class DataMappingIngestionService
                 try { return JsonDocument.Parse(line); }
                 catch (JsonException) { /* keep scanning earlier lines */ }
             }
-            throw; // nothing parseable — let the caller surface the original error
+            return JsonDocument.Parse(JsonSerializer.Serialize(primary.Trim()));
         }
     }
 
-    // An array yields one record per element; a single object is one record.
+    // Arrays yield one record per element. Objects and scalar values each yield one record so every
+    // valid job result shape remains mappable; null carries no usable value and is skipped.
     private static IEnumerable<JsonElement> Records(JsonElement el)
     {
         if (el.ValueKind == JsonValueKind.Array)
         {
             foreach (var item in el.EnumerateArray())
-                yield return item;
+                if (item.ValueKind is not (JsonValueKind.Null or JsonValueKind.Undefined))
+                    yield return item;
         }
-        else if (el.ValueKind == JsonValueKind.Object)
+        else if (el.ValueKind is not (JsonValueKind.Null or JsonValueKind.Undefined))
         {
             yield return el;
         }
     }
 
-    // Dot-path navigation over objects ("data.items"). Null/empty path = the element itself.
+    // Dot-path navigation over objects ("data.items"). `$` selects the complete current record,
+    // and `$.data.items` is the explicit-root form. Null/empty remains the rows-path root.
     private static JsonElement? Navigate(JsonElement el, string? path)
     {
-        if (string.IsNullOrWhiteSpace(path)) return el;
+        if (string.IsNullOrWhiteSpace(path) || path == "$") return el;
+        if (path.StartsWith("$.", StringComparison.Ordinal)) path = path[2..];
         var current = el;
         foreach (var segment in path.Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
         {

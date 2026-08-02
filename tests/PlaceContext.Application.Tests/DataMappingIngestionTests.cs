@@ -11,10 +11,10 @@ public class DataMappingIngestionTests
 {
     private static readonly DateTimeOffset T0 = new(2026, 7, 12, 9, 0, 0, TimeSpan.Zero);
 
-    private static (Job job, JobRun run) RunWithArtifact(string artifact)
+    private static (Job job, JobRun run) RunWithArtifact(string artifact, Guid? projectId = null)
     {
         var mapSpec = new MapSpec("img", new[] { "{}" }, new Dictionary<string, string>());
-        var job = Job.Create(Guid.NewGuid(), "collector", null, mapSpec, null, 1,
+        var job = Job.Create(projectId ?? Guid.NewGuid(), "collector", null, mapSpec, null, 1,
             new ExitCodePolicy(new[] { 0 }, Array.Empty<int>()), T0);
         var run = JobRun.Start(job.Id, job.ProjectId, T0, WorkloadSnapshot.From(mapSpec, null, 1));
         run.Complete(new[] { new ShardResult(0, 0, WorkloadOutcome.Succeeded, artifact, "ok") }, null, T0.AddSeconds(1));
@@ -40,7 +40,7 @@ public class DataMappingIngestionTests
 
         var append = Assert.Single(store.Appends);
         Assert.Equal("listings", append.Table);
-        Assert.Equal(new[] { "ingested_at", "run_id", "city", "price" }, append.Columns.Select(c => c.Name));
+        Assert.Equal(new[] { "ingested_at", "run_id", "city", "price", "source_kind", "source_id", "mapping_id" }, append.Columns.Select(c => c.Name));
         Assert.Equal(2, append.Rows.Count);
         Assert.Equal(run.Id.ToString(), append.Rows[0][1]);
         Assert.Equal("Brisbane", append.Rows[0][2]);
@@ -84,13 +84,13 @@ public class DataMappingIngestionTests
     }
 
     [Fact]
-    public async Task A_field_targeting_a_missing_column_on_an_existing_table_drops_nothing_and_surfaces_a_notification()
+    public async Task A_field_targeting_a_new_column_on_an_existing_system_table_evolves_the_schema_and_ingests()
     {
         var (job, run) = RunWithArtifact("""{"listings":[{"suburb":"Logan","lga":"Logan"}]}""");
         var mapping = DataMapping.Create(job.ProjectId, job.Id, "listings", "listings", new[]
         {
             new DataFieldMapping("suburb", "suburb", "text"),
-            new DataFieldMapping("lga", "lga", "text"), // table has council_code, not lga
+            new DataFieldMapping("lga", "lga", "text"),
         }, T0);
         var store = new FakeDataStore();
         store.Existing["listings"] = new[]
@@ -104,11 +104,10 @@ public class DataMappingIngestionTests
 
         await Service(job, mapping, store, notifier).IngestAsync(job, run);
 
-        Assert.Empty(store.Appends); // the doomed insert is skipped, not attempted row-by-row
-        var update = Assert.Single(notifier.Updates);
-        Assert.Equal(RunOutcome.Failed, update.Outcome);
-        Assert.Contains("'lga'", update.Detail);
-        Assert.Contains("council_code", update.Detail);
+        var append = Assert.Single(store.Appends);
+        Assert.Contains(append.Columns, column => column.Name == "lga");
+        Assert.Equal("Logan", append.Rows[0][3]);
+        Assert.Empty(notifier.Updates);
     }
 
     [Fact]
@@ -155,8 +154,8 @@ public class DataMappingIngestionTests
 
         var append = Assert.Single(store.Appends);
         // Objects are no longer flattened — they land as JSON text in the declared column.
-        Assert.Equal(new[] { "ingested_at", "run_id", "city", "meta" }, append.Columns.Select(c => c.Name));
-        Assert.Equal(new[] { "timestamptz", "uuid", "text", "jsonb" }, append.Columns.Select(c => c.Type));
+        Assert.Equal(new[] { "ingested_at", "run_id", "city", "meta", "source_kind", "source_id", "mapping_id" }, append.Columns.Select(c => c.Name));
+        Assert.Equal(new[] { "timestamptz", "uuid", "text", "jsonb", "text", "uuid", "uuid" }, append.Columns.Select(c => c.Type));
         Assert.Equal(2, append.Rows.Count);
         Assert.Equal("Brisbane", append.Rows[0][2]);
         Assert.Equal("""{"region":"QLD","pop":2500000,"capital":true}""", append.Rows[0][3]);
@@ -173,7 +172,7 @@ public class DataMappingIngestionTests
         await Service(job, mapping, store).IngestAsync(job, run);
 
         var append = Assert.Single(store.Appends);
-        Assert.Equal(new[] { "ingested_at", "run_id", "meta" }, append.Columns.Select(c => c.Name));
+        Assert.Equal(new[] { "ingested_at", "run_id", "meta", "source_kind", "source_id", "mapping_id" }, append.Columns.Select(c => c.Name));
         Assert.Equal("""{"a":{"b":{"c":"deep"}}}""", append.Rows[0][2]);
     }
 
@@ -191,7 +190,7 @@ public class DataMappingIngestionTests
         await Service(job, mapping, store).IngestAsync(job, run);
 
         var append = Assert.Single(store.Appends);
-        Assert.Equal(new[] { "ingested_at", "run_id", "tags", "extra" }, append.Columns.Select(c => c.Name));
+        Assert.Equal(new[] { "ingested_at", "run_id", "tags", "extra", "source_kind", "source_id", "mapping_id" }, append.Columns.Select(c => c.Name));
         Assert.Equal("""["a","b"]""", append.Rows[0][2]);
         Assert.Equal("{}", append.Rows[0][3]);
     }
@@ -207,7 +206,7 @@ public class DataMappingIngestionTests
         await Service(job, mapping, store).IngestAsync(job, run);
 
         var append = Assert.Single(store.Appends);
-        Assert.Equal(new[] { "ingested_at", "run_id", "meta" }, append.Columns.Select(c => c.Name));
+        Assert.Equal(new[] { "ingested_at", "run_id", "meta", "source_kind", "source_id", "mapping_id" }, append.Columns.Select(c => c.Name));
         Assert.Equal("""{"region":"QLD"}""", append.Rows[0][2]); // object row: JSON text
         Assert.Equal("unknown", append.Rows[1][2]);                  // scalar row: plain text
     }
@@ -234,7 +233,7 @@ public class DataMappingIngestionTests
         await Service(job, mapping, store, notifier).IngestAsync(job, run);
 
         var append = Assert.Single(store.Appends);
-        Assert.Equal(new[] { "ingested_at", "run_id", "city", "meta" }, append.Columns.Select(c => c.Name));
+        Assert.Equal(new[] { "ingested_at", "run_id", "city", "meta", "source_kind", "source_id", "mapping_id" }, append.Columns.Select(c => c.Name));
         Assert.Equal("""{"region":"QLD"}""", append.Rows[0][3]);
         Assert.Empty(notifier.Updates);
     }
@@ -254,10 +253,50 @@ public class DataMappingIngestionTests
         await Service(job, mapping, store).IngestAsync(job, run);
 
         var append = Assert.Single(store.Appends);
-        Assert.Equal(new[] { "ingested_at", "run_id", "m", "m_a" }, append.Columns.Select(c => c.Name));
+        Assert.Equal(new[] { "ingested_at", "run_id", "m", "m_a", "source_kind", "source_id", "mapping_id" }, append.Columns.Select(c => c.Name));
         var row = Assert.Single(append.Rows);
         Assert.Equal("""{"a_b":"first"}""", row[2]);
         Assert.Equal("""{"b":"second"}""", row[3]);
+    }
+
+    [Fact]
+    public async Task Data_from_different_jobs_can_share_a_table_with_queryable_source_lineage()
+    {
+        var (firstJob, firstRun) = RunWithArtifact("""{"rows":[{"address":"1 Main St"}]}""");
+        var (secondJob, secondRun) = RunWithArtifact("""{"rows":[{"score":91}]}""", firstJob.ProjectId);
+        var firstMapping = DataMapping.Create(firstJob.ProjectId, firstJob.Id, "property_facts", "rows",
+            new[] { new DataFieldMapping("address", "address", "text") }, T0);
+        var secondMapping = DataMapping.Create(firstJob.ProjectId, secondJob.Id, "property_facts", "rows",
+            new[] { new DataFieldMapping("score", "score", "integer") }, T0);
+        var store = new FakeDataStore();
+
+        await Service(firstJob, firstMapping, store).IngestAsync(firstJob, firstRun);
+        await Service(secondJob, secondMapping, store).IngestAsync(secondJob, secondRun);
+
+        Assert.Equal(2, store.Appends.Count);
+        Assert.All(store.Appends, append => Assert.Equal("property_facts", append.Table));
+        var first = store.Appends[0];
+        var second = store.Appends[1];
+        var firstSourceIndex = first.Columns.Select(c => c.Name).ToList().IndexOf("source_id");
+        var secondSourceIndex = second.Columns.Select(c => c.Name).ToList().IndexOf("source_id");
+        Assert.Equal(firstJob.Id.ToString(), first.Rows[0][firstSourceIndex]);
+        Assert.Equal(secondJob.Id.ToString(), second.Rows[0][secondSourceIndex]);
+        Assert.Contains(first.Columns, c => c.Name == "mapping_id");
+        Assert.Contains(second.Columns, c => c.Name == "source_kind");
+    }
+
+    [Fact]
+    public async Task Plain_text_and_scalar_results_can_be_mapped_with_the_root_selector()
+    {
+        var (job, run) = RunWithArtifact("analysis complete");
+        var mapping = DataMapping.Create(job.ProjectId, job.Id, "job_messages", null,
+            new[] { new DataFieldMapping("$", "message", "text") }, T0);
+        var store = new FakeDataStore();
+
+        await Service(job, mapping, store).IngestAsync(job, run);
+
+        var append = Assert.Single(store.Appends);
+        Assert.Equal("analysis complete", append.Rows[0][2]);
     }
 
     // ── fakes ───────────────────────────────────────────────────────────────────────────────────────

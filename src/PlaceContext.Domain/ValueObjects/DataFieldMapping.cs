@@ -4,10 +4,9 @@ namespace PlaceContext.Domain.ValueObjects;
 /// One column of a <see cref="Entities.DataMapping"/>: the value at <paramref name="SourcePath"/>
 /// (a dot-path into an ingested record, e.g. "price" or "meta.city") lands in target column
 /// <paramref name="Column"/> of the declared <paramref name="Type"/> (a project-data column type
-/// such as "text", "integer", "numeric", "boolean", "timestamptz"). When the value is a JSON
-/// object it is flattened instead: each nested leaf gets its own inferred-type column named
-/// <c>{Column}_{path}</c> (e.g. "meta.region" → "meta_region"), and the declared column is only
-/// written when a non-object value (scalar, array, empty object) shows up for the field.
+/// such as "text", "integer", "numeric", "boolean", "timestamptz"). Use <c>$</c> to map the
+/// complete current record or scalar result. Objects and arrays are preserved as JSON text in the
+/// declared column, so nested payloads remain usable without uncontrolled schema expansion.
 /// </summary>
 public sealed record DataFieldMapping(string SourcePath, string Column, string Type)
 {
