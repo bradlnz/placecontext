@@ -46,51 +46,66 @@ else
             }
         </div>
 
-        <div class="crm-tab-row">
-        <nav class="crm-section-tabs" aria-label="CRM sections">
-            <button class="@(_crmSection == "clients" ? "active" : "")"
-                    @onclick="@(() => _crmSection = "clients")">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-                    <circle cx="9" cy="7" r="4"></circle><path d="M3 21v-2a6 6 0 0 1 12 0v2M17 8h4M19 6v4"></path>
-                </svg>
-                Clients <span>@_clients.Count</span>
+        <div class="crm-shell">
+            <button type="button" class="crm-nav-toggle"
+                    aria-controls="crm-sections" aria-expanded="@_crmNavOpen"
+                    @onclick="ToggleCrmNavigation">
+                <span>Customer operations</span>
+                <span class="crm-nav-current">@CrmSectionTitle()</span>
+                <span aria-hidden="true">@(_crmNavOpen ? "−" : "+")</span>
             </button>
-            <button class="@(_crmSection == "automations" ? "active" : "")"
-                    @onclick="@(() => OpenCrmSection("automations"))">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-                    <path d="M8 4h8v5H8zM4 15h6v5H4zM14 15h6v5h-6z"></path>
-                    <path d="M12 9v3M7 12h10M7 12v3M17 12v3"></path>
-                </svg>
-                Automations <span>@_automationRules.Count</span>
-            </button>
-            <button class="@(_crmSection == "settings" ? "active" : "")"
-                    @onclick="@(() => OpenCrmSection("settings"))">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-                    <circle cx="12" cy="12" r="3"></circle>
-                    <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.6v-.2h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1z"></path>
-                </svg>
-                Settings
-            </button>
-        </nav>
-        @if (_crmSection == "clients")
-        {
-            <div class="crm-toolbar">
-                <div class="crm-search">
+
+            <nav id="crm-sections"
+                 class="@($"crm-section-nav {(_crmNavOpen ? "open" : string.Empty)}")"
+                 aria-label="CRM sections">
+                <div class="crm-nav-head">Customer operations</div>
+                <button class="@(_crmSection == "clients" ? "active" : "")"
+                        aria-current="@(_crmSection == "clients" ? "page" : null)"
+                        @onclick="@(() => OpenCrmSection("clients"))">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-                        <circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path>
+                        <circle cx="9" cy="7" r="4"></circle><path d="M3 21v-2a6 6 0 0 1 12 0v2M17 8h4M19 6v4"></path>
                     </svg>
-                    <input class="dcinput" @bind="_search" @bind:event="oninput"
-                           placeholder="Search name, company, email, or phone…" />
-                </div>
-                @if (_stageFilter is not null)
+                    <span>Clients</span><small>@_clients.Count</small>
+                </button>
+                <button class="@(_crmSection == "automations" ? "active" : "")"
+                        aria-current="@(_crmSection == "automations" ? "page" : null)"
+                        @onclick="@(() => OpenCrmSection("automations"))">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                        <path d="M8 4h8v5H8zM4 15h6v5H4zM14 15h6v5h-6z"></path>
+                        <path d="M12 9v3M7 12h10M7 12v3M17 12v3"></path>
+                    </svg>
+                    <span>Automations</span><small>@_automationRules.Count</small>
+                </button>
+                <button class="@(_crmSection == "settings" ? "active" : "")"
+                        aria-current="@(_crmSection == "settings" ? "page" : null)"
+                        @onclick="@(() => OpenCrmSection("settings"))">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                        <circle cx="12" cy="12" r="3"></circle>
+                        <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.6v-.2h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1z"></path>
+                    </svg>
+                    <span>Settings</span>
+                </button>
+            </nav>
+
+            <div class="crm-workspace">
+                @if (_crmSection == "clients")
                 {
-                    <button class="dcbtn xs clear-filter" @onclick="@(() => _stageFilter = null)">
-                        Clear filter <span>×</span>
-                    </button>
+                    <div class="crm-toolbar">
+                        <div class="crm-search">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                                <circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path>
+                            </svg>
+                            <input class="dcinput" @bind="_search" @bind:event="oninput"
+                                   placeholder="Search name, company, email, or phone…" />
+                        </div>
+                        @if (_stageFilter is not null)
+                        {
+                            <button class="dcbtn xs clear-filter" @onclick="@(() => _stageFilter = null)">
+                                Clear filter <span>×</span>
+                            </button>
+                        }
+                    </div>
                 }
-            </div>
-        }
-        </div>
 
         @if (_message is not null)
         {
@@ -423,6 +438,8 @@ else
                 </div>
             </section>
         }
+            </div>
+        </div>
     </div>
 }
 
@@ -991,6 +1008,7 @@ else
     private static readonly CrmAutomationEventType[] AutomationEvents = Enum.GetValues<CrmAutomationEventType>();
     private static readonly string[] CommsChannels = ["Note", "Email", "Sms"];
     private string _crmSection = "clients";
+    private bool _crmNavOpen;
     private IReadOnlyList<CrmClientView> _clients = Array.Empty<CrmClientView>();
     private IReadOnlyList<JobChainView> _chains = Array.Empty<JobChainView>();
     private IReadOnlyList<CrmAutomationRuleView> _automationRules = Array.Empty<CrmAutomationRuleView>();
@@ -1087,9 +1105,12 @@ else
         _ => "Connect external lead forms without exposing the rest of your CRM.",
     };
 
+    private void ToggleCrmNavigation() => _crmNavOpen = !_crmNavOpen;
+
     private async Task OpenCrmSection(string section)
     {
         _crmSection = section;
+        _crmNavOpen = false;
         if (section == "settings" && _ingestionSettings is null)
             await LoadIngestionSettings();
     }

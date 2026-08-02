@@ -114,6 +114,21 @@ public sealed class ResponsiveShellContractTests
         Assert.Contains("@media (max-width: 950px)", styles);
     }
 
+    [Fact]
+    public void Crm_uses_the_wiki_subpage_navigation_pattern()
+    {
+        var page = ReadHostSource("Components/Pages/Crm.razor");
+        var styles = ReadHostSource("Components/Pages/Crm.razor.css");
+
+        Assert.Contains("class=\"crm-nav-toggle\"", page);
+        Assert.Contains("id=\"crm-sections\"", page);
+        Assert.Contains("crm-section-nav", page);
+        Assert.Contains("class=\"crm-workspace\"", page);
+        Assert.Contains(".crm-shell", styles);
+        Assert.Contains(".crm-section-nav.open", styles);
+        Assert.Contains("@media (max-width: 767px)", styles);
+    }
+
     private static string ReadHostSource(string relativePath)
     {
         var hostRoot = Path.GetFullPath(Path.Combine(
