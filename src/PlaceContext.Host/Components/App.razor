@@ -43,7 +43,7 @@
         }
         * { box-sizing:border-box; }
         html, body { margin:0; padding:0; height:100%; }
-        html.pc-focus-layer-open, html.pc-focus-layer-open body { overscroll-behavior:none; }
+        html.pc-focus-layer-open, html.pc-focus-layer-open body { overflow:hidden; overscroll-behavior:none; }
         body { font-family:var(--font-sans); background:#182026; -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility; }
         #dcshell { font-family:var(--font-sans); color:var(--text); font-variant-numeric:tabular-nums; letter-spacing:-0.006em; }
         a { color:inherit; text-decoration:none; }
@@ -166,8 +166,18 @@
         .dcflash { animation:dcflashkf 1.6s ease-out; }
         #decisions.dcflash { box-shadow:0 0 0 1.5px var(--brand); }
 
-        /* Small screens — shared primitives only; page-level fixes live in the page CSS.
-           .dcmodal (max-width:94vw) and .dcslide (max-width:92vw) already fit, unchanged. */
+        /* Shared mobile overlay contract: dialogs and editors become full-screen task surfaces. */
+        @@media (max-width: 700px) {
+            .dcmodal-overlay { align-items:stretch; justify-content:stretch; padding:0; }
+            .dcmodal { width:100vw; max-width:none; height:100vh; height:100dvh; max-height:none; border:0; border-radius:0; box-shadow:none; }
+            .dcslide { inset:0; width:100vw !important; max-width:none; height:100vh; height:100dvh; border:0; box-shadow:none; }
+            .dcmodal-body, .dcslide-body { flex:1; min-height:0; overscroll-behavior:contain; }
+            .dcmodal-head, .dcslide-head { padding-top:max(15px, env(safe-area-inset-top)); padding-right:max(12px, env(safe-area-inset-right)); }
+            .dcmodal-foot, .dcslide-foot { padding-bottom:max(13px, env(safe-area-inset-bottom)); }
+            .dcmodal-head > .dcslide-x, .dcslide-head > .dcslide-x { display:inline-flex; align-items:center; justify-content:center; min-width:44px; min-height:44px; margin:-8px -8px -8px auto; border-radius:8px; }
+            .dcmodal-head > .dcslide-x:hover, .dcslide-head > .dcslide-x:hover { background:var(--hover); }
+        }
+
         @@media (max-width: 950px) {
             .dctabs { overflow-x:auto; }
             .dcbtn.sm { min-height:40px; }

@@ -36,6 +36,30 @@ public sealed class ResponsiveShellContractTests
         Assert.Contains("overflow-wrap: anywhere", clientNotesRule);
     }
 
+    [Fact]
+    public void Mobile_modals_use_the_full_viewport_with_accessible_close_targets()
+    {
+        var styles = ReadHostSource("Components/App.razor");
+        const string mobileBreakpoint = "@@media (max-width: 700px)";
+
+        Assert.Contains(mobileBreakpoint, styles);
+        var mobileStyles = styles.Split(mobileBreakpoint, 2)[1];
+        Assert.Contains("width:100vw", mobileStyles);
+        Assert.Contains("height:100dvh", mobileStyles);
+        Assert.Contains("border-radius:0", mobileStyles);
+        Assert.Contains("min-width:44px", mobileStyles);
+        Assert.Contains("min-height:44px", mobileStyles);
+    }
+
+    [Fact]
+    public void Mobile_focus_layers_lock_background_scrolling()
+    {
+        var styles = ReadHostSource("Components/App.razor");
+        var focusLayerRule = styles.Split("html.pc-focus-layer-open", 2)[1].Split('}', 2)[0];
+
+        Assert.Contains("overflow:hidden", focusLayerRule);
+    }
+
     private static string ReadHostSource(string relativePath)
     {
         var hostRoot = Path.GetFullPath(Path.Combine(
