@@ -55,7 +55,7 @@ else
                         <title>@mp.JobName → @mp.TargetTable (@mp.Fields.Count field(s)) — click to edit</title>
                     </path>
                 }
-                @if (Vm.ConnectJob is not null || Vm.ConnectChain is not null)
+                @if (Vm.ConnectJob is not null)
                 {
                     <path d="@Vm.ConnectPath()" fill="none" stroke="var(--human)" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#pcarrow)" />
                 }
@@ -78,27 +78,6 @@ else
                     <div style="font-size:10px; color:var(--text-3); margin-top:3px; display:flex; justify-content:space-between">
                         <span>@(mapped ? "mapped" : "unmapped — drag ＋")</span>
                         <span style="font-family:var(--font-sans); color:var(--brand-2)">@j.ReturnType</span>
-                    </div>
-                </div>
-            }
-
-            @foreach (var chain in Vm.Chains ?? Array.Empty<JobChainView>())
-            {
-                var c = chain;
-                var key = "chain:" + c.Id;
-                var mapped = Vm.Mappings?.Any(m => m.SourceKind == "chain" && m.JobId == c.Id) ?? false;
-                <div style="position:absolute; left:@(Vm.GetPos(key).X + Vm.PanX)px; top:@(Vm.GetPos(key).Y + Vm.PanY)px; width:190px; border:1px @(mapped ? "solid var(--human)" : "dashed var(--human)"); border-radius:9px; padding:8px 10px; background:var(--human-bg); cursor:grab; box-shadow:var(--shadow)"
-                     @onpointerdown="@(e => StartDrag(key, e))" @onpointerdown:stopPropagation="true">
-                    <div style="display:flex; align-items:center; gap:7px">
-                        <span style="width:7px; height:7px; border-radius:50%; flex:none; background:var(--human)"></span>
-                        <span style="flex:1; min-width:0; font-size:12px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis" title="@c.Name">@c.Name</span>
-                        <span title="Drag onto a table to map this chain's final output into it"
-                              style="flex:none; width:18px; height:18px; border-radius:50%; background:var(--human); color:#fff; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700; cursor:crosshair"
-                              @onpointerdown="@(e => StartConnectChain(c, e))" @onpointerdown:stopPropagation="true">＋</span>
-                    </div>
-                    <div style="font-size:10px; color:var(--text-3); margin-top:3px; display:flex; justify-content:space-between">
-                        <span>@(mapped ? "mapped" : "unmapped — drag ＋")</span>
-                        <span style="font-family:var(--font-sans); color:var(--human)">chain · @c.Steps.Count step(s)</span>
                     </div>
                 </div>
             }
@@ -134,28 +113,7 @@ else
         <div class="dcslide-body" style="flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:14px">
 
             <div class="dcfield">
-                <label>
-                    Source <span class="req">*</span>
-                    <span style="margin-left:8px; display:inline-flex; gap:4px">
-                        @foreach (var kind in new[] { "job", "chain" })
-                        {
-                            <button type="button" class="dcbtn" style="padding:1px 8px; font-size:10.5px; @(Vm.EdSourceKind == kind ? "color:var(--brand-2); border-color:var(--brand-2)" : "")"
-                                    @onclick="@(() => { Vm.EdSourceKind = kind; Vm.EdJobId = Guid.Empty; })">@kind</button>
-                        }
-                    </span>
-                </label>
-                @if (Vm.EdSourceKind == "chain")
-                {
-                    <select class="dcinput" @bind="Vm.EdJobId">
-                        <option value="@Guid.Empty">— pick a chain (its final output ingests) —</option>
-                        @foreach (var c in Vm.Chains ?? Array.Empty<JobChainView>())
-                        {
-                            <option value="@c.Id">@c.Name</option>
-                        }
-                    </select>
-                }
-                else
-                {
+                <label>Source job <span class="req">*</span></label>
                 <select class="dcinput" @bind="Vm.EdJobId">
                     <option value="@Guid.Empty">— pick a job —</option>
                     @foreach (var j in Vm.Jobs ?? Array.Empty<JobView>())
@@ -163,7 +121,6 @@ else
                         <option value="@j.Id">@j.Name (@j.ReturnType)</option>
                     }
                 </select>
-                }
             </div>
 
             <div style="display:flex; gap:10px">
@@ -188,7 +145,7 @@ else
                     <label>Fields</label>
                     <div style="display:flex; gap:6px">
                         <button class="dcbtn" style="padding:3px 9px; font-size:11px" @onclick="() => Vm.SuggestFieldsAsync()"
-                                disabled="@(Vm.EdJobId == Guid.Empty || Vm.EdSourceKind == "chain")" title="Prefill from the job's latest run result (jobs only)">
+                                disabled="@(Vm.EdJobId == Guid.Empty)" title="Prefill from the job's latest run result">
                             @(Vm.Suggesting ? "Reading last run…" : "Suggest from last run")
                         </button>
                         <button class="dcbtn" style="padding:3px 9px; font-size:11px" @onclick="() => Vm.AddField()">+ field</button>
@@ -267,7 +224,6 @@ else
     private void StartDrag(string key, PointerEventArgs e) => Vm.StartDrag(key, e.ClientX, e.ClientY);
     private void OnCanvasDown(PointerEventArgs e) => Vm.OnCanvasDown(e.ClientX, e.ClientY);
     private void StartConnect(JobView job, PointerEventArgs e) => Vm.StartConnect(job, e.ClientX, e.ClientY);
-    private void StartConnectChain(JobChainView chain, PointerEventArgs e) => Vm.StartConnectChain(chain, e.ClientX, e.ClientY);
     private void OnCanvasMove(PointerEventArgs e) => Vm.OnCanvasMove(e.ClientX, e.ClientY);
     private async Task OnCanvasUp() => await Vm.OnCanvasUpAsync();
     private async Task OnTableUp(string table) => await Vm.OnTableUpAsync(table);

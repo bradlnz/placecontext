@@ -14,7 +14,6 @@ public sealed partial class DataMapViewModel
     public bool Suggesting { get; private set; }
     public Guid? EditId { get; private set; }
     public Guid EdJobId { get; set; }
-    public string EdSourceKind { get; set; } = "job";
     public string EdTable { get; set; } = "";
     public string EdRowsPath { get; set; } = "";
     public bool EdEnabled { get; set; } = true;
@@ -26,7 +25,6 @@ public sealed partial class DataMapViewModel
     {
         EditId = m?.Id;
         EdJobId = m?.JobId ?? Guid.Empty;
-        EdSourceKind = m?.SourceKind ?? "job";
         EdTable = m?.TargetTable ?? "";
         EdRowsPath = m?.RowsPath ?? "";
         EdEnabled = m?.Enabled ?? true;
@@ -41,17 +39,8 @@ public sealed partial class DataMapViewModel
     public void OpenEditorForJob(JobView job)
     {
         OpenEditor(null);
-        EdSourceKind = "job";
         EdJobId = job.Id;
         EdTable = Sanitize(job.Name);
-    }
-
-    public void OpenEditorForChain(JobChainView chain)
-    {
-        OpenEditor(null);
-        EdSourceKind = "chain";
-        EdJobId = chain.Id;
-        EdTable = Sanitize(chain.Name);
     }
 
     public void CloseEditor()
@@ -71,7 +60,7 @@ public sealed partial class DataMapViewModel
     public async Task SaveMappingAsync()
     {
         EditorError = null;
-        if (EdJobId == Guid.Empty) { EditorError = EdSourceKind == "chain" ? "Pick a source chain." : "Pick a source job."; NotifyStateChanged(); return; }
+        if (EdJobId == Guid.Empty) { EditorError = "Pick a source job."; NotifyStateChanged(); return; }
         if (string.IsNullOrWhiteSpace(EdTable)) { EditorError = "Target table is required."; NotifyStateChanged(); return; }
         var fields = EdFields
             .Where(f => !string.IsNullOrWhiteSpace(f.SourcePath) || !string.IsNullOrWhiteSpace(f.Column))
@@ -86,7 +75,7 @@ public sealed partial class DataMapViewModel
                 ProjectId, EdJobId, EdTable.Trim(),
                 string.IsNullOrWhiteSpace(EdRowsPath) ? null : EdRowsPath.Trim(),
                 fields, EdEnabled, EditId,
-                SourceKind: EdSourceKind));
+                SourceKind: "job"));
             await LoadAsync();
             ShowEditor = false;
         }

@@ -18,7 +18,6 @@ public sealed partial class DataMapViewModel
     public bool Panning { get; set; }
     public string? ConnectJobId { get; set; }
     public JobView? ConnectJob { get; set; }
-    public JobChainView? ConnectChain { get; set; }
     public (double X, double Y) ConnectEnd { get; set; }
     public double LastX { get; set; }
     public double LastY { get; set; }
@@ -52,15 +51,6 @@ public sealed partial class DataMapViewModel
         LastY = clientY;
     }
 
-    public void StartConnectChain(JobChainView chain, double clientX, double clientY)
-    {
-        ConnectChain = chain;
-        ConnectJobId = "chain:" + chain.Id;
-        var cp = GetPos(ConnectJobId);
-        ConnectEnd = (cp.X + 190, cp.Y + 22);
-        LastX = clientX;
-        LastY = clientY;
-    }
 
     public void OnCanvasMove(double clientX, double clientY)
     {
@@ -72,7 +62,7 @@ public sealed partial class DataMapViewModel
             Pos[key] = (Math.Max(0, p.X + dx), Math.Max(0, p.Y + dy));
             if (Math.Abs(dx) + Math.Abs(dy) > 1) Moved = true;
         }
-        else if (ConnectJob is not null || ConnectChain is not null)
+        else if (ConnectJob is not null)
         {
             ConnectEnd = (ConnectEnd.X + dx, ConnectEnd.Y + dy);
         }
@@ -105,11 +95,6 @@ public sealed partial class DataMapViewModel
             ConnectJob = null;
             OpenEditorForJob(job);
         }
-        else if (ConnectChain is { } chain)
-        {
-            ConnectChain = null;
-            OpenEditorForChain(chain);
-        }
     }
 
     public async Task OnTableUpAsync(string table)
@@ -118,13 +103,6 @@ public sealed partial class DataMapViewModel
         {
             ConnectJob = null;
             OpenEditorForJob(job);
-            EdTable = table;
-            return;
-        }
-        if (ConnectChain is { } chain)
-        {
-            ConnectChain = null;
-            OpenEditorForChain(chain);
             EdTable = table;
             return;
         }
@@ -138,7 +116,7 @@ public sealed partial class DataMapViewModel
     // ── Edge paths ────────────────────────────────────────────────────────────────────────────
     public string EdgePath(DataMappingView m)
     {
-        var from = GetPos((m.SourceKind == "chain" ? "chain:" : "job:") + m.JobId);
+        var from = GetPos("job:" + m.JobId);
         var to = GetPos("table:" + m.TargetTable);
         var x1 = from.X + 190 + PanX; var y1 = from.Y + 26 + PanY;
         var x2 = to.X + PanX; var y2 = to.Y + 26 + PanY;

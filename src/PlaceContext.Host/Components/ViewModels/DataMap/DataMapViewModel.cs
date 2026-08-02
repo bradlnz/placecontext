@@ -24,7 +24,6 @@ public sealed partial class DataMapViewModel : PageViewModel
     public IReadOnlyList<DataMappingView>? Mappings { get; private set; }
     public IReadOnlyList<JobView>? Jobs { get; private set; }
     public IReadOnlyList<ProjectTableInfo>? Tables { get; private set; }
-    public IReadOnlyList<JobChainView>? Chains { get; private set; }
     public string? Message { get; private set; }
     public bool Loading { get; private set; } = true;
 
@@ -37,9 +36,10 @@ public sealed partial class DataMapViewModel : PageViewModel
         Message = null;
         try
         {
-            Mappings = await _svc.ListDataMappingsAsync(ProjectId);
+            Mappings = (await _svc.ListDataMappingsAsync(ProjectId))
+                .Where(mapping => !string.Equals(mapping.SourceKind, "chain", StringComparison.OrdinalIgnoreCase))
+                .ToArray();
             Jobs = await _svc.ListJobsAsync(ProjectId);
-            Chains = await _svc.ListJobChainsAsync(ProjectId);
             try { Tables = await _svc.ListProjectDataTablesAsync(ProjectId); }
             catch { Tables = Array.Empty<ProjectTableInfo>(); }
         }
@@ -72,11 +72,6 @@ public sealed partial class DataMapViewModel : PageViewModel
         foreach (var j in Jobs ?? Array.Empty<JobView>())
         {
             Pos.TryAdd("job:" + j.Id, (30, yJ));
-            yJ += 84;
-        }
-        foreach (var c in Chains ?? Array.Empty<JobChainView>())
-        {
-            Pos.TryAdd("chain:" + c.Id, (30, yJ));
             yJ += 84;
         }
         var yT = 24d;

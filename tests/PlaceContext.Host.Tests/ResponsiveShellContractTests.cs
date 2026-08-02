@@ -70,6 +70,21 @@ public sealed class ResponsiveShellContractTests
         Assert.Contains("scrollbar-width: thin", styles);
     }
 
+    [Fact]
+    public void Data_map_only_presents_job_to_table_mappings()
+    {
+        var page = ReadHostSource("Components/Pages/DataMap.razor");
+        var viewModel = ReadHostSource("Components/ViewModels/DataMap/DataMapViewModel.cs");
+        var canvas = ReadHostSource("Components/ViewModels/DataMap/DataMapViewModel.Canvas.cs");
+        var editor = ReadHostSource("Components/ViewModels/DataMap/DataMapViewModel.Editor.cs");
+
+        Assert.DoesNotContain("JobChainView", page);
+        Assert.DoesNotContain("ConnectChain", page);
+        Assert.DoesNotContain("ListJobChainsAsync", viewModel);
+        Assert.DoesNotContain("ConnectChain", canvas);
+        Assert.DoesNotContain("OpenEditorForChain", editor);
+    }
+
     private static string ReadHostSource(string relativePath)
     {
         var hostRoot = Path.GetFullPath(Path.Combine(
