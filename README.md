@@ -1,13 +1,12 @@
 # PlaceContext
 
-**A context platform for AI.** Built by Bradley Lietz.
+**A full-scale, self-hosted data platform.** Built by Bradley Lietz.
 
-PlaceContext gives AI agents and the people working with them a durable, structured home for
-project context — decisions, activity, **jobs and their artifacts**, data, and
-analytics — served over [MCP](https://modelcontextprotocol.io) and a web portal. Connect Claude
-Code (or any MCP client) to one endpoint and your agent can remember decisions across sessions,
-queue work, and **run real containerized jobs on your own machines** — from a laptop to a
-multi-node fleet.
+PlaceContext unifies operational data, compute, automation, analytics, and governance in one project-scoped
+workspace. Create SQL tables and entity models, ingest and transform data with containerised jobs, orchestrate
+multi-step pipelines, inspect lineage and execution traces, publish artifacts and charts, and activate records
+through built-in CRM workflows. The web portal, CLI/TUI, schedules, events, and MCP endpoint all operate on the
+same durable platform.
 
 ```bash
 # Install the placecontext CLI, then open the TUI
@@ -16,7 +15,11 @@ placecontext               # install / upgrade / connect a cluster
 # after cluster install → portal http://localhost:7700   ·   MCP /mcp
 ```
 
-Then connect your agent:
+### Connect automation and AI clients
+
+MCP is one interface to the platform—not the product boundary. Claude Code and other MCP clients can query
+project data and context, submit jobs and pipelines, record decisions, and retrieve outputs through the same
+permission model as the portal:
 
 ```bash
 claude mcp add --transport http placecontext http://localhost:7700/mcp
@@ -25,30 +28,33 @@ claude mcp add --transport http placecontext http://localhost:7700/mcp
 The first tool call opens a browser to sign in (OAuth 2.1 + PKCE, tenant-scoped tokens with
 automatic refresh). No API keys to paste.
 
-## What your agent gets
+## Platform capabilities
 
-- **Durable memory** — `get_project_overview` at session start, `record_activity` and `add_decision`
-  as it works. Nothing lives only in a chat scrollback.
-- **A job runner** — upload code (`python`, `node`, `go`, `ruby`, `dotnet`) or point at a container
-  image; PlaceContext fans out shards as sandboxed containers (no network egress by default),
-  collects JSON artifacts, and stores HTML/chart/CSV outputs in the object store.
-- **Job chains** — `run_job_chain` pipes each job's output into the next job's input: a
-  multi-step pipeline in one MCP call.
-- **Schedules & events** — cron triggers and event triggers (`job.completed`, or your own event
-  types via `emit_event`) run jobs while the agent is offline.
-- **Per-project data & analytics** — every project gets its own SQL tables; deterministic
-  renderers turn run output into reports and charts.
-- **On-demand runs with parameters** — declare job parameters and the portal prompts for them in a
-  form; agents pass them as the input payload.
+- **Project databases and entity models** — create project-scoped SQL tables, define linked entities, browse
+  records, map job outputs into tables, and explore relationships without mixing tenant data.
+- **Containerised compute** — upload code (`python`, `node`, `go`, `ruby`, `dotnet`) or use a container image;
+  PlaceContext fans out sandboxed shards across your fleet, collects results and logs, and persists outputs.
+- **Pipelines and automation** — chain jobs into multi-step flows, declare run parameters, and trigger work on
+  demand, on schedules, or from events while operators are offline.
+- **Analytics and artifacts** — query project data, create charts and reports, and retain HTML, chart, CSV, and
+  structured run artifacts in object storage.
+- **Lineage and observability** — inspect job-to-table mappings, run and chain history, shard outcomes, logs,
+  OpenTelemetry traces, and operational status across the workspace.
+- **Operational CRM** — manage client records, lifecycle stages, communications, artifacts, and automations
+  alongside the data and workloads that support them.
+- **Governed access** — project and tenant boundaries, role-based permissions, OAuth 2.1 + PKCE, encrypted
+  secrets, and sandboxed jobs with network egress disabled by default.
+- **Agent and automation integration** — durable project context and MCP tools let AI and automation clients use
+  the same governed data, jobs, pipelines, and artifacts as human operators.
 
 ## How a job runs across your fleet
 
-An agent anywhere talks MCP to the master; work executes on whichever node has capacity —
-including machines behind different NATs, joined over [Tailscale](https://tailscale.com):
+Any authenticated client can submit work through the portal or MCP endpoint; execution lands on whichever node
+has capacity—including machines behind different NATs, joined over [Tailscale](https://tailscale.com):
 
 ```mermaid
 sequenceDiagram
-    participant A as AI agent (Claude Code)
+    participant A as Client / automation
     participant M as PlaceContext Host<br/>(k3s master · MCP + portal)
     participant W as Worker nodes<br/>(k3s over Tailscale)
     participant S as Object store (MinIO)
