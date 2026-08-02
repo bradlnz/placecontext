@@ -13,6 +13,20 @@ public sealed class ResponsiveShellContractTests
         Assert.DoesNotContain("user-scalable", source, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public void Wiki_exposes_an_accessible_mobile_documentation_drawer()
+    {
+        var markup = ReadHostSource("Components/Pages/Wiki.razor");
+        var styles = ReadHostSource("Components/Pages/Wiki.razor.css");
+
+        Assert.Contains("class=\"toc-toggle\"", markup);
+        Assert.Contains("aria-controls=\"wiki-contents\"", markup);
+        Assert.Contains("aria-expanded=\"@_tocOpen\"", markup);
+        Assert.Contains("id=\"wiki-contents\"", markup);
+        Assert.Contains("@media (max-width: 767px)", styles);
+        Assert.Contains(".toc.open", styles);
+    }
+
     private static string ReadHostSource(string relativePath)
     {
         var hostRoot = Path.GetFullPath(Path.Combine(
