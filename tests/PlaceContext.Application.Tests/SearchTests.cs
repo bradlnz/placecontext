@@ -150,6 +150,24 @@ public class SearchTests
         Assert.Equal($"/project/{projectId}/data-search?index=property%20records&q=Smith%20%26%20Sons&document=doc%2F1%2B2", hit.Url);
     }
 
+    [Fact]
+    public async Task OpenSearch_document_with_artifact_id_opens_the_artifact()
+    {
+        var projectId = Guid.NewGuid();
+        var artifactId = Guid.NewGuid();
+        var gateway = new FakeOpenSearchGateway(_ => new OpenSearchSearchView(
+            1, 1,
+            new[] { Hit("reports", "doc-1", ("title", "Feasibility report"),
+                ("artifact_id", artifactId.ToString())) },
+            null));
+
+        var results = await (await SeedAsync(gateway, new FakePermissionService(true)))
+            .HandleAsync(new SearchQuery("Feasibility", ProjectId: projectId));
+
+        var hit = Assert.Single(results.Hits, item => item.Kind == "opensearch");
+        Assert.Equal($"/artifacts?artifact={artifactId}", hit.Url);
+    }
+
     private static OpenSearchHitView Hit(
         string index, string id, params (string Key, string Value)[] fields)
         => new(index, id, 1, fields.ToDictionary(field => field.Key, field => (string?)field.Value));

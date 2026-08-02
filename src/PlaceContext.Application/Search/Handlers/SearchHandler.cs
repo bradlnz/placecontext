@@ -65,10 +65,13 @@ public sealed class SearchHandler : IQueryHandler<SearchQuery, SearchResultsView
                     var detail = FirstOtherField(hit, title, "suburb", "locality", "council",
                         "authority", "description", "status", "type");
                     var subtitle = detail is null ? hit.Index : $"{hit.Index} · {detail}";
-                    var url = $"/project/{openSearchProjectId}/data-search"
-                        + $"?index={Uri.EscapeDataString(hit.Index)}"
-                        + $"&q={Uri.EscapeDataString(term)}"
-                        + $"&document={Uri.EscapeDataString(hit.Id)}";
+                    var artifactId = FindArtifactId(hit);
+                    var url = artifactId is { } id
+                        ? $"/artifacts?artifact={id}"
+                        : $"/project/{openSearchProjectId}/data-search"
+                          + $"?index={Uri.EscapeDataString(hit.Index)}"
+                          + $"&q={Uri.EscapeDataString(term)}"
+                          + $"&document={Uri.EscapeDataString(hit.Id)}";
                     hits.Add(new SearchHit("opensearch", openSearchProjectId, title, subtitle, url));
                 }
             }
@@ -133,6 +136,19 @@ public sealed class SearchHandler : IQueryHandler<SearchQuery, SearchResultsView
                 field.Key.Equals(name, StringComparison.OrdinalIgnoreCase)
                 || field.Key.EndsWith('.' + name, StringComparison.OrdinalIgnoreCase)).Value;
             if (!string.IsNullOrWhiteSpace(value)) return Short(value);
+        }
+        return null;
+    }
+
+    private static Guid? FindArtifactId(OpenSearchHitView hit)
+    {
+        foreach (var field in hit.Fields)
+        {
+            var leaf = field.Key.Split('.').Last()
+                .Replace("_", "", StringComparison.Ordinal)
+                .Replace("-", "", StringComparison.Ordinal);
+            if (!leaf.Equals("artifactid", StringComparison.OrdinalIgnoreCase)) continue;
+            if (Guid.TryParse(field.Value, out var artifactId)) return artifactId;
         }
         return null;
     }
