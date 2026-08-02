@@ -1,4 +1,7 @@
 .page {
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
     padding: 24px 24px 40px;
     max-width: 1320px;
     margin: 0 auto;
@@ -124,7 +127,7 @@
 
 .projects-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 380px), 1fr));
     gap: 14px;
 }
 
@@ -249,4 +252,105 @@
 
 .foot-sep {
     color: var(--border-2);
+}
+
+.stat-strip,
+.stat-cell,
+.focus-card,
+.focus-head,
+.projects-head,
+.projects-title-group,
+.projects-actions,
+.projects-grid,
+.project-card,
+.project-card-head,
+.project-name-row,
+.project-foot,
+.foot-stats,
+.dcfocus-row,
+.dcfocus-row > .min-w-0 {
+    min-width: 0;
+}
+
+.project-name,
+.dcfocus-title,
+.dcfocus-detail,
+.dcfocus-proj,
+.empty-card {
+    overflow-wrap: anywhere;
+}
+
+@media (max-width: 700px) {
+    .page {
+        padding: 16px 12px 32px;
+    }
+
+    .stat-strip {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .stat-cell:nth-child(2n) {
+        border-right: 0;
+    }
+
+    .stat-cell:nth-child(-n+2) {
+        border-bottom: 1px solid var(--border);
+    }
+
+    .focus-head,
+    .projects-head,
+    .project-card-head,
+    .project-foot {
+        align-items: flex-start;
+        flex-wrap: wrap;
+    }
+
+    .section-hint {
+        flex-basis: 100%;
+        order: 3;
+    }
+
+    .dcfocus-row {
+        flex-wrap: wrap;
+    }
+
+    .dcfocus-proj {
+        flex-basis: calc(100% - 26px);
+        margin-left: 26px;
+        padding-top: 0;
+    }
+
+    .project-path {
+        white-space: normal;
+        overflow-wrap: anywhere;
+    }
+
+    .foot-stats {
+        flex-wrap: wrap;
+        gap: 6px;
+    }
+}
+
+@media (max-width: 380px) {
+    .stat-strip {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .stat-cell {
+        border-right: 0;
+        border-bottom: 1px solid var(--border);
+    }
+
+    .stat-cell:last-child {
+        border-bottom: 0;
+    }
+
+    .projects-actions,
+    .projects-actions .dcbtn {
+        width: 100%;
+    }
+
+    .projects-actions .dcbtn {
+        min-height: 44px;
+    }
 }
