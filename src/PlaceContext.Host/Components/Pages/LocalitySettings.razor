@@ -19,13 +19,12 @@
     <div class="dccard card">
         <div class="dcfield tz-field">
             <label>Workspace timezone <span class="code code-gap">IANA</span></label>
-            <input class="dcinput tz-input" list="pc-tz" @bind="_tz" />
-            <datalist id="pc-tz">
-                @foreach (var z in CommonZones)
+            <select class="dcinput tz-input" @bind="_tz">
+                @foreach (var zone in LocalityTimeZones.All)
                 {
-                    <option value="@z" />
+                    <option value="@zone">@zone</option>
                 }
-            </datalist>
+            </select>
         </div>
         <div class="now-row">
             Now in <span class="mono">@_tz</span>:
@@ -46,13 +45,6 @@
 </div>
 
 @code {
-    private static readonly string[] CommonZones =
-    {
-        "UTC", "Australia/Brisbane", "Australia/Sydney", "Australia/Melbourne", "Australia/Perth",
-        "Pacific/Auckland", "Asia/Singapore", "Asia/Tokyo", "Europe/London", "Europe/Berlin",
-        "America/New_York", "America/Chicago", "America/Los_Angeles",
-    };
-
     private string _tz = "UTC";
     private bool _busy;
     private string? _message;
