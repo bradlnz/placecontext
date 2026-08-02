@@ -4,6 +4,8 @@ obj/
 .vs/
 .idea/
 [Tt]est[Rr]esults/
+__pycache__/
+*.py[cod]
 graphify-out/
 .claude/settings.local.json
 
