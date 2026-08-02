@@ -71,6 +71,14 @@ public sealed class ResponsiveShellContractTests
     }
 
     [Fact]
+    public void Data_tables_page_uses_the_shared_data_navigation()
+    {
+        var page = ReadHostSource("Components/Pages/ProjectData.razor");
+
+        Assert.Contains("<DataTabs ProjectId=\"ProjectId\" Active=\"tables\" />", page);
+    }
+
+    [Fact]
     public void Data_map_only_presents_job_to_table_mappings()
     {
         var page = ReadHostSource("Components/Pages/DataMap.razor");
