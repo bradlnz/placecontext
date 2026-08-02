@@ -11,6 +11,8 @@ da_bundle=(
   Ossen--6525de7d/da-pathway--8b8c0c02/map/main.py
   Ossen--6525de7d/da-pathway--8b8c0c02/map/council_requirements.json
   Ossen--6525de7d/da-readiness--8b8c0c03/map/main.py
+  Ossen--6525de7d/da-pdf--8b8c0c05/map/main.py
+  Ossen--6525de7d/da-pdf--8b8c0c05/map/requirements.txt
   Ossen--6525de7d/council-registry--447808c5/map/main.py
   Ossen--6525de7d/overlays--74719f98/map/main.py
 )
@@ -35,9 +37,7 @@ fi
 docker build -t registry.digitalocean.com/ctrlsignalregistryimg/placecontext:latest -f Dockerfile . 2>&1 | tail -3
 docker push registry.digitalocean.com/ctrlsignalregistryimg/placecontext:latest 2>&1 | tail -3
 
-{
-  printf '%s\n' "$sync_token"
-  cat <<'REMOTE'
+printf '%s\n' "$sync_token" | ssh -o BatchMode=yes -i "$ssh_key" "$app_host" '
 read -r sync_token
 set -euo pipefail
 kubectl -n placecontext create secret generic opensearch-sync \
@@ -47,6 +47,10 @@ unset sync_token
 kubectl -n placecontext set env deployment/placecontext \
   PlaceContext__OpenSearch__SyncEndpoint=http://100.116.60.120:9340/v1/sync
 kubectl -n placecontext set env deployment/placecontext --from=secret/opensearch-sync
+'
+
+ssh -o BatchMode=yes -i "$ssh_key" "$app_host" 'bash -s' <<'REMOTE'
+set -euo pipefail
 kubectl -n placecontext rollout restart deployment/placecontext
 sleep 30
 kubectl -n placecontext get pods
@@ -57,7 +61,6 @@ if [ -n "$pod" ]; then
     | kubectl -n placecontext exec "$pod" -- psql -U postgres -d placecontext
 fi
 REMOTE
-} | ssh -o BatchMode=yes -i "$ssh_key" "$app_host" 'bash -s' 2>&1
 
 printf 'Deploying council development-application jobs and chain...\n'
 tar -C "$da_jobs_root" -czf - "${da_bundle[@]}" \

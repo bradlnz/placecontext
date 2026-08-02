@@ -62,6 +62,7 @@ public static class DependencyInjection
         services.AddScoped<ICommandHandler<UpdateJobTestCodeCommand, JobTestCaseView>, UpdateJobTestCodeHandler>();
         services.AddScoped<ICommandHandler<SaveOpenSearchDashboardCommand, OpenSearchDashboardView>, SaveOpenSearchDashboardHandler>();
         services.AddScoped<ICommandHandler<DeleteOpenSearchDashboardCommand, bool>, DeleteOpenSearchDashboardHandler>();
+        services.AddScoped<ICommandHandler<TriggerOpenSearchSyncCommand, OpenSearchSyncView>, TriggerOpenSearchSyncHandler>();
         services.AddScoped<ICommandHandler<ReplayRunCommand, JobRunDetailView>, ReplayRunHandler>();
         services.AddScoped<ICommandHandler<UploadJobCodeCommand, JobView>, UploadJobCodeHandler>();
         services.AddScoped<ICommandHandler<DeleteJobCommand, bool>, DeleteJobHandler>();

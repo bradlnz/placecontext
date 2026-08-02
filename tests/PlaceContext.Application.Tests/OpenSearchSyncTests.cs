@@ -1,6 +1,8 @@
 using PlaceContext.Application.Features;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Ports;
+using PlaceContext.Application.Cqrs;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace PlaceContext.Application.Tests;
 
@@ -17,6 +19,20 @@ public sealed class OpenSearchSyncTests
 
         Assert.Equal(expected, result);
         Assert.Equal(1, gateway.TriggerCount);
+    }
+
+    [Fact]
+    public void Manual_sync_handler_is_registered_with_the_application()
+    {
+        var services = new ServiceCollection();
+
+        services.AddApplication();
+
+        Assert.Contains(services, descriptor =>
+            descriptor.ServiceType == typeof(ICommandHandler<
+                TriggerOpenSearchSyncCommand,
+                OpenSearchSyncView>)
+            && descriptor.ImplementationType == typeof(TriggerOpenSearchSyncHandler));
     }
 
     private sealed class StubSyncGateway(OpenSearchSyncView result) : IOpenSearchSyncGateway
