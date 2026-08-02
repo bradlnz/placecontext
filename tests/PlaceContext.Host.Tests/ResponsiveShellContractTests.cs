@@ -100,6 +100,20 @@ public sealed class ResponsiveShellContractTests
         Assert.Contains(".chart-canvas-box { height: 220px; }", responsive);
     }
 
+    [Fact]
+    public void Observability_uses_the_jobs_catalogue_visual_hierarchy()
+    {
+        var page = ReadHostSource("Components/Pages/Observability.razor");
+        var styles = ReadHostSource("Components/Pages/Observability.razor.css");
+
+        Assert.Contains("class=\"summary-strip\"", page);
+        Assert.Contains("class=\"dccard run-suite\"", page);
+        Assert.Contains("class=\"suite-head\"", page);
+        Assert.Contains("width: min(1120px, 100%);", styles);
+        Assert.Contains("border-bottom: 1px solid var(--border);", styles);
+        Assert.Contains("@media (max-width: 950px)", styles);
+    }
+
     private static string ReadHostSource(string relativePath)
     {
         var hostRoot = Path.GetFullPath(Path.Combine(

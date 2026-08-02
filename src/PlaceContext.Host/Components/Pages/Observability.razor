@@ -39,6 +39,19 @@ else
             <div class="message-banner">@_message</div>
         }
 
+        @if (ActiveRunCount > 0)
+        {
+            <section class="summary-strip" aria-label="Run summary">
+                <div class="summary-count"><strong>@ActiveRunCount</strong><span>runs</span></div>
+                <div class="summary-count running"><strong>@ActiveStatusCount("Running")</strong><span>running</span></div>
+                <div class="summary-count succeeded"><strong>@ActiveStatusCount("Succeeded")</strong><span>succeeded</span></div>
+                <div class="summary-count failed"><strong>@ActiveStatusCount("Failed")</strong><span>failed</span></div>
+                <div class="summary-progress" title="@ActiveSuccessPercent% succeeded">
+                    <span style="width:@ActiveSuccessPercent%"></span>
+                </div>
+            </section>
+        }
+
         @if (_tab == "runs")
         {
             @if (_reports is null or { Count: 0 })
@@ -49,34 +62,40 @@ else
             }
             else
             {
-                <div class="run-list">
-                    @foreach (var rep in _reports)
-                    {
-                        var run = rep.Run;
-                        <div class="dccard run-row" @onclick="@(() => OpenRun(rep))">
-                            <div class="run-row-inner">
-                                <span class="status-pill" style="color:@StatusColor(run.Status); background:@StatusBg(run.Status)">@run.Status</span>
-                                <div class="flex-fill">
-                                    <span class="job-name">@rep.JobName</span>
-                                    <span class="project-name">@rep.ProjectName</span>
-                                </div>
-                                <span class="note-sm">
-                                    ✓ @run.ShardResults.Count(s => s.Outcome == "Succeeded")
-                                    @(run.ShardResults.Any(s => s.Outcome == "Failed") ? $" ✗ {run.ShardResults.Count(s => s.Outcome == "Failed")}" : "")
-                                </span>
-                                <span class="run-time">
-                                    @run.StartedAt.ToWorkspaceTime().ToString("yyyy-MM-dd HH:mm")
-                                </span>
-                                @if (run.FinishedAt.HasValue)
-                                {
-                                    <span class="run-duration">
-                                        @FormatDuration(run.StartedAt, run.FinishedAt.Value)
+                <section class="dccard run-suite">
+                    <header class="suite-head">
+                        <div><span class="suite-caret">⌄</span><strong>Job run catalogue</strong><span>@_reports.Count across the workspace</span></div>
+                        <span class="suite-result">@ActiveStatusCount("Succeeded") succeeded</span>
+                    </header>
+                    <div class="run-list">
+                        @foreach (var rep in _reports)
+                        {
+                            var run = rep.Run;
+                            <article class="run-row" @onclick="@(() => OpenRun(rep))">
+                                <div class="run-row-inner">
+                                    <span class="status-pill" style="color:@StatusColor(run.Status); background:@StatusBg(run.Status)">@run.Status</span>
+                                    <div class="flex-fill">
+                                        <span class="job-name">@rep.JobName</span>
+                                        <span class="project-name">@rep.ProjectName</span>
+                                    </div>
+                                    <span class="note-sm">
+                                        ✓ @run.ShardResults.Count(s => s.Outcome == "Succeeded")
+                                        @(run.ShardResults.Any(s => s.Outcome == "Failed") ? $" ✗ {run.ShardResults.Count(s => s.Outcome == "Failed")}" : "")
                                     </span>
-                                }
-                            </div>
-                        </div>
-                    }
-                </div>
+                                    <span class="run-time">
+                                        @run.StartedAt.ToWorkspaceTime().ToString("yyyy-MM-dd HH:mm")
+                                    </span>
+                                    @if (run.FinishedAt.HasValue)
+                                    {
+                                        <span class="run-duration">
+                                            @FormatDuration(run.StartedAt, run.FinishedAt.Value)
+                                        </span>
+                                    }
+                                </div>
+                            </article>
+                        }
+                    </div>
+                </section>
             }
         }
 
@@ -90,33 +109,39 @@ else
             }
             else
             {
-                <div class="run-list">
-                    @foreach (var rep in _chainReports)
-                    {
-                        var run = rep.Run;
-                        <div class="dccard run-row" @onclick="@(() => OpenChainRun(rep))">
-                            <div class="run-row-inner">
-                                <span class="status-pill" style="color:@StatusColor(run.Status); background:@StatusBg(run.Status)">@run.Status</span>
-                                <div class="flex-fill">
-                                    <span class="job-name">@run.ChainName</span>
-                                    <span class="project-name">@rep.ProjectName</span>
-                                </div>
-                                <span class="note-sm">
-                                    @run.Steps.Count(s => s.Status == "Succeeded")/@run.Steps.Count step(s)
-                                </span>
-                                <span class="run-time">
-                                    @run.StartedAt.ToWorkspaceTime().ToString("yyyy-MM-dd HH:mm")
-                                </span>
-                                @if (run.FinishedAt.HasValue)
-                                {
-                                    <span class="run-duration">
-                                        @FormatDuration(run.StartedAt, run.FinishedAt.Value)
+                <section class="dccard run-suite">
+                    <header class="suite-head">
+                        <div><span class="suite-caret">⌄</span><strong>Chain run catalogue</strong><span>@_chainReports.Count across the workspace</span></div>
+                        <span class="suite-result">@ActiveStatusCount("Succeeded") succeeded</span>
+                    </header>
+                    <div class="run-list">
+                        @foreach (var rep in _chainReports)
+                        {
+                            var run = rep.Run;
+                            <article class="run-row" @onclick="@(() => OpenChainRun(rep))">
+                                <div class="run-row-inner">
+                                    <span class="status-pill" style="color:@StatusColor(run.Status); background:@StatusBg(run.Status)">@run.Status</span>
+                                    <div class="flex-fill">
+                                        <span class="job-name">@run.ChainName</span>
+                                        <span class="project-name">@rep.ProjectName</span>
+                                    </div>
+                                    <span class="note-sm">
+                                        @run.Steps.Count(s => s.Status == "Succeeded")/@run.Steps.Count step(s)
                                     </span>
-                                }
-                            </div>
-                        </div>
-                    }
-                </div>
+                                    <span class="run-time">
+                                        @run.StartedAt.ToWorkspaceTime().ToString("yyyy-MM-dd HH:mm")
+                                    </span>
+                                    @if (run.FinishedAt.HasValue)
+                                    {
+                                        <span class="run-duration">
+                                            @FormatDuration(run.StartedAt, run.FinishedAt.Value)
+                                        </span>
+                                    }
+                                </div>
+                            </article>
+                        }
+                    </div>
+                </section>
             }
         }
 
@@ -133,22 +158,28 @@ else
             }
             else
             {
-                <div class="run-list">
-                    @foreach (var t in _liveTraces)
-                    {
-                        <div class="dccard run-row" @onclick="@(() => OpenLiveTrace(t))">
-                            <div class="run-row-inner">
-                                <span class="status-pill" style="color:@StatusColor(t.Status ?? ""); background:@StatusBg(t.Status ?? "")">@(t.Status ?? "—")</span>
-                                <div class="flex-fill">
-                                    <span class="job-name">@(t.JobName ?? t.JobId.ToString("N")[..8])</span>
-                                    <span class="project-name">trace @(t.TraceId is { Length: > 8 } ? t.TraceId[..8] : t.TraceId ?? "—")…</span>
+                <section class="dccard run-suite">
+                    <header class="suite-head">
+                        <div><span class="suite-caret">⌄</span><strong>Live trace catalogue</strong><span>@_liveTraces.Count on this replica</span></div>
+                        <span class="suite-result">@ActiveStatusCount("Succeeded") succeeded</span>
+                    </header>
+                    <div class="run-list">
+                        @foreach (var t in _liveTraces)
+                        {
+                            <article class="run-row" @onclick="@(() => OpenLiveTrace(t))">
+                                <div class="run-row-inner">
+                                    <span class="status-pill" style="color:@StatusColor(t.Status ?? ""); background:@StatusBg(t.Status ?? "")">@(t.Status ?? "—")</span>
+                                    <div class="flex-fill">
+                                        <span class="job-name">@(t.JobName ?? t.JobId.ToString("N")[..8])</span>
+                                        <span class="project-name">trace @(t.TraceId is { Length: > 8 } ? t.TraceId[..8] : t.TraceId ?? "—")…</span>
+                                    </div>
+                                    <span class="note-sm">@t.Shards.Count shard(s)</span>
+                                    <span class="run-duration">@FormatMs(t.DurationMs)</span>
                                 </div>
-                                <span class="note-sm">@t.Shards.Count shard(s)</span>
-                                <span class="run-duration">@FormatMs(t.DurationMs)</span>
-                            </div>
-                        </div>
-                    }
-                </div>
+                            </article>
+                        }
+                    </div>
+                </section>
             }
         }
     </div>
@@ -363,6 +394,24 @@ else
     private string _tab = "runs";
     private string? _message;
     private bool _loading = true;
+
+    private int ActiveRunCount => _tab switch
+    {
+        "chains" => _chainReports?.Count ?? 0,
+        "traces" => _liveTraces?.Count ?? 0,
+        _ => _reports?.Count ?? 0
+    };
+
+    private int ActiveStatusCount(string status) => _tab switch
+    {
+        "chains" => _chainReports?.Count(report => string.Equals(report.Run.Status, status, StringComparison.OrdinalIgnoreCase)) ?? 0,
+        "traces" => _liveTraces?.Count(trace => string.Equals(trace.Status, status, StringComparison.OrdinalIgnoreCase)) ?? 0,
+        _ => _reports?.Count(report => string.Equals(report.Run.Status, status, StringComparison.OrdinalIgnoreCase)) ?? 0
+    };
+
+    private int ActiveSuccessPercent => ActiveRunCount == 0
+        ? 0
+        : (int)Math.Round(ActiveStatusCount("Succeeded") * 100d / ActiveRunCount);
 
     protected override async Task OnInitializedAsync()
     {
