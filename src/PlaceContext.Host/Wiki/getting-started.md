@@ -12,13 +12,40 @@ You do not need to understand the technical parts to use the portal. A **job** i
 
 ## First steps
 
-1. Select a project from the project switcher in the lower-left corner.
-2. Open **Jobs** to run a saved task, or **CRM** to work with customers.
-3. Follow progress in **Jobs** or **Observability**.
-4. Open **Artifacts** to view files produced by completed tasks.
+1. If the workspace has no projects, connect an approved MCP client and ask it to onboard a project.
+2. Select the project from the switcher in the lower-left corner.
+3. Open **Jobs** to run a saved task, **Data** to explore reusable outputs, or **CRM** to work with customers.
+4. Follow progress in **Jobs** or **Observability**, then open **Artifacts** for files produced by completed tasks.
 
-If no projects exist yet, open **Onboarding**. It explains how to connect an approved AI or MCP
-client that can register a code project for you.
+## Connect an MCP client
+
+Your MCP endpoint is your PlaceContext workspace URL followed by `/mcp`:
+
+```text
+<workspace-url>/mcp
+```
+
+For Claude Code, add it with:
+
+```bash
+claude mcp add --transport http placecontext <workspace-url>/mcp
+```
+
+The first tool call opens PlaceContext in your browser so you can sign in and authorize access. The
+client receives a token scoped to this workspace and renews it automatically while active. Other MCP
+clients can use the same endpoint with Streamable HTTP; OAuth is discovered automatically.
+
+## Add the first project
+
+Ask the connected client to **“onboard this project into PlaceContext.”** The onboarding tools register
+the repository, import its git history, seed context from project documentation, and prepare the client
+to record activities and decisions. A project is the boundary for jobs, reusable data, entities,
+analytics, CRM information, permissions, and provenance.
+
+Once the project exists, ask the client to load the project overview at the beginning of work and record
+activities and decisions as work progresses. Use **Jobs** for repeatable computation and **Chains** for
+multi-stage workflows; mapped outputs remain available through project tables, entities, analytics, and
+search.
 
 ## Main areas
 

@@ -20,7 +20,6 @@ public sealed class MenuAuthorizationTests
     [InlineData("project.events", Permission.EventsManage)]
     [InlineData("chat", Permission.AgentsChat)]
     [InlineData("artifacts", Permission.ArtifactsView)]
-    [InlineData("onboarding", Permission.ProjectsView)]
     public void Menu_item_uses_the_same_section_permission_as_its_route(
         string itemId, string expectedPermission)
     {
