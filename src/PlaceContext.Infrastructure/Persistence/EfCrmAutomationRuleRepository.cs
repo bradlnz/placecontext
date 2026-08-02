@@ -50,13 +50,15 @@ public sealed class EfCrmAutomationRuleRepository : ICrmAutomationRuleRepository
             .Select(ToDomain).ToList();
 
     public async Task<IReadOnlyList<CrmAutomationRule>> ListMatchingAsync(
-        Guid projectId, CrmAutomationEventType eventType, CustomerLifecycleStage stage,
+        Guid projectId, CrmAutomationEventType eventType, CustomerLifecycleStage? stage,
         CancellationToken ct = default)
         => (await _db.CrmAutomationRules.AsNoTracking()
             .Where(x => x.ProjectId == projectId
                 && x.Enabled
                 && x.EventType == eventType.ToString()
-                && (x.LifecycleStage == null || x.LifecycleStage == stage.ToString()))
+                && (stage == null
+                    ? x.LifecycleStage == null
+                    : x.LifecycleStage == null || x.LifecycleStage == stage.ToString()))
             .ToListAsync(ct))
             .Select(ToDomain).ToList();
 

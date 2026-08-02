@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.HttpOverrides;
@@ -37,6 +38,7 @@ using PlaceContext.Infrastructure.Persistence;
 using Microsoft.AspNetCore.ResponseCompression;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.StaticFiles;
+using FluentValidation;
 
 // PlaceContext is a single hosted web app on http://localhost:7700, serving two surfaces from one
 // process and the same Postgres store:
@@ -105,6 +107,8 @@ builder.Services.AddResponseCompression(o =>
 // The former minimal-API endpoints (ingest, backup, auth, artifacts, health) now live as controllers
 // under Controllers/ — attribute-routed, same paths/auth, wired below with MapControllers().
 builder.Services.AddControllers();
+builder.Services.AddScoped<IValidator<LeadIngestionRequest>, LeadIngestionRequestValidator>();
+builder.Services.AddScoped<IValidator<JsonElement>, CrmIngestionPayloadValidator>();
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;

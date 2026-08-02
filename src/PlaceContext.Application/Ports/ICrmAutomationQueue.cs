@@ -5,11 +5,12 @@ namespace PlaceContext.Application.Ports;
 public sealed record QueuedCrmAutomation(
     Guid TenantId,
     Guid RuleId,
-    Guid ClientId,
+    Guid? ClientId,
     Guid ChainId,
     CrmAutomationEventType EventType,
-    CustomerLifecycleStage LifecycleStage,
-    string RuleName);
+    CustomerLifecycleStage? LifecycleStage,
+    string RuleName,
+    string? InputPayload = null);
 
 public interface ICrmAutomationQueue
 {

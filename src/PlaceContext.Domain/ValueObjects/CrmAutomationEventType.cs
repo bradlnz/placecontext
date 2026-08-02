@@ -8,4 +8,5 @@ public enum CrmAutomationEventType
     NoteAdded,
     ArtifactAttached,
     CommunicationSent,
+    IngestionReceived,
 }

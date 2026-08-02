@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging;
 using PlaceContext.Application.Ports;
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Features;
+using PlaceContext.Application.Dtos;
 using PlaceContext.Infrastructure.Persistence;
 using PlaceContext.Infrastructure.Tenancy;
 
@@ -79,17 +80,34 @@ public sealed class CrmAutomationWorker : BackgroundService
             try
             {
                 await using var scope = _scopes.CreateAsyncScope();
-                var handler = scope.ServiceProvider.GetRequiredService<
-                    ICommandHandler<RunCrmClientAutomationCommand, CrmChainRunView>>();
-                await handler.HandleAsync(
-                    new RunCrmClientAutomationCommand(item.ClientId, item.ChainId), ct);
+                if (item.ClientId is { } clientId)
+                {
+                    var handler = scope.ServiceProvider.GetRequiredService<
+                        ICommandHandler<RunCrmClientAutomationCommand, CrmChainRunView>>();
+                    await handler.HandleAsync(
+                        new RunCrmClientAutomationCommand(clientId, item.ChainId), ct);
+                }
+                else
+                {
+                    var encryptor = scope.ServiceProvider.GetRequiredService<IDataEncryptor>();
+                    var handler = scope.ServiceProvider.GetRequiredService<
+                        ICommandHandler<RunJobChainCommand, ChainRunView>>();
+                    var payload = encryptor.Unprotect(
+                        item.InputPayloadProtected, IDataEncryptor.Purpose.CrmAutomationPayload);
+                    await handler.HandleAsync(new RunJobChainCommand(item.ChainId, payload), ct);
+                }
             }
             finally { CurrentTenant.Clear(); }
 
             await DeleteAsync(item.Id, ct);
-            _log.LogInformation(
-                "CRM automation '{Rule}' ran chain {ChainId} for client {ClientId}.",
-                item.RuleName, item.ChainId, item.ClientId);
+            if (item.ClientId is { } loggedClientId)
+                _log.LogInformation(
+                    "CRM automation '{Rule}' ran chain {ChainId} for client {ClientId}.",
+                    item.RuleName, item.ChainId, loggedClientId);
+            else
+                _log.LogInformation(
+                    "CRM ingestion automation '{Rule}' ran chain {ChainId}.",
+                    item.RuleName, item.ChainId);
         }
         catch (OperationCanceledException) { throw; }
         catch (Exception ex)
@@ -142,6 +160,7 @@ public sealed class CrmAutomationWorker : BackgroundService
         EventType = row.EventType,
         LifecycleStage = row.LifecycleStage,
         RuleName = row.RuleName,
+        InputPayloadProtected = row.InputPayloadProtected,
         EnqueuedAt = row.EnqueuedAt,
         NextAttemptAt = row.NextAttemptAt,
         Attempts = row.Attempts,

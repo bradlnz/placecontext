@@ -2,6 +2,7 @@ using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Ports;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.Repositories;
+using PlaceContext.Domain.ValueObjects;
 
 namespace PlaceContext.Application.Features;
 
@@ -27,6 +28,9 @@ public sealed class SaveCrmAutomationRuleHandler
         if (chain.ProjectId != command.ProjectId)
             throw new InvalidOperationException("The automation chain must belong to this project.");
 
+        var lifecycleStage = command.EventType == CrmAutomationEventType.IngestionReceived
+            ? null
+            : command.LifecycleStage;
         CrmAutomationRule rule;
         if (command.RuleId is { } id)
         {
@@ -34,14 +38,14 @@ public sealed class SaveCrmAutomationRuleHandler
                 ?? throw new InvalidOperationException($"Automation {id} not found.");
             if (rule.ProjectId != command.ProjectId)
                 throw new InvalidOperationException("Automation does not belong to this project.");
-            rule.Update(command.Name, command.EventType, command.LifecycleStage,
+            rule.Update(command.Name, command.EventType, lifecycleStage,
                 command.ChainId, command.Enabled, _clock.UtcNow);
             await _rules.UpdateAsync(rule, ct);
         }
         else
         {
             rule = CrmAutomationRule.Create(
-                command.ProjectId, command.Name, command.EventType, command.LifecycleStage,
+                command.ProjectId, command.Name, command.EventType, lifecycleStage,
                 command.ChainId, command.Enabled, _clock.UtcNow);
             await _rules.AddAsync(rule, ct);
         }

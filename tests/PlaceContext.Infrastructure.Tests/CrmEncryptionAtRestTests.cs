@@ -7,12 +7,38 @@ using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.ValueObjects;
 using PlaceContext.Infrastructure.Persistence;
 using PlaceContext.Infrastructure.Security;
+using PlaceContext.Infrastructure.Scheduling;
 using PlaceContext.TestSupport;
 
 namespace PlaceContext.Infrastructure.Tests;
 
 public sealed class CrmEncryptionAtRestTests
 {
+    [Fact]
+    public async Task Ingestion_automation_queue_encrypts_raw_payload_at_rest()
+    {
+        var (db, encryptor) = CreateDb();
+        await using (db)
+        {
+            var tenantId = Guid.NewGuid();
+            const string payload = """{"address":"123 Example Street"}""";
+            var queue = new DbCrmAutomationQueue(
+                db, new FakeClock(DateTimeOffset.UtcNow), encryptor);
+
+            await queue.EnqueueAsync(new QueuedCrmAutomation(
+                tenantId, Guid.NewGuid(), null, Guid.NewGuid(),
+                CrmAutomationEventType.IngestionReceived, null, "Run feasibility", payload));
+            await db.SaveChangesAsync();
+
+            var stored = await db.CrmAutomationQueue.AsNoTracking().SingleAsync();
+            Assert.Null(stored.ClientId);
+            Assert.Null(stored.LifecycleStage);
+            AssertProtected(encryptor, stored.InputPayloadProtected, payload);
+            Assert.Equal(payload, encryptor.Unprotect(
+                stored.InputPayloadProtected, IDataEncryptor.Purpose.CrmAutomationPayload));
+        }
+    }
+
     [Fact]
     public async Task Client_repository_encrypts_identity_and_contact_fields_but_returns_plaintext()
     {

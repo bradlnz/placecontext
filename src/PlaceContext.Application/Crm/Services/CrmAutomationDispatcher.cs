@@ -31,4 +31,18 @@ public sealed class CrmAutomationDispatcher
                 client.LifecycleStage, rule.Name), ct);
         return matching.Count;
     }
+
+    public async Task<int> EnqueueIngestionAsync(
+        Guid projectId,
+        string inputPayload,
+        CancellationToken ct = default)
+    {
+        var matching = await _rules.ListMatchingAsync(
+            projectId, CrmAutomationEventType.IngestionReceived, null, ct);
+        foreach (var rule in matching)
+            await _queue.EnqueueAsync(new QueuedCrmAutomation(
+                _tenant.TenantId, rule.Id, null, rule.ChainId,
+                CrmAutomationEventType.IngestionReceived, null, rule.Name, inputPayload), ct);
+        return matching.Count;
+    }
 }

@@ -6,11 +6,12 @@ public sealed class CrmAutomationQueueRow
     public Guid Id { get; set; }
     public Guid TenantId { get; set; }
     public Guid RuleId { get; set; }
-    public Guid ClientId { get; set; }
+    public Guid? ClientId { get; set; }
     public Guid ChainId { get; set; }
     public string EventType { get; set; } = "";
-    public string LifecycleStage { get; set; } = "";
+    public string? LifecycleStage { get; set; }
     public string RuleName { get; set; } = "";
+    public string? InputPayloadProtected { get; set; }
     public DateTimeOffset EnqueuedAt { get; set; }
     public DateTimeOffset NextAttemptAt { get; set; }
     public int Attempts { get; set; }

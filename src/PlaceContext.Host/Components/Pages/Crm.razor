@@ -238,8 +238,8 @@ else
                             </svg>
                         </span>
                         <span>
-                            <strong>Lifecycle workflow rules</strong>
-                            <small>When a customer event matches, its job chain is queued with the client context.</small>
+                            <strong>CRM workflow rules</strong>
+                            <small>When a CRM event matches, its job chain is queued with client context or the ingestion payload.</small>
                         </span>
                     </div>
                     <div class="automation-stats">
@@ -253,8 +253,8 @@ else
                 {
                     <div class="dccard automation-empty">
                         <span class="automation-empty-icon">⌁</span>
-                        <strong>Turn lifecycle moments into workflows</strong>
-                        <span>Run a job chain when a client is created, enters a stage, receives a note or file, or gets a communication.</span>
+                        <strong>Turn CRM events into workflows</strong>
+                        <span>Run a job chain from client lifecycle events or any JSON submitted to the CRM ingestion endpoint.</span>
                         <button class="dcbtn primary" @onclick="NewAutomation">Create automation</button>
                     </div>
                 }
@@ -287,7 +287,7 @@ else
                                     <span class="flow-node event">
                                         <small>When</small>
                                         <strong>@AutomationEventLabel(rule.EventType)</strong>
-                                        <em>@AutomationStageLabel(rule.LifecycleStage)</em>
+                                        <em>@(rule.EventType == nameof(CrmAutomationEventType.IngestionReceived) ? "Raw JSON payload" : AutomationStageLabel(rule.LifecycleStage))</em>
                                     </span>
                                     <span class="flow-arrow">
                                         <span></span>
@@ -336,8 +336,8 @@ else
                             </svg>
                         </span>
                         <div>
-                            <strong>Lead ingestion API</strong>
-                            <span>Accept contact-form leads into this project's CRM using a scoped header token.</span>
+                            <strong>CRM ingestion API</strong>
+                            <span>Accept JSON payloads and pass them into CRM automation job chains using a scoped header token.</span>
                         </div>
                         <span class="ingestion-status @(_ingestionSettings?.Enabled == true ? "enabled" : "")">
                             @(_ingestionSettings?.Enabled == true ? "Enabled" : "Disabled")
@@ -418,8 +418,8 @@ else
                     }
                 </div>
                 <div class="ingestion-security-note">
-                    <strong>Designed for lead capture only</strong>
-                    <span>The token can create or update Lead records through this endpoint; it does not grant access to CRM reads or other APIs. The configured origin is checked on every request.</span>
+                    <strong>Write-only automation input</strong>
+                    <span>The token can submit JSON to enabled ingestion automations. Recognized contact-form payloads also create or update Lead records; the token grants no CRM reads or other API access. The configured origin is checked on every request.</span>
                 </div>
             </section>
         }
@@ -491,14 +491,14 @@ else
         <div class="dcslide-head">
             <div>
                 <div class="title-14">@(_editAutomationId is null ? "Add automation" : "Edit automation")</div>
-                <div class="subtitle-11-5">Connect a customer lifecycle event to a job chain</div>
+                <div class="subtitle-11-5">Connect a CRM or ingestion event to a job chain</div>
             </div>
             <button class="dcslide-x" @onclick="CloseAutomationEditor">×</button>
         </div>
         <div class="dcslide-body crm-form">
             <div class="automation-editor-intro">
                 <span>⌁</span>
-                <p><strong>Event-driven customer work</strong>Matching events are queued and run with the client’s current details, stage, notes, and artifacts.</p>
+                <p><strong>Event-driven customer work</strong>Matching events are queued and run with client context or the incoming JSON payload.</p>
             </div>
             <div class="dcfield">
                 <label>Automation name</label>
@@ -506,7 +506,7 @@ else
                        placeholder="e.g. Send onboarding pack" />
             </div>
             <div class="dcfield">
-                <label>Customer event</label>
+                <label>Event</label>
                 <select class="dcinput" @bind="_automationEvent">
                     @foreach (var eventType in AutomationEvents)
                     {
@@ -515,17 +515,20 @@ else
                 </select>
                 <small class="field-help">@AutomationEventDescription(_automationEvent)</small>
             </div>
-            <div class="dcfield">
-                <label>Lifecycle stage</label>
-                <select class="dcinput" @bind="_automationStage">
-                    <option value="">Any lifecycle stage</option>
-                    @foreach (var stage in Stages)
-                    {
-                        <option value="@stage">@StageLabel(stage)</option>
-                    }
-                </select>
-                <small class="field-help">Optionally limit this rule to clients in one stage.</small>
-            </div>
+            @if (_automationEvent != CrmAutomationEventType.IngestionReceived)
+            {
+                <div class="dcfield">
+                    <label>Lifecycle stage</label>
+                    <select class="dcinput" @bind="_automationStage">
+                        <option value="">Any lifecycle stage</option>
+                        @foreach (var stage in Stages)
+                        {
+                            <option value="@stage">@StageLabel(stage)</option>
+                        }
+                    </select>
+                    <small class="field-help">Optionally limit this rule to clients in one stage.</small>
+                </div>
+            }
             <div class="dcfield">
                 <label>Job chain</label>
                 <select class="dcinput" @bind="_automationChainId">
@@ -552,13 +555,13 @@ else
                 <span class="preview-node">
                     <small>When</small>
                     <strong>@AutomationEventLabel(_automationEvent)</strong>
-                    <em>@AutomationStageLabel(_automationStage?.ToString())</em>
+                    <em>@(_automationEvent == CrmAutomationEventType.IngestionReceived ? "Raw JSON payload" : AutomationStageLabel(_automationStage?.ToString()))</em>
                 </span>
                 <span class="preview-arrow">→</span>
                 <span class="preview-node">
                     <small>Run</small>
                     <strong>@SelectedAutomationChainName</strong>
-                    <em>with client context</em>
+                    <em>@(_automationEvent == CrmAutomationEventType.IngestionReceived ? "with request payload" : "with client context")</em>
                 </span>
             </div>
             @if (_automationError is not null)
@@ -1183,12 +1186,7 @@ else
                "{{CrmIngestionSettingsService.TokenHeader}}": "{{_newIngestionToken ?? "YOUR_TOKEN"}}"
              },
              body: JSON.stringify({
-               name: "Ada Lovelace",
-               email: "ada@example.com",
-               phone: "+61412345678",
-               company: "Analytical Engines",
-               message: "Please contact me about a feasibility report.",
-               source: "website-contact-form"
+               address: "123 Example Street, Brisbane QLD 4000"
              })
            });
            """;
@@ -1641,6 +1639,7 @@ else
         CrmAutomationEventType.NoteAdded => "Note added",
         CrmAutomationEventType.ArtifactAttached => "Artifact attached",
         CrmAutomationEventType.CommunicationSent => "Communication sent",
+        CrmAutomationEventType.IngestionReceived => "Ingestion received",
         _ => eventType.ToString(),
     };
     private static string AutomationEventDescription(CrmAutomationEventType eventType) => eventType switch
@@ -1651,6 +1650,7 @@ else
         CrmAutomationEventType.NoteAdded => "Runs when an internal note is added in Comms.",
         CrmAutomationEventType.ArtifactAttached => "Runs when a file is attached directly to the client.",
         CrmAutomationEventType.CommunicationSent => "Runs after an email or SMS is sent successfully.",
+        CrmAutomationEventType.IngestionReceived => "Runs when this project's CRM ingestion endpoint receives any JSON payload.",
         _ => "",
     };
     private static string AutomationEventIcon(string value)
@@ -1663,6 +1663,7 @@ else
                 CrmAutomationEventType.NoteAdded => "✦",
                 CrmAutomationEventType.ArtifactAttached => "⇧",
                 CrmAutomationEventType.CommunicationSent => "✉",
+                CrmAutomationEventType.IngestionReceived => "⇥",
                 _ => "⌁",
             }
             : "⌁";

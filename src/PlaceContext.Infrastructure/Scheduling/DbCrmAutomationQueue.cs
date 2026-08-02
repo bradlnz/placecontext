@@ -7,8 +7,10 @@ public sealed class DbCrmAutomationQueue : ICrmAutomationQueue
 {
     private readonly AppDbContext _db;
     private readonly IClock _clock;
+    private readonly IDataEncryptor _encryptor;
 
-    public DbCrmAutomationQueue(AppDbContext db, IClock clock) => (_db, _clock) = (db, clock);
+    public DbCrmAutomationQueue(AppDbContext db, IClock clock, IDataEncryptor encryptor)
+        => (_db, _clock, _encryptor) = (db, clock, encryptor);
 
     public async Task EnqueueAsync(QueuedCrmAutomation value, CancellationToken ct = default)
     {
@@ -21,8 +23,10 @@ public sealed class DbCrmAutomationQueue : ICrmAutomationQueue
             ClientId = value.ClientId,
             ChainId = value.ChainId,
             EventType = value.EventType.ToString(),
-            LifecycleStage = value.LifecycleStage.ToString(),
+            LifecycleStage = value.LifecycleStage?.ToString(),
             RuleName = value.RuleName,
+            InputPayloadProtected = _encryptor.Protect(
+                value.InputPayload, IDataEncryptor.Purpose.CrmAutomationPayload),
             EnqueuedAt = now,
             NextAttemptAt = now,
         }, ct);

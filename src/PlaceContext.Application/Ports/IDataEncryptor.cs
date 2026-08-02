@@ -34,6 +34,7 @@ public interface IDataEncryptor
         /// <summary>Customer-facing filenames and storage references on CRM artifact rows.</summary>
         public const string CrmArtifactMetadata = "crm.artifact.metadata.v1";
         public const string CrmAutomation = "crm.automation.v1";
+        public const string CrmAutomationPayload = "crm.automation.payload.v1";
     }
 
     /// <summary>True when <paramref name="value"/> is already in the protected wire format.</summary>

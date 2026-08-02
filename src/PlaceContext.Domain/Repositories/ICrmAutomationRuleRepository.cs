@@ -12,6 +12,6 @@ public interface ICrmAutomationRuleRepository
     Task<IReadOnlyList<CrmAutomationRule>> ListForProjectAsync(
         Guid projectId, CancellationToken ct = default);
     Task<IReadOnlyList<CrmAutomationRule>> ListMatchingAsync(
-        Guid projectId, CrmAutomationEventType eventType, CustomerLifecycleStage stage,
+        Guid projectId, CrmAutomationEventType eventType, CustomerLifecycleStage? stage,
         CancellationToken ct = default);
 }
