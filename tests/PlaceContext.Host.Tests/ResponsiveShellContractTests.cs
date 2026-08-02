@@ -85,6 +85,21 @@ public sealed class ResponsiveShellContractTests
         Assert.DoesNotContain("OpenEditorForChain", editor);
     }
 
+    [Fact]
+    public void Project_analytics_matches_entity_analytics_responsive_layout()
+    {
+        var styles = ReadHostSource("Components/Pages/ProjectAnalytics.razor.css");
+        const string breakpoint = "@media (max-width: 950px)";
+
+        Assert.Contains(breakpoint, styles);
+        var responsive = styles.Split(breakpoint, 2)[1];
+        Assert.Contains(".page { padding: 16px 14px 28px; }", responsive);
+        Assert.Contains(".page-head { flex-wrap: wrap", responsive);
+        Assert.Contains(".sql-actions { flex-wrap: wrap; }", responsive);
+        Assert.Contains(".sql-chart-grid, .table-chart-grid { grid-template-columns: 1fr; }", responsive);
+        Assert.Contains(".chart-canvas-box { height: 220px; }", responsive);
+    }
+
     private static string ReadHostSource(string relativePath)
     {
         var hostRoot = Path.GetFullPath(Path.Combine(
