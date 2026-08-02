@@ -60,6 +60,16 @@ public sealed class ResponsiveShellContractTests
         Assert.Contains("overflow:hidden", focusLayerRule);
     }
 
+    [Fact]
+    public void Mobile_data_tabs_scroll_horizontally_without_shrinking()
+    {
+        var styles = ReadHostSource("Components/Shared/DataTabs.razor.css");
+
+        Assert.Contains("overflow-x: auto", styles);
+        Assert.Contains("flex: none", styles);
+        Assert.Contains("scrollbar-width: thin", styles);
+    }
+
     private static string ReadHostSource(string relativePath)
     {
         var hostRoot = Path.GetFullPath(Path.Combine(

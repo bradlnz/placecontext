@@ -1,3 +1,18 @@
 .tabs-strip {
+    max-width: 100%;
     margin: -6px 0 16px;
+}
+
+@media (max-width: 700px) {
+    .tabs-strip {
+        overflow-x: auto;
+        overflow-y: hidden;
+        overscroll-behavior-x: contain;
+        scrollbar-width: thin;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .tabs-strip > .dctab {
+        flex: none;
+    }
 }
