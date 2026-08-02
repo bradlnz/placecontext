@@ -129,6 +129,23 @@ public sealed class ResponsiveShellContractTests
         Assert.Contains("@media (max-width: 767px)", styles);
     }
 
+    [Fact]
+    public void Crm_directory_uses_an_enterprise_list_to_detail_hierarchy()
+    {
+        var page = ReadHostSource("Components/Pages/Crm.razor");
+        var styles = ReadHostSource("Components/Pages/Crm.razor.css");
+
+        Assert.Contains("class=\"client-table\"", page);
+        Assert.Contains("class=\"client-table-head\"", page);
+        Assert.Contains("client-row", page);
+        Assert.Contains("client-row-identity", page);
+        Assert.Contains("client-row-contact", page);
+        Assert.Contains("client-row-stage", page);
+        Assert.Contains(".client-table-head", styles);
+        Assert.Contains("grid-template-columns: minmax(210px, 1.35fr) minmax(190px, 1fr) minmax(150px, .65fr) 44px;", styles);
+        Assert.Contains(".client-row-field-label", styles);
+    }
+
     private static string ReadHostSource(string relativePath)
     {
         var hostRoot = Path.GetFullPath(Path.Combine(

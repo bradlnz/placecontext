@@ -938,55 +938,70 @@
     font-size: 14px;
 }
 
-.client-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-    gap: 12px;
-}
-
-.client-card {
-    position: relative;
+.client-table {
     min-width: 0;
-    padding: 16px;
     overflow: hidden;
-    cursor: pointer;
-    transition: transform .17s, border-color .17s, box-shadow .17s;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--card);
 }
 
-.client-accent {
-    position: absolute;
-    inset: 0 0 auto;
-    height: 2px;
-    opacity: .85;
-    background: linear-gradient(90deg, var(--stage-color), color-mix(in srgb, var(--stage-color) 10%, transparent) 68%, transparent);
-}
-
-.client-card:hover {
-    transform: translateY(-2px);
-    border-color: color-mix(in srgb, var(--stage-color) 42%, var(--border));
-    box-shadow: 0 10px 30px rgba(0, 0, 0, .12);
-}
-
-.client-card-head {
-    display: flex;
+.client-table-head,
+.client-row {
+    display: grid;
+    grid-template-columns: minmax(210px, 1.35fr) minmax(190px, 1fr) minmax(150px, .65fr) 44px;
     align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    margin-bottom: 14px;
+}
+
+.client-table-head {
+    min-height: 34px;
+    padding: 0 10px;
+    border-bottom: 1px solid var(--border);
+    background: var(--card-2);
+    color: var(--text-3);
+    font-size: 9.5px;
+    font-weight: 650;
+    letter-spacing: .045em;
+    text-transform: uppercase;
+}
+
+.client-row {
+    --stage-color: var(--text-3);
+    min-height: 58px;
+    padding: 0 10px;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    transition: background .14s;
+}
+
+.client-row:last-child {
+    border-bottom: 0;
+}
+
+.client-row:hover {
+    background: var(--hover);
+}
+
+.client-row-identity {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: 10px;
+    padding-right: 14px;
 }
 
 .client-avatar {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 36px;
-    height: 36px;
+    width: 32px;
+    height: 32px;
     flex: none;
     border: 1px solid color-mix(in srgb, var(--stage-color) 35%, var(--border));
-    border-radius: 10px;
+    border-radius: 9px;
     background: color-mix(in srgb, var(--stage-color) 12%, var(--card-2));
     color: var(--stage-color);
-    font-size: 11px;
+    font-size: 10px;
     font-weight: 750;
     letter-spacing: .02em;
 }
@@ -998,18 +1013,78 @@
     font-size: 12px;
 }
 
-.stage-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    padding: 4px 7px;
-    border: 1px solid color-mix(in srgb, var(--stage-color) 35%, var(--border));
-    border-radius: 999px;
-    background: color-mix(in srgb, var(--stage-color) 9%, transparent);
-    color: var(--stage-color);
-    font-size: 9px;
-    font-weight: 650;
+.client-row-link {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 2px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+    font: inherit;
+    text-align: left;
+}
+
+.client-row-link strong,
+.client-row-link small,
+.client-row-contact > span:not(.client-row-field-label),
+.client-row-contact > small {
+    overflow: hidden;
+    text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+.client-row-link strong {
+    color: var(--text);
+    font-size: 11.5px;
+    font-weight: 650;
+}
+
+.client-row-link small {
+    color: var(--text-3);
+    font-size: 9.5px;
+}
+
+.client-row-contact {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 2px;
+    padding-right: 14px;
+    color: var(--text-2);
+    font-size: 10.5px;
+}
+
+.client-row-contact small {
+    color: var(--text-3);
+    font-size: 9.5px;
+}
+
+.client-row-contact .contact-missing {
+    color: var(--text-3);
+    font-style: italic;
+}
+
+.client-row-stage {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: 7px;
+    padding-right: 8px;
+}
+
+.client-row-stage .stage-dot {
+    width: 6px;
+    height: 6px;
+    border: 0;
+    background: var(--stage-color);
+    box-shadow: none;
+}
+
+.client-row-field-label {
+    display: none;
 }
 
 .badge-dot {
@@ -1020,87 +1095,34 @@
     background: currentColor;
 }
 
-.client-name {
-    overflow: hidden;
-    color: var(--text);
-    font-size: 14px;
-    font-weight: 650;
-    letter-spacing: -.01em;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.client-company {
-    overflow: hidden;
-    min-height: 16px;
-    margin-top: 3px;
-    color: var(--text-3);
-    font-size: 11px;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.client-contact {
-    display: flex;
-    min-height: 43px;
-    flex-direction: column;
-    gap: 5px;
-    margin: 14px 0;
-    color: var(--text-2);
-    font-size: 10.5px;
-}
-
-.client-contact span {
-    display: flex;
-    align-items: center;
-    min-width: 0;
-    gap: 7px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.client-contact svg {
-    width: 12px;
-    height: 12px;
-    flex: none;
-    color: var(--text-3);
-}
-
-.client-contact .contact-missing {
-    color: var(--text-3);
-    font-style: italic;
-}
-
-.client-card-foot {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding-top: 11px;
-    border-top: 1px solid var(--border);
-}
-
 .stage-select {
     min-width: 0;
     height: 29px;
     flex: 1;
     padding: 3px 25px 3px 8px;
-    background: var(--card-2);
+    border-color: transparent;
+    background: transparent;
     color: var(--text-2);
     font-size: 10px;
+}
+
+.stage-select:hover,
+.stage-select:focus {
+    border-color: var(--border);
+    background: var(--card-2);
 }
 
 .open-client {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 29px;
-    height: 29px;
+    width: 30px;
+    height: 30px;
     flex: none;
     padding: 0;
-    border: 1px solid var(--border);
+    border: 1px solid transparent;
     border-radius: 7px;
-    background: var(--card-2);
+    background: transparent;
     color: var(--text-3);
     cursor: pointer;
     transition: color .14s, border-color .14s, background .14s;
@@ -1111,7 +1133,8 @@
     height: 13px;
 }
 
-.open-client:hover {
+.open-client:hover,
+.open-client:focus-visible {
     border-color: color-mix(in srgb, var(--stage-color) 45%, var(--border));
     background: color-mix(in srgb, var(--stage-color) 10%, var(--card-2));
     color: var(--stage-color);
@@ -2450,17 +2473,74 @@
         flex-basis: 100%;
     }
 
-    .client-grid {
-        grid-template-columns: 1fr;
-        gap: 9px;
+    .client-table {
+        overflow: visible;
+        border: 0;
+        border-radius: 0;
+        background: transparent;
     }
 
-    .client-card {
-        padding: 14px;
+    .client-table-head {
+        display: none;
     }
 
-    .client-contact {
+    .client-row {
+        grid-template-columns: minmax(0, 1fr) 44px;
+        gap: 8px 10px;
         min-height: 0;
+        margin-bottom: 9px;
+        padding: 12px;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        background: var(--card);
+    }
+
+    .client-row:last-child {
+        border-bottom: 1px solid var(--border);
+    }
+
+    .client-row-identity {
+        grid-column: 1;
+        grid-row: 1;
+        padding-right: 0;
+    }
+
+    .client-row-contact,
+    .client-row-stage {
+        grid-column: 1;
+        margin-left: 42px;
+        padding-right: 0;
+    }
+
+    .client-row-contact {
+        grid-row: 2;
+    }
+
+    .client-row-stage {
+        grid-row: 3;
+    }
+
+    .client-row-field-label {
+        display: inline;
+        color: var(--text-3);
+        font-size: 9px;
+        font-weight: 650;
+        letter-spacing: .04em;
+        text-transform: uppercase;
+    }
+
+    .client-row-stage .client-row-field-label {
+        flex: none;
+    }
+
+    .open-client {
+        grid-column: 2;
+        grid-row: 1 / span 3;
+        width: 44px;
+        height: 44px;
+        align-self: center;
+        border-color: var(--border);
+        background: var(--card-2);
     }
 
     .crm-editor,

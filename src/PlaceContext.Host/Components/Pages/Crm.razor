@@ -181,45 +181,43 @@ else
             }
             else
             {
-                <div class="client-grid">
+                <div class="client-table" role="table" aria-label="Client directory">
+                    <div class="client-table-head" role="row">
+                        <span role="columnheader">Account</span>
+                        <span role="columnheader">Contact</span>
+                        <span role="columnheader">Lifecycle</span>
+                        <span role="columnheader" class="visually-hidden">Open</span>
+                    </div>
                     @foreach (var client in FilteredClients)
                     {
                         var stage = ParseStage(client.LifecycleStage);
-                        <article class="dccard client-card @StageClass(stage)" @onclick="@(() => OpenClient(client))">
-                            <div class="client-accent"></div>
-                            <div class="client-card-head">
+                        <article class="client-row @StageClass(stage)" role="row" @onclick="@(() => OpenClient(client))">
+                            <div class="client-row-identity" role="cell">
                                 <span class="client-avatar @StageClass(stage)">@Initials(client.Name)</span>
-                                <span class="stage-badge @StageClass(stage)">
-                                    <span class="badge-dot"></span>@StageLabel(stage)
-                                </span>
+                                <button class="client-row-link" @onclick:stopPropagation="true"
+                                        @onclick="@(() => OpenClient(client))">
+                                    <strong>@client.Name</strong>
+                                    <small>@(client.Company ?? "Individual client")</small>
+                                </button>
                             </div>
-                            <div class="client-name">@client.Name</div>
-                            <div class="client-company">@(client.Company ?? "Individual client")</div>
-                            <div class="client-contact">
+                            <div class="client-row-contact" role="cell">
+                                <span class="client-row-field-label">Contact</span>
                                 @if (client.Email is not null)
                                 {
-                                    <span title="@client.Email">
-                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-                                            <path d="M4 4h16v16H4z"></path><path d="m4 6 8 6 8-6"></path>
-                                        </svg>
-                                        @client.Email
-                                    </span>
+                                    <span title="@client.Email">@client.Email</span>
                                 }
                                 @if (client.Phone is not null)
                                 {
-                                    <span>
-                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-                                            <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.79 19.79 0 0 1 2.12 4.18 2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.12.9.33 1.78.62 2.63a2 2 0 0 1-.45 2.11L8 9.73a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.85.29 1.73.5 2.63.62A2 2 0 0 1 22 16.92z"></path>
-                                        </svg>
-                                        @client.Phone
-                                    </span>
+                                    <small>@client.Phone</small>
                                 }
                                 @if (client.Email is null && client.Phone is null)
                                 {
                                     <span class="contact-missing">No contact details yet</span>
                                 }
                             </div>
-                            <div class="client-card-foot" @onclick:stopPropagation="true">
+                            <div class="client-row-stage" role="cell" @onclick:stopPropagation="true">
+                                <span class="client-row-field-label">Lifecycle</span>
+                                <span class="stage-dot"></span>
                                 <select class="dcinput stage-select"
                                         value="@client.LifecycleStage"
                                         @onchange="@(e => MoveClient(client, e))"
@@ -229,12 +227,13 @@ else
                                         <option value="@option.ToString()">@StageLabel(option)</option>
                                     }
                                 </select>
-                                <button class="open-client" @onclick="@(() => OpenClient(client))" aria-label="Open @client.Name">
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9">
-                                        <path d="M5 12h14M13 6l6 6-6 6"></path>
-                                    </svg>
-                                </button>
                             </div>
+                            <button class="open-client" @onclick:stopPropagation="true"
+                                    @onclick="@(() => OpenClient(client))" aria-label="Open @client.Name">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9">
+                                    <path d="M5 12h14M13 6l6 6-6 6"></path>
+                                </svg>
+                            </button>
                         </article>
                     }
                 </div>
