@@ -27,6 +27,15 @@ public sealed class ResponsiveShellContractTests
         Assert.Contains(".toc.open", styles);
     }
 
+    [Fact]
+    public void Crm_client_notes_wrap_unbroken_content()
+    {
+        var styles = ReadHostSource("Components/Pages/Crm.razor.css");
+        var clientNotesRule = styles.Split(".client-notes", 2)[1].Split('}', 2)[0];
+
+        Assert.Contains("overflow-wrap: anywhere", clientNotesRule);
+    }
+
     private static string ReadHostSource(string relativePath)
     {
         var hostRoot = Path.GetFullPath(Path.Combine(
