@@ -21,10 +21,6 @@
                 · every run yields an artifact
             </p>
         </div>
-        <button class="dcbtn primary submit-btn"
-                @onclick="NewJob">
-            <span class="submit-plus">＋</span> Submit job
-        </button>
     </div>
 
     @* ── Stat cards ─────────────────────────────────────────────────────────────────────── *@
@@ -58,6 +54,60 @@
             </div>
         </div>
     </div>
+
+    @* ── Chain quick actions: contextual execution without a dashboard submission CTA ─────── *@
+    <section class="dccard dashboard-quick-chains" aria-labelledby="quick-chain-title">
+        <div class="quick-chain-head">
+            <div>
+                <div class="quick-chain-kicker">QUICK ACTION</div>
+                <h2 id="quick-chain-title" class="quick-chain-title">Run a job chain</h2>
+                <p class="quick-chain-sub">Start a repeatable workflow from the current project.</p>
+            </div>
+            @if (Ui.CurrentProjectId is { } chainProjectId)
+            {
+                <a class="dcbtn btn-sm" href="@($"/project/{chainProjectId}/chains")">View chains</a>
+            }
+        </div>
+
+        @if (Ui.CurrentProjectId is null)
+        {
+            <div class="quick-chain-empty">Select a project to run its job chains.</div>
+        }
+        else if (_chains.Count == 0)
+        {
+            <div class="quick-chain-empty">No job chains are configured for this project.</div>
+        }
+        else
+        {
+            <div class="quick-chain-list">
+                @foreach (var chain in _chains.Take(4))
+                {
+                    <div class="quick-chain-row">
+                        <div class="quick-chain-copy">
+                            <div class="quick-chain-name">@chain.Name</div>
+                            <div class="quick-chain-meta">
+                                @chain.Stages.Count stage@(chain.Stages.Count == 1 ? "" : "s") ·
+                                @chain.Steps.Count job@(chain.Steps.Count == 1 ? "" : "s")
+                            </div>
+                        </div>
+                        <button class="dcbtn primary btn-sm quick-chain-run"
+                                disabled="@(_runningChainId is not null)"
+                                aria-label="Run @chain.Name"
+                                @onclick="@(() => RunQuickChainAsync(chain))">
+                            @(_runningChainId == chain.Id ? "Starting…" : "Run")
+                        </button>
+                    </div>
+                }
+            </div>
+        }
+
+        @if (!string.IsNullOrWhiteSpace(_chainMessage))
+        {
+            <div class="quick-chain-message @(_chainError ? "error" : "")" role="status" aria-live="polite">
+                @_chainMessage
+            </div>
+        }
+    </section>
 
     @* ── Pinned entities: one-click access to the business views of tagged data ────────── *@
     @if (_entities.Count > 0)
@@ -184,6 +234,10 @@
     private IReadOnlyList<RunReportView> _reports = Array.Empty<RunReportView>();
     private int _running, _queued, _failed24, _succeeded24;
     private string _filter = "all";
+    private IReadOnlyList<JobChainView> _chains = Array.Empty<JobChainView>();
+    private Guid? _runningChainId;
+    private string? _chainMessage;
+    private bool _chainError;
 
     private IReadOnlyList<ProjectChartView> _charts = Array.Empty<ProjectChartView>();
     private IReadOnlyList<DataEntityView> _entities = Array.Empty<DataEntityView>();
@@ -284,6 +338,7 @@
         try { _reports = await Svc.ListRecentRunReportsAsync(take: 50); } catch { }
         if (Ui.CurrentProjectId is { } chartPid)
         {
+            try { _chains = await Svc.ListJobChainsAsync(chartPid); } catch { _chains = Array.Empty<JobChainView>(); }
             try { _charts = await Svc.ListProjectChartsAsync(chartPid); } catch { }
             try
             {
@@ -314,10 +369,27 @@
         _ => _reports,
     };
 
-    private void NewJob()
+    private async Task RunQuickChainAsync(JobChainView chain)
     {
-        if (Ui.CurrentProjectId is { } pid) Nav.NavigateTo($"/project/{pid}/jobs");
-        else Nav.NavigateTo("/onboarding");
+        if (_runningChainId is not null) return;
+
+        _runningChainId = chain.Id;
+        _chainMessage = null;
+        _chainError = false;
+        try
+        {
+            await Svc.RunJobChainAsync(chain.Id);
+            _chainMessage = $"{chain.Name} started. Follow its progress in notifications or Observability.";
+        }
+        catch (Exception ex)
+        {
+            _chainError = true;
+            _chainMessage = $"Could not start {chain.Name}: {ex.Message}";
+        }
+        finally
+        {
+            _runningChainId = null;
+        }
     }
 
     private static string Duration(JobRunDetailView run)

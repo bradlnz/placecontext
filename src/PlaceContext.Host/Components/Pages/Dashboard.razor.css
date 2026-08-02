@@ -34,25 +34,109 @@
     color: var(--text);
 }
 
-.submit-btn {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 8px 14px;
-    font-size: 13px;
-}
-
-.submit-plus {
-    font-size: 15px;
-    line-height: 1;
-}
-
 .stat-grid {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
     gap: 12px;
     margin-bottom: 24px;
     min-width: 0;
+}
+
+.dashboard-quick-chains {
+    margin-bottom: 24px;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.quick-chain-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 16px;
+    border-bottom: 1px solid var(--border);
+}
+
+.quick-chain-head > div,
+.quick-chain-copy {
+    min-width: 0;
+}
+
+.quick-chain-kicker {
+    color: var(--text-3);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: .1em;
+}
+
+.quick-chain-title {
+    margin: 3px 0 0;
+    font-size: 15px;
+    font-weight: 600;
+}
+
+.quick-chain-sub {
+    margin: 4px 0 0;
+    color: var(--text-2);
+    font-size: 12px;
+}
+
+.quick-chain-list {
+    display: grid;
+}
+
+.quick-chain-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-width: 0;
+    padding: 11px 16px;
+    border-bottom: 1px solid var(--border);
+}
+
+.quick-chain-row:last-child {
+    border-bottom: 0;
+}
+
+.quick-chain-name {
+    overflow: hidden;
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 550;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.quick-chain-meta,
+.quick-chain-empty,
+.quick-chain-message {
+    color: var(--text-3);
+    font-size: 11px;
+}
+
+.quick-chain-meta {
+    margin-top: 3px;
+}
+
+.quick-chain-empty,
+.quick-chain-message {
+    padding: 14px 16px;
+}
+
+.quick-chain-message {
+    border-top: 1px solid var(--border);
+    color: var(--good);
+    overflow-wrap: anywhere;
+}
+
+.quick-chain-message.error {
+    color: var(--bad);
+}
+
+.quick-chain-run {
+    flex: none;
+    min-width: 70px;
 }
 
 .stat-card {
@@ -433,10 +517,32 @@
         height: 180px;
     }
 
-    .submit-btn {
-        width: 100%;
+    .quick-chain-head {
+        align-items: stretch;
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    .quick-chain-head .dcbtn {
         justify-content: center;
         min-height: 40px;
+        width: 100%;
+    }
+
+    .quick-chain-row {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .quick-chain-name {
+        overflow-wrap: anywhere;
+        text-overflow: clip;
+        white-space: normal;
+    }
+
+    .quick-chain-run {
+        min-height: 44px;
+        width: 100%;
     }
 
     .jobs-head {
