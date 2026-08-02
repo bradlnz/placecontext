@@ -7,7 +7,7 @@
 }
 
 .sidebar {
-    width: 236px;
+    width: 220px;
     flex: none;
     display: flex;
     flex-direction: column;
@@ -19,23 +19,25 @@
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 18px 18px 16px;
+    min-height: 50px;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
 }
 
 .brand-logo {
-    width: 28px;
-    height: 28px;
+    width: 26px;
+    height: 26px;
     flex: none;
-    border-radius: 7px;
+    border-radius: 3px;
     object-fit: contain;
     background: var(--card-2);
 }
 
 .brand-mark {
-    width: 28px;
-    height: 28px;
+    width: 26px;
+    height: 26px;
     flex: none;
-    border-radius: 7px;
+    border-radius: 3px;
     background: var(--brand);
     display: flex;
     align-items: center;
@@ -76,7 +78,7 @@
 }
 
 .nav-list {
-    padding: 6px 12px;
+    padding: 7px 8px;
     display: flex;
     flex-direction: column;
     gap: 2px;
@@ -97,11 +99,11 @@
 }
 
 .nav-section {
-    font-size: 10px;
-    font-weight: 600;
-    letter-spacing: .7px;
+    font-size: 9.5px;
+    font-weight: 700;
+    letter-spacing: .8px;
     color: var(--text-3);
-    padding: 14px 10px 6px;
+    padding: 15px 8px 5px;
     text-transform: uppercase;
 }
 
@@ -197,8 +199,8 @@
     align-items: center;
     gap: 8px;
     padding: 8px 10px;
-    border-radius: 6px;
-    background: var(--card);
+    border-radius: 3px;
+    background: var(--card-2);
     border: 1px solid var(--border-2);
     cursor: pointer;
 }
@@ -209,7 +211,6 @@
     flex: none;
     border-radius: 50%;
     background: var(--good);
-    box-shadow: 0 0 8px rgba(67, 214, 117, .6);
 }
 
 .switcher-name {
@@ -291,7 +292,7 @@
     width: 26px;
     height: 26px;
     flex: none;
-    border-radius: 6px;
+    border-radius: 3px;
     background: var(--card-2);
     border: 1px solid var(--border);
     display: flex;
@@ -339,7 +340,7 @@
 .icon-btn {
     width: 30px;
     height: 30px;
-    border-radius: 7px;
+    border-radius: 3px;
     border: 1px solid var(--border);
     background: var(--card);
     cursor: pointer;
@@ -358,12 +359,12 @@
 }
 
 .topbar {
-    height: 54px;
+    height: 50px;
     flex: none;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0 24px;
+    padding: 0 20px;
     border-bottom: 1px solid var(--border);
     background: var(--panel);
 }
@@ -395,9 +396,10 @@
     display: flex;
     align-items: center;
     gap: 7px;
-    padding: 6px 11px;
+    padding: 5px 9px;
     background: var(--good-bg);
-    border-radius: 7px;
+    border: 1px solid color-mix(in srgb, var(--good) 34%, var(--border));
+    border-radius: 3px;
     color: var(--good);
     font-size: 11.5px;
     font-weight: 500;
@@ -428,7 +430,7 @@
     width: 34px;
     height: 34px;
     flex: none;
-    border-radius: 7px;
+    border-radius: 3px;
     border: 1px solid var(--border);
     background: var(--card);
     cursor: pointer;

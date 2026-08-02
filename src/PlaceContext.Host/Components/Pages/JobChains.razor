@@ -18,43 +18,86 @@
 }
 else
 {
-    <div class="page-wrap">
-
-        <div class="header-row">
+    <div class="chains-page">
+        <header class="chains-head">
             <div>
-                <h2 class="page-title">Job chains</h2>
-                <div class="sub-note">
-                    Ordered pipelines — each stage's primary output becomes the next stage's input payload. A
-                    stage with more than one job (chips joined with "+") is a parallel fan-out group.
-                </div>
+                <h2>Job chains</h2>
+                <p>Connect reusable jobs into ordered pipelines, including parallel stages and delivery actions.</p>
             </div>
-            <button class="dcbtn primary" @onclick="() => Vm.NewChain()">+ New chain</button>
-        </div>
+            <div class="head-actions">
+                <button class="dcbtn" @onclick="@(() => Nav.NavigateTo($"/project/{ProjectId}/jobs"))">View jobs</button>
+                <button class="dcbtn primary" @onclick="() => Vm.NewChain()">+ New chain</button>
+            </div>
+        </header>
 
         @if (Vm.Message is not null)
         {
-            <div class="message-banner">@Vm.Message</div>
+            <div class="status-message">@Vm.Message</div>
         }
 
         @if (Vm.Chains is null or { Count: 0 })
         {
-            <div class="dccard empty-card">
-                No chains defined for this project yet. Click <strong>+ New chain</strong> to link jobs into a pipeline.
+            <div class="dccard empty-state">
+                <div class="empty-icon">⇢</div>
+                <strong>No job chains yet</strong>
+                <span>Link reusable jobs into a pipeline, then run the whole workflow with one action.</span>
+                <button class="dcbtn primary" @onclick="() => Vm.NewChain()">Create first chain</button>
             </div>
         }
         else
         {
-            <div class="chain-list">
-                @foreach (var chain in Vm.Chains)
-                {
-                    <div class="dccard chain-card" @onclick="@(() => Vm.OpenChainAsync(chain))">
-                        <div class="chain-row">
-                            <div class="min0">
-                                <div class="chain-name">@chain.Name</div>
-                                @if (!string.IsNullOrWhiteSpace(chain.Description))
+            <section class="summary-strip" aria-label="Job chain summary">
+                <div class="summary-count"><strong>@Vm.Chains.Count</strong><span>chains</span></div>
+                <div class="summary-count"><strong>@Vm.Chains.Sum(chain => chain.Stages.Count)</strong><span>stages</span></div>
+                <div class="summary-count"><strong>@Vm.Chains.Sum(chain => chain.Steps.Count)</strong><span>job steps</span></div>
+                <div class="summary-count parallel"><strong>@Vm.Chains.Sum(chain => chain.Stages.Count(stage => stage.IsParallel))</strong><span>parallel</span></div>
+            </section>
+
+            <section class="dccard chain-suite">
+                <header class="suite-head">
+                    <div>
+                        <span class="suite-caret">⌄</span>
+                        <strong>Chain catalogue</strong>
+                        <span>@Vm.Chains.Count reusable pipeline@(Vm.Chains.Count == 1 ? "" : "s")</span>
+                    </div>
+                    <span class="suite-result">@Vm.Chains.Sum(chain => chain.Stages.Count) stages</span>
+                </header>
+
+                <div class="chain-rows">
+                    @foreach (var chain in Vm.Chains)
+                    {
+                        var isRunning = Vm.IsRunningChain(chain.Id);
+                        var parallelStages = chain.Stages.Count(stage => stage.IsParallel);
+                        var actionStages = chain.Stages.Count(stage => stage.Action is not null);
+                        <article class="chain-row @(isRunning ? "running" : null)" @onclick="@(() => Vm.OpenChainAsync(chain))">
+                            <div class="status-icon @(isRunning ? "is-running" : null)" aria-label="@(isRunning ? "Running" : "Pipeline")">
+                                @if (isRunning)
                                 {
-                                    <div class="sub-note">@chain.Description</div>
+                                    <span class="spinner"></span>
                                 }
+                                else
+                                {
+                                    <span>⇢</span>
+                                }
+                            </div>
+                            <div class="chain-copy">
+                                <div class="chain-title">
+                                    <strong>@chain.Name</strong>
+                                    <span class="chain-chip">@chain.Stages.Count stage@(chain.Stages.Count == 1 ? "" : "s")</span>
+                                    <span class="chain-chip">@chain.Steps.Count job step@(chain.Steps.Count == 1 ? "" : "s")</span>
+                                    @if (parallelStages > 0)
+                                    {
+                                        <span class="chain-chip brand-chip">@parallelStages parallel</span>
+                                    }
+                                    @if (actionStages > 0)
+                                    {
+                                        <span class="chain-chip action-chip">@actionStages delivery action@(actionStages == 1 ? "" : "s")</span>
+                                    }
+                                </div>
+                                <div class="chain-detail">
+                                    <span>@(string.IsNullOrWhiteSpace(chain.Description) ? "No description" : chain.Description)</span>
+                                    <span class="chain-facts">updated @chain.UpdatedAt.ToWorkspaceTime().ToString("yyyy-MM-dd")</span>
+                                </div>
                                 <div class="step-chips">
                                     @foreach (var (stage, i) in chain.Stages.Select((s, i) => (s, i)))
                                     {
@@ -93,21 +136,24 @@ else
                             <div class="chain-actions">
                                 @if (Vm.ConfirmDeleteId == chain.Id)
                                 {
-                                    <button class="dcbtn c-bad" @onclick:stopPropagation="true" @onclick="@(() => Vm.DeleteChainAsync(chain.Id))">Confirm delete</button>
+                                    <button class="dcbtn danger" @onclick:stopPropagation="true" @onclick="@(() => Vm.DeleteChainAsync(chain.Id))">Delete</button>
                                     <button class="dcbtn" @onclick:stopPropagation="true" @onclick="@(() => Vm.ConfirmDeleteId = null)">Keep</button>
                                 }
                                 else
                                 {
-                                    <button class="dcbtn" @onclick:stopPropagation="true" @onclick="@(() => Vm.ConfirmDeleteId = chain.Id)">Delete</button>
+                                    <button class="icon-action run-action" title="Run chain" aria-label="Run @chain.Name"
+                                            disabled="@isRunning" @onclick:stopPropagation="true"
+                                            @onclick="@(() => Vm.RunChainAsync(chain))">▶</button>
+                                    <button class="icon-action" title="Edit chain" aria-label="Edit @chain.Name"
+                                            @onclick:stopPropagation="true" @onclick="@(() => Vm.OpenChainAsync(chain))">✎</button>
+                                    <button class="icon-action danger-action" title="Delete chain" aria-label="Delete @chain.Name"
+                                            @onclick:stopPropagation="true" @onclick="@(() => Vm.ConfirmDeleteId = chain.Id)">⋯</button>
                                 }
-                                <button class="dcbtn primary" disabled="@Vm.IsRunningChain(chain.Id)" @onclick:stopPropagation="true" @onclick="@(() => Vm.RunChainAsync(chain))">
-                                    @(Vm.IsRunningChain(chain.Id) ? "running…" : "▶ Run")
-                                </button>
                             </div>
-                        </div>
-                    </div>
-                }
-            </div>
+                        </article>
+                    }
+                </div>
+            </section>
         }
     </div>
 }
