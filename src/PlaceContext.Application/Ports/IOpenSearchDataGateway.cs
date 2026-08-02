@@ -30,6 +30,12 @@ public interface IOpenSearchDataGateway
         OpenSearchSearchRequest request, CancellationToken ct = default);
 }
 
+/// <summary>Triggers the external collector without coupling the application to its transport.</summary>
+public interface IOpenSearchSyncGateway
+{
+    Task<OpenSearchSyncView> TriggerAsync(CancellationToken ct = default);
+}
+
 public sealed record OpenSearchDashboardRecord(
     Guid Id,
     Guid ProjectId,

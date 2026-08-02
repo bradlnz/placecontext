@@ -183,6 +183,10 @@ public sealed class PlaceContextService : IPlaceContextService
         OpenSearchSearchRequest request, CancellationToken ct = default)
         => _dispatcher.Query(new SearchOpenSearchQuery(request), ct);
 
+    public Task<OpenSearchSyncView> TriggerOpenSearchSyncAsync(
+        Guid projectId, CancellationToken ct = default)
+        => _dispatcher.Send(new TriggerOpenSearchSyncCommand(projectId), ct);
+
     public Task<IReadOnlyList<OpenSearchDashboardView>> ListOpenSearchDashboardsAsync(
         Guid projectId, CancellationToken ct = default)
         => _dispatcher.Query(new ListOpenSearchDashboardsQuery(projectId), ct);

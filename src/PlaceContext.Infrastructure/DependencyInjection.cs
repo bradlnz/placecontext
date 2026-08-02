@@ -67,7 +67,12 @@ public static class DependencyInjection
         services.AddScoped<IOpenSearchDashboardStore, EfOpenSearchDashboardStore>();
         services.AddScoped<IOpenSearchConnectionResolver, OpenSearch.OpenSearchConnectionResolver>();
         services.AddScoped<IOpenSearchDataGateway, OpenSearch.OpenSearchDataGateway>();
+        services.AddScoped<IOpenSearchSyncGateway, OpenSearch.OpenSearchSyncGateway>();
         services.AddHttpClient("opensearch", client =>
+        {
+            client.Timeout = TimeSpan.FromSeconds(30);
+        });
+        services.AddHttpClient("opensearch-sync", client =>
         {
             client.Timeout = TimeSpan.FromSeconds(30);
         });

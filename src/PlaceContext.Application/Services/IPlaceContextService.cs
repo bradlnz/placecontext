@@ -69,6 +69,8 @@ public interface IPlaceContextService
         CancellationToken ct = default);
     Task<OpenSearchSearchView> SearchOpenSearchAsync(
         OpenSearchSearchRequest request, CancellationToken ct = default);
+    Task<OpenSearchSyncView> TriggerOpenSearchSyncAsync(
+        Guid projectId, CancellationToken ct = default);
     Task<IReadOnlyList<OpenSearchDashboardView>> ListOpenSearchDashboardsAsync(
         Guid projectId, CancellationToken ct = default);
     Task<OpenSearchDashboardView> SaveOpenSearchDashboardAsync(

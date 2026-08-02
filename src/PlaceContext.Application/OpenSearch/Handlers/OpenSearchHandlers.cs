@@ -45,6 +45,17 @@ public sealed class GetOpenSearchLastUpdatedHandler
             query.ProjectId, query.IndexPattern, query.CandidateFields, ct);
 }
 
+public sealed class TriggerOpenSearchSyncHandler
+    : ICommandHandler<TriggerOpenSearchSyncCommand, OpenSearchSyncView>
+{
+    private readonly IOpenSearchSyncGateway _gateway;
+    public TriggerOpenSearchSyncHandler(IOpenSearchSyncGateway gateway) => _gateway = gateway;
+
+    public Task<OpenSearchSyncView> HandleAsync(
+        TriggerOpenSearchSyncCommand command, CancellationToken ct = default)
+        => _gateway.TriggerAsync(ct);
+}
+
 public sealed class ListOpenSearchDashboardsHandler
     : IQueryHandler<ListOpenSearchDashboardsQuery, IReadOnlyList<OpenSearchDashboardView>>
 {

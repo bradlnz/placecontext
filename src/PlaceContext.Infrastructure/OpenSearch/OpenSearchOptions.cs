@@ -6,4 +6,6 @@ public sealed class OpenSearchOptions
     public string? Username { get; set; }
     public string? Password { get; set; }
     public string DefaultIndexPattern { get; set; } = "*";
+    public string? SyncEndpoint { get; set; }
+    public string? SyncToken { get; set; }
 }

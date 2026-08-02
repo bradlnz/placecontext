@@ -8,6 +8,9 @@ public sealed record OpenSearchFieldView(
 public sealed record OpenSearchLastUpdatedView(
     DateTimeOffset? Value, string? Field);
 
+public sealed record OpenSearchSyncView(
+    bool Accepted, string Status, string Message);
+
 public sealed record OpenSearchHitView(
     string Index,
     string Id,

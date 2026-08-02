@@ -4,6 +4,7 @@
 @inject IPlaceContextService Svc
 @inject PortalUiState Ui
 @inject IJSRuntime JS
+@inject IPermissionService Permissions
 
 <PageTitle>PlaceContext — Data Search</PageTitle>
 
@@ -15,8 +16,21 @@
             <h2>Data Search</h2>
             <p>Search OpenSearch documents, explore fields, and turn aggregations into reusable charts.</p>
         </div>
-        <span class="proxy-chip"><i></i> server proxy</span>
+        <div class="head-actions">
+            @if (_canSync)
+            {
+                <button class="dcbtn" disabled="@_syncing" @onclick="TriggerSyncAsync">
+                    @(_syncing ? "Starting sync…" : "Sync now")
+                </button>
+            }
+            <span class="proxy-chip"><i></i> server proxy</span>
+        </div>
     </header>
+
+    @if (_syncMessage is not null)
+    {
+        <div class="dchint">@_syncMessage</div>
+    }
 
     @if (_error is not null)
     {
@@ -312,6 +326,9 @@
     private string? _error;
     private bool _loading;
     private bool _searching;
+    private bool _syncing;
+    private bool _canSync;
+    private string? _syncMessage;
     private bool _savingDashboard;
     private bool _generatingCharts;
     private Guid? _editingDashboardId;
@@ -343,9 +360,11 @@
         {
             var indicesTask = Svc.ListOpenSearchIndicesAsync(ProjectId);
             var dashboardsTask = Svc.ListOpenSearchDashboardsAsync(ProjectId);
-            await Task.WhenAll(indicesTask, dashboardsTask);
+            var permissionTask = Permissions.HasAsync(Permission.SettingsManage);
+            await Task.WhenAll(indicesTask, dashboardsTask, permissionTask);
             _indices = await indicesTask;
             _dashboards = (await dashboardsTask).ToList();
+            _canSync = await permissionTask;
             if (_indices.Count > 0)
                 _indexPattern = !string.IsNullOrWhiteSpace(RequestedIndex)
                     && _indices.Any(item => item.Name.Equals(RequestedIndex, StringComparison.Ordinal))
@@ -369,6 +388,25 @@
         finally
         {
             _loading = false;
+        }
+    }
+
+    private async Task TriggerSyncAsync()
+    {
+        _syncing = true;
+        _syncMessage = null;
+        try
+        {
+            var result = await Svc.TriggerOpenSearchSyncAsync(ProjectId);
+            _syncMessage = result.Message;
+        }
+        catch (Exception ex)
+        {
+            _syncMessage = ex.Message;
+        }
+        finally
+        {
+            _syncing = false;
         }
     }
 
