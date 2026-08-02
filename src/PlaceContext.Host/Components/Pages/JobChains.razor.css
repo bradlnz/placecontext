@@ -141,6 +141,15 @@
     .chains-head { flex-direction:column; }
     .head-actions { width:100%; }
     .head-actions .dcbtn { flex:1; min-height:40px; }
+    .running-steps-panel {
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
+        height: auto;
+        overflow: hidden;
+    }
+    .running-steps-head { flex-wrap: wrap; }
+    .running-steps-head span { overflow-wrap: anywhere; }
     .summary-strip { grid-template-columns:repeat(4, 1fr); gap:5px; }
     .summary-count { flex-direction:column; gap:0; }
     .chain-row { grid-template-columns:26px minmax(0, 1fr); padding:12px 10px; }
