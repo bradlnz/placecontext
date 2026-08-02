@@ -887,3 +887,29 @@
     .job-facts { white-space: normal; }
     .suite-result { display: none; }
 }
+
+@media (max-width: 700px) {
+    .job-slide-head {
+        align-items: flex-start;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+
+    .job-slide-head .flex-fill-min {
+        flex: 1 1 calc(100% - 54px);
+        min-width: 0;
+    }
+
+    .job-slide-close {
+        flex: none;
+        margin-left: auto;
+        order: 1;
+    }
+
+    .job-slide-run {
+        width: 100%;
+        min-height: 44px;
+        margin-right: 0;
+        order: 2;
+    }
+}

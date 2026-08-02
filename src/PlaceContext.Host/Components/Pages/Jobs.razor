@@ -137,7 +137,7 @@ else
 {
     <div class="dcslide-scrim" @onclick="() => Vm.CloseEditor()"></div>
     <div class="dcslide slide-620">
-        <div class="dcslide-head">
+        <div class="dcslide-head job-slide-head">
             <div class="flex-fill-min">
                 <div class="title-14">@(Vm.EditJobId.HasValue ? Vm.EdName : "New job")</div>
                 <div class="subtitle-11-5">
@@ -146,10 +146,10 @@ else
             </div>
             @if (Vm.EditJobId is { } runnableId)
             {
-                <button class="dcbtn primary mr-10" disabled="@Vm.IsRunningJob(runnableId)"
+                <button class="dcbtn primary mr-10 job-slide-run" disabled="@Vm.IsRunningJob(runnableId)"
                         @onclick="@(() => Vm.RunJobAsync(runnableId))">▶ Run</button>
             }
-            <button class="dcslide-x" @onclick="() => Vm.CloseEditor()">×</button>
+            <button class="dcslide-x job-slide-close" @onclick="() => Vm.CloseEditor()">×</button>
         </div>
 
         @if (Vm.EditJobId.HasValue)
