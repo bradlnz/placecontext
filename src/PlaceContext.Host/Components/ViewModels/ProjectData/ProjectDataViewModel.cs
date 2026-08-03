@@ -62,6 +62,12 @@ public sealed partial class ProjectDataViewModel : PageViewModel
         NotifyStateChanged();
     }
 
+    public async Task OpenTableModalAsync(string table)
+    {
+        OpenTableModal(table);
+        await RunModalAsync(() => Task.FromResult(ModalSql));
+    }
+
     public void CloseTableModal()
     {
         ShowTableModal = false;

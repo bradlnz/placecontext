@@ -64,3 +64,20 @@ public sealed record RemoveCrmClientArtifactCommand(Guid ArtifactId)
 {
     public string RequiredPermission => Permission.DataWrite;
 }
+
+public sealed record CreateCrmAppointmentCommand(Guid ProjectId, Guid? CalendarId, Guid? ClientId, string Title,
+    DateTimeOffset StartsAt, DateTimeOffset EndsAt, string? Location, string? Notes, Guid? AppointmentId = null)
+    : ICommand<CrmAppointmentView>, IRequiresPermission
+{
+    public string RequiredPermission => Permission.DataWrite;
+}
+
+public sealed record DeleteCrmAppointmentCommand(Guid AppointmentId) : ICommand<bool>, IRequiresPermission
+{ public string RequiredPermission => Permission.DataWrite; }
+
+public sealed record SaveCrmCalendarCommand(Guid ProjectId, string Name, string Color, Guid? CalendarId = null)
+    : ICommand<CrmCalendarView>, IRequiresPermission
+{ public string RequiredPermission => Permission.DataWrite; }
+
+public sealed record DeleteCrmCalendarCommand(Guid CalendarId) : ICommand<bool>, IRequiresPermission
+{ public string RequiredPermission => Permission.DataWrite; }

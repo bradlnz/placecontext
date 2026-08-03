@@ -246,6 +246,21 @@ public sealed class PlaceContextService : IPlaceContextService
     public Task<IReadOnlyList<CrmClientView>> ListCrmClientsAsync(Guid projectId, CancellationToken ct = default)
         => _dispatcher.Query(new ListCrmClientsQuery(projectId), ct);
 
+    public Task<IReadOnlyList<CrmAppointmentView>> ListCrmAppointmentsAsync(Guid projectId, CancellationToken ct = default)
+        => _dispatcher.Query(new ListCrmAppointmentsQuery(projectId), ct);
+
+    public Task<CrmAppointmentView> CreateCrmAppointmentAsync(CreateCrmAppointmentCommand command, CancellationToken ct = default)
+        => _dispatcher.Send(command, ct);
+
+    public Task<bool> DeleteCrmAppointmentAsync(Guid appointmentId, CancellationToken ct = default)
+        => _dispatcher.Send(new DeleteCrmAppointmentCommand(appointmentId), ct);
+    public Task<IReadOnlyList<CrmCalendarView>> ListCrmCalendarsAsync(Guid projectId, CancellationToken ct = default)
+        => _dispatcher.Query(new ListCrmCalendarsQuery(projectId), ct);
+    public Task<CrmCalendarView> SaveCrmCalendarAsync(SaveCrmCalendarCommand command, CancellationToken ct = default)
+        => _dispatcher.Send(command, ct);
+    public Task<bool> DeleteCrmCalendarAsync(Guid calendarId, CancellationToken ct = default)
+        => _dispatcher.Send(new DeleteCrmCalendarCommand(calendarId), ct);
+
     public Task<CrmChainRunView> RunCrmClientAutomationAsync(
         Guid clientId,
         Guid chainId,

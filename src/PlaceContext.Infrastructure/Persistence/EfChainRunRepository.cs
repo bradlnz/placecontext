@@ -30,6 +30,15 @@ public sealed class EfChainRunRepository : IChainRunRepository
         existing.StepsJson = Encrypt(JsonSerializer.Serialize(run.Steps.Select(StepJson.From), Json));
         existing.FinalOutput = EncryptNullable(run.FinalOutput);
         existing.FinishedAt = run.FinishedAt;
+        existing.ResumeAt = run.ResumeAt;
+        existing.ResumeStageIndex = run.ResumeStageIndex;
+        existing.CrmClientId = run.CrmClientId;
+        existing.ContinuationOverrides = EncryptNullable(run.ContinuationOverridesJson);
+        if (run.Status != ChainRunStatus.Running)
+        {
+            existing.ContinuationClaimedAt = null;
+            existing.ContinuationClaimedBy = null;
+        }
     }
 
     public async Task<ChainRun?> GetByIdAsync(Guid chainRunId, CancellationToken ct = default)
@@ -68,6 +77,10 @@ public sealed class EfChainRunRepository : IChainRunRepository
         FinalOutput = EncryptNullable(r.FinalOutput),
         StartedAt = r.StartedAt,
         FinishedAt = r.FinishedAt,
+        ResumeAt = r.ResumeAt,
+        ResumeStageIndex = r.ResumeStageIndex,
+        CrmClientId = r.CrmClientId,
+        ContinuationOverrides = EncryptNullable(r.ContinuationOverridesJson),
     };
 
     private ChainRun ToDomain(ChainRunRow r)
@@ -77,7 +90,8 @@ public sealed class EfChainRunRepository : IChainRunRepository
             .ToList();
         return ChainRun.Rehydrate(r.Id, r.ChainId, r.ProjectId, r.ChainName,
             Enum.Parse<ChainRunStatus>(r.Status), steps, DecryptNullable(r.FinalOutput),
-            r.StartedAt, r.FinishedAt);
+            r.StartedAt, r.FinishedAt, r.ResumeAt, r.ResumeStageIndex, r.CrmClientId,
+            DecryptNullable(r.ContinuationOverrides));
     }
 
     private string Encrypt(string value) => _encryptor.Protect(value, Purpose);

@@ -5,6 +5,7 @@ public sealed class CrmAutomationQueueRow
 {
     public Guid Id { get; set; }
     public Guid TenantId { get; set; }
+    public Guid ProjectId { get; set; }
     public Guid RuleId { get; set; }
     public Guid? ClientId { get; set; }
     public Guid ChainId { get; set; }
@@ -19,4 +20,7 @@ public sealed class CrmAutomationQueueRow
     public string? ClaimedBy { get; set; }
     public DateTimeOffset? ClaimedAt { get; set; }
     public DateTimeOffset? FailedAt { get; set; }
+    public Guid? ChainRunId { get; set; }
+    public string? ResultStatus { get; set; }
+    public DateTimeOffset? CompletedAt { get; set; }
 }

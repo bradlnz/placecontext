@@ -93,6 +93,12 @@ public interface IPlaceContextService
     Task<CrmClientView> MoveCrmClientAsync(Guid clientId, Domain.ValueObjects.CustomerLifecycleStage stage, CancellationToken ct = default);
     Task<bool> DeleteCrmClientAsync(Guid clientId, CancellationToken ct = default);
     Task<IReadOnlyList<CrmClientView>> ListCrmClientsAsync(Guid projectId, CancellationToken ct = default);
+    Task<IReadOnlyList<CrmAppointmentView>> ListCrmAppointmentsAsync(Guid projectId, CancellationToken ct = default);
+    Task<CrmAppointmentView> CreateCrmAppointmentAsync(CreateCrmAppointmentCommand command, CancellationToken ct = default);
+    Task<bool> DeleteCrmAppointmentAsync(Guid appointmentId, CancellationToken ct = default);
+    Task<IReadOnlyList<CrmCalendarView>> ListCrmCalendarsAsync(Guid projectId, CancellationToken ct = default);
+    Task<CrmCalendarView> SaveCrmCalendarAsync(SaveCrmCalendarCommand command, CancellationToken ct = default);
+    Task<bool> DeleteCrmCalendarAsync(Guid calendarId, CancellationToken ct = default);
     Task<CrmChainRunView> RunCrmClientAutomationAsync(
         Guid clientId,
         Guid chainId,

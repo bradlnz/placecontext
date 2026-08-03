@@ -12,13 +12,15 @@ public sealed class DbCrmAutomationQueue : ICrmAutomationQueue
     public DbCrmAutomationQueue(AppDbContext db, IClock clock, IDataEncryptor encryptor)
         => (_db, _clock, _encryptor) = (db, clock, encryptor);
 
-    public async Task EnqueueAsync(QueuedCrmAutomation value, CancellationToken ct = default)
+    public async Task<Guid> EnqueueAsync(QueuedCrmAutomation value, CancellationToken ct = default)
     {
         var now = _clock.UtcNow;
+        var trackingId = Guid.NewGuid();
         await _db.CrmAutomationQueue.AddAsync(new CrmAutomationQueueRow
         {
-            Id = Guid.NewGuid(),
+            Id = trackingId,
             TenantId = value.TenantId,
+            ProjectId = value.ProjectId,
             RuleId = value.RuleId,
             ClientId = value.ClientId,
             ChainId = value.ChainId,
@@ -30,5 +32,6 @@ public sealed class DbCrmAutomationQueue : ICrmAutomationQueue
             EnqueuedAt = now,
             NextAttemptAt = now,
         }, ct);
+        return trackingId;
     }
 }

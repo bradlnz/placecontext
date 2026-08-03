@@ -34,14 +34,14 @@ else
                 <h2>@CrmSectionTitle()</h2>
                 <p>@CrmSectionDescription()</p>
             </div>
-            @if (_crmSection != "settings")
+            @if (_crmSection is "contacts" or "opportunities" or "automations")
             {
             <button class="dcbtn primary add-client-btn"
                     @onclick="NewPrimary">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M12 5v14M5 12h14"></path>
                 </svg>
-                @(_crmSection == "clients" ? "Add client" : "Add automation")
+                @(_crmSection == "automations" ? "Add automation" : "Add contact")
             </button>
             }
         </div>
@@ -52,23 +52,47 @@ else
                     @onclick="ToggleCrmNavigation">
                 <span>Customer operations</span>
                 <span class="crm-nav-current">@CrmSectionTitle()</span>
-                <span aria-hidden="true">@(_crmNavOpen ? "−" : "+")</span>
+                <span aria-hidden="true"><CrmIcon Name="@(_crmNavOpen ? "chevron-up" : "chevron-down")" /></span>
             </button>
 
             <nav id="crm-sections"
                  class="@($"crm-section-nav {(_crmNavOpen ? "open" : string.Empty)}")"
-                 aria-label="CRM sections">
+                 aria-label="CRM sections" role="tablist">
                 <div class="crm-nav-head">Customer operations</div>
-                <button class="@(_crmSection == "clients" ? "active" : "")"
-                        aria-current="@(_crmSection == "clients" ? "page" : null)"
-                        @onclick="@(() => OpenCrmSection("clients"))">
+                <button class="@(_crmSection == "conversations" ? "active" : "")"
+                        role="tab" aria-selected="@(_crmSection == "conversations")"
+                        @onclick="@(() => OpenCrmSection("conversations"))">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                        <path d="M4 5h16v11H8l-4 4z"></path><path d="M8 9h8M8 12h5"></path>
+                    </svg>
+                    <span>Conversations</span>
+                </button>
+                <button class="@(_crmSection == "calendars" ? "active" : "")"
+                        role="tab" aria-selected="@(_crmSection == "calendars")"
+                        @onclick="@(() => OpenCrmSection("calendars"))">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                        <rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M7 3v4M17 3v4M3 10h18"></path>
+                    </svg>
+                    <span>Calendars</span>
+                </button>
+                <button class="@(_crmSection == "contacts" ? "active" : "")"
+                        role="tab" aria-selected="@(_crmSection == "contacts")"
+                        @onclick="@(() => OpenCrmSection("contacts"))">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
                         <circle cx="9" cy="7" r="4"></circle><path d="M3 21v-2a6 6 0 0 1 12 0v2M17 8h4M19 6v4"></path>
                     </svg>
-                    <span>Clients</span><small>@_clients.Count</small>
+                    <span>Contacts</span><small>@_clients.Count</small>
+                </button>
+                <button class="@(_crmSection == "opportunities" ? "active" : "")"
+                        role="tab" aria-selected="@(_crmSection == "opportunities")"
+                        @onclick="@(() => OpenCrmSection("opportunities"))">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                        <path d="M4 19V9M10 19V5M16 19v-7M22 19H2"></path>
+                    </svg>
+                    <span>Opportunities</span><small>@_clients.Count</small>
                 </button>
                 <button class="@(_crmSection == "automations" ? "active" : "")"
-                        aria-current="@(_crmSection == "automations" ? "page" : null)"
+                        role="tab" aria-selected="@(_crmSection == "automations")"
                         @onclick="@(() => OpenCrmSection("automations"))">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
                         <path d="M8 4h8v5H8zM4 15h6v5H4zM14 15h6v5h-6z"></path>
@@ -77,7 +101,7 @@ else
                     <span>Automations</span><small>@_automationRules.Count</small>
                 </button>
                 <button class="@(_crmSection == "settings" ? "active" : "")"
-                        aria-current="@(_crmSection == "settings" ? "page" : null)"
+                        role="tab" aria-selected="@(_crmSection == "settings")"
                         @onclick="@(() => OpenCrmSection("settings"))">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
                         <circle cx="12" cy="12" r="3"></circle>
@@ -88,7 +112,7 @@ else
             </nav>
 
             <div class="crm-workspace">
-                @if (_crmSection == "clients")
+                @if (_crmSection is "contacts" or "opportunities")
                 {
                     <div class="crm-toolbar">
                         <div class="crm-search">
@@ -101,7 +125,7 @@ else
                         @if (_stageFilter is not null)
                         {
                             <button class="dcbtn xs clear-filter" @onclick="@(() => _stageFilter = null)">
-                                Clear filter <span>×</span>
+                                Clear filter <span><CrmIcon Name="close" /></span>
                             </button>
                         }
                     </div>
@@ -112,7 +136,9 @@ else
             <div class="crm-message">@_message</div>
         }
 
-        @if (_crmSection == "clients")
+        @if (_crmSection is "contacts" or "opportunities")
+        {
+        @if (_crmSection == "opportunities")
         {
         <section class="dccard lifecycle-panel">
             <div class="lifecycle-head">
@@ -141,6 +167,7 @@ else
                 }
             </div>
         </section>
+        }
 
         <section class="client-directory">
             <div class="directory-head">
@@ -240,6 +267,185 @@ else
             }
         </section>
         }
+        else if (_crmSection == "conversations")
+        {
+            <section class="conversation-inbox dccard">
+                <aside class="conversation-sidebar">
+                    <div class="conversation-sidebar-head">
+                        <strong>Customers</strong><span>@_clients.Count</span>
+                    </div>
+                    <label class="conversation-search">
+                        <span aria-hidden="true"><CrmIcon Name="search" /></span>
+                        <input @bind="_conversationSearch" @bind:event="oninput" placeholder="Search customers…" />
+                    </label>
+                @if (_clients.Count == 0)
+                {
+                    <div class="conversation-list-empty">Add a contact to start a conversation.</div>
+                }
+                else
+                {
+                    <div class="conversation-customer-list">
+                        @foreach (var client in FilteredConversationClients)
+                        {
+                            <button class="conversation-customer @(_selected?.Id == client.Id ? "active" : "")"
+                                    @onclick="@(() => OpenConversation(client))">
+                                <span class="client-avatar @StageClass(ParseStage(client.LifecycleStage))">@Initials(client.Name)</span>
+                                <span class="conversation-customer-copy">
+                                    <strong>@client.Name</strong>
+                                    <small>@(client.Email ?? client.Phone ?? "No contact details")</small>
+                                </span>
+                                <span class="conversation-stage-dot @StageClass(ParseStage(client.LifecycleStage))"></span>
+                            </button>
+                        }
+                    </div>
+                }
+                </aside>
+
+                <div class="conversation-main">
+                    @if (_selected is null)
+                    {
+                        <div class="conversation-no-selection">
+                            <span class="crm-channel-icon"><CrmIcon Name="mail" /></span>
+                            <strong>Select a customer</strong>
+                            <span>Choose a customer from the sidebar to open their conversation.</span>
+                        </div>
+                    }
+                    else
+                    {
+                        <header class="conversation-main-head">
+                            <span class="client-avatar @StageClass(ParseStage(_selected.LifecycleStage))">@Initials(_selected.Name)</span>
+                            <span><strong>@_selected.Name</strong><small>@(_selected.Email ?? _selected.Phone ?? "No contact details")</small></span>
+                            <button class="dcbtn xs" @onclick="@(() => EditClient(_selected))">Contact details</button>
+                        </header>
+                        <div class="conversation-thread">
+                            @if (_loadingComms)
+                            {
+                                <div class="comms-empty">Loading conversation…</div>
+                            }
+                            else if (_communications.Count == 0)
+                            {
+                                <div class="comms-empty">
+                                    <span class="comms-empty-icon"><CrmIcon Name="message" /></span>
+                                    <strong>Start the conversation</strong>
+                                    <span>Add an internal note, or contact @_selected.Name by email or SMS.</span>
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="comms-timeline">
+                                    @foreach (var item in _communications.Reverse())
+                                    {
+                                        <article class="message-row @item.Channel.ToLowerInvariant() @item.Status.ToLowerInvariant()">
+                                            <div class="message-bubble">
+                                                <div class="message-meta">
+                                                    <span class="channel-mark"><CrmIcon Name="@ChannelIconName(item.Channel)" /></span>
+                                                    <strong>@ChannelLabel(item.Channel)</strong>
+                                                    @if (item.Status == "Failed") { <span class="delivery-state failed">Failed</span> }
+                                                    else if (item.Status == "Sent") { <span class="delivery-state">Sent</span> }
+                                                </div>
+                                                @if (item.Subject is not null) { <div class="message-subject">@item.Subject</div> }
+                                                <div class="message-body">@item.Body</div>
+                                                @if (item.Error is not null) { <div class="message-error">@item.Error</div> }
+                                                <time>@item.CreatedAt.ToWorkspaceTime().ToString("dd MMM, HH:mm")</time>
+                                            </div>
+                                        </article>
+                                    }
+                                </div>
+                            }
+                        </div>
+                        <div class="conversation-composer">
+                            <div class="channel-picker" role="tablist" aria-label="Communication type">
+                                @foreach (var channel in CommsChannels)
+                                {
+                                    var enabled = ChannelAvailable(channel);
+                                    <button class="@(_composeChannel == channel ? "active" : "")" disabled="@(!enabled)"
+                                            title="@ChannelHelp(channel)" @onclick="@(() => SelectChannel(channel))">
+                                        <span><CrmIcon Name="@ChannelIconName(channel)" /></span>@ChannelLabel(channel)
+                                    </button>
+                                }
+                            </div>
+                            @if (_composeChannel == "Email")
+                            {
+                                <input class="dcinput composer-subject" @bind="_composeSubject" placeholder="Email subject" />
+                            }
+                            <textarea class="dcinput composer-body" rows="3" @bind="_composeBody"
+                                      placeholder="@ComposerPlaceholder()" aria-label="Message"></textarea>
+                            @if (_commsError is not null) { <div class="form-error">@_commsError</div> }
+                            <div class="composer-foot">
+                                <span class="recipient-hint">@RecipientHint()</span>
+                                <button class="dcbtn primary send-comms" disabled="@(!CanSubmitComms)" @onclick="SubmitCommunication">
+                                    @(_sendingComms ? "Sending…" : SubmitLabel())
+                                </button>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </section>
+        }
+        else if (_crmSection == "calendars")
+        {
+            <section class="crm-channel-workspace">
+                @if (_openCalendarId is null)
+                {
+                    <div class="crm-calendar-head dccard">
+                        <div><span class="section-kicker">Calendar catalogue</span><strong>@(_calendars.Count + 1) calendar@(_calendars.Count == 0 ? "" : "s")</strong></div>
+                        <button class="dcbtn primary" @onclick="@(() => OpenCalendarEditor())"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"></path></svg>New calendar</button>
+                    </div>
+                    <div class="dccard calendar-catalogue">
+                        <button class="calendar-catalogue-row" @onclick="@(() => OpenCalendar(Guid.Empty))">
+                            <span class="calendar-swatch" style="background:#4f7cff"></span>
+                            <span><strong>General</strong><small>Default CRM calendar · @_appointments.Count(x => x.CalendarId is null) event@(_appointments.Count(x => x.CalendarId is null) == 1 ? "" : "s")</small></span>
+                            <CrmIcon Name="arrow-right" />
+                        </button>
+                        @foreach (var calendar in _calendars)
+                        {
+                            <div class="calendar-catalogue-row" role="button" tabindex="0" @onclick="@(() => OpenCalendar(calendar.Id))">
+                                <span class="calendar-swatch" style="background:@calendar.Color"></span>
+                                <span><strong>@calendar.Name</strong><small>@_appointments.Count(x => x.CalendarId == calendar.Id) event@(_appointments.Count(x => x.CalendarId == calendar.Id) == 1 ? "" : "s")</small></span>
+                                <span class="calendar-row-actions">
+                                    <button class="icon-action" title="Edit calendar" @onclick:stopPropagation="true" @onclick="@(() => OpenCalendarEditor(calendar))"><CrmIcon Name="edit" /></button>
+                                    <button class="icon-action danger" title="Delete calendar" @onclick:stopPropagation="true" @onclick="@(() => DeleteCalendar(calendar.Id))"><CrmIcon Name="trash" /></button>
+                                </span>
+                            </div>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <div class="crm-calendar-head dccard calendar-view-head">
+                        <button class="dcbtn" @onclick="CloseCalendar"><CrmIcon Name="arrow-left" />Calendars</button>
+                        <div><span class="section-kicker">@OpenCalendarName</span><strong>@_calendarMonth.ToString("MMMM yyyy")</strong></div>
+                        <div class="calendar-head-actions">
+                            <button class="icon-action" title="Previous month" @onclick="@(() => ChangeCalendarMonth(-1))"><CrmIcon Name="chevron-left" /></button>
+                            <button class="dcbtn xs" @onclick="GoToCurrentMonth">Today</button>
+                            <button class="icon-action" title="Next month" @onclick="@(() => ChangeCalendarMonth(1))"><CrmIcon Name="chevron-right" /></button>
+                            <button class="dcbtn primary" @onclick="@(() => OpenAppointmentEditor())"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"></path></svg>Add event</button>
+                        </div>
+                    </div>
+                    <div class="dccard calendar-month">
+                        <div class="calendar-weekdays">@foreach (var dayName in CalendarWeekdays) { <span>@dayName</span> }</div>
+                        <div class="calendar-grid">
+                            @foreach (var day in CalendarDays)
+                            {
+                                var events = AppointmentsFor(day);
+                                <div class="calendar-day @(day.Month != _calendarMonth.Month ? "outside" : "") @(day == DateOnly.FromDateTime(DateTime.Now) ? "today" : "")" @ondblclick="@(() => OpenAppointmentEditor(day))">
+                                    <span class="calendar-day-number">@day.Day</span>
+                                    <div class="calendar-day-events">
+                                        @foreach (var appointment in events.Take(3))
+                                        {
+                                            <button class="calendar-event" style="--event-color:@OpenCalendarColor" @onclick="@(() => OpenAppointmentEditor(appointment))">
+                                                <time>@appointment.StartsAt.ToWorkspaceTime().ToString("h:mm tt")</time><span>@appointment.Title</span>
+                                            </button>
+                                        }
+                                        @if (events.Count > 3) { <small>+@(events.Count - 3) more</small> }
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
+            </section>
+        }
         else if (_crmSection == "automations")
         {
             <section class="automations-workspace">
@@ -266,7 +472,7 @@ else
                 @if (_automationRules.Count == 0)
                 {
                     <div class="dccard automation-empty">
-                        <span class="automation-empty-icon">⌁</span>
+                        <span class="automation-empty-icon"><CrmIcon Name="workflow" /></span>
                         <strong>Turn CRM events into workflows</strong>
                         <span>Run a job chain from client lifecycle events or any JSON submitted to the CRM ingestion endpoint.</span>
                         <button class="dcbtn primary" @onclick="NewAutomation">Create automation</button>
@@ -286,7 +492,7 @@ else
                         {
                             <article class="dccard automation-rule-card @(!rule.Enabled ? "disabled" : "")">
                                 <div class="automation-card-head">
-                                    <span class="automation-event-icon">@AutomationEventIcon(rule.EventType)</span>
+                                    <span class="automation-event-icon"><CrmIcon Name="@AutomationEventIconName(rule.EventType)" /></span>
                                     <span class="automation-card-title">
                                         <strong>@rule.Name</strong>
                                         <small>Updated @rule.UpdatedAt.ToWorkspaceTime().ToString("dd MMM yyyy")</small>
@@ -442,6 +648,48 @@ else
     </div>
 }
 
+@if (_showAppointmentEditor)
+{
+    <div class="dcslide-scrim" @onclick="CloseAppointmentEditor"></div>
+    <div class="dcslide appointment-editor">
+        <div class="dcslide-head">
+            <div><div class="title-14">@(_editAppointmentId is null ? "Add event" : "Edit event")</div><div class="subtitle-11-5">Schedule time with a CRM contact.</div></div>
+            <button class="dcslide-x" @onclick="CloseAppointmentEditor" aria-label="Close"><CrmIcon Name="close" /></button>
+        </div>
+        <div class="dcslide-body appointment-form">
+            <div class="dcfield"><label>Title <span class="req">*</span></label><input class="dcinput" @bind="_appointmentTitle" placeholder="Site consultation" /></div>
+            <div class="dcfield"><label>Calendar</label><select class="dcinput" @bind="_appointmentCalendarId"><option value="">General</option>@foreach (var calendar in _calendars) { <option value="@calendar.Id">@calendar.Name</option> }</select></div>
+            <div class="dcfield"><label>Contact</label><select class="dcinput" @bind="_appointmentClientId"><option value="">No linked contact</option>@foreach (var client in _clients.OrderBy(x => x.Name)) { <option value="@client.Id">@client.Name</option> }</select></div>
+            <div class="appointment-times">
+                <div class="dcfield"><label>Starts <span class="req">*</span></label><input class="dcinput" type="datetime-local" value="@_appointmentStartsAt" @onchange="OnAppointmentStartsChanged" /></div>
+                <div class="dcfield"><label>Ends <span class="req">*</span></label><input class="dcinput" type="datetime-local" value="@_appointmentEndsAt" @onchange="OnAppointmentEndsChanged" /></div>
+            </div>
+            <div class="dcfield"><label>Location</label><input class="dcinput" @bind="_appointmentLocation" placeholder="Office, phone, or video link" /></div>
+            <div class="dcfield"><label>Notes</label><textarea class="dcinput" rows="4" @bind="_appointmentNotes" placeholder="Appointment context…"></textarea></div>
+            @if (_appointmentError is not null) { <div class="form-error">@_appointmentError</div> }
+        </div>
+        <div class="dcslide-foot">
+            @if (_editAppointmentId is not null) { <button class="dcbtn danger" disabled="@_savingAppointment" @onclick="DeleteAppointment">Delete event</button> }
+            <button class="dcbtn" @onclick="CloseAppointmentEditor">Cancel</button>
+            <button class="dcbtn primary" disabled="@_savingAppointment" @onclick="SaveAppointment">@(_savingAppointment ? "Saving…" : _editAppointmentId is null ? "Add event" : "Save event")</button>
+        </div>
+    </div>
+}
+
+@if (_showCalendarEditor)
+{
+    <div class="dcslide-scrim" @onclick="CloseCalendarEditor"></div>
+    <div class="dcslide calendar-editor">
+        <div class="dcslide-head"><div><div class="title-14">@(_editCalendarId is null ? "New calendar" : "Edit calendar")</div><div class="subtitle-11-5">Organise CRM events into a dedicated calendar.</div></div><button class="dcslide-x" @onclick="CloseCalendarEditor"><CrmIcon Name="close" /></button></div>
+        <div class="dcslide-body appointment-form">
+            <div class="dcfield"><label>Name <span class="req">*</span></label><input class="dcinput" @bind="_calendarName" placeholder="Consultations" /></div>
+            <div class="dcfield"><label>Colour</label><div class="calendar-color-field"><input type="color" @bind="_calendarColor" /><input class="dcinput" @bind="_calendarColor" /></div></div>
+            @if (_calendarError is not null) { <div class="form-error">@_calendarError</div> }
+        </div>
+        <div class="dcslide-foot"><button class="dcbtn" @onclick="CloseCalendarEditor">Cancel</button><button class="dcbtn primary" disabled="@_savingCalendar" @onclick="SaveCalendar">@(_savingCalendar ? "Saving…" : "Save calendar")</button></div>
+    </div>
+}
+
 @if (_showEditor)
 {
     <div class="dcslide-scrim" @onclick="CloseEditor"></div>
@@ -451,7 +699,7 @@ else
                 <div class="title-14">@(_editId is null ? "Add client" : "Edit client")</div>
                 <div class="subtitle-11-5">Contact details and current lifecycle position</div>
             </div>
-            <button class="dcslide-x" @onclick="CloseEditor">×</button>
+            <button class="dcslide-x" @onclick="CloseEditor" aria-label="Close"><CrmIcon Name="close" /></button>
         </div>
         <div class="dcslide-body crm-form">
             <div class="dcfield">
@@ -509,11 +757,11 @@ else
                 <div class="title-14">@(_editAutomationId is null ? "Add automation" : "Edit automation")</div>
                 <div class="subtitle-11-5">Connect a CRM or ingestion event to a job chain</div>
             </div>
-            <button class="dcslide-x" @onclick="CloseAutomationEditor">×</button>
+            <button class="dcslide-x" @onclick="CloseAutomationEditor" aria-label="Close"><CrmIcon Name="close" /></button>
         </div>
         <div class="dcslide-body crm-form">
             <div class="automation-editor-intro">
-                <span>⌁</span>
+                <span><CrmIcon Name="workflow" /></span>
                 <p><strong>Event-driven customer work</strong>Matching events are queued and run with client context or the incoming JSON payload.</p>
             </div>
             <div class="dcfield">
@@ -573,7 +821,7 @@ else
                     <strong>@AutomationEventLabel(_automationEvent)</strong>
                     <em>@(_automationEvent == CrmAutomationEventType.IngestionReceived ? "Raw JSON payload" : AutomationStageLabel(_automationStage?.ToString()))</em>
                 </span>
-                <span class="preview-arrow">→</span>
+                <span class="preview-arrow"><CrmIcon Name="arrow-right" /></span>
                 <span class="preview-node">
                     <small>Run</small>
                     <strong>@SelectedAutomationChainName</strong>
@@ -594,7 +842,7 @@ else
     </div>
 }
 
-@if (_selected is not null)
+@if (_selected is not null && _crmSection != "conversations")
 {
     <div class="dcslide-scrim" @onclick="CloseClient"></div>
     <div class="dcslide crm-detail">
@@ -606,7 +854,7 @@ else
                     <span class="subtitle-11-5">@(_selected.Company ?? StageLabel(ParseStage(_selected.LifecycleStage)))</span>
                 </span>
             </div>
-            <button class="dcslide-x" @onclick="CloseClient">×</button>
+            <button class="dcslide-x" @onclick="CloseClient" aria-label="Close"><CrmIcon Name="close" /></button>
         </div>
         <div class="dcslide-body detail-body">
             <div class="detail-hero @StageClass(ParseStage(_selected.LifecycleStage))">
@@ -630,7 +878,7 @@ else
                 <button class="@(_detailTab == "artifacts" ? "active" : "")"
                         role="tab" aria-selected="@(_detailTab == "artifacts")"
                         @onclick="@(() => _detailTab = "artifacts")">
-                    Artifacts <span class="tab-count">@_clientArtifacts.Count</span>
+                    Artifacts <span class="tab-count">@LatestClientArtifacts.Count</span>
                 </button>
             </div>
 
@@ -664,11 +912,11 @@ else
                     <div class="section-label">Contact</div>
                     <div class="detail-list">
                         <span class="detail-contact">
-                            <span class="contact-icon">@@</span>
+                            <span class="contact-icon"><CrmIcon Name="mail" /></span>
                             <span><small>Email</small>@(_selected.Email ?? "Not provided")</span>
                         </span>
                         <span class="detail-contact">
-                            <span class="contact-icon">⌕</span>
+                            <span class="contact-icon"><CrmIcon Name="phone" /></span>
                             <span><small>Phone</small>@(_selected.Phone ?? "Not provided")</span>
                         </span>
                     </div>
@@ -744,7 +992,7 @@ else
                     else if (_communications.Count == 0)
                     {
                         <div class="comms-empty">
-                            <span class="comms-empty-icon">✦</span>
+                            <span class="comms-empty-icon"><CrmIcon Name="message" /></span>
                             <strong>Start the conversation</strong>
                             <span>Add an internal note, or contact @_selected.Name by email or SMS.</span>
                         </div>
@@ -757,7 +1005,7 @@ else
                                 <article class="message-row @item.Channel.ToLowerInvariant() @item.Status.ToLowerInvariant()">
                                     <div class="message-bubble">
                                         <div class="message-meta">
-                                            <span class="channel-mark">@ChannelIcon(item.Channel)</span>
+                                            <span class="channel-mark"><CrmIcon Name="@ChannelIconName(item.Channel)" /></span>
                                             <strong>@ChannelLabel(item.Channel)</strong>
                                             @if (item.Status == "Failed")
                                             {
@@ -793,7 +1041,7 @@ else
                                         disabled="@(!enabled)"
                                         title="@ChannelHelp(channel)"
                                         @onclick="@(() => SelectChannel(channel))">
-                                    <span>@ChannelIcon(channel)</span>@ChannelLabel(channel)
+                                    <span><CrmIcon Name="@ChannelIconName(channel)" /></span>@ChannelLabel(channel)
                                 </button>
                             }
                         </div>
@@ -840,8 +1088,8 @@ else
                             </span>
                         </div>
                         <div class="artifact-summary">
-                            <span><strong>@_clientArtifacts.Count</strong> file@(_clientArtifacts.Count == 1 ? "" : "s")</span>
-                            <span>@FormatBytes(_clientArtifacts.Sum(item => item.SizeBytes))</span>
+                            <span><strong>@LatestClientArtifacts.Count</strong> file@(LatestClientArtifacts.Count == 1 ? "" : "s")</span>
+                            <span>@FormatBytes(LatestClientArtifacts.Sum(item => item.SizeBytes))</span>
                         </div>
                     </div>
 
@@ -874,7 +1122,7 @@ else
                             }
                         </div>
                     }
-                    else if (_clientArtifacts.Count == 0)
+                    else if (LatestClientArtifacts.Count == 0)
                     {
                         <div class="artifact-empty">
                             <span class="artifact-empty-icon">
@@ -898,13 +1146,13 @@ else
                                 @if (!string.IsNullOrWhiteSpace(_artifactSearch))
                                 {
                                     <button type="button" title="Clear search"
-                                            @onclick="@(() => _artifactSearch = "")">×</button>
+                                            @onclick="@(() => _artifactSearch = "")"><CrmIcon Name="close" /></button>
                                 }
                             </label>
                             <div class="artifact-source-filter" aria-label="Artifact source">
                                 <button class="@(_artifactSourceFilter == "all" ? "active" : "")"
                                         @onclick="@(() => _artifactSourceFilter = "all")">
-                                    All <span>@_clientArtifacts.Count</span>
+                                    All <span>@LatestClientArtifacts.Count</span>
                                 </button>
                                 <button class="@(_artifactSourceFilter == "upload" ? "active" : "")"
                                         @onclick="@(() => _artifactSourceFilter = "upload")">
@@ -975,7 +1223,7 @@ else
                                                     @onclick="@(() => RemoveArtifact(artifact))">Remove</button>
                                             <button class="artifact-action"
                                                     title="Cancel"
-                                                    @onclick="@(() => _confirmArtifactRemoveId = null)">×</button>
+                                                    @onclick="@(() => _confirmArtifactRemoveId = null)"><CrmIcon Name="close" /></button>
                                         }
                                         else
                                         {
@@ -1006,7 +1254,7 @@ else
     private static readonly CustomerLifecycleStage[] Stages = Enum.GetValues<CustomerLifecycleStage>();
     private static readonly CrmAutomationEventType[] AutomationEvents = Enum.GetValues<CrmAutomationEventType>();
     private static readonly string[] CommsChannels = ["Note", "Email", "Sms"];
-    private string _crmSection = "clients";
+    private string _crmSection = "opportunities";
     private bool _crmNavOpen;
     private IReadOnlyList<CrmClientView> _clients = Array.Empty<CrmClientView>();
     private IReadOnlyList<JobChainView> _chains = Array.Empty<JobChainView>();
@@ -1014,6 +1262,8 @@ else
     private IReadOnlyList<CrmChainRunView> _clientRuns = Array.Empty<CrmChainRunView>();
     private IReadOnlyList<CrmCommunicationView> _communications = Array.Empty<CrmCommunicationView>();
     private IReadOnlyList<CrmClientArtifactView> _clientArtifacts = Array.Empty<CrmClientArtifactView>();
+    private IReadOnlyList<CrmAppointmentView> _appointments = Array.Empty<CrmAppointmentView>();
+    private IReadOnlyList<CrmCalendarView> _calendars = Array.Empty<CrmCalendarView>();
     private CrmCommsCapabilitiesView? _commsCapabilities;
     private bool _loading = true;
     private bool _loadingRuns;
@@ -1023,14 +1273,33 @@ else
     private bool _uploadingArtifact;
     private bool _showEditor;
     private bool _showAutomationEditor;
+    private bool _showAppointmentEditor;
+    private bool _showCalendarEditor;
     private bool _saving;
     private bool _savingAutomation;
+    private bool _savingAppointment;
+    private bool _savingCalendar;
     private bool _running;
     private bool _confirmDelete;
     private string? _message;
     private string? _formError;
     private string? _commsError;
     private string? _artifactError;
+    private string? _appointmentError;
+    private string? _calendarError;
+    private Guid? _editAppointmentId;
+    private Guid? _editCalendarId;
+    private Guid? _openCalendarId;
+    private string _appointmentCalendarId = "";
+    private string _appointmentTitle = "";
+    private string _appointmentClientId = "";
+    private string _appointmentStartsAt = "";
+    private string _appointmentEndsAt = "";
+    private string? _appointmentLocation;
+    private string? _appointmentNotes;
+    private string _calendarName = "";
+    private string _calendarColor = "#4f7cff";
+    private DateTime _calendarMonth = new(DateTime.Today.Year, DateTime.Today.Month, 1);
     private string _artifactSearch = "";
     private string _artifactSourceFilter = "all";
     private string _detailTab = "overview";
@@ -1038,6 +1307,7 @@ else
     private string _composeSubject = "";
     private string _composeBody = "";
     private string _search = "";
+    private string _conversationSearch = "";
     private CustomerLifecycleStage? _stageFilter;
     private CrmClientView? _selected;
     private Guid? _selectedChainId;
@@ -1072,19 +1342,28 @@ else
         (string.IsNullOrWhiteSpace(_search) ||
          Searchable(client).Contains(_search.Trim(), StringComparison.OrdinalIgnoreCase)));
 
+    private IEnumerable<CrmClientView> FilteredConversationClients => _clients
+        .Where(client => string.IsNullOrWhiteSpace(_conversationSearch)
+            || Searchable(client).Contains(_conversationSearch.Trim(), StringComparison.OrdinalIgnoreCase))
+        .OrderBy(client => client.Name);
+
     protected override async Task OnParametersSetAsync()
     {
-        Ui.Set("CRM", "clients · lifecycle · automations");
+        Ui.Set("CRM", "conversations · calendars · contacts · opportunities");
         _loading = true;
         try
         {
             var clientsTask = Svc.ListCrmClientsAsync(ProjectId);
             var chainsTask = Svc.ListJobChainsAsync(ProjectId);
             var automationsTask = Svc.ListCrmAutomationRulesAsync(ProjectId);
-            await Task.WhenAll(clientsTask, chainsTask, automationsTask);
+            var appointmentsTask = Svc.ListCrmAppointmentsAsync(ProjectId);
+            var calendarsTask = Svc.ListCrmCalendarsAsync(ProjectId);
+            await Task.WhenAll(clientsTask, chainsTask, automationsTask, appointmentsTask, calendarsTask);
             _clients = await clientsTask;
             _chains = await chainsTask;
             _automationRules = await automationsTask;
+            _appointments = await appointmentsTask;
+            _calendars = await calendarsTask;
         }
         catch (Exception ex) { _message = ex.Message; }
         finally { _loading = false; }
@@ -1092,14 +1371,20 @@ else
 
     private string CrmSectionTitle() => _crmSection switch
     {
-        "clients" => "Clients",
+        "conversations" => "Conversations",
+        "calendars" => "Calendars",
+        "contacts" => "Contacts",
+        "opportunities" => "Opportunities",
         "automations" => "Automations",
         _ => "CRM settings",
     };
 
     private string CrmSectionDescription() => _crmSection switch
     {
-        "clients" => "Manage customers through their lifecycle and run project automations in customer context.",
+        "conversations" => "Keep customer email, SMS, and internal notes in one shared timeline.",
+        "calendars" => "Manage customer appointments and connected calendars.",
+        "contacts" => "Manage customer contact details and relationship context.",
+        "opportunities" => "Move customer opportunities through the full lifecycle pipeline.",
         "automations" => "Connect customer lifecycle events to durable job-chain workflows.",
         _ => "Connect external lead forms without exposing the rest of your CRM.",
     };
@@ -1108,10 +1393,148 @@ else
 
     private async Task OpenCrmSection(string section)
     {
+        if (_crmSection == "conversations" && section != "conversations") CloseClient();
         _crmSection = section;
         _crmNavOpen = false;
+        if (section == "conversations" && _selected is null && _clients.Count > 0)
+            await OpenConversation(_clients.OrderBy(client => client.Name).First());
         if (section == "settings" && _ingestionSettings is null)
             await LoadIngestionSettings();
+    }
+
+    private async Task OpenConversation(CrmClientView client)
+    {
+        _selected = client;
+        _detailTab = "comms";
+        _composeChannel = "Note";
+        _composeSubject = _composeBody = "";
+        _commsError = null;
+        _communications = Array.Empty<CrmCommunicationView>();
+        await LoadCommunications();
+    }
+
+    private void OpenAppointmentEditor() => OpenAppointmentEditor(DateOnly.FromDateTime(DateTime.Now));
+
+    private void OpenAppointmentEditor(DateOnly day)
+    {
+        var now = DateTimeOffset.Now.ToWorkspaceTime();
+        var hour = day == DateOnly.FromDateTime(DateTime.Now) ? Math.Min(22, now.Hour + 1) : 9;
+        var starts = new DateTimeOffset(day.Year, day.Month, day.Day, hour, 0, 0, TimeSpan.FromHours(10));
+        _editAppointmentId = null;
+        _appointmentTitle = "";
+        _appointmentClientId = "";
+        _appointmentCalendarId = _openCalendarId is { } id && id != Guid.Empty ? id.ToString() : "";
+        _appointmentStartsAt = starts.ToString("yyyy-MM-ddTHH:mm");
+        _appointmentEndsAt = starts.AddHours(1).ToString("yyyy-MM-ddTHH:mm");
+        _appointmentLocation = _appointmentNotes = null;
+        _appointmentError = null;
+        _showAppointmentEditor = true;
+    }
+
+    private void OpenAppointmentEditor(CrmAppointmentView appointment)
+    {
+        _editAppointmentId = appointment.Id;
+        _appointmentTitle = appointment.Title;
+        _appointmentClientId = appointment.ClientId?.ToString() ?? "";
+        _appointmentCalendarId = appointment.CalendarId?.ToString() ?? "";
+        _appointmentStartsAt = appointment.StartsAt.ToWorkspaceTime().ToString("yyyy-MM-ddTHH:mm");
+        _appointmentEndsAt = appointment.EndsAt.ToWorkspaceTime().ToString("yyyy-MM-ddTHH:mm");
+        _appointmentLocation = appointment.Location;
+        _appointmentNotes = appointment.Notes;
+        _appointmentError = null;
+        _showAppointmentEditor = true;
+    }
+
+    private void CloseAppointmentEditor() => _showAppointmentEditor = false;
+
+    private void OnAppointmentStartsChanged(ChangeEventArgs args) => _appointmentStartsAt = args.Value?.ToString() ?? "";
+    private void OnAppointmentEndsChanged(ChangeEventArgs args) => _appointmentEndsAt = args.Value?.ToString() ?? "";
+
+    private async Task SaveAppointment()
+    {
+        _appointmentError = null;
+        if (string.IsNullOrWhiteSpace(_appointmentTitle)) { _appointmentError = "Appointment title is required."; return; }
+        if (!TryAppointmentTime(_appointmentStartsAt, out var starts) || !TryAppointmentTime(_appointmentEndsAt, out var ends))
+        { _appointmentError = "Choose a valid start and end time."; return; }
+        if (ends <= starts) { _appointmentError = "End time must be after the start time."; return; }
+
+        _savingAppointment = true;
+        try
+        {
+            var clientId = Guid.TryParse(_appointmentClientId, out var parsedClientId) ? parsedClientId : (Guid?)null;
+            var calendarId = Guid.TryParse(_appointmentCalendarId, out var parsedCalendarId) ? parsedCalendarId : (Guid?)null;
+            await Svc.CreateCrmAppointmentAsync(new CreateCrmAppointmentCommand(ProjectId, calendarId, clientId,
+                _appointmentTitle, starts, ends, _appointmentLocation, _appointmentNotes, _editAppointmentId));
+            await RefreshCalendarData();
+            _showAppointmentEditor = false;
+        }
+        catch (Exception ex) { _appointmentError = ex.Message; }
+        finally { _savingAppointment = false; }
+    }
+
+    private async Task DeleteAppointment()
+    {
+        if (_editAppointmentId is not { } id || !await Js.InvokeAsync<bool>("confirm", "Delete this event?")) return;
+        _savingAppointment = true;
+        try { await Svc.DeleteCrmAppointmentAsync(id); await RefreshCalendarData(); _showAppointmentEditor = false; }
+        catch (Exception ex) { _appointmentError = ex.Message; }
+        finally { _savingAppointment = false; }
+    }
+
+    private void OpenCalendar(Guid id) { _openCalendarId = id; GoToCurrentMonth(); }
+    private void CloseCalendar() => _openCalendarId = null;
+    private string OpenCalendarName => _openCalendarId == Guid.Empty ? "General" : _calendars.FirstOrDefault(x => x.Id == _openCalendarId)?.Name ?? "Calendar";
+    private string OpenCalendarColor => _openCalendarId == Guid.Empty ? "#4f7cff" : _calendars.FirstOrDefault(x => x.Id == _openCalendarId)?.Color ?? "#4f7cff";
+    private static readonly string[] CalendarWeekdays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    private IReadOnlyList<DateOnly> CalendarDays
+    {
+        get
+        {
+            var first = new DateOnly(_calendarMonth.Year, _calendarMonth.Month, 1);
+            var start = first.AddDays(-(int)first.DayOfWeek);
+            return Enumerable.Range(0, 42).Select(start.AddDays).ToArray();
+        }
+    }
+    private IReadOnlyList<CrmAppointmentView> AppointmentsFor(DateOnly day) => _appointments
+        .Where(x => (_openCalendarId == Guid.Empty ? x.CalendarId is null : x.CalendarId == _openCalendarId)
+            && DateOnly.FromDateTime(x.StartsAt.ToWorkspaceTime().DateTime) == day)
+        .OrderBy(x => x.StartsAt).ToArray();
+    private void ChangeCalendarMonth(int months) => _calendarMonth = _calendarMonth.AddMonths(months);
+    private void GoToCurrentMonth() => _calendarMonth = new(DateTime.Today.Year, DateTime.Today.Month, 1);
+
+    private void OpenCalendarEditor(CrmCalendarView? calendar = null)
+    {
+        _editCalendarId = calendar?.Id; _calendarName = calendar?.Name ?? "";
+        _calendarColor = calendar?.Color ?? "#4f7cff"; _calendarError = null; _showCalendarEditor = true;
+    }
+    private void CloseCalendarEditor() => _showCalendarEditor = false;
+    private async Task SaveCalendar()
+    {
+        _savingCalendar = true; _calendarError = null;
+        try { await Svc.SaveCrmCalendarAsync(new SaveCrmCalendarCommand(ProjectId, _calendarName, _calendarColor, _editCalendarId)); await RefreshCalendarData(); _showCalendarEditor = false; }
+        catch (Exception ex) { _calendarError = ex.Message; }
+        finally { _savingCalendar = false; }
+    }
+    private async Task DeleteCalendar(Guid id)
+    {
+        if (!await Js.InvokeAsync<bool>("confirm", "Delete this calendar? Its events will move to General.")) return;
+        try { await Svc.DeleteCrmCalendarAsync(id); await RefreshCalendarData(); if (_openCalendarId == id) _openCalendarId = null; }
+        catch (Exception ex) { _message = ex.Message; }
+    }
+    private async Task RefreshCalendarData()
+    {
+        var calendarsTask = Svc.ListCrmCalendarsAsync(ProjectId); var appointmentsTask = Svc.ListCrmAppointmentsAsync(ProjectId);
+        await Task.WhenAll(calendarsTask, appointmentsTask); _calendars = await calendarsTask; _appointments = await appointmentsTask;
+    }
+
+    private static bool TryAppointmentTime(string value, out DateTimeOffset result)
+    {
+        result = default;
+        if (!DateTime.TryParse(value, System.Globalization.CultureInfo.InvariantCulture,
+            System.Globalization.DateTimeStyles.None, out var local)) return false;
+        var zone = TimeZoneInfo.FindSystemTimeZoneById("Australia/Brisbane");
+        result = new DateTimeOffset(DateTime.SpecifyKind(local, DateTimeKind.Unspecified), zone.GetUtcOffset(local));
+        return true;
     }
 
     private async Task LoadIngestionSettings()
@@ -1562,21 +1985,12 @@ else
     };
 
     private static string ChannelLabel(string channel) => channel == "Sms" ? "SMS" : channel;
-    private static string ChannelIcon(string channel) => channel switch
+    private static string ChannelIconName(string channel) => channel switch
     {
-        "Email" => "✉",
-        "Sms" => "◌",
-        _ => "✦",
+        "Email" => "mail",
+        "Sms" => "phone",
+        _ => "note",
     };
-
-    private static string ArtifactIcon(string contentType)
-    {
-        if (contentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase)) return "▧";
-        if (contentType.Contains("pdf", StringComparison.OrdinalIgnoreCase)) return "PDF";
-        if (contentType.Contains("json", StringComparison.OrdinalIgnoreCase)) return "{}";
-        if (contentType.Contains("csv", StringComparison.OrdinalIgnoreCase)) return "CSV";
-        return "DOC";
-    }
 
     private static string FormatBytes(long bytes) => bytes switch
     {
@@ -1585,8 +1999,17 @@ else
         _ => $"{bytes} B",
     };
 
+    // CRM presents one row per logical client file. Older records remain stored and available
+    // to the artifact system, but the client workspace always resolves the newest version.
+    private IReadOnlyList<CrmClientArtifactView> LatestClientArtifacts =>
+        _clientArtifacts
+            .GroupBy(item => item.Title.Trim(), StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.OrderByDescending(item => item.CreatedAt).First())
+            .OrderByDescending(item => item.CreatedAt)
+            .ToArray();
+
     private IEnumerable<CrmClientArtifactView> FilteredClientArtifacts =>
-        _clientArtifacts.Where(item =>
+        LatestClientArtifacts.Where(item =>
             (_artifactSourceFilter == "all"
              || item.Source.Equals(_artifactSourceFilter, StringComparison.OrdinalIgnoreCase))
             && (string.IsNullOrWhiteSpace(_artifactSearch)
@@ -1604,7 +2027,7 @@ else
     }
 
     private int ArtifactSourceCount(string source)
-        => _clientArtifacts.Count(item => item.Source == source);
+        => LatestClientArtifacts.Count(item => item.Source.Equals(source, StringComparison.OrdinalIgnoreCase));
 
     private static string ArtifactExtension(string title)
     {
@@ -1673,20 +2096,20 @@ else
         CrmAutomationEventType.IngestionReceived => "Runs when this project's CRM ingestion endpoint receives any JSON payload.",
         _ => "",
     };
-    private static string AutomationEventIcon(string value)
+    private static string AutomationEventIconName(string value)
         => Enum.TryParse<CrmAutomationEventType>(value, out var eventType)
             ? eventType switch
             {
-                CrmAutomationEventType.ClientCreated => "+",
-                CrmAutomationEventType.ClientUpdated => "↻",
-                CrmAutomationEventType.StageEntered => "→",
-                CrmAutomationEventType.NoteAdded => "✦",
-                CrmAutomationEventType.ArtifactAttached => "⇧",
-                CrmAutomationEventType.CommunicationSent => "✉",
-                CrmAutomationEventType.IngestionReceived => "⇥",
-                _ => "⌁",
+                CrmAutomationEventType.ClientCreated => "message",
+                CrmAutomationEventType.ClientUpdated => "refresh",
+                CrmAutomationEventType.StageEntered => "arrow-right",
+                CrmAutomationEventType.NoteAdded => "note",
+                CrmAutomationEventType.ArtifactAttached => "upload",
+                CrmAutomationEventType.CommunicationSent => "mail",
+                CrmAutomationEventType.IngestionReceived => "arrow-right",
+                _ => "workflow",
             }
-            : "⌁";
+            : "workflow";
     private static string AutomationStageLabel(string? value)
         => value is not null && Enum.TryParse<CustomerLifecycleStage>(value, out var stage)
             ? StageLabel(stage)

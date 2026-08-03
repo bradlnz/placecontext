@@ -4,6 +4,12 @@
     padding: 20px 24px 44px;
 }
 
+.data-search-skeleton {
+    display: grid;
+    gap: 22px;
+    padding-top: 22px;
+}
+
 .page-head {
     display: flex;
     justify-content: space-between;

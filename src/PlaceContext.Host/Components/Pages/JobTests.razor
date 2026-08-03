@@ -11,7 +11,7 @@
     <header class="tests-head">
         <div>
             <h2>Tests</h2>
-            <p>Verify Job code in isolated sandboxes with mocked dependencies and no production side effects.</p>
+            <p>Verify Job logic against declared mock scenarios with no live Job execution or production side effects.</p>
         </div>
         <div class="head-actions">
             <button class="dcbtn" disabled="@(_running.Count > 0 || EnabledTests.Count == 0)"
@@ -36,7 +36,7 @@
         <div class="dccard empty-state">
             <div class="empty-icon">⌁</div>
             <strong>Create a Job before adding tests</strong>
-            <span>Tests execute Job source without network, secrets, post-actions, or production data writes.</span>
+            <span>Tests use declared mock scenarios and never execute the selected Job.</span>
             <button class="dcbtn primary" @onclick="@(() => Nav.NavigateTo($"/project/{ProjectId}/jobs"))">Open Jobs</button>
         </div>
     }
@@ -104,13 +104,16 @@
                                         {
                                             <span class="disabled-chip">disabled</span>
                                         }
-                                        <span class="assertion-chip">@AssertionLabel(test.AssertionType)</span>
+                                        @if (test.CodeFiles.Count == 0)
+                                        {
+                                            <span class="assertion-chip">@AssertionLabel(test.AssertionType)</span>
+                                        }
                                         <span class="assertion-chip">@JobTestFramework.Label(test.RuntimeId) · @MethodCount(test) methods</span>
                                     </div>
                                     <div class="test-detail">
                                         @if (isRunning)
                                         {
-                                            <span>Executing isolated Job code…</span>
+                                            <span>Running framework tests against the mock scenario…</span>
                                         }
                                         else
                                         {
@@ -188,10 +191,10 @@
                 </label>
 
                 <label class="field">
-                    <span>Input payload <small>optional</small></span>
+                    <span>Mock scenario JSON</span>
                     <textarea class="dcinput code-input" rows="7" @bind="_editInput"
-                              placeholder='{"customerId":"example"}'></textarea>
-                    <small>Passed to the Job as its single input payload.</small>
+                              placeholder='{"input":{},"run":{"status":"Succeeded","output":{},"shards":[]}}'></textarea>
+                    <small>Defines input and the mocked status, output, and shard results. Never executes the selected Job.</small>
                 </label>
 
                 <label class="field">
@@ -222,7 +225,7 @@
                 <div class="code-editor-callout">
                     <div>
                         <strong>Framework test methods</strong>
-                        <small>Add multiple methods using Python unittest, Node test, Go testing, or Ruby Minitest.</small>
+                        <small>Add multiple methods using pytest, Node test, Go testing, or Ruby Minitest.</small>
                     </div>
                     @if (_editId is { } testId)
                     {
@@ -249,6 +252,19 @@
 
 @code {
     [Parameter] public Guid ProjectId { get; set; }
+
+    private const string DefaultScenario = """
+        {
+          "input": {"customerId":"example"},
+          "run": {
+            "status": "Succeeded",
+            "output": {"status":"active"},
+            "shards": [
+              {"index":0,"exitCode":0,"outcome":"Succeeded","artifact":{"status":"active"}}
+            ]
+          }
+        }
+        """;
 
     private IReadOnlyList<JobView> _jobs = Array.Empty<JobView>();
     private List<JobTestCaseView> _tests = new();
@@ -315,7 +331,7 @@
         _editId = null;
         _editJobId = _jobs.FirstOrDefault()?.Id ?? Guid.Empty;
         _editName = "";
-        _editInput = "";
+        _editInput = DefaultScenario;
         _editAssertion = JobTestAssertionType.Succeeds;
         _editExpected = "";
         _editEnabled = true;

@@ -1,0 +1,74 @@
+.data-map-page { max-width: 1320px; margin: 0 auto; padding: 20px 24px 40px; }
+.data-map-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 18px; margin: 18px 0; }
+.data-map-head h2 { margin: 0; font-size: 18px; font-weight: 650; }
+.data-map-head p { margin: 4px 0 0; color: var(--text-3); font-size: 12px; }
+.data-map-head .dcbtn { display: inline-flex; align-items: center; gap: 6px; }
+.data-map-head .dcbtn svg, .field-add svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+.status-message { margin-bottom: 12px; padding: 10px 14px; border-radius: 8px; background: var(--card); color: var(--text-2); font-size: 12.5px; }
+
+.summary-strip { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin-bottom: 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--card); overflow: hidden; }
+.summary-strip > div { display: flex; align-items: baseline; gap: 7px; padding: 12px 15px; border-right: 1px solid var(--border); }
+.summary-strip > div:last-child { border-right: 0; }
+.summary-strip strong { font-size: 17px; font-weight: 650; }
+.summary-strip span { color: var(--text-3); font-size: 11.5px; }
+.summary-strip .needs-attention strong { color: var(--warn, #b7791f); }
+
+.mapping-suite { overflow: hidden; }
+.suite-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 14px; border-bottom: 1px solid var(--border); background: color-mix(in srgb, var(--card-2) 55%, transparent); }
+.suite-head > div { display: flex; align-items: baseline; gap: 9px; min-width: 0; }
+.suite-head strong { font-size: 13px; }
+.suite-head span { color: var(--text-3); font-size: 11.5px; }
+.mapping-empty { padding: 34px 18px; color: var(--text-3); text-align: center; font-size: 12.5px; }
+.mapping-rows { display: flex; flex-direction: column; }
+.mapping-row { display: grid; grid-template-columns: 30px minmax(0, 1fr) auto; gap: 11px; align-items: start; padding: 13px 14px; border-bottom: 1px solid var(--border); }
+.mapping-row:last-child { border-bottom: 0; }
+.mapping-row:hover { background: color-mix(in srgb, var(--card-2) 45%, transparent); }
+.mapping-row.unmapped { background: color-mix(in srgb, var(--warn, #b7791f) 3%, transparent); }
+.mapping-status { display: grid; place-items: center; width: 26px; height: 26px; margin-top: 1px; border-radius: 7px; }
+.mapping-status svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+.mapping-status.configured { color: var(--good); background: color-mix(in srgb, var(--good) 10%, transparent); }
+.mapping-status.missing { color: var(--warn, #b7791f); background: color-mix(in srgb, var(--warn, #b7791f) 11%, transparent); }
+.mapping-main { min-width: 0; }
+.mapping-job-title { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; min-height: 27px; }
+.mapping-job-title strong { font-size: 12.5px; font-weight: 650; }
+.mapping-chip { padding: 2px 6px; border: 1px solid var(--border); border-radius: 999px; color: var(--text-3); background: var(--card); font-size: 10px; }
+.unmapped-copy { display: flex; gap: 7px; margin-top: 3px; font-size: 11.5px; }
+.unmapped-copy strong { color: var(--warn, #b7791f); font-weight: 600; }
+.unmapped-copy span { color: var(--text-3); }
+.job-mappings { display: flex; flex-direction: column; gap: 5px; margin-top: 5px; }
+.mapping-detail { display: grid; grid-template-columns: minmax(190px, auto) minmax(0, 1fr) 18px; align-items: center; gap: 12px; width: 100%; padding: 7px 9px; border: 1px solid var(--border); border-radius: 7px; color: inherit; background: var(--card); text-align: left; cursor: pointer; }
+.mapping-detail:hover { border-color: var(--border-2); background: var(--card-2); }
+.mapping-route { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.mapping-route strong { overflow: hidden; font-family: var(--font-sans); font-size: 11.5px; text-overflow: ellipsis; white-space: nowrap; }
+.mapping-route > span:last-child, .mapping-facts { color: var(--text-3); font-size: 10.5px; }
+.table-icon { display: inline-flex; color: var(--brand-2); }
+.table-icon svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.7; }
+.mapping-facts { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mapping-facts .enabled { color: var(--good); }
+.mapping-facts .disabled { color: var(--warn, #b7791f); }
+.edit-icon { width: 14px; height: 14px; fill: none; stroke: var(--text-3); stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.map-action { align-self: center; }
+.icon-add { display: grid; place-items: center; width: 28px; height: 28px; align-self: center; border: 1px solid var(--border); border-radius: 7px; color: var(--text-2); background: var(--card); cursor: pointer; }
+.icon-add:hover { color: var(--brand-2); border-color: var(--brand-2); }
+.icon-add svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+
+.dcslide-x svg, .field-remove svg, .field-arrow { fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+.dcslide-x svg { width: 17px; height: 17px; }
+.field-add { display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px; font-size: 11px; }
+.field-arrow { width: 15px; height: 15px; flex: none; color: var(--text-3); }
+.field-remove { display: grid; place-items: center; flex: none; padding: 5px; }
+.field-remove svg { width: 14px; height: 14px; }
+
+@media (max-width: 760px) {
+    .data-map-page { padding: 14px 12px 30px; }
+    .data-map-head { align-items: flex-start; }
+    .summary-strip { grid-template-columns: repeat(2, 1fr); }
+    .summary-strip > div:nth-child(2) { border-right: 0; }
+    .summary-strip > div:nth-child(-n+2) { border-bottom: 1px solid var(--border); }
+    .mapping-row { grid-template-columns: 26px minmax(0, 1fr); padding: 12px 10px; }
+    .map-action, .icon-add { grid-column: 2; justify-self: start; }
+    .mapping-detail { grid-template-columns: minmax(0, 1fr) 18px; }
+    .mapping-facts { grid-column: 1 / -1; white-space: normal; }
+    .suite-head > div { display: block; }
+    .suite-head > div span { display: block; margin-top: 2px; }
+}

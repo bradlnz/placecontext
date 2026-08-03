@@ -10,92 +10,118 @@
 
 <PageTitle>PlaceContext — Data map</PageTitle>
 
-@if (Vm.Loading || !Vm.PosLoaded)
+@if (Vm.Loading)
 {
-    <Skeleton Kind="detail" Rows="5" Padded />
+    <Skeleton Kind="list" Rows="6" Padded />
 }
 else
 {
-    <div style="padding:20px 24px 40px; max-width:1320px; margin:0 auto">
-
+    <div class="data-map-page">
         <DataTabs ProjectId="ProjectId" Active="datamap" />
 
-        <div style="display:flex; align-items:baseline; justify-content:space-between; margin-bottom:18px">
+        <header class="data-map-head">
             <div>
-                <h2 style="font-size:18px; font-weight:600; margin:0">Data map</h2>
-                <div style="font-size:12px; color:var(--text-3); margin-top:3px">
-                    The data flow, live: drag nodes to arrange, click an edge to edit its mapping,
-                    drag a job's ＋ onto a table to connect them.
-                </div>
+                <h2>Data map</h2>
+                <p>Choose which job results become queryable project tables after a completed run.</p>
             </div>
-            <button class="dcbtn primary" @onclick="@(() => Vm.OpenEditor(null))">+ New mapping</button>
-        </div>
+            <button class="dcbtn primary" @onclick="@(() => Vm.OpenEditor(null))">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
+                New mapping
+            </button>
+        </header>
 
         @if (Vm.Message is not null)
         {
-            <div style="margin-bottom:12px; padding:10px 14px; border-radius:8px; background:var(--card); font-size:12.5px; color:var(--text-2)">@Vm.Message</div>
+            <div class="status-message">@Vm.Message</div>
         }
 
-        <div style="position:relative; height:65vh; min-height:480px; border:1px solid var(--border); border-radius:10px; overflow:hidden; background:var(--card); background-image:radial-gradient(var(--border-2) 1px, transparent 1px); background-size:22px 22px; background-position:@(Vm.PanX)px @(Vm.PanY)px; user-select:none; touch-action:none; cursor:@(Vm.Panning ? "grabbing" : "grab")"
-             @onpointerdown="OnCanvasDown" @onpointermove="OnCanvasMove" @onpointerup="OnCanvasUp">
+        <section class="summary-strip" aria-label="Data mapping summary">
+            <div><strong>@JobCount</strong><span>jobs</span></div>
+            <div><strong>@MappedJobCount</strong><span>mapped jobs</span></div>
+            <div><strong>@EnabledMappingCount</strong><span>active mappings</span></div>
+            <div class="needs-attention"><strong>@UnmappedJobCount</strong><span>need mapping</span></div>
+        </section>
 
-            <svg style="position:absolute; inset:0; width:100%; height:100%; pointer-events:none">
-                <defs>
-                    <marker id="pcarrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-                        <path d="M0 0 L10 5 L0 10 Z" fill="var(--brand-2)" />
-                    </marker>
-                </defs>
-                @foreach (var m in Vm.Mappings ?? Array.Empty<DataMappingView>())
-                {
-                    var mp = m;
-                    <path d="@Vm.EdgePath(mp)" fill="none" stroke="var(--brand-2)" stroke-width="1.6"
-                          stroke-dasharray="@(mp.Enabled ? "none" : "5 4")" opacity="@(mp.Enabled ? "0.9" : "0.4")"
-                          marker-end="url(#pcarrow)" style="pointer-events:stroke; cursor:pointer"
-                          @onclick="@(() => Vm.OpenEditor(mp))">
-                        <title>@mp.JobName → @mp.TargetTable (@mp.Fields.Count field(s)) — click to edit</title>
-                    </path>
-                }
-                @if (Vm.ConnectJob is not null)
-                {
-                    <path d="@Vm.ConnectPath()" fill="none" stroke="var(--human)" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#pcarrow)" />
-                }
-            </svg>
+        <section class="dccard mapping-suite">
+            <header class="suite-head">
+                <div>
+                    <strong>Job outputs</strong>
+                    <span>Mappings run after each successful or partial job run</span>
+                </div>
+                <span>@(Vm.Tables?.Count ?? 0) project tables</span>
+            </header>
 
-            @foreach (var job in Vm.Jobs ?? Array.Empty<JobView>())
+            @if (JobCount == 0)
             {
-                var j = job;
-                var key = "job:" + j.Id;
-                var mapped = Vm.Mappings?.Any(m => m.JobId == j.Id) ?? false;
-                <div style="position:absolute; left:@(Vm.GetPos(key).X + Vm.PanX)px; top:@(Vm.GetPos(key).Y + Vm.PanY)px; width:190px; border:1px @(mapped ? "solid var(--border-2)" : "dashed var(--border-2)"); border-radius:9px; padding:8px 10px; background:var(--card-2); cursor:grab; box-shadow:var(--shadow)"
-                     @onpointerdown="@(e => StartDrag(key, e))" @onpointerdown:stopPropagation="true">
-                    <div style="display:flex; align-items:center; gap:7px">
-                        <span style="width:7px; height:7px; border-radius:50%; flex:none; background:@(mapped ? "var(--brand-2)" : "var(--border-2)")"></span>
-                        <span style="flex:1; min-width:0; font-size:12px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis" title="@j.Name">@j.Name</span>
-                        <span title="Drag onto a table to map this job's output into it"
-                              style="flex:none; width:18px; height:18px; border-radius:50%; background:var(--brand); color:var(--brand-fg,#07130b); display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700; cursor:crosshair"
-                              @onpointerdown="@(e => StartConnect(j, e))" @onpointerdown:stopPropagation="true">＋</span>
-                    </div>
-                    <div style="font-size:10px; color:var(--text-3); margin-top:3px; display:flex; justify-content:space-between">
-                        <span>@(mapped ? "mapped" : "unmapped — drag ＋")</span>
-                        <span style="font-family:var(--font-sans); color:var(--brand-2)">@j.ReturnType</span>
-                    </div>
+                <div class="mapping-empty">No jobs exist in this project yet.</div>
+            }
+            else
+            {
+                <div class="mapping-rows">
+                @foreach (var job in OrderedJobs)
+                {
+                    var mappings = MappingsFor(job.Id);
+                    <article class="mapping-row @(mappings.Count == 0 ? "unmapped" : null)">
+                        <div class="mapping-status @(mappings.Count == 0 ? "missing" : "configured")" aria-hidden="true">
+                            @if (mappings.Count == 0)
+                            {
+                                <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8" /><path d="M12 8v5M12 16.5h.01" /></svg>
+                            }
+                            else
+                            {
+                                <svg viewBox="0 0 24 24"><path d="m5 12 4 4L19 6" /></svg>
+                            }
+                        </div>
+                        <div class="mapping-main">
+                            <div class="mapping-job-title">
+                                <strong>@job.Name</strong>
+                                <span class="mapping-chip">@job.ReturnType output</span>
+                            </div>
+                            @if (mappings.Count == 0)
+                            {
+                                <div class="unmapped-copy">
+                                    <strong>No data mapping</strong>
+                                    <span>Completed runs do not populate a project table.</span>
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="job-mappings">
+                                    @foreach (var mapping in mappings)
+                                    {
+                                        <button class="mapping-detail" @onclick="@(() => Vm.OpenEditor(mapping))">
+                                            <span class="mapping-route">
+                                                <span class="table-icon"><svg viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="8" ry="3" /><path d="M4 5v7c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 12v7c0 1.7 3.6 3 8 3s8-1.3 8-3v-7" /></svg></span>
+                                                <strong>@mapping.TargetTable</strong>
+                                                <span>@(Vm.TableRows(mapping.TargetTable) is { } rows ? $"{rows:N0} rows" : "created on next ingest")</span>
+                                            </span>
+                                            <span class="mapping-facts">
+                                                @(string.IsNullOrWhiteSpace(mapping.RowsPath) ? "root object" : $"rows at {mapping.RowsPath}")
+                                                · @mapping.Fields.Count field@(mapping.Fields.Count == 1 ? "" : "s")
+                                                · <span class="@(mapping.Enabled ? "enabled" : "disabled")">@(mapping.Enabled ? "enabled" : "paused")</span>
+                                            </span>
+                                            <svg class="edit-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m14 5 5 5M4 20l4.5-1L19 8l-4-4L5 15.5z" /></svg>
+                                        </button>
+                                    }
+                                </div>
+                            }
+                        </div>
+                        @if (mappings.Count == 0)
+                        {
+                            <button class="dcbtn map-action" @onclick="@(() => Vm.OpenEditorForJob(job))">Create mapping</button>
+                        }
+                        else
+                        {
+                            <button class="icon-add" title="Add another mapping" aria-label="Add another mapping for @job.Name"
+                                    @onclick="@(() => Vm.OpenEditorForJob(job))">
+                                <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></svg>
+                            </button>
+                        }
+                    </article>
+                }
                 </div>
             }
-
-            @foreach (var table in Vm.TableNodes())
-            {
-                var t = table;
-                var key = "table:" + t;
-                <div style="position:absolute; left:@(Vm.GetPos(key).X + Vm.PanX)px; top:@(Vm.GetPos(key).Y + Vm.PanY)px; width:210px; border:1px solid var(--brand-2); border-radius:10px; padding:9px 12px; background:var(--brand-bg); cursor:grab; box-shadow:var(--shadow)"
-                     @onpointerdown="@(e => StartDrag(key, e))" @onpointerdown:stopPropagation="true"
-                     @onpointerup="@(() => OnTableUp(t))" @onpointerup:stopPropagation="true">
-                    <div style="font-size:12.5px; font-weight:600; font-family:var(--font-sans); white-space:nowrap; overflow:hidden; text-overflow:ellipsis" title="@t">@t</div>
-                    <div style="font-size:10px; color:var(--text-3); margin-top:2px">
-                        @(Vm.TableRows(t) is { } n ? $"{n:N0} rows" : "created on first ingest") · append-only
-                    </div>
-                </div>
-            }
-        </div>
+        </section>
     </div>
 }
 
@@ -108,7 +134,9 @@ else
                 <div style="font-size:14px; font-weight:600">@(Vm.EditId.HasValue ? "Edit mapping" : "New mapping")</div>
                 <div style="font-size:11.5px; color:var(--text-3); margin-top:3px">Job result → project table, after every completed run.</div>
             </div>
-            <button class="dcslide-x" @onclick="Vm.CloseEditor">×</button>
+            <button class="dcslide-x" @onclick="Vm.CloseEditor" aria-label="Close">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg>
+            </button>
         </div>
         <div class="dcslide-body" style="flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:14px">
 
@@ -148,7 +176,10 @@ else
                                 disabled="@(Vm.EdJobId == Guid.Empty)" title="Prefill from the job's latest run result">
                             @(Vm.Suggesting ? "Reading last run…" : "Suggest from last run")
                         </button>
-                        <button class="dcbtn" style="padding:3px 9px; font-size:11px" @onclick="() => Vm.AddField()">+ field</button>
+                        <button class="dcbtn field-add" @onclick="() => Vm.AddField()">
+                            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
+                            Field
+                        </button>
                     </div>
                 </div>
                 <div style="display:flex; flex-direction:column; gap:6px; margin-top:6px">
@@ -158,7 +189,7 @@ else
                         <div style="display:flex; gap:6px; align-items:center">
                             <input class="dcinput" style="flex:1.2; font-size:12px" placeholder="source path (e.g. price)"
                                    @bind="Vm.EdFields[idx].SourcePath" />
-                            <span style="color:var(--text-3); flex:none">→</span>
+                            <svg class="field-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M14 7l5 5-5 5" /></svg>
                             <input class="dcinput" style="flex:1; font-size:12px; font-family:var(--font-sans)" placeholder="column"
                                    @bind="Vm.EdFields[idx].Column" />
                             <select class="dcinput" style="flex:none; width:110px; font-size:12px" @bind="Vm.EdFields[idx].Type">
@@ -167,7 +198,9 @@ else
                                     <option value="@t">@t</option>
                                 }
                             </select>
-                            <button class="dcbtn" style="padding:3px 8px; flex:none" title="Remove field" @onclick="@(() => Vm.RemoveField(idx))">×</button>
+                            <button class="dcbtn field-remove" title="Remove field" aria-label="Remove field" @onclick="@(() => Vm.RemoveField(idx))">
+                                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg>
+                            </button>
                         </div>
                     }
                     @if (Vm.EdFields.Count == 0)
@@ -214,17 +247,21 @@ else
         Ui.Set("Data map", "job results → project tables");
     }
 
-    protected override async Task OnAfterRenderAsync(bool firstRender)
-    {
-        if (firstRender) await Vm.EnsureLayoutAsync();
-    }
-
     public void Dispose() => Vm.Detach();
 
-    private void StartDrag(string key, PointerEventArgs e) => Vm.StartDrag(key, e.ClientX, e.ClientY);
-    private void OnCanvasDown(PointerEventArgs e) => Vm.OnCanvasDown(e.ClientX, e.ClientY);
-    private void StartConnect(JobView job, PointerEventArgs e) => Vm.StartConnect(job, e.ClientX, e.ClientY);
-    private void OnCanvasMove(PointerEventArgs e) => Vm.OnCanvasMove(e.ClientX, e.ClientY);
-    private async Task OnCanvasUp() => await Vm.OnCanvasUpAsync();
-    private async Task OnTableUp(string table) => await Vm.OnTableUpAsync(table);
+    private int JobCount => Vm.Jobs?.Count ?? 0;
+    private int MappedJobCount => (Vm.Mappings ?? Array.Empty<DataMappingView>()).Select(mapping => mapping.JobId).Distinct().Count();
+    private int EnabledMappingCount => (Vm.Mappings ?? Array.Empty<DataMappingView>()).Count(mapping => mapping.Enabled);
+    private int UnmappedJobCount => Math.Max(0, JobCount - MappedJobCount);
+
+    private IReadOnlyList<JobView> OrderedJobs => (Vm.Jobs ?? Array.Empty<JobView>())
+        .OrderBy(job => MappingsFor(job.Id).Count == 0 ? 0 : 1)
+        .ThenBy(job => job.Name, StringComparer.OrdinalIgnoreCase)
+        .ToArray();
+
+    private IReadOnlyList<DataMappingView> MappingsFor(Guid jobId) =>
+        (Vm.Mappings ?? Array.Empty<DataMappingView>())
+            .Where(mapping => mapping.JobId == jobId)
+            .OrderBy(mapping => mapping.TargetTable, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
 }

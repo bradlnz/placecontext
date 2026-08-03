@@ -70,8 +70,13 @@ public static class DependencyInjection
         services.AddScoped<ICommandHandler<MoveCrmClientCommand, CrmClientView>, MoveCrmClientHandler>();
         services.AddScoped<ICommandHandler<DeleteCrmClientCommand, bool>, DeleteCrmClientHandler>();
         services.AddScoped<ICommandHandler<RunCrmClientAutomationCommand, CrmChainRunView>, RunCrmClientAutomationHandler>();
+        services.AddScoped<CrmArtifactAssociationService>();
         services.AddScoped<ICommandHandler<AddCrmClientNoteCommand, CrmCommunicationView>, AddCrmClientNoteHandler>();
         services.AddScoped<ICommandHandler<SendCrmClientMessageCommand, CrmCommunicationView>, SendCrmClientMessageHandler>();
+        services.AddScoped<ICommandHandler<CreateCrmAppointmentCommand, CrmAppointmentView>, CreateCrmAppointmentHandler>();
+        services.AddScoped<ICommandHandler<DeleteCrmAppointmentCommand, bool>, DeleteCrmAppointmentHandler>();
+        services.AddScoped<ICommandHandler<SaveCrmCalendarCommand, CrmCalendarView>, SaveCrmCalendarHandler>();
+        services.AddScoped<ICommandHandler<DeleteCrmCalendarCommand, bool>, DeleteCrmCalendarHandler>();
         services.AddScoped<ICommandHandler<AttachCrmClientArtifactCommand, CrmClientArtifactView>, AttachCrmClientArtifactHandler>();
         services.AddScoped<ICommandHandler<RemoveCrmClientArtifactCommand, bool>, RemoveCrmClientArtifactHandler>();
         services.AddScoped<ICommandHandler<SaveCrmAutomationRuleCommand, CrmAutomationRuleView>, SaveCrmAutomationRuleHandler>();
@@ -158,6 +163,8 @@ public static class DependencyInjection
         services.AddScoped<IQueryHandler<ListCrmClientsQuery, IReadOnlyList<CrmClientView>>, ListCrmClientsHandler>();
         services.AddScoped<IQueryHandler<ListCrmClientChainRunsQuery, IReadOnlyList<CrmChainRunView>>, ListCrmClientChainRunsHandler>();
         services.AddScoped<IQueryHandler<ListCrmClientCommunicationsQuery, IReadOnlyList<CrmCommunicationView>>, ListCrmClientCommunicationsHandler>();
+        services.AddScoped<IQueryHandler<ListCrmAppointmentsQuery, IReadOnlyList<CrmAppointmentView>>, ListCrmAppointmentsHandler>();
+        services.AddScoped<IQueryHandler<ListCrmCalendarsQuery, IReadOnlyList<CrmCalendarView>>, ListCrmCalendarsHandler>();
         services.AddScoped<IQueryHandler<GetCrmCommsCapabilitiesQuery, CrmCommsCapabilitiesView>, GetCrmCommsCapabilitiesHandler>();
         services.AddScoped<IQueryHandler<ListCrmClientArtifactsQuery, IReadOnlyList<CrmClientArtifactView>>, ListCrmClientArtifactsHandler>();
         services.AddScoped<IQueryHandler<ListCrmAutomationRulesQuery, IReadOnlyList<CrmAutomationRuleView>>, ListCrmAutomationRulesHandler>();

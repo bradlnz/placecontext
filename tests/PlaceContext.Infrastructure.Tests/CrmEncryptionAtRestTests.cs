@@ -26,7 +26,7 @@ public sealed class CrmEncryptionAtRestTests
                 db, new FakeClock(DateTimeOffset.UtcNow), encryptor);
 
             await queue.EnqueueAsync(new QueuedCrmAutomation(
-                tenantId, Guid.NewGuid(), null, Guid.NewGuid(),
+                tenantId, Guid.NewGuid(), Guid.NewGuid(), null, Guid.NewGuid(),
                 CrmAutomationEventType.IngestionReceived, null, "Run feasibility", payload));
             await db.SaveChangesAsync();
 

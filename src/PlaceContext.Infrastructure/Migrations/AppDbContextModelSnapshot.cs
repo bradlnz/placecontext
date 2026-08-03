@@ -282,6 +282,18 @@ namespace PlaceContext.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<DateTimeOffset?>("ContinuationClaimedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ContinuationClaimedBy")
+                        .HasColumnType("text");
+
+                    b.Property<string>("ContinuationOverrides")
+                        .HasColumnType("text");
+
+                    b.Property<Guid?>("CrmClientId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("FinalOutput")
                         .HasColumnType("text");
 
@@ -290,6 +302,12 @@ namespace PlaceContext.Infrastructure.Migrations
 
                     b.Property<Guid>("ProjectId")
                         .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("ResumeAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("ResumeStageIndex")
+                        .HasColumnType("integer");
 
                     b.Property<DateTimeOffset>("StartedAt")
                         .HasColumnType("timestamp with time zone");
@@ -310,6 +328,8 @@ namespace PlaceContext.Infrastructure.Migrations
                     b.HasIndex("ProjectId");
 
                     b.HasIndex("ChainId", "StartedAt");
+
+                    b.HasIndex("Status", "ResumeAt", "ContinuationClaimedAt");
 
                     b.ToTable("chain_runs", (string)null);
                 });
@@ -434,6 +454,59 @@ namespace PlaceContext.Infrastructure.Migrations
                     b.ToTable("communication_providers", (string)null);
                 });
 
+            modelBuilder.Entity("PlaceContext.Infrastructure.Persistence.CrmAppointmentRow", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("CalendarId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("ClientId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<Guid>("CreatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("EndsAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("LocationProtected")
+                        .HasColumnType("text");
+
+                    b.Property<string>("NotesProtected")
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("StartsAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("TitleProtected")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CalendarId");
+
+                    b.HasIndex("ClientId");
+
+                    b.HasIndex("ProjectId", "StartsAt");
+
+                    b.ToTable("crm_appointments", (string)null);
+                });
+
             modelBuilder.Entity("PlaceContext.Infrastructure.Persistence.CrmAutomationQueueRow", b =>
                 {
                     b.Property<Guid>("Id")
@@ -446,6 +519,9 @@ namespace PlaceContext.Infrastructure.Migrations
                     b.Property<Guid>("ChainId")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("ChainRunId")
+                        .HasColumnType("uuid");
+
                     b.Property<DateTimeOffset?>("ClaimedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -454,6 +530,9 @@ namespace PlaceContext.Infrastructure.Migrations
 
                     b.Property<Guid?>("ClientId")
                         .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<DateTimeOffset>("EnqueuedAt")
                         .HasColumnType("timestamp with time zone");
@@ -477,6 +556,12 @@ namespace PlaceContext.Infrastructure.Migrations
                     b.Property<DateTimeOffset>("NextAttemptAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ResultStatus")
+                        .HasColumnType("text");
+
                     b.Property<Guid>("RuleId")
                         .HasColumnType("uuid");
 
@@ -489,7 +574,11 @@ namespace PlaceContext.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("FailedAt", "ClaimedAt", "NextAttemptAt");
+                    b.HasIndex("ChainRunId");
+
+                    b.HasIndex("TenantId", "ProjectId", "Id");
+
+                    b.HasIndex("CompletedAt", "FailedAt", "ClaimedAt", "NextAttemptAt");
 
                     b.ToTable("crm_automation_queue", (string)null);
                 });
@@ -540,6 +629,44 @@ namespace PlaceContext.Infrastructure.Migrations
                     b.HasIndex("ProjectId", "EventType", "LifecycleStage");
 
                     b.ToTable("crm_automation_rules", (string)null);
+                });
+
+            modelBuilder.Entity("PlaceContext.Infrastructure.Persistence.CrmCalendarRow", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Color")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("now()");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProjectId", "Name")
+                        .IsUnique();
+
+                    b.ToTable("crm_calendars", (string)null);
                 });
 
             modelBuilder.Entity("PlaceContext.Infrastructure.Persistence.CrmChainRunRow", b =>

@@ -27,7 +27,7 @@ else
                 <span>@_test.JobName</span>
             </div>
             <select class="runtime-select" @bind="_runtimeId" @bind:after="RuntimeChanged">
-                <option value="python">Python · unittest</option>
+                <option value="python">Python · pytest</option>
                 <option value="node">Node.js · node:test</option>
                 <option value="go">Go · testing</option>
                 <option value="ruby">Ruby · Minitest</option>
@@ -56,7 +56,7 @@ else
         <div class="contract-bar">
             <strong>@JobTestFramework.Label(_runtimeId)</strong>
             <code>{ "input": …, "run": { "status": "Succeeded", "output": …, "shards": […] } }</code>
-            <span>Every framework method runs against the isolated Job result. Network, secrets, and production side effects stay disabled.</span>
+            <span>Every framework method runs against the declared mock scenario. Inline Job source is available under <code>job/</code> for imports and mocks; the selected Job is never executed.</span>
         </div>
 
         <main class="workspace">
@@ -157,7 +157,7 @@ else
                         <div class="result-body">
                             @if (_lastResult is null)
                             {
-                                <span>Run the block to execute the Job once, then run every discovered framework test method against its result.</span>
+                                <span>Run the block to execute every discovered framework test method against the declared mock scenario.</span>
                             }
                             else
                             {
@@ -358,6 +358,8 @@ else
         _files.Add(new EditorFile { Path = starter.Path, Content = starter.Content });
         if (runtime == "go")
             _files.Add(new EditorFile { Path = "go.mod", Content = "module placecontext_tests\n\ngo 1.23\n" });
+        else if (runtime == "python")
+            _files.Add(new EditorFile { Path = "requirements.txt", Content = "pytest==8.4.1\n" });
         _entrypoint = starter.Path;
         _active = 0;
     }
@@ -483,17 +485,21 @@ else
         _ => ("test_job.py", """
             import json
             import os
-            import unittest
+            import pytest
 
-            class JobOutputTest(unittest.TestCase):
-                def setUp(self):
-                    self.context = json.loads(os.environ["PC_TEST_CONTEXT"])
+            @pytest.fixture
+            def scenario():
+                return json.loads(os.environ["PC_TEST_CONTEXT"])
 
-                def test_job_succeeds(self):
-                    self.assertEqual("Succeeded", self.context["run"]["status"])
+            def test_job_succeeds(scenario):
+                assert scenario["run"]["status"] == "Succeeded"
 
-                def test_job_reports_shard_results(self):
-                    self.assertGreater(len(self.context["run"]["shards"]), 0)
+            def test_job_reports_shard_results(scenario):
+                assert scenario["run"]["shards"]
+
+            @pytest.mark.parametrize("field", ["status"])
+            def test_output_contract(scenario, field):
+                assert field in scenario["run"]["output"]
             """),
     };
 

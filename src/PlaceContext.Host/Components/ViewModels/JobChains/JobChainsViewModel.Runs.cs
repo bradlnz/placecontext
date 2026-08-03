@@ -31,37 +31,13 @@ public sealed partial class JobChainsViewModel
     // ── Run chain ─────────────────────────────────────────────────────────────────────────────
     public async Task RunChainAsync(JobChainView chain)
     {
-        // Only steps with declared parameters appear in the prompt (UI keys: stepN:param).
-        var paramSteps = new List<(int Index, JobView Job)>();
-        var executionIndex = 0;
-        foreach (var stage in chain.Stages)
-        {
-            if (stage.Action is not null)
-            {
-                executionIndex++;
-                continue;
-            }
-            foreach (var step in stage.Jobs)
-            {
-                var job = Jobs?.FirstOrDefault(item => item.Id == step.JobId);
-                if (job is { Parameters.Count: > 0 }) paramSteps.Add((executionIndex, job));
-                executionIndex++;
-            }
-        }
-
-        if (paramSteps.Count > 0)
+        var plan = ChainParameterPromptPlan.Build(chain, Jobs ?? Array.Empty<JobView>());
+        if (plan.Steps.Count > 0)
         {
             RunPromptChain = chain;
             RunPromptSteps.Clear();
-            RunPromptSteps.AddRange(paramSteps);
-            var defaults = new Dictionary<string, string>(StringComparer.Ordinal);
-            foreach (var (idx, job) in RunPromptSteps)
-            {
-                var stored = JsonPayloadHelper.FlattenScalars(job.InputPayloads);
-                foreach (var p in job.Parameters)
-                    defaults[ArgKey(idx, p.Name)] = stored.GetValueOrDefault(p.Name, "");
-            }
-            _runPrompt.Reset(defaults);
+            RunPromptSteps.AddRange(plan.Steps);
+            _runPrompt.Reset(plan.Defaults);
             NotifyStateChanged();
             return;
         }

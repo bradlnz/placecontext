@@ -26,6 +26,8 @@ public sealed class LeadIngestionRequestValidator : AbstractValidator<LeadIngest
             .MaximumLength(10_000).WithMessage("Message is too long.");
         RuleFor(request => request.Source)
             .MaximumLength(200).WithMessage("Source is too long.");
+        RuleFor(request => request.Address)
+            .MaximumLength(1_000).WithMessage("Address is too long.");
         RuleFor(request => request.Metadata)
             .Must(metadata => metadata is null || metadata.Count <= 30)
             .WithMessage("Metadata has too many fields.");

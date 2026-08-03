@@ -33,7 +33,7 @@ public sealed class CancelChainRunHandler : ICommandHandler<CancelChainRunComman
     {
         var chainRun = await _runs.GetByIdAsync(command.ChainRunId, ct);
         if (chainRun is null) return false;
-        if (chainRun.Status != ChainRunStatus.Running) return true;
+        if (chainRun.Status is not (ChainRunStatus.Running or ChainRunStatus.Waiting)) return true;
 
         // Cancel every step that has a running job run, then mark each as Cancelled.
         var cancelTasks = new List<(int Index, Task Task)>();

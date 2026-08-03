@@ -7,6 +7,7 @@
 @inject IJSRuntime JS
 @inject PlaceContext.Application.Ports.ICurrentTenant Tenant
 @inject PlaceContext.Infrastructure.Operations.OperationCenter OpCenter
+@using PlaceContext.Host.Components.ViewModels.Helpers
 
 <PageTitle>placecontext — Dashboard</PageTitle>
 
@@ -93,7 +94,7 @@
                         <button class="dcbtn primary btn-sm quick-chain-run"
                                 disabled="@(_runningChainId is not null)"
                                 aria-label="Run @chain.Name"
-                                @onclick="@(() => RunQuickChainAsync(chain))">
+                                @onclick="@(() => PrepareQuickChainRunAsync(chain))">
                             @(_runningChainId == chain.Id ? "Starting…" : "Run")
                         </button>
                     </div>
@@ -227,6 +228,65 @@
     </div>
 </div>
 
+@if (_runPromptChain is not null)
+{
+    <div class="dcmodal-overlay" @onclick="CancelQuickChainPrompt">
+        <div class="dcmodal quick-chain-modal" role="dialog" aria-modal="true"
+             aria-labelledby="quick-chain-prompt-title" @onclick:stopPropagation="true">
+            <div class="dcmodal-head">
+                <div class="quick-chain-modal-title">
+                    <div id="quick-chain-prompt-title" class="title-14">Run @_runPromptChain.Name</div>
+                    <div class="quick-chain-modal-sub">
+                        Enter the declared inputs for each chain step. Stored job values are prefilled.
+                    </div>
+                </div>
+                <button class="dcslide-x" aria-label="Close run input prompt"
+                        disabled="@(_runningChainId is not null)" @onclick="CancelQuickChainPrompt">×</button>
+            </div>
+            <div class="dcmodal-body quick-chain-modal-body">
+                @foreach (var step in RunPromptSteps)
+                {
+                    <section class="quick-chain-prompt-step">
+                        <div class="quick-chain-prompt-head">
+                            <span class="quick-chain-step-badge">step @(step.Index + 1)</span>
+                            <strong>@step.Job.Name</strong>
+                        </div>
+                        @foreach (var parameter in step.Job.Parameters)
+                        {
+                            var key = ParameterPromptState.ChainArgKey(step.Index, parameter.Name);
+                            <div class="dcfield">
+                                <label>
+                                    @(parameter.Label ?? parameter.Name)
+                                    @if (parameter.Required)
+                                    {
+                                        <span class="req">*</span>
+                                    }
+                                    <span class="code ml-5">@parameter.Name</span>
+                                </label>
+                                <ParamInput Parameter="parameter" ProjectId="@_runPromptChain.ProjectId"
+                                            Value="@_runPrompt.Get(key)"
+                                            ValueChanged="@(value => _runPrompt.Set(key, value))" />
+                            </div>
+                        }
+                    </section>
+                }
+                @if (_runPrompt.Error is not null)
+                {
+                    <div class="quick-chain-prompt-error" role="alert">@_runPrompt.Error</div>
+                }
+            </div>
+            <div class="dcmodal-foot">
+                <button class="dcbtn" disabled="@(_runningChainId is not null)"
+                        @onclick="CancelQuickChainPrompt">Cancel</button>
+                <button class="dcbtn primary" disabled="@(_runningChainId is not null)"
+                        @onclick="SubmitQuickChainPromptAsync">
+                    @(_runningChainId is not null ? "Starting…" : "▶ Run chain")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
 <style>.dcdash-row:hover { background:var(--hover); }</style>
 
 @code {
@@ -235,6 +295,10 @@
     private int _running, _queued, _failed24, _succeeded24;
     private string _filter = "all";
     private IReadOnlyList<JobChainView> _chains = Array.Empty<JobChainView>();
+    private IReadOnlyList<JobView> _jobs = Array.Empty<JobView>();
+    private readonly ParameterPromptState _runPrompt = new();
+    private JobChainView? _runPromptChain;
+    private List<(int Index, JobView Job)> RunPromptSteps { get; } = new();
     private Guid? _runningChainId;
     private string? _chainMessage;
     private bool _chainError;
@@ -338,7 +402,19 @@
         try { _reports = await Svc.ListRecentRunReportsAsync(take: 50); } catch { }
         if (Ui.CurrentProjectId is { } chartPid)
         {
-            try { _chains = await Svc.ListJobChainsAsync(chartPid); } catch { _chains = Array.Empty<JobChainView>(); }
+            try
+            {
+                var chainsTask = Svc.ListJobChainsAsync(chartPid);
+                var jobsTask = Svc.ListJobsAsync(chartPid);
+                await Task.WhenAll(chainsTask, jobsTask);
+                _chains = await chainsTask;
+                _jobs = await jobsTask;
+            }
+            catch
+            {
+                _chains = Array.Empty<JobChainView>();
+                _jobs = Array.Empty<JobView>();
+            }
             try { _charts = await Svc.ListProjectChartsAsync(chartPid); } catch { }
             try
             {
@@ -369,7 +445,44 @@
         _ => _reports,
     };
 
-    private async Task RunQuickChainAsync(JobChainView chain)
+    private async Task PrepareQuickChainRunAsync(JobChainView chain)
+    {
+        if (_runningChainId is not null) return;
+
+        var plan = ChainParameterPromptPlan.Build(chain, _jobs);
+        if (plan.Steps.Count == 0)
+        {
+            await RunQuickChainAsync(chain, null, null);
+            return;
+        }
+
+        _runPromptChain = chain;
+        RunPromptSteps.Clear();
+        RunPromptSteps.AddRange(plan.Steps);
+        _runPrompt.Reset(plan.Defaults);
+    }
+
+    private async Task SubmitQuickChainPromptAsync()
+    {
+        if (_runPromptChain is null || _runningChainId is not null) return;
+        if (!_runPrompt.ValidateChainStepParameters(RunPromptSteps)) return;
+
+        var overrides = _runPrompt.ToStepPayloadOverrides(RunPromptSteps);
+        await RunQuickChainAsync(_runPromptChain, overrides.GetValueOrDefault(0), overrides);
+    }
+
+    private void CancelQuickChainPrompt()
+    {
+        if (_runningChainId is not null) return;
+        _runPromptChain = null;
+        RunPromptSteps.Clear();
+        _runPrompt.Clear();
+    }
+
+    private async Task RunQuickChainAsync(
+        JobChainView chain,
+        string? payload,
+        IReadOnlyDictionary<int, string>? stepPayloadOverrides)
     {
         if (_runningChainId is not null) return;
 
@@ -378,8 +491,11 @@
         _chainError = false;
         try
         {
-            await Svc.RunJobChainAsync(chain.Id);
+            await Svc.RunJobChainAsync(chain.Id, payload, stepPayloadOverrides: stepPayloadOverrides);
             _chainMessage = $"{chain.Name} started. Follow its progress in notifications or Observability.";
+            _runPromptChain = null;
+            RunPromptSteps.Clear();
+            _runPrompt.Clear();
         }
         catch (Exception ex)
         {

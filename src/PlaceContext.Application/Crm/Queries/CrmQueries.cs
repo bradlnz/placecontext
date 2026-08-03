@@ -10,3 +10,6 @@ public sealed record ListCrmClientCommunicationsQuery(Guid ClientId, int Take = 
 public sealed record GetCrmCommsCapabilitiesQuery : IQuery<CrmCommsCapabilitiesView>;
 public sealed record ListCrmClientArtifactsQuery(Guid ClientId, int Take = 200)
     : IQuery<IReadOnlyList<CrmClientArtifactView>>;
+public sealed record ListCrmAppointmentsQuery(Guid ProjectId)
+    : IQuery<IReadOnlyList<CrmAppointmentView>>;
+public sealed record ListCrmCalendarsQuery(Guid ProjectId) : IQuery<IReadOnlyList<CrmCalendarView>>;

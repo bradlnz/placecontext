@@ -46,6 +46,8 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
     public DbSet<CrmJobRunRow> CrmJobRuns => Set<CrmJobRunRow>();
     public DbSet<CrmChainRunRow> CrmChainRuns => Set<CrmChainRunRow>();
     public DbSet<CrmCommunicationRow> CrmCommunications => Set<CrmCommunicationRow>();
+    public DbSet<CrmAppointmentRow> CrmAppointments => Set<CrmAppointmentRow>();
+    public DbSet<CrmCalendarRow> CrmCalendars => Set<CrmCalendarRow>();
     public DbSet<CrmClientArtifactRow> CrmClientArtifacts => Set<CrmClientArtifactRow>();
     public DbSet<CrmAutomationRuleRow> CrmAutomationRules => Set<CrmAutomationRuleRow>();
     public DbSet<CrmAutomationQueueRow> CrmAutomationQueue => Set<CrmAutomationQueueRow>();
@@ -325,6 +327,26 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
             e.Property(x => x.CreatedAt).HasDefaultValueSql("now()");
         });
 
+        b.Entity<CrmAppointmentRow>(e =>
+        {
+            e.ToTable("crm_appointments");
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => new { x.ProjectId, x.StartsAt });
+            e.HasIndex(x => x.ClientId);
+            e.HasIndex(x => x.CalendarId);
+            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
+            e.Property(x => x.CreatedAt).HasDefaultValueSql("now()");
+        });
+
+        b.Entity<CrmCalendarRow>(e =>
+        {
+            e.ToTable("crm_calendars"); e.HasKey(x => x.Id);
+            e.HasIndex(x => new { x.ProjectId, x.Name }).IsUnique();
+            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
+            e.Property(x => x.CreatedAt).HasDefaultValueSql("now()");
+            e.Property(x => x.UpdatedAt).HasDefaultValueSql("now()");
+        });
+
         b.Entity<CrmClientArtifactRow>(e =>
         {
             e.ToTable("crm_client_artifacts");
@@ -350,7 +372,9 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
         {
             e.ToTable("crm_automation_queue");
             e.HasKey(x => x.Id);
-            e.HasIndex(x => new { x.FailedAt, x.ClaimedAt, x.NextAttemptAt });
+            e.HasIndex(x => new { x.CompletedAt, x.FailedAt, x.ClaimedAt, x.NextAttemptAt });
+            e.HasIndex(x => new { x.TenantId, x.ProjectId, x.Id });
+            e.HasIndex(x => x.ChainRunId);
         });
 
         b.Entity<CommunicationProviderRow>(e =>
@@ -490,6 +514,7 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
             // The pipeline history is read newest-first per chain.
             e.HasIndex(x => new { x.ChainId, x.StartedAt });
             e.HasIndex(x => x.ProjectId);
+            e.HasIndex(x => new { x.Status, x.ResumeAt, x.ContinuationClaimedAt });
             e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
         });
 

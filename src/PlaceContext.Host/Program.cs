@@ -306,6 +306,13 @@ builder.Services
             },
         };
     })
+    // The generic agent accepts either a real user's personal token or an OAuth access token. Route
+    // each credential to exactly one validator so a valid pct_ token is not also parsed (and logged)
+    // as a malformed JWT.
+    .AddPolicyScheme(AgentAuthenticationDefaults.SchemeName, AgentAuthenticationDefaults.SchemeName, o =>
+    {
+        o.ForwardDefaultSelector = AgentAuthenticationDefaults.SelectScheme;
+    })
     // Machine-facing "ApiKey" scheme for the /api/v1/* management API (the Terraform provider and other
     // IaC/CI clients). Deliberately opt-in per endpoint via [Authorize(AuthenticationSchemes = "ApiKey")]
     // — it never becomes the ambient default, so it can't accidentally widen the portal or MCP surfaces.

@@ -11,6 +11,56 @@
     overflow: hidden;
 }
 
+/* Job-catalogue presentation: tables remain the primary objects, while SQL is a secondary workspace. */
+.page { height: auto; min-height: 100%; overflow: visible; }
+.data-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 18px; margin: 18px 0; }
+.data-head h2 { margin: 0; font-size: 18px; font-weight: 650; }
+.data-head p { margin: 4px 0 0; color: var(--text-3); font-size: 12px; }
+.data-head-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 7px; }
+.data-head-actions .dcbtn { display: inline-flex; align-items: center; gap: 5px; cursor: pointer; }
+.data-head-actions svg, .icon-refresh svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+.data-summary { display: grid; grid-template-columns: repeat(4, 1fr); margin-bottom: 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--card); overflow: hidden; }
+.data-summary > div { display: flex; align-items: baseline; gap: 7px; padding: 12px 15px; border-right: 1px solid var(--border); }
+.data-summary > div:last-child { border-right: 0; }
+.data-summary strong { font-size: 17px; font-weight: 650; }
+.data-summary span { color: var(--text-3); font-size: 11.5px; }
+.table-suite { margin-bottom: 14px; overflow: hidden; }
+.table-suite-head, .sql-workspace-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid var(--border); background: color-mix(in srgb, var(--card-2) 55%, transparent); }
+.table-suite-head > div, .sql-workspace-head > div { display: flex; align-items: baseline; gap: 9px; }
+.table-suite-head strong, .sql-workspace-head strong { font-size: 13px; }
+.table-suite-head span, .sql-workspace-head span { color: var(--text-3); font-size: 11.5px; }
+.icon-refresh { display: grid; width: 28px; height: 28px; place-items: center; border: 1px solid var(--border); border-radius: 7px; color: var(--text-2); background: var(--card); cursor: pointer; }
+.table-rows { display: flex; flex-direction: column; }
+.table-row { display: grid; grid-template-columns: 30px minmax(0, 1fr) auto; align-items: center; gap: 11px; padding: 13px 14px; border-bottom: 1px solid var(--border); cursor: pointer; }
+.table-row:last-child { border-bottom: 0; }
+.table-row:hover { background: color-mix(in srgb, var(--card-2) 45%, transparent); }
+.table-kind { display: grid; width: 27px; height: 27px; place-items: center; border-radius: 7px; color: var(--text-3); background: var(--card-2); }
+.table-kind.table { color: var(--brand-2); background: var(--brand-bg); }
+.table-kind svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.7; }
+.table-copy { display: flex; min-width: 0; flex-direction: column; gap: 4px; }
+.table-copy > div { display: flex; align-items: center; gap: 7px; }
+.table-copy strong { overflow: hidden; font-family: var(--font-sans); font-size: 12.5px; text-overflow: ellipsis; white-space: nowrap; }
+.table-copy > span { color: var(--text-3); font-size: 10.5px; }
+.table-chip { padding: 2px 6px; border: 1px solid var(--border); border-radius: 999px; color: var(--text-3); font-size: 9.5px; }
+.table-chip.brand { color: var(--brand-2); border-color: color-mix(in srgb, var(--brand-2) 35%, var(--border)); }
+.table-actions { display: flex; align-items: center; gap: 5px; }
+.rename-row, .drop-row { grid-column: 2 / -1; }
+.sql-workspace { overflow: hidden; }
+.sql-workspace .flex-min { min-height: 340px; padding: 12px; }
+.sql-workspace .sql-editor { min-height: 190px; }
+
+@media (max-width: 760px) {
+    .data-head { align-items: flex-start; flex-direction: column; }
+    .data-head-actions { justify-content: flex-start; }
+    .data-summary { grid-template-columns: repeat(2, 1fr); }
+    .data-summary > div:nth-child(2) { border-right: 0; }
+    .data-summary > div:nth-child(-n+2) { border-bottom: 1px solid var(--border); }
+    .table-row { grid-template-columns: 27px minmax(0, 1fr); }
+    .table-actions { grid-column: 2; flex-wrap: wrap; }
+    .table-suite-head > div, .sql-workspace-head > div { display: block; }
+    .table-suite-head span, .sql-workspace-head span { display: block; margin-top: 2px; }
+}
+
 .head-row {
     display: flex;
     align-items: baseline;
@@ -664,13 +714,14 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 24px;
+    padding: 0;
 }
 
 .table-modal {
+    position: relative;
     background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: 12px;
+    border: 0;
+    border-radius: 0;
     width: 100%;
     height: 100%;
     max-width: 100%;
@@ -680,6 +731,16 @@
     overflow: hidden;
     box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
 }
+
+.json-view-button { padding: 3px 7px; border: 1px solid var(--border); border-radius: 5px; color: var(--text-2); background: var(--card-2); font: inherit; font-size: 10px; cursor: pointer; }
+.json-view-button:hover { border-color: var(--border-2); background: var(--hover); }
+.json-side-pane { position: absolute; top: 0; right: 0; bottom: 0; z-index: 5; display: flex; width: min(520px, 48vw); flex-direction: column; border-left: 1px solid var(--border); background: var(--card); box-shadow: -14px 0 34px rgba(0,0,0,.2); }
+.json-side-pane header { display: flex; min-height: 60px; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--border); }
+.json-side-pane header > div { display: flex; min-width: 0; flex-direction: column; gap: 2px; }
+.json-side-pane header strong { overflow: hidden; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+.json-side-pane header span { color: var(--text-3); font-size: 10px; text-transform: uppercase; }
+.json-pane-close { display: grid; width: 30px; height: 30px; flex: none; place-items: center; border: 1px solid var(--border); border-radius: 7px; color: var(--text-2); background: var(--card-2); cursor: pointer; }
+.json-side-pane pre { flex: 1; margin: 0; padding: 16px; overflow: auto; color: var(--text-2); background: color-mix(in srgb, var(--card-2) 60%, var(--card)); font: 11.5px/1.6 var(--font-mono, monospace); white-space: pre-wrap; word-break: break-word; }
 
 .table-modal-head {
     display: flex;
@@ -794,6 +855,8 @@
     .table-modal-body {
         flex: 0 0 45%;
     }
+
+    .json-side-pane { width: 100%; }
 }
 
 .text-2 {

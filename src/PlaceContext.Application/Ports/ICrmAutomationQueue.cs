@@ -4,6 +4,7 @@ namespace PlaceContext.Application.Ports;
 
 public sealed record QueuedCrmAutomation(
     Guid TenantId,
+    Guid ProjectId,
     Guid RuleId,
     Guid? ClientId,
     Guid ChainId,
@@ -14,5 +15,11 @@ public sealed record QueuedCrmAutomation(
 
 public interface ICrmAutomationQueue
 {
-    Task EnqueueAsync(QueuedCrmAutomation value, CancellationToken ct = default);
+    Task<Guid> EnqueueAsync(QueuedCrmAutomation value, CancellationToken ct = default);
 }
+
+public sealed record CrmAutomationReceipt(
+    Guid TrackingId,
+    Guid RuleId,
+    Guid ChainId,
+    string RuleName);

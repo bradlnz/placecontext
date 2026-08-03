@@ -3,6 +3,7 @@ using System.Net.Mail;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using Microsoft.Extensions.Logging;
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Observability;
@@ -53,13 +54,19 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
     private readonly IJobRunner _jobRunner;
     private readonly IClientCommunicationSender? _communications;
     private readonly IPermissionService? _permissions;
+    private readonly ICrmClientRepository? _crmClients;
+    private readonly CrmArtifactAssociationService? _crmArtifacts;
+    private readonly ILogger<RunJobChainHandler>? _log;
 
     public RunJobChainHandler(IJobChainRepository chains, IJobRepository jobs, IChainRunRepository runs,
         IUnitOfWork uow, IClock clock, IJobRunner jobRunner,
         // Optional so unit tests construct the handler unchanged; DI always supplies it.
         DataMappingIngestionService? dataMappings = null,
         IClientCommunicationSender? communications = null,
-        IPermissionService? permissions = null)
+        IPermissionService? permissions = null,
+        ICrmClientRepository? crmClients = null,
+        CrmArtifactAssociationService? crmArtifacts = null,
+        ILogger<RunJobChainHandler>? log = null)
     {
         _dataMappings = dataMappings;
         _chains = chains;
@@ -70,6 +77,9 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
         _jobRunner = jobRunner;
         _communications = communications;
         _permissions = permissions;
+        _crmClients = crmClients;
+        _crmArtifacts = crmArtifacts;
+        _log = log;
     }
 
     private readonly DataMappingIngestionService? _dataMappings;
@@ -105,10 +115,26 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
         JobTelemetry.ChainsStarted.Add(1, new("chain.id", chain.Id.ToString()), new("project.id", chain.ProjectId.ToString()));
         var chainStartedAt = _clock.UtcNow;
 
-        var chainRun = ChainRun.Start(chain, names, chainStartedAt, command.ChainRunId);
+        ChainRun chainRun;
+        var startStageIndex = command.ResumeFromStageIndex ?? 0;
+        if (command.ResumeFromStageIndex is { } resumeStage)
+        {
+            if (command.ChainRunId is not { } existingRunId)
+                throw new InvalidOperationException("A chain run id is required to resume a chain.");
+            chainRun = await _runs.GetByIdAsync(existingRunId, ct)
+                ?? throw new InvalidOperationException($"Chain run {existingRunId} not found.");
+            if (chainRun.ChainId != chain.Id || chainRun.ResumeStageIndex != resumeStage)
+                throw new InvalidOperationException("The scheduled chain continuation is no longer valid.");
+            chainRun.Resume();
+            await SaveProgressAsync(chainRun, ct);
+        }
+        else
+        {
+            chainRun = ChainRun.Start(chain, names, chainStartedAt, command.ChainRunId, command.CrmClientId);
+            await _runs.AddAsync(chainRun, ct);
+            await _uow.SaveChangesAsync(ct);
+        }
         chainSpan?.SetTag("chain.run.id", chainRun.Id);
-        await _runs.AddAsync(chainRun, ct);
-        await _uow.SaveChangesAsync(ct);
 
         // Serializes every write onto chainRun/_runs/_uow — dispatching itself (_dispatcher.Send) is
         // NOT held under this lock, so a fan-out stage's branches genuinely run concurrently; only the
@@ -117,20 +143,30 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
         using var dispatchGate = new SemaphoreSlim(MaxConcurrentBranches, MaxConcurrentBranches);
 
         var status = ChainRunStatus.Succeeded;
-        string? payload = command.InputPayload; // first stage: caller's payload, or the job's stored shards
-        var flatIndex = 0;
+        string? payload = command.InputPayload; // first/resumed stage input
+        var flatIndex = chain.Stages.Take(startStageIndex).Sum(stage => stage.ExecutionCount);
 
-        for (var stageIndex = 0; stageIndex < chain.Stages.Count; stageIndex++)
+        for (var stageIndex = startStageIndex; stageIndex < chain.Stages.Count; stageIndex++)
         {
             var stage = chain.Stages[stageIndex];
 
             // ── Evaluate gate before the stage ────────────────────────────────────────────────
-            if (stage.Gate is { } gate)
+            // The continuation is scheduled only after this gate has already evaluated. Skipping
+            // it once on resume prevents a wait gate from scheduling itself forever.
+            if (stage.Gate is { } gate
+                && !(command.ResumeFromStageIndex == stageIndex && stageIndex == startStageIndex))
             {
                 var gateResult = gate.Evaluate(payload);
                 if (gateResult.WaitDuration is { } wait)
                 {
-                    await Task.Delay(wait, ct);
+                    var overridesJson = command.StepPayloadOverrides is null
+                        ? null
+                        : JsonSerializer.Serialize(command.StepPayloadOverrides);
+                    chainRun.Pause(stageIndex, payload, _clock.UtcNow.Add(wait), overridesJson);
+                    await SaveProgressAsync(chainRun, ct);
+                    chainSpan?.SetTag("status", ChainRunStatus.Waiting.ToString());
+                    chainSpan?.SetTag("chain.resume_at", chainRun.ResumeAt);
+                    return ChainRunMapper.ToView(chainRun);
                 }
                 if (!gateResult.Proceed)
                 {
@@ -153,16 +189,22 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
                 await SaveProgressAsync(chainRun, ct);
                 try
                 {
-                    if (_communications is null || _permissions is null
-                        || !await _permissions.HasAsync(Permission.EmailSend, ct))
+                    if (_communications is null || (chainRun.CrmClientId is null
+                        && (_permissions is null || !await _permissions.HasAsync(Permission.EmailSend, ct))))
                         throw new UnauthorizedAccessException(
                             $"The '{Permission.EmailSend}' permission is required to send chain email.");
                     EnsureEmailReleaseAllowed(payload);
-                    var recipient = RenderTemplate(email.Recipient, payload);
-                    var recipientName = RenderTemplate(email.RecipientName, payload);
-                    var subject = RenderTemplate(email.Subject, payload);
-                    var body = RenderTemplate(email.Body, payload);
-                    var attachments = ResolveEmailAttachments(email.AttachmentPath, payload);
+                    var customer = await LoadChainCustomerAsync(chainRun, ct);
+                    var templatePayload = AddCustomerContext(payload, customer);
+                    var recipient = customer?.Email
+                        ?? RenderTemplate(email.Recipient, templatePayload);
+                    var recipientName = customer?.Name
+                        ?? RenderTemplate(email.RecipientName, templatePayload);
+                    var subject = RenderTemplate(email.Subject, templatePayload);
+                    var body = RenderTemplate(email.Body, templatePayload);
+                    var attachments = ResolveEmailAttachments(email.AttachmentPath, templatePayload);
+                    if (chainRun.CrmClientId is not null && string.IsNullOrWhiteSpace(recipient))
+                        throw new InvalidOperationException("The CRM customer does not have an email address.");
                     _ = new MailAddress(recipient);
                     if (string.IsNullOrWhiteSpace(subject) || string.IsNullOrWhiteSpace(body))
                         throw new InvalidOperationException(
@@ -198,13 +240,16 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
                 await SaveProgressAsync(chainRun, ct);
                 try
                 {
-                    if (_communications is null || _permissions is null
-                        || !await _permissions.HasAsync(Permission.SmsSend, ct))
+                    if (_communications is null || (chainRun.CrmClientId is null
+                        && (_permissions is null || !await _permissions.HasAsync(Permission.SmsSend, ct))))
                         throw new UnauthorizedAccessException(
                             $"The '{Permission.SmsSend}' permission is required to send chain SMS.");
                     EnsureReleaseAllowed(payload, "sms");
-                    var recipient = RenderTemplate(sms.Recipient, payload);
-                    var body = RenderTemplate(sms.Body, payload);
+                    var customer = await LoadChainCustomerAsync(chainRun, ct);
+                    var templatePayload = AddCustomerContext(payload, customer);
+                    var recipient = customer?.Phone
+                        ?? RenderTemplate(sms.Recipient, templatePayload);
+                    var body = RenderTemplate(sms.Body, templatePayload);
                     var digits = new string(recipient.Where(char.IsDigit).ToArray());
                     if (!recipient.StartsWith('+') || digits.Length is < 8 or > 15)
                         throw new InvalidOperationException(
@@ -317,6 +362,21 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
         chainRun.Complete(status, payload, _clock.UtcNow);
         await SaveProgressAsync(chainRun, ct);
 
+        // CRM artifacts are derived from the finished persisted steps. This must happen here—not
+        // in the ingestion worker—so resumed wait chains and every other CRM launch path converge.
+        if (_crmArtifacts is not null)
+        {
+            try { await _crmArtifacts.AssociateAsync(chainRun, ct); }
+            catch (Exception ex)
+            {
+                // Artifact tagging must not rewrite a successfully completed chain as failed. The
+                // startup reconciler retries recent terminal CRM runs after transient failures.
+                _log?.LogWarning(ex,
+                    "Could not associate artifacts from chain run {ChainRunId} to CRM customer {ClientId}.",
+                    chainRun.Id, chainRun.CrmClientId);
+            }
+        }
+
         var finishedAt = _clock.UtcNow;
         chainSpan?.SetTag("status", status.ToString());
         chainSpan?.SetTag("chain.steps.json", BuildStepsTelemetryJson(chainRun));
@@ -333,6 +393,36 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
         }
 
         return ChainRunMapper.ToView(chainRun);
+    }
+
+    private async Task<CrmClient?> LoadChainCustomerAsync(ChainRun run, CancellationToken ct)
+    {
+        if (run.CrmClientId is not { } clientId) return null;
+        if (_crmClients is null)
+            throw new InvalidOperationException("CRM customer lookup is unavailable.");
+        return await _crmClients.GetByIdAsync(clientId, ct)
+            ?? throw new InvalidOperationException($"CRM customer {clientId} no longer exists.");
+    }
+
+    internal static string? AddCustomerContext(string? payload, CrmClient? customer)
+    {
+        if (customer is null) return payload;
+        var root = string.IsNullOrWhiteSpace(payload)
+            ? new System.Text.Json.Nodes.JsonObject()
+            : System.Text.Json.Nodes.JsonNode.Parse(payload) as System.Text.Json.Nodes.JsonObject
+                ?? new System.Text.Json.Nodes.JsonObject
+                {
+                    ["previous"] = System.Text.Json.Nodes.JsonNode.Parse(payload),
+                };
+        root["customer"] = new System.Text.Json.Nodes.JsonObject
+        {
+            ["id"] = customer.Id,
+            ["name"] = customer.Name,
+            ["company"] = customer.Company,
+            ["email"] = customer.Email,
+            ["phone"] = customer.Phone,
+        };
+        return root.ToJsonString();
     }
 
     private static async Task WithProgressLockAsync(SemaphoreSlim gate, Func<Task> action)

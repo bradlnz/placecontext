@@ -170,6 +170,8 @@ public static class DependencyInjection
         services.AddScoped<ICrmJobRunRepository, EfCrmJobRunRepository>();
         services.AddScoped<ICrmChainRunRepository, EfCrmChainRunRepository>();
         services.AddScoped<ICrmCommunicationRepository, EfCrmCommunicationRepository>();
+        services.AddScoped<ICrmAppointmentRepository, EfCrmAppointmentRepository>();
+        services.AddScoped<ICrmCalendarRepository, EfCrmCalendarRepository>();
         services.AddScoped<ICrmClientArtifactRepository, EfCrmClientArtifactRepository>();
         services.AddScoped<ICrmAutomationRuleRepository, EfCrmAutomationRuleRepository>();
         services.AddScoped<ICrmAutomationQueue, Scheduling.DbCrmAutomationQueue>();
@@ -268,6 +270,8 @@ public static class DependencyInjection
         services.AddScoped<IJobRunQueue, Scheduling.DbJobRunQueue>();
         services.AddHostedService<Scheduling.TriggerSchedulerService>();
         services.AddHostedService<Scheduling.CrmAutomationWorker>();
+        services.AddHostedService<Scheduling.ChainContinuationWorker>();
+        services.AddHostedService<Scheduling.CrmArtifactReconciliationWorker>();
 
         // Background portal operations (the notifications-pane ledger) + the analytics chart sweep
         // worker (generation can be slow; the portal only enqueues and reads stored charts).

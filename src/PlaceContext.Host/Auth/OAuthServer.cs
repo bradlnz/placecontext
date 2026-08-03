@@ -6,6 +6,7 @@ using PlaceContext.Application.Ports;
 using PlaceContext.Host.Tenancy;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http.Extensions;
 using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
@@ -51,7 +52,7 @@ public static class OAuthServer
                 ["grant_types_supported"] = new[] { "authorization_code", "refresh_token" },
                 ["code_challenge_methods_supported"] = new[] { "S256" },
                 ["token_endpoint_auth_methods_supported"] = new[] { "none" },
-                ["scopes_supported"] = new[] { "mcp" },
+                ["scopes_supported"] = new[] { "mcp", "identity" },
             });
         }).AllowAnonymous();
 
@@ -98,31 +99,47 @@ public static class OAuthServer
 
             if (string.IsNullOrWhiteSpace(client_id) || string.IsNullOrWhiteSpace(redirect_uri))
                 return Results.BadRequest("Missing client_id or redirect_uri.");
-            // Defense in depth: even a pre-registered client cannot use a non-loopback redirect.
-            // Blocks codes being sent to attacker hosts if an old DCR row still lists one.
-            if (!PlaceContext.Infrastructure.Persistence.EfOAuthClientStore.IsSafeRedirectUri(redirect_uri))
-                return Results.BadRequest("Invalid redirect_uri (loopback only for public MCP clients).");
-            // Resolve the client. EnsureAsync may self-heal a loopback-only public client after a DB
-            // reset, but never appends an arbitrary external redirect_uri (auth-code theft).
+            // Public dynamically registered MCP clients remain loopback-only. Reports is the sole
+            // browser client allowed to use a remote callback, and must match the operator-controlled
+            // client id + redirect URI configuration exactly.
             OAuthClient client;
-            try
+            var config = ctx.RequestServices.GetRequiredService<IConfiguration>();
+            var trustedWebClient = TrustedWebClient(config, client_id, redirect_uri);
+            if (trustedWebClient is not null)
             {
-                client = await clients.EnsureAsync(client_id, redirect_uri, ctx.RequestAborted);
+                client = trustedWebClient;
             }
-            catch (InvalidOperationException)
+            else
             {
-                return Results.BadRequest("Unknown client or redirect_uri.");
+                if (!PlaceContext.Infrastructure.Persistence.EfOAuthClientStore.IsSafeRedirectUri(redirect_uri))
+                    return Results.BadRequest("Unknown client or redirect_uri.");
+                try
+                {
+                    client = await clients.EnsureAsync(client_id, redirect_uri, ctx.RequestAborted);
+                }
+                catch (InvalidOperationException)
+                {
+                    return Results.BadRequest("Unknown client or redirect_uri.");
+                }
             }
             if (!client.RedirectUris.Contains(redirect_uri))
                 return Results.BadRequest("Unknown client or redirect_uri.");
             if (response_type != "code" || string.IsNullOrEmpty(code_challenge) || (code_challenge_method ?? "S256") != "S256")
                 return Results.BadRequest("Only response_type=code with S256 PKCE is supported.");
 
+            var requestedScope = scope ?? "mcp";
+            if (requestedScope.Split(' ', StringSplitOptions.RemoveEmptyEntries)
+                .Any(s => s is not ("mcp" or "identity")))
+                return Results.BadRequest("Unknown scope.");
+            if (requestedScope.Contains("identity", StringComparison.Ordinal)
+                && trustedWebClient is null)
+                return Results.BadRequest("The identity scope is restricted to trusted web clients.");
+
             var userId = Guid.Parse(ctx.User.FindFirstValue(ClaimTypes.NameIdentifier)!);
             var role = ctx.User.FindFirstValue(ClaimTypes.Role) ?? "Viewer";
             var code = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
             await authCodes.SaveAsync(new AuthCode(code, client_id, redirect_uri, code_challenge, userId, tenant.TenantId,
-                role, scope ?? "mcp", DateTimeOffset.UtcNow.AddMinutes(5)), ctx.RequestAborted);
+                role, requestedScope, DateTimeOffset.UtcNow.AddMinutes(5)), ctx.RequestAborted);
 
             var sep = redirect_uri.Contains('?') ? "&" : "?";
             var loc = $"{redirect_uri}{sep}code={Uri.EscapeDataString(code)}";
@@ -162,6 +179,31 @@ public static class OAuthServer
                     return Results.BadRequest(new { error = "unsupported_grant_type" });
             }
         }).AllowAnonymous().DisableAntiforgery();
+
+        // A trusted portal resolves the authenticated PlaceContext subject after the code exchange. Identity is
+        // read from the tenant database on every call, so removed users and changed names/roles take
+        // effect immediately rather than being copied into a long-lived token.
+        app.MapGet("/connect/userinfo", async (HttpContext ctx, IMembershipService members) =>
+        {
+            var scopes = ctx.User.FindFirstValue("scope")?.Split(' ', StringSplitOptions.RemoveEmptyEntries) ?? [];
+            if (!scopes.Contains("identity", StringComparer.Ordinal))
+                return Results.Forbid();
+            if (!Guid.TryParse(ctx.User.FindFirstValue("sub"), out var userId))
+                return Results.Unauthorized();
+            var member = await members.GetMemberAsync(userId, ctx.RequestAborted);
+            return member is null
+                ? Results.Unauthorized()
+                : Results.Json(new Dictionary<string, object?>
+                {
+                    ["sub"] = member.Id.ToString(),
+                    ["email"] = member.Email,
+                    ["name"] = member.DisplayName,
+                    ["role"] = member.Role,
+                });
+        }).RequireAuthorization(new AuthorizeAttribute
+        {
+            AuthenticationSchemes = Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerDefaults.AuthenticationScheme,
+        });
     }
 
     /// <summary>
@@ -205,6 +247,22 @@ public static class OAuthServer
         var computed = Base64UrlEncoder.Encode(SHA256.HashData(Encoding.ASCII.GetBytes(verifier)));
         return CryptographicOperations.FixedTimeEquals(
             Encoding.ASCII.GetBytes(computed), Encoding.ASCII.GetBytes(challenge));
+    }
+
+    private static OAuthClient? TrustedWebClient(IConfiguration config, string clientId, string redirectUri)
+    {
+        var configuredId = config["PlaceContext:OAuth:TrustedClients:AdminPortal:ClientId"];
+        var configuredRedirect = config["PlaceContext:OAuth:TrustedClients:AdminPortal:RedirectUri"];
+        var configuredName = config["PlaceContext:OAuth:TrustedClients:AdminPortal:Name"];
+        if (string.IsNullOrWhiteSpace(configuredId) || string.IsNullOrWhiteSpace(configuredRedirect))
+            return null;
+        if (!string.Equals(clientId, configuredId, StringComparison.Ordinal)
+            || !string.Equals(redirectUri, configuredRedirect, StringComparison.Ordinal))
+            return null;
+        if (!Uri.TryCreate(configuredRedirect, UriKind.Absolute, out var uri)
+            || !uri.Scheme.Equals(Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
+            return null;
+        return new OAuthClient(configuredId, new[] { configuredRedirect }, configuredName ?? "Trusted Admin Portal");
     }
 
     private sealed record RegisterRequest(

@@ -11,6 +11,18 @@
 <div class="search-page">
     <DataTabs ProjectId="ProjectId" Active="search" />
 
+    @if (!_initialLoadComplete)
+    {
+        <div class="data-search-skeleton" aria-busy="true" aria-label="Loading data search">
+            <Skeleton Kind="text" Rows="2" />
+            <Skeleton Kind="card-grid" Cards="4" />
+            <Skeleton Kind="text" Rows="3" />
+            <Skeleton Kind="table" Rows="6" />
+        </div>
+    }
+    else
+    {
+
     <header class="page-head">
         <div>
             <h2>Data Search</h2>
@@ -301,6 +313,7 @@
             }
         </section>
     }
+    }
 </div>
 
 @code {
@@ -325,6 +338,7 @@
     private string _dashboardName = "";
     private string? _error;
     private bool _loading;
+    private bool _initialLoadComplete;
     private bool _searching;
     private bool _syncing;
     private bool _canSync;
@@ -388,6 +402,7 @@
         finally
         {
             _loading = false;
+            _initialLoadComplete = true;
         }
     }
 

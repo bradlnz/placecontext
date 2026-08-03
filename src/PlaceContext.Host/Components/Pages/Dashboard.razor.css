@@ -46,6 +46,8 @@
     margin-bottom: 24px;
     min-width: 0;
     overflow: hidden;
+    padding: 16px;
+    box-sizing: border-box;
 }
 
 .quick-chain-head {
@@ -53,7 +55,7 @@
     align-items: flex-start;
     justify-content: space-between;
     gap: 16px;
-    padding: 16px;
+    padding: 0 0 14px;
     border-bottom: 1px solid var(--border);
 }
 
@@ -91,7 +93,7 @@
     justify-content: space-between;
     gap: 12px;
     min-width: 0;
-    padding: 11px 16px;
+    padding: 12px 0;
     border-bottom: 1px solid var(--border);
 }
 
@@ -121,10 +123,11 @@
 
 .quick-chain-empty,
 .quick-chain-message {
-    padding: 14px 16px;
+    padding: 14px 0 0;
 }
 
 .quick-chain-message {
+    margin-top: 12px;
     border-top: 1px solid var(--border);
     color: var(--good);
     overflow-wrap: anywhere;
@@ -137,6 +140,68 @@
 .quick-chain-run {
     flex: none;
     min-width: 70px;
+}
+
+.quick-chain-modal {
+    width: min(560px, calc(100vw - 32px));
+    max-height: min(760px, calc(100dvh - 32px));
+    min-width: 0;
+}
+
+.quick-chain-modal-title {
+    min-width: 0;
+}
+
+.quick-chain-modal-sub {
+    margin-top: 3px;
+    color: var(--text-2);
+    font-size: 11.5px;
+    line-height: 1.45;
+    overflow-wrap: anywhere;
+}
+
+.quick-chain-modal-body {
+    min-height: 0;
+    overflow-y: auto;
+}
+
+.quick-chain-prompt-step {
+    min-width: 0;
+    padding: 14px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--card-2);
+}
+
+.quick-chain-prompt-step + .quick-chain-prompt-step {
+    margin-top: 12px;
+}
+
+.quick-chain-prompt-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    margin-bottom: 12px;
+    overflow-wrap: anywhere;
+}
+
+.quick-chain-step-badge {
+    flex: none;
+    padding: 2px 7px;
+    border: 1px solid var(--border-2);
+    border-radius: 999px;
+    color: var(--text-3);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+}
+
+.quick-chain-prompt-error {
+    margin-top: 12px;
+    color: var(--bad);
+    font-size: 12px;
+    overflow-wrap: anywhere;
 }
 
 .stat-card {
@@ -523,6 +588,10 @@
         gap: 12px;
     }
 
+    .dashboard-quick-chains {
+        padding: 14px;
+    }
+
     .quick-chain-head .dcbtn {
         justify-content: center;
         min-height: 40px;
@@ -543,6 +612,15 @@
     .quick-chain-run {
         min-height: 44px;
         width: 100%;
+    }
+
+    .quick-chain-modal {
+        width: 100%;
+        max-height: 100dvh;
+    }
+
+    .quick-chain-prompt-step {
+        padding: 12px;
     }
 
     .jobs-head {

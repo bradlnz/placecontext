@@ -3,6 +3,7 @@ using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Features;
 using PlaceContext.Application.Ports;
 using PlaceContext.Domain.Entities;
+using PlaceContext.Domain.Repositories;
 using PlaceContext.Domain.ValueObjects;
 using PlaceContext.TestSupport;
 using Xunit;
@@ -17,10 +18,11 @@ public class JobChainTests
     private static RunJobChainHandler RunHandler(InMemoryJobChainRepository chains, InMemoryJobRepository jobs,
         FakeRunDispatcher dispatcher, InMemoryChainRunRepository? runs = null,
         IClientCommunicationSender? communications = null,
-        IPermissionService? permissions = null)
+        IPermissionService? permissions = null,
+        ICrmClientRepository? crmClients = null)
         => new(chains, jobs, runs ?? new InMemoryChainRunRepository(),
             new RecordingUnitOfWork(), new FakeClock(T0), new FakeJobRunner(dispatcher),
-            communications: communications, permissions: permissions);
+            communications: communications, permissions: permissions, crmClients: crmClients);
 
     private static Job MakeJob(string name, Guid? projectId = null)
     {
@@ -218,6 +220,72 @@ public class JobChainTests
         Assert.Equal("Postmark", actionStep.Provider);
         Assert.Equal("message-123", actionStep.ExternalId);
         Assert.Null(actionStep.Error);
+    }
+
+    [Fact]
+    public async Task Send_actions_pull_the_current_crm_customer_contact_details()
+    {
+        var jobs = new InMemoryJobRepository();
+        var source = MakeJob("source");
+        await jobs.AddAsync(source);
+        var customer = CrmClient.Create(ProjectId, "Casey Customer", null,
+            "casey@example.com", "+61412345678", CustomerLifecycleStage.Active, null, T0);
+        var customers = new SingleCrmClientRepository(customer);
+        var chains = new InMemoryJobChainRepository();
+        var email = new SendEmailChainAction(
+            "fallback@example.com", "Fallback", "Hello {{customer.name}}", "Your report is ready.");
+        var chain = JobChain.Create(ProjectId, "customer delivery", null,
+            new[] { ChainStage.Of(source.Id), ChainStage.ForAction(email) }, T0);
+        await chains.AddAsync(chain);
+        var dispatcher = new FakeRunDispatcher();
+        dispatcher.Results[source.Id] = Run(source.Id, "Succeeded", shardArtifacts: new[] { "{}" });
+        var sender = new FakeCommunicationSender();
+
+        await RunHandler(chains, jobs, dispatcher, communications: sender,
+                permissions: new FakePermissionService(true), crmClients: customers)
+            .HandleAsync(new RunJobChainCommand(chain.Id, CrmClientId: customer.Id));
+
+        var sent = Assert.Single(sender.Emails);
+        Assert.Equal("casey@example.com", sent.Recipient);
+        Assert.Equal("Casey Customer", sent.RecipientName);
+        Assert.Equal("Hello Casey Customer", sent.Subject);
+    }
+
+    [Fact]
+    public async Task Wait_gate_persists_state_and_resume_continues_the_same_run_without_delaying()
+    {
+        var jobs = new InMemoryJobRepository();
+        var first = MakeJob("first");
+        var second = MakeJob("second");
+        await jobs.AddAsync(first);
+        await jobs.AddAsync(second);
+        var chains = new InMemoryJobChainRepository();
+        var chain = JobChain.Create(ProjectId, "durable wait", null,
+            new[]
+            {
+                ChainStage.Of(first.Id),
+                new ChainStage(new[] { second.Id }, new WaitGate(TimeSpan.FromHours(2))),
+            }, T0);
+        await chains.AddAsync(chain);
+        var dispatcher = new FakeRunDispatcher();
+        dispatcher.Results[first.Id] = Run(first.Id, "Succeeded", shardArtifacts: new[] { "{\"first\":true}" });
+        dispatcher.Results[second.Id] = Run(second.Id, "Succeeded", shardArtifacts: new[] { "{\"done\":true}" });
+        var runs = new InMemoryChainRunRepository();
+        var handler = RunHandler(chains, jobs, dispatcher, runs);
+
+        var waiting = await handler.HandleAsync(new RunJobChainCommand(chain.Id));
+
+        Assert.Equal("Waiting", waiting.Status);
+        Assert.Equal(T0.AddHours(2), (await runs.GetByIdAsync(waiting.Id))!.ResumeAt);
+        Assert.Single(dispatcher.Payloads);
+
+        var completed = await handler.HandleAsync(new RunJobChainCommand(
+            chain.Id, waiting.FinalOutput, waiting.Id, ResumeFromStageIndex: 1));
+
+        Assert.Equal(waiting.Id, completed.Id);
+        Assert.Equal("Succeeded", completed.Status);
+        Assert.Equal("{\"first\":true}", dispatcher.Payloads[1]);
+        Assert.All(completed.Steps, step => Assert.Equal("Succeeded", step.Status));
     }
 
     [Fact]
@@ -687,5 +755,20 @@ public class JobChainTests
         public Task<JobRunDetailView> RunAsync(Guid jobId, string? inputPayload = null, Guid? runId = null,
             Guid? replayOfRunId = null, CancellationToken ct = default)
             => _dispatcher.Send(new RunJobCommand(jobId, inputPayload, runId, replayOfRunId), ct);
+    }
+
+    private sealed class SingleCrmClientRepository : ICrmClientRepository
+    {
+        private readonly CrmClient _client;
+        public SingleCrmClientRepository(CrmClient client) => _client = client;
+        public Task AddAsync(CrmClient client, CancellationToken ct = default) => Task.CompletedTask;
+        public Task UpdateAsync(CrmClient client, CancellationToken ct = default) => Task.CompletedTask;
+        public Task DeleteAsync(Guid clientId, CancellationToken ct = default) => Task.CompletedTask;
+        public Task<CrmClient?> GetByIdAsync(Guid clientId, CancellationToken ct = default)
+            => Task.FromResult<CrmClient?>(clientId == _client.Id ? _client : null);
+        public Task<IReadOnlyList<CrmClient>> ListForProjectAsync(Guid projectId, CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<CrmClient>>(projectId == _client.ProjectId
+                ? new[] { _client }
+                : Array.Empty<CrmClient>());
     }
 }

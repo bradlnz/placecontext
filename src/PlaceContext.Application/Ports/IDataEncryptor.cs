@@ -31,6 +31,7 @@ public interface IDataEncryptor
         /// <summary>Customer identity and contact fields stored on CRM client rows.</summary>
         public const string CrmClient = "crm.client.v1";
         public const string CrmCommunication = "crm.communication.v1";
+        public const string CrmAppointment = "crm.appointment.v1";
         /// <summary>Customer-facing filenames and storage references on CRM artifact rows.</summary>
         public const string CrmArtifactMetadata = "crm.artifact.metadata.v1";
         public const string CrmAutomation = "crm.automation.v1";

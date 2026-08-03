@@ -173,7 +173,7 @@ public sealed class RunCrmClientAutomationHandler
         });
 
         var result = await _chainRunner.HandleAsync(
-            new RunJobChainCommand(chain.Id, payload), ct);
+            new RunJobChainCommand(chain.Id, payload, CrmClientId: client.Id), ct);
         var link = CrmChainRun.Create(client.ProjectId, client.Id, chain.Id, result.Id,
             client.LifecycleStage, result.StartedAt);
         await _crmRuns.AddAsync(link, ct);

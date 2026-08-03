@@ -30,9 +30,14 @@ public sealed class ArtifactsController : ControllerBase
         var obj = await _store.OpenReadAsync(link.Bucket, link.ObjectKey, HttpContext.RequestAborted);
         if (obj is null) return NotFound();
 
+        // Some object-store uploads lose their metadata and come back as octet-stream even though
+        // the durable artifact record still has the authoritative image/PDF type. Prefer that
+        // record when the object metadata is absent or generic so inline previews keep working.
         var contentType = string.IsNullOrWhiteSpace(obj.ContentType)
-            ? "application/octet-stream"
+            || obj.ContentType.Equals("application/octet-stream", StringComparison.OrdinalIgnoreCase)
+            ? link.ContentType
             : obj.ContentType;
+        if (string.IsNullOrWhiteSpace(contentType)) contentType = "application/octet-stream";
         var fileName = link.ObjectKey[(link.ObjectKey.LastIndexOf('/') + 1)..];
         if (string.IsNullOrEmpty(fileName)) fileName = "artifact";
 

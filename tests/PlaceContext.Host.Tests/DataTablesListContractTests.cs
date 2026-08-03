@@ -1,0 +1,45 @@
+namespace PlaceContext.Host.Tests;
+
+public sealed class DataTablesListContractTests
+{
+    [Fact]
+    public void Data_tables_use_the_job_catalogue_list_pattern()
+    {
+        var root = FindRepoRoot();
+        var page = File.ReadAllText(Path.Combine(root, "src", "PlaceContext.Host", "Components", "Pages", "ProjectData.razor"));
+        var css = File.ReadAllText(Path.Combine(root, "src", "PlaceContext.Host", "Components", "Pages", "ProjectData.razor.css"));
+
+        Assert.Contains("class=\"dccard table-suite\"", page, StringComparison.Ordinal);
+        Assert.Contains("class=\"table-rows\"", page, StringComparison.Ordinal);
+        Assert.Contains("class=\"table-row\"", page, StringComparison.Ordinal);
+        Assert.DoesNotContain("class=\"table-tile\"", page, StringComparison.Ordinal);
+        Assert.Contains(".table-row {", css, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Opening_a_table_runs_its_query_and_json_uses_a_full_screen_side_viewer()
+    {
+        var root = FindRepoRoot();
+        var page = File.ReadAllText(Path.Combine(root, "src", "PlaceContext.Host", "Components", "Pages", "ProjectData.razor"));
+        var css = File.ReadAllText(Path.Combine(root, "src", "PlaceContext.Host", "Components", "Pages", "ProjectData.razor.css"));
+        var viewModel = File.ReadAllText(Path.Combine(root, "src", "PlaceContext.Host", "Components", "ViewModels", "ProjectData", "ProjectDataViewModel.cs"));
+
+        Assert.Contains("OpenTableModalAsync", page, StringComparison.Ordinal);
+        Assert.Contains("await RunModalAsync(() => Task.FromResult(ModalSql))", viewModel, StringComparison.Ordinal);
+        Assert.Contains("class=\"json-view-button\"", page, StringComparison.Ordinal);
+        Assert.Contains("class=\"json-side-pane\"", page, StringComparison.Ordinal);
+        Assert.Contains("padding: 0;", css, StringComparison.Ordinal);
+        Assert.Contains("border-radius: 0;", css, StringComparison.Ordinal);
+    }
+
+    private static string FindRepoRoot()
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null)
+        {
+            if (Directory.Exists(Path.Combine(directory.FullName, "src", "PlaceContext.Host"))) return directory.FullName;
+            directory = directory.Parent;
+        }
+        throw new DirectoryNotFoundException("Repository root not found.");
+    }
+}

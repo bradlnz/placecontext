@@ -1,33 +1,34 @@
 @inherits LayoutComponentBase
 @layout MainLayout
-@implements IDisposable
 @using Microsoft.Extensions.DependencyInjection
 @inject NavigationManager Nav
-@inject PortalUiState Ui
 @inject IServiceScopeFactory ScopeFactory
 @inject ICurrentUser CurrentUser
 
-@* The settings area mirrors the project area: a vertical menu, tabs inside the pages. *@
 <div class="shell">
-    <nav class="side @(_navOpen ? "open" : null)">
-        <button class="main-menu-back" @onclick="OpenMainMenu" title="Open main menu">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M19 12H5"></path><path d="M12 19l-7-7 7-7"></path></svg>
-            Main menu
-        </button>
-        <div class="side-head">Settings</div>
+    <button type="button" class="settings-toggle"
+            aria-controls="settings-sections" aria-expanded="@_navOpen"
+            @onclick="ToggleNav">
+        <span>Settings</span>
+        <span class="settings-current">@ActiveLabel</span>
+        <span aria-hidden="true">@(_navOpen ? "−" : "+")</span>
+    </button>
+
+    <nav id="settings-sections" class="settings-nav @(_navOpen ? "open" : null)"
+         aria-label="Settings sections">
+        <div class="settings-nav-head">Settings</div>
         @foreach (var (label, path) in VisibleItems)
         {
-            <button class="dcnav nav-btn @(Nav.Uri.Contains($"/settings/{path}") ? "active" : "")"
-                    @onclick="@(() => GoTo($"/settings/{path}"))">
-                <span class="bar"></span>@label
-            </button>
+            var active = IsActive(path);
+            <a href="@($"/settings/{path}")" class="settings-link"
+               aria-current="@(active ? "page" : null)" @onclick="CloseNav"
+               style="color:@(active ? "var(--text)" : "var(--text-2)");
+                      background:@(active ? "var(--hover)" : "transparent");
+                      border-left:2px solid @(active ? "var(--brand)" : "transparent")">
+                @label
+            </a>
         }
     </nav>
-
-    @if (_navOpen)
-    {
-        <div class="subnav-backdrop" @onclick="CloseNav"></div>
-    }
 
     <div class="body">
         @Body
@@ -36,25 +37,19 @@
 
 @code {
     private bool _navOpen;
+    private bool _isDefaultAdmin;
 
     private void ToggleNav() => _navOpen = !_navOpen;
     private void CloseNav() => _navOpen = false;
 
-    private void GoTo(string href)
-    {
-        _navOpen = false;
-        Nav.NavigateTo(href);
-    }
+    private bool IsActive(string path) =>
+        new Uri(Nav.Uri).AbsolutePath.Equals($"/settings/{path}", StringComparison.OrdinalIgnoreCase);
 
-    private void OpenMainMenu()
-    {
-        _navOpen = false;
-        Ui.OpenMainNav?.Invoke();
-    }
+    private string ActiveLabel =>
+        VisibleItems.FirstOrDefault(item => IsActive(item.Path)).Label ?? "Choose a section";
 
     protected override async Task OnInitializedAsync()
     {
-        Ui.SetSubNav(true, ToggleNav);
         // /settings/* is default-admin-only except the self-service API tokens page. The nav mirrors
         // that policy so members only see entries they can actually open.
         if (CurrentUser.IsAuthenticated)
@@ -65,13 +60,6 @@
                 .IsDefaultAdminAsync(CurrentUser.UserId);
         }
     }
-
-    public void Dispose()
-    {
-        Ui.SetSubNav(false, null);
-    }
-
-    private bool _isDefaultAdmin;
 
     private IEnumerable<(string Label, string Path)> VisibleItems =>
         _isDefaultAdmin ? Items : Items.Where(i => i.Path == "api-tokens");

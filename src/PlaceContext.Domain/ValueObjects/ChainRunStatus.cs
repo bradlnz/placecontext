@@ -4,6 +4,8 @@ namespace PlaceContext.Domain.ValueObjects;
 public enum ChainRunStatus
 {
     Running,
+    /// <summary>Execution is durably paused until its scheduled continuation is due.</summary>
+    Waiting,
     Succeeded,
     /// <summary>Every step ran, but at least one was Partial.</summary>
     Partial,

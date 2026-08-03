@@ -3,6 +3,8 @@ using FluentValidation;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using PlaceContext.Application;
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Features;
 using PlaceContext.Application.Ports;
@@ -10,6 +12,7 @@ using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.Repositories;
 using PlaceContext.Domain.ValueObjects;
 using PlaceContext.Infrastructure.Crm;
+using PlaceContext.Infrastructure.Persistence;
 using PlaceContext.Infrastructure.Tenancy;
 
 namespace PlaceContext.Host.Controllers;
@@ -24,6 +27,12 @@ public sealed class CrmIngestionController : ControllerBase
     private readonly ICrmClientRepository _clients;
     private readonly ICommandHandler<SaveCrmClientCommand, CrmClientView> _save;
     private readonly CrmAutomationDispatcher _automations;
+    private readonly IProjectDataStore _projectData;
+    private readonly AppDbContext _db;
+    private readonly IDataEncryptor _encryptor;
+    private readonly IPlaceContextService _service;
+    private readonly IRunArtifactLinkRepository _artifactLinks;
+    private readonly IObjectStore _objectStore;
     private readonly IUnitOfWork _uow;
     private readonly IValidator<JsonElement> _validator;
     private static readonly JsonSerializerOptions WebJson = new(JsonSerializerDefaults.Web);
@@ -33,10 +42,18 @@ public sealed class CrmIngestionController : ControllerBase
         ICrmClientRepository clients,
         ICommandHandler<SaveCrmClientCommand, CrmClientView> save,
         CrmAutomationDispatcher automations,
+        IProjectDataStore projectData,
+        AppDbContext db,
+        IDataEncryptor encryptor,
+        IPlaceContextService service,
+        IRunArtifactLinkRepository artifactLinks,
+        IObjectStore objectStore,
         IUnitOfWork uow,
         IValidator<JsonElement> validator)
-        => (_settings, _clients, _save, _automations, _uow, _validator)
-            = (settings, clients, save, automations, uow, validator);
+        => (_settings, _clients, _save, _automations, _projectData, _db, _encryptor,
+                _service, _artifactLinks, _objectStore, _uow, _validator)
+            = (settings, clients, save, automations, projectData, db, encryptor,
+                service, artifactLinks, objectStore, uow, validator);
 
     [HttpOptions]
     public async Task<IActionResult> Options(CancellationToken ct)
@@ -107,18 +124,33 @@ public sealed class CrmIngestionController : ControllerBase
                     existing?.Id), ct);
             }
 
+            var queuedSite = CrmSiteQueueSubmission.From(payload, request);
+            if (queuedSite is not null)
+                await _projectData.InsertRowAsync(
+                    resolved.ProjectId, CrmSiteQueueSubmission.TableName, queuedSite.Values, ct);
+
             var queued = await _automations.EnqueueIngestionAsync(
-                resolved.ProjectId, payload.GetRawText(), ct);
+                resolved.ProjectId, CrmIngestionPayload.JobChainInput(payload), result?.Id, ct);
             await _uow.SaveChangesAsync(ct);
 
             if (result is null)
-                return Accepted(new { accepted = true, automationsQueued = queued });
+                return Accepted(new
+                {
+                    accepted = true,
+                    siteQueued = queuedSite is not null,
+                    queuedSiteId = queuedSite?.Id,
+                    automationsQueued = queued.Count,
+                    automationRuns = queued,
+                });
             return StatusCode(existing is null ? StatusCodes.Status201Created : StatusCodes.Status200OK,
                 new
                 {
                     id = result.Id,
                     status = existing is null ? "created" : "updated",
-                    automationsQueued = queued,
+                    siteQueued = queuedSite is not null,
+                    queuedSiteId = queuedSite?.Id,
+                    automationsQueued = queued.Count,
+                    automationRuns = queued,
                 });
         }
         catch (ArgumentException ex)
@@ -132,10 +164,144 @@ public sealed class CrmIngestionController : ControllerBase
         }
     }
 
+    /// <summary>
+    /// Returns the durable lifecycle of one ingestion-triggered automation. The receipt is generic:
+    /// callers can track any matching rule and, once allocated, inspect its underlying chain stages.
+    /// </summary>
+    [HttpGet("runs/{trackingId:guid}")]
+    public async Task<IActionResult> GetRun(Guid trackingId, CancellationToken ct)
+    {
+        var token = Request.Headers[CrmIngestionSettingsService.TokenHeader].ToString();
+        var resolved = await _settings.ResolveAsync(token, ct);
+        if (resolved is null) return Unauthorized(new { error = "Invalid CRM ingestion token." });
+
+        var origin = Request.Headers.Origin.ToString();
+        string normalizedOrigin;
+        try { normalizedOrigin = CrmIngestionSettingsService.NormalizeOrigin(origin); }
+        catch (ArgumentException) { return StatusCode(StatusCodes.Status403Forbidden, new { error = "Origin is required." }); }
+        if (!string.Equals(normalizedOrigin, resolved.AllowedOrigin, StringComparison.Ordinal))
+            return StatusCode(StatusCodes.Status403Forbidden, new { error = "Origin is not allowed." });
+        ApplyCors(normalizedOrigin);
+
+        var previousTenant = CurrentTenant.Current;
+        CurrentTenant.Set(resolved.Tenant);
+        try
+        {
+            var row = await _db.CrmAutomationQueue.AsNoTracking().FirstOrDefaultAsync(
+                value => value.Id == trackingId
+                    && value.TenantId == resolved.Tenant.Id
+                    && value.ProjectId == resolved.ProjectId, ct);
+            if (row is null) return NotFound();
+
+            var chain = row.ChainRunId is { } chainRunId
+                ? await _service.GetChainRunAsync(chainRunId, ct)
+                : null;
+            var error = row.LastError is { Length: > 0 }
+                ? _encryptor.Unprotect(row.LastError, IDataEncryptor.Purpose.CrmAutomation)
+                : null;
+            var status = row.CompletedAt is not null
+                ? chain?.Status ?? row.ResultStatus ?? "Completed"
+                : row.FailedAt is not null
+                    ? "Failed"
+                    : row.ChainRunId is not null || row.ClaimedAt is not null
+                        ? "Running"
+                        : row.Attempts > 0 ? "Retrying" : "Queued";
+            var terminal = row.CompletedAt is not null || row.FailedAt is not null;
+            var artifactsByRun = new Dictionary<Guid, IReadOnlyList<RunArtifactLinkView>>();
+            if (terminal && chain is not null)
+            {
+                foreach (var runId in chain.Steps.Select(step => step.RunId).OfType<Guid>().Distinct())
+                    artifactsByRun[runId] = await _service.ListRunArtifactsAsync(runId, ct);
+            }
+
+            return Ok(new
+            {
+                trackingId = row.Id,
+                row.ProjectId,
+                row.RuleId,
+                row.RuleName,
+                row.ChainId,
+                row.ChainRunId,
+                status,
+                terminal,
+                row.Attempts,
+                error,
+                row.EnqueuedAt,
+                startedAt = chain?.StartedAt ?? row.ClaimedAt,
+                finishedAt = chain?.FinishedAt ?? row.CompletedAt ?? row.FailedAt,
+                steps = chain?.Steps.Select(step => new
+                {
+                    step.Index,
+                    step.StageIndex,
+                    step.BranchIndex,
+                    step.JobId,
+                    step.JobName,
+                    step.RunId,
+                    step.Status,
+                    step.Error,
+                    step.StartedAt,
+                    step.FinishedAt,
+                    artifacts = step.RunId is { } runId
+                        ? artifactsByRun.GetValueOrDefault(runId)
+                        : null,
+                }),
+            });
+        }
+        finally
+        {
+            if (previousTenant is null) CurrentTenant.Clear();
+            else CurrentTenant.Set(previousTenant);
+        }
+    }
+
+    [HttpGet("runs/{trackingId:guid}/artifacts/{artifactId:guid}")]
+    public async Task<IActionResult> GetRunArtifact(
+        Guid trackingId, Guid artifactId, CancellationToken ct)
+    {
+        var token = Request.Headers[CrmIngestionSettingsService.TokenHeader].ToString();
+        var resolved = await _settings.ResolveAsync(token, ct);
+        if (resolved is null) return Unauthorized(new { error = "Invalid CRM ingestion token." });
+
+        var origin = Request.Headers.Origin.ToString();
+        string normalizedOrigin;
+        try { normalizedOrigin = CrmIngestionSettingsService.NormalizeOrigin(origin); }
+        catch (ArgumentException) { return StatusCode(StatusCodes.Status403Forbidden, new { error = "Origin is required." }); }
+        if (!string.Equals(normalizedOrigin, resolved.AllowedOrigin, StringComparison.Ordinal))
+            return StatusCode(StatusCodes.Status403Forbidden, new { error = "Origin is not allowed." });
+        ApplyCors(normalizedOrigin);
+
+        var previousTenant = CurrentTenant.Current;
+        CurrentTenant.Set(resolved.Tenant);
+        try
+        {
+            var row = await _db.CrmAutomationQueue.AsNoTracking().FirstOrDefaultAsync(
+                value => value.Id == trackingId
+                    && value.TenantId == resolved.Tenant.Id
+                    && value.ProjectId == resolved.ProjectId, ct);
+            if (row?.ChainRunId is not { } chainRunId) return NotFound();
+
+            var chain = await _service.GetChainRunAsync(chainRunId, ct);
+            var allowedRuns = chain?.Steps.Select(step => step.RunId).OfType<Guid>().ToHashSet()
+                ?? new HashSet<Guid>();
+            var artifact = await _artifactLinks.GetByIdAsync(artifactId, ct);
+            if (artifact is null || artifact.ProjectId != resolved.ProjectId ||
+                !allowedRuns.Contains(artifact.RunId)) return NotFound();
+
+            var value = await _objectStore.OpenReadAsync(artifact.Bucket, artifact.ObjectKey, ct);
+            if (value is null) return NotFound();
+            return File(value.Content, artifact.ContentType, artifact.Title);
+        }
+        finally
+        {
+            if (previousTenant is null) CurrentTenant.Clear();
+            else CurrentTenant.Set(previousTenant);
+        }
+    }
+
     private void ApplyCors(string origin)
     {
         Response.Headers.AccessControlAllowOrigin = origin;
-        Response.Headers.AccessControlAllowMethods = "POST, OPTIONS";
+        Response.Headers.AccessControlAllowMethods = "GET, POST, OPTIONS";
         Response.Headers.AccessControlAllowHeaders =
             $"Content-Type, {CrmIngestionSettingsService.TokenHeader}";
         Response.Headers.Append("Vary", "Origin");
@@ -172,5 +338,98 @@ public sealed record LeadIngestionRequest(
     string? Company,
     string? Message,
     string? Source,
+    string? Address,
     Dictionary<string, JsonElement>? Metadata,
     string? Website);
+
+/// <summary>
+/// Produces the payload consumed by ingestion-triggered job chains. Report clients historically
+/// sent the report-order contract inside a contact-form metadata property; the report chain uses
+/// that contract directly. All other ingestion payloads remain opaque and are forwarded unchanged.
+/// </summary>
+public static class CrmIngestionPayload
+{
+    public static string JobChainInput(JsonElement payload)
+    {
+        if (IsReportOrder(payload)) return payload.GetRawText();
+
+        if (payload.ValueKind == JsonValueKind.Object
+            && payload.TryGetProperty("metadata", out var metadata)
+            && IsReportOrder(metadata))
+            return metadata.GetRawText();
+
+        return payload.GetRawText();
+    }
+
+    private static bool IsReportOrder(JsonElement payload)
+        => payload.ValueKind == JsonValueKind.Object
+            && payload.TryGetProperty("event", out var eventName)
+            && eventName.ValueKind == JsonValueKind.String
+            && string.Equals(eventName.GetString(), "feasibility_report_ordered", StringComparison.Ordinal)
+            && payload.TryGetProperty("site", out var site)
+            && site.ValueKind == JsonValueKind.Object;
+}
+
+/// <summary>
+/// Converts an address-bearing CRM submission into the existing Ossen project queue contract.
+/// The metadata fallback accepts older report clients that only supplied metadata.site.address.
+/// </summary>
+public sealed record CrmSiteQueueSubmission(Guid Id, IReadOnlyDictionary<string, string?> Values)
+{
+    public const string TableName = "queue_sites";
+
+    public static CrmSiteQueueSubmission? From(LeadIngestionRequest? request)
+    {
+        var address = Clean(request?.Address) ?? MetadataAddress(request?.Metadata);
+        return FromAddress(address);
+    }
+
+    public static CrmSiteQueueSubmission? From(JsonElement payload, LeadIngestionRequest? request = null)
+    {
+        var address = Clean(request?.Address)
+            ?? SiteAddress(payload)
+            ?? MetadataAddress(request?.Metadata);
+        return FromAddress(address);
+    }
+
+    private static CrmSiteQueueSubmission? FromAddress(string? address)
+    {
+        if (address is null) return null;
+
+        var id = Guid.NewGuid();
+        return new CrmSiteQueueSubmission(id, new Dictionary<string, string?>
+        {
+            ["id"] = id.ToString(),
+            ["address"] = address,
+            ["status"] = "NOT_RUN",
+            ["error"] = null,
+            ["retry_attempt"] = "0",
+            ["last_run_at"] = null,
+        });
+    }
+
+    private static string? SiteAddress(JsonElement payload)
+    {
+        if (payload.ValueKind != JsonValueKind.Object
+            || !payload.TryGetProperty("site", out var site)
+            || site.ValueKind != JsonValueKind.Object
+            || !site.TryGetProperty("address", out var address)
+            || address.ValueKind != JsonValueKind.String)
+            return null;
+        return Clean(address.GetString());
+    }
+
+    private static string? MetadataAddress(Dictionary<string, JsonElement>? metadata)
+    {
+        if (metadata is null
+            || !metadata.TryGetValue("site", out var site)
+            || site.ValueKind != JsonValueKind.Object
+            || !site.TryGetProperty("address", out var address)
+            || address.ValueKind != JsonValueKind.String)
+            return null;
+        return Clean(address.GetString());
+    }
+
+    private static string? Clean(string? value)
+        => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+}

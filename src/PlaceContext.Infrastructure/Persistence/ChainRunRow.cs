@@ -14,4 +14,10 @@ public sealed class ChainRunRow : ITenantOwned
     public string? FinalOutput { get; set; }
     public DateTimeOffset StartedAt { get; set; }
     public DateTimeOffset? FinishedAt { get; set; }
+    public DateTimeOffset? ResumeAt { get; set; }
+    public int? ResumeStageIndex { get; set; }
+    public Guid? CrmClientId { get; set; }
+    public string? ContinuationClaimedBy { get; set; }
+    public DateTimeOffset? ContinuationClaimedAt { get; set; }
+    public string? ContinuationOverrides { get; set; }
 }

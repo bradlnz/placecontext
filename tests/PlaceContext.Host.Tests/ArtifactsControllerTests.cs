@@ -65,6 +65,19 @@ public class ArtifactsControllerTests
     }
 
     [Fact]
+    public async Task Generic_object_metadata_falls_back_to_the_durable_artifact_image_type()
+    {
+        var link = MakeLink("image/png", "runs/x/preview.png");
+        var controller = MakeController(link, out _, "application/octet-stream");
+
+        var result = await controller.Get(RunId, link.Id);
+
+        var file = Assert.IsType<FileStreamResult>(result);
+        Assert.Equal("image/png", file.ContentType);
+        Assert.True(string.IsNullOrEmpty(file.FileDownloadName));
+    }
+
+    [Fact]
     public async Task Mismatched_run_id_is_not_found()
     {
         var link = MakeLink("text/html", "runs/x/report.html");
@@ -89,10 +102,11 @@ public class ArtifactsControllerTests
             RunId, Guid.NewGuid(), Guid.NewGuid(), PostJobActionKind.HtmlReport,
             "artifact", "reports", objectKey, contentType, 3, DateTimeOffset.UtcNow);
 
-    private static ArtifactsController MakeController(RunArtifactLink link, out DefaultHttpContext http)
+    private static ArtifactsController MakeController(RunArtifactLink link, out DefaultHttpContext http,
+        string? storedContentType = null)
     {
         http = new DefaultHttpContext();
-        return new ArtifactsController(new StubLinks(link), new StubStore(link))
+        return new ArtifactsController(new StubLinks(link), new StubStore(link, storedContentType))
         {
             ControllerContext = new ControllerContext { HttpContext = http },
         };
@@ -114,7 +128,7 @@ public class ArtifactsControllerTests
             Task.FromResult<IReadOnlyList<RunArtifactLink>>(Array.Empty<RunArtifactLink>());
     }
 
-    private sealed class StubStore(RunArtifactLink link) : IObjectStore
+    private sealed class StubStore(RunArtifactLink link, string? storedContentType = null) : IObjectStore
     {
         public bool IsEnabled => true;
         public string ReportsBucket => link.Bucket;
@@ -122,7 +136,7 @@ public class ArtifactsControllerTests
 
         public Task<ObjectDownload?> OpenReadAsync(string bucket, string key, CancellationToken ct = default) =>
             Task.FromResult<ObjectDownload?>(bucket == link.Bucket && key == link.ObjectKey
-                ? new ObjectDownload(new MemoryStream(Encoding.UTF8.GetBytes("hi!")), link.ContentType)
+                ? new ObjectDownload(new MemoryStream(Encoding.UTF8.GetBytes("hi!")), storedContentType ?? link.ContentType)
                 : null);
 
         public Task PutAsync(string bucket, string key, byte[] content, string contentType, CancellationToken ct = default) => Task.CompletedTask;

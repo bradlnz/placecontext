@@ -27,22 +27,27 @@ public sealed class CrmAutomationDispatcher
             client.ProjectId, eventType, client.LifecycleStage, ct);
         foreach (var rule in matching)
             await _queue.EnqueueAsync(new QueuedCrmAutomation(
-                _tenant.TenantId, rule.Id, client.Id, rule.ChainId, eventType,
+                _tenant.TenantId, client.ProjectId, rule.Id, client.Id, rule.ChainId, eventType,
                 client.LifecycleStage, rule.Name), ct);
         return matching.Count;
     }
 
-    public async Task<int> EnqueueIngestionAsync(
+    public async Task<IReadOnlyList<CrmAutomationReceipt>> EnqueueIngestionAsync(
         Guid projectId,
         string inputPayload,
+        Guid? clientId = null,
         CancellationToken ct = default)
     {
         var matching = await _rules.ListMatchingAsync(
             projectId, CrmAutomationEventType.IngestionReceived, null, ct);
+        var receipts = new List<CrmAutomationReceipt>(matching.Count);
         foreach (var rule in matching)
-            await _queue.EnqueueAsync(new QueuedCrmAutomation(
-                _tenant.TenantId, rule.Id, null, rule.ChainId,
+        {
+            var trackingId = await _queue.EnqueueAsync(new QueuedCrmAutomation(
+                _tenant.TenantId, projectId, rule.Id, clientId, rule.ChainId,
                 CrmAutomationEventType.IngestionReceived, null, rule.Name, inputPayload), ct);
-        return matching.Count;
+            receipts.Add(new CrmAutomationReceipt(trackingId, rule.Id, rule.ChainId, rule.Name));
+        }
+        return receipts;
     }
 }

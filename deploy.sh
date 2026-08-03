@@ -51,6 +51,10 @@ kubectl -n placecontext set env deployment/placecontext --from=secret/opensearch
 
 ssh -o BatchMode=yes -i "$ssh_key" "$app_host" 'bash -s' <<'REMOTE'
 set -euo pipefail
+# The deployment may be pinned to an older release tag. Point it at the image
+# this script just pushed before restarting so a successful push is actually deployed.
+kubectl -n placecontext set image deployment/placecontext \
+  host=registry.digitalocean.com/ctrlsignalregistryimg/placecontext:latest
 kubectl -n placecontext rollout restart deployment/placecontext
 sleep 30
 kubectl -n placecontext get pods

@@ -28,6 +28,21 @@ public sealed class ResponsiveShellContractTests
     }
 
     [Fact]
+    public void Settings_uses_the_wiki_section_navigation_pattern()
+    {
+        var markup = ReadHostSource("Components/Layout/SettingsLayout.razor");
+        var styles = ReadHostSource("Components/Layout/SettingsLayout.razor.css");
+
+        Assert.Contains("class=\"settings-toggle\"", markup);
+        Assert.Contains("aria-controls=\"settings-sections\"", markup);
+        Assert.Contains("aria-expanded=\"@_navOpen\"", markup);
+        Assert.Contains("id=\"settings-sections\"", markup);
+        Assert.Contains("aria-label=\"Settings sections\"", markup);
+        Assert.Contains(".settings-nav.open", styles);
+        Assert.Contains("@media (max-width: 767px)", styles);
+    }
+
+    [Fact]
     public void Crm_client_notes_wrap_unbroken_content()
     {
         var styles = ReadHostSource("Components/Pages/Crm.razor.css");

@@ -205,7 +205,6 @@ public sealed class RunJobTestCaseHandler
             ?? throw new InvalidOperationException($"Job {test.JobId} not found.");
 
         var stopwatch = Stopwatch.StartNew();
-        JobRunDetailView? run = null;
         string? actual = null;
         IReadOnlyList<JobTestMethodResult> methodResults =
             test.MethodResults ?? Array.Empty<JobTestMethodResult>();
@@ -214,13 +213,17 @@ public sealed class RunJobTestCaseHandler
 
         try
         {
-            run = await RunMockJobAsync(job, test.InputPayload, ct);
-            actual = RunJobChainHandler.PrimaryOutput(run);
-            (status, message) = Evaluate(test, run, actual);
-            if (status == "Passed" && test.CodeFiles.Count > 0)
-                (status, message, methodResults) = await RunTestCodeAsync(test, run, actual, ct);
-            else if (test.CodeFiles.Count == 0)
+            var scenario = ParseScenario(test.InputPayload);
+            actual = ScenarioOutput(scenario);
+            if (test.CodeFiles.Count > 0)
+            {
+                (status, message, methodResults) = await RunTestCodeAsync(test, job, scenario, ct);
+            }
+            else
+            {
+                (status, message) = Evaluate(test, ScenarioStatus(scenario), actual);
                 methodResults = new[] { new JobTestMethodResult(test.Name, status, null, message) };
+            }
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -251,8 +254,8 @@ public sealed class RunJobTestCaseHandler
 
     private async Task<(string Status, string Message, IReadOnlyList<JobTestMethodResult> Methods)> RunTestCodeAsync(
         JobTestCaseRecord test,
-        JobRunDetailView run,
-        string? actual,
+        Job job,
+        JsonObject scenario,
         CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(test.RuntimeId))
@@ -266,24 +269,13 @@ public sealed class RunJobTestCaseHandler
             .Where(file => !string.Equals(file.Path, runner.Path, StringComparison.Ordinal))
             .Append(runner)
             .ToList();
+        AppendJobSource(files, job.MapSpec.Source, "job");
+        if (job.ReduceSpec is { } reduce)
+            AppendJobSource(files, reduce.Source, "job/reduce");
+        if (string.Equals(test.RuntimeId, "python", StringComparison.Ordinal))
+            EnsurePytestDependency(files);
 
-        var stdin = JsonSerializer.Serialize(new
-        {
-            input = JsonValue(test.InputPayload),
-            run = new
-            {
-                id = run.Id,
-                status = run.Status,
-                output = JsonValue(actual),
-                shards = run.ShardResults.Select(shard => new
-                {
-                    index = shard.Index,
-                    exitCode = shard.ExitCode,
-                    outcome = shard.Outcome,
-                    artifact = JsonValue(shard.Artifact),
-                }),
-            },
-        });
+        var stdin = scenario.ToJsonString();
         var result = await _workloads.RunAsync(new WorkloadRunRequest(
             Image: null,
             StdinPayload: stdin,
@@ -316,115 +308,95 @@ public sealed class RunJobTestCaseHandler
         return (status, summary + ".", methods);
     }
 
-    private async Task<JobRunDetailView> RunMockJobAsync(
-        Job job, string? inputPayload, CancellationToken ct)
+    private static void AppendJobSource(
+        List<CodeFileDto> files,
+        WorkloadSource source,
+        string prefix)
     {
-        var startedAt = _clock.UtcNow;
-        var mockRunId = Guid.NewGuid();
-        var mapResult = await _workloads.RunAsync(BuildMockRequest(
-            job.MapSpec.Source,
-            inputPayload ?? "{}",
-            Array.Empty<(string, string)>(),
-            $"job-test-mock-{job.Id:N}-{mockRunId:N}-map",
-            job.TimeoutSeconds), ct);
-        var mapOutcome = job.ExitCodePolicy.Classify(mapResult.ExitCode);
-        var shard = new ShardResultView(
-            0,
-            mapResult.ExitCode,
-            mapOutcome.ToString(),
-            mapResult.Artifact,
-            CombineLog(mapResult.Stdout, mapResult.Stderr),
-            ToArtifactViews(mapResult.Artifacts));
-
-        ReduceResultView? reduce = null;
-        if (mapOutcome == WorkloadOutcome.Succeeded && job.ReduceSpec is { } reduceSpec)
+        if (source is not WorkloadSource.CodeWorkload code) return;
+        foreach (var file in code.Files)
         {
-            var mounts = mapResult.Artifact is null
-                ? Array.Empty<(string, string)>()
-                : new[] { (mapResult.Artifact, "/in/0/result.json") };
-            var reduceResult = await _workloads.RunAsync(BuildMockRequest(
-                reduceSpec.Source,
-                "{}",
-                mounts,
-                $"job-test-mock-{job.Id:N}-{mockRunId:N}-reduce",
-                job.TimeoutSeconds), ct);
-            reduce = new ReduceResultView(
-                reduceResult.ExitCode,
-                job.ExitCodePolicy.SuccessCodes.Contains(reduceResult.ExitCode),
-                reduceResult.Artifact,
-                CombineLog(reduceResult.Stdout, reduceResult.Stderr),
-                ToArtifactViews(reduceResult.Artifacts));
+            var path = prefix + "/" + file.Path.TrimStart('/');
+            if (files.Any(existing => string.Equals(existing.Path, path, StringComparison.Ordinal)))
+                throw new InvalidOperationException($"Test sandbox path collision at '{path}'.");
+            files.Add(new CodeFileDto(path, file.Content));
+        }
+    }
+
+    private static void EnsurePytestDependency(List<CodeFileDto> files)
+    {
+        const string requirement = "pytest==8.4.1";
+        var index = files.FindIndex(file =>
+            string.Equals(file.Path, "requirements.txt", StringComparison.OrdinalIgnoreCase));
+        if (index < 0)
+        {
+            files.Add(new CodeFileDto("requirements.txt", requirement + "\n"));
+            return;
         }
 
-        var status = mapOutcome switch
-        {
-            WorkloadOutcome.Failed => "Failed",
-            WorkloadOutcome.Partial => "Partial",
-            _ when reduce is { Succeeded: false } => "Failed",
-            _ => "Succeeded",
-        };
-        var sourceKind = job.MapSpec.Source is WorkloadSource.CodeWorkload ? "code" : "image";
-        return new JobRunDetailView(
-            mockRunId,
-            job.Id,
-            job.ProjectId,
-            status,
-            startedAt,
-            _clock.UtcNow,
-            new[] { shard },
-            reduce,
-            new JobRunSnapshotView(
-                sourceKind,
-                job.MapSpec.Source.Label,
-                job.ReduceSpec is null
-                    ? null
-                    : job.ReduceSpec.Source is WorkloadSource.CodeWorkload ? "code" : "image",
-                job.ReduceSpec?.Source.Label,
-                1,
-                1,
-                false));
+        var manifest = files[index];
+        var hasPytest = manifest.Content.Split('\n')
+            .Select(line => line.TrimStart())
+            .Any(IsPytestRequirement);
+        if (!hasPytest)
+            files[index] = manifest with
+            {
+                Content = manifest.Content.TrimEnd() + "\n" + requirement + "\n",
+            };
     }
 
-    private static WorkloadRunRequest BuildMockRequest(
-        WorkloadSource source,
-        string stdinPayload,
-        IReadOnlyList<(string Content, string ContainerPath)> artifactMounts,
-        string correlationId,
-        int timeoutSeconds)
-        => source switch
-        {
-            WorkloadSource.ImageWorkload image => new WorkloadRunRequest(
-                image.Image, stdinPayload, new Dictionary<string, string>(), artifactMounts,
-                correlationId, null, null, null, false, timeoutSeconds),
-            WorkloadSource.CodeWorkload code => new WorkloadRunRequest(
-                null, stdinPayload, new Dictionary<string, string>(), artifactMounts,
-                correlationId,
-                code.Files.Select(file => (file.Path, file.Content)).ToList(),
-                code.RuntimeId, code.Entrypoint, false, timeoutSeconds),
-            _ => throw new InvalidOperationException(
-                $"Unsupported workload source type {source.GetType().Name}."),
-        };
-
-    private static IReadOnlyList<RunArtifactView> ToArtifactViews(
-        IReadOnlyList<WorkloadArtifact>? artifacts)
-        => artifacts is null
-            ? Array.Empty<RunArtifactView>()
-            : artifacts.Select(artifact =>
-                new RunArtifactView(artifact.Name, artifact.Content, artifact.IsBinary)).ToList();
-
-    private static string? CombineLog(string stdout, string stderr)
+    private static bool IsPytestRequirement(string line)
     {
-        if (string.IsNullOrWhiteSpace(stdout) && string.IsNullOrWhiteSpace(stderr)) return null;
-        if (string.IsNullOrWhiteSpace(stderr)) return stdout;
-        if (string.IsNullOrWhiteSpace(stdout)) return stderr;
-        return stdout + "\n--- stderr ---\n" + stderr;
+        const string package = "pytest";
+        if (!line.StartsWith(package, StringComparison.OrdinalIgnoreCase)) return false;
+        return line.Length == package.Length
+            || char.IsWhiteSpace(line[package.Length])
+            || "[=<>!~".Contains(line[package.Length]);
     }
 
-    private static JsonNode? JsonValue(string? value)
+    private static JsonObject ParseScenario(string? payload)
     {
-        if (value is null) return null;
-        try { return JsonNode.Parse(value); }
-        catch (JsonException) { return System.Text.Json.Nodes.JsonValue.Create(value); }
+        if (string.IsNullOrWhiteSpace(payload))
+            throw new InvalidOperationException(
+                "Mock scenario is invalid: provide JSON with input and run fields.");
+
+        JsonObject scenario;
+        try
+        {
+            scenario = JsonNode.Parse(payload) as JsonObject
+                ?? throw new InvalidOperationException("the root must be a JSON object");
+        }
+        catch (JsonException ex)
+        {
+            throw new InvalidOperationException($"Mock scenario is invalid: {ex.Message}", ex);
+        }
+
+        if (scenario["run"] is not JsonObject run)
+            throw new InvalidOperationException(
+                "Mock scenario is invalid: run must be a JSON object.");
+        if (run["status"] is not JsonValue status
+            || status.GetValueKind() != JsonValueKind.String
+            || string.IsNullOrWhiteSpace(status.GetValue<string>()))
+            throw new InvalidOperationException(
+                "Mock scenario is invalid: run.status must be a non-empty string.");
+        if (run["shards"] is null) run["shards"] = new JsonArray();
+        if (run["shards"] is not JsonArray)
+            throw new InvalidOperationException(
+                "Mock scenario is invalid: run.shards must be an array.");
+        if (!scenario.ContainsKey("input")) scenario["input"] = null;
+        return scenario;
+    }
+
+    private static string ScenarioStatus(JsonObject scenario)
+        => scenario["run"]!["status"]!.GetValue<string>();
+
+    private static string? ScenarioOutput(JsonObject scenario)
+    {
+        var output = scenario["run"]?["output"];
+        if (output is null) return null;
+        return output is JsonValue value && value.GetValueKind() == JsonValueKind.String
+            ? value.GetValue<string>()
+            : output.ToJsonString();
     }
 
     private static string? FirstNonBlank(params string?[] values)
@@ -435,9 +407,13 @@ public sealed class RunJobTestCaseHandler
 
     internal static (string Status, string Message) Evaluate(
         JobTestCaseRecord test, JobRunDetailView run, string? actual)
+        => Evaluate(test, run.Status, actual);
+
+    internal static (string Status, string Message) Evaluate(
+        JobTestCaseRecord test, string runStatus, string? actual)
     {
-        if (!string.Equals(run.Status, "Succeeded", StringComparison.Ordinal))
-            return ("Failed", $"Expected a successful run, but the job finished as {run.Status}.");
+        if (!string.Equals(runStatus, "Succeeded", StringComparison.Ordinal))
+            return ("Failed", $"Expected a successful run, but the mock scenario finished as {runStatus}.");
 
         return test.AssertionType switch
         {

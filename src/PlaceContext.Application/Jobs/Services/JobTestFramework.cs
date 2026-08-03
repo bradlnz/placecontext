@@ -14,7 +14,7 @@ public static partial class JobTestFramework
         "node" => "Node test",
         "go" => "Go testing",
         "ruby" => "Minitest",
-        "python" => "unittest",
+        "python" => "pytest",
         _ => "Framework runner",
     };
 
@@ -103,59 +103,39 @@ public static partial class JobTestFramework
     private static partial Regex RubyMethodRegex();
 
     private const string PythonRunner = """
-        import importlib.util
         import json
         import os
         import sys
-        import time
-        import unittest
+        import pytest
 
         TARGET = __TARGET__
         os.environ["PC_TEST_CONTEXT"] = sys.stdin.read()
 
-        spec = importlib.util.spec_from_file_location("placecontext_user_tests", f"/work/{TARGET}")
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
+        class PlaceContextPlugin:
+            def __init__(self):
+                self.results = []
+                self.recorded = set()
 
-        class RecordingResult(unittest.TextTestResult):
-            def __init__(self, *args, **kwargs):
-                super().__init__(*args, **kwargs)
-                self.method_results = []
-                self.started = {}
-
-            def startTest(self, test):
-                self.started[id(test)] = time.perf_counter()
-                super().startTest(test)
-
-            def record(self, test, status, message=None):
-                elapsed = int((time.perf_counter() - self.started.get(id(test), time.perf_counter())) * 1000)
-                self.method_results.append({
-                    "name": test.id().replace("placecontext_user_tests.", ""),
+            def pytest_runtest_logreport(self, report):
+                terminal = report.when == "call" or (
+                    report.when == "setup" and (report.failed or report.skipped)
+                )
+                if not terminal or report.nodeid in self.recorded:
+                    return
+                self.recorded.add(report.nodeid)
+                status = "Skipped" if report.skipped else "Passed" if report.passed else "Failed"
+                message = None if report.passed else getattr(report, "longreprtext", str(report.longrepr))
+                self.results.append({
+                    "name": report.nodeid.replace("/work/", ""),
                     "status": status,
-                    "durationMs": elapsed,
+                    "durationMs": int(report.duration * 1000),
                     "message": message,
                 })
 
-            def addSuccess(self, test):
-                super().addSuccess(test)
-                self.record(test, "Passed")
-
-            def addFailure(self, test, err):
-                super().addFailure(test, err)
-                self.record(test, "Failed", self._exc_info_to_string(err, test))
-
-            def addError(self, test, err):
-                super().addError(test, err)
-                self.record(test, "Failed", self._exc_info_to_string(err, test))
-
-            def addSkip(self, test, reason):
-                super().addSkip(test, reason)
-                self.record(test, "Skipped", reason)
-
-        suite = unittest.defaultTestLoader.loadTestsFromModule(module)
-        result = unittest.TextTestRunner(stream=sys.stderr, verbosity=2, resultclass=RecordingResult).run(suite)
-        print("__PLACECONTEXT_TEST_RESULTS__=" + json.dumps(result.method_results, separators=(",", ":")))
-        raise SystemExit(0 if result.wasSuccessful() else 1)
+        plugin = PlaceContextPlugin()
+        exit_code = pytest.main(["-q", f"/work/{TARGET}"], plugins=[plugin])
+        print("__PLACECONTEXT_TEST_RESULTS__=" + json.dumps(plugin.results, separators=(",", ":")))
+        raise SystemExit(int(exit_code))
         """;
 
     private const string NodeRunner = """

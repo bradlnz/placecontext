@@ -24,11 +24,13 @@ public sealed class CrmIngestionAutomationTests
             rules, queue, new FakeCurrentTenant(tenantId));
         const string payload = """{"address":"123 Example Street"}""";
 
-        var count = await dispatcher.EnqueueIngestionAsync(projectId, payload);
+        var receipts = await dispatcher.EnqueueIngestionAsync(projectId, payload);
 
-        Assert.Equal(1, count);
+        var receipt = Assert.Single(receipts);
         var queued = Assert.Single(queue.Values);
+        Assert.Equal(queue.TrackingIds.Single(), receipt.TrackingId);
         Assert.Equal(tenantId, queued.TenantId);
+        Assert.Equal(projectId, queued.ProjectId);
         Assert.Equal(chainId, queued.ChainId);
         Assert.Null(queued.ClientId);
         Assert.Null(queued.LifecycleStage);
@@ -39,11 +41,14 @@ public sealed class CrmIngestionAutomationTests
     private sealed class RecordingQueue : ICrmAutomationQueue
     {
         public List<QueuedCrmAutomation> Values { get; } = new();
+        public List<Guid> TrackingIds { get; } = new();
 
-        public Task EnqueueAsync(QueuedCrmAutomation value, CancellationToken ct = default)
+        public Task<Guid> EnqueueAsync(QueuedCrmAutomation value, CancellationToken ct = default)
         {
             Values.Add(value);
-            return Task.CompletedTask;
+            var trackingId = Guid.NewGuid();
+            TrackingIds.Add(trackingId);
+            return Task.FromResult(trackingId);
         }
     }
 

@@ -839,7 +839,7 @@
 
     // Always path-absolute on the current host — never bake Request.Host (breaks when the
     // reverse-proxy public DNS differs from the in-cluster name).
-    private static string Url(ArtifactFileView a) => $"/runs/{a.RunId}/artifacts/{a.Id}";
+    private static string Url(ArtifactFileView a) => $"/runs/{a.RunId}/artifacts/{a.Id}?v={a.CreatedAt.ToUnixTimeSeconds()}";
 
     private void CloseViewer()
     {

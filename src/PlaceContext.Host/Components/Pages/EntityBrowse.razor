@@ -402,11 +402,13 @@
                     <div class="section-label">Auto-linked records</div>
                     @foreach (var link in Vm.AutoLinks)
                     {
-                        <div class="dccard dcdash-row auto-link">
+                        <a class="dccard dcdash-row auto-link"
+                           href="@($"/project/{ProjectId}/entity/{Uri.EscapeDataString(EntityNameForTable(link.TableName))}?record={Uri.EscapeDataString(link.RowKey)}")">
                             <span class="link-kind">@link.Kind</span>
                             <span class="ellipsis">@link.DisplayValue</span>
                             <span class="link-meta">@link.TableName · @link.ColumnName · @link.RowKey</span>
-                        </div>
+                            <span aria-hidden="true">→</span>
+                        </a>
                     }
                 </div>
             }
@@ -420,6 +422,10 @@
     [Parameter] public string EntityName { get; set; } = "";
 
     [SupplyParameterFromQuery(Name = "record")] public string? RecordKey { get; set; }
+
+    private string EntityNameForTable(string tableName)
+        => Vm.AllEntities.FirstOrDefault(entity => string.Equals(entity.TableName, tableName, StringComparison.OrdinalIgnoreCase))?.Name
+           ?? tableName;
 
     protected override void OnInitialized() => Vm.Attach(() => InvokeAsync(StateHasChanged));
 

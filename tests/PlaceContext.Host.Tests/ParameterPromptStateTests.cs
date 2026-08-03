@@ -7,6 +7,45 @@ namespace PlaceContext.Host.Tests;
 public sealed class ParameterPromptStateTests
 {
     [Fact]
+    public void ChainParameterPromptPlan_finds_parameterized_steps_and_prefills_stored_values()
+    {
+        var first = Job("first");
+        var second = Job("second", new JobParameterDto("query", "Search")) with
+        {
+            InputPayloads = new[] { """{"query":"stored search"}""" },
+        };
+        var third = Job("third", new JobParameterDto("limit", Required: false));
+        var projectId = Guid.NewGuid();
+        var chain = new JobChainView(
+            Guid.NewGuid(), projectId, "pipeline", null,
+            [
+                new JobChainStageView([
+                    new JobChainStepView(first.Id, first.Name),
+                    new JobChainStepView(second.Id, second.Name),
+                ]),
+                new JobChainStageView([new JobChainStepView(third.Id, third.Name)]),
+            ],
+            DateTimeOffset.UtcNow);
+
+        var plan = ChainParameterPromptPlan.Build(chain, [first, second, third]);
+
+        Assert.Collection(plan.Steps,
+            step =>
+            {
+                Assert.Equal(1, step.Index);
+                Assert.Equal(second.Id, step.Job.Id);
+            },
+            step =>
+            {
+                Assert.Equal(2, step.Index);
+                Assert.Equal(third.Id, step.Job.Id);
+            });
+        Assert.Equal("stored search", plan.Defaults["step1:query"]);
+        Assert.Equal("", plan.Defaults["step2:limit"]);
+        Assert.DoesNotContain("step0", plan.Defaults.Keys);
+    }
+
+    [Fact]
     public void ChainArgKey_is_ui_disambiguator_only()
     {
         Assert.Equal("step0:address", ParameterPromptState.ChainArgKey(0, "address"));
