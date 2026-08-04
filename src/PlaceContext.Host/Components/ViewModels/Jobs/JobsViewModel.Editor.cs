@@ -37,8 +37,10 @@ public sealed partial class JobsViewModel
     public int EdRetryCount { get; set; }
     public int EdRetryDelaySeconds { get; set; }
     public List<ParamEdit> EdParams { get; } = new();
-    public List<PlaceContext.Domain.ValueObjects.PostJobActionKind> EdPostJobActions { get; } = new();
-    public PlaceContext.Domain.ValueObjects.JobReturnType EdReturnType { get; set; } = PlaceContext.Domain.ValueObjects.JobReturnType.Json;
+    public List<PlaceContext.Domain.ValueObjects.PostJobActionKind> EdPostJobActions { get; } =
+        new();
+    public PlaceContext.Domain.ValueObjects.JobReturnType EdReturnType { get; set; } =
+        PlaceContext.Domain.ValueObjects.JobReturnType.Json;
     public string EdReturnFileName { get; set; } = "";
 
     // ── Jobs ──────────────────────────────────────────────────────────────────────────────────
@@ -51,7 +53,10 @@ public sealed partial class JobsViewModel
         {
             Runs = await _svc.ListJobRunsAsync(job.Id);
         }
-        catch (Exception ex) { Message = ex.Message; }
+        catch (Exception ex)
+        {
+            Message = ex.Message;
+        }
         await LoadJobTelemetryAsync(job.Id);
         NotifyStateChanged();
     }
@@ -62,7 +67,11 @@ public sealed partial class JobsViewModel
         RunDetail = null;
         if (EditJobId is { } jobId)
         {
-            try { Runs = await _svc.ListJobRunsAsync(jobId); } catch { }
+            try
+            {
+                Runs = await _svc.ListJobRunsAsync(jobId);
+            }
+            catch { }
             await LoadJobTelemetryAsync(jobId);
         }
         NotifyStateChanged();
@@ -70,8 +79,14 @@ public sealed partial class JobsViewModel
 
     private async Task LoadJobTelemetryAsync(Guid jobId)
     {
-        try { JobTelemetry = await _svc.ListJobRunTelemetryAsync(jobId); }
-        catch { JobTelemetry = null; }
+        try
+        {
+            JobTelemetry = await _svc.ListJobRunTelemetryAsync(jobId);
+        }
+        catch
+        {
+            JobTelemetry = null;
+        }
     }
 
     // ── Editor ────────────────────────────────────────────────────────────────────────────────
@@ -153,13 +168,14 @@ public sealed partial class JobsViewModel
     public void SetEditorTab(string tab)
     {
         EditorTab = tab;
-        if (tab == "triggers") SelectedTriggerId = null;
+        if (tab == "triggers")
+            SelectedTriggerId = null;
         NotifyStateChanged();
     }
 
     // ── Payload form ──────────────────────────────────────────────────────────────────────────
-    public IReadOnlyList<JobParameterDto> DeclaredParams()
-        => EdParams.Where(p => !string.IsNullOrWhiteSpace(p.Name)).Select(p => p.ToDto()).ToList();
+    public IReadOnlyList<JobParameterDto> DeclaredParams() =>
+        EdParams.Where(p => !string.IsNullOrWhiteSpace(p.Name)).Select(p => p.ToDto()).ToList();
 
     public void SwitchPayloadMode(string mode)
     {
@@ -187,29 +203,51 @@ public sealed partial class JobsViewModel
         NotifyStateChanged();
     }
 
-    private void ComposePayloadFromForm()
-        => EdInputPayloadsRaw = ParameterPromptState.ToJsonPayload(
-            DeclaredParams(), PayloadFormValue);
+    private void ComposePayloadFromForm() =>
+        EdInputPayloadsRaw = ParameterPromptState.ToJsonPayload(DeclaredParams(), PayloadFormValue);
 
-    public void TogglePostJobAction(PlaceContext.Domain.ValueObjects.PostJobActionKind kind, bool on)
+    public void TogglePostJobAction(
+        PlaceContext.Domain.ValueObjects.PostJobActionKind kind,
+        bool on
+    )
     {
-        if (on) { if (!EdPostJobActions.Contains(kind)) EdPostJobActions.Add(kind); }
-        else EdPostJobActions.Remove(kind);
+        if (on)
+        {
+            if (!EdPostJobActions.Contains(kind))
+                EdPostJobActions.Add(kind);
+        }
+        else
+            EdPostJobActions.Remove(kind);
         NotifyStateChanged();
     }
 
     public async Task SaveJobAsync()
     {
         EditorError = null;
-        if (string.IsNullOrWhiteSpace(EdName)) { EditorError = "Name is required."; NotifyStateChanged(); return; }
+        if (string.IsNullOrWhiteSpace(EdName))
+        {
+            EditorError = "Name is required.";
+            NotifyStateChanged();
+            return;
+        }
 
         var payloads = EdInputPayloadsRaw
             .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .ToList();
-        if (payloads.Count == 0) { EditorError = "At least one input payload is required."; NotifyStateChanged(); return; }
+        if (payloads.Count == 0)
+        {
+            EditorError = "At least one input payload is required.";
+            NotifyStateChanged();
+            return;
+        }
 
         var env = new Dictionary<string, string>();
-        foreach (var line in EdMapEnvRaw.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        foreach (
+            var line in EdMapEnvRaw.Split(
+                '\n',
+                StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries
+            )
+        )
         {
             var eq = line.IndexOf('=');
             if (eq > 0)
@@ -217,9 +255,19 @@ public sealed partial class JobsViewModel
         }
 
         var successCodes = ParseInts(EdSuccessCodesRaw, out var sucErr);
-        if (sucErr is not null) { EditorError = $"Success codes: {sucErr}"; NotifyStateChanged(); return; }
+        if (sucErr is not null)
+        {
+            EditorError = $"Success codes: {sucErr}";
+            NotifyStateChanged();
+            return;
+        }
         var partialCodes = ParseInts(EdPartialCodesRaw, out var parErr);
-        if (parErr is not null) { EditorError = $"Partial codes: {parErr}"; NotifyStateChanged(); return; }
+        if (parErr is not null)
+        {
+            EditorError = $"Partial codes: {parErr}";
+            NotifyStateChanged();
+            return;
+        }
 
         var parameters = DeclaredParams();
 
@@ -232,8 +280,12 @@ public sealed partial class JobsViewModel
                 IReadOnlyList<CodeFileDto>? mapFiles = null;
                 if (EdMapSourceKind == "code" && EdMapFiles.Count > 1)
                 {
-                    var entry = !string.IsNullOrWhiteSpace(EdMapEntrypoint) ? EdMapEntrypoint : DefaultEntrypointFor(EdMapRuntimeId);
-                    mapFiles = EdMapFiles.Select(f => f.Path == entry ? f with { Content = EdMapSource } : f).ToList();
+                    var entry = !string.IsNullOrWhiteSpace(EdMapEntrypoint)
+                        ? EdMapEntrypoint
+                        : DefaultEntrypointFor(EdMapRuntimeId);
+                    mapFiles = EdMapFiles
+                        .Select(f => f.Path == entry ? f with { Content = EdMapSource } : f)
+                        .ToList();
                 }
 
                 var mcpIds = EdMcpConnectionIds.Select(id => Guid.Parse(id)).ToList();
@@ -241,12 +293,17 @@ public sealed partial class JobsViewModel
                 var cmd = new UpdateJobCommand(
                     JobId: EditJobId.Value,
                     Name: EdName.Trim(),
-                    Description: string.IsNullOrWhiteSpace(EdDescription) ? null : EdDescription.Trim(),
+                    Description: string.IsNullOrWhiteSpace(EdDescription)
+                        ? null
+                        : EdDescription.Trim(),
                     MapImage: EdMapSourceKind == "image" ? EdMapImage : null,
                     MapRuntimeId: EdMapSourceKind == "code" ? EdMapRuntimeId : null,
                     MapSource: EdMapSourceKind == "code" && mapFiles is null ? EdMapSource : null,
                     MapFiles: mapFiles,
-                    MapEntrypoint: EdMapSourceKind == "code" && !string.IsNullOrWhiteSpace(EdMapEntrypoint) ? EdMapEntrypoint : null,
+                    MapEntrypoint: EdMapSourceKind == "code"
+                    && !string.IsNullOrWhiteSpace(EdMapEntrypoint)
+                        ? EdMapEntrypoint
+                        : null,
                     InputPayloads: payloads,
                     MapEnv: env,
                     ReduceImage: null,
@@ -261,10 +318,13 @@ public sealed partial class JobsViewModel
                     Parameters: parameters,
                     PostJobActions: EdPostJobActions.ToList(),
                     ReturnType: EdReturnType,
-                    ReturnFileName: string.IsNullOrWhiteSpace(EdReturnFileName) ? null : EdReturnFileName.Trim(),
+                    ReturnFileName: string.IsNullOrWhiteSpace(EdReturnFileName)
+                        ? null
+                        : EdReturnFileName.Trim(),
                     RetryCount: EdRetryCount,
                     RetryDelaySeconds: EdRetryDelaySeconds,
-                    McpConnectionIds: mcpIds);
+                    McpConnectionIds: mcpIds
+                );
 
                 await _svc.UpdateJobAsync(cmd);
                 Message = $"Job '{EdName.Trim()}' updated.";
@@ -276,11 +336,16 @@ public sealed partial class JobsViewModel
                 var cmd = new CreateJobCommand(
                     ProjectId: ProjectId,
                     Name: EdName.Trim(),
-                    Description: string.IsNullOrWhiteSpace(EdDescription) ? null : EdDescription.Trim(),
+                    Description: string.IsNullOrWhiteSpace(EdDescription)
+                        ? null
+                        : EdDescription.Trim(),
                     MapImage: EdMapSourceKind == "image" ? EdMapImage : null,
                     MapRuntimeId: EdMapSourceKind == "code" ? EdMapRuntimeId : null,
                     MapSource: EdMapSourceKind == "code" ? EdMapSource : null,
-                    MapEntrypoint: EdMapSourceKind == "code" && !string.IsNullOrWhiteSpace(EdMapEntrypoint) ? EdMapEntrypoint : null,
+                    MapEntrypoint: EdMapSourceKind == "code"
+                    && !string.IsNullOrWhiteSpace(EdMapEntrypoint)
+                        ? EdMapEntrypoint
+                        : null,
                     InputPayloads: payloads,
                     MapEnv: env,
                     ReduceImage: null,
@@ -295,10 +360,13 @@ public sealed partial class JobsViewModel
                     Parameters: parameters,
                     PostJobActions: EdPostJobActions.ToList(),
                     ReturnType: EdReturnType,
-                    ReturnFileName: string.IsNullOrWhiteSpace(EdReturnFileName) ? null : EdReturnFileName.Trim(),
+                    ReturnFileName: string.IsNullOrWhiteSpace(EdReturnFileName)
+                        ? null
+                        : EdReturnFileName.Trim(),
                     RetryCount: EdRetryCount,
                     RetryDelaySeconds: EdRetryDelaySeconds,
-                    McpConnectionIds: mcpIds);
+                    McpConnectionIds: mcpIds
+                );
 
                 await _svc.CreateJobAsync(cmd);
                 Message = $"Job '{EdName.Trim()}' created.";
@@ -325,10 +393,14 @@ public sealed partial class JobsViewModel
             await _svc.DeleteJobAsync(jobId);
             Jobs = await _svc.ListJobsAsync(ProjectId);
             ConfirmDeleteId = null;
-            if (EditJobId == jobId) CloseEditor();
+            if (EditJobId == jobId)
+                CloseEditor();
             Message = "Job deleted.";
         }
-        catch (Exception ex) { Message = ex.Message; }
+        catch (Exception ex)
+        {
+            Message = ex.Message;
+        }
         NotifyStateChanged();
     }
 }

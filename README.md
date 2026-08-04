@@ -105,6 +105,8 @@ src/
   PlaceContext.Application     → command/query handlers, ports, the dispatcher, views
   PlaceContext.Infrastructure  → EF Core/PostgreSQL, Kubernetes runner, MinIO, schedulers
   PlaceContext.Host            → MCP tools (Streamable HTTP) + Blazor portal (composition root)
+                                 Razor views are MVVM-only: scoped ViewModels own state,
+                                 commands, validation, navigation, service access, and JS interop
 deploy/
   pctl · tui/ · k3s/           → cluster lifecycle CLI, Go TUI, Kubernetes manifests
 ```
@@ -150,7 +152,7 @@ EF migrations apply automatically on startup.
 
 ## License
 
-**Software:** proprietary — © Bradley Lietz / CTRL SIGNAL SOFTWARE PTY LTD. See [LICENSE](LICENSE).
+**Software:** open source under the MIT License — © Bradley Lietz / CTRL SIGNAL SOFTWARE PTY LTD. See [LICENSE](LICENSE).
 
 **Your data and jobs:** owned by you. PlaceContext does not claim ownership of project data,
 knowledge, job definitions, runs, or artifacts you create or import. Details are in [LICENSE](LICENSE).

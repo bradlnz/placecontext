@@ -3,6 +3,8 @@
 @layout PlaceContext.Host.Components.Layout.AuthLayout
 
 @using Microsoft.AspNetCore.Components.Forms
+@using PlaceContext.Host.Components.ViewModels
+@inject LoginViewModel Vm
 
 @* Password sign-in. Posts as a plain HTML form to AuthController.Login (see Setup.razor's comment for
    why — cookie sign-in needs a normal HTTP round trip, not a Blazor circuit event). Errors are always
@@ -24,17 +26,17 @@
 
     <form method="post" action="/auth/login" class="auth-form">
         <AntiforgeryToken />
-        @if (!string.IsNullOrEmpty(Error))
+        @if (!string.IsNullOrEmpty(Vm.Error))
         {
-            <div class="auth-error">@Error</div>
+            <div class="auth-error">@Vm.Error</div>
         }
-        @if (!string.IsNullOrEmpty(ReturnUrl))
+        @if (!string.IsNullOrEmpty(Vm.ReturnUrl))
         {
-            <input type="hidden" name="returnUrl" value="@ReturnUrl" />
+            <input type="hidden" name="returnUrl" value="@Vm.ReturnUrl" />
         }
         <div class="dcfield">
             <label>Email</label>
-            <input class="dcinput" type="email" name="email" required autofocus value="@Email" autocomplete="username" />
+            <input class="dcinput" type="email" name="email" required autofocus value="@Vm.Email" autocomplete="username" />
         </div>
         <div class="dcfield">
             <label>Password</label>
@@ -46,11 +48,14 @@
 
 @code {
     [SupplyParameterFromQuery(Name = "error")]
-    public string? Error { get; set; }
+    public string? ErrorQuery { get; set; }
 
     [SupplyParameterFromQuery(Name = "returnUrl")]
-    public string? ReturnUrl { get; set; }
+    public string? ReturnUrlQuery { get; set; }
 
     [SupplyParameterFromQuery(Name = "email")]
-    public string? Email { get; set; }
+    public string? EmailQuery { get; set; }
+
+    protected override void OnParametersSet() =>
+        Vm.SetParameters(ErrorQuery, ReturnUrlQuery, EmailQuery);
 }

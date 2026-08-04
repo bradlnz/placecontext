@@ -4,8 +4,8 @@ using PlaceContext.Application.Features;
 using PlaceContext.Application.Mcp;
 using PlaceContext.Application.Ports;
 using PlaceContext.Domain.Repositories;
-using PlaceContext.Infrastructure.Chat;
 using PlaceContext.Infrastructure.Caching;
+using PlaceContext.Infrastructure.Chat;
 
 namespace PlaceContext.Host.Components.ViewModels;
 
@@ -40,7 +40,8 @@ public sealed partial class ChatViewModel
                 LoadSessionsAsync(),
                 LoadMcpConnectionsAsync(),
                 LoadCommandsAsync(),
-                LoadPanelArtifactsAsync());
+                LoadPanelArtifactsAsync()
+            );
             if (Sessions.Count > 0)
                 await SelectSessionAsync(Sessions[0]);
         }
@@ -51,7 +52,8 @@ public sealed partial class ChatViewModel
 
     public void OnProjectChanged()
     {
-        if (ProjectId == _ui.CurrentProjectId) return;
+        if (ProjectId == _ui.CurrentProjectId)
+            return;
         ProjectId = _ui.CurrentProjectId;
         ProjectName = _ui.CurrentProjectName ?? "";
         _ = OnProjectChangedAsync();
@@ -59,7 +61,8 @@ public sealed partial class ChatViewModel
 
     private async Task OnProjectChangedAsync()
     {
-        if (!ProjectId.HasValue) return;
+        if (!ProjectId.HasValue)
+            return;
         WorkspaceLoaded = false;
         NotifyStateChanged();
         await LoadAgentConfigAsync();
@@ -75,5 +78,4 @@ public sealed partial class ChatViewModel
         WorkspaceLoaded = true;
         NotifyStateChanged();
     }
-
 }

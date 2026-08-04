@@ -4,8 +4,8 @@ using PlaceContext.Application.Features;
 using PlaceContext.Application.Mcp;
 using PlaceContext.Application.Ports;
 using PlaceContext.Domain.Repositories;
-using PlaceContext.Infrastructure.Chat;
 using PlaceContext.Infrastructure.Caching;
+using PlaceContext.Infrastructure.Chat;
 
 namespace PlaceContext.Host.Components.ViewModels;
 
@@ -15,14 +15,21 @@ public sealed partial class ChatViewModel
 
     private async Task LoadAgentConfigAsync()
     {
-        if (!ProjectId.HasValue) return;
+        if (!ProjectId.HasValue)
+            return;
         try
         {
             var config = await _svc.GetAgentConfigAsync(ProjectId.Value);
             _systemPrompt = config.SystemPrompt;
-            _preamble = string.IsNullOrWhiteSpace(config.Preamble) ? ChatCopy.DefaultPreamble : config.Preamble;
-            _toolCatalog = string.IsNullOrWhiteSpace(config.ToolCatalog) ? ChatCopy.DefaultToolCatalog : config.ToolCatalog;
-            _launchpadToolCatalog = string.IsNullOrWhiteSpace(config.LaunchpadToolCatalog) ? ChatCopy.DefaultLaunchpadToolCatalog : config.LaunchpadToolCatalog;
+            _preamble = string.IsNullOrWhiteSpace(config.Preamble)
+                ? ChatCopy.DefaultPreamble
+                : config.Preamble;
+            _toolCatalog = string.IsNullOrWhiteSpace(config.ToolCatalog)
+                ? ChatCopy.DefaultToolCatalog
+                : config.ToolCatalog;
+            _launchpadToolCatalog = string.IsNullOrWhiteSpace(config.LaunchpadToolCatalog)
+                ? ChatCopy.DefaultLaunchpadToolCatalog
+                : config.LaunchpadToolCatalog;
             _temperature = config.Temperature;
             _maxContextChunks = config.MaxContextChunks;
         }
@@ -46,7 +53,11 @@ public sealed partial class ChatViewModel
         await LoadMcpConnectionsAsync();
     }
 
-    public void CloseSettings() { ShowSettings = false; NotifyStateChanged(); }
+    public void CloseSettings()
+    {
+        ShowSettings = false;
+        NotifyStateChanged();
+    }
 
     public async Task SaveSettingsAsync()
     {
@@ -64,14 +75,23 @@ public sealed partial class ChatViewModel
             try
             {
                 var config = await _svc.GetAgentConfigAsync(ProjectId.Value);
-                await _svc.UpdateAgentConfigAsync(new UpdateAgentConfigCommand(
-                    config.ProjectId, config.BaseModel, _systemPrompt, _preamble, _toolCatalog,
-                    _launchpadToolCatalog, _maxContextChunks,
-                    _temperature, config.TopP, config.Enabled));
+                await _svc.UpdateAgentConfigAsync(
+                    new UpdateAgentConfigCommand(
+                        config.ProjectId,
+                        config.BaseModel,
+                        _systemPrompt,
+                        _preamble,
+                        _toolCatalog,
+                        _launchpadToolCatalog,
+                        _maxContextChunks,
+                        _temperature,
+                        config.TopP,
+                        config.Enabled
+                    )
+                );
             }
             catch { }
         }
         NotifyStateChanged();
     }
-
 }

@@ -1,6 +1,8 @@
 @* Interactive pipeline canvas. Stages can be reordered, job paths can be dragged between stages,
    and the + path action adds another parallel branch to a stage. *@
 @using PlaceContext.Application.Dtos
+@inject ChainCanvasViewModel Vm
+@implements IDisposable
 
 <div class="chain-canvas">
     <div class="canvas-toolbar">
@@ -9,14 +11,14 @@
             <div class="canvas-hint">Drag stages to reorder them. Drag a job onto another stage to move its path.</div>
         </div>
         <div class="canvas-add-stage">
-            <select class="canvas-select" @bind="_addJobId" aria-label="Job for new stage">
+            <select class="canvas-select" value="@Vm.AddJobId" @onchange="OnAddJobChanged" aria-label="Job for new stage">
                 <option value="">Choose a job…</option>
                 @foreach (var job in Jobs)
                 {
                     <option value="@job.Id">@job.Name</option>
                 }
             </select>
-            <button class="canvas-button primary" disabled="@(!Guid.TryParse(_addJobId, out _))" @onclick="AddStageAsync">
+            <button class="canvas-button primary" disabled="@(!Vm.IsAddStageEnabled)" @onclick="AddStageAsync">
                 <span>+</span> Add stage
             </button>
         </div>
@@ -29,7 +31,7 @@
                 <span>Start</span>
             </div>
 
-            @if (Stages.Count == 0)
+            @if (Vm.Stages.Count == 0)
             {
                 <div class="empty-canvas">
                     <span class="empty-icon">＋</span>
@@ -37,22 +39,22 @@
                 </div>
             }
 
-            @for (var i = 0; i < Stages.Count; i++)
+            @for (var i = 0; i < Vm.Stages.Count; i++)
             {
                 var stageIndex = i;
-                var stage = Stages[stageIndex];
-                var gate = Gates.GetValueOrDefault(stageIndex);
+                var stage = Vm.Stages[stageIndex];
+                var gate = Vm.Gates.GetValueOrDefault(stageIndex);
 
                 <div class="flow-group">
                     <div class="connector">
                         <span class="connector-line"></span>
                         @if (gate is not null)
                         {
-                            <button class="gate-node @(gate switch { WaitGateView => "gate-wait", ConditionGateView => "gate-condition", _ => "" })"
-                                    title="@GateTooltip(gate)"
+                            <button class="gate-node @Vm.GateClass(gate)"
+                                    title="@Vm.GateTooltip(gate)"
                                     @onclick="@(() => OnEditGate.InvokeAsync((stageIndex, gate)))">
-                                <span class="gate-icon">@GateIcon(gate)</span>
-                                <span class="gate-label">@GateLabel(gate)</span>
+                                <span class="gate-icon">@Vm.GateIcon(gate)</span>
+                                <span class="gate-label">@Vm.GateLabel(gate)</span>
                             </button>
                         }
                         else
@@ -65,7 +67,7 @@
                         <span class="connector-line arrow-line"></span>
                     </div>
 
-                    <div class="canvas-stage @(_dragOverStage == stageIndex ? "drag-over" : "")"
+                    <div class="canvas-stage @(Vm.DragOverStage == stageIndex ? "drag-over" : "")"
                          @ondragover="@(e => DragOver(stageIndex))"
                          @ondragover:preventDefault="true"
                          @ondragleave="@(() => DragLeave(stageIndex))"
@@ -116,17 +118,17 @@
                             }
                         </div>
 
-                        @if (stage.Action is null && _pathPickerStage == stageIndex)
+                        @if (stage.Action is null && Vm.PathPickerStage == stageIndex)
                         {
                             <div class="path-picker">
-                                <select class="canvas-select" @bind="_pathJobId" aria-label="Job for new path">
+                                    <select class="canvas-select" value="@Vm.PathJobId" @onchange="OnPathJobChanged" aria-label="Job for new path">
                                     <option value="">Choose a job…</option>
                                     @foreach (var job in Jobs)
                                     {
                                         <option value="@job.Id">@job.Name</option>
                                     }
                                 </select>
-                                <button class="picker-confirm" disabled="@(!Guid.TryParse(_pathJobId, out _))"
+                                <button class="picker-confirm" disabled="@(!Vm.IsPathEnabled)"
                                         @onclick="@(() => ConfirmPathAsync(stageIndex))">Add</button>
                                 <button class="picker-cancel" @onclick="ClosePathPicker">×</button>
                             </div>
@@ -154,7 +156,7 @@
                 </div>
             }
 
-            @if (Stages.Count > 0)
+            @if (Vm.Stages.Count > 0)
             {
                 <div class="finish-connector"><span></span><b>›</b></div>
                 <div class="finish-node">Output</div>
@@ -185,92 +187,31 @@
     [Parameter] public EventCallback<(int StageIndex, int BranchIndex)> OnRemovePath { get; set; }
     [Parameter] public EventCallback<int> OnRemoveStage { get; set; }
 
-    private string _addJobId = "";
-    private string _pathJobId = "";
-    private int? _pathPickerStage;
-    private int? _draggedStage;
-    private (int Stage, int Branch)? _draggedPath;
-    private int? _dragOverStage;
-
+    protected override void OnInitialized() => Vm.Attach(() => InvokeAsync(StateHasChanged));
+    protected override void OnParametersSet() => Vm.SetParameters(Stages, Jobs, Gates);
+    private void OnAddJobChanged(ChangeEventArgs args) => Vm.SetAddJobId(args.Value?.ToString());
+    private void OnPathJobChanged(ChangeEventArgs args) => Vm.SetPathJobId(args.Value?.ToString());
     private async Task AddStageAsync()
     {
-        if (!Guid.TryParse(_addJobId, out var jobId)) return;
-        await OnAddStage.InvokeAsync(jobId);
-        _addJobId = "";
+        if (Vm.ConsumeAddStageJob() is { } jobId) await OnAddStage.InvokeAsync(jobId);
     }
-
-    private void OpenPathPicker(int stageIndex)
-    {
-        _pathPickerStage = stageIndex;
-        _pathJobId = "";
-    }
-
-    private void ClosePathPicker()
-    {
-        _pathPickerStage = null;
-        _pathJobId = "";
-    }
-
+    private void OpenPathPicker(int stageIndex) => Vm.OpenPathPicker(stageIndex);
+    private void ClosePathPicker() => Vm.ClosePathPicker();
     private async Task ConfirmPathAsync(int stageIndex)
     {
-        if (!Guid.TryParse(_pathJobId, out var jobId)) return;
-        await OnAddPath.InvokeAsync((stageIndex, jobId));
-        ClosePathPicker();
+        if (Vm.ConsumePathJob() is { } jobId) await OnAddPath.InvokeAsync((stageIndex, jobId));
     }
-
-    private void BeginStageDrag(int stageIndex)
-    {
-        _draggedStage = stageIndex;
-        _draggedPath = null;
-    }
-
-    private void BeginPathDrag(int stageIndex, int branchIndex)
-    {
-        _draggedPath = (stageIndex, branchIndex);
-        _draggedStage = null;
-    }
-
-    private void DragOver(int stageIndex) => _dragOverStage = stageIndex;
-
-    private void DragLeave(int stageIndex)
-    {
-        if (_dragOverStage == stageIndex) _dragOverStage = null;
-    }
-
+    private void BeginStageDrag(int stageIndex) => Vm.BeginStageDrag(stageIndex);
+    private void BeginPathDrag(int stageIndex, int branchIndex) => Vm.BeginPathDrag(stageIndex, branchIndex);
+    private void DragOver(int stageIndex) => Vm.DragOver(stageIndex);
+    private void DragLeave(int stageIndex) => Vm.DragLeave(stageIndex);
     private async Task DropOnStageAsync(int targetStage)
     {
-        if (_draggedPath is { } path)
-            await OnMovePath.InvokeAsync((path.Stage, path.Branch, targetStage));
-        else if (_draggedStage is { } source)
-            await OnMoveStage.InvokeAsync((source, targetStage));
-        EndDrag();
+        if (Vm.ConsumePathDrop(targetStage) is { } path)
+            await OnMovePath.InvokeAsync(path);
+        else if (Vm.ConsumeStageDrop(targetStage) is { } stage)
+            await OnMoveStage.InvokeAsync(stage);
     }
-
-    private void EndDrag()
-    {
-        _draggedStage = null;
-        _draggedPath = null;
-        _dragOverStage = null;
-    }
-
-    private static string GateIcon(ChainGateView gate) => gate switch
-    {
-        WaitGateView => "◷",
-        ConditionGateView => "◇",
-        _ => "?",
-    };
-
-    private static string GateLabel(ChainGateView gate) => gate switch
-    {
-        WaitGateView wg => $"{wg.DurationSeconds:0.#}s",
-        ConditionGateView => "IF",
-        _ => "",
-    };
-
-    private static string GateTooltip(ChainGateView gate) => gate switch
-    {
-        WaitGateView wg => $"Wait {wg.DurationSeconds:0.#} second(s) before this stage",
-        ConditionGateView cg => $"Run when {cg.Expression}",
-        _ => "",
-    };
+    private void EndDrag() => Vm.EndDrag();
+    public void Dispose() => Vm.Dispose();
 }

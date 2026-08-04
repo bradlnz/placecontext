@@ -1,8 +1,8 @@
 @page "/inspector"
 @attribute [Authorize(Policy = Permission.JobsView)]
 @implements IDisposable
-@inject IPlaceContextService Svc
-@inject PortalUiState Ui
+@inject InspectorViewModel Vm
+@using PlaceContext.Host.Components.ViewModels
 
 <PageTitle>PlaceContext — MCP Inspector</PageTitle>
 
@@ -14,10 +14,10 @@
                 <span class="title-13">Tool calls</span>
                 <span class="pulse-dot"></span>
             </div>
-            <button class="dcbtn btn-sm" @onclick="Load">refresh</button>
+            <button class="dcbtn btn-sm" @onclick="Vm.LoadAsync">refresh</button>
         </div>
         <div class="feed-list">
-            @if (_calls is null || _calls.Count == 0)
+            @if (Vm.Calls is null || Vm.Calls.Count == 0)
             {
                 <div class="feed-empty">
                     No tool calls yet. Launch the MCP server (<code>--mcp</code>) and call a tool, or use the portal — calls appear here live.
@@ -25,11 +25,11 @@
             }
             else
             {
-                @foreach (var c in _calls)
+                @foreach (var c in Vm.Calls)
                 {
-                    var active = _active?.Id == c.Id;
-                    <div class="call-row" style="background:@(active ? "var(--card)" : "transparent"); border-left:2px solid @(active ? "var(--brand)" : "transparent")" @onclick="@(() => _active = c)">
-                        <span class="status-dot" style="background:@Status(c.Status)"></span>
+                    var active = Vm.Active?.Id == c.Id;
+                    <div class="call-row" style="background:@(active ? "var(--card)" : "transparent"); border-left:2px solid @(active ? "var(--brand)" : "transparent")" @onclick="@(() => Vm.Select(c))">
+                        <span class="status-dot" style="background:@InspectorViewModel.StatusColor(c.Status)"></span>
                         <div class="flex-min">
                             <div class="row8">
                                 <span class="call-tool">@c.Tool</span>
@@ -38,7 +38,7 @@
                             <div class="call-summary">@c.Summary</div>
                         </div>
                         <div class="call-meta">
-                            <div class="call-status" style="color:@Status(c.Status)">@c.Status.ToLower()</div>
+                            <div class="call-status" style="color:@InspectorViewModel.StatusColor(c.Status)">@c.Status.ToLower()</div>
                             <div class="call-dur">@c.DurationMs ms</div>
                         </div>
                     </div>
@@ -49,25 +49,25 @@
 
     <!-- detail -->
     <div class="detail">
-        @if (_active is null)
+        @if (Vm.Active is null)
         {
             <div class="detail-empty">Select a tool call to inspect its request and response.</div>
         }
         else
         {
             <div class="detail-head">
-                <span class="detail-tool">@_active.Tool</span>
-                <span class="status-pill" style="color:@Status(_active.Status); background:@StatusBg(_active.Status)">@_active.Status.ToLower()</span>
-                <span class="detail-meta">@_active.DurationMs ms · @_active.Project</span>
+                <span class="detail-tool">@Vm.Active.Tool</span>
+                <span class="status-pill" style="color:@InspectorViewModel.StatusColor(Vm.Active.Status); background:@InspectorViewModel.StatusBackground(Vm.Active.Status)">@Vm.Active.Status.ToLower()</span>
+                <span class="detail-meta">@Vm.Active.DurationMs ms · @Vm.Active.Project</span>
             </div>
             <div class="detail-body">
                 <div>
                     <div class="section-label">Request</div>
-                    <pre class="json-block">@_active.RequestJson</pre>
+                    <pre class="json-block">@Vm.Active.RequestJson</pre>
                 </div>
                 <div>
                     <div class="section-label">Response</div>
-                    <pre class="json-block">@_active.ResponseJson</pre>
+                    <pre class="json-block">@Vm.Active.ResponseJson</pre>
                 </div>
             </div>
         }
@@ -75,34 +75,6 @@
 </div>
 
 @code {
-    private IReadOnlyList<ToolCallView>? _calls;
-    private ToolCallView? _active;
-    private System.Threading.Timer? _poll;
-
-    protected override async Task OnInitializedAsync()
-    {
-        Ui.Set("MCP Inspector", "live tool traffic · MCP via Streamable HTTP");
-        await Load();
-        // Tool calls arrive from agents, not from portal actions, so there's no in-process change
-        // event to subscribe to — a short poll keeps the feed genuinely live.
-        _poll = new System.Threading.Timer(_ => _ = InvokeAsync(async () => { await Load(); StateHasChanged(); }),
-            null, TimeSpan.FromSeconds(3), TimeSpan.FromSeconds(3));
-    }
-
-    private async Task Load()
-    {
-        _calls = await Svc.GetRecentToolCallsAsync(20);
-        _active ??= _calls.FirstOrDefault();
-    }
-
-    public void Dispose() => _poll?.Dispose();
-
-    private static string Status(string s) => s switch
-    {
-        "Ok" => "var(--good)", "Warn" => "var(--warn)", _ => "var(--bad)"
-    };
-    private static string StatusBg(string s) => s switch
-    {
-        "Ok" => "var(--good-bg)", "Warn" => "var(--warn-bg)", _ => "var(--bad-bg)"
-    };
+    protected override async Task OnInitializedAsync() { Vm.Attach(() => InvokeAsync(StateHasChanged)); await Vm.LoadAsync(); Vm.StartPolling(); }
+    public void Dispose() { Vm.Detach(); Vm.Dispose(); }
 }

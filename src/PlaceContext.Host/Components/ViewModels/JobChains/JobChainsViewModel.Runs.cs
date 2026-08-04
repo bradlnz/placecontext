@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Threading;
 using Microsoft.Extensions.DependencyInjection;
 using PlaceContext.Application;
@@ -18,9 +19,52 @@ public sealed partial class JobChainsViewModel
     public Guid? SelectedStepRunId { get; private set; }
     public DateTimeOffset? LiveOutputUpdatedAt { get; private set; }
     public string? LiveOutputText { get; private set; }
+    public IReadOnlyList<(string Path, string Value)> ContextRows =>
+        FlattenContext(OpenRun?.FinalOutput);
     public bool FollowNewest { get; set; }
     private CancellationTokenSource? _pollCts;
     private readonly SemaphoreSlim _refreshLock = new(1, 1);
+
+    private static IReadOnlyList<(string Path, string Value)> FlattenContext(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+            return Array.Empty<(string, string)>();
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            var rows = new List<(string, string)>();
+            Flatten(doc.RootElement, "", rows);
+            return rows.Take(250).ToList();
+        }
+        catch (JsonException)
+        {
+            return new[] { ("payload", json) };
+        }
+    }
+
+    private static void Flatten(
+        JsonElement node,
+        string path,
+        List<(string Path, string Value)> rows
+    )
+    {
+        if (node.ValueKind == JsonValueKind.Object)
+        {
+            foreach (var property in node.EnumerateObject())
+                Flatten(
+                    property.Value,
+                    string.IsNullOrEmpty(path) ? property.Name : $"{path}.{property.Name}",
+                    rows
+                );
+            return;
+        }
+        if (node.ValueKind == JsonValueKind.Array)
+        {
+            rows.Add((path, node.GetRawText()));
+            return;
+        }
+        rows.Add((path, node.ToString()));
+    }
 
     // ── Run-input prompt state ────────────────────────────────────────────────────────────────
     public JobChainView? RunPromptChain { get; private set; }
@@ -45,11 +89,13 @@ public sealed partial class JobChainsViewModel
     }
 
     public string GetArg(string name) => _runPrompt.Get(name);
+
     public void SetArg(string name, string value) => _runPrompt.Set(name, value);
 
     public async Task SubmitRunPromptAsync()
     {
-        if (RunPromptChain is null) return;
+        if (RunPromptChain is null)
+            return;
 
         if (!_runPrompt.ValidateChainStepParameters(RunPromptSteps))
         {
@@ -71,19 +117,32 @@ public sealed partial class JobChainsViewModel
         NotifyStateChanged();
     }
 
-    private async Task RunChainCoreAsync(JobChainView chain, string? payload, IReadOnlyDictionary<int, string>? stepOverrides = null)
+    private async Task RunChainCoreAsync(
+        JobChainView chain,
+        string? payload,
+        IReadOnlyDictionary<int, string>? stepOverrides = null
+    )
     {
         Message = null;
         var chainRunId = Guid.NewGuid();
-        var err = _ops.TryRun(ProjectId, $"Run chain — {chain.Name}", $"/project/{ProjectId}/chains",
+        var err = _ops.TryRun(
+            ProjectId,
+            $"Run chain — {chain.Name}",
+            $"/project/{ProjectId}/chains",
             async (sp, ct) =>
             {
                 var result = await sp.GetRequiredService<IPlaceContextService>()
                     .RunJobChainAsync(chain.Id, payload, chainRunId, stepOverrides, ct);
                 return $"chain finished — {result.Status}";
             },
-            correlationKey: RunStatusWatchService.ChainRunKey(chainRunId));
-        if (err is not null) { Message = err; NotifyStateChanged(); return; }
+            correlationKey: RunStatusWatchService.ChainRunKey(chainRunId)
+        );
+        if (err is not null)
+        {
+            Message = err;
+            NotifyStateChanged();
+            return;
+        }
 
         RunPromptChain = null;
         RunPromptSteps.Clear();
@@ -111,7 +170,10 @@ public sealed partial class JobChainsViewModel
             if (OpenRun?.Id == chainRunId && OpenRun is { } run)
                 await RefreshRunsAsync(run.ChainId);
         }
-        catch (Exception ex) { Message = ex.Message; }
+        catch (Exception ex)
+        {
+            Message = ex.Message;
+        }
         NotifyStateChanged();
     }
 
@@ -125,7 +187,10 @@ public sealed partial class JobChainsViewModel
                 await RefreshRunsAsync(run.ChainId);
             Message = "Step run cancellation requested.";
         }
-        catch (Exception ex) { Message = ex.Message; }
+        catch (Exception ex)
+        {
+            Message = ex.Message;
+        }
         NotifyStateChanged();
     }
 
@@ -170,9 +235,13 @@ public sealed partial class JobChainsViewModel
                 UpdateLiveOutput(rid);
                 LiveOutputUpdatedAt = DateTimeOffset.UtcNow;
             }
-            else StepRunDetail = null;
+            else
+                StepRunDetail = null;
         }
-        catch { StepRunDetail = null; }
+        catch
+        {
+            StepRunDetail = null;
+        }
         NotifyStateChanged();
     }
 
@@ -186,7 +255,8 @@ public sealed partial class JobChainsViewModel
 
     private async Task RefreshRunsAsync(Guid chainId, Guid? pendingChainRunId = null)
     {
-        if (!await _refreshLock.WaitAsync(0)) return; // skip if a refresh is already in-flight
+        if (!await _refreshLock.WaitAsync(0))
+            return; // skip if a refresh is already in-flight
         try
         {
             ChainRuns = await _svc.ListChainRunsAsync(chainId);
@@ -222,16 +292,21 @@ public sealed partial class JobChainsViewModel
             }
 
             // If the pending run is terminal and no longer needed, clear it.
-            if (PendingChainRunId is { } stillPending
+            if (
+                PendingChainRunId is { } stillPending
                 && ChainRuns.FirstOrDefault(r => r.Id == stillPending) is { } sp
-                && IsTerminal(sp.Status))
+                && IsTerminal(sp.Status)
+            )
             {
                 PendingChainRunId = null;
                 PendingChainId = null;
             }
         }
         catch { }
-        finally { _refreshLock.Release(); }
+        finally
+        {
+            _refreshLock.Release();
+        }
         NotifyStateChanged();
     }
 
@@ -240,13 +315,15 @@ public sealed partial class JobChainsViewModel
         var runId = SelectedStepRunId;
         if (runId is null || run.Steps.All(s => s.RunId != runId))
         {
-            runId = run.Steps
-                .Where(s => s.RunId.HasValue && s.Status == "Running")
-                .OrderByDescending(s => s.StartedAt)
-                .Select(s => s.RunId)
-                .FirstOrDefault()
-                ?? run.Steps
-                    .Where(s => s.RunId.HasValue && s.Status is "Succeeded" or "Partial" or "Failed" or "Cancelled")
+            runId =
+                run.Steps.Where(s => s.RunId.HasValue && s.Status == "Running")
+                    .OrderByDescending(s => s.StartedAt)
+                    .Select(s => s.RunId)
+                    .FirstOrDefault()
+                ?? run.Steps.Where(s =>
+                        s.RunId.HasValue
+                        && s.Status is "Succeeded" or "Partial" or "Failed" or "Cancelled"
+                    )
                     .OrderByDescending(s => s.FinishedAt ?? s.StartedAt)
                     .Select(s => s.RunId)
                     .FirstOrDefault();
@@ -280,44 +357,53 @@ public sealed partial class JobChainsViewModel
 
     private void StartPolling(Guid chainId)
     {
-        if (_pollCts is not null) return;
+        if (_pollCts is not null)
+            return;
         _pollCts = new CancellationTokenSource();
         var ct = _pollCts.Token;
         var started = DateTimeOffset.UtcNow;
-        _ = Task.Run(async () =>
-        {
-            while (!ct.IsCancellationRequested)
+        _ = Task.Run(
+            async () =>
             {
-                await Task.Delay(1000, ct).ConfigureAwait(false);
-                if (ct.IsCancellationRequested) break;
-
-                // Stop polling after a generous timeout.
-                if (DateTimeOffset.UtcNow - started > TimeSpan.FromMinutes(5))
+                while (!ct.IsCancellationRequested)
                 {
-                    PendingChainRunId = null;
-                    PendingChainId = null;
-                    NotifyStateChanged();
-                    break;
-                }
-
-                try
-                {
-                    await RefreshRunsAsync(chainId);
-                    if (PendingChainRunId is null && OpenRun is { } open && IsTerminal(open.Status))
+                    await Task.Delay(1000, ct).ConfigureAwait(false);
+                    if (ct.IsCancellationRequested)
                         break;
+
+                    // Stop polling after a generous timeout.
+                    if (DateTimeOffset.UtcNow - started > TimeSpan.FromMinutes(5))
+                    {
+                        PendingChainRunId = null;
+                        PendingChainId = null;
+                        NotifyStateChanged();
+                        break;
+                    }
+
+                    try
+                    {
+                        await RefreshRunsAsync(chainId);
+                        if (
+                            PendingChainRunId is null
+                            && OpenRun is { } open
+                            && IsTerminal(open.Status)
+                        )
+                            break;
+                    }
+                    catch { }
                 }
-                catch { }
-            }
-            if (_pollCts is not null && _pollCts.Token == ct)
-            {
-                _pollCts.Dispose();
-                _pollCts = null;
-            }
-        }, ct);
+                if (_pollCts is not null && _pollCts.Token == ct)
+                {
+                    _pollCts.Dispose();
+                    _pollCts = null;
+                }
+            },
+            ct
+        );
     }
 
-    private static bool IsTerminal(string status)
-        => status is "Succeeded" or "Failed" or "Partial" or "Cancelled";
+    private static bool IsTerminal(string status) =>
+        status is "Succeeded" or "Failed" or "Partial" or "Cancelled";
 
     private void StopPolling()
     {
@@ -325,5 +411,4 @@ public sealed partial class JobChainsViewModel
         _pollCts?.Dispose();
         _pollCts = null;
     }
-
 }

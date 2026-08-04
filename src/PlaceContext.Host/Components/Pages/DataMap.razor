@@ -6,7 +6,6 @@
 @using PlaceContext.Application.Features
 @using PlaceContext.Host.Components.ViewModels
 @inject DataMapViewModel Vm
-@inject PortalUiState Ui
 
 <PageTitle>PlaceContext — Data map</PageTitle>
 
@@ -17,7 +16,7 @@
 else
 {
     <div class="data-map-page">
-        <DataTabs ProjectId="ProjectId" Active="datamap" />
+        <DataTabs ProjectId="ProjectId" Active="@DataSection.DataMap" />
 
         <header class="data-map-head">
             <div>
@@ -36,10 +35,10 @@ else
         }
 
         <section class="summary-strip" aria-label="Data mapping summary">
-            <div><strong>@JobCount</strong><span>jobs</span></div>
-            <div><strong>@MappedJobCount</strong><span>mapped jobs</span></div>
-            <div><strong>@EnabledMappingCount</strong><span>active mappings</span></div>
-            <div class="needs-attention"><strong>@UnmappedJobCount</strong><span>need mapping</span></div>
+            <div><strong>@Vm.JobCount</strong><span>jobs</span></div>
+            <div><strong>@Vm.MappedJobCount</strong><span>mapped jobs</span></div>
+            <div><strong>@Vm.EnabledMappingCount</strong><span>active mappings</span></div>
+            <div class="needs-attention"><strong>@Vm.UnmappedJobCount</strong><span>need mapping</span></div>
         </section>
 
         <section class="dccard mapping-suite">
@@ -51,16 +50,16 @@ else
                 <span>@(Vm.Tables?.Count ?? 0) project tables</span>
             </header>
 
-            @if (JobCount == 0)
+            @if (Vm.JobCount == 0)
             {
                 <div class="mapping-empty">No jobs exist in this project yet.</div>
             }
             else
             {
                 <div class="mapping-rows">
-                @foreach (var job in OrderedJobs)
+                @foreach (var job in Vm.OrderedJobs)
                 {
-                    var mappings = MappingsFor(job.Id);
+                    var mappings = Vm.MappingsFor(job.Id);
                     <article class="mapping-row @(mappings.Count == 0 ? "unmapped" : null)">
                         <div class="mapping-status @(mappings.Count == 0 ? "missing" : "configured")" aria-hidden="true">
                             @if (mappings.Count == 0)
@@ -244,24 +243,8 @@ else
     {
         Vm.Initialize(ProjectId);
         await Vm.LoadAsync();
-        Ui.Set("Data map", "job results → project tables");
     }
 
     public void Dispose() => Vm.Detach();
 
-    private int JobCount => Vm.Jobs?.Count ?? 0;
-    private int MappedJobCount => (Vm.Mappings ?? Array.Empty<DataMappingView>()).Select(mapping => mapping.JobId).Distinct().Count();
-    private int EnabledMappingCount => (Vm.Mappings ?? Array.Empty<DataMappingView>()).Count(mapping => mapping.Enabled);
-    private int UnmappedJobCount => Math.Max(0, JobCount - MappedJobCount);
-
-    private IReadOnlyList<JobView> OrderedJobs => (Vm.Jobs ?? Array.Empty<JobView>())
-        .OrderBy(job => MappingsFor(job.Id).Count == 0 ? 0 : 1)
-        .ThenBy(job => job.Name, StringComparer.OrdinalIgnoreCase)
-        .ToArray();
-
-    private IReadOnlyList<DataMappingView> MappingsFor(Guid jobId) =>
-        (Vm.Mappings ?? Array.Empty<DataMappingView>())
-            .Where(mapping => mapping.JobId == jobId)
-            .OrderBy(mapping => mapping.TargetTable, StringComparer.OrdinalIgnoreCase)
-            .ToArray();
 }

@@ -22,14 +22,17 @@ public sealed partial class JobsViewModel
 
     private async Task RefreshRunsAsync()
     {
-        if (_refreshingRuns || SelectedJobId is not { } jobId) return;
+        if (_refreshingRuns || SelectedJobId is not { } jobId)
+            return;
         _refreshingRuns = true;
         try
         {
             var runs = await _svc.ListJobRunsAsync(jobId);
-            if (RunDetail is { } open
+            if (
+                RunDetail is { } open
                 && runs.FirstOrDefault(r => r.Id == open.Id) is { } summary
-                && summary.Status != open.Status)
+                && summary.Status != open.Status
+            )
             {
                 RunDetail = await _svc.GetJobRunAsync(open.Id);
                 RunArtifacts = await _svc.ListRunArtifactsAsync(open.Id);
@@ -37,9 +40,11 @@ public sealed partial class JobsViewModel
             Runs = runs;
 
             // Clear pending state once the launched run reaches a terminal status.
-            if (PendingRunId is { } pending
+            if (
+                PendingRunId is { } pending
                 && runs.FirstOrDefault(r => r.Id == pending) is { } p
-                && p.Status is "Succeeded" or "Failed" or "Partial")
+                && p.Status is "Succeeded" or "Failed" or "Partial"
+            )
             {
                 PendingRunId = null;
                 PendingRunJobId = null;
@@ -48,7 +53,10 @@ public sealed partial class JobsViewModel
             NotifyStateChanged();
         }
         catch { }
-        finally { _refreshingRuns = false; }
+        finally
+        {
+            _refreshingRuns = false;
+        }
     }
 
     public async Task RunJobAsync(Guid jobId)
@@ -58,10 +66,13 @@ public sealed partial class JobsViewModel
         {
             RunPromptJob = job;
             var stored = JsonPayloadHelper.FlattenScalars(job.InputPayloads);
-            _runPrompt.Reset(job.Parameters.ToDictionary(
-                p => p.Name,
-                p => stored.GetValueOrDefault(p.Name, ""),
-                StringComparer.Ordinal));
+            _runPrompt.Reset(
+                job.Parameters.ToDictionary(
+                    p => p.Name,
+                    p => stored.GetValueOrDefault(p.Name, ""),
+                    StringComparer.Ordinal
+                )
+            );
             NotifyStateChanged();
             return;
         }
@@ -73,13 +84,18 @@ public sealed partial class JobsViewModel
         Message = null;
         var jobName = Jobs?.FirstOrDefault(j => j.Id == jobId)?.Name ?? "job";
         var runId = Guid.NewGuid();
-        var err = _ops.TryRun(ProjectId, $"Run job — {jobName}", $"/observability?run={runId}",
+        var err = _ops.TryRun(
+            ProjectId,
+            $"Run job — {jobName}",
+            $"/observability?run={runId}",
             async (sp, ct) =>
             {
-                var result = await sp.GetRequiredService<IPlaceContextService>().RunJobAsync(jobId, payload, runId, ct);
+                var result = await sp.GetRequiredService<IPlaceContextService>()
+                    .RunJobAsync(jobId, payload, runId, ct);
                 return $"run finished — {result.Status}";
             },
-            correlationKey: RunStatusWatchService.JobRunKey(runId));
+            correlationKey: RunStatusWatchService.JobRunKey(runId)
+        );
         if (err is not null)
         {
             Message = err;
@@ -98,10 +114,15 @@ public sealed partial class JobsViewModel
         EditorTab = "runs";
         ShowEditor = true;
         RunDetail = null;
-        try { Runs = await _svc.ListJobRunsAsync(jobId); } catch { }
+        try
+        {
+            Runs = await _svc.ListJobRunsAsync(jobId);
+        }
+        catch { }
         NotifyStateChanged();
 
-        Message = $"Run of {jobName} started in the background — follow it in the notifications bell.";
+        Message =
+            $"Run of {jobName} started in the background — follow it in the notifications bell.";
         StartRunPolling(jobId, runId);
     }
 
@@ -111,46 +132,51 @@ public sealed partial class JobsViewModel
         _runPollCts = new CancellationTokenSource();
         var ct = _runPollCts.Token;
         var started = DateTimeOffset.UtcNow;
-        _ = Task.Run(async () =>
-        {
-            while (!ct.IsCancellationRequested)
+        _ = Task.Run(
+            async () =>
             {
-                await Task.Delay(2000, ct).ConfigureAwait(false);
-                if (ct.IsCancellationRequested) break;
-
-                // Stop polling after a generous timeout even if the run never appeared.
-                if (DateTimeOffset.UtcNow - started > TimeSpan.FromMinutes(2))
+                while (!ct.IsCancellationRequested)
                 {
-                    PendingRunId = null;
-                    PendingRunJobId = null;
-                    NotifyStateChanged();
-                    break;
-                }
+                    await Task.Delay(2000, ct).ConfigureAwait(false);
+                    if (ct.IsCancellationRequested)
+                        break;
 
-                try
-                {
-                    var runs = await _svc.ListJobRunsAsync(jobId);
-                    if (ct.IsCancellationRequested) break;
-
-                    var found = runs.FirstOrDefault(r => r.Id == runId);
-                    if (found is not null)
+                    // Stop polling after a generous timeout even if the run never appeared.
+                    if (DateTimeOffset.UtcNow - started > TimeSpan.FromMinutes(2))
                     {
-                        Runs = runs;
-                        RunDetail = await _svc.GetJobRunAsync(runId);
-                        RunArtifacts = await _svc.ListRunArtifactsAsync(runId);
+                        PendingRunId = null;
+                        PendingRunJobId = null;
                         NotifyStateChanged();
-                        if (found.Status is "Succeeded" or "Failed" or "Partial")
-                        {
-                            PendingRunId = null;
-                            PendingRunJobId = null;
-                            NotifyStateChanged();
+                        break;
+                    }
+
+                    try
+                    {
+                        var runs = await _svc.ListJobRunsAsync(jobId);
+                        if (ct.IsCancellationRequested)
                             break;
+
+                        var found = runs.FirstOrDefault(r => r.Id == runId);
+                        if (found is not null)
+                        {
+                            Runs = runs;
+                            RunDetail = await _svc.GetJobRunAsync(runId);
+                            RunArtifacts = await _svc.ListRunArtifactsAsync(runId);
+                            NotifyStateChanged();
+                            if (found.Status is "Succeeded" or "Failed" or "Partial")
+                            {
+                                PendingRunId = null;
+                                PendingRunJobId = null;
+                                NotifyStateChanged();
+                                break;
+                            }
                         }
                     }
+                    catch { }
                 }
-                catch { }
-            }
-        }, ct);
+            },
+            ct
+        );
     }
 
     private void StopRunPolling()
@@ -168,11 +194,13 @@ public sealed partial class JobsViewModel
     }
 
     public string GetArg(string name) => _runPrompt.Get(name);
+
     public void SetArg(string name, string value) => _runPrompt.Set(name, value);
 
     public async Task SubmitRunPromptAsync()
     {
-        if (RunPromptJob is null) return;
+        if (RunPromptJob is null)
+            return;
         if (!_runPrompt.ValidateJobParameters(RunPromptJob.Parameters))
         {
             NotifyStateChanged();
@@ -198,7 +226,10 @@ public sealed partial class JobsViewModel
                 RunDetail = await _svc.GetJobRunAsync(runId);
             StopRunDetailPolling();
         }
-        catch (Exception ex) { Message = ex.Message; }
+        catch (Exception ex)
+        {
+            Message = ex.Message;
+        }
         NotifyStateChanged();
     }
 
@@ -212,7 +243,10 @@ public sealed partial class JobsViewModel
             if (RunDetail?.Status is "Queued" or "Running")
                 StartRunDetailPolling(runId);
         }
-        catch (Exception ex) { Message = ex.Message; }
+        catch (Exception ex)
+        {
+            Message = ex.Message;
+        }
         NotifyStateChanged();
     }
 
@@ -228,5 +262,4 @@ public sealed partial class JobsViewModel
         StopRunDetailPolling();
         NotifyStateChanged();
     }
-
 }

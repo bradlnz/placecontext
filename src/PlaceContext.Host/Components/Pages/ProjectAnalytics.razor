@@ -2,10 +2,10 @@
 @attribute [Authorize(Policy = Permission.DataRead)]
 @layout PlaceContext.Host.Components.Layout.ProjectLayout
 @implements IDisposable
-@inject IPlaceContextService Svc
-@inject PortalUiState Ui
-@inject IJSRuntime JS
-@inject PlaceContext.Infrastructure.Scheduling.AnalyticsRefreshQueue Queue
+@inject ProjectAnalyticsViewModel Vm
+
+
+
 @using PlaceContext.Application.Features
 @using PlaceContext.Application.Ports
 @using PlaceContext.Infrastructure.Tenancy
@@ -14,64 +14,64 @@
 
 <div class="page">
 
-    <DataTabs ProjectId="ProjectId" Active="analytics" />
+    <DataTabs ProjectId="ProjectId" Active="@DataSection.Analytics" />
 
     <div class="page-head">
         <div>
             <h2 class="page-title">Analytics</h2>
             <span class="page-sub">SQL-defined charts plus one auto chart per table — every query runs isolated inside this project's own database</span>
         </div>
-        <button class="dcbtn primary" disabled="@_sweepPending" @onclick="GenerateAllAsync">
-            @(_sweepPending ? "Generating…" : "↻ Generate all")
+        <button class="dcbtn primary" disabled="@Vm.SweepPending" @onclick="Vm.GenerateAll">
+            @(Vm.SweepPending ? "Generating…" : "↻ Generate all")
         </button>
     </div>
-    @if (_error is not null)
+    @if (Vm.Error is not null)
     {
-        <div class="error-msg">@_error</div>
+        <div class="error-msg">@Vm.Error</div>
     }
 
     @* ── Charts: user-defined queries → charts (isolated to this project's schema/role) ── *@
     <div class="section-head">
         <span class="section-title">Charts</span>
-        <button class="dcbtn btn-sql" @onclick="ToggleSqlEditor">＋ SQL chart</button>
+        <button class="dcbtn btn-sql" @onclick="Vm.ToggleSqlEditor">＋ SQL chart</button>
     </div>
 
-    @if (_showSqlEditor)
+    @if (Vm.ShowSqlEditor)
     {
         <div class="dccard sql-editor">
-            <input class="dcinput sql-name-input" placeholder="chart name (e.g. sales per city)" @bind="_sqlName" />
-            @if (_sqlMonaco)
+            <input class="dcinput sql-name-input" placeholder="chart name (e.g. sales per city)" @bind="Vm.SqlName" />
+            @if (Vm.SqlMonaco)
             {
-                <div id="@SqlEditorId" class="sql-monaco"></div>
+                <div id="@ProjectAnalyticsViewModel.SqlEditorId" class="sql-monaco"></div>
             }
             else
             {
-                <textarea @bind="_sqlQuery" rows="4" spellcheck="false"
+                <textarea @bind="Vm.SqlQuery" rows="4" spellcheck="false"
                           placeholder="SELECT city, avg(price) FROM listings GROUP BY city ORDER BY 2 DESC"
                           class="sql-textarea"></textarea>
             }
             <div class="sql-actions">
-                <select class="dcinput sql-type-select" @bind="_sqlType">
+                <select class="dcinput sql-type-select" @bind="Vm.SqlType">
                     <option value="bar">bar</option>
                     <option value="line">line</option>
                     <option value="pie">pie</option>
                 </select>
-                <button class="dcbtn primary btn-run-save" disabled="@_sqlBusy" @onclick="SaveSqlAsync">
-                    @(_sqlBusy ? "Running…" : "▶ Run & save")
+                <button class="dcbtn primary btn-run-save" disabled="@Vm.SqlBusy" @onclick="Vm.SaveSqlAsync">
+                    @(Vm.SqlBusy ? "Running…" : "▶ Run & save")
                 </button>
                 <span class="dchint hint-flush">
                     First text column = labels, numeric columns = series. The query runs as this project's own
                     database role — it cannot see any other project's data.
                 </span>
-                @if (_sqlError is not null)
+                @if (Vm.SqlError is not null)
                 {
-                    <span class="error-inline">@_sqlError</span>
+                    <span class="error-inline">@Vm.SqlError</span>
                 }
             </div>
         </div>
     }
 
-    @if (SqlCharts() is { Count: > 0 } sqlCharts)
+    @if (Vm.SqlCharts() is { Count: > 0 } sqlCharts)
     {
         <div class="sql-chart-grid">
             @foreach (var chart in sqlCharts)
@@ -83,18 +83,18 @@
                         <span class="type-switch">
                             @foreach (var t in new[] { "bar", "line", "pie" })
                             {
-                                <button class="dcbtn btn-type" style="@(StoredType(chart) == t ? "color:var(--brand-2); border-color:var(--brand-2)" : "")"
-                                        title="Switch to @t" @onclick="@(() => SwitchTypeAsync(chart, t))">@t</button>
+                                <button class="dcbtn btn-type" style="@(Vm.ChartTypeStyle(chart, t))"
+                                        title="Switch to @t" @onclick="@(() => Vm.SwitchTypeAsync(chart, t))">@t</button>
                             }
                         </span>
                         <span class="spacer"></span>
-                        <span class="chart-time">@chart.GeneratedAt.ToWorkspaceTime().ToString("MM-dd HH:mm")</span>
-                        <button class="dcbtn btn-sm" @onclick="@(() => RefreshSqlAsync(chart))">↻ refresh</button>
-                        <button class="dcbtn btn-sm" @onclick="@(() => EditSql(chart))">edit</button>
-                        <button class="dcbtn btn-sm-danger" @onclick="@(() => DeleteSqlAsync(chart))">✕</button>
+                        <span class="chart-time">@Vm.Presentation.DateTime(chart.GeneratedAt)</span>
+                        <button class="dcbtn btn-sm" @onclick="@(() => Vm.RefreshSqlAsync(chart))">↻ refresh</button>
+                        <button class="dcbtn btn-sm" @onclick="@(() => Vm.EditSql(chart))">edit</button>
+                        <button class="dcbtn btn-sm-danger" @onclick="@(() => Vm.DeleteSqlAsync(chart))">✕</button>
                     </div>
                     <div class="chart-canvas-box">
-                        <canvas id="@CanvasId(chart.TableName)"></canvas>
+                        <canvas id="@ProjectAnalyticsViewModel.CanvasId(chart.TableName)"></canvas>
                     </div>
                 </div>
             }
@@ -103,23 +103,23 @@
 
     <div class="subsection-title">Table charts</div>
 
-    @if (_tables is null)
+    @if (Vm.Tables is null)
     {
         <div class="skeleton-wrap"><Skeleton Kind="card-grid" Cards="4" /></div>
     }
-    else if (_tables is { Count: 0 })
+    else if (Vm.Tables is { Count: 0 })
     {
         <div class="dccard empty-card">
-            No tables yet — create some on the <a href="@($"/project/{ProjectId}/data")" class="link-accent">Data</a>
+            No tables yet — create some on the <a href="@($"/project/{Vm.ProjectId}/data")" class="link-accent">Data</a>
             tab and charts will be drawn over them here.
         </div>
     }
 
     <div class="table-chart-grid">
-        @foreach (var table in _tables ?? Array.Empty<ProjectTableInfo>())
+        @foreach (var table in Vm.Tables ?? Array.Empty<ProjectTableInfo>())
         {
-            var chart = ChartFor(table.Name);
-            var pending = Queue.IsPending(ProjectId, table.Name);
+            var chart = Vm.ChartFor(table.Name);
+            var pending = Vm.IsPending(table.Name);
             <div class="dccard chart-card">
                 <div class="chart-card-head">
                     <span class="chart-name">@table.Name</span>
@@ -131,32 +131,32 @@
                     }
                     else if (chart is not null)
                     {
-                        <span class="chart-time">@chart.GeneratedAt.ToWorkspaceTime().ToString("MM-dd HH:mm")</span>
+                        <span class="chart-time">@Vm.Presentation.DateTime(chart.GeneratedAt)</span>
                     }
                     <button class="dcbtn btn-sm" disabled="@pending"
-                            @onclick="@(() => ToggleRedraw(table.Name))">
+                            @onclick="@(() => Vm.ToggleRedraw(table.Name))">
                         @(chart is null ? "▶ draw" : "↻ redraw")
                     </button>
                 </div>
 
-                @if (_redrawFor == table.Name)
+                @if (Vm.RedrawFor == table.Name)
                 {
                     <div class="redraw-row">
-                        <input @bind="_instruction" @bind:event="oninput"
+                        <input @bind="Vm.Instruction" @bind:event="oninput"
                                placeholder="what should this chart show? (optional — e.g. totals per day)"
                                class="redraw-input" />
-                        <button class="dcbtn primary btn-go" @onclick="@(() => RedrawAsync(table.Name))">Go</button>
-                        <button class="dcbtn btn-cancel" @onclick="@(() => _redrawFor = null)">✕</button>
+                        <button class="dcbtn primary btn-go" @onclick="@(() => Vm.RedrawAsync(table.Name))">Go</button>
+                        <button class="dcbtn btn-cancel" @onclick="@(() => Vm.CancelRedraw())">✕</button>
                     </div>
                 }
 
                 @if (chart is not null)
                 {
-                    @if (IsSpec(chart))
+                    @if (ProjectAnalyticsViewModel.IsSpec(chart))
                     {
                         @* Chart.js spec — rendered by pcchart.js with the validated palette + theme tokens. *@
                         <div class="chart-canvas-box">
-                            <canvas id="@CanvasId(table.Name)"></canvas>
+                            <canvas id="@ProjectAnalyticsViewModel.CanvasId(table.Name)"></canvas>
                         </div>
                     }
                     else
@@ -180,211 +180,13 @@
 @code {
     [Parameter] public Guid ProjectId { get; set; }
 
-    private IReadOnlyList<ProjectTableInfo>? _tables;
-    private IReadOnlyList<ProjectChartView> _charts = Array.Empty<ProjectChartView>();
-    private string? _error, _redrawFor, _instruction;
-    private bool _sweepPending;
-    private System.Threading.Timer? _poll;
-
-    private ProjectChartView? ChartFor(string table)
-        => _charts.FirstOrDefault(c => string.Equals(c.TableName, table, StringComparison.OrdinalIgnoreCase));
-
-    // A stored spec is JSON ('{…}'); anything else is a legacy LLM-drawn HTML document.
-    private static bool IsSpec(ProjectChartView chart) => chart.Html.TrimStart().StartsWith('{');
-
-    // Stable, DOM-safe canvas id per table (names can hold chars invalid in element ids).
-    private static string CanvasId(string table)
-        => "pcchart-" + Convert.ToHexString(System.Security.Cryptography.MD5.HashData(
-               System.Text.Encoding.UTF8.GetBytes(table)))[..12];
-
-    // Track what each canvas last rendered so poll-driven re-renders only redraw changed charts.
-    private readonly Dictionary<string, DateTimeOffset> _rendered = new();
-
-    protected override async Task OnAfterRenderAsync(bool firstRender)
-    {
-        if (_showSqlEditor && _sqlMonaco && !_sqlMonacoReady)
-        {
-            _sqlMonacoReady = true;
-            try
-            {
-                var rich = await JS.InvokeAsync<bool>("pcmonaco.init", SqlEditorId, _sqlQuery, "sql", "vs-dark");
-                if (!rich) { _sqlMonaco = false; StateHasChanged(); }
-            }
-            catch { _sqlMonaco = false; StateHasChanged(); }
-        }
-
-        foreach (var chart in _charts.Where(IsSpec))
-        {
-            var id = CanvasId(chart.TableName);
-            if (_rendered.TryGetValue(id, out var at) && at == chart.GeneratedAt) continue;
-            try
-            {
-                await JS.InvokeVoidAsync("pcchart.render", id, chart.Html);
-                _rendered[id] = chart.GeneratedAt;
-            }
-            catch (JSException) { /* canvas not on screen yet — the next render pass retries */ }
-        }
-    }
-
     protected override async Task OnParametersSetAsync()
     {
-        Ui.Set("Analytics", "charts over the project's data");
-        await LoadAsync();
-        // Charts land table-by-table while the worker runs — poll so they appear without a reload.
-        _poll ??= new System.Threading.Timer(_ => _ = InvokeAsync(PollAsync), null,
-            TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5));
+        Vm.Attach(() => InvokeAsync(StateHasChanged));
+        await Vm.LoadAsync(ProjectId);
     }
 
-    private async Task LoadAsync()
-    {
-        _sweepPending = Queue.IsPending(ProjectId);
-        try
-        {
-            _tables = await Svc.ListProjectDataTablesAsync(ProjectId);
-            _charts = await Svc.ListProjectChartsAsync(ProjectId);
-            _error = null;
-        }
-        catch (Exception ex) { _error = ex.Message; }
-    }
+    protected override Task OnAfterRenderAsync(bool firstRender) => Vm.RenderAsync();
 
-    private async Task PollAsync()
-    {
-        var wasPending = _sweepPending;
-        _sweepPending = Queue.IsPending(ProjectId);
-        if (_sweepPending || wasPending)
-        {
-            await LoadAsync();
-            StateHasChanged();
-        }
-    }
-
-    private Task GenerateAllAsync()
-    {
-        var tenant = CurrentTenant.Current;
-        if (tenant is null) { _error = "No tenant resolved — sign in again."; return Task.CompletedTask; }
-        Queue.TryEnqueue(tenant, ProjectId);
-        _sweepPending = true;
-        return Task.CompletedTask;
-    }
-
-    private void ToggleRedraw(string table)
-    {
-        if (_redrawFor == table) { _redrawFor = null; return; }
-        _redrawFor = table;
-        _instruction = null;
-    }
-
-    private Task RedrawAsync(string table)
-    {
-        var tenant = CurrentTenant.Current;
-        if (tenant is null) { _error = "No tenant resolved — sign in again."; return Task.CompletedTask; }
-        Queue.TryEnqueue(tenant, ProjectId, tableName: table, instruction: _instruction);
-        _redrawFor = null;
-        _instruction = null;
-        return Task.CompletedTask;
-    }
-
-    // ── Charts ────────────────────────────────────────────────────────────────────────────────
-    private bool _showSqlEditor, _sqlBusy;
-    private bool _sqlMonaco = true;      // degrade to the textarea when the Monaco CDN is unreachable
-    private bool _sqlMonacoReady;
-    private const string SqlEditorId = "pcmonaco-sqlchart";
-    private string _sqlName = "", _sqlQuery = "", _sqlType = "bar";
-    private string? _sqlError;
-
-    private IReadOnlyList<ProjectChartView> SqlCharts()
-        => _charts.Where(c => c.TableName.StartsWith("sql:", StringComparison.Ordinal)).ToList();
-
-    private void ToggleSqlEditor()
-    {
-        _showSqlEditor = !_showSqlEditor;
-        _sqlMonacoReady = false;
-        _sqlError = null;
-    }
-
-    private async Task SyncSqlFromMonacoAsync()
-    {
-        if (!_sqlMonaco || !_sqlMonacoReady) return;
-        try { _sqlQuery = await JS.InvokeAsync<string>("pcmonaco.getValue", SqlEditorId); } catch { }
-    }
-
-    private async Task SaveSqlAsync()
-    {
-        _sqlError = null;
-        _sqlBusy = true;
-        try
-        {
-            await SyncSqlFromMonacoAsync();
-            await Svc.SaveSqlChartAsync(ProjectId, _sqlName, _sqlQuery, _sqlType);
-            await LoadAsync();
-            _showSqlEditor = false;
-            _sqlName = "";
-            _sqlQuery = "";
-        }
-        catch (Exception ex) { _sqlError = ex.Message; }
-        finally { _sqlBusy = false; }
-    }
-
-    private async Task EditSql(ProjectChartView chart)
-    {
-        _showSqlEditor = true;
-        _sqlMonacoReady = false;
-        _sqlName = chart.TableName["sql:".Length..];
-        _sqlQuery = StoredSql(chart) ?? "";
-        _sqlType = StoredType(chart);
-        _sqlError = null;
-        // If Monaco is already mounted from a previous open, push the loaded query into it.
-        if (_sqlMonaco)
-        {
-            try { await JS.InvokeVoidAsync("pcmonaco.setValue", SqlEditorId, _sqlQuery, "sql"); } catch { }
-        }
-    }
-
-    // Re-save with the same SQL and a different form — bar ⇄ line ⇄ pie.
-    private async Task SwitchTypeAsync(ProjectChartView chart, string type)
-    {
-        if (StoredSql(chart) is not { } sql || StoredType(chart) == type) return;
-        try
-        {
-            await Svc.SaveSqlChartAsync(ProjectId, chart.TableName["sql:".Length..], sql, type);
-            await LoadAsync();
-        }
-        catch (Exception ex) { _error = ex.Message; }
-    }
-
-    private static string StoredType(ProjectChartView chart)
-    {
-        try { return System.Text.Json.Nodes.JsonNode.Parse(chart.Html)?["type"]?.GetValue<string>() ?? "bar"; }
-        catch { return "bar"; }
-    }
-
-    private async Task RefreshSqlAsync(ProjectChartView chart)
-    {
-        if (StoredSql(chart) is not { } sql) return;
-        try
-        {
-            await Svc.SaveSqlChartAsync(ProjectId, chart.TableName["sql:".Length..], sql, StoredType(chart));
-            await LoadAsync();
-        }
-        catch (Exception ex) { _error = ex.Message; }
-    }
-
-    private async Task DeleteSqlAsync(ProjectChartView chart)
-    {
-        try
-        {
-            await Svc.DeleteSqlChartAsync(ProjectId, chart.TableName["sql:".Length..]);
-            await LoadAsync();
-        }
-        catch (Exception ex) { _error = ex.Message; }
-    }
-
-    // The defining query rides inside the stored spec ("sql" property, ignored by the renderer).
-    private static string? StoredSql(ProjectChartView chart)
-    {
-        try { return System.Text.Json.Nodes.JsonNode.Parse(chart.Html)?["sql"]?.GetValue<string>(); }
-        catch { return null; }
-    }
-
-    public void Dispose() => _poll?.Dispose();
+    public void Dispose() => Vm.Dispose();
 }

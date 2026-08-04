@@ -16,5 +16,4 @@ public sealed partial class JobChainsViewModel
     public string? Message { get; private set; }
     public bool Loading { get; private set; } = true;
     public Guid? ConfirmDeleteId { get; set; }
-
 }

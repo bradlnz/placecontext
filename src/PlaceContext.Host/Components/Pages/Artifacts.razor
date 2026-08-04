@@ -1,16 +1,10 @@
+@inject ArtifactsViewModel Vm
+@using PlaceContext.Host.Components.ViewModels
 @page "/artifacts"
 @attribute [Authorize(Policy = Permission.ArtifactsView)]
 @implements IDisposable
 @using PlaceContext.Application.Features
 @using PlaceContext.Application.Dtos
-@inject IPlaceContextService Svc
-@inject PortalUiState Ui
-@inject NavigationManager Nav
-@inject IJSRuntime Js
-@inject PlaceContext.Application.Ports.IObjectStore Store
-@inject PlaceContext.Application.Ports.IArtifactViewConfigService ArtifactConfig
-@inject PlaceContext.Domain.Repositories.IRunArtifactLinkRepository Links
-@inject IPermissionService Permissions
 
 <PageTitle>placecontext — Artifacts</PageTitle>
 
@@ -22,69 +16,69 @@
             <div class="head-row">
                 <span class="panel-title">Artifact files</span>
                 <input class="dcinput filter-input" placeholder="search files…"
-                       value="@_filter" @oninput="OnFilterInputAsync" />
+                       value="@Vm.Filter" @oninput="Vm.OnFilterInputAsync" />
             </div>
-            <select class="dcinput project-select" value="@_projectFilter" @onchange="OnProjectFilter">
+            <select class="dcinput project-select" value="@Vm.ProjectFilter" @onchange="Vm.OnProjectFilter">
                 <option value="">All projects</option>
-                @foreach (var p in _projects)
+                @foreach (var p in Vm.Projects)
                 {
                     <option value="@p.Id">@p.Name</option>
                 }
             </select>
             <div class="artifact-type-bar" aria-label="Artifact type filters">
-                <button class="type-toggle @(string.IsNullOrEmpty(_categoryFilter) ? "active" : null)"
-                        @onclick="@(() => SetCategoryFilter(null))">
-                    <span>All</span><small>@BaseFiltered().Count</small>
+                <button class="type-toggle @(string.IsNullOrEmpty(Vm.CategoryFilter) ? "active" : null)"
+                        @onclick="@(() => Vm.SetCategoryFilter(null))">
+                    <span>All</span><small>@Vm.BaseFiltered().Count</small>
                 </button>
-                @foreach (var category in _artifactConfig.Categories)
+                @foreach (var category in Vm.ArtifactConfig.Categories)
                 {
-                    <button class="type-toggle @(_categoryFilter == category.Id ? "active" : null)"
+                    <button class="type-toggle @(Vm.CategoryFilter == category.Id ? "active" : null)"
                             title="Prefixes: @string.Join(", ", category.Prefixes)"
-                            @onclick="@(() => SetCategoryFilter(category.Id))">
-                        <span>@category.Label</span><small>@CategoryCount(category.Id)</small>
+                            @onclick="@(() => Vm.SetCategoryFilter(category.Id))">
+                        <span>@category.Label</span><small>@Vm.CategoryCount(category.Id)</small>
                     </button>
                 }
-                @if (OtherCount() > 0)
+                @if (Vm.OtherCount() > 0)
                 {
-                    <button class="type-toggle @(_categoryFilter == OtherCategory ? "active" : null)"
-                            @onclick="@(() => SetCategoryFilter(OtherCategory))">
-                        <span>Other</span><small>@OtherCount()</small>
+                    <button class="type-toggle @(Vm.CategoryFilter == ArtifactsViewModel.OtherCategory ? "active" : null)"
+                            @onclick="@(() => Vm.SetCategoryFilter(ArtifactsViewModel.OtherCategory))">
+                        <span>Other</span><small>@Vm.OtherCount()</small>
                     </button>
                 }
-                @if (_canManageSettings)
+                @if (Vm.CanManageSettings)
                 {
                     <a class="type-config" href="/settings/artifacts" title="Configure artifact filters">⚙</a>
                 }
             </div>
-            @if (_canDelete && _selected.Count > 0)
+            @if (Vm.CanDelete && Vm.Selected.Count > 0)
             {
                 <div class="bulk-bar">
-                    <span class="selected-count">@_selected.Count selected</span>
-                    <button class="dcbtn bulk-delete-btn" disabled="@_bulkDeleting"
-                            @onclick="DeleteSelectedAsync">@(_bulkDeleting ? "Deleting…" : "Delete selected")</button>
-                    <button class="dcbtn bulk-clear-btn" disabled="@_bulkDeleting"
-                            @onclick="@(() => _selected.Clear())">Clear</button>
+                    <span class="selected-count">@Vm.Selected.Count selected</span>
+                    <button class="dcbtn bulk-delete-btn" disabled="@Vm.BulkDeleting"
+                            @onclick="Vm.DeleteSelectedAsync">@(Vm.BulkDeleting ? "Deleting…" : "Delete selected")</button>
+                    <button class="dcbtn bulk-clear-btn" disabled="@Vm.BulkDeleting"
+                            @onclick="@(() => Vm.Selected.Clear())">Clear</button>
                 </div>
             }
-            @if (_loadMayBeIncomplete)
+            @if (Vm.LoadMayBeIncomplete)
             {
                 <div class="cap-note">
-                    Showing the newest @_files.Count loaded files — older ones may not be listed yet. Pick a project or narrow the search to see more.
+                    Showing the newest @Vm.Files.Count loaded files — older ones may not be listed yet. Pick a project or narrow the search to see more.
                 </div>
             }
         </div>
         @{
-            var groups = Grouped();
+            var groups = Vm.Grouped();
             var totalGroups = groups.Count;
-            var maxFilesPage = Math.Max(1, (int)Math.Ceiling(totalGroups / (double)FilesPageSize));
-            if (_filesPage > maxFilesPage) _filesPage = maxFilesPage;
-            var pageGroups = groups.Skip((_filesPage - 1) * FilesPageSize).Take(FilesPageSize).ToList();
+            var maxFilesPage = Math.Max(1, (int)Math.Ceiling(totalGroups / (double)ArtifactsViewModel.FilesPageSize));
+            if (Vm.FilesPage > maxFilesPage) Vm.FilesPage = maxFilesPage;
+            var pageGroups = groups.Skip((Vm.FilesPage - 1) * ArtifactsViewModel.FilesPageSize).Take(ArtifactsViewModel.FilesPageSize).ToList();
         }
         <div class="file-list">
             @if (totalGroups == 0)
             {
                 <div class="empty-note">
-                    @EmptyMessage()
+                    @Vm.EmptyMessage()
                 </div>
             }
             else
@@ -92,23 +86,23 @@
                 @foreach (var group in pageGroups)
                 {
                     var latest = group[0];
-                    var groupKey = GroupKey(latest);
-                    var active = _active is { } act && group.Any(v => v.Id == act.Id);
+                    var groupKey = ArtifactsViewModel.GroupKey(latest);
+                    var active = Vm.Active is { } act && group.Any(v => v.Id == act.Id);
                     <div class="file-group" style="border-left:2px solid @(active ? "var(--brand)" : "transparent")">
-                        <div @onclick="@(() => OpenAsync(latest))"
+                        <div @onclick="@(() => Vm.OpenAsync(latest))"
                              class="file-row" style="background:@(active ? "var(--card)" : "transparent")">
-                            @if (_canDelete)
+                            @if (Vm.CanDelete)
                             {
-                                <input type="checkbox" checked="@GroupAllSelected(group)" title="Select for delete"
+                                <input type="checkbox" checked="@Vm.GroupAllSelected(group)" title="Select for delete"
                                        @onclick:stopPropagation="true"
-                                       @onchange="@(e => ToggleGroup(group, (bool)(e.Value ?? false)))"
+                                       @onchange="@(e => Vm.ToggleGroup(group, (bool)(e.Value ?? false)))"
                                        class="select-check" />
                             }
-                            <span class="file-icon">@FileIcon(latest.ContentType, 16)</span>
+                            <span class="file-icon">@Vm.Presentation.FileIcon(latest.ContentType, 16)</span>
                             <div class="file-meta">
                                 <div class="file-title">@latest.Title</div>
                                 <div class="file-sub">
-                                    @ProjectName(latest.ProjectId) · @latest.Kind · @FormatBytes(latest.SizeBytes) · @latest.CreatedAt.ToWorkspaceTime().ToString("MMM d · HH:mm")
+                                    @Vm.ProjectName(latest.ProjectId) · @latest.Kind · @Vm.Presentation.Bytes(latest.SizeBytes) · @Vm.Presentation.ShortDateTime(latest.CreatedAt)
                                 </div>
                             </div>
                             @if (group.Count > 1)
@@ -116,28 +110,31 @@
                                 <button title="@(group.Count) versions — show history"
                                         class="version-btn"
                                         @onclick:stopPropagation="true"
-                                        @onclick="@(() => _expanded = _expanded == groupKey ? null : groupKey)">
-                                    v@(group.Count) @(_expanded == groupKey ? "▴" : "▾")
+                                        @onclick="@(() => Vm.Expanded = Vm.Expanded == groupKey ? null : groupKey)">
+                                    v@(group.Count) @(Vm.Expanded == groupKey ? "▴" : "▾")
                                 </button>
                             }
                         </div>
-                        @if (_expanded == groupKey && group.Count > 1)
+                        @if (Vm.Expanded == groupKey && group.Count > 1)
                         {
-                            @foreach (var (v, n) in group.Skip(1).Select((v, n) => (v, group.Count - 1 - n)))
+                            @foreach (var version in group.Skip(1).Select((ArtifactFileView artifact, int index) =>
+                                (Artifact: artifact, Number: group.Count - 1 - index)))
                             {
-                                var vActive = _active?.Id == v.Id;
-                                <div @onclick="@(() => OpenAsync(v))"
+                                var v = version.Artifact;
+                                var n = version.Number;
+                                var vActive = Vm.Active?.Id == v.Id;
+                                <div @onclick="@(() => Vm.OpenAsync(v))"
                                      class="version-row" style="background:@(vActive ? "var(--card)" : "transparent")">
-                                    @if (_canDelete)
+                                    @if (Vm.CanDelete)
                                     {
-                                        <input type="checkbox" checked="@_selected.Contains(v.Id)"
+                                        <input type="checkbox" checked="@Vm.Selected.Contains(v.Id)"
                                                @onclick:stopPropagation="true"
-                                               @onchange="@(e => ToggleOne(v.Id, (bool)(e.Value ?? false)))"
+                                               @onchange="@(e => Vm.ToggleOne(v.Id, (bool)(e.Value ?? false)))"
                                                class="select-check" />
                                     }
                                     <span class="version-tag">v@(n)</span>
-                                    <span class="version-date">@v.CreatedAt.ToWorkspaceTime().ToString("MMM d · HH:mm")</span>
-                                    <span class="version-size">@FormatBytes(v.SizeBytes)</span>
+                                    <span class="version-date">@Vm.Presentation.ShortDateTime(v.CreatedAt)</span>
+                                    <span class="version-size">@Vm.Presentation.Bytes(v.SizeBytes)</span>
                                 </div>
                             }
                         }
@@ -149,26 +146,26 @@
         {
             <div class="pager-row">
                 <span class="pager-info">
-                    Showing @(((_filesPage - 1) * FilesPageSize) + 1)–@(Math.Min(_filesPage * FilesPageSize, totalGroups)) of @totalGroups files
+                    Showing @(((Vm.FilesPage - 1) * ArtifactsViewModel.FilesPageSize) + 1)–@(Math.Min(Vm.FilesPage * ArtifactsViewModel.FilesPageSize, totalGroups)) of @totalGroups files
                 </span>
                 <div class="pager-controls">
-                    <button class="dcbtn pager-btn" disabled="@(_filesPage <= 1)"
-                            @onclick="@(() => GoToFilesPage(_filesPage - 1))">‹ Prev</button>
-                    <span class="pager-page">Page @_filesPage of @maxFilesPage</span>
-                    <button class="dcbtn pager-btn" disabled="@(_filesPage >= maxFilesPage)"
-                            @onclick="@(() => GoToFilesPage(_filesPage + 1))">Next ›</button>
+                    <button class="dcbtn pager-btn" disabled="@(Vm.FilesPage <= 1)"
+                            @onclick="@(() => Vm.GoToFilesPage(Vm.FilesPage - 1))">‹ Prev</button>
+                    <span class="pager-page">Page @Vm.FilesPage of @maxFilesPage</span>
+                    <button class="dcbtn pager-btn" disabled="@(Vm.FilesPage >= maxFilesPage)"
+                            @onclick="@(() => Vm.GoToFilesPage(Vm.FilesPage + 1))">Next ›</button>
                 </div>
             </div>
         }
     </div>
 
     @* ── Viewer ────────────────────────────────────────────────────────────────────────── *@
-    <div class="viewer @(_active is not null ? "active" : null)">
-        @if (_active is null)
+    <div class="viewer @(Vm.Active is not null ? "active" : null)">
+        @if (Vm.Active is null)
         {
             <div class="viewer-empty">
-                <span class="icon-placeholder">@FileIcon("", 40)</span>
-                @if (_loadError is { } deepLinkError)
+                <span class="icon-placeholder">@Vm.Presentation.FileIcon("", 40)</span>
+                @if (Vm.LoadError is { } deepLinkError)
                 {
                     <span>Couldn't open the linked artifact — @deepLinkError.</span>
                 }
@@ -181,65 +178,65 @@
         else
         {
             <div class="viewer-head">
-                <button class="viewer-back" @onclick="CloseViewer" title="Back to files">
+                <button class="viewer-back" @onclick="Vm.CloseViewer" title="Back to files">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"></path><path d="M12 19l-7-7 7-7"></path></svg>
                     Back
                 </button>
-                <span class="viewer-title">@_active.Title</span>
-                <span class="viewer-ct">@_active.ContentType</span>
+                <span class="viewer-title">@Vm.Active.Title</span>
+                <span class="viewer-ct">@Vm.Active.ContentType</span>
                 <a class="dcbtn viewer-open-btn" target="_blank" rel="noopener"
-                   href="@Url(_active)">Open ↗</a>
-                @if (_canShare)
+                   href="@ArtifactsViewModel.Url(Vm.Active)">Open ↗</a>
+                @if (Vm.CanShare)
                 {
                     <button class="dcbtn viewer-btn" title="Create or manage a public share link"
-                            @onclick="ToggleShareAsync">@(_shareOpen ? "Close share" : "Share")</button>
+                            @onclick="Vm.ToggleShareAsync">@(Vm.ShareOpen ? "Close share" : "Share")</button>
                 }
-                @if (_canDelete && _confirmDelete)
+                @if (Vm.CanDelete && Vm.ConfirmDelete)
                 {
                     <button class="dcbtn viewer-btn-danger"
-                            disabled="@_deleting" @onclick="DeleteActiveAsync">@(_deleting ? "Deleting…" : "Confirm delete")</button>
-                    <button class="dcbtn viewer-btn" disabled="@_deleting"
-                            @onclick="@(() => _confirmDelete = false)">Keep</button>
+                            disabled="@Vm.Deleting" @onclick="Vm.DeleteActiveAsync">@(Vm.Deleting ? "Deleting…" : "Confirm delete")</button>
+                    <button class="dcbtn viewer-btn" disabled="@Vm.Deleting"
+                            @onclick="@(() => Vm.ConfirmDelete = false)">Keep</button>
                 }
-                else if (_canDelete)
+                else if (Vm.CanDelete)
                 {
                     <button class="dcbtn viewer-btn" title="Permanently delete this artifact"
-                            @onclick="@(() => _confirmDelete = true)">Delete</button>
+                            @onclick="@(() => Vm.ConfirmDelete = true)">Delete</button>
                 }
             </div>
-            @if (_shareOpen)
+            @if (Vm.ShareOpen)
             {
                 <div class="share-panel">
                     <div class="share-copy">
                         <strong>Public share link</strong>
                         <span>Anyone with the code can open this artifact without signing in. Links expire and can be revoked.</span>
                     </div>
-                    @if (_shareBusy)
+                    @if (Vm.ShareBusy)
                     {
                         <span class="share-status">Working…</span>
                     }
-                    else if (_shareUrl is not null)
+                    else if (Vm.ShareUrl is not null)
                     {
                         <div class="share-link-row">
-                            <input class="dcinput share-link" value="@_shareUrl" readonly />
-                            <button class="dcbtn viewer-btn" @onclick="CopyShareAsync">Copy link</button>
+                            <input class="dcinput share-link" value="@Vm.ShareUrl" readonly />
+                            <button class="dcbtn viewer-btn" @onclick="Vm.CopyShareAsync">Copy link</button>
                         </div>
                         <span class="share-status">
-                            This link is shown once and expires @_shareCreatedExpiresAt?.ToWorkspaceTime().ToString("MMM d, yyyy · HH:mm").
+                            This link is shown once and expires @(Vm.ShareCreatedExpiresAt is { } expires ? Vm.Presentation.Format(expires, "MMM d, yyyy · HH:mm") : "").
                         </span>
                     }
-                    else if (_shareStatus?.IsActive == true)
+                    else if (Vm.ShareStatus?.IsActive == true)
                     {
                         <div class="share-actions">
                             <span class="share-status">
-                                Active code @_shareStatus.TokenPrefix · expires @_shareStatus.ExpiresAt.ToWorkspaceTime().ToString("MMM d, yyyy · HH:mm")
-                                @if (_shareStatus.LastAccessedAt is { } accessed)
+                                Active code @Vm.ShareStatus.TokenPrefix · expires @Vm.Presentation.Format(Vm.ShareStatus.ExpiresAt, "MMM d, yyyy · HH:mm")
+                                @if (Vm.ShareStatus.LastAccessedAt is { } accessed)
                                 {
-                                    <span> · last opened @accessed.ToWorkspaceTime().ToString("MMM d · HH:mm")</span>
+                                    <span> · last opened @Vm.Presentation.Format(accessed, "MMM d · HH:mm")</span>
                                 }
                             </span>
-                            <button class="dcbtn viewer-btn" @onclick="CreateShareAsync">Rotate link</button>
-                            <button class="dcbtn viewer-btn-danger" @onclick="RevokeShareAsync">Revoke</button>
+                            <button class="dcbtn viewer-btn" @onclick="Vm.CreateShareAsync">Rotate link</button>
+                            <button class="dcbtn viewer-btn-danger" @onclick="Vm.RevokeShareAsync">Revoke</button>
                         </div>
                     }
                     else
@@ -247,55 +244,55 @@
                         <div class="share-actions">
                             <label class="share-duration">
                                 Expires after
-                                <select class="dcinput" @bind="_shareLifetimeDays">
+                                <select class="dcinput" @bind="Vm.ShareLifetimeDays">
                                     <option value="1">1 day</option>
                                     <option value="7">7 days</option>
                                     <option value="30">30 days</option>
                                 </select>
                             </label>
-                            <button class="dcbtn viewer-btn" @onclick="CreateShareAsync">Create public link</button>
+                            <button class="dcbtn viewer-btn" @onclick="Vm.CreateShareAsync">Create public link</button>
                         </div>
                     }
-                    @if (_shareMessage is not null)
+                    @if (Vm.ShareMessage is not null)
                     {
-                        <span class="share-message">@_shareMessage</span>
+                        <span class="share-message">@Vm.ShareMessage</span>
                     }
                 </div>
             }
-            @if (_loadFailed)
+            @if (Vm.LoadFailed)
             {
                 <div class="viewer-error">
-                    <span class="icon-warn">@FileIcon(_active.ContentType, 34)</span>
-                    Couldn't load the preview — @(_loadError ?? "unknown error").
+                    <span class="icon-warn">@Vm.Presentation.FileIcon(Vm.Active.ContentType, 34)</span>
+                    Couldn't load the preview — @(Vm.LoadError ?? "unknown error").
                     <span>Use <strong>Open ↗</strong> to fetch the file directly.</span>
                 </div>
             }
-            else if (IsJson(_active.ContentType))
+            else if (Vm.Presentation.IsJson(Vm.Active.ContentType))
             {
                 <div class="json-view">
-                    @if (_loading)
+                    @if (Vm.Loading)
                     {
                         <Skeleton Kind="text" Rows="8" />
                     }
-                    else if (_content is null)
+                    else if (Vm.Content is null)
                     {
                         <div class="raw-note">Not valid JSON — showing the raw content:</div>
-                        <pre class="raw-pre">@_rawText</pre>
+                        <pre class="raw-pre">@Vm.RawText</pre>
                     }
                     else
                     {
-                        @JsonTree(_content)
+                        @Vm.JsonTree(Vm.Content)
                     }
                 </div>
             }
-            else if (IsCsv(_active.ContentType))
+            else if (ArtifactsViewModel.IsCsv(Vm.Active.ContentType))
             {
                 <div class="csv-view">
-                    @if (_loading)
+                    @if (Vm.Loading)
                     {
                         <Skeleton Kind="table" Rows="8" Columns="5" />
                     }
-                    else if (_csv is null)
+                    else if (Vm.Csv is null)
                     {
                         <span class="csv-error">Couldn't parse this CSV — use Open ↗.</span>
                     }
@@ -304,14 +301,14 @@
                         <table class="csv-table">
                             <thead>
                                 <tr>
-                                    @foreach (var h in _csv.Value.Header)
+                                    @foreach (var h in Vm.Csv.Value.Header)
                                     {
                                         <th class="csv-th">@h</th>
                                     }
                                 </tr>
                             </thead>
                             <tbody>
-                                @foreach (var row in _csv.Value.Rows)
+                                @foreach (var row in Vm.Csv.Value.Rows)
                                 {
                                     <tr>
                                         @foreach (var cell in row)
@@ -322,48 +319,48 @@
                                 }
                             </tbody>
                         </table>
-                        @if (_truncated)
+                        @if (Vm.Truncated)
                         {
                             <div class="truncated-note">Showing the first rows — Open ↗ for the full file.</div>
                         }
                     }
                 </div>
             }
-            else if (IsImage(_active))
+            else if (ArtifactsViewModel.IsImage(Vm.Active))
             {
                 <div class="image-view">
-                    <img src="@Url(_active)" class="artifact-image" alt="@_active.Title" />
+                    <img src="@ArtifactsViewModel.Url(Vm.Active)" class="artifact-image" alt="@Vm.Active.Title" />
                 </div>
             }
-            else if (IsPdf(_active.ContentType))
+            else if (ArtifactsViewModel.IsPdf(Vm.Active.ContentType))
             {
                 @* Mobile Safari and several Android webviews only expose the first page of an
                    embedded PDF. On compact screens PDF.js renders every page into this scrollable
                    canvas list. Desktop retains the browser's native viewer and toolbar. *@
                 <div class="pdf-view">
-                    <div id="@PdfMobileId(_active)" class="pdf-mobile-view" aria-label="PDF pages"
-                         data-pc-pdf data-pdf-url="@Url(_active)">
+                    <div id="@ArtifactsViewModel.PdfMobileId(Vm.Active)" class="pdf-mobile-view" aria-label="PDF pages"
+                         data-pc-pdf data-pdf-url="@ArtifactsViewModel.Url(Vm.Active)">
                         <div class="pdf-loading">Preparing all PDF pages…</div>
                     </div>
-                    <iframe src="@Url(_active)" class="preview-frame pdf-desktop-frame" title="@_active.Title"
+                    <iframe src="@ArtifactsViewModel.Url(Vm.Active)" class="preview-frame pdf-desktop-frame" title="@Vm.Active.Title"
                             loading="lazy" referrerpolicy="no-referrer"></iframe>
                 </div>
             }
-            else if (Previewable(_active.ContentType))
+            else if (ArtifactsViewModel.Previewable(Vm.Active.ContentType))
             {
                 @* Relative /runs/… — browser keeps the public DNS host (never rewrite to in-cluster name).
                    No sandbox attribute here: it would give the frame an opaque origin, so the browser
                    drops the SameSite=Lax auth cookie and the [Authorize] endpoint bounces to /locked.
                    HTML/SVG is still sandboxed — ArtifactsController sends CSP "sandbox", which applies
                    after the authenticated fetch. *@
-                <iframe src="@Url(_active)" class="preview-frame" title="@_active.Title"
+                <iframe src="@ArtifactsViewModel.Url(Vm.Active)" class="preview-frame" title="@Vm.Active.Title"
                         loading="lazy" referrerpolicy="no-referrer"></iframe>
             }
             else
             {
                 <div class="viewer-none">
-                    <span class="icon-placeholder">@FileIcon(_active.ContentType, 40)</span>
-                    No inline preview for @_active.ContentType — use Open ↗ to download it.
+                    <span class="icon-placeholder">@Vm.Presentation.FileIcon(Vm.Active.ContentType, 40)</span>
+                    No inline preview for @Vm.Active.ContentType — use Open ↗ to download it.
                 </div>
             }
         }
@@ -371,594 +368,15 @@
 </div>
 
 @code {
-    [SupplyParameterFromQuery(Name = "artifact")] public string? ArtifactId { get; set; }
+    [Parameter]
+    public string? ArtifactId { get => Vm.ArtifactId; set => Vm.ArtifactId = value; }
 
-    private IReadOnlyList<ArtifactFileView> _files = Array.Empty<ArtifactFileView>();
-    private IReadOnlyList<ProjectSummaryView> _projects = Array.Empty<ProjectSummaryView>();
-    private ArtifactFileView? _active;
-    private string _filter = "";
-    private string _projectFilter = "";
-    private string? _categoryFilter;
-    private PlaceContext.Application.Ports.ArtifactViewConfig _artifactConfig = new([]);
-    private System.Text.Json.JsonElement? _content;
-    private string? _rawText;
-    private (IReadOnlyList<string> Header, IReadOnlyList<IReadOnlyList<string>> Rows)? _csv;
-    private bool _truncated;
-    private bool _loading;
-    private int _openGeneration;
-    private bool _loadFailed;
-    private string? _loadError;
-    private bool _confirmDelete;
-    private bool _deleting;
-    private readonly HashSet<Guid> _selected = new();
-    private bool _bulkDeleting;
-    // UI-level hiding only — the actual DeleteArtifact(s) commands are also gated server-side (the
-    // dispatcher rejects them for a caller lacking artifacts.delete regardless of what the UI shows).
-    private bool _canDelete;
-    private bool _canShare;
-    private bool _canManageSettings;
-    private bool _shareOpen;
-    private bool _shareBusy;
-    private int _shareLifetimeDays = 7;
-    private ArtifactShareStatus? _shareStatus;
-    private string? _shareUrl;
-    private string? _shareMessage;
-    private DateTimeOffset? _shareCreatedExpiresAt;
+    protected override Task OnInitializedAsync()
+        => Vm.AttachAndInitializeAsync(() => InvokeAsync(StateHasChanged));
 
-    private const int MaxInlineBytes = 2 * 1024 * 1024;
-    private const int MaxCsvRows = 500;
-    private const string OtherCategory = "__other";
+    protected override Task OnParametersSetAsync() => Vm.ApplyDeepLinkAsync();
 
-    // ── Pagination over the grouped (version-stacked) file list ─────────────────────────────────
-    private const int FilesPageSize = 25;
-    private int _filesPage = 1;
-    private CancellationTokenSource? _searchDebounce;
+    protected override Task OnAfterRenderAsync(bool firstRender) => Vm.AfterRenderAsync(firstRender);
 
-    // The per-project/recent load is capped — this flags when the returned count hit that cap, so
-    // the UI can say "there may be more" instead of silently acting as if the list is complete.
-    private const int ProjectArtifactsCap = 2000;
-    private const int RecentArtifactsCap = 1000;
-    private bool _loadMayBeIncomplete;
-
-    protected override async Task OnInitializedAsync()
-    {
-        Ui.Set("Artifacts", "every file your runs produced — click to view");
-        _canDelete = await Permissions.HasAsync(Permission.ArtifactsDelete);
-        _canShare = await Permissions.HasAsync(Permission.ArtifactsShare);
-        _canManageSettings = await Permissions.HasAsync(Permission.SettingsManage);
-        try { _artifactConfig = await ArtifactConfig.GetAsync(); } catch { }
-        try { _projects = await Svc.GetProjectsAsync(); } catch { }
-        // Default the filter to the project the sidebar is on; a project-scoped load pulls ALL of
-        // that project's artifacts, so older files aren't hidden behind a global "recent" cap.
-        if (Ui.CurrentProjectId is { } pid) _projectFilter = pid.ToString();
-        await LoadFilesAsync();
-
-        await ApplyDeepLinkAsync();
-    }
-
-    protected override async Task OnAfterRenderAsync(bool firstRender)
-    {
-        if (_active is null || !IsPdf(_active.ContentType)) return;
-
-        try
-        {
-            await Js.InvokeVoidAsync("placecontext.renderPdf", PdfMobileId(_active), Url(_active));
-        }
-        catch
-        {
-            // The native desktop frame and Open link remain available if client rendering fails.
-        }
-    }
-
-    // Loads the file list for the current filter: project-scoped (complete, and search-widened —
-    // the ILIKE runs server-side on Title/Kind) when a project is selected, else the recent feed
-    // across all projects (client-filtered only, since the recent feed has no project to scope to).
-    private async Task LoadFilesAsync()
-    {
-        try
-        {
-            if (Guid.TryParse(_projectFilter, out var pid))
-            {
-                var search = string.IsNullOrWhiteSpace(_filter) ? null : _filter;
-                _files = await Svc.ListProjectArtifactsAsync(pid, ProjectArtifactsCap, search);
-                _loadMayBeIncomplete = _files.Count >= ProjectArtifactsCap;
-            }
-            else
-            {
-                _files = await Svc.ListRecentArtifactsAsync(RecentArtifactsCap);
-                _loadMayBeIncomplete = _files.Count >= RecentArtifactsCap;
-            }
-        }
-        catch { _files = Array.Empty<ArtifactFileView>(); _loadMayBeIncomplete = false; }
-    }
-
-    // Supplied from the query: re-fires on same-page navigation (search hits, graph links).
-    protected override async Task OnParametersSetAsync() => await ApplyDeepLinkAsync();
-
-    private async Task ApplyDeepLinkAsync()
-    {
-        if (!Guid.TryParse(ArtifactId, out var artifactId)) return;
-        if (_active?.Id == artifactId) return;
-        var target = _files.FirstOrDefault(f => f.Id == artifactId);
-        if (target is null)
-        {
-            // The deep-linked artifact may belong to a different project than the current filter —
-            // fall back to the recent global feed to locate it.
-            try { _files = await Svc.ListRecentArtifactsAsync(RecentArtifactsCap); } catch { }
-            target = _files.FirstOrDefault(f => f.Id == artifactId);
-        }
-        if (target is null)
-        {
-            // Still not found — the artifact may be older than both the project-scoped and recent
-            // caps (e.g. linked directly from an entity row via EntityBrowse). Rather than give up,
-            // resolve it directly by id through the same tenant-scoped repository ReadTextAsync uses.
-            _loadError = null;
-            try
-            {
-                var link = await Links.GetByIdAsync(artifactId);
-                if (link is null)
-                {
-                    _loadError = "artifact not found for this workspace";
-                    return;
-                }
-                target = new ArtifactFileView(
-                    link.Id, link.RunId, link.JobId, link.ProjectId, link.Kind.ToString(),
-                    link.Title, link.ContentType, link.SizeBytes, link.CreatedAt);
-            }
-            catch (Exception ex)
-            {
-                _loadError = ex.Message;
-                return;
-            }
-        }
-        if (target is { })
-        {
-            _projectFilter = target.ProjectId.ToString(); // make sure it's visible in the list
-            await LoadFilesAsync();
-            target = _files.FirstOrDefault(f => f.Id == artifactId) ?? target;
-            await OpenAsync(target);
-        }
-    }
-
-    private async Task OnProjectFilter(ChangeEventArgs e)
-    {
-        _projectFilter = e.Value?.ToString() ?? "";
-        _active = null;
-        _confirmDelete = false;
-        ResetShareUi();
-        _selected.Clear();
-        _filesPage = 1;
-        await LoadFilesAsync();
-    }
-
-    // Debounced so a search widens the server-side query only once typing pauses (~300ms), not on
-    // every keystroke; the client-side group+paginate step re-runs immediately for instant feedback
-    // on the "All projects" feed, which is filtered client-side only.
-    private async Task OnFilterInputAsync(ChangeEventArgs e)
-    {
-        _filter = e.Value?.ToString() ?? "";
-        _filesPage = 1;
-        _searchDebounce?.Cancel();
-        _searchDebounce?.Dispose();
-        var cts = new CancellationTokenSource();
-        _searchDebounce = cts;
-        try
-        {
-            await Task.Delay(300, cts.Token);
-        }
-        catch (TaskCanceledException) { return; }
-        if (cts.IsCancellationRequested) return;
-        await LoadFilesAsync();
-        StateHasChanged();
-    }
-
-    private void GoToFilesPage(int page) => _filesPage = Math.Max(1, page);
-
-    private void SetCategoryFilter(string? category)
-    {
-        _categoryFilter = category;
-        _filesPage = 1;
-        _expanded = null;
-        _selected.Clear();
-    }
-
-    public void Dispose()
-    {
-        _searchDebounce?.Cancel();
-        _searchDebounce?.Dispose();
-    }
-
-    // ── Multi-select for bulk delete ────────────────────────────────────────────────────────────
-    private void ToggleOne(Guid id, bool on) { if (on) _selected.Add(id); else _selected.Remove(id); }
-
-    private void ToggleGroup(IReadOnlyList<ArtifactFileView> group, bool on)
-    {
-        foreach (var v in group) { if (on) _selected.Add(v.Id); else _selected.Remove(v.Id); }
-    }
-
-    private bool GroupAllSelected(IReadOnlyList<ArtifactFileView> group)
-        => group.Count > 0 && group.All(v => _selected.Contains(v.Id));
-
-    private async Task DeleteSelectedAsync()
-    {
-        if (_selected.Count == 0 || _bulkDeleting) return;
-        _bulkDeleting = true;
-        var ids = _selected.ToList();
-        try { await Svc.DeleteArtifactsAsync(ids); }
-        catch { }
-        finally { _bulkDeleting = false; }
-        var idSet = ids.ToHashSet();
-        _files = _files.Where(f => !idSet.Contains(f.Id)).ToList();
-        _selected.Clear();
-        if (_active is { } a && idSet.Contains(a.Id))
-        {
-            _active = null;
-            ResetShareUi();
-            Nav.NavigateTo("/artifacts", replace: true);
-        }
-    }
-
-    private string ProjectName(Guid id) => _projects.FirstOrDefault(p => p.Id == id)?.Name ?? "—";
-
-    private string? _expanded;
-
-    private static string GroupKey(ArtifactFileView a) => $"{a.ProjectId}|{a.Kind}|{a.Title}";
-
-    // Versioning: the same logical file (project + kind + title) groups newest-first; the list
-    // shows the latest with the history behind the vN dropdown.
-    private IReadOnlyList<IReadOnlyList<ArtifactFileView>> Grouped()
-        => Filtered()
-            .GroupBy(GroupKey)
-            .Select(g => (IReadOnlyList<ArtifactFileView>)g.OrderByDescending(a => a.CreatedAt).ToList())
-            .OrderByDescending(g => g[0].CreatedAt)
-            .ToList();
-
-    private IReadOnlyList<ArtifactFileView> Filtered()
-    {
-        IEnumerable<ArtifactFileView> q = BaseFiltered();
-        if (_categoryFilter == OtherCategory)
-            q = q.Where(file => _artifactConfig.CategoryFor(file.Title) is null);
-        else if (!string.IsNullOrWhiteSpace(_categoryFilter))
-            q = q.Where(file => string.Equals(
-                _artifactConfig.CategoryFor(file.Title),
-                _categoryFilter,
-                StringComparison.OrdinalIgnoreCase));
-        return q.ToList();
-    }
-
-    private IReadOnlyList<ArtifactFileView> BaseFiltered()
-    {
-        IEnumerable<ArtifactFileView> q = _files;
-        if (Guid.TryParse(_projectFilter, out var pid)) q = q.Where(f => f.ProjectId == pid);
-        if (!string.IsNullOrWhiteSpace(_filter))
-            q = q.Where(f => f.Title.Contains(_filter, StringComparison.OrdinalIgnoreCase)
-                          || f.Kind.Contains(_filter, StringComparison.OrdinalIgnoreCase));
-        return q.ToList();
-    }
-
-    private int CategoryCount(string categoryId) => BaseFiltered().Count(file =>
-        string.Equals(
-            _artifactConfig.CategoryFor(file.Title),
-            categoryId,
-            StringComparison.OrdinalIgnoreCase));
-
-    private int OtherCount() => BaseFiltered().Count(file =>
-        _artifactConfig.CategoryFor(file.Title) is null);
-
-    private string EmptyMessage()
-    {
-        if (!string.IsNullOrWhiteSpace(_filter)) return "No files match your search and selected filters.";
-        if (_categoryFilter == OtherCategory) return "No uncategorized artifact files match the selected project.";
-        if (!string.IsNullOrWhiteSpace(_categoryFilter))
-        {
-            var label = _artifactConfig.Categories
-                .FirstOrDefault(category => category.Id == _categoryFilter)?.Label ?? "this category";
-            return $"No {label} files match the selected project.";
-        }
-        return "No stored artifacts here yet — every completed run generates one from its job's return type.";
-    }
-
-    private async Task OpenAsync(ArtifactFileView a)
-    {
-        var openGeneration = ++_openGeneration;
-        _active = a;
-        // Keep the URL shareable: every opened file lands in ?artifact= without growing history.
-        // Replacing the browser URL directly avoids re-running the page's route lifecycle while
-        // the viewer is opening (which otherwise causes a visible flash and can race this load).
-        try
-        {
-            await Js.InvokeVoidAsync("history.replaceState", null, "", $"/artifacts?artifact={a.Id}");
-        }
-        catch (JSDisconnectedException) { }
-        _content = null;
-        _csv = null;
-        _rawText = null;
-        _truncated = false;
-        _loadFailed = false;
-        _confirmDelete = false;
-        ResetShareUi();
-        if (!IsJson(a.ContentType) && !IsCsv(a.ContentType)) return;
-
-        _loading = true;
-        try
-        {
-            var text = await ReadTextAsync(a);
-            if (openGeneration != _openGeneration) return;
-            if (text is null) { _loadFailed = true; _loadError ??= "the object store returned nothing for this file"; return; }
-            _rawText = text;
-            if (IsJson(a.ContentType))
-            {
-                // Not all *.json artifacts hold valid JSON (raw bundles keep whatever the run
-                // printed) — parse failure falls back to the raw text, not an error.
-                try { _content = System.Text.Json.JsonDocument.Parse(text).RootElement.Clone(); }
-                catch { _content = null; }
-            }
-            else
-            {
-                _csv = ParseCsv(text);
-            }
-        }
-        finally
-        {
-            if (openGeneration == _openGeneration) _loading = false;
-        }
-    }
-
-    // Server-side fetch through the tenant-scoped link → object store (same objects the stream
-    // endpoint serves), capped so a huge file can't balloon the circuit.
-    private async Task<string?> ReadTextAsync(ArtifactFileView a)
-    {
-        _loadError = null;
-        try
-        {
-            var link = await Links.GetByIdAsync(a.Id);
-            if (link is null) { _loadError = "artifact link not found for this workspace"; return null; }
-            var obj = await Store.OpenReadAsync(link.Bucket, link.ObjectKey);
-            if (obj is null) { _loadError = "object missing from the store"; return null; }
-            await using var stream = obj.Content;
-            using var ms = new MemoryStream();
-            var buffer = new byte[81920];
-            int read, total = 0;
-            while ((read = await stream.ReadAsync(buffer)) > 0)
-            {
-                total += read;
-                if (total > MaxInlineBytes) { _truncated = true; break; }
-                ms.Write(buffer, 0, read);
-            }
-            return System.Text.Encoding.UTF8.GetString(ms.ToArray());
-        }
-        catch (Exception ex)
-        {
-            _loadError = ex.Message;
-            return null;
-        }
-    }
-
-    // ── JSON tree viewer ──────────────────────────────────────────────────────────────────────────
-    private RenderFragment JsonTree(System.Text.Json.JsonElement? el) => builder =>
-        builder.AddMarkupContent(0, RenderJson(el!.Value, 0));
-
-    private static string RenderJson(System.Text.Json.JsonElement el, int depth)
-    {
-        var sb = new System.Text.StringBuilder();
-        switch (el.ValueKind)
-        {
-            case System.Text.Json.JsonValueKind.Object:
-                sb.Append($"<details {(depth < 2 ? "open" : "")} style=\"margin-left:{(depth == 0 ? 0 : 14)}px\"><summary style=\"cursor:pointer; color:var(--text-3)\">{{…}} <span style=\"font-size:10px\">({el.EnumerateObject().Count()})</span></summary>");
-                foreach (var p in el.EnumerateObject())
-                {
-                    sb.Append($"<div style=\"margin-left:14px\"><span style=\"color:var(--human)\">\"{Esc(p.Name)}\"</span>: ");
-                    sb.Append(p.Value.ValueKind is System.Text.Json.JsonValueKind.Object or System.Text.Json.JsonValueKind.Array
-                        ? RenderJson(p.Value, depth + 1) : Scalar(p.Value));
-                    sb.Append("</div>");
-                }
-                sb.Append("</details>");
-                break;
-            case System.Text.Json.JsonValueKind.Array:
-                sb.Append($"<details {(depth < 2 ? "open" : "")} style=\"margin-left:{(depth == 0 ? 0 : 14)}px\"><summary style=\"cursor:pointer; color:var(--text-3)\">[…] <span style=\"font-size:10px\">({el.GetArrayLength()})</span></summary>");
-                var i = 0;
-                foreach (var item in el.EnumerateArray())
-                {
-                    if (i++ >= 200) { sb.Append("<div style=\"margin-left:14px; color:var(--text-3)\">…</div>"); break; }
-                    sb.Append("<div style=\"margin-left:14px\">");
-                    sb.Append(item.ValueKind is System.Text.Json.JsonValueKind.Object or System.Text.Json.JsonValueKind.Array
-                        ? RenderJson(item, depth + 1) : Scalar(item));
-                    sb.Append("</div>");
-                }
-                sb.Append("</details>");
-                break;
-            default:
-                sb.Append(Scalar(el));
-                break;
-        }
-        return sb.ToString();
-    }
-
-    private static string Scalar(System.Text.Json.JsonElement v) => v.ValueKind switch
-    {
-        System.Text.Json.JsonValueKind.String => $"<span style=\"color:var(--good)\">\"{Esc(v.GetString() ?? "")}\"</span>",
-        System.Text.Json.JsonValueKind.Number => $"<span style=\"color:var(--warn)\">{v.GetRawText()}</span>",
-        System.Text.Json.JsonValueKind.True or System.Text.Json.JsonValueKind.False => $"<span style=\"color:var(--brand-2)\">{v.GetRawText()}</span>",
-        _ => "<span style=\"color:var(--text-3)\">null</span>",
-    };
-
-    private static string Esc(string s) => s.Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;");
-
-    // ── CSV table ─────────────────────────────────────────────────────────────────────────────────
-    private (IReadOnlyList<string>, IReadOnlyList<IReadOnlyList<string>>) ParseCsv(string text)
-    {
-        var lines = text.Split('\n', StringSplitOptions.RemoveEmptyEntries);
-        var header = lines.Length > 0 ? SplitCsvLine(lines[0]) : Array.Empty<string>();
-        var rows = new List<IReadOnlyList<string>>();
-        foreach (var line in lines.Skip(1))
-        {
-            if (rows.Count >= MaxCsvRows) { _truncated = true; break; }
-            rows.Add(SplitCsvLine(line));
-        }
-        return (header, rows);
-    }
-
-    private static IReadOnlyList<string> SplitCsvLine(string line)
-    {
-        var cells = new List<string>();
-        var sb = new System.Text.StringBuilder();
-        var quoted = false;
-        for (var i = 0; i < line.Length; i++)
-        {
-            var c = line[i];
-            if (quoted)
-            {
-                if (c == '"' && i + 1 < line.Length && line[i + 1] == '"') { sb.Append('"'); i++; }
-                else if (c == '"') quoted = false;
-                else sb.Append(c);
-            }
-            else if (c == '"') quoted = true;
-            else if (c == ',') { cells.Add(sb.ToString()); sb.Clear(); }
-            else if (c != '\r') sb.Append(c);
-        }
-        cells.Add(sb.ToString());
-        return cells;
-    }
-
-    private async Task DeleteActiveAsync()
-    {
-        if (_active is null || _deleting) return;
-        var id = _active.Id;
-        _deleting = true;
-        try { await Svc.DeleteArtifactAsync(id); }
-        catch { }
-        finally { _deleting = false; }
-        _files = _files.Where(f => f.Id != id).ToList();
-        ++_openGeneration;
-        _active = null;
-        _confirmDelete = false;
-        ResetShareUi();
-        // Drop the ?artifact= deep link so a refresh doesn't try to reopen the deleted file.
-        Nav.NavigateTo("/artifacts", replace: true);
-    }
-
-    // Always path-absolute on the current host — never bake Request.Host (breaks when the
-    // reverse-proxy public DNS differs from the in-cluster name).
-    private static string Url(ArtifactFileView a) => $"/runs/{a.RunId}/artifacts/{a.Id}?v={a.CreatedAt.ToUnixTimeSeconds()}";
-
-    private void CloseViewer()
-    {
-        ++_openGeneration;
-        _active = null;
-        ResetShareUi();
-        Nav.NavigateTo("/artifacts", replace: true);
-    }
-
-    private async Task ToggleShareAsync()
-    {
-        if (_active is null || _shareBusy) return;
-        if (_shareOpen)
-        {
-            ResetShareUi();
-            return;
-        }
-
-        _shareOpen = true;
-        _shareBusy = true;
-        _shareMessage = null;
-        try { _shareStatus = await Svc.GetArtifactShareStatusAsync(_active.Id); }
-        catch { _shareMessage = "Couldn't load this artifact's share status."; }
-        finally { _shareBusy = false; }
-    }
-
-    private async Task CreateShareAsync()
-    {
-        if (_active is null || _shareBusy) return;
-        _shareBusy = true;
-        _shareMessage = null;
-        try
-        {
-            var created = await Svc.CreateArtifactShareAsync(_active.Id, _shareLifetimeDays);
-            _shareUrl = Nav.ToAbsoluteUri($"/share/artifacts/{created.Token}").AbsoluteUri;
-            _shareCreatedExpiresAt = created.ExpiresAt;
-            _shareStatus = new ArtifactShareStatus(
-                true, created.TokenPrefix, DateTimeOffset.UtcNow, created.ExpiresAt, null);
-        }
-        catch { _shareMessage = "Couldn't create a public link."; }
-        finally { _shareBusy = false; }
-    }
-
-    private async Task RevokeShareAsync()
-    {
-        if (_active is null || _shareBusy) return;
-        _shareBusy = true;
-        _shareMessage = null;
-        try
-        {
-            await Svc.RevokeArtifactShareAsync(_active.Id);
-            _shareStatus = null;
-            _shareUrl = null;
-            _shareCreatedExpiresAt = null;
-            _shareMessage = "Public access revoked.";
-        }
-        catch { _shareMessage = "Couldn't revoke the public link."; }
-        finally { _shareBusy = false; }
-    }
-
-    private async Task CopyShareAsync()
-    {
-        if (_shareUrl is null) return;
-        try
-        {
-            await Js.InvokeVoidAsync("navigator.clipboard.writeText", _shareUrl);
-            _shareMessage = "Link copied.";
-        }
-        catch { _shareMessage = "Copy failed — select and copy the link manually."; }
-    }
-
-    private void ResetShareUi()
-    {
-        _shareOpen = false;
-        _shareBusy = false;
-        _shareStatus = null;
-        _shareUrl = null;
-        _shareMessage = null;
-        _shareCreatedExpiresAt = null;
-    }
-
-    private static bool IsJson(string ct) => ct.Contains("json", StringComparison.OrdinalIgnoreCase);
-    private static bool IsCsv(string ct) => ct.Contains("csv", StringComparison.OrdinalIgnoreCase);
-    private static bool IsPdf(string ct) => ct.Equals("application/pdf", StringComparison.OrdinalIgnoreCase);
-    private static string PdfMobileId(ArtifactFileView artifact) => $"artifact-pdf-{artifact.Id:N}";
-    private static bool IsImage(ArtifactFileView artifact)
-    {
-        if (artifact.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase)) return true;
-        var extension = Path.GetExtension(artifact.Title);
-        return extension.Equals(".png", StringComparison.OrdinalIgnoreCase)
-            || extension.Equals(".jpg", StringComparison.OrdinalIgnoreCase)
-            || extension.Equals(".jpeg", StringComparison.OrdinalIgnoreCase)
-            || extension.Equals(".gif", StringComparison.OrdinalIgnoreCase)
-            || extension.Equals(".webp", StringComparison.OrdinalIgnoreCase)
-            || extension.Equals(".svg", StringComparison.OrdinalIgnoreCase)
-            || extension.Equals(".bmp", StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static bool Previewable(string ct) =>
-        ct.StartsWith("text/") || ct.StartsWith("image/") || ct == "application/pdf"
-        || ct.Contains("svg") || ct.StartsWith("video/");
-
-    // Stroke-style file icons matching the sidebar's icon set — no emoji.
-    private static RenderFragment FileIcon(string ct, int size) => builder =>
-    {
-        var inner = ct switch
-        {
-            var c when c.StartsWith("image/") => "<rect x='3' y='4' width='18' height='16' rx='2'></rect><circle cx='8.5' cy='9.5' r='1.7'></circle><path d='M21 15.5l-4.5-4.5L6 21.5'></path>",
-            "application/pdf" => "<path d='M6 2h8l5 5v15H6V2Z'></path><path d='M14 2v5h5'></path><path d='M9 13.5h6M9 17h6'></path>",
-            var c when c.StartsWith("video/") => "<rect x='2.5' y='5' width='13' height='14' rx='2'></rect><path d='M15.5 10l6-3.5v11l-6-3.5'></path>",
-            var c when c.Contains("html") => "<circle cx='12' cy='12' r='9'></circle><path d='M3 12h18M12 3c2.8 2.6 4 5.7 4 9s-1.2 6.4-4 9c-2.8-2.6-4-5.7-4-9s1.2-6.4 4-9Z'></path>",
-            var c when c.Contains("csv") => "<rect x='3' y='4' width='18' height='16' rx='2'></rect><path d='M3 9.5h18M3 15h18M9 4v16M15 4v16'></path>",
-            var c when c.Contains("json") => "<path d='M8 3c-2 0-3 1-3 3v3c0 1.4-.8 2.3-2 3 1.2.7 2 1.6 2 3v3c0 2 1 3 3 3'></path><path d='M16 3c2 0 3 1 3 3v3c0 1.4.8 2.3 2 3-1.2.7-2 1.6-2 3v3c0 2-1 3-3 3'></path>",
-            _ => "<path d='M6 2h8l5 5v15H6V2Z'></path><path d='M14 2v5h5'></path>",
-        };
-        builder.AddMarkupContent(0,
-            $"<svg width='{size}' height='{size}' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'>{inner}</svg>");
-    };
-
-    private static string FormatBytes(long n) =>
-        n >= 1_048_576 ? $"{n / 1_048_576.0:0.#} MB" : n >= 1024 ? $"{n / 1024.0:0.#} KB" : $"{n} B";
+    public void Dispose() => Vm.Detach();
 }

@@ -1,33 +1,34 @@
 @page "/wiki"
 @attribute [Authorize]
 @page "/wiki/{Slug}"
+@implements IDisposable
 @using PlaceContext.Host.Wiki
-@inject PortalUiState Ui
-@inject NavigationManager Nav
+@using PlaceContext.Host.Components.ViewModels
+@inject WikiViewModel Vm
 
-<PageTitle>PlaceContext — Wiki: @(_article?.Title ?? "Docs")</PageTitle>
+<PageTitle>PlaceContext — Wiki: @(Vm.Article?.Title ?? "Docs")</PageTitle>
 
 <div class="page">
 
     <button type="button" class="toc-toggle"
-            aria-controls="wiki-contents" aria-expanded="@_tocOpen"
-            @onclick="ToggleContents">
+            aria-controls="wiki-contents" aria-expanded="@Vm.TocOpen"
+            @onclick="Vm.ToggleContents">
         <span>Documentation</span>
-        <span class="toc-current">@(_article?.Title ?? "Choose an article")</span>
-        <span aria-hidden="true">@(_tocOpen ? "−" : "+")</span>
+        <span class="toc-current">@(Vm.Article?.Title ?? "Choose an article")</span>
+        <span aria-hidden="true">@(Vm.TocOpen ? "−" : "+")</span>
     </button>
 
     @* ── Contents ───────────────────────────────────────────────────────────────────────── *@
-    <nav id="wiki-contents" class="@($"toc {(_tocOpen ? "open" : string.Empty)}")"
+    <nav id="wiki-contents" class="@($"toc {(Vm.TocOpen ? "open" : string.Empty)}")"
          aria-label="Documentation articles">
         <div class="toc-head">
             Documentation
         </div>
-        @foreach (var a in WikiLibrary.Articles)
+        @foreach (var a in Vm.Articles)
         {
-            var active = a.Slug == _article?.Slug;
-            <a href="@($"/wiki/{a.Slug}")" class="toc-link" aria-current="@(active ? "page" : null)"
-               @onclick="CloseContents"
+            var active = a.Slug == Vm.Article?.Slug;
+            <a href="@Vm.ArticleRoute(a)" class="toc-link" aria-current="@(active ? "page" : null)"
+               @onclick="Vm.CloseContents"
                style="color:@(active ? "var(--text)" : "var(--text-2)");
                       background:@(active ? "var(--hover)" : "transparent");
                       border-left:2px solid @(active ? "var(--brand)" : "transparent")">
@@ -38,17 +39,17 @@
 
     @* ── Article ────────────────────────────────────────────────────────────────────────── *@
     <article class="article">
-        @if (_article is null)
+        @if (Vm.Article is null)
         {
             <div class="not-found">
-                Article not found. <a href="/wiki" class="link">Back to the docs home →</a>
+                Article not found. <a href="@PageRoutes.Wiki" class="link">Back to the docs home →</a>
             </div>
         }
         else
         {
-            <div class="summary">@_article.Summary</div>
+            <div class="summary">@Vm.Article.Summary</div>
             <div class="pcwiki">
-                @((MarkupString)_article.Html)
+                @((MarkupString)Vm.Article.Html)
             </div>
         }
     </article>
@@ -76,20 +77,10 @@
 @code {
     [Parameter] public string? Slug { get; set; }
 
-    private WikiArticle? _article;
-    private bool _tocOpen;
-
     protected override void OnParametersSet()
-    {
-        // Default to the first article (Getting started) at /wiki.
-        _article = Slug is null
-            ? WikiLibrary.Articles.FirstOrDefault()
-            : WikiLibrary.Find(Slug);
-        _tocOpen = false;
-        Ui.Set("Wiki", _article?.Title ?? "platform documentation");
-    }
+        => Vm.SetParameters(Slug);
 
-    private void ToggleContents() => _tocOpen = !_tocOpen;
+    protected override void OnInitialized() => Vm.Attach(() => InvokeAsync(StateHasChanged));
 
-    private void CloseContents() => _tocOpen = false;
+    public void Dispose() => Vm.Detach();
 }

@@ -1,6 +1,7 @@
 @page "/about"
 @attribute [Authorize]
-@inject PortalUiState Ui
+@using PlaceContext.Host.Components.ViewModels
+@inject AboutViewModel Vm
 
 <PageTitle>PlaceContext — About</PageTitle>
 
@@ -35,9 +36,8 @@
         <div class="section">
             <div class="section-title">Product</div>
             <p class="section-body">
-                PlaceContext is proprietary software by <strong>Bradley Lietz</strong>
-                (CTRL SIGNAL SOFTWARE PTY LTD). All rights reserved in the product itself —
-                see the product license.
+                PlaceContext is open-source software by <strong>Bradley Lietz</strong>
+                (CTRL SIGNAL SOFTWARE PTY LTD), released under the MIT License.
             </p>
         </div>
 
@@ -63,11 +63,11 @@
 
         <div class="footer">
             Created by <strong>Bradley Lietz</strong>.<br />
-            <span class="muted">© @DateTime.UtcNow.Year Bradley Lietz / CTRL SIGNAL SOFTWARE PTY LTD — product rights reserved; your data &amp; jobs are yours.</span>
+            <span class="muted">© @Vm.CopyrightYear Bradley Lietz / CTRL SIGNAL SOFTWARE PTY LTD — product rights reserved; your data &amp; jobs are yours.</span>
         </div>
     </div>
 </div>
 
 @code {
-    protected override void OnInitialized() => Ui.Set("About", "PlaceContext — a full-scale data platform");
+    protected override void OnInitialized() => Vm.Initialize();
 }

@@ -1,10 +1,11 @@
-@inject NavigationManager Nav
+@inject RoutesViewModel Vm
+@implements IDisposable
 
 <Router AppAssembly="@typeof(Program).Assembly">
     <Found Context="routeData">
         <AuthorizeRouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)">
             <NotAuthorized>
-                @{ Nav.NavigateTo("/locked", forceLoad: true); }
+                @{ Vm.NavigateToLocked(); }
             </NotAuthorized>
         </AuthorizeRouteView>
         <FocusOnNavigate RouteData="@routeData" Selector="h1" />
@@ -15,3 +16,8 @@
         </LayoutView>
     </NotFound>
 </Router>
+
+@code {
+    protected override void OnInitialized() => Vm.Attach(() => InvokeAsync(StateHasChanged));
+    public void Dispose() => Vm.Dispose();
+}

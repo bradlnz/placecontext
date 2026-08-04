@@ -1,9 +1,9 @@
 @page "/project/{ProjectId:guid}/events"
 @attribute [Authorize(Policy = Permission.EventsManage)]
 @layout PlaceContext.Host.Components.Layout.ProjectLayout
-@inject IPlaceContextService Svc
-@inject PortalUiState Ui
-@inject NavigationManager Nav
+@implements IDisposable
+@inject EventsViewModel Vm
+@using PlaceContext.Host.Components.ViewModels
 
 <PageTitle>PlaceContext — Events</PageTitle>
 
@@ -14,29 +14,29 @@
             <p>See what happened in the workspace and manage the event types that can start Jobs automatically.</p>
         </div>
         <div class="head-actions">
-            <button class="dcbtn" @onclick="@(() => Nav.NavigateTo($"/project/{ProjectId}/jobs"))">Manage triggers</button>
-            <button class="dcbtn primary" @onclick="BeginDefine">+ New event type</button>
+            <button class="dcbtn" @onclick="@(() => Vm.OpenJobs())">Manage triggers</button>
+            <button class="dcbtn primary" @onclick="Vm.BeginDefine">+ New event type</button>
         </div>
     </header>
 
-    @if (_message is not null)
+    @if (Vm.Message is not null)
     {
-        <div class="event-message @(_messageIsError ? "error" : null)">@_message</div>
+        <div class="event-message @(Vm.MessageIsError ? "error" : null)">@Vm.Message</div>
     }
 
-    @if (_loading)
+    @if (Vm.Loading)
     {
         <Skeleton Kind="list" Rows="5" />
     }
     else
     {
         <section class="summary-strip" aria-label="Event summary">
-            <div class="summary-count"><strong>@(_types?.Count ?? 0)</strong><span>event types</span></div>
-            <div class="summary-count"><strong>@CustomTypeCount</strong><span>custom</span></div>
-            <div class="summary-count active"><strong>@ActiveSubscriptionCount</strong><span>active triggers</span></div>
-            <div class="summary-count"><strong>@(_log?.Count ?? 0)</strong><span>recent events</span></div>
-            <div class="summary-progress" title="@SubscriptionPercent% of event types have an active trigger">
-                <span style="width:@SubscriptionPercent%"></span>
+            <div class="summary-count"><strong>@(Vm.Types?.Count ?? 0)</strong><span>event types</span></div>
+            <div class="summary-count"><strong>@Vm.CustomTypeCount</strong><span>custom</span></div>
+            <div class="summary-count active"><strong>@Vm.ActiveSubscriptionCount</strong><span>active triggers</span></div>
+            <div class="summary-count"><strong>@(Vm.Log?.Count ?? 0)</strong><span>recent events</span></div>
+            <div class="summary-progress" title="@Vm.SubscriptionPercent% of event types have an active trigger">
+                <span style="width:@Vm.SubscriptionPercent%"></span>
             </div>
         </section>
 
@@ -48,24 +48,24 @@
                         <strong>Event types</strong>
                         <span>Choose one to emit it manually</span>
                     </div>
-                    <span>@(_types?.Count ?? 0) available</span>
+                    <span>@(Vm.Types?.Count ?? 0) available</span>
                 </header>
 
-                @if (_types is null or { Count: 0 })
+                @if (Vm.Types is null or { Count: 0 })
                 {
                     <div class="panel-empty">
                         <span class="empty-icon">◇</span>
                         <strong>No event types yet</strong>
                         <span>Create one to connect external activity to a Job.</span>
-                        <button class="dcbtn primary" @onclick="BeginDefine">Create event type</button>
+                        <button class="dcbtn primary" @onclick="Vm.BeginDefine">Create event type</button>
                     </div>
                 }
                 else
                 {
                     <div class="type-rows">
-                        @foreach (var eventType in _types)
+                        @foreach (var eventType in Vm.Types)
                         {
-                            var subscriberCount = SubscriberCount(eventType.Name);
+                            var subscriberCount = Vm.SubscriberCount(eventType.Name);
                             <article class="type-row">
                                 <div class="type-icon" aria-hidden="true">@(eventType.IsBuiltIn ? "◆" : "◇")</div>
                                 <div class="type-copy">
@@ -86,7 +86,7 @@
                                         </details>
                                     }
                                 </div>
-                                <button class="dcbtn emit-button" @onclick="@(() => Emit(eventType.Name))">Emit</button>
+                                <button class="dcbtn emit-button" @onclick="@(() => Vm.Emit(eventType.Name))">Emit</button>
                             </article>
                         }
                     </div>
@@ -103,7 +103,7 @@
                     <span>latest 50</span>
                 </header>
 
-                @if (_log is null or { Count: 0 })
+                @if (Vm.Log is null or { Count: 0 })
                 {
                     <div class="panel-empty">
                         <span class="empty-icon">↯</span>
@@ -114,19 +114,19 @@
                 else
                 {
                     <div class="activity-rows">
-                        @foreach (var occurrence in _log)
+                        @foreach (var occurrence in Vm.Log)
                         {
                             <article class="activity-row">
                                 <div class="timeline">
-                                    <span class="timeline-dot @SourceClass(occurrence.Source)"></span>
+                                    <span class="timeline-dot @EventsViewModel.SourceClass(occurrence.Source)"></span>
                                 </div>
                                 <div class="activity-copy">
                                     <div class="activity-title">
                                         <strong>@occurrence.Name</strong>
-                                        <span class="source-chip @SourceClass(occurrence.Source)">@SourceLabel(occurrence.Source)</span>
+                                        <span class="source-chip @EventsViewModel.SourceClass(occurrence.Source)">@EventsViewModel.SourceLabel(occurrence.Source)</span>
                                     </div>
-                                    <time datetime="@occurrence.OccurredAt.ToString("O")">
-                                        @occurrence.OccurredAt.ToWorkspaceTime().ToString("yyyy-MM-dd · HH:mm:ss")
+                                    <time datetime="@Vm.Presentation.Iso(occurrence.OccurredAt)">
+                                        @Vm.Presentation.Date(occurrence.OccurredAt) · @Vm.Presentation.Time(occurrence.OccurredAt)
                                     </time>
                                     @if (!string.IsNullOrWhiteSpace(occurrence.Payload))
                                     {
@@ -149,82 +149,82 @@
     }
 </div>
 
-@if (_showDefinition)
+@if (Vm.ShowDefinition)
 {
-    <div class="editor-backdrop" @onclick="CloseDefinition">
+    <div class="editor-backdrop" @onclick="Vm.CloseDefinition">
         <aside class="event-editor" @onclick:stopPropagation="true" role="dialog" aria-modal="true"
                aria-labelledby="event-definition-title">
             <header>
                 <div>
                     <span class="eyebrow">EVENT TYPE</span>
-                    <h3 id="event-definition-title">Define an event</h3>
+                    <h3 id="event-definition-title">Vm.DefineAsync an event</h3>
                     <p>Name an activity that Jobs can listen for.</p>
                 </div>
-                <button class="close-button" aria-label="Close" @onclick="CloseDefinition">×</button>
+                <button class="close-button" aria-label="Close" @onclick="Vm.CloseDefinition">×</button>
             </header>
             <div class="editor-body">
                 <label class="field">
                     <span>Name</span>
-                    <input class="dcinput" @bind="_defName" placeholder="deploy.finished" />
+                    <input class="dcinput" @bind="Vm.DefinitionName" placeholder="deploy.finished" />
                     <small>Use a short, stable name such as customer.created or invoice.paid.</small>
                 </label>
                 <label class="field">
                     <span>Description <small>optional</small></span>
-                    <input class="dcinput" @bind="_defDescription" placeholder="What does this event mean?" />
+                    <input class="dcinput" @bind="Vm.DefinitionDescription" placeholder="What does this event mean?" />
                 </label>
                 <label class="field">
                     <span>Payload guidance <small>optional</small></span>
-                    <textarea class="dcinput code-input" rows="8" @bind="_defSchema"
+                    <textarea class="dcinput code-input" rows="8" @bind="Vm.DefinitionSchema"
                               placeholder="Describe the fields people should include, or paste a JSON example."></textarea>
                     <small>This helps people prepare the event payload; it does not expose the event publicly.</small>
                 </label>
-                @if (_defError is not null)
+                @if (Vm.DefinitionError is not null)
                 {
-                    <div class="error-inline">@_defError</div>
+                    <div class="error-inline">@Vm.DefinitionError</div>
                 }
             </div>
             <footer>
-                <button class="dcbtn" @onclick="CloseDefinition">Cancel</button>
-                <button class="dcbtn primary" disabled="@_defBusy" @onclick="Define">
-                    @(_defBusy ? "Creating…" : "Create event type")
+                <button class="dcbtn" @onclick="Vm.CloseDefinition">Cancel</button>
+                <button class="dcbtn primary" disabled="@Vm.DefinitionBusy" @onclick="Vm.DefineAsync">
+                    @(Vm.DefinitionBusy ? "Creating…" : "Create event type")
                 </button>
             </footer>
         </aside>
     </div>
 }
 
-@if (_emitName is not null)
+@if (Vm.EmitName is not null)
 {
-    <div class="editor-backdrop" @onclick="CloseEmit">
+    <div class="editor-backdrop" @onclick="Vm.CloseEmit">
         <aside class="event-editor emit-editor" @onclick:stopPropagation="true" role="dialog" aria-modal="true"
                aria-labelledby="emit-event-title">
             <header>
                 <div>
                     <span class="eyebrow">EMIT EVENT</span>
-                    <h3 id="emit-event-title">@_emitName</h3>
+                    <h3 id="emit-event-title">@Vm.EmitName</h3>
                     <p>Every enabled Job trigger listening for this name will start.</p>
                 </div>
-                <button class="close-button" aria-label="Close" @onclick="CloseEmit">×</button>
+                <button class="close-button" aria-label="Close" @onclick="Vm.CloseEmit">×</button>
             </header>
             <div class="editor-body">
                 <div class="impact-note">
-                    <strong>@SubscriberCount(_emitName) active trigger@(SubscriberCount(_emitName) == 1 ? "" : "s")</strong>
+                    <strong>@Vm.SubscriberCount(Vm.EmitName) active trigger@(Vm.SubscriberCount(Vm.EmitName) == 1 ? "" : "s")</strong>
                     <span>The payload becomes the input for each triggered Job.</span>
                 </div>
                 <label class="field">
                     <span>Payload <small>optional JSON</small></span>
-                    <textarea class="dcinput code-input" rows="10" @bind="_emitPayload"
+                    <textarea class="dcinput code-input" rows="10" @bind="Vm.EmitPayload"
                               placeholder="{&quot;customerEmail&quot;: &quot;a@b.com&quot;}"></textarea>
                 </label>
-                @if (_emitError is not null)
+                @if (Vm.EmitError is not null)
                 {
-                    <div class="error-inline">@_emitError</div>
+                    <div class="error-inline">@Vm.EmitError</div>
                 }
             </div>
             <footer>
-                <button class="dcbtn" @onclick="CloseEmit">Cancel</button>
-                <button class="dcbtn primary" disabled="@_emitBusy" @onclick="DoEmit">
-                    @(_emitBusy ? "Emitting…" : "Emit event")
+                <button class="dcbtn" @onclick="Vm.CloseEmit">Cancel</button>
+                <button class="dcbtn primary" disabled="@Vm.EmitBusy" @onclick="Vm.EmitAsync">
+                    @(Vm.EmitBusy ? "Emitting…" : "Emit event")
                 </button>
             </footer>
         </aside>
@@ -233,140 +233,6 @@
 
 @code {
     [Parameter] public Guid ProjectId { get; set; }
-
-    private IReadOnlyList<EventTypeView>? _types;
-    private IReadOnlyList<EventOccurrenceView>? _log;
-    private IReadOnlyList<TriggerView>? _triggers;
-    private bool _loading = true;
-    private string? _message;
-    private bool _messageIsError;
-
-    private bool _showDefinition;
-    private string _defName = "";
-    private string _defDescription = "";
-    private string _defSchema = "";
-    private bool _defBusy;
-    private string? _defError;
-
-    private string? _emitName;
-    private string _emitPayload = "";
-    private bool _emitBusy;
-    private string? _emitError;
-
-    private int CustomTypeCount => _types?.Count(eventType => !eventType.IsBuiltIn) ?? 0;
-    private int ActiveSubscriptionCount => _triggers?.Count(trigger => trigger.Enabled && trigger.Kind == "Event") ?? 0;
-    private int SubscribedTypeCount => _types?.Count(eventType => SubscriberCount(eventType.Name) > 0) ?? 0;
-    private int SubscriptionPercent => _types is not { Count: > 0 }
-        ? 0
-        : (int)Math.Round(SubscribedTypeCount * 100d / _types.Count);
-
-    protected override async Task OnParametersSetAsync()
-    {
-        _loading = true;
-        _message = null;
-        _messageIsError = false;
-        try
-        {
-            await ReloadAsync();
-            Ui.Set("Events", "workspace activity and event types");
-        }
-        catch (Exception ex)
-        {
-            _message = ex.Message;
-            _messageIsError = true;
-        }
-        finally { _loading = false; }
-    }
-
-    private async Task ReloadAsync()
-    {
-        var typesTask = Svc.ListEventTypesAsync();
-        var logTask = Svc.ListEventOccurrencesAsync(50);
-        var triggersTask = Svc.ListTriggersAsync(ProjectId);
-        await Task.WhenAll(typesTask, logTask, triggersTask);
-        _types = await typesTask;
-        _log = await logTask;
-        _triggers = await triggersTask;
-    }
-
-    private int SubscriberCount(string? eventName) => string.IsNullOrWhiteSpace(eventName)
-        ? 0
-        : _triggers?.Count(trigger => trigger.Enabled && trigger.Kind == "Event" &&
-            string.Equals(trigger.EventName, eventName, StringComparison.OrdinalIgnoreCase)) ?? 0;
-
-    private static string SourceClass(string source) =>
-        string.Equals(source, "Domain", StringComparison.OrdinalIgnoreCase) ? "domain" : "user";
-
-    private static string SourceLabel(string source) =>
-        string.Equals(source, "Domain", StringComparison.OrdinalIgnoreCase) ? "system" : "manual";
-
-    private void BeginDefine()
-    {
-        _defName = "";
-        _defDescription = "";
-        _defSchema = "";
-        _defError = null;
-        _showDefinition = true;
-    }
-
-    private void CloseDefinition()
-    {
-        if (!_defBusy) _showDefinition = false;
-    }
-
-    private async Task Define()
-    {
-        _defError = null;
-        if (string.IsNullOrWhiteSpace(_defName))
-        {
-            _defError = "Name is required.";
-            return;
-        }
-
-        _defBusy = true;
-        try
-        {
-            var eventName = _defName.Trim();
-            await Svc.DefineEventTypeAsync(eventName,
-                string.IsNullOrWhiteSpace(_defDescription) ? null : _defDescription.Trim(),
-                string.IsNullOrWhiteSpace(_defSchema) ? null : _defSchema.Trim());
-            await ReloadAsync();
-            _showDefinition = false;
-            _messageIsError = false;
-            _message = $"Created event type '{eventName}'.";
-        }
-        catch (Exception ex) { _defError = ex.Message; }
-        finally { _defBusy = false; }
-    }
-
-    private void Emit(string name)
-    {
-        _emitName = name;
-        _emitPayload = "";
-        _emitError = null;
-    }
-
-    private void CloseEmit()
-    {
-        if (!_emitBusy) _emitName = null;
-    }
-
-    private async Task DoEmit()
-    {
-        if (_emitName is null) return;
-        _emitError = null;
-        _emitBusy = true;
-        try
-        {
-            var eventName = _emitName;
-            var result = await Svc.EmitEventAsync(eventName,
-                ProjectId, string.IsNullOrWhiteSpace(_emitPayload) ? null : _emitPayload);
-            await ReloadAsync();
-            _emitName = null;
-            _messageIsError = false;
-            _message = $"Emitted '{eventName}' — {result.TriggeredRuns} trigger(s) fired.";
-        }
-        catch (Exception ex) { _emitError = ex.Message; }
-        finally { _emitBusy = false; }
-    }
+    protected override async Task OnParametersSetAsync() { Vm.Attach(() => InvokeAsync(StateHasChanged)); await Vm.LoadAsync(ProjectId); }
+    public void Dispose() { Vm.Detach(); }
 }

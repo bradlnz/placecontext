@@ -1,17 +1,15 @@
+@inject OpenSearchDataViewModel Vm
+@using PlaceContext.Host.Components.ViewModels
 @page "/project/{ProjectId:guid}/data-search"
 @attribute [Authorize(Policy = Permission.DataRead)]
 @layout PlaceContext.Host.Components.Layout.ProjectLayout
-@inject IPlaceContextService Svc
-@inject PortalUiState Ui
-@inject IJSRuntime JS
-@inject IPermissionService Permissions
 
 <PageTitle>PlaceContext — Data Search</PageTitle>
 
 <div class="search-page">
-    <DataTabs ProjectId="ProjectId" Active="search" />
+    <DataTabs ProjectId="Vm.ProjectId" Active="@DataSection.Search" />
 
-    @if (!_initialLoadComplete)
+    @if (!Vm.InitialLoadComplete)
     {
         <div class="data-search-skeleton" aria-busy="true" aria-label="Loading data search">
             <Skeleton Kind="text" Rows="2" />
@@ -29,26 +27,26 @@
             <p>Search OpenSearch documents, explore fields, and turn aggregations into reusable charts.</p>
         </div>
         <div class="head-actions">
-            @if (_canSync)
+            @if (Vm.CanSync)
             {
-                <button class="dcbtn" disabled="@_syncing" @onclick="TriggerSyncAsync">
-                    @(_syncing ? "Starting sync…" : "Sync now")
+                <button class="dcbtn" disabled="@Vm.Syncing" @onclick="Vm.TriggerSyncAsync">
+                    @(Vm.Syncing ? "Starting sync…" : "Sync now")
                 </button>
             }
             <span class="proxy-chip"><i></i> server proxy</span>
         </div>
     </header>
 
-    @if (_syncMessage is not null)
+    @if (Vm.SyncMessage is not null)
     {
-        <div class="dchint">@_syncMessage</div>
+        <div class="dchint">@Vm.SyncMessage</div>
     }
 
-    @if (_error is not null)
+    @if (Vm.Error is not null)
     {
         <div class="connection-error">
             <strong>OpenSearch unavailable</strong>
-            <span>@_error</span>
+            <span>@Vm.Error</span>
             <small>Add <code>OPENSEARCH_URL</code>, <code>OPENSEARCH_USERNAME</code>,
                 <code>OPENSEARCH_PASSWORD</code>, and optionally <code>OPENSEARCH_INDEX</code>
                 in this project's Vault. Jobs receive the same values as environment variables and
@@ -56,14 +54,14 @@
         </div>
     }
 
-    @if (_dashboards.Count > 0)
+    @if (Vm.Dashboards.Count > 0)
     {
         <section class="dashboard-section">
             <div class="section-head">
-                <div><strong>Dashboard</strong><span>@_dashboards.Count saved chart@(_dashboards.Count == 1 ? "" : "s")</span></div>
+                <div><strong>Dashboard</strong><span>@Vm.Dashboards.Count saved chart@(Vm.Dashboards.Count == 1 ? "" : "s")</span></div>
             </div>
             <div class="dashboard-grid">
-                @foreach (var dashboard in _dashboards)
+                @foreach (var dashboard in Vm.Dashboards)
                 {
                     <article class="dccard dashboard-card">
                         <header>
@@ -72,17 +70,17 @@
                                 <span>@dashboard.IndexPattern · @dashboard.MetricType by @dashboard.BucketField</span>
                             </div>
                             <div class="card-actions">
-                                <button title="Open in builder" @onclick="@(() => LoadDashboardAsync(dashboard))">✎</button>
-                                <button title="Duplicate dashboard" disabled="@(_replicating == dashboard.Id)"
-                                        @onclick="@(() => DuplicateDashboardAsync(dashboard))">⧉</button>
-                                <button title="Refresh chart" disabled="@(_refreshing == dashboard.Id)"
-                                        @onclick="@(() => RefreshDashboardAsync(dashboard))">↻</button>
+                                <button title="Open in builder" @onclick="@(() => Vm.LoadDashboardAsync(dashboard))">✎</button>
+                                <button title="Duplicate dashboard" disabled="@(Vm.Replicating == dashboard.Id)"
+                                        @onclick="@(() => Vm.DuplicateDashboardAsync(dashboard))">⧉</button>
+                                <button title="Refresh chart" disabled="@(Vm.Refreshing == dashboard.Id)"
+                                        @onclick="@(() => Vm.RefreshDashboardAsync(dashboard))">↻</button>
                                 <button title="Delete chart" class="delete"
-                                        @onclick="@(() => DeleteDashboardAsync(dashboard.Id))">×</button>
+                                        @onclick="@(() => Vm.DeleteDashboardAsync(dashboard.Id))">×</button>
                             </div>
                         </header>
                         <div class="saved-chart">
-                            <canvas id="@CanvasId(dashboard.Id.ToString())"></canvas>
+                            <canvas id="@Vm.CanvasIdFor(dashboard.Id)"></canvas>
                         </div>
                     </article>
                 }
@@ -90,23 +88,23 @@
         </section>
     }
 
-    @if (_indices.Count > 0)
+    @if (Vm.Indices.Count > 0)
     {
         <section class="index-section">
             <div class="section-head">
-                <div><strong>Indexes</strong><span>@_indices.Count available</span></div>
-                <span class="last-updated" title="@LastUpdatedTitle">
-                    Last updated: @LastUpdatedLabel
+                <div><strong>Indexes</strong><span>@Vm.Indices.Count available</span></div>
+                <span class="last-updated" title="@Vm.LastUpdatedTitle">
+                    Last updated: @Vm.LastUpdatedLabel
                 </span>
             </div>
             <div class="index-grid">
-                @foreach (var index in _indices)
+                @foreach (var index in Vm.Indices)
                 {
                     <button type="button"
-                            class="dccard index-card @(index.Name == _indexPattern ? "selected" : "")"
-                            @onclick="@(() => SelectIndexAsync(index))">
+                            class="dccard index-card @(index.Name == Vm.IndexPattern ? "selected" : "")"
+                            @onclick="@(() => Vm.SelectIndexAsync(index))">
                         <code>@index.Name</code>
-                        <span><strong>@index.DocumentCount.ToString("N0")</strong> documents</span>
+                        <span><strong>@Vm.Presentation.Number(index.DocumentCount)</strong> documents</span>
                         <small>@(index.StoreSize ?? "size unavailable")</small>
                     </button>
                 }
@@ -114,30 +112,30 @@
         </section>
     }
 
-    @if (_fields.Count > 0)
+    @if (Vm.Fields.Count > 0)
     {
         <section class="generated-section">
             <div class="section-head generated-head">
                 <div>
                     <strong>Generated insights</strong>
-                    <span>@(_generatingCharts ? "analysing fields…" : $"{_generatedCharts.Count} charts from {_indexPattern}")</span>
+                    <span>@(Vm.GeneratingCharts ? "analysing fields…" : $"{Vm.GeneratedCharts.Count} charts from {Vm.IndexPattern}")</span>
                 </div>
-                <button class="dcbtn" disabled="@(_generatingCharts || _loading)" @onclick="GenerateChartsAsync">
-                    @(_generatingCharts ? "Generating…" : "Regenerate charts")
+                <button class="dcbtn" disabled="@(Vm.GeneratingCharts || Vm.Loading)" @onclick="Vm.GenerateChartsAsync">
+                    @(Vm.GeneratingCharts ? "Generating…" : "Regenerate charts")
                 </button>
             </div>
-            @if (_generatingCharts)
+            @if (Vm.GeneratingCharts)
             {
                 <div class="generated-loading dccard">Finding useful date, category, and numeric fields…</div>
             }
-            else if (_generatedCharts.Count == 0)
+            else if (Vm.GeneratedCharts.Count == 0)
             {
                 <div class="generated-loading dccard">No chartable values were found in this index for the current query.</div>
             }
             else
             {
                 <div class="dashboard-grid">
-                    @foreach (var chart in _generatedCharts)
+                    @foreach (var chart in Vm.GeneratedCharts)
                     {
                         <article class="dccard dashboard-card generated-card">
                             <header>
@@ -147,7 +145,7 @@
                                 </div>
                             </header>
                             <div class="saved-chart">
-                                <canvas id="@GeneratedCanvasId(chart.Id)"></canvas>
+                                <canvas id="@OpenSearchDataViewModel.GeneratedCanvasId(chart.Id)"></canvas>
                             </div>
                         </article>
                     }
@@ -160,9 +158,9 @@
         <div class="query-row">
             <label class="index-field">
                 <span>Index</span>
-                <input class="dcinput" list="opensearch-indices" @bind="_indexPattern" />
+                <input class="dcinput" list="opensearch-indices" @bind="Vm.IndexPattern" />
                 <datalist id="opensearch-indices">
-                    @foreach (var index in _indices)
+                    @foreach (var index in Vm.Indices)
                     {
                         <option value="@index.Name">@index.DocumentCount documents</option>
                     }
@@ -170,13 +168,13 @@
             </label>
             <label class="query-field">
                 <span>Query</span>
-                <input class="dcinput" @bind="_queryText"
-                       @onkeydown="OnQueryKeyDown"
+                <input class="dcinput" @bind="Vm.QueryText"
+                       @onkeydown="Vm.OnQueryKeyDown"
                        placeholder="Search words or phrases across all fields" />
             </label>
-            <button class="dcbtn fields-button" disabled="@_loading" @onclick="LoadFieldsAsync">Fields</button>
-            <button class="dcbtn primary search-button" disabled="@_searching" @onclick="SearchAsync">
-                @(_searching ? "Searching…" : "Search")
+            <button class="dcbtn fields-button" disabled="@Vm.Loading" @onclick="Vm.LoadFieldsAsync">Fields</button>
+            <button class="dcbtn primary search-button" disabled="@Vm.Searching" @onclick="Vm.SearchAsync">
+                @(Vm.Searching ? "Searching…" : "Search")
             </button>
         </div>
         <div class="query-help">
@@ -186,19 +184,19 @@
         <div class="chart-controls">
             <label>
                 <span>Group by</span>
-                <select class="dcinput" @bind="_bucketField" @bind:after="BucketChanged">
+                <select class="dcinput" @bind="Vm.BucketField" @bind:after="Vm.BucketChanged">
                     <option value="">No chart</option>
-                    @foreach (var field in AggregatableFields)
+                    @foreach (var field in Vm.AggregatableFields)
                     {
                         <option value="@field.Name">@field.Name <text>(@field.Type)</text></option>
                     }
                 </select>
             </label>
-            @if (!string.IsNullOrWhiteSpace(_bucketField))
+            @if (!string.IsNullOrWhiteSpace(Vm.BucketField))
             {
                 <label>
                     <span>Chart</span>
-                    <select class="dcinput" @bind="_chartType">
+                    <select class="dcinput" @bind="Vm.ChartType">
                         <option value="bar">Bar</option>
                         <option value="line">Line</option>
                         <option value="pie">Pie</option>
@@ -206,7 +204,7 @@
                 </label>
                 <label>
                     <span>Metric</span>
-                    <select class="dcinput" @bind="_metricType">
+                    <select class="dcinput" @bind="Vm.MetricType">
                         <option value="count">Document count</option>
                         <option value="sum">Sum</option>
                         <option value="avg">Average</option>
@@ -214,23 +212,23 @@
                         <option value="max">Maximum</option>
                     </select>
                 </label>
-                @if (_metricType != "count")
+                @if (Vm.RequiresMetricField)
                 {
                     <label class="metric-field">
                         <span>Numeric field</span>
-                        <select class="dcinput" @bind="_metricField">
-                            @foreach (var field in NumericFields)
+                        <select class="dcinput" @bind="Vm.MetricField">
+                            @foreach (var field in Vm.NumericFields)
                             {
                                 <option value="@field.Name">@field.Name</option>
                             }
                         </select>
                     </label>
                 }
-                @if (_bucketType == "date_histogram")
+                @if (Vm.UsesDateBuckets)
                 {
                     <label>
                         <span>Interval</span>
-                        <select class="dcinput" @bind="_dateInterval">
+                        <select class="dcinput" @bind="Vm.DateInterval">
                             <option value="hour">Hour</option>
                             <option value="day">Day</option>
                             <option value="week">Week</option>
@@ -242,37 +240,37 @@
         </div>
     </section>
 
-    @if (_result is not null)
+    @if (Vm.Result is not null)
     {
         <div class="result-summary">
-            <span><strong>@_result.Total.ToString("N0")</strong> documents</span>
-            <span>@_result.TookMs ms</span>
-            <span>page @_page</span>
+            <span><strong>@Vm.Presentation.Number(Vm.Result.Total)</strong> documents</span>
+            <span>@Vm.Result.TookMs ms</span>
+            <span>page @Vm.Page</span>
         </div>
 
-        @if (_result.ChartSpecJson is not null)
+        @if (Vm.Result.ChartSpecJson is not null)
         {
             <section class="dccard chart-preview">
                 <header>
                     <div>
                         <strong>Chart preview</strong>
-                        <span>@_metricType by @_bucketField</span>
+                        <span>@Vm.MetricType by @Vm.BucketField</span>
                     </div>
                     <div class="save-chart">
-                        <input class="dcinput" @bind="_dashboardName" placeholder="Dashboard chart name" />
-                        <button class="dcbtn primary" disabled="@_savingDashboard" @onclick="SaveDashboardAsync">
-                            @(_savingDashboard ? "Saving…" : _editingDashboardId is null ? "Save chart" : "Update chart")
+                        <input class="dcinput" @bind="Vm.DashboardName" placeholder="Dashboard chart name" />
+                        <button class="dcbtn primary" disabled="@Vm.SavingDashboard" @onclick="Vm.SaveDashboardAsync">
+                            @(Vm.SavingDashboard ? "Saving…" : Vm.EditingDashboardId is null ? "Save chart" : "Update chart")
                         </button>
                     </div>
                 </header>
                 <div class="preview-canvas">
-                    <canvas id="@PreviewCanvasId"></canvas>
+                    <canvas id="@OpenSearchDataViewModel.PreviewCanvasId"></canvas>
                 </div>
             </section>
         }
 
         <section class="dccard results-card">
-            @if (_result.Hits.Count == 0)
+            @if (Vm.Result.Hits.Count == 0)
             {
                 <div class="no-results">No documents matched this query.</div>
             }
@@ -284,21 +282,21 @@
                             <tr>
                                 <th>_index</th>
                                 <th>_id</th>
-                                @foreach (var column in VisibleColumns)
+                                @foreach (var column in Vm.VisibleColumns)
                                 {
                                     <th>@column</th>
                                 }
                             </tr>
                         </thead>
                         <tbody>
-                            @foreach (var hit in _result.Hits)
+                            @foreach (var hit in Vm.Result.Hits)
                             {
-                                <tr class="@(hit.Id == RequestedDocument ? "linked-document" : null)">
+                                <tr class="@(hit.Id == Vm.RequestedDocument ? "linked-document" : null)">
                                     <td><code>@hit.Index</code></td>
                                     <td><code>@hit.Id</code></td>
-                                    @foreach (var column in VisibleColumns)
+                                    @foreach (var column in Vm.VisibleColumns)
                                     {
-                                        <td title="@Value(hit, column)">@ShortValue(Value(hit, column))</td>
+                                        <td title="@OpenSearchDataViewModel.Value(hit, column)">@OpenSearchDataViewModel.ShortValue(OpenSearchDataViewModel.Value(hit, column))</td>
                                     }
                                 </tr>
                             }
@@ -306,9 +304,9 @@
                     </table>
                 </div>
                 <footer class="pager">
-                    <button class="dcbtn" disabled="@(_page <= 1 || _searching)" @onclick="PreviousPageAsync">← Previous</button>
-                    <span>Page @_page</span>
-                    <button class="dcbtn" disabled="@(_result.Hits.Count < _pageSize || _searching)" @onclick="NextPageAsync">Next →</button>
+                    <button class="dcbtn" disabled="@(Vm.Page <= 1 || Vm.Searching)" @onclick="Vm.PreviousPageAsync">← Previous</button>
+                    <span>Page @Vm.Page</span>
+                    <button class="dcbtn" disabled="@(Vm.Result.Hits.Count < Vm.PageSize || Vm.Searching)" @onclick="Vm.NextPageAsync">Next →</button>
                 </footer>
             }
         </section>
@@ -317,559 +315,21 @@
 </div>
 
 @code {
-    [Parameter] public Guid ProjectId { get; set; }
-    [SupplyParameterFromQuery(Name = "index")] public string? RequestedIndex { get; set; }
-    [SupplyParameterFromQuery(Name = "q")] public string? RequestedQuery { get; set; }
-    [SupplyParameterFromQuery(Name = "document")] public string? RequestedDocument { get; set; }
-    private const string PreviewCanvasId = "opensearch-chart-preview";
+    [Parameter]
+    public Guid ProjectId { get => Vm.ProjectId; set => Vm.ProjectId = value; }
+    [Parameter]
+    public string? RequestedIndex { get => Vm.RequestedIndex; set => Vm.RequestedIndex = value; }
+    [Parameter]
+    public string? RequestedQuery { get => Vm.RequestedQuery; set => Vm.RequestedQuery = value; }
+    [Parameter]
+    public string? RequestedDocument { get => Vm.RequestedDocument; set => Vm.RequestedDocument = value; }
 
-    private IReadOnlyList<OpenSearchIndexView> _indices = Array.Empty<OpenSearchIndexView>();
-    private IReadOnlyList<OpenSearchFieldView> _fields = Array.Empty<OpenSearchFieldView>();
-    private List<OpenSearchDashboardView> _dashboards = new();
-    private OpenSearchSearchView? _result;
-    private string _indexPattern = "*";
-    private string _queryText = "";
-    private string _bucketField = "";
-    private string _bucketType = "terms";
-    private string _chartType = "bar";
-    private string _metricType = "count";
-    private string _metricField = "";
-    private string _dateInterval = "day";
-    private string _dashboardName = "";
-    private string? _error;
-    private bool _loading;
-    private bool _initialLoadComplete;
-    private bool _searching;
-    private bool _syncing;
-    private bool _canSync;
-    private string? _syncMessage;
-    private bool _savingDashboard;
-    private bool _generatingCharts;
-    private Guid? _editingDashboardId;
-    private Guid? _refreshing;
-    private Guid? _replicating;
-    private int _page = 1;
-    private readonly int _pageSize = 25;
-    private string? _lastPreviewSpec;
-    private readonly Dictionary<Guid, DateTimeOffset> _renderedDashboards = new();
-    private readonly HashSet<string> _renderedGeneratedCharts = new();
-    private List<GeneratedOpenSearchChart> _generatedCharts = new();
-    private OpenSearchLastUpdatedView? _lastUpdated;
+    protected override Task OnInitializedAsync()
+        => Vm.AttachAndInitializeAsync(() => InvokeAsync(StateHasChanged));
 
-    private IEnumerable<OpenSearchFieldView> AggregatableFields
-        => _fields.Where(item => item.Aggregatable);
-    private IEnumerable<OpenSearchFieldView> NumericFields
-        => _fields.Where(item => item.Aggregatable && item.Type is
-            "byte" or "short" or "integer" or "long" or "half_float" or "float" or "double" or "scaled_float");
-    private IReadOnlyList<string> VisibleColumns
-        => _result is null
-            ? Array.Empty<string>()
-            : _result.Hits.SelectMany(hit => hit.Fields.Keys).Distinct().Take(10).ToList();
+    protected override Task OnParametersSetAsync() => Vm.SetParametersAsync();
 
-    protected override async Task OnParametersSetAsync()
-    {
-        Ui.Set("Data Search", "OpenSearch · queries · charts");
-        _loading = true;
-        try
-        {
-            var indicesTask = Svc.ListOpenSearchIndicesAsync(ProjectId);
-            var dashboardsTask = Svc.ListOpenSearchDashboardsAsync(ProjectId);
-            var permissionTask = Permissions.HasAsync(Permission.SettingsManage);
-            await Task.WhenAll(indicesTask, dashboardsTask, permissionTask);
-            _indices = await indicesTask;
-            _dashboards = (await dashboardsTask).ToList();
-            _canSync = await permissionTask;
-            if (_indices.Count > 0)
-                _indexPattern = !string.IsNullOrWhiteSpace(RequestedIndex)
-                    && _indices.Any(item => item.Name.Equals(RequestedIndex, StringComparison.Ordinal))
-                        ? RequestedIndex
-                        : DefaultIndex(_indices).Name;
-            if (!string.IsNullOrWhiteSpace(RequestedQuery))
-                _queryText = RequestedQuery;
-            await LoadFieldsAsync();
-            if (!string.IsNullOrWhiteSpace(RequestedQuery))
-                await SearchAsync();
-            else
-                await GenerateChartsAsync();
-            _error = null;
-        }
-        catch (Exception ex)
-        {
-            _error = FriendlyError(ex);
-            try { _dashboards = (await Svc.ListOpenSearchDashboardsAsync(ProjectId)).ToList(); }
-            catch { _dashboards = new(); }
-        }
-        finally
-        {
-            _loading = false;
-            _initialLoadComplete = true;
-        }
-    }
+    protected override Task OnAfterRenderAsync(bool firstRender) => Vm.AfterRenderAsync(firstRender);
 
-    private async Task TriggerSyncAsync()
-    {
-        _syncing = true;
-        _syncMessage = null;
-        try
-        {
-            var result = await Svc.TriggerOpenSearchSyncAsync(ProjectId);
-            _syncMessage = result.Message;
-        }
-        catch (Exception ex)
-        {
-            _syncMessage = ex.Message;
-        }
-        finally
-        {
-            _syncing = false;
-        }
-    }
-
-    protected override async Task OnAfterRenderAsync(bool firstRender)
-    {
-        if (_result?.ChartSpecJson is { } preview && preview != _lastPreviewSpec)
-        {
-            try
-            {
-                await JS.InvokeVoidAsync("pcchart.render", PreviewCanvasId, preview);
-                _lastPreviewSpec = preview;
-            }
-            catch (JSException) { }
-        }
-
-        foreach (var dashboard in _dashboards)
-        {
-            if (_renderedDashboards.TryGetValue(dashboard.Id, out var rendered)
-                && rendered == dashboard.UpdatedAt) continue;
-            try
-            {
-                await JS.InvokeVoidAsync("pcchart.render", CanvasId(dashboard.Id.ToString()), dashboard.ChartSpecJson);
-                _renderedDashboards[dashboard.Id] = dashboard.UpdatedAt;
-            }
-            catch (JSException) { }
-        }
-
-        foreach (var chart in _generatedCharts)
-        {
-            if (_renderedGeneratedCharts.Contains(chart.Id)) continue;
-            try
-            {
-                await JS.InvokeVoidAsync("pcchart.render", GeneratedCanvasId(chart.Id), chart.ChartSpecJson);
-                _renderedGeneratedCharts.Add(chart.Id);
-            }
-            catch (JSException) { }
-        }
-    }
-
-    private async Task LoadFieldsAsync()
-    {
-        if (string.IsNullOrWhiteSpace(_indexPattern)) return;
-        try
-        {
-            _fields = await Svc.ListOpenSearchFieldsAsync(ProjectId, _indexPattern);
-            var dateFields = _fields
-                .Where(field => field.Aggregatable && field.Type is "date" or "date_nanos")
-                .OrderBy(field => LastUpdatedFieldPriority(field.Name))
-                .ThenBy(field => field.Name)
-                .Select(field => field.Name)
-                .ToList();
-            _lastUpdated = null;
-            try
-            {
-                _lastUpdated = await Svc.GetOpenSearchLastUpdatedAsync(
-                    ProjectId, _indexPattern, dateFields);
-            }
-            catch
-            {
-                // Last-updated metadata is optional; field browsing remains usable if an
-                // index has an incompatible date mapping or denies aggregations.
-            }
-            _error = null;
-        }
-        catch (Exception ex)
-        {
-            _error = FriendlyError(ex);
-            _fields = Array.Empty<OpenSearchFieldView>();
-            _lastUpdated = null;
-        }
-    }
-
-    private string LastUpdatedLabel => _lastUpdated?.Value is { } value
-        ? value.UtcDateTime.ToString("d MMM yyyy, h:mm tt 'UTC'", System.Globalization.CultureInfo.InvariantCulture)
-        : "Unavailable";
-
-    private string LastUpdatedTitle => _lastUpdated?.Field is { } timestampField
-        ? $"Newest document value in {timestampField}"
-        : "No aggregatable date field is available for this index";
-
-    private static int LastUpdatedFieldPriority(string field)
-    {
-        var name = field.ToLowerInvariant();
-        if (name.Contains("updated") || name.Contains("last_modified")) return 0;
-        if (name.Contains("modified")) return 1;
-        if (name.Contains("timestamp")) return 2;
-        if (name.Contains("created")) return 3;
-        return 4;
-    }
-
-    private async Task SelectIndexAsync(OpenSearchIndexView index)
-    {
-        _indexPattern = index.Name;
-        _page = 1;
-        _result = null;
-        await LoadFieldsAsync();
-        await GenerateChartsAsync();
-    }
-
-    private async Task GenerateChartsAsync()
-    {
-        if (string.IsNullOrWhiteSpace(_indexPattern) || _fields.Count == 0) return;
-        _generatingCharts = true;
-        _generatedCharts = new();
-        _renderedGeneratedCharts.Clear();
-        try
-        {
-            var candidates = ChartCandidates();
-            var generated = await Task.WhenAll(candidates.Select(async candidate =>
-            {
-                try
-                {
-                    var result = await Svc.SearchOpenSearchAsync(new OpenSearchSearchRequest(
-                        ProjectId, _indexPattern, _queryText, 1, 1,
-                        candidate.BucketField, candidate.BucketType, candidate.ChartType,
-                        candidate.MetricType, candidate.MetricField, candidate.DateInterval));
-                    return result.ChartSpecJson is null
-                        ? null
-                        : new GeneratedOpenSearchChart(
-                            candidate.Id, candidate.Title, candidate.Subtitle, result.ChartSpecJson);
-                }
-                catch
-                {
-                    // A sparse or incompatible field should not suppress other useful charts.
-                    return null;
-                }
-            }));
-            _generatedCharts = generated.Where(chart => chart is not null).Cast<GeneratedOpenSearchChart>().ToList();
-        }
-        finally
-        {
-            _generatingCharts = false;
-        }
-    }
-
-    private IReadOnlyList<GeneratedChartCandidate> ChartCandidates()
-    {
-        var date = _fields
-            .Where(field => field.Aggregatable && field.Type == "date")
-            .OrderBy(FieldPriority)
-            .FirstOrDefault();
-        var categories = _fields
-            .Where(IsUsefulCategory)
-            .OrderBy(FieldPriority)
-            .Take(2)
-            .ToList();
-        var numerics = _fields
-            .Where(IsNumeric)
-            .OrderBy(FieldPriority)
-            .GroupBy(MetricFamily)
-            .Select(group => group.First())
-            .Take(2)
-            .ToList();
-
-        var candidates = new List<GeneratedChartCandidate>();
-        if (date is not null)
-        {
-            candidates.Add(new(
-                $"date-{date.Name}", $"{Humanize(date.Name)} over time",
-                $"Monthly document count by {date.Name}", date.Name,
-                "date_histogram", "line", "count", null, "month"));
-        }
-        if (categories.Count > 0)
-        {
-            var category = categories[0];
-            candidates.Add(new(
-                $"terms-{category.Name}", $"Top {Humanize(category.Name)} values",
-                $"Document count by {category.Name}", category.Name,
-                "terms", "bar", "count", null, null));
-        }
-        foreach (var numeric in numerics)
-        {
-            if (categories.Count > 0)
-            {
-                var category = categories[0];
-                candidates.Add(new(
-                    $"avg-{numeric.Name}-by-{category.Name}",
-                    $"Average {Humanize(numeric.Name)} by {Humanize(category.Name)}",
-                    $"Average {numeric.Name} grouped by {category.Name}", category.Name,
-                    "terms", "bar", "avg", numeric.Name, null));
-            }
-            else if (date is not null)
-            {
-                candidates.Add(new(
-                    $"avg-{numeric.Name}-over-{date.Name}",
-                    $"Average {Humanize(numeric.Name)} over time",
-                    $"Monthly average of {numeric.Name}", date.Name,
-                    "date_histogram", "line", "avg", numeric.Name, "month"));
-            }
-        }
-        if (categories.Count > 1)
-        {
-            var category = categories[1];
-            candidates.Add(new(
-                $"terms-{category.Name}", $"Top {Humanize(category.Name)} values",
-                $"Document count by {category.Name}", category.Name,
-                "terms", "bar", "count", null, null));
-        }
-        return candidates.Take(4).ToList();
-    }
-
-    private static OpenSearchIndexView DefaultIndex(IReadOnlyList<OpenSearchIndexView> indices)
-        => indices.FirstOrDefault(index => index.DocumentCount > 0
-                && index.Name.Contains("property-feasibility-assessments", StringComparison.OrdinalIgnoreCase))
-            ?? indices.FirstOrDefault(index => index.DocumentCount > 0
-                && index.Name.Contains("development-applications", StringComparison.OrdinalIgnoreCase))
-            ?? indices.OrderByDescending(index => index.DocumentCount).First();
-
-    private static bool IsUsefulCategory(OpenSearchFieldView field)
-    {
-        if (!field.Aggregatable || field.Type is not ("keyword" or "boolean")) return false;
-        var name = field.Name.ToLowerInvariant();
-        return !new[] { "id", "hash", "url", "path", "geometry", "coordinate", "description", "address", "title", "raw" }
-            .Any(token => name.EndsWith(token) || name.Contains($"_{token}") || name.Contains($".{token}"));
-    }
-
-    private static bool IsNumeric(OpenSearchFieldView field)
-        => field.Aggregatable && field.Type is
-            "byte" or "short" or "integer" or "long" or "half_float" or "float" or "double" or "scaled_float";
-
-    private static string MetricFamily(OpenSearchFieldView field)
-    {
-        var name = field.Name.ToLowerInvariant();
-        string[] families = ["profit", "cashflow", "margin", "yield", "cost", "rent", "value", "amount", "debt"];
-        return families.FirstOrDefault(name.Contains) ?? name;
-    }
-
-    private static int FieldPriority(OpenSearchFieldView field)
-    {
-        var name = field.Name.ToLowerInvariant();
-        string[] priorities =
-        [
-            "profit", "cashflow", "margin", "yield", "status", "outcome", "authority", "council",
-            "suburb", "locality", "category", "type", "source", "cost", "rent", "value", "amount",
-            "debt", "lodged", "decision", "created", "updated", "date", "timestamp"
-        ];
-        var match = Array.FindIndex(priorities, name.Contains);
-        return match < 0 ? priorities.Length : match;
-    }
-
-    private static string Humanize(string field)
-    {
-        var leaf = field.Split('.').Last().Replace('_', ' ').Replace('-', ' ');
-        return string.Join(' ', leaf.Split(' ', StringSplitOptions.RemoveEmptyEntries)
-            .Select(word => char.ToUpperInvariant(word[0]) + word[1..]));
-    }
-
-    private void BucketChanged()
-    {
-        var field = _fields.FirstOrDefault(item => item.Name == _bucketField);
-        _bucketType = field?.Type == "date" ? "date_histogram" : "terms";
-        if (_metricType != "count" && string.IsNullOrWhiteSpace(_metricField))
-            _metricField = NumericFields.FirstOrDefault()?.Name ?? "";
-    }
-
-    private async Task SearchAsync()
-    {
-        _searching = true;
-        _error = null;
-        try
-        {
-            _result = await Svc.SearchOpenSearchAsync(BuildRequest());
-            _lastPreviewSpec = null;
-        }
-        catch (Exception ex)
-        {
-            _error = FriendlyError(ex);
-        }
-        finally
-        {
-            _searching = false;
-        }
-    }
-
-    private OpenSearchSearchRequest BuildRequest()
-        => new(ProjectId, _indexPattern, _queryText, _page, _pageSize,
-            NullIfBlank(_bucketField), _bucketType, _chartType, _metricType,
-            NullIfBlank(_metricField), _dateInterval);
-
-    private async Task SaveDashboardAsync()
-    {
-        if (_result?.ChartSpecJson is null) return;
-        if (string.IsNullOrWhiteSpace(_dashboardName))
-        {
-            _error = "Enter a name before saving the chart.";
-            return;
-        }
-        _savingDashboard = true;
-        try
-        {
-            var saved = await Svc.SaveOpenSearchDashboardAsync(new SaveOpenSearchDashboardCommand(
-                ProjectId, _dashboardName, _indexPattern, _queryText, _bucketField,
-                _bucketType, _chartType, _metricType, NullIfBlank(_metricField),
-                _dateInterval, _result.ChartSpecJson, _editingDashboardId));
-            ReplaceDashboard(saved);
-            _editingDashboardId = saved.Id;
-            _renderedDashboards.Remove(saved.Id);
-        }
-        catch (Exception ex)
-        {
-            _error = FriendlyError(ex);
-        }
-        finally
-        {
-            _savingDashboard = false;
-        }
-    }
-
-    private async Task LoadDashboardAsync(OpenSearchDashboardView dashboard)
-    {
-        _editingDashboardId = dashboard.Id;
-        _dashboardName = dashboard.Name;
-        _indexPattern = dashboard.IndexPattern;
-        _queryText = dashboard.QueryText ?? "";
-        _bucketField = dashboard.BucketField;
-        _bucketType = dashboard.BucketType;
-        _chartType = dashboard.ChartType;
-        _metricType = dashboard.MetricType;
-        _metricField = dashboard.MetricField ?? "";
-        _dateInterval = dashboard.DateInterval ?? "day";
-        _page = 1;
-        await LoadFieldsAsync();
-        await SearchAsync();
-    }
-
-    private async Task RefreshDashboardAsync(OpenSearchDashboardView dashboard)
-    {
-        _refreshing = dashboard.Id;
-        try
-        {
-            var request = new OpenSearchSearchRequest(
-                ProjectId, dashboard.IndexPattern, dashboard.QueryText, 1, _pageSize,
-                dashboard.BucketField, dashboard.BucketType, dashboard.ChartType,
-                dashboard.MetricType, dashboard.MetricField, dashboard.DateInterval);
-            var result = await Svc.SearchOpenSearchAsync(request);
-            if (result.ChartSpecJson is null) throw new InvalidOperationException("The refreshed query returned no chart buckets.");
-            var saved = await Svc.SaveOpenSearchDashboardAsync(new SaveOpenSearchDashboardCommand(
-                ProjectId, dashboard.Name, dashboard.IndexPattern, dashboard.QueryText,
-                dashboard.BucketField, dashboard.BucketType, dashboard.ChartType,
-                dashboard.MetricType, dashboard.MetricField, dashboard.DateInterval,
-                result.ChartSpecJson, dashboard.Id));
-            ReplaceDashboard(saved);
-            _renderedDashboards.Remove(saved.Id);
-        }
-        catch (Exception ex)
-        {
-            _error = FriendlyError(ex);
-        }
-        finally
-        {
-            _refreshing = null;
-        }
-    }
-
-    private async Task DuplicateDashboardAsync(OpenSearchDashboardView dashboard)
-    {
-        _replicating = dashboard.Id;
-        try
-        {
-            var baseName = $"{dashboard.Name} copy";
-            var name = baseName;
-            var suffix = 2;
-            while (_dashboards.Any(item => item.Name.Equals(name, StringComparison.OrdinalIgnoreCase)))
-                name = $"{baseName} {suffix++}";
-
-            var duplicate = await Svc.SaveOpenSearchDashboardAsync(new SaveOpenSearchDashboardCommand(
-                ProjectId, name, dashboard.IndexPattern, dashboard.QueryText,
-                dashboard.BucketField, dashboard.BucketType, dashboard.ChartType,
-                dashboard.MetricType, dashboard.MetricField, dashboard.DateInterval,
-                dashboard.ChartSpecJson));
-            ReplaceDashboard(duplicate);
-            _renderedDashboards.Remove(duplicate.Id);
-        }
-        catch (Exception ex)
-        {
-            _error = FriendlyError(ex);
-        }
-        finally
-        {
-            _replicating = null;
-        }
-    }
-
-    private async Task DeleteDashboardAsync(Guid id)
-    {
-        try
-        {
-            if (await Svc.DeleteOpenSearchDashboardAsync(id))
-            {
-                _dashboards.RemoveAll(item => item.Id == id);
-                _renderedDashboards.Remove(id);
-                if (_editingDashboardId == id) _editingDashboardId = null;
-            }
-        }
-        catch (Exception ex)
-        {
-            _error = FriendlyError(ex);
-        }
-    }
-
-    private async Task PreviousPageAsync()
-    {
-        if (_page <= 1) return;
-        _page--;
-        await SearchAsync();
-    }
-
-    private async Task NextPageAsync()
-    {
-        _page++;
-        await SearchAsync();
-    }
-
-    private async Task OnQueryKeyDown(KeyboardEventArgs args)
-    {
-        if (args.Key == "Enter")
-        {
-            _page = 1;
-            await SearchAsync();
-        }
-    }
-
-    private void ReplaceDashboard(OpenSearchDashboardView dashboard)
-    {
-        var index = _dashboards.FindIndex(item => item.Id == dashboard.Id);
-        if (index < 0) _dashboards.Add(dashboard);
-        else _dashboards[index] = dashboard;
-        _dashboards = _dashboards.OrderBy(item => item.Name).ToList();
-    }
-
-    private static string CanvasId(string value)
-        => "oschart-" + Convert.ToHexString(System.Security.Cryptography.MD5.HashData(
-            System.Text.Encoding.UTF8.GetBytes(value)))[..12];
-    private static string GeneratedCanvasId(string value)
-        => "osgenerated-" + Convert.ToHexString(System.Security.Cryptography.MD5.HashData(
-            System.Text.Encoding.UTF8.GetBytes(value)))[..12];
-    private static string? NullIfBlank(string? value)
-        => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
-    private static string? Value(OpenSearchHitView hit, string field)
-        => hit.Fields.GetValueOrDefault(field);
-    private static string ShortValue(string? value)
-        => value is null ? "—" : value.Length > 90 ? value[..87] + "…" : value;
-    private static string FriendlyError(Exception ex)
-        => ex is UnauthorizedAccessException ? "You do not have permission to search project data." : ex.Message;
-
-    private sealed record GeneratedOpenSearchChart(
-        string Id, string Title, string Subtitle, string ChartSpecJson);
-    private sealed record GeneratedChartCandidate(
-        string Id, string Title, string Subtitle, string BucketField, string BucketType,
-        string ChartType, string MetricType, string? MetricField, string? DateInterval);
+    public void Dispose() => Vm.Detach();
 }

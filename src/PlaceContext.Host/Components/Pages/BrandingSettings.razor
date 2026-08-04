@@ -1,50 +1,61 @@
 @page "/settings/branding"
 @layout PlaceContext.Host.Components.Layout.SettingsLayout
 @attribute [Authorize(Policy = Policies.DefaultAdmin)]
-@using PlaceContext.Host.Branding
-@inject BrandingService Branding
-@inject PortalUiState Ui
-@inject NavigationManager Nav
+@using PlaceContext.Host.Components.ViewModels
+@inject BrandingSettingsViewModel Vm
+@implements IDisposable
 
 <PageTitle>placecontext — Branding</PageTitle>
-
 <div class="page">
     <h2 class="title">Whitelabel branding</h2>
     <div class="intro">
-        Make the portal yours — a name, a logo, and the shell colors. Applies to everyone in this workspace;
-        leave a field empty to keep the default.
+        Make the portal yours — a name, a logo, and the shell colors. Applies to everyone in this workspace; leave a field empty to keep the default.
     </div>
-
     <div class="dccard card">
         <div class="row">
             <div class="dcfield grow">
                 <label>Product name</label>
-                <input class="dcinput" @bind="_name" placeholder="placecontext" />
+                <input class="dcinput" @bind="Vm.Name" placeholder="placecontext" />
             </div>
             <div class="dcfield grow">
                 <label>Logo <span class="code code-gap">png/svg, ≤200 KB</span></label>
-                <InputFile OnChange="OnLogo" accept="image/png,image/svg+xml,image/jpeg,image/webp" class="dcinput" style="padding:6px" />
+                <InputFile OnChange="Vm.SetLogoAsync" accept="image/png,image/svg+xml,image/jpeg,image/webp"
+                           class="dcinput" style="padding:6px" />
             </div>
         </div>
-        @if (!string.IsNullOrEmpty(_logo))
+        @if (!string.IsNullOrEmpty(Vm.Logo))
         {
             <div class="logo-row">
-                <img src="@_logo" alt="logo" class="logo-preview" />
-                <button class="dcbtn btn-sm" @onclick="@(() => _logo = null)">remove logo</button>
+                <img src="@Vm.Logo" alt="logo" class="logo-preview" />
+                <button class="dcbtn btn-sm" @onclick="Vm.RemoveLogo">remove logo</button>
             </div>
         }
         <div class="color-row">
-            <div class="dcfield"><label>Background</label><input type="color" class="dcinput color-input" @bind="_bg" /></div>
-            <div class="dcfield"><label>Panels & cards</label><input type="color" class="dcinput color-input" @bind="_panel" /></div>
-            <div class="dcfield"><label>Text</label><input type="color" class="dcinput color-input" @bind="_text" /></div>
-            <div class="dcfield"><label>Accent</label><input type="color" class="dcinput color-input" @bind="_accent" /></div>
+            <div class="dcfield">
+                <label>Background</label>
+                <input type="color" class="dcinput color-input" @bind="Vm.Background" />
+            </div>
+            <div class="dcfield">
+                <label>Panels & cards</label>
+                <input type="color" class="dcinput color-input" @bind="Vm.Panel" />
+            </div>
+            <div class="dcfield">
+                <label>Text</label>
+                <input type="color" class="dcinput color-input" @bind="Vm.Text" />
+            </div>
+            <div class="dcfield">
+                <label>Accent</label>
+                <input type="color" class="dcinput color-input" @bind="Vm.Accent" />
+            </div>
         </div>
         <div class="actions">
-            <button class="dcbtn primary" disabled="@_busy" @onclick="SaveAsync">@(_busy ? "Saving…" : "Save branding")</button>
-            <button class="dcbtn" disabled="@_busy" @onclick="ResetAsync">Reset to default</button>
-            @if (_message is not null)
+            <button class="dcbtn primary" disabled="@Vm.Busy" @onclick="Vm.SaveAsync">
+                @(Vm.Busy ? "Saving…" : "Save branding")
+            </button>
+            <button class="dcbtn" disabled="@Vm.Busy" @onclick="Vm.ResetAsync">Reset to default</button>
+            @if (Vm.Message is not null)
             {
-                <span class="msg">@_message</span>
+                <span class="msg">@Vm.Message</span>
             }
         </div>
         <div class="dchint">Changes apply on the next page load. Colors override the dark theme's shell variables.</div>
@@ -52,59 +63,9 @@
 </div>
 
 @code {
-    private string _name = "";
-    private string? _logo;
-    private string _bg = "#0a0c0e", _panel = "#0d1013", _text = "#e6edf3", _accent = "#43d675";
-    private bool _busy;
-    private string? _message;
+    protected override async Task OnInitializedAsync() => await Vm.LoadAsync();
 
-    protected override async Task OnInitializedAsync()
-    {
-        Ui.Set("Branding", "whitelabel the portal for this workspace");
-        var b = await Branding.GetAsync();
-        _name = b.ProductName ?? "";
-        _logo = b.LogoDataUri;
-        _bg = b.BgColor ?? _bg;
-        _panel = b.PanelColor ?? _panel;
-        _text = b.TextColor ?? _text;
-        _accent = b.AccentColor ?? _accent;
-    }
+    protected override void OnInitialized() => Vm.Attach(() => InvokeAsync(StateHasChanged));
 
-    private async Task OnLogo(InputFileChangeEventArgs e)
-    {
-        _message = null;
-        var file = e.File;
-        if (file.Size > 200 * 1024) { _message = "Logo too large — keep it under 200 KB."; return; }
-        using var ms = new MemoryStream();
-        await file.OpenReadStream(200 * 1024).CopyToAsync(ms);
-        _logo = $"data:{file.ContentType};base64,{Convert.ToBase64String(ms.ToArray())}";
-    }
-
-    private async Task SaveAsync()
-    {
-        _busy = true;
-        _message = null;
-        try
-        {
-            await Branding.SetAsync(new TenantBranding(
-                string.IsNullOrWhiteSpace(_name) ? null : _name.Trim(),
-                _logo, _bg, _panel, _text, _accent));
-            _message = "Saved — reloading…";
-            Nav.NavigateTo("/settings/branding", forceLoad: true);
-        }
-        catch (Exception ex) { _message = ex.Message; }
-        finally { _busy = false; }
-    }
-
-    private async Task ResetAsync()
-    {
-        _busy = true;
-        try
-        {
-            await Branding.SetAsync(new TenantBranding());
-            Nav.NavigateTo("/settings/branding", forceLoad: true);
-        }
-        catch (Exception ex) { _message = ex.Message; }
-        finally { _busy = false; }
-    }
+    public void Dispose() => Vm.Detach();
 }

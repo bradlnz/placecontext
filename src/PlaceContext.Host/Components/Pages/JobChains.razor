@@ -7,8 +7,6 @@
 @using PlaceContext.Host.Components.ViewModels
 @using PlaceContext.Host.Components.ViewModels.Helpers
 @inject JobChainsViewModel Vm
-@inject PortalUiState Ui
-@inject NavigationManager Nav
 
 <PageTitle>PlaceContext — Job chains</PageTitle>
 
@@ -25,7 +23,7 @@ else
                 <p>Connect reusable jobs into ordered pipelines, including parallel stages and delivery actions.</p>
             </div>
             <div class="head-actions">
-                <button class="dcbtn" @onclick="@(() => Nav.NavigateTo($"/project/{ProjectId}/jobs"))">View jobs</button>
+                <button class="dcbtn" @onclick="Vm.NavigateToJobs">View jobs</button>
                 <button class="dcbtn primary" @onclick="() => Vm.NewChain()">+ New chain</button>
             </div>
         </header>
@@ -70,7 +68,7 @@ else
                         var parallelStages = chain.Stages.Count(stage => stage.IsParallel);
                         var actionStages = chain.Stages.Count(stage => stage.Action is not null);
                         <article class="chain-row @(isRunning ? "running" : null)" @onclick="@(() => Vm.OpenChainAsync(chain))">
-                            <div class="status-icon @(isRunning ? "is-running" : null)" aria-label="@(isRunning ? "Running" : "Pipeline")">
+                            <div class="status-icon @(isRunning ? "is-running" : null)" aria-label="@Vm.ChainStatusAria(isRunning)">
                                 @if (isRunning)
                                 {
                                     <span class="spinner"></span>
@@ -96,7 +94,7 @@ else
                                 </div>
                                 <div class="chain-detail">
                                     <span>@(string.IsNullOrWhiteSpace(chain.Description) ? "No description" : chain.Description)</span>
-                                    <span class="chain-facts">updated @chain.UpdatedAt.ToWorkspaceTime().ToString("yyyy-MM-dd")</span>
+                                    <span class="chain-facts">updated @Vm.Presentation.Date(chain.UpdatedAt)</span>
                                 </div>
                                 <div class="step-chips">
                                     @foreach (var (stage, i) in chain.Stages.Select((s, i) => (s, i)))
@@ -122,13 +120,13 @@ else
                                                     {
                                                         <span class="chip-plus">+</span>
                                                     }
-                                                    <span class="step-chip" style="color:@(job.JobName == "(deleted)" ? "var(--bad)" : "var(--brand-2)")">@job.JobName</span>
+                                                    <span class="step-chip" style="color:@Vm.JobChipColor(job.JobName)">@job.JobName</span>
                                                 }
                                             </span>
                                         }
                                         else
                                         {
-                                            <span class="step-chip" style="color:@(stage.Jobs[0].JobName == "(deleted)" ? "var(--bad)" : "var(--brand-2)")">@stage.Jobs[0].JobName</span>
+                                            <span class="step-chip" style="color:@Vm.JobChipColor(stage.Jobs[0].JobName)">@stage.Jobs[0].JobName</span>
                                         }
                                     }
                                 </div>
@@ -184,12 +182,12 @@ else
         @if (Vm.EditChainId.HasValue)
         {
             <div class="dctabs editor-tabs">
-                <button class="dctab @(Vm.EditorTab == "details" ? "active" : "")" @onclick="@(() => Vm.EditorTab = "details")">Details</button>
-                <button class="dctab @(Vm.EditorTab == "runs" ? "active" : "")" @onclick="() => Vm.SwitchToRunsTabAsync()">Runs<span class="n">@(Vm.ChainRuns?.Count ?? 0)</span></button>
+                <button class="dctab @(Vm.IsDetailsTab ? "active" : "")" @onclick="@(() => Vm.EditorTab = "details")">Details</button>
+                <button class="dctab @(Vm.IsRunsTab ? "active" : "")" @onclick="() => Vm.SwitchToRunsTabAsync()">Runs<span class="n">@(Vm.ChainRuns?.Count ?? 0)</span></button>
             </div>
         }
 
-        @if (Vm.EditorTab == "runs" && Vm.EditChainId.HasValue)
+        @if (Vm.IsRunsTab && Vm.EditChainId.HasValue)
         {
             <div class="dcslide-body runs-body">
                 @if (Vm.OpenRun is null)
@@ -204,24 +202,24 @@ else
                         {
                             <div class="dccard run-card" @onclick="@(() => Vm.OpenChainRunAsync(run))">
                                 <div class="run-row">
-                                    <span class="status-chip" style="color:@JobChainsViewModel.StatusColor(run.Status); background:@JobChainsViewModel.StatusBg(run.Status)">@run.Status</span>
+                                    <span class="status-chip" style="color:@Vm.Presentation.StatusColor(run.Status); background:@Vm.Presentation.StatusBackground(run.Status)">@run.Status</span>
                                     <span class="run-time">
-                                        @run.StartedAt.ToWorkspaceTime().ToString("yyyy-MM-dd HH:mm:ss")
+                                        @Vm.Presentation.DateTime(run.StartedAt)
                                     </span>
                                     <span class="meta-11">
-                                        @run.Steps.Count(s => s.Status == "Succeeded")/@run.Steps.Count steps
+                                        @Vm.SucceededSteps(run)/@run.Steps.Count steps
                                     </span>
                                     @if (run.FinishedAt.HasValue)
                                     {
                                         <span class="dur-meta">
-                                            @JobChainsViewModel.FormatDuration(run.StartedAt, run.FinishedAt.Value)
+                                            @Vm.Presentation.Duration(run.StartedAt, run.FinishedAt.Value)
                                         </span>
                                     }
                                     else
                                     {
                                         <span class="running-note">running…</span>
                                     }
-                                    @if (run.Status is "Queued" or "Running")
+                                    @if (Vm.IsChainRunActive(run.Status))
                                     {
                                         <button class="dcbtn btn-2-8 text-bad" @onclick:stopPropagation="true"
                                                 @onclick="@(() => Vm.CancelChainRunAsync(run.Id))">Cancel</button>
@@ -236,12 +234,12 @@ else
                     <button class="dcbtn btn-start" @onclick="@(() => Vm.CloseChainRun())">← All runs</button>
 
                     <div class="status-row">
-                        <span class="status-chip-lg" style="color:@JobChainsViewModel.StatusColor(Vm.OpenRun.Status); background:@JobChainsViewModel.StatusBg(Vm.OpenRun.Status)">@Vm.OpenRun.Status</span>
+                        <span class="status-chip-lg" style="color:@Vm.Presentation.StatusColor(Vm.OpenRun.Status); background:@Vm.Presentation.StatusBackground(Vm.OpenRun.Status)">@Vm.OpenRun.Status</span>
                         <span class="dur-meta">
-                            @Vm.OpenRun.StartedAt.ToWorkspaceTime().ToString("yyyy-MM-dd HH:mm:ss")
-                            @(Vm.OpenRun.FinishedAt.HasValue ? " · took " + JobChainsViewModel.FormatDuration(Vm.OpenRun.StartedAt, Vm.OpenRun.FinishedAt.Value) : " · live")
+                            @Vm.Presentation.DateTime(Vm.OpenRun.StartedAt)
+                            @(Vm.OpenRun.FinishedAt.HasValue ? " · took " + Vm.Presentation.Duration(Vm.OpenRun.StartedAt, Vm.OpenRun.FinishedAt.Value) : " · live")
                         </span>
-                        @if (Vm.OpenRun.Status is "Queued" or "Running")
+                        @if (Vm.IsChainRunActive(Vm.OpenRun.Status))
                         {
                             <button class="dcbtn btn-2-8 text-bad" @onclick="@(() => Vm.CancelChainRunAsync(Vm.OpenRun.Id))">Cancel run</button>
                         }
@@ -250,17 +248,35 @@ else
                     <div class="running-steps-panel">
                         <div class="running-steps-head">
                             <span>Running steps</span>
-                            <span>@Vm.OpenRun.Steps.Count(s => s.Status == "Succeeded")/@Vm.OpenRun.Steps.Count complete</span>
+                            <span>@Vm.SucceededSteps(Vm.OpenRun)/@Vm.OpenRun.Steps.Count complete</span>
                         </div>
-                        <ChainPipeline Run="Vm.OpenRun" OnStepClick="@Vm.OpenStepRunAsync"
-                                       OnStepCancel="@(step => Vm.CancelStepRunAsync(step.RunId!.Value))" />
+                    <ChainPipeline Run="Vm.OpenRun" OnStepClick="@Vm.OpenStepRunAsync"
+                                   OnStepCancel="@(step => Vm.CancelStepRunAsync(step.RunId!.Value))" />
                     </div>
+
+                    @if (Vm.ContextRows.Count > 0)
+                    {
+                        <div class="chain-context-panel">
+                            <div class="out-label">Accumulated chain context</div>
+                            <div class="chain-context-scroll">
+                                <table class="data-table compact-table">
+                                    <thead><tr><th>Field</th><th>Value</th></tr></thead>
+                                    <tbody>
+                                        @foreach (var row in Vm.ContextRows)
+                                        {
+                                            <tr><td><code>@row.Path</code></td><td>@row.Value</td></tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    }
 
                     @if (Vm.OpenRun.FinalOutput is { Length: > 0 })
                     {
                         <div>
                             <div class="out-label">Pipeline output</div>
-                            <pre class="json-pre">@JobChainsViewModel.PrettyJson(Vm.OpenRun.FinalOutput)</pre>
+                            <pre class="json-pre">@Vm.Presentation.Json(Vm.OpenRun.FinalOutput)</pre>
                         </div>
                     }
 
@@ -269,23 +285,23 @@ else
                         <div class="stage-detail live-output-panel">
                             <div class="stage-detail-head">
                                 <span class="live-output-title">
-                                    @if (d.Status == "Running")
+                                    @if (Vm.IsRunningStep(d.Status))
                                     {
                                         <i class="output-live-dot"></i>
                                     }
-                                    @(d.Status == "Running" ? "Live output" : "Job output")
+                                    @Vm.StepOutputTitle(d.Status)
                                     <b>@(Vm.OpenRun.Steps.FirstOrDefault(s => s.RunId == d.Id)?.JobName)</b>
                                 </span>
-                                <span class="status-chip-sm" style="color:@JobChainsViewModel.StatusColor(d.Status); background:@JobChainsViewModel.StatusBg(d.Status)">@d.Status</span>
+                                <span class="status-chip-sm" style="color:@Vm.Presentation.StatusColor(d.Status); background:@Vm.Presentation.StatusBackground(d.Status)">@d.Status</span>
                                 <span class="flex-1"></span>
                                 @if (Vm.LiveOutputUpdatedAt is { } outputAt)
                                 {
-                                    <span class="output-updated">updated @outputAt.ToLocalTime().ToString("HH:mm:ss")</span>
+                                    <span class="output-updated">updated @Vm.Presentation.Format(outputAt, "HH:mm:ss")</span>
                                 }
                                 <button class="dcbtn btn-xs"
-                                        @onclick="@(() => Nav.NavigateTo($"/project/{ProjectId}/jobs"))">open in Jobs →</button>
+                                        @onclick="Vm.NavigateToJobs">open in Jobs →</button>
                             </div>
-                            @if (d.ShardResults.Count == 0 && d.Status == "Running")
+                            @if (d.ShardResults.Count == 0 && Vm.IsRunning(d.Status))
                             {
                                 @if (!string.IsNullOrWhiteSpace(Vm.LiveOutputText))
                                 {
@@ -305,11 +321,11 @@ else
                                     <div class="shard-head">shard @shard.Index — @shard.Outcome (exit @shard.ExitCode)</div>
                                     @if (shard.Artifact is not null)
                                     {
-                                        <pre class="artifact-pre">@JobChainsViewModel.PrettyJson(shard.Artifact)</pre>
+                                        <pre class="artifact-pre">@Vm.Presentation.Json(shard.Artifact)</pre>
                                     }
                                     @if (!string.IsNullOrWhiteSpace(shard.Log))
                                     {
-                                        <details class="log-details" open="@(shard.Outcome == "Failed")">
+                                        <details class="log-details" open="@Vm.IsFailedStep(shard.Outcome)">
                                             <summary class="log-summary">Log</summary>
                                             <pre class="log-pre">@shard.Log</pre>
                                         </details>
@@ -319,10 +335,10 @@ else
                             @if (d.ReduceResult is { } reduce)
                             {
                                 <div class="mb-8">
-                                    <div class="shard-head">reduce — @(reduce.Succeeded ? "Succeeded" : "Failed") (exit @reduce.ExitCode)</div>
+                                    <div class="shard-head">reduce — @Vm.ReduceStatusLabel(reduce.Succeeded) (exit @reduce.ExitCode)</div>
                                     @if (!string.IsNullOrWhiteSpace(reduce.Artifact))
                                     {
-                                        <pre class="artifact-pre">@JobChainsViewModel.PrettyJson(reduce.Artifact)</pre>
+                                        <pre class="artifact-pre">@Vm.Presentation.Json(reduce.Artifact)</pre>
                                     }
                                     @if (!string.IsNullOrWhiteSpace(reduce.Log))
                                     {
@@ -353,15 +369,15 @@ else
 
             @* ── Canvas / List toggle ────────────────────────────────────────────────────── *@
             <div class="dctabs editor-tabs sub-tabs">
-                <button class="dctab @(Vm.EditorView == "canvas" ? "active" : "")" @onclick="@(() => Vm.EditorView = "canvas")">
+                <button class="dctab @(Vm.IsCanvasView ? "active" : "")" @onclick="@(() => Vm.EditorView = "canvas")">
                     <span class="tab-icon">⌘</span> Canvas
                 </button>
-                <button class="dctab @(Vm.EditorView == "list" ? "active" : "")" @onclick="@(() => Vm.EditorView = "list")">
+                <button class="dctab @(!Vm.IsCanvasView ? "active" : "")" @onclick="@(() => Vm.EditorView = "list")">
                     <span class="tab-icon">☷</span> List
                 </button>
             </div>
 
-            @if (Vm.EditorView == "canvas")
+            @if (Vm.IsCanvasView)
             {
                 @* ── Canvas view ──────────────────────────────────────────────────────────── *@
                 <div class="mb-8">
@@ -381,7 +397,7 @@ else
                 </div>
             }
 
-            @if (Vm.EditorView != "canvas")
+            @if (!Vm.IsCanvasView)
             {
             @* ── List editor ──────────────────────────────────────────────────────────────── *@
             <div class="dcform-section">
@@ -449,12 +465,12 @@ else
                                         <button class="dcbtn btn-xs" @onclick="@(() => Vm.OpenStageNodePicker(stageIndex))">+ step</button>
                                     }
                                 </div>
-                                @if (!Vm.EdStageActions.ContainsKey(stageIndex))
+                                @if (!Vm.HasStageAction(stageIndex))
                                 {
                                 <div class="stage-branch-row">
                                     <select class="dcinput branch-select" title="Pick a job to add as a parallel branch"
                                             value="@Vm.EdBranchJobIds.GetValueOrDefault(stageIndex, "")"
-                                            @onchange="@((e) => Vm.EdBranchJobIds[stageIndex] = e.Value?.ToString() ?? "")">
+                                            @onchange="@((e) => Vm.SetBranchJobId(stageIndex, e))">
                                         <option value="">— pick a job —</option>
                                         @foreach (var job in Vm.Jobs ?? Array.Empty<JobView>())
                                         {
@@ -520,13 +536,13 @@ else
                             </span>
                             <strong>Send SMS</strong><small>Text message through workspace communications</small>
                         </button>
-                        <button class="node-picker-tile" @onclick="@(() => Vm.ChooseStageNode("condition"))">
+                        <button class="node-picker-tile" @onclick="Vm.ChooseConditionNode">
                             <span class="node-picker-icon" aria-hidden="true">
                                 <svg viewBox="0 0 24 24"><circle cx="6" cy="5" r="2"/><circle cx="18" cy="5" r="2"/><circle cx="12" cy="19" r="2"/><path d="M6 7v2a4 4 0 0 0 4 4h2M18 7v2a4 4 0 0 1-4 4h-2v4"/></svg>
                             </span>
                             <strong>Condition</strong><small>Continue when payload matches</small>
                         </button>
-                        <button class="node-picker-tile" @onclick="@(() => Vm.ChooseStageNode("wait"))">
+                        <button class="node-picker-tile" @onclick="Vm.ChooseWaitNode">
                             <span class="node-picker-icon" aria-hidden="true">
                                 <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
                             </span>
@@ -555,7 +571,7 @@ else
                             </select>
                         </div>
 
-                        @if (Vm.GateEditorType == "wait")
+                        @if (Vm.IsWaitGateEditor)
                         {
                             <div class="dcfield">
                                 <label>Duration (seconds)</label>
@@ -565,7 +581,7 @@ else
                             <div class="sub-note">Pauses the pipeline before running this stage's jobs.</div>
                         }
 
-                        @if (Vm.GateEditorType == "condition")
+                        @if (Vm.IsConditionGateEditor)
                         {
                             <div class="condition-builder">
                                 <div class="dcfield">
@@ -595,7 +611,7 @@ else
                                 @if (Vm.ConditionNeedsValue)
                                 {
                                     <div class="dcfield">
-                                        <label>Value @(Vm.GateEditorOperator == "in" ? "(comma separated)" : "")</label>
+                                        <label>Value @(Vm.IsInGateOperator ? "(comma separated)" : "")</label>
                                         <input class="dcinput" @bind="Vm.GateEditorValue" placeholder="approved" />
                                     </div>
                                 }
@@ -752,7 +768,7 @@ else
             </div>
         }
 
-        @if (Vm.EditorTab == "details")
+        @if (Vm.IsDetailsTab)
         {
             <div class="dcslide-foot">
                 @if (Vm.EditorError is not null)

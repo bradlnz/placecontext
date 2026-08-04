@@ -4,9 +4,11 @@
    per-project JobChains page and the cross-project Observability "Chains" lens so the two stay
    visually identical. Clicking a step (once it has a run id) raises OnStepClick — callers decide
    whether that opens an inline detail panel or deep-links to the run's OTel trace. *@
+@inject ChainPipelineViewModel Vm
+@implements IDisposable
 
 <div class="pipeline">
-    @foreach (var (stage, colIndex) in Run.StepsByStage.Select((s, i) => (s, i)))
+    @foreach (var (stage, colIndex) in Vm.Stages(Run).Select((s, i) => (s, i)))
     {
         if (colIndex > 0)
         {
@@ -15,16 +17,13 @@
         <div class="stage-col">
             @foreach (var step in stage)
             {
-                <div class="stage" style="border:1.5px solid @StepBorder(step.Status); background:@StatusBg(step.Status); @(step.RunId is not null ? "cursor:pointer" : "")"
+                <div class="stage" style="border:1.5px solid @Vm.Border(step.Status); background:@Vm.Background(step.Status); @Vm.CursorStyle(step)"
                      @onclick="@(() => OnStepClick.InvokeAsync(step))">
-                    <div class="stage-title" style="color:@StatusColor(step.Status)">
-                        <span>@StepIcon(step.Status)</span><span>@step.JobName</span>
+                    <div class="stage-title" style="color:@Vm.Color(step.Status)">
+                        <span>@Vm.Icon(step.Status)</span><span>@step.JobName</span>
                     </div>
                     <div class="stage-sub">
-                        @(step.Status == "Running" ? "running…"
-                            : step.StartedAt.HasValue && step.FinishedAt.HasValue
-                                ? step.Status + " " + FormatDuration(step.StartedAt.Value, step.FinishedAt.Value)
-                                : step.Status.ToLowerInvariant())
+                        @Vm.Summary(step)
                     </div>
                     @if (!string.IsNullOrWhiteSpace(step.Provider))
                     {
@@ -34,7 +33,7 @@
                     {
                         <div class="stage-sub" title="@step.Error">@step.Error</div>
                     }
-                    @if (step.Status == "Running" && step.RunId.HasValue)
+                    @if (Vm.CanCancel(step))
                     {
                         <button class="dcbtn btn-2-8 text-bad mt-4" @onclick:stopPropagation="true"
                                 @onclick="@(() => OnStepCancel.InvokeAsync(step))">Cancel</button>
@@ -50,45 +49,6 @@
     [Parameter] public EventCallback<ChainStepRunView> OnStepClick { get; set; }
     [Parameter] public EventCallback<ChainStepRunView> OnStepCancel { get; set; }
 
-    private static string StepIcon(string status) => status switch
-    {
-        "Succeeded" => "✓",
-        "Failed" => "✗",
-        "Partial" => "~",
-        "Running" => "●",
-        "Skipped" => "⏭",
-        _ => "○"
-    };
-
-    private static string StepBorder(string status) => status switch
-    {
-        "Running" => "var(--brand-2)",
-        "Pending" or "Skipped" => "var(--border)",
-        _ => StatusColor(status)
-    };
-
-    private static string StatusColor(string status) => status switch
-    {
-        "Succeeded" => "var(--good)",
-        "Failed" => "var(--bad)",
-        "Partial" => "var(--warn)",
-        "Running" => "var(--brand-2)",
-        _ => "var(--text-3)"
-    };
-
-    private static string StatusBg(string status) => status switch
-    {
-        "Succeeded" => "var(--good-bg)",
-        "Failed" => "var(--bad-bg)",
-        "Partial" => "var(--warn-bg)",
-        "Running" => "var(--brand-bg)",
-        _ => "var(--card-2)"
-    };
-
-    private static string FormatDuration(DateTimeOffset start, DateTimeOffset end)
-    {
-        var span = end - start;
-        if (span.TotalSeconds < 60) return $"{(int)span.TotalSeconds}s";
-        return $"{(int)span.TotalMinutes}m {span.Seconds}s";
-    }
+    protected override void OnInitialized() => Vm.Attach(() => InvokeAsync(StateHasChanged));
+    public void Dispose() => Vm.Dispose();
 }

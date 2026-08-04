@@ -10,8 +10,6 @@
 @using PlaceContext.Host.Components.ViewModels
 @using PlaceContext.Host.Components.ViewModels.Helpers
 @inject ChatViewModel Vm
-@inject PortalUiState Ui
-@inject IJSRuntime JS
 
 <PageTitle>placecontext — Agent Chat</PageTitle>
 
@@ -37,15 +35,15 @@
         <div class="chat-controls">
             @if (Vm.ProjectId.HasValue)
             {
-                <button class="dcbtn sm" @onclick="ToggleSidePanel">@(Vm.ShowSidePanel ? "Hide Panel" : "Show Panel")</button>
-                <button class="dcbtn sm" @onclick="OpenSettingsAsync">⚙ Settings</button>
+                <button class="dcbtn sm" @onclick="Vm.ToggleSidePanel">@(Vm.ShowSidePanel ? "Hide Panel" : "Show Panel")</button>
+                <button class="dcbtn sm" @onclick="Vm.OpenSettingsAsync">⚙ Settings</button>
             }
         </div>
     </div>
 
     <div class="chat-layout">
         <div class="chat-area">
-            <div class="chat-messages" @ref="_messagesRef">
+            <div class="chat-messages" @ref="Vm.MessagesElement">
                 @if (Vm.Messages.Count == 0)
                 {
                     <div class="empty-note chat-empty">
@@ -53,24 +51,39 @@
                         @if (Vm.ProjectId.HasValue && Vm.GatewayReady)
                         {
                             <div class="starter-actions">
-                                <button class="starter-btn" @onclick="@(() => StarterPromptAsync("Give me an overview of this project"))">
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                                <button class="starter-btn" @onclick="@(() => Vm.StarterPromptFromUiAsync("Give me an overview of this project"))">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                                        <circle cx="12" cy="12" r="10" />
+                                        <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+                                        <line x1="12" y1="17" x2="12.01" y2="17" />
+                                    </svg>
                                     Project overview
                                 </button>
-                                <button class="starter-btn" @onclick="@(() => StarterPromptAsync("Show me the recent job runs and their status"))">
+                                <button class="starter-btn" @onclick="@(() => Vm.StarterPromptFromUiAsync("Show me the recent job runs and their status"))">
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polygon points="5 3 19 12 5 21 5 3"/></svg>
                                     Recent job runs
                                 </button>
-                                <button class="starter-btn" @onclick="@(() => StarterPromptAsync("What are the hotspots in the project dependency graph?"))">
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><circle cx="5" cy="6" r="3"/><circle cx="19" cy="6" r="3"/><circle cx="12" cy="18" r="3"/><line x1="8" y1="8" x2="10" y2="15"/><line x1="16" y1="8" x2="14" y2="15"/></svg>
+                                <button class="starter-btn" @onclick="@(() => Vm.StarterPromptFromUiAsync("What are the hotspots in the project dependency graph?"))">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                                        <circle cx="5" cy="6" r="3" /><circle cx="19" cy="6" r="3" />
+                                        <circle cx="12" cy="18" r="3" />
+                                        <line x1="8" y1="8" x2="10" y2="15" /><line x1="16" y1="8" x2="14" y2="15" />
+                                    </svg>
                                     Graph hotspots
                                 </button>
-                                <button class="starter-btn" @onclick="@(() => StarterPromptAsync("List the recent artifacts produced by job runs"))">
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                                <button class="starter-btn" @onclick="@(() => Vm.StarterPromptFromUiAsync("List the recent artifacts produced by job runs"))">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                                        <polyline points="14 2 14 8 20 8" />
+                                    </svg>
                                     Recent artifacts
                                 </button>
-                                <button class="starter-btn" @onclick="@(() => StarterPromptAsync("List the project data tables"))">
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+                                <button class="starter-btn" @onclick="@(() => Vm.StarterPromptFromUiAsync("List the project data tables"))">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                                        <ellipse cx="12" cy="5" rx="9" ry="3" />
+                                        <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3" />
+                                        <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5" />
+                                    </svg>
                                     Data tables
                                 </button>
                             </div>
@@ -80,11 +93,11 @@
                 }
                 else
                 {
-                    @foreach (var msg in Vm.Messages.Where(m => m.Role != "system"))
+                    @foreach (var msg in Vm.Messages.Where(Vm.IsVisible))
                     {
                         <div class="chat-msg @msg.Role">
-                            <div class="msg-avatar @(msg.Role == "user" ? "avatar-user" : "avatar-bot")">
-                                @if (msg.Role == "user")
+                            <div class="msg-avatar @(Vm.IsUser(msg) ? "avatar-user" : "avatar-bot")">
+                                @if (Vm.IsUser(msg))
                                 {
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
                                 }
@@ -96,22 +109,21 @@
                             <div class="msg-body">
                                 <div class="msg-role-row">
                                     <span class="msg-role">@msg.Role</span>
-                                    @if (msg.Role == "assistant" && !Vm.Streaming)
+                                    @if (Vm.IsAssistant(msg) && !Vm.Streaming)
                                     {
-                                        <button class="msg-copy-btn" @onclick="@(() => CopyMessageAsync(msg.Content))" title="Copy response">
-                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                                        <button class="msg-copy-btn" @onclick="@(() => Vm.CopyMessageAsync(msg.Content))" title="Copy response">
+                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12">
+                                                <rect x="9" y="9" width="13" height="13" rx="2" />
+                                                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                                            </svg>
                                         </button>
                                     }
                                 </div>
                                 @if (msg.ToolCalls.Count > 0)
                                 {
-                                    var graphCalls = msg.ToolCalls.Where(tc => tc.ResultType == "graph" && tc.Status == AgentToolCallStatus.Completed).ToList();
-                                    var mapCalls = msg.ToolCalls.Where(tc => tc.ResultType == "map" && tc.Status == AgentToolCallStatus.Completed).ToList();
-                                    var artifactCalls = msg.ToolCalls.Where(tc => tc.ResultType == "artifact" && tc.Status == AgentToolCallStatus.Completed).ToList();
-                                    var otherCalls = msg.ToolCalls.Where(tc => (tc.ResultType != "graph" && tc.ResultType != "map" && tc.ResultType != "artifact") || tc.Status != AgentToolCallStatus.Completed).ToList();
 
                                     @* Show graphs inline *@
-                                    @foreach (var tc in graphCalls)
+                                    @foreach (var tc in Vm.GraphCalls(msg))
                                     {
                                         <div class="chat-chart-wrap">
                                             <canvas id="graph-@tc.Id"></canvas>
@@ -119,7 +131,7 @@
                                     }
 
                                     @* Show maps inline *@
-                                    @foreach (var tc in mapCalls)
+                                    @foreach (var tc in Vm.MapCalls(msg))
                                     {
                                         <div class="chat-map-wrap">
                                             <div id="map-@tc.Id" class="chat-map-container"></div>
@@ -127,35 +139,33 @@
                                     }
 
                                     @* Show artifacts inline *@
-                                    @foreach (var tc in artifactCalls)
+                                    @foreach (var tc in Vm.ArtifactCalls(msg))
                                     {
                                         <div class="chat-artifact-wrap">
-                                            @RenderArtifact(tc)
+                                            @Vm.RenderArtifact(tc)
                                         </div>
                                     }
 
                                     @* Show other tool calls in expandable details *@
-                                    @if (otherCalls.Count > 0)
+                                    @if (Vm.OtherCalls(msg).Count > 0)
                                     {
-                                        var completedCount = otherCalls.Count(tc => tc.Status == AgentToolCallStatus.Completed);
-                                        var errorCount = otherCalls.Count(tc => tc.Status == AgentToolCallStatus.Error);
                                         <details class="tool-calls-expandable">
                                             <summary class="tool-calls-summary">
                                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M9 18l6-6-6-6"/></svg>
-                                                <span>@otherCalls.Count tool call@(otherCalls.Count > 1 ? "s" : "")</span>
-                                                @if (completedCount > 0)
+                                                <span>@Vm.OtherCalls(msg).Count tool call@(Vm.OtherCalls(msg).Count > 1 ? "s" : "")</span>
+                                                @if (Vm.CompletedOtherCallCount(msg) > 0)
                                                 {
-                                                    <span class="tc-badge tc-ok">@completedCount ok</span>
+                                                    <span class="tc-badge tc-ok">@Vm.CompletedOtherCallCount(msg) ok</span>
                                                 }
-                                                @if (errorCount > 0)
+                                                @if (Vm.ErrorOtherCallCount(msg) > 0)
                                                 {
-                                                    <span class="tc-badge tc-err">@errorCount err</span>
+                                                    <span class="tc-badge tc-err">@Vm.ErrorOtherCallCount(msg) err</span>
                                                 }
                                             </summary>
                                             <div class="tool-calls">
-                                                @foreach (var tc in otherCalls)
+                                                @foreach (var tc in Vm.OtherCalls(msg))
                                                 {
-                                                    <div class="tool-call @(tc.Status.ToString().ToLower())">
+                                                    <div class="tool-call @Vm.StatusClass(tc.Status)">
                                                         <span class="tool-name">@tc.ToolName</span>
                                                         <span class="tool-status">@tc.Status</span>
                                                         @if (tc.Status == AgentToolCallStatus.Error && !string.IsNullOrEmpty(tc.Result))
@@ -166,7 +176,7 @@
                                                         {
                                                             <details class="tool-result">
                                                                 <summary>View result</summary>
-                                                                <div class="tool-output-formatted">@((MarkupString)FormatToolResult(tc.Result))</div>
+                                                                <div class="tool-output-formatted">@((MarkupString)Vm.FormatToolResult(tc.Result))</div>
                                                             </details>
                                                         }
                                                     </div>
@@ -181,11 +191,11 @@
                                         @if (msg.AttachmentKey != null)
                                         {
                                             <a class="attachment-tile" href="/chat/attachments/@msg.AttachmentKey" target="_blank" title="Open attachment">
-                                                <span class="file-tile-icon">@FileLabel(msg.AttachmentName)</span>
+                                                <span class="file-tile-icon">@Vm.FileLabel(msg.AttachmentName)</span>
                                                 <span class="file-tile-copy">
                                                     <strong>@msg.AttachmentName</strong>
                                                     <small>
-                                                        @(msg.AttachmentSizeBytes > 0 ? FormatHelper.Bytes(msg.AttachmentSizeBytes) : "attached")
+                                                        @(msg.AttachmentSizeBytes > 0 ? Vm.Presentation.Bytes(msg.AttachmentSizeBytes) : "attached")
                                                         · @(msg.AttachmentParsed ? $"{msg.AttachmentExtractedChars:N0} characters parsed" : "no readable text")
                                                     </small>
                                                 </span>
@@ -195,11 +205,11 @@
                                         else
                                         {
                                             <span class="attachment-tile">
-                                                <span class="file-tile-icon">@FileLabel(msg.AttachmentName)</span>
+                                                <span class="file-tile-icon">@Vm.FileLabel(msg.AttachmentName)</span>
                                                 <span class="file-tile-copy">
                                                     <strong>@msg.AttachmentName</strong>
                                                     <small>
-                                                        @(msg.AttachmentSizeBytes > 0 ? FormatHelper.Bytes(msg.AttachmentSizeBytes) : "attached")
+                                                        @(msg.AttachmentSizeBytes > 0 ? Vm.Presentation.Bytes(msg.AttachmentSizeBytes) : "attached")
                                                         · @(msg.AttachmentParsed ? $"{msg.AttachmentExtractedChars:N0} characters parsed" : "no readable text")
                                                     </small>
                                                 </span>
@@ -219,45 +229,57 @@
                                 }
                                 @if (!string.IsNullOrWhiteSpace(msg.Content))
                                 {
-                                    <div class="msg-content">@((MarkupString)ChatViewModel.FormatContent(msg.Content))</div>
+                                    <div class="msg-content">@((MarkupString)Vm.FormatContent(msg.Content))</div>
                                 }
                                 @{
-                                    var parsedOptions = ChatViewModel.ParseNumberedOptions(msg.Content);
-                                    if (parsedOptions.Count > 0 && msg.Role == "assistant" && !Vm.Streaming)
+                                    if (Vm.NumberedOptions(msg).Count > 0 && Vm.IsAssistant(msg) && !Vm.Streaming)
                                     {
                                         <div class="option-picker" data-msg-id="@msg.Id">
-                                            @foreach (var opt in parsedOptions)
+                                            @foreach (var opt in Vm.NumberedOptions(msg))
                                             {
                                                 <label class="option-item">
                                                     <input type="checkbox" value="@opt" />
                                                     <span>@opt</span>
                                                 </label>
                                             }
-                                            <button class="dcbtn xs primary" @onclick="@(() => SubmitOptionsAsync(msg.Id))">Continue</button>
+                                            <button class="dcbtn xs primary" @onclick="@(() => Vm.SubmitOptionsFromUiAsync(msg.Id))">Continue</button>
                                         </div>
                                     }
                                 }
-                                @if (msg.Role == "assistant" && !Vm.Streaming)
+                                @if (Vm.IsAssistant(msg) && !Vm.Streaming)
                                 {
                                     <div class="quick-actions">
-                                        <button class="qa-btn" @onclick="@(() => QuickActionAsync(msg.Content, "summarize"))" title="Summarize">
+                                        <button class="qa-btn" @onclick="@(() => Vm.QuickActionFromUiAsync(msg.Content, "summarize"))" title="Summarize">
                                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M4 6h16M4 12h10M4 18h14"/></svg>
                                             Summarize
                                         </button>
-                                        <button class="qa-btn" @onclick="@(() => QuickActionAsync(msg.Content, "explain"))" title="Explain in detail">
-                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                                        <button class="qa-btn" @onclick="@(() => Vm.QuickActionFromUiAsync(msg.Content, "explain"))" title="Explain in detail">
+                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                                                <circle cx="12" cy="12" r="10" />
+                                                <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+                                                <line x1="12" y1="17" x2="12.01" y2="17" />
+                                            </svg>
                                             Explain
                                         </button>
-                                        <button class="qa-btn" @onclick="@(() => QuickActionAsync(msg.Content, "code"))" title="Generate code">
+                                        <button class="qa-btn" @onclick="@(() => Vm.QuickActionFromUiAsync(msg.Content, "code"))" title="Generate code">
                                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
                                             Code
                                         </button>
-                                        <button class="qa-btn" @onclick="@(() => QuickActionAsync(msg.Content, "graph"))" title="Visualize as graph">
-                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><circle cx="5" cy="6" r="3"/><circle cx="19" cy="6" r="3"/><circle cx="12" cy="18" r="3"/><line x1="8" y1="8" x2="10" y2="15"/><line x1="16" y1="8" x2="14" y2="15"/></svg>
+                                        <button class="qa-btn" @onclick="@(() => Vm.QuickActionFromUiAsync(msg.Content, "graph"))" title="Visualize as graph">
+                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                                                <circle cx="5" cy="6" r="3" />
+                                                <circle cx="19" cy="6" r="3" />
+                                                <circle cx="12" cy="18" r="3" />
+                                                <line x1="8" y1="8" x2="10" y2="15" />
+                                                <line x1="16" y1="8" x2="14" y2="15" />
+                                            </svg>
                                             Graph
                                         </button>
-                                        <button class="qa-btn" @onclick="@(() => CopyMessageAsync(msg.Content))" title="Copy to clipboard">
-                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                                        <button class="qa-btn" @onclick="@(() => Vm.CopyMessageAsync(msg.Content))" title="Copy to clipboard">
+                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                                                <rect x="9" y="9" width="13" height="13" rx="2" />
+                                                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                                            </svg>
                                         </button>
                                     </div>
                                 }
@@ -296,20 +318,19 @@
                             }
                             else if (!string.IsNullOrEmpty(Vm.StreamBuffer))
                             {
-                                var streamSplit = ChatViewModel.SplitThinking(Vm.StreamBuffer);
-                                @if (!string.IsNullOrWhiteSpace(streamSplit.Thinking))
+                                @if (!string.IsNullOrWhiteSpace(Vm.StreamThinking))
                                 {
                                     <details class="thinking-expandable" open>
                                         <summary class="thinking-summary">
                                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M9 18l6-6-6-6"/></svg>
                                             <span>Thinking…</span>
                                         </summary>
-                                        <div class="thinking-content">@streamSplit.Thinking</div>
+                                        <div class="thinking-content">@Vm.StreamThinking</div>
                                     </details>
                                 }
-                                @if (!string.IsNullOrWhiteSpace(streamSplit.Answer))
+                                @if (!string.IsNullOrWhiteSpace(Vm.StreamAnswer))
                                 {
-                                    <div class="msg-content">@((MarkupString)ChatViewModel.FormatContent(streamSplit.Answer))</div>
+                                    <div class="msg-content">@((MarkupString)Vm.FormatContent(Vm.StreamAnswer))</div>
                                 }
                             }
                         </div>
@@ -332,7 +353,7 @@
                                         <label class="clarification-option @(isSelected ? "selected" : "")">
                                             <input type="checkbox"
                                                    checked="@isSelected"
-                                                   @onchange="@(_ => ToggleClarificationOption(opt.Id))" />
+                                                   @onchange="@(_ => Vm.ToggleClarificationOption(opt.Id))" />
                                             <span class="clarification-option-label">@opt.Label</span>
                                             @if (!string.IsNullOrEmpty(opt.Description))
                                             {
@@ -342,40 +363,40 @@
                                     }
                                 </div>
                                 <div class="clarification-actions">
-                                    <button class="dcbtn xs" @onclick="CancelClarification">Cancel</button>
+                                    <button class="dcbtn xs" @onclick="Vm.CancelClarification">Cancel</button>
                                     <button class="dcbtn xs primary"
                                                 disabled="@(Vm.ClarificationSelected.Count == 0)"
-                                                @onclick="SubmitClarification">Continue</button>
+                                                @onclick="Vm.SubmitClarification">Continue</button>
                                 </div>
                             </div>
                         </div>
                     </div>
                 }
-                <div @ref="_scrollAnchor"></div>
+                <div @ref="Vm.ScrollAnchorElement"></div>
             </div>
 
             @if (Vm.WorkspaceLoaded)
             {
-            <div class="chat-input-wrap" @ref="_dropZoneRef">
+            <div class="chat-input-wrap" @ref="Vm.DropZoneElement">
                 <div class="chat-input-bar">
                     <button type="button" class="chat-attach-btn" title="Attach file (CSV, JSON, text, PDF, DOCX, XLSX)"
-                            aria-label="Attach file" @onclick="OpenFilePicker">
+                            aria-label="Attach file" @onclick="Vm.OpenFilePicker">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
                             <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/>
                         </svg>
                     </button>
-                    <InputFile @key="_fileInputVersion" id="chat-file-input" OnChange="OnFileSelected"
+                    <InputFile @key="Vm.FileInputVersion" id="chat-file-input" OnChange="@(e => Vm.ImportFileAsync(e.File))"
                                accept=".csv,.tsv,.json,.txt,.md,.xml,.yaml,.yml,.pdf,.docx,.xlsx"
                                class="hidden-file-input" style="display:none" />
                     <div class="chat-input-outer">
-                        @if (_showCmdSuggest)
+                        @if (Vm.ShowCommandSuggestions)
                         {
                             <div class="cmd-suggest">
-                                @foreach (var cmd in _filteredCmds)
+                                @foreach (var cmd in Vm.FilteredCommands)
                                 {
-                                    <div class="cmd-suggest-item @(cmd == _filteredCmds[_selectedCmdIdx] ? "hover" : "")"
-                                         @onmousedown="@(() => SelectCommand(cmd))"
-                                         @onmouseenter="@(() => _selectedCmdIdx = _filteredCmds.IndexOf(cmd))">
+                                    <div class="cmd-suggest-item @(cmd == Vm.FilteredCommands[Vm.SelectedCommandIndex] ? "hover" : "")"
+                                         @onmousedown="@(() => Vm.SelectCommand(cmd))"
+                                         @onmouseenter="@(() => Vm.HighlightCommand(cmd))">
                                         <span class="cmd-suggest-name">/<span>@cmd.Name</span></span>
                                         @if (!string.IsNullOrWhiteSpace(cmd.Description))
                                         {
@@ -387,34 +408,34 @@
                             </div>
                         }
                         <input class="dcinput chat-input" @bind="Vm.Input" @bind:event="oninput"
-                               @bind:after="OnInputChanged"
+                               @bind:after="Vm.HandleInputChanged"
                                placeholder="@(Vm.PendingClarification != null ? "Respond to the question above…" : "Ask about data, jobs, or request a graph…")"
                                disabled="@(Vm.Streaming && Vm.PendingClarification == null)"
-                               @onkeydown="InputKeydown" />
+                               @onkeydown="@(e => Vm.HandleInputKeydownAsync(e, Vm.MessagesElement, Vm.ScrollAnchorElement))" />
                     </div>
                     @if (Vm.Streaming && Vm.PendingClarification == null)
                     {
-                        <button class="dcbtn danger" @onclick="Stop">Stop</button>
+                        <button class="dcbtn danger" @onclick="Vm.StopFromUiAsync">Stop</button>
                     }
                     else
                     {
                         <button class="dcbtn primary"
                                 disabled="@(string.IsNullOrWhiteSpace(Vm.Input) && Vm.AttachedFile is null)"
-                                @onclick="Send">Send</button>
+                                @onclick="Vm.SendFromUiAsync">Send</button>
                     }
                 </div>
                 @if (Vm.AttachedFileName != null)
                 {
                     <div class="attached-file-tile">
-                        <span class="file-tile-icon compact">@FileLabel(Vm.AttachedFileName)</span>
+                        <span class="file-tile-icon compact">@Vm.FileLabel(Vm.AttachedFileName)</span>
                         <span class="file-tile-copy">
                             <strong>@Vm.AttachedFileName</strong>
                             <small>
-                                @(Vm.AttachedFile is null ? "attached" : FormatHelper.Bytes(Vm.AttachedFile.Length))
+                                @(Vm.AttachedFile is null ? "attached" : Vm.Presentation.Bytes(Vm.AttachedFile.Length))
                                 · @(Vm.AttachedFileText is not null ? $"{Vm.AttachedFileText.Length:N0} characters ready" : "no readable text")
                             </small>
                         </span>
-                        <button class="chip-remove" @onclick="RemoveAttachment" title="Remove file">×</button>
+                        <button class="chip-remove" @onclick="Vm.RemoveAttachment" title="Remove file">×</button>
                     </div>
                 }
                 @if (Vm.AttachmentError is not null)
@@ -427,7 +448,7 @@
 
         @if (Vm.ShowSidePanel)
         {
-            <div class="side-panel-scrim" aria-hidden="true" @onclick="ToggleSidePanel"></div>
+            <div class="side-panel-scrim" aria-hidden="true" @onclick="Vm.ToggleSidePanel"></div>
             <div class="side-panel" aria-label="Agent workspace">
                 <div class="side-panel-head">
                     <h3>Agent Workspace</h3>
@@ -435,7 +456,7 @@
                     {
                         <span class="graph-badge">@Vm.GraphNodes.Count nodes · @Vm.GraphLinks links</span>
                     }
-                    <button class="side-panel-close" aria-label="Close agent workspace" @onclick="ToggleSidePanel">×</button>
+                    <button class="side-panel-close" aria-label="Close agent workspace" @onclick="Vm.ToggleSidePanel">×</button>
                 </div>
 
                 @if (!Vm.WorkspaceLoaded)
@@ -471,16 +492,16 @@
                         <div class="session-header">
                             <h4>Sessions</h4>
                             <div class="session-header-actions">
-                                <button class="dcbtn xs" @onclick="ClearCurrentSessionAsync" disabled="@(Vm.Messages.Count == 0 || Vm.Streaming)" title="Clear messages in this session">Clear</button>
-                                <button class="dcbtn xs" @onclick="NewSession" disabled="@Vm.Streaming">+ New</button>
+                                <button class="dcbtn xs" @onclick="Vm.ClearCurrentSessionAsync" disabled="@(Vm.Messages.Count == 0 || Vm.Streaming)" title="Clear messages in this session">Clear</button>
+                                <button class="dcbtn xs" @onclick="Vm.NewSession" disabled="@Vm.Streaming">+ New</button>
                             </div>
                         </div>
                         @foreach (var s in Vm.Sessions.Take(20))
                         {
-                            <div class="session-item @(s.Id == Vm.SessionId ? "active" : "")" @onclick="@(() => SelectSessionAsync(s))">
+                            <div class="session-item @(s.Id == Vm.SessionId ? "active" : "")" @onclick="@(() => Vm.SelectSessionAsync(s))">
                                 <span class="session-title">@s.Title</span>
-                                <span class="session-meta">@s.MessageCount msgs · @s.LastMessageAt.ToString("MMM d HH:mm")</span>
-                                <button class="session-delete" @onclick="@(() => DeleteSessionAsync(s))" @onclick:stopPropagation="true" title="Delete session">×</button>
+                                <span class="session-meta">@s.MessageCount msgs · @Vm.SessionTime(s.LastMessageAt)</span>
+                                <button class="session-delete" @onclick="@(() => Vm.DeleteSessionAsync(s))" @onclick:stopPropagation="true" title="Delete session">×</button>
                             </div>
                         }
                     </div>
@@ -492,7 +513,7 @@
                         <h4>Active Actions</h4>
                         @foreach (var action in Vm.ActiveActions)
                         {
-                            <div class="action-item @action.Status.ToString().ToLower()">
+                            <div class="action-item @Vm.StatusClass(action.Status)">
                                 <span class="action-icon">
                                     @if (action.Status == AgentToolCallStatus.Running)
                                     {
@@ -549,8 +570,11 @@
                         <h4>Artifacts</h4>
                         @foreach (var a in Vm.PanelArtifacts)
                         {
-                            <a class="artifact-item" href="/runs/@a.RunId/artifacts/@a.Id" target="_blank" title="Open @a.Title (@FormatHelper.Bytes(a.SizeBytes))">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                            <a class="artifact-item" href="/runs/@a.RunId/artifacts/@a.Id" target="_blank" title="Open @a.Title (@Vm.Presentation.Bytes(a.SizeBytes))">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13">
+                                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                                    <polyline points="14 2 14 8 20 8" />
+                                </svg>
                                 <span class="artifact-title">@a.Title</span>
                                 <span class="artifact-kind">@a.Kind</span>
                             </a>
@@ -578,7 +602,7 @@
                         @foreach (var th in Vm.ToolHistory.TakeLast(15))
                         {
                             <div class="tool-history-item @(th.Success ? "ok" : "err")">
-                                <span class="th-time">@th.Timestamp.ToString("HH:mm:ss")</span>
+                                <span class="th-time">@Vm.ToolTime(th.Timestamp)</span>
                                 <span class="th-tool">@th.ToolName</span>
                                 <span class="th-status">@th.Status</span>
                             </div>
@@ -592,20 +616,20 @@
 
     @if (Vm.ShowSettings)
     {
-        <div class="dcmodal-overlay" @onclick="CloseSettings">
+        <div class="dcmodal-overlay" @onclick="Vm.CloseSettings">
             <div class="dcmodal settings-modal" @onclick:stopPropagation>
                 <div class="dcmodal-head">
                     <h3>Agent Settings</h3>
-                    <button class="dcslide-x" @onclick="CloseSettings">×</button>
+                    <button class="dcslide-x" @onclick="Vm.CloseSettings">×</button>
                 </div>
                 <div class="dcmodal-body settings-body">
                     <div class="settings-tabs">
-                        <button class="tab-btn @(Vm.SettingsTab == "prompt" ? "active" : "")" @onclick="@(() => Vm.SettingsTab = "prompt")">Prompt</button>
-                        <button class="tab-btn @(Vm.SettingsTab == "rag" ? "active" : "")" @onclick="@(() => Vm.SettingsTab = "rag")">RAG</button>
-                        <button class="tab-btn @(Vm.SettingsTab == "commands" ? "active" : "")" @onclick="@(() => Vm.SettingsTab = "commands")">Commands</button>
+                        <button class="tab-btn @(Vm.CurrentSettingsTab == ChatSettingsTab.Prompt ? "active" : "")" @onclick="@(() => Vm.SelectSettingsTab(ChatSettingsTab.Prompt))">Prompt</button>
+                        <button class="tab-btn @(Vm.CurrentSettingsTab == ChatSettingsTab.Rag ? "active" : "")" @onclick="@(() => Vm.SelectSettingsTab(ChatSettingsTab.Rag))">RAG</button>
+                        <button class="tab-btn @(Vm.CurrentSettingsTab == ChatSettingsTab.Commands ? "active" : "")" @onclick="@(() => Vm.SelectSettingsTab(ChatSettingsTab.Commands))">Commands</button>
                     </div>
 
-                    @if (Vm.SettingsTab == "prompt")
+                    @if (Vm.CurrentSettingsTab == ChatSettingsTab.Prompt)
                     {
                         <div class="dcfield system-prompt-field">
                             <label>Persona <span class="field-hint">— the agent's personality and instructions</span></label>
@@ -632,7 +656,7 @@
                                 <label>Temperature</label>
                                 <div class="slider-row">
                                     <input type="range" class="dcslider" @bind="Vm.PendingTemperature" min="0" max="1" step="0.1" />
-                                    <span class="slider-val">@Vm.PendingTemperature.ToString("0.0")</span>
+                                    <span class="slider-val">@Vm.TemperatureLabel</span>
                                 </div>
                             </div>
                             <div class="dcfield">
@@ -641,7 +665,7 @@
                             </div>
                         </div>
                     }
-                    else if (Vm.SettingsTab == "rag")
+                    else if (Vm.CurrentSettingsTab == ChatSettingsTab.Rag)
                     {
                         <div class="rag-settings">
                             <div class="rag-toggle">
@@ -664,7 +688,7 @@
                             }
                         </div>
                     }
-                    else if (Vm.SettingsTab == "commands")
+                    else if (Vm.CurrentSettingsTab == ChatSettingsTab.Commands)
                     {
                         <div class="cmd-section">
                             <p class="cmd-hint">Typing <code>/name</code> in chat expands into a tool call. The command name is shown in the auto-suggest when you type <code>/</code>.</p>
@@ -693,7 +717,7 @@
                                     }
                                 </div>
                             }
-                            <button class="dcbtn sm primary add-cmd-btn" @onclick="@(() => Vm.ShowAddCommand = !Vm.ShowAddCommand)">+ Add Command</button>
+                            <button class="dcbtn sm primary add-cmd-btn" @onclick="Vm.ToggleAddCommand">+ Add Command</button>
                             @if (Vm.ShowAddCommand)
                             {
                                 <div class="cmd-form">
@@ -714,8 +738,8 @@
                                         <input class="dcinput" @bind="Vm.NewCmdArgs" placeholder="" />
                                     </div>
                                     <div class="cmd-form-actions">
-                                        <button class="dcbtn xs" @onclick="@(() => Vm.ShowAddCommand = false)">Cancel</button>
-                                        <button class="dcbtn xs primary" @onclick="AddCommandAsync">Add</button>
+                                        <button class="dcbtn xs" @onclick="Vm.HideAddCommand">Cancel</button>
+                                        <button class="dcbtn xs primary" @onclick="Vm.AddCommandAsync">Add</button>
                                     </div>
                                 </div>
                             }
@@ -724,8 +748,8 @@
 
                 </div>
                 <div class="dcmodal-foot">
-                    <button class="dcbtn" @onclick="CloseSettings">Cancel</button>
-                    <button class="dcbtn primary" @onclick="SaveSettings">Save</button>
+                    <button class="dcbtn" @onclick="Vm.CloseSettings">Cancel</button>
+                    <button class="dcbtn primary" @onclick="Vm.SaveSettingsAsync">Save</button>
                 </div>
             </div>
         </div>
@@ -735,589 +759,20 @@
 
 
 @code {
-    private ElementReference _messagesRef;
-    private ElementReference _scrollAnchor;
-    private ElementReference _dropZoneRef;
-    private bool _dropZoneInitialized;
-    private int _fileInputVersion;
-    private Action? _onUiChangedHandler;
-    private bool _showCmdSuggest;
-    private List<PlaceContext.Application.Dtos.ChatCommandView> _filteredCmds = [];
-    private int _selectedCmdIdx;
-
     protected override void OnInitialized()
     {
         base.OnInitialized();
         Vm.Attach(() => InvokeAsync(StateHasChanged));
-        _onUiChangedHandler = async () => await InvokeAsync(OnUiChanged);
-        Ui.OnChanged += _onUiChangedHandler;
     }
 
-    protected override async Task OnInitializedAsync()
-    {
-        await Vm.InitializeAsync();
-    }
+    protected override Task OnInitializedAsync() => Vm.InitializeAsync();
 
-    protected override async Task OnAfterRenderAsync(bool firstRender)
-    {
-        if (Vm.WorkspaceLoaded && !_dropZoneInitialized)
-        {
-            try
-            {
-                _dropZoneInitialized =
-                    await JS.InvokeAsync<bool>("placecontext.setupDropZone", _dropZoneRef, "chat-file-input");
-            }
-            catch (JSException)
-            {
-                // The conditional input may have changed during this render. Retry next render.
-            }
-        }
-
-        if (firstRender)
-        {
-            try
-            {
-                if (await JS.InvokeAsync<bool>("placecontext.isMobile"))
-                {
-                    Vm.ShowSidePanel = false;
-                    StateHasChanged();
-                }
-            }
-            catch { }
-        }
-
-        foreach (var msg in Vm.Messages)
-        {
-            foreach (var tc in msg.ToolCalls.Where(t => t.ResultType == "graph" && t.Status == AgentToolCallStatus.Completed))
-            {
-                if (Vm.RenderedChartIds.Contains(tc.Id)) continue;
-                try
-                {
-                    await JS.InvokeVoidAsync("pcchart.render", $"graph-{tc.Id}", tc.Result);
-                    Vm.RenderedChartIds.Add(tc.Id);
-                }
-                catch { }
-            }
-            foreach (var tc in msg.ToolCalls.Where(t => t.ResultType == "map" && t.Status == AgentToolCallStatus.Completed))
-            {
-                try
-                {
-                    await JS.InvokeVoidAsync("pcmap.render", $"map-{tc.Id}", tc.Result);
-                }
-                catch { }
-            }
-        }
-    }
+    protected override Task OnAfterRenderAsync(bool firstRender) =>
+        Vm.AfterRenderAsync(Vm.MessagesElement, Vm.ScrollAnchorElement, Vm.DropZoneElement, firstRender);
 
     public void Dispose()
     {
         Vm.Detach();
-        if (_onUiChangedHandler is not null) Ui.OnChanged -= _onUiChangedHandler;
+        Vm.DetachUi();
     }
-
-    private async Task OnUiChanged()
-    {
-        _dropZoneInitialized = false;
-        Vm.OnProjectChanged();
-        StateHasChanged();
-    }
-
-    // ── Thin event handler wrappers ──────────────────────────────────────
-
-    private async Task Send()
-    {
-        await Vm.SendAsync(() => InvokeAsync(ScrollToBottom), () => InvokeAsync(ScrollAfterRender));
-    }
-
-    private async Task Stop()
-    {
-        await Vm.StopAsync();
-    }
-
-    private void NewSession()
-    {
-        Vm.NewSession();
-    }
-
-    private async Task DeleteSessionAsync(ChatSessionSummary session)
-    {
-        await Vm.DeleteSessionAsync(session);
-    }
-
-    private async Task ClearCurrentSessionAsync()
-    {
-        await Vm.ClearCurrentSessionAsync();
-    }
-
-    private async Task SelectSessionAsync(ChatSessionSummary session)
-    {
-        await Vm.SelectSessionAsync(session);
-    }
-
-    private void ToggleSidePanel()
-    {
-        Vm.ShowSidePanel = !Vm.ShowSidePanel;
-    }
-
-    private async Task OpenSettingsAsync()
-    {
-        await Vm.OpenSettingsAsync();
-    }
-
-    private void CloseSettings()
-    {
-        Vm.CloseSettings();
-    }
-
-    private async Task SaveSettings()
-    {
-        await Vm.SaveSettingsAsync();
-    }
-
-    private async Task StarterPromptAsync(string prompt)
-    {
-        await Vm.StarterPromptAsync(prompt, ScrollToBottom);
-    }
-
-    private async Task QuickActionAsync(string context, string action)
-    {
-        await Vm.QuickActionAsync(context, action, ScrollToBottom);
-    }
-
-    private void ToggleClarificationOption(string id)
-    {
-        Vm.ToggleClarificationOption(id);
-    }
-
-    private void SubmitClarification()
-    {
-        Vm.SubmitClarification();
-    }
-
-    private void CancelClarification()
-    {
-        Vm.CancelClarification();
-    }
-
-    private async Task SubmitOptionsAsync(int messageId)
-    {
-        var selected = await JS.InvokeAsync<string[]>("placecontext.getCheckedOptions", messageId);
-        if (selected == null || selected.Length == 0) return;
-        var text = $"I selected: {string.Join(", ", selected)}";
-        Vm.Input = text;
-        await Send();
-    }
-
-    private async Task InputKeydown(KeyboardEventArgs e)
-    {
-        if (_showCmdSuggest)
-        {
-            if (e.Key == "ArrowDown")
-            {
-                _selectedCmdIdx = Math.Min(_selectedCmdIdx + 1, _filteredCmds.Count - 1);
-                return;
-            }
-            if (e.Key == "ArrowUp")
-            {
-                _selectedCmdIdx = Math.Max(_selectedCmdIdx - 1, 0);
-                return;
-            }
-            if (e.Key is "Enter" or "Tab")
-            {
-                if (_filteredCmds.Count > 0 && _selectedCmdIdx >= 0 && _selectedCmdIdx < _filteredCmds.Count)
-                {
-                    SelectCommand(_filteredCmds[_selectedCmdIdx]);
-                    if (e.Key == "Enter") await Send();
-                }
-                return;
-            }
-            if (e.Key == "Escape")
-            {
-                _showCmdSuggest = false;
-                return;
-            }
-        }
-        if (e.Key == "Enter" && !e.ShiftKey)
-        {
-            await Send();
-        }
-    }
-
-    private void RemoveAttachment()
-    {
-        Vm.RemoveAttachment();
-    }
-
-    private void OnInputChanged()
-    {
-        var input = Vm.Input;
-        if (input.StartsWith('/') && Vm.Commands.Count > 0)
-        {
-            var partial = input[1..].ToLowerInvariant();
-            _filteredCmds = string.IsNullOrEmpty(partial)
-                ? [..Vm.Commands]
-                : Vm.Commands.Where(c => c.Name.Contains(partial, StringComparison.OrdinalIgnoreCase)).ToList();
-            _showCmdSuggest = _filteredCmds.Count > 0;
-            _selectedCmdIdx = 0;
-        }
-        else
-        {
-            _showCmdSuggest = false;
-        }
-    }
-
-    private void SelectCommand(PlaceContext.Application.Dtos.ChatCommandView cmd)
-    {
-        Vm.Input = "/" + cmd.Name + " ";
-        _showCmdSuggest = false;
-    }
-
-    private async Task AddCommandAsync()
-    {
-        await Vm.AddCommandAsync();
-    }
-
-    private static string? GetMcpUrl(string f) => f?.StartsWith("http") == true ? f : null;
-
-    private static string FileLabel(string fileName)
-    {
-        var extension = Path.GetExtension(fileName).TrimStart('.');
-        return string.IsNullOrWhiteSpace(extension)
-            ? "FILE"
-            : extension[..Math.Min(4, extension.Length)].ToUpperInvariant();
-    }
-
-    private async Task CopyMessageAsync(string content)
-    {
-        try { await JS.InvokeVoidAsync("navigator.clipboard.writeText", content); }
-        catch { }
-    }
-
-    // ── JS interop helpers ───────────────────────────────────────────────
-
-    private async Task ScrollToBottom()
-    {
-        try { await JS.InvokeVoidAsync("placecontext.scrollToBottom", _messagesRef); }
-        catch { }
-    }
-
-    private async Task ScrollAfterRender()
-    {
-        try { await JS.InvokeVoidAsync("placecontext.scrollToElement", _scrollAnchor); }
-        catch { }
-    }
-
-    private async Task OnFileSelected(InputFileChangeEventArgs e)
-    {
-        const long maxBytes = 10 * 1024 * 1024;
-        try
-        {
-            var file = e.File;
-            if (file.Size == 0)
-            {
-                Vm.SetAttachmentError("That file is empty.");
-                return;
-            }
-            if (file.Size > maxBytes)
-            {
-                Vm.SetAttachmentError("Files must be 10 MB or smaller.");
-                return;
-            }
-
-            await using var input = file.OpenReadStream(maxBytes);
-            using var buffer = new MemoryStream((int)file.Size);
-            await input.CopyToAsync(buffer);
-            var data = buffer.ToArray();
-            Vm.SetAttachment(data, file.Name, Vm.ExtractText(data, file.Name));
-        }
-        catch (Exception ex)
-        {
-            Vm.SetAttachmentError($"Couldn't read that file: {ex.Message}");
-        }
-        finally
-        {
-            // Recreate the native input so selecting the same file again still raises OnChange.
-            _fileInputVersion++;
-        }
-    }
-
-    private async Task OpenFilePicker()
-    {
-        try { await JS.InvokeVoidAsync("eval", "document.getElementById('chat-file-input')?.click()"); }
-        catch { }
-    }
-
-    // ── Render helpers (Blazor-specific: MarkupString / RenderFragment) ──
-
-    private static string FormatToolResult(string result)
-    {
-        if (string.IsNullOrWhiteSpace(result)) return "<em>Empty result</em>";
-
-        var lines = result.Split('\n', StringSplitOptions.RemoveEmptyEntries);
-        var sb = new System.Text.StringBuilder();
-
-        var separatorIdx = Array.FindIndex(lines, l => l.Trim() == "---");
-        if (separatorIdx > 0)
-        {
-            var headerLine = lines[separatorIdx - 1];
-            var headers = headerLine.Split('|', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
-            var dataLines = lines.Skip(separatorIdx + 1).ToArray();
-
-            sb.Append("<table class=\"tool-table\">");
-            sb.Append("<thead><tr>");
-            foreach (var h in headers)
-                sb.Append($"<th>{System.Net.WebUtility.HtmlEncode(h)}</th>");
-            sb.Append("</tr></thead>");
-            sb.Append("<tbody>");
-            foreach (var row in dataLines)
-            {
-                var cells = row.Split('|', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
-                sb.Append("<tr>");
-                foreach (var c in cells)
-                    sb.Append($"<td>{System.Net.WebUtility.HtmlEncode(c)}</td>");
-                sb.Append("</tr>");
-            }
-            sb.Append("</tbody></table>");
-            return sb.ToString();
-        }
-
-        var listItems = lines.Where(l => l.TrimStart().StartsWith("- ")).ToArray();
-        if (listItems.Length > 0)
-        {
-            var headerLine = lines.FirstOrDefault(l => !l.TrimStart().StartsWith("- "));
-            if (!string.IsNullOrEmpty(headerLine))
-                sb.Append($"<div class=\"tool-result-header\">{System.Net.WebUtility.HtmlEncode(headerLine)}</div>");
-            sb.Append("<ul class=\"tool-list\">");
-            foreach (var item in listItems)
-            {
-                var text = item.TrimStart().Substring(2);
-                var formatted = System.Text.RegularExpressions.Regex.Replace(
-                    System.Net.WebUtility.HtmlEncode(text),
-                    @"\(([^)]+)\)",
-                    "<span class=\"tool-meta\">($1)</span>");
-                sb.Append($"<li>{formatted}</li>");
-            }
-            sb.Append("</ul>");
-            return sb.ToString();
-        }
-
-        var escaped = System.Net.WebUtility.HtmlEncode(result);
-        escaped = escaped.Replace("\n", "<br/>");
-        return $"<div class=\"tool-plain\">{escaped}</div>";
-    }
-
-    private RenderFragment RenderArtifact(ToolCallInfo tc) => builder =>
-    {
-        ArtifactRenderInfo? info = null;
-        try { info = System.Text.Json.JsonSerializer.Deserialize<ArtifactRenderInfo>(tc.Result ?? "{}"); }
-        catch { }
-
-        if (info is null)
-        {
-            builder.AddMarkupContent(0, "<div class=\"artifact-error\">Couldn't parse artifact result.</div>");
-            return;
-        }
-
-        var url = $"/runs/{info.RunId}/artifacts/{info.Id}";
-        var header = $"""
-            <div class="artifact-header">
-                <span class="artifact-title">{System.Net.WebUtility.HtmlEncode(info.Title)}</span>
-                <span class="artifact-ct">{System.Net.WebUtility.HtmlEncode(info.ContentType)}</span>
-                <span class="artifact-size">{FormatHelper.Bytes(info.SizeBytes)}</span>
-                <a class="artifact-open" href="{url}" target="_blank" rel="noopener">Open ↗</a>
-            </div>
-            """;
-        if (info.Truncated)
-            header += "<div class='artifact-truncated'>Preview truncated — use Open ↗ for the full file.</div>";
-        builder.AddMarkupContent(0, header);
-
-        if (!string.IsNullOrEmpty(info.ExtractedText))
-        {
-            if (info.ContentType == "application/pdf")
-                builder.AddMarkupContent(1, PdfPreviewMarkup(info, url));
-            var details = $"""
-                <details class="artifact-extracted">
-                    <summary>Extracted text {(info.ExtractedTruncated ? "(truncated)" : "")}</summary>
-                    <pre class="artifact-pre">{System.Net.WebUtility.HtmlEncode(info.ExtractedText)}</pre>
-                </details>
-                """;
-            builder.AddMarkupContent(2, details);
-        }
-        else if (info.IsText && !string.IsNullOrEmpty(info.Content))
-        {
-            if (IsJson(info.ContentType))
-            {
-                builder.OpenElement(1, "div");
-                builder.AddAttribute(2, "class", "artifact-json");
-                try
-                {
-                    var el = System.Text.Json.JsonDocument.Parse(info.Content).RootElement.Clone();
-                    builder.AddMarkupContent(3, RenderJson(el, 0));
-                }
-                catch
-                {
-                    builder.AddMarkupContent(3, $"<pre class='artifact-pre'>{System.Net.WebUtility.HtmlEncode(info.Content)}</pre>");
-                }
-                builder.CloseElement();
-            }
-            else if (IsCsv(info.ContentType))
-            {
-                var parsed = ParseCsv(info.Content);
-                if (parsed.Header.Count == 0)
-                {
-                    builder.AddMarkupContent(1, $"<pre class='artifact-pre'>{System.Net.WebUtility.HtmlEncode(info.Content)}</pre>");
-                }
-                else
-                {
-                    var csvSb = new System.Text.StringBuilder();
-                    csvSb.Append("<table class='artifact-table'><thead><tr>");
-                    foreach (var h in parsed.Header)
-                        csvSb.Append($"<th>{System.Net.WebUtility.HtmlEncode(h)}</th>");
-                    csvSb.Append("</tr></thead><tbody>");
-                    foreach (var row in parsed.Rows)
-                    {
-                        csvSb.Append("<tr>");
-                        foreach (var cell in row)
-                            csvSb.Append($"<td>{System.Net.WebUtility.HtmlEncode(cell)}</td>");
-                        csvSb.Append("</tr>");
-                    }
-                    csvSb.Append("</tbody></table>");
-                    builder.AddMarkupContent(1, csvSb.ToString());
-                }
-            }
-            else
-            {
-                builder.AddMarkupContent(1, $"<pre class='artifact-pre'>{System.Net.WebUtility.HtmlEncode(info.Content)}</pre>");
-            }
-        }
-        else if (PreviewableArtifact(info.ContentType))
-        {
-            if (info.ContentType.StartsWith("image/"))
-                builder.AddMarkupContent(1, $"<img class='artifact-image' src='{url}' alt='{System.Net.WebUtility.HtmlEncode(info.Title)}' loading='lazy' />");
-            else if (info.ContentType.StartsWith("video/"))
-                builder.AddMarkupContent(1, $"<video class='artifact-frame' src='{url}' controls preload='metadata' />");
-            else if (info.ContentType == "application/pdf")
-                builder.AddMarkupContent(1, PdfPreviewMarkup(info, url));
-            else
-                builder.AddMarkupContent(1, $"<iframe class='artifact-frame' src='{url}' title='{System.Net.WebUtility.HtmlEncode(info.Title)}' loading='lazy' referrerpolicy='no-referrer'></iframe>");
-        }
-        else
-        {
-            builder.AddMarkupContent(1, $"<div class='artifact-none'>No inline preview for {System.Net.WebUtility.HtmlEncode(info.ContentType)}.</div>");
-        }
-    };
-
-    private sealed class ArtifactRenderInfo
-    {
-        public Guid Id { get; set; }
-        public Guid RunId { get; set; }
-        public string Title { get; set; } = "";
-        public string ContentType { get; set; } = "";
-        public long SizeBytes { get; set; }
-        public bool IsText { get; set; }
-        public string? Content { get; set; }
-        public string? ExtractedText { get; set; }
-        public bool ExtractedTruncated { get; set; }
-        public bool Truncated { get; set; }
-    }
-
-    private static bool IsJson(string ct) => ct.Contains("json", StringComparison.OrdinalIgnoreCase);
-    private static bool IsCsv(string ct) => ct.Contains("csv", StringComparison.OrdinalIgnoreCase);
-
-    private static string PdfPreviewMarkup(ArtifactRenderInfo info, string url)
-    {
-        var title = System.Net.WebUtility.HtmlEncode(info.Title);
-        return $"""
-            <div class="artifact-pdf-wrap">
-                <div id="chat-artifact-pdf-{info.Id:N}" class="artifact-pdf-mobile"
-                     data-pc-pdf data-pdf-url="{url}" aria-label="PDF pages">
-                    <div class="pdf-loading">Preparing all PDF pages…</div>
-                </div>
-                <iframe class="artifact-frame pdf-desktop-frame" src="{url}" title="{title}"
-                        loading="lazy" referrerpolicy="no-referrer"></iframe>
-            </div>
-            """;
-    }
-
-    private static bool PreviewableArtifact(string ct) =>
-        ct.StartsWith("text/") || ct.StartsWith("image/") || ct == "application/pdf"
-        || ct.Contains("svg") || ct.StartsWith("video/") || ct.Contains("html");
-
-    private static (IReadOnlyList<string> Header, IReadOnlyList<IReadOnlyList<string>> Rows) ParseCsv(string text)
-    {
-        var lines = text.Split('\n', StringSplitOptions.RemoveEmptyEntries);
-        var header = lines.Length > 0 ? SplitCsvLine(lines[0]) : Array.Empty<string>();
-        var rows = new List<IReadOnlyList<string>>();
-        foreach (var line in lines.Skip(1))
-            rows.Add(SplitCsvLine(line));
-        return (header, rows);
-    }
-
-    private static IReadOnlyList<string> SplitCsvLine(string line)
-    {
-        var cells = new List<string>();
-        var sb = new System.Text.StringBuilder();
-        var quoted = false;
-        for (var i = 0; i < line.Length; i++)
-        {
-            var c = line[i];
-            if (quoted)
-            {
-                if (c == '"' && i + 1 < line.Length && line[i + 1] == '"') { sb.Append('"'); i++; }
-                else if (c == '"') quoted = false;
-                else sb.Append(c);
-            }
-            else if (c == '"') quoted = true;
-            else if (c == ',') { cells.Add(sb.ToString()); sb.Clear(); }
-            else if (c != '\r') sb.Append(c);
-        }
-        cells.Add(sb.ToString());
-        return cells;
-    }
-
-    private static string RenderJson(System.Text.Json.JsonElement el, int depth)
-    {
-        var sb = new System.Text.StringBuilder();
-        switch (el.ValueKind)
-        {
-            case System.Text.Json.JsonValueKind.Object:
-                sb.Append($"<details {(depth < 2 ? "open" : "")} style=\"margin-left:{(depth == 0 ? 0 : 14)}px\"><summary style=\"cursor:pointer; color:var(--text-3)\">{{…}} <span style=\"font-size:10px\">({el.EnumerateObject().Count()})</span></summary>");
-                foreach (var p in el.EnumerateObject())
-                {
-                    sb.Append($"<div style=\"margin-left:14px\"><span style=\"color:var(--human)\">\"{Esc(p.Name)}\"</span>: ");
-                    sb.Append(p.Value.ValueKind is System.Text.Json.JsonValueKind.Object or System.Text.Json.JsonValueKind.Array
-                        ? RenderJson(p.Value, depth + 1) : Scalar(p.Value));
-                    sb.Append("</div>");
-                }
-                sb.Append("</details>");
-                break;
-            case System.Text.Json.JsonValueKind.Array:
-                sb.Append($"<details {(depth < 2 ? "open" : "")} style=\"margin-left:{(depth == 0 ? 0 : 14)}px\"><summary style=\"cursor:pointer; color:var(--text-3)\">[…] <span style=\"font-size:10px\">({el.GetArrayLength()})</span></summary>");
-                var i = 0;
-                foreach (var item in el.EnumerateArray())
-                {
-                    if (i++ >= 200) { sb.Append("<div style=\"margin-left:14px; color:var(--text-3)\">…</div>"); break; }
-                    sb.Append("<div style=\"margin-left:14px\">");
-                    sb.Append(item.ValueKind is System.Text.Json.JsonValueKind.Object or System.Text.Json.JsonValueKind.Array
-                        ? RenderJson(item, depth + 1) : Scalar(item));
-                    sb.Append("</div>");
-                }
-                sb.Append("</details>");
-                break;
-            default:
-                sb.Append(Scalar(el));
-                break;
-        }
-        return sb.ToString();
-    }
-
-    private static string Scalar(System.Text.Json.JsonElement v) => v.ValueKind switch
-    {
-        System.Text.Json.JsonValueKind.String => $"<span style=\"color:var(--good)\">\"{Esc(v.GetString() ?? "")}\"</span>",
-        System.Text.Json.JsonValueKind.Number => $"<span style=\"color:var(--warn)\">{v.GetRawText()}</span>",
-        System.Text.Json.JsonValueKind.True or System.Text.Json.JsonValueKind.False => $"<span style=\"color:var(--brand-2)\">{v.GetRawText()}</span>",
-        _ => "<span style=\"color:var(--text-3)\">null</span>",
-    };
-
-    private static string Esc(string s) => s.Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;");
 }

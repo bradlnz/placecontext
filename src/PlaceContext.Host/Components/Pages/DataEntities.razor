@@ -2,14 +2,14 @@
 @attribute [Authorize(Policy = Permission.DataRead)]
 @layout PlaceContext.Host.Components.Layout.ProjectLayout
 @using PlaceContext.Application.Features
-@inject IPlaceContextService Svc
-@inject PortalUiState Ui
-@inject NavigationManager Nav
+@implements IDisposable
+@inject DataEntitiesViewModel Vm
+@using PlaceContext.Host.Components.ViewModels
 
 <PageTitle>placecontext — Entities</PageTitle>
 
 <div class="page">
-    <DataTabs ProjectId="ProjectId" Active="entities" />
+    <DataTabs ProjectId="ProjectId" Active="@DataSection.Entities" />
 
     <div class="page-head">
         <div>
@@ -20,20 +20,20 @@
             </div>
         </div>
         <div class="head-actions">
-            <button class="dcbtn" disabled="@_rescanning" @onclick="RescanAsync">@(_rescanning ? "Scanning…" : "↻ Rescan links")</button>
-            <button class="dcbtn primary" @onclick="@(() => OpenEditor(null))">+ New entity</button>
+            <button class="dcbtn" disabled="@Vm.Rescanning" @onclick="Vm.RescanAsync">@(Vm.Rescanning ? "Scanning…" : "↻ Rescan links")</button>
+            <button class="dcbtn primary" @onclick="@(() => Vm.OpenEditor(null))">+ New entity</button>
         </div>
     </div>
 
-    @if (_entities.Count > 0)
+    @if (Vm.Entities.Count > 0)
     {
-        <section class="entity-summary"><div><strong>@_entities.Count</strong><span>entities</span></div><div><strong>@_entities.Sum(x => x.Relations.Count)</strong><span>relations</span></div><div><strong>@_entities.Sum(x => x.Tags.Count)</strong><span>tags</span></div></section>
+        <section class="entity-summary"><div><strong>@Vm.Entities.Count</strong><span>entities</span></div><div><strong>@Vm.Entities.Sum(x => x.Relations.Count)</strong><span>relations</span></div><div><strong>@Vm.Entities.Sum(x => x.Tags.Count)</strong><span>tags</span></div></section>
         <section class="dccard entity-suite">
             <header class="entity-suite-head"><div><strong>Entity catalogue</strong><span>Business views over project data tables</span></div></header>
             <div class="entity-list">
-            @foreach (var e in _entities)
+            @foreach (var e in Vm.Entities)
             {
-                <article class="entity-row" @onclick="@(() => Nav.NavigateTo($"/project/{ProjectId}/entity/{Uri.EscapeDataString(e.Name)}"))">
+                <article class="entity-row" @onclick="@(() => Vm.NavigateToEntity(e.Name))">
                     <span class="entity-icon"><svg viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="8" ry="3" /><path d="M4 5v7c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 12v7c0 1.7 3.6 3 8 3s8-1.3 8-3v-7" /></svg></span>
                     <div class="entity-copy">
                         <div><strong>@e.Name</strong><span class="entity-table-chip">@e.TableName</span></div>
@@ -49,8 +49,8 @@
                         }
                     </div>
                         <div class="entity-actions" @onclick:stopPropagation="true">
-                            <button class="dcbtn xs" @onclick="@(() => OpenEditor(e))">Edit</button>
-                            <button class="dcbtn xs" @onclick="@(() => Nav.NavigateTo($"/project/{ProjectId}/entity/{Uri.EscapeDataString(e.Name)}"))">Open records</button>
+                            <button class="dcbtn xs" @onclick="@(() => Vm.OpenEditor(e))">Edit</button>
+                            <button class="dcbtn xs" @onclick="@(() => Vm.NavigateToEntity(e.Name))">Open records</button>
                         </div>
                 </article>
             }
@@ -65,20 +65,20 @@
         </div>
     }
 
-    @if (_rescanMessage is not null)
+    @if (Vm.RescanMessage is not null)
     {
-        <div class="rescan-msg">@_rescanMessage</div>
+        <div class="rescan-msg">@Vm.RescanMessage</div>
     }
 
     <div class="section-label">Linked values</div>
-    @if (_linkGroups.Count == 0)
+    @if (Vm.LinkGroups.Count == 0)
     {
         <div class="empty-note">No linked values yet — rescan after adding data.</div>
     }
     else
     {
         <div class="link-groups">
-            @foreach (var g in _linkGroups)
+            @foreach (var g in Vm.LinkGroups)
             {
                 <div class="dccard link-group">
                     <div class="link-group-head">
@@ -99,28 +99,28 @@
 </div>
 
 @* ── Entity editor slide-out ─────────────────────────────────────────────────────────────── *@
-@if (_showEditor)
+@if (Vm.ShowEditor)
 {
-    <div class="dcslide-scrim" @onclick="@(() => _showEditor = false)"></div>
+    <div class="dcslide-scrim" @onclick="@(() => Vm.ShowEditor = false)"></div>
     <div class="dcslide editor-slide">
         <div class="dcslide-head">
             <div class="flex-1">
-                <div class="slide-title">@(_editId.HasValue ? "Edit entity" : "New entity")</div>
+                <div class="slide-title">@(Vm.EditId.HasValue ? "Edit entity" : "New entity")</div>
                 <div class="slide-sub">A named business view over an ingested table, related to other entities.</div>
             </div>
-            <button class="dcslide-x" @onclick="@(() => _showEditor = false)">×</button>
+            <button class="dcslide-x" @onclick="@(() => Vm.ShowEditor = false)">×</button>
         </div>
         <div class="dcslide-body editor-body">
             <div class="field-row">
                 <div class="dcfield flex-1">
                     <label>Name <span class="req">*</span> <span class="code code-hint">menu label</span></label>
-                    <input class="dcinput" @bind="_edName" placeholder="Sites" />
+                    <input class="dcinput" @bind="Vm.EditName" placeholder="Sites" />
                 </div>
                 <div class="dcfield flex-1">
                     <label>Source table / view <span class="req">*</span></label>
-                    <select class="dcinput" @bind="_edTable">
+                    <select class="dcinput" @bind="Vm.EditTable">
                         <option value="">— pick —</option>
-                        @foreach (var t in _tables)
+                        @foreach (var t in Vm.Tables)
                         {
                             <option value="@t.Name">@t.Name@(t.IsView ? " (view)" : "")</option>
                         }
@@ -129,186 +129,68 @@
             </div>
             <div class="dcfield field-narrow">
                 <label>Label column <span class="code code-hint">names a record</span></label>
-                <input class="dcinput sans" @bind="_edLabel" placeholder="name" />
+                <input class="dcinput sans" @bind="Vm.EditLabel" placeholder="name" />
             </div>
             <div class="dcfield">
                 <label>Tags <span class="code code-hint">extra keys a run's output maps this entity to</span></label>
                 <div class="tag-input-box">
-                    @foreach (var tag in _edTags)
+                    @foreach (var tag in Vm.EditTags)
                     {
                         var t = tag;
                         <span class="tag-chip">
                             @t
                             <button class="dcslide-x tag-chip-x"
-                                    title="Remove tag" @onclick="@(() => _edTags.Remove(t))">×</button>
+                                    title="Remove tag" @onclick="@(() => Vm.EditTags.Remove(t))">×</button>
                         </span>
                     }
                     <input class="dcinput tag-input"
-                           placeholder="type a tag, press Enter" @bind="_tagInput" @bind:event="oninput" @onkeydown="TagKey" />
+                           placeholder="type a tag, press Enter" @bind="Vm.TagInput" @bind:event="oninput" @onkeydown="Vm.TagKey" />
                 </div>
                 <div class="field-hint">Enter or comma adds; a run whose output or documents mention a tag links to this entity.</div>
             </div>
             <div class="dcfield">
                 <div class="flex-between">
                     <label>Relations <span class="code code-hint">this column ↔ that entity's column</span></label>
-                    <button class="dcbtn rel-add-btn" @onclick="@(() => _edRelations.Add(new RelEdit()))">+ relation</button>
+                    <button class="dcbtn rel-add-btn" @onclick="@(() => Vm.EditRelations.Add(new DataEntitiesViewModel.RelationEdit()))">+ relation</button>
                 </div>
                 <div class="rel-list">
-                    @for (var i = 0; i < _edRelations.Count; i++)
+                    @for (var i = 0; i < Vm.EditRelations.Count; i++)
                     {
                         var idx = i;
                         <div class="rel-edit-row">
-                            <input class="dcinput rel-input-mono" placeholder="column" @bind="_edRelations[idx].Column" />
+                            <input class="dcinput rel-input-mono" placeholder="column" @bind="Vm.EditRelations[idx].Column" />
                             <span class="rel-sep">↔</span>
-                            <select class="dcinput rel-select" @bind="_edRelations[idx].TargetEntity">
+                            <select class="dcinput rel-select" @bind="Vm.EditRelations[idx].TargetEntity">
                                 <option value="">— entity —</option>
-                                @foreach (var e in _entities.Where(x => x.Id != _editId))
+                                @foreach (var e in Vm.Entities.Where(x => x.Id != Vm.EditId))
                                 {
                                     <option value="@e.Name">@e.Name</option>
                                 }
                             </select>
-                            <input class="dcinput rel-input-mono" placeholder="their column (default: same)" @bind="_edRelations[idx].TargetColumn" />
-                            <button class="dcbtn rel-del-btn" @onclick="@(() => _edRelations.RemoveAt(idx))">×</button>
+                            <input class="dcinput rel-input-mono" placeholder="their column (default: same)" @bind="Vm.EditRelations[idx].TargetColumn" />
+                            <button class="dcbtn rel-del-btn" @onclick="@(() => Vm.EditRelations.RemoveAt(idx))">×</button>
                         </div>
                     }
                 </div>
             </div>
         </div>
         <div class="dcslide-foot">
-            @if (_error is not null)
+            @if (Vm.Error is not null)
             {
-                <div class="foot-error">@_error</div>
+                <div class="foot-error">@Vm.Error</div>
             }
-            @if (_editId.HasValue)
+            @if (Vm.EditId.HasValue)
             {
-                <button class="dcbtn btn-danger" @onclick="DeleteAsync">Delete</button>
+                <button class="dcbtn btn-danger" @onclick="Vm.DeleteAsync">Delete</button>
             }
-            <button class="dcbtn" @onclick="@(() => _showEditor = false)">Cancel</button>
-            <button class="dcbtn primary" disabled="@_busy" @onclick="SaveAsync">@(_busy ? "Saving…" : "Save entity")</button>
+            <button class="dcbtn" @onclick="@(() => Vm.ShowEditor = false)">Cancel</button>
+            <button class="dcbtn primary" disabled="@Vm.Busy" @onclick="Vm.SaveAsync">@(Vm.Busy ? "Saving…" : "Save entity")</button>
         </div>
     </div>
 }
 
 @code {
     [Parameter] public Guid ProjectId { get; set; }
-
-    private IReadOnlyList<DataEntityView> _entities = Array.Empty<DataEntityView>();
-    private IReadOnlyList<PlaceContext.Application.Ports.ProjectTableInfo> _tables = Array.Empty<PlaceContext.Application.Ports.ProjectTableInfo>();
-    private bool _showEditor, _busy;
-    private Guid? _editId;
-    private string _edName = "", _edTable = "", _edLabel = "";
-    private string? _error;
-    private readonly List<RelEdit> _edRelations = new();
-    private readonly List<string> _edTags = new();
-    private string _tagInput = "";
-
-    private IReadOnlyList<RecordLinkGroup> _linkGroups = Array.Empty<RecordLinkGroup>();
-    private bool _rescanning;
-    private string? _rescanMessage;
-
-    private sealed class RelEdit
-    {
-        public string Column = "";
-        public string TargetEntity = "";
-        public string TargetColumn = "";
-    }
-
-    protected override async Task OnParametersSetAsync()
-    {
-        Ui.Set("Entities", "the project's data graph — tagged tables, related records");
-        await ReloadAsync();
-        await LoadLinkGroupsAsync();
-    }
-
-    private async Task ReloadAsync()
-    {
-        try
-        {
-            _entities = await Svc.ListDataEntitiesAsync(ProjectId);
-            _tables = await Svc.ListProjectDataTablesAsync(ProjectId);
-        }
-        catch (Exception ex) { _error = ex.Message; }
-    }
-
-    private async Task LoadLinkGroupsAsync()
-    {
-        try { _linkGroups = await Svc.ListRecordLinkGroupsAsync(ProjectId); }
-        catch (Exception ex) { _rescanMessage = ex.Message; }
-    }
-
-    private async Task RescanAsync()
-    {
-        _rescanning = true;
-        _rescanMessage = null;
-        try
-        {
-            var r = await Svc.RescanRecordLinksAsync(ProjectId);
-            _rescanMessage = $"scanned {r.TablesScanned} table(s) · {r.LinksFound} link(s)";
-            await LoadLinkGroupsAsync();
-        }
-        catch (Exception ex) { _rescanMessage = ex.Message; }
-        finally { _rescanning = false; }
-    }
-
-    private void OpenEditor(DataEntityView? e)
-    {
-        _editId = e?.Id;
-        _edName = e?.Name ?? "";
-        _edTable = e?.TableName ?? "";
-        _edLabel = e?.LabelColumn ?? "";
-        _edRelations.Clear();
-        if (e is not null)
-            _edRelations.AddRange(e.Relations.Select(r => new RelEdit { Column = r.Column, TargetEntity = r.TargetEntity, TargetColumn = r.TargetColumn }));
-        _edTags.Clear();
-        if (e is not null) _edTags.AddRange(e.Tags);
-        _tagInput = "";
-        _error = null;
-        _showEditor = true;
-    }
-
-    // Enter or comma commits the typed tag; a duplicate (case-insensitive) is ignored.
-    private void TagKey(KeyboardEventArgs e)
-    {
-        if (e.Key is not ("Enter" or ",")) return;
-        var tag = _tagInput.Trim().TrimEnd(',').Trim();
-        if (tag.Length > 0 && !_edTags.Contains(tag, StringComparer.OrdinalIgnoreCase))
-            _edTags.Add(tag);
-        _tagInput = "";
-    }
-
-    private async Task SaveAsync()
-    {
-        _error = null;
-        if (string.IsNullOrWhiteSpace(_edName)) { _error = "Name is required."; return; }
-        if (string.IsNullOrWhiteSpace(_edTable)) { _error = "Pick a source table or view."; return; }
-        _busy = true;
-        try
-        {
-            var relations = _edRelations
-                .Select(r => new EntityRelationDto(r.Column, r.TargetEntity, r.TargetColumn))
-                .ToList();
-            // A tag left in the input box (never Enter-committed) should still be saved.
-            var tags = _edTags.ToList();
-            var pending = _tagInput.Trim().TrimEnd(',').Trim();
-            if (pending.Length > 0 && !tags.Contains(pending, StringComparer.OrdinalIgnoreCase)) tags.Add(pending);
-            await Svc.SaveDataEntityAsync(new SaveDataEntityCommand(
-                ProjectId, _edName, _edTable, _edLabel, relations, tags, _editId));
-            await ReloadAsync();
-            _showEditor = false;
-        }
-        catch (Exception ex) { _error = ex.Message; }
-        finally { _busy = false; }
-    }
-
-    private async Task DeleteAsync()
-    {
-        if (_editId is not { } id) return;
-        try
-        {
-            await Svc.DeleteDataEntityAsync(id);
-            await ReloadAsync();
-            _showEditor = false;
-        }
-        catch (Exception ex) { _error = ex.Message; }
-    }
+    protected override async Task OnParametersSetAsync() { Vm.Attach(() => InvokeAsync(StateHasChanged)); await Vm.LoadAsync(ProjectId); }
+    public void Dispose() { Vm.Detach(); }
 }

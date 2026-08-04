@@ -1,45 +1,44 @@
 @page "/project/{Id:guid}"
 @attribute [Authorize(Policy = Permission.ProjectsView)]
 @layout PlaceContext.Host.Components.Layout.ProjectLayout
-@inject IPlaceContextService Svc
-@inject PortalUiState Ui
-@inject NavigationManager Nav
-@inject IJSRuntime JS
+@implements IDisposable
+@inject ProjectViewModel Vm
+@using PlaceContext.Host.Components.ViewModels
 @using PlaceContext.Application.Dtos
 
 <PageTitle>PlaceContext — Project</PageTitle>
 
-@if (_overview is null)
+@if (Vm.Overview is null)
 {
     <Skeleton Kind="detail" Rows="6" Padded />
 }
 else
 {
     <div class="page">
-        <button class="dcbtn back-btn" @onclick="@(() => Nav.NavigateTo("/"))">← All projects</button>
+        <button class="dcbtn back-btn" @onclick="@(() => Vm.BackToProjects())">← All projects</button>
 
         <div class="header-row">
             <div>
                 <div class="title-row">
-                    <span class="lang-dot" style="background:@Viz.LangColor(_overview.Path)"></span>
-                    <h1 class="project-title">@_overview.Name</h1>
-                    <span class="status-pill">@_overview.Status</span>
+                    <span class="lang-dot" style="background:@ProjectViewModel.LanguageColor(Vm.Overview.Path)"></span>
+                    <h1 class="project-title">@Vm.Overview.Name</h1>
+                    <span class="status-pill">@Vm.Overview.Status</span>
                 </div>
-                <div class="project-path">@_overview.Path</div>
+                <div class="project-path">@Vm.Overview.Path</div>
             </div>
         </div>
 
-        @if (_message is not null) { <div class="message">@_message</div> }
+        @if (Vm.Message is not null) { <div class="message">@Vm.Message</div> }
 
 
         <div class="dctabs tabs">
-            @foreach (var (key, label) in new[] { ("overview", "Overview"), ("requirements", "Requirements"), ("activity", "Activity") })
+            @foreach (var (key, label) in ProjectViewModel.TabItems)
             {
-                <button class="dctab @(_tab == key ? "active" : "")" @onclick="@(() => SwitchTab(key))">@label</button>
+                <button class="dctab @(Vm.Tab == key ? "active" : "")" @onclick="@(() => Vm.SwitchTab(key))">@label</button>
             }
         </div>
 
-        @if (_tab == "overview")
+        @if (Vm.Tab == ProjectViewModel.Tabs.Overview)
         {
         <!-- god-nodes -->
         <div class="dccard section-card pad-card">
@@ -47,14 +46,14 @@ else
                     <span class="card-title">God-nodes</span>
                     <span class="meta-mono">top degree</span>
                 </div>
-                @if (_overview.GodNodes.Count == 0)
+                @if (Vm.Overview.GodNodes.Count == 0)
                 {
                     <div class="muted-note">None detected.</div>
                 }
                 else
                 {
                     <div class="god-list">
-                        @foreach (var g in _overview.GodNodes)
+                        @foreach (var g in Vm.Overview.GodNodes)
                         {
                             <div class="god-row">
                                 <span class="god-dot"></span>
@@ -67,7 +66,7 @@ else
         </div>
         }
 
-        @if (_tab == "requirements")
+        @if (Vm.Tab == ProjectViewModel.Tabs.Requirements)
         {
         <!-- project requirements -->
         <div class="dccard section-card">
@@ -77,21 +76,21 @@ else
                     <span class="meta-mono">project-specific · added on top of the global requirements</span>
                 </div>
                 <div class="head-actions">
-                    @if (_requirements?.UpdatedAt is { } rts)
+                    @if (Vm.Requirements?.UpdatedAt is { } rts)
                     {
-                        <span class="meta-mono">updated @rts.ToWorkspaceTime().ToString("yyyy-MM-dd HH:mm")</span>
+                        <span class="meta-mono">updated @Vm.RequirementUpdated(rts)</span>
                     }
-                    <button class="dcbtn primary" @onclick="SaveRequirements" disabled="@(_savingReq || !RequirementsDirty)">@(_savingReq ? "saving…" : "Save requirements")</button>
+                    <button class="dcbtn primary" @onclick="Vm.SaveRequirementsAsync" disabled="@(Vm.SavingRequirements || !Vm.RequirementsDirty)">@(Vm.SavingRequirements ? "saving…" : "Save requirements")</button>
                 </div>
             </div>
             <div class="card-body">
-                @if (_requirements is null)
+                @if (Vm.Requirements is null)
                 {
                     <Skeleton Kind="text" Rows="4" />
                 }
                 else
                 {
-                    <textarea @bind="_reqDraft" spellcheck="false"
+                    <textarea @bind="Vm.RequirementsDraft" spellcheck="false"
                         placeholder="Requirements specific to this project (Markdown) — frameworks, patterns, constraints the review &amp; skill prompts should enforce here."
                         class="editor editor-req"></textarea>
                 }
@@ -99,30 +98,30 @@ else
         </div>
         }
 
-        @if (_tab == "activity")
+        @if (Vm.Tab == ProjectViewModel.Tabs.Activity)
         {
         <!-- decisions -->
         <div id="decisions" class="dccard section-card">
             <div class="card-head-title">Decisions</div>
-            @if (_decisions is null)
+            @if (Vm.Decisions is null)
             {
                 <div class="section-loading"><Skeleton Kind="list" Rows="3" /></div>
             }
-            else if (_decisions.Count == 0)
+            else if (Vm.Decisions.Count == 0)
             {
                 <div class="empty-note">No decisions recorded yet — they flow in through the <code>add_decision</code> MCP tool.</div>
             }
             else
             {
-                @foreach (var d in _decisions)
+                @foreach (var d in Vm.Decisions)
                 {
                     <div id="@($"decision-{d.Id}")" class="dcflashable decision-row">
                         <div class="decision-head">
                             <span class="decision-q">@d.Question</span>
-                            <span class="meta-mono">@d.DecidedAt.ToWorkspaceTime().ToString("yyyy-MM-dd")</span>
+                            <span class="meta-mono">@Vm.DecisionDate(d.DecidedAt)</span>
                         </div>
                         <div class="decision-choice">→ @d.Choice</div>
-                        @if (!string.IsNullOrWhiteSpace(d.Rationale) && d.Rationale != "(none)")
+                        @if (Vm.HasDecisionRationale(d))
                         {
                             <div class="decision-rationale">@d.Rationale</div>
                         }
@@ -132,26 +131,26 @@ else
         </div>
         }
 
-        @if (_tab == "activity")
+        @if (Vm.Tab == ProjectViewModel.Tabs.Activity)
         {
         <!-- recent changes -->
         <div id="changes" class="dccard section-card">
             <div class="card-head-title">Recent changes</div>
-            @if (_timeline is null)
+            @if (Vm.Timeline is null)
             {
                 <div class="section-loading"><Skeleton Kind="list" Rows="4" /></div>
             }
-            else if (_timeline.Changes.Count == 0)
+            else if (Vm.Timeline.Changes.Count == 0)
             {
                 <div class="empty-note">No changes recorded yet — they flow in through the <code>record_activity</code> MCP tool.</div>
             }
             else
             {
-                @foreach (var c in _timeline.Changes)
+                @foreach (var c in Vm.Timeline.Changes)
                 {
                     <div class="change-row">
                         <span class="change-seq">#@c.Sequence</span>
-                        <span class="change-kind" style="color:@Viz.AuthorColor(c.Kind); background:@Viz.AuthorBg(c.Kind)">@c.Kind.ToLower()</span>
+                            <span class="change-kind" style="color:@Vm.ChangeColor(c.Kind); background:@Vm.ChangeBackground(c.Kind)">@Vm.ChangeLabel(c.Kind)</span>
                         <span class="change-title">@c.Title</span>
                         <span class="meta-mono">@(c.Commit ?? "—")</span>
                     </div>
@@ -165,108 +164,7 @@ else
 
 @code {
     [Parameter] public Guid Id { get; set; }
-
-    private ProjectOverviewView? _overview;
-    private ActivityTimelineView? _timeline;
-    private IReadOnlyList<DecisionView>? _decisions;
-
-    private string _tab = "overview";
-
-    private string? _message;
-
-    private RequirementsView? _requirements;
-    private string _reqDraft = string.Empty;
-    private string _reqSaved = string.Empty;
-    private bool _savingReq;
-    private bool RequirementsDirty => !string.Equals(_reqDraft, _reqSaved, StringComparison.Ordinal);
-
-    private bool _scrollPending;
-
-    // OnParametersSet (not OnInitialized) so navigating between projects reloads the data.
-    protected override async Task OnParametersSetAsync()
-    {
-        // Sub-pages link back here with ?tab= so their tab strip can open a project-local tab.
-        var query = System.Web.HttpUtility.ParseQueryString(new Uri(Nav.Uri).Query);
-        // Unknown/retired tab values in old deep links (e.g. "board", "knowledge") fall back to overview.
-        if (query["tab"] is { Length: > 0 } tab)
-            _tab = tab is "overview" or "requirements" or "activity" ? tab : "overview";
-        await Load();
-    }
-
-    private async Task Load()
-    {
-        await LoadOverviewAsync();
-        _ = LoadDetailsAsync();
-    }
-
-    private async Task LoadOverviewAsync()
-    {
-        _overview = await Svc.GetProjectOverviewAsync(Id);
-        Ui.Set(_overview.Name, $"{_overview.Path} · {_overview.Status}");
-        _scrollPending = true; // arrived (often from a search hit) — scroll to the URL fragment once loaded
-        await InvokeAsync(StateHasChanged);
-    }
-
-    private async Task LoadDetailsAsync()
-    {
-        var timelineTask = LoadTimelineAsync();
-        var requirementsTask = LoadRequirementsAsync();
-        var decisionsTask = LoadDecisionsAsync();
-
-        await Task.WhenAll(timelineTask, requirementsTask, decisionsTask);
-        await InvokeAsync(StateHasChanged);
-    }
-
-    private async Task LoadTimelineAsync()
-    {
-        try { _timeline = await Svc.GetTimelineAsync(Id, 8); }
-        catch (Exception ex) { _message = $"Could not load timeline: {ex.Message}"; }
-    }
-
-    private async Task LoadRequirementsAsync()
-    {
-        try
-        {
-            _requirements = await Svc.GetProjectRequirementsAsync(Id);
-            _reqDraft = _reqSaved = _requirements.Markdown;
-        }
-        catch (Exception ex) { _message = $"Could not load requirements: {ex.Message}"; }
-    }
-
-    private async Task LoadDecisionsAsync()
-    {
-        try { _decisions = await Svc.GetDecisionsAsync(Id); }
-        catch (Exception ex) { _message = $"Could not load decisions: {ex.Message}"; }
-    }
-
-    // After the loaded page renders, scroll to (and flash) the section/decision named in the URL
-    // fragment — e.g. /project/{id}#changes or #decision-{id} from a search hit.
-    protected override async Task OnAfterRenderAsync(bool firstRender)
-    {
-        if (_scrollPending && _overview is not null)
-        {
-            _scrollPending = false;
-            await JS.InvokeVoidAsync("placecontext.scrollToHash");
-        }
-    }
-
-    private async Task SaveRequirements()
-    {
-        _savingReq = true; _message = null;
-        try
-        {
-            _requirements = await Svc.SetProjectRequirementsAsync(Id, _reqDraft);
-            _reqDraft = _reqSaved = _requirements.Markdown;
-            _message = "Project requirements saved.";
-        }
-        catch (Exception ex) { _message = ex.Message; }
-        finally { _savingReq = false; }
-    }
-
-    private async Task SwitchTab(string key)
-    {
-        _tab = key;
-        StateHasChanged();
-    }
-
+    protected override async Task OnParametersSetAsync() { Vm.Attach(() => InvokeAsync(StateHasChanged)); await Vm.LoadAsync(Id); }
+    protected override async Task OnAfterRenderAsync(bool firstRender) { await Vm.AfterRenderAsync(); }
+    public void Dispose() { Vm.Detach(); }
 }

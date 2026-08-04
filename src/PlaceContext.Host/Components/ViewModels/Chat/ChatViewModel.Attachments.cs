@@ -4,8 +4,8 @@ using PlaceContext.Application.Features;
 using PlaceContext.Application.Mcp;
 using PlaceContext.Application.Ports;
 using PlaceContext.Domain.Repositories;
-using PlaceContext.Infrastructure.Chat;
 using PlaceContext.Infrastructure.Caching;
+using PlaceContext.Infrastructure.Chat;
 
 namespace PlaceContext.Host.Components.ViewModels;
 
@@ -43,5 +43,4 @@ public sealed partial class ChatViewModel
         AttachmentError = null;
         NotifyStateChanged();
     }
-
 }

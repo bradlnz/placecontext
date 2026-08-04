@@ -1,26 +1,22 @@
 @page "/project/{ProjectId:guid}/jobs/{JobId:guid}"
 @attribute [Authorize(Policy = Permission.JobsEdit)]
-@using PlaceContext.Application.Dtos
-@using PlaceContext.Application.Features
-@inject IPlaceContextService Svc
-@inject PortalUiState Ui
-@inject NavigationManager Nav
-@inject IJSRuntime JS
+@using PlaceContext.Host.Components.ViewModels
+@inject JobEditorViewModel Vm
 
-<PageTitle>PlaceContext — @(_job?.Name ?? "Job editor")</PageTitle>
+<PageTitle>PlaceContext — @(Vm.Job?.Name ?? "Job editor")</PageTitle>
 
-@if (_loading)
+@if (Vm.Loading)
 {
     <Skeleton Kind="detail" Rows="8" Padded />
 }
-else if (_job is null)
+else if (Vm.Job is null)
 {
     <div class="notice">Job not found. <a href="/project/@ProjectId/jobs">Back to jobs</a></div>
 }
-else if (_job.MapSourceKind != "code")
+else if (!Vm.IsCodeMap)
 {
     <div class="notice">
-        This job runs a container image (<code>@_job.MapImage</code>), not inline code — there is nothing to edit here.
+        This job runs a container image (<code>@Vm.Job.MapImage</code>), not inline code — there is nothing to edit here.
         <a href="/project/@ProjectId/jobs">Back to jobs</a>
     </div>
 }
@@ -29,11 +25,10 @@ else
     <div class="page">
     @* ── Toolbar ─────────────────────────────────────────────────────────────────────────── *@
     <div class="toolbar">
-        <button class="dcbtn toolbar-back"
-                @onclick="@(() => Nav.NavigateTo($"/project/{ProjectId}/jobs"))">←</button>
-        <span class="job-name">@_job.Name</span>
-        <span class="runtime-badge">@_runtimeId</span>
-        @if (_monacoLite)
+        <button class="dcbtn toolbar-back" @onclick="Vm.NavigateBack">←</button>
+        <span class="job-name">@Vm.Job.Name</span>
+        <span class="runtime-badge">@Vm.RuntimeId</span>
+        @if (Vm.MonacoLite)
         {
             <span class="editor-warn"
                   title="The Monaco editor's CDN was unreachable — editing still works in a plain editor.">
@@ -41,15 +36,15 @@ else
             </span>
         }
         <span class="flex-spacer"></span>
-        @if (_message is not null)
+        @if (Vm.Message is not null)
         {
-            <span class="text-12-3">@_message</span>
+            <span class="text-12-3">@Vm.Message</span>
         }
-        <button class="dcbtn" disabled="@_busy" @onclick="RunAsync">
-            @(_running ? "Testing…" : "▶ Test")
+        <button class="dcbtn" disabled="@Vm.Busy" @onclick="Vm.RunAsync">
+            @(Vm.Running ? "Testing…" : "▶ Test")
         </button>
-        <button class="dcbtn primary" disabled="@_busy" @onclick="DeployAsync">
-            @(_saving ? "Deploying…" : "Deploy")
+        <button class="dcbtn primary" disabled="@Vm.Busy" @onclick="Vm.DeployAsync">
+            @(Vm.Saving ? "Deploying…" : "Deploy")
         </button>
     </div>
 
@@ -59,41 +54,41 @@ else
         <div class="file-tree">
             <div class="file-tree-head">
                 <span>Files</span>
-                <button class="dcbtn add-file-btn" @onclick="StartAddFile" title="Add file">+</button>
+                <button class="dcbtn add-file-btn" @onclick="Vm.StartAddFile" title="Add file">+</button>
             </div>
 
-            @if (_addingFile)
+            @if (Vm.AddingFile)
             {
                 <div class="add-file-row">
                     <input class="dcinput add-file-input" placeholder="path/name.js"
-                           @bind="_newFileName" @bind:event="oninput" @onkeydown="AddFileKey" @ref="_newFileInput" />
-                    <button class="dcbtn add-file-confirm" @onclick="ConfirmAddFile">✓</button>
+                           @bind="Vm.NewFileName" @bind:event="oninput" @onkeydown="Vm.AddFileKey" @ref="Vm.NewFileInput" />
+                    <button class="dcbtn add-file-confirm" @onclick="Vm.ConfirmAddFile">✓</button>
                 </div>
             }
 
             <div class="file-list">
-                @for (var i = 0; i < _files.Count; i++)
+                @for (var i = 0; i < Vm.Files.Count; i++)
                 {
                     var idx = i;
-                    var file = _files[idx];
-                    var isActive = idx == _active;
-                    var isEntry = file.Path == _entrypoint;
+                    var file = Vm.Files[idx];
+                    var isActive = idx == Vm.ActiveIndex;
+                    var isEntry = file.Path == Vm.Entrypoint;
                     <div class="dcfile file-row @(isActive ? "active" : "")"
                          style="@(isActive ? "background:var(--card-2); color:var(--text-1)" : "color:var(--text-2)")"
-                         @onclick="@(() => SwitchFileAsync(idx))">
-                        @if (idx == _renamingIdx)
+                         @onclick="@(() => Vm.SwitchFileAsync(idx))">
+                        @if (idx == Vm.RenamingIndex)
                         {
                             <input class="dcinput rename-input"
-                                   @bind="_renameValue" @bind:event="oninput" @onkeydown="RenameKey"
-                                   @onclick:stopPropagation="true" @ref="_renameInput" />
+                                   @bind="Vm.RenameValue" @bind:event="oninput" @onkeydown="Vm.RenameKey"
+                                   @onclick:stopPropagation="true" @ref="Vm.RenameInput" />
                             <button class="dcfile-act file-act-confirm" title="Confirm rename"
-                                    @onclick:stopPropagation="true" @onclick="ConfirmRenameAsync">✓</button>
+                                    @onclick:stopPropagation="true" @onclick="Vm.ConfirmRenameAsync">✓</button>
                         }
                         else
                         {
                             <span class="file-name" title="@file.Path">@file.Path</span>
                             <button class="dcfile-act file-act" title="Rename file"
-                                    @onclick:stopPropagation="true" @onclick="@(() => StartRenameAsync(idx))">✎</button>
+                                    @onclick:stopPropagation="true" @onclick="@(() => Vm.StartRenameAsync(idx))">✎</button>
                         }
                         @if (isEntry)
                         {
@@ -102,58 +97,58 @@ else
                         else
                         {
                             <button class="dcfile-act file-act" title="Set as entry point"
-                                    @onclick:stopPropagation="true" @onclick="@(() => SetEntry(file.Path))">☆</button>
+                                    @onclick:stopPropagation="true" @onclick="@(() => Vm.SetEntry(file.Path))">☆</button>
                         }
-                        @if (_files.Count > 1)
+                        @if (Vm.Files.Count > 1)
                         {
                             <button class="dcfile-act file-act-del" title="Delete file"
-                                    @onclick:stopPropagation="true" @onclick="@(() => DeleteFileAsync(idx))">×</button>
+                                    @onclick:stopPropagation="true" @onclick="@(() => Vm.DeleteFileAsync(idx))">×</button>
                         }
                     </div>
                 }
             </div>
 
             <div class="entry-foot">
-                Entry: <code class="entry-code">@(_entrypoint ?? "(runtime default)")</code>
+                Entry: <code class="entry-code">@(Vm.Entrypoint ?? "(runtime default)")</code>
             </div>
         </div>
 
         @* ── Editor + results ────────────────────────────────────────────────────────────── *@
         <div class="editor-pane">
-            <div id="@_editorId" class="editor-host"></div>
+            <div id="@Vm.EditorId" class="editor-host"></div>
 
             @* Results panel *@
-            <div class="results-panel" style="height:@(_panelOpen ? "240px" : "34px")">
-                <div class="results-bar" @onclick="@(() => _panelOpen = !_panelOpen)">
+            <div class="results-panel" style="height:@(Vm.PanelOpen ? "240px" : "34px")">
+                <div class="results-bar" @onclick="Vm.TogglePanel">
                     <span class="section-label">Execution results</span>
-                    @if (_lastRun is not null)
+                    @if (Vm.LastRun is not null)
                     {
-                        <span class="status-badge" style="color:@StatusColor(_lastRun.Status); background:@StatusBg(_lastRun.Status)">@_lastRun.Status</span>
+                        <span class="status-badge" style="color:@Vm.StatusTextColor(Vm.LastRun.Status); background:@Vm.StatusTextBackground(Vm.LastRun.Status)">@Vm.StatusLabelText(Vm.LastRun.Status)</span>
                     }
                     <span class="flex-spacer"></span>
-                    <span class="text-12-3">@(_panelOpen ? "▾" : "▴")</span>
+                    <span class="text-12-3">@(Vm.PanelOpen ? "▾" : "▴")</span>
                 </div>
 
-                @if (_panelOpen)
+                @if (Vm.PanelOpen)
                 {
                     <div class="results-body">
-                        @if (_lastRun is null)
+                        @if (Vm.LastRun is null)
                         {
                             <div class="text-12-3">Click <strong>Test</strong> to deploy and run this job. Shard artifacts and logs appear here.</div>
                         }
                         else
                         {
-                            @foreach (var shard in _lastRun.ShardResults)
+                            @foreach (var shard in Vm.LastRun.ShardResults)
                             {
                                 <div class="shard">
                                     <div class="shard-head">
                                         <span>Shard @shard.Index</span>
-                                        <span class="shard-badge" style="color:@StatusColor(shard.Outcome); background:@StatusBg(shard.Outcome)">@shard.Outcome</span>
+                                        <span class="shard-badge" style="color:@Vm.StatusTextColor(shard.Outcome); background:@Vm.StatusTextBackground(shard.Outcome)">@Vm.StatusLabelText(shard.Outcome)</span>
                                         <span class="shard-exit">exit @shard.ExitCode</span>
                                     </div>
                                     @if (shard.Artifact is not null)
                                     {
-                                        <pre class="shard-artifact">@PrettyJson(shard.Artifact)</pre>
+                                        <pre class="shard-artifact">@Vm.JsonText(shard.Artifact)</pre>
                                     }
                                     @if (!string.IsNullOrWhiteSpace(shard.Log))
                                     {
@@ -177,312 +172,19 @@ else
     [Parameter] public Guid ProjectId { get; set; }
     [Parameter] public Guid JobId { get; set; }
 
-    private readonly string _editorId = "pcmonaco-" + Guid.NewGuid().ToString("N");
+    protected override void OnInitialized() =>
+        Vm.Attach(() => InvokeAsync(StateHasChanged));
 
-    private JobView? _job;
-    private readonly List<EditorFile> _files = new();
-    private int _active;
-    private string? _entrypoint;
-    private string _runtimeId = "python"; // the default runtime for new jobs
-
-    private JobRunDetailView? _lastRun;
-    private string? _message;
-    private bool _loading = true;
-    private bool _saving;
-    private bool _running;
-    private bool _panelOpen;
-    private bool _monacoReady;
-    private bool _monacoLite; // Monaco CDN unreachable → plain-textarea mode
-
-    private bool _addingFile;
-    private string _newFileName = "";
-    private ElementReference _newFileInput;
-
-    private bool _busy => _saving || _running;
-
-    private sealed class EditorFile
+    protected override Task OnParametersSetAsync()
     {
-        public string Path { get; set; } = "";
-        public string Content { get; set; } = "";
+        Vm.Initialize(ProjectId, JobId);
+        return Task.CompletedTask;
     }
 
-    protected override async Task OnParametersSetAsync()
+    protected override Task OnAfterRenderAsync(bool firstRender) => Vm.AfterRenderAsync();
+
+    public void Dispose()
     {
-        _loading = true;
-        _monacoReady = false;
-        _message = null;
-        try
-        {
-            _job = await Svc.GetJobAsync(JobId);
-            if (_job is { MapSourceKind: "code" })
-            {
-                _runtimeId = _job.MapRuntimeId ?? "python";
-                _entrypoint = _job.MapEntrypoint;
-                _files.Clear();
-                if (_job.MapFiles.Count > 0)
-                {
-                    foreach (var f in _job.MapFiles)
-                        _files.Add(new EditorFile { Path = f.Path, Content = f.Content });
-                }
-                else if (_job.MapSource is not null)
-                {
-                    _files.Add(new EditorFile { Path = _entrypoint ?? "main", Content = _job.MapSource });
-                }
-                _active = Math.Max(0, _files.FindIndex(f => f.Path == _entrypoint));
-                Ui.Set(_job.Name, "code editor");
-            }
-        }
-        catch (Exception ex) { _message = ex.Message; }
-        finally { _loading = false; }
-    }
-
-    protected override async Task OnAfterRenderAsync(bool firstRender)
-    {
-        if (_monacoReady || _job is not { MapSourceKind: "code" } || _files.Count == 0)
-            return;
-        _monacoReady = true;
-        var active = _files[_active];
-        try
-        {
-            // init returns false when Monaco's CDN was unreachable and the editor degraded to a
-            // plain textarea. Belt-and-braces try/catch: an interop exception here would kill the
-            // whole Blazor circuit and freeze the page on "Loading…".
-            var rich = await JS.InvokeAsync<bool>("pcmonaco.init", _editorId, active.Content, Language(active.Path), "vs-dark", active.Path);
-            if (!rich)
-            {
-                _monacoLite = true;
-                StateHasChanged();
-            }
-        }
-        catch (Exception)
-        {
-            _monacoLite = true;
-            StateHasChanged();
-        }
-    }
-
-    // ── File operations ──────────────────────────────────────────────────────────────────────────
-
-    private async Task SyncActiveAsync()
-    {
-        if (!_monacoReady || _files.Count == 0) return;
-        // pcmonaco.getValue returns null when no editor is mounted yet (CDN still loading) —
-        // keep the in-memory content in that case instead of wiping the file.
-        try
-        {
-            var content = await JS.InvokeAsync<string?>("pcmonaco.getValue", _editorId);
-            if (content is not null) _files[_active].Content = content;
-        }
-        catch { /* editor unreachable — keep the in-memory content */ }
-    }
-
-    private async Task SetEditorValueAsync(EditorFile file)
-    {
-        try { await JS.InvokeVoidAsync("pcmonaco.openFile", _editorId, file.Path, file.Content, Language(file.Path)); }
-        catch (Exception ex) { _message = ex.Message; }
-    }
-
-    private async Task SwitchFileAsync(int idx)
-    {
-        if (idx == _active) return;
-        await SyncActiveAsync();
-        _active = idx;
-        await SetEditorValueAsync(_files[_active]);
-    }
-
-    private async Task StartAddFile()
-    {
-        _addingFile = true;
-        _newFileName = "";
-        StateHasChanged();
-        await Task.Yield();
-        try { await _newFileInput.FocusAsync(); } catch { /* not yet rendered */ }
-    }
-
-    private async Task AddFileKey(KeyboardEventArgs e)
-    {
-        if (e.Key == "Enter") await ConfirmAddFile();
-        else if (e.Key == "Escape") _addingFile = false;
-    }
-
-    private async Task ConfirmAddFile()
-    {
-        var name = _newFileName.Trim().Replace('\\', '/').TrimStart('/');
-        _message = null;
-        if (string.IsNullOrWhiteSpace(name)) { _addingFile = false; return; }
-        if (_files.Any(f => f.Path == name)) { _message = $"'{name}' already exists."; return; }
-
-        await SyncActiveAsync();
-        _files.Add(new EditorFile { Path = name, Content = "" });
-        _active = _files.Count - 1;
-        _addingFile = false;
-        await SetEditorValueAsync(_files[_active]);
-    }
-
-    private async Task DeleteFileAsync(int idx)
-    {
-        if (_files.Count <= 1) return;
-        if (idx < 0 || idx >= _files.Count) return;
-
-        // Sync before mutating the list — otherwise the editor is overwritten with the stale
-        // in-memory copy of the active file and unsaved edits vanish.
-        await SyncActiveAsync();
-
-        var removed = _files[idx];
-        var wasActive = idx == _active;
-        _files.RemoveAt(idx);
-        if (removed.Path == _entrypoint) _entrypoint = _files.Count == 1 ? null : _files[0].Path;
-
-        _active = _active > idx ? _active - 1 : _active;
-        if (_active >= _files.Count) _active = _files.Count - 1;
-
-        // Dispose the Monaco model for the deleted file
-        try { await JS.InvokeVoidAsync("pcmonaco.closeFile", _editorId, removed.Path); }
-        catch { /* best-effort cleanup */ }
-
-        // A non-active file was deleted — the editor already shows the active file, leave it.
-        if (!wasActive) return;
-        await SetEditorValueAsync(_files[_active]);
-    }
-
-    private void SetEntry(string path) => _entrypoint = path;
-
-    private int _renamingIdx = -1;
-    private string _renameValue = "";
-    private ElementReference _renameInput;
-
-    private async Task StartRenameAsync(int idx)
-    {
-        _renamingIdx = idx;
-        _renameValue = _files[idx].Path;
-        _message = null;
-        StateHasChanged();
-        await Task.Yield();
-        try { await _renameInput.FocusAsync(); } catch { /* not yet rendered */ }
-    }
-
-    private async Task RenameKey(KeyboardEventArgs e)
-    {
-        if (e.Key == "Enter") await ConfirmRenameAsync();
-        else if (e.Key == "Escape") _renamingIdx = -1;
-    }
-
-    private async Task ConfirmRenameAsync()
-    {
-        if (_renamingIdx < 0 || _renamingIdx >= _files.Count) { _renamingIdx = -1; return; }
-        var idx = _renamingIdx;
-        var name = _renameValue.Trim().Replace('\\', '/').TrimStart('/');
-        var old = _files[idx].Path;
-        if (string.IsNullOrWhiteSpace(name) || name == old) { _renamingIdx = -1; return; }
-        if (_files.Any(f => f.Path == name)) { _message = $"'{name}' already exists."; return; }
-
-        _files[idx].Path = name;
-        if (_entrypoint == old) _entrypoint = name;
-        _renamingIdx = -1;
-
-        // Dispose the old model (keyed by old path) and switch to the new model.
-        // This always runs after rename because model keys are path-based.
-        await SyncActiveAsync();
-        try { await JS.InvokeVoidAsync("pcmonaco.closeFile", _editorId, old); }
-        catch { /* best-effort cleanup */ }
-        await SetEditorValueAsync(_files[idx]);
-    }
-
-    // ── Deploy / Test ────────────────────────────────────────────────────────────────────────────
-
-    private async Task DeployAsync()
-    {
-        if (_job is null) return;
-        _saving = true;
-        _message = null;
-        try
-        {
-            await SaveCoreAsync();
-            _message = "Deployed.";
-        }
-        catch (Exception ex) { _message = ex.Message; }
-        finally { _saving = false; }
-    }
-
-    private async Task RunAsync()
-    {
-        if (_job is null) return;
-        _running = true;
-        _message = null;
-        try
-        {
-            await SaveCoreAsync();
-            _lastRun = await Svc.RunJobAsync(JobId);
-            _panelOpen = true;
-            _message = $"Run {_lastRun.Status}.";
-        }
-        catch (Exception ex) { _message = ex.Message; }
-        finally { _running = false; }
-    }
-
-    private async Task SaveCoreAsync()
-    {
-        await SyncActiveAsync();
-
-        // Default the entrypoint to the single file (or first) when none is explicitly chosen.
-        var entry = _entrypoint;
-        if (entry is null && _files.Count > 1) entry = _files[0].Path;
-
-        var files = _files.Select(f => new CodeFileDto(f.Path, f.Content)).ToList();
-        var cmd = new UploadJobCodeCommand(JobId, ProjectId, _job!.Name, _runtimeId, entry, files);
-        _job = await Svc.UploadJobCodeAsync(cmd);
-        _entrypoint = _job.MapEntrypoint ?? entry;
-    }
-
-    // ── Utilities ────────────────────────────────────────────────────────────────────────────────
-
-    private static string Language(string path)
-    {
-        var ext = System.IO.Path.GetExtension(path).ToLowerInvariant();
-        return ext switch
-        {
-            ".js" or ".cjs" or ".mjs" => "javascript",
-            ".ts" => "typescript",
-            ".py" => "python",
-            ".go" => "go",
-            ".rb" => "ruby",
-            ".cs" => "csharp",
-            ".json" => "json",
-            ".sh" => "shell",
-            ".md" => "markdown",
-            ".html" => "html",
-            ".css" => "css",
-            ".yml" or ".yaml" => "yaml",
-            _ => "plaintext",
-        };
-    }
-
-    private static string StatusColor(string status) => status switch
-    {
-        "Succeeded" => "var(--good)",
-        "Partial" => "var(--warn)",
-        "Failed" => "var(--bad)",
-        "Running" => "var(--brand-2)",
-        _ => "var(--text-3)",
-    };
-
-    private static string StatusBg(string status) => status switch
-    {
-        "Succeeded" => "var(--good-bg)",
-        "Partial" => "var(--warn-bg)",
-        "Failed" => "var(--bad-bg)",
-        "Running" => "var(--brand-bg)",
-        _ => "var(--card-2)",
-    };
-
-    private static string PrettyJson(string raw)
-    {
-        try
-        {
-            var doc = System.Text.Json.JsonDocument.Parse(raw);
-            return System.Text.Json.JsonSerializer.Serialize(doc.RootElement,
-                new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
-        }
-        catch { return raw; }
+        Vm.Detach();
     }
 }

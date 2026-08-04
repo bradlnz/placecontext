@@ -3,167 +3,68 @@
 @using Microsoft.AspNetCore.Components.Forms
 @using System.Net.Http.Headers
 @using System.Text.Json
-@inject IObjectStore ObjectStore
-@inject IHttpClientFactory HttpClientFactory
+@inject ParamInputViewModel Vm
+@implements IDisposable
 
 @* One declared job input, rendered by its type — the same control everywhere a run form appears. *@
-@switch (Parameter.Type)
+@switch (Vm.InputType)
 {
-    case "select":
-        <select class="dcinput" value="@Value" @onchange="@(e => ValueChanged.InvokeAsync(e.Value?.ToString() ?? ""))">
+    case ParameterInputType.Select:
+        <select class="dcinput" value="@Vm.Value" @onchange="OnValueChanged">
             <option value="">— pick —</option>
-            @foreach (var o in Parameter.Options ?? Array.Empty<string>())
+            @foreach (var o in Vm.Parameter.Options ?? Array.Empty<string>())
             {
                 <option value="@o">@o</option>
             }
         </select>
         break;
-    case "number":
-        <input class="dcinput number-input" type="number" value="@Value"
-               @oninput="@(e => ValueChanged.InvokeAsync(e.Value?.ToString() ?? ""))" />
+    case ParameterInputType.Number:
+        <input class="dcinput number-input" type="number" value="@Vm.Value"
+               @oninput="OnValueChanged" />
         break;
-    case "checkbox":
+    case ParameterInputType.Checkbox:
         <label class="checkbox-field">
-            <input type="checkbox" checked="@(Value == "true")" class="checkbox-box"
-                   @onchange="@(e => ValueChanged.InvokeAsync(e.Value is true ? "true" : "false"))" />
-            @(Parameter.Label ?? Parameter.Name)
+            <input type="checkbox" checked="@Vm.CheckboxChecked" class="checkbox-box"
+                   @onchange="OnCheckboxChanged" />
+            @(Vm.Parameter.Label ?? Vm.Parameter.Name)
         </label>
         break;
-    case "file":
+    case ParameterInputType.File:
         <div class="file-input-field">
-            <InputFile OnChange="OnFileSelected" accept="@Accept" disabled="@_uploading" />
-            @if (_uploading)
+            <InputFile OnChange="OnFileSelected" accept="@Vm.Accept" disabled="@Vm.Uploading" />
+            @if (Vm.Uploading)
             {
                 <small>Uploading to private storage…</small>
             }
-            else if (_uploadError is not null)
+            else if (Vm.UploadError is not null)
             {
-                <small class="error">@_uploadError</small>
+                <small class="error">@Vm.UploadError</small>
             }
-            else if (SelectedFileName is { } selected)
+            else if (Vm.SelectedFileName is { } selected)
             {
                 <small>Uploaded: @selected</small>
             }
         </div>
         break;
     default:
-        <input class="dcinput" value="@Value"
-               @oninput="@(e => ValueChanged.InvokeAsync(e.Value?.ToString() ?? ""))" />
+        <input class="dcinput" value="@Vm.Value" @oninput="OnValueChanged" />
         break;
 }
 
 @code {
     [Parameter, EditorRequired] public JobParameterDto Parameter { get; set; } = default!;
     [Parameter] public Guid ProjectId { get; set; }
-    [Parameter] public string Value { get; set; } = "";
+    [Parameter] public string Value { get; set; } = string.Empty;
     [Parameter] public EventCallback<string> ValueChanged { get; set; }
-
-    private const long MaxFileBytes = 40L * 1024 * 1024;
-    private bool _uploading;
-    private string? _uploadError;
-
-    private string Accept => Parameter.Options is { Count: > 0 }
-        ? string.Join(",", Parameter.Options)
-        : "application/pdf,image/*";
-
-    private string? SelectedFileName
+    protected override void OnInitialized() => Vm.Attach(() => InvokeAsync(StateHasChanged));
+    protected override void OnParametersSet() => Vm.SetParameters(Parameter, ProjectId, Value);
+    private Task OnFileSelected(InputFileChangeEventArgs args) => Vm.UploadAsync(args, ValueChanged);
+    private Task OnValueChanged(ChangeEventArgs args) => ForwardValueAsync(args.Value?.ToString());
+    private Task OnCheckboxChanged(ChangeEventArgs args) => ForwardValueAsync(Vm.CheckboxValue(args));
+    private Task ForwardValueAsync(string? value)
     {
-        get
-        {
-            if (string.IsNullOrWhiteSpace(Value)) return null;
-            try
-            {
-                using var document = JsonDocument.Parse(Value);
-                return document.RootElement.GetProperty("$file").GetProperty("filename").GetString();
-            }
-            catch
-            {
-                return null;
-            }
-        }
+        Vm.SetValue(value);
+        return ValueChanged.InvokeAsync(Vm.Value);
     }
-
-    private async Task OnFileSelected(InputFileChangeEventArgs args)
-    {
-        _uploadError = null;
-        var file = args.File;
-        if (ProjectId == Guid.Empty)
-        {
-            _uploadError = "A project is required before uploading.";
-            return;
-        }
-        if (!ObjectStore.IsEnabled)
-        {
-            _uploadError = "File storage is not configured.";
-            return;
-        }
-        if (file.Size <= 0 || file.Size > MaxFileBytes)
-        {
-            _uploadError = "Choose a non-empty PDF or image no larger than 40 MB.";
-            return;
-        }
-
-        _uploading = true;
-        try
-        {
-            var filename = SanitizeFilename(file.Name);
-            var contentType = ContentTypeFor(filename, file.ContentType);
-            var key = $"job-inputs/{ProjectId:N}/{Guid.NewGuid():N}-{filename}";
-
-            await ObjectStore.EnsureBucketAsync(ObjectStore.ReportsBucket);
-            var uploadUrl = await ObjectStore.PresignUploadAsync(
-                ObjectStore.ReportsBucket, key, TimeSpan.FromMinutes(20));
-
-            using var content = new StreamContent(file.OpenReadStream(MaxFileBytes));
-            content.Headers.ContentType = new MediaTypeHeaderValue(contentType);
-            using var response = await HttpClientFactory.CreateClient().PutAsync(uploadUrl, content);
-            response.EnsureSuccessStatusCode();
-
-            var marker = JsonSerializer.Serialize(new Dictionary<string, object?>
-            {
-                ["$file"] = new
-                {
-                    bucket = ObjectStore.ReportsBucket,
-                    key,
-                    filename,
-                    content_type = contentType,
-                    size_bytes = file.Size,
-                },
-            });
-            await ValueChanged.InvokeAsync(marker);
-        }
-        catch (Exception ex)
-        {
-            _uploadError = $"Upload failed: {ex.Message}";
-        }
-        finally
-        {
-            _uploading = false;
-        }
-    }
-
-    private static string SanitizeFilename(string name)
-    {
-        var leaf = Path.GetFileName(name);
-        var invalid = Path.GetInvalidFileNameChars();
-        var cleaned = new string(leaf.Select(c => invalid.Contains(c) ? '_' : c).ToArray()).Trim();
-        return string.IsNullOrWhiteSpace(cleaned) ? "upload.bin" : cleaned;
-    }
-
-    private static string ContentTypeFor(string filename, string browserContentType)
-    {
-        if (!string.IsNullOrWhiteSpace(browserContentType)
-            && !string.Equals(browserContentType, "application/octet-stream", StringComparison.OrdinalIgnoreCase))
-            return browserContentType;
-
-        return Path.GetExtension(filename).ToLowerInvariant() switch
-        {
-            ".pdf" => "application/pdf",
-            ".png" => "image/png",
-            ".jpg" or ".jpeg" => "image/jpeg",
-            ".webp" => "image/webp",
-            ".tif" or ".tiff" => "image/tiff",
-            _ => "application/octet-stream",
-        };
-    }
+    public void Dispose() => Vm.Detach();
 }

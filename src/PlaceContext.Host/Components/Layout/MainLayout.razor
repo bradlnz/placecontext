@@ -1,20 +1,15 @@
 @inherits LayoutComponentBase
 @implements IDisposable
 @using Microsoft.Extensions.DependencyInjection
-@inject PortalUiState Ui
-@inject IConfiguration Config
-@inject PlaceContext.Application.Ports.ICurrentTenant Tenant
-@inject PlaceContext.Infrastructure.Operations.OperationCenter OpCenter
-@inject IJSRuntime JS
-@inject NavigationManager Nav
-@inject IServiceScopeFactory ScopeFactory
+@inject MainLayoutViewModel Vm
 
-<div id="dcshell" data-theme="@_theme" class="shell" style="@_brand.CssOverrides()">
+
+<div id="dcshell" data-theme="@Vm.Theme" class="shell" style="@Vm.BrandCssOverrides">
 
     <!-- SIDEBAR — structure from tenant menu config; still filtered by effective permissions. -->
-    <aside class="sidebar @(_navOpen ? "open" : null)" aria-label="Primary navigation">
+    <aside class="sidebar @(Vm.NavOpen ? "open" : null)" aria-label="Primary navigation">
         <div class="brand-row">
-            @if (_brand.LogoDataUri is { } logo)
+            @if (Vm.Brand.LogoDataUri is { } logo)
             {
                 <img src="@logo" alt="logo" class="brand-logo" />
             }
@@ -25,26 +20,26 @@
                 </div>
             }
             <div class="brand-text">
-                <span class="title-14">@(_brand.ProductName ?? "placecontext")</span>
-                <span class="org-name">@OrgName</span>
+                <span class="title-14">@Vm.ProductName</span>
+                <span class="org-name">@Vm.OrganizationName</span>
             </div>
-            <button class="sidebar-close" @onclick="CloseNav" aria-label="Close navigation">×</button>
+            <button class="sidebar-close" @onclick="Vm.CloseNavigation" aria-label="Close navigation">×</button>
         </div>
 
         <div class="nav-list">
             @{
                 string? lastSection = null;
             }
-            @foreach (var item in TopLevel())
+            @foreach (var item in Vm.TopLevel)
             {
-                if (item.Kind == "section")
+                if (Vm.IsSection(item))
                 {
                     lastSection = item.Label;
                     <div class="nav-section">@item.Label</div>
                     continue;
                 }
-                var children = ChildrenOf(item.Id);
-                var isGroup = item.Kind == "entities" || children.Count > 0;
+                var children = Vm.ChildrenOf(item.Id);
+                var isGroup = Vm.IsGroup(item);
                 // Accordion groups are their own visual grouping — no section header above them.
                 if (!isGroup && !string.IsNullOrEmpty(item.Section) && item.Section != lastSection)
                 {
@@ -53,43 +48,43 @@
                 }
                 @* Keep a leading '/' so links stay absolute. Relative hrefs break under deep
                    routes like /project/{id}/entity/{name} (resolve under the entity segment). *@
-                var href = AbsHref(item.Href);
+                var href = Vm.AbsoluteHref(item.Href);
                 if (!isGroup)
                 {
-                    <NavLink class="dcnav" href="@(href ?? "/")" Match="@MatchFor(item, href)">
-                        <span class="bar"></span>@Icon(item.Icon ?? "grid")<span class="nav-label">@item.Label</span>
-                        @if (item.Id == "mcp")
+                    <NavLink class="dcnav" href="@(href ?? "/")" Match="@Vm.MatchFor(href)">
+                        <span class="bar"></span>@((MarkupString)Vm.IconMarkup(item.Icon))<span class="nav-label">@item.Label</span>
+                        @if (Vm.IsMcp(item))
                         {
                             <span class="mcp-dot"></span>
                         }
                     </NavLink>
                     continue;
                 }
-                var expanded = _expanded.Contains(item.Id);
-                var groupActive = href is not null && PathMatches(new Uri(Nav.Uri).AbsolutePath.TrimEnd('/'), href);
+                var expanded = Vm.IsExpanded(item.Id);
+                var groupActive = href is not null && Vm.PathMatches(href);
                 <div class="nav-group">
                     <button class="dcnav nav-group-toggle@(groupActive ? " active" : null)"
-                            @onclick="@(() => ToggleGroup(item.Id))">
-                        <span class="bar"></span>@Icon(item.Icon ?? "grid")<span class="nav-label">@item.Label</span>
-                        <span class="nav-caret-icon @(expanded ? "open" : null)">@Caret()</span>
+                            @onclick="@(() => Vm.ToggleGroup(item.Id))">
+                        <span class="bar"></span>@((MarkupString)Vm.IconMarkup(item.Icon))<span class="nav-label">@item.Label</span>
+                        <span class="nav-caret-icon @(expanded ? "open" : null)">@((MarkupString)MainLayoutViewModel.CaretMarkup)</span>
                     </button>
                     @if (expanded)
                     {
                         <div class="nav-children">
                             @foreach (var child in children)
                             {
-                                var childHref = AbsHref(child.Href) ?? "/";
+                                var childHref = Vm.AbsoluteHref(child.Href) ?? "/";
                                 <NavLink class="dcnav nav-child" href="@childHref" Match="NavLinkMatch.Prefix">
                                     <span class="bar"></span><span class="nav-label">@child.Label</span>
                                 </NavLink>
                             }
-                            @if (item.Kind == "entities")
+                            @if (Vm.IsEntitiesGroup(item))
                             {
-                                @foreach (var e in _entities)
+                                @foreach (var e in Vm.Entities)
                                 {
-                                    var entityPath = $"/project/{Ui.CurrentProjectId}/entity/{Uri.EscapeDataString(e)}";
-                                    <button class="dcnav nav-child @(IsEntityActive(e) ? "active" : "")"
-                                            @onclick="@(() => GoTo(entityPath))">
+                                    var entityPath = $"/project/{Vm.CurrentProjectId}/entity/{Uri.EscapeDataString(e)}";
+                                    <button class="dcnav nav-child @(Vm.IsEntityActive(e) ? "active" : "")"
+                                            @onclick="@(() => Vm.GoTo(entityPath))">
                                         <span class="bar"></span><span class="nav-label">@e</span>
                                     </button>
                                 }
@@ -102,26 +97,26 @@
 
         @* ── Project switcher — the design's context pill; nav above scopes to this project ── *@
         <div class="switcher-wrap">
-            <div @onclick="ToggleSwitcher"
+            <div @onclick="Vm.ToggleSwitcher"
                  class="switcher-pill">
                 <span class="switcher-dot"></span>
                 <span class="switcher-name">
-                    @(Ui.CurrentProjectName ?? "select project")
+                    @(Vm.CurrentProjectName ?? "select project")
                 </span>
                 <span class="switcher-caret">▾</span>
             </div>
-            @if (_switcherOpen)
+            @if (Vm.SwitcherOpen)
             {
                 <div class="switcher-menu">
-                    @foreach (var p in _projects)
+                    @foreach (var p in Vm.Projects)
                     {
-                        <div @onclick="@(() => SwitchProject(p))"
-                             class="switcher-item" style="background:@(p.Id == Ui.CurrentProjectId ? "var(--card-2)" : "transparent")">
-                            <span class="switcher-item-dot" style="background:@(p.Id == Ui.CurrentProjectId ? "var(--good)" : "var(--border-2)")"></span>
+                        <div @onclick="@(() => Vm.SwitchProjectAsync(p))"
+                             class="switcher-item" style="background:@(p.Id == Vm.CurrentProjectId ? "var(--card-2)" : "transparent")">
+                            <span class="switcher-item-dot" style="background:@(p.Id == Vm.CurrentProjectId ? "var(--good)" : "var(--border-2)")"></span>
                             <span class="switcher-item-name">@p.Name</span>
                         </div>
                     }
-                    @if (_projects.Count == 0)
+                    @if (Vm.Projects.Count == 0)
                     {
                         <div class="switcher-empty">No projects yet — <a href="/wiki/getting-started">open the getting-started guide</a>.</div>
                     }
@@ -133,7 +128,7 @@
             <AuthorizeView>
                 <Authorized>
                     <div class="user-info">
-                        <div class="user-avatar">@Initials(context.User.Identity?.Name)</div>
+                        <div class="user-avatar">@Vm.Initials(context.User.Identity?.Name)</div>
                         <div class="user-detail">
                             <div class="user-name">@context.User.Identity?.Name</div>
                             <div class="user-role">@context.User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value</div>
@@ -151,47 +146,40 @@
                         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><path d="M16 17l5-5-5-5"></path><path d="M21 12H9"></path></svg>
                     </button>
                 </form>
-                <button @onclick="ToggleTheme" title="Switch to @(_theme == "dark" ? "light" : "dark") mode"
-                        aria-label="Switch to @(_theme == "dark" ? "light" : "dark") mode"
-                        aria-pressed="@(_theme == "light")" class="icon-btn">
-                    @if (_theme == "dark")
-                    {
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5L19 19M19 5l-1.5 1.5M6.5 17.5L5 19"></path></svg>
-                    }
-                    else
-                    {
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 14.3A8.5 8.5 0 0 1 9.7 3.5 8.5 8.5 0 1 0 20.5 14.3Z"></path></svg>
-                    }
+                <button @onclick="ToggleTheme" title="Switch to @Vm.ThemeSwitchLabel mode"
+                        aria-label="Switch to @Vm.ThemeSwitchLabel mode"
+                        aria-pressed="@Vm.IsThemeLightPressed" class="icon-btn">
+                    @((MarkupString)Vm.ThemeIcon)
                 </button>
             </div>
         </div>
     </aside>
 
     @* Mobile nav backdrop — click anywhere outside the sidebar to close it. *@
-    @if (_navOpen)
+    @if (Vm.NavOpen)
     {
-        <div class="nav-backdrop" @onclick="CloseNav"></div>
+        <div class="nav-backdrop" @onclick="Vm.CloseNavigation"></div>
     }
 
     <!-- MAIN -->
     <main class="main">
         <header class="topbar">
             <div class="topbar-left">
-                <button class="nav-toggle" @onclick="ToggleNav" title="Menu" aria-label="Toggle navigation">
+                <button class="nav-toggle" @onclick="Vm.ToggleNavigation" title="Menu" aria-label="Toggle navigation">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 7h16"></path><path d="M4 12h16"></path><path d="M4 17h16"></path></svg>
                 </button>
-                <span class="title-14">@Ui.Title</span>
-                <span class="topbar-sub">@Ui.Sub</span>
+                <span class="title-14">@Vm.Title</span>
+                <span class="topbar-sub">@Vm.Subtitle</span>
             </div>
             <div class="topbar-right">
-                <button class="dcsearch-trigger" @onclick="OpenSearch">
+                <button class="dcsearch-trigger" @onclick="Vm.OpenSearch">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path></svg>
                     <span class="dcsearch-text">Search context, files, changes</span>
                     <kbd>/</kbd>
                 </button>
                 <div class="running-badge">
                     <span class="running-dot"></span>
-                    @_runningCount running
+                    @Vm.RunningCount running
                 </div>
                 <NotificationsBell />
             </div>
@@ -203,23 +191,23 @@
         </div>
     </main>
 
-    @if (_searchOpen)
+    @if (Vm.SearchOpen)
     {
-        <div class="dcsearch-overlay" @onclick="CloseSearch">
+        <div class="dcsearch-overlay" @onclick="Vm.CloseSearch">
             <div class="dcsearch-modal" role="dialog" aria-modal="true" aria-label="Search workspace"
                  @onclick:stopPropagation="true">
                 <input class="dcsearch-input" placeholder="Search projects, changes, context, decisions…"
-                       value="@_term" @oninput="OnSearchInput" @onkeydown="OnSearchKey" @ref="_searchInput" />
+                       value="@Vm.SearchTerm" @oninput="OnSearchInput" @onkeydown="OnSearchKey" @ref="_searchInput" />
                 <div class="dcsearch-results">
-                    @if (_searching)
+                    @if (Vm.Searching)
                     {
                         <div class="dcsearch-empty">Searching…</div>
                     }
-                    else if (_results is { Hits.Count: > 0 })
+                    else if (Vm.SearchResults is { Hits.Count: > 0 })
                     {
-                        @foreach (var h in _results.Hits)
+                        @foreach (var h in Vm.SearchResults.Hits)
                         {
-                            <button class="dcsearch-hit" @onclick="@(() => Go(h))">
+                            <button class="dcsearch-hit" @onclick="@(() => Vm.GoToSearchResult(h))">
                                 <span class="dcsearch-kind">@h.Kind</span>
                                 <span class="dcsearch-title">
                                     <div class="t">@h.Title</div>
@@ -228,9 +216,9 @@
                             </button>
                         }
                     }
-                    else if (!string.IsNullOrWhiteSpace(_term) && _term.Trim().Length >= 2)
+                    else if (!string.IsNullOrWhiteSpace(Vm.SearchTerm) && Vm.SearchTerm.Trim().Length >= 2)
                     {
-                        <div class="dcsearch-empty">No matches for “@_term”.</div>
+                        <div class="dcsearch-empty">No matches for “@Vm.SearchTerm”.</div>
                     }
                     else
                     {
@@ -243,342 +231,12 @@
 </div>
 
 @code {
-    private IReadOnlyList<ProjectSummaryView> _projects = Array.Empty<ProjectSummaryView>();
-    private bool _switcherOpen;
-    private bool _navOpen;
-    private int _runningCount;
-    private string OrgName => string.IsNullOrEmpty(Tenant.Slug) ? "organisation" : Tenant.Slug;
-    private string RootPath => Config["PlaceContext:RootPath"] ?? "/home/brad/code";
-
-    protected override void OnInitialized()
-    {
-        Ui.OnChanged += OnUiChanged;
-        OpCenter.Changed += OnOpsChanged;
-        Nav.LocationChanged += OnLocationChanged;
-        Ui.SetMainNavOpener(() => _ = InvokeAsync(() => { _navOpen = true; StateHasChanged(); }));
-    }
-
-    private PlaceContext.Host.Branding.TenantBranding _brand = new();
-    private string _theme = "dark";
-    private IReadOnlyList<ResolvedMenuItem> _menu = Array.Empty<ResolvedMenuItem>();
-    private readonly HashSet<string> _expanded = new(StringComparer.Ordinal);
-    private IReadOnlyList<string> _entities = Array.Empty<string>();
-    private Guid? _entitiesFor;
-
-    protected override async Task OnInitializedAsync()
-    {
-        try
-        {
-            _brand = await InScopeAsync<PlaceContext.Host.Branding.BrandingService, PlaceContext.Host.Branding.TenantBranding>(
-                service => service.GetAsync());
-        }
-        catch { }
-        try
-        {
-            _projects = await InScopeAsync<IPlaceContextService, IReadOnlyList<ProjectSummaryView>>(
-                service => service.GetProjectsAsync());
-        }
-        catch { _projects = Array.Empty<ProjectSummaryView>(); }
-        // Default the switcher: the project in the current URL, else the first project.
-        SyncProjectFromUrl(Nav.Uri);
-        if (Ui.CurrentProjectId is null && _projects.Count > 0)
-            Ui.SetProject(_projects[0].Id, _projects[0].Name);
-        await ReloadMenuAsync();
-        RefreshRunningCount();
-    }
-
-    private async Task ReloadMenuAsync()
-    {
-        // Keep the previous sidebar on a transient failure or an empty result (ambient user not yet
-        // resolved) instead of blanking it.
-        try
-        {
-            var menu = await InScopeAsync<PlaceContext.Application.Ports.IMenuConfigService, IReadOnlyList<ResolvedMenuItem>>(
-                service => service.GetWorkspaceMenuAsync(Ui.CurrentProjectId));
-            if (menu.Count > 0) _menu = menu;
-        }
-        catch { /* keep previous _menu so the sidebar does not vanish */ }
-        await ReloadEntitiesAsync();
-        ExpandActiveGroups();
-    }
-
-    private IEnumerable<ResolvedMenuItem> TopLevel()
-        => _menu.Where(m => m.Parent is null);
-
-    private List<ResolvedMenuItem> ChildrenOf(string parentId)
-        => _menu.Where(m => m.Parent == parentId).OrderBy(m => m.Order).ToList();
-
-    private void ToggleGroup(string id)
-    {
-        if (!_expanded.Remove(id)) _expanded.Add(id);
-    }
-
-    private static string? AbsHref(string? href)
-    {
-        if (string.IsNullOrEmpty(href)) return null;
-        if (!href.StartsWith('/')) return "/" + href;
-        return href;
-    }
-
-    private static NavLinkMatch MatchFor(ResolvedMenuItem item, string? href)
-    {
-        return string.Equals(href, "/", StringComparison.Ordinal) ? NavLinkMatch.All : NavLinkMatch.Prefix;
-    }
-
-    private static bool PathMatches(string path, string? href)
-    {
-        if (string.IsNullOrEmpty(href)) return false;
-        var target = href.TrimEnd('/');
-        if (target.Length == 0) target = "/";
-        if (path.Equals(target, StringComparison.OrdinalIgnoreCase)) return true;
-        if (target == "/") return false;
-        return path.StartsWith(target + "/", StringComparison.OrdinalIgnoreCase);
-    }
-
-    private void ExpandActiveGroups()
-    {
-        var path = new Uri(Nav.Uri).AbsolutePath.TrimEnd('/');
-        foreach (var item in _menu)
-        {
-            var children = ChildrenOf(item.Id);
-            if (item.Kind != "entities" && children.Count == 0) continue;
-            if (GroupIsActive(item, children, path)) _expanded.Add(item.Id);
-        }
-    }
-
-    private bool GroupIsActive(ResolvedMenuItem item, List<ResolvedMenuItem> children, string path)
-    {
-        if (PathMatches(path, item.Href)) return true;
-        foreach (var c in children) if (PathMatches(path, c.Href)) return true;
-        if (item.Kind == "entities" && IsOnEntityPath(path)) return true;
-        return false;
-    }
-
-    private static bool IsOnEntityPath(string path)
-        => path.Contains("/entity/", StringComparison.OrdinalIgnoreCase)
-           || path.EndsWith("/entities", StringComparison.OrdinalIgnoreCase);
-
-    private bool IsEntityActive(string entityName)
-    {
-        var path = Uri.UnescapeDataString(new Uri(Nav.Uri).AbsolutePath);
-        var marker = "/entity/";
-        var i = path.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
-        if (i < 0) return false;
-        var segment = path[(i + marker.Length)..].TrimEnd('/');
-        var slash = segment.IndexOf('/');
-        if (slash >= 0) segment = segment[..slash];
-        return segment.Equals(entityName, StringComparison.OrdinalIgnoreCase);
-    }
-
-    private async Task ReloadEntitiesAsync()
-    {
-        var pid = Ui.CurrentProjectId;
-        if (pid is null || !_menu.Any(m => m.Kind == "entities"))
-        {
-            _entities = Array.Empty<string>();
-            _entitiesFor = null;
-            return;
-        }
-        if (pid == _entitiesFor) return;
-        _entities = Array.Empty<string>();
-        _entitiesFor = null;
-        try
-        {
-            _entities = (await InScopeAsync<IPlaceContextService, IReadOnlyList<DataEntityView>>(
-                service => service.ListDataEntitiesAsync(pid.Value))).Select(e => e.Name).ToList();
-            _entitiesFor = pid;
-        }
-        catch { /* keep previous entity list on transient failures */ }
-    }
-
-    private void GoTo(string href)
-    {
-        _navOpen = false;
-        Nav.NavigateTo(href);
-    }
-
-    private void ToggleSwitcher() => _switcherOpen = !_switcherOpen;
-
-    private void ToggleNav()
-    {
-        if (Ui.HasSubNav && Ui.ToggleSubNav is not null)
-            Ui.ToggleSubNav();
-        else
-            _navOpen = !_navOpen;
-    }
-
-    private void CloseNav() => _navOpen = false;
-
-    private async Task SwitchProject(ProjectSummaryView p)
-    {
-        _switcherOpen = false;
-        Ui.SetProject(p.Id, p.Name);
-        await ReloadMenuAsync();
-        // Prefer first project-scoped menu item the user can see, else jobs.
-        var dest = _menu.FirstOrDefault(m => m.Href?.Contains($"/project/{p.Id}", StringComparison.Ordinal) == true)?.Href
-                   ?? $"/project/{p.Id}/jobs";
-        Nav.NavigateTo(dest);
-    }
-
-    // Navigating into any /project/{id}/… page moves the switcher with you; any navigation
-    // also closes the mobile nav drawer.
-    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
-    {
-        _navOpen = false;
-        var before = Ui.CurrentProjectId;
-        SyncProjectFromUrl(e.Location);
-        _ = InvokeAsync(async () =>
-        {
-            if (Ui.CurrentProjectId != before)
-                await ReloadMenuAsync();
-            else
-                await ReloadEntitiesAsync();
-            ExpandActiveGroups();
-            StateHasChanged();
-        });
-    }
-
-    private void SyncProjectFromUrl(string uri)
-    {
-        var m = System.Text.RegularExpressions.Regex.Match(uri, @"/project/([0-9a-fA-F-]{36})");
-        if (!m.Success || !Guid.TryParse(m.Groups[1].Value, out var id)) return;
-        var p = _projects.FirstOrDefault(x => x.Id == id);
-        if (p is not null) Ui.SetProject(p.Id, p.Name);
-    }
-
-    private void OnOpsChanged() => _ = InvokeAsync(() => { RefreshRunningCount(); StateHasChanged(); });
-
-    private void RefreshRunningCount()
-        => _runningCount = Tenant.IsResolved ? OpCenter.ActiveCount(Tenant.TenantId) : 0;
-
-    protected override async Task OnAfterRenderAsync(bool firstRender)
-    {
-        if (firstRender)
-        {
-            var storedTheme = await JS.InvokeAsync<string>("placecontext.initTheme");
-            _theme = NormalizeTheme(storedTheme);
-            StateHasChanged();
-        }
-        await JS.InvokeVoidAsync("placecontext.animateMeters");
-
-        if (_focusSearch)
-        {
-            _focusSearch = false;
-            try { await _searchInput.FocusAsync(); } catch { /* element not ready */ }
-        }
-    }
-
-    private async Task ToggleTheme()
-    {
-        _theme = NormalizeTheme(await JS.InvokeAsync<string>("placecontext.toggleTheme"));
-    }
-
-    private static string NormalizeTheme(string? theme)
-        => string.Equals(theme, "light", StringComparison.OrdinalIgnoreCase) ? "light" : "dark";
-
-    // ---- Workspace search ----
-    private bool _searchOpen;
-    private bool _focusSearch;
-    private bool _searching;
-    private string _term = "";
-    private SearchResultsView? _results;
     private ElementReference _searchInput;
-
-    private void OpenSearch()
-    {
-        _searchOpen = true;
-        _focusSearch = true;
-        _term = "";
-        _results = null;
-    }
-
-    private void CloseSearch() => _searchOpen = false;
-
-    private async Task OnSearchInput(ChangeEventArgs e)
-    {
-        _term = e.Value?.ToString() ?? "";
-        var term = _term.Trim();
-        if (term.Length < 2) { _results = null; return; }
-
-        _searching = true;
-        try
-        {
-            _results = await InScopeAsync<IPlaceContextService, SearchResultsView>(
-                service => service.SearchAsync(term, Ui.CurrentProjectId));
-        }
-        catch { _results = null; }
-        finally { _searching = false; }
-    }
-
-    private void OnSearchKey(KeyboardEventArgs e)
-    {
-        if (e.Key == "Escape") CloseSearch();
-    }
-
-    private void Go(SearchHit hit)
-    {
-        CloseSearch();
-        Nav.NavigateTo(hit.Url);
-    }
-
-    // A Blazor scoped service lives for the whole circuit. Database services resolved directly by
-    // this layout would therefore share one AppDbContext with every nested page, whose lifecycle and
-    // event callbacks can overlap the layout's own loads. Each operation instead owns a short-lived
-    // scope and DbContext.
-    private async Task<TResult> InScopeAsync<TService, TResult>(Func<TService, Task<TResult>> operation)
-        where TService : notnull
-    {
-        await using var scope = ScopeFactory.CreateAsyncScope();
-        return await operation(scope.ServiceProvider.GetRequiredService<TService>());
-    }
-
-    private static string Initials(string? name)
-    {
-        if (string.IsNullOrWhiteSpace(name)) return "?";
-        var parts = name.Split(new[] { ' ', '.', '@', '_', '-' }, StringSplitOptions.RemoveEmptyEntries);
-        return parts.Length switch
-        {
-            0 => "?",
-            1 => parts[0][..Math.Min(2, parts[0].Length)].ToUpperInvariant(),
-            _ => string.Concat(parts[0][0], parts[1][0]).ToUpperInvariant()
-        };
-    }
-
-    private void OnUiChanged() => InvokeAsync(StateHasChanged);
-
-    public void Dispose()
-    {
-        Ui.OnChanged -= OnUiChanged;
-        OpCenter.Changed -= OnOpsChanged;
-        Nav.LocationChanged -= OnLocationChanged;
-    }
-
-    private RenderFragment Icon(string kind) => builder =>
-    {
-        var path = kind switch
-        {
-            "grid" => "<rect x='3' y='3' width='7' height='7' rx='1.5'></rect><rect x='14' y='3' width='7' height='7' rx='1.5'></rect><rect x='14' y='14' width='7' height='7' rx='1.5'></rect><rect x='3' y='14' width='7' height='7' rx='1.5'></rect>",
-            "ledger" => "<circle cx='6' cy='6' r='2.4'></circle><circle cx='6' cy='18' r='2.4'></circle><path d='M6 8.5v7'></path><path d='M18 8.5a3.5 3.5 0 0 1-3.5 3.5H10'></path><circle cx='18' cy='6' r='2.4'></circle>",
-            "rocket" => "<path d='M5 13c-1.5 1.3-2 5-2 5s3.7-.5 5-2'></path><path d='M9 11a14 14 0 0 1 7-8c2.6 0 4 1.4 4 4a14 14 0 0 1-8 7l-3-3z'></path><circle cx='14.5' cy='9.5' r='1.4'></circle>",
-            "github" => "<path d='M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.3 4.3 0 0 0-.1-3.2s-1-.3-3.4 1.3a11.6 11.6 0 0 0-6 0C6.3 2.1 5.3 2.4 5.3 2.4a4.3 4.3 0 0 0-.1 3.2A4.6 4.6 0 0 0 3.9 8.8c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21'></path>",
-            "pulse" => "<path d='M3 12h4l2.5-6 4 12L16 12h5'></path>",
-            "box" => "<path d='M12 2.5 21 7v10l-9 4.5L3 17V7l9-4.5Z'></path><path d='M3 7l9 4.5L21 7M12 11.5V21.5'></path>",
-            "test" => "<path d='M9 11l2 2 4-5'></path><path d='M9 17l2 2 4-5'></path><path d='M5 4h14v18H5z'></path>",
-            "briefcase" => "<rect x='3' y='7' width='18' height='13' rx='2'></rect><path d='M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2'></path><path d='M12 12v0'></path>",
-            "users" => "<path d='M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2'></path><circle cx='9' cy='7' r='4'></circle><path d='M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75'></path>",
-            "chain" => "<path d='M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7'></path><path d='M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7'></path>",
-            "clock" => "<circle cx='12' cy='12' r='9'></circle><path d='M12 7v5l3.5 2'></path>",
-            "map" => "<path d='M9 4 3 6.5v13L9 17l6 2.5 6-2.5v-13L15 6.5 9 4Z'></path><path d='M9 4v13M15 6.5v13'></path>",
-            "key" => "<circle cx='8' cy='15' r='4.5'></circle><path d='M11.5 11.5 20 3M16 7l3 3M13 10l2 2'></path>",
-            "file" => "<path d='M6 2h8l5 5v15H6V2Z'></path><path d='M14 2v5h5'></path>",
-            "chat" => "<path d='M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7A8.38 8.38 0 0 1 4 11.5a8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5Z'></path>",
-            _ => "<rect x='3' y='4' width='18' height='16' rx='2'></rect><path d='M7 9l3 2.5L7 14'></path><path d='M13 14.5h4'></path>"
-        };
-        builder.AddMarkupContent(0, $"<svg width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'>{path}</svg>");
-    };
-
-    private RenderFragment Caret() => builder =>
-    {
-        builder.AddMarkupContent(0, "<svg width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'><path d='M9 6l6 6-6 6'></path></svg>");
-    };
+    protected override void OnInitialized() => Vm.Attach(() => InvokeAsync(StateHasChanged));
+    protected override Task OnInitializedAsync() => Vm.InitializeAsync();
+    protected override Task OnAfterRenderAsync(bool firstRender) => Vm.AfterRenderAsync(firstRender, _searchInput);
+    private Task OnSearchInput(ChangeEventArgs args) => Vm.SearchAsync(args.Value?.ToString());
+    private void OnSearchKey(KeyboardEventArgs args) => Vm.HandleSearchKey(args.Key);
+    private Task ToggleTheme() => Vm.ToggleThemeAsync();
+    public void Dispose() => Vm.Dispose();
 }

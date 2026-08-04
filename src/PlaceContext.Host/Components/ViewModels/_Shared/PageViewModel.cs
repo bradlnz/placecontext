@@ -14,6 +14,11 @@ namespace PlaceContext.Host.Components.ViewModels;
 /// </summary>
 public abstract class PageViewModel
 {
+    public PagePresentationCatalog Presentation { get; } = new();
+
+    public bool TryArtifactSvg(string? artifact, out string svg) =>
+        ArtifactChart.TrySvg(artifact, out svg);
+
     private Func<Task>? _stateHasChanged;
 
     /// <summary>Wire the component's <c>StateHasChanged</c> into the ViewModel.</summary>
@@ -34,13 +39,20 @@ public abstract class PageViewModel
     protected void NotifyStateChanged()
     {
         var callback = _stateHasChanged;
-        if (callback is null) return;
+        if (callback is null)
+            return;
         _ = SafeNotifyAsync(callback);
     }
 
     private static async Task SafeNotifyAsync(Func<Task> callback)
     {
-        try { await callback(); }
-        catch (Exception ex) { Console.WriteLine($"NotifyStateChanged failed: {ex}"); }
+        try
+        {
+            await callback();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"NotifyStateChanged failed: {ex}");
+        }
     }
 }

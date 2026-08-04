@@ -1,8 +1,8 @@
 @page "/onboarding"
 @attribute [Authorize(Policy = Permission.ProjectsView)]
-@inject NavigationManager Nav
+@using PlaceContext.Host.Components.ViewModels
+@inject OnboardingViewModel Vm
 
 @code {
-    protected override void OnInitialized() =>
-        Nav.NavigateTo("/wiki/getting-started", replace: true);
+    protected override void OnInitialized() => Vm.Initialize();
 }

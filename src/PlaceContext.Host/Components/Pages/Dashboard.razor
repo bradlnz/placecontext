@@ -1,12 +1,12 @@
 @page "/"
 @attribute [Authorize(Policy = Permission.ProjectsView)]
 @implements IDisposable
-@inject IPlaceContextService Svc
-@inject PortalUiState Ui
-@inject NavigationManager Nav
-@inject IJSRuntime JS
-@inject PlaceContext.Application.Ports.ICurrentTenant Tenant
-@inject PlaceContext.Infrastructure.Operations.OperationCenter OpCenter
+@inject DashboardViewModel Vm
+
+
+
+
+
 @using PlaceContext.Host.Components.ViewModels.Helpers
 
 <PageTitle>placecontext — Dashboard</PageTitle>
@@ -18,7 +18,7 @@
             <h1 class="page-title">Dashboard</h1>
             <p class="page-sub">
                 Jobs across
-                <span class="page-sub-project">@(Ui.CurrentProjectName ?? "the workspace")</span>
+                <span class="page-sub-project">@Vm.WorkspaceProjectName</span>
                 · every run yields an artifact
             </p>
         </div>
@@ -29,28 +29,28 @@
         <div class="dccard stat-card">
             <div class="stat-label">RUNNING</div>
             <div class="stat-figure">
-                <span class="stat-num tone-good">@_running</span>
+                <span class="stat-num tone-good">@Vm.Running</span>
                 <span class="stat-unit">jobs</span>
             </div>
         </div>
         <div class="dccard stat-card">
             <div class="stat-label">QUEUED</div>
             <div class="stat-figure">
-                <span class="stat-num tone-warn">@_queued</span>
+                <span class="stat-num tone-warn">@Vm.Queued</span>
                 <span class="stat-unit">waiting to start</span>
             </div>
         </div>
         <div class="dccard stat-card">
             <div class="stat-label">FAILED · 24H</div>
             <div class="stat-figure">
-                <span class="stat-num tone-bad">@_failed24</span>
+                <span class="stat-num tone-bad">@Vm.Failed24</span>
                 <span class="stat-unit">needs attention</span>
             </div>
         </div>
         <div class="dccard stat-card">
             <div class="stat-label">SUCCEEDED · 24H</div>
             <div class="stat-figure">
-                <span class="stat-num tone-text">@_succeeded24</span>
+                <span class="stat-num tone-text">@Vm.Succeeded24</span>
                 <span class="stat-unit">artifacts generated</span>
             </div>
         </div>
@@ -64,24 +64,24 @@
                 <h2 id="quick-chain-title" class="quick-chain-title">Run a job chain</h2>
                 <p class="quick-chain-sub">Start a repeatable workflow from the current project.</p>
             </div>
-            @if (Ui.CurrentProjectId is { } chainProjectId)
+            @if (Vm.CurrentProjectId is { } chainProjectId)
             {
                 <a class="dcbtn btn-sm" href="@($"/project/{chainProjectId}/chains")">View chains</a>
             }
         </div>
 
-        @if (Ui.CurrentProjectId is null)
+        @if (Vm.CurrentProjectId is null)
         {
             <div class="quick-chain-empty">Select a project to run its job chains.</div>
         }
-        else if (_chains.Count == 0)
+        else if (Vm.Chains.Count == 0)
         {
             <div class="quick-chain-empty">No job chains are configured for this project.</div>
         }
         else
         {
             <div class="quick-chain-list">
-                @foreach (var chain in _chains.Take(4))
+                @foreach (var chain in Vm.Chains.Take(4))
                 {
                     <div class="quick-chain-row">
                         <div class="quick-chain-copy">
@@ -92,37 +92,37 @@
                             </div>
                         </div>
                         <button class="dcbtn primary btn-sm quick-chain-run"
-                                disabled="@(_runningChainId is not null)"
+                                disabled="@(Vm.RunningChainId is not null)"
                                 aria-label="Run @chain.Name"
-                                @onclick="@(() => PrepareQuickChainRunAsync(chain))">
-                            @(_runningChainId == chain.Id ? "Starting…" : "Run")
+                                @onclick="@(() => Vm.PrepareQuickChainRunAsync(chain))">
+                            @(Vm.RunningChainId == chain.Id ? "Starting…" : "Run")
                         </button>
                     </div>
                 }
             </div>
         }
 
-        @if (!string.IsNullOrWhiteSpace(_chainMessage))
+        @if (!string.IsNullOrWhiteSpace(Vm.ChainMessage))
         {
-            <div class="quick-chain-message @(_chainError ? "error" : "")" role="status" aria-live="polite">
-                @_chainMessage
+            <div class="quick-chain-message @(Vm.ChainError ? "error" : "")" role="status" aria-live="polite">
+                @Vm.ChainMessage
             </div>
         }
     </section>
 
     @* ── Pinned entities: one-click access to the business views of tagged data ────────── *@
-    @if (_entities.Count > 0)
+    @if (Vm.Entities.Count > 0)
     {
         <div class="entity-grid">
-            @foreach (var e in _entities)
+            @foreach (var e in Vm.Entities)
             {
                 <a href="@($"/project/{e.ProjectId}/entity/{Uri.EscapeDataString(e.Name)}")"
                    class="dccard dcdash-row entity-card">
                     <div class="entity-head">
                         <span class="entity-name">@e.Name</span>
-                        <span class="entity-count">@EntityCount(e)</span>
+                        <span class="entity-count">@Vm.EntityCount(e)</span>
                     </div>
-                    @if (_entityCharts.TryGetValue(e.Id, out var chart) && chart.Bars.Count > 0)
+                    @if (Vm.EntityCharts.TryGetValue(e.Id, out var chart) && chart.Bars.Count > 0)
                     {
                         <div class="entity-chart-label">by @chart.Column</div>
                         <div class="entity-bars">
@@ -148,11 +148,11 @@
     }
 
     @* ── Charts (read-only copies from the current project's Analytics) ───────────── *@
-    @if (SqlCharts() is { Count: > 0 } sqlCharts)
+    @if (Vm.SqlCharts() is { Count: > 0 } sqlCharts)
     {
         <div class="charts-head">
             <span class="section-title">Charts</span>
-            @if (Ui.CurrentProjectId is { } chartsPid)
+            @if (Vm.CurrentProjectId is { } chartsPid)
             {
                 <a href="@($"/project/{chartsPid}/analytics")" class="charts-edit-link">edit in Analytics →</a>
             }
@@ -164,10 +164,10 @@
                     <div class="chart-card-head">
                         <span class="chart-title">@chart.TableName["sql:".Length..]</span>
                         <span class="spacer"></span>
-                        <span class="chart-time">@chart.GeneratedAt.ToWorkspaceTime().ToString("MM-dd HH:mm")</span>
+                        <span class="chart-time">@Vm.ChartDate(chart.GeneratedAt)</span>
                     </div>
                     <div class="chart-canvas-wrap">
-                        <canvas id="@CanvasId(chart.TableName)"></canvas>
+                        <canvas id="@DashboardViewModel.CanvasId(chart.TableName)"></canvas>
                     </div>
                 </div>
             }
@@ -179,13 +179,13 @@
         <div class="jobs-head">
             <span class="jobs-title">Recent jobs</span>
             <div class="jobs-filters">
-                @foreach (var f in new[] { "all", "running", "failed" })
+                @foreach (var f in Vm.FilterOptions)
                 {
-                    <span @onclick="@(() => _filter = f)"
+                    <span @onclick="@(() => Vm.SetFilter(f))"
                           class="jobs-filter"
-                          style="background:@(_filter == f ? "var(--card-2)" : "transparent");
-                                 border:1px solid @(_filter == f ? "var(--border-2)" : "transparent");
-                                 color:@(_filter == f ? "var(--text)" : "var(--text-3)")">@f</span>
+                          style="background:@(Vm.IsFilter(f) ? "var(--card-2)" : "transparent");
+                                 border:1px solid @(Vm.IsFilter(f) ? "var(--border-2)" : "transparent");
+                                 color:@(Vm.IsFilter(f) ? "var(--text)" : "var(--text-3)")">@f</span>
                 }
             </div>
         </div>
@@ -193,11 +193,11 @@
             <div class="jobs-grid-head">
                 <span>STATUS</span><span>JOB</span><span>PROJECT</span><span>SHARDS</span><span>DURATION</span><span>STARTED</span><span>RETURN</span>
             </div>
-            @if (!_ready)
+            @if (!Vm.Ready)
             {
                 <div class="jobs-loading"><Skeleton Kind="text" Rows="6" /></div>
             }
-            else if (Filtered() is { Count: 0 })
+            else if (Vm.Filtered() is { Count: 0 })
             {
                 <div class="jobs-empty">
                     No runs yet — submit a job and its run appears here live.
@@ -205,21 +205,21 @@
             }
             else
             {
-                @foreach (var rep in Filtered())
+                @foreach (var rep in Vm.Filtered())
                 {
                     var run = rep.Run;
-                    <div @onclick="@(() => Nav.NavigateTo($"/observability?run={run.Id}"))"
+                    <div @onclick="@(() => Vm.OpenRun(run.Id))"
                          class="dcdash-row jobs-row">
-                        <span class="job-status" style="color:@StatusColor(run.Status)">
-                            <span class="job-status-dot" style="background:@StatusColor(run.Status); animation:@(run.Status == "Running" ? "dcpulse 1.6s ease-in-out infinite" : "none")"></span>@run.Status.ToUpperInvariant()
+                        <span class="job-status" style="color:@Vm.StatusTextColor(run.Status)">
+                            <span class="job-status-dot" style="background:@Vm.StatusTextColor(run.Status); animation:@(Vm.IsRunningStatus(run.Status) ? "dcpulse 1.6s ease-in-out infinite" : "none")"></span>@Vm.StatusLabel(run.Status)
                         </span>
                         <span class="job-name">@rep.JobName</span>
                         <span class="job-project">@rep.ProjectName</span>
                         <span class="job-cell">
-                            ✓@run.ShardResults.Count(s => s.Outcome == "Succeeded")@(run.ShardResults.Any(s => s.Outcome == "Failed") ? $" ✗{run.ShardResults.Count(s => s.Outcome == "Failed")}" : "")
+                            @Vm.ShardSummary(run)
                         </span>
-                        <span class="job-cell">@Duration(run)</span>
-                        <span class="job-started">@run.StartedAt.ToWorkspaceTime().ToString("HH:mm · MMM d")</span>
+                        <span class="job-cell">@DashboardViewModel.Duration(run)</span>
+                        <span class="job-started">@Vm.StartedLabel(run.StartedAt)</span>
                         <span class="job-return">@(run.Snapshot.MapSourceKind)</span>
                     </div>
                 }
@@ -228,23 +228,23 @@
     </div>
 </div>
 
-@if (_runPromptChain is not null)
+@if (Vm.RunPromptChain is not null)
 {
-    <div class="dcmodal-overlay" @onclick="CancelQuickChainPrompt">
+    <div class="dcmodal-overlay" @onclick="Vm.CancelQuickChainPrompt">
         <div class="dcmodal quick-chain-modal" role="dialog" aria-modal="true"
              aria-labelledby="quick-chain-prompt-title" @onclick:stopPropagation="true">
             <div class="dcmodal-head">
                 <div class="quick-chain-modal-title">
-                    <div id="quick-chain-prompt-title" class="title-14">Run @_runPromptChain.Name</div>
+                    <div id="quick-chain-prompt-title" class="title-14">Run @Vm.RunPromptChain.Name</div>
                     <div class="quick-chain-modal-sub">
                         Enter the declared inputs for each chain step. Stored job values are prefilled.
                     </div>
                 </div>
                 <button class="dcslide-x" aria-label="Close run input prompt"
-                        disabled="@(_runningChainId is not null)" @onclick="CancelQuickChainPrompt">×</button>
+                        disabled="@(Vm.RunningChainId is not null)" @onclick="Vm.CancelQuickChainPrompt">×</button>
             </div>
             <div class="dcmodal-body quick-chain-modal-body">
-                @foreach (var step in RunPromptSteps)
+                @foreach (var step in Vm.RunPromptSteps)
                 {
                     <section class="quick-chain-prompt-step">
                         <div class="quick-chain-prompt-head">
@@ -263,24 +263,24 @@
                                     }
                                     <span class="code ml-5">@parameter.Name</span>
                                 </label>
-                                <ParamInput Parameter="parameter" ProjectId="@_runPromptChain.ProjectId"
-                                            Value="@_runPrompt.Get(key)"
-                                            ValueChanged="@(value => _runPrompt.Set(key, value))" />
+                                <ParamInput Parameter="parameter" ProjectId="@Vm.RunPromptChain.ProjectId"
+                                            Value="@Vm.RunPrompt.Get(key)"
+                                            ValueChanged="@(value => Vm.RunPrompt.Set(key, value))" />
                             </div>
                         }
                     </section>
                 }
-                @if (_runPrompt.Error is not null)
+                @if (Vm.RunPrompt.Error is not null)
                 {
-                    <div class="quick-chain-prompt-error" role="alert">@_runPrompt.Error</div>
+                    <div class="quick-chain-prompt-error" role="alert">@Vm.RunPrompt.Error</div>
                 }
             </div>
             <div class="dcmodal-foot">
-                <button class="dcbtn" disabled="@(_runningChainId is not null)"
-                        @onclick="CancelQuickChainPrompt">Cancel</button>
-                <button class="dcbtn primary" disabled="@(_runningChainId is not null)"
-                        @onclick="SubmitQuickChainPromptAsync">
-                    @(_runningChainId is not null ? "Starting…" : "▶ Run chain")
+                <button class="dcbtn" disabled="@(Vm.RunningChainId is not null)"
+                        @onclick="Vm.CancelQuickChainPrompt">Cancel</button>
+                <button class="dcbtn primary" disabled="@(Vm.RunningChainId is not null)"
+                        @onclick="Vm.SubmitQuickChainPromptAsync">
+                    @(Vm.RunningChainId is not null ? "Starting…" : "▶ Run chain")
                 </button>
             </div>
         </div>
@@ -290,237 +290,14 @@
 <style>.dcdash-row:hover { background:var(--hover); }</style>
 
 @code {
-    private bool _ready;   // first data load complete — gates the skeleton
-    private IReadOnlyList<RunReportView> _reports = Array.Empty<RunReportView>();
-    private int _running, _queued, _failed24, _succeeded24;
-    private string _filter = "all";
-    private IReadOnlyList<JobChainView> _chains = Array.Empty<JobChainView>();
-    private IReadOnlyList<JobView> _jobs = Array.Empty<JobView>();
-    private readonly ParameterPromptState _runPrompt = new();
-    private JobChainView? _runPromptChain;
-    private List<(int Index, JobView Job)> RunPromptSteps { get; } = new();
-    private Guid? _runningChainId;
-    private string? _chainMessage;
-    private bool _chainError;
-
-    private IReadOnlyList<ProjectChartView> _charts = Array.Empty<ProjectChartView>();
-    private IReadOnlyList<DataEntityView> _entities = Array.Empty<DataEntityView>();
-    private IReadOnlyList<PlaceContext.Application.Ports.ProjectTableInfo> _entityTables = Array.Empty<PlaceContext.Application.Ports.ProjectTableInfo>();
-
-    private sealed record EntityChart(string Column, IReadOnlyList<(string Label, string Count, int Frac)> Bars);
-    private readonly Dictionary<Guid, EntityChart> _entityCharts = new();
-
-    // One mini distribution per pinned entity — charted from the data itself (isolated SELECT),
-    // preferring a relation-key column, else the first categorical column.
-    private async Task LoadEntityChartsAsync()
-    {
-        foreach (var e in _entities.Take(6))
-        {
-            if (_entityCharts.ContainsKey(e.Id)) continue;
-            try
-            {
-                var columns = await Svc.ListProjectTableColumnsAsync(e.ProjectId, e.TableName);
-                var col = e.Relations.Select(r => r.Column)
-                    .Concat(columns.Where(c => (c.Type.Contains("text") || c.Type.Contains("char"))
-                        && !string.Equals(c.Name, e.LabelColumn, StringComparison.OrdinalIgnoreCase)).Select(c => c.Name))
-                    .FirstOrDefault();
-                if (col is null) continue;
-                var r = await Svc.ExecuteProjectDataAsync(e.ProjectId,
-                    $"SELECT \"{col.Replace("\"", "")}\"::text, count(*) FROM \"{e.TableName.Replace("\"", "")}\" GROUP BY 1 ORDER BY 2 DESC LIMIT 4");
-                if (r.Rows.Count == 0) continue;
-                var max = r.Rows.Max(x => long.TryParse(x[1], out var n) ? n : 0);
-                _entityCharts[e.Id] = new EntityChart(col, r.Rows
-                    .Select(x => (x[0] ?? "—", x[1] ?? "0",
-                        max > 0 && long.TryParse(x[1], out var n) ? (int)(n * 100 / max) : 0))
-                    .ToList());
-            }
-            catch { /* an unchartable entity keeps its plain card */ }
-        }
-    }
-
-    private string EntityCount(DataEntityView e)
-        => _entityTables.FirstOrDefault(t => string.Equals(t.Name, e.TableName, StringComparison.OrdinalIgnoreCase))
-            is { } t ? t.RowEstimate.ToString("N0") : "—";
-    private readonly Dictionary<string, DateTimeOffset> _rendered = new();
-
     protected override async Task OnInitializedAsync()
     {
-        OpCenter.Changed += OnOpsChanged;
-        Ui.Set("Dashboard", "jobs · runs · artifacts");
-        await RefreshAsync();
+        Vm.Attach(() => InvokeAsync(StateHasChanged));
+        Vm.Initialize();
+        await Vm.LoadAsync();
     }
 
-    private IReadOnlyList<ProjectChartView> SqlCharts()
-        => _charts.Where(c => c.TableName.StartsWith("sql:", StringComparison.Ordinal)
-                              && c.Html.TrimStart().StartsWith('{')).ToList();
+    protected override Task OnAfterRenderAsync(bool firstRender) => Vm.RenderChartsAsync();
 
-    private static string CanvasId(string slot)
-        => "pcdash-" + Convert.ToHexString(System.Security.Cryptography.MD5.HashData(
-               System.Text.Encoding.UTF8.GetBytes(slot)))[..12];
-
-    protected override async Task OnAfterRenderAsync(bool firstRender)
-    {
-        foreach (var chart in SqlCharts())
-        {
-            var id = CanvasId(chart.TableName);
-            if (_rendered.TryGetValue(id, out var at) && at == chart.GeneratedAt) continue;
-            try
-            {
-                await JS.InvokeVoidAsync("pcchart.render", id, chart.Html);
-                _rendered[id] = chart.GeneratedAt;
-            }
-            catch (JSException) { /* canvas not on screen yet — the next render pass retries */ }
-        }
-    }
-
-    // The run-status watcher feeds the OperationCenter on a short tick — every transition
-    // (queued → running → terminal) re-renders the stats and table without a manual refresh.
-    // Coalesced: RefreshAsync fans out to run reports + per-entity SQL, so at most one full
-    // reload runs per window. A burst's last event still lands — it schedules a trailing
-    // refresh rather than being dropped.
-    private void OnOpsChanged() => _ = InvokeAsync(async () =>
-    {
-        if (_refreshScheduled) return;
-        _refreshScheduled = true;
-        try
-        {
-            var wait = _lastRefreshAt + MinRefreshInterval - DateTimeOffset.UtcNow;
-            if (wait > TimeSpan.Zero) await Task.Delay(wait);
-        }
-        finally { _refreshScheduled = false; }
-        _lastRefreshAt = DateTimeOffset.UtcNow;
-        try { await RefreshAsync(); StateHasChanged(); }
-        catch { /* live refresh is best-effort */ }
-    });
-
-    private static readonly TimeSpan MinRefreshInterval = TimeSpan.FromSeconds(5);
-    private DateTimeOffset _lastRefreshAt = DateTimeOffset.MinValue;
-    private bool _refreshScheduled;
-
-    private async Task RefreshAsync()
-    {
-        try { _reports = await Svc.ListRecentRunReportsAsync(take: 50); } catch { }
-        if (Ui.CurrentProjectId is { } chartPid)
-        {
-            try
-            {
-                var chainsTask = Svc.ListJobChainsAsync(chartPid);
-                var jobsTask = Svc.ListJobsAsync(chartPid);
-                await Task.WhenAll(chainsTask, jobsTask);
-                _chains = await chainsTask;
-                _jobs = await jobsTask;
-            }
-            catch
-            {
-                _chains = Array.Empty<JobChainView>();
-                _jobs = Array.Empty<JobView>();
-            }
-            try { _charts = await Svc.ListProjectChartsAsync(chartPid); } catch { }
-            try
-            {
-                _entities = await Svc.ListDataEntitiesAsync(chartPid);
-                if (_entities.Count > 0)
-                {
-                    _entityTables = await Svc.ListProjectDataTablesAsync(chartPid);
-                    await LoadEntityChartsAsync();
-                }
-            }
-            catch { }
-        }
-
-        var dayAgo = DateTimeOffset.UtcNow.AddHours(-24);
-        _running = _reports.Count(r => r.Run.Status == "Running");
-        _failed24 = _reports.Count(r => r.Run.Status == "Failed" && r.Run.StartedAt >= dayAgo);
-        _succeeded24 = _reports.Count(r => r.Run.Status is "Succeeded" or "Partial" && r.Run.StartedAt >= dayAgo);
-        _queued = Tenant.IsResolved
-            ? OpCenter.ListForTenant(Tenant.TenantId).Count(o => o.Status == PlaceContext.Infrastructure.Operations.PortalOperationStatus.Queued)
-            : 0;
-        _ready = true;
-    }
-
-    private IReadOnlyList<RunReportView> Filtered() => _filter switch
-    {
-        "running" => _reports.Where(r => r.Run.Status == "Running").ToList(),
-        "failed" => _reports.Where(r => r.Run.Status == "Failed").ToList(),
-        _ => _reports,
-    };
-
-    private async Task PrepareQuickChainRunAsync(JobChainView chain)
-    {
-        if (_runningChainId is not null) return;
-
-        var plan = ChainParameterPromptPlan.Build(chain, _jobs);
-        if (plan.Steps.Count == 0)
-        {
-            await RunQuickChainAsync(chain, null, null);
-            return;
-        }
-
-        _runPromptChain = chain;
-        RunPromptSteps.Clear();
-        RunPromptSteps.AddRange(plan.Steps);
-        _runPrompt.Reset(plan.Defaults);
-    }
-
-    private async Task SubmitQuickChainPromptAsync()
-    {
-        if (_runPromptChain is null || _runningChainId is not null) return;
-        if (!_runPrompt.ValidateChainStepParameters(RunPromptSteps)) return;
-
-        var overrides = _runPrompt.ToStepPayloadOverrides(RunPromptSteps);
-        await RunQuickChainAsync(_runPromptChain, overrides.GetValueOrDefault(0), overrides);
-    }
-
-    private void CancelQuickChainPrompt()
-    {
-        if (_runningChainId is not null) return;
-        _runPromptChain = null;
-        RunPromptSteps.Clear();
-        _runPrompt.Clear();
-    }
-
-    private async Task RunQuickChainAsync(
-        JobChainView chain,
-        string? payload,
-        IReadOnlyDictionary<int, string>? stepPayloadOverrides)
-    {
-        if (_runningChainId is not null) return;
-
-        _runningChainId = chain.Id;
-        _chainMessage = null;
-        _chainError = false;
-        try
-        {
-            await Svc.RunJobChainAsync(chain.Id, payload, stepPayloadOverrides: stepPayloadOverrides);
-            _chainMessage = $"{chain.Name} started. Follow its progress in notifications or Observability.";
-            _runPromptChain = null;
-            RunPromptSteps.Clear();
-            _runPrompt.Clear();
-        }
-        catch (Exception ex)
-        {
-            _chainError = true;
-            _chainMessage = $"Could not start {chain.Name}: {ex.Message}";
-        }
-        finally
-        {
-            _runningChainId = null;
-        }
-    }
-
-    private static string Duration(JobRunDetailView run)
-        => run.FinishedAt is { } f
-            ? (f - run.StartedAt) is { TotalSeconds: < 60 } s ? $"{(int)s.TotalSeconds}s" : $"{(int)(f - run.StartedAt).TotalMinutes}m {(f - run.StartedAt).Seconds}s"
-            : "—";
-
-    private static string StatusColor(string status) => status switch
-    {
-        "Succeeded" => "var(--good)",
-        "Failed" => "var(--bad)",
-        "Partial" => "var(--warn)",
-        "Running" => "var(--good)",
-        _ => "var(--text-3)",
-    };
-
-    public void Dispose() => OpCenter.Changed -= OnOpsChanged;
+    public void Dispose() => Vm.Dispose();
 }

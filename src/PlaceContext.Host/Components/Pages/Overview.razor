@@ -1,8 +1,8 @@
 @page "/overview"
 @attribute [Authorize(Policy = Permission.ProjectsView)]
-@inject IPlaceContextService Svc
-@inject PortalUiState Ui
-@inject NavigationManager Nav
+@implements IDisposable
+@inject OverviewViewModel Vm
+@using PlaceContext.Host.Components.ViewModels
 
 <PageTitle>PlaceContext — Overview</PageTitle>
 
@@ -10,7 +10,7 @@
 
     <!-- root stat strip -->
     <div class="stat-strip">
-        @foreach (var s in _stats)
+        @foreach (var s in Vm.Stats)
         {
             <div class="stat-cell">
                 <div class="stat-label">@s.Label</div>
@@ -25,24 +25,24 @@
         <div class="focus-head">
             <span class="section-title">Current focus</span>
             <span class="section-hint">what needs attention across your workspace</span>
-            @if (_focus is { Items.Count: > 0 })
+            @if (Vm.Focus is { Items.Count: > 0 })
             {
-                <span class="focus-count">@_focus.Items.Count</span>
+                <span class="focus-count">@Vm.Focus.Items.Count</span>
             }
         </div>
-        @if (_focus is null)
+        @if (Vm.Focus is null)
         {
             <div class="focus-skeleton"><Skeleton Kind="list" Rows="3" /></div>
         }
-        else if (_focus.Items.Count == 0)
+        else if (Vm.Focus.Items.Count == 0)
         {
             <div class="dcfocus-clear">✓ All clear — nothing needs attention right now.</div>
         }
         else
         {
-            @foreach (var f in _focus.Items)
+            @foreach (var f in Vm.Focus.Items)
             {
-                <button class="dcfocus-row sev-@f.Severity" @onclick="@(() => Nav.NavigateTo(f.Url))">
+                <button class="dcfocus-row sev-@f.Severity" @onclick="@(() => Vm.OpenFocus(f.Url))">
                     <span class="dcfocus-box"></span>
                     <span class="min-w-0">
                         <span class="dcfocus-title">@f.Title</span>
@@ -57,18 +57,18 @@
     <div class="projects-head">
         <div class="projects-title-group">
             <h2 class="projects-title">Projects</h2>
-            <span class="projects-count">@(_projects?.Count ?? 0)</span>
+            <span class="projects-count">@(Vm.Projects?.Count ?? 0)</span>
         </div>
         <div class="projects-actions">
-            <button class="dcbtn primary" @onclick="Refresh" disabled="@_busy">@(_busy ? "Refreshing…" : "Refresh")</button>
+            <button class="dcbtn primary" @onclick="Vm.RefreshAsync" disabled="@Vm.Busy">@(Vm.Busy ? "Refreshing…" : "Vm.RefreshAsync")</button>
         </div>
     </div>
 
-    @if (_projects is null)
+    @if (Vm.Projects is null)
     {
         <Skeleton Kind="card-grid" Cards="6" />
     }
-    else if (_projects.Count == 0)
+    else if (Vm.Projects.Count == 0)
     {
         <div class="dccard empty-card">
             No projects yet. Projects register themselves through the MCP <code>create_project</code> tool when an agent starts working in a repo.
@@ -77,13 +77,13 @@
     else
     {
         <div class="projects-grid">
-            @foreach (var p in _projects)
+            @foreach (var p in Vm.Projects)
             {
-                <div class="dccard project-card" @onclick="@(() => Open(p.Id))">
+                <div class="dccard project-card" @onclick="@(() => Vm.Open(p.Id))">
                     <div class="project-card-head">
                         <div class="min-w-0">
                             <div class="project-name-row">
-                                <span class="lang-dot" style="background:@Viz.LangColor(p.Path)"></span>
+                                <span class="lang-dot" style="background:@OverviewViewModel.LanguageColor(p.Path)"></span>
                                 <span class="project-name">@p.Name</span>
                             </div>
                             <div class="project-path">@p.Path</div>
@@ -97,9 +97,9 @@
                     <div class="map-row">
                         <div class="minimap">
                             <svg viewBox="0 0 100 76" width="100%" height="100%" preserveAspectRatio="xMidYMid slice">
-                                @foreach (var (x, y, god) in MiniNodes(p))
+                                @foreach (var (x, y, god) in OverviewViewModel.MiniNodes(p))
                                 {
-                                    <circle cx="@N(x)" cy="@N(y)" r="@(god ? "3" : "1.3")" fill="@(god ? "var(--brand)" : "var(--text-3)")"></circle>
+                                    <circle cx="@OverviewViewModel.Number(x)" cy="@OverviewViewModel.Number(y)" r="@(god ? "3" : "1.3")" fill="@(god ? "var(--brand)" : "var(--text-3)")"></circle>
                                 }
                             </svg>
                             <span class="minimap-badge">@p.GodNodeCount god</span>
@@ -121,50 +121,6 @@
 </div>
 
 @code {
-    private IReadOnlyList<ProjectSummaryView>? _projects;
-    private FocusView? _focus;
-    private List<Stat> _stats = new();
-    private bool _busy;
-
-    private record Stat(string Label, string Value, string Sub, string Color);
-
-    protected override async Task OnInitializedAsync()
-    {
-        Ui.Set("Overview", "codebase visibility · projects register via MCP");
-        await Load();
-    }
-
-    private async Task Load()
-    {
-        _projects = await Svc.GetProjectsAsync();
-        _focus = await Svc.GetFocusAsync();
-        var st = await Svc.GetRootStatsAsync();
-        _stats = new()
-        {
-            new("Projects", st.ProjectCount.ToString(), "under root", "var(--text)"),
-            new("Changes today", st.ChangesToday.ToString(), $"{st.AgentChangesToday} agent · {st.HumanChangesToday} human", "var(--text)"),
-            new("God-nodes", st.GodNodeTotal.ToString(), "top-degree files", "var(--text)"),
-            new("Stale context", st.StaleContextCount.ToString(), "need re-index", st.StaleContextCount > 0 ? "var(--warn)" : "var(--good)"),
-        };
-    }
-
-    private async Task Refresh()
-    {
-        // Projects are created explicitly via the MCP `create_project` tool; this reloads the list.
-        _busy = true;
-        try { await Load(); }
-        finally { _busy = false; }
-    }
-
-    private void Open(Guid id) => Nav.NavigateTo($"/project/{id}");
-
-    private IEnumerable<(double x, double y, bool god)> MiniNodes(ProjectSummaryView p)
-    {
-        var count = Math.Min(22, p.GodNodeCount * 3 + 10);
-        var pos = Viz.Layout(count, Viz.Seed(p.Id), 100, 76);
-        for (var i = 0; i < pos.Length; i++)
-            yield return (pos[i].X, pos[i].Y, i < p.GodNodeCount);
-    }
-
-    private static string N(double v) => v.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture);
+    protected override async Task OnInitializedAsync() { Vm.Attach(() => InvokeAsync(StateHasChanged)); await Vm.LoadAsync(); }
+    public void Dispose() { Vm.Detach(); }
 }

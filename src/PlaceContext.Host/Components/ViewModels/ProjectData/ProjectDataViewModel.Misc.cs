@@ -7,12 +7,14 @@ namespace PlaceContext.Host.Components.ViewModels;
 public sealed partial class ProjectDataViewModel
 {
     // ── Tables ────────────────────────────────────────────────────────────────────────────────
-    public IReadOnlyList<ProjectTableInfo> Tables { get; private set; } = Array.Empty<ProjectTableInfo>();
+    public IReadOnlyList<ProjectTableInfo> Tables { get; private set; } =
+        Array.Empty<ProjectTableInfo>();
     public bool TablesReady { get; private set; }
 
     // ── Edit table ────────────────────────────────────────────────────────────────────────────
     public string? EditTable { get; private set; }
-    public IReadOnlyList<ProjectColumnInfo> EditColumns { get; private set; } = Array.Empty<ProjectColumnInfo>();
+    public IReadOnlyList<ProjectColumnInfo> EditColumns { get; private set; } =
+        Array.Empty<ProjectColumnInfo>();
     public string? EditError { get; private set; }
     public string? ConfirmDropColumn { get; set; }
     public ColumnDraft AddCol { get; set; } = new();
@@ -29,36 +31,69 @@ public sealed partial class ProjectDataViewModel
         NotifyStateChanged();
     }
 
-    public void CloseEdit() { EditTable = null; NotifyStateChanged(); }
+    public void CloseEdit()
+    {
+        EditTable = null;
+        NotifyStateChanged();
+    }
 
     private async Task RefreshColumnsAsync()
     {
-        if (EditTable is null) return;
-        try { EditColumns = await _svc.ListProjectTableColumnsAsync(ProjectId, EditTable); }
-        catch (Exception ex) { EditError = Trim(ex.Message); }
+        if (EditTable is null)
+            return;
+        try
+        {
+            EditColumns = await _svc.ListProjectTableColumnsAsync(ProjectId, EditTable);
+        }
+        catch (Exception ex)
+        {
+            EditError = Trim(ex.Message);
+        }
     }
 
     public async Task AddColumnToTableAsync()
     {
-        if (EditTable is null) return;
+        if (EditTable is null)
+            return;
         EditError = null;
-        if (string.IsNullOrWhiteSpace(AddCol.Name)) { EditError = "Give the column a name."; NotifyStateChanged(); return; }
+        if (string.IsNullOrWhiteSpace(AddCol.Name))
+        {
+            EditError = "Give the column a name.";
+            NotifyStateChanged();
+            return;
+        }
         AlteringColumn = true;
         try
         {
-            await _svc.AddProjectTableColumnAsync(ProjectId, EditTable,
-                new ProjectColumnSpec(AddCol.Name.Trim(), AddCol.Type, AddCol.NotNull, PrimaryKey: false));
+            await _svc.AddProjectTableColumnAsync(
+                ProjectId,
+                EditTable,
+                new ProjectColumnSpec(
+                    AddCol.Name.Trim(),
+                    AddCol.Type,
+                    AddCol.NotNull,
+                    PrimaryKey: false
+                )
+            );
             AddCol = new ColumnDraft();
             await RefreshColumnsAsync();
             await RefreshTablesAsync();
         }
-        catch (Exception ex) { EditError = Trim(ex.Message); }
-        finally { AlteringColumn = false; NotifyStateChanged(); }
+        catch (Exception ex)
+        {
+            EditError = Trim(ex.Message);
+        }
+        finally
+        {
+            AlteringColumn = false;
+            NotifyStateChanged();
+        }
     }
 
     public async Task DropColumnAsync(string column)
     {
-        if (EditTable is null) return;
+        if (EditTable is null)
+            return;
         EditError = null;
         ConfirmDropColumn = null;
         try
@@ -66,8 +101,10 @@ public sealed partial class ProjectDataViewModel
             await _svc.DropProjectTableColumnAsync(ProjectId, EditTable, column);
             await RefreshColumnsAsync();
         }
-        catch (Exception ex) { EditError = Trim(ex.Message); }
+        catch (Exception ex)
+        {
+            EditError = Trim(ex.Message);
+        }
         NotifyStateChanged();
     }
-
 }

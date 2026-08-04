@@ -3,10 +3,10 @@
 @layout PlaceContext.Host.Components.Layout.ProjectLayout
 @using PlaceContext.Application.Dtos
 @using PlaceContext.Application.Features
-@using PlaceContext.Application.Ports
-@inject IPlaceContextService Svc
-@inject PortalUiState Ui
-@inject ICurrentTenant Tenant
+@using PlaceContext.Domain.ValueObjects
+@using PlaceContext.Host.Components.ViewModels
+@implements IDisposable
+@inject SchedulesViewModel Vm
 
 <PageTitle>placecontext — Schedules</PageTitle>
 
@@ -16,37 +16,37 @@
             <h2 class="page-title">Schedules</h2>
             <div class="page-sub">
                 Every trigger across this project's jobs — cron schedules, event hooks, and launchpads that run an autonomous agent session on a schedule.
-                Cron fires in <span class="tz">@Tenant.TimeZoneId</span>.
+                Cron fires in <span class="tz">@Vm.TimeZoneId</span>.
             </div>
         </div>
     </div>
 
-    @if (_message is not null)
+    @if (Vm.Message is not null)
     {
-        <div class="message">@_message</div>
+        <div class="message">@Vm.Message</div>
     }
 
     @* ── Add trigger ──────────────────────────────────────────────────────────────────── *@
     <div class="dccard add-bar">
         <div class="dcfield field-sm">
             <label>Kind</label>
-            <select class="dcinput" @bind="_newKind" @bind:after="OnKindChanged">
-                <option value="Schedule">Schedule</option>
-                <option value="Event">Event</option>
-                <option value="Launchpad">Launchpad</option>
+            <select class="dcinput" @bind="Vm.NewKind" @bind:after="Vm.OnKindChangedAsync">
+                <option value="@TriggerKind.Schedule">Schedule</option>
+                <option value="@TriggerKind.Event">Event</option>
+                <option value="@TriggerKind.Launchpad">Launchpad</option>
             </select>
         </div>
         <div class="dcfield field-name">
             <label>Name</label>
-            <input class="dcinput" @bind="_newName" placeholder="nightly refresh" />
+            <input class="dcinput" @bind="Vm.NewName" placeholder="nightly refresh" />
         </div>
-        @if (_newKind == "Launchpad")
+        @if (Vm.NewKind == TriggerKind.Launchpad)
         {
             <div class="dcfield field-job">
                 <label>Chain</label>
-                <select class="dcinput" @bind="_newChainId">
+                <select class="dcinput" @bind="Vm.NewChainId">
                     <option value="@Guid.Empty">— pick a chain —</option>
-                    @foreach (var c in _chains ?? Array.Empty<JobChainView>())
+                    @foreach (var c in Vm.Chains ?? Array.Empty<JobChainView>())
                     {
                         <option value="@c.Id">@c.Name</option>
                     }
@@ -54,9 +54,9 @@
             </div>
             <div class="dcfield field-job">
                 <label>Source table</label>
-                <select class="dcinput" @bind="_newSourceTable">
+                <select class="dcinput" @bind="Vm.NewSourceTable">
                     <option value="">— optional —</option>
-                    @foreach (var t in _tables ?? Array.Empty<ProjectTableInfo>())
+                    @foreach (var t in Vm.Tables ?? Array.Empty<ProjectTableInfo>())
                     {
                         <option value="@t.Name">@t.Name</option>
                     }
@@ -67,343 +67,190 @@
         {
             <div class="dcfield field-job">
                 <label>Job</label>
-                <select class="dcinput" @bind="_newJobId">
+                <select class="dcinput" @bind="Vm.NewJobId">
                     <option value="@Guid.Empty">— pick a job —</option>
-                    @foreach (var j in _jobs ?? Array.Empty<JobView>())
+                    @foreach (var j in Vm.Jobs ?? Array.Empty<JobView>())
                     {
                         <option value="@j.Id">@j.Name</option>
                     }
                 </select>
             </div>
         }
-        @if (_newKind is "Schedule" or "Launchpad")
+        @if (Vm.NewKind is TriggerKind.Schedule or TriggerKind.Launchpad)
         {
-            @if (_advancedCron)
+            @if (Vm.AdvancedCron)
             {
                 <div class="dcfield field-cron">
-                    <label>Cron <span class="code code-hint">@Tenant.TimeZoneId</span></label>
-                    <input class="dcinput sans" @bind="_newCron" placeholder="0 0 * * *" />
+                    <label>Cron <span class="code code-hint">@Vm.TimeZoneId</span></label>
+                    <input class="dcinput sans" @bind="Vm.NewCron" placeholder="0 0 * * *" />
                 </div>
             }
             else
             {
                 <div class="dcfield field-sm">
                     <label>Every</label>
-                    <select class="dcinput" @bind="_pickFrequency">
-                        <option value="day">day</option>
-                        <option value="weekday">weekday</option>
-                        <option value="week">week</option>
-                        <option value="month">month</option>
-                        <option value="hour">hour</option>
+                    <select class="dcinput" @bind="Vm.Frequency">
+                        <option value="@ScheduleFrequency.Day">day</option>
+                        <option value="@ScheduleFrequency.Weekday">weekday</option>
+                        <option value="@ScheduleFrequency.Week">week</option>
+                        <option value="@ScheduleFrequency.Month">month</option>
+                        <option value="@ScheduleFrequency.Hour">hour</option>
                     </select>
                 </div>
-                @if (_pickFrequency == "week")
+                @if (Vm.Frequency == ScheduleFrequency.Week)
                 {
                     <div class="dcfield field-sm">
                         <label>On</label>
-                        <select class="dcinput" @bind="_pickWeekday">
-                            <option value="1">Monday</option><option value="2">Tuesday</option>
-                            <option value="3">Wednesday</option><option value="4">Thursday</option>
-                            <option value="5">Friday</option><option value="6">Saturday</option>
-                            <option value="0">Sunday</option>
+                        <select class="dcinput" @bind="Vm.Weekday">
+                            <option value="@((int)DayOfWeek.Monday)">Monday</option><option value="@((int)DayOfWeek.Tuesday)">Tuesday</option>
+                            <option value="@((int)DayOfWeek.Wednesday)">Wednesday</option><option value="@((int)DayOfWeek.Thursday)">Thursday</option>
+                            <option value="@((int)DayOfWeek.Friday)">Friday</option><option value="@((int)DayOfWeek.Saturday)">Saturday</option>
+                            <option value="@((int)DayOfWeek.Sunday)">Sunday</option>
                         </select>
                     </div>
                 }
-                @if (_pickFrequency == "month")
+                @if (Vm.Frequency == ScheduleFrequency.Month)
                 {
                     <div class="dcfield field-day">
                         <label>Day</label>
-                        <input class="dcinput" type="number" min="1" max="28" @bind="_pickDay" />
+                        <input class="dcinput" type="number" min="1" max="28" @bind="Vm.Day" />
                     </div>
                 }
-                @if (_pickFrequency != "hour")
+                @if (Vm.Frequency != ScheduleFrequency.Hour)
                 {
                     <div class="dcfield field-sm">
-                        <label>At <span class="code code-hint">@Tenant.TimeZoneId</span></label>
-                        <input class="dcinput" type="time" @bind="_pickTime" />
+                        <label>At <span class="code code-hint">@Vm.TimeZoneId</span></label>
+                        <input class="dcinput" type="time" @bind="Vm.Time" />
                     </div>
                 }
             }
             <button type="button" class="dcbtn cron-toggle"
-                    @onclick="@(() => _advancedCron = !_advancedCron)">
-                @(_advancedCron ? "◂ simple" : "cron ▸")
+                    @onclick="Vm.ToggleAdvancedCron">
+                @(Vm.AdvancedCron ? "◂ simple" : "cron ▸")
             </button>
         }
         else
         {
             <div class="dcfield field-event">
                 <label>Event</label>
-                <select class="dcinput" @bind="_newEvent">
-                    @foreach (var e in _eventTypes ?? Array.Empty<EventTypeView>())
+                <select class="dcinput" @bind="Vm.NewEvent">
+                    @foreach (var e in Vm.EventTypes ?? Array.Empty<EventTypeView>())
                     {
                         <option value="@e.Name">@e.Name</option>
                     }
                 </select>
             </div>
         }
-        @if (_newKind == "Launchpad")
+        @if (Vm.NewKind == TriggerKind.Launchpad)
         {
             <div class="dcfield field-prompt">
                 <label>Prompt</label>
-                <textarea class="dcinput" rows="3" @bind="_newPrompt" placeholder="For each row, run the chain and summarize anomalies." />
+                <textarea class="dcinput" rows="3" @bind="Vm.NewPrompt" placeholder="For each row, run the chain and summarize anomalies." />
             </div>
         }
-        <button class="dcbtn primary" disabled="@_busy" @onclick="AddTrigger">＋ Add trigger</button>
-        @if (_error is not null)
+        <button class="dcbtn primary" disabled="@Vm.Busy" @onclick="@(() => Vm.AddTriggerAsync(ProjectId))">＋ Add trigger</button>
+        @if (Vm.Error is not null)
         {
-            <span class="err-text">@_error</span>
+            <span class="err-text">@Vm.Error</span>
         }
     </div>
 
     @* ── Trigger table ────────────────────────────────────────────────────────────────── *@
     <div class="dccard table-card">
-        <div class="trigger-grid table-head">
-            <span>STATE</span><span>TRIGGER</span><span>TARGET</span><span>FIRES ON</span><span>NEXT RUN</span><span>LAST FIRED</span><span></span>
-        </div>
-        @if (_triggers is null)
-        {
-            <div class="skeleton-pad"><Skeleton Kind="text" Rows="4" /></div>
-        }
-        else if (_triggers.Count == 0)
-        {
-            <div class="empty-note">
-                No triggers yet — add a cron schedule, an event hook, or an agent launchpad above.
+        <div class="table-scroll" tabindex="0" aria-label="Scrollable schedules table">
+            <div class="trigger-grid table-head">
+                <span>STATE</span><span>TRIGGER</span><span>TARGET</span><span>FIRES ON</span><span>NEXT RUN</span><span>LAST FIRED</span><span></span>
             </div>
-        }
-        else
-        {
-            @foreach (var t in _triggers)
+            @if (Vm.Triggers is null)
             {
-                var isEditing = _editingId == t.Id;
-                <div class="trigger-grid trigger-row@(isEditing ? " editing" : "")">
-                    @if (isEditing)
-                    {
-                        <span class="state-cell" style="color:@(t.Enabled ? "var(--good)" : "var(--text-3)")">
-                            <span class="state-dot" style="background:@(t.Enabled ? "var(--good)" : "var(--border-2)")"></span>@(t.Enabled ? "ON" : "PAUSED")
-                        </span>
-                        <span class="trigger-name">
-                            <input class="dcinput edit-name" @bind="_editName" />
-                        </span>
-                        <span class="cell-job">@TargetLabel(t)</span>
-                        <span class="cell-2">
-                            @if (t.Kind == "Event")
-                            {
-                                <select class="dcinput edit-event" @bind="_editEvent">
-                                    @foreach (var e in _eventTypes ?? Array.Empty<EventTypeView>())
-                                    {
-                                        <option value="@e.Name">@e.Name</option>
-                                    }
-                                </select>
-                            }
-                            else
-                            {
-                                <input class="dcinput edit-cron" @bind="_editCron" placeholder="0 0 * * *" />
-                            }
-                        </span>
-                        <span class="cell-2">@(t.NextRunAt?.ToWorkspaceTime().ToString("MMM d · HH:mm") ?? "—")</span>
-                        <span class="cell-3">@(t.LastFiredAt?.ToWorkspaceTime().ToString("MMM d · HH:mm") ?? "never")</span>
-                        <span class="row-actions">
-                            @if (_editError is not null)
-                            {
-                                <span class="err-text">@_editError</span>
-                            }
-                            <button class="dcbtn btn-sm" disabled="@_editingBusy" @onclick="SaveEdit">Save</button>
-                            <button class="dcbtn btn-sm" disabled="@_editingBusy" @onclick="CancelEdit">Cancel</button>
-                        </span>
-                    }
-                    else
-                    {
-                        <span class="state-cell" style="color:@(t.Enabled ? "var(--good)" : "var(--text-3)")">
-                            <span class="state-dot" style="background:@(t.Enabled ? "var(--good)" : "var(--border-2)")"></span>@(t.Enabled ? "ON" : "PAUSED")
-                        </span>
-                        <span class="trigger-name">@t.Name</span>
-                        <span class="cell-job">@TargetLabel(t)</span>
-                        <span class="cell-2">
-                            @if (t.Kind == "Event")
-                            {
-                                <text>event @t.EventName</text>
-                            }
-                            else
-                            {
-                                <text>cron @t.CronExpression</text>
-                            }
-                        </span>
-                        <span class="cell-2">@(t.NextRunAt?.ToWorkspaceTime().ToString("MMM d · HH:mm") ?? "—")</span>
-                        <span class="cell-3">@(t.LastFiredAt?.ToWorkspaceTime().ToString("MMM d · HH:mm") ?? "never")</span>
-                        <span class="row-actions">
-                            <button class="dcbtn btn-sm" @onclick="@(() => Toggle(t))">@(t.Enabled ? "Pause" : "Resume")</button>
-                            <button class="dcbtn btn-sm" @onclick="@(() => StartEdit(t))">Edit</button>
-                            <button class="dcbtn btn-sm btn-danger" @onclick="@(() => Remove(t.Id))">Delete</button>
-                        </span>
-                    }
+                <div class="skeleton-pad"><Skeleton Kind="text" Rows="4" /></div>
+            }
+            else if (Vm.Triggers.Count == 0)
+            {
+                <div class="empty-note">
+                    No triggers yet — add a cron schedule, an event hook, or an agent launchpad above.
                 </div>
             }
-        }
+            else
+            {
+                @foreach (var t in Vm.Triggers)
+                {
+                    var isEditing = Vm.EditingId == t.Id;
+                    <div class="trigger-grid trigger-row@(isEditing ? " editing" : "")">
+                        @if (isEditing)
+                        {
+                            <span class="state-cell" style="color:@(t.Enabled ? "var(--good)" : "var(--text-3)")">
+                                <span class="state-dot" style="background:@(t.Enabled ? "var(--good)" : "var(--border-2)")"></span>@(t.Enabled ? "ON" : "PAUSED")
+                            </span>
+                            <span class="trigger-name">
+                                <input class="dcinput edit-name" @bind="Vm.EditName" />
+                            </span>
+                            <span class="cell-job">@Vm.TargetLabel(t)</span>
+                            <span class="cell-2">
+                                @if (Vm.IsEvent(t))
+                                {
+                                    <select class="dcinput edit-event" @bind="Vm.EditEvent">
+                                        @foreach (var e in Vm.EventTypes ?? Array.Empty<EventTypeView>())
+                                        {
+                                            <option value="@e.Name">@e.Name</option>
+                                        }
+                                    </select>
+                                }
+                                else
+                                {
+                                    <input class="dcinput edit-cron" @bind="Vm.EditCron" placeholder="0 0 * * *" />
+                                }
+                            </span>
+                            <span class="cell-2">@Vm.NextRunLabel(t)</span>
+                            <span class="cell-3">@Vm.LastFiredLabel(t)</span>
+                            <span class="row-actions">
+                                @if (Vm.EditError is not null)
+                                {
+                                    <span class="err-text">@Vm.EditError</span>
+                                }
+                                <button class="dcbtn btn-sm" disabled="@Vm.EditingBusy" @onclick="@(() => Vm.SaveEditAsync(ProjectId))">Save</button>
+                                <button class="dcbtn btn-sm" disabled="@Vm.EditingBusy" @onclick="Vm.CancelEdit">Cancel</button>
+                            </span>
+                        }
+                        else
+                        {
+                            <span class="state-cell" style="color:@(t.Enabled ? "var(--good)" : "var(--text-3)")">
+                                <span class="state-dot" style="background:@(t.Enabled ? "var(--good)" : "var(--border-2)")"></span>@(t.Enabled ? "ON" : "PAUSED")
+                            </span>
+                            <span class="trigger-name">@t.Name</span>
+                            <span class="cell-job">@Vm.TargetLabel(t)</span>
+                            <span class="cell-2">
+                                @if (Vm.IsEvent(t))
+                                {
+                                    <text>event @t.EventName</text>
+                                }
+                                else
+                                {
+                                    <text>cron @t.CronExpression</text>
+                                }
+                            </span>
+                        <span class="cell-2">@Vm.NextRunLabel(t)</span>
+                        <span class="cell-3">@Vm.LastFiredLabel(t)</span>
+                            <span class="row-actions">
+                                <button class="dcbtn btn-sm" @onclick="@(() => Vm.ToggleAsync(ProjectId, t))">@(t.Enabled ? "Pause" : "Resume")</button>
+                                <button class="dcbtn btn-sm" @onclick="@(() => Vm.StartEdit(t))">Edit</button>
+                                <button class="dcbtn btn-sm btn-danger" @onclick="@(() => Vm.RemoveAsync(ProjectId, t.Id))">Delete</button>
+                            </span>
+                        }
+                    </div>
+                }
+            }
+        </div>
     </div>
 </div>
 
 @code {
     [Parameter] public Guid ProjectId { get; set; }
 
-    private IReadOnlyList<TriggerView>? _triggers;
-    private IReadOnlyList<JobView>? _jobs;
-    private IReadOnlyList<JobChainView>? _chains;
-    private IReadOnlyList<ProjectTableInfo>? _tables;
-    private IReadOnlyList<EventTypeView>? _eventTypes;
-    private string? _message, _error;
-    private bool _busy;
+    protected override void OnInitialized() =>
+        Vm.Attach(() => InvokeAsync(StateHasChanged));
 
-    private Guid _newJobId;
-    private string _newName = "";
-    private string _newKind = "Schedule";
-    private string _newCron = "0 0 * * *";
-    private string _newEvent = "";
-    private Guid _newChainId;
-    private string _newSourceTable = "";
-    private string _newPrompt = "";
+    protected override Task OnParametersSetAsync() => Vm.LoadAsync(ProjectId);
 
-    // Simple picker (the default): frequency + time compose the cron; advanced users type it raw.
-    private bool _advancedCron;
-    private string _pickFrequency = "day";
-    private string _pickWeekday = "1";
-    private int _pickDay = 1;
-    private TimeOnly _pickTime = new(9, 0);
-
-    private string ComposedCron() => _pickFrequency switch
-    {
-        "hour" => "0 * * * *",
-        "weekday" => $"{_pickTime.Minute} {_pickTime.Hour} * * 1-5",
-        "week" => $"{_pickTime.Minute} {_pickTime.Hour} * * {_pickWeekday}",
-        "month" => $"{_pickTime.Minute} {_pickTime.Hour} {Math.Clamp(_pickDay, 1, 28)} * *",
-        _ => $"{_pickTime.Minute} {_pickTime.Hour} * * *",
-    };
-
-    protected override async Task OnParametersSetAsync()
-    {
-        try
-        {
-            _jobs = await Svc.ListJobsAsync(ProjectId);
-            _chains = await Svc.ListJobChainsAsync(ProjectId);
-            _tables = await Svc.ListProjectDataTablesAsync(ProjectId);
-            _triggers = await Svc.ListTriggersAsync(ProjectId);
-            _eventTypes = await Svc.ListEventTypesAsync();
-            _newEvent = _eventTypes.FirstOrDefault()?.Name ?? "";
-            Ui.Set("Schedules", "cron + event triggers + launchpads across this project");
-        }
-        catch (Exception ex) { _message = ex.Message; }
-    }
-
-    private async Task OnKindChanged()
-    {
-        if (_newKind == "Launchpad" && _chains?.Count > 0 && _newChainId == Guid.Empty)
-            _newChainId = _chains[0].Id;
-        await Task.CompletedTask;
-    }
-
-    private string TargetLabel(TriggerView t) => t.Kind switch
-    {
-        "Launchpad" => ChainName(t.ChainId) + (!string.IsNullOrEmpty(t.SourceTable) ? $" · {t.SourceTable}" : ""),
-        _ => JobName(t.JobId ?? Guid.Empty),
-    };
-
-    private string JobName(Guid jobId) => _jobs?.FirstOrDefault(j => j.Id == jobId)?.Name ?? "(deleted job)";
-    private string ChainName(Guid? chainId) => _chains?.FirstOrDefault(c => c.Id == chainId)?.Name ?? "(deleted chain)";
-
-    private async Task AddTrigger()
-    {
-        _error = null;
-        if (string.IsNullOrWhiteSpace(_newName)) { _error = "Name is required."; return; }
-        _busy = true;
-        try
-        {
-            if (_newKind == "Launchpad")
-            {
-                if (_newChainId == Guid.Empty) { _error = "Pick a chain."; return; }
-                if (string.IsNullOrWhiteSpace(_newPrompt)) { _error = "Prompt is required."; return; }
-                var cron = _advancedCron ? _newCron : ComposedCron();
-                await Svc.CreateTriggerAsync(new CreateTriggerCommand(
-                    null, _newName.Trim(), "Launchpad", cron, null,
-                    _newChainId,
-                    string.IsNullOrWhiteSpace(_newSourceTable) ? null : _newSourceTable,
-                    _newPrompt.Trim()));
-            }
-            else
-            {
-                if (_newJobId == Guid.Empty) { _error = "Pick a job."; return; }
-                var cron = _newKind == "Schedule" ? (_advancedCron ? _newCron : ComposedCron()) : null;
-                var evt = _newKind == "Event" ? _newEvent : null;
-                await Svc.CreateTriggerAsync(new CreateTriggerCommand(_newJobId, _newName.Trim(), _newKind, cron, evt));
-            }
-            _triggers = await Svc.ListTriggersAsync(ProjectId);
-            _newName = "";
-            _newPrompt = "";
-            _newSourceTable = "";
-        }
-        catch (Exception ex) { _error = ex.Message; }
-        finally { _busy = false; }
-    }
-
-    private async Task Toggle(TriggerView t)
-    {
-        try
-        {
-            await Svc.SetTriggerEnabledAsync(t.Id, !t.Enabled);
-            _triggers = await Svc.ListTriggersAsync(ProjectId);
-        }
-        catch (Exception ex) { _error = ex.Message; }
-    }
-
-    private async Task Remove(Guid id)
-    {
-        try
-        {
-            await Svc.DeleteTriggerAsync(id);
-            _triggers = await Svc.ListTriggersAsync(ProjectId);
-        }
-        catch (Exception ex) { _error = ex.Message; }
-    }
-
-    // ── Inline editing ─────────────────────────────────────────────────────────────────
-
-    private Guid? _editingId;
-    private string? _editName, _editCron, _editEvent;
-    private string? _editError;
-    private bool _editingBusy;
-
-    private void StartEdit(TriggerView t)
-    {
-        _editingId = t.Id;
-        _editName = t.Name;
-        _editCron = t.CronExpression;
-        _editEvent = t.EventName;
-        _editError = null;
-    }
-
-    private void CancelEdit()
-    {
-        _editingId = null;
-        _editName = _editCron = _editEvent = null;
-        _editError = null;
-    }
-
-    private async Task SaveEdit()
-    {
-        _editError = null;
-        if (string.IsNullOrWhiteSpace(_editName)) { _editError = "Name is required."; return; }
-        _editingBusy = true;
-        try
-        {
-            var cmd = new UpdateTriggerCommand(
-                _editingId!.Value,
-                Name: _editName?.Trim(),
-                CronExpression: _editCron?.Trim(),
-                EventName: _editEvent?.Trim(),
-                Enabled: null);
-            await Svc.UpdateTriggerAsync(cmd);
-            _triggers = await Svc.ListTriggersAsync(ProjectId);
-            CancelEdit();
-        }
-        catch (Exception ex) { _editError = ex.Message; }
-        finally { _editingBusy = false; }
-    }
+    public void Dispose() => Vm.Detach();
 }

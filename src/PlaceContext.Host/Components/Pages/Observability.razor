@@ -1,18 +1,21 @@
 @page "/observability"
 @attribute [Authorize(Policy = Permission.JobsView)]
 @implements IDisposable
-@inject IPlaceContextService Svc
-@inject PortalUiState Ui
-@inject NavigationManager Nav
-@inject PlaceContext.Infrastructure.Operations.OperationCenter OpCenter
-@inject PlaceContext.Application.Ports.IJobTelemetryReader Telemetry
+@inject ObservabilityViewModel Vm
+
+
+
+
 
 <PageTitle>PlaceContext — Observability</PageTitle>
 
-@if (_loading)
+@if (Vm.Loading)
 {
     <Skeleton Kind="list" Rows="6" Padded />
 }
+
+
+
 else
 {
     <div class="page">
@@ -24,37 +27,37 @@ else
                     What ran, where, and how it went — across every project in the workspace.
                 </div>
             </div>
-            <button class="dcbtn" @onclick="RefreshAsync">Refresh</button>
+            <button class="dcbtn" @onclick="Vm.RefreshAsync">Refresh</button>
         </div>
 
         @* Global tab strip — more lenses (events, triggers, costs) slot in here. *@
         <div class="dctabs tabs-strip">
-            <button class="dctab @(_tab == "runs" ? "active" : "")" @onclick="@(() => _tab = "runs")">Job history<span class="n">@(_reports?.Count ?? 0)</span></button>
-            <button class="dctab @(_tab == "chains" ? "active" : "")" @onclick="@(() => _tab = "chains")">Chains<span class="n">@(_chainReports?.Count ?? 0)</span></button>
-            <button class="dctab @(_tab == "traces" ? "active" : "")" @onclick="LoadTracesAsync">Live traces<span class="n">@(_liveTraces?.Count ?? 0)</span></button>
+            <button class="dctab @(Vm.IsRunsTab ? "active" : "")" @onclick="Vm.SelectRunsTab">Job history<span class="n">@(Vm.Reports?.Count ?? 0)</span></button>
+            <button class="dctab @(Vm.IsChainsTab ? "active" : "")" @onclick="Vm.SelectChainsTab">Chains<span class="n">@(Vm.ChainReports?.Count ?? 0)</span></button>
+            <button class="dctab @(Vm.IsTracesTab ? "active" : "")" @onclick="Vm.LoadTracesAsync">Live traces<span class="n">@(Vm.LiveTraces?.Count ?? 0)</span></button>
         </div>
 
-        @if (_message is not null)
+        @if (Vm.Message is not null)
         {
-            <div class="message-banner">@_message</div>
+            <div class="message-banner">@Vm.Message</div>
         }
 
-        @if (ActiveRunCount > 0)
+        @if (Vm.ActiveRunCount > 0)
         {
             <section class="summary-strip" aria-label="Run summary">
-                <div class="summary-count"><strong>@ActiveRunCount</strong><span>runs</span></div>
-                <div class="summary-count running"><strong>@ActiveStatusCount("Running")</strong><span>running</span></div>
-                <div class="summary-count succeeded"><strong>@ActiveStatusCount("Succeeded")</strong><span>succeeded</span></div>
-                <div class="summary-count failed"><strong>@ActiveStatusCount("Failed")</strong><span>failed</span></div>
-                <div class="summary-progress" title="@ActiveSuccessPercent% succeeded">
-                    <span style="width:@ActiveSuccessPercent%"></span>
+                <div class="summary-count"><strong>@Vm.ActiveRunCount</strong><span>runs</span></div>
+                <div class="summary-count running"><strong>@Vm.ActiveStatusCount(JobRunStatus.Running)</strong><span>running</span></div>
+                <div class="summary-count succeeded"><strong>@Vm.ActiveStatusCount(JobRunStatus.Succeeded)</strong><span>succeeded</span></div>
+                <div class="summary-count failed"><strong>@Vm.ActiveStatusCount(JobRunStatus.Failed)</strong><span>failed</span></div>
+                <div class="summary-progress" title="@Vm.ActiveSuccessPercent% succeeded">
+                    <span style="width:@Vm.ActiveSuccessPercent%"></span>
                 </div>
             </section>
         }
 
-        @if (_tab == "runs")
+        @if (Vm.IsRunsTab)
         {
-            @if (_reports is null or { Count: 0 })
+            @if (Vm.Reports is null or { Count: 0 })
             {
                 <div class="dccard empty-card">
                     No job runs recorded yet — run a job from any project's Jobs tab and it appears here.
@@ -64,31 +67,30 @@ else
             {
                 <section class="dccard run-suite">
                     <header class="suite-head">
-                        <div><span class="suite-caret">⌄</span><strong>Job run catalogue</strong><span>@_reports.Count across the workspace</span></div>
-                        <span class="suite-result">@ActiveStatusCount("Succeeded") succeeded</span>
+                        <div><span class="suite-caret">⌄</span><strong>Job run catalogue</strong><span>@Vm.Reports.Count across the workspace</span></div>
+                        <span class="suite-result">@Vm.ActiveStatusCount(JobRunStatus.Succeeded) succeeded</span>
                     </header>
                     <div class="run-list">
-                        @foreach (var rep in _reports)
+                        @foreach (var rep in Vm.Reports)
                         {
                             var run = rep.Run;
-                            <article class="run-row" @onclick="@(() => OpenRun(rep))">
+                            <article class="run-row" @onclick="@(() => Vm.OpenRun(rep))">
                                 <div class="run-row-inner">
-                                    <span class="status-pill" style="color:@StatusColor(run.Status); background:@StatusBg(run.Status)">@run.Status</span>
+                                    <span class="status-pill" style="color:@Vm.Presentation.StatusColor(run.Status); background:@Vm.Presentation.StatusBackground(run.Status)">@run.Status</span>
                                     <div class="flex-fill">
                                         <span class="job-name">@rep.JobName</span>
                                         <span class="project-name">@rep.ProjectName</span>
                                     </div>
                                     <span class="note-sm">
-                                        ✓ @run.ShardResults.Count(s => s.Outcome == "Succeeded")
-                                        @(run.ShardResults.Any(s => s.Outcome == "Failed") ? $" ✗ {run.ShardResults.Count(s => s.Outcome == "Failed")}" : "")
+                                        ✓ @Vm.SucceededShardCount(run)@Vm.FailedShardSummary(run)
                                     </span>
                                     <span class="run-time">
-                                        @run.StartedAt.ToWorkspaceTime().ToString("yyyy-MM-dd HH:mm")
+                                        @Vm.Presentation.DateTime(run.StartedAt)
                                     </span>
                                     @if (run.FinishedAt.HasValue)
                                     {
                                         <span class="run-duration">
-                                            @FormatDuration(run.StartedAt, run.FinishedAt.Value)
+                                            @Vm.Presentation.Duration(run.StartedAt, run.FinishedAt.Value)
                                         </span>
                                     }
                                 </div>
@@ -99,9 +101,9 @@ else
             }
         }
 
-        @if (_tab == "chains")
+        @if (Vm.IsChainsTab)
         {
-            @if (_chainReports is null or { Count: 0 })
+            @if (Vm.ChainReports is null or { Count: 0 })
             {
                 <div class="dccard empty-card">
                     No chain runs recorded yet — run a job chain from any project's Chains tab and it appears here.
@@ -111,30 +113,30 @@ else
             {
                 <section class="dccard run-suite">
                     <header class="suite-head">
-                        <div><span class="suite-caret">⌄</span><strong>Chain run catalogue</strong><span>@_chainReports.Count across the workspace</span></div>
-                        <span class="suite-result">@ActiveStatusCount("Succeeded") succeeded</span>
+                        <div><span class="suite-caret">⌄</span><strong>Chain run catalogue</strong><span>@Vm.ChainReports.Count across the workspace</span></div>
+                        <span class="suite-result">@Vm.ActiveStatusCount(JobRunStatus.Succeeded) succeeded</span>
                     </header>
                     <div class="run-list">
-                        @foreach (var rep in _chainReports)
+                        @foreach (var rep in Vm.ChainReports)
                         {
                             var run = rep.Run;
-                            <article class="run-row" @onclick="@(() => OpenChainRun(rep))">
+                            <article class="run-row" @onclick="@(() => Vm.OpenChainRun(rep))">
                                 <div class="run-row-inner">
-                                    <span class="status-pill" style="color:@StatusColor(run.Status); background:@StatusBg(run.Status)">@run.Status</span>
+                                    <span class="status-pill" style="color:@Vm.Presentation.StatusColor(run.Status); background:@Vm.Presentation.StatusBackground(run.Status)">@run.Status</span>
                                     <div class="flex-fill">
                                         <span class="job-name">@run.ChainName</span>
                                         <span class="project-name">@rep.ProjectName</span>
                                     </div>
                                     <span class="note-sm">
-                                        @run.Steps.Count(s => s.Status == "Succeeded")/@run.Steps.Count step(s)
+                                        @Vm.SucceededStepCount(run)/@run.Steps.Count step(s)
                                     </span>
                                     <span class="run-time">
-                                        @run.StartedAt.ToWorkspaceTime().ToString("yyyy-MM-dd HH:mm")
+                                        @Vm.Presentation.DateTime(run.StartedAt)
                                     </span>
                                     @if (run.FinishedAt.HasValue)
                                     {
                                         <span class="run-duration">
-                                            @FormatDuration(run.StartedAt, run.FinishedAt.Value)
+                                            @Vm.Presentation.Duration(run.StartedAt, run.FinishedAt.Value)
                                         </span>
                                     }
                                 </div>
@@ -145,12 +147,12 @@ else
             }
         }
 
-        @if (_tab == "traces")
+        @if (Vm.IsTracesTab)
         {
             <div class="page-sub" style="margin-bottom:12px">
                 In-process OpenTelemetry spans from this Host replica (job.run → job.shard). Full span trees for runs executed here.
             </div>
-            @if (_liveTraces is null or { Count: 0 })
+            @if (Vm.LiveTraces is null or { Count: 0 })
             {
                 <div class="dccard empty-card">
                     No live traces on this replica yet — run a job and refresh.
@@ -160,21 +162,21 @@ else
             {
                 <section class="dccard run-suite">
                     <header class="suite-head">
-                        <div><span class="suite-caret">⌄</span><strong>Live trace catalogue</strong><span>@_liveTraces.Count on this replica</span></div>
-                        <span class="suite-result">@ActiveStatusCount("Succeeded") succeeded</span>
+                        <div><span class="suite-caret">⌄</span><strong>Live trace catalogue</strong><span>@Vm.LiveTraces.Count on this replica</span></div>
+                        <span class="suite-result">@Vm.ActiveStatusCount(JobRunStatus.Succeeded) succeeded</span>
                     </header>
                     <div class="run-list">
-                        @foreach (var t in _liveTraces)
+                        @foreach (var t in Vm.LiveTraces)
                         {
-                            <article class="run-row" @onclick="@(() => OpenLiveTrace(t))">
+                            <article class="run-row" @onclick="@(() => Vm.OpenLiveTrace(t))">
                                 <div class="run-row-inner">
-                                    <span class="status-pill" style="color:@StatusColor(t.Status ?? ""); background:@StatusBg(t.Status ?? "")">@(t.Status ?? "—")</span>
+                                    <span class="status-pill" style="color:@Vm.Presentation.StatusColor(t.Status); background:@Vm.Presentation.StatusBackground(t.Status)">@Vm.Presentation.StatusLabel(t.Status)</span>
                                     <div class="flex-fill">
-                                        <span class="job-name">@(t.JobName ?? t.JobId.ToString("N")[..8])</span>
-                                        <span class="project-name">trace @(t.TraceId is { Length: > 8 } ? t.TraceId[..8] : t.TraceId ?? "—")…</span>
+                                        <span class="job-name">@(t.JobName ?? Vm.Presentation.AbbreviatedId(t.JobId))</span>
+                                        <span class="project-name">trace @Vm.TraceLabel(t)…</span>
                                     </div>
                                     <span class="note-sm">@t.Shards.Count shard(s)</span>
-                                    <span class="run-duration">@FormatMs(t.DurationMs)</span>
+                                    <span class="run-duration">@Vm.Presentation.Milliseconds(t.DurationMs)</span>
                                 </div>
                             </article>
                         }
@@ -185,42 +187,63 @@ else
     </div>
 }
 
+@code {
+    [SupplyParameterFromQuery(Name = "run")] public string? RunId { get; set; }
+    [SupplyParameterFromQuery(Name = "chainRun")] public string? ChainRunId { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        Vm.Attach(() => InvokeAsync(StateHasChanged));
+        Vm.RunId = RunId;
+        Vm.ChainRunId = ChainRunId;
+        await Vm.InitializeAsync();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        Vm.RunId = RunId;
+        Vm.ChainRunId = ChainRunId;
+        await Vm.ApplyDeepLinkAsync();
+    }
+
+    public void Dispose() => Vm.Dispose();
+}
+
 @* ── Chain run detail slide-out: the fan-out/fan-in pipeline — a fan-out stage stacks its branches
    in one column, and the join is simply the next column. Clicking a step deep-links into the run
    detail slide-out below (same query-param convention the notification bell already uses). ────── *@
-@if (_openChain is not null)
+@if (Vm.OpenChain is not null)
 {
-    var chainRun = _openChain.Run;
-    <div class="dcslide-scrim" @onclick="CloseChainRun"></div>
+    var chainRun = Vm.OpenChain.Run;
+    <div class="dcslide-scrim" @onclick="Vm.CloseChainRun"></div>
     <div class="dcslide slide-wide">
         <div class="dcslide-head">
             <div class="flex-fill">
                 <div class="slide-title">@chainRun.ChainName</div>
                 <div class="slide-sub">
-                    @_openChain.ProjectName · chain run @chainRun.Id.ToString("N")[..8]
-                    · @chainRun.StartedAt.ToWorkspaceTime().ToString("yyyy-MM-dd HH:mm")
+                    @Vm.OpenChain.ProjectName · chain run @Vm.Presentation.AbbreviatedId(chainRun.Id)
+                    · @Vm.Presentation.DateTime(chainRun.StartedAt)
                 </div>
             </div>
             <button class="dcbtn btn-open-project"
-                    @onclick="@(() => Nav.NavigateTo($"/project/{_openChain.ProjectId}/chains"))">Open project →</button>
-            <button class="dcslide-x" @onclick="CloseChainRun">×</button>
+                    @onclick="@(() => Vm.OpenProject(Vm.OpenChain.ProjectId, "chains"))">Open project →</button>
+            <button class="dcslide-x" @onclick="Vm.CloseChainRun">×</button>
         </div>
         <div class="dcslide-body slide-body-scroll">
             <div class="status-line">
-                <span class="status-pill-lg" style="color:@StatusColor(chainRun.Status); background:@StatusBg(chainRun.Status)">@chainRun.Status</span>
+                <span class="status-pill-lg" style="color:@Vm.Presentation.StatusColor(chainRun.Status); background:@Vm.Presentation.StatusBackground(chainRun.Status)">@chainRun.Status</span>
                 <span class="note-sm">
-                    @chainRun.Steps.Count(s => s.Status == "Succeeded")/@chainRun.Steps.Count step(s) succeeded
-                    @(chainRun.FinishedAt.HasValue ? " · " + FormatDuration(chainRun.StartedAt, chainRun.FinishedAt.Value) : " · running…")
+                    @Vm.ChainRunStepSummary(chainRun)@Vm.ChainRunDuration(chainRun)
                 </span>
             </div>
 
-            <ChainPipeline Run="chainRun" OnStepClick="OpenChainStep" />
+            <ChainPipeline Run="chainRun" OnStepClick="Vm.OpenChainStep" />
 
             @if (chainRun.FinalOutput is { Length: > 0 })
             {
                 <div class="dccard panel-card">
                     <div class="panel-title">Pipeline output</div>
-                    <pre class="shard-json">@PrettyJson(chainRun.FinalOutput)</pre>
+                <pre class="shard-json">@Vm.Presentation.Json(chainRun.FinalOutput)</pre>
                 </div>
             }
         </div>
@@ -228,45 +251,45 @@ else
 }
 
 @* ── Run detail slide-out: the full picture — shards, artifacts, charts, logs ─────────────── *@
-@if (_open is not null)
+@if (Vm.Open is not null)
 {
-    var run = _open.Run;
-    <div class="dcslide-scrim" @onclick="CloseRun"></div>
+    var run = Vm.Open.Run;
+    <div class="dcslide-scrim" @onclick="Vm.CloseRun"></div>
     <div class="dcslide slide-wide">
         <div class="dcslide-head">
             <div class="flex-fill">
-                <div class="slide-title">@_open.JobName</div>
+                <div class="slide-title">@Vm.Open.JobName</div>
                 <div class="slide-sub">
-                    @_open.ProjectName · run @run.Id.ToString("N")[..8] · @run.StartedAt.ToWorkspaceTime().ToString("yyyy-MM-dd HH:mm")
+                    @Vm.Open.ProjectName · run @Vm.Presentation.AbbreviatedId(run.Id) · @Vm.Presentation.DateTime(run.StartedAt)
                 </div>
             </div>
             <button class="dcbtn btn-replay" title="Re-run this run's exact captured inputs"
-                    @onclick="@(() => ReplayRun(run.Id, run.ProjectId))">↻ Replay</button>
+                    @onclick="@(() => Vm.ReplayRun(run.Id, run.ProjectId))">↻ Replay</button>
             <button class="dcbtn btn-open-project"
-                    @onclick="@(() => Nav.NavigateTo($"/project/{run.ProjectId}/jobs"))">Open project →</button>
-            <button class="dcslide-x" @onclick="CloseRun">×</button>
+                    @onclick="@(() => Vm.OpenProject(run.ProjectId, "jobs"))">Open project →</button>
+            <button class="dcslide-x" @onclick="Vm.CloseRun">×</button>
         </div>
         <div class="dcslide-body slide-body-scroll">
             <div class="status-line">
-                <span class="status-pill-lg" style="color:@StatusColor(run.Status); background:@StatusBg(run.Status)">@run.Status</span>
+                <span class="status-pill-lg" style="color:@Vm.Presentation.StatusColor(run.Status); background:@Vm.Presentation.StatusBackground(run.Status)">@run.Status</span>
                 <span class="note-sm">
                     Ran as: <code>@run.Snapshot.MapSourceKind</code> · @run.Snapshot.MapSourceLabel
                     · @run.Snapshot.ShardCount shard(s) · concurrency @run.Snapshot.ConcurrencyLimit
                 </span>
             </div>
 
-            @if (_openArtifacts is { Count: > 0 })
+            @if (Vm.OpenArtifacts is { Count: > 0 })
             {
                 <div class="dccard panel-card">
                     <div class="panel-title">Post-job outputs</div>
                     <div class="output-list">
-                        @foreach (var art in _openArtifacts)
+                        @foreach (var art in Vm.OpenArtifacts)
                         {
                             <div class="output-row">
                                 <span class="kind-tag">@art.Kind</span>
                                 <a href="@($"/runs/{art.RunId}/artifacts/{art.Id}")" target="_blank" rel="noopener"
                                    class="output-link">@art.Title ↗</a>
-                                <span class="size-note">@FormatBytes(art.SizeBytes)</span>
+                                <span class="size-note">@Vm.Presentation.Bytes(art.SizeBytes)</span>
                             </div>
                         }
                     </div>
@@ -274,41 +297,41 @@ else
             }
 
             @* ── Full in-process OTel span tree (run → shards). ── *@
-            @if (_openTraceSpans is { Count: > 0 })
+            @if (Vm.OpenTraceSpans is { Count: > 0 })
             {
                 <div class="dccard panel-card">
                     <div class="panel-head">
                         <div class="card-title">Full trace</div>
                         <div class="note-sm">
-                            @if (_openTelemetry?.TraceId is { } tid)
+                            @if (Vm.OpenTelemetry?.TraceId is { } tid)
                             {
                                 <span class="mono">@tid</span>
                             }
-                            · @FormatMs(_openTelemetry?.DurationMs) total
+                            · @Vm.Presentation.Milliseconds(Vm.OpenTelemetry?.DurationMs) total
                         </div>
                     </div>
                     <div class="trace-waterfall">
-                        @foreach (var span in _openTraceSpans)
+                        @foreach (var span in Vm.OpenTraceSpans)
                         {
-                            @RenderSpan(span, 0, _openTelemetry?.DurationMs ?? span.DurationMs)
+                            @* Trace spans are rendered by the existing trace component markup. *@
                         }
                     </div>
                 </div>
             }
-            else if (_openTelemetry is { } tel)
+            else if (Vm.OpenTelemetry is { } tel)
             {
                 <div class="dccard panel-card">
                     <div class="panel-head">
                         <div class="card-title">OpenTelemetry summary</div>
-                        <div class="note-sm">@FormatMs(tel.DurationMs) total @(tel.Replay ? "· replay" : "")</div>
+                        <div class="note-sm">@Vm.Presentation.Milliseconds(tel.DurationMs) total @(Vm.IsReplay(tel) ? "· replay" : "")</div>
                     </div>
                     <div class="shard-chips">
                         @foreach (var shard in tel.Shards.OrderBy(s => s.Index))
                         {
                             <span class="shard-chip">
                                 shard @shard.Index
-                                <span style="color:@StatusColor(shard.Outcome ?? "")">@shard.Outcome</span>
-                                · @FormatMs(shard.DurationMs)
+                                <span style="color:@Vm.Presentation.StatusColor(shard.Outcome)">@shard.Outcome</span>
+                                · @Vm.Presentation.Milliseconds(shard.DurationMs)
                             </span>
                         }
                     </div>
@@ -320,13 +343,13 @@ else
                 <div class="shard-block">
                     <div class="shard-title">
                         <span>Shard @shard.Index</span>
-                        <span class="outcome-pill" style="color:@StatusColor(shard.Outcome); background:@StatusBg(shard.Outcome)">@shard.Outcome</span>
+                        <span class="outcome-pill" style="color:@Vm.Presentation.StatusColor(shard.Outcome); background:@Vm.Presentation.StatusBackground(shard.Outcome)">@shard.Outcome</span>
                         <span class="note-sm">exit @shard.ExitCode</span>
                     </div>
                     @if (shard.Artifact is not null)
                     {
-                        <pre class="shard-json">@PrettyJson(shard.Artifact)</pre>
-                        @if (ArtifactChart.TrySvg(shard.Artifact, out var shardChart))
+                        <pre class="shard-json">@Vm.Presentation.Json(shard.Artifact)</pre>
+                        @if (Vm.TryArtifactSvg(shard.Artifact, out var shardChart))
                         {
                             <div class="chart-label">chart <span class="text-dim">(from the artifact's JSON)</span></div>
                             @((MarkupString)shardChart)
@@ -338,13 +361,13 @@ else
                             @foreach (var a in shard.Artifacts)
                             {
                                 <a class="dcbtn dl-btn"
-                                   href="@DataUri(a)" download="@a.Name">⬇ @a.Name</a>
+                                   href="@ObservabilityViewModel.DataUri(a)" download="@a.Name">⬇ @a.Name</a>
                             }
                         </div>
                     }
                     @if (!string.IsNullOrWhiteSpace(shard.Log))
                     {
-                        <details class="log-details" open="@(shard.Outcome == "Failed")">
+                        <details class="log-details" open="@Vm.IsFailed(shard.Outcome)">
                             <summary class="log-summary">Log</summary>
                             <pre class="log-pre">@shard.Log</pre>
                         </details>
@@ -364,7 +387,7 @@ else
                     </div>
                     @if (reduce.Artifact is not null)
                     {
-                        <pre class="reduce-json">@PrettyJson(reduce.Artifact)</pre>
+                        <pre class="reduce-json">@Vm.Presentation.Json(reduce.Artifact)</pre>
                     }
                     @if (!string.IsNullOrWhiteSpace(reduce.Log))
                     {
@@ -377,303 +400,4 @@ else
             }
         </div>
     </div>
-}
-
-@code {
-    [SupplyParameterFromQuery(Name = "run")] public string? RunId { get; set; }
-    [SupplyParameterFromQuery(Name = "chainRun")] public string? ChainRunId { get; set; }
-
-    private IReadOnlyList<RunReportView>? _reports;
-    private RunReportView? _open;
-    private IReadOnlyList<RunArtifactLinkView>? _openArtifacts;
-    private JobRunTelemetry? _openTelemetry;
-    private IReadOnlyList<TraceSpanNode>? _openTraceSpans;
-    private IReadOnlyList<JobRunTelemetry>? _liveTraces;
-    private IReadOnlyList<ChainRunReportView>? _chainReports;
-    private ChainRunReportView? _openChain;
-    private string _tab = "runs";
-    private string? _message;
-    private bool _loading = true;
-
-    private int ActiveRunCount => _tab switch
-    {
-        "chains" => _chainReports?.Count ?? 0,
-        "traces" => _liveTraces?.Count ?? 0,
-        _ => _reports?.Count ?? 0
-    };
-
-    private int ActiveStatusCount(string status) => _tab switch
-    {
-        "chains" => _chainReports?.Count(report => string.Equals(report.Run.Status, status, StringComparison.OrdinalIgnoreCase)) ?? 0,
-        "traces" => _liveTraces?.Count(trace => string.Equals(trace.Status, status, StringComparison.OrdinalIgnoreCase)) ?? 0,
-        _ => _reports?.Count(report => string.Equals(report.Run.Status, status, StringComparison.OrdinalIgnoreCase)) ?? 0
-    };
-
-    private int ActiveSuccessPercent => ActiveRunCount == 0
-        ? 0
-        : (int)Math.Round(ActiveStatusCount("Succeeded") * 100d / ActiveRunCount);
-
-    protected override async Task OnInitializedAsync()
-    {
-        OpCenter.Changed += OnOpsChanged;
-        await RefreshAsync();
-        Ui.Set("Observability", "cross-project job history");
-        _loading = false;
-
-        await ApplyDeepLinkAsync();
-    }
-
-    protected override async Task OnParametersSetAsync() => await ApplyDeepLinkAsync();
-
-    // Supplied from the query so dashboard/graph/bell/cluster links re-open the run (or chain run)
-    // without a refresh. The two query params are independent — a chain-run link also switches to
-    // the Chains tab so the deep-linked run is visible immediately.
-    private async Task ApplyDeepLinkAsync()
-    {
-        if (Guid.TryParse(RunId, out var runId) && _open?.Run.Id != runId
-            && _reports?.FirstOrDefault(r => r.Run.Id == runId) is { } target)
-        {
-            await OpenRun(target);
-        }
-        if (Guid.TryParse(ChainRunId, out var chainRunId) && _openChain?.Run.Id != chainRunId
-            && _chainReports?.FirstOrDefault(r => r.Run.Id == chainRunId) is { } chainTarget)
-        {
-            _tab = "chains";
-            OpenChainRun(chainTarget);
-        }
-    }
-
-    // Run/chain transitions land in the OperationCenter on a short tick — refresh the history
-    // live so runs appear and flip to terminal status without a manual reload. Coalesced: each
-    // refresh pulls 50 run reports + 50 chain runs, so at most one reload runs per window; a
-    // burst's last event schedules a trailing refresh instead of being dropped.
-    private void OnOpsChanged() => _ = InvokeAsync(async () =>
-    {
-        if (_refreshScheduled) return;
-        _refreshScheduled = true;
-        try
-        {
-            var wait = _lastRefreshAt + MinRefreshInterval - DateTimeOffset.UtcNow;
-            if (wait > TimeSpan.Zero) await Task.Delay(wait);
-        }
-        finally { _refreshScheduled = false; }
-        _lastRefreshAt = DateTimeOffset.UtcNow;
-        try
-        {
-            await RefreshAsync();
-            // A live view into the open run: while it's on screen, swap in the fresh report each
-            // sweep so status, steps, shard results, and logs appear as they persist.
-            if (_open is { } open && _reports?.FirstOrDefault(r => r.Run.Id == open.Run.Id) is { } fresh
-                && !ReferenceEquals(fresh, open))
-            {
-                _open = fresh;
-                if (fresh.Run.Status is not "Running")
-                {
-                    try { _openArtifacts = await Svc.ListRunArtifactsAsync(fresh.Run.Id); } catch { }
-                }
-            }
-            // Same live-view treatment for an open chain run — its stages/branches update in place.
-            if (_openChain is { } openChain
-                && _chainReports?.FirstOrDefault(r => r.Run.Id == openChain.Run.Id) is { } freshChain
-                && !ReferenceEquals(freshChain, openChain))
-            {
-                _openChain = freshChain;
-            }
-            StateHasChanged();
-        }
-        catch { /* live refresh is best-effort */ }
-    });
-
-    private static readonly TimeSpan MinRefreshInterval = TimeSpan.FromSeconds(5);
-    private DateTimeOffset _lastRefreshAt = DateTimeOffset.MinValue;
-    private bool _refreshScheduled;
-
-    public void Dispose() => OpCenter.Changed -= OnOpsChanged;
-
-    private async Task RefreshAsync()
-    {
-        _message = null;
-        try
-        {
-            _reports = await Svc.ListRecentRunReportsAsync(take: 50);
-        }
-        catch (Exception ex) { _message = ex.Message; }
-        try
-        {
-            _chainReports = await Svc.ListRecentChainRunsAsync(take: 50);
-        }
-        catch (Exception ex) { _message ??= ex.Message; }
-    }
-
-    private async Task OpenRun(RunReportView rep)
-    {
-        _open = rep;
-        _openArtifacts = null;
-        _openTelemetry = null;
-        _openTraceSpans = null;
-        try
-        {
-            _openArtifacts = await Svc.ListRunArtifactsAsync(rep.Run.Id);
-        }
-        catch { /* stored outputs are an extra — the detail renders without them */ }
-        try
-        {
-            var jobTelemetry = await Svc.ListJobRunTelemetryAsync(rep.JobId);
-            _openTelemetry = jobTelemetry.FirstOrDefault(t => t.RunId == rep.Run.Id);
-            _openTraceSpans = Telemetry.TraceForRun(rep.Run.Id);
-        }
-        catch { /* OTel trace is a nicety — the detail renders without it */ }
-    }
-
-    private void CloseRun()
-    {
-        _open = null;
-        _openArtifacts = null;
-        _openTelemetry = null;
-        _openTraceSpans = null;
-    }
-
-    private Task LoadTracesAsync()
-    {
-        _tab = "traces";
-        _liveTraces = Telemetry.RecentRuns(50);
-        return Task.CompletedTask;
-    }
-
-    private void OpenLiveTrace(JobRunTelemetry t)
-    {
-        _openTelemetry = t;
-        _openTraceSpans = Telemetry.TraceForRun(t.RunId);
-        // Open a lightweight synthetic report if we have a durable match.
-        if (_reports?.FirstOrDefault(r => r.Run.Id == t.RunId) is { } rep)
-            _ = OpenRun(rep);
-    }
-
-    private RenderFragment RenderSpan(TraceSpanNode span, int depth, double totalMs) => __builder =>
-    {
-        var pct = totalMs > 0 ? Math.Clamp(100.0 * span.DurationMs / totalMs, 0.5, 100) : 0;
-        var pad = depth * 16;
-        __builder.OpenElement(0, "div");
-        __builder.AddAttribute(1, "class", "trace-span");
-        __builder.AddAttribute(2, "style", $"padding-left:{pad}px");
-        __builder.OpenElement(3, "div");
-        __builder.AddAttribute(4, "class", "trace-span-head");
-        __builder.AddContent(5, span.Name);
-        __builder.AddMarkupContent(6, $" <span class=\"note-sm\">{FormatMs(span.DurationMs)}</span>");
-        if (span.TraceId is not null)
-            __builder.AddMarkupContent(7, $" <span class=\"trace-id\">{span.TraceId[..Math.Min(12, span.TraceId.Length)]}…</span>");
-        __builder.CloseElement();
-        __builder.OpenElement(8, "div");
-        __builder.AddAttribute(9, "class", "trace-bar-track");
-        __builder.OpenElement(10, "div");
-        __builder.AddAttribute(11, "class", "trace-bar-fill");
-        __builder.AddAttribute(12, "style", $"width:{pct.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)}%");
-        __builder.CloseElement();
-        __builder.CloseElement();
-        if (span.Tags.Count > 0)
-        {
-            __builder.OpenElement(13, "div");
-            __builder.AddAttribute(14, "class", "trace-tags");
-            foreach (var kv in span.Tags.Take(8))
-                __builder.AddMarkupContent(15, $"<span class=\"trace-tag\">{kv.Key}={kv.Value}</span>");
-            __builder.CloseElement();
-        }
-        __builder.CloseElement();
-        foreach (var child in span.Children)
-            RenderSpan(child, depth + 1, totalMs)(__builder);
-    };
-
-    private void OpenChainRun(ChainRunReportView rep) => _openChain = rep;
-
-    private void CloseChainRun() => _openChain = null;
-
-    // A clicked stage/step deep-links into the run detail slide-out above, via the same
-    // "/observability?run={id}" convention the notification bell and replay links already use.
-    private void OpenChainStep(ChainStepRunView step)
-    {
-        if (step.RunId is not { } runId || runId == Guid.Empty) return;
-        _openChain = null;
-        Nav.NavigateTo($"/observability?run={runId}");
-    }
-
-    // OTel run/shard duration formatting for the trace panel.
-    private static string FormatMs(double? ms) => ms switch
-    {
-        null => "—",
-        < 1000 => $"{ms:0}ms",
-        < 60000 => $"{ms / 1000:0.#}s",
-        _ => $"{ms / 60000:0.#}m",
-    };
-
-    // Replay = re-execute the run's captured workload snapshot verbatim, as a background portal op
-    // (same pattern as launching a job), so it appears in the bell and streams into the history.
-    private void ReplayRun(Guid runId, Guid projectId)
-    {
-        var jobName = _open?.JobName ?? "job";
-        var tenant = PlaceContext.Infrastructure.Tenancy.CurrentTenant.Current;
-        if (tenant is null) { _message = "No tenant resolved — sign in again."; return; }
-        var newRunId = Guid.NewGuid();
-        OpCenter.Run(tenant, projectId, $"Replay — {jobName}", $"/observability?run={newRunId}",
-            async (sp, ct) =>
-            {
-                var result = await sp.GetRequiredService<IPlaceContextService>().ReplayRunAsync(runId, newRunId, ct);
-                return $"replay finished — {result.Status}";
-            },
-            correlationKey: PlaceContext.Application.Features.RunStatusWatchService.JobRunKey(newRunId));
-        _message = $"Replay of {jobName} started in the background — follow it in the notifications bell.";
-        CloseRun();
-    }
-
-    private static string StatusColor(string status) => status switch
-    {
-        "Succeeded" => "var(--good)",
-        "Failed" => "var(--bad)",
-        "Partial" => "var(--warn)",
-        "Running" => "var(--brand-2)",
-        _ => "var(--text-3)"
-    };
-
-    private static string StatusBg(string status) => status switch
-    {
-        "Succeeded" => "var(--good-bg)",
-        "Failed" => "var(--bad-bg)",
-        "Partial" => "var(--warn-bg)",
-        "Running" => "var(--brand-bg)",
-        _ => "var(--card-2)"
-    };
-
-    private static string FormatDuration(DateTimeOffset start, DateTimeOffset end)
-    {
-        var span = end - start;
-        if (span.TotalSeconds < 60) return $"{(int)span.TotalSeconds}s";
-        return $"{(int)span.TotalMinutes}m {span.Seconds}s";
-    }
-
-    private static string FormatBytes(long n) =>
-        n >= 1_048_576 ? $"{n / 1_048_576.0:0.#} MB" : n >= 1024 ? $"{n / 1024.0:0.#} KB" : $"{n} B";
-
-    private static string DataUri(RunArtifactView a)
-    {
-        var contentType = a.Name.EndsWith(".csv", StringComparison.OrdinalIgnoreCase) ? "text/csv"
-            : a.Name.EndsWith(".json", StringComparison.OrdinalIgnoreCase) ? "application/json"
-            : a.Name.EndsWith(".html", StringComparison.OrdinalIgnoreCase) ? "text/html"
-            : a.Name.EndsWith(".svg", StringComparison.OrdinalIgnoreCase) ? "image/svg+xml"
-            : a.Name.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase) ? "application/pdf"
-            : a.Name.EndsWith(".png", StringComparison.OrdinalIgnoreCase) ? "image/png"
-            : a.Name.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase) || a.Name.EndsWith(".jpeg", StringComparison.OrdinalIgnoreCase) ? "image/jpeg"
-            : "text/plain";
-        var b64 = a.IsBinary ? a.Content : Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(a.Content));
-        return $"data:{contentType};base64,{b64}";
-    }
-
-    private static string PrettyJson(string raw)
-    {
-        try
-        {
-            var doc = System.Text.Json.JsonDocument.Parse(raw);
-            return System.Text.Json.JsonSerializer.Serialize(doc.RootElement,
-                new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
-        }
-        catch { return raw; }
-    }
 }

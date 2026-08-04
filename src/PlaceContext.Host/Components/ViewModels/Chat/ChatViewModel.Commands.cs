@@ -3,14 +3,15 @@ using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Features;
 using PlaceContext.Application.Ports;
 using PlaceContext.Domain.Repositories;
-using PlaceContext.Infrastructure.Chat;
 using PlaceContext.Infrastructure.Caching;
+using PlaceContext.Infrastructure.Chat;
 
 namespace PlaceContext.Host.Components.ViewModels;
 
 public sealed partial class ChatViewModel
 {
-    public IReadOnlyList<ChatCommandView> Commands { get; private set; } = Array.Empty<ChatCommandView>();
+    public IReadOnlyList<ChatCommandView> Commands { get; private set; } =
+        Array.Empty<ChatCommandView>();
     public bool ShowAddCommand { get; set; }
     public string NewCmdName { get; set; } = "";
     public string NewCmdDescription { get; set; } = "";
@@ -19,9 +20,16 @@ public sealed partial class ChatViewModel
 
     public async Task LoadCommandsAsync()
     {
-        if (!ProjectId.HasValue) return;
-        try { Commands = await _svc.ListChatCommandsAsync(ProjectId.Value); }
-        catch { Commands = Array.Empty<ChatCommandView>(); }
+        if (!ProjectId.HasValue)
+            return;
+        try
+        {
+            Commands = await _svc.ListChatCommandsAsync(ProjectId.Value);
+        }
+        catch
+        {
+            Commands = Array.Empty<ChatCommandView>();
+        }
         NotifyStateChanged();
     }
 
@@ -37,12 +45,23 @@ public sealed partial class ChatViewModel
 
     public async Task AddCommandAsync()
     {
-        if (!ProjectId.HasValue || string.IsNullOrWhiteSpace(NewCmdName) || string.IsNullOrWhiteSpace(NewCmdToolName)) return;
+        if (
+            !ProjectId.HasValue
+            || string.IsNullOrWhiteSpace(NewCmdName)
+            || string.IsNullOrWhiteSpace(NewCmdToolName)
+        )
+            return;
         try
         {
-            await _svc.CreateChatCommandAsync(new CreateChatCommandCommand(
-                ProjectId.Value, NewCmdName.TrimStart('/'), NewCmdDescription,
-                NewCmdToolName, NewCmdArgs));
+            await _svc.CreateChatCommandAsync(
+                new CreateChatCommandCommand(
+                    ProjectId.Value,
+                    NewCmdName.TrimStart('/'),
+                    NewCmdDescription,
+                    NewCmdToolName,
+                    NewCmdArgs
+                )
+            );
             ShowAddCommand = false;
             await LoadCommandsAsync();
         }
@@ -51,7 +70,11 @@ public sealed partial class ChatViewModel
 
     public async Task DeleteCommandAsync(Guid id)
     {
-        try { await _svc.DeleteChatCommandAsync(id); await LoadCommandsAsync(); }
+        try
+        {
+            await _svc.DeleteChatCommandAsync(id);
+            await LoadCommandsAsync();
+        }
         catch { }
     }
 }

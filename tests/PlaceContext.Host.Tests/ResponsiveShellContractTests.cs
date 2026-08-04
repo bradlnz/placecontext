@@ -21,7 +21,7 @@ public sealed class ResponsiveShellContractTests
 
         Assert.Contains("class=\"toc-toggle\"", markup);
         Assert.Contains("aria-controls=\"wiki-contents\"", markup);
-        Assert.Contains("aria-expanded=\"@_tocOpen\"", markup);
+        Assert.Contains("aria-expanded=\"@Vm.TocOpen\"", markup);
         Assert.Contains("id=\"wiki-contents\"", markup);
         Assert.Contains("@media (max-width: 767px)", styles);
         Assert.Contains(".toc.open", styles);
@@ -35,7 +35,7 @@ public sealed class ResponsiveShellContractTests
 
         Assert.Contains("class=\"settings-toggle\"", markup);
         Assert.Contains("aria-controls=\"settings-sections\"", markup);
-        Assert.Contains("aria-expanded=\"@_navOpen\"", markup);
+        Assert.Contains("aria-expanded=\"@Vm.NavigationOpen\"", markup);
         Assert.Contains("id=\"settings-sections\"", markup);
         Assert.Contains("aria-label=\"Settings sections\"", markup);
         Assert.Contains(".settings-nav.open", styles);
@@ -90,7 +90,7 @@ public sealed class ResponsiveShellContractTests
     {
         var page = ReadHostSource("Components/Pages/ProjectData.razor");
 
-        Assert.Contains("<DataTabs ProjectId=\"ProjectId\" Active=\"tables\" />", page);
+        Assert.Contains("<DataTabs ProjectId=\"ProjectId\" Active=\"@DataSection.Tables\" />", page);
     }
 
     [Fact]

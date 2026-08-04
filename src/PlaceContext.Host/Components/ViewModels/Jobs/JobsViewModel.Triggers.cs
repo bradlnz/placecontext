@@ -27,21 +27,36 @@ public sealed partial class JobsViewModel
     public async Task AddTriggerAsync()
     {
         TrError = null;
-        if (!SelectedJobId.HasValue) return;
-        if (string.IsNullOrWhiteSpace(TrName)) { TrError = "Name is required."; NotifyStateChanged(); return; }
+        if (!SelectedJobId.HasValue)
+            return;
+        if (string.IsNullOrWhiteSpace(TrName))
+        {
+            TrError = "Name is required.";
+            NotifyStateChanged();
+            return;
+        }
 
         TrBusy = true;
         try
         {
             var cron = TrKind == "Schedule" ? TrCron : null;
             var evt = TrKind == "Event" ? TrEvent : null;
-            await _svc.CreateTriggerAsync(new CreateTriggerCommand(SelectedJobId.Value, TrName.Trim(), TrKind, cron, evt));
+            await _svc.CreateTriggerAsync(
+                new CreateTriggerCommand(SelectedJobId.Value, TrName.Trim(), TrKind, cron, evt)
+            );
             Triggers = await _svc.ListTriggersAsync(ProjectId);
             TrName = "";
             TrEvent = "";
         }
-        catch (Exception ex) { TrError = ex.Message; }
-        finally { TrBusy = false; NotifyStateChanged(); }
+        catch (Exception ex)
+        {
+            TrError = ex.Message;
+        }
+        finally
+        {
+            TrBusy = false;
+            NotifyStateChanged();
+        }
     }
 
     public async Task ToggleTriggerAsync(TriggerView t)
@@ -52,7 +67,11 @@ public sealed partial class JobsViewModel
             Triggers = await _svc.ListTriggersAsync(ProjectId);
             NotifyStateChanged();
         }
-        catch (Exception ex) { TrError = ex.Message; NotifyStateChanged(); }
+        catch (Exception ex)
+        {
+            TrError = ex.Message;
+            NotifyStateChanged();
+        }
     }
 
     public async Task RemoveTriggerAsync(Guid triggerId)
@@ -61,13 +80,17 @@ public sealed partial class JobsViewModel
         {
             await _svc.DeleteTriggerAsync(triggerId);
             Triggers = await _svc.ListTriggersAsync(ProjectId);
-            if (SelectedTriggerId == triggerId) SelectedTriggerId = null;
+            if (SelectedTriggerId == triggerId)
+                SelectedTriggerId = null;
             NotifyStateChanged();
         }
-        catch (Exception ex) { TrError = ex.Message; NotifyStateChanged(); }
+        catch (Exception ex)
+        {
+            TrError = ex.Message;
+            NotifyStateChanged();
+        }
     }
 
     public TriggerView? SelectedTrigger() =>
         SelectedTriggerId is { } id ? JobTriggers().FirstOrDefault(t => t.Id == id) : null;
-
 }

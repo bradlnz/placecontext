@@ -11,6 +11,7 @@ using PlaceContext.Host.Auth;
 using PlaceContext.Application;
 using PlaceContext.Application.Ports;
 using PlaceContext.Host.Components;
+using PlaceContext.Host.Components.ViewModels;
 using PlaceContext.Host.Controllers;
 using PlaceContext.Host.Tenancy;
 using PlaceContext.Host.Tools;
@@ -164,12 +165,17 @@ builder.Services.AddScoped<PortalUiState>();
 builder.Services.AddScoped<BrandingService>();
 
 // ── Page ViewModels ──────────────────────────────────────────────────────────
-builder.Services.AddScoped<PlaceContext.Host.Components.ViewModels.ChatViewModel>();
-builder.Services.AddScoped<PlaceContext.Host.Components.ViewModels.JobsViewModel>();
-builder.Services.AddScoped<PlaceContext.Host.Components.ViewModels.EntityBrowseViewModel>();
-builder.Services.AddScoped<PlaceContext.Host.Components.ViewModels.ProjectDataViewModel>();
-builder.Services.AddScoped<PlaceContext.Host.Components.ViewModels.JobChainsViewModel>();
-builder.Services.AddScoped<PlaceContext.Host.Components.ViewModels.DataMapViewModel>();
+// Page ViewModels are scoped to the Blazor circuit. Repeated stateful component ViewModels opt
+// into IComponentViewModel and are transient so each rendered component gets isolated state.
+var pageViewModelType = typeof(PlaceContext.Host.Components.ViewModels.PageViewModel);
+foreach (var viewModelType in pageViewModelType.Assembly.GetTypes()
+             .Where(type => !type.IsAbstract && pageViewModelType.IsAssignableFrom(type)))
+{
+    if (typeof(IComponentViewModel).IsAssignableFrom(viewModelType))
+        builder.Services.AddTransient(viewModelType);
+    else
+        builder.Services.AddScoped(viewModelType);
+}
 
 // Share the Data Protection key ring across replicas (persisted in Postgres) and pin the application
 // name, so the auth cookie one replica issues can be decrypted by any other — otherwise a token sign-in

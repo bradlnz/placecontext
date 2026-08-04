@@ -8,11 +8,10 @@ namespace PlaceContext.Host.Components.ViewModels.Helpers;
 /// </summary>
 public sealed record ChainParameterPromptPlan(
     IReadOnlyList<(int Index, JobView Job)> Steps,
-    IReadOnlyDictionary<string, string> Defaults)
+    IReadOnlyDictionary<string, string> Defaults
+)
 {
-    public static ChainParameterPromptPlan Build(
-        JobChainView chain,
-        IReadOnlyList<JobView> jobs)
+    public static ChainParameterPromptPlan Build(JobChainView chain, IReadOnlyList<JobView> jobs)
     {
         var steps = new List<(int Index, JobView Job)>();
         var executionIndex = 0;
@@ -27,7 +26,8 @@ public sealed record ChainParameterPromptPlan(
             foreach (var chainStep in stage.Jobs)
             {
                 var job = jobs.FirstOrDefault(item => item.Id == chainStep.JobId);
-                if (job is { Parameters.Count: > 0 }) steps.Add((executionIndex, job));
+                if (job is { Parameters.Count: > 0 })
+                    steps.Add((executionIndex, job));
                 executionIndex++;
             }
         }

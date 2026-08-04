@@ -3,9 +3,8 @@
 @layout PlaceContext.Host.Components.Layout.AuthLayout
 
 @using Microsoft.AspNetCore.Components.Forms
-@using PlaceContext.Application.Ports
-@inject IAuthService Auth
-@inject NavigationManager Nav
+@using PlaceContext.Host.Components.ViewModels
+@inject SetupViewModel Vm
 
 @* First-run admin setup. Shown only while this tenant has no Owner with a real password (checked below
    for UX; /auth/setup enforces the same thing server-side and fails closed regardless). The form posts
@@ -22,11 +21,11 @@
         <span class="auth-brand-name">placecontext</span>
     </div>
 
-    @if (_configured)
+    @if (Vm.Configured)
     {
         <h1 class="auth-title">Already set up</h1>
         <p class="auth-sub">This workspace already has an admin account.</p>
-        <a class="dcbtn primary auth-submit" href="/login">Go to sign in</a>
+        <a class="dcbtn primary auth-submit" href="@PageRoutes.Login">Go to sign in</a>
     }
     else
     {
@@ -38,9 +37,9 @@
 
         <form method="post" action="/auth/setup" class="auth-form">
             <AntiforgeryToken />
-            @if (!string.IsNullOrEmpty(Error))
+            @if (!string.IsNullOrEmpty(Vm.Error))
             {
-                <div class="auth-error">@Error</div>
+                <div class="auth-error">@Vm.Error</div>
             }
             <div class="dcfield">
                 <label>Admin email <span class="req">*</span></label>
@@ -68,18 +67,9 @@
     [SupplyParameterFromQuery(Name = "error")]
     public string? Error { get; set; }
 
-    private bool _configured;
-
     protected override async Task OnInitializedAsync()
     {
-        _configured = !await Auth.IsUnconfiguredAsync();
-        if (_configured)
-        {
-            // The tenant is already set up — this page is a dead end now. Redirect to /login instead of
-            // rendering a form that /auth/setup would refuse anyway (belt-and-braces: that POST endpoint
-            // fails closed on its own re-check even if this races or the redirect doesn't take for some
-            // reason, e.g. an already-connected circuit navigating here client-side).
-            Nav.NavigateTo("/login", forceLoad: true);
-        }
+        Vm.Error = Error;
+        await Vm.InitializeAsync();
     }
 }

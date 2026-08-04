@@ -22,7 +22,8 @@ public sealed class BackgroundOperationRunner
         string title,
         string href,
         Func<IServiceProvider, CancellationToken, Task<string?>> work,
-        string? correlationKey = null)
+        string? correlationKey = null
+    )
     {
         var tenant = CurrentTenant.Current;
         if (tenant is null)

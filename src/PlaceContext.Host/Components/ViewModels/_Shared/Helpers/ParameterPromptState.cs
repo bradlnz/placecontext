@@ -44,30 +44,42 @@ public sealed class ParameterPromptState
             .Where(f => f.Required && string.IsNullOrWhiteSpace(Get(f.Key)))
             .Select(f => f.Label)
             .ToList();
-        if (missing.Count == 0) return true;
+        if (missing.Count == 0)
+            return true;
         Error = $"Required: {string.Join(", ", missing)}";
         return false;
     }
 
-    public bool ValidateJobParameters(IEnumerable<JobParameterDto> parameters)
-        => ValidateRequired(parameters.Select(p => (p.Name, p.Label ?? p.Name, p.Required)));
+    public bool ValidateJobParameters(IEnumerable<JobParameterDto> parameters) =>
+        ValidateRequired(parameters.Select(p => (p.Name, p.Label ?? p.Name, p.Required)));
 
-    public bool ValidateChainStepParameters(IEnumerable<(int Index, JobView Job)> steps)
-        => ValidateRequired(steps.SelectMany(s => s.Job.Parameters.Select(p => (
-            ChainArgKey(s.Index, p.Name),
-            $"step {s.Index + 1}: {p.Label ?? p.Name}",
-            p.Required))));
+    public bool ValidateChainStepParameters(IEnumerable<(int Index, JobView Job)> steps) =>
+        ValidateRequired(
+            steps.SelectMany(s =>
+                s.Job.Parameters.Select(p =>
+                    (
+                        ChainArgKey(s.Index, p.Name),
+                        $"step {s.Index + 1}: {p.Label ?? p.Name}",
+                        p.Required
+                    )
+                )
+            )
+        );
 
     /// <summary>Serialize bare parameter names → JSON object for job stdin / step override.</summary>
-    public static string ToJsonPayload(IEnumerable<JobParameterDto> parameters, Func<string, string> valueForName)
+    public static string ToJsonPayload(
+        IEnumerable<JobParameterDto> parameters,
+        Func<string, string> valueForName
+    )
     {
         var payload = new Dictionary<string, object?>(StringComparer.Ordinal);
         foreach (var parameter in parameters)
         {
             var value = valueForName(parameter.Name);
-            payload[parameter.Name] = parameter.Type == "file" && TryParseFileReference(value, out var reference)
-                ? reference
-                : value;
+            payload[parameter.Name] =
+                parameter.Type == "file" && TryParseFileReference(value, out var reference)
+                    ? reference
+                    : value;
         }
         return JsonSerializer.Serialize(payload);
     }
@@ -75,14 +87,17 @@ public sealed class ParameterPromptState
     private static bool TryParseFileReference(string value, out JsonElement reference)
     {
         reference = default;
-        if (string.IsNullOrWhiteSpace(value)) return false;
+        if (string.IsNullOrWhiteSpace(value))
+            return false;
 
         try
         {
             using var document = JsonDocument.Parse(value);
-            if (document.RootElement.ValueKind != JsonValueKind.Object
+            if (
+                document.RootElement.ValueKind != JsonValueKind.Object
                 || !document.RootElement.TryGetProperty("$file", out var file)
-                || file.ValueKind != JsonValueKind.Object)
+                || file.ValueKind != JsonValueKind.Object
+            )
                 return false;
 
             reference = document.RootElement.Clone();
@@ -94,19 +109,20 @@ public sealed class ParameterPromptState
         }
     }
 
-    public string ToJobPayload(IEnumerable<JobParameterDto> parameters)
-        => ToJsonPayload(parameters, Get);
+    public string ToJobPayload(IEnumerable<JobParameterDto> parameters) =>
+        ToJsonPayload(parameters, Get);
 
     /// <summary>
     /// Group chain form values into per-step JSON overrides keyed by flat step index.
     /// Wire shape uses bare param names; form keys stay <c>stepN:param</c>.
     /// </summary>
-    public IReadOnlyDictionary<int, string> ToStepPayloadOverrides(IEnumerable<(int Index, JobView Job)> steps)
-        => steps
+    public IReadOnlyDictionary<int, string> ToStepPayloadOverrides(
+        IEnumerable<(int Index, JobView Job)> steps
+    ) =>
+        steps
             .Where(s => s.Job.Parameters.Count > 0)
             .ToDictionary(
                 s => s.Index,
-                s => ToJsonPayload(
-                    s.Job.Parameters,
-                    name => Get(ChainArgKey(s.Index, name))));
+                s => ToJsonPayload(s.Job.Parameters, name => Get(ChainArgKey(s.Index, name)))
+            );
 }

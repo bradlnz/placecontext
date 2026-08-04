@@ -1,17 +1,19 @@
-@inject NavigationManager Nav
-
-@* Second-level strip under the project's Data tab: Tables | Analytics | Data map. *@
+@* Second-level navigation within the project's Data area. This component is intentionally
+   presentational: its typed model and route catalog are supplied by Components.Models. *@
 <div class="dctabs tabs-strip">
-    <button class="dctab @(Active == "tables" ? "active" : "")" @onclick='@(() => Nav.NavigateTo($"/project/{ProjectId}/data"))'>Tables</button>
-    <button class="dctab @(Active == "analytics" ? "active" : "")" @onclick='@(() => Nav.NavigateTo($"/project/{ProjectId}/analytics"))'>Analytics</button>
-    <button class="dctab @(Active == "search" ? "active" : "")" @onclick='@(() => Nav.NavigateTo($"/project/{ProjectId}/data-search"))'>Search</button>
-    <button class="dctab @(Active == "datamap" ? "active" : "")" @onclick='@(() => Nav.NavigateTo($"/project/{ProjectId}/datamap"))'>Data map</button>
-    <button class="dctab @(Active == "entities" ? "active" : "")" @onclick='@(() => Nav.NavigateTo($"/project/{ProjectId}/entities"))'>Entities</button>
+    @foreach (var item in DataSectionNavigation.Items)
+    {
+        <a class="dctab @(Active == item.Section ? "active" : string.Empty)"
+           href="@DataSectionNavigation.Route(ProjectId, item)">
+            @item.Label
+        </a>
+    }
 </div>
 
 @code {
-    [Parameter] public Guid ProjectId { get; set; }
+    [Parameter]
+    public Guid ProjectId { get; set; }
 
-    /// <summary>Which sub-tab this page is: tables/analytics/datamap.</summary>
-    [Parameter] public string Active { get; set; } = "tables";
+    [Parameter]
+    public DataSection Active { get; set; } = DataSection.Tables;
 }

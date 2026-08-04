@@ -2,18 +2,15 @@
 @attribute [Authorize(Policy = Permission.JobsEdit)]
 @layout PlaceContext.Host.Components.Layout.ProjectLayout
 @implements IAsyncDisposable
-@inject IPlaceContextService Svc
-@inject PortalUiState Ui
-@inject NavigationManager Nav
-@inject IJSRuntime JS
+@inject JobTestCodeEditorViewModel Vm
 
-<PageTitle>PlaceContext — @(_test?.Name ?? "Test code")</PageTitle>
+<PageTitle>PlaceContext — @(Vm.Test?.Name ?? "Test code")</PageTitle>
 
-@if (_loading)
+@if (Vm.Loading)
 {
     <Skeleton Kind="detail" Rows="8" Padded />
 }
-else if (_test is null)
+else if (Vm.Test is null)
 {
     <div class="notice">Test not found. <a href="@($"/project/{ProjectId}/tests")">Back to Tests</a></div>
 }
@@ -21,40 +18,40 @@ else
 {
     <div class="page">
         <header class="toolbar">
-            <button class="dcbtn back-button" @onclick="@(() => Nav.NavigateTo($"/project/{ProjectId}/tests"))">←</button>
+            <button class="dcbtn back-button" @onclick="Vm.NavigateBack">←</button>
             <div class="title-block">
-                <strong>@_test.Name</strong>
-                <span>@_test.JobName</span>
+                <strong>@Vm.Test.Name</strong>
+                <span>@Vm.Test.JobName</span>
             </div>
-            <select class="runtime-select" @bind="_runtimeId" @bind:after="RuntimeChanged">
+            <select class="runtime-select" value="@Vm.RuntimeId" @onchange="Vm.RuntimeChanged">
                 <option value="python">Python · pytest</option>
                 <option value="node">Node.js · node:test</option>
                 <option value="go">Go · testing</option>
                 <option value="ruby">Ruby · Minitest</option>
             </select>
-            @if (_monacoLite)
+            @if (Vm.MonacoLite)
             {
                 <span class="editor-warning">basic editor</span>
             }
             <span class="spacer"></span>
-            @if (_message is not null)
+            @if (Vm.Message is not null)
             {
-                <span class="toolbar-message">@_message</span>
+                <span class="toolbar-message">@Vm.Message</span>
             }
             <span class="mocked-badge" title="No network, Vault secrets, external services, or production Job side effects">
                 Isolated
             </span>
-            <button class="dcbtn" disabled="@_busy" @onclick="ResetStarterAsync">Starter</button>
-            <button class="dcbtn" disabled="@_busy" @onclick="RunAsync">
-                @(_running ? "Running…" : "▶ Run block")
+            <button class="dcbtn" disabled="@Vm.Busy" @onclick="Vm.ResetStarterAsync">Starter</button>
+            <button class="dcbtn" disabled="@Vm.Busy" @onclick="Vm.RunAsync">
+                @(Vm.Running ? "Running…" : "▶ Run block")
             </button>
-            <button class="dcbtn primary" disabled="@_busy" @onclick="SaveAsync">
-                @(_saving ? "Saving…" : "Save code")
+            <button class="dcbtn primary" disabled="@Vm.Busy" @onclick="Vm.SaveAsync">
+                @(Vm.Saving ? "Saving…" : "Save code")
             </button>
         </header>
 
         <div class="contract-bar">
-            <strong>@JobTestFramework.Label(_runtimeId)</strong>
+            <strong>@JobTestCodeEditorViewModel.RuntimeLabel(Vm.RuntimeId)</strong>
             <code>{ "input": …, "run": { "status": "Succeeded", "output": …, "shards": […] } }</code>
             <span>Every framework method runs against the declared mock scenario. Inline Job source is available under <code>job/</code> for imports and mocks; the selected Job is never executed.</span>
         </div>
@@ -63,23 +60,23 @@ else
             <aside class="file-tree">
                 <div class="method-tree-head">
                     <span>Test methods</span>
-                    <b>@Methods.Count</b>
+                    <b>@Vm.Methods.Count</b>
                 </div>
                 <div class="method-list">
-                    @if (Methods.Count == 0)
+                    @if (Vm.Methods.Count == 0)
                     {
                         <span class="method-empty">Add a framework test method, then save or run the block.</span>
                     }
                     else
                     {
-                        @foreach (var method in Methods)
+                        @foreach (var method in Vm.Methods)
                         {
                             <div class="method-row @method.Status.ToLowerInvariant()" title="@method.Message">
-                                <span class="method-status">@MethodIcon(method.Status)</span>
+                                <span class="method-status">@JobTestCodeEditorViewModel.MethodIcon(method.Status)</span>
                                 <span>@method.Name</span>
                                 @if (method.DurationMs is { } methodDuration)
                                 {
-                                    <small>@FormatDuration(methodDuration)</small>
+                                    <small>@JobTestCodeEditorViewModel.FormatDuration(methodDuration)</small>
                                 }
                             </div>
                         }
@@ -88,41 +85,41 @@ else
 
                 <div class="file-tree-head">
                     <span>Test files</span>
-                    <button class="add-file-button" @onclick="StartAddFile" title="Add file">+</button>
+                    <button class="add-file-button" @onclick="Vm.StartAddFile" title="Add file">+</button>
                 </div>
 
-                @if (_addingFile)
+                @if (Vm.AddingFile)
                 {
                     <div class="add-file-row">
                         <input class="dcinput" placeholder="path/name.py"
-                               @bind="_newFileName" @bind:event="oninput"
-                               @onkeydown="AddFileKey" @ref="_newFileInput" />
-                        <button @onclick="ConfirmAddFile">✓</button>
+                               @bind="Vm.NewFileName" @bind:event="oninput"
+                               @onkeydown="Vm.AddFileKey" @ref="Vm.NewFileInput" />
+                        <button @onclick="Vm.ConfirmAddFile">✓</button>
                     </div>
                 }
 
                 <div class="file-list">
-                    @for (var index = 0; index < _files.Count; index++)
+                    @for (var index = 0; index < Vm.Files.Count; index++)
                     {
                         var fileIndex = index;
-                        var file = _files[fileIndex];
-                        <div class="file-row @(fileIndex == _active ? "active" : null)"
-                             @onclick="@(() => SwitchFileAsync(fileIndex))">
+                        var file = Vm.Files[fileIndex];
+                        <div class="file-row @(fileIndex == Vm.ActiveIndex ? "active" : null)"
+                             @onclick="@(() => Vm.SwitchFileAsync(fileIndex))">
                             <span title="@file.Path">@file.Path</span>
-                            @if (file.Path == _entrypoint)
+                            @if (file.Path == Vm.Entrypoint)
                             {
                                 <b title="Entrypoint">★</b>
                             }
                             else
                             {
                                 <button title="Set as entrypoint" @onclick:stopPropagation="true"
-                                        @onclick="@(() => _entrypoint = file.Path)">☆</button>
+                                        @onclick="@(() => Vm.SetEntry(file.Path))">☆</button>
                             }
-                            @if (_files.Count > 1)
+                            @if (Vm.Files.Count > 1)
                             {
                                 <button class="delete-file" title="Delete file"
                                         @onclick:stopPropagation="true"
-                                        @onclick="@(() => DeleteFileAsync(fileIndex))">×</button>
+                                        @onclick="@(() => Vm.DeleteFileAsync(fileIndex))">×</button>
                             }
                         </div>
                     }
@@ -130,43 +127,43 @@ else
 
                 <div class="file-foot">
                     <span>Entrypoint</span>
-                    <code>@(_entrypoint ?? DefaultEntrypoint(_runtimeId))</code>
+                    <code>@(Vm.Entrypoint ?? Vm.DefaultEntrypoint)</code>
                     <small>Dependency manifests are supported and use the same warm-cache path as Jobs.</small>
                 </div>
             </aside>
 
             <section class="editor-pane">
-                <div id="@_editorId" class="editor-host"></div>
+                <div id="@Vm.EditorId" class="editor-host"></div>
 
-                <div class="result-panel @(_panelOpen ? "open" : null)">
-                    <button class="result-bar" @onclick="@(() => _panelOpen = !_panelOpen)">
+                <div class="result-panel @(Vm.PanelOpen ? "open" : null)">
+                    <button class="result-bar" @onclick="Vm.TogglePanel">
                     <span>Block result</span>
-                        @if (_lastResult is not null)
+                        @if (Vm.LastResult is not null)
                         {
-                            <b class="@_lastResult.LastStatus.ToLowerInvariant()">@_lastResult.LastStatus</b>
-                            @if (_lastResult.LastDurationMs is { } duration)
+                            <b class="@Vm.LastResult.LastStatus.ToLowerInvariant()">@Vm.LastResult.LastStatus</b>
+                            @if (Vm.LastResult.LastDurationMs is { } duration)
                             {
-                                <small>@FormatDuration(duration)</small>
+                                <small>@JobTestCodeEditorViewModel.FormatDuration(duration)</small>
                             }
                         }
                         <i></i>
-                        <span>@(_panelOpen ? "▾" : "▴")</span>
+                        <span>@(Vm.PanelOpen ? "▾" : "▴")</span>
                     </button>
-                    @if (_panelOpen)
+                    @if (Vm.PanelOpen)
                     {
                         <div class="result-body">
-                            @if (_lastResult is null)
+                            @if (Vm.LastResult is null)
                             {
                                 <span>Run the block to execute every discovered framework test method against the declared mock scenario.</span>
                             }
                             else
                             {
-                                <strong class="@_lastResult.LastStatus.ToLowerInvariant()">@_lastResult.LastMessage</strong>
-                                @if (!string.IsNullOrWhiteSpace(_lastResult.LastActualOutput))
+                                <strong class="@Vm.LastResult.LastStatus.ToLowerInvariant()">@Vm.LastResult.LastMessage</strong>
+                                @if (!string.IsNullOrWhiteSpace(Vm.LastResult.LastActualOutput))
                                 {
                                     <details>
                                         <summary>Job output</summary>
-                                        <pre>@PrettyJson(_lastResult.LastActualOutput)</pre>
+                                        <pre>@JobTestCodeEditorViewModel.PrettyJson(Vm.LastResult.LastActualOutput)</pre>
                                     </details>
                                 }
                             }
@@ -182,375 +179,20 @@ else
     [Parameter] public Guid ProjectId { get; set; }
     [Parameter] public Guid TestId { get; set; }
 
-    private readonly string _editorId = "pctestmonaco-" + Guid.NewGuid().ToString("N");
-    private JobTestCaseView? _test;
-    private JobTestCaseView? _lastResult;
-    private readonly List<EditorFile> _files = new();
-    private string _runtimeId = "python";
-    private string? _entrypoint;
-    private int _active;
-    private bool _loading = true;
-    private bool _saving;
-    private bool _running;
-    private bool _panelOpen = true;
-    private bool _monacoReady;
-    private bool _monacoLite;
-    private bool _addingFile;
-    private string _newFileName = "";
-    private ElementReference _newFileInput;
-    private string? _message;
-    private bool _busy => _saving || _running;
-    private IReadOnlyList<JobTestMethodResult> Methods
+    protected override void OnInitialized() =>
+        Vm.Attach(() => InvokeAsync(StateHasChanged));
+
+    protected override Task OnParametersSetAsync()
     {
-        get
-        {
-            if (_lastResult?.MethodResults is { Count: > 0 } results) return results;
-            return JobTestFramework.Discover(_runtimeId,
-                _files.Select(file => new CodeFileDto(file.Path, file.Content)).ToList());
-        }
+        Vm.Initialize(ProjectId, TestId);
+        return Task.CompletedTask;
     }
 
-    private sealed class EditorFile
-    {
-        public string Path { get; set; } = "";
-        public string Content { get; set; } = "";
-    }
-
-    protected override async Task OnParametersSetAsync()
-    {
-        _loading = true;
-        _monacoReady = false;
-        try
-        {
-            _test = await Svc.GetJobTestCaseAsync(TestId);
-            if (_test is not null && _test.ProjectId != ProjectId)
-            {
-                _test = null;
-                return;
-            }
-            if (_test is not null)
-            {
-                _runtimeId = _test.RuntimeId ?? "python";
-                _entrypoint = _test.Entrypoint;
-                _files.Clear();
-                foreach (var file in _test.CodeFiles)
-                    _files.Add(new EditorFile { Path = file.Path, Content = file.Content });
-                if (_files.Count == 0) ApplyStarter(_runtimeId);
-                _active = Math.Max(0, _files.FindIndex(file => file.Path == _entrypoint));
-                _lastResult = _test.LastStatus == "NotRun" ? null : _test;
-                Ui.Set(_test.Name, "test code · " + _runtimeId);
-            }
-        }
-        catch (Exception ex) { _message = ex.Message; }
-        finally { _loading = false; }
-    }
-
-    protected override async Task OnAfterRenderAsync(bool firstRender)
-    {
-        if (_monacoReady || _test is null || _files.Count == 0) return;
-        _monacoReady = true;
-        var active = _files[_active];
-        try
-        {
-            var rich = await JS.InvokeAsync<bool>(
-                "pcmonaco.init", _editorId, active.Content, Language(active.Path), "vs-dark", active.Path);
-            if (!rich) { _monacoLite = true; StateHasChanged(); }
-        }
-        catch
-        {
-            _monacoLite = true;
-            StateHasChanged();
-        }
-    }
-
-    private async Task SyncActiveAsync()
-    {
-        if (!_monacoReady || _files.Count == 0) return;
-        try
-        {
-            var content = await JS.InvokeAsync<string?>("pcmonaco.getValue", _editorId);
-            if (content is not null) _files[_active].Content = content;
-        }
-        catch { }
-    }
-
-    private async Task OpenFileAsync(EditorFile file)
-    {
-        try
-        {
-            await JS.InvokeVoidAsync(
-                "pcmonaco.openFile", _editorId, file.Path, file.Content, Language(file.Path));
-        }
-        catch (Exception ex) { _message = ex.Message; }
-    }
-
-    private async Task SwitchFileAsync(int index)
-    {
-        if (index == _active) return;
-        await SyncActiveAsync();
-        _active = index;
-        await OpenFileAsync(_files[_active]);
-    }
-
-    private async Task StartAddFile()
-    {
-        _addingFile = true;
-        _newFileName = "";
-        StateHasChanged();
-        await Task.Yield();
-        try { await _newFileInput.FocusAsync(); } catch { }
-    }
-
-    private async Task AddFileKey(KeyboardEventArgs args)
-    {
-        if (args.Key == "Enter") await ConfirmAddFile();
-        else if (args.Key == "Escape") _addingFile = false;
-    }
-
-    private async Task ConfirmAddFile()
-    {
-        var path = NormalizePath(_newFileName);
-        if (string.IsNullOrWhiteSpace(path)) { _addingFile = false; return; }
-        if (_files.Any(file => file.Path == path))
-        {
-            _message = $"'{path}' already exists.";
-            return;
-        }
-        await SyncActiveAsync();
-        _files.Add(new EditorFile { Path = path });
-        _active = _files.Count - 1;
-        _addingFile = false;
-        await OpenFileAsync(_files[_active]);
-    }
-
-    private async Task DeleteFileAsync(int index)
-    {
-        if (_files.Count <= 1) return;
-        await SyncActiveAsync();
-        var removed = _files[index];
-        _files.RemoveAt(index);
-        if (_entrypoint == removed.Path) _entrypoint = _files[0].Path;
-        _active = Math.Clamp(_active > index ? _active - 1 : _active, 0, _files.Count - 1);
-        try { await JS.InvokeVoidAsync("pcmonaco.closeFile", _editorId, removed.Path); } catch { }
-        await OpenFileAsync(_files[_active]);
-    }
-
-    private void RuntimeChanged()
-    {
-        Ui.Set(_test?.Name ?? "Test code", "test code · " + _runtimeId);
-        _message = "Runtime changed. Use Starter to replace the files with a matching example.";
-    }
-
-    private async Task ResetStarterAsync()
-    {
-        await SyncActiveAsync();
-        foreach (var file in _files)
-            try { await JS.InvokeVoidAsync("pcmonaco.closeFile", _editorId, file.Path); } catch { }
-        ApplyStarter(_runtimeId);
-        await OpenFileAsync(_files[0]);
-        _message = $"{RuntimeLabel(_runtimeId)} starter loaded. Save to keep it.";
-    }
-
-    private void ApplyStarter(string runtime)
-    {
-        var starter = Starter(runtime);
-        _files.Clear();
-        _files.Add(new EditorFile { Path = starter.Path, Content = starter.Content });
-        if (runtime == "go")
-            _files.Add(new EditorFile { Path = "go.mod", Content = "module placecontext_tests\n\ngo 1.23\n" });
-        else if (runtime == "python")
-            _files.Add(new EditorFile { Path = "requirements.txt", Content = "pytest==8.4.1\n" });
-        _entrypoint = starter.Path;
-        _active = 0;
-    }
-
-    private async Task<JobTestCaseView> SaveCoreAsync()
-    {
-        await SyncActiveAsync();
-        var entrypoint = _entrypoint;
-        if (string.IsNullOrWhiteSpace(entrypoint)) entrypoint = _files[0].Path;
-        var updated = await Svc.UpdateJobTestCodeAsync(new UpdateJobTestCodeCommand(
-            TestId, _runtimeId, entrypoint,
-            _files.Select(file => new CodeFileDto(file.Path, file.Content)).ToList(),
-            false));
-        _test = updated;
-        _entrypoint = updated.Entrypoint ?? entrypoint;
-        _lastResult = updated.LastStatus == "NotRun" ? null : updated;
-        return updated;
-    }
-
-    private async Task SaveAsync()
-    {
-        _saving = true;
-        _message = null;
-        try
-        {
-            await SaveCoreAsync();
-            _message = "Test code saved.";
-        }
-        catch (Exception ex) { _message = ex.Message; }
-        finally { _saving = false; }
-    }
-
-    private async Task RunAsync()
-    {
-        _running = true;
-        _message = null;
-        try
-        {
-            await SaveCoreAsync();
-            _lastResult = await Svc.RunJobTestCaseAsync(TestId);
-            _test = _lastResult;
-            _panelOpen = true;
-            _message = _lastResult.LastStatus;
-        }
-        catch (Exception ex) { _message = ex.Message; }
-        finally { _running = false; }
-    }
-
-    private static (string Path, string Content) Starter(string runtime) => runtime switch
-    {
-        "node" => ("job.test.js", """
-            const test = require("node:test");
-            const assert = require("node:assert/strict");
-
-            const context = JSON.parse(process.env.PC_TEST_CONTEXT);
-
-            test("job succeeds", () => {
-              assert.equal(context.run.status, "Succeeded");
-            });
-
-            test("job reports its shard results", () => {
-              assert.ok(Array.isArray(context.run.shards));
-              assert.ok(context.run.shards.length > 0);
-            });
-            """),
-        "go" => ("job_test.go", """
-            package main
-
-            import (
-                "encoding/json"
-                "os"
-                "testing"
-            )
-
-            type testContext struct {
-                Run struct {
-                    Status string `json:"status"`
-                    Shards []any  `json:"shards"`
-                } `json:"run"`
-            }
-
-            func context(t *testing.T) testContext {
-                t.Helper()
-                var value testContext
-                if err := json.Unmarshal([]byte(os.Getenv("PC_TEST_CONTEXT")), &value); err != nil {
-                    t.Fatal(err)
-                }
-                return value
-            }
-
-            func TestJobSucceeds(t *testing.T) {
-                value := context(t)
-                if value.Run.Status != "Succeeded" {
-                    t.Fatalf("expected Succeeded, got %s", value.Run.Status)
-                }
-            }
-
-            func TestJobReportsShardResults(t *testing.T) {
-                value := context(t)
-                if len(value.Run.Shards) == 0 {
-                    t.Fatal("expected at least one shard result")
-                }
-            }
-            """),
-        "ruby" => ("job_test.rb", """
-            require "json"
-            require "minitest/test"
-
-            class JobOutputTest < Minitest::Test
-              def setup
-                @context = JSON.parse(ENV.fetch("PC_TEST_CONTEXT"))
-              end
-
-              def test_job_succeeds
-                assert_equal "Succeeded", @context.dig("run", "status")
-              end
-
-              def test_job_reports_shard_results
-                refute_empty @context.dig("run", "shards")
-              end
-            end
-            """),
-        _ => ("test_job.py", """
-            import json
-            import os
-            import pytest
-
-            @pytest.fixture
-            def scenario():
-                return json.loads(os.environ["PC_TEST_CONTEXT"])
-
-            def test_job_succeeds(scenario):
-                assert scenario["run"]["status"] == "Succeeded"
-
-            def test_job_reports_shard_results(scenario):
-                assert scenario["run"]["shards"]
-
-            @pytest.mark.parametrize("field", ["status"])
-            def test_output_contract(scenario, field):
-                assert field in scenario["run"]["output"]
-            """),
-    };
-
-    private static string DefaultEntrypoint(string runtime) => Starter(runtime).Path;
-    private static string RuntimeLabel(string runtime) => runtime switch
-    {
-        "node" => "Node.js",
-        "go" => "Go",
-        "ruby" => "Ruby",
-        _ => "Python",
-    };
-    private static string MethodIcon(string status) => status switch
-    {
-        "Passed" => "✓",
-        "Failed" => "×",
-        "Skipped" => "–",
-        _ => "○",
-    };
-    private static string NormalizePath(string value)
-        => value.Trim().Replace('\\', '/').TrimStart('/');
-    private static string Language(string path) => System.IO.Path.GetExtension(path).ToLowerInvariant() switch
-    {
-        ".js" or ".cjs" or ".mjs" => "javascript",
-        ".ts" => "typescript",
-        ".py" => "python",
-        ".go" => "go",
-        ".rb" => "ruby",
-        ".cs" => "csharp",
-        ".json" => "json",
-        ".sh" => "shell",
-        ".md" => "markdown",
-        ".html" => "html",
-        ".css" => "css",
-        ".yml" or ".yaml" => "yaml",
-        _ => "plaintext",
-    };
-    private static string FormatDuration(long milliseconds)
-        => milliseconds < 1000 ? $"{milliseconds} ms" : $"{milliseconds / 1000d:0.0} s";
-    private static string PrettyJson(string raw)
-    {
-        try
-        {
-            using var document = System.Text.Json.JsonDocument.Parse(raw);
-            return System.Text.Json.JsonSerializer.Serialize(document.RootElement,
-                new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
-        }
-        catch { return raw; }
-    }
+    protected override Task OnAfterRenderAsync(bool firstRender) => Vm.AfterRenderAsync();
 
     public async ValueTask DisposeAsync()
     {
-        try { await JS.InvokeVoidAsync("pcmonaco.destroy", _editorId); } catch { }
+        Vm.Detach();
+        await Vm.DisposeAsync();
     }
 }

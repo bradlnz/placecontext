@@ -3,14 +3,17 @@ namespace PlaceContext.Host.Components.ViewModels;
 public sealed class AgentMessage
 {
     private static int _nextId;
+
     public AgentMessage(string role, string content)
     {
         Id = Interlocked.Increment(ref _nextId);
         Role = role;
         Content = content;
     }
+
     public int Id { get; }
     public string Role { get; }
+    public ChatRole RoleKind => ChatPresentationCatalog.ParseRole(Role);
     public string Content { get; }
     public string? Thinking { get; set; }
     public List<ToolCallInfo> ToolCalls { get; } = new();

@@ -15,22 +15,28 @@ public static class JsonPayloadHelper
         var result = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var payload in payloads)
         {
-            if (string.IsNullOrWhiteSpace(payload)) continue;
+            if (string.IsNullOrWhiteSpace(payload))
+                continue;
             try
             {
                 using var doc = JsonDocument.Parse(payload);
-                if (doc.RootElement.ValueKind != JsonValueKind.Object) continue;
+                if (doc.RootElement.ValueKind != JsonValueKind.Object)
+                    continue;
                 foreach (var prop in doc.RootElement.EnumerateObject())
                 {
-                    var isFileMarker = prop.Value.ValueKind == JsonValueKind.Object
+                    var isFileMarker =
+                        prop.Value.ValueKind == JsonValueKind.Object
                         && prop.Value.TryGetProperty("$file", out var file)
                         && file.ValueKind == JsonValueKind.Object;
-                    if (prop.Value.ValueKind is JsonValueKind.Object or JsonValueKind.Array && !isFileMarker)
+                    if (
+                        prop.Value.ValueKind is JsonValueKind.Object or JsonValueKind.Array
+                        && !isFileMarker
+                    )
                         continue;
-                    var value = isFileMarker
-                        ? prop.Value.GetRawText()
+                    var value =
+                        isFileMarker ? prop.Value.GetRawText()
                         : prop.Value.ValueKind == JsonValueKind.String
-                        ? prop.Value.GetString() ?? ""
+                            ? prop.Value.GetString() ?? ""
                         : prop.Value.ToString();
                     result.TryAdd(prop.Name, value);
                 }
@@ -43,8 +49,8 @@ public static class JsonPayloadHelper
         return result;
     }
 
-    public static Dictionary<string, string> FlattenScalars(string? payload)
-        => string.IsNullOrWhiteSpace(payload)
+    public static Dictionary<string, string> FlattenScalars(string? payload) =>
+        string.IsNullOrWhiteSpace(payload)
             ? new Dictionary<string, string>(StringComparer.Ordinal)
             : FlattenScalars(new[] { payload });
 }

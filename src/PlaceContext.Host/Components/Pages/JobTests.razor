@@ -1,9 +1,9 @@
 @page "/project/{ProjectId:guid}/tests"
 @attribute [Authorize(Policy = Permission.JobsView)]
 @layout PlaceContext.Host.Components.Layout.ProjectLayout
-@inject IPlaceContextService Svc
-@inject PortalUiState Ui
-@inject NavigationManager Nav
+@implements IDisposable
+@inject JobTestsViewModel Vm
+@using PlaceContext.Host.Components.ViewModels
 
 <PageTitle>PlaceContext — Tests</PageTitle>
 
@@ -14,81 +14,81 @@
             <p>Verify Job logic against declared mock scenarios with no live Job execution or production side effects.</p>
         </div>
         <div class="head-actions">
-            <button class="dcbtn" disabled="@(_running.Count > 0 || EnabledTests.Count == 0)"
-                    @onclick="RunAllAsync">
-                @(_running.Count > 0 ? "Running…" : "Run all")
+            <button class="dcbtn" disabled="@(Vm.Running.Count > 0 || Vm.EnabledTests.Count == 0)"
+                    @onclick="Vm.RunAllAsync">
+                @(Vm.Running.Count > 0 ? "Running…" : "Run all")
             </button>
-            <button class="dcbtn primary" disabled="@(_jobs.Count == 0)" @onclick="NewTest">+ New block</button>
+            <button class="dcbtn primary" disabled="@(Vm.Jobs.Count == 0)" @onclick="Vm.NewTest">+ New block</button>
         </div>
     </header>
 
-    @if (_message is not null)
+    @if (Vm.Message is not null)
     {
-        <div class="test-message @(_messageIsError ? "error" : null)">@_message</div>
+        <div class="test-message @(Vm.MessageIsError ? "error" : null)">@Vm.Message</div>
     }
 
-    @if (_loading)
+    @if (Vm.Loading)
     {
         <Skeleton Kind="list" Rows="5" />
     }
-    else if (_jobs.Count == 0)
+    else if (Vm.Jobs.Count == 0)
     {
         <div class="dccard empty-state">
             <div class="empty-icon">⌁</div>
             <strong>Create a Job before adding tests</strong>
             <span>Tests use declared mock scenarios and never execute the selected Job.</span>
-            <button class="dcbtn primary" @onclick="@(() => Nav.NavigateTo($"/project/{ProjectId}/jobs"))">Open Jobs</button>
+            <button class="dcbtn primary" @onclick="@(() => Vm.OpenJobs())">Open Jobs</button>
         </div>
     }
-    else if (_tests.Count == 0)
+    else if (Vm.Tests.Count == 0)
     {
         <div class="dccard empty-state">
             <div class="empty-icon">✓</div>
             <strong>No test blocks yet</strong>
             <span>Add a framework-backed block with multiple test methods to start verifying Job code.</span>
-            <button class="dcbtn primary" @onclick="NewTest">Create first block</button>
+            <button class="dcbtn primary" @onclick="Vm.NewTest">Create first block</button>
         </div>
     }
     else
     {
         <section class="summary-strip" aria-label="Test summary">
-            <div class="summary-count"><strong>@TotalMethodCount</strong><span>methods</span></div>
-            <div class="summary-count passed"><strong>@PassedCount</strong><span>passed</span></div>
-            <div class="summary-count failed"><strong>@FailedCount</strong><span>failed</span></div>
-            <div class="summary-count"><strong>@NotRunCount</strong><span>not run</span></div>
+            <div class="summary-count"><strong>@Vm.TotalMethodCount</strong><span>methods</span></div>
+            <div class="summary-count passed"><strong>@Vm.PassedCount</strong><span>passed</span></div>
+            <div class="summary-count failed"><strong>@Vm.FailedCount</strong><span>failed</span></div>
+            <div class="summary-count"><strong>@Vm.NotRunCount</strong><span>not run</span></div>
             <div class="summary-progress">
-                <span style="width:@PassPercent%"></span>
+                <span style="width:@Vm.PassPercent%"></span>
             </div>
         </section>
 
         <div class="suite-list">
-            @foreach (var suite in Suites)
+            @foreach (var suite in Vm.Suites)
             {
                 <section class="dccard test-suite">
                     <header class="suite-head">
                         <div>
                             <span class="suite-caret">⌄</span>
                             <strong>@suite.Key</strong>
-                            <span>@suite.Count() block@(suite.Count() == 1 ? "" : "s") · @suite.Sum(MethodCount) methods</span>
+                            <span>@suite.Count() block@(suite.Count() == 1 ? "" : "s") · @suite.Sum(JobTestsViewModel.MethodCount) methods</span>
                         </div>
-                        <span class="suite-result">@suite.SelectMany(MethodResults).Count(t => t.Status == "Passed") / @suite.Sum(MethodCount) passing</span>
+                        <span class="suite-result">@JobTestsViewModel.SuitePassedCount(suite) / @suite.Sum(JobTestsViewModel.MethodCount) passing</span>
                     </header>
 
                     <div class="test-rows">
                         @foreach (var test in suite)
                         {
-                            var isRunning = _running.Contains(test.Id);
-                            <article class="test-row @StatusClass(test, isRunning)">
-                                <div class="status-icon" aria-label="@StatusLabel(test, isRunning)">
+                            var isRunning = Vm.Running.Contains(test.Id);
+                            <article class="test-row @Vm.StatusClassLabel(test, isRunning)">
+                                <div class="status-icon" aria-label="@Vm.StatusLabelText(test, isRunning)">
                                     @if (isRunning)
                                     {
                                         <span class="spinner"></span>
                                     }
-                                    else if (test.LastStatus == "Passed")
+                                    else if (JobTestsViewModel.IsPassed(test))
                                     {
                                         <span>✓</span>
                                     }
-                                    else if (test.LastStatus == "Failed")
+                                    else if (JobTestsViewModel.IsFailed(test))
                                     {
                                         <span>×</span>
                                     }
@@ -106,9 +106,9 @@
                                         }
                                         @if (test.CodeFiles.Count == 0)
                                         {
-                                            <span class="assertion-chip">@AssertionLabel(test.AssertionType)</span>
+                                            <span class="assertion-chip">@JobTestsViewModel.AssertionLabel(test.AssertionType)</span>
                                         }
-                                        <span class="assertion-chip">@JobTestFramework.Label(test.RuntimeId) · @MethodCount(test) methods</span>
+                                        <span class="assertion-chip">@JobTestFramework.Label(test.RuntimeId) · @JobTestsViewModel.MethodCount(test) methods</span>
                                     </div>
                                     <div class="test-detail">
                                         @if (isRunning)
@@ -120,11 +120,11 @@
                                             <span>@(test.LastMessage ?? "Not run yet")</span>
                                             @if (test.LastDurationMs is { } duration)
                                             {
-                                                <span class="duration">@FormatDuration(duration)</span>
+                                                <span class="duration">@Vm.DurationLabel(duration)</span>
                                             }
                                         }
                                     </div>
-                                    @if (!isRunning && test.LastStatus == "Failed" && !string.IsNullOrWhiteSpace(test.LastActualOutput))
+                                    @if (JobTestsViewModel.HasFailureOutput(test, isRunning))
                                     {
                                         <details class="actual-output">
                                             <summary>Actual output</summary>
@@ -133,23 +133,23 @@
                                     }
                                 </div>
                                 <div class="test-actions">
-                                    @if (_confirmDelete == test.Id)
+                                    @if (Vm.ConfirmDelete == test.Id)
                                     {
-                                        <button class="dcbtn danger" @onclick="@(() => DeleteAsync(test.Id))">Delete</button>
-                                        <button class="dcbtn" @onclick="@(() => _confirmDelete = null)">Keep</button>
+                                        <button class="dcbtn danger" @onclick="@(() => Vm.DeleteAsync(test.Id))">Delete</button>
+                                        <button class="dcbtn" @onclick="@(() => Vm.ConfirmDelete = null)">Keep</button>
                                     }
                                     else
                                     {
                                         <button class="icon-action" title="Run test" aria-label="Run @test.Name"
                                                 disabled="@(isRunning || !test.Enabled)"
-                                                @onclick="@(() => RunAsync(test.Id))">▶</button>
+                                                @onclick="@(() => Vm.RunAsync(test.Id))">▶</button>
                                         <button class="icon-action" title="Edit test" aria-label="Edit @test.Name"
-                                                @onclick="@(() => EditTest(test))">✎</button>
+                                                @onclick="@(() => Vm.EditTest(test))">✎</button>
                                         <button class="icon-action code-action" title="Open test code editor"
                                                 aria-label="Open code editor for @test.Name"
-                                                @onclick="@(() => OpenCodeEditor(test.Id))">&lt;/&gt;</button>
+                                                @onclick="@(() => Vm.OpenCodeEditor(test.Id))">&lt;/&gt;</button>
                                         <button class="icon-action" title="Delete test" aria-label="Delete @test.Name"
-                                                @onclick="@(() => _confirmDelete = test.Id)">⋯</button>
+                                                @onclick="@(() => Vm.ConfirmDelete = test.Id)">⋯</button>
                                     }
                                 </div>
                             </article>
@@ -161,24 +161,24 @@
     }
 </div>
 
-@if (_editing)
+@if (Vm.Editing)
 {
-    <div class="editor-backdrop" @onclick="CloseEditor">
+    <div class="editor-backdrop" @onclick="Vm.CloseEditor">
         <aside class="test-editor" @onclick:stopPropagation="true" role="dialog" aria-modal="true"
                aria-labelledby="test-editor-title">
             <header>
                 <div>
                     <span class="eyebrow">JOB TEST BLOCK</span>
-                    <h3 id="test-editor-title">@(_editId is null ? "New block" : "Edit block")</h3>
+                    <h3 id="test-editor-title">@(Vm.EditId is null ? "New block" : "Edit block")</h3>
                 </div>
-                <button class="close-button" aria-label="Close" @onclick="CloseEditor">×</button>
+                <button class="close-button" aria-label="Close" @onclick="Vm.CloseEditor">×</button>
             </header>
 
             <div class="editor-body">
                 <label class="field">
                     <span>Job</span>
-                    <select class="dcinput" @bind="_editJobId">
-                        @foreach (var job in _jobs)
+                    <select class="dcinput" @bind="Vm.EditJobId">
+                        @foreach (var job in Vm.Jobs)
                         {
                             <option value="@job.Id">@job.Name</option>
                         }
@@ -187,38 +187,38 @@
 
                 <label class="field">
                     <span>Block name</span>
-                    <input class="dcinput" @bind="_editName" placeholder="customer output contract" />
+                    <input class="dcinput" @bind="Vm.EditName" placeholder="customer output contract" />
                 </label>
 
                 <label class="field">
                     <span>Mock scenario JSON</span>
-                    <textarea class="dcinput code-input" rows="7" @bind="_editInput"
+                    <textarea class="dcinput code-input" rows="7" @bind="Vm.EditInput"
                               placeholder='{"input":{},"run":{"status":"Succeeded","output":{},"shards":[]}}'></textarea>
                     <small>Defines input and the mocked status, output, and shard results. Never executes the selected Job.</small>
                 </label>
 
                 <label class="field">
                     <span>Assertion</span>
-                    <select class="dcinput" @bind="_editAssertion">
+                    <select class="dcinput" @bind="Vm.EditAssertion">
                         @foreach (var assertion in Enum.GetValues<JobTestAssertionType>())
                         {
-                            <option value="@assertion">@AssertionLabel(assertion)</option>
+                            <option value="@assertion">@JobTestsViewModel.AssertionLabel(assertion)</option>
                         }
                     </select>
                 </label>
 
-                @if (_editAssertion != JobTestAssertionType.Succeeds)
+                @if (Vm.EditAssertion != JobTestAssertionType.Succeeds)
                 {
                     <label class="field">
                         <span>Expected value</span>
-                        <textarea class="dcinput code-input" rows="7" @bind="_editExpected"
-                                  placeholder="@ExpectedPlaceholder"></textarea>
-                        <small>@AssertionHelp</small>
+                        <textarea class="dcinput code-input" rows="7" @bind="Vm.EditExpected"
+                                  placeholder="@Vm.ExpectedPlaceholder"></textarea>
+                        <small>@Vm.AssertionHelp</small>
                     </label>
                 }
 
                 <label class="enabled-field">
-                    <input type="checkbox" @bind="_editEnabled" />
+                    <input type="checkbox" @bind="Vm.EditEnabled" />
                     <span><strong>Enabled</strong><small>Included when Run all is selected.</small></span>
                 </label>
 
@@ -227,9 +227,9 @@
                         <strong>Framework test methods</strong>
                         <small>Add multiple methods using pytest, Node test, Go testing, or Ruby Minitest.</small>
                     </div>
-                    @if (_editId is { } testId)
+                    @if (Vm.EditId is { } testId)
                     {
-                        <button class="dcbtn" @onclick="@(() => OpenCodeEditor(testId))">
+                        <button class="dcbtn" @onclick="@(() => Vm.OpenCodeEditor(testId))">
                             &lt;/&gt; Open code editor
                         </button>
                     }
@@ -241,9 +241,9 @@
             </div>
 
             <footer>
-                <button class="dcbtn" @onclick="CloseEditor">Cancel</button>
-                <button class="dcbtn primary" disabled="@_saving" @onclick="SaveAsync">
-                    @(_saving ? "Saving…" : "Save block")
+                <button class="dcbtn" @onclick="Vm.CloseEditor">Cancel</button>
+                <button class="dcbtn primary" disabled="@Vm.Saving" @onclick="Vm.SaveAsync">
+                    @(Vm.Saving ? "Saving…" : "Save block")
                 </button>
             </footer>
         </aside>
@@ -252,223 +252,6 @@
 
 @code {
     [Parameter] public Guid ProjectId { get; set; }
-
-    private const string DefaultScenario = """
-        {
-          "input": {"customerId":"example"},
-          "run": {
-            "status": "Succeeded",
-            "output": {"status":"active"},
-            "shards": [
-              {"index":0,"exitCode":0,"outcome":"Succeeded","artifact":{"status":"active"}}
-            ]
-          }
-        }
-        """;
-
-    private IReadOnlyList<JobView> _jobs = Array.Empty<JobView>();
-    private List<JobTestCaseView> _tests = new();
-    private readonly HashSet<Guid> _running = new();
-    private bool _loading = true;
-    private bool _editing;
-    private bool _saving;
-    private string? _message;
-    private bool _messageIsError;
-    private Guid? _confirmDelete;
-
-    private Guid? _editId;
-    private Guid _editJobId;
-    private string _editName = "";
-    private string _editInput = "";
-    private JobTestAssertionType _editAssertion = JobTestAssertionType.Succeeds;
-    private string _editExpected = "";
-    private bool _editEnabled = true;
-
-    private IEnumerable<IGrouping<string, JobTestCaseView>> Suites
-        => _tests.GroupBy(test => test.JobName).OrderBy(group => group.Key);
-    private List<JobTestCaseView> EnabledTests => _tests.Where(test => test.Enabled).ToList();
-    private int TotalMethodCount => _tests.Sum(MethodCount);
-    private int PassedCount => _tests.SelectMany(MethodResults).Count(result => result.Status == "Passed");
-    private int FailedCount => _tests.SelectMany(MethodResults).Count(result => result.Status == "Failed");
-    private int NotRunCount => Math.Max(0, TotalMethodCount - PassedCount - FailedCount);
-    private int PassPercent => TotalMethodCount == 0
-        ? 0
-        : (int)Math.Round(PassedCount * 100d / TotalMethodCount);
-    private string ExpectedPlaceholder => _editAssertion == JobTestAssertionType.JsonSubset
-        ? "{\"status\":\"ok\"}"
-        : "Expected output";
-    private string AssertionHelp => _editAssertion switch
-    {
-        JobTestAssertionType.JsonSubset => "Object properties may be a subset; arrays are compared by position.",
-        JobTestAssertionType.OutputContains => "Passes when the primary output contains this exact text.",
-        _ => "Passes when the trimmed primary output is exactly this value.",
-    };
-
-    protected override async Task OnParametersSetAsync()
-    {
-        Ui.Set("Tests", "verify Job code");
-        _loading = true;
-        try
-        {
-            var jobsTask = Svc.ListJobsAsync(ProjectId);
-            var testsTask = Svc.ListJobTestCasesAsync(ProjectId);
-            await Task.WhenAll(jobsTask, testsTask);
-            _jobs = await jobsTask;
-            _tests = (await testsTask).ToList();
-        }
-        catch (Exception ex)
-        {
-            ShowMessage(ex.Message, true);
-        }
-        finally
-        {
-            _loading = false;
-        }
-    }
-
-    private void NewTest()
-    {
-        _editId = null;
-        _editJobId = _jobs.FirstOrDefault()?.Id ?? Guid.Empty;
-        _editName = "";
-        _editInput = DefaultScenario;
-        _editAssertion = JobTestAssertionType.Succeeds;
-        _editExpected = "";
-        _editEnabled = true;
-        _editing = true;
-    }
-
-    private void EditTest(JobTestCaseView test)
-    {
-        _editId = test.Id;
-        _editJobId = test.JobId;
-        _editName = test.Name;
-        _editInput = test.InputPayload ?? "";
-        _editAssertion = test.AssertionType;
-        _editExpected = test.ExpectedValue ?? "";
-        _editEnabled = test.Enabled;
-        _editing = true;
-    }
-
-    private void CloseEditor() => _editing = false;
-    private void OpenCodeEditor(Guid testId)
-        => Nav.NavigateTo($"/project/{ProjectId}/tests/{testId}");
-
-    private async Task SaveAsync()
-    {
-        if (_editJobId == Guid.Empty || string.IsNullOrWhiteSpace(_editName))
-        {
-            ShowMessage("Choose a Job and enter a block name.", true);
-            return;
-        }
-        if (_editAssertion != JobTestAssertionType.Succeeds && string.IsNullOrWhiteSpace(_editExpected))
-        {
-            ShowMessage("Enter the expected value for this assertion.", true);
-            return;
-        }
-
-        _saving = true;
-        try
-        {
-            var saved = await Svc.SaveJobTestCaseAsync(new SaveJobTestCaseCommand(
-                ProjectId, _editJobId, _editName, _editInput, _editAssertion,
-                _editExpected, _editEnabled, _editId));
-            Replace(saved);
-            _editing = false;
-            ShowMessage($"Saved block “{saved.Name}”.");
-        }
-        catch (Exception ex)
-        {
-            ShowMessage(ex.Message, true);
-        }
-        finally
-        {
-            _saving = false;
-        }
-    }
-
-    private async Task RunAsync(Guid id)
-    {
-        if (!_running.Add(id)) return;
-        _confirmDelete = null;
-        try
-        {
-            StateHasChanged();
-            Replace(await Svc.RunJobTestCaseAsync(id));
-        }
-        catch (Exception ex)
-        {
-            ShowMessage(ex.Message, true);
-        }
-        finally
-        {
-            _running.Remove(id);
-            StateHasChanged();
-        }
-    }
-
-    private async Task RunAllAsync()
-    {
-        _message = null;
-        foreach (var test in EnabledTests)
-            await RunAsync(test.Id);
-
-        var failed = FailedCount;
-        ShowMessage(failed == 0
-            ? $"All {EnabledTests.Sum(MethodCount)} enabled test methods passed."
-            : $"{failed} test method{(failed == 1 ? "" : "s")} failed.", failed > 0);
-    }
-
-    private async Task DeleteAsync(Guid id)
-    {
-        try
-        {
-            if (await Svc.DeleteJobTestCaseAsync(id))
-            {
-                _tests.RemoveAll(test => test.Id == id);
-                ShowMessage("Test block deleted.");
-            }
-        }
-        catch (Exception ex)
-        {
-            ShowMessage(ex.Message, true);
-        }
-        finally
-        {
-            _confirmDelete = null;
-        }
-    }
-
-    private void Replace(JobTestCaseView updated)
-    {
-        var index = _tests.FindIndex(test => test.Id == updated.Id);
-        if (index < 0) _tests.Add(updated);
-        else _tests[index] = updated;
-    }
-
-    private void ShowMessage(string message, bool error = false)
-    {
-        _message = message;
-        _messageIsError = error;
-    }
-
-    private static string StatusClass(JobTestCaseView test, bool running)
-        => running ? "running" : test.LastStatus.ToLowerInvariant();
-    private static string StatusLabel(JobTestCaseView test, bool running)
-        => running ? "Running" : test.LastStatus == "NotRun" ? "Not run" : test.LastStatus;
-    private static IReadOnlyList<JobTestMethodResult> MethodResults(JobTestCaseView test)
-        => test.MethodResults is { Count: > 0 } results
-            ? results
-            : JobTestFramework.Discover(test.RuntimeId, test.CodeFiles);
-    private static int MethodCount(JobTestCaseView test) => MethodResults(test).Count;
-    private static string AssertionLabel(JobTestAssertionType assertion) => assertion switch
-    {
-        JobTestAssertionType.Succeeds => "Run succeeds",
-        JobTestAssertionType.OutputEquals => "Output equals",
-        JobTestAssertionType.OutputContains => "Output contains",
-        JobTestAssertionType.JsonSubset => "JSON subset",
-        _ => assertion.ToString(),
-    };
-    private static string FormatDuration(long ms)
-        => ms < 1000 ? $"{ms} ms" : $"{ms / 1000d:0.0} s";
+    protected override async Task OnParametersSetAsync() { Vm.Attach(() => InvokeAsync(StateHasChanged)); await Vm.LoadAsync(ProjectId); }
+    public void Dispose() { Vm.Detach(); }
 }

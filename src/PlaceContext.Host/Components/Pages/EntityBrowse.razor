@@ -7,9 +7,6 @@
 @using PlaceContext.Host.Components.ViewModels
 @using PlaceContext.Host.Components.ViewModels.Helpers
 @inject EntityBrowseViewModel Vm
-@inject PortalUiState Ui
-@inject NavigationManager Nav
-@inject IJSRuntime JS
 
 <PageTitle>placecontext — @EntityName</PageTitle>
 
@@ -43,7 +40,7 @@
                     </Authorized>
                 </AuthorizeView>
                 <input class="dcinput filter-input" placeholder="search records…"
-                       value="@Vm.Search" @oninput="OnSearchInput" />
+                       value="@Vm.Search" @oninput="Vm.OnSearchInputAsync" />
             </div>
         </div>
 
@@ -57,12 +54,12 @@
         }
 
         <div class="dctabs tabs-mb">
-            <button class="dctab @(Vm.ViewTab == "records" ? "active" : "")" @onclick="@(() => Vm.ViewTab = "records")">Records</button>
-            <button class="dctab @(Vm.ViewTab == "graph" ? "active" : "")" @onclick="@(() => Vm.ViewTab = "graph")">Graph</button>
-            <button class="dctab @(Vm.ViewTab == "analytics" ? "active" : "")" @onclick="OpenAnalyticsAsync">Analytics</button>
+            <button class="dctab @(Vm.IsRecordsTab ? "active" : "")" @onclick="Vm.SelectRecords">Records</button>
+            <button class="dctab @(Vm.IsGraphTab ? "active" : "")" @onclick="Vm.SelectGraph">Graph</button>
+            <button class="dctab @(Vm.IsAnalyticsTab ? "active" : "")" @onclick="Vm.OpenAnalyticsAsync">Analytics</button>
         </div>
 
-        @if (Vm.ViewTab == "analytics")
+        @if (Vm.IsAnalyticsTab)
         {
             <div class="analytics-head">
                 <span class="note-12">Charts over <span class="mono">@Vm.Entity.TableName</span> — SELECT-only, isolated to this project.</span>
@@ -75,7 +72,7 @@
                     <input class="dcinput chart-name-input" placeholder="chart name (e.g. price by suburb)" @bind="Vm.ChartName" />
                     @if (Vm.ChartMonaco)
                     {
-                        <div id="@EntityBrowseViewModel.ChartEditorId" class="monaco-box"></div>
+                        <div id="@Vm.ChartEditorIdentifier" class="monaco-box"></div>
                     }
                     else
                     {
@@ -88,7 +85,7 @@
                             <option value="line">line</option>
                             <option value="pie">pie</option>
                         </select>
-                        <button class="dcbtn primary run-save-btn" disabled="@Vm.ChartBusy" @onclick="SaveChartAsync">
+                        <button class="dcbtn primary run-save-btn" disabled="@Vm.ChartBusy" @onclick="@(() => Vm.SaveEntityChartAsync(Vm.GetChartSqlAsync))">
                             @(Vm.ChartBusy ? "Running…" : "▶ Run & save")
                         </button>
                         @if (Vm.ChartError is not null)
@@ -114,9 +111,9 @@
                             <div class="chart-head">
                                 <span class="chart-name">@Vm.ChartShortName(chart)</span>
                                 <span class="chart-type-group">
-                                    @foreach (var t in new[] { "bar", "line", "pie" })
+                                    @foreach (var t in Vm.ChartTypes)
                                     {
-                                        <button class="dcbtn chart-type-btn" style="@(EntityBrowseViewModel.StoredType(chart) == t ? "color:var(--brand-2); border-color:var(--brand-2)" : "")"
+                                        <button class="dcbtn chart-type-btn" style="@(Vm.ChartTypeStyle(chart, t))"
                                                 @onclick="@(() => Vm.SwitchChartTypeAsync(chart, t))">@t</button>
                                     }
                                 </span>
@@ -125,7 +122,7 @@
                                 <button class="dcbtn btn-11-del" @onclick="@(() => Vm.DeleteChartAsync(chart))">✕</button>
                             </div>
                             <div class="chart-canvas-box">
-                                <canvas id="@EntityBrowseViewModel.ChartCanvasId(chart.TableName)"></canvas>
+                                <canvas id="@Vm.ChartCanvasIdentifier(chart.TableName)"></canvas>
                             </div>
                         </div>
                     }
@@ -133,7 +130,7 @@
             }
         }
 
-        @if (Vm.ViewTab == "graph")
+        @if (Vm.IsGraphTab)
         {
             @if (Vm.BrainGraph is { Nodes.Count: > 0 })
             {
@@ -145,7 +142,7 @@
                     <div class="focus-row">
                         <span class="focus-chip">focused: @Vm.FocusKey</span>
                         <button class="dcbtn btn-11"
-                                @onclick="@ClearFocusAsync">show whole graph</button>
+                                @onclick="Vm.ClearFocusAsync">show whole graph</button>
                     </div>
                 }
                 <div class="legend">
@@ -164,7 +161,7 @@
             }
         }
 
-        @if (Vm.ViewTab == "records" && Vm.Insights.Count > 0)
+        @if (Vm.IsRecordsTab && Vm.Insights.Count > 0)
         {
             <div class="insights-grid">
                 @foreach (var ins in Vm.Insights)
@@ -198,12 +195,12 @@
             </div>
         }
 
-        @if (Vm.ViewTab == "records" && Vm.Page is null)
+        @if (Vm.IsRecordsTab && Vm.Page is null)
         {
             <Skeleton Kind="table" Rows="8" Columns="4" />
         }
 
-        @if (Vm.ViewTab == "records" && Vm.Page is { } pg)
+        @if (Vm.IsRecordsTab && Vm.Page is { } pg)
         {
             <div class="dccard table-card">
                 <div class="table-scroll">
@@ -227,11 +224,11 @@
                             }
                             @foreach (var row in pg.Rows)
                             {
-                                <tr class="dcdash-row clickable" @onclick="@(() => OpenRecordAsync(row))">
+                                <tr class="dcdash-row clickable" @onclick="@(() => Vm.OpenRecordAsync(row))">
                                     @for (var i = 0; i < pg.Columns.Count; i++)
                                     {
                                         var cell = i < row.Count ? row[i] : null;
-                                        <td class="data-cell" style="color:@(pg.Columns[i] == Vm.LabelCol() ? "var(--text)" : "var(--text-2)"); font-weight:@(pg.Columns[i] == Vm.LabelCol() ? "600" : "400")">
+                                        <td class="data-cell" style="color:@Vm.CellColor(pg.Columns[i]); font-weight:@Vm.CellWeight(pg.Columns[i])">
                                             <OpenSearchDataValue ProjectId="ProjectId" Column="@pg.Columns[i]" Value="@cell" />
                                         </td>
                                     }
@@ -254,7 +251,7 @@
                     <div class="pager-controls">
                         <button class="dcbtn pager-btn" disabled="@(pg.Page <= 1)"
                                 @onclick="@(() => Vm.GoToPageAsync(pg.Page - 1))">‹ Prev</button>
-                        <span class="pager-page">Page @pg.Page of @EntityBrowseViewModel.TotalPages(pg)</span>
+                        <span class="pager-page">@Vm.PageLabel(pg)</span>
                         <button class="dcbtn pager-btn" disabled="@((long)pg.Page * pg.PageSize >= pg.TotalCount)"
                                 @onclick="@(() => Vm.GoToPageAsync(pg.Page + 1))">Next ›</button>
                     </div>
@@ -297,26 +294,18 @@
                 <div class="dccard card-pad crm-form">
                     @foreach (var col in Vm.FormColumns)
                     {
-                        var inputType = col.Type switch
-                        {
-                            "integer" or "bigint" or "numeric" or "double" or "real" => "number",
-                            "boolean" => "checkbox",
-                            "date" => "date",
-                            "timestamptz" => "datetime-local",
-                            _ => "text"
-                        };
                         <label class="crm-label">@col.Name
-                            @if (inputType == "checkbox")
+                            @if (Vm.IsChartInput(col.Type))
                             {
                                 <input type="checkbox" class="dccheckbox crm-input" style="margin-top:2px"
-                                       checked="@(Vm.FormValues.GetValueOrDefault(col.Name) == "true" || Vm.FormValues.GetValueOrDefault(col.Name) == "1")"
-                                       @onchange="e => ToggleBool(col.Name, (ChangeEventArgs)e)" />
+                                       checked="@Vm.FormValueIsTrue(col.Name)"
+                                       @onchange="e => Vm.ToggleBool(col.Name, e.Value is bool value && value)" />
                             }
                             else
                             {
-                                <input type="@inputType" class="dcinput crm-input"
+                                <input type="@Vm.FormInputType(col.Type)" class="dcinput crm-input"
                                        value="@(Vm.FormValues.GetValueOrDefault(col.Name))"
-                                       @oninput="e => Vm.FormValues[col.Name] = e.Value?.ToString()" />
+                                       @oninput="@(e => Vm.SetFormValue(col.Name, e))" />
                             }
                         </label>
                     }
@@ -362,7 +351,7 @@
                             {
                                 <span title="@versions versions — this is the latest" class="version-badge">v@(versions)</span>
                             }
-                            <span class="artifact-meta">@a.Kind · @a.CreatedAt.ToWorkspaceTime().ToString("MMM d · HH:mm")</span>
+                            <span class="artifact-meta">@a.Kind · @Vm.ArtifactDate(a.CreatedAt)</span>
                         </a>
                     }
                 </div>
@@ -403,7 +392,7 @@
                     @foreach (var link in Vm.AutoLinks)
                     {
                         <a class="dccard dcdash-row auto-link"
-                           href="@($"/project/{ProjectId}/entity/{Uri.EscapeDataString(EntityNameForTable(link.TableName))}?record={Uri.EscapeDataString(link.RowKey)}")">
+                           href="@($"/project/{ProjectId}/entity/{Uri.EscapeDataString(Vm.EntityNameForTable(link.TableName))}?record={Uri.EscapeDataString(link.RowKey)}")">
                             <span class="link-kind">@link.Kind</span>
                             <span class="ellipsis">@link.DisplayValue</span>
                             <span class="link-meta">@link.TableName · @link.ColumnName · @link.RowKey</span>
@@ -423,10 +412,6 @@
 
     [SupplyParameterFromQuery(Name = "record")] public string? RecordKey { get; set; }
 
-    private string EntityNameForTable(string tableName)
-        => Vm.AllEntities.FirstOrDefault(entity => string.Equals(entity.TableName, tableName, StringComparison.OrdinalIgnoreCase))?.Name
-           ?? tableName;
-
     protected override void OnInitialized() => Vm.Attach(() => InvokeAsync(StateHasChanged));
 
     protected override async Task OnParametersSetAsync()
@@ -439,28 +424,7 @@
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (Vm.ViewTab != "analytics") return;
-        if (Vm.ShowChartEditor && Vm.ChartMonaco && !Vm.ChartMonacoReady)
-        {
-            Vm.ChartMonacoReady = true;
-            try
-            {
-                var rich = await JS.InvokeAsync<bool>("pcmonaco.init", EntityBrowseViewModel.ChartEditorId, Vm.ChartSql, "sql", "vs-dark");
-                if (!rich) { Vm.ChartMonaco = false; StateHasChanged(); }
-            }
-            catch { Vm.ChartMonaco = false; StateHasChanged(); }
-        }
-        foreach (var chart in Vm.EntityCharts().Where(c => c.Html.TrimStart().StartsWith('{')))
-        {
-            var id = EntityBrowseViewModel.ChartCanvasId(chart.TableName);
-            if (Vm.RenderedCharts.TryGetValue(id, out var at) && at == chart.GeneratedAt) continue;
-            try
-            {
-                await JS.InvokeVoidAsync("pcchart.render", id, chart.Html);
-                Vm.RenderedCharts[id] = chart.GeneratedAt;
-            }
-            catch (JSException) { }
-        }
+        await Vm.AfterRenderAsync();
     }
 
     public void Dispose()
@@ -469,28 +433,4 @@
         Vm.Detach();
     }
 
-    private async Task OnSearchInput(ChangeEventArgs e)
-        => await Vm.OnSearchInputAsync(e.Value?.ToString() ?? "");
-
-    private async Task OpenRecordAsync(IReadOnlyList<string?> row)
-        => await Vm.OpenRecordAsync(row);
-
-    private async Task OpenAnalyticsAsync()
-        => await Vm.OpenAnalyticsAsync();
-
-    private async Task ClearFocusAsync()
-    {
-        Vm.FocusKey = null;
-        await Vm.BuildSectionGraphAsync();
-    }
-
-    private async Task SaveChartAsync()
-        => await Vm.SaveEntityChartAsync(async (id, current) =>
-        {
-            try { return await JS.InvokeAsync<string>("pcmonaco.getValue", id); }
-            catch { return current; }
-        });
-
-    private void ToggleBool(string colName, ChangeEventArgs e)
-        => Vm.FormValues[colName] = e.Value?.ToString() == "true" ? "true" : "false";
 }

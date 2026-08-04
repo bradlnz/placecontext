@@ -1,12 +1,10 @@
 @page "/settings/communications"
 @layout PlaceContext.Host.Components.Layout.SettingsLayout
 @attribute [Authorize(Policy = Policies.DefaultAdmin)]
-@using System.Text.Json
-@using System.Text.Json.Nodes
-@using Microsoft.Extensions.DependencyInjection
-@using PlaceContext.Infrastructure.Comms
-@inject IServiceScopeFactory ScopeFactory
-@inject PortalUiState Ui
+@using PlaceContext.Host.Components.ViewModels
+@inject CommunicationsSettingsViewModel Vm
+@implements IDisposable
+
 
 <PageTitle>PlaceContext — Communications</PageTitle>
 
@@ -17,38 +15,38 @@
             <h2>Communications</h2>
             <p>Connect providers for workflows and sign-in codes. Credentials are referenced from project Vaults and resolved only when a message is sent.</p>
         </div>
-        <button class="dcbtn primary" @onclick="ShowAdd">+ Add provider</button>
+        <button class="dcbtn primary" @onclick="Vm.ShowAdd">+ Add provider</button>
     </header>
 
-    @if (_loading)
+    @if (Vm.Loading)
     {
         <div class="dccard loading-card">Loading communication providers…</div>
     }
-    else if (_loadError is not null)
+    else if (Vm.LoadError is not null)
     {
-        <div class="settings-alert error">@_loadError</div>
+        <div class="settings-alert error">@Vm.LoadError</div>
     }
     else
     {
-        @if (_message is not null)
+        @if (Vm.Message is not null)
         {
-            <div class="settings-alert @(_messageIsError ? "error" : "success")">@_message</div>
+            <div class="settings-alert @(Vm.MessageIsError ? "error" : "success")">@Vm.Message</div>
         }
 
         <section class="dccard provider-card">
-            @if (_providers.Count == 0)
+            @if (Vm.Providers.Count == 0)
             {
                 <div class="empty-note">No communication providers configured.</div>
             }
             else
             {
-                @foreach (var provider in _providers)
+                @foreach (var provider in Vm.Providers)
                 {
                     <article class="provider-row @(!provider.Enabled ? "disabled" : "")">
                         <div class="provider-info">
                             <strong>@provider.Name</strong>
-                            <span class="channel-badge">@ChannelLabel(provider.Channel)</span>
-                            <span class="kind-badge">@KindLabel(provider.Kind)</span>
+                            <span class="channel-badge">@Vm.ChannelLabel(provider.Channel)</span>
+                            <span class="kind-badge">@Vm.KindLabel(provider.Kind)</span>
                             @if (provider.IsDefault)
                             {
                                 <span class="flag-badge default">Default</span>
@@ -59,68 +57,68 @@
                             }
                             <label class="enabled-toggle">
                                 <input type="checkbox" checked="@provider.Enabled"
-                                       @onchange="@(() => ToggleEnabledAsync(provider))" />
+                                       @onchange="@(() => Vm.ToggleEnabledAsync(provider))" />
                                 Enabled
                             </label>
                         </div>
                         <div class="provider-actions">
                             @if (!provider.IsDefault)
                             {
-                                <button class="dcbtn xs" @onclick="@(() => SetDefaultAsync(provider.Id))">Make default</button>
+                                <button class="dcbtn xs" @onclick="@(() => Vm.SetDefaultAsync(provider.Id))">Make default</button>
                             }
-                            <button class="dcbtn xs" @onclick="@(() => ToggleTwoFactorAsync(provider))">
+                            <button class="dcbtn xs" @onclick="@(() => Vm.ToggleTwoFactorAsync(provider))">
                                 @(provider.UseForTwoFactor ? "Remove 2FA" : "Use for 2FA")
                             </button>
-                            <button class="dcbtn xs" @onclick="@(() => StartTest(provider))">Test</button>
-                            <button class="dcbtn xs" @onclick="@(() => StartEdit(provider))">Edit</button>
-                            @if (_confirmDeleteId == provider.Id)
+                            <button class="dcbtn xs" @onclick="@(() => Vm.StartTest(provider))">Test</button>
+                            <button class="dcbtn xs" @onclick="@(() => Vm.StartEdit(provider))">Edit</button>
+                            @if (Vm.ConfirmDeleteId == provider.Id)
                             {
-                                <button class="dcbtn xs danger" @onclick="@(() => DeleteAsync(provider.Id))">Confirm</button>
-                                <button class="dcbtn xs" @onclick="@(() => _confirmDeleteId = null)">Keep</button>
+                                <button class="dcbtn xs danger" @onclick="@(() => Vm.DeleteAsync(provider.Id))">Confirm</button>
+                                <button class="dcbtn xs" @onclick="@(() => Vm.ConfirmDeleteId = null)">Keep</button>
                             }
                             else
                             {
-                                <button class="dcbtn xs danger" @onclick="@(() => _confirmDeleteId = provider.Id)">Delete</button>
+                                <button class="dcbtn xs danger" @onclick="@(() => Vm.ConfirmDeleteId = provider.Id)">Delete</button>
                             }
                         </div>
                     </article>
-                    @if (_testProviderId == provider.Id)
+                    @if (Vm.TestProviderId == provider.Id)
                     {
                         <div class="test-row">
                             <div class="dcfield test-recipient">
                                 <label>Test recipient</label>
-                                <input class="dcinput" @bind="_testRecipient"
-                                       placeholder="@(provider.Channel == "email" ? "recipient@example.com" : "+15551234567")" />
+                                <input class="dcinput" @bind="Vm.TestRecipient"
+                                       placeholder="@Vm.TestRecipientPlaceholder(provider.Channel)" />
                             </div>
-                            <button class="dcbtn xs primary" disabled="@(_testSending || string.IsNullOrWhiteSpace(_testRecipient))"
-                                    @onclick="@(() => SendTestAsync(provider.Id))">
-                                @(_testSending ? "Sending…" : "Send test")
+                            <button class="dcbtn xs primary" disabled="@(Vm.TestSending || string.IsNullOrWhiteSpace(Vm.TestRecipient))"
+                                    @onclick="@(() => Vm.SendTestAsync(provider.Id))">
+                                @(Vm.TestSending ? "Sending…" : "Send test")
                             </button>
-                            <button class="dcbtn xs" @onclick="@(() => _testProviderId = null)">Cancel</button>
+                            <button class="dcbtn xs" @onclick="@(() => Vm.TestProviderId = null)">Cancel</button>
                         </div>
                     }
                 }
             }
         </section>
 
-        @if (_showForm)
+        @if (Vm.ShowForm)
         {
             <section class="dccard add-card">
-                <div class="form-title">@(_editingId is null ? "New provider" : $"Edit {_name}")</div>
+                <div class="form-title">@(Vm.EditingId is null ? "New provider" : $"Edit {Vm.Name}")</div>
                 <div class="field-grid">
                     <div class="dcfield">
                         <label>Channel</label>
-                        <select class="dcinput" value="@_channel" @onchange="ChannelChanged">
+                        <select class="dcinput" value="@Vm.Channel" @onchange="Vm.ChannelChanged">
                             <option value="email">Email</option>
                             <option value="sms">SMS</option>
                         </select>
                     </div>
                     <div class="dcfield">
                         <label>Provider kind</label>
-                        <select class="dcinput" value="@_kind" @onchange="KindChanged">
-                            @foreach (var kind in KindsForChannel(_channel))
+                        <select class="dcinput" value="@Vm.Kind" @onchange="Vm.KindChanged">
+                            @foreach (var kind in Vm.KindsForChannel(Vm.Channel))
                             {
-                                <option value="@kind">@KindLabel(kind)</option>
+                                <option value="@kind">@Vm.KindLabel(kind)</option>
                             }
                         </select>
                     </div>
@@ -128,11 +126,11 @@
                 <div class="field-grid">
                     <div class="dcfield">
                         <label>Display name</label>
-                        <input class="dcinput" @bind="_name" placeholder="Transactional email" />
+                        <input class="dcinput" @bind="Vm.Name" placeholder="Transactional email" />
                     </div>
                     <div class="dcfield">
                         <label>Authentication</label>
-                        <select class="dcinput" value="@_authType" @onchange="AuthTypeChanged">
+                        <select class="dcinput" value="@Vm.AuthType" @onchange="Vm.AuthTypeChanged">
                             <option value="none">None</option>
                             <option value="bearer">Bearer token</option>
                             <option value="header">API key header</option>
@@ -141,20 +139,20 @@
                     </div>
                 </div>
                 <label class="enabled-toggle form-enabled">
-                    <input type="checkbox" @bind="_enabled" /> Enabled
+                    <input type="checkbox" @bind="Vm.Enabled" /> Enabled
                 </label>
 
-                @if (_authType == "header")
+                @if (Vm.IsHeaderAuth)
                 {
                     <div class="dcfield">
                         <label>Header name</label>
-                        <input class="dcinput" @bind="_authHeaderName" placeholder="X-Api-Key" />
+                        <input class="dcinput" @bind="Vm.AuthHeaderName" placeholder="X-Api-Key" />
                         <small>The header that carries the API key. Postmark uses <code>X-Postmark-Server-Token</code>.</small>
                     </div>
                 }
-                @if (_authType is "bearer" or "header" or "basic")
+                @if (Vm.UsesSecret)
                 {
-                    @if (_authType == "basic")
+                    @if (Vm.IsBasicAuth)
                     {
                         <div class="settings-alert">
                             Basic auth takes its username from the Account SID field below; the Vault secret is the auth token used as the password.
@@ -163,9 +161,9 @@
                     <div class="field-grid">
                         <div class="dcfield">
                             <label>Vault project</label>
-                            <select class="dcinput" value="@_vaultProjectId" @onchange="ProjectChanged">
+                            <select class="dcinput" value="@Vm.VaultProjectId" @onchange="Vm.ProjectChanged">
                                 <option value="">Select a project…</option>
-                                @foreach (var project in _projects)
+                                @foreach (var project in Vm.Projects)
                                 {
                                     <option value="@project.Id">@project.Name</option>
                                 }
@@ -174,14 +172,14 @@
                         </div>
                         <div class="dcfield">
                             <label>API key secret</label>
-                            <select class="dcinput" @bind="_secretName" disabled="@(_vaultProjectId is null)">
+                            <select class="dcinput" @bind="Vm.SecretName" disabled="@(Vm.VaultProjectId is null)">
                                 <option value="">Select a Vault secret…</option>
-                                @foreach (var secret in _secrets)
+                                @foreach (var secret in Vm.Secrets)
                                 {
                                     <option value="@secret.Name">@secret.Name</option>
                                 }
                             </select>
-                            @if (_vaultProjectId is not null && _secrets.Count == 0)
+                            @if (Vm.VaultProjectId is not null && Vm.Secrets.Count == 0)
                             {
                                 <small class="warning">No Vault secrets exist in this project yet.</small>
                             }
@@ -189,52 +187,52 @@
                     </div>
                 }
 
-                @if (_kind is "postmark" or "sendgrid")
+                @if (Vm.IsTransactionalKind)
                 {
                     <div class="field-grid">
                         <div class="dcfield">
                             <label>Verified sender email</label>
-                            <input class="dcinput" type="email" @bind="_fromEmail" placeholder="hello@yourdomain.com" />
+                            <input class="dcinput" type="email" @bind="Vm.FromEmail" placeholder="hello@yourdomain.com" />
                             <small>This address or its domain must be verified with the provider.</small>
                         </div>
                         <div class="dcfield">
                             <label>Sender name</label>
-                            <input class="dcinput" @bind="_fromName" placeholder="Your company" />
+                            <input class="dcinput" @bind="Vm.FromName" placeholder="Your company" />
                         </div>
                     </div>
-                    @if (_kind == "postmark")
+                    @if (Vm.IsPostmark)
                     {
                         <div class="dcfield stream-field">
                             <label>Message stream</label>
-                            <input class="dcinput" @bind="_messageStream" placeholder="outbound" />
+                            <input class="dcinput" @bind="Vm.MessageStream" placeholder="outbound" />
                             <small>Use <code>outbound</code> unless you created a dedicated transactional stream.</small>
                         </div>
                     }
                 }
-                else if (_kind == "twilio")
+                else if (Vm.IsTwilio)
                 {
                     <div class="field-grid">
                         <div class="dcfield">
                             <label>Account SID</label>
-                            <input class="dcinput" @bind="_accountSid" placeholder="AC…" />
+                            <input class="dcinput" @bind="Vm.AccountSid" placeholder="AC…" />
                             <small>Also used as the basic-auth username.</small>
                         </div>
                         <div class="dcfield">
                             <label>From number</label>
-                            <input class="dcinput" @bind="_fromNumber" placeholder="+15551234567" />
+                            <input class="dcinput" @bind="Vm.FromNumber" placeholder="+15551234567" />
                         </div>
                     </div>
                 }
                 <div class="dcfield stream-field">
                     <label>Endpoint override <small>(optional)</small></label>
-                    <input class="dcinput" @bind="_endpoint" placeholder="Leave empty for the provider default" />
+                    <input class="dcinput" @bind="Vm.Endpoint" placeholder="Leave empty for the provider default" />
                 </div>
 
                 <div class="form-actions">
-                    <button class="dcbtn" @onclick="@(() => _showForm = false)">Cancel</button>
-                    <button class="dcbtn primary" disabled="@(_saving || string.IsNullOrWhiteSpace(_name))"
-                            @onclick="SaveAsync">
-                        @(_saving ? "Saving…" : _editingId is null ? "Add provider" : "Save changes")
+                    <button class="dcbtn" @onclick="Vm.CloseForm">Cancel</button>
+                    <button class="dcbtn primary" disabled="@(Vm.Saving || string.IsNullOrWhiteSpace(Vm.Name))"
+                            @onclick="Vm.SaveAsync">
+                        @(Vm.Saving ? "Saving…" : Vm.EditingId is null ? "Add provider" : "Save changes")
                     </button>
                 </div>
             </section>
@@ -242,333 +240,14 @@
     }
 </div>
 
+
 @code {
-    private IReadOnlyList<CommunicationProviderView> _providers = Array.Empty<CommunicationProviderView>();
-    private IReadOnlyList<ProjectSummaryView> _projects = Array.Empty<ProjectSummaryView>();
-    private IReadOnlyList<ProjectSecretView> _secrets = Array.Empty<ProjectSecretView>();
-    private bool _loading = true;
-    private string? _loadError;
-    private string? _message;
-    private bool _messageIsError;
-    private Guid? _confirmDeleteId;
-
-    // Add/edit form state.
-    private bool _showForm;
-    private bool _saving;
-    private Guid? _editingId;
-    private string _channel = "email";
-    private string _kind = "postmark";
-    private string _name = "";
-    private bool _enabled = true;
-    private string _authType = "none";
-    private string _authHeaderName = "";
-    private Guid? _vaultProjectId;
-    private string _secretName = "";
-    private string _fromEmail = "";
-    private string _fromName = "";
-    private string _messageStream = "outbound";
-    private string _accountSid = "";
-    private string _fromNumber = "";
-    private string _endpoint = "";
-
-    // Test-send state.
-    private Guid? _testProviderId;
-    private string _testRecipient = "";
-    private bool _testSending;
+    protected override void OnInitialized()
+        => Vm.Attach(() => InvokeAsync(StateHasChanged));
 
     protected override async Task OnInitializedAsync()
-    {
-        Ui.Set("Settings", "Communications");
-        await LoadAsync();
-    }
+        => await Vm.LoadAsync();
 
-    private async Task LoadAsync()
-    {
-        _loading = true;
-        _loadError = null;
-        try
-        {
-            _providers = await InScopeAsync<CommunicationProviderService, IReadOnlyList<CommunicationProviderView>>(
-                service => service.ListAsync());
-            _projects = await InScopeAsync<IPlaceContextService, IReadOnlyList<ProjectSummaryView>>(
-                service => service.GetProjectsAsync());
-        }
-        catch (Exception ex) { _loadError = ex.Message; }
-        finally { _loading = false; }
-    }
-
-    private async Task ReloadAsync()
-        => _providers = await InScopeAsync<CommunicationProviderService, IReadOnlyList<CommunicationProviderView>>(
-            service => service.ListAsync());
-
-    private void Report(string message, bool isError = false)
-        => (_message, _messageIsError) = (message, isError);
-
-    private static string[] KindsForChannel(string channel)
-        => channel == "sms" ? ["twilio"] : ["postmark", "sendgrid"];
-
-    private static string KindLabel(string kind) => kind switch
-    {
-        "postmark" => "Postmark",
-        "sendgrid" => "SendGrid",
-        "twilio" => "Twilio",
-        _ => kind,
-    };
-
-    private static string ChannelLabel(string channel)
-        => channel == "sms" ? "SMS" : "Email";
-
-    private static string DefaultHeaderName(string kind)
-        => kind == "postmark" ? "X-Postmark-Server-Token" : "";
-
-    private void ChannelChanged(ChangeEventArgs args)
-    {
-        _channel = args.Value?.ToString() ?? "email";
-        if (!KindsForChannel(_channel).Contains(_kind))
-            _kind = KindsForChannel(_channel)[0];
-        if (_authType == "header")
-            _authHeaderName = DefaultHeaderName(_kind);
-    }
-
-    private void KindChanged(ChangeEventArgs args)
-    {
-        _kind = args.Value?.ToString() ?? "postmark";
-        if (_authType == "header")
-            _authHeaderName = DefaultHeaderName(_kind);
-    }
-
-    private void AuthTypeChanged(ChangeEventArgs args)
-    {
-        _authType = args.Value?.ToString() ?? "none";
-        if (_authType == "header" && string.IsNullOrWhiteSpace(_authHeaderName))
-            _authHeaderName = DefaultHeaderName(_kind);
-    }
-
-    private async Task ProjectChanged(ChangeEventArgs args)
-    {
-        _vaultProjectId = Guid.TryParse(args.Value?.ToString(), out var id) ? id : null;
-        _secretName = "";
-        await LoadSecretsAsync();
-    }
-
-    private async Task LoadSecretsAsync()
-    {
-        _secrets = _vaultProjectId is { } id
-            ? await InScopeAsync<IPlaceContextService, IReadOnlyList<ProjectSecretView>>(
-                service => service.ListProjectSecretsAsync(id))
-            : Array.Empty<ProjectSecretView>();
-    }
-
-    private void ResetForm()
-    {
-        _editingId = null;
-        _channel = "email";
-        _kind = "postmark";
-        _name = "";
-        _enabled = true;
-        _authType = "none";
-        _authHeaderName = "";
-        _vaultProjectId = null;
-        _secretName = "";
-        _secrets = Array.Empty<ProjectSecretView>();
-        _fromEmail = "";
-        _fromName = "";
-        _messageStream = "outbound";
-        _accountSid = "";
-        _fromNumber = "";
-        _endpoint = "";
-    }
-
-    private void ShowAdd()
-    {
-        ResetForm();
-        _showForm = true;
-    }
-
-    private async Task StartEdit(CommunicationProviderView provider)
-    {
-        ResetForm();
-        _editingId = provider.Id;
-        _channel = provider.Channel;
-        _kind = provider.Kind;
-        _name = provider.Name;
-        _enabled = provider.Enabled;
-        _authType = provider.AuthType;
-        _authHeaderName = provider.AuthHeaderName ?? DefaultHeaderName(provider.Kind);
-        _vaultProjectId = provider.VaultProjectId;
-        _secretName = provider.ApiKeySecretName ?? "";
-        _fromEmail = ReadSetting(provider.SettingsJson, "fromEmail");
-        _fromName = ReadSetting(provider.SettingsJson, "fromName");
-        _messageStream = ReadSetting(provider.SettingsJson, "messageStream") is { Length: > 0 } stream
-            ? stream : "outbound";
-        _accountSid = ReadSetting(provider.SettingsJson, "accountSid");
-        _fromNumber = ReadSetting(provider.SettingsJson, "fromNumber");
-        _endpoint = ReadSetting(provider.SettingsJson, "endpoint");
-        _showForm = true;
-        await LoadSecretsAsync();
-    }
-
-    private string BuildSettingsJson()
-    {
-        var settings = new JsonObject();
-        if (_kind is "postmark" or "sendgrid")
-        {
-            settings["fromEmail"] = _fromEmail.Trim();
-            settings["fromName"] = _fromName.Trim();
-            if (_kind == "postmark")
-                settings["messageStream"] = string.IsNullOrWhiteSpace(_messageStream)
-                    ? "outbound" : _messageStream.Trim();
-        }
-        else if (_kind == "twilio")
-        {
-            settings["accountSid"] = _accountSid.Trim();
-            settings["fromNumber"] = _fromNumber.Trim();
-        }
-        if (!string.IsNullOrWhiteSpace(_endpoint))
-            settings["endpoint"] = _endpoint.Trim();
-        return settings.ToJsonString();
-    }
-
-    private CommunicationProviderInput CurrentInput()
-        => new(
-            _channel,
-            _kind,
-            _name,
-            _enabled,
-            _authType,
-            _authType == "header" ? _authHeaderName : null,
-            RequiresSecret(_authType) ? _vaultProjectId : null,
-            RequiresSecret(_authType) ? _secretName : null,
-            BuildSettingsJson());
-
-    private static bool RequiresSecret(string authType)
-        => authType is "bearer" or "header" or "basic";
-
-    private async Task SaveAsync()
-    {
-        _saving = true;
-        _message = null;
-        try
-        {
-            if (_editingId is { } id)
-                await InScopeAsync<CommunicationProviderService>(
-                    async service => { await service.UpdateAsync(id, CurrentInput()); });
-            else
-                await InScopeAsync<CommunicationProviderService>(
-                    async service => { await service.CreateAsync(CurrentInput()); });
-            _showForm = false;
-            Report(_editingId is null ? "Provider added." : "Provider updated.");
-            await ReloadAsync();
-        }
-        catch (Exception ex) { Report(ex.Message, isError: true); }
-        finally { _saving = false; }
-    }
-
-    private static CommunicationProviderInput ToInput(CommunicationProviderView provider)
-        => new(
-            provider.Channel, provider.Kind, provider.Name, provider.Enabled,
-            provider.AuthType, provider.AuthHeaderName,
-            provider.VaultProjectId, provider.ApiKeySecretName, provider.SettingsJson);
-
-    private async Task ToggleEnabledAsync(CommunicationProviderView provider)
-    {
-        try
-        {
-            var input = ToInput(provider) with { Enabled = !provider.Enabled };
-            await InScopeAsync<CommunicationProviderService>(
-                async service => { await service.UpdateAsync(provider.Id, input); });
-            Report($"Provider '{provider.Name}' {(input.Enabled ? "enabled" : "disabled")}.");
-            await ReloadAsync();
-        }
-        catch (Exception ex) { Report(ex.Message, isError: true); }
-    }
-
-    private async Task SetDefaultAsync(Guid id)
-    {
-        try
-        {
-            await InScopeAsync<CommunicationProviderService>(
-                async service => { await service.SetDefaultAsync(id); });
-            Report("Default provider updated.");
-            await ReloadAsync();
-        }
-        catch (Exception ex) { Report(ex.Message, isError: true); }
-    }
-
-    private async Task ToggleTwoFactorAsync(CommunicationProviderView provider)
-    {
-        try
-        {
-            await InScopeAsync<CommunicationProviderService>(
-                async service => { await service.SetTwoFactorAsync(provider.Id, !provider.UseForTwoFactor); });
-            Report(provider.UseForTwoFactor
-                ? $"Provider '{provider.Name}' is no longer used for two-factor codes."
-                : $"Provider '{provider.Name}' now delivers two-factor codes.");
-            await ReloadAsync();
-        }
-        catch (Exception ex) { Report(ex.Message, isError: true); }
-    }
-
-    private async Task DeleteAsync(Guid id)
-    {
-        try
-        {
-            await InScopeAsync<CommunicationProviderService>(service => service.DeleteAsync(id));
-            _confirmDeleteId = null;
-            Report("Provider deleted.");
-            await ReloadAsync();
-        }
-        catch (Exception ex) { Report(ex.Message, isError: true); }
-    }
-
-    private void StartTest(CommunicationProviderView provider)
-    {
-        _confirmDeleteId = null;
-        _testProviderId = _testProviderId == provider.Id ? null : provider.Id;
-        _testRecipient = "";
-    }
-
-    private async Task SendTestAsync(Guid id)
-    {
-        _testSending = true;
-        _message = null;
-        try
-        {
-            var delivery = await InScopeAsync<DatabaseCommunicationSender, ClientMessageDelivery>(
-                sender => sender.SendTestAsync(id, _testRecipient.Trim()));
-            Report($"Test message sent via {delivery.Provider}.");
-            _testProviderId = null;
-        }
-        catch (Exception ex) { Report(ex.Message, isError: true); }
-        finally { _testSending = false; }
-    }
-
-    private static string ReadSetting(string json, string key)
-    {
-        try
-        {
-            using var document = JsonDocument.Parse(
-                string.IsNullOrWhiteSpace(json) ? "{}" : json);
-            return document.RootElement.TryGetProperty(key, out var value)
-                && value.ValueKind == JsonValueKind.String
-                    ? value.GetString() ?? ""
-                    : "";
-        }
-        catch (JsonException) { return ""; }
-    }
-
-    private async Task<TResult> InScopeAsync<TService, TResult>(Func<TService, Task<TResult>> action)
-        where TService : notnull
-    {
-        using var scope = ScopeFactory.CreateScope();
-        return await action(scope.ServiceProvider.GetRequiredService<TService>());
-    }
-
-    private async Task InScopeAsync<TService>(Func<TService, Task> action)
-        where TService : notnull
-    {
-        using var scope = ScopeFactory.CreateScope();
-        await action(scope.ServiceProvider.GetRequiredService<TService>());
-    }
-
+    public void Dispose()
+        => Vm.Detach();
 }

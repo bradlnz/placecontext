@@ -1,10 +1,9 @@
 @page "/settings/locality"
+@implements IDisposable
 @layout PlaceContext.Host.Components.Layout.SettingsLayout
 @attribute [Authorize(Policy = Policies.DefaultAdmin)]
-@inject PlaceContext.Infrastructure.Tenancy.ITenantStore Tenants
-@inject PlaceContext.Application.Ports.ICurrentTenant Tenant
-@inject PortalUiState Ui
-@inject NavigationManager Nav
+@using PlaceContext.Host.Components.ViewModels
+@inject LocalitySettingsViewModel Vm
 
 <PageTitle>placecontext — Locality</PageTitle>
 
@@ -19,7 +18,7 @@
     <div class="dccard card">
         <div class="dcfield tz-field">
             <label>Workspace timezone <span class="code code-gap">IANA</span></label>
-            <select class="dcinput tz-input" @bind="_tz">
+            <select class="dcinput tz-input" @bind="Vm.TimeZoneId">
                 @foreach (var zone in LocalityTimeZones.All)
                 {
                     <option value="@zone">@zone</option>
@@ -27,14 +26,14 @@
             </select>
         </div>
         <div class="now-row">
-            Now in <span class="mono">@_tz</span>:
-            <span class="mono-accent">@PreviewNow()</span>
+            Now in <span class="mono">@Vm.TimeZoneId</span>:
+            <span class="mono-accent">@Vm.PreviewNow()</span>
         </div>
         <div class="actions">
-            <button class="dcbtn primary" disabled="@_busy" @onclick="SaveAsync">@(_busy ? "Saving…" : "Save timezone")</button>
-            @if (_message is not null)
+            <button class="dcbtn primary" disabled="@Vm.Busy" @onclick="@(() => Vm.SaveAsync())">@(Vm.Busy ? "Saving…" : "Save timezone")</button>
+            @if (Vm.Message is not null)
             {
-                <span class="msg">@_message</span>
+                <span class="msg">@Vm.Message</span>
             }
         </div>
         <div class="dchint">
@@ -45,35 +44,11 @@
 </div>
 
 @code {
-    private string _tz = "UTC";
-    private bool _busy;
-    private string? _message;
-
     protected override void OnInitialized()
     {
-        Ui.Set("Locality", "workspace timezone — schedules and displayed times obey it");
-        _tz = Tenant.TimeZoneId;
+        Vm.Attach(() => InvokeAsync(StateHasChanged));
+        Vm.Initialize();
     }
 
-    private string PreviewNow()
-    {
-        try { return TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, TimeZoneInfo.FindSystemTimeZoneById(_tz)).ToString("ddd HH:mm"); }
-        catch { return "unknown timezone"; }
-    }
-
-    private async Task SaveAsync()
-    {
-        _busy = true;
-        _message = null;
-        try
-        {
-            _ = TimeZoneInfo.FindSystemTimeZoneById(_tz.Trim()); // throws on unknown ids
-            await Tenants.SetTimeZoneAsync(Tenant.TenantId, _tz.Trim());
-            _message = "Saved — reloading…";
-            Nav.NavigateTo("/settings/locality", forceLoad: true);
-        }
-        catch (TimeZoneNotFoundException) { _message = $"Unknown timezone id '{_tz}'."; }
-        catch (Exception ex) { _message = ex.Message; }
-        finally { _busy = false; }
-    }
+    public void Dispose() => Vm.Detach();
 }

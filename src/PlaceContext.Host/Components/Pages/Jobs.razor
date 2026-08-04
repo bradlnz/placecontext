@@ -3,8 +3,6 @@
 @layout PlaceContext.Host.Components.Layout.ProjectLayout
 @implements IDisposable
 @inject JobsViewModel Vm
-@inject PortalUiState Ui
-@inject NavigationManager Nav
 @using PlaceContext.Host.Components.ViewModels
 @using PlaceContext.Host.Components.ViewModels.Helpers
 
@@ -23,7 +21,7 @@ else
                 <p>Build reusable workloads, run them on demand, and connect them to automated triggers.</p>
             </div>
             <div class="head-actions">
-                <button class="dcbtn" @onclick="@(() => Nav.NavigateTo($"/project/{ProjectId}/tests"))">View tests</button>
+                <button class="dcbtn" @onclick="Vm.NavigateToTests">View tests</button>
                 <button class="dcbtn primary" @onclick="() => Vm.NewJob()">+ New job</button>
             </div>
         </header>
@@ -47,10 +45,10 @@ else
             <section class="summary-strip" aria-label="Job summary">
                 <div class="summary-count"><strong>@Vm.Jobs.Count</strong><span>jobs</span></div>
                 <div class="summary-count"><strong>@Vm.Jobs.Sum(job => job.ShardCount)</strong><span>shards</span></div>
-                <div class="summary-count automated"><strong>@AutomatedJobCount</strong><span>automated</span></div>
-                <div class="summary-count"><strong>@EnabledTriggerCount</strong><span>active triggers</span></div>
-                <div class="summary-progress" title="@AutomationPercent% of jobs have an active trigger">
-                    <span style="width:@AutomationPercent%"></span>
+                <div class="summary-count automated"><strong>@Vm.AutomatedJobCount</strong><span>automated</span></div>
+                <div class="summary-count"><strong>@Vm.EnabledTriggerCount</strong><span>active triggers</span></div>
+                <div class="summary-progress" title="@Vm.AutomationPercent% of jobs have an active trigger">
+                    <span style="width:@Vm.AutomationPercent%"></span>
                 </div>
             </section>
 
@@ -61,30 +59,30 @@ else
                         <strong>Job catalogue</strong>
                         <span>@Vm.Jobs.Count reusable workload@(Vm.Jobs.Count == 1 ? "" : "s")</span>
                     </div>
-                    <span class="suite-result">@AutomatedJobCount automated</span>
+                    <span class="suite-result">@Vm.AutomatedJobCount automated</span>
                 </header>
 
                 <div class="job-rows">
                     @foreach (var job in Vm.Jobs)
                     {
-                        var triggerCount = EnabledTriggersFor(job.Id);
+                        var triggerCount = Vm.EnabledTriggersFor(job.Id);
                         var isRunning = Vm.IsRunningJob(job.Id);
                         <article class="job-row @(isRunning ? "running" : null)"
                                  @onclick="@(() => Vm.OpenJobAsync(job))">
-                            <div class="status-icon @(isRunning ? "is-running" : null)" aria-label="@(isRunning ? "Running" : WorkloadLabel(job))">
+                            <div class="status-icon @(isRunning ? "is-running" : null)" aria-label="@Vm.JobStatusAria(isRunning, job)">
                                 @if (isRunning)
                                 {
                                     <span class="spinner"></span>
                                 }
                                 else
                                 {
-                                    <span>@(job.MapSourceKind == "code" ? "⌁" : "□")</span>
+                                    <span>@(Vm.IsCodeJob(job) ? "⌁" : "□")</span>
                                 }
                             </div>
                             <div class="job-copy">
                                 <div class="job-title">
                                     <strong>@job.Name</strong>
-                                    <span class="job-chip">@WorkloadLabel(job)</span>
+                                    <span class="job-chip">@JobsViewModel.WorkloadLabel(job)</span>
                                     <span class="job-chip">@job.ReturnType output</span>
                                     @if (job.ReduceSourceKind is not null)
                                     {
@@ -97,7 +95,7 @@ else
                                 </div>
                                 <div class="job-detail">
                                     <span>@(string.IsNullOrWhiteSpace(job.Description) ? "No description" : job.Description)</span>
-                                    <span class="job-facts">@job.ShardCount shard@(job.ShardCount == 1 ? "" : "s") · concurrency @job.ConcurrencyLimit · updated @job.UpdatedAt.ToWorkspaceTime().ToString("yyyy-MM-dd")</span>
+                                    <span class="job-facts">@Vm.JobFacts(job)</span>
                                 </div>
                             </div>
                             <div class="job-actions">
@@ -113,11 +111,11 @@ else
                                             @onclick="@(() => Vm.RunJobAsync(job.Id))">▶</button>
                                     <button class="icon-action" title="Edit job" aria-label="Edit @job.Name"
                                             @onclick:stopPropagation="true" @onclick="@(() => Vm.OpenJobAsync(job))">✎</button>
-                                    @if (job.MapSourceKind == "code")
+                                    @if (Vm.IsCodeJob(job))
                                     {
                                         <button class="icon-action code-action" title="Open code editor" aria-label="Open code editor for @job.Name"
                                                 @onclick:stopPropagation="true"
-                                                @onclick="@(() => Nav.NavigateTo($"/project/{ProjectId}/jobs/{job.Id}"))">&lt;/&gt;</button>
+                                                @onclick="@(() => Vm.NavigateToJob(job.Id))">&lt;/&gt;</button>
                                     }
                                     <button class="icon-action danger-action" title="Delete job" aria-label="Delete @job.Name"
                                             @onclick:stopPropagation="true" @onclick="@(() => Vm.ConfirmDeleteId = job.Id)">⋯</button>
@@ -155,13 +153,13 @@ else
         @if (Vm.EditJobId.HasValue)
         {
             <div class="dctabs job-tabs">
-                <button class="dctab @(Vm.EditorTab == "details" ? "active" : "")" @onclick="@(() => Vm.SetEditorTab("details"))">Details</button>
-                <button class="dctab @(Vm.EditorTab == "runs" ? "active" : "")" @onclick="@(() => Vm.SwitchToRunsTabAsync())">Runs<span class="n">@(Vm.Runs?.Count ?? 0)</span></button>
-                <button class="dctab @(Vm.EditorTab == "triggers" ? "active" : "")" @onclick="@(() => Vm.SetEditorTab("triggers"))">Triggers<span class="n">@Vm.JobTriggers().Count()</span></button>
+                <button class="dctab @(Vm.IsDetailsTab ? "active" : "")" @onclick="@(() => Vm.SetEditorTab("details"))">Details</button>
+                <button class="dctab @(Vm.IsRunsTab ? "active" : "")" @onclick="@(() => Vm.SwitchToRunsTabAsync())">Runs<span class="n">@(Vm.Runs?.Count ?? 0)</span></button>
+                <button class="dctab @(Vm.IsTriggersTab ? "active" : "")" @onclick="@(() => Vm.SetEditorTab("triggers"))">Triggers<span class="n">@Vm.JobTriggers().Count()</span></button>
             </div>
         }
 
-        @if (Vm.EditorTab == "runs" && Vm.EditJobId.HasValue)
+        @if (Vm.IsRunsTab && Vm.EditJobId.HasValue)
         {
             @* ── Runs tab: execution results, with a run's full detail inline ─────────────────── *@
             <div class="dcslide-body slide-body-scroll">
@@ -176,8 +174,8 @@ else
                                 @foreach (var t in Vm.JobTelemetry.Reverse().TakeLast(24))
                                 {
                                     var pct = maxMs > 0 ? Math.Max(6, (t.DurationMs ?? 0) / maxMs * 100) : 6;
-                                    <div title="@(t.Status ?? "running") · @JobsViewModel.FormatMs(t.DurationMs)"
-                                         class="otel-bar" style="height:@(pct)%; background:@JobsViewModel.StatusColor(t.Status)"></div>
+                                    <div title="@Vm.OtelTitle(t)"
+                                         class="otel-bar" style="height:@(pct)%; background:@Vm.Presentation.StatusColor(t.Status)"></div>
                                 }
                             </div>
                             <div class="otel-legend">
@@ -186,7 +184,7 @@ else
                                     .Select(g => (Outcome: g.Key, Count: g.Count()))
                                     .OrderByDescending(g => g.Count))
                                 {
-                                    <span style="color:@JobsViewModel.StatusColor(outcome)">@count @outcome shard(s)</span>
+                                    <span style="color:@Vm.Presentation.StatusColor(outcome)">@count @outcome shard(s)</span>
                                 }
                             </div>
                         </div>
@@ -203,11 +201,11 @@ else
                             {
                                 <div class="dccard card-pad">
                                     <div class="run-row-head" @onclick="@(() => Vm.OpenRunDetailAsync(run.Id))">
-                                        <span class="status-badge-sm" style="color:@JobsViewModel.StatusColor(run.Status); background:@JobsViewModel.StatusBg(run.Status)">
+                                        <span class="status-badge-sm" style="color:@Vm.Presentation.StatusColor(run.Status); background:@Vm.Presentation.StatusBackground(run.Status)">
                                             @run.Status
                                         </span>
                                         <span class="run-time">
-                                            @run.StartedAt.ToWorkspaceTime().ToString("yyyy-MM-dd HH:mm")
+                                            @Vm.Presentation.DateTime(run.StartedAt)
                                         </span>
                                         <span class="meta-11">
                                             ✓ @run.SucceededShards  @(run.PartialShards > 0 ? $"~ {run.PartialShards}" : "")  @(run.FailedShards > 0 ? $"✗ {run.FailedShards}" : "")
@@ -215,10 +213,10 @@ else
                                         @if (run.FinishedAt.HasValue)
                                         {
                                             <span class="meta-mono">
-                                                @JobsViewModel.FormatDuration(run.StartedAt, run.FinishedAt.Value)
+                                                @Vm.Presentation.Duration(run.StartedAt, run.FinishedAt.Value)
                                             </span>
                                         }
-                                        @if (run.Status is "Queued" or "Running")
+                                        @if (Vm.IsQueuedOrRunning(run.Status))
                                         {
                                             <button class="dcbtn btn-2-8 text-bad" @onclick:stopPropagation="true"
                                                     @onclick="@(() => Vm.CancelRunAsync(run.Id))">Cancel</button>
@@ -234,7 +232,7 @@ else
                     <button class="dcbtn mb-12" @onclick="() => Vm.CloseRunDetail()">← All runs</button>
 
                     <div class="run-detail-head">
-                        <span class="status-badge-lg" style="color:@JobsViewModel.StatusColor(Vm.RunDetail.Status); background:@JobsViewModel.StatusBg(Vm.RunDetail.Status)">
+                        <span class="status-badge-lg" style="color:@Vm.Presentation.StatusColor(Vm.RunDetail.Status); background:@Vm.Presentation.StatusBackground(Vm.RunDetail.Status)">
                             @Vm.RunDetail.Status
                         </span>
                         <span class="meta-mono">@Vm.RunDetail.Id</span>
@@ -249,7 +247,7 @@ else
                         }
                     </div>
 
-                    @if (Vm.RunDetail.Status is "Queued" or "Running")
+                    @if (Vm.IsQueuedOrRunning(Vm.RunDetail.Status))
                     {
                         <button class="dcbtn text-bad mb-8" @onclick="@(() => Vm.CancelRunAsync(Vm.RunDetail.Id))">Cancel run</button>
                     }
@@ -274,7 +272,7 @@ else
                                         <span class="output-kind">@art.Kind</span>
                                         <a href="@($"/runs/{art.RunId}/artifacts/{art.Id}")" target="_blank" rel="noopener"
                                            class="output-link">@art.Title ↗</a>
-                                        <span class="hint-10-5">@JobsViewModel.FormatBytes(art.SizeBytes)</span>
+                                        <span class="hint-10-5">@Vm.Presentation.Bytes(art.SizeBytes)</span>
                                     </div>
                                 }
                             </div>
@@ -286,15 +284,15 @@ else
                         <div class="mb-14">
                             <div class="shard-head">
                                 <span>Shard @shard.Index</span>
-                                <span class="shard-badge" style="color:@JobsViewModel.StatusColor(shard.Outcome); background:@JobsViewModel.StatusBg(shard.Outcome)">
+                                <span class="shard-badge" style="color:@Vm.Presentation.StatusColor(shard.Outcome); background:@Vm.Presentation.StatusBackground(shard.Outcome)">
                                     @shard.Outcome
                                 </span>
                                 <span class="meta-11">exit @shard.ExitCode</span>
                             </div>
                             @if (shard.Artifact is not null)
                             {
-                                <pre class="artifact-pre">@JobsViewModel.PrettyJson(shard.Artifact)</pre>
-                                @if (ArtifactChart.TrySvg(shard.Artifact, out var shardChart))
+                                <pre class="artifact-pre">@Vm.Presentation.Json(shard.Artifact)</pre>
+                                @if (Vm.TryArtifactSvg(shard.Artifact, out var shardChart))
                                 {
                                     <div class="chart-label">chart <span class="text-3">(from the artifact's JSON)</span></div>
                                     @((MarkupString)shardChart)
@@ -316,10 +314,10 @@ else
                             }
                             @if (!string.IsNullOrWhiteSpace(shard.Log))
                             {
-                                <details class="mt-4" open="@(Vm.RunDetail.Status == "Running")">
+                                <details class="mt-4" open="@Vm.IsRunning(Vm.RunDetail.Status)">
                                     <summary class="log-summary">
                                         Log
-                                        @if (Vm.RunDetail.Status == "Running")
+                                        @if (Vm.IsRunning(Vm.RunDetail.Status))
                                         {
                                             <span class="live-badge">LIVE</span>
                                         }
@@ -343,7 +341,7 @@ else
                             @if (reduce.Artifact is not null)
                             {
                                 <pre class="artifact-pre-lg">@JobsViewModel.PrettyJson(reduce.Artifact)</pre>
-                                @if (ArtifactChart.TrySvg(reduce.Artifact, out var reduceChart))
+                                @if (Vm.TryArtifactSvg(reduce.Artifact, out var reduceChart))
                                 {
                                     <div class="chart-label">chart <span class="text-3">(from the artifact's JSON)</span></div>
                                     @((MarkupString)reduceChart)
@@ -361,10 +359,10 @@ else
                             }
                             @if (!string.IsNullOrWhiteSpace(reduce.Log))
                             {
-                                <details class="mt-4" open="@(Vm.RunDetail.Status == "Running")">
+                                <details class="mt-4" open="@Vm.IsRunning(Vm.RunDetail.Status)">
                                     <summary class="log-summary">
                                         Reduce log
-                                        @if (Vm.RunDetail.Status == "Running")
+                                        @if (Vm.IsRunning(Vm.RunDetail.Status))
                                         {
                                             <span class="live-badge">LIVE</span>
                                         }
@@ -377,7 +375,7 @@ else
                 }
             </div>
         }
-        else if (Vm.EditorTab == "triggers" && Vm.EditJobId.HasValue)
+        else if (Vm.IsTriggersTab && Vm.EditJobId.HasValue)
         {
             @* ── Triggers tab: this job's triggers, a trigger's detail inline, and the add form ── *@
             <div class="dcslide-body slide-body-col">
@@ -397,17 +395,17 @@ else
 
                     <div class="dccard trigger-detail-card">
                         <div><span class="text-3">Kind:</span> @sel.Kind</div>
-                        @if (sel.Kind == "Schedule")
+                        @if (Vm.IsScheduleTrigger(sel.Kind))
                         {
                             <div><span class="text-3">Cron:</span> <code>@sel.CronExpression</code></div>
-                            <div><span class="text-3">Next run:</span> @(sel.NextRunAt?.ToWorkspaceTime().ToString("yyyy-MM-dd HH:mm") ?? "—")</div>
+                            <div><span class="text-3">Next run:</span> @Vm.NextRunLabel(sel)</div>
                         }
                         else
                         {
                             <div><span class="text-3">Event:</span> <code>@sel.EventName</code></div>
                         }
-                        <div><span class="text-3">Last fired:</span> @(sel.LastFiredAt?.ToWorkspaceTime().ToString("yyyy-MM-dd HH:mm") ?? "never")</div>
-                        <div><span class="text-3">Created:</span> @sel.CreatedAt.ToWorkspaceTime().ToString("yyyy-MM-dd HH:mm")</div>
+                        <div><span class="text-3">Last fired:</span> @Vm.LastFiredLabel(sel)</div>
+                        <div><span class="text-3">Created:</span> @Vm.Presentation.DateTime(sel.CreatedAt)</div>
                     </div>
 
                     <div class="section-label-mt4">Execution results</div>
@@ -422,9 +420,9 @@ else
                             {
                                 <div class="dccard run-row"
                                      @onclick="@(() => Vm.OpenRunDetailFromTriggerAsync(run.Id))">
-                                    <span class="status-badge-sm" style="color:@JobsViewModel.StatusColor(run.Status); background:@JobsViewModel.StatusBg(run.Status)">@run.Status</span>
+                                <span class="status-badge-sm" style="color:@Vm.Presentation.StatusColor(run.Status); background:@Vm.Presentation.StatusBackground(run.Status)">@run.Status</span>
                                     <span class="run-time">
-                                        @run.StartedAt.ToWorkspaceTime().ToString("yyyy-MM-dd HH:mm")
+                                        @Vm.Presentation.DateTime(run.StartedAt)
                                     </span>
                                     <span class="meta-11">✓ @run.SucceededShards @(run.FailedShards > 0 ? $"✗ {run.FailedShards}" : "")</span>
                                 </div>
@@ -446,12 +444,12 @@ else
                                     @t.Name <span class="trigger-kind">· @t.Kind</span>
                                 </div>
                                 <div class="trigger-meta">
-                                    @if (t.Kind == "Schedule")
+                                    @if (Vm.IsScheduleTrigger(t.Kind))
                                     {
                                         <span>@t.CronExpression</span>
                                         @if (t.NextRunAt.HasValue)
                                         {
-                                            <span class="ml-8">next @t.NextRunAt.Value.ToWorkspaceTime().ToString("yyyy-MM-dd HH:mm")</span>
+                                            <span class="ml-8">next @Vm.Presentation.DateTime(t.NextRunAt.Value)</span>
                                         }
                                     }
                                     else
@@ -460,7 +458,7 @@ else
                                     }
                                     @if (t.LastFiredAt.HasValue)
                                     {
-                                        <span class="ml-8">last @t.LastFiredAt.Value.ToWorkspaceTime().ToString("MM-dd HH:mm")</span>
+                                        <span class="ml-8">last @Vm.Presentation.Format(t.LastFiredAt.Value, "MM-dd HH:mm")</span>
                                     }
                                 </div>
                             </div>
@@ -487,7 +485,7 @@ else
                                     <option value="Event">Event</option>
                                 </select>
                             </div>
-                            @if (Vm.TrKind == "Schedule")
+                            @if (Vm.IsScheduleEditor)
                             {
                                 <div class="field-150">
                                     <label class="field-label">Cron</label>
@@ -536,14 +534,14 @@ else
                 <div class="workload-head">
                     <span class="dcform-title">Workload</span>
                     <div class="dcseg">
-                        <button type="button" class="@(Vm.EdMapSourceKind == "image" ? "on" : "")"
-                                @onclick="@(() => Vm.EdMapSourceKind = "image")">Container image</button>
-                        <button type="button" class="@(Vm.EdMapSourceKind == "code" ? "on" : "")"
-                                @onclick="@(() => Vm.EdMapSourceKind = "code")">Inline code</button>
+                        <button type="button" class="@(Vm.IsImageMap ? "on" : "")"
+                                @onclick="Vm.SelectImageMap">Container image</button>
+                        <button type="button" class="@(Vm.IsCodeMap ? "on" : "")"
+                                @onclick="Vm.SelectCodeMap">Inline code</button>
                     </div>
                 </div>
 
-                @if (Vm.EdMapSourceKind == "image")
+                @if (Vm.IsImageMap)
                 {
                     <div class="dcfield">
                         <label>Image <span class="req">*</span></label>
@@ -575,7 +573,7 @@ else
                         @if (Vm.EditJobId is { } editingJobId)
                         {
                             <button class="dcbtn open-editor-btn"
-                                    @onclick="@(() => Nav.NavigateTo($"/project/{ProjectId}/jobs/{editingJobId}"))">
+                                    @onclick="@(() => Vm.NavigateToJob(editingJobId))">
                                 ⤷ Open code editor
                                 <span class="hint-10-5">@Math.Max(Vm.EdMapFiles.Count, 1) file(s)</span>
                             </button>
@@ -597,7 +595,7 @@ else
                         {
                             <div class="files-note">
                                 <span>This job has @Vm.EdMapFiles.Count files — the editor above changes only the entrypoint; the rest are kept on save:</span>
-                                @foreach (var f in Vm.EdMapFiles.Where(f => f.Path != (Vm.EdMapEntrypoint == "" ? JobsViewModel.DefaultEntrypointFor(Vm.EdMapRuntimeId) : Vm.EdMapEntrypoint)))
+                                @foreach (var f in Vm.EdMapFiles.Where(f => f.Path != Vm.CurrentEntrypoint))
                                 {
                                     <span class="file-chip">@f.Path</span>
                                 }
@@ -615,10 +613,10 @@ else
                         @if (Vm.DeclaredParams().Count > 0)
                         {
                             <span class="payload-mode-toggle">
-                                <button type="button" class="dcbtn mode-btn" style="@(Vm.EdPayloadMode == "form" ? "color:var(--brand-2); border-color:var(--brand-2)" : "")"
-                                        @onclick="@(() => Vm.SwitchPayloadMode("form"))">form</button>
-                                <button type="button" class="dcbtn mode-btn" style="@(Vm.EdPayloadMode == "raw" ? "color:var(--brand-2); border-color:var(--brand-2)" : "")"
-                                        @onclick="@(() => Vm.SwitchPayloadMode("raw"))">raw JSON</button>
+                                <button type="button" class="dcbtn mode-btn" style="@(Vm.IsPayloadForm ? "color:var(--brand-2); border-color:var(--brand-2)" : "")"
+                                        @onclick="Vm.SelectPayloadForm">form</button>
+                                <button type="button" class="dcbtn mode-btn" style="@(Vm.IsPayloadRaw ? "color:var(--brand-2); border-color:var(--brand-2)" : "")"
+                                        @onclick="Vm.SelectPayloadRaw">raw JSON</button>
                             </span>
                         }
                         else
@@ -626,7 +624,7 @@ else
                             <span class="code ml-5">one JSON per line — each line becomes a shard</span>
                         }
                     </label>
-                    @if (Vm.EdPayloadMode == "form" && Vm.DeclaredParams().Count > 0)
+                    @if (Vm.IsPayloadForm && Vm.DeclaredParams().Count > 0)
                     {
                         @foreach (var p in Vm.DeclaredParams())
                         {
@@ -669,10 +667,10 @@ else
                                     <option value="checkbox">checkbox</option>
                                     <option value="file">file upload</option>
                                 </select>
-                                @if (Vm.EdParams[idx].Type is "select" or "file")
+                                @if (Vm.ParameterNeedsOptions(Vm.EdParams[idx]))
                                 {
                                     <input class="dcinput param-options-input"
-                                           placeholder="@(Vm.EdParams[idx].Type == "file" ? "accepted types, e.g. application/pdf, image/*" : "options, comma-separated")"
+                                           placeholder="@Vm.ParameterOptionsPlaceholder(Vm.EdParams[idx])"
                                            @bind="Vm.EdParams[idx].OptionsRaw" />
                                 }
                                 <label class="param-required-label">
@@ -703,7 +701,7 @@ else
                     <div class="vault-head">
                         <span class="text-3-12">Injected at run time (from Vault)</span>
                         <button type="button" class="link-btn"
-                                @onclick="@(() => Nav.NavigateTo($"/project/{ProjectId}/secrets"))">manage in Vault →</button>
+                                @onclick="Vm.NavigateToSecrets">manage in Vault →</button>
                     </div>
                     @if (Vm.VaultSecrets is { Count: > 0 })
                     {
@@ -733,11 +731,7 @@ else
                         <div class="mcp-list">
                             @foreach (var mcp in Vm.ProjectMcpConnections)
                             {
-                                var connId = mcp.Id.ToString();
-                                var isEnabled = Vm.EdMcpConnectionIds.Contains(connId);
-                                var isOAuth = mcp.AuthType == "oauth";
-                                var isExpired = mcp.OAuthTokenExpiresAt.HasValue && mcp.OAuthTokenExpiresAt.Value <= DateTimeOffset.UtcNow;
-                                var isConnected = mcp.LastStatus?.StartsWith("oauth:connected") == true;
+                                var isEnabled = Vm.IsMcpEnabled(mcp.Id);
 
                                 <label class="mcp-item @(isEnabled ? "" : "disabled")">
                                     <input type="checkbox" class="checkbox-15 mcp-checkbox"
@@ -746,14 +740,14 @@ else
                                     <span class="mcp-name">@mcp.Name</span>
                                     <span class="mcp-badge">@mcp.Transport</span>
                                     <span class="mcp-url">@mcp.EndpointUrl</span>
-                                    @if (isOAuth)
+                                    @if (Vm.IsMcpOAuth(mcp))
                                     {
-                                        <span class="mcp-badge oauth @(isExpired ? "expired" : isConnected ? "active" : "")">
-                                            @(isExpired ? "token expired" : isConnected ? "oauth connected" : "oauth")
+                                        <span class="mcp-badge oauth @Vm.McpStatusClass(mcp)">
+                                            @Vm.McpStatusLabel(mcp)
                                         </span>
                                         <button type="button" class="dcbtn xs"
-                                                @onclick="@(() => Js.InvokeVoidAsync("open", Vm.GetOAuthUrl(mcp.Id), "_blank"))">
-                                            @(isExpired ? "Reconnect" : "Auth")
+                                                @onclick="@(() => Vm.OpenMcpOAuthAsync(mcp.Id))">
+                                            @Vm.McpAuthLabel(mcp)
                                         </button>
                                     }
                                 </label>
@@ -839,7 +833,7 @@ else
                         @foreach (var (kind, label) in JobsViewModel.PostJobActionChoices)
                         {
                             <label class="action-label">
-                                <input type="checkbox" checked="@Vm.EdPostJobActions.Contains(kind)"
+                                <input type="checkbox" checked="@Vm.IsPostJobActionSelected(kind)"
                                        class="checkbox-15"
                                        @onchange="@(e => Vm.TogglePostJobAction(kind, (bool)e.Value!))" />
                                 @label
@@ -854,7 +848,7 @@ else
         </div>
         }
 
-        @if (Vm.EditorTab == "details")
+        @if (Vm.IsDetailsTab)
         {
             <div class="dcslide-foot">
                 @if (Vm.EditorError is not null)
@@ -917,45 +911,16 @@ else
 
 @code {
     [Parameter] public Guid ProjectId { get; set; }
-    [Inject] private IJSRuntime Js { get; set; } = null!;
-
-    private int EnabledTriggerCount => Vm.Triggers?.Count(trigger => trigger.Enabled) ?? 0;
-    private int AutomatedJobCount => Vm.Jobs?.Count(job => EnabledTriggersFor(job.Id) > 0) ?? 0;
-    private int AutomationPercent => Vm.Jobs is not { Count: > 0 }
-        ? 0
-        : (int)Math.Round(AutomatedJobCount * 100d / Vm.Jobs.Count);
-
-    private int EnabledTriggersFor(Guid jobId) =>
-        Vm.Triggers?.Count(trigger => trigger.JobId == jobId && trigger.Enabled) ?? 0;
-
-    private static string WorkloadLabel(PlaceContext.Application.Dtos.JobView job) =>
-        job.MapSourceKind == "code"
-            ? $"{(string.IsNullOrWhiteSpace(job.MapRuntimeId) ? "code" : job.MapRuntimeId)} code"
-            : "container";
-
     protected override void OnInitialized()
     {
         Vm.Attach(() => InvokeAsync(StateHasChanged));
-        McpOAuthCompleted += async (_, _) =>
-        {
-            await Vm.LoadMcpConnectionsAsync();
-            StateHasChanged();
-        };
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (firstRender)
         {
-            await Js.InvokeVoidAsync("eval", @"
-if (!window.__jobsMcpOAuthListener) {
-    window.__jobsMcpOAuthListener = function(e) {
-        if (e.data && e.data.startsWith && e.data.startsWith('mcp-oauth-')) {
-            DotNet.invokeMethodAsync('PlaceContext.Host', 'OnJobsMcpOAuthCallback', e.data);
-        }
-    };
-    window.addEventListener('message', window.__jobsMcpOAuthListener);
-}");
+            try { await Vm.InitializeOAuthListenerAsync(); } catch { }
         }
     }
 
@@ -971,12 +936,4 @@ if (!window.__jobsMcpOAuthListener) {
         Vm.Detach();
     }
 
-    private static event EventHandler? McpOAuthCompleted;
-
-    [JSInvokable]
-    public static async Task OnJobsMcpOAuthCallback(string message)
-    {
-        McpOAuthCompleted?.Invoke(null, EventArgs.Empty);
-        await Task.CompletedTask;
-    }
 }
