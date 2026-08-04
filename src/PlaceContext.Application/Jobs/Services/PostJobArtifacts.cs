@@ -299,7 +299,13 @@ public static class PostJobArtifacts
             "json" => "application/json",
             "csv" => "text/csv; charset=utf-8",
             "html" or "htm" => "text/html; charset=utf-8",
+            "png" => "image/png",
+            "jpg" or "jpeg" => "image/jpeg",
+            "gif" => "image/gif",
+            "webp" => "image/webp",
             "svg" => "image/svg+xml",
+            "mp4" => "video/mp4",
+            "webm" => "video/webm",
             "txt" or "log" => "text/plain; charset=utf-8",
             _ => "application/octet-stream",
         };
