@@ -109,6 +109,33 @@ public sealed class EfJobRunRepository : IJobRunRepository
         return rows.Select(ToDomain).ToList();
     }
 
+    /// <summary>
+    /// Removes terminal job runs older than the newest <paramref name="keepLatest"/> terminal runs
+    /// for the current tenant. Queued/running rows are never eligible, and the global tenant filter
+    /// prevents retention in one tenant from touching another tenant's history.
+    /// </summary>
+    public async Task<int> TrimToLatestAsync(int keepLatest, CancellationToken ct = default)
+    {
+        if (keepLatest < 0)
+            throw new ArgumentOutOfRangeException(nameof(keepLatest));
+
+        var terminal = await _db.JobRuns
+            .Where(r => r.Status != nameof(JobRunStatus.Queued)
+                     && r.Status != nameof(JobRunStatus.Running))
+            .OrderByDescending(r => r.StartedAt)
+            .ThenByDescending(r => r.Id)
+            .Skip(keepLatest)
+            .ToListAsync(ct);
+
+        if (terminal.Count == 0) return 0;
+
+        _db.JobRuns.RemoveRange(terminal);
+        foreach (var row in terminal)
+            await _cache.RemoveShardResultsJsonAsync(row.Id, ct);
+
+        return terminal.Count;
+    }
+
     private JobRunRow ToRow(JobRun run) => new()
     {
         Id = run.Id,

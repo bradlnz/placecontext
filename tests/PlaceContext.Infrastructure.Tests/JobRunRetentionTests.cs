@@ -40,7 +40,7 @@ public sealed class JobRunRetentionTests
         Assert.Equal(5, removed);
         Assert.Equal(101, await db.JobRuns.CountAsync());
         Assert.NotNull(await db.JobRuns.FindAsync(active.Id));
-        Assert.Null(await db.JobRuns.FindAsync(otherTenant.Id)); // hidden by this tenant's query filter
+        Assert.Null(await db.JobRuns.FirstOrDefaultAsync(r => r.Id == otherTenant.Id)); // hidden by this tenant's query filter
         Assert.Equal(1, await db.JobRuns.IgnoreQueryFilters().CountAsync(r => r.TenantId == otherTenantId));
         Assert.Equal(start.AddMinutes(5), await db.JobRuns
             .Where(r => r.Status != "Queued" && r.Status != "Running")
