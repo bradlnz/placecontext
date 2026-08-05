@@ -95,35 +95,6 @@
             }
         </div>
 
-        @* ── Project switcher — the design's context pill; nav above scopes to this project ── *@
-        <div class="switcher-wrap">
-            <div @onclick="Vm.ToggleSwitcher"
-                 class="switcher-pill">
-                <span class="switcher-dot"></span>
-                <span class="switcher-name">
-                    @(Vm.CurrentProjectName ?? "select project")
-                </span>
-                <span class="switcher-caret">▾</span>
-            </div>
-            @if (Vm.SwitcherOpen)
-            {
-                <div class="switcher-menu">
-                    @foreach (var p in Vm.Projects)
-                    {
-                        <div @onclick="@(() => Vm.SwitchProjectAsync(p))"
-                             class="switcher-item" style="background:@(p.Id == Vm.CurrentProjectId ? "var(--card-2)" : "transparent")">
-                            <span class="switcher-item-dot" style="background:@(p.Id == Vm.CurrentProjectId ? "var(--good)" : "var(--border-2)")"></span>
-                            <span class="switcher-item-name">@p.Name</span>
-                        </div>
-                    }
-                    @if (Vm.Projects.Count == 0)
-                    {
-                        <div class="switcher-empty">No projects yet — <a href="/wiki/getting-started">open the getting-started guide</a>.</div>
-                    }
-                </div>
-            }
-        </div>
-
         <div class="user-bar">
             <AuthorizeView>
                 <Authorized>
@@ -139,19 +110,6 @@
                     <span class="not-signed-in">Not signed in</span>
                 </NotAuthorized>
             </AuthorizeView>
-            <div class="user-actions">
-                <form method="post" action="/auth/logout" class="logout-form">
-                    <AntiforgeryToken />
-                    <button type="submit" title="Sign out" class="icon-btn">
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><path d="M16 17l5-5-5-5"></path><path d="M21 12H9"></path></svg>
-                    </button>
-                </form>
-                <button @onclick="ToggleTheme" title="Switch to @Vm.ThemeSwitchLabel mode"
-                        aria-label="Switch to @Vm.ThemeSwitchLabel mode"
-                        aria-pressed="@Vm.IsThemeLightPressed" class="icon-btn">
-                    @((MarkupString)Vm.ThemeIcon)
-                </button>
-            </div>
         </div>
     </aside>
 
@@ -182,6 +140,50 @@
                     @Vm.RunningCount running
                 </div>
                 <NotificationsBell />
+                <AuthorizeView>
+                    <Authorized>
+                        <div class="topbar-switcher-wrap switcher-wrap">
+                            <div @onclick="Vm.ToggleSwitcher"
+                                 class="topbar-switcher-pill switcher-pill">
+                                <span class="switcher-dot"></span>
+                                <span class="topbar-switcher-name switcher-name">
+                                    @(Vm.CurrentProjectName ?? "select project")
+                                </span>
+                                <span class="topbar-switcher-caret switcher-caret">▾</span>
+                            </div>
+                            @if (Vm.SwitcherOpen)
+                            {
+                                <div class="switcher-menu">
+                                    @foreach (var p in Vm.Projects)
+                                    {
+                                        <div @onclick="@(() => Vm.SwitchProjectAsync(p))"
+                                             class="switcher-item" style="background:@(p.Id == Vm.CurrentProjectId ? "var(--card-2)" : "transparent")">
+                                            <span class="switcher-item-dot" style="background:@(p.Id == Vm.CurrentProjectId ? "var(--good)" : "var(--border-2)")"></span>
+                                            <span class="switcher-item-name">@p.Name</span>
+                                        </div>
+                                    }
+                                    @if (Vm.Projects.Count == 0)
+                                    {
+                                        <div class="switcher-empty">No projects yet — <a href="/wiki/getting-started">open the getting-started guide</a>.</div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                        <div class="user-actions topbar-user-actions">
+                            <form method="post" action="/auth/logout" class="logout-form">
+                                <AntiforgeryToken />
+                                <button type="submit" title="Sign out" class="icon-btn">
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><path d="M16 17l5-5-5-5"></path><path d="M21 12H9"></path></svg>
+                                </button>
+                            </form>
+                            <button @onclick="ToggleTheme" title="Switch to @Vm.ThemeSwitchLabel mode"
+                                    aria-label="Switch to @Vm.ThemeSwitchLabel mode"
+                                    aria-pressed="@Vm.IsThemeLightPressed" class="icon-btn">
+                                @((MarkupString)Vm.ThemeIcon)
+                            </button>
+                        </div>
+                    </Authorized>
+                </AuthorizeView>
             </div>
         </header>
 

@@ -872,18 +872,23 @@ else
 
 @if (Vm.PortalProvisioningOpen)
 {
-    <div class="dcslide-scrim" @onclick="Vm.ClosePortalProvisioning"></div>
+    <div class="dcslide-scrim portal-scrim" @onclick="Vm.ClosePortalProvisioning"></div>
     <div class="dcslide crm-editor portal-editor">
         <div class="dcslide-head">
             <span class="title-14">Create customer portal</span>
             <button class="dcslide-x" @onclick="Vm.ClosePortalProvisioning" aria-label="Close"><CrmIcon Name="close" /></button>
         </div>
         <div class="dcslide-body crm-form">
-            <p class="section-help">Choose the domain where this tenant's customer portal will be hosted. The domain must be configured in DNS before customers can sign in.</p>
+            <p class="section-help">Optionally choose a domain where this tenant's customer portal will be hosted. If omitted, the current workspace origin is used with <code>/p/{tenant-slug}</code>.</p>
             <div class="dcfield">
-                <label>Portal domain</label>
+                <label>Customer portal slug</label>
+                <input class="dcinput" @bind="Vm.PortalCustomerSlug" placeholder="acme-clients" aria-label="Customer portal slug" />
+                <small class="field-help">Defaults to the selected CRM customer name if left empty.</small>
+            </div>
+            <div class="dcfield">
+                <label>Portal domain (optional)</label>
                 <input class="dcinput" @bind="Vm.PortalDomain" placeholder="portal.example.com" aria-label="Portal domain" />
-                <small class="field-help">The fully qualified domain for the isolated Rails portal.</small>
+                <small class="field-help">Leave blank to use the workspace origin plus <code>/p/{customer-slug}</code>.</small>
             </div>
             @if (Vm.PortalMessage is not null)
             {
@@ -999,12 +1004,12 @@ else
                 </section>
 
                 <section class="detail-section portal-section">
-                    <div class="section-label">Customer portal</div>
-                    @if (Vm.CustomerPortalEnabled && !string.IsNullOrWhiteSpace(Vm.CustomerPortalDomain))
+                <div class="section-label">Customer portal</div>
+                    @if (Vm.CustomerPortalEnabled)
                     {
                         <div class="portal-status">
                             <span class="portal-status-dot enabled"></span>
-                            <span>Portal enabled at <strong>@Vm.CustomerPortalDomain</strong></span>
+                            <span>Portal enabled at <strong>@Vm.CustomerPortalHost</strong></span>
                         </div>
                         @if (Vm.CanManagePortal)
                         {
@@ -1012,7 +1017,7 @@ else
                                 <button class="dcbtn primary" disabled="@(Vm.PortalInviting || string.IsNullOrWhiteSpace(Vm.Selected.Email))" @onclick="Vm.InviteSelectedToPortalAsync">
                                     @(Vm.PortalInviting ? "Inviting…" : "Invite to portal")
                                 </button>
-                                <button class="dcbtn" @onclick="Vm.OpenPortalProvisioning">Configure</button>
+                                <button class="dcbtn" @onclick="@(() => Vm.OpenPortalProvisioning(Vm.Selected?.Name))">Configure</button>
                             </div>
                             @if (string.IsNullOrWhiteSpace(Vm.Selected.Email))
                             {
@@ -1025,7 +1030,7 @@ else
                         <p class="section-help">Give this client a self-service portal for their project data and job-chain runs.</p>
                         @if (Vm.CanManagePortal)
                         {
-                            <button class="dcbtn primary" @onclick="Vm.OpenPortalProvisioning">
+                            <button class="dcbtn primary" @onclick="@(() => Vm.OpenPortalProvisioning(Vm.Selected?.Name))">
                                 <CrmIcon Name="globe" />
                                 Create customer portal
                             </button>
@@ -1374,7 +1379,7 @@ else
             }
         </div>
     </div>
-}+
+}
 @implements IDisposable
 
 @code {

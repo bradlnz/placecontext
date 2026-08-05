@@ -4,10 +4,18 @@ ARG TARGETARCH
 WORKDIR /src
 
 COPY . .
-RUN dotnet restore src/PlaceContext.Host/PlaceContext.Host.csproj -a $TARGETARCH
-RUN dotnet publish src/PlaceContext.Host/PlaceContext.Host.csproj -c Release -o /app/host -a $TARGETARCH --no-restore
-RUN dotnet restore src/PlaceContext.ClusterHost/PlaceContext.ClusterHost.csproj -a $TARGETARCH
-RUN dotnet publish src/PlaceContext.ClusterHost/PlaceContext.ClusterHost.csproj -c Release -o /app/cluster -a $TARGETARCH --no-restore
+RUN TARGET_ARCH="$TARGETARCH"; \
+  if [ "$TARGET_ARCH" = "amd64" ]; then TARGET_ARCH="x64"; fi; \
+  dotnet restore src/PlaceContext.Host/PlaceContext.Host.csproj -a "$TARGET_ARCH"
+RUN TARGET_ARCH="$TARGETARCH"; \
+  if [ "$TARGET_ARCH" = "amd64" ]; then TARGET_ARCH="x64"; fi; \
+  dotnet publish src/PlaceContext.Host/PlaceContext.Host.csproj -c Release -o /app/host -a "$TARGET_ARCH" --no-restore
+RUN TARGET_ARCH="$TARGETARCH"; \
+  if [ "$TARGET_ARCH" = "amd64" ]; then TARGET_ARCH="x64"; fi; \
+  dotnet restore src/PlaceContext.ClusterHost/PlaceContext.ClusterHost.csproj -a "$TARGET_ARCH"
+RUN TARGET_ARCH="$TARGETARCH"; \
+  if [ "$TARGET_ARCH" = "amd64" ]; then TARGET_ARCH="x64"; fi; \
+  dotnet publish src/PlaceContext.ClusterHost/PlaceContext.ClusterHost.csproj -c Release -o /app/cluster -a "$TARGET_ARCH" --no-restore
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 RUN apt-get update && apt-get install -y --no-install-recommends libgssapi-krb5-2 && rm -rf /var/lib/apt/lists/*

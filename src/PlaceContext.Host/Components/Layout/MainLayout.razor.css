@@ -1,4 +1,7 @@
 .shell {
+    --menu-width-collapsed: 60px;
+    --menu-width-expanded: 220px;
+    --menu-hover-hit: 20px;
     display: flex;
     height: 100vh;
     width: 100%;
@@ -7,8 +10,10 @@
 }
 
 .sidebar {
-    width: 62px;
+    width: var(--menu-width-collapsed);
     flex: none;
+    min-width: 0;
+    position: relative;
     display: flex;
     flex-direction: column;
     background: var(--panel);
@@ -18,8 +23,15 @@
 }
 
 .sidebar:hover {
-    width: 220px;
+    width: var(--menu-width-expanded);
     overflow: visible;
+}
+
+.sidebar:not(:hover)::before {
+    content: "";
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: var(--menu-hover-hit);
 }
 
 .brand-text,
@@ -132,6 +144,20 @@
 
 .nav-label {
     flex: 1;
+}
+
+.dcnav {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.dcnav svg {
+    flex: none;
+    width: 16px;
+    height: 16px;
+    min-width: 16px;
+    min-height: 16px;
 }
 
 .mcp-dot {
@@ -323,6 +349,13 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
+    overflow: hidden;
+}
+
+.sidebar:not(:hover) .user-bar {
+    padding-inline: 8px;
+    justify-content: flex-start;
+    gap: 8px;
 }
 
 .user-info {
@@ -375,6 +408,19 @@
     align-items: center;
     gap: 6px;
     flex: none;
+    margin-left: auto;
+}
+
+.sidebar:not(:hover) .user-actions {
+    gap: 4px;
+    margin-left: 0;
+}
+
+.sidebar:not(:hover) .user-actions .icon-btn,
+.sidebar:not(:hover) .icon-btn {
+    width: 27px;
+    height: 27px;
+    min-width: 27px;
 }
 
 .logout-form {
@@ -434,6 +480,36 @@
     align-items: center;
     gap: 10px;
     flex: none;
+}
+
+.topbar-switcher-wrap {
+    padding: 0;
+    border-top: none;
+}
+
+.topbar-switcher-pill {
+    height: 30px;
+}
+
+.topbar-switcher-name {
+    max-width: 140px;
+}
+
+.topbar-switcher-caret {
+    font-size: 11px;
+}
+
+.topbar-switcher-wrap .switcher-menu {
+    left: auto;
+    right: 0;
+    bottom: auto;
+    top: calc(100% + 4px);
+}
+
+.topbar-user-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
 }
 
 .running-badge {
@@ -496,10 +572,19 @@
         z-index: 45;
         transform: translateX(-100%);
         transition: transform .22s cubic-bezier(.4, 0, .2, 1);
+        width: 220px;
     }
 
     .sidebar.open {
         transform: translateX(0);
+    }
+
+    .sidebar:hover {
+        width: 220px;
+    }
+
+    .sidebar:not(:hover)::before {
+        content: none;
     }
 
     .sidebar-close {
@@ -528,6 +613,10 @@
 
     .topbar-right {
         gap: 6px;
+    }
+
+    .topbar-switcher-name {
+        max-width: 86px;
     }
 
     .dcsearch-trigger {

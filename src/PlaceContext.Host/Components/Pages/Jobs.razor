@@ -553,7 +553,7 @@ else
                     <div class="row-gap-10">
                         <div class="dcfield flex-1">
                             <label>Runtime <span class="req">*</span></label>
-                            <select class="dcinput" @bind="Vm.EdMapRuntimeId">
+                            <select class="dcinput" @bind="Vm.EdMapRuntimeId" @bind:after="Vm.OnSourceRuntimeChangedAsync">
                                 <option value="">— select —</option>
                                 <option value="node">node</option>
                                 <option value="python">python</option>
@@ -577,6 +577,10 @@ else
                                 ⤷ Open code editor
                                 <span class="hint-10-5">@Math.Max(Vm.EdMapFiles.Count, 1) file(s)</span>
                             </button>
+                        }
+                        else if (Vm.SourceMonaco)
+                        {
+                            <div id="@JobsViewModel.SourceEditorId" class="dcinput textarea-sans source-editor-monaco"></div>
                         }
                         else
                         {
@@ -798,6 +802,12 @@ else
                            class="checkbox-16" />
                     Allow network egress
                     <span class="dchint">(disables the --network none sandbox; only enable for jobs that require outbound access)</span>
+                </label>
+                <label class="egress-label">
+                    <input type="checkbox" @bind="Vm.EdAllowApiInvocation"
+                           class="checkbox-16" />
+                    Allow API access
+                    <span class="dchint">(exposes this job as a callable endpoint through the management API)</span>
                 </label>
             </div>
 
@@ -1027,6 +1037,7 @@ else
         {
             try { await Vm.InitializeOAuthListenerAsync(); } catch { }
         }
+        try { await Vm.AfterRenderAsync(); } catch { }
     }
 
     protected override async Task OnParametersSetAsync()

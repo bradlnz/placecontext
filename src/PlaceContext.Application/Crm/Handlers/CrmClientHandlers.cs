@@ -486,6 +486,9 @@ internal static class CrmClientMapper
         client.Phone,
         client.LifecycleStage.ToString(),
         client.Notes,
+        client.CustomerPortalEnabled,
+        client.CustomerPortalSlug,
+        client.CustomerPortalDomain,
         client.CreatedAt,
         client.UpdatedAt);
 }

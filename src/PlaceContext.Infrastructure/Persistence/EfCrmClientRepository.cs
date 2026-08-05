@@ -28,6 +28,9 @@ public sealed class EfCrmClientRepository : ICrmClientRepository
         row.Phone = ProtectNullable(client.Phone);
         row.LifecycleStage = client.LifecycleStage.ToString();
         row.Notes = ProtectNullable(client.Notes);
+        row.CustomerPortalEnabled = client.CustomerPortalEnabled;
+        row.CustomerPortalSlug = client.CustomerPortalSlug;
+        row.CustomerPortalDomain = client.CustomerPortalDomain;
         row.UpdatedAt = client.UpdatedAt;
     }
 
@@ -96,6 +99,9 @@ public sealed class EfCrmClientRepository : ICrmClientRepository
         Phone = ProtectNullable(client.Phone),
         LifecycleStage = client.LifecycleStage.ToString(),
         Notes = ProtectNullable(client.Notes),
+        CustomerPortalEnabled = client.CustomerPortalEnabled,
+        CustomerPortalSlug = client.CustomerPortalSlug,
+        CustomerPortalDomain = client.CustomerPortalDomain,
         CreatedAt = client.CreatedAt,
         UpdatedAt = client.UpdatedAt,
     };
@@ -112,6 +118,9 @@ public sealed class EfCrmClientRepository : ICrmClientRepository
                 ? stage
                 : CustomerLifecycleStage.Lead,
             UnprotectNullable(row.Notes),
+            row.CustomerPortalEnabled,
+            row.CustomerPortalSlug,
+            row.CustomerPortalDomain,
             row.CreatedAt,
             row.UpdatedAt);
 

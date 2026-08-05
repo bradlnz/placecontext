@@ -1,14 +1,68 @@
+using Microsoft.JSInterop;
 using PlaceContext.Application.Ports;
 using PlaceContext.Host;
 
 namespace PlaceContext.Host.Components.ViewModels;
 
-public sealed class ApiTokensSettingsViewModel(IUserApiTokenService tokens, PortalUiState ui)
+public sealed class ApiTokensSettingsViewModel(IUserApiTokenService tokens, PortalUiState ui, IJSRuntime js)
     : PageViewModel
 {
+    public sealed record ApiEndpoint(string Method, string Path, string Description);
+    public sealed record ApiEndpointExample(string Title, string Command);
+
     public const string DefaultLifetimeDays = "90";
     public IReadOnlyList<UserApiTokenView> Tokens { get; private set; } =
         Array.Empty<UserApiTokenView>();
+    public IReadOnlyList<ApiEndpoint> UsableEndpoints { get; } =
+        new[]
+        {
+            new ApiEndpoint(
+                "GET",
+                "/api/v1/entities",
+                "List entities for the resolved project."
+            ),
+            new ApiEndpoint(
+                "GET",
+                "/api/v1/{entity-name}",
+                "List rows for an entity/table (query: search, page, pageSize)."
+            ),
+            new ApiEndpoint(
+                "GET",
+                "/api/v1/{entity-name}/{key}",
+                "Look up one entity row by label/first-column key."
+            ),
+            new ApiEndpoint(
+                "POST",
+                "/api/v1/{job-name}",
+                "Run a named job with API invocation enabled."
+            ),
+            new ApiEndpoint(
+                "POST",
+                "/api/v1/{entity-name}/jobs/{jobId}/run",
+                "Run a specific job on an entity with API invocation enabled."
+            ),
+            new ApiEndpoint(
+                "GET",
+                "/api/v1/search?q=<query>",
+                "Search within the resolved project."
+            )
+        };
+    public IReadOnlyList<ApiEndpointExample> EndpointExamples { get; } =
+        new[]
+        {
+            new ApiEndpointExample(
+                "List entities",
+                "curl -H \"Authorization: Bearer $PC_TOKEN\" -H \"X-Project-Id: $PC_PROJECT_ID\" \\\n  \"$PC_HOST/api/v1/entities\""
+            ),
+            new ApiEndpointExample(
+                "Query an entity",
+                "curl -H \"Authorization: Bearer $PC_TOKEN\" -H \"X-Project: $PC_PROJECT_NAME\" \\\n  \"$PC_HOST/api/v1/example-entity?search=acme&page=1&pageSize=20\""
+            ),
+            new ApiEndpointExample(
+                "Run job by name",
+                "curl -X POST -H \"Authorization: Bearer $PC_TOKEN\" -H \"X-Project-Id: $PC_PROJECT_ID\" \\\n  -H \"Content-Type: application/json\" \\\n  -d '{\"inputPayload\":\"{\\\"name\\\":\\\"Acme\\\"}\"}' \\\n  \"$PC_HOST/api/v1/build-summary\""
+            )
+        };
     public bool Loading { get; private set; } = true;
     public bool Busy { get; private set; }
     public string? Message { get; private set; }
@@ -17,6 +71,10 @@ public sealed class ApiTokensSettingsViewModel(IUserApiTokenService tokens, Port
     public string LifetimeDays { get; set; } = DefaultLifetimeDays;
     public string? CreatedRaw { get; private set; }
     public string? CreatedPrefix { get; private set; }
+    public async Task CopyExampleAsync(string command)
+    {
+        await js.InvokeVoidAsync("navigator.clipboard.writeText", command);
+    }
 
     public async Task LoadAsync()
     {

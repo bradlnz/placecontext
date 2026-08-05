@@ -574,6 +574,13 @@
     resize: vertical;
 }
 
+.source-editor-monaco {
+    height: 240px;
+    padding: 0;
+    resize: none;
+    overflow: hidden;
+}
+
 .files-note {
     margin-top: 6px;
     display: flex;

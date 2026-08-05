@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Forms;
 using Microsoft.JSInterop;
+using System.Text;
 using PlaceContext.Application;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Features;
@@ -108,9 +109,57 @@ public sealed class CrmViewModel : PageViewModel
     public bool CanManagePortal;
     public bool CustomerPortalEnabled;
     public string CustomerPortalDomain = "";
+    public string PortalCustomerSlug = "";
     public string PortalDomain = "";
     public string PortalInviteRole = "member";
     public string? PortalMessage;
+    public string CustomerPortalHost =>
+        string.IsNullOrWhiteSpace(CustomerPortalDomain)
+            ? BuildPortalHostFromCurrentDomain()
+            : $"https://{CustomerPortalDomain.Trim()}";
+    private string BuildPortalHostFromCurrentDomain()
+    {
+        var customerSlug = BuildPortalPathSlug();
+        return $"{Nav.BaseUri.TrimEnd('/')}/p/{customerSlug}";
+    }
+
+    private string BuildPortalPathSlug()
+    {
+        var customerSlug = PortalCustomerSlug?.Trim();
+        if (!string.IsNullOrWhiteSpace(customerSlug))
+            return Slugify(customerSlug);
+
+        var tenantSlug = (CurrentTenant.Slug ?? "").Trim();
+        return string.IsNullOrWhiteSpace(tenantSlug) ? "tenant" : Slugify(tenantSlug);
+    }
+
+    private static string Slugify(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return "tenant";
+
+        var lowered = value.ToLowerInvariant();
+        var sanitized = new StringBuilder(lowered.Length);
+        var prevWasSeparator = false;
+
+        foreach (var ch in lowered)
+        {
+            if (char.IsLetterOrDigit(ch))
+            {
+                sanitized.Append(ch);
+                prevWasSeparator = false;
+            }
+            else if (char.IsWhiteSpace(ch) || ch is '-' or '_' or '.')
+            {
+                if (!prevWasSeparator)
+                    sanitized.Append('-');
+                prevWasSeparator = true;
+            }
+        }
+
+        var slug = sanitized.ToString().Trim('-');
+        return string.IsNullOrWhiteSpace(slug) ? "tenant" : slug;
+    }
     public bool NotesMetadataOpen;
     public string? NotesMetadataJson;
     public bool LoadingRuns;
@@ -954,9 +1003,10 @@ public sealed class CrmViewModel : PageViewModel
         await Task.WhenAll(LoadRuns(), LoadCommunications(), LoadArtifacts());
     }
 
-    public void OpenPortalProvisioning()
+    public void OpenPortalProvisioning(string? customerName = null)
     {
         PortalDomain = CustomerPortalDomain;
+        PortalCustomerSlug = customerName ?? string.Empty;
         PortalMessage = null;
         PortalProvisioningOpen = true;
     }
@@ -969,7 +1019,10 @@ public sealed class CrmViewModel : PageViewModel
         PortalMessage = null;
         try
         {
-            await TenantStore.SetCustomerPortalDomainAsync(CurrentTenant.TenantId, PortalDomain);
+            await TenantStore.SetCustomerPortalDomainAsync(
+                CurrentTenant.TenantId,
+                string.IsNullOrWhiteSpace(PortalDomain) ? null : PortalDomain.Trim()
+            );
             await TenantStore.SetCustomerPortalEnabledAsync(CurrentTenant.TenantId, true);
             var tenant = await TenantStore.GetRowAsync(CurrentTenant.TenantId);
             CustomerPortalEnabled = tenant?.CustomerPortalEnabled ?? true;
@@ -999,7 +1052,7 @@ public sealed class CrmViewModel : PageViewModel
         PortalMessage = null;
         try
         {
-            if (!CustomerPortalEnabled || string.IsNullOrWhiteSpace(CustomerPortalDomain))
+            if (!CustomerPortalEnabled)
                 throw new InvalidOperationException("Configure and enable the customer portal first.");
 
             var key = Configuration[ProvisioningKey];
@@ -1007,7 +1060,7 @@ public sealed class CrmViewModel : PageViewModel
                 throw new InvalidOperationException("Customer portal provisioning is not configured.");
 
             var client = HttpClientFactory.CreateClient();
-            client.BaseAddress = new Uri($"https://{CustomerPortalDomain}");
+            client.BaseAddress = new Uri($"{CustomerPortalHost}/");
             client.DefaultRequestHeaders.Add("X-PlaceContext-Provisioning-Key", key);
             client.DefaultRequestHeaders.Add("X-PlaceContext-Tenant-Id", CurrentTenant.TenantId.ToString());
             using var response = await client.PostAsJsonAsync(

@@ -11,6 +11,9 @@ public sealed class CrmClientRow : ITenantOwned
     public string? Phone { get; set; }
     public string LifecycleStage { get; set; } = "Lead";
     public string? Notes { get; set; }
+    public bool CustomerPortalEnabled { get; set; }
+    public string? CustomerPortalSlug { get; set; }
+    public string? CustomerPortalDomain { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
 }

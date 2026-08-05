@@ -138,10 +138,10 @@
                     @foreach (var tab in _openTabs)
                     {
                         <button class="workspace-tab @(tab.TableName == _activeTableName ? "active" : "")"
-                                @onclick="@(() => ActivateTab(tab.TableName))" title="@tab.TableName">
+                                @onclick="@(() => ActivateTabAsync(tab.TableName))" title="@tab.TableName">
                             <span class="workspace-tab-name">@tab.TableName</span>
                             <span class="workspace-tab-close"
-                                  @onclick:stopPropagation="true" @onclick="@(() => CloseTableTab(tab.TableName))"
+                                  @onclick:stopPropagation="true" @onclick="@(() => CloseTableTabAsync(tab.TableName))"
                                   title="Close @tab.TableName">×</span>
                         </button>
                     }
@@ -152,8 +152,15 @@
                     <div class="table-workspace-main">
                         <div class="table-workspace-editor-shell">
                             <label class="field-label">SQL</label>
-                            <textarea class="table-sql-editor"
-                                      @bind="activeTab.Sql" @bind:event="oninput"></textarea>
+                            @if (Vm.SqlEditorMonaco)
+                            {
+                                <div id="@ProjectDataViewModel.SqlEditorId" class="table-sql-editor monaco-box"></div>
+                            }
+                            else
+                            {
+                                <textarea class="table-sql-editor"
+                                          @bind="activeTab.Sql" @bind:event="oninput"></textarea>
+                            }
                         </div>
                         <div class="run-bar">
                             <button class="dcbtn primary" disabled="@activeTab.Running" @onclick="@(() => RunTableTabAsync(activeTab))">
@@ -448,6 +455,8 @@
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         await Vm.AfterRenderAsync();
+        if (ActiveTableTab is { } active)
+            await Vm.ShowSqlTabAsync(active.TableName, active.Sql);
     }
 
     private async Task OpenTableTabAsync(string tableName)
@@ -456,6 +465,7 @@
         if (existing is not null)
         {
             _activeTableName = existing.TableName;
+            await Vm.ShowSqlTabAsync(existing.TableName, existing.Sql);
             if (existing.Result is null && !existing.Running && existing.Error is null)
                 await RunTableTabAsync(existing);
             return;
@@ -464,20 +474,34 @@
         var tab = new TableTab(tableName, DefaultSqlFor(tableName));
         _openTabs.Add(tab);
         _activeTableName = tableName;
+        await Vm.ShowSqlTabAsync(tableName, tab.Sql);
         await RunTableTabAsync(tab);
     }
 
-    private void ActivateTab(string tableName)
+    private async Task ActivateTabAsync(string tableName)
     {
+        if (StringComparer.Ordinal.Equals(tableName, _activeTableName))
+            return;
+
+        if (ActiveTableTab is { } current)
+        {
+            var value = await Vm.GetSqlEditorValueAsync();
+            if (value is not null)
+                current.Sql = value;
+        }
+
         _activeTableName = tableName;
+        await Vm.ShowSqlTabAsync(tableName, ActiveTableTab?.Sql ?? DefaultSqlFor(tableName));
+        StateHasChanged();
     }
 
-    private void CloseTableTab(string tableName)
+    private async Task CloseTableTabAsync(string tableName)
     {
         var index = _openTabs.FindIndex(tab => StringComparer.Ordinal.Equals(tab.TableName, tableName));
         if (index < 0) return;
 
-        if (_activeTableName == tableName)
+        var wasActive = _activeTableName == tableName;
+        if (wasActive)
         {
             if (_openTabs.Count == 1)
             {
@@ -491,13 +515,26 @@
         }
 
         _openTabs.RemoveAt(index);
+        await Vm.CloseSqlEditorFileAsync(tableName);
+
+        if (wasActive && _activeTableName is not null)
+        {
+            var tab = _openTabs.FirstOrDefault(t => StringComparer.Ordinal.Equals(t.TableName, _activeTableName));
+            await Vm.ShowSqlTabAsync(_activeTableName, tab?.Sql ?? DefaultSqlFor(_activeTableName));
+        }
+        else if (_openTabs.Count == 0)
+        {
+            Vm.ResetSqlEditor();
+        }
     }
 
-    private void ResetTableTabSql(TableTab tab)
+    private async Task ResetTableTabSql(TableTab tab)
     {
         tab.Sql = DefaultSqlFor(tab.TableName);
         tab.Result = null;
         tab.Error = null;
+        await Vm.SetSqlEditorValueAsync(tab.Sql);
+        StateHasChanged();
     }
 
     private async Task RunTableTabAsync(TableTab tab)
@@ -507,6 +544,9 @@
         StateHasChanged();
         try
         {
+            var editorSql = await Vm.GetSqlEditorValueAsync();
+            if (editorSql is not null)
+                tab.Sql = editorSql;
             tab.Result = await DataService.ExecuteProjectDataAsync(ProjectId, tab.Sql);
         }
         catch (Exception ex)

@@ -117,6 +117,14 @@
     margin: 0;
 }
 
+.table-sql-editor.monaco-box {
+    flex: none;
+    height: 240px;
+    padding: 0;
+    resize: none;
+    overflow: hidden;
+}
+
 .table-sql-editor {
     flex: 1;
     min-height: 150px;

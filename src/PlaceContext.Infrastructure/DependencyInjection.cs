@@ -8,6 +8,7 @@ using PlaceContext.Infrastructure.Workload;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 
 namespace PlaceContext.Infrastructure;
 
@@ -55,7 +56,14 @@ public static class DependencyInjection
         // EF Core code-first store. The DbContext is the request-scoped unit of work.
         var connectionString = configuration.GetSection("PlaceContext")["ConnectionString"]
             ?? new PlaceContextOptions().ConnectionString;
-        services.AddDbContext<AppDbContext>(o => o.UseNpgsql(connectionString));
+        services.AddDbContext<AppDbContext>(o =>
+        {
+            o.UseNpgsql(connectionString);
+            o.ConfigureWarnings(w =>
+            {
+                w.Ignore(RelationalEventId.PendingModelChangesWarning);
+            });
+        });
         services.AddScoped<IUnitOfWork>(sp => sp.GetRequiredService<AppDbContext>());
 
         // Shared, persisted MCP tool-call log (singleton; opens short-lived scopes).
@@ -338,6 +346,7 @@ public static class DependencyInjection
         {
             db.Database.ExecuteSqlRaw(
                 """
+                ALTER TABLE jobs ADD COLUMN IF NOT EXISTS "AllowApiInvocation" boolean NOT NULL DEFAULT false;
                 ALTER TABLE tenants ADD COLUMN IF NOT EXISTS "MenuJson" text NULL;
                 ALTER TABLE tenants ADD COLUMN IF NOT EXISTS "ArtifactViewJson" text NULL;
                 """);

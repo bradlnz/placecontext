@@ -486,7 +486,9 @@ internal static class MainLayoutIconCatalog
             "test" =>
                 "<svg width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'><path d='M9 2h6'></path><path d='M10 22h4'></path><path d='M12 9v3'></path><path d='M9 6l-3 3 3 3'></path><path d='M15 6l3 3-3 3'></path><path d='M12 14v7'></path><path d='M6 12h12'></path></svg>",
             "chain" =>
-                "<svg width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'><path d='M17 7l-5-3-5 3'></path><path d='M7 17l5 3 5-3'></path><path d='M12 4v16'></path><path d='M3.5 9.5l6.5-3 2.5 1 6.5-3'></path><path d='M3.5 14.5l6.5 3 2.5-1 6.5 3'></path></svg>",
+                "<svg width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'><path d='M4 12h3.5'></path><path d='M9 12h6'></path><path d='M16.5 12h3.5'></path><path d='M8 9h8L16 7V5m-4 10h0v5m0-5 4-2.5m0 0 4 2.5m-4-2.5-4 2.5M4 12h.5'></path><path d='M6.5 8.5h3m-3 7h3'></path><path d='M14.5 9h3m-3 6h3'></path></svg>",
+            "crm" or "users" =>
+                "<svg width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'><path d='M12 13.5c3 0 5.5 2.5 5.5 5.5v1H6.5v-1c0-3 2.5-5.5 5.5-5.5Z'></path><circle cx='12' cy='8' r='3.2'></circle></svg>",
             "clock" =>
                 "<svg width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='9'></circle><polyline points='12 7 12 12 15 15'></polyline></svg>",
             "map" =>
@@ -502,15 +504,15 @@ internal static class MainLayoutIconCatalog
             "ledger" =>
                 "<svg width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'><path d='M4 4h16'></path><path d='M4 8h16'></path><path d='M4 12h16'></path><path d='M4 16h16'></path><path d='M4 20h16'></path><path d='M8 4v16'></path><path d='M16 4v16'></path></svg>",
             "data" or "data.tables" =>
-                "<svg width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'><path d='M4 7h16M4 11h16M4 15h16M4 19h16'/></svg>",
+                "<svg width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M4 7h16M4 11h16M4 15h16M4 19h16'/></svg>",
             "data.analytics" =>
-                "<svg width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'><path d='M4 19h16M7 19V5M11 19V8M15 19V11M4 16h16'/></svg>",
+                "<svg width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M4 19h16M7 19V5M11 19V8M15 19V11M4 16h16'/></svg>",
             "data.search" =>
-                "<svg width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'><circle cx='11' cy='11' r='7'></circle><path d='M20 20l-3.5-3.5'/></svg>",
+                "<svg width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><circle cx='11' cy='11' r='7'></circle><path d='M20 20l-3.5-3.5'/></svg>",
             "data.datamap" =>
-                "<svg width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'><path d='M4 4h16M4 20h16M8 4v16M12 4v16M16 4v16'/></svg>",
+                "<svg width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M4 4h16M4 20h16M8 4v16M12 4v16M16 4v16'/></svg>",
             "data.entities" =>
-                "<svg width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'><circle cx='9' cy='8' r='3'></circle><circle cx='16' cy='8' r='3'></circle><path d='M4 21a4 4 0 0 1 4-4h8a4 4 0 0 1 4 4'></path><path d='M2 19.5c0-4 4-5 7-5s7 1 7 5'></path><path d='M9 21a7 7 0 0 1 14 0'></path></svg>",
+                "<svg width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><circle cx='9' cy='8' r='3'></circle><circle cx='16' cy='8' r='3'></circle><path d='M4 21a4 4 0 0 1 4-4h8a4 4 0 0 1 4 4'></path><path d='M2 19.5c0-4 4-5 7-5s7 1 7 5'></path><path d='M9 21a7 7 0 0 1 14 0'></path></svg>",
             "observability" =>
                 "<svg width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'><path d='M3 3v18h18M7 15v-4M12 15V9M17 15V11'></path></svg>",
             "overview" =>

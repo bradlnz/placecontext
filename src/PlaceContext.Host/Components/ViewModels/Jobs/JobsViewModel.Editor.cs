@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.JSInterop;
 using PlaceContext.Application;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Features;
@@ -17,6 +18,91 @@ public sealed partial class JobsViewModel
     public string? EditorError { get; private set; }
     public string EditorTab { get; set; } = "details";
     public Guid? SelectedTriggerId { get; set; }
+
+    // ── Source editor (Monaco) ────────────────────────────────────────────────────────────────
+    public const string SourceEditorId = "pcjobs-source-editor";
+    public bool SourceMonaco { get; private set; } = true;
+    public bool SourceMonacoReady { get; private set; }
+    public string SourceEditorLanguage => EditorLanguageCatalog.ForPath(CurrentEntrypoint);
+
+    public void ResetSourceEditor()
+    {
+        SourceMonaco = true;
+        SourceMonacoReady = false;
+    }
+
+    public async Task AfterRenderAsync()
+    {
+        if (
+            ShowEditor
+            && EditJobId is null
+            && EdMapSourceKind == "code"
+            && SourceMonaco
+            && !SourceMonacoReady
+        )
+        {
+            SourceMonacoReady = true;
+            try
+            {
+                if (
+                    !await _js.InvokeAsync<bool>(
+                        "pcmonaco.init",
+                        SourceEditorId,
+                        EdMapSource,
+                        SourceEditorLanguage,
+                        "vs-dark"
+                    )
+                )
+                    SourceMonaco = false;
+            }
+            catch
+            {
+                SourceMonaco = false;
+            }
+            if (!SourceMonaco)
+                NotifyStateChanged();
+        }
+    }
+
+    public async Task OnSourceRuntimeChangedAsync()
+    {
+        if (SourceMonaco && SourceMonacoReady)
+        {
+            try
+            {
+                var current = await _js.InvokeAsync<string>("pcmonaco.getValue", SourceEditorId);
+                if (current is not null)
+                    EdMapSource = current;
+                await _js.InvokeVoidAsync(
+                    "pcmonaco.setValue",
+                    SourceEditorId,
+                    EdMapSource,
+                    SourceEditorLanguage
+                );
+            }
+            catch
+            {
+                SourceMonaco = false;
+            }
+        }
+        NotifyStateChanged();
+    }
+
+    private async Task SyncSourceEditorAsync()
+    {
+        if (!SourceMonaco || !SourceMonacoReady)
+            return;
+        try
+        {
+            var value = await _js.InvokeAsync<string>("pcmonaco.getValue", SourceEditorId);
+            if (value is not null)
+                EdMapSource = value;
+        }
+        catch
+        {
+            SourceMonaco = false;
+        }
+    }
 
     // ── Template modal state ──────────────────────────────────────────────────────────────────
     public bool ShowTemplateModal { get; private set; }
@@ -53,6 +139,7 @@ public sealed partial class JobsViewModel
     public string EdSuccessCodesRaw { get; set; } = "0";
     public string EdPartialCodesRaw { get; set; } = "";
     public bool EdAllowNetworkEgress { get; set; }
+    public bool EdAllowApiInvocation { get; set; }
     public int EdRetryCount { get; set; }
     public int EdRetryDelaySeconds { get; set; }
     public List<ParamEdit> EdParams { get; } = new();
@@ -126,6 +213,7 @@ public sealed partial class JobsViewModel
         EdSuccessCodesRaw = "0";
         EdPartialCodesRaw = "";
         EdAllowNetworkEgress = false;
+        EdAllowApiInvocation = false;
         EdRetryCount = 0;
         EdRetryDelaySeconds = 0;
         EdParams.Clear();
@@ -136,6 +224,7 @@ public sealed partial class JobsViewModel
         EditorError = null;
         EditorTab = "details";
         ShowEditor = true;
+        ResetSourceEditor();
         NotifyStateChanged();
     }
 
@@ -178,6 +267,7 @@ public sealed partial class JobsViewModel
         EdInputPayloadsRaw = template.InputPayloadsRaw;
         EdReturnType = template.ReturnType;
         EdAllowNetworkEgress = template.AllowNetworkEgress;
+        EdAllowApiInvocation = false;
         EdParams.Clear();
         EdParams.AddRange(template.Parameters.Select(p => new ParamEdit
         {
@@ -210,6 +300,7 @@ public sealed partial class JobsViewModel
         EdSuccessCodesRaw = string.Join(",", job.SuccessExitCodes);
         EdPartialCodesRaw = string.Join(",", job.PartialExitCodes);
         EdAllowNetworkEgress = job.AllowNetworkEgress;
+        EdAllowApiInvocation = job.AllowApiInvocation;
         EdRetryCount = job.RetryCount;
         EdRetryDelaySeconds = job.RetryDelaySeconds;
         EdParams.Clear();
@@ -225,6 +316,7 @@ public sealed partial class JobsViewModel
         EditorTab = "details";
         SelectedTriggerId = null;
         ShowEditor = true;
+        ResetSourceEditor();
         NotifyStateChanged();
     }
 
@@ -235,6 +327,7 @@ public sealed partial class JobsViewModel
         RunDetail = null;
         SelectedTriggerId = null;
         EditorTab = "details";
+        ResetSourceEditor();
         NotifyStateChanged();
     }
 
@@ -297,6 +390,7 @@ public sealed partial class JobsViewModel
     public async Task SaveJobAsync()
     {
         EditorError = null;
+        await SyncSourceEditorAsync();
         if (string.IsNullOrWhiteSpace(EdName))
         {
             EditorError = "Name is required.";
@@ -388,6 +482,7 @@ public sealed partial class JobsViewModel
                     SuccessExitCodes: successCodes,
                     PartialExitCodes: partialCodes,
                     AllowNetworkEgress: EdAllowNetworkEgress,
+                    AllowApiInvocation: EdAllowApiInvocation,
                     Parameters: parameters,
                     PostJobActions: EdPostJobActions.ToList(),
                     ReturnType: EdReturnType,
@@ -430,6 +525,7 @@ public sealed partial class JobsViewModel
                     SuccessExitCodes: successCodes,
                     PartialExitCodes: partialCodes,
                     AllowNetworkEgress: EdAllowNetworkEgress,
+                    AllowApiInvocation: EdAllowApiInvocation,
                     Parameters: parameters,
                     PostJobActions: EdPostJobActions.ToList(),
                     ReturnType: EdReturnType,

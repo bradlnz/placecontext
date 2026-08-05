@@ -141,9 +141,9 @@ public sealed class AccessSettingsViewModel(
         {
             var tenant = await TenantStore.GetRowAsync(Tenant.TenantId);
             var key = Configuration[ProvisioningKey];
-            if (tenant is null || string.IsNullOrWhiteSpace(tenant.CustomerPortalDomain))
+            if (tenant is null || !tenant.CustomerPortalEnabled)
                 throw new InvalidOperationException(
-                    "Configure the customer portal domain before inviting users."
+                    "Enable the customer portal before inviting users."
                 );
             if (string.IsNullOrWhiteSpace(key))
                 throw new InvalidOperationException(
@@ -151,7 +151,8 @@ public sealed class AccessSettingsViewModel(
                 );
 
             var client = HttpClientFactory.CreateClient();
-            client.BaseAddress = new Uri($"https://{tenant.CustomerPortalDomain}");
+            var host = BuildPortalHost(tenant.CustomerPortalDomain);
+            client.BaseAddress = new Uri(host.TrimEnd('/') + "/");
             client.DefaultRequestHeaders.Add("X-PlaceContext-Provisioning-Key", key);
             client.DefaultRequestHeaders.Add(
                 "X-PlaceContext-Tenant-Id",
@@ -188,6 +189,19 @@ public sealed class AccessSettingsViewModel(
         Roles = await InScopeAsync<IPlaceContextService, IReadOnlyList<RoleView>>(service =>
             service.ListRolesAsync()
         );
+
+    private string BuildPortalHost(string? domain)
+    {
+        if (string.IsNullOrWhiteSpace(domain))
+        {
+            var tenantSlug = (Tenant.Slug ?? "").Trim();
+            if (string.IsNullOrWhiteSpace(tenantSlug))
+                tenantSlug = "tenant";
+            return $"{Nav.BaseUri.TrimEnd('/')}/p/{tenantSlug}";
+        }
+
+        return $"https://{domain.Trim()}";
+    }
 
     public async Task InviteAsync()
     {

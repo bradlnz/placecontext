@@ -61,7 +61,11 @@ public sealed partial class JobsViewModel : PageViewModel
     public bool IsImageMap => MapMode == MapSourceMode.Image;
     public bool IsCodeMap => MapMode == MapSourceMode.Code;
 
-    public void SelectImageMap() => EdMapSourceKind = "image";
+    public void SelectImageMap()
+    {
+        EdMapSourceKind = "image";
+        ResetSourceEditor();
+    }
 
     public void SelectCodeMap() => EdMapSourceKind = "code";
 

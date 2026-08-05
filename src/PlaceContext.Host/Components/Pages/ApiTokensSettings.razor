@@ -16,6 +16,33 @@ else
         <div class="page-sub">
             Personal tokens authenticate you against the project data and search APIs. The raw secret is shown once when created.
         </div>
+        <div class="dccard api-docs">
+            <div class="add-title">Usable endpoints</div>
+            <ul class="api-list">
+                @foreach (var endpoint in Vm.UsableEndpoints)
+                {
+                    <li><code>@endpoint.Method @endpoint.Path</code> — @endpoint.Description</li>
+                }
+            </ul>
+            <div class="api-subtitle">Example calls</div>
+            <div class="api-examples">
+                @foreach (var sample in Vm.EndpointExamples)
+                {
+                    <div class="api-example">
+                        <div class="api-example-title">@sample.Title</div>
+                        <div class="api-example-code-wrap">
+                            <code class="api-example-code">@sample.Command</code>
+                            <button class="dcbtn api-copy" @onclick="() => Vm.CopyExampleAsync(sample.Command)">Copy</button>
+                        </div>
+                    </div>
+                }
+            </div>
+            <div class="api-hint">
+                Include <code>Authorization: Bearer &lt;token&gt;</code> or
+                <code>X-Api-Key: &lt;token&gt;</code>, and one of <code>X-Project-Id</code> / <code>X-Project</code>.
+                Job-run endpoints also require the job to have <strong>API invocation enabled</strong> in settings.
+            </div>
+        </div>
         @if (Vm.Message is not null)
         {
             <div class="message">@Vm.Message</div>

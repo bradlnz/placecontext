@@ -33,6 +33,7 @@ public sealed partial class ProjectDataViewModel : PageViewModel
             ProjectId = projectId;
             ViewMonacoReady = false;
         }
+        ResetSqlEditor();
     }
 
     public static bool IsJsonCell(string column, string? value)
@@ -101,6 +102,28 @@ public sealed partial class ProjectDataViewModel : PageViewModel
             catch
             {
                 CloseTableModal();
+            }
+        }
+        if (SqlEditorMonaco && !SqlEditorReady && SqlEditorActiveTable is not null)
+        {
+            SqlEditorReady = true;
+            try
+            {
+                if (
+                    !await _js.InvokeAsync<bool>(
+                        "pcmonaco.init",
+                        SqlEditorId,
+                        SqlEditorPendingValue,
+                        "sql",
+                        "vs-dark",
+                        SqlEditorActiveTable
+                    )
+                )
+                    SqlEditorMonaco = false;
+            }
+            catch
+            {
+                SqlEditorMonaco = false;
             }
         }
     }

@@ -3103,6 +3103,10 @@
 .crm-page .crm-detail {
     width: min(500px, 100vw);
 }
+.crm-page .dcslide,
+.crm-page .dcslide-scrim {
+    z-index: 1000;
+}
 .crm-page .crm-detail .dcslide-head {
     min-height: 66px;
     padding: 12px 18px;

@@ -286,6 +286,7 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
             e.HasIndex(x => new { x.ProjectId, x.Email });
             e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
             e.Property(x => x.LifecycleStage).HasDefaultValue("Lead");
+            e.Property(x => x.CustomerPortalEnabled).HasDefaultValue(false);
             e.Property(x => x.CreatedAt).HasDefaultValueSql("now()");
             e.Property(x => x.UpdatedAt).HasDefaultValueSql("now()");
         });
