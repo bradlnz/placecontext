@@ -1,4 +1,4 @@
-class ImpersonationController < ActionController::Base
+class ImpersonationController < ApplicationController
   skip_before_action :authenticate_portal_user!
 
   def login
