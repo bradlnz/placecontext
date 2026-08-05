@@ -140,7 +140,7 @@ public sealed class PostJobActionService
     };
 
     private static readonly string[] PdfExtensions = { ".pdf" };
-    private static readonly string[] ImageExtensions = { ".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg" };
+    private static readonly string[] ImageExtensions = { ".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".bmp", ".tif", ".tiff", ".avif" };
     private static readonly string[] VideoExtensions = { ".mp4", ".webm", ".mov", ".avi", ".mkv" };
 
     // File return types (Pdf/Image/Video): the job emits its result as a file to /out, and the
@@ -268,7 +268,10 @@ public sealed class PostJobActionService
             ".jpg" or ".jpeg" => "image/jpeg",
             ".gif" => "image/gif",
             ".webp" => "image/webp",
+            ".avif" => "image/avif",
+            ".bmp" => "image/bmp",
             ".svg" => "image/svg+xml",
+            ".tif" or ".tiff" => "image/tiff",
             ".mp4" => "video/mp4",
             ".webm" => "video/webm",
             ".mov" => "video/quicktime",

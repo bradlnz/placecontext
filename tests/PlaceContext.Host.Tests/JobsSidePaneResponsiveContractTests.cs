@@ -23,9 +23,9 @@ public sealed class JobsSidePaneResponsiveContractTests
 
     private static string ReadHostSource(string relativePath)
     {
-        var hostRoot = Path.GetFullPath(Path.Combine(
-            AppContext.BaseDirectory,
-            "../../../../../src/PlaceContext.Host"));
+        var hostRoot = Path.GetFullPath(
+            Path.Combine(AppContext.BaseDirectory, "../../../../../src/PlaceContext.Host")
+        );
 
         return File.ReadAllText(Path.Combine(hostRoot, relativePath));
     }

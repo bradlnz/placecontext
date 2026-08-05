@@ -13,8 +13,8 @@ public class PublicUrlAndTenantSlugTests
     [InlineData("evil.attacker", false)]
     [InlineData("foo.evil.com", false)]
     [InlineData("evil.com", false)]
-    public void Trusted_hosts(string host, bool trusted)
-        => Assert.Equal(trusted, PublicUrl.IsTrustedHost(host));
+    public void Trusted_hosts(string host, bool trusted) =>
+        Assert.Equal(trusted, PublicUrl.IsTrustedHost(host));
 
     [Theory]
     [InlineData("localhost", "default")]
@@ -24,6 +24,6 @@ public class PublicUrlAndTenantSlugTests
     [InlineData("evil.attacker", "default")] // was: would not match 3-part rule; still default
     [InlineData("foo.evil.com", "default")] // was: slug "foo" — Host-header tenant minting
     [InlineData("sub.foo.evil.com", "default")]
-    public void ResolveSlug_only_known_bases(string host, string expected)
-        => Assert.Equal(expected, TenantResolutionMiddleware.ResolveSlug(host));
+    public void ResolveSlug_only_known_bases(string host, string expected) =>
+        Assert.Equal(expected, TenantResolutionMiddleware.ResolveSlug(host));
 }

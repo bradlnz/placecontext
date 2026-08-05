@@ -32,6 +32,7 @@ internal static class JobViewMapper
         SuccessExitCodes: job.ExitCodePolicy.SuccessCodes.ToList(),
         PartialExitCodes: job.ExitCodePolicy.PartialCodes.ToList(),
         AllowNetworkEgress: job.AllowNetworkEgress,
+        AllowApiInvocation: job.AllowApiInvocation,
         Parameters: job.Parameters.Select(p => new JobParameterDto(p.Name, p.Label, p.Required, p.Type, p.Options.ToList())).ToList(),
         PostJobActions: job.PostJobActions.ToList(),
         ReturnType: job.ReturnType,

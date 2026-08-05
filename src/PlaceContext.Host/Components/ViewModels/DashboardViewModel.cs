@@ -21,6 +21,7 @@ public sealed class DashboardViewModel : PageViewModel, IDisposable
     private readonly IJSRuntime _js;
     private readonly ICurrentTenant _tenant;
     private readonly OperationCenter _operations;
+    private readonly BackgroundOperationRunner _ops;
     private readonly Dictionary<string, DateTimeOffset> _rendered = new();
     private DateTimeOffset _lastRefresh = DateTimeOffset.MinValue;
     private bool _refreshScheduled;
@@ -40,6 +41,7 @@ public sealed class DashboardViewModel : PageViewModel, IDisposable
         _js = js;
         _tenant = tenant;
         _operations = operations;
+        _ops = new BackgroundOperationRunner(operations);
     }
 
     public bool Ready { get; private set; }
@@ -189,15 +191,94 @@ public sealed class DashboardViewModel : PageViewModel, IDisposable
 
     public void OpenRun(Guid runId) => _navigation.NavigateTo($"/observability?run={runId}");
 
-    public async Task PrepareQuickChainRunAsync(JobChainView chain) => await Task.CompletedTask;
+    public async Task PrepareQuickChainRunAsync(JobChainView chain)
+    {
+        RunningChainId = null;
+        var plan = ChainParameterPromptPlan.Build(chain, Jobs ?? Array.Empty<JobView>());
+        if (plan.Steps.Count > 0)
+        {
+            RunPromptChain = chain;
+            RunPromptSteps.Clear();
+            RunPromptSteps.AddRange(plan.Steps);
+            RunPrompt.Reset(plan.Defaults);
+            ChainError = false;
+            ChainMessage = null;
+            NotifyStateChanged();
+            return;
+        }
 
-    public async Task SubmitQuickChainPromptAsync() => await Task.CompletedTask;
+        await RunQuickChainCoreAsync(chain, null);
+    }
+
+    public async Task SubmitQuickChainPromptAsync()
+    {
+        if (RunPromptChain is null)
+            return;
+        if (!RunPrompt.ValidateChainStepParameters(RunPromptSteps))
+        {
+            ChainError = true;
+            ChainMessage = RunPrompt.Error;
+            NotifyStateChanged();
+            return;
+        }
+
+        var overrides = RunPrompt.ToStepPayloadOverrides(RunPromptSteps);
+        var payload = overrides.GetValueOrDefault(0);
+        await RunQuickChainCoreAsync(RunPromptChain, payload, overrides);
+    }
 
     public void CancelQuickChainPrompt()
     {
         RunPromptChain = null;
         RunPromptSteps.Clear();
         RunPrompt.Clear();
+        RunningChainId = null;
+        ChainMessage = null;
+        ChainError = false;
+    }
+
+    private async Task RunQuickChainCoreAsync(
+        JobChainView chain,
+        string? payload,
+        IReadOnlyDictionary<int, string>? stepOverrides = null
+    )
+    {
+        ChainMessage = null;
+        ChainError = false;
+        RunningChainId = chain.Id;
+        NotifyStateChanged();
+
+        var chainRunId = Guid.NewGuid();
+        var err = _ops.TryRun(
+            chain.ProjectId,
+            $"Run chain — {chain.Name}",
+            $"/project/{chain.ProjectId}/chains",
+            async (sp, ct) =>
+            {
+                var result = await sp
+                    .GetRequiredService<IPlaceContextService>()
+                    .RunJobChainAsync(chain.Id, payload, chainRunId, stepOverrides, ct);
+                return $"chain finished — {result.Status}";
+            },
+            correlationKey: RunStatusWatchService.ChainRunKey(chainRunId)
+        );
+
+        if (err is not null)
+        {
+            ChainError = true;
+            ChainMessage = err;
+            RunningChainId = null;
+            NotifyStateChanged();
+            return;
+        }
+
+        RunPromptChain = null;
+        RunPromptSteps.Clear();
+        RunPrompt.Clear();
+        ChainMessage = $"Run of {chain.Name} started — follow it in the notifications bell.";
+        RunningChainId = null;
+        NotifyStateChanged();
+        await Task.CompletedTask;
     }
 
     public static string CanvasId(string slot) => ChartPresentation.CanvasId("pcdash-", slot);

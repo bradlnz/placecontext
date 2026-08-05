@@ -1,6 +1,6 @@
 using System.Reflection;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using PlaceContext.Application.Ports;
 using PlaceContext.Host.Auth;
@@ -16,10 +16,15 @@ public sealed class AgentStreamAuthorizationContractTests
         var route = typeof(AgentStreamController).GetCustomAttribute<RouteAttribute>();
         Assert.Equal("api/v1/agent", route?.Template);
 
-        var auth = typeof(AgentStreamController).GetCustomAttributes<AuthorizeAttribute>().ToArray();
+        var auth = typeof(AgentStreamController)
+            .GetCustomAttributes<AuthorizeAttribute>()
+            .ToArray();
         var schemes = Assert.Single(auth, a => !string.IsNullOrEmpty(a.AuthenticationSchemes));
         Assert.Equal(AgentAuthenticationDefaults.SchemeName, schemes.AuthenticationSchemes);
-        Assert.DoesNotContain(ApiKeyAuthenticationHandler.SchemeName, schemes.AuthenticationSchemes);
+        Assert.DoesNotContain(
+            ApiKeyAuthenticationHandler.SchemeName,
+            schemes.AuthenticationSchemes
+        );
         Assert.Contains(auth, a => a.Policy == Permission.AgentsChat);
         Assert.DoesNotContain(auth, a => a.Policy == Permission.DataRead);
     }
@@ -29,11 +34,16 @@ public sealed class AgentStreamAuthorizationContractTests
     [InlineData(null, "pct_abc", UserApiTokenAuthenticationHandler.SchemeName)]
     [InlineData("Bearer eyJhbGciOiJSUzI1NiJ9.payload.signature", null, "Bearer")]
     public void Credential_selector_uses_exactly_one_validator(
-        string? authorization, string? apiKey, string expected)
+        string? authorization,
+        string? apiKey,
+        string expected
+    )
     {
         var context = new DefaultHttpContext();
-        if (authorization is not null) context.Request.Headers.Authorization = authorization;
-        if (apiKey is not null) context.Request.Headers["X-Api-Key"] = apiKey;
+        if (authorization is not null)
+            context.Request.Headers.Authorization = authorization;
+        if (apiKey is not null)
+            context.Request.Headers["X-Api-Key"] = apiKey;
 
         Assert.Equal(expected, AgentAuthenticationDefaults.SelectScheme(context));
     }

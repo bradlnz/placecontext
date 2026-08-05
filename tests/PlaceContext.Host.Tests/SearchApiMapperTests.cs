@@ -12,18 +12,30 @@ public sealed class SearchApiMapperTests
     [Fact]
     public void Search_endpoint_uses_entity_api_authentication_and_data_read_permission()
     {
-        var controllerAuth = Assert.Single(typeof(SearchController)
-            .GetCustomAttributes(typeof(AuthorizeAttribute), inherit: true)
-            .Cast<AuthorizeAttribute>());
-        Assert.Contains(UserApiTokenAuthenticationHandler.SchemeName, controllerAuth.AuthenticationSchemes);
-        Assert.Contains(ApiKeyAuthenticationHandler.SchemeName, controllerAuth.AuthenticationSchemes);
+        var controllerAuth = Assert.Single(
+            typeof(SearchController)
+                .GetCustomAttributes(typeof(AuthorizeAttribute), inherit: true)
+                .Cast<AuthorizeAttribute>()
+        );
+        Assert.Contains(
+            UserApiTokenAuthenticationHandler.SchemeName,
+            controllerAuth.AuthenticationSchemes
+        );
+        Assert.Contains(
+            ApiKeyAuthenticationHandler.SchemeName,
+            controllerAuth.AuthenticationSchemes
+        );
 
         var method = typeof(SearchController).GetMethod(nameof(SearchController.Search))!;
-        var route = Assert.Single(method.GetCustomAttributes(typeof(HttpGetAttribute), inherit: true));
+        var route = Assert.Single(
+            method.GetCustomAttributes(typeof(HttpGetAttribute), inherit: true)
+        );
         Assert.NotNull(route);
-        var methodAuth = Assert.Single(method
-            .GetCustomAttributes(typeof(AuthorizeAttribute), inherit: true)
-            .Cast<AuthorizeAttribute>());
+        var methodAuth = Assert.Single(
+            method
+                .GetCustomAttributes(typeof(AuthorizeAttribute), inherit: true)
+                .Cast<AuthorizeAttribute>()
+        );
         Assert.Equal(Permission.DataRead, methodAuth.Policy);
     }
 
@@ -32,12 +44,21 @@ public sealed class SearchApiMapperTests
     {
         var selected = Guid.NewGuid();
         var other = Guid.NewGuid();
-        var results = new SearchResultsView("customer", new[]
-        {
-            new SearchHit("artifact", selected, "First", "PDF", "/artifacts?artifact=1"),
-            new SearchHit("decision", other, "Other tenant project", "hidden", "/project/other"),
-            new SearchHit("entity", selected, "Second", "CRM", "/project/selected/entity"),
-        });
+        var results = new SearchResultsView(
+            "customer",
+            new[]
+            {
+                new SearchHit("artifact", selected, "First", "PDF", "/artifacts?artifact=1"),
+                new SearchHit(
+                    "decision",
+                    other,
+                    "Other tenant project",
+                    "hidden",
+                    "/project/other"
+                ),
+                new SearchHit("entity", selected, "Second", "CRM", "/project/selected/entity"),
+            }
+        );
 
         var response = SearchApiMapper.ToResponse(results, selected, limit: 1);
 

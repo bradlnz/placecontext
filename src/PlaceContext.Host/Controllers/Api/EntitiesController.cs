@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using PlaceContext.Application;
 using PlaceContext.Application.Features;
 using PlaceContext.Application.Ports;
+using PlaceContext.Application.Dtos;
 using PlaceContext.Host.Auth;
 
 namespace PlaceContext.Host.Controllers.Api;
@@ -15,6 +16,7 @@ namespace PlaceContext.Host.Controllers.Api;
 ///   <item><c>GET /api/v1/entities</c> — registry for the current project</item>
 ///   <item><c>GET /api/v1/{entity-name}</c> — paginated rows for that entity</item>
 ///   <item><c>GET /api/v1/{entity-name}/{key}</c> — rows matching the label column (or first column)</item>
+///   <item><c>POST /api/v1/{job-name}</c> — runs the named job when API invocation is enabled.</item>
 /// </list>
 /// Auth: personal user API tokens or the workspace admin key. Requires <c>data.read</c>.
 /// Route segments reserved by the management API (<c>projects</c>, <c>jobs</c>, <c>schedules</c>,
@@ -76,6 +78,57 @@ public sealed class EntitiesController : ControllerBase
     }
 
     /// <summary>
+    /// POST /api/v1/{entity-name}/jobs/{jobId}/run — runs a job for the current project.
+    /// Returns the full job run detail with shard + reduce output/artifact fields.
+    /// </summary>
+    [HttpPost("{entityName}/jobs/{jobId:guid}/run")]
+    [Authorize(Policy = Permission.JobsRun)]
+    public async Task<ActionResult<JobRunDetailView>> RunJob(
+        string entityName,
+        Guid jobId,
+        [FromBody] RunJobRequest? request = null)
+    {
+        if (ProjectDataReservedNames.IsReserved(entityName) || !EntityNameRe.IsMatch(entityName))
+            return NotFound();
+        if (RequireProject() is { } err) return err;
+
+        var entity = await FindEntityByNameAsync(entityName);
+        if (entity is null) return NotFound(new { error = $"Unknown entity '{entityName}' in this project." });
+
+        var job = await _svc.GetJobAsync(jobId, HttpContext.RequestAborted);
+        if (job is null || job.ProjectId != entity.ProjectId)
+            return NotFound(new { error = $"No job '{jobId}' for project '{entityName}'." });
+        if (!job.AllowApiInvocation)
+            return StatusCode(403, new { error = $"Job '{job.Name}' is not enabled for API invocation." });
+
+        var result = await _svc.RunJobAsync(jobId, request?.InputPayload, request?.RunId, HttpContext.RequestAborted);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// POST /api/v1/{job-name} — runs a named job for the current project.
+    /// Returns the full job run detail with shard + reduce output/artifact fields.
+    /// </summary>
+    [HttpPost("{jobName}")]
+    [Authorize(Policy = Permission.JobsRun)]
+    public async Task<ActionResult<JobRunDetailView>> RunJobByName(
+        string jobName,
+        [FromBody] RunJobRequest? request = null)
+    {
+        if (ProjectDataReservedNames.IsReserved(jobName) || !EntityNameRe.IsMatch(jobName))
+            return NotFound();
+        if (RequireProject() is { } err) return err;
+
+        var job = await FindJobByNameAsync(jobName, _project.ProjectId!.Value);
+        if (job is null) return NotFound(new { error = $"No job '{jobName}' for this project." });
+        if (!job.AllowApiInvocation)
+            return StatusCode(403, new { error = $"Job '{job.Name}' is not enabled for API invocation." });
+
+        var result = await _svc.RunJobAsync(job.Id, request?.InputPayload, request?.RunId, HttpContext.RequestAborted);
+        return Ok(result);
+    }
+
+    /// <summary>
     /// GET /api/v1/{entity-name}/{key} — rows whose label column (or first column) equals <paramref name="key"/>.
     /// </summary>
     [HttpGet("{entityName}/{key}")]
@@ -125,6 +178,12 @@ public sealed class EntitiesController : ControllerBase
         return list.FirstOrDefault(e => EntityNameMatches(e, entityName));
     }
 
+    private async Task<JobView?> FindJobByNameAsync(string jobName, Guid projectId)
+    {
+        var list = await _svc.ListJobsAsync(projectId, HttpContext.RequestAborted);
+        return list.FirstOrDefault(job => JobNameMatches(job, jobName));
+    }
+
     /// <summary>
     /// Matches against display name, table name, or a slug form of either
     /// (spaces/underscores → hyphens, case-insensitive).
@@ -135,6 +194,13 @@ public sealed class EntitiesController : ControllerBase
         if (string.Equals(e.TableName, entityName, StringComparison.OrdinalIgnoreCase)) return true;
         if (string.Equals(ProjectDataReservedNames.Slug(e.Name), entityName, StringComparison.OrdinalIgnoreCase)) return true;
         if (string.Equals(ProjectDataReservedNames.Slug(e.TableName), entityName, StringComparison.OrdinalIgnoreCase)) return true;
+        return false;
+    }
+
+    public static bool JobNameMatches(JobView job, string jobName)
+    {
+        if (string.Equals(job.Name, jobName, StringComparison.OrdinalIgnoreCase)) return true;
+        if (string.Equals(ProjectDataReservedNames.Slug(job.Name), jobName, StringComparison.OrdinalIgnoreCase)) return true;
         return false;
     }
 
@@ -175,6 +241,10 @@ public sealed record EntityRecordsResponse(
     long Total,
     int Page,
     int PageSize);
+
+public sealed record RunJobRequest(
+    string? InputPayload = null,
+    Guid? RunId = null);
 
 public static class EntityApiMapper
 {

@@ -103,6 +103,8 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
             e.ToTable("tenants");
             e.HasKey(x => x.Id);
             e.HasIndex(x => x.Slug).IsUnique();
+            e.HasIndex(x => x.CustomerPortalDomain).IsUnique();
+            e.Property(x => x.CustomerPortalEnabled).HasDefaultValue(false);
         });
 
         b.Entity<OAuthClientRow>(e =>
@@ -232,6 +234,7 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
             e.Property(x => x.MapSourceKind).HasDefaultValue("image");
             e.Property(x => x.UpdatedAt).HasDefaultValueSql("now()");
             e.Property(x => x.AllowNetworkEgress).HasDefaultValue(false);
+            e.Property(x => x.AllowApiInvocation).HasDefaultValue(false);
             e.Property(x => x.TimeoutSeconds).HasDefaultValue(1800);
             e.Property(x => x.ParametersJson).HasDefaultValue("[]");
             e.Property(x => x.PostJobActionsJson).HasDefaultValue("[]");

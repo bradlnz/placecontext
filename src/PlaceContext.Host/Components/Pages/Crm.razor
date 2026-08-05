@@ -870,6 +870,54 @@ else
     </div>
 }
 
+@if (Vm.PortalProvisioningOpen)
+{
+    <div class="dcslide-scrim" @onclick="Vm.ClosePortalProvisioning"></div>
+    <div class="dcslide crm-editor portal-editor">
+        <div class="dcslide-head">
+            <span class="title-14">Create customer portal</span>
+            <button class="dcslide-x" @onclick="Vm.ClosePortalProvisioning" aria-label="Close"><CrmIcon Name="close" /></button>
+        </div>
+        <div class="dcslide-body crm-form">
+            <p class="section-help">Choose the domain where this tenant's customer portal will be hosted. The domain must be configured in DNS before customers can sign in.</p>
+            <div class="dcfield">
+                <label>Portal domain</label>
+                <input class="dcinput" @bind="Vm.PortalDomain" placeholder="portal.example.com" aria-label="Portal domain" />
+                <small class="field-help">The fully qualified domain for the isolated Rails portal.</small>
+            </div>
+            @if (Vm.PortalMessage is not null)
+            {
+                <div class="form-error">@Vm.PortalMessage</div>
+            }
+            <div class="form-actions">
+                <button class="dcbtn" @onclick="Vm.ClosePortalProvisioning">Cancel</button>
+                <button class="dcbtn primary" disabled="@Vm.SavingPortal" @onclick="Vm.SavePortalProvisioning">
+                    @(Vm.SavingPortal ? "Saving…" : "Create portal")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@if (Vm.NotesMetadataOpen)
+{
+    <div class="dcslide-scrim" @onclick="Vm.CloseNotesMetadata"></div>
+    <div class="dcslide crm-editor notes-metadata-editor">
+        <div class="dcslide-head">
+            <span class="title-14">Notes metadata</span>
+            <button class="dcslide-x" @onclick="Vm.CloseNotesMetadata" aria-label="Close"><CrmIcon Name="close" /></button>
+        </div>
+        <div class="dcslide-body crm-form">
+            <p class="section-help">JSON extracted from this client's notes.</p>
+            <pre class="notes-metadata-json">@Vm.NotesMetadataJson</pre>
+            <div class="form-actions">
+                <button class="dcbtn" @onclick="Vm.CloseNotesMetadata">Close</button>
+                <button class="dcbtn primary" @onclick="Vm.CopyNotesMetadataAsync">Copy JSON</button>
+            </div>
+        </div>
+    </div>
+}
+
 @if (Vm.Selected is not null && Vm.CurrentSection != CrmSection.Conversations)
 {
     <div class="dcslide-scrim" @onclick="Vm.CloseClient"></div>
@@ -950,10 +998,63 @@ else
                     </div>
                 </section>
 
+                <section class="detail-section portal-section">
+                    <div class="section-label">Customer portal</div>
+                    @if (Vm.CustomerPortalEnabled && !string.IsNullOrWhiteSpace(Vm.CustomerPortalDomain))
+                    {
+                        <div class="portal-status">
+                            <span class="portal-status-dot enabled"></span>
+                            <span>Portal enabled at <strong>@Vm.CustomerPortalDomain</strong></span>
+                        </div>
+                        @if (Vm.CanManagePortal)
+                        {
+                            <div class="portal-actions">
+                                <button class="dcbtn primary" disabled="@(Vm.PortalInviting || string.IsNullOrWhiteSpace(Vm.Selected.Email))" @onclick="Vm.InviteSelectedToPortalAsync">
+                                    @(Vm.PortalInviting ? "Inviting…" : "Invite to portal")
+                                </button>
+                                <button class="dcbtn" @onclick="Vm.OpenPortalProvisioning">Configure</button>
+                            </div>
+                            @if (string.IsNullOrWhiteSpace(Vm.Selected.Email))
+                            {
+                                <small class="field-help">Add an email address to invite this client.</small>
+                            }
+                        }
+                    }
+                    else
+                    {
+                        <p class="section-help">Give this client a self-service portal for their project data and job-chain runs.</p>
+                        @if (Vm.CanManagePortal)
+                        {
+                            <button class="dcbtn primary" @onclick="Vm.OpenPortalProvisioning">
+                                <CrmIcon Name="globe" />
+                                Create customer portal
+                            </button>
+                        }
+                        else
+                        {
+                            <small class="field-help">The settings.manage permission is required to configure the customer portal.</small>
+                        }
+                    }
+                    @if (Vm.PortalMessage is not null)
+                    {
+                        <div class="portal-message">@Vm.PortalMessage</div>
+                    }
+                </section>
+
+
                 @if (Vm.Selected.Notes is not null)
                 {
                     <section class="detail-section">
-                        <div class="section-label">Notes</div>
+                        <div class="notes-section-head">
+                            <div class="section-label">Notes</div>
+                            @if (Vm.HasNotesMetadata)
+                            {
+                                <button class="dcbtn xs" @onclick="Vm.OpenNotesMetadata">
+                                    <CrmIcon Name="code" />
+                                    View metadata
+                                </button>
+                            }
+                        </div>
                         <p class="client-notes">@Vm.Selected.Notes</p>
                     </section>
                 }

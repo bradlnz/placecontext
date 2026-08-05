@@ -69,6 +69,9 @@ public sealed class JobRow : ITenantOwned
     /// <summary>True when containers may make outbound network calls. Default false (network-none sandbox).</summary>
     public bool AllowNetworkEgress { get; set; }
 
+    /// <summary>True when this job is allowed to run through the API endpoint.</summary>
+    public bool AllowApiInvocation { get; set; }
+
     /// <summary>Per-container wall-clock timeout in seconds. Default 1800 (30 minutes).</summary>
     public int TimeoutSeconds { get; set; } = 1800;
 

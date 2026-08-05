@@ -37,6 +37,9 @@ fi
 docker build -t registry.digitalocean.com/ctrlsignalregistryimg/placecontext:latest -f Dockerfile . 2>&1 | tail -3
 docker push registry.digitalocean.com/ctrlsignalregistryimg/placecontext:latest 2>&1 | tail -3
 
+docker build -t registry.digitalocean.com/ctrlsignalregistryimg/placecontext-customer-portal:latest -f Dockerfile.customer-portal . 2>&1 | tail -3
+docker push registry.digitalocean.com/ctrlsignalregistryimg/placecontext-customer-portal:latest 2>&1 | tail -3
+
 printf '%s\n' "$sync_token" | ssh -o BatchMode=yes -i "$ssh_key" "$app_host" '
 read -r sync_token
 set -euo pipefail

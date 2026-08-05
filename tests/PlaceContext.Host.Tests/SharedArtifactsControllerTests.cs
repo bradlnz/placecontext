@@ -10,15 +10,23 @@ namespace PlaceContext.Host.Tests;
 public sealed class SharedArtifactsControllerTests
 {
     [Fact]
-    public void Public_controller_explicitly_allows_anonymous_access()
-        => Assert.NotEmpty(typeof(SharedArtifactsController)
-            .GetCustomAttributes(typeof(AllowAnonymousAttribute), inherit: true));
+    public void Public_controller_explicitly_allows_anonymous_access() =>
+        Assert.NotEmpty(
+            typeof(SharedArtifactsController).GetCustomAttributes(
+                typeof(AllowAnonymousAttribute),
+                inherit: true
+            )
+        );
 
     [Fact]
     public async Task Valid_code_streams_artifact_with_no_store_and_no_referrer_headers()
     {
         var artifact = new SharedArtifact(
-            "Report", "reports", "runs/customer-report.pdf", "application/pdf");
+            "Report",
+            "reports",
+            "runs/customer-report.pdf",
+            "application/pdf"
+        );
         var controller = MakeController(artifact, out var http);
 
         var result = await controller.Get("pc_art_valid");
@@ -45,7 +53,8 @@ public sealed class SharedArtifactsControllerTests
 
     private static SharedArtifactsController MakeController(
         SharedArtifact artifact,
-        out DefaultHttpContext http)
+        out DefaultHttpContext http
+    )
     {
         http = new DefaultHttpContext();
         return new SharedArtifactsController(new StubShares(artifact), new StubStore(artifact))
@@ -56,14 +65,23 @@ public sealed class SharedArtifactsControllerTests
 
     private sealed class StubShares(SharedArtifact? artifact) : IArtifactShareTokenService
     {
-        public Task<ArtifactShareCreated> CreateOrRotateAsync(Guid artifactId, Guid createdByUserId, int lifetimeDays, CancellationToken ct = default)
-            => throw new NotSupportedException();
-        public Task<ArtifactShareStatus?> GetStatusAsync(Guid artifactId, CancellationToken ct = default)
-            => throw new NotSupportedException();
-        public Task<bool> RevokeAsync(Guid artifactId, CancellationToken ct = default)
-            => throw new NotSupportedException();
-        public Task<SharedArtifact?> ResolveAsync(string token, CancellationToken ct = default)
-            => Task.FromResult(artifact);
+        public Task<ArtifactShareCreated> CreateOrRotateAsync(
+            Guid artifactId,
+            Guid createdByUserId,
+            int lifetimeDays,
+            CancellationToken ct = default
+        ) => throw new NotSupportedException();
+
+        public Task<ArtifactShareStatus?> GetStatusAsync(
+            Guid artifactId,
+            CancellationToken ct = default
+        ) => throw new NotSupportedException();
+
+        public Task<bool> RevokeAsync(Guid artifactId, CancellationToken ct = default) =>
+            throw new NotSupportedException();
+
+        public Task<SharedArtifact?> ResolveAsync(string token, CancellationToken ct = default) =>
+            Task.FromResult(artifact);
     }
 
     private sealed class StubStore(SharedArtifact? artifact) : IObjectStore
@@ -72,17 +90,53 @@ public sealed class SharedArtifactsControllerTests
         public bool IsEnabled => true;
         public string ReportsBucket => "reports";
         public string DepsBucket => "deps";
-        public Task<ObjectDownload?> OpenReadAsync(string bucket, string key, CancellationToken ct = default)
+
+        public Task<ObjectDownload?> OpenReadAsync(
+            string bucket,
+            string key,
+            CancellationToken ct = default
+        )
         {
             OpenCount++;
-            return Task.FromResult<ObjectDownload?>(artifact is null ? null : new ObjectDownload(
-                new MemoryStream(Encoding.UTF8.GetBytes("pdf")), artifact.ContentType));
+            return Task.FromResult<ObjectDownload?>(
+                artifact is null
+                    ? null
+                    : new ObjectDownload(
+                        new MemoryStream(Encoding.UTF8.GetBytes("pdf")),
+                        artifact.ContentType
+                    )
+            );
         }
-        public Task PutAsync(string bucket, string key, byte[] content, string contentType, CancellationToken ct = default) => Task.CompletedTask;
-        public Task DeleteAsync(string bucket, string key, CancellationToken ct = default) => Task.CompletedTask;
-        public Task<bool> ExistsAsync(string bucket, string key, CancellationToken ct = default) => Task.FromResult(false);
-        public Task EnsureBucketAsync(string bucket, CancellationToken ct = default) => Task.CompletedTask;
-        public Task<string> PresignDownloadAsync(string bucket, string key, TimeSpan ttl, CancellationToken ct = default) => Task.FromResult("");
-        public Task<string> PresignUploadAsync(string bucket, string key, TimeSpan ttl, CancellationToken ct = default) => Task.FromResult("");
+
+        public Task PutAsync(
+            string bucket,
+            string key,
+            byte[] content,
+            string contentType,
+            CancellationToken ct = default
+        ) => Task.CompletedTask;
+
+        public Task DeleteAsync(string bucket, string key, CancellationToken ct = default) =>
+            Task.CompletedTask;
+
+        public Task<bool> ExistsAsync(string bucket, string key, CancellationToken ct = default) =>
+            Task.FromResult(false);
+
+        public Task EnsureBucketAsync(string bucket, CancellationToken ct = default) =>
+            Task.CompletedTask;
+
+        public Task<string> PresignDownloadAsync(
+            string bucket,
+            string key,
+            TimeSpan ttl,
+            CancellationToken ct = default
+        ) => Task.FromResult("");
+
+        public Task<string> PresignUploadAsync(
+            string bucket,
+            string key,
+            TimeSpan ttl,
+            CancellationToken ct = default
+        ) => Task.FromResult("");
     }
 }

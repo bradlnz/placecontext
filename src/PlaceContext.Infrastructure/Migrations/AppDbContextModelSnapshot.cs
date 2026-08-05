@@ -2198,6 +2198,14 @@ namespace PlaceContext.Infrastructure.Migrations
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("CustomerPortalDomain")
+                        .HasColumnType("text");
+
+                    b.Property<bool>("CustomerPortalEnabled")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
                     b.Property<string>("GitHubLogin")
                         .HasColumnType("text");
 
@@ -2220,6 +2228,9 @@ namespace PlaceContext.Infrastructure.Migrations
                         .HasColumnType("text");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("CustomerPortalDomain")
+                        .IsUnique();
 
                     b.HasIndex("Slug")
                         .IsUnique();

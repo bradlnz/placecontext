@@ -45,6 +45,7 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
     /// dispatched <c>RunJobCommand</c> opens its own DI scope/DbContext and may itself fan out map
     /// shards under its own concurrency limit.</summary>
     private const int MaxConcurrentBranches = 4;
+    private const string FullFeasibilityReportChainName = "full-feasibility-report";
 
     private readonly IJobChainRepository _chains;
     private readonly IJobRepository _jobs;
@@ -56,6 +57,8 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
     private readonly IPermissionService? _permissions;
     private readonly ICrmClientRepository? _crmClients;
     private readonly CrmArtifactAssociationService? _crmArtifacts;
+    private readonly IRunArtifactLinkRepository? _runArtifacts;
+    private readonly IChainContextStore? _contextStore;
     private readonly ILogger<RunJobChainHandler>? _log;
 
     public RunJobChainHandler(IJobChainRepository chains, IJobRepository jobs, IChainRunRepository runs,
@@ -66,6 +69,8 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
         IPermissionService? permissions = null,
         ICrmClientRepository? crmClients = null,
         CrmArtifactAssociationService? crmArtifacts = null,
+        IRunArtifactLinkRepository? runArtifacts = null,
+        IChainContextStore? contextStore = null,
         ILogger<RunJobChainHandler>? log = null)
     {
         _dataMappings = dataMappings;
@@ -79,6 +84,8 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
         _permissions = permissions;
         _crmClients = crmClients;
         _crmArtifacts = crmArtifacts;
+        _runArtifacts = runArtifacts;
+        _contextStore = contextStore;
         _log = log;
     }
 
@@ -88,6 +95,16 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
     {
         var chain = await _chains.GetByIdAsync(command.ChainId, ct)
             ?? throw new InvalidOperationException($"Chain {command.ChainId} not found.");
+
+        if (command.ResumeFromStageIndex is null
+            && command.CrmClientId is { } clientId
+            && string.Equals(chain.Name, FullFeasibilityReportChainName, StringComparison.Ordinal)
+            && _runArtifacts is not null)
+        {
+            var existingReportRun = await TryGetExistingFeasibilityReportRunAsync(chain.Id, clientId, ct);
+            if (existingReportRun is not null)
+                return ChainRunMapper.ToView(existingReportRun);
+        }
 
         // Snapshot every step's job up front — names go on the run so its history stands alone.
         var stepJobs = new List<Job?>(chain.ExecutionStepCount);
@@ -143,19 +160,25 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
         using var dispatchGate = new SemaphoreSlim(MaxConcurrentBranches, MaxConcurrentBranches);
 
         var status = ChainRunStatus.Succeeded;
-        string? payload = command.InputPayload; // first/resumed stage input
+        string? payload = command.ResumeFromStageIndex is not null
+            ? await LoadContextAsync(chainRun, ct)
+            : command.InputPayload; // first/resumed stage input
+        await SaveContextAsync(chainRun, payload, ct);
         var flatIndex = chain.Stages.Take(startStageIndex).Sum(stage => stage.ExecutionCount);
 
         for (var stageIndex = startStageIndex; stageIndex < chain.Stages.Count; stageIndex++)
         {
             var stage = chain.Stages[stageIndex];
 
-            // ── Evaluate gate before the stage ────────────────────────────────────────────────
+        // ── Evaluate gate before the stage ────────────────────────────────────────────────
             // The continuation is scheduled only after this gate has already evaluated. Skipping
             // it once on resume prevents a wait gate from scheduling itself forever.
             if (stage.Gate is { } gate
                 && !(command.ResumeFromStageIndex == stageIndex && stageIndex == startStageIndex))
             {
+                if (stage.Gate is ConditionGate && string.IsNullOrWhiteSpace(payload))
+                    payload = await ResolvePreviousRunPayloadAsync(chain.Id, chainRun.CrmClientId, command.ResumeFromStageIndex, ct);
+
                 var gateResult = gate.Evaluate(payload);
                 if (gateResult.WaitDuration is { } wait)
                 {
@@ -170,6 +193,28 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
                 }
                 if (!gateResult.Proceed)
                 {
+                    if (stage.Gate is ConditionGate { ElseBranch: { Count: > 0 } elseBranch })
+                    {
+                        // Condition false: skip this stage and execute the branch stages in-place.
+                        for (var b = 0; b < stage.ExecutionCount; b++)
+                        {
+                            var idx = flatIndex + b;
+                            chainRun.MarkStepFinished(idx, runId: null, ChainStepStatus.Skipped, _clock.UtcNow);
+                        }
+                        flatIndex += stage.ExecutionCount;
+                        await SaveProgressAsync(chainRun, ct);
+
+                        var branchResult = await ExecuteConditionalBranchAsync(
+                            elseBranch, chainRun, payload, ct, progressLock, dispatchGate);
+                        payload = branchResult.Payload;
+                        status = branchResult.Status;
+                        if (status == ChainRunStatus.Waiting)
+                            return ChainRunMapper.ToView(chainRun);
+                        if (status is ChainRunStatus.Failed or ChainRunStatus.Cancelled)
+                            break;
+                        continue;
+                    }
+
                     // Condition gate false: skip this stage, keep payload unchanged.
                     for (var b = 0; b < stage.ExecutionCount; b++)
                     {
@@ -356,11 +401,15 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
             if (Array.IndexOf(branchStatuses, ChainStepStatus.Partial) >= 0)
                 status = ChainRunStatus.Partial;
 
-            payload = stage.JobIds.Count == 1 ? branchOutputs[0] : CombineOutputs(branchOutputs);
+            payload = MergeContext(payload,
+                stage.JobIds.Count == 1 ? branchOutputs[0] : CombineOutputs(branchOutputs));
+            chainRun.SetCurrentPayload(payload);
+            await SaveProgressAsync(chainRun, ct);
         }
 
         chainRun.Complete(status, payload, _clock.UtcNow);
         await SaveProgressAsync(chainRun, ct);
+        await SaveContextAsync(chainRun, payload, ct);
 
         // CRM artifacts are derived from the finished persisted steps. This must happen here—not
         // in the ingestion worker—so resumed wait chains and every other CRM launch path converge.
@@ -393,6 +442,277 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
         }
 
         return ChainRunMapper.ToView(chainRun);
+    }
+
+    private async Task<ChainRun?> TryGetExistingFeasibilityReportRunAsync(
+        Guid chainId, Guid clientId, CancellationToken ct)
+    {
+        var runs = await _runs.ListForChainAsync(chainId, 20, ct);
+
+        foreach (var run in runs)
+        {
+            if (run.CrmClientId != clientId)
+                continue;
+            if (run.Status is not (ChainRunStatus.Succeeded or ChainRunStatus.Partial))
+                continue;
+
+            foreach (var step in run.Steps)
+            {
+                if (step.RunId is not { } stepRunId)
+                    continue;
+
+                var artifacts = await _runArtifacts!.ListForRunAsync(stepRunId, ct);
+                if (artifacts.Any(a => a.Kind == PostJobActionKind.HtmlReport))
+                    return run;
+            }
+        }
+
+        return null;
+    }
+
+    private async Task<(string? Payload, ChainRunStatus Status)> ExecuteConditionalBranchAsync(
+        IReadOnlyList<ChainStage> stages, ChainRun chainRun, string? payload,
+        CancellationToken ct, SemaphoreSlim progressLock, SemaphoreSlim dispatchGate)
+    {
+        var status = ChainRunStatus.Succeeded;
+        var branchStageIndex = chainRun.StageCount;
+
+        foreach (var stage in stages)
+        {
+            var result = await ExecuteConditionalStageAsync(
+                stage, chainRun, branchStageIndex++, payload, ct, progressLock, dispatchGate);
+            payload = result.Payload;
+            status = result.Status;
+            if (status is ChainRunStatus.Waiting or ChainRunStatus.Failed or ChainRunStatus.Cancelled)
+                break;
+        }
+
+        return (payload, status);
+    }
+
+    private async Task<(string? Payload, ChainRunStatus Status)> ExecuteConditionalStageAsync(
+        ChainStage stage, ChainRun chainRun, int stageIndex, string? payload, CancellationToken ct,
+        SemaphoreSlim progressLock, SemaphoreSlim dispatchGate)
+    {
+        if (stage.Gate is { } gate)
+        {
+            if (gate is ConditionGate && string.IsNullOrWhiteSpace(payload))
+                payload = await ResolvePreviousRunPayloadAsync(chainRun.ChainId, chainRun.CrmClientId, null, ct);
+
+            var gateResult = gate.Evaluate(payload);
+            if (gateResult.WaitDuration is { } wait)
+            {
+                var resumeAtStage = stageIndex >= chainRun.StageCount
+                    ? Math.Max(chainRun.StageCount - 1, 0)
+                    : stageIndex;
+                chainRun.Pause(resumeAtStage, payload, _clock.UtcNow.Add(wait));
+                await SaveProgressAsync(chainRun, ct);
+                await SaveContextAsync(chainRun, payload, ct);
+                return (payload, ChainRunStatus.Waiting);
+            }
+            if (!gateResult.Proceed)
+            {
+                if (gate is ConditionGate { ElseBranch: { Count: > 0 } elseBranch })
+                    return await ExecuteConditionalBranchAsync(elseBranch, chainRun, payload, ct, progressLock, dispatchGate);
+
+                return (payload, ChainRunStatus.Succeeded);
+            }
+        }
+
+        if (stage.Action is SendEmailChainAction email)
+        {
+            var actionIndex = chainRun.AppendStep("send-email", stageIndex);
+            chainRun.MarkStepRunning(actionIndex, runId: null, _clock.UtcNow);
+            await SaveProgressAsync(chainRun, ct);
+
+            try
+            {
+                if (_communications is null || (chainRun.CrmClientId is null
+                    && (_permissions is null || !await _permissions.HasAsync(Permission.EmailSend, ct))))
+                    throw new UnauthorizedAccessException(
+                        $"The '{Permission.EmailSend}' permission is required to send chain email.");
+
+                EnsureEmailReleaseAllowed(payload);
+                var customer = await LoadChainCustomerAsync(chainRun, ct);
+                var templatePayload = AddCustomerContext(payload, customer);
+                var recipient = customer?.Email
+                    ?? RenderTemplate(email.Recipient, templatePayload);
+                var recipientName = customer?.Name
+                    ?? RenderTemplate(email.RecipientName, templatePayload);
+                var subject = RenderTemplate(email.Subject, templatePayload);
+                var body = RenderTemplate(email.Body, templatePayload);
+                var attachments = ResolveEmailAttachments(email.AttachmentPath, templatePayload);
+                if (chainRun.CrmClientId is not null && string.IsNullOrWhiteSpace(recipient))
+                    throw new InvalidOperationException("The CRM customer does not have an email address.");
+                _ = new MailAddress(recipient);
+                if (string.IsNullOrWhiteSpace(subject) || string.IsNullOrWhiteSpace(body))
+                    throw new InvalidOperationException(
+                        "Email subject and body must not be empty after payload substitution.");
+
+                var delivery = await _communications.SendEmailAsync(
+                    recipient, recipientName, subject, body, ct, attachments);
+                chainRun.MarkStepFinished(actionIndex, runId: null,
+                    ChainStepStatus.Succeeded, _clock.UtcNow,
+                    delivery.Provider, delivery.ExternalId);
+                await SaveProgressAsync(chainRun, ct);
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                chainRun.MarkStepFinished(actionIndex, runId: null,
+                    ChainStepStatus.Failed, _clock.UtcNow,
+                    _communications?.EmailProvider, error: ShortError(ex.Message));
+                await SaveProgressAsync(chainRun, ct);
+                return (payload, ChainRunStatus.Failed);
+            }
+
+            return (payload, ChainRunStatus.Succeeded);
+        }
+
+        if (stage.Action is SendSmsChainAction sms)
+        {
+            var actionIndex = chainRun.AppendStep("send-sms", stageIndex);
+            chainRun.MarkStepRunning(actionIndex, runId: null, _clock.UtcNow);
+            await SaveProgressAsync(chainRun, ct);
+            try
+            {
+                if (_communications is null || (chainRun.CrmClientId is null
+                    && (_permissions is null || !await _permissions.HasAsync(Permission.SmsSend, ct))))
+                    throw new UnauthorizedAccessException(
+                        $"The '{Permission.SmsSend}' permission is required to send chain SMS.");
+                EnsureReleaseAllowed(payload, "sms");
+                var customer = await LoadChainCustomerAsync(chainRun, ct);
+                var templatePayload = AddCustomerContext(payload, customer);
+                var recipient = customer?.Phone
+                    ?? RenderTemplate(sms.Recipient, templatePayload);
+                var body = RenderTemplate(sms.Body, templatePayload);
+                var digits = new string(recipient.Where(char.IsDigit).ToArray());
+                if (!recipient.StartsWith('+') || digits.Length is < 8 or > 15)
+                    throw new InvalidOperationException(
+                        "SMS recipient must be an international number such as +61412345678.");
+                if (string.IsNullOrWhiteSpace(body))
+                    throw new InvalidOperationException(
+                        "SMS body must not be empty after payload substitution.");
+
+                var delivery = await _communications.SendSmsAsync(recipient, body, ct);
+                chainRun.MarkStepFinished(actionIndex, runId: null,
+                    ChainStepStatus.Succeeded, _clock.UtcNow,
+                    delivery.Provider, delivery.ExternalId);
+                await SaveProgressAsync(chainRun, ct);
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                chainRun.MarkStepFinished(actionIndex, runId: null,
+                    ChainStepStatus.Failed, _clock.UtcNow,
+                    _communications?.SmsProvider, error: ShortError(ex.Message));
+                await SaveProgressAsync(chainRun, ct);
+                return (payload, ChainRunStatus.Failed);
+            }
+
+            return (payload, ChainRunStatus.Succeeded);
+        }
+
+        var stagePayload = payload;
+        var branchOutputs = new string?[stage.JobIds.Count];
+        var branchStatuses = new ChainStepStatus[stage.JobIds.Count];
+        var resolvedJobs = new List<Job?>(stage.JobIds.Count);
+        foreach (var jobId in stage.JobIds)
+            resolvedJobs.Add(await _jobs.GetByIdAsync(jobId, ct));
+        var status = ChainRunStatus.Succeeded;
+
+        var branchTasks = Enumerable.Range(0, stage.JobIds.Count).Select(async branchIndex =>
+        {
+            var job = resolvedJobs[branchIndex];
+            int flat = -1;
+            Guid stepRunId = Guid.Empty;
+            await WithProgressLockAsync(progressLock, async () =>
+            {
+                flat = chainRun.AppendStep(job?.Id ?? Guid.Empty, job?.Name ?? "(deleted)",
+                    stageIndex, branchIndex);
+                stepRunId = Guid.NewGuid();
+                chainRun.MarkStepRunning(flat, stepRunId, _clock.UtcNow);
+                await SaveProgressAsync(chainRun, ct);
+            });
+
+            if (job is null)
+            {
+                branchStatuses[branchIndex] = ChainStepStatus.Failed;
+                var error = $"The chain job '{stage.JobIds[branchIndex]}' does not exist.";
+                await WithProgressLockAsync(progressLock, async () =>
+                {
+                    chainRun.MarkStepFinished(flat, runId: null, ChainStepStatus.Failed,
+                        _clock.UtcNow, error: error);
+                    await SaveProgressAsync(chainRun, ct);
+                });
+                return;
+            }
+
+            await dispatchGate.WaitAsync(ct);
+            JobRunDetailView run;
+            try
+            {
+                run = await _jobRunner.RunAsync(stage.JobIds[branchIndex], stagePayload, stepRunId, ct: ct);
+            }
+            finally
+            {
+                dispatchGate.Release();
+            }
+            var outcome = ParseStepOutcome(run.Status);
+            branchStatuses[branchIndex] = outcome;
+            branchOutputs[branchIndex] = PrimaryOutput(run);
+
+            await WithProgressLockAsync(progressLock, async () =>
+            {
+                chainRun.MarkStepFinished(flat, run.Id, outcome, _clock.UtcNow);
+                await SaveProgressAsync(chainRun, ct);
+            });
+        });
+
+        await Task.WhenAll(branchTasks);
+
+        if (Array.IndexOf(branchStatuses, ChainStepStatus.Failed) >= 0)
+        {
+            return (payload, ChainRunStatus.Failed);
+        }
+        if (Array.IndexOf(branchStatuses, ChainStepStatus.Cancelled) >= 0)
+        {
+            return (payload, ChainRunStatus.Cancelled);
+        }
+        if (Array.IndexOf(branchStatuses, ChainStepStatus.Partial) >= 0)
+            status = ChainRunStatus.Partial;
+        else
+            status = ChainRunStatus.Succeeded;
+
+        payload = MergeContext(payload,
+            stage.JobIds.Count == 1 ? branchOutputs[0] : CombineOutputs(branchOutputs));
+        chainRun.SetCurrentPayload(payload);
+        await SaveContextAsync(chainRun, payload, ct);
+
+        return (payload, status);
+    }
+
+    private async Task<string?> ResolvePreviousRunPayloadAsync(
+        Guid chainId, Guid? crmClientId, int? resumeFromStageIndex, CancellationToken ct)
+    {
+        if (resumeFromStageIndex is not null) return null;
+        var previousRuns = await _runs.ListForChainAsync(chainId, 20, ct);
+        foreach (var previous in previousRuns)
+        {
+            if (previous.CrmClientId != crmClientId)
+                continue;
+            if (previous.Status is not (ChainRunStatus.Succeeded or ChainRunStatus.Partial))
+                continue;
+            return previous.FinalOutput;
+        }
+
+        return null;
     }
 
     private async Task<CrmClient?> LoadChainCustomerAsync(ChainRun run, CancellationToken ct)
@@ -460,6 +780,66 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
     {
         await _runs.UpdateAsync(run, ct);
         await _uow.SaveChangesAsync(ct);
+    }
+
+    private async Task<string?> LoadContextAsync(ChainRun run, CancellationToken ct)
+    {
+        if (_contextStore is not null)
+        {
+            try
+            {
+                var cached = await _contextStore.GetAsync(run.Id, ct);
+                if (cached is not null) return cached;
+            }
+            catch (Exception ex) { _log?.LogWarning(ex, "Could not read chain context {ChainRunId} from Redis; using checkpoint.", run.Id); }
+        }
+        return run.FinalOutput;
+    }
+
+    private async Task SaveContextAsync(ChainRun run, string? payload, CancellationToken ct)
+    {
+        if (_contextStore is null) return;
+        try { await _contextStore.SetAsync(run.Id, payload, ct); }
+        catch (Exception ex) { _log?.LogWarning(ex, "Could not write chain context {ChainRunId} to Redis; DB checkpoint remains authoritative.", run.Id); }
+    }
+
+    private static string? MergeContext(string? context, string? output)
+    {
+        if (string.IsNullOrWhiteSpace(output)) return context;
+        try
+        {
+            var next = System.Text.Json.Nodes.JsonNode.Parse(output);
+            if (next is System.Text.Json.Nodes.JsonObject nextObject)
+            {
+                if (System.Text.Json.Nodes.JsonNode.Parse(context ?? "null") is System.Text.Json.Nodes.JsonObject current)
+                {
+                    DeepMerge(current, nextObject);
+                    return current.ToJsonString();
+                }
+                nextObject["previous"] = context is null ? null : System.Text.Json.Nodes.JsonNode.Parse(context);
+                return nextObject.ToJsonString();
+            }
+            if (next is System.Text.Json.Nodes.JsonArray branches
+                && System.Text.Json.Nodes.JsonNode.Parse(context ?? "null") is System.Text.Json.Nodes.JsonObject envelope)
+            {
+                envelope["branches"] = branches;
+                return envelope.ToJsonString();
+            }
+            return next?.ToJsonString();
+        }
+        catch (JsonException) { return output; }
+    }
+
+    private static void DeepMerge(System.Text.Json.Nodes.JsonObject target, System.Text.Json.Nodes.JsonObject source)
+    {
+        foreach (var (key, value) in source)
+        {
+            if (value is System.Text.Json.Nodes.JsonObject sourceObject
+                && target[key] is System.Text.Json.Nodes.JsonObject targetObject)
+                DeepMerge(targetObject, sourceObject);
+            else
+                target[key] = value?.DeepClone();
+        }
     }
 
     private static ChainStepStatus ParseStepOutcome(string runStatus) => runStatus switch

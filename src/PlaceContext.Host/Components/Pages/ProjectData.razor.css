@@ -25,6 +25,111 @@
 .data-summary strong { font-size: 17px; font-weight: 650; }
 .data-summary span { color: var(--text-3); font-size: 11.5px; }
 .table-suite { margin-bottom: 14px; overflow: hidden; }
+.table-workspace-layout {
+    display: flex;
+    gap: 14px;
+    min-height: 0;
+    flex: 1;
+}
+
+.table-workspace {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    position: relative;
+    overflow: hidden;
+}
+
+.table-workspace-main {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    flex: 1;
+    padding: 0 12px 12px;
+    gap: 10px;
+}
+
+.table-workspace-empty {
+    margin: 12px;
+    min-height: 250px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.workspace-tabs {
+    flex: none;
+    display: flex;
+    align-items: flex-end;
+    gap: 6px;
+    border-bottom: 1px solid var(--border);
+    padding: 10px 10px 0;
+    overflow-x: auto;
+}
+
+.workspace-tab {
+    appearance: none;
+    border: 1px solid var(--border);
+    background: var(--card-2);
+    border-radius: 7px 7px 0 0;
+    color: var(--text-3);
+    font: inherit;
+    font-size: 11.5px;
+    padding: 6px 10px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 29px;
+    max-width: 190px;
+    cursor: pointer;
+}
+
+.workspace-tab.active {
+    color: var(--text);
+    border-bottom-color: var(--card);
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+    background: var(--card);
+}
+
+.workspace-tab-name {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.workspace-tab-close {
+    width: 16px;
+    height: 16px;
+    border-radius: 4px;
+    background: transparent;
+    border: none;
+    color: var(--text-3);
+    cursor: pointer;
+}
+
+.workspace-tab-close:hover {
+    color: var(--text-2);
+    background: var(--card-2);
+}
+
+.table-workspace-editor-shell .field-label {
+    margin: 0;
+}
+
+.table-sql-editor {
+    flex: 1;
+    min-height: 150px;
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 9px 10px;
+    resize: vertical;
+    color: var(--text);
+    font: 11.5px/1.45 var(--font-mono, monospace);
+}
+
 .table-suite-head, .sql-workspace-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid var(--border); background: color-mix(in srgb, var(--card-2) 55%, transparent); }
 .table-suite-head > div, .sql-workspace-head > div { display: flex; align-items: baseline; gap: 9px; }
 .table-suite-head strong, .sql-workspace-head strong { font-size: 13px; }
@@ -59,6 +164,13 @@
     .table-actions { grid-column: 2; flex-wrap: wrap; }
     .table-suite-head > div, .sql-workspace-head > div { display: block; }
     .table-suite-head span, .sql-workspace-head span { display: block; margin-top: 2px; }
+    .table-workspace-layout {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+        min-height: 0;
+        flex: 1;
+    }
 }
 
 .head-row {
@@ -949,22 +1061,36 @@
 @media (max-width: 950px) {
     .page {
         padding: 16px 14px;
-        height: 100%;
-        overflow: hidden;
+        /* The data page now flows as a catalogue + SQL workspace. Let the
+           layout's body own vertical scrolling on narrow screens; the old
+           fixed-height rule clipped the tables catalogue below the fold. */
+        height: auto;
+        min-height: 100%;
+        overflow: visible;
     }
 
-    .cols {
+    .cols,
+    .table-workspace-layout {
         flex-direction: column;
         gap: 16px;
         min-height: 0;
         flex: 1;
     }
 
-    .tables-col {
+    .tables-col,
+    .table-workspace {
         width: 100%;
         min-height: 0;
-        max-height: 220px;
         flex: none;
+    }
+
+    .tables-col {
+        max-height: 220px;
+        min-height: 220px;
+    }
+
+    .table-workspace {
+        min-height: 340px;
     }
 
     .tables-grid {

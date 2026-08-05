@@ -48,6 +48,8 @@ public sealed record JobRequest(
     IReadOnlyCollection<int>? PartialExitCodes = null,
     /// <summary>Opt-in outbound network access for the job's containers. Default false (--network none).</summary>
     bool AllowNetworkEgress = false,
+    /// <summary>Opt-in API invocation for this job. Default false.</summary>
+    bool AllowApiInvocation = false,
     IReadOnlyList<JobParameterRequest>? Parameters = null,
     /// <summary>Each entry one of "HtmlReport" | "Chart" | "Csv" | "RawBundle" | "HtmlOutput".</summary>
     IReadOnlyList<string>? PostJobActions = null,
@@ -88,6 +90,7 @@ public sealed record JobResponse(
     IReadOnlyList<int> SuccessExitCodes,
     IReadOnlyList<int> PartialExitCodes,
     bool AllowNetworkEgress,
+    bool AllowApiInvocation,
     IReadOnlyList<JobParameterRequest> Parameters,
     IReadOnlyList<string> PostJobActions,
     string ReturnType,
@@ -112,6 +115,7 @@ internal static class JobApiMapper
         r.SuccessExitCodes ?? new[] { 0 },
         r.PartialExitCodes ?? Array.Empty<int>(),
         r.AllowNetworkEgress,
+        r.AllowApiInvocation,
         ToCodeFiles(r.MapFiles),
         ToCodeFiles(r.ReduceFiles),
         ToParameters(r.Parameters),
@@ -132,6 +136,7 @@ internal static class JobApiMapper
         r.SuccessExitCodes ?? new[] { 0 },
         r.PartialExitCodes ?? Array.Empty<int>(),
         r.AllowNetworkEgress,
+        r.AllowApiInvocation,
         ToCodeFiles(r.MapFiles),
         ToCodeFiles(r.ReduceFiles),
         ToParameters(r.Parameters),
@@ -150,7 +155,7 @@ internal static class JobApiMapper
         v.ReduceSourceKind, v.ReduceImage, v.ReduceRuntimeId, v.ReduceSource, v.ReduceEntrypoint,
         v.ReduceFiles.Select(f => new JobCodeFile(f.Path, f.Content)).ToList(),
         v.ReduceEnv,
-        v.ConcurrencyLimit, v.SuccessExitCodes, v.PartialExitCodes, v.AllowNetworkEgress,
+        v.ConcurrencyLimit, v.SuccessExitCodes, v.PartialExitCodes, v.AllowNetworkEgress, v.AllowApiInvocation,
         v.Parameters.Select(p => new JobParameterRequest(p.Name, p.Label, p.Required, p.Type, p.Options)).ToList(),
         v.PostJobActions.Select(a => a.ToString()).ToList(),
         v.ReturnType.ToString(),

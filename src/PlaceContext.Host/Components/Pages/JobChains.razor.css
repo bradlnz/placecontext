@@ -69,11 +69,29 @@
 .btn-start { align-self:flex-start }
 .status-row { display:flex; align-items:center; gap:8px }
 .status-chip-lg { font-size:12px; font-weight:600; padding:3px 9px; border-radius:5px }
-.running-steps-panel { position:relative; top:0; flex:none; height:100%; min-height:0; overflow:visible; border:1px solid var(--border); border-radius:10px; background:var(--card) }
+.running-steps-panel { position:relative; flex:none; height:auto; min-height:0; overflow:visible; border:1px solid var(--border); border-radius:10px; background:var(--card) }
 .running-steps-head { position:relative; top:0; display:flex; align-items:center; justify-content:space-between; gap:12px; padding:8px 12px; border-bottom:1px solid var(--border); background:var(--card); color:var(--text-2); font-size:11px; font-weight:650; text-transform:uppercase; letter-spacing:.045em }
 .running-steps-head span:last-child { color:var(--text-3); font-size:10px; font-weight:500; text-transform:none; letter-spacing:0 }
 .out-label { font-size:12px; font-weight:600; margin-bottom:4px }
 .json-pre { background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:10px; font-size:11px; font-family:var(--font-mono); white-space:pre-wrap; word-break:break-all; color:var(--text-2); max-height:200px; overflow-y:auto }
+.chain-context-panel { border:1px solid var(--border); border-radius:10px; background:var(--card); padding:9px 10px 10px; display:flex; flex-direction:column; gap:6px; }
+.chain-context-scroll { overflow:auto; border:1px solid var(--border); border-radius:8px; background:var(--card); max-height: 260px; }
+.chain-context-table { width:100%; border-collapse:collapse; table-layout:fixed; font-size:11px; }
+.chain-context-table th,
+.chain-context-table td { padding:8px 10px; border-bottom:1px solid var(--border); vertical-align:top; text-align:left; }
+.chain-context-table thead th { font-size:10px; text-transform:uppercase; letter-spacing:.04em; color:var(--text-3); position:sticky; top:0; background:color-mix(in srgb, var(--card-2) 58%, var(--card)); z-index:1; }
+.chain-context-table tbody tr:hover { background:color-mix(in srgb, var(--card-2) 45%, transparent) }
+.chain-context-cell { word-break:break-all; overflow:hidden; }
+.json-view-button { padding: 2px 8px; border: 1px solid var(--border-2); border-radius: 5px; color: var(--text-2); background: var(--card-2); font: inherit; font-size: 10px; cursor: pointer; }
+.json-view-button:hover { border-color: var(--border); background: var(--hover); }
+.chain-context-path { width:34%; }
+.chain-context-cell code,
+.chain-context-cell .chain-context-value { font-size:10.8px; color:var(--text-2); font-family:var(--font-mono); }
+.chain-context-cell code { display:inline-block; max-width:100%; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.chain-context-preview { display:inline-block; margin-left:8px; color:var(--text-3); font-size:10.2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:min(52vw, 410px); }
+.chain-json-modal { width:min(840px, calc(100vw - 32px)); }
+.chain-json-body { min-height:0; }
+.chain-json-body .json-pre { margin:0; max-height:68vh; }
 .stage-detail { border-top:1px solid var(--border); padding-top:10px }
 .live-output-panel { margin-top:2px; padding:12px; border:1px solid var(--border); border-radius:10px; background:var(--card) }
 .stage-detail-head { font-size:12px; font-weight:600; margin-bottom:6px; display:flex; align-items:center; gap:8px }

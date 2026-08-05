@@ -66,6 +66,7 @@ public sealed record JobManifest(
     IReadOnlyList<int> SuccessExitCodes,
     IReadOnlyList<int> PartialExitCodes,
     bool AllowNetworkEgress,
+    bool AllowApiInvocation,
     int TimeoutSeconds,
     IReadOnlyList<JobParameterDto> Parameters,
     IReadOnlyList<PostJobActionKind> PostJobActions,

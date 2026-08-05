@@ -48,6 +48,7 @@ public sealed class UpdateJobHandler : ICommandHandler<UpdateJobCommand, JobView
             policy,
             _clock.UtcNow,
             allowNetworkEgress: command.AllowNetworkEgress,
+            allowApiInvocation: command.AllowApiInvocation,
             parameters: JobParameterMapper.ToDomain(command.Parameters),
             postJobActions: command.PostJobActions,
             returnType: command.ReturnType,

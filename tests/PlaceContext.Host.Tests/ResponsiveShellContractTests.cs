@@ -86,11 +86,25 @@ public sealed class ResponsiveShellContractTests
     }
 
     [Fact]
+    public void Schedules_table_preserves_horizontal_overflow_on_narrow_viewports()
+    {
+        var markup = ReadHostSource("Components/Pages/Schedules.razor");
+        var styles = ReadHostSource("Components/Pages/Schedules.razor.css");
+
+        Assert.Contains("class=\"table-scroll\"", markup);
+        Assert.Contains("overflow-x: auto", styles);
+        Assert.Contains("min-width: 1026px", styles);
+    }
+
+    [Fact]
     public void Data_tables_page_uses_the_shared_data_navigation()
     {
         var page = ReadHostSource("Components/Pages/ProjectData.razor");
 
-        Assert.Contains("<DataTabs ProjectId=\"ProjectId\" Active=\"@DataSection.Tables\" />", page);
+        Assert.Contains(
+            "<DataTabs ProjectId=\"ProjectId\" Active=\"@DataSection.Tables\" />",
+            page
+        );
     }
 
     [Fact]
@@ -119,7 +133,10 @@ public sealed class ResponsiveShellContractTests
         Assert.Contains(".page { padding: 16px 14px 28px; }", responsive);
         Assert.Contains(".page-head { flex-wrap: wrap", responsive);
         Assert.Contains(".sql-actions { flex-wrap: wrap; }", responsive);
-        Assert.Contains(".sql-chart-grid, .table-chart-grid { grid-template-columns: 1fr; }", responsive);
+        Assert.Contains(
+            ".sql-chart-grid, .table-chart-grid { grid-template-columns: 1fr; }",
+            responsive
+        );
         Assert.Contains(".chart-canvas-box { height: 220px; }", responsive);
     }
 
@@ -165,15 +182,18 @@ public sealed class ResponsiveShellContractTests
         Assert.Contains("client-row-contact", page);
         Assert.Contains("client-row-stage", page);
         Assert.Contains(".client-table-head", styles);
-        Assert.Contains("grid-template-columns: minmax(210px, 1.35fr) minmax(190px, 1fr) minmax(150px, .65fr) 44px;", styles);
+        Assert.Contains(
+            "grid-template-columns: minmax(210px, 1.35fr) minmax(190px, 1fr) minmax(150px, .65fr) 44px;",
+            styles
+        );
         Assert.Contains(".client-row-field-label", styles);
     }
 
     private static string ReadHostSource(string relativePath)
     {
-        var hostRoot = Path.GetFullPath(Path.Combine(
-            AppContext.BaseDirectory,
-            "../../../../../src/PlaceContext.Host"));
+        var hostRoot = Path.GetFullPath(
+            Path.Combine(AppContext.BaseDirectory, "../../../../../src/PlaceContext.Host")
+        );
 
         return File.ReadAllText(Path.Combine(hostRoot, relativePath));
     }

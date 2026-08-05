@@ -22,7 +22,10 @@ public class ApiKeyAuthenticationHandlerTests
     [Fact]
     public async Task Fails_when_no_key_is_configured()
     {
-        var result = await AuthenticateAsync(configuredKey: null, req => req.Headers.Authorization = $"Bearer {ConfiguredKey}");
+        var result = await AuthenticateAsync(
+            configuredKey: null,
+            req => req.Headers.Authorization = $"Bearer {ConfiguredKey}"
+        );
 
         Assert.False(result.Succeeded);
         Assert.Contains("disabled", result.Failure!.Message, StringComparison.OrdinalIgnoreCase);
@@ -39,7 +42,10 @@ public class ApiKeyAuthenticationHandlerTests
     [Fact]
     public async Task Fails_when_the_presented_key_is_wrong()
     {
-        var result = await AuthenticateAsync(ConfiguredKey, req => req.Headers.Authorization = "Bearer wrong-key");
+        var result = await AuthenticateAsync(
+            ConfiguredKey,
+            req => req.Headers.Authorization = "Bearer wrong-key"
+        );
 
         Assert.False(result.Succeeded);
     }
@@ -47,32 +53,50 @@ public class ApiKeyAuthenticationHandlerTests
     [Fact]
     public async Task Succeeds_with_a_correct_bearer_key_and_grants_an_owner_principal()
     {
-        var result = await AuthenticateAsync(ConfiguredKey, req => req.Headers.Authorization = $"Bearer {ConfiguredKey}");
+        var result = await AuthenticateAsync(
+            ConfiguredKey,
+            req => req.Headers.Authorization = $"Bearer {ConfiguredKey}"
+        );
 
         Assert.True(result.Succeeded);
-        Assert.Equal(ApiKeyAuthenticationHandler.PrincipalId.ToString(), result.Principal!.FindFirst("sub")!.Value);
+        Assert.Equal(
+            ApiKeyAuthenticationHandler.PrincipalId.ToString(),
+            result.Principal!.FindFirst("sub")!.Value
+        );
         Assert.Equal("Owner", result.Principal.FindFirst("role")!.Value);
     }
 
     [Fact]
     public async Task Succeeds_with_a_correct_X_Api_Key_header()
     {
-        var result = await AuthenticateAsync(ConfiguredKey, req => req.Headers["X-Api-Key"] = ConfiguredKey);
+        var result = await AuthenticateAsync(
+            ConfiguredKey,
+            req => req.Headers["X-Api-Key"] = ConfiguredKey
+        );
 
         Assert.True(result.Succeeded);
     }
 
-    private static async Task<AuthenticateResult> AuthenticateAsync(string? configuredKey, Action<HttpRequest> configureRequest)
+    private static async Task<AuthenticateResult> AuthenticateAsync(
+        string? configuredKey,
+        Action<HttpRequest> configureRequest
+    )
     {
         var config = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?> { ["PlaceContext:Api:Key"] = configuredKey })
+            .AddInMemoryCollection(
+                new Dictionary<string, string?> { ["PlaceContext:Api:Key"] = configuredKey }
+            )
             .Build();
 
         var services = new ServiceCollection();
         services.AddSingleton<IConfiguration>(config);
         services.AddLogging();
-        services.AddAuthentication(ApiKeyAuthenticationHandler.SchemeName)
-            .AddScheme<ApiKeyAuthenticationOptions, ApiKeyAuthenticationHandler>(ApiKeyAuthenticationHandler.SchemeName, _ => { });
+        services
+            .AddAuthentication(ApiKeyAuthenticationHandler.SchemeName)
+            .AddScheme<ApiKeyAuthenticationOptions, ApiKeyAuthenticationHandler>(
+                ApiKeyAuthenticationHandler.SchemeName,
+                _ => { }
+            );
         await using var provider = services.BuildServiceProvider();
 
         var context = new DefaultHttpContext { RequestServices = provider };

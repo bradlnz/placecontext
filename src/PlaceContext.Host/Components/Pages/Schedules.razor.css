@@ -105,8 +105,16 @@
     overflow: hidden;
 }
 
+.table-scroll {
+    max-width: 100%;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    scrollbar-width: thin;
+}
+
 .trigger-grid {
     display: grid;
+    min-width: 1026px;
     grid-template-columns: 90px minmax(160px, 1fr) minmax(150px, 1fr) minmax(150px, 1fr) 150px 150px 130px;
     gap: 0 16px;
 }

@@ -795,8 +795,12 @@ public sealed class ArtifactsViewModel : PageViewModel, IDisposable
             || extension.Equals(".jpeg", StringComparison.OrdinalIgnoreCase)
             || extension.Equals(".gif", StringComparison.OrdinalIgnoreCase)
             || extension.Equals(".webp", StringComparison.OrdinalIgnoreCase)
+            || extension.Equals(".avif", StringComparison.OrdinalIgnoreCase)
+            || extension.Equals(".bmp", StringComparison.OrdinalIgnoreCase)
+            || extension.Equals(".tif", StringComparison.OrdinalIgnoreCase)
+            || extension.Equals(".tiff", StringComparison.OrdinalIgnoreCase)
             || extension.Equals(".svg", StringComparison.OrdinalIgnoreCase)
-            || extension.Equals(".bmp", StringComparison.OrdinalIgnoreCase);
+            || extension.Equals(".svg", StringComparison.OrdinalIgnoreCase);
     }
 
     public static bool Previewable(string ct) =>

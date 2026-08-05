@@ -57,7 +57,9 @@ public sealed class ApiKeyAuthenticationHandler : AuthenticationHandler<ApiKeyAu
 
     protected override Task<AuthenticateResult> HandleAuthenticateAsync()
     {
-        var configuredKey = _config["PlaceContext:Api:Key"];
+        var configuredKey = Request.Path.StartsWithSegments("/api/customer-portal")
+            ? _config["PlaceContext:CustomerPortal:ApiKey"]
+            : _config["PlaceContext:Api:Key"];
         if (string.IsNullOrWhiteSpace(configuredKey))
             return Task.FromResult(AuthenticateResult.Fail("The management API is disabled: no PlaceContext:Api:Key is configured."));
 

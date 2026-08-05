@@ -47,6 +47,7 @@ public sealed class EfJobRepository : IJobRepository
         existing.ConcurrencyLimit = updated.ConcurrencyLimit;
         existing.ParametersJson = updated.ParametersJson;
         existing.AllowNetworkEgress = updated.AllowNetworkEgress;
+        existing.AllowApiInvocation = updated.AllowApiInvocation;
         existing.TimeoutSeconds = updated.TimeoutSeconds;
         existing.PostJobActionsJson = updated.PostJobActionsJson;
         existing.ReturnType = updated.ReturnType;
@@ -94,6 +95,7 @@ public sealed class EfJobRepository : IJobRepository
             ParametersJson = JsonSerializer.Serialize(
                 job.Parameters.Select(p => new JobParameterJson(p.Name, p.Label, p.Required, p.Type, p.Options.ToList())).ToList(), Json),
             AllowNetworkEgress = job.AllowNetworkEgress,
+            AllowApiInvocation = job.AllowApiInvocation,
             TimeoutSeconds = job.TimeoutSeconds,
             PostJobActionsJson = JsonSerializer.Serialize(job.PostJobActions.Select(a => a.ToString()).ToList(), Json),
             ReturnType = job.ReturnType.ToString(),
@@ -189,7 +191,8 @@ public sealed class EfJobRepository : IJobRepository
         return Job.Rehydrate(
             row.Id, row.ProjectId, row.Name, row.Description,
             mapSpec, reduceSpec, row.ConcurrencyLimit, policy, row.CreatedAt, row.UpdatedAt,
-            allowNetworkEgress: row.AllowNetworkEgress, parameters: parameters,
+            allowNetworkEgress: row.AllowNetworkEgress,
+            allowApiInvocation: row.AllowApiInvocation, parameters: parameters,
             timeoutSeconds: row.TimeoutSeconds, postJobActions: postJobActions,
             returnType: returnType, returnFileName: row.ReturnFileName,
             retryCount: row.RetryCount, retryDelaySeconds: row.RetryDelaySeconds,

@@ -51,8 +51,8 @@
                 var href = Vm.AbsoluteHref(item.Href);
                 if (!isGroup)
                 {
-                    <NavLink class="dcnav" href="@(href ?? "/")" Match="@Vm.MatchFor(href)">
-                        <span class="bar"></span>@((MarkupString)Vm.IconMarkup(item.Icon))<span class="nav-label">@item.Label</span>
+                <NavLink class="dcnav" href="@(href ?? "/")" Match="@Vm.MatchFor(href)" title="@item.Label">
+                    <span class="bar"></span>@((MarkupString)Vm.IconMarkup(string.IsNullOrWhiteSpace(item.Icon) ? item.Id : item.Icon))<span class="nav-label">@item.Label</span>
                         @if (Vm.IsMcp(item))
                         {
                             <span class="mcp-dot"></span>
@@ -63,9 +63,9 @@
                 var expanded = Vm.IsExpanded(item.Id);
                 var groupActive = href is not null && Vm.PathMatches(href);
                 <div class="nav-group">
-                    <button class="dcnav nav-group-toggle@(groupActive ? " active" : null)"
-                            @onclick="@(() => Vm.ToggleGroup(item.Id))">
-                        <span class="bar"></span>@((MarkupString)Vm.IconMarkup(item.Icon))<span class="nav-label">@item.Label</span>
+            <button class="dcnav nav-group-toggle@(groupActive ? " active" : null)"
+                            @onclick="@(() => Vm.ToggleGroup(item.Id))" title="@item.Label">
+                <span class="bar"></span>@((MarkupString)Vm.IconMarkup(string.IsNullOrWhiteSpace(item.Icon) ? item.Id : item.Icon))<span class="nav-label">@item.Label</span>
                         <span class="nav-caret-icon @(expanded ? "open" : null)">@((MarkupString)MainLayoutViewModel.CaretMarkup)</span>
                     </button>
                     @if (expanded)
@@ -74,7 +74,7 @@
                             @foreach (var child in children)
                             {
                                 var childHref = Vm.AbsoluteHref(child.Href) ?? "/";
-                                <NavLink class="dcnav nav-child" href="@childHref" Match="NavLinkMatch.Prefix">
+                                    <NavLink class="dcnav nav-child" href="@childHref" Match="NavLinkMatch.Prefix" title="@child.Label">
                                     <span class="bar"></span><span class="nav-label">@child.Label</span>
                                 </NavLink>
                             }
@@ -83,8 +83,8 @@
                                 @foreach (var e in Vm.Entities)
                                 {
                                     var entityPath = $"/project/{Vm.CurrentProjectId}/entity/{Uri.EscapeDataString(e)}";
-                                    <button class="dcnav nav-child @(Vm.IsEntityActive(e) ? "active" : "")"
-                                            @onclick="@(() => Vm.GoTo(entityPath))">
+                                        <button class="dcnav nav-child @(Vm.IsEntityActive(e) ? "active" : "")"
+                                            @onclick="@(() => Vm.GoTo(entityPath))" title="@e">
                                         <span class="bar"></span><span class="nav-label">@e</span>
                                     </button>
                                 }

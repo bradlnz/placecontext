@@ -6,6 +6,7 @@ using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Ports;
 using PlaceContext.Host;
 using PlaceContext.Infrastructure.Persistence;
+using PlaceContext.Infrastructure.Tenancy;
 
 namespace PlaceContext.Host.Components.ViewModels;
 
@@ -14,10 +15,16 @@ public sealed class AccessSettingsViewModel(
     ICurrentUser CurrentUser,
     PortalUiState Ui,
     NavigationManager Nav,
-    IJSRuntime JS
+    IJSRuntime JS,
+    ITenantStore TenantStore,
+    ICurrentTenant Tenant,
+    IHttpClientFactory HttpClientFactory,
+    IConfiguration Configuration
 ) : PageViewModel
 {
     public const string PageRoute = "/settings/access";
+    public const string ProvisioningKey = "PlaceContext:CustomerPortal:ProvisioningKey";
+    public const string ProvisionUsersRoute = "/api/provision/users";
     public const string ScrollFunction = "placecontext.scrollToElement";
     public IReadOnlyList<string> Permissions => Permission.All;
 
@@ -30,6 +37,12 @@ public sealed class AccessSettingsViewModel(
     public IReadOnlyList<MemberView> Members = Array.Empty<MemberView>();
     public IReadOnlyList<RoleView> Roles = Array.Empty<RoleView>();
     public bool Loading = true;
+    public bool CustomerPortalEnabled;
+    public bool PortalBusy;
+    public string? PortalMessage;
+    public string PortalInviteEmail = "";
+    public string PortalInviteRole = "member";
+    public bool PortalInviting;
     public bool Busy;
     public string? Message;
 
@@ -84,10 +97,85 @@ public sealed class AccessSettingsViewModel(
             Roles = await InScopeAsync<IPlaceContextService, IReadOnlyList<RoleView>>(service =>
                 service.ListRolesAsync()
             );
+            CustomerPortalEnabled =
+                (await TenantStore.GetRowAsync(Tenant.TenantId))?.CustomerPortalEnabled == true;
         }
         finally
         {
             Loading = false;
+        }
+    }
+
+    public async Task SetCustomerPortalEnabledAsync(ChangeEventArgs args)
+    {
+        PortalBusy = true;
+        PortalMessage = null;
+        try
+        {
+            CustomerPortalEnabled = args.Value is bool value && value;
+            await TenantStore.SetCustomerPortalEnabledAsync(Tenant.TenantId, CustomerPortalEnabled);
+            PortalMessage = CustomerPortalEnabled
+                ? "Customer portal accounts enabled. You can now provision invitations for this tenant."
+                : "Customer portal accounts disabled. Existing portal users cannot sign in.";
+        }
+        catch (Exception ex)
+        {
+            PortalMessage = ex.Message;
+        }
+        finally
+        {
+            PortalBusy = false;
+        }
+    }
+
+    public async Task InviteCustomerPortalUserAsync()
+    {
+        if (string.IsNullOrWhiteSpace(PortalInviteEmail) || !PortalInviteEmail.Contains('@'))
+        {
+            PortalMessage = "Enter a valid customer email.";
+            return;
+        }
+
+        PortalInviting = true;
+        try
+        {
+            var tenant = await TenantStore.GetRowAsync(Tenant.TenantId);
+            var key = Configuration[ProvisioningKey];
+            if (tenant is null || string.IsNullOrWhiteSpace(tenant.CustomerPortalDomain))
+                throw new InvalidOperationException(
+                    "Configure the customer portal domain before inviting users."
+                );
+            if (string.IsNullOrWhiteSpace(key))
+                throw new InvalidOperationException(
+                    "Customer portal provisioning is not configured."
+                );
+
+            var client = HttpClientFactory.CreateClient();
+            client.BaseAddress = new Uri($"https://{tenant.CustomerPortalDomain}");
+            client.DefaultRequestHeaders.Add("X-PlaceContext-Provisioning-Key", key);
+            client.DefaultRequestHeaders.Add(
+                "X-PlaceContext-Tenant-Id",
+                Tenant.TenantId.ToString()
+            );
+            using var response = await client.PostAsJsonAsync(
+                ProvisionUsersRoute,
+                new { email = PortalInviteEmail.Trim(), role = PortalInviteRole }
+            );
+            if (!response.IsSuccessStatusCode)
+                throw new InvalidOperationException(
+                    $"Portal invitation failed ({(int)response.StatusCode})."
+                );
+
+            PortalMessage = $"Invitation sent to {PortalInviteEmail.Trim()}.";
+            PortalInviteEmail = "";
+        }
+        catch (Exception ex)
+        {
+            PortalMessage = ex.Message;
+        }
+        finally
+        {
+            PortalInviting = false;
         }
     }
 

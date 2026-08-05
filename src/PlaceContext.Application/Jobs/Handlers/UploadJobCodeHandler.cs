@@ -53,6 +53,7 @@ public sealed class UploadJobCodeHandler : ICommandHandler<UploadJobCodeCommand,
             var mapSpec = new MapSpec(codeSource, job.MapSpec.InputPayloads, job.MapSpec.Env);
             job.Update(job.Name, job.Description, mapSpec, job.ReduceSpec, job.ConcurrencyLimit,
                 job.ExitCodePolicy, _clock.UtcNow, job.AllowNetworkEgress,
+                allowApiInvocation: job.AllowApiInvocation,
                 timeoutSeconds: job.TimeoutSeconds, returnType: job.ReturnType, returnFileName: job.ReturnFileName,
                 retryCount: job.RetryCount, retryDelaySeconds: job.RetryDelaySeconds);
             await _jobs.UpdateAsync(job, ct);

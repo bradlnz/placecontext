@@ -1,5 +1,7 @@
 **/.git
 **/bin
+!customer-portal/bin/
+!customer-portal/bin/rails
 **/obj
 **/.vs
 **/.idea

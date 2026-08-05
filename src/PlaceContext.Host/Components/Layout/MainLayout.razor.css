@@ -7,12 +7,56 @@
 }
 
 .sidebar {
-    width: 220px;
+    width: 62px;
     flex: none;
     display: flex;
     flex-direction: column;
     background: var(--panel);
     border-right: 1px solid var(--border);
+    overflow: hidden;
+    transition: width .2s cubic-bezier(.4, 0, .2, 1);
+}
+
+.sidebar:hover {
+    width: 220px;
+    overflow: visible;
+}
+
+.brand-text,
+.brand-text .title-14,
+.brand-text .org-name,
+.nav-label,
+.nav-section,
+.switcher-name,
+.switcher-caret,
+.user-detail,
+.user-role,
+.user-name,
+.nav-child .bar,
+.dcnav .nav-caret-icon,
+.mcp-dot {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.sidebar:not(:hover) .nav-label,
+.sidebar:not(:hover) .brand-text,
+.sidebar:not(:hover) .nav-section,
+.sidebar:not(:hover) .switcher-name,
+.sidebar:not(:hover) .switcher-caret,
+.sidebar:not(:hover) .user-detail {
+    width: 0;
+    max-width: 0;
+    opacity: 0;
+    margin-left: 0;
+    margin-right: 0;
+    padding-left: 0;
+    padding-right: 0;
+}
+
+.sidebar:not(:hover) .nav-child .bar {
+    left: -8px;
 }
 
 .brand-row {

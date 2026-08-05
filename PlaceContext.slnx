@@ -3,6 +3,7 @@
     <Project Path="src/PlaceContext.Application/PlaceContext.Application.csproj" />
     <Project Path="src/PlaceContext.Domain/PlaceContext.Domain.csproj" />
     <Project Path="src/PlaceContext.Host/PlaceContext.Host.csproj" />
+    <Project Path="src/PlaceContext.CustomerPortal/PlaceContext.CustomerPortal.csproj" />
     <Project Path="src/PlaceContext.Infrastructure/PlaceContext.Infrastructure.csproj" />
     <Project Path="src/PlaceContext.Sync/PlaceContext.Sync.csproj" />
     <Project Path="src/PlaceContext.Sync.Transport/PlaceContext.Sync.Transport.csproj" />

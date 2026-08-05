@@ -7,11 +7,13 @@ public sealed class JsonPayloadHelperTests
     [Fact]
     public void FlattenScalars_takes_first_occurrence_and_skips_nested()
     {
-        var result = JsonPayloadHelper.FlattenScalars(new[]
-        {
-            """{"address":"A","nested":{"x":1},"tags":[1],"n":42,"ok":true}""",
-            """{"address":"B","extra":"z"}""",
-        });
+        var result = JsonPayloadHelper.FlattenScalars(
+            new[]
+            {
+                """{"address":"A","nested":{"x":1},"tags":[1],"n":42,"ok":true}""",
+                """{"address":"B","extra":"z"}""",
+            }
+        );
 
         Assert.Equal("A", result["address"]);
         Assert.Equal("42", result["n"]);
@@ -31,13 +33,16 @@ public sealed class JsonPayloadHelperTests
     [Fact]
     public void FlattenScalars_retains_file_marker_as_json()
     {
-        var result = JsonPayloadHelper.FlattenScalars(new[]
-        {
-            """{"source_file":{"$file":{"bucket":"reports","key":"job-inputs/p/plan.pdf"}}}""",
-        });
+        var result = JsonPayloadHelper.FlattenScalars(
+            new[]
+            {
+                """{"source_file":{"$file":{"bucket":"reports","key":"job-inputs/p/plan.pdf"}}}""",
+            }
+        );
 
         Assert.Equal(
             """{"$file":{"bucket":"reports","key":"job-inputs/p/plan.pdf"}}""",
-            result["source_file"]);
+            result["source_file"]
+        );
     }
 }

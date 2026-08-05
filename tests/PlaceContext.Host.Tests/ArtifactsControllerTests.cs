@@ -32,7 +32,10 @@ public class ArtifactsControllerTests
         var file = Assert.IsType<FileStreamResult>(result);
         Assert.StartsWith("text/html", file.ContentType);
         Assert.True(string.IsNullOrEmpty(file.FileDownloadName)); // inline, not a download
-        Assert.Equal("sandbox allow-popups; frame-ancestors 'self'", headers["Content-Security-Policy"]);
+        Assert.Equal(
+            "sandbox allow-popups; frame-ancestors 'self'",
+            headers["Content-Security-Policy"]
+        );
         Assert.Equal("SAMEORIGIN", headers["X-Frame-Options"]);
         Assert.StartsWith("inline;", headers.ContentDisposition.ToString());
     }
@@ -89,7 +92,9 @@ public class ArtifactsControllerTests
     }
 
     private static async Task<(IActionResult Result, IHeaderDictionary Headers)> GetAsync(
-        string contentType, string objectKey = "runs/x/artifact.bin")
+        string contentType,
+        string objectKey = "runs/x/artifact.bin"
+    )
     {
         var link = MakeLink(contentType, objectKey);
         var controller = MakeController(link, out var http);
@@ -99,11 +104,23 @@ public class ArtifactsControllerTests
 
     private static RunArtifactLink MakeLink(string contentType, string objectKey) =>
         RunArtifactLink.Create(
-            RunId, Guid.NewGuid(), Guid.NewGuid(), PostJobActionKind.HtmlReport,
-            "artifact", "reports", objectKey, contentType, 3, DateTimeOffset.UtcNow);
+            RunId,
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            PostJobActionKind.HtmlReport,
+            "artifact",
+            "reports",
+            objectKey,
+            contentType,
+            3,
+            DateTimeOffset.UtcNow
+        );
 
-    private static ArtifactsController MakeController(RunArtifactLink link, out DefaultHttpContext http,
-        string? storedContentType = null)
+    private static ArtifactsController MakeController(
+        RunArtifactLink link,
+        out DefaultHttpContext http,
+        string? storedContentType = null
+    )
     {
         http = new DefaultHttpContext();
         return new ArtifactsController(new StubLinks(link), new StubStore(link, storedContentType))
@@ -117,33 +134,87 @@ public class ArtifactsControllerTests
         public Task<RunArtifactLink?> GetByIdAsync(Guid id, CancellationToken ct = default) =>
             Task.FromResult(id == link.Id ? link : null);
 
-        public Task AddAsync(RunArtifactLink l, CancellationToken ct = default) => Task.CompletedTask;
-        public Task<IReadOnlyList<RunArtifactLink>> ListForRunAsync(Guid runId, CancellationToken ct = default) => Empty();
-        public Task<IReadOnlyList<RunArtifactLink>> ListForJobAsync(Guid jobId, CancellationToken ct = default) => Empty();
-        public Task<IReadOnlyList<RunArtifactLink>> ListRecentAsync(int take, CancellationToken ct = default) => Empty();
-        public Task<IReadOnlyList<RunArtifactLink>> ListForProjectAsync(Guid projectId, int take, string? search = null, CancellationToken ct = default) => Empty();
+        public Task AddAsync(RunArtifactLink l, CancellationToken ct = default) =>
+            Task.CompletedTask;
+
+        public Task<IReadOnlyList<RunArtifactLink>> ListForRunAsync(
+            Guid runId,
+            CancellationToken ct = default
+        ) => Empty();
+
+        public Task<IReadOnlyList<RunArtifactLink>> ListForJobAsync(
+            Guid jobId,
+            CancellationToken ct = default
+        ) => Empty();
+
+        public Task<IReadOnlyList<RunArtifactLink>> ListRecentAsync(
+            int take,
+            CancellationToken ct = default
+        ) => Empty();
+
+        public Task<IReadOnlyList<RunArtifactLink>> ListForProjectAsync(
+            Guid projectId,
+            int take,
+            string? search = null,
+            CancellationToken ct = default
+        ) => Empty();
+
         public Task RemoveAsync(Guid id, CancellationToken ct = default) => Task.CompletedTask;
 
         private static Task<IReadOnlyList<RunArtifactLink>> Empty() =>
             Task.FromResult<IReadOnlyList<RunArtifactLink>>(Array.Empty<RunArtifactLink>());
     }
 
-    private sealed class StubStore(RunArtifactLink link, string? storedContentType = null) : IObjectStore
+    private sealed class StubStore(RunArtifactLink link, string? storedContentType = null)
+        : IObjectStore
     {
         public bool IsEnabled => true;
         public string ReportsBucket => link.Bucket;
         public string DepsBucket => "placecontext-deps";
 
-        public Task<ObjectDownload?> OpenReadAsync(string bucket, string key, CancellationToken ct = default) =>
-            Task.FromResult<ObjectDownload?>(bucket == link.Bucket && key == link.ObjectKey
-                ? new ObjectDownload(new MemoryStream(Encoding.UTF8.GetBytes("hi!")), storedContentType ?? link.ContentType)
-                : null);
+        public Task<ObjectDownload?> OpenReadAsync(
+            string bucket,
+            string key,
+            CancellationToken ct = default
+        ) =>
+            Task.FromResult<ObjectDownload?>(
+                bucket == link.Bucket && key == link.ObjectKey
+                    ? new ObjectDownload(
+                        new MemoryStream(Encoding.UTF8.GetBytes("hi!")),
+                        storedContentType ?? link.ContentType
+                    )
+                    : null
+            );
 
-        public Task PutAsync(string bucket, string key, byte[] content, string contentType, CancellationToken ct = default) => Task.CompletedTask;
-        public Task DeleteAsync(string bucket, string key, CancellationToken ct = default) => Task.CompletedTask;
-        public Task<bool> ExistsAsync(string bucket, string key, CancellationToken ct = default) => Task.FromResult(false);
-        public Task EnsureBucketAsync(string bucket, CancellationToken ct = default) => Task.CompletedTask;
-        public Task<string> PresignDownloadAsync(string bucket, string key, TimeSpan ttl, CancellationToken ct = default) => Task.FromResult("");
-        public Task<string> PresignUploadAsync(string bucket, string key, TimeSpan ttl, CancellationToken ct = default) => Task.FromResult("");
+        public Task PutAsync(
+            string bucket,
+            string key,
+            byte[] content,
+            string contentType,
+            CancellationToken ct = default
+        ) => Task.CompletedTask;
+
+        public Task DeleteAsync(string bucket, string key, CancellationToken ct = default) =>
+            Task.CompletedTask;
+
+        public Task<bool> ExistsAsync(string bucket, string key, CancellationToken ct = default) =>
+            Task.FromResult(false);
+
+        public Task EnsureBucketAsync(string bucket, CancellationToken ct = default) =>
+            Task.CompletedTask;
+
+        public Task<string> PresignDownloadAsync(
+            string bucket,
+            string key,
+            TimeSpan ttl,
+            CancellationToken ct = default
+        ) => Task.FromResult("");
+
+        public Task<string> PresignUploadAsync(
+            string bucket,
+            string key,
+            TimeSpan ttl,
+            CancellationToken ct = default
+        ) => Task.FromResult("");
     }
 }

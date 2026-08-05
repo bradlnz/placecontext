@@ -265,6 +265,18 @@ window.placecontext = {
       if (activeDialog && !activeDialog.contains(event.target)) focusFirst(activeDialog);
     });
 
+    // A panel's header, empty space, and scroll surface are often plain divs.
+    // On touch devices those taps do not move focus, which leaves the focus
+    // context behind the overlay and makes keyboard/screen-reader navigation
+    // start from the page underneath. Keep native focus for controls, but put
+    // the focusable dialog itself in focus when its non-interactive surface is
+    // tapped.
+    document.addEventListener('pointerdown', event => {
+      if (!activeDialog || !(event.target instanceof Element) || !activeDialog.contains(event.target)) return;
+      if (event.target.closest(focusableSelector)) return;
+      activeDialog.focus({ preventScroll: true });
+    }, true);
+
     this.focusLayerObserver = new MutationObserver(queueSync);
     this.focusLayerObserver.observe(document.body, {
       childList: true,

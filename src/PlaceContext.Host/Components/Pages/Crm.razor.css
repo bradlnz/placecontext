@@ -3048,3 +3048,133 @@
         min-width: 0;
     }
 }
+
+/* Enterprise visual treatment: keep CRM information-dense and calm. Brand colour is
+   reserved for navigation and primary actions; lifecycle and calendar colours no longer
+   compete with the data, while success/failure states retain their semantic colours. */
+.crm-page .crm-eyebrow { color: var(--text-3); }
+.crm-page .eyebrow-mark,
+.crm-page .crm-section-nav button.active,
+.crm-page .crm-message,
+.crm-page .automation-overview,
+.crm-page .lifecycle-head,
+.crm-page .crm-empty,
+.crm-page .detail-hero {
+    background: var(--card);
+    background-image: none;
+}
+.crm-page .eyebrow-mark { border-color: var(--border); }
+.crm-page .crm-section-nav button.active {
+    border-bottom-color: var(--brand);
+}
+.crm-page .crm-section-nav button.active svg { color: var(--text-2); }
+.crm-page .crm-message { border-color: var(--border); }
+.crm-page .automation-mark,
+.crm-page .empty-icon {
+    border-color: var(--border);
+    background: var(--card-2);
+    color: var(--text-2);
+}
+.crm-page .lifecycle-panel { box-shadow: none; }
+.crm-page .lifecycle-step,
+.crm-page .client-row-stage,
+.crm-page .stage-lead,
+.crm-page .stage-qualified,
+.crm-page .stage-onboarding,
+.crm-page .stage-active,
+.crm-page .stage-atrisk,
+.crm-page .stage-churned {
+    --stage-color: var(--text-2);
+}
+.crm-page .lifecycle-step:hover,
+.crm-page .lifecycle-step.selected {
+    background: var(--card-2);
+}
+.crm-page .lifecycle-step.selected {
+    box-shadow: inset 0 0 0 1px var(--border-2);
+}
+.crm-page .calendar-swatch { background: var(--text-3) !important; }
+.crm-page .calendar-event {
+    --event-color: var(--brand-2) !important;
+    background: var(--card-2);
+}
+
+/* Client detail pane: quiet, structured chrome with a consistent icon language. */
+.crm-page .crm-detail {
+    width: min(500px, 100vw);
+}
+.crm-page .crm-detail .dcslide-head {
+    min-height: 66px;
+    padding: 12px 18px;
+    background: var(--card);
+}
+.crm-page .detail-avatar {
+    border-color: var(--border-2);
+    border-radius: 8px;
+    background: var(--card-2);
+    color: var(--text-2);
+}
+.crm-page .detail-avatar .crm-svg-icon {
+    width: 19px;
+    height: 19px;
+}
+.crm-page .detail-hero {
+    margin: 0 -18px;
+    padding: 10px 18px;
+    border-bottom-color: var(--border);
+}
+.crm-page .detail-hero .hero-stage {
+    color: var(--text-2);
+}
+.crm-page .detail-hero .badge-dot {
+    background: var(--text-3);
+}
+.crm-page .detail-tabs {
+    gap: 2px;
+    border-radius: 8px;
+}
+.crm-page .detail-tabs button {
+    gap: 5px;
+    min-height: 34px;
+}
+.crm-page .detail-tabs button .crm-svg-icon {
+    width: 13px;
+    height: 13px;
+    color: var(--text-3);
+}
+.crm-page .detail-tabs button.active .crm-svg-icon {
+    color: var(--text-2);
+}
+.crm-page .detail-tabs .tab-count {
+    background: var(--card-2);
+    color: var(--text-2);
+}
+.crm-page .detail-section {
+    padding-top: 15px;
+}
+.crm-page .action-panel {
+    padding: 13px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--card-2);
+}
+.crm-page .action-panel .section-help {
+    margin-bottom: 12px;
+}
+.crm-portal-provisioning-row { display:flex; gap:9px; align-items:center; }
+.crm-portal-provisioning-row .dcinput { flex:1; }
+.detail-help { margin:4px 0 10px; color:var(--text-2); font-size:12px; }
+.portal-section .dcbtn { display:inline-flex; align-items:center; gap:6px; }
+.portal-section .dcbtn svg { width:13px; height:13px; }
+.portal-status { display:flex; align-items:center; gap:8px; margin-bottom:10px; color:var(--text-2); font-size:11.5px; }
+.portal-status strong { color:var(--text); font-weight:650; }
+.portal-status-dot { width:7px; height:7px; border-radius:50%; background:var(--text-3); }
+.portal-status-dot.enabled { background:var(--good); box-shadow:0 0 0 3px color-mix(in srgb, var(--good) 12%, transparent); }
+.portal-actions { display:flex; gap:8px; flex-wrap:wrap; }
+.portal-message { margin-top:10px; padding:9px 11px; border:1px solid color-mix(in srgb, var(--good) 28%, var(--border)); border-radius:7px; background:color-mix(in srgb, var(--good) 8%, var(--card)); color:var(--text-2); font-size:11px; }
+.portal-editor { width:min(480px, 100vw); }
+.notes-section-head { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:8px; }
+.notes-section-head .dcbtn { display:inline-flex; align-items:center; gap:5px; }
+.notes-section-head .dcbtn svg { width:12px; height:12px; }
+.notes-metadata-editor { width:min(560px, 100vw); }
+.notes-metadata-json { margin:0; padding:12px; overflow:auto; max-height:60vh; border:1px solid var(--border); border-radius:8px; background:var(--card-2); color:var(--text-2); font-size:11px; line-height:1.55; }

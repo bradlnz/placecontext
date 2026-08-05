@@ -22,6 +22,7 @@ public sealed class Job : AggregateRoot
         int concurrencyLimit,
         ExitCodePolicy exitCodePolicy,
         bool allowNetworkEgress,
+        bool allowApiInvocation,
         int timeoutSeconds,
         IReadOnlyList<JobParameter> parameters,
         IReadOnlyList<PostJobActionKind> postJobActions,
@@ -42,6 +43,7 @@ public sealed class Job : AggregateRoot
         ConcurrencyLimit = concurrencyLimit;
         ExitCodePolicy = exitCodePolicy;
         AllowNetworkEgress = allowNetworkEgress;
+        AllowApiInvocation = allowApiInvocation;
         TimeoutSeconds = timeoutSeconds;
         Parameters = parameters;
         PostJobActions = postJobActions;
@@ -86,6 +88,12 @@ public sealed class Job : AggregateRoot
     /// When false (default), <c>--network none</c> is applied. Opt-in per job — not enabled by default.
     /// </summary>
     public bool AllowNetworkEgress { get; private set; }
+
+    /// <summary>
+    /// When true, the job can be executed through the public API endpoint.
+    /// By default, jobs are not API-callable.
+    /// </summary>
+    public bool AllowApiInvocation { get; private set; }
 
     /// <summary>
     /// Per-container wall-clock timeout in seconds. A container exceeding this is killed and the shard
@@ -150,7 +158,8 @@ public sealed class Job : AggregateRoot
         string? returnFileName = null,
         int retryCount = 0,
         int retryDelaySeconds = 0,
-        IReadOnlyList<Guid>? mcpConnectionIds = null)
+        IReadOnlyList<Guid>? mcpConnectionIds = null,
+        bool allowApiInvocation = false)
     {
         if (projectId == Guid.Empty)
             throw new ArgumentException("ProjectId must not be empty.", nameof(projectId));
@@ -170,7 +179,7 @@ public sealed class Job : AggregateRoot
         return new Job(
             Guid.NewGuid(), projectId, name.Trim(), description?.Trim(),
             mapSpec, reduceSpec, concurrencyLimit, exitCodePolicy,
-            allowNetworkEgress, NormalizeTimeout(timeoutSeconds), parameters ?? Array.Empty<JobParameter>(),
+            allowNetworkEgress, allowApiInvocation, NormalizeTimeout(timeoutSeconds), parameters ?? Array.Empty<JobParameter>(),
             DistinctActions(postJobActions), returnType, returnFileName, retryCount, retryDelaySeconds,
             mcpConnectionIds ?? Array.Empty<Guid>(),
             createdAt, createdAt);
@@ -204,9 +213,10 @@ public sealed class Job : AggregateRoot
         string? returnFileName = null,
         int retryCount = 0,
         int retryDelaySeconds = 0,
-        IReadOnlyList<Guid>? mcpConnectionIds = null)
+        IReadOnlyList<Guid>? mcpConnectionIds = null,
+        bool allowApiInvocation = false)
         => new(id, projectId, name, description, mapSpec, reduceSpec, concurrencyLimit, exitCodePolicy,
-               allowNetworkEgress, NormalizeTimeout(timeoutSeconds), parameters ?? Array.Empty<JobParameter>(),
+               allowNetworkEgress, allowApiInvocation, NormalizeTimeout(timeoutSeconds), parameters ?? Array.Empty<JobParameter>(),
                DistinctActions(postJobActions), returnType, returnFileName, retryCount, retryDelaySeconds,
                mcpConnectionIds ?? Array.Empty<Guid>(),
                createdAt, updatedAt);
@@ -232,7 +242,8 @@ public sealed class Job : AggregateRoot
         string? returnFileName = null,
         int retryCount = 0,
         int retryDelaySeconds = 0,
-        IReadOnlyList<Guid>? mcpConnectionIds = null)
+        IReadOnlyList<Guid>? mcpConnectionIds = null,
+        bool allowApiInvocation = false)
     {
         if (string.IsNullOrWhiteSpace(name))
             throw new ArgumentException("Job name must not be empty.", nameof(name));
@@ -254,6 +265,7 @@ public sealed class Job : AggregateRoot
         ConcurrencyLimit = concurrencyLimit;
         ExitCodePolicy = exitCodePolicy;
         AllowNetworkEgress = allowNetworkEgress;
+        AllowApiInvocation = allowApiInvocation;
         TimeoutSeconds = NormalizeTimeout(timeoutSeconds);
         if (parameters is not null) Parameters = parameters;
         if (postJobActions is not null) PostJobActions = DistinctActions(postJobActions);

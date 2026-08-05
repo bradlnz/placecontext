@@ -11,7 +11,8 @@ public sealed class BrandingThemeTests
             BgColor: "#101112",
             PanelColor: "#202122",
             TextColor: "#f0f1f2",
-            AccentColor: "#3366cc");
+            AccentColor: "#3366cc"
+        );
 
         var css = branding.CssOverrides();
 

@@ -17,7 +17,8 @@ public class JobsCodeArchiveBuilderTests
         var manifest = Manifest(
             new ProjectManifest(projectId, "Analytics / Prod", "/analytics"),
             CodeJob(projectId, codeJobId),
-            ImageJob(projectId, imageJobId));
+            ImageJob(projectId, imageJobId)
+        );
 
         var bytes = JobsCodeArchiveBuilder.Build(manifest);
 
@@ -39,8 +40,14 @@ public class JobsCodeArchiveBuilderTests
         var imageJobFolder = $"Container only--{imageJobId.ToString("N")[..8]}";
         var imageJobRoot = $"placecontext-jobs/{projectFolder}/{imageJobFolder}";
         Assert.Contains($"{imageJobRoot}/job.json", entries.Keys);
-        Assert.DoesNotContain(entries.Keys, path => path.StartsWith($"{imageJobRoot}/map/", StringComparison.Ordinal));
-        Assert.Contains("\"image\": \"example/worker:latest\"", Read(entries[$"{imageJobRoot}/job.json"]));
+        Assert.DoesNotContain(
+            entries.Keys,
+            path => path.StartsWith($"{imageJobRoot}/map/", StringComparison.Ordinal)
+        );
+        Assert.Contains(
+            "\"image\": \"example/worker:latest\"",
+            Read(entries[$"{imageJobRoot}/job.json"])
+        );
     }
 
     [Fact]
@@ -55,17 +62,37 @@ public class JobsCodeArchiveBuilderTests
                 new CodeFileDto("../../token.txt", "first"),
                 new CodeFileDto("a:b/token.txt", "second"),
                 new CodeFileDto("a?b/token.txt", "third"),
-            ]);
+            ]
+        );
 
         var bytes = JobsCodeArchiveBuilder.Build(
-            Manifest(new ProjectManifest(projectId, "Project", "/project"), job));
+            Manifest(new ProjectManifest(projectId, "Project", "/project"), job)
+        );
 
         using var archive = new ZipArchive(new MemoryStream(bytes), ZipArchiveMode.Read);
-        Assert.DoesNotContain(archive.Entries, entry => entry.FullName.Contains("../", StringComparison.Ordinal));
-        Assert.Equal(archive.Entries.Count, archive.Entries.Select(entry => entry.FullName).Distinct(StringComparer.OrdinalIgnoreCase).Count());
-        Assert.Contains(archive.Entries, entry => entry.FullName.EndsWith("/map/_/_/token.txt", StringComparison.Ordinal));
-        Assert.Contains(archive.Entries, entry => entry.FullName.EndsWith("/map/a-b/token.txt", StringComparison.Ordinal));
-        Assert.Contains(archive.Entries, entry => entry.FullName.EndsWith("/map/a-b/token-2.txt", StringComparison.Ordinal));
+        Assert.DoesNotContain(
+            archive.Entries,
+            entry => entry.FullName.Contains("../", StringComparison.Ordinal)
+        );
+        Assert.Equal(
+            archive.Entries.Count,
+            archive
+                .Entries.Select(entry => entry.FullName)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Count()
+        );
+        Assert.Contains(
+            archive.Entries,
+            entry => entry.FullName.EndsWith("/map/_/_/token.txt", StringComparison.Ordinal)
+        );
+        Assert.Contains(
+            archive.Entries,
+            entry => entry.FullName.EndsWith("/map/a-b/token.txt", StringComparison.Ordinal)
+        );
+        Assert.Contains(
+            archive.Entries,
+            entry => entry.FullName.EndsWith("/map/a-b/token-2.txt", StringComparison.Ordinal)
+        );
     }
 
     private static BackupManifest Manifest(ProjectManifest project, params JobManifest[] jobs) =>
@@ -78,12 +105,14 @@ public class JobsCodeArchiveBuilderTests
             [],
             [],
             [],
-            []);
+            []
+        );
 
     private static JobManifest CodeJob(
         Guid projectId,
         Guid jobId,
-        IReadOnlyList<CodeFileDto>? mapFiles = null) =>
+        IReadOnlyList<CodeFileDto>? mapFiles = null
+    ) =>
         new(
             jobId,
             projectId,
@@ -93,11 +122,12 @@ public class JobsCodeArchiveBuilderTests
             null,
             "python",
             "src/main.py",
-            mapFiles ??
-            [
-                new CodeFileDto("src/main.py", "print('map')"),
-                new CodeFileDto("lib/helpers.py", "def helper(): pass"),
-            ],
+            mapFiles
+                ??
+                [
+                    new CodeFileDto("src/main.py", "print('map')"),
+                    new CodeFileDto("lib/helpers.py", "def helper(): pass"),
+                ],
             [],
             new Dictionary<string, string> { ["API_KEY"] = "super-secret" },
             "code",
@@ -110,11 +140,13 @@ public class JobsCodeArchiveBuilderTests
             [0],
             [],
             false,
+            false,
             300,
             [],
             [],
             JobReturnType.Json,
-            null);
+            null
+        );
 
     private static JobManifest ImageJob(Guid projectId, Guid jobId) =>
         new(
@@ -139,11 +171,13 @@ public class JobsCodeArchiveBuilderTests
             [0],
             [],
             false,
+            false,
             300,
             [],
             [],
             JobReturnType.Json,
-            null);
+            null
+        );
 
     private static string Read(ZipArchiveEntry entry)
     {

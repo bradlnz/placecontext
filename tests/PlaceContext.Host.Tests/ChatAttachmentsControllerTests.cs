@@ -52,7 +52,10 @@ public class ChatAttachmentsControllerTests
         var file = Assert.IsType<FileStreamResult>(result);
         Assert.StartsWith("text/html", file.ContentType);
         Assert.True(string.IsNullOrEmpty(file.FileDownloadName));
-        Assert.Equal("sandbox allow-popups; frame-ancestors 'self'", http.Response.Headers["Content-Security-Policy"]);
+        Assert.Equal(
+            "sandbox allow-popups; frame-ancestors 'self'",
+            http.Response.Headers["Content-Security-Policy"]
+        );
     }
 
     [Fact]
@@ -129,11 +132,17 @@ public class ChatAttachmentsControllerTests
     }
 
     private static ChatAttachmentsController MakeController(
-        string? servedKey, string contentType, out DefaultHttpContext http, bool storeEnabled = true)
+        string? servedKey,
+        string contentType,
+        out DefaultHttpContext http,
+        bool storeEnabled = true
+    )
     {
         http = new DefaultHttpContext();
         return new ChatAttachmentsController(
-            new StubTenant(TenantId), new StubStore(storeEnabled, servedKey, contentType))
+            new StubTenant(TenantId),
+            new StubStore(storeEnabled, servedKey, contentType)
+        )
         {
             ControllerContext = new ControllerContext { HttpContext = http },
         };
@@ -147,23 +156,56 @@ public class ChatAttachmentsControllerTests
         public bool IsResolved => true;
     }
 
-    private sealed class StubStore(bool enabled, string? servedKey, string contentType) : IObjectStore
+    private sealed class StubStore(bool enabled, string? servedKey, string contentType)
+        : IObjectStore
     {
         public bool IsEnabled => enabled;
         public string ReportsBucket => "placecontext-reports";
         public string DepsBucket => "placecontext-deps";
 
-        public Task<ObjectDownload?> OpenReadAsync(string bucket, string key, CancellationToken ct = default) =>
+        public Task<ObjectDownload?> OpenReadAsync(
+            string bucket,
+            string key,
+            CancellationToken ct = default
+        ) =>
             Task.FromResult<ObjectDownload?>(
                 enabled && bucket == ChatAttachmentsController.Bucket && key == servedKey
-                    ? new ObjectDownload(new MemoryStream(Encoding.UTF8.GetBytes("hi!")), contentType)
-                    : null);
+                    ? new ObjectDownload(
+                        new MemoryStream(Encoding.UTF8.GetBytes("hi!")),
+                        contentType
+                    )
+                    : null
+            );
 
-        public Task PutAsync(string bucket, string key, byte[] content, string contentType, CancellationToken ct = default) => Task.CompletedTask;
-        public Task DeleteAsync(string bucket, string key, CancellationToken ct = default) => Task.CompletedTask;
-        public Task<bool> ExistsAsync(string bucket, string key, CancellationToken ct = default) => Task.FromResult(false);
-        public Task EnsureBucketAsync(string bucket, CancellationToken ct = default) => Task.CompletedTask;
-        public Task<string> PresignDownloadAsync(string bucket, string key, TimeSpan ttl, CancellationToken ct = default) => Task.FromResult("");
-        public Task<string> PresignUploadAsync(string bucket, string key, TimeSpan ttl, CancellationToken ct = default) => Task.FromResult("");
+        public Task PutAsync(
+            string bucket,
+            string key,
+            byte[] content,
+            string contentType,
+            CancellationToken ct = default
+        ) => Task.CompletedTask;
+
+        public Task DeleteAsync(string bucket, string key, CancellationToken ct = default) =>
+            Task.CompletedTask;
+
+        public Task<bool> ExistsAsync(string bucket, string key, CancellationToken ct = default) =>
+            Task.FromResult(false);
+
+        public Task EnsureBucketAsync(string bucket, CancellationToken ct = default) =>
+            Task.CompletedTask;
+
+        public Task<string> PresignDownloadAsync(
+            string bucket,
+            string key,
+            TimeSpan ttl,
+            CancellationToken ct = default
+        ) => Task.FromResult("");
+
+        public Task<string> PresignUploadAsync(
+            string bucket,
+            string key,
+            TimeSpan ttl,
+            CancellationToken ct = default
+        ) => Task.FromResult("");
     }
 }

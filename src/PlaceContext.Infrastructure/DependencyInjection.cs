@@ -122,6 +122,7 @@ public static class DependencyInjection
                 opts.InstanceName = "pc";
             });
             services.AddSingleton<Caching.IJobRunCache, Caching.RedisJobRunCache>();
+            services.AddSingleton<IChainContextStore, Caching.RedisChainContextStore>();
             services.AddSingleton<Caching.RedisChatMemoryStore>();
             services.AddSingleton<Caching.IChatMemoryStore>(sp => sp.GetRequiredService<Caching.RedisChatMemoryStore>());
             innerChatMemoryStoreType = typeof(Caching.RedisChatMemoryStore);
@@ -129,6 +130,7 @@ public static class DependencyInjection
         else
         {
             services.AddSingleton<Caching.IJobRunCache, Caching.NullJobRunCache>();
+            services.AddSingleton<IChainContextStore, Caching.NullChainContextStore>();
             services.AddSingleton<Caching.NullChatMemoryStore>();
             services.AddSingleton<Caching.IChatMemoryStore>(sp => sp.GetRequiredService<Caching.NullChatMemoryStore>());
             innerChatMemoryStoreType = typeof(Caching.NullChatMemoryStore);

@@ -4,6 +4,7 @@
 @implements IDisposable
 @using PlaceContext.Application.Dtos
 @using PlaceContext.Domain.ValueObjects
+@using System.Text.Json
 @using PlaceContext.Host.Components.ViewModels
 @using PlaceContext.Host.Components.ViewModels.Helpers
 @inject JobChainsViewModel Vm
@@ -259,12 +260,34 @@ else
                         <div class="chain-context-panel">
                             <div class="out-label">Accumulated chain context</div>
                             <div class="chain-context-scroll">
-                                <table class="data-table compact-table">
-                                    <thead><tr><th>Field</th><th>Value</th></tr></thead>
+                                <table class="chain-context-table">
+                                    <thead>
+                                        <tr>
+                                            <th class="chain-context-cell chain-context-path">Field</th>
+                                            <th class="chain-context-cell">Value</th>
+                                        </tr>
+                                    </thead>
                                     <tbody>
                                         @foreach (var row in Vm.ContextRows)
                                         {
-                                            <tr><td><code>@row.Path</code></td><td>@row.Value</td></tr>
+                                            var isJson = IsJsonLike(row.Value);
+                                            <tr>
+                                                <td class="chain-context-cell chain-context-path"><code>@row.Path</code></td>
+                                                <td class="chain-context-cell">
+                                                    @if (isJson)
+                                                    {
+                                                        <button class="dcbtn btn-2-8 json-view-button"
+                                                                @onclick="@(() => OpenChainContextJson(row.Path, row.Value))">
+                                                            View JSON
+                                                        </button>
+                                                        <span class="chain-context-preview">@GetJsonPreview(row.Value)</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <code class="chain-context-value">@row.Value</code>
+                                                    }
+                                                </td>
+                                            </tr>
                                         }
                                     </tbody>
                                 </table>
@@ -768,6 +791,24 @@ else
             </div>
         }
 
+        @if (_chainContextJson is not null)
+        {
+            <div class="dcmodal-overlay" @onclick="CloseChainContextJson">
+                <div class="dcmodal chain-json-modal" @onclick:stopPropagation="true">
+                    <div class="dcmodal-head">
+                        <div>
+                            <div class="title-14">Chain context JSON</div>
+                            <div class="sub-115">Path: <code>@_chainContextJsonPath</code></div>
+                        </div>
+                        <button class="dcslide-x" @onclick="CloseChainContextJson">×</button>
+                    </div>
+                    <div class="dcmodal-body chain-json-body">
+                        <pre class="json-pre">@_chainContextJson</pre>
+                    </div>
+                </div>
+            </div>
+        }
+
         @if (Vm.IsDetailsTab)
         {
             <div class="dcslide-foot">
@@ -841,6 +882,9 @@ else
 @code {
     [Parameter] public Guid ProjectId { get; set; }
 
+    private string? _chainContextJson;
+    private string? _chainContextJsonPath;
+
     protected override void OnInitialized() => Vm.Attach(() => InvokeAsync(StateHasChanged));
 
     protected override async Task OnParametersSetAsync()
@@ -853,5 +897,59 @@ else
     {
         Vm.DetachEvents();
         Vm.Detach();
+    }
+
+    private bool IsJsonLike(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return false;
+
+        try
+        {
+            using var document = JsonDocument.Parse(value);
+            return document.RootElement.ValueKind is JsonValueKind.Object or JsonValueKind.Array;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static string GetJsonPreview(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return "(empty)";
+
+        var trimmed = value.Trim();
+        const int max = 90;
+        if (trimmed.Length <= max)
+            return trimmed;
+
+        return trimmed[..max] + "…";
+    }
+
+    private void OpenChainContextJson(string path, string value)
+    {
+        _chainContextJson = FormatJson(value);
+        _chainContextJsonPath = path;
+    }
+
+    private void CloseChainContextJson()
+    {
+        _chainContextJson = null;
+        _chainContextJsonPath = null;
+    }
+
+    private static string FormatJson(string raw)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(raw);
+            return JsonSerializer.Serialize(document.RootElement, new JsonSerializerOptions { WriteIndented = true });
+        }
+        catch
+        {
+            return raw;
+        }
     }
 }

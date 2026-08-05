@@ -22,18 +22,35 @@ public sealed class DefaultAdminAuthorizationHandlerTests
         services.AddDbContext<AppDbContext>(o => o.UseInMemoryDatabase(dbName));
         var provider = services.BuildServiceProvider();
         var db = provider.GetRequiredService<AppDbContext>();
-        return (new DefaultAdminAuthorizationHandler(provider.GetRequiredService<IServiceScopeFactory>()), db);
+        return (
+            new DefaultAdminAuthorizationHandler(
+                provider.GetRequiredService<IServiceScopeFactory>()
+            ),
+            db
+        );
     }
 
-    private static async Task<bool> Succeeds(DefaultAdminAuthorizationHandler handler, ClaimsPrincipal user)
+    private static async Task<bool> Succeeds(
+        DefaultAdminAuthorizationHandler handler,
+        ClaimsPrincipal user
+    )
     {
-        var context = new AuthorizationHandlerContext(new[] { new DefaultAdminRequirement() }, user, resource: null);
+        var context = new AuthorizationHandlerContext(
+            new[] { new DefaultAdminRequirement() },
+            user,
+            resource: null
+        );
         await handler.HandleAsync(context);
         return context.HasSucceeded;
     }
 
-    private static ClaimsPrincipal Principal(Guid userId)
-        => new(new ClaimsIdentity(new[] { new Claim(ClaimTypes.NameIdentifier, userId.ToString()) }, "test"));
+    private static ClaimsPrincipal Principal(Guid userId) =>
+        new(
+            new ClaimsIdentity(
+                new[] { new Claim(ClaimTypes.NameIdentifier, userId.ToString()) },
+                "test"
+            )
+        );
 
     private async Task<Guid> AddUser(AppDbContext db, bool isDefaultAdmin)
     {

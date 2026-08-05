@@ -8,6 +8,9 @@ using PlaceContext.Application.Ports;
 using PlaceContext.Domain.ValueObjects;
 using PlaceContext.Host;
 using PlaceContext.Infrastructure.Crm;
+using PlaceContext.Infrastructure.Tenancy;
+using System.Net.Http.Json;
+using System.Text.Json;
 
 namespace PlaceContext.Host.Components.ViewModels.Crm;
 
@@ -20,6 +23,13 @@ public sealed class CrmViewModel : PageViewModel
     private readonly IMembershipService Membership;
     private readonly CrmIngestionSettingsService IngestionSettingsService;
     private readonly IPermissionService Permissions;
+    private readonly ITenantStore TenantStore;
+    private readonly ICurrentTenant CurrentTenant;
+    private readonly IHttpClientFactory HttpClientFactory;
+    private readonly IConfiguration Configuration;
+
+    public const string ProvisioningKey = "PlaceContext:CustomerPortal:ProvisioningKey";
+    public const string ProvisionUsersRoute = "/api/provision/users";
 
     public CrmViewModel(
         IPlaceContextService svc,
@@ -28,7 +38,11 @@ public sealed class CrmViewModel : PageViewModel
         NavigationManager nav,
         IMembershipService membership,
         CrmIngestionSettingsService ingestionSettings,
-        IPermissionService permissions
+        IPermissionService permissions,
+        ITenantStore tenantStore,
+        ICurrentTenant currentTenant,
+        IHttpClientFactory httpClientFactory,
+        IConfiguration configuration
     )
     {
         Svc = svc;
@@ -38,6 +52,10 @@ public sealed class CrmViewModel : PageViewModel
         Membership = membership;
         IngestionSettingsService = ingestionSettings;
         Permissions = permissions;
+        TenantStore = tenantStore;
+        CurrentTenant = currentTenant;
+        HttpClientFactory = httpClientFactory;
+        Configuration = configuration;
     }
 
     [Parameter]
@@ -84,7 +102,17 @@ public sealed class CrmViewModel : PageViewModel
     public IReadOnlyList<CrmCalendarView> Calendars = Array.Empty<CrmCalendarView>();
     public CrmCommsCapabilitiesView? CommsCapabilities;
     public bool Loading = true;
-
+    public bool PortalProvisioningOpen;
+    public bool SavingPortal;
+    public bool PortalInviting;
+    public bool CanManagePortal;
+    public bool CustomerPortalEnabled;
+    public string CustomerPortalDomain = "";
+    public string PortalDomain = "";
+    public string PortalInviteRole = "member";
+    public string? PortalMessage;
+    public bool NotesMetadataOpen;
+    public string? NotesMetadataJson;
     public bool LoadingRuns;
     public bool LoadingComms;
     public bool SendingComms;
@@ -246,14 +274,20 @@ public sealed class CrmViewModel : PageViewModel
             var appointmentsTask = Svc.ListCrmAppointmentsAsync(ProjectId);
             var calendarsTask = Svc.ListCrmCalendarsAsync(ProjectId);
             var membersTask = Membership.ListMembersAsync();
+            var portalPermissionTask = Permissions.HasAsync(Permission.SettingsManage);
             await Task.WhenAll(
                 clientsTask,
                 chainsTask,
                 automationsTask,
                 appointmentsTask,
                 calendarsTask,
-                membersTask
+                membersTask,
+                portalPermissionTask
             );
+            CanManagePortal = await portalPermissionTask;
+            var tenant = await TenantStore.GetRowAsync(CurrentTenant.TenantId);
+            CustomerPortalEnabled = tenant?.CustomerPortalEnabled ?? false;
+            CustomerPortalDomain = tenant?.CustomerPortalDomain ?? "";
             var adminEmails = (await membersTask)
                 .Where(member =>
                     member.IsDefaultAdmin
@@ -916,7 +950,83 @@ public sealed class CrmViewModel : PageViewModel
         ArtifactSearch = "";
         ArtifactSourceFilter = "all";
         ConfirmArtifactRemoveId = null;
+        PortalMessage = null;
         await Task.WhenAll(LoadRuns(), LoadCommunications(), LoadArtifacts());
+    }
+
+    public void OpenPortalProvisioning()
+    {
+        PortalDomain = CustomerPortalDomain;
+        PortalMessage = null;
+        PortalProvisioningOpen = true;
+    }
+
+    public void ClosePortalProvisioning() => PortalProvisioningOpen = false;
+
+    public async Task SavePortalProvisioning()
+    {
+        SavingPortal = true;
+        PortalMessage = null;
+        try
+        {
+            await TenantStore.SetCustomerPortalDomainAsync(CurrentTenant.TenantId, PortalDomain);
+            await TenantStore.SetCustomerPortalEnabledAsync(CurrentTenant.TenantId, true);
+            var tenant = await TenantStore.GetRowAsync(CurrentTenant.TenantId);
+            CustomerPortalEnabled = tenant?.CustomerPortalEnabled ?? true;
+            CustomerPortalDomain = tenant?.CustomerPortalDomain ?? PortalDomain;
+            PortalMessage = "Customer portal provisioned.";
+            PortalProvisioningOpen = false;
+        }
+        catch (Exception ex)
+        {
+            PortalMessage = ex.Message;
+        }
+        finally
+        {
+            SavingPortal = false;
+        }
+    }
+
+    public async Task InviteSelectedToPortalAsync()
+    {
+        if (Selected?.Email is not { Length: > 0 } email)
+        {
+            PortalMessage = "This client has no email address.";
+            return;
+        }
+
+        PortalInviting = true;
+        PortalMessage = null;
+        try
+        {
+            if (!CustomerPortalEnabled || string.IsNullOrWhiteSpace(CustomerPortalDomain))
+                throw new InvalidOperationException("Configure and enable the customer portal first.");
+
+            var key = Configuration[ProvisioningKey];
+            if (string.IsNullOrWhiteSpace(key))
+                throw new InvalidOperationException("Customer portal provisioning is not configured.");
+
+            var client = HttpClientFactory.CreateClient();
+            client.BaseAddress = new Uri($"https://{CustomerPortalDomain}");
+            client.DefaultRequestHeaders.Add("X-PlaceContext-Provisioning-Key", key);
+            client.DefaultRequestHeaders.Add("X-PlaceContext-Tenant-Id", CurrentTenant.TenantId.ToString());
+            using var response = await client.PostAsJsonAsync(
+                ProvisionUsersRoute,
+                new { email = email.Trim(), role = PortalInviteRole }
+            );
+            if (!response.IsSuccessStatusCode)
+                throw new InvalidOperationException($"Portal invitation failed ({(int)response.StatusCode}).");
+
+            PortalMessage = $"Invitation sent to {email.Trim()}.";
+        }
+        catch (Exception ex)
+        {
+            PortalMessage = ex.Message;
+        }
+        finally
+        {
+            PortalInviting = false;
+        }
     }
 
     public void CloseClient()
@@ -925,6 +1035,85 @@ public sealed class CrmViewModel : PageViewModel
         ClientRuns = Array.Empty<CrmChainRunView>();
         Communications = Array.Empty<CrmCommunicationView>();
         ClientArtifacts = Array.Empty<CrmClientArtifactView>();
+        PortalMessage = null;
+        NotesMetadataOpen = false;
+        NotesMetadataJson = null;
+    }
+
+    public bool HasNotesMetadata => !string.IsNullOrWhiteSpace(ExtractNotesMetadata(Selected?.Notes));
+
+    public void OpenNotesMetadata()
+    {
+        NotesMetadataJson = ExtractNotesMetadata(Selected?.Notes);
+        NotesMetadataOpen = !string.IsNullOrWhiteSpace(NotesMetadataJson);
+    }
+
+    public void CloseNotesMetadata()
+    {
+        NotesMetadataOpen = false;
+        NotesMetadataJson = null;
+    }
+
+    public static string? ExtractNotesMetadata(string? notes)
+    {
+        if (string.IsNullOrWhiteSpace(notes))
+            return null;
+
+        var start = notes.IndexOfAny(['{', '[']);
+        if (start < 0)
+            return null;
+
+        char open = notes[start];
+        char close = open == '{' ? '}' : ']';
+        int depth = 1;
+        bool inString = false;
+        bool escape = false;
+        int i = start + 1;
+
+        while (i < notes.Length && depth > 0)
+        {
+            char c = notes[i];
+            if (escape)
+            {
+                escape = false;
+            }
+            else if (c == '\\')
+            {
+                escape = true;
+            }
+            else if (c == '"')
+            {
+                inString = !inString;
+            }
+            else if (!inString)
+            {
+                if (c == open)
+                    depth++;
+                else if (c == close)
+                    depth--;
+            }
+            i++;
+        }
+
+        if (depth != 0)
+            return null;
+
+        var json = notes[start..i];
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            return JsonSerializer.Serialize(doc, new JsonSerializerOptions { WriteIndented = true });
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    public async Task CopyNotesMetadataAsync()
+    {
+        if (!string.IsNullOrWhiteSpace(NotesMetadataJson))
+            await Js.InvokeVoidAsync("navigator.clipboard.writeText", NotesMetadataJson);
     }
 
     public async Task MoveClient(CrmClientView client, ChangeEventArgs args)

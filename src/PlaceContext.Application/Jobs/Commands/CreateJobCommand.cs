@@ -42,6 +42,10 @@ public sealed record CreateJobCommand(
     /// When false, --network none is applied. When true, Docker's default bridge is used.
     /// </summary>
     bool AllowNetworkEgress = false,
+    /// <summary>
+    /// Opt-in: allow this job to be executed via the API. Defaults to false.
+    /// </summary>
+    bool AllowApiInvocation = false,
 
     // ── Multi-file code workload (preferred over the single MapSource/ReduceSource strings) ─────────
     /// <summary>Map-step source files. When non-empty, supersedes <see cref="MapSource"/>.</summary>

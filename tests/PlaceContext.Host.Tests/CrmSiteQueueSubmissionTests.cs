@@ -27,8 +27,10 @@ public sealed class CrmSiteQueueSubmissionTests
     public void Falls_back_to_report_site_address_in_metadata()
     {
         using var document = JsonDocument.Parse(
-            """{"site":{"address":"20 George Street, Brisbane QLD 4000"}}""");
-        var metadata = document.RootElement.EnumerateObject()
+            """{"site":{"address":"20 George Street, Brisbane QLD 4000"}}"""
+        );
+        var metadata = document
+            .RootElement.EnumerateObject()
             .ToDictionary(property => property.Name, property => property.Value.Clone());
 
         var queued = CrmSiteQueueSubmission.From(Request(metadata: metadata));
@@ -41,7 +43,8 @@ public sealed class CrmSiteQueueSubmissionTests
     public void Queues_canonical_report_site_address()
     {
         using var document = JsonDocument.Parse(
-            """{"event":"feasibility_report_ordered","site":{"address":"20 Balfour Street, Darra QLD 4076"}}""");
+            """{"event":"feasibility_report_ordered","site":{"address":"20 Balfour Street, Darra QLD 4076"}}"""
+        );
 
         var queued = CrmSiteQueueSubmission.From(document.RootElement);
 
@@ -52,7 +55,8 @@ public sealed class CrmSiteQueueSubmissionTests
     [Fact]
     public void Passes_canonical_report_order_to_job_chain_unchanged()
     {
-        const string payload = """{"event":"feasibility_report_ordered","report_uuid":"c636bba4-cb2c-4337-85f8-0af9b9391cd1","product_tier":"premium","site":{"address":"20 Balfour Street, Darra QLD 4076","street":"20 Balfour Street","suburb":"Darra","state":"QLD","postcode":"4076","lat":"-27.5720207","lon":"152.9555556","place_id":"N6215137771"}}""";
+        const string payload =
+            """{"event":"feasibility_report_ordered","report_uuid":"c636bba4-cb2c-4337-85f8-0af9b9391cd1","product_tier":"premium","site":{"address":"20 Balfour Street, Darra QLD 4076","street":"20 Balfour Street","suburb":"Darra","state":"QLD","postcode":"4076","lat":"-27.5720207","lon":"152.9555556","place_id":"N6215137771"}}""";
         using var document = JsonDocument.Parse(payload);
 
         Assert.Equal(payload, CrmIngestionPayload.JobChainInput(document.RootElement));
@@ -62,15 +66,21 @@ public sealed class CrmSiteQueueSubmissionTests
     public void Unwraps_legacy_report_metadata_for_job_chain()
     {
         using var document = JsonDocument.Parse(
-            """{"name":"Ada","email":"ada@example.com","metadata":{"event":"feasibility_report_ordered","report_uuid":"report-1","product_tier":"premium","site":{"address":"20 Balfour Street, Darra QLD 4076"}}}""");
+            """{"name":"Ada","email":"ada@example.com","metadata":{"event":"feasibility_report_ordered","report_uuid":"report-1","product_tier":"premium","site":{"address":"20 Balfour Street, Darra QLD 4076"}}}"""
+        );
 
         var chainInput = CrmIngestionPayload.JobChainInput(document.RootElement);
         using var normalized = JsonDocument.Parse(chainInput);
 
-        Assert.Equal("feasibility_report_ordered", normalized.RootElement.GetProperty("event").GetString());
+        Assert.Equal(
+            "feasibility_report_ordered",
+            normalized.RootElement.GetProperty("event").GetString()
+        );
         Assert.Equal("report-1", normalized.RootElement.GetProperty("report_uuid").GetString());
-        Assert.Equal("20 Balfour Street, Darra QLD 4076",
-            normalized.RootElement.GetProperty("site").GetProperty("address").GetString());
+        Assert.Equal(
+            "20 Balfour Street, Darra QLD 4076",
+            normalized.RootElement.GetProperty("site").GetProperty("address").GetString()
+        );
         Assert.False(normalized.RootElement.TryGetProperty("name", out _));
     }
 
@@ -91,8 +101,9 @@ public sealed class CrmSiteQueueSubmissionTests
 
     private static LeadIngestionRequest Request(
         string? address = null,
-        Dictionary<string, JsonElement>? metadata = null)
-        => new(
+        Dictionary<string, JsonElement>? metadata = null
+    ) =>
+        new(
             Name: "Ada Lovelace",
             Email: "ada@example.com",
             Phone: null,
@@ -101,5 +112,6 @@ public sealed class CrmSiteQueueSubmissionTests
             Source: "ossen-reports",
             Address: address,
             Metadata: metadata,
-            Website: null);
+            Website: null
+        );
 }

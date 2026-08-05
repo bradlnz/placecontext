@@ -29,7 +29,8 @@ public class JobDtosTests
             ReduceSource: null,
             ReduceEntrypoint: null,
             ReduceFiles: null,
-            ReduceEnv: null);
+            ReduceEnv: null
+        );
 
         Assert.Equal(4, request.ConcurrencyLimit);
     }
@@ -53,7 +54,8 @@ public class JobDtosTests
             ReduceEntrypoint: null,
             ReduceFiles: null,
             ReduceEnv: null,
-            ConcurrencyLimit: 1);
+            ConcurrencyLimit: 1
+        );
 
         Assert.Equal(1, request.ConcurrencyLimit);
     }

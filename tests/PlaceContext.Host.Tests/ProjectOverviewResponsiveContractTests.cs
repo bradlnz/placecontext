@@ -15,7 +15,11 @@ public sealed class ProjectOverviewResponsiveContractTests
 
     private static string ReadHostSource(string relativePath)
     {
-        var repositoryRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../.."));
-        return File.ReadAllText(Path.Combine(repositoryRoot, "src/PlaceContext.Host", relativePath));
+        var repositoryRoot = Path.GetFullPath(
+            Path.Combine(AppContext.BaseDirectory, "../../../../..")
+        );
+        return File.ReadAllText(
+            Path.Combine(repositoryRoot, "src/PlaceContext.Host", relativePath)
+        );
     }
 }

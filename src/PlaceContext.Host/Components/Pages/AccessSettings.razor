@@ -29,6 +29,36 @@
             <div class="message">@Vm.Message</div>
         }
 
+        <div class="dccard invite-card">
+            <div class="invite-title">Customer portal accounts</div>
+            <p class="note-11">Allow this customer tenant to use its isolated Rails portal. Portal users are separate from Placecontext workspace members.</p>
+            <label class="toggle-row">
+                <input type="checkbox" checked="@Vm.CustomerPortalEnabled" @onchange="Vm.SetCustomerPortalEnabledAsync" disabled="@Vm.PortalBusy" />
+                <span>Enable customer portal accounts</span>
+            </label>
+            @if (Vm.PortalMessage is not null)
+            {
+                <div class="dchint">@Vm.PortalMessage</div>
+            }
+            @if (Vm.CustomerPortalEnabled)
+            {
+                <div class="invite-row">
+                    <div class="invite-email">
+                        <label class="field-label">Customer email</label>
+                        <input class="dcinput input-full-sans" @bind="Vm.PortalInviteEmail" placeholder="customer@example.com" />
+                    </div>
+                    <div class="invite-role">
+                        <label class="field-label">Portal role</label>
+                        <select class="dcinput input-full" @bind="Vm.PortalInviteRole">
+                            <option value="member">Member</option>
+                            <option value="manager">Manager</option>
+                        </select>
+                    </div>
+                    <button class="dcbtn primary" disabled="@Vm.PortalInviting" @onclick="Vm.InviteCustomerPortalUserAsync">@(Vm.PortalInviting ? "Inviting…" : "Invite portal user")</button>
+                </div>
+            }
+        </div>
+
         @* ── Invite ────────────────────────────────────────────────────────────────────────── *@
         <div class="dccard invite-card">
             <div class="invite-title">Invite a member</div>

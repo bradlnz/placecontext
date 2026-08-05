@@ -1,5 +1,4 @@
 <Project Sdk="Microsoft.NET.Sdk">
-
   <PropertyGroup>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
@@ -30,5 +29,4 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\PlaceContext.Host\PlaceContext.Host.csproj" />
   </ItemGroup>
-
 </Project>

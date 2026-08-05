@@ -62,6 +62,25 @@ public sealed class CrmViewModelTests
         );
     }
 
+    [Theory]
+    [InlineData("Contact prefers email. {\"source\": \"referral\"} Follow up next week.", "{\"source\": \"referral\"}")]
+    [InlineData("Started as [1, 2, 3] array.", "[1, 2, 3]")]
+    [InlineData("No json here", null)]
+    [InlineData("", null)]
+    public void ExtractNotesMetadata_pulls_first_valid_json_block(string notes, string? expectedJson)
+    {
+        var extracted = CrmViewModel.ExtractNotesMetadata(notes);
+        if (expectedJson is null)
+        {
+            Assert.Null(extracted);
+        }
+        else
+        {
+            Assert.NotNull(extracted);
+            Assert.Contains(expectedJson, extracted, StringComparison.Ordinal);
+        }
+    }
+
     private static string ReadHostSource(string relativePath)
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);

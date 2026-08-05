@@ -127,6 +127,26 @@ public sealed class ChainRun : AggregateRoot
         Status = ChainRunStatus.Running;
     }
 
+    /// <summary>Appends a placeholder step to this chain run and returns its flat index.</summary>
+    public int AppendStep(string actionType, int stageIndex)
+        => AppendStep(actionType, stageIndex, 0, Guid.Empty, actionType);
+
+    /// <summary>
+    /// Appends a placeholder job step to this chain run and returns its flat index.
+    /// </summary>
+    public int AppendStep(Guid jobId, string jobName, int stageIndex, int branchIndex = 0)
+        => AppendStep(null, stageIndex, branchIndex, jobId, jobName);
+
+    private int AppendStep(string? actionType, int stageIndex, int branchIndex, Guid jobId, string? jobName)
+    {
+        _steps.Add(new ChainStepRun(_steps.Count, stageIndex, branchIndex, jobId, jobName ?? "(deleted)",
+            null, ChainStepStatus.Pending, null, null, actionType));
+        return _steps.Count - 1;
+    }
+
+    /// <summary>Persists the latest accumulated envelope as a crash-recovery checkpoint.</summary>
+    public void SetCurrentPayload(string? payload) => FinalOutput = payload;
+
     /// <summary>Marks a step running. <paramref name="runId"/> is the step's pre-allocated job-run
     /// id, recorded up front so a live pipeline can link to the run while it executes. Steps within
     /// the same stage may be marked running independently of one another (a fan-out group runs

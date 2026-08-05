@@ -36,6 +36,8 @@ public sealed record JobView(
     IReadOnlyList<int> PartialExitCodes,
     /// <summary>True when containers for this job are permitted outbound network access.</summary>
     bool AllowNetworkEgress,
+    /// <summary>True when the job is enabled for API invocation.</summary>
+    bool AllowApiInvocation,
     /// <summary>Declared input parameters prompted before a manual run (empty = none).</summary>
     IReadOnlyList<JobParameterDto> Parameters,
     /// <summary>Post-job actions that produce stored outputs after each run (empty = none).</summary>
