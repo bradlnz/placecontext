@@ -1,0 +1,64 @@
+<% page_title "Leads" %>
+
+<div class="page-header">
+  <div>
+    <div class="breadcrumbs">
+      <%= link_to "Dashboard", root_path %> · Leads
+    </div>
+  </div>
+  <% if current_portal_user.manager? && @project_id %>
+    <%= link_to new_client_path(project_id: @project_id), class: "btn btn-primary" do %>
+      <%= icon :plus %>
+      Add lead
+    <% end %>
+  <% end %>
+</div>
+
+<%= form_with url: leads_path, method: :get, local: true, class: "project-selector" do |form| %>
+  <%= form.label :project_id, "CRM project" %>
+  <%= form.select :project_id, @projects.map { |project| [project["name"], project["id"]] }, { selected: @project_id }, { onchange: "this.form.submit()" } %>
+<% end %>
+
+<div class="card">
+  <div class="card-header">
+    <h2 class="card-title">All leads</h2>
+    <span class="card-subtitle"><%= pluralize(@leads.size, "lead") %> in this project</span>
+  </div>
+
+  <% if @leads.any? %>
+    <div class="table-wrap">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Company</th>
+            <th>Email</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% @leads.each do |lead| %>
+            <tr>
+              <td><%= link_to lead["name"], client_path(lead["id"], project_id: @project_id) %></td>
+              <td><%= lead["company"].presence || "—" %></td>
+              <td><%= lead["email"].presence || "—" %></td>
+              <td>
+                <%= link_to "View", client_path(lead["id"], project_id: @project_id), class: "btn btn-sm btn-secondary" %>
+              </td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    </div>
+  <% else %>
+    <div class="empty-state">
+      <div class="empty-state-title">No leads yet</div>
+      <p>This project doesn't have any leads. Add a client with stage "Lead" to get started.</p>
+      <% if current_portal_user.manager? && @project_id %>
+        <div style="margin-top: 16px;">
+          <%= link_to "Add lead", new_client_path(project_id: @project_id), class: "btn btn-primary" %>
+        </div>
+      <% end %>
+    </div>
+  <% end %>
+</div>

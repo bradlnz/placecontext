@@ -1,0 +1,59 @@
+<% page_title @chain["name"] %>
+
+<div class="page-header">
+  <div>
+    <div class="breadcrumbs">
+      <%= link_to "Dashboard", root_path %> ·
+      <%= link_to "Automations", automations_path(project_id: @project_id) %> ·
+      <%= @chain["name"] %>
+    </div>
+    <h1><%= @chain["name"] %></h1>
+  </div>
+</div>
+
+<% if @chain["description"].present? %>
+  <p class="card-subtitle" style="margin-bottom: 20px; font-size: 14px;"><%= @chain["description"] %></p>
+<% end %>
+
+<%= form_with url: run_automation_path(@chain["id"], project_id: @project_id), method: :post, local: true do %>
+  <% @chain["steps"].each do |step| %>
+    <fieldset class="step-card">
+      <legend>Step <%= step["index"] + 1 %>: <%= step["jobName"] %></legend>
+
+      <% if step["conditionExpression"].present? %>
+        <div class="step-condition">
+          <strong>Condition:</strong> <%= step["conditionExpression"] %>
+        </div>
+      <% end %>
+
+      <div class="form-grid">
+        <% step["parameters"].each do |param| %>
+          <% field_name = "steps[#{step["index"]}][params][#{param["name"]}]" %>
+          <div class="form-group <%= "full-width" if param["type"] == "textarea" %>">
+            <%= label_tag field_name, param["label"].presence || param["name"] %>
+            <% case param["type"] %>
+            <% when "select" %>
+              <%= select_tag field_name, options_for_select(param["options"] || []), include_blank: !param["required"], required: param["required"] %>
+            <% when "checkbox" %>
+              <%= check_box_tag field_name, "true", false %>
+            <% when "number" %>
+              <%= number_field_tag field_name, nil, required: param["required"] %>
+            <% when "file" %>
+              <%= text_field_tag field_name, nil, required: param["required"], placeholder: "File URL or identifier" %>
+              <small style="color: var(--color-text-muted);">File uploads are not supported in this preview.</small>
+            <% when "textarea" %>
+              <%= text_area_tag field_name, nil, required: param["required"] %>
+            <% else %>
+              <%= text_field_tag field_name, nil, required: param["required"] %>
+            <% end %>
+          </div>
+        <% end %>
+      </div>
+    </fieldset>
+  <% end %>
+
+  <div class="btn-toolbar">
+    <%= submit_tag "Run automation", class: "btn btn-primary" %>
+    <%= link_to "Back to automations", automations_path(project_id: @project_id), class: "btn btn-secondary" %>
+  </div>
+<% end %>

@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title><%= content_for?(:page_title) ? "#{yield(:page_title)} · PlaceContext" : "PlaceContext" %></title>
+    <%= csrf_meta_tags %>
+    <%= csp_meta_tag %>
+    <%= stylesheet_link_tag "application", "data-turbo-track": "reload" %>
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="Main navigation">
+        <div class="sidebar-brand">
+          <div class="brand-logo">
+            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M12 2L2 7L12 12L22 7L12 2Z" fill="currentColor"/><path d="M2 17L12 22L22 17" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 12L12 17L22 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+          <span class="brand-name">PlaceContext</span>
+        </div>
+
+        <div class="sidebar-tenant">
+          <span class="tenant-label">Workspace</span>
+          <span class="tenant-name"><%= portal_tenant_id %></span>
+        </div>
+
+        <nav class="sidebar-nav">
+          <%= nav_link_to "Dashboard", root_path, icon: :dashboard %>
+          <%= nav_link_to "Clients", clients_path, icon: :clients %>
+          <%= nav_link_to "Leads", leads_path, icon: :leads %>
+          <%= nav_link_to "Automations", automations_path, icon: :automations %>
+        </nav>
+
+        <div class="sidebar-footer">
+          <%= button_to destroy_portal_user_session_path, method: :delete, class: "sidebar-signout" do %>
+            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M9 21H5C4.46957 21 3.96086 20.7893 3.58579 20.4142C3.21071 20.0391 3 19.5304 3 19V5C3 4.46957 3.21071 3.96086 3.58579 3.58579C3.96086 3.21071 4.46957 3 5 3H9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M16 17L21 12L16 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M21 12H9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Sign out
+          <% end %>
+        </div>
+      </aside>
+
+      <div class="app-body">
+        <header class="topbar">
+          <div class="topbar-section">
+            <h1 class="page-heading"><%= content_for?(:page_title) ? yield(:page_title) : "Dashboard" %></h1>
+          </div>
+          <div class="topbar-section">
+            <% if current_portal_user %>
+              <div class="user-menu">
+                <div class="user-avatar"><%= current_portal_user.email.first.upcase %></div>
+                <div class="user-info">
+                  <span class="user-email"><%= current_portal_user.email %></span>
+                  <span class="user-role"><%= current_portal_user.role.capitalize %></span>
+                </div>
+              </div>
+            <% end %>
+          </div>
+        </header>
+
+        <main class="main-content">
+          <% if alert %>
+            <div class="flash flash-alert" role="alert"><%= alert %></div>
+          <% end %>
+          <% if notice %>
+            <div class="flash flash-notice" role="status"><%= notice %></div>
+          <% end %>
+
+          <%= yield %>
+        </main>
+      </div>
+    </div>
+  </body>
+</html>

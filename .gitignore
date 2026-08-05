@@ -42,6 +42,25 @@ deploy/terraform-app/*.tfvars
 deploy/terraform-app/*.tfplan
 !deploy/terraform-app/*.tfvars.example
 
+# Customer portal (Rails) — runtime/cache/build artifacts
+customer-portal/log/*
+!customer-portal/log/.keep
+customer-portal/tmp/*
+!customer-portal/tmp/.keep
+customer-portal/tmp/cache/*
+customer-portal/storage/*
+!customer-portal/storage/.keep
+customer-portal/public/assets
+customer-portal/vendor/bundle
+customer-portal/.bundle
+customer-portal/db/*.sqlite3
+customer-portal/config/master.key
+customer-portal/config/credentials.yml.enc
+customer-portal/.env
+customer-portal/.env.*
+customer-portal/coverage/
+customer-portal/.byebug_history
+
 # agent worktrees (isolated, never commit)
 .claude/worktrees/
 

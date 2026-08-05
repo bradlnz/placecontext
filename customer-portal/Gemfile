@@ -1,0 +1,14 @@
+source "https://rubygems.org"
+
+gem "rails", "~> 8.1.0"
+gem "devise", "~> 5.0"
+gem "pg", "~> 1.5"
+gem "puma", "~> 8.0"
+
+gem "bootsnap", require: false
+
+group :development, :test do
+  gem "debug", require: false
+end
+
+gem "propshaft", "~> 1.3"

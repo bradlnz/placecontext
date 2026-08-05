@@ -1,0 +1,14 @@
+<% page_title "Add client" %>
+
+<div class="page-header">
+  <div>
+    <div class="breadcrumbs">
+      <%= link_to "Dashboard", root_path %> ·
+      <%= link_to "Clients", clients_path(project_id: @project_id) %> ·
+      Add client
+    </div>
+    <h1>Add client or lead</h1>
+  </div>
+</div>
+
+<%= render "form" %>
