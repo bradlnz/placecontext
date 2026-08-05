@@ -90,6 +90,8 @@ public interface IPlaceContextService
 
     // CRM mode: project-scoped customers and customer-linked job execution.
     Task<CrmClientView> SaveCrmClientAsync(SaveCrmClientCommand command, CancellationToken ct = default);
+    Task<CrmClientView> ConfigureCrmClientPortalAsync(
+        Guid clientId, bool enabled, string? slug, string? domain, CancellationToken ct = default);
     Task<CrmClientView> MoveCrmClientAsync(Guid clientId, Domain.ValueObjects.CustomerLifecycleStage stage, CancellationToken ct = default);
     Task<bool> DeleteCrmClientAsync(Guid clientId, CancellationToken ct = default);
     Task<IReadOnlyList<CrmClientView>> ListCrmClientsAsync(Guid projectId, CancellationToken ct = default);

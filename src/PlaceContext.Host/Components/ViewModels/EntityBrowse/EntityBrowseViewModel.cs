@@ -168,19 +168,32 @@ public sealed partial class EntityBrowseViewModel : PageViewModel
             }
         }
 
+        var entries = new List<object>();
+        var rendered = new List<(string Id, DateTimeOffset At)>();
         foreach (var chart in EntityCharts().Where(c => c.Html.TrimStart().StartsWith('{')))
         {
             var id = ChartCanvasId(chart.TableName);
             if (RenderedCharts.TryGetValue(id, out var at) && at == chart.GeneratedAt)
                 continue;
+            entries.Add(new { id, spec = chart.Html });
+            rendered.Add((id, chart.GeneratedAt));
+        }
+        if (entries.Count > 0)
+        {
             try
             {
-                await _js.InvokeVoidAsync("pcchart.render", id, chart.Html);
-                RenderedCharts[id] = chart.GeneratedAt;
+                await _js.InvokeVoidAsync("pcchart.renderAll", entries);
+                foreach (var (id, at) in rendered)
+                    RenderedCharts[id] = at;
             }
             catch (JSException) { }
         }
     }
+
+    // The view model is circuit-scoped and outlives the page, but the canvases it renders into are
+    // created per page mount. Clear the rendered-once cache whenever the page (re)mounts so charts
+    // redraw the fresh canvases instead of being skipped as "already drawn".
+    public void ResetChartCache() => RenderedCharts.Clear();
 
     public async Task<string> GetChartSqlAsync(string id, string current)
     {

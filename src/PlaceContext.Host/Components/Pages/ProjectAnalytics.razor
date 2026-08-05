@@ -183,6 +183,7 @@
     protected override async Task OnParametersSetAsync()
     {
         Vm.Attach(() => InvokeAsync(StateHasChanged));
+        Vm.ResetChartCache();
         await Vm.LoadAsync(ProjectId);
     }
 

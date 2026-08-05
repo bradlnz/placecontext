@@ -56,7 +56,7 @@
 .bar-fill { display:block; height:100%; background:var(--brand-2) }
 .bar-count { font-family:var(--font-sans); color:var(--text-3) }
 .table-card { border-radius:8px; overflow:hidden }
-.table-scroll { overflow-x:auto }
+.table-scroll { overflow-x:auto; max-height:60vh; overflow-y:auto }
 .data-table { border-collapse:collapse; width:100%; font-size:12px }
 .data-th { text-align:left; padding:8px 14px; border-bottom:2px solid var(--border-2); color:var(--text-3); font-size:10.5px; letter-spacing:.06em; text-transform:uppercase; white-space:nowrap }
 .clickable { cursor:pointer }

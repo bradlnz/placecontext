@@ -107,7 +107,7 @@
                 <div class="charts-grid">
                     @foreach (var chart in Vm.EntityCharts())
                     {
-                        <div class="dccard card-pad">
+                        <div class="dccard card-pad" @key="chart.TableName">
                             <div class="chart-head">
                                 <span class="chart-name">@Vm.ChartShortName(chart)</span>
                                 <span class="chart-type-group">
@@ -166,7 +166,7 @@
             <div class="insights-grid">
                 @foreach (var ins in Vm.Insights)
                 {
-                    <div class="dccard insight-card">
+                    <div class="dccard insight-card" @key="ins.Title">
                         <div class="insight-title">@ins.Title</div>
                         @if (ins.Big is not null)
                         {
@@ -222,8 +222,7 @@
                                     </td>
                                 </tr>
                             }
-                            @foreach (var row in pg.Rows)
-                            {
+                            <Virtualize Items="Vm.PageRows" Context="row" ItemSize="34" OverscanCount="6">
                                 <tr class="dcdash-row clickable" @onclick="@(() => Vm.OpenRecordAsync(row))">
                                     @for (var i = 0; i < pg.Columns.Count; i++)
                                     {
@@ -233,7 +232,7 @@
                                         </td>
                                     }
                                 </tr>
-                            }
+                            </Virtualize>
                         </tbody>
                     </table>
                 </div>
@@ -418,6 +417,7 @@
     {
         Vm.EntityName = EntityName;
         Vm.RecordKey = RecordKey;
+        Vm.ResetChartCache();
         Vm.Initialize(ProjectId);
         await Vm.LoadAsync();
     }

@@ -211,10 +211,11 @@ else
                         <span role="columnheader">Lifecycle</span>
                         <span role="columnheader" class="visually-hidden">Open</span>
                     </div>
-                    @foreach (var client in Vm.FilteredClients)
-                    {
-                        var stage = CrmViewModel.ParseStage(client.LifecycleStage);
-                        <article class="client-row @CrmViewModel.StageClass(stage)" role="row" @onclick="@(() => Vm.OpenClient(client))">
+                    <div class="client-table-body" role="rowgroup">
+                        <Virtualize Items="Vm.FilteredClients" Context="client" ItemSize="58" OverscanCount="4">
+                            @{ var stage = CrmViewModel.ParseStage(client.LifecycleStage); }
+                            <article class="client-row @CrmViewModel.StageClass(stage)" role="row"
+                                     @onclick="@(() => Vm.OpenClient(client))">
                             <div class="client-row-identity" role="cell">
                                 <span class="client-avatar @CrmViewModel.StageClass(stage)">@CrmViewModel.Initials(client.Name)</span>
                                 <button class="client-row-link" @onclick:stopPropagation="true"
@@ -258,7 +259,8 @@ else
                                 </svg>
                             </button>
                         </article>
-                    }
+                        </Virtualize>
+                    </div>
                 </div>
             }
         </section>
@@ -284,6 +286,7 @@ else
                         @foreach (var client in Vm.FilteredConversationClients)
                         {
                             <button class="conversation-customer @(Vm.Selected?.Id == client.Id ? "active" : "")"
+                                    @key="client.Id"
                                     @onclick="@(() => Vm.OpenConversation(client))">
                                 <span class="client-avatar @CrmViewModel.StageClass(CrmViewModel.ParseStage(client.LifecycleStage))">@CrmViewModel.Initials(client.Name)</span>
                                 <span class="conversation-customer-copy">
@@ -331,7 +334,8 @@ else
                                 <div class="comms-timeline">
                                     @foreach (var item in Vm.Communications.Reverse())
                                     {
-                                        <article class="message-row @Vm.ChannelCss(item) @Vm.StatusCss(item)">
+                                        <article class="message-row @Vm.ChannelCss(item) @Vm.StatusCss(item)"
+                                                 @key="item.Id">
                                             <div class="message-bubble">
                                                 <div class="message-meta">
                                                     <span class="channel-mark"><CrmIcon Name="@Vm.ChannelIcon(item)" /></span>
@@ -906,7 +910,7 @@ else
 
 @if (Vm.NotesMetadataOpen)
 {
-    <div class="dcslide-scrim" @onclick="Vm.CloseNotesMetadata"></div>
+    <div class="dcslide-scrim notes-scrim" @onclick="Vm.CloseNotesMetadata"></div>
     <div class="dcslide crm-editor notes-metadata-editor">
         <div class="dcslide-head">
             <span class="title-14">Notes metadata</span>
@@ -925,7 +929,7 @@ else
 
 @if (Vm.Selected is not null && Vm.CurrentSection != CrmSection.Conversations)
 {
-    <div class="dcslide-scrim" @onclick="Vm.CloseClient"></div>
+    <div class="dcslide-scrim crm-detail-scrim" @onclick="Vm.CloseClient"></div>
     <div class="dcslide crm-detail">
         <div class="dcslide-head">
             <div class="detail-heading">
@@ -1005,17 +1009,20 @@ else
 
                 <section class="detail-section portal-section">
                 <div class="section-label">Customer portal</div>
-                    @if (Vm.CustomerPortalEnabled)
+                    @if (Vm.SelectedPortalEnabled)
                     {
                         <div class="portal-status">
                             <span class="portal-status-dot enabled"></span>
-                            <span>Portal enabled at <strong>@Vm.CustomerPortalHost</strong></span>
+                            <span>Portal enabled at <strong>@Vm.SelectedPortalHost</strong></span>
                         </div>
                         @if (Vm.CanManagePortal)
                         {
                             <div class="portal-actions">
                                 <button class="dcbtn primary" disabled="@(Vm.PortalInviting || string.IsNullOrWhiteSpace(Vm.Selected.Email))" @onclick="Vm.InviteSelectedToPortalAsync">
                                     @(Vm.PortalInviting ? "Inviting…" : "Invite to portal")
+                                </button>
+                                <button class="dcbtn" disabled="@(Vm.PortalImpersonating || string.IsNullOrWhiteSpace(Vm.Selected.Email))" @onclick="Vm.ImpersonateSelectedToPortalAsync">
+                                    @(Vm.PortalImpersonating ? "Signing in…" : "Impersonate")
                                 </button>
                                 <button class="dcbtn" @onclick="@(() => Vm.OpenPortalProvisioning(Vm.Selected?.Name))">Configure</button>
                             </div>

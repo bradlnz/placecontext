@@ -86,19 +86,32 @@ public sealed class ProjectAnalyticsViewModel(
                 SqlMonaco = false;
             }
         }
+        var entries = new List<object>();
+        var rendered = new List<(string Id, DateTimeOffset At)>();
         foreach (var chart in Charts.Where(IsSpec))
         {
             var id = CanvasId(chart.TableName);
             if (_rendered.TryGetValue(id, out var timestamp) && timestamp == chart.GeneratedAt)
                 continue;
+            entries.Add(new { id, spec = chart.Html });
+            rendered.Add((id, chart.GeneratedAt));
+        }
+        if (entries.Count > 0)
+        {
             try
             {
-                await js.InvokeVoidAsync("pcchart.render", id, chart.Html);
-                _rendered[id] = chart.GeneratedAt;
+                await js.InvokeVoidAsync("pcchart.renderAll", entries);
+                foreach (var (id, at) in rendered)
+                    _rendered[id] = at;
             }
             catch (JSException) { }
         }
     }
+
+    // The view model is circuit-scoped and outlives the page, but the canvases it renders into are
+    // created per page mount. Clear the rendered-once cache whenever the page (re)mounts so charts
+    // redraw the fresh canvases instead of being skipped as "already drawn".
+    public void ResetChartCache() => _rendered.Clear();
 
     public IReadOnlyList<ProjectChartView> SqlCharts() =>
         Charts

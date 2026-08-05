@@ -68,6 +68,7 @@ else
                         var triggerCount = Vm.EnabledTriggersFor(job.Id);
                         var isRunning = Vm.IsRunningJob(job.Id);
                         <article class="job-row @(isRunning ? "running" : null)"
+                                 @key="job.Id"
                                  @onclick="@(() => Vm.OpenJobAsync(job))">
                             <div class="status-icon @(isRunning ? "is-running" : null)" aria-label="@Vm.JobStatusAria(isRunning, job)">
                                 @if (isRunning)
@@ -199,7 +200,7 @@ else
                         <div class="col-gap-8">
                             @foreach (var run in Vm.Runs)
                             {
-                                <div class="dccard card-pad">
+                                <div class="dccard card-pad" @key="run.Id">
                                     <div class="run-row-head" @onclick="@(() => Vm.OpenRunDetailAsync(run.Id))">
                                         <span class="status-badge-sm" style="color:@Vm.Presentation.StatusColor(run.Status); background:@Vm.Presentation.StatusBackground(run.Status)">
                                             @run.Status
@@ -419,6 +420,7 @@ else
                             @foreach (var run in Vm.Runs)
                             {
                                 <div class="dccard run-row"
+                                     @key="run.Id"
                                      @onclick="@(() => Vm.OpenRunDetailFromTriggerAsync(run.Id))">
                                 <span class="status-badge-sm" style="color:@Vm.Presentation.StatusColor(run.Status); background:@Vm.Presentation.StatusBackground(run.Status)">@run.Status</span>
                                     <span class="run-time">

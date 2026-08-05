@@ -126,12 +126,23 @@ window.pcchart = (function () {
       .observe(shell, { attributes: true, attributeFilter: ['data-theme'] });
   }
 
+  function renderCore(id, specJson) {
+    try { specs[id] = typeof specJson === 'string' ? JSON.parse(specJson) : specJson; }
+    catch { return; }
+    if (pending[id]) { clearTimeout(pending[id]); delete pending[id]; }
+    mount(id, 0);
+  }
+
   return {
     render(id, specJson) {
-      try { specs[id] = typeof specJson === 'string' ? JSON.parse(specJson) : specJson; }
-      catch { return; }
-      if (pending[id]) { clearTimeout(pending[id]); delete pending[id]; }
-      mount(id, 0);
+      renderCore(id, specJson);
+    },
+    // Batch entry point: one interop round-trip for many charts. entries = [{id, spec}].
+    renderAll(entries) {
+      for (let i = 0; i < entries.length; i++) {
+        const e = entries[i];
+        if (e) renderCore(e.id, e.spec);
+      }
     },
     destroy(id) {
       if (pending[id]) { clearTimeout(pending[id]); delete pending[id]; }

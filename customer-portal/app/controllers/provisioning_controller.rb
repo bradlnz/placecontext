@@ -22,6 +22,17 @@ class ProvisioningController < ActionController::API
     render json: { error: e.record.errors.full_messages.to_sentence }, status: :unprocessable_entity
   end
 
+  def impersonate
+    email = params.require(:email).to_s.strip.downcase
+    user = PortalUser.find_by(tenant_id: ENV.fetch("PLACE_CONTEXT_TENANT_ID"), email: email)
+    return render json: { error: "No portal account for #{email} — invite the client first." }, status: :not_found unless user
+
+    token = Rails.application.message_verifier(:portal_impersonation).generate(
+      { "user_id" => user.id, "exp" => 10.minutes.from_now.to_i }
+    )
+    render json: { url: "/impersonate/#{user.id}?t=#{token}" }, status: :ok
+  end
+
   private
 
   def authenticate_provisioner!

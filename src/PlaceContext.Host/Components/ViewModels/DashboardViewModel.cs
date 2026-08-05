@@ -374,19 +374,31 @@ public sealed class DashboardViewModel : PageViewModel, IDisposable
 
     public async Task RenderChartsAsync()
     {
+        var entries = new List<object>();
+        var rendered = new List<(string Id, DateTimeOffset At)>();
         foreach (var chart in SqlCharts())
         {
             var id = CanvasId(chart.TableName);
             if (_rendered.TryGetValue(id, out var timestamp) && timestamp == chart.GeneratedAt)
                 continue;
-            try
-            {
-                await _js.InvokeVoidAsync("pcchart.render", id, chart.Html);
-                _rendered[id] = chart.GeneratedAt;
-            }
-            catch (JSException) { }
+            entries.Add(new { id, spec = chart.Html });
+            rendered.Add((id, chart.GeneratedAt));
         }
+        if (entries.Count == 0)
+            return;
+        try
+        {
+            await _js.InvokeVoidAsync("pcchart.renderAll", entries);
+            foreach (var (id, at) in rendered)
+                _rendered[id] = at;
+        }
+        catch (JSException) { }
     }
+
+    // The view model is circuit-scoped and outlives the page, but the canvases it renders into are
+    // created per page mount. Clear the rendered-once cache whenever the Dashboard component mounts
+    // so returning to the page redraws the fresh canvases instead of skipping them as "already drawn".
+    public void ResetChartCache() => _rendered.Clear();
 
     public void Dispose() => _operations.Changed -= OnOperationsChanged;
 }

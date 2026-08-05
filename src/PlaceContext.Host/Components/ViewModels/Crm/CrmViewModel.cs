@@ -9,7 +9,6 @@ using PlaceContext.Application.Ports;
 using PlaceContext.Domain.ValueObjects;
 using PlaceContext.Host;
 using PlaceContext.Infrastructure.Crm;
-using PlaceContext.Infrastructure.Tenancy;
 using System.Net.Http.Json;
 using System.Text.Json;
 
@@ -24,7 +23,6 @@ public sealed class CrmViewModel : PageViewModel
     private readonly IMembershipService Membership;
     private readonly CrmIngestionSettingsService IngestionSettingsService;
     private readonly IPermissionService Permissions;
-    private readonly ITenantStore TenantStore;
     private readonly ICurrentTenant CurrentTenant;
     private readonly IHttpClientFactory HttpClientFactory;
     private readonly IConfiguration Configuration;
@@ -40,7 +38,6 @@ public sealed class CrmViewModel : PageViewModel
         IMembershipService membership,
         CrmIngestionSettingsService ingestionSettings,
         IPermissionService permissions,
-        ITenantStore tenantStore,
         ICurrentTenant currentTenant,
         IHttpClientFactory httpClientFactory,
         IConfiguration configuration
@@ -53,7 +50,6 @@ public sealed class CrmViewModel : PageViewModel
         Membership = membership;
         IngestionSettingsService = ingestionSettings;
         Permissions = permissions;
-        TenantStore = tenantStore;
         CurrentTenant = currentTenant;
         HttpClientFactory = httpClientFactory;
         Configuration = configuration;
@@ -91,7 +87,16 @@ public sealed class CrmViewModel : PageViewModel
     public CrmSectionPresentation CurrentSectionPresentation =>
         CrmPresentationCatalog.Sections[(int)CurrentSection];
     public bool CrmNavOpen;
-    public IReadOnlyList<CrmClientView> Clients = Array.Empty<CrmClientView>();
+    private IReadOnlyList<CrmClientView> _clients = Array.Empty<CrmClientView>();
+    public IReadOnlyList<CrmClientView> Clients
+    {
+        get => _clients;
+        set
+        {
+            _clients = value;
+            _filteredClientsCache = null;
+        }
+    }
     public IReadOnlyList<JobChainView> Chains = Array.Empty<JobChainView>();
     public IReadOnlyList<CrmAutomationRuleView> AutomationRules =
         Array.Empty<CrmAutomationRuleView>();
@@ -106,31 +111,25 @@ public sealed class CrmViewModel : PageViewModel
     public bool PortalProvisioningOpen;
     public bool SavingPortal;
     public bool PortalInviting;
+    public bool PortalImpersonating;
     public bool CanManagePortal;
-    public bool CustomerPortalEnabled;
-    public string CustomerPortalDomain = "";
     public string PortalCustomerSlug = "";
     public string PortalDomain = "";
     public string PortalInviteRole = "member";
     public string? PortalMessage;
-    public string CustomerPortalHost =>
-        string.IsNullOrWhiteSpace(CustomerPortalDomain)
-            ? BuildPortalHostFromCurrentDomain()
-            : $"https://{CustomerPortalDomain.Trim()}";
-    private string BuildPortalHostFromCurrentDomain()
+    public bool SelectedPortalEnabled => Selected?.CustomerPortalEnabled ?? false;
+    public string SelectedPortalHost =>
+        string.IsNullOrWhiteSpace(Selected?.CustomerPortalDomain)
+            ? BuildClientPortalHost()
+            : $"https://{Selected.CustomerPortalDomain.Trim()}";
+    private string BuildClientPortalHost()
     {
-        var customerSlug = BuildPortalPathSlug();
-        return $"{Nav.BaseUri.TrimEnd('/')}/p/{customerSlug}";
-    }
-
-    private string BuildPortalPathSlug()
-    {
-        var customerSlug = PortalCustomerSlug?.Trim();
-        if (!string.IsNullOrWhiteSpace(customerSlug))
-            return Slugify(customerSlug);
-
-        var tenantSlug = (CurrentTenant.Slug ?? "").Trim();
-        return string.IsNullOrWhiteSpace(tenantSlug) ? "tenant" : Slugify(tenantSlug);
+        var slug = Selected?.CustomerPortalSlug;
+        if (string.IsNullOrWhiteSpace(slug) && Selected is not null)
+            slug = Slugify(Selected.Name);
+        if (string.IsNullOrWhiteSpace(slug))
+            slug = "customer";
+        return $"{Nav.BaseUri.TrimEnd('/')}/p/{Slugify(slug)}";
     }
 
     private static string Slugify(string value)
@@ -209,9 +208,27 @@ public sealed class CrmViewModel : PageViewModel
         StageFilter is { } stage ? StageLabel(stage).ToLowerInvariant() : "all";
     public string ComposeSubject = "";
     public string ComposeBody = "";
-    public string Search = "";
+    private string _search = "";
+    public string Search
+    {
+        get => _search;
+        set
+        {
+            _search = value;
+            _filteredClientsCache = null;
+        }
+    }
     public string ConversationSearch = "";
-    public CustomerLifecycleStage? StageFilter;
+    private CustomerLifecycleStage? _stageFilter;
+    public CustomerLifecycleStage? StageFilter
+    {
+        get => _stageFilter;
+        set
+        {
+            _stageFilter = value;
+            _filteredClientsCache = null;
+        }
+    }
     public CrmClientView? Selected;
     public Guid? SelectedChainId;
     public Guid? ConfirmArtifactRemoveId;
@@ -293,14 +310,18 @@ public sealed class CrmViewModel : PageViewModel
 
     public string IngestionEndpoint => $"{Nav.BaseUri.TrimEnd('/')}/api/crm/ingest";
 
-    public IEnumerable<CrmClientView> FilteredClients =>
-        Clients.Where(client =>
-            (StageFilter is null || ParseStage(client.LifecycleStage) == StageFilter)
-            && (
-                string.IsNullOrWhiteSpace(Search)
-                || Searchable(client).Contains(Search.Trim(), StringComparison.OrdinalIgnoreCase)
+    private List<CrmClientView>? _filteredClientsCache;
+    public ICollection<CrmClientView> FilteredClients =>
+        _filteredClientsCache ??= Clients
+            .Where(client =>
+                (StageFilter is null || ParseStage(client.LifecycleStage) == StageFilter)
+                && (
+                    string.IsNullOrWhiteSpace(Search)
+                    || Searchable(client)
+                        .Contains(Search.Trim(), StringComparison.OrdinalIgnoreCase)
+                )
             )
-        );
+            .ToList();
 
     public IEnumerable<CrmClientView> FilteredConversationClients =>
         Clients
@@ -334,9 +355,6 @@ public sealed class CrmViewModel : PageViewModel
                 portalPermissionTask
             );
             CanManagePortal = await portalPermissionTask;
-            var tenant = await TenantStore.GetRowAsync(CurrentTenant.TenantId);
-            CustomerPortalEnabled = tenant?.CustomerPortalEnabled ?? false;
-            CustomerPortalDomain = tenant?.CustomerPortalDomain ?? "";
             var adminEmails = (await membersTask)
                 .Where(member =>
                     member.IsDefaultAdmin
@@ -1005,8 +1023,8 @@ public sealed class CrmViewModel : PageViewModel
 
     public void OpenPortalProvisioning(string? customerName = null)
     {
-        PortalDomain = CustomerPortalDomain;
-        PortalCustomerSlug = customerName ?? string.Empty;
+        PortalDomain = Selected?.CustomerPortalDomain ?? "";
+        PortalCustomerSlug = Selected?.CustomerPortalSlug ?? customerName ?? string.Empty;
         PortalMessage = null;
         PortalProvisioningOpen = true;
     }
@@ -1015,18 +1033,23 @@ public sealed class CrmViewModel : PageViewModel
 
     public async Task SavePortalProvisioning()
     {
+        if (Selected is null) return;
         SavingPortal = true;
         PortalMessage = null;
         try
         {
-            await TenantStore.SetCustomerPortalDomainAsync(
-                CurrentTenant.TenantId,
+            var slug = string.IsNullOrWhiteSpace(PortalCustomerSlug)
+                ? Slugify(Selected.Name)
+                : Slugify(PortalCustomerSlug);
+            var saved = await Svc.ConfigureCrmClientPortalAsync(
+                Selected.Id,
+                true,
+                slug,
                 string.IsNullOrWhiteSpace(PortalDomain) ? null : PortalDomain.Trim()
             );
-            await TenantStore.SetCustomerPortalEnabledAsync(CurrentTenant.TenantId, true);
-            var tenant = await TenantStore.GetRowAsync(CurrentTenant.TenantId);
-            CustomerPortalEnabled = tenant?.CustomerPortalEnabled ?? true;
-            CustomerPortalDomain = tenant?.CustomerPortalDomain ?? PortalDomain;
+            if (Selected.Id == saved.Id)
+                Selected = saved;
+            await RefreshClients();
             PortalMessage = "Customer portal provisioned.";
             PortalProvisioningOpen = false;
         }
@@ -1052,7 +1075,7 @@ public sealed class CrmViewModel : PageViewModel
         PortalMessage = null;
         try
         {
-            if (!CustomerPortalEnabled)
+            if (!SelectedPortalEnabled)
                 throw new InvalidOperationException("Configure and enable the customer portal first.");
 
             var key = Configuration[ProvisioningKey];
@@ -1060,7 +1083,7 @@ public sealed class CrmViewModel : PageViewModel
                 throw new InvalidOperationException("Customer portal provisioning is not configured.");
 
             var client = HttpClientFactory.CreateClient();
-            client.BaseAddress = new Uri($"{CustomerPortalHost}/");
+            client.BaseAddress = new Uri($"{SelectedPortalHost}/");
             client.DefaultRequestHeaders.Add("X-PlaceContext-Provisioning-Key", key);
             client.DefaultRequestHeaders.Add("X-PlaceContext-Tenant-Id", CurrentTenant.TenantId.ToString());
             using var response = await client.PostAsJsonAsync(
@@ -1079,6 +1102,67 @@ public sealed class CrmViewModel : PageViewModel
         finally
         {
             PortalInviting = false;
+        }
+    }
+
+    public async Task ImpersonateSelectedToPortalAsync()
+    {
+        if (Selected?.Email is not { Length: > 0 } email)
+        {
+            PortalMessage = "This client has no email address.";
+            return;
+        }
+
+        PortalImpersonating = true;
+        PortalMessage = null;
+        try
+        {
+            if (!SelectedPortalEnabled)
+                throw new InvalidOperationException("Configure and enable the customer portal first.");
+
+            var key = Configuration[ProvisioningKey];
+            if (string.IsNullOrWhiteSpace(key))
+                throw new InvalidOperationException("Customer portal provisioning is not configured.");
+
+            var client = HttpClientFactory.CreateClient();
+            client.BaseAddress = new Uri($"{SelectedPortalHost}/");
+            client.DefaultRequestHeaders.Add("X-PlaceContext-Provisioning-Key", key);
+            client.DefaultRequestHeaders.Add("X-PlaceContext-Tenant-Id", CurrentTenant.TenantId.ToString());
+            using var response = await client.PostAsJsonAsync(
+                "/api/provision/impersonate",
+                new { email = email.Trim() }
+            );
+            if (!response.IsSuccessStatusCode)
+            {
+                var detail = await TryReadErrorDetailAsync(response);
+                throw new InvalidOperationException(detail ?? $"Impersonation failed ({(int)response.StatusCode}).");
+            }
+
+            var payload = await response.Content.ReadFromJsonAsync<PortalImpersonateResponse>();
+            Nav.NavigateTo($"{SelectedPortalHost}{payload.Url}", forceLoad: true);
+        }
+        catch (Exception ex)
+        {
+            PortalMessage = ex.Message;
+        }
+        finally
+        {
+            PortalImpersonating = false;
+        }
+    }
+
+    private static async Task<string?> TryReadErrorDetailAsync(HttpResponseMessage response)
+    {
+        try
+        {
+            using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            return json.RootElement.TryGetProperty("error", out var error)
+                ? error.GetString()
+                : null;
+        }
+        catch (Exception)
+        {
+            return null;
         }
     }
 
@@ -1652,3 +1736,6 @@ public sealed class CrmViewModel : PageViewModel
         return string.Concat(parts.Take(2).Select(part => char.ToUpperInvariant(part[0])));
     }
 }
+
+public sealed record PortalImpersonateResponse(string Url);
+

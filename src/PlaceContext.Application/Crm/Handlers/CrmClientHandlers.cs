@@ -109,6 +109,29 @@ public sealed class DeleteCrmClientHandler : ICommandHandler<DeleteCrmClientComm
     }
 }
 
+public sealed class ConfigureCrmClientPortalHandler
+    : ICommandHandler<ConfigureCrmClientPortalCommand, CrmClientView>
+{
+    private readonly ICrmClientRepository _clients;
+    private readonly IUnitOfWork _uow;
+    private readonly IClock _clock;
+
+    public ConfigureCrmClientPortalHandler(
+        ICrmClientRepository clients, IUnitOfWork uow, IClock clock)
+        => (_clients, _uow, _clock) = (clients, uow, clock);
+
+    public async Task<CrmClientView> HandleAsync(
+        ConfigureCrmClientPortalCommand command, CancellationToken ct = default)
+    {
+        var client = await _clients.GetByIdAsync(command.ClientId, ct)
+            ?? throw new InvalidOperationException($"Client {command.ClientId} not found.");
+        client.ConfigurePortal(command.Enabled, command.Slug, command.Domain, _clock.UtcNow);
+        await _clients.UpdateAsync(client, ct);
+        await _uow.SaveChangesAsync(ct);
+        return CrmClientMapper.ToView(client);
+    }
+}
+
 public sealed class ListCrmClientsHandler
     : IQueryHandler<ListCrmClientsQuery, IReadOnlyList<CrmClientView>>
 {

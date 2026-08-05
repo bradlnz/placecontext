@@ -182,6 +182,15 @@ public sealed class OpenSearchDataViewModel : PageViewModel, IDisposable
 
     public async Task AfterRenderAsync(bool firstRender)
     {
+        // The view model is circuit-scoped and outlives the page, but the canvases it renders into
+        // are created per page mount. On the first render of a fresh page mount the cached
+        // "already rendered" markers refer to canvases that no longer exist, so reset them.
+        if (firstRender)
+        {
+            RenderedDashboards.Clear();
+            RenderedGeneratedCharts.Clear();
+        }
+
         if (Result?.ChartSpecJson is { } preview && preview != LastPreviewSpec)
         {
             try
@@ -192,6 +201,8 @@ public sealed class OpenSearchDataViewModel : PageViewModel, IDisposable
             catch (JSException) { }
         }
 
+        var dashEntries = new List<object>();
+        var dashRendered = new List<(Guid Id, DateTimeOffset At)>();
         foreach (var dashboard in Dashboards)
         {
             if (
@@ -199,30 +210,40 @@ public sealed class OpenSearchDataViewModel : PageViewModel, IDisposable
                 && rendered == dashboard.UpdatedAt
             )
                 continue;
+            dashEntries.Add(
+                new { id = CanvasId(dashboard.Id.ToString()), spec = dashboard.ChartSpecJson }
+            );
+            dashRendered.Add((dashboard.Id, dashboard.UpdatedAt));
+        }
+        if (dashEntries.Count > 0)
+        {
             try
             {
-                await JS.InvokeVoidAsync(
-                    "pcchart.render",
-                    CanvasId(dashboard.Id.ToString()),
-                    dashboard.ChartSpecJson
-                );
-                RenderedDashboards[dashboard.Id] = dashboard.UpdatedAt;
+                await JS.InvokeVoidAsync("pcchart.renderAll", dashEntries);
+                foreach (var (id, at) in dashRendered)
+                    RenderedDashboards[id] = at;
             }
             catch (JSException) { }
         }
 
+        var genEntries = new List<object>();
+        var genRendered = new List<string>();
         foreach (var chart in GeneratedCharts)
         {
             if (RenderedGeneratedCharts.Contains(chart.Id))
                 continue;
+            genEntries.Add(
+                new { id = GeneratedCanvasId(chart.Id), spec = chart.ChartSpecJson }
+            );
+            genRendered.Add(chart.Id);
+        }
+        if (genEntries.Count > 0)
+        {
             try
             {
-                await JS.InvokeVoidAsync(
-                    "pcchart.render",
-                    GeneratedCanvasId(chart.Id),
-                    chart.ChartSpecJson
-                );
-                RenderedGeneratedCharts.Add(chart.Id);
+                await JS.InvokeVoidAsync("pcchart.renderAll", genEntries);
+                foreach (var id in genRendered)
+                    RenderedGeneratedCharts.Add(id);
             }
             catch (JSException) { }
         }

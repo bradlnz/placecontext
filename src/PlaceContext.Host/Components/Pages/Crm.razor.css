@@ -1246,6 +1246,13 @@
     border: 1px solid var(--border);
     border-radius: 10px;
     background: var(--card);
+    display: flex;
+    flex-direction: column;
+}
+
+.client-table-body {
+    overflow-y: auto;
+    max-height: 62vh;
 }
 
 .client-table-head,
@@ -3106,6 +3113,16 @@
 .crm-page .dcslide,
 .crm-page .dcslide-scrim {
     z-index: 1000;
+}
+.crm-page .crm-detail,
+.crm-page .crm-detail-scrim {
+    z-index: 1100;
+}
+.crm-page .portal-editor,
+.crm-page .portal-scrim,
+.crm-page .notes-metadata-editor,
+.crm-page .notes-scrim {
+    z-index: 1200;
 }
 .crm-page .crm-detail .dcslide-head {
     min-height: 66px;

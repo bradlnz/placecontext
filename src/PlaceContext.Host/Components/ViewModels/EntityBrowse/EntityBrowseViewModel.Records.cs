@@ -11,6 +11,9 @@ public sealed partial class EntityBrowseViewModel
 {
     // ── Records tab ───────────────────────────────────────────────────────────────────────────
     public ProjectTablePageResult? Page { get; private set; }
+    private List<IReadOnlyList<string?>>? _pageRowsCache;
+    public List<IReadOnlyList<string?>> PageRows =>
+        _pageRowsCache ??= Page?.Rows.ToList() ?? new();
     public string Search { get; set; } = "";
     public int PageNum { get; private set; } = 1;
     public const int RecordsPageSize = 50;

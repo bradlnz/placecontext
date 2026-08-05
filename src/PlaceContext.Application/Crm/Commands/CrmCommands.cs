@@ -24,6 +24,15 @@ public sealed record MoveCrmClientCommand(
     public string RequiredPermission => Permission.DataWrite;
 }
 
+public sealed record ConfigureCrmClientPortalCommand(
+    Guid ClientId,
+    bool Enabled,
+    string? Slug,
+    string? Domain) : ICommand<CrmClientView>, IRequiresPermission
+{
+    public string RequiredPermission => Permission.SettingsManage;
+}
+
 public sealed record DeleteCrmClientCommand(Guid ClientId) : ICommand<bool>, IRequiresPermission
 {
     public string RequiredPermission => Permission.DataWrite;

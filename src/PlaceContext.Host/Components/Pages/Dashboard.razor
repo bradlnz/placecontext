@@ -83,7 +83,7 @@
             <div class="quick-chain-list">
                 @foreach (var chain in Vm.Chains.Take(4))
                 {
-                    <div class="quick-chain-row">
+                    <div class="quick-chain-row" @key="chain.Id">
                         <div class="quick-chain-copy">
                             <div class="quick-chain-name">@chain.Name</div>
                             <div class="quick-chain-meta">
@@ -117,7 +117,8 @@
             @foreach (var e in Vm.Entities)
             {
                 <a href="@($"/project/{e.ProjectId}/entity/{Uri.EscapeDataString(e.Name)}")"
-                   class="dccard dcdash-row entity-card">
+                   class="dccard dcdash-row entity-card"
+                   @key="e.Id">
                     <div class="entity-head">
                         <span class="entity-name">@e.Name</span>
                         <span class="entity-count">@Vm.EntityCount(e)</span>
@@ -128,7 +129,7 @@
                         <div class="entity-bars">
                             @foreach (var (label, count, frac) in chart.Bars)
                             {
-                                <div class="entity-bar-row">
+                                <div class="entity-bar-row" @key="label">
                                     <span class="entity-bar-label" title="@label">@label</span>
                                     <span class="entity-bar-track">
                                         <span class="entity-bar-fill" style="width:@(frac)%"></span>
@@ -160,7 +161,7 @@
         <div class="charts-grid">
             @foreach (var chart in sqlCharts)
             {
-                <div class="dccard chart-card">
+                <div class="dccard chart-card" @key="chart.TableName">
                     <div class="chart-card-head">
                         <span class="chart-title">@chart.TableName["sql:".Length..]</span>
                         <span class="spacer"></span>
@@ -209,7 +210,8 @@
                 {
                     var run = rep.Run;
                     <div @onclick="@(() => Vm.OpenRun(run.Id))"
-                         class="dcdash-row jobs-row">
+                         class="dcdash-row jobs-row"
+                         @key="run.Id">
                         <span class="job-status" style="color:@Vm.StatusTextColor(run.Status)">
                             <span class="job-status-dot" style="background:@Vm.StatusTextColor(run.Status); animation:@(Vm.IsRunningStatus(run.Status) ? "dcpulse 1.6s ease-in-out infinite" : "none")"></span>@Vm.StatusLabel(run.Status)
                         </span>
@@ -293,6 +295,7 @@
     protected override async Task OnInitializedAsync()
     {
         Vm.Attach(() => InvokeAsync(StateHasChanged));
+        Vm.ResetChartCache();
         Vm.Initialize();
         await Vm.LoadAsync();
     }

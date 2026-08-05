@@ -7,7 +7,7 @@ class ApplicationController < ActionController::Base
   private
 
   def require_tenant_host!
-    return if request.path == "/healthz"
+    return if request.path == "/healthz" || request.path == "#{portal_path}/healthz"
 
     custom_domain = request.host.casecmp?(ENV.fetch("PLACE_CONTEXT_PORTAL_DOMAIN"))
     path = portal_path

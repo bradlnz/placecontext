@@ -234,6 +234,10 @@ public sealed class PlaceContextService : IPlaceContextService
     public Task<CrmClientView> SaveCrmClientAsync(SaveCrmClientCommand command, CancellationToken ct = default)
         => _dispatcher.Send(command, ct);
 
+    public Task<CrmClientView> ConfigureCrmClientPortalAsync(
+        Guid clientId, bool enabled, string? slug, string? domain, CancellationToken ct = default)
+        => _dispatcher.Send(new ConfigureCrmClientPortalCommand(clientId, enabled, slug, domain), ct);
+
     public Task<CrmClientView> MoveCrmClientAsync(
         Guid clientId,
         Domain.ValueObjects.CustomerLifecycleStage stage,
