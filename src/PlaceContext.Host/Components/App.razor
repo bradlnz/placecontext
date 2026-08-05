@@ -12,7 +12,7 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
     @* Blazor scoped-CSS bundle: per-component <Name>.razor.css files compile into this. Component
        classes resolve --var() values from the #dcshell ancestor's cascade below. *@
-    <link rel="stylesheet" href="PlaceContext.Host.styles.css" />
+    <link rel="stylesheet" href="PlaceContext.Host.styles.css?v=2" />
     @* prerender:false — with prerender on, every page ran its whole data load twice (once for
        the throwaway static render, again when the circuit connects). One load, one render. *@
     <HeadOutlet @rendermode="new InteractiveServerRenderMode(prerender: false)" />
