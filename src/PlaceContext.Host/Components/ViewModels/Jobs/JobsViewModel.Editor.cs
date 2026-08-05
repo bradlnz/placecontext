@@ -18,6 +18,25 @@ public sealed partial class JobsViewModel
     public string EditorTab { get; set; } = "details";
     public Guid? SelectedTriggerId { get; set; }
 
+    // ── Template modal state ──────────────────────────────────────────────────────────────────
+    public bool ShowTemplateModal { get; private set; }
+    public JobTemplate? SelectedTemplate { get; private set; }
+    public string TemplateFilter { get; set; } = "";
+    public IReadOnlyList<JobTemplate> FilteredTemplates =>
+        string.IsNullOrWhiteSpace(TemplateFilter)
+            ? JobTemplateCatalog.All
+            : JobTemplateCatalog.All
+                .Where(t => t.Name.Contains(TemplateFilter, StringComparison.OrdinalIgnoreCase)
+                         || t.Description.Contains(TemplateFilter, StringComparison.OrdinalIgnoreCase)
+                         || t.Category.Contains(TemplateFilter, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+    public bool HasTemplateCredential(JobCredentialRequirement credential) =>
+        VaultSecrets?.Any(s => s.Name.Equals(credential.EnvVarName, StringComparison.OrdinalIgnoreCase)) ?? false;
+
+    public int MissingCredentialCount(JobTemplate template) =>
+        template.RequiredCredentials.Count(c => !HasTemplateCredential(c));
+
     public string EdName { get; set; } = "";
     public string EdDescription { get; set; } = "";
     public string EdMapSourceKind { get; set; } = "image";
@@ -116,6 +135,60 @@ public sealed partial class JobsViewModel
         EdMcpConnectionIds.Clear();
         EditorError = null;
         EditorTab = "details";
+        ShowEditor = true;
+        NotifyStateChanged();
+    }
+
+    public void OpenTemplateModal()
+    {
+        ShowTemplateModal = true;
+        SelectedTemplate = null;
+        TemplateFilter = "";
+        NotifyStateChanged();
+    }
+
+    public void CloseTemplateModal()
+    {
+        ShowTemplateModal = false;
+        SelectedTemplate = null;
+        TemplateFilter = "";
+        NotifyStateChanged();
+    }
+
+    public void SelectTemplate(JobTemplate template)
+    {
+        SelectedTemplate = template;
+        NotifyStateChanged();
+    }
+
+    public void ApplySelectedTemplate()
+    {
+        if (SelectedTemplate is not { } template)
+            return;
+
+        NewJob();
+        EdName = template.Name;
+        EdDescription = template.Description;
+        EdMapSourceKind = template.MapSourceKind;
+        EdMapImage = template.MapImage;
+        EdMapRuntimeId = template.MapRuntimeId ?? "node";
+        EdMapEntrypoint = template.MapEntrypoint ?? "";
+        EdMapSource = template.MapSource;
+        EdMapEnvRaw = template.MapEnvRaw;
+        EdInputPayloadsRaw = template.InputPayloadsRaw;
+        EdReturnType = template.ReturnType;
+        EdAllowNetworkEgress = template.AllowNetworkEgress;
+        EdParams.Clear();
+        EdParams.AddRange(template.Parameters.Select(p => new ParamEdit
+        {
+            Name = p.Name,
+            Label = p.Label ?? "",
+            Type = p.Type,
+            Required = p.Required,
+            OptionsRaw = p.Options is { Count: > 0 } ? string.Join(",", p.Options) : ""
+        }));
+        ShowTemplateModal = false;
+        SelectedTemplate = null;
         ShowEditor = true;
         NotifyStateChanged();
     }

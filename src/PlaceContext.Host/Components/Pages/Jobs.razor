@@ -22,7 +22,7 @@ else
             </div>
             <div class="head-actions">
                 <button class="dcbtn" @onclick="Vm.NavigateToTests">View tests</button>
-                <button class="dcbtn primary" @onclick="() => Vm.NewJob()">+ New job</button>
+                <button class="dcbtn primary" @onclick="() => Vm.OpenTemplateModal()">+ New job</button>
             </div>
         </header>
 
@@ -37,7 +37,7 @@ else
                 <div class="empty-icon">⌁</div>
                 <strong>No jobs yet</strong>
                 <span>Create a reusable workload, then run it manually or connect it to a schedule or event.</span>
-                <button class="dcbtn primary" @onclick="() => Vm.NewJob()">Create first job</button>
+                <button class="dcbtn primary" @onclick="() => Vm.OpenTemplateModal()">Create first job</button>
             </div>
         }
         else
@@ -861,6 +861,111 @@ else
                 </button>
             </div>
         }
+    </div>
+}
+
+@* ── Template picker modal ───────────────────────────────────────────────────────────── *@
+@if (Vm.ShowTemplateModal)
+{
+    <div class="dcmodal-overlay" @onclick="() => Vm.CloseTemplateModal()">
+        <div class="dcmodal modal-templates" @onclick:stopPropagation="true">
+            <div class="dcmodal-head">
+                <div class="flex-fill-min">
+                    <div class="title-14">New job</div>
+                    <div class="subtitle-11-5">Choose a template to get started, or start from scratch.</div>
+                </div>
+                <button class="dcslide-x" @onclick="() => Vm.CloseTemplateModal()">×</button>
+            </div>
+            <div class="dcmodal-body template-modal-body">
+                <div class="template-search-row">
+                    <input class="dcinput" @bind="Vm.TemplateFilter" @bind:event="oninput"
+                           placeholder="Search templates…" />
+                    <button class="dcbtn" @onclick="() => { Vm.CloseTemplateModal(); Vm.NewJob(); }">Start from scratch</button>
+                </div>
+
+                @if (Vm.FilteredTemplates.Count == 0)
+                {
+                    <div class="text-3-12">No templates match your search.</div>
+                }
+                else
+                {
+                    @foreach (var category in Vm.FilteredTemplates.Select(t => t.Category).Distinct())
+                    {
+                        <div class="template-category">@category</div>
+                        <div class="template-grid">
+                            @foreach (var template in Vm.FilteredTemplates.Where(t => t.Category == category))
+                            {
+                                var missing = Vm.MissingCredentialCount(template);
+                                <button type="button" class="template-card @(Vm.SelectedTemplate?.Id == template.Id ? "selected" : "")"
+                                        @onclick="() => Vm.SelectTemplate(template)">
+                                    <div class="template-card-head">
+                                        <span class="template-icon">@template.Icon</span>
+                                        <span class="template-name">@template.Name</span>
+                                    </div>
+                                    <div class="template-desc">@template.Description</div>
+                                    <div class="template-creds">
+                                        @if (missing > 0)
+                                        {
+                                            <span class="template-cred-missing">@missing vault credential@(missing == 1 ? "" : "s") required</span>
+                                        }
+                                        else if (template.RequiredCredentials.Count > 0)
+                                        {
+                                            <span class="template-cred-ok">✓ Vault credentials present</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="template-cred-ok">No credentials required</span>
+                                        }
+                                    </div>
+                                </button>
+                            }
+                        </div>
+                    }
+                }
+
+                @if (Vm.SelectedTemplate is { } selected)
+                {
+                    <div class="template-detail">
+                        <div class="template-detail-head">
+                            <span class="template-icon">@selected.Icon</span>
+                            <strong>@selected.Name</strong>
+                        </div>
+                        <p>@selected.Description</p>
+                        @if (selected.RequiredCredentials.Count > 0)
+                        {
+                            <div class="template-detail-section">Required vault credentials</div>
+                            <ul class="template-cred-list">
+                                @foreach (var cred in selected.RequiredCredentials)
+                                {
+                                    <li>
+                                        <code>@cred.EnvVarName</code>
+                                        <span>@cred.Description</span>
+                                        @if (Vm.HasTemplateCredential(cred))
+                                        {
+                                            <span class="template-cred-ok">✓ present</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="template-cred-missing">missing</span>
+                                        }
+                                    </li>
+                                }
+                            </ul>
+                            <div class="template-detail-hint">
+                                Vault secrets are injected as environment variables at runtime.
+                                <button type="button" class="link-btn" @onclick="Vm.NavigateToSecrets">Open Vault →</button>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+            <div class="dcmodal-foot">
+                <button class="dcbtn" @onclick="() => Vm.CloseTemplateModal()">Cancel</button>
+                <button class="dcbtn primary" disabled="@(Vm.SelectedTemplate is null)" @onclick="() => Vm.ApplySelectedTemplate()">
+                    Use template
+                </button>
+            </div>
+        </div>
     </div>
 }
 
