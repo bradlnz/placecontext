@@ -203,6 +203,25 @@ public class SearchTests
             Requests.Add(request);
             return Task.FromResult(_search(request));
         }
+
+        public Task CreateIndexAsync(
+            Guid projectId, string indexName, IReadOnlyList<OpenSearchMappingField> mappingFields,
+            CancellationToken ct = default)
+            => Task.CompletedTask;
+
+        public Task<int> IndexBulkAsync(
+            Guid projectId, string indexName, IReadOnlyList<string> columnNames,
+            IReadOnlyList<IReadOnlyList<string?>> rows, CancellationToken ct = default,
+            IReadOnlyList<string>? jsonColumnNames = null)
+            => Task.FromResult(rows.Count);
+
+        public Task DeleteIndexAsync(Guid projectId, string indexName, CancellationToken ct = default)
+            => Task.CompletedTask;
+
+        public Task<ProjectQueryResult> SearchSqlAsync(
+            Guid projectId, string sql, CancellationToken ct = default)
+            => Task.FromResult(new ProjectQueryResult(
+                new[] { "index" }, new IReadOnlyList<string?>[] { new[] { sql } }, 0, false));
     }
 
     private sealed class FakePermissionService : IPermissionService

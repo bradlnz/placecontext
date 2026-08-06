@@ -35,17 +35,17 @@ window.pcmonaco = (function () {
   // here would propagate through JS interop and terminate the Blazor circuit, freezing
   // the page on "Loading…".
   // The editor follows the portal's theme: light shells get Monaco's white 'vs', dark get
-  // a ClickHouse-inspired 'placecontext-ch' theme — and a toggle mid-session re-themes
+  // a yellow-inspired 'placecontext-ch' theme — and a toggle mid-session re-themes
   // every mounted editor live.
   function shellTheme() {
     const shell = document.getElementById('dcshell');
     return shell && shell.getAttribute('data-theme') === 'light' ? 'vs' : 'placecontext-ch';
   }
 
-  let clickHouseThemeDefined = false;
-  function defineClickHouseTheme(monaco) {
-    if (clickHouseThemeDefined) return;
-    clickHouseThemeDefined = true;
+  let yellowThemeDefined = false;
+  function defineyellowTheme(monaco) {
+    if (yellowThemeDefined) return;
+    yellowThemeDefined = true;
     monaco.editor.defineTheme('placecontext-ch', {
       base: 'vs-dark',
       inherit: true,
@@ -64,7 +64,7 @@ window.pcmonaco = (function () {
         'editorLineNumber.activeForeground': '#E4E7EC',
         'editor.selectionBackground': '#3E4249',
         'editor.inactiveSelectionBackground': '#33363D',
-        'editorCursor.foreground': '#FFCC00',
+        'editorCursor.foreground': '#ff6200',
         'editorWhitespace.foreground': '#4B4F57'
       }
     });
@@ -75,7 +75,7 @@ window.pcmonaco = (function () {
     if (themeWatcher) return;
     const shell = document.getElementById('dcshell');
     if (!shell) return;
-    defineClickHouseTheme(monaco);
+    defineyellowTheme(monaco);
     themeWatcher = new MutationObserver(() => monaco.editor.setTheme(shellTheme()));
     themeWatcher.observe(shell, { attributes: true, attributeFilter: ['data-theme'] });
   }

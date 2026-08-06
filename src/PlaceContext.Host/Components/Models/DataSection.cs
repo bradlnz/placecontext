@@ -17,7 +17,6 @@ public static class DataSectionNavigation
     [
         new(DataSection.Tables, "Tables", "data"),
         new(DataSection.Analytics, "Analytics", "analytics"),
-        new(DataSection.Search, "Search", "data-search"),
         new(DataSection.DataMap, "Data map", "datamap"),
         new(DataSection.Entities, "Entities", "entities")
     ];

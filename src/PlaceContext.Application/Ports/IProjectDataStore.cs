@@ -33,6 +33,20 @@ public sealed record ProjectTablePageResult(
     int PageSize);
 
 /// <summary>
+/// A whole-table read for external tooling (e.g. materialising a table into OpenSearch).
+/// <see cref="ColumnTypes"/> holds each column's Postgres type name (parallel to <see cref="Columns"/>);
+/// date/timestamp columns are already emitted as ISO-8601 (UTC) so they index cleanly, and
+/// everything else is its text form. <see cref="Truncated"/> is true when the table holds more
+/// rows than the cap that was requested.
+/// </summary>
+public sealed record ProjectTableReadResult(
+    IReadOnlyList<string> Columns,
+    IReadOnlyList<string> ColumnTypes,
+    IReadOnlyList<IReadOnlyList<string?>> Rows,
+    long TotalCount,
+    bool Truncated);
+
+/// <summary>
 /// Each project's own database: a private, isolated namespace of tables the project can create,
 /// fill, and query with SQL. Isolation is the store's job — a project's SQL must never be able to
 /// see another project's tables or the platform's own.
@@ -51,6 +65,13 @@ public interface IProjectDataStore
     /// </summary>
     Task<ProjectTablePageResult> QueryTablePageAsync(Guid projectId, string tableName, string? search,
         int page, int pageSize, string? sortColumn = null, bool sortDescending = false, CancellationToken ct = default);
+
+    /// <summary>
+    /// Read every row of a table (row-capped for safety) for external tooling — the OpenSearch
+    /// materialisation path. Column order is the table's own; date columns arrive as ISO-8601 UTC.
+    /// </summary>
+    Task<ProjectTableReadResult> ReadTableAsync(
+        Guid projectId, string tableName, long maxRows = 10000, CancellationToken ct = default);
 
     /// <summary>The project's tables with an approximate row count, name-sorted.</summary>
     Task<IReadOnlyList<ProjectTableInfo>> ListTablesAsync(Guid projectId, CancellationToken ct = default);

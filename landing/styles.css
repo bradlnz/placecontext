@@ -116,7 +116,7 @@
   .mock-view.is-active,.mock-pulse,.mock-pin.ready,.mock-progress>i,.mock-meter b,.mock-otel-row i,.mock-chart i,.mock-shimmer{animation:none!important}
 }
 
-/* ── ClickUp-inspired split hero ───────────────────────────────────────────── */
+/* ── -inspired split hero ───────────────────────────────────────────── */
 .hero-split{width:min(1180px,calc(100% - 48px));margin:88px auto 0;display:grid;grid-template-columns:minmax(0,.88fr) minmax(0,1.12fr);gap:72px;align-items:center;text-align:left}
 .hero-copy-block{min-width:0}
 .hero-split h1{max-width:650px;margin:22px 0 20px;font-size:clamp(44px,5.6vw,72px)}

@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Configuration;
@@ -21,6 +22,7 @@ namespace PlaceContext.Infrastructure.ProjectData;
 public sealed class NpgsqlProjectDataStore : IProjectDataStore
 {
     private const int MaxRows = 500;
+    private const long MaxReadRows = 100000;
     private const string StatementTimeout = "10s";
     private const int ProvisioningMaxAttempts = 3;
 
@@ -335,6 +337,84 @@ public sealed class NpgsqlProjectDataStore : IProjectDataStore
         return new ProjectTablePageResult(columns, rows, total, page, pageSize);
     }
 
+    public async Task<ProjectTableReadResult> ReadTableAsync(
+        Guid projectId, string tableName, long maxRows = 10000, CancellationToken ct = default)
+    {
+        Ident(tableName, "table name");
+        if (maxRows is <= 0 or > MaxReadRows)
+            throw new ArgumentException($"Read at most {MaxReadRows:N0} rows.");
+
+        var resolved = await ResolveDatabaseAsync(projectId, ct);
+        await using var conn = await OpenConnectionAsync(resolved, ct);
+        await EnsureIsolationAsync(conn, projectId, resolved, ct);
+        var schema = await EffectiveListSchemaAsync(conn, resolved, projectId, ct);
+        var qualified = $"{QuoteIdent(schema)}.{QuoteIdent(tableName)}";
+
+        // Column metadata (names + Postgres type names) — same shape as ListColumnsAsync, so the
+        // date/timestamp handling below is driven by the real column types.
+        var columns = new List<(string Name, string TypeName)>();
+        await using (var metaCmd = conn.CreateCommand())
+        {
+            metaCmd.CommandText = """
+                SELECT a.attname, format_type(a.atttypid, a.atttypmod)
+                FROM pg_attribute a
+                JOIN pg_class c ON c.oid = a.attrelid
+                JOIN pg_namespace n ON n.oid = c.relnamespace
+                WHERE n.nspname = @schema AND c.relname = @table AND a.attnum > 0 AND NOT a.attisdropped
+                ORDER BY a.attnum
+                """;
+            metaCmd.Parameters.AddWithValue("schema", schema);
+            metaCmd.Parameters.AddWithValue("table", tableName);
+            await using var reader = await metaCmd.ExecuteReaderAsync(ct);
+            while (await reader.ReadAsync(ct))
+                columns.Add((reader.GetString(0), reader.GetString(1)));
+        }
+
+        // Canonical text forms so OpenSearch indexes cleanly: dates/timestamps become ISO-8601 and
+        // jsonb is its JSON text. Everything else casts to text as-is.
+        var selectList = columns.Select(c => MaterializeExpression(c.Name, c.TypeName)).ToList();
+
+        long total;
+        using (var countCmd = conn.CreateCommand())
+        {
+            countCmd.CommandText = $"SELECT count(*) FROM {qualified}";
+            total = Convert.ToInt64(await countCmd.ExecuteScalarAsync(ct), CultureInfo.InvariantCulture);
+        }
+
+        var rows = new List<IReadOnlyList<string?>>();
+        await using (var cmd = conn.CreateCommand())
+        {
+            cmd.CommandText = $"SELECT {string.Join(", ", selectList)} FROM {qualified} LIMIT @maxRows";
+            cmd.Parameters.AddWithValue("maxRows", maxRows);
+            await using var reader = await cmd.ExecuteReaderAsync(ct);
+            while (await reader.ReadAsync(ct))
+            {
+                var row = new string?[reader.FieldCount];
+                for (var i = 0; i < reader.FieldCount; i++)
+                    row[i] = reader.IsDBNull(i) ? null : reader.GetValue(i).ToString();
+                rows.Add(row);
+            }
+        }
+        return new ProjectTableReadResult(
+            columns.Select(c => c.Name).ToList(),
+            columns.Select(c => c.TypeName).ToList(),
+            rows,
+            total,
+            Truncated: rows.Count < total);
+    }
+
+    private static string MaterializeExpression(string column, string typeName)
+    {
+        var quoted = QuoteIdent(column);
+        return typeName switch
+        {
+            "date" => $"to_char({quoted}, 'YYYY-MM-DD')",
+            "timestamp with time zone" => $"to_char(timezone('utc', {quoted}), 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"')",
+            "timestamp without time zone" => $"to_char({quoted}, 'YYYY-MM-DD\"T\"HH24:MI:SS.US')",
+            _ => $"{quoted}::text",
+        };
+    }
+
     public async Task<IReadOnlyList<ProjectTableInfo>> ListTablesAsync(Guid projectId, CancellationToken ct = default)
     {
         var resolved = await ResolveDatabaseAsync(projectId, ct);
@@ -345,6 +425,7 @@ public sealed class NpgsqlProjectDataStore : IProjectDataStore
         // (the role holds SELECT at most — see AppendReadOnlyRowsAsync). On an external database the
         // connecting user owns its own tables, so nothing is read-only from the store's point of view.
         var listSchema = await EffectiveListSchemaAsync(conn, resolved, projectId, ct);
+
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = """
             SELECT c.relname, GREATEST(c.reltuples, 0)::bigint,

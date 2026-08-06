@@ -14,9 +14,7 @@ public sealed class OpenSearchDataGateway : IOpenSearchDataGateway
     private const int MaxPageSize = 100;
     private const int MaxSqlRows = 500;
     private const int MaxSqlLength = 16000;
-    private const int ExportPageSize = 500;
-    private const int DefaultExportRows = 10000;
-    private const int MaxExportRows = 100000;
+    private const int BulkChunkSize = 1000;
     private readonly IHttpClientFactory _httpFactory;
     private readonly IOpenSearchConnectionResolver _connections;
 
@@ -68,94 +66,6 @@ public sealed class OpenSearchDataGateway : IOpenSearchDataGateway
                 Bool(type.Value, "aggregatable")));
         }
         return result.OrderBy(field => field.Name).ToList();
-    }
-
-    public async Task<OpenSearchExportView> ExportIndexAsync(
-        Guid projectId, string indexPattern, int maxRows = DefaultExportRows, CancellationToken ct = default)
-    {
-        var connection = await RequiredConnectionAsync(projectId, ct);
-        var safePattern = SafeIndex(indexPattern);
-        var rowCap = Math.Clamp(maxRows, 1, MaxExportRows);
-
-        // Schema: the same _field_caps call the fields list uses, mapped onto the store's Postgres
-        // type allow-list. Object/nested/alias parents are skipped — their flattened leaves carry
-        // the data, so a parent column would just be all nulls.
-        var fields = new List<OpenSearchExportField>();
-        using (var capsResponse = await SendAsync(connection, HttpMethod.Get,
-                   $"/{safePattern}/_field_caps?fields=*", null, ct))
-        using (var caps = await ReadSuccessAsync(capsResponse, ct))
-        {
-            if (!caps.RootElement.TryGetProperty("fields", out var fieldsJson)
-                || fieldsJson.ValueKind != JsonValueKind.Object)
-                return new OpenSearchExportView(
-                    Array.Empty<OpenSearchExportField>(), Array.Empty<IReadOnlyList<string?>>(), false);
-
-            foreach (var field in fieldsJson.EnumerateObject())
-            {
-                if (field.Name.StartsWith('_') || field.Value.ValueKind != JsonValueKind.Object) continue;
-                var type = field.Value.EnumerateObject().FirstOrDefault();
-                if (type.Value.ValueKind != JsonValueKind.Object) continue;
-                var postgres = PostgresTypeFor(type.Name);
-                if (postgres is null) continue;
-                fields.Add(new OpenSearchExportField(field.Name, type.Name, postgres));
-            }
-        }
-        fields.Sort((a, b) => string.Compare(a.Name, b.Name, StringComparison.Ordinal));
-        if (fields.Count == 0)
-            return new OpenSearchExportView(fields, Array.Empty<IReadOnlyList<string?>>(), false);
-
-        // Docs paged with search_after on the _doc tiebreaker — stable across pages and cheap at
-        // any depth (unlike from+size), which matters for a full-index export.
-        var rows = new List<IReadOnlyList<string?>>();
-        JsonNode? searchAfter = null;
-        var truncated = false;
-        while (rows.Count < rowCap)
-        {
-            var wanted = Math.Min(ExportPageSize, rowCap - rows.Count);
-            var body = new JsonObject
-            {
-                ["size"] = wanted,
-                ["sort"] = new JsonArray { new JsonObject { ["_doc"] = "asc" } },
-                ["query"] = new JsonObject { ["match_all"] = new JsonObject() },
-            };
-            if (searchAfter is not null) body["search_after"] = new JsonArray { searchAfter };
-
-            using var response = await SendAsync(connection, HttpMethod.Post,
-                $"/{safePattern}/_search", body.ToJsonString(), ct);
-            using var document = await ReadSuccessAsync(response, ct);
-            var hits = document.RootElement.GetProperty("hits").GetProperty("hits");
-            var pageCount = 0;
-            foreach (var hit in hits.EnumerateArray())
-            {
-                var flat = new SortedDictionary<string, string?>(StringComparer.Ordinal);
-                if (hit.TryGetProperty("_source", out var source)
-                    && source.ValueKind == JsonValueKind.Object)
-                    Flatten(source, null, flat);
-                var row = new string?[fields.Count];
-                for (var i = 0; i < fields.Count; i++)
-                {
-                    var value = flat.TryGetValue(fields[i].Name, out var v) ? v : null;
-                    // Date fields stored as epoch_millis wouldn't cast to timestamptz — normalise first.
-                    if (value is not null && IsDateField(fields[i].Type) && LooksLikeEpochMillis(value))
-                        value = EpochMillisToIso(value);
-                    row[i] = value;
-                }
-                rows.Add(row);
-                pageCount++;
-            }
-
-            if (pageCount == 0) break;
-            searchAfter = ParseSearchAfter(hits.EnumerateArray().Last());
-            if (searchAfter is null) break;
-            if (pageCount < wanted) break; // short page — the index is exhausted
-            if (rows.Count >= rowCap)
-            {
-                truncated = await HasMoreAsync(connection, safePattern, searchAfter, ct);
-                break;
-            }
-        }
-
-        return new OpenSearchExportView(fields, rows, truncated);
     }
 
     public async Task<OpenSearchLastUpdatedView> GetLastUpdatedAsync(
@@ -218,6 +128,125 @@ public sealed class OpenSearchDataGateway : IOpenSearchDataGateway
         return new OpenSearchSearchView(total, took, hits, chart?.ToJson());
     }
 
+    public async Task CreateIndexAsync(
+        Guid projectId, string indexName, IReadOnlyList<OpenSearchMappingField> mappingFields,
+        CancellationToken ct = default)
+    {
+        var connection = await RequiredConnectionAsync(projectId, ct);
+        var safeIndex = SafeIndex(indexName);
+        var properties = new JsonObject();
+        foreach (var field in mappingFields)
+            properties[field.Name] = new JsonObject { ["type"] = field.OpenSearchType };
+        var body = new JsonObject
+        {
+            ["settings"] = new JsonObject { ["number_of_shards"] = 1 },
+            ["mappings"] = new JsonObject { ["properties"] = properties },
+        };
+        using var response = await SendAsync(connection, HttpMethod.Put,
+            $"/{safeIndex}", body.ToJsonString(), ct);
+        await ReadSuccessAsync(response, ct);
+    }
+
+    public async Task<int> IndexBulkAsync(
+        Guid projectId, string indexName, IReadOnlyList<string> columnNames,
+        IReadOnlyList<IReadOnlyList<string?>> rows, CancellationToken ct = default,
+        IReadOnlyList<string>? jsonColumnNames = null)
+    {
+        var connection = await RequiredConnectionAsync(projectId, ct);
+        var safeIndex = SafeIndex(indexName);
+        var jsonColumns = jsonColumnNames is { Count: > 0 }
+            ? new HashSet<string>(jsonColumnNames, StringComparer.Ordinal)
+            : null;
+        var indexed = 0;
+        foreach (var chunk in Chunks(rows, BulkChunkSize))
+        {
+            var body = new StringBuilder();
+            foreach (var row in chunk)
+            {
+                body.Append("{\"index\":{\"_index\":\"")
+                    .Append(safeIndex)
+                    .Append("\"}}\n")
+                    .Append(RowJson(columnNames, row, jsonColumns))
+                    .Append('\n');
+            }
+            using var response = await SendAsync(connection, HttpMethod.Post,
+                "/_bulk", body.ToString(), ct, "application/x-ndjson");
+            using var document = await ReadSuccessAsync(response, ct);
+            var failures = BulkFailures(document.RootElement);
+            if (failures.Count > 0)
+                throw new InvalidOperationException(
+                    $"OpenSearch rejected {failures.Count:N0} document(s) while indexing into '{indexName}'"
+                    + (failures.FirstReason is null ? "." : $" — {failures.FirstReason}"));
+            indexed += chunk.Count;
+        }
+        return indexed;
+    }
+
+    public async Task DeleteIndexAsync(
+        Guid projectId, string indexName, CancellationToken ct = default)
+    {
+        var connection = await RequiredConnectionAsync(projectId, ct);
+        var safeIndex = SafeIndex(indexName);
+        using var response = await SendAsync(connection, HttpMethod.Delete,
+            $"/{safeIndex}", null, ct);
+        if ((int)response.StatusCode == 404) return; // already gone
+        await ReadSuccessAsync(response, ct);
+    }
+
+    private static IEnumerable<IReadOnlyList<IReadOnlyList<string?>>> Chunks(
+        IReadOnlyList<IReadOnlyList<string?>> rows, int size)
+    {
+        for (var i = 0; i < rows.Count; i += size)
+            yield return rows.Skip(i).Take(size).ToList();
+    }
+
+    /// <summary>One row as a JSON object. Values are JSON strings (null stays null) unless the column
+    /// is in <paramref name="jsonColumns"/> — then the raw text is emitted so <c>object</c>-mapped
+    /// jsonb values index as real JSON.</summary>
+    private static string RowJson(IReadOnlyList<string> columns, IReadOnlyList<string?> row,
+        HashSet<string>? jsonColumns)
+    {
+        var sb = new StringBuilder("{");
+        for (var i = 0; i < columns.Count; i++)
+        {
+            if (i > 0) sb.Append(',');
+            sb.Append(JsonSerializer.Serialize(columns[i])).Append(':');
+            var value = row[i];
+            if (value is null)
+                sb.Append("null");
+            else if (jsonColumns is not null && jsonColumns.Contains(columns[i]))
+                sb.Append(value);
+            else
+                sb.Append(JsonSerializer.Serialize(value));
+        }
+        return sb.Append('}').ToString();
+    }
+
+    /// <summary>Count of failed bulk items plus the first failure reason, for a helpful error.</summary>
+    private static (int Count, string? FirstReason) BulkFailures(JsonElement root)
+    {
+        if (!root.TryGetProperty("errors", out var errors) || errors.ValueKind != JsonValueKind.True
+            || !root.TryGetProperty("items", out var items))
+            return (0, null);
+        var count = 0;
+        string? firstReason = null;
+        foreach (var item in items.EnumerateArray())
+        {
+            var action = item.EnumerateObject().FirstOrDefault();
+            if (action.Value.ValueKind != JsonValueKind.Object) continue;
+            var status = action.Value.TryGetProperty("status", out var s) && s.ValueKind == JsonValueKind.Number
+                ? s.GetInt32() : 0;
+            if (status >= 400)
+            {
+                count++;
+                firstReason ??= action.Value.TryGetProperty("error", out var e)
+                    && e.TryGetProperty("reason", out var r) && r.ValueKind == JsonValueKind.String
+                    ? r.GetString() : "index failed";
+            }
+        }
+        return (count, firstReason);
+    }
+
     public async Task<ProjectQueryResult> SearchSqlAsync(
         Guid projectId, string sql, CancellationToken ct = default)
     {
@@ -251,46 +280,254 @@ public sealed class OpenSearchDataGateway : IOpenSearchDataGateway
 
     private static ProjectQueryResult ParseSqlResult(JsonElement root)
     {
-        IReadOnlyList<string> columns;
-        List<IReadOnlyList<string?>> rows;
-
-        if (root.TryGetProperty("columns", out var columnsJson)
-            && root.TryGetProperty("rows", out var rowsJson))
-        {
-            columns = ColumnNames(columnsJson);
-            rows = rowsJson.EnumerateArray()
-                .Select(row => (IReadOnlyList<string?>)row.EnumerateArray()
-                    .Select(ScalarText).ToList())
-                .ToList();
-        }
-        else if (root.TryGetProperty("schema", out var schemaJson)
-                 && root.TryGetProperty("datarows", out var datarowsJson))
-        {
-            columns = ColumnNames(schemaJson);
-            rows = datarowsJson.EnumerateArray()
-                .Select(row => (IReadOnlyList<string?>)row.EnumerateArray()
-                    .Select(ScalarText).ToList())
-                .ToList();
-        }
-        else
-        {
+        if (!TryGetSqlPayload(root, out var payload))
             throw new InvalidOperationException(
                 "OpenSearch SQL returned an unexpected response shape.");
+
+        if (TryGetSqlError(root, out var errorMessage))
+            throw new InvalidOperationException($"OpenSearch SQL error: {errorMessage}");
+
+        if (!TryGetSqlColumns(payload, out var columns)
+            || !TryGetSqlRows(payload, columns, out var rows))
+            throw new InvalidOperationException(
+                "OpenSearch SQL returned an unexpected response shape.");
+
+        var total = GetSqlTotal(payload, rows.Count);
+        var hasMore = (payload.TryGetProperty("cursor", out var cursor)
+                           && cursor.ValueKind == JsonValueKind.String
+                           && !string.IsNullOrWhiteSpace(cursor.GetString()))
+            || total > rows.Count;
+        return new ProjectQueryResult(columns, rows, 0, hasMore);
+    }
+
+    private static bool TryGetSqlPayload(JsonElement root, out JsonElement payload)
+    {
+        if (TryGetObjectProperty(root, "response", out payload))
+            return true;
+
+        if (TryGetObjectProperty(root, "result", out payload))
+            return true;
+
+        payload = root;
+        return true;
+    }
+
+    private static bool TryGetSqlError(JsonElement root, out string message)
+    {
+        message = "";
+        if (!root.TryGetProperty("error", out var error))
+            return false;
+
+        if (error.ValueKind == JsonValueKind.String)
+        {
+            message = error.GetString() ?? "";
+            return !string.IsNullOrWhiteSpace(message);
         }
 
-        var total = root.TryGetProperty("total", out var totalElement)
-            && totalElement.ValueKind == JsonValueKind.Number
-            ? totalElement.GetInt64()
-            : rows.Count;
-        return new ProjectQueryResult(columns, rows, 0, total > rows.Count);
+        if (error.ValueKind != JsonValueKind.Object)
+            return false;
+
+        if (error.TryGetProperty("reason", out var reason) && reason.ValueKind == JsonValueKind.String)
+            message = reason.GetString() ?? "";
+        if (error.TryGetProperty("type", out var type) && type.ValueKind == JsonValueKind.String)
+            message = (string.IsNullOrWhiteSpace(message) ? "" : $"{message} — ") + type.GetString();
+        if (error.TryGetProperty("details", out var details) && details.ValueKind == JsonValueKind.String)
+            message = (string.IsNullOrWhiteSpace(message) ? "" : $"{message} — ") + details.GetString();
+
+        return !string.IsNullOrWhiteSpace(message);
+    }
+
+    private static bool TryGetSqlColumns(JsonElement root, out IReadOnlyList<string> columns)
+    {
+        if (TryGetArrayProperty(root, "columns", out var columnsJson))
+        {
+            columns = ColumnNames(columnsJson);
+            return columns.Count > 0;
+        }
+
+        if (TryGetArrayProperty(root, "schema", out var schemaJson))
+        {
+            columns = ColumnNames(schemaJson);
+            return columns.Count > 0;
+        }
+
+        if (TryGetArrayProperty(root, "column", out var columnJson))
+        {
+            columns = ColumnNames(columnJson);
+            return columns.Count > 0;
+        }
+
+        if (TryGetArrayProperty(root, "column_names", out var columnNamesJson))
+        {
+            columns = columnNamesJson
+                .EnumerateArray()
+                .Select(GetString)
+                .Where(name => !string.IsNullOrWhiteSpace(name))
+                .ToList();
+            return columns.Count > 0;
+        }
+
+        if (TryGetObjectProperty(root, "result", out var resultJson)
+            && TryGetSqlColumns(resultJson, out columns))
+            return columns.Count > 0;
+
+        columns = Array.Empty<string>();
+        return false;
+    }
+
+    private static bool TryGetSqlRows(
+        JsonElement root, IReadOnlyList<string> columns, out List<IReadOnlyList<string?>> rows)
+    {
+        if (TryGetArrayProperty(root, "rows", out var rowsJson))
+        {
+            rows = MapRows(rowsJson, columns);
+            return true;
+        }
+
+        if (TryGetArrayProperty(root, "datarows", out var datarowsJson))
+        {
+            rows = MapRows(datarowsJson, columns);
+            return true;
+        }
+
+        if (TryGetArrayProperty(root, "data", out var dataJson))
+        {
+            rows = MapRows(dataJson, columns);
+            return true;
+        }
+
+        if (TryGetArrayProperty(root, "values", out var valuesJson))
+        {
+            rows = MapRows(valuesJson, columns);
+            return true;
+        }
+
+        if (TryGetObjectProperty(root, "result", out var resultJson)
+            && TryGetSqlRows(resultJson, columns, out rows))
+            return true;
+
+        rows = [];
+        return false;
+    }
+
+    private static bool TryGetObjectProperty(JsonElement root, string property, out JsonElement nested)
+    {
+        if (root.TryGetProperty(property, out nested) && nested.ValueKind == JsonValueKind.Object)
+            return true;
+        return false;
+    }
+
+    private static List<IReadOnlyList<string?>> MapRows(
+        JsonElement rowsJson, IReadOnlyList<string> columns)
+    {
+        return rowsJson.EnumerateArray()
+            .Select(row => row.ValueKind == JsonValueKind.Object
+                ? (IReadOnlyList<string?>)columns.Select(column =>
+                    row.TryGetProperty(column, out var value)
+                        ? ScalarText(value) : null).ToList()
+                : (IReadOnlyList<string?>)(row.ValueKind == JsonValueKind.Array
+                    ? row.EnumerateArray().Select(ScalarText).ToList()
+                    : new[] { ScalarText(row) }.ToList()))
+            .ToList();
+    }
+
+    private static long GetSqlTotal(JsonElement root, int fallback)
+    {
+        if (root.TryGetProperty("total", out var total)
+            && TryGetLong(total, out var totalValue))
+            return totalValue;
+
+        if (root.TryGetProperty("row_count", out var rowCount)
+            && TryGetLong(rowCount, out var rowCountValue))
+            return rowCountValue;
+
+        if (TryGetObjectProperty(root, "result", out var resultJson))
+        {
+            if (resultJson.TryGetProperty("total", out total)
+                && TryGetLong(total, out totalValue))
+                return totalValue;
+            if (resultJson.TryGetProperty("row_count", out rowCount)
+                && TryGetLong(rowCount, out rowCountValue))
+                return rowCountValue;
+        }
+
+        return fallback;
+    }
+
+    private static bool TryGetLong(JsonElement value, out long result)
+    {
+        result = 0;
+
+        if (value.ValueKind == JsonValueKind.Object)
+        {
+            if (value.TryGetProperty("value", out var nested)
+                && TryGetLong(nested, out var nestedValue))
+            {
+                result = nestedValue;
+                return true;
+            }
+            return false;
+        }
+
+        if (value.ValueKind != JsonValueKind.Number)
+            return value.ValueKind == JsonValueKind.String
+                && long.TryParse(value.GetString(), out result);
+
+        return value.TryGetInt64(out result);
+    }
+
+    private static bool TryGetArrayProperty(JsonElement root, string property, out JsonElement array)
+    {
+        if (!root.TryGetProperty(property, out array) || array.ValueKind != JsonValueKind.Array)
+            return false;
+        return true;
     }
 
     private static IReadOnlyList<string> ColumnNames(JsonElement columns) =>
         columns.EnumerateArray()
-            .Select(column => column.ValueKind == JsonValueKind.String
-                ? column.GetString() ?? ""
-                : column.TryGetProperty("name", out var name) ? name.GetString() ?? "" : "")
+            .Select(ColumnName)
             .ToList();
+
+    private static string ColumnName(JsonElement column)
+    {
+        if (column.ValueKind == JsonValueKind.String)
+            return column.GetString() ?? "";
+
+        if (column.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var item in column.EnumerateArray())
+            {
+                if (item.ValueKind == JsonValueKind.String)
+                    return item.GetString() ?? "";
+                if (item.ValueKind == JsonValueKind.Object && item.TryGetProperty("name", out var nestedName))
+                    return nestedName.GetString() ?? "";
+            }
+            return "";
+        }
+
+        if (column.ValueKind == JsonValueKind.Object)
+            return GetColumnNameFromObject(column);
+
+        return "";
+    }
+
+    private static string GetColumnNameFromObject(JsonElement column) =>
+        column.TryGetProperty("name", out var name)
+            ? name.GetString() ?? ""
+            : column.TryGetProperty("label", out var label)
+            ? label.GetString() ?? ""
+            : column.TryGetProperty("alias", out var alias)
+            ? alias.GetString() ?? ""
+            : column.TryGetProperty("field", out var field)
+            ? field.GetString() ?? ""
+            : "";
+
+    private static string? GetString(JsonElement item)
+    {
+        if (item.ValueKind == JsonValueKind.String)
+            return item.GetString();
+        return null;
+    }
 
     private static string? ScalarText(JsonElement value) => value.ValueKind switch
     {
@@ -415,67 +652,6 @@ public sealed class OpenSearchDataGateway : IOpenSearchDataGateway
             fields);
     }
 
-    /// <summary>
-    /// OpenSearch type → the store's Postgres allow-list. Returns null for structural parents that
-    /// have no own value (object/nested/flattened) and aliases (their real field carries the data).
-    /// </summary>
-    private static string? PostgresTypeFor(string openSearchType) => openSearchType switch
-    {
-        "long" or "unsigned_long" or "short" or "byte" => "bigint",
-        "integer" => "integer",
-        "double" or "float" or "half_float" or "scaled_float" or "rank_feature" or "rank_features" => "numeric",
-        "boolean" => "boolean",
-        "date" or "date_nanos" => "timestamptz",
-        "object" or "nested" or "flattened" or "alias" => null,
-        _ => "text",
-    };
-
-    private static bool IsDateField(string openSearchType)
-        => openSearchType is "date" or "date_nanos";
-
-    private static bool LooksLikeEpochMillis(string value)
-        => value.Length is >= 10 and <= 16 && value.All(char.IsAsciiDigit);
-
-    private static string EpochMillisToIso(string value) =>
-        DateTimeOffset.FromUnixTimeMilliseconds(long.Parse(value, CultureInfo.InvariantCulture))
-            .UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss.FFFFFF'Z'", CultureInfo.InvariantCulture);
-
-    /// <summary>
-    /// The last hit's sort token for the next search_after page. <c>_doc</c> values come back either
-    /// as plain numbers or (beyond int32) as <c>{"$numberLong":"..."}</c> — re-parsing the raw JSON
-    /// token preserves whichever shape the server sent so the round trip is exact.
-    /// </summary>
-    private static JsonNode? ParseSearchAfter(JsonElement hit)
-    {
-        if (!hit.TryGetProperty("sort", out var sort)
-            || sort.ValueKind != JsonValueKind.Array || sort.GetArrayLength() == 0)
-            return null;
-        try
-        {
-            return JsonNode.Parse(sort[0].GetRawText());
-        }
-        catch
-        {
-            return null;
-        }
-    }
-
-    private async Task<bool> HasMoreAsync(
-        OpenSearchConnection connection, string safePattern, JsonNode searchAfter, CancellationToken ct)
-    {
-        var body = new JsonObject
-        {
-            ["size"] = 1,
-            ["sort"] = new JsonArray { new JsonObject { ["_doc"] = "asc" } },
-            ["search_after"] = new JsonArray { searchAfter },
-            ["query"] = new JsonObject { ["match_all"] = new JsonObject() },
-        };
-        using var response = await SendAsync(connection, HttpMethod.Post,
-            $"/{safePattern}/_search", body.ToJsonString(), ct);
-        using var document = await ReadSuccessAsync(response, ct);
-        return document.RootElement.GetProperty("hits").GetProperty("hits").GetArrayLength() > 0;
-    }
-
     private static void Flatten(
         JsonElement element, string? prefix, IDictionary<string, string?> target)
     {
@@ -505,7 +681,8 @@ public sealed class OpenSearchDataGateway : IOpenSearchDataGateway
         HttpMethod method,
         string path,
         string? json,
-        CancellationToken ct)
+        CancellationToken ct,
+        string? contentType = null)
     {
         var client = _httpFactory.CreateClient("opensearch");
         using var request = new HttpRequestMessage(method, connection.Endpoint + path);
@@ -517,7 +694,7 @@ public sealed class OpenSearchDataGateway : IOpenSearchDataGateway
             request.Headers.Authorization = new AuthenticationHeaderValue("Basic", credentials);
         }
         if (json is not null)
-            request.Content = new StringContent(json, Encoding.UTF8, "application/json");
+            request.Content = new StringContent(json, Encoding.UTF8, contentType ?? "application/json");
         return await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
     }
 

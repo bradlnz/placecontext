@@ -44,6 +44,112 @@ public sealed class OpenSearchDataGatewayTests
     }
 
     [Fact]
+    public async Task Search_sql_parses_columns_rows_shape()
+    {
+        var gateway = new OpenSearchDataGateway(
+            new StubHttpClientFactory(new StubHandler(_ =>
+                Task.FromResult(Json("""
+                    {
+                      "columns": [
+                        {"name":"status"},
+                        {"name":"count"}
+                      ],
+                      "rows": [
+                        ["active", 12],
+                        [null, 3]
+                      ],
+                      "total": 14
+                    }
+                    """))),
+            new StubConnectionResolver());
+
+        var result = await gateway.SearchSqlAsync(Guid.NewGuid(), "SELECT status, COUNT(*) FROM logs GROUP BY 1");
+
+        Assert.Equal(["status", "count"], result.Columns);
+        Assert.False(result.Truncated);
+        Assert.Equal(2, result.Rows.Count);
+        Assert.Equal("active", result.Rows[0][0]);
+        Assert.Equal("12", result.Rows[0][1]);
+        Assert.Null(result.Rows[1][0]);
+        Assert.Equal("3", result.Rows[1][1]);
+    }
+
+    [Fact]
+    public async Task Search_sql_parses_schema_datarows_with_row_count_and_cursor()
+    {
+        var gateway = new OpenSearchDataGateway(
+            new StubHttpClientFactory(new StubHandler(_ =>
+                Task.FromResult(Json("""
+                    {
+                      "schema": [{"name":"project_id"},{"name":"size_bytes"}],
+                      "datarows": [["p1", 7], ["p2", 4]],
+                      "row_count": 3,
+                      "cursor": "next-page-token"
+                    }
+                    """))),
+            new StubConnectionResolver());
+
+        var result = await gateway.SearchSqlAsync(Guid.NewGuid(), "SELECT project_id, size_bytes FROM projects");
+
+        Assert.Equal(["project_id", "size_bytes"], result.Columns);
+        Assert.True(result.Truncated);
+        Assert.Equal(2, result.Rows.Count);
+        Assert.Equal("7", result.Rows[0][1]);
+    }
+
+    [Fact]
+    public async Task Search_sql_parses_rows_as_objects()
+    {
+        var gateway = new OpenSearchDataGateway(
+            new StubHttpClientFactory(new StubHandler(_ =>
+                Task.FromResult(Json("""
+                    {
+                      "columns": [{"name":"status"},{"name":"city"}],
+                      "rows": [
+                        {"status":"active","city":"Brisbane"},
+                        {"status":"idle","city":null}
+                      ]
+                    }
+                    """))),
+            new StubConnectionResolver());
+
+        var result = await gateway.SearchSqlAsync(Guid.NewGuid(), "SELECT status, city FROM logs");
+
+        Assert.Equal("active", result.Rows[0][0]);
+        Assert.Equal("Brisbane", result.Rows[0][1]);
+        Assert.Equal("idle", result.Rows[1][0]);
+        Assert.Null(result.Rows[1][1]);
+    }
+
+    [Fact]
+    public async Task Search_sql_parses_nested_response_shape()
+    {
+        var gateway = new OpenSearchDataGateway(
+            new StubHttpClientFactory(new StubHandler(_ =>
+                Task.FromResult(Json("""
+                    {
+                      "response": {
+                        "schema": [
+                          {"name":"project_id"},
+                          {"name":"size_bytes"}
+                        ],
+                        "datarows": [["p1", 7], ["p2", 4]],
+                        "row_count": 2,
+                        "cursor": "next-page-token"
+                      }
+                    }
+                    """))),
+            new StubConnectionResolver());
+
+        var result = await gateway.SearchSqlAsync(Guid.NewGuid(), "SELECT project_id, size_bytes FROM projects");
+
+        Assert.Equal(["project_id", "size_bytes"], result.Columns);
+        Assert.True(result.Truncated);
+        Assert.Equal(2, result.Rows.Count);
+        Assert.Equal("4", result.Rows[1][1]);
+    }
+
+    [Fact]
     public async Task Search_builds_free_text_query_and_maps_hits_and_chart()
     {
         HttpRequestMessage? captured = null;

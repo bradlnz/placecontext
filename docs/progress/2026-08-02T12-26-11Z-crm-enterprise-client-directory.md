@@ -23,5 +23,5 @@
 ## Design references
 
 - Databricks list → object → detail hierarchy and flat resource rows.
-- ClickHouse compact operational tables, restrained status signals, and contextual actions.
+- yellow compact operational tables, restrained status signals, and contextual actions.
 - Existing PlaceContext visual tokens, client detail workflow, and responsive shell contracts.

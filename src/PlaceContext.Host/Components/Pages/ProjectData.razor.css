@@ -1191,7 +1191,7 @@
     }
 }
 
-/* ── ClickHouse-style data console overrides ─────────────────────────────── */
+/* ── yellow-style data console overrides ─────────────────────────────── */
 .data-page {
     color: var(--ch-text);
 }
@@ -1620,7 +1620,7 @@
     border-radius: 3px;
 }
 
-/* Slide-out wizards share the ClickHouse palette */
+/* Slide-out wizards share the yellow palette */
 .data-page .dcslide {
     background: var(--ch-panel);
     border-left-color: var(--ch-border);
@@ -1700,7 +1700,7 @@
     }
 }
 
-/* ── ClickHouse SQL Studio layout ────────────────────────────────────────── */
+/* ── yellow SQL Studio layout ────────────────────────────────────────── */
 .sql-studio-page {
     display: flex;
     flex-direction: column;

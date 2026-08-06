@@ -30,13 +30,27 @@ public interface IOpenSearchDataGateway
         OpenSearchSearchRequest request, CancellationToken ct = default);
 
     /// <summary>
-    /// Export an index's documents as flat, field-aligned rows — schema via <c>_field_caps</c>, docs
-    /// via stable <c>search_after</c> paging on <c>_doc</c>. <paramref name="maxRows"/> caps the export
-    /// (clamped to 100,000); <see cref="OpenSearchExportView.Truncated"/> is true when more documents
-    /// exist beyond the cap.
+    /// Create an index with a fixed mapping — the destination for a materialised project table.
+    /// Field names are used verbatim; types come from the Postgres→OpenSearch mapping.
     /// </summary>
-    Task<OpenSearchExportView> ExportIndexAsync(
-        Guid projectId, string indexPattern, int maxRows = 10000, CancellationToken ct = default);
+    Task CreateIndexAsync(
+        Guid projectId, string indexName, IReadOnlyList<OpenSearchMappingField> mappingFields,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Bulk-index <paramref name="rows"/> (column-aligned to <paramref name="columnNames"/>) into
+    /// <paramref name="indexName"/> as one JSON document per row, chunked internally. Values are
+    /// sent as JSON strings; OpenSearch coerces them onto the index mapping. Columns named in
+    /// <paramref name="jsonColumnNames"/> are emitted as raw JSON instead (for <c>object</c>-mapped
+    /// jsonb columns). Returns the number of documents indexed, throwing if any was rejected.
+    /// </summary>
+    Task<int> IndexBulkAsync(
+        Guid projectId, string indexName, IReadOnlyList<string> columnNames,
+        IReadOnlyList<IReadOnlyList<string?>> rows, CancellationToken ct = default,
+        IReadOnlyList<string>? jsonColumnNames = null);
+
+    /// <summary>Delete an index; a missing index is not an error (idempotent re-materialise).</summary>
+    Task DeleteIndexAsync(Guid projectId, string indexName, CancellationToken ct = default);
 
     /// <summary>Run a SELECT-style query through OpenSearch's SQL engine against the project's indices.</summary>
     Task<ProjectQueryResult> SearchSqlAsync(

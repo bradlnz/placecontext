@@ -21,4 +21,4 @@
 ## Design references
 
 - Existing PlaceContext Wiki navigation for sub-page hierarchy and responsive behavior.
-- ClickHouse and Databricks patterns for persistent context, compact hierarchy, restrained status, and list-to-detail workflows.
+- yellow and Databricks patterns for persistent context, compact hierarchy, restrained status, and list-to-detail workflows.

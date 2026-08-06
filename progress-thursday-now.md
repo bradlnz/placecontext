@@ -99,7 +99,7 @@ none of the items below are built yet except the deployed OpenSearch backend.
 
 ## Current verified state (this is where we start)
 
-- **Commit:** `77855ac` "feat: OCR daemon server-side, OpenSearch SQL, Monaco schema autocomplete, ClickHouse UI" — deployed.
+- **Commit:** `77855ac` "feat: OCR daemon server-side, OpenSearch SQL, Monaco schema autocomplete, yellow UI" — deployed.
   Running pod image digest `sha256:daf43b1e222cef152336347b1e0b8ab10bc38868c3eff5abaaa76d26e8303fe1` (2/2 Running).
 - **Deploy:** `./deploy.sh` (SSH key `$HOME/.ssh/id_ed25519` fallback; `OPENSEARCH_SYNC_HOST=root@100.116.60.120`,
   `PLACECONTEXT_DEPLOY_HOST=root@100.81.205.22`). Static assets `Cache-Control: public,max-age=3600`
@@ -107,7 +107,7 @@ none of the items below are built yet except the deployed OpenSearch backend.
 - **Headless verification (Playwright, scratchpad, node v26, playwright 1.62.1, chromium-1234):**
   - Login OK; shell `data-theme=dark`; Manrope + `--bg-tilt` + `--ch-yellow` + `pcmonaco.js?v=3` in served HTML.
   - SQL Studio: 34 `.resource-item` tables; `bcc_overlays` opens Monaco model `/pcdata-sql-editor/bcc_overlays`,
-    ClickHouse theme bg `rgb(31,33,37)`; Run executes against the project DB (`Elapsed: 0.003s`, `Read: 0 row(s)`).
+    yellow theme bg `rgb(31,33,37)`; Run executes against the project DB (`Elapsed: 0.003s`, `Read: 0 row(s)`).
   - Entity record pane graph verified for `Cashflow` (graph svg + `◉ Graph` toggle) the run BEFORE the user
     reported it not showing in their own session.
 - **OpenSearch infra (external):** `root@100.116.60.120` runs OpenSearch 2.19.5 + Dashboards 2.19.5

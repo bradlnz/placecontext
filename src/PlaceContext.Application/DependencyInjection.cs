@@ -219,7 +219,7 @@ public static class DependencyInjection
         services.AddScoped<IQueryHandler<QueryProjectTablePageQuery, Ports.ProjectTablePageResult>, QueryProjectTablePageHandler>();
         services.AddScoped<ICommandHandler<CreateProjectTableCommand, bool>, CreateProjectTableHandler>();
         services.AddScoped<ICommandHandler<ImportCsvToProjectTableCommand, ImportCsvResult>, ImportCsvToProjectTableHandler>();
-        services.AddScoped<ICommandHandler<MaterializeIndexTableCommand, MaterializeIndexResult>, MaterializeIndexTableHandler>();
+        services.AddScoped<ICommandHandler<MaterializeTableIndexCommand, MaterializeTableIndexResult>, MaterializeTableIndexHandler>();
         services.AddScoped<ICommandHandler<RenameProjectTableCommand, bool>, RenameProjectTableHandler>();
         services.AddScoped<ICommandHandler<DropProjectTableCommand, bool>, DropProjectTableHandler>();
         services.AddScoped<IQueryHandler<ExportProjectTableQuery, string>, ExportProjectTableHandler>();

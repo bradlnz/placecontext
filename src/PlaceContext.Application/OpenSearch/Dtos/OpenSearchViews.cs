@@ -36,17 +36,8 @@ public sealed record OpenSearchSearchView(
     IReadOnlyList<OpenSearchHitView> Hits,
     string? ChartSpecJson);
 
-/// <summary>One exportable column: the OpenSearch field and the Postgres column type it maps to.</summary>
-public sealed record OpenSearchExportField(string Name, string Type, string PostgresType);
-
-/// <summary>
-/// A flattened export of an index's documents: <see cref="Fields"/> describe the Postgres column
-/// order, and each <see cref="Rows"/> entry holds one value per field (null where the doc lacks it).
-/// </summary>
-public sealed record OpenSearchExportView(
-    IReadOnlyList<OpenSearchExportField> Fields,
-    IReadOnlyList<IReadOnlyList<string?>> Rows,
-    bool Truncated);
+/// <summary>One column of a materialised index: the field name and its OpenSearch mapping type.</summary>
+public sealed record OpenSearchMappingField(string Name, string OpenSearchType);
 
 public sealed record OpenSearchDashboardView(
     Guid Id,

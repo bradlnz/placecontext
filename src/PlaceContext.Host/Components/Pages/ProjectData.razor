@@ -35,6 +35,10 @@
                 <button class="studio-new-table" @onclick="() => Vm.StartNewTable()">
                     <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></svg>New table
                 </button>
+                @if (Vm.MaterializeMessage is not null)
+                {
+                    <div class="studio-note">@Vm.MaterializeMessage</div>
+                }
                 <div class="studio-search">
                     <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.5-3.5" /></svg>
                     <input type="text" placeholder="Search tables" @bind="_tableFilter" @bind:event="oninput" />
@@ -65,6 +69,10 @@
                                     <span>@TableTag(t)</span>
                                 </div>
                                 <span class="resource-tag">@TableEngineTag(t)</span>
+                                <button class="studio-materialize" title="Copy this table into an OpenSearch index (for search)"
+                                        @onclick:stopPropagation="true" @onclick="@(() => Vm.OpenMaterializeDialog(t.Name))">
+                                    <svg viewBox="0 0 24 24"><path d="M12 3v12M5 10l7 7 7-7" /><path d="M5 21h14" /></svg>
+                                </button>
                             </article>
                         }
                     }
@@ -76,10 +84,6 @@
                     <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.5-3.5" /></svg>
                     <input type="text" placeholder="Search indices" @bind="_tableFilter" @bind:event="oninput" />
                 </div>
-                @if (Vm.MaterializeMessage is not null)
-                {
-                    <div class="studio-note">@Vm.MaterializeMessage</div>
-                }
                 <div class="studio-resource-list">
                     @if (!Vm.IndicesReady)
                     {
@@ -108,10 +112,6 @@
                                     <span>@idx.DocumentCount.ToString("N0") doc(s)</span>
                                 </div>
                                 <span class="resource-tag">@(idx.StoreSize ?? "—")</span>
-                                <button class="studio-materialize" title="Copy this index into a project Postgres table (for joins)"
-                                        @onclick:stopPropagation="true" @onclick="@(() => Vm.OpenMaterializeDialog(idx.Name))">
-                                    <svg viewBox="0 0 24 24"><path d="M12 3v12M5 10l7 7 7-7" /><path d="M5 21h14" /></svg>
-                                </button>
                             </article>
                         }
                     }
@@ -532,19 +532,19 @@
     </div>
 }
 
-@* ── Materialize-index dialog ────────────────────────────────────────────────────────────── *@
+@* ── Materialize-table dialog ───────────────────────────────────────────────────────────── *@
 @if (Vm.ShowMaterializeDialog)
 {
     <div class="dcslide-scrim" @onclick="() => Vm.CloseMaterializeDialog()"></div>
     <div class="dcslide slide-420">
         <div class="dcslide-head">
-            <span class="slide-title-13">Materialize index</span>
+            <span class="slide-title-13">Materialize to index</span>
             <button class="dcslide-x" @onclick="() => Vm.CloseMaterializeDialog()">×</button>
         </div>
         <div class="slide-pad">
-            <div class="slide-sub">Copies <strong>@Vm.MaterializeIndexName</strong> into a project Postgres table so you can join it with your tables in one SQL statement. Re-materializing replaces the existing table.</div>
-            <label class="field-label">Table name</label>
-            <input @bind="Vm.MaterializeTableName" @bind:event="oninput" placeholder="e.g. ingestion_runs"
+            <div class="slide-sub">Copies <strong>@Vm.MaterializeTableName</strong> into an OpenSearch index so you can search and aggregate it with your other indices. Re-materializing replaces the existing index.</div>
+            <label class="field-label">Index name</label>
+            <input @bind="Vm.MaterializeIndexName" @bind:event="oninput" placeholder="e.g. pi-orders"
                    class="table-name-input" />
             @if (Vm.MaterializeError is not null)
             {
@@ -743,17 +743,26 @@
         sb.Append(Vm.TablesReady).Append('|').Append(Vm.IndicesReady).Append('|').Append(Vm.SavedQueriesReady).Append('|');
         sb.Append(Vm.Tables.Count).Append('|').Append(Vm.Indices.Count).Append('|').Append(Vm.SavedQueries.Count).Append('|');
         foreach (var t in Vm.Tables) sb.Append(t.Name).Append('\u0001');
-        foreach (var i in Vm.Indices) sb.Append(i.Name).Append('\u0001');
+        foreach (var i in Vm.Indices) sb.Append(i.Name).Append('~').Append(i.DocumentCount).Append('~')
+            .Append(i.StoreSize).Append('\u0001');
         foreach (var q in Vm.SavedQueries) sb.Append(q.Name).Append('~').Append(q.Sql).Append('\u0001');
         sb.Append('|');
         foreach (var t in _openTabs)
             sb.Append(t.TableName).Append('~').Append((int)t.Source).Append('~').Append(t.Running).Append('~')
-              .Append(t.Error ?? "").Append('~').Append(t.Sql).Append('~').Append(t.Result is null ? 0 : 1).Append(';');
+              .Append(t.Error ?? "").Append('~').Append(t.Sql).Append('~')
+              .Append(t.Result is null ? 0 : 1).Append('~')
+              .Append(t.Result?.Columns.Count ?? 0).Append('~')
+              .Append(t.Result?.Rows.Count ?? 0).Append(';');
         sb.Append('|');
         sb.Append(Vm.NewTable is null ? 0 : 1).Append('|');
         sb.Append(Vm.CsvImport is null ? 0 : 1).Append('|');
         sb.Append(Vm.ShowNewView).Append('|');
+        sb.Append(Vm.ShowMaterializeDialog).Append('|');
+        sb.Append(Vm.MaterializeError ?? "").Append('|');
+        sb.Append(Vm.MaterializeMessage ?? "").Append('|');
+        sb.Append(Vm.Materializing).Append('|');
         sb.Append(Vm.ShowSaveQueryDialog).Append('|');
+        sb.Append(Vm.IndicesError ?? "").Append('|');
         sb.Append(Vm.Creating).Append('|').Append(Vm.Importing).Append('|').Append(Vm.SavingQuery).Append('|');
         if (Vm.NewTable is { } nt)
         {

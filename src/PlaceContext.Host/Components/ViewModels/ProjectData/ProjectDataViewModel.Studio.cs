@@ -16,6 +16,10 @@ public enum SidebarPane
 
 public sealed partial class ProjectDataViewModel
 {
+    private bool _loadingIndices;
+    private static readonly TimeSpan MaterializeIndexRefreshDelay = TimeSpan.FromMilliseconds(450);
+    private const int MaterializeIndexRefreshAttempts = 6;
+
     // ── Sidebar panes ────────────────────────────────────────────────────────────────────────
     public SidebarPane SidebarPane { get; private set; } = SidebarPane.Tables;
 
@@ -25,8 +29,8 @@ public sealed partial class ProjectDataViewModel
             return;
         SidebarPane = pane;
         NotifyStateChanged();
-        if (pane == SidebarPane.Indexes && !IndicesReady && IndicesError is null)
-            _ = LoadIndicesAsync();
+        if (pane == SidebarPane.Indexes)
+            _ = LoadIndicesAsync(force: true);
         else if (pane == SidebarPane.Queries && !SavedQueriesReady)
             _ = LoadSavedQueriesAsync();
     }
@@ -37,8 +41,14 @@ public sealed partial class ProjectDataViewModel
     public bool IndicesReady { get; private set; }
     public string? IndicesError { get; private set; }
 
-    public async Task LoadIndicesAsync()
+    public async Task LoadIndicesAsync(bool force = false)
     {
+        if (!force && IndicesReady && IndicesError is null)
+            return;
+        if (_loadingIndices)
+            return;
+
+        _loadingIndices = true;
         IndicesReady = false;
         IndicesError = null;
         NotifyStateChanged();
@@ -52,23 +62,24 @@ public sealed partial class ProjectDataViewModel
         }
         finally
         {
+            _loadingIndices = false;
             IndicesReady = true;
             NotifyStateChanged();
         }
     }
 
-    // ── Materialize index → Postgres table ───────────────────────────────────────────────────
+    // ── Materialize table → OpenSearch index ────────────────────────────────────────────────
     public bool ShowMaterializeDialog { get; private set; }
-    public string? MaterializeIndexName { get; private set; }
-    public string MaterializeTableName { get; set; } = "";
+    public string? MaterializeTableName { get; private set; }
+    public string MaterializeIndexName { get; set; } = "";
     public bool Materializing { get; private set; }
     public string? MaterializeError { get; private set; }
     public string? MaterializeMessage { get; private set; }
 
-    public void OpenMaterializeDialog(string indexName)
+    public void OpenMaterializeDialog(string tableName)
     {
-        MaterializeIndexName = indexName;
-        MaterializeTableName = MaterializeIndexTableCommand.DefaultTableName(indexName);
+        MaterializeTableName = tableName;
+        MaterializeIndexName = MaterializeTableIndexCommand.DefaultIndexName(tableName);
         MaterializeError = null;
         ShowMaterializeDialog = true;
         NotifyStateChanged();
@@ -83,9 +94,9 @@ public sealed partial class ProjectDataViewModel
 
     public async Task MaterializeAsync()
     {
-        if (string.IsNullOrWhiteSpace(MaterializeTableName))
+        if (string.IsNullOrWhiteSpace(MaterializeIndexName))
         {
-            MaterializeError = "Give the table a name.";
+            MaterializeError = "Give the index a name.";
             NotifyStateChanged();
             return;
         }
@@ -93,13 +104,14 @@ public sealed partial class ProjectDataViewModel
         MaterializeError = null;
         try
         {
-            var result = await _svc.MaterializeIndexTableAsync(
-                ProjectId, MaterializeIndexName!, MaterializeTableName.Trim());
+            var result = await _svc.MaterializeTableIndexAsync(
+                ProjectId, MaterializeTableName!, MaterializeIndexName.Trim());
             ShowMaterializeDialog = false;
             MaterializeMessage =
-                $"{result.SourceIndex} → {result.TableName}: {result.RowsImported:N0} row(s), {result.ColumnCount} column(s)"
-                + (result.Truncated ? " (capped — index has more rows)" : "") + ".";
+                $"{result.SourceTable} → {result.IndexName}: {result.RowsIndexed:N0} row(s), {result.ColumnCount} column(s)"
+                + (result.Truncated ? " (capped — table has more rows)" : "") + ".";
             await RefreshTablesAsync();
+            await RefreshMaterializedIndexListingAsync(result.IndexName);
         }
         catch (Exception ex)
         {
@@ -109,6 +121,21 @@ public sealed partial class ProjectDataViewModel
         {
             Materializing = false;
             NotifyStateChanged();
+        }
+    }
+
+    private async Task RefreshMaterializedIndexListingAsync(string indexName)
+    {
+        await LoadIndicesAsync(force: true);
+        if (Indices.Any(index => string.Equals(index.Name, indexName, StringComparison.Ordinal)))
+            return;
+
+        for (var attempt = 0; attempt < MaterializeIndexRefreshAttempts; attempt++)
+        {
+            await Task.Delay(MaterializeIndexRefreshDelay);
+            await LoadIndicesAsync(force: true);
+            if (Indices.Any(index => string.Equals(index.Name, indexName, StringComparison.Ordinal)))
+                return;
         }
     }
 
