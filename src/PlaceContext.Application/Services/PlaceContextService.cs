@@ -203,6 +203,18 @@ public sealed class PlaceContextService : IPlaceContextService
         Guid dashboardId, CancellationToken ct = default)
         => _dispatcher.Send(new DeleteOpenSearchDashboardCommand(dashboardId), ct);
 
+    public Task<IReadOnlyList<SavedQueryRecord>> ListSavedQueriesAsync(
+        Guid projectId, CancellationToken ct = default)
+        => _dispatcher.Query(new ListSavedQueriesQuery(projectId), ct);
+
+    public Task<SavedQueryRecord> SaveSavedQueryAsync(
+        Guid projectId, string name, string sql, CancellationToken ct = default)
+        => _dispatcher.Send(new SaveSavedQueryCommand(projectId, name, sql), ct);
+
+    public Task<bool> DeleteSavedQueryAsync(
+        Guid queryId, CancellationToken ct = default)
+        => _dispatcher.Send(new DeleteSavedQueryCommand(queryId), ct);
+
     public Task<IReadOnlyList<RunArtifactLinkView>> ListRunArtifactsAsync(Guid runId, CancellationToken ct = default)
         => _dispatcher.Query(new ListRunArtifactsQuery(runId), ct);
 

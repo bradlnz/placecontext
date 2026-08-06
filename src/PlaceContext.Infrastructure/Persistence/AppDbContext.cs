@@ -42,6 +42,7 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
     public DbSet<JobRunRow> JobRuns => Set<JobRunRow>();
     public DbSet<JobTestCaseRow> JobTestCases => Set<JobTestCaseRow>();
     public DbSet<OpenSearchDashboardRow> OpenSearchDashboards => Set<OpenSearchDashboardRow>();
+    public DbSet<SavedQueryRow> SavedQueries => Set<SavedQueryRow>();
     public DbSet<CrmClientRow> CrmClients => Set<CrmClientRow>();
     public DbSet<CrmJobRunRow> CrmJobRuns => Set<CrmJobRunRow>();
     public DbSet<CrmChainRunRow> CrmChainRuns => Set<CrmChainRunRow>();
@@ -274,6 +275,16 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
             e.Property(x => x.BucketType).HasDefaultValue("terms");
             e.Property(x => x.ChartType).HasDefaultValue("bar");
             e.Property(x => x.MetricType).HasDefaultValue("count");
+            e.Property(x => x.CreatedAt).HasDefaultValueSql("now()");
+            e.Property(x => x.UpdatedAt).HasDefaultValueSql("now()");
+        });
+
+        b.Entity<SavedQueryRow>(e =>
+        {
+            e.ToTable("saved_queries");
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => new { x.ProjectId, x.Name }).IsUnique();
+            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
             e.Property(x => x.CreatedAt).HasDefaultValueSql("now()");
             e.Property(x => x.UpdatedAt).HasDefaultValueSql("now()");
         });

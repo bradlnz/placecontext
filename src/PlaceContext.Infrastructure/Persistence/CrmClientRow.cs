@@ -14,6 +14,8 @@ public sealed class CrmClientRow : ITenantOwned
     public bool CustomerPortalEnabled { get; set; }
     public string? CustomerPortalSlug { get; set; }
     public string? CustomerPortalDomain { get; set; }
+    public string? CustomerPortalBrandName { get; set; }
+    public string? CustomerPortalLogoUrl { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
 }

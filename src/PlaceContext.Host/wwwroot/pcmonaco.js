@@ -203,6 +203,9 @@ window.pcmonaco = (function () {
         if (!el) return true;
         destroy(id);
         watchTheme(monaco);
+        // Schema may have been pushed (setSqlSchema) before the CDN finished loading — the
+        // provider is cheap and guarded, so registering here always wires autocomplete up.
+        registerSqlCompletion(monaco);
         const modelPath = path || '__active__';
         const model = getOrCreateModel(monaco, id, modelPath, value, language);
         const editor = monaco.editor.create(el, {
@@ -342,7 +345,7 @@ window.pcmonaco = (function () {
     }
   }
 
-  return { init, openFile, closeFile, setValue, getValue, destroy };
+  return { init, openFile, closeFile, setValue, getValue, destroy, setSqlSchema };
 })();
 
 // pcdata — small helpers for the project Data page (CSV download from a data: URI).

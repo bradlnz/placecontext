@@ -79,6 +79,12 @@ public interface IPlaceContextService
         SaveOpenSearchDashboardCommand command, CancellationToken ct = default);
     Task<bool> DeleteOpenSearchDashboardAsync(
         Guid dashboardId, CancellationToken ct = default);
+    Task<IReadOnlyList<SavedQueryRecord>> ListSavedQueriesAsync(
+        Guid projectId, CancellationToken ct = default);
+    Task<SavedQueryRecord> SaveSavedQueryAsync(
+        Guid projectId, string name, string sql, CancellationToken ct = default);
+    Task<bool> DeleteSavedQueryAsync(
+        Guid queryId, CancellationToken ct = default);
     Task<IReadOnlyList<RunArtifactLinkView>> ListRunArtifactsAsync(Guid runId, CancellationToken ct = default);
     Task<IReadOnlyList<RunArtifactLinkView>> ListJobRunArtifactsAsync(Guid jobId, CancellationToken ct = default);
 

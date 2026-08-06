@@ -12,6 +12,8 @@ public sealed record CrmClientView(
     bool CustomerPortalEnabled,
     string? CustomerPortalSlug,
     string? CustomerPortalDomain,
+    string? CustomerPortalBrandName,
+    string? CustomerPortalLogoUrl,
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt);
 

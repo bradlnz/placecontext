@@ -62,6 +62,8 @@ public static class DependencyInjection
         services.AddScoped<ICommandHandler<UpdateJobTestCodeCommand, JobTestCaseView>, UpdateJobTestCodeHandler>();
         services.AddScoped<ICommandHandler<SaveOpenSearchDashboardCommand, OpenSearchDashboardView>, SaveOpenSearchDashboardHandler>();
         services.AddScoped<ICommandHandler<DeleteOpenSearchDashboardCommand, bool>, DeleteOpenSearchDashboardHandler>();
+        services.AddScoped<ICommandHandler<SaveSavedQueryCommand, SavedQueryRecord>, SaveSavedQueryHandler>();
+        services.AddScoped<ICommandHandler<DeleteSavedQueryCommand, bool>, DeleteSavedQueryHandler>();
         services.AddScoped<ICommandHandler<TriggerOpenSearchSyncCommand, OpenSearchSyncView>, TriggerOpenSearchSyncHandler>();
         services.AddScoped<ICommandHandler<ReplayRunCommand, JobRunDetailView>, ReplayRunHandler>();
         services.AddScoped<ICommandHandler<UploadJobCodeCommand, JobView>, UploadJobCodeHandler>();
@@ -190,6 +192,7 @@ public static class DependencyInjection
         services.AddScoped<IQueryHandler<SearchOpenSearchQuery, OpenSearchSearchView>, SearchOpenSearchHandler>();
         services.AddScoped<IQueryHandler<SearchOpenSearchSqlQuery, ProjectQueryResult>, SearchOpenSearchSqlHandler>();
         services.AddScoped<IQueryHandler<ListOpenSearchDashboardsQuery, IReadOnlyList<OpenSearchDashboardView>>, ListOpenSearchDashboardsHandler>();
+        services.AddScoped<IQueryHandler<ListSavedQueriesQuery, IReadOnlyList<SavedQueryRecord>>, ListSavedQueriesHandler>();
         services.AddScoped<IQueryHandler<ListRecentRunReportsQuery, IReadOnlyList<RunReportView>>, ListRecentRunReportsHandler>();
         services.AddScoped<IQueryHandler<GetJobQuery, JobView?>, GetJobHandler>();
         services.AddScoped<IQueryHandler<ListTriggersQuery, IReadOnlyList<TriggerView>>, ListTriggersHandler>();

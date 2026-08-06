@@ -148,10 +148,16 @@ public sealed class ConfigureCrmClientPortalHandler
                 ct);
         }
 
-        client.ConfigurePortal(command.Enabled, command.Slug, command.Domain, _clock.UtcNow);
-        await _clients.UpdateAsync(client, ct);
-        await _uow.SaveChangesAsync(ct);
-        return CrmClientMapper.ToView(client);
+            client.ConfigurePortal(
+                command.Enabled,
+                command.Slug,
+                command.Domain,
+                command.PortalBrandName,
+                command.PortalBrandLogoUrl,
+                _clock.UtcNow);
+            await _clients.UpdateAsync(client, ct);
+            await _uow.SaveChangesAsync(ct);
+            return CrmClientMapper.ToView(client);
     }
 }
 
@@ -535,6 +541,8 @@ internal static class CrmClientMapper
         client.CustomerPortalEnabled,
         client.CustomerPortalSlug,
         client.CustomerPortalDomain,
+        client.CustomerPortalBrandName,
+        client.CustomerPortalLogoUrl,
         client.CreatedAt,
         client.UpdatedAt);
 }

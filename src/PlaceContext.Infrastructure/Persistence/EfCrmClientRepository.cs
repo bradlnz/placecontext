@@ -31,6 +31,8 @@ public sealed class EfCrmClientRepository : ICrmClientRepository
         row.CustomerPortalEnabled = client.CustomerPortalEnabled;
         row.CustomerPortalSlug = client.CustomerPortalSlug;
         row.CustomerPortalDomain = client.CustomerPortalDomain;
+        row.CustomerPortalBrandName = client.CustomerPortalBrandName;
+        row.CustomerPortalLogoUrl = client.CustomerPortalLogoUrl;
         row.UpdatedAt = client.UpdatedAt;
     }
 
@@ -102,6 +104,8 @@ public sealed class EfCrmClientRepository : ICrmClientRepository
         CustomerPortalEnabled = client.CustomerPortalEnabled,
         CustomerPortalSlug = client.CustomerPortalSlug,
         CustomerPortalDomain = client.CustomerPortalDomain,
+        CustomerPortalBrandName = client.CustomerPortalBrandName,
+        CustomerPortalLogoUrl = client.CustomerPortalLogoUrl,
         CreatedAt = client.CreatedAt,
         UpdatedAt = client.UpdatedAt,
     };
@@ -121,6 +125,8 @@ public sealed class EfCrmClientRepository : ICrmClientRepository
             row.CustomerPortalEnabled,
             row.CustomerPortalSlug,
             row.CustomerPortalDomain,
+            row.CustomerPortalBrandName,
+            row.CustomerPortalLogoUrl,
             row.CreatedAt,
             row.UpdatedAt);
 

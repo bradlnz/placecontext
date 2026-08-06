@@ -175,6 +175,7 @@ public sealed partial class ProjectDataViewModel : PageViewModel
     public async Task LoadAsync()
     {
         await RefreshTablesAsync();
+        await PushSqlSchemaAsync();
         NotifyStateChanged();
     }
 

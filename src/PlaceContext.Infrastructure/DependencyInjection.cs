@@ -74,6 +74,7 @@ public static class DependencyInjection
         services.AddScoped<IProjectRepository, EfProjectRepository>();
         services.AddScoped<IJobTestStore, EfJobTestStore>();
         services.AddScoped<IOpenSearchDashboardStore, EfOpenSearchDashboardStore>();
+        services.AddScoped<ISavedQueryStore, EfSavedQueryStore>();
         services.AddScoped<IOpenSearchConnectionResolver, OpenSearch.OpenSearchConnectionResolver>();
         services.AddScoped<IOpenSearchDataGateway, OpenSearch.OpenSearchDataGateway>();
         services.AddScoped<IOpenSearchSyncGateway, OpenSearch.OpenSearchSyncGateway>();

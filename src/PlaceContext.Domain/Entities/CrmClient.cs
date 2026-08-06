@@ -18,6 +18,8 @@ public sealed class CrmClient : AggregateRoot
         bool customerPortalEnabled,
         string? customerPortalSlug,
         string? customerPortalDomain,
+        string? customerPortalBrandName,
+        string? customerPortalLogoUrl,
         DateTimeOffset createdAt,
         DateTimeOffset updatedAt)
     {
@@ -32,6 +34,8 @@ public sealed class CrmClient : AggregateRoot
         CustomerPortalEnabled = customerPortalEnabled;
         CustomerPortalSlug = customerPortalSlug;
         CustomerPortalDomain = customerPortalDomain;
+        CustomerPortalBrandName = customerPortalBrandName;
+        CustomerPortalLogoUrl = customerPortalLogoUrl;
         CreatedAt = createdAt;
         UpdatedAt = updatedAt;
     }
@@ -47,6 +51,8 @@ public sealed class CrmClient : AggregateRoot
     public bool CustomerPortalEnabled { get; private set; }
     public string? CustomerPortalSlug { get; private set; }
     public string? CustomerPortalDomain { get; private set; }
+    public string? CustomerPortalBrandName { get; private set; }
+    public string? CustomerPortalLogoUrl { get; private set; }
     public DateTimeOffset CreatedAt { get; }
     public DateTimeOffset UpdatedAt { get; private set; }
 
@@ -65,7 +71,7 @@ public sealed class CrmClient : AggregateRoot
         Validate(name, email);
         return new CrmClient(
             Guid.NewGuid(), projectId, name.Trim(), Trim(company), Trim(email), Trim(phone),
-            lifecycleStage, Trim(notes), false, null, null, now, now);
+            lifecycleStage, Trim(notes), false, null, null, null, null, now, now);
     }
 
     public static CrmClient Rehydrate(
@@ -80,10 +86,13 @@ public sealed class CrmClient : AggregateRoot
         bool customerPortalEnabled,
         string? customerPortalSlug,
         string? customerPortalDomain,
+        string? customerPortalBrandName,
+        string? customerPortalLogoUrl,
         DateTimeOffset createdAt,
         DateTimeOffset updatedAt)
         => new(id, projectId, name, company, email, phone, lifecycleStage, notes,
-            customerPortalEnabled, customerPortalSlug, customerPortalDomain, createdAt, updatedAt);
+            customerPortalEnabled, customerPortalSlug, customerPortalDomain,
+            customerPortalBrandName, customerPortalLogoUrl, createdAt, updatedAt);
 
     public void Update(
         string name,
@@ -104,11 +113,19 @@ public sealed class CrmClient : AggregateRoot
         UpdatedAt = now;
     }
 
-    public void ConfigurePortal(bool enabled, string? slug, string? domain, DateTimeOffset now)
+    public void ConfigurePortal(
+        bool enabled,
+        string? slug,
+        string? domain,
+        string? portalBrandName,
+        string? portalLogoUrl,
+        DateTimeOffset now)
     {
         CustomerPortalEnabled = enabled;
         CustomerPortalSlug = Trim(slug);
         CustomerPortalDomain = Trim(domain);
+        CustomerPortalBrandName = Trim(portalBrandName);
+        CustomerPortalLogoUrl = Trim(portalLogoUrl);
         UpdatedAt = now;
     }
 

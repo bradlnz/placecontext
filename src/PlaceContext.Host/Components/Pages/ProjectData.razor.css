@@ -579,6 +579,10 @@
     width: 560px;
 }
 
+.slide-420 {
+    width: 420px;
+}
+
 .slide-680 {
     width: 680px;
 }
@@ -1157,6 +1161,10 @@
         width: min(560px, 92vw);
     }
 
+    .slide-420 {
+        width: min(420px, 92vw);
+    }
+
     .col-grid-head,
     .col-grid-row {
         grid-template-columns: 1fr 110px 44px 44px 24px;
@@ -1694,6 +1702,8 @@
 
 /* ── ClickHouse SQL Studio layout ────────────────────────────────────────── */
 .sql-studio-page {
+    display: flex;
+    flex-direction: column;
     padding: 0;
     height: calc(100vh - 50px);
     min-height: 0;
@@ -1703,7 +1713,8 @@
 .sql-studio {
     display: grid;
     grid-template-columns: 260px minmax(0, 1fr);
-    height: 100%;
+    flex: 1;
+    min-height: 0;
     background: var(--ch-bg);
     color: var(--ch-text);
 }
@@ -1897,6 +1908,30 @@
     font-size: 9px;
     font-weight: 700;
     letter-spacing: 0.04em;
+}
+
+.studio-query-delete {
+    appearance: none;
+    background: transparent;
+    border: none;
+    border-radius: 3px;
+    color: var(--ch-text-3);
+    font: inherit;
+    font-size: 11px;
+    line-height: 1;
+    padding: 3px 5px;
+    cursor: pointer;
+    opacity: 0;
+}
+
+.resource-item:hover .studio-query-delete,
+.resource-item.active .studio-query-delete {
+    opacity: 1;
+}
+
+.studio-query-delete:hover {
+    color: #ff6b6b;
+    background: color-mix(in srgb, #ff6b6b 12%, var(--ch-panel-2));
 }
 
 /* Main studio area */
@@ -2118,11 +2153,42 @@
 
 /* Editor */
 .studio-editor-shell {
-    flex: 1 1 35%;
-    min-height: 160px;
+    flex: none;
+    height: 38%;
+    min-height: 120px;
     background: var(--ch-bg);
     border-bottom: 1px solid var(--ch-border);
     overflow: hidden;
+}
+
+/* Draggable divider between the editor and the results pane */
+.studio-splitter {
+    flex: none;
+    height: 6px;
+    cursor: row-resize;
+    background: var(--ch-panel);
+    border-bottom: 1px solid var(--ch-border);
+    touch-action: none;
+}
+
+.studio-splitter:hover,
+.studio-splitter.dragging {
+    background: color-mix(in srgb, var(--ch-yellow) 45%, var(--ch-panel));
+}
+
+.studio-splitter::after {
+    content: '';
+    display: block;
+    height: 2px;
+    margin: 2px auto 0;
+    width: 36px;
+    border-radius: 2px;
+    background: var(--ch-border-2);
+}
+
+.studio-splitter:hover::after,
+.studio-splitter.dragging::after {
+    background: var(--ch-yellow);
 }
 
 .studio-sql-editor {
@@ -2256,10 +2322,43 @@
 
 /* Results grid */
 .studio-results {
-    flex: 1 1 40%;
+    flex: 1 1 auto;
     min-height: 0;
     overflow: auto;
     background: var(--ch-bg);
+}
+
+.studio-chart {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    padding: 14px 16px;
+    background: var(--ch-bg);
+}
+
+.studio-chart-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ch-text);
+    margin-bottom: 4px;
+}
+
+.studio-chart-sub {
+    font-size: 11px;
+    color: var(--ch-text-3);
+    margin-bottom: 12px;
+}
+
+.studio-chart canvas {
+    flex: 1;
+    min-height: 0;
+    width: 100% !important;
+}
+
+.studio-chart-empty {
+    color: var(--ch-text-3);
+    font-size: 12px;
 }
 
 .studio-result-table {

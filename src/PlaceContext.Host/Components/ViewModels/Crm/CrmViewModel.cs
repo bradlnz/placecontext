@@ -1059,10 +1059,10 @@ public sealed class CrmViewModel : PageViewModel
         PortalCustomerSlug = !string.IsNullOrWhiteSpace(client.CustomerPortalSlug)
             ? client.CustomerPortalSlug
             : client.Name;
+        PortalBrandName = client.CustomerPortalBrandName ?? "";
+        PortalBrandLogoUrl = client.CustomerPortalLogoUrl ?? "";
         PortalUserName = "";
         PortalPassword = "";
-        PortalBrandName = "";
-        PortalBrandLogoUrl = "";
         PortalMessage = null;
         PortalProvisioningOpen = true;
     }
