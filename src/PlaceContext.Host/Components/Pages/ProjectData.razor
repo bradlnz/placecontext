@@ -76,6 +76,10 @@
                     <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.5-3.5" /></svg>
                     <input type="text" placeholder="Search indices" @bind="_tableFilter" @bind:event="oninput" />
                 </div>
+                @if (Vm.MaterializeMessage is not null)
+                {
+                    <div class="studio-note">@Vm.MaterializeMessage</div>
+                }
                 <div class="studio-resource-list">
                     @if (!Vm.IndicesReady)
                     {
@@ -104,6 +108,10 @@
                                     <span>@idx.DocumentCount.ToString("N0") doc(s)</span>
                                 </div>
                                 <span class="resource-tag">@(idx.StoreSize ?? "—")</span>
+                                <button class="studio-materialize" title="Copy this index into a project Postgres table (for joins)"
+                                        @onclick:stopPropagation="true" @onclick="@(() => Vm.OpenMaterializeDialog(idx.Name))">
+                                    <svg viewBox="0 0 24 24"><path d="M12 3v12M5 10l7 7 7-7" /><path d="M5 21h14" /></svg>
+                                </button>
                             </article>
                         }
                     }
@@ -524,6 +532,34 @@
     </div>
 }
 
+@* ── Materialize-index dialog ────────────────────────────────────────────────────────────── *@
+@if (Vm.ShowMaterializeDialog)
+{
+    <div class="dcslide-scrim" @onclick="() => Vm.CloseMaterializeDialog()"></div>
+    <div class="dcslide slide-420">
+        <div class="dcslide-head">
+            <span class="slide-title-13">Materialize index</span>
+            <button class="dcslide-x" @onclick="() => Vm.CloseMaterializeDialog()">×</button>
+        </div>
+        <div class="slide-pad">
+            <div class="slide-sub">Copies <strong>@Vm.MaterializeIndexName</strong> into a project Postgres table so you can join it with your tables in one SQL statement. Re-materializing replaces the existing table.</div>
+            <label class="field-label">Table name</label>
+            <input @bind="Vm.MaterializeTableName" @bind:event="oninput" placeholder="e.g. ingestion_runs"
+                   class="table-name-input" />
+            @if (Vm.MaterializeError is not null)
+            {
+                <div class="view-error">@Vm.MaterializeError</div>
+            }
+        </div>
+        <div class="dcslide-foot">
+            <button class="dcbtn" @onclick="() => Vm.CloseMaterializeDialog()">Cancel</button>
+            <button class="dcbtn primary" disabled="@Vm.Materializing" @onclick="@(() => Vm.MaterializeAsync())">
+                @(Vm.Materializing ? "Materializing…" : "Materialize")
+            </button>
+        </div>
+    </div>
+}
+
 @code {
     [Parameter] public Guid ProjectId { get; set; }
 
@@ -672,6 +708,10 @@
         StateHasChanged();
     }
 
+    protected override void OnInitialized() => Vm.Attach(() => InvokeAsync(StateHasChanged));
+
+    public void Dispose() => Vm.Detach();
+
     protected override async Task OnParametersSetAsync()
     {
         Vm.Initialize(ProjectId);
@@ -738,9 +778,12 @@
     {
         await Vm.AfterRenderAsync();
         if (ActiveTableTab is { } active)
+        {
             await Vm.ShowSqlTabAsync(active.TableName, active.Sql);
-        if (firstRender)
+            // Idempotent (pcstudio.js guards on dataset.bound); must run after the first
+            // tab renders, since the splitter element only exists while a tab is open.
             await _js.InvokeVoidAsync("pcstudio.splitter", "pcdata-studio-splitter");
+        }
         if (_resultsPane == ResultsPane.Chart && ActiveTableTab is { } chartTab && BuildChartSpec(chartTab) is { } spec)
         {
             var chartKey = $"{chartTab.TableName}|{spec.Json}";
@@ -783,7 +826,7 @@
             return;
         }
 
-        var tab = new TableTab(indexName, DefaultSqlFor(indexName), TableTabSource.OpenSearch);
+        var tab = new TableTab(indexName, DefaultOpenSearchSqlFor(indexName), TableTabSource.OpenSearch);
         _openTabs.Add(tab);
         _activeTableName = indexName;
         await Vm.ShowSqlTabAsync(indexName, tab.Sql);
@@ -873,7 +916,7 @@
 
     private async Task ResetTableTabSql(TableTab tab)
     {
-        tab.Sql = DefaultSqlFor(tab.TableName);
+        tab.Sql = tab.IsIndex ? DefaultOpenSearchSqlFor(tab.TableName) : DefaultSqlFor(tab.TableName);
         tab.Result = null;
         tab.Error = null;
         await Vm.SetSqlEditorValueAsync(tab.Sql);
@@ -909,7 +952,14 @@
     private string DefaultSqlFor(string tableName) =>
         $"SELECT * FROM \"{EscapeIdent(tableName)}\" LIMIT 100;";
 
+    // OpenSearch SQL treats double quotes as a literal index name (so "name" never resolves),
+    // and accepts backticks for identifiers — verified against the live cluster.
+    private string DefaultOpenSearchSqlFor(string indexName) =>
+        $"SELECT * FROM `{EscapeBacktickIdent(indexName)}` LIMIT 100;";
+
     private static string EscapeIdent(string value) => value.Replace("\"", "\"\"");
+
+    private static string EscapeBacktickIdent(string value) => value.Replace("`", "``");
 
     private static string CsvEscape(string value)
     {

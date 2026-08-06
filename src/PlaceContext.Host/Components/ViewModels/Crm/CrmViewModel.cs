@@ -110,6 +110,7 @@ public sealed class CrmViewModel : PageViewModel
     public bool Loading = true;
     public bool PortalProvisioningOpen;
     public bool SavingPortal;
+    public bool PortalRedeploying;
     public bool PortalInviting;
     public bool PortalImpersonating;
     public bool CanManagePortal;
@@ -1102,17 +1103,7 @@ public sealed class CrmViewModel : PageViewModel
         PortalMessage = null;
         try
         {
-            var slug = string.IsNullOrWhiteSpace(PortalCustomerSlug)
-                ? Slugify(target.Name)
-                : Slugify(PortalCustomerSlug);
-            var saved = await Svc.ConfigureCrmClientPortalAsync(
-                target.Id,
-                true,
-                slug,
-                string.IsNullOrWhiteSpace(PortalDomain) ? null : PortalDomain.Trim(),
-                string.IsNullOrWhiteSpace(PortalBrandName) ? null : PortalBrandName.Trim(),
-                string.IsNullOrWhiteSpace(PortalBrandLogoUrl) ? null : PortalBrandLogoUrl.Trim()
-            );
+            var saved = await ConfigurePortalAsync(target);
             if (Selected?.Id == saved.Id)
                 Selected = saved;
             if (PortalTarget?.Id == saved.Id)
@@ -1136,6 +1127,45 @@ public sealed class CrmViewModel : PageViewModel
         finally
         {
             SavingPortal = false;
+        }
+    }
+
+    public async Task RedeployPortal()
+    {
+        if (PortalTarget is null && Selected is null)
+            return;
+
+        var target = PortalTarget ?? Selected;
+        if (target is null || !target.CustomerPortalEnabled)
+            return;
+
+        PortalRedeploying = true;
+        PortalMessage = null;
+        try
+        {
+            var saved = await ConfigurePortalAsync(target);
+            if (Selected?.Id == saved.Id)
+                Selected = saved;
+            if (PortalTarget?.Id == saved.Id)
+                PortalTarget = saved;
+            await RefreshClients();
+            PortalMessage = "Customer portal redeploy requested.";
+            PortalProvisioningOpen = false;
+            PortalTarget = null;
+            PortalUserName = "";
+            PortalPassword = "";
+            PortalBrandName = "";
+            PortalBrandLogoUrl = "";
+            PortalCustomerSlug = "";
+            PortalDomain = "";
+        }
+        catch (Exception ex)
+        {
+            PortalMessage = ex.Message;
+        }
+        finally
+        {
+            PortalRedeploying = false;
         }
     }
 
@@ -1219,6 +1249,21 @@ public sealed class CrmViewModel : PageViewModel
         {
             PortalInviting = false;
         }
+    }
+
+    private async Task<CrmClientView> ConfigurePortalAsync(CrmClientView target)
+    {
+        var slug = string.IsNullOrWhiteSpace(PortalCustomerSlug)
+            ? Slugify(target.Name)
+            : Slugify(PortalCustomerSlug);
+        return await Svc.ConfigureCrmClientPortalAsync(
+            target.Id,
+            true,
+            slug,
+            string.IsNullOrWhiteSpace(PortalDomain) ? null : PortalDomain.Trim(),
+            string.IsNullOrWhiteSpace(PortalBrandName) ? null : PortalBrandName.Trim(),
+            string.IsNullOrWhiteSpace(PortalBrandLogoUrl) ? null : PortalBrandLogoUrl.Trim()
+        );
     }
 
     public async Task ImpersonateSelectedToPortalAsync()

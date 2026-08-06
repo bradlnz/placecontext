@@ -449,6 +449,10 @@ public sealed class PlaceContextService : IPlaceContextService
     public Task DropProjectTableColumnAsync(Guid projectId, string tableName, string columnName, CancellationToken ct = default)
         => _dispatcher.Send(new DropProjectTableColumnCommand(projectId, tableName, columnName), ct);
 
+    public Task<MaterializeIndexResult> MaterializeIndexTableAsync(
+        Guid projectId, string indexPattern, string? tableName = null, CancellationToken ct = default)
+        => _dispatcher.Send(new MaterializeIndexTableCommand(projectId, indexPattern, tableName), ct);
+
     public Task<string> GenerateProjectChartAsync(Guid projectId, string tableName, string? instruction, CancellationToken ct = default)
         => _dispatcher.Send(new GenerateProjectChartCommand(projectId, tableName, instruction), ct);
 

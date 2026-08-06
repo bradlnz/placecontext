@@ -1,6 +1,7 @@
 using Microsoft.JSInterop;
 using PlaceContext.Application;
 using PlaceContext.Application.Dtos;
+using PlaceContext.Application.Features;
 using PlaceContext.Application.Ports;
 
 namespace PlaceContext.Host.Components.ViewModels;
@@ -52,6 +53,61 @@ public sealed partial class ProjectDataViewModel
         finally
         {
             IndicesReady = true;
+            NotifyStateChanged();
+        }
+    }
+
+    // ── Materialize index → Postgres table ───────────────────────────────────────────────────
+    public bool ShowMaterializeDialog { get; private set; }
+    public string? MaterializeIndexName { get; private set; }
+    public string MaterializeTableName { get; set; } = "";
+    public bool Materializing { get; private set; }
+    public string? MaterializeError { get; private set; }
+    public string? MaterializeMessage { get; private set; }
+
+    public void OpenMaterializeDialog(string indexName)
+    {
+        MaterializeIndexName = indexName;
+        MaterializeTableName = MaterializeIndexTableCommand.DefaultTableName(indexName);
+        MaterializeError = null;
+        ShowMaterializeDialog = true;
+        NotifyStateChanged();
+    }
+
+    public void CloseMaterializeDialog()
+    {
+        ShowMaterializeDialog = false;
+        MaterializeError = null;
+        NotifyStateChanged();
+    }
+
+    public async Task MaterializeAsync()
+    {
+        if (string.IsNullOrWhiteSpace(MaterializeTableName))
+        {
+            MaterializeError = "Give the table a name.";
+            NotifyStateChanged();
+            return;
+        }
+        Materializing = true;
+        MaterializeError = null;
+        try
+        {
+            var result = await _svc.MaterializeIndexTableAsync(
+                ProjectId, MaterializeIndexName!, MaterializeTableName.Trim());
+            ShowMaterializeDialog = false;
+            MaterializeMessage =
+                $"{result.SourceIndex} → {result.TableName}: {result.RowsImported:N0} row(s), {result.ColumnCount} column(s)"
+                + (result.Truncated ? " (capped — index has more rows)" : "") + ".";
+            await RefreshTablesAsync();
+        }
+        catch (Exception ex)
+        {
+            MaterializeError = Trim(ex.Message);
+        }
+        finally
+        {
+            Materializing = false;
             NotifyStateChanged();
         }
     }

@@ -14,6 +14,9 @@ public sealed class OpenSearchDataGateway : IOpenSearchDataGateway
     private const int MaxPageSize = 100;
     private const int MaxSqlRows = 500;
     private const int MaxSqlLength = 16000;
+    private const int ExportPageSize = 500;
+    private const int DefaultExportRows = 10000;
+    private const int MaxExportRows = 100000;
     private readonly IHttpClientFactory _httpFactory;
     private readonly IOpenSearchConnectionResolver _connections;
 
@@ -65,6 +68,94 @@ public sealed class OpenSearchDataGateway : IOpenSearchDataGateway
                 Bool(type.Value, "aggregatable")));
         }
         return result.OrderBy(field => field.Name).ToList();
+    }
+
+    public async Task<OpenSearchExportView> ExportIndexAsync(
+        Guid projectId, string indexPattern, int maxRows = DefaultExportRows, CancellationToken ct = default)
+    {
+        var connection = await RequiredConnectionAsync(projectId, ct);
+        var safePattern = SafeIndex(indexPattern);
+        var rowCap = Math.Clamp(maxRows, 1, MaxExportRows);
+
+        // Schema: the same _field_caps call the fields list uses, mapped onto the store's Postgres
+        // type allow-list. Object/nested/alias parents are skipped — their flattened leaves carry
+        // the data, so a parent column would just be all nulls.
+        var fields = new List<OpenSearchExportField>();
+        using (var capsResponse = await SendAsync(connection, HttpMethod.Get,
+                   $"/{safePattern}/_field_caps?fields=*", null, ct))
+        using (var caps = await ReadSuccessAsync(capsResponse, ct))
+        {
+            if (!caps.RootElement.TryGetProperty("fields", out var fieldsJson)
+                || fieldsJson.ValueKind != JsonValueKind.Object)
+                return new OpenSearchExportView(
+                    Array.Empty<OpenSearchExportField>(), Array.Empty<IReadOnlyList<string?>>(), false);
+
+            foreach (var field in fieldsJson.EnumerateObject())
+            {
+                if (field.Name.StartsWith('_') || field.Value.ValueKind != JsonValueKind.Object) continue;
+                var type = field.Value.EnumerateObject().FirstOrDefault();
+                if (type.Value.ValueKind != JsonValueKind.Object) continue;
+                var postgres = PostgresTypeFor(type.Name);
+                if (postgres is null) continue;
+                fields.Add(new OpenSearchExportField(field.Name, type.Name, postgres));
+            }
+        }
+        fields.Sort((a, b) => string.Compare(a.Name, b.Name, StringComparison.Ordinal));
+        if (fields.Count == 0)
+            return new OpenSearchExportView(fields, Array.Empty<IReadOnlyList<string?>>(), false);
+
+        // Docs paged with search_after on the _doc tiebreaker — stable across pages and cheap at
+        // any depth (unlike from+size), which matters for a full-index export.
+        var rows = new List<IReadOnlyList<string?>>();
+        JsonNode? searchAfter = null;
+        var truncated = false;
+        while (rows.Count < rowCap)
+        {
+            var wanted = Math.Min(ExportPageSize, rowCap - rows.Count);
+            var body = new JsonObject
+            {
+                ["size"] = wanted,
+                ["sort"] = new JsonArray { new JsonObject { ["_doc"] = "asc" } },
+                ["query"] = new JsonObject { ["match_all"] = new JsonObject() },
+            };
+            if (searchAfter is not null) body["search_after"] = new JsonArray { searchAfter };
+
+            using var response = await SendAsync(connection, HttpMethod.Post,
+                $"/{safePattern}/_search", body.ToJsonString(), ct);
+            using var document = await ReadSuccessAsync(response, ct);
+            var hits = document.RootElement.GetProperty("hits").GetProperty("hits");
+            var pageCount = 0;
+            foreach (var hit in hits.EnumerateArray())
+            {
+                var flat = new SortedDictionary<string, string?>(StringComparer.Ordinal);
+                if (hit.TryGetProperty("_source", out var source)
+                    && source.ValueKind == JsonValueKind.Object)
+                    Flatten(source, null, flat);
+                var row = new string?[fields.Count];
+                for (var i = 0; i < fields.Count; i++)
+                {
+                    var value = flat.TryGetValue(fields[i].Name, out var v) ? v : null;
+                    // Date fields stored as epoch_millis wouldn't cast to timestamptz — normalise first.
+                    if (value is not null && IsDateField(fields[i].Type) && LooksLikeEpochMillis(value))
+                        value = EpochMillisToIso(value);
+                    row[i] = value;
+                }
+                rows.Add(row);
+                pageCount++;
+            }
+
+            if (pageCount == 0) break;
+            searchAfter = ParseSearchAfter(hits.EnumerateArray().Last());
+            if (searchAfter is null) break;
+            if (pageCount < wanted) break; // short page — the index is exhausted
+            if (rows.Count >= rowCap)
+            {
+                truncated = await HasMoreAsync(connection, safePattern, searchAfter, ct);
+                break;
+            }
+        }
+
+        return new OpenSearchExportView(fields, rows, truncated);
     }
 
     public async Task<OpenSearchLastUpdatedView> GetLastUpdatedAsync(
@@ -322,6 +413,67 @@ public sealed class OpenSearchDataGateway : IOpenSearchDataGateway
                 ? score.GetDouble()
                 : null,
             fields);
+    }
+
+    /// <summary>
+    /// OpenSearch type → the store's Postgres allow-list. Returns null for structural parents that
+    /// have no own value (object/nested/flattened) and aliases (their real field carries the data).
+    /// </summary>
+    private static string? PostgresTypeFor(string openSearchType) => openSearchType switch
+    {
+        "long" or "unsigned_long" or "short" or "byte" => "bigint",
+        "integer" => "integer",
+        "double" or "float" or "half_float" or "scaled_float" or "rank_feature" or "rank_features" => "numeric",
+        "boolean" => "boolean",
+        "date" or "date_nanos" => "timestamptz",
+        "object" or "nested" or "flattened" or "alias" => null,
+        _ => "text",
+    };
+
+    private static bool IsDateField(string openSearchType)
+        => openSearchType is "date" or "date_nanos";
+
+    private static bool LooksLikeEpochMillis(string value)
+        => value.Length is >= 10 and <= 16 && value.All(char.IsAsciiDigit);
+
+    private static string EpochMillisToIso(string value) =>
+        DateTimeOffset.FromUnixTimeMilliseconds(long.Parse(value, CultureInfo.InvariantCulture))
+            .UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss.FFFFFF'Z'", CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// The last hit's sort token for the next search_after page. <c>_doc</c> values come back either
+    /// as plain numbers or (beyond int32) as <c>{"$numberLong":"..."}</c> — re-parsing the raw JSON
+    /// token preserves whichever shape the server sent so the round trip is exact.
+    /// </summary>
+    private static JsonNode? ParseSearchAfter(JsonElement hit)
+    {
+        if (!hit.TryGetProperty("sort", out var sort)
+            || sort.ValueKind != JsonValueKind.Array || sort.GetArrayLength() == 0)
+            return null;
+        try
+        {
+            return JsonNode.Parse(sort[0].GetRawText());
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private async Task<bool> HasMoreAsync(
+        OpenSearchConnection connection, string safePattern, JsonNode searchAfter, CancellationToken ct)
+    {
+        var body = new JsonObject
+        {
+            ["size"] = 1,
+            ["sort"] = new JsonArray { new JsonObject { ["_doc"] = "asc" } },
+            ["search_after"] = new JsonArray { searchAfter },
+            ["query"] = new JsonObject { ["match_all"] = new JsonObject() },
+        };
+        using var response = await SendAsync(connection, HttpMethod.Post,
+            $"/{safePattern}/_search", body.ToJsonString(), ct);
+        using var document = await ReadSuccessAsync(response, ct);
+        return document.RootElement.GetProperty("hits").GetProperty("hits").GetArrayLength() > 0;
     }
 
     private static void Flatten(

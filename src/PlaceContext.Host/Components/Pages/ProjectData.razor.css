@@ -1934,6 +1934,60 @@
     background: color-mix(in srgb, #ff6b6b 12%, var(--ch-panel-2));
 }
 
+.studio-materialize {
+    appearance: none;
+    background: transparent;
+    border: none;
+    border-radius: 3px;
+    color: var(--ch-text-3);
+    font: inherit;
+    line-height: 0;
+    padding: 4px;
+    margin-left: 4px;
+    cursor: pointer;
+    opacity: 0;
+    display: inline-flex;
+    align-items: center;
+}
+
+.resource-item:hover .studio-materialize,
+.resource-item.active .studio-materialize {
+    opacity: 1;
+}
+
+.studio-materialize:hover {
+    color: #5ad1e6;
+    background: color-mix(in srgb, #5ad1e6 12%, var(--ch-panel-2));
+}
+
+.studio-materialize svg {
+    width: 12px;
+    height: 12px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.studio-note {
+    margin: 8px 12px 0;
+    padding: 7px 9px;
+    border-radius: 4px;
+    background: color-mix(in srgb, #5ad1e6 10%, var(--ch-panel-2));
+    color: var(--ch-text-2);
+    font-size: 11px;
+    line-height: 1.45;
+}
+
+.slide-sub {
+    font-size: 11.5px;
+    color: var(--ch-text-3);
+    margin-top: 3px;
+    margin-bottom: 12px;
+    line-height: 1.5;
+}
+
 /* Main studio area */
 .studio-main {
     display: flex;

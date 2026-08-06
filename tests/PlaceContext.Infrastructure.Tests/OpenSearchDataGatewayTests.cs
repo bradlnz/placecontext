@@ -1,6 +1,8 @@
+using System.Globalization;
 using System.Net;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using PlaceContext.Application.Dtos;
@@ -168,6 +170,157 @@ public sealed class OpenSearchDataGatewayTests
         await Assert.ThrowsAsync<ArgumentException>(() =>
             gateway.SearchAsync(new OpenSearchSearchRequest(
                 Guid.NewGuid(), unsafeIndex, null)));
+    }
+
+    [Fact]
+    public async Task Export_aligns_rows_to_field_caps_and_paginates_with_search_after()
+    {
+        var searchBodies = new List<string>();
+        var handler = new StubHandler(async request =>
+        {
+            if (request.RequestUri!.AbsolutePath.Contains("_field_caps"))
+                return Json("""
+                    {
+                      "fields": {
+                        "@timestamp": {"date": {"type":"date","searchable":true,"aggregatable":true}},
+                        "status": {"keyword": {"type":"keyword","searchable":true,"aggregatable":true}},
+                        "customer.city": {"text": {"type":"text","searchable":true,"aggregatable":false}},
+                        "customer": {"object": {"type":"object","searchable":false,"aggregatable":false}},
+                        "nope": {"alias": {"type":"alias","searchable":true,"aggregatable":false}}
+                      }
+                    }
+                    """);
+            searchBodies.Add(await request.Content!.ReadAsStringAsync());
+            if (searchBodies.Count == 1)
+            {
+                // A full page (500) must force a follow-up page so search_after is exercised.
+                var hits = new JsonArray();
+                for (var i = 0; i < 500; i++)
+                {
+                    hits.Add(new JsonObject
+                    {
+                        ["_index"] = "customers",
+                        ["_id"] = i.ToString(CultureInfo.InvariantCulture),
+                        ["_source"] = i == 0
+                            ? new JsonObject
+                            {
+                                ["@timestamp"] = 1785556800000,
+                                ["status"] = "active",
+                                ["customer"] = new JsonObject { ["city"] = "Brisbane" },
+                            }
+                            : new JsonObject { ["status"] = "other" },
+                        ["sort"] = new JsonArray { new JsonObject
+                            { ["$numberLong"] = (i + 1).ToString(CultureInfo.InvariantCulture) } },
+                    });
+                }
+                return Json(new JsonObject
+                {
+                    ["hits"] = new JsonObject
+                    {
+                        ["total"] = new JsonObject { ["value"] = 501, ["relation"] = "eq" },
+                        ["hits"] = hits,
+                    },
+                }.ToJsonString());
+            }
+            return Json("""{ "hits": {"total":{"value":501,"relation":"eq"},"hits":[]} }""");
+        });
+        var gateway = new OpenSearchDataGateway(
+            new StubHttpClientFactory(handler), new StubConnectionResolver());
+
+        var result = await gateway.ExportIndexAsync(Guid.NewGuid(), "customers-*");
+
+        // object/alias parents are skipped; leaves are sorted by field name.
+        Assert.Equal(3, result.Fields.Count);
+        Assert.Equal("@timestamp", result.Fields[0].Name);
+        Assert.Equal("timestamptz", result.Fields[0].PostgresType);
+        Assert.Equal("customer.city", result.Fields[1].Name);
+        Assert.Equal("text", result.Fields[1].PostgresType);
+        Assert.Equal("status", result.Fields[2].Name);
+        Assert.False(result.Truncated);
+        Assert.Equal(500, result.Rows.Count);
+        Assert.Equal("2026-08-01T04:00:00Z", result.Rows[0][0]); // epoch_millis normalised to ISO
+        Assert.Equal("Brisbane", result.Rows[0][1]);
+        Assert.Equal("active", result.Rows[0][2]);
+        Assert.Equal("other", result.Rows[1][2]);
+        Assert.Null(result.Rows[1][0]);
+
+        // First search page carries no cursor and sorts on _doc; the second page is keyed by the
+        // previous page's last hit sort token (the $numberLong shape is round-tripped verbatim).
+        using var first = JsonDocument.Parse(searchBodies[0]);
+        Assert.Equal(500, first.RootElement.GetProperty("size").GetInt32());
+        Assert.False(first.RootElement.TryGetProperty("search_after", out _));
+        Assert.Equal("asc", first.RootElement.GetProperty("sort")[0].GetProperty("_doc").GetString());
+        using var second = JsonDocument.Parse(searchBodies[1]);
+        Assert.Equal("500", second.RootElement.GetProperty("search_after")[0]
+            .GetProperty("$numberLong").GetString());
+    }
+
+    [Fact]
+    public async Task Export_maps_open_search_types_onto_the_postgres_allow_list()
+    {
+        var gateway = new OpenSearchDataGateway(
+            new StubHttpClientFactory(new StubHandler(async request =>
+            {
+                if (request.RequestUri!.AbsolutePath.Contains("_field_caps"))
+                    return Json("""
+                        {
+                          "fields": {
+                            "count": {"long": {"type":"long"}},
+                            "price": {"double": {"type":"double"}},
+                            "active": {"boolean": {"type":"boolean"}},
+                            "when": {"date": {"type":"date"}},
+                            "label": {"match_only_text": {"type":"match_only_text"}},
+                            "parent": {"nested": {"type":"nested"}},
+                            "blob": {"flattened": {"type":"flattened"}}
+                          }
+                        }
+                        """);
+                return Json("""{ "hits": {"total":{"value":0,"relation":"eq"},"hits":[]} }""");
+            })),
+            new StubConnectionResolver());
+
+        var result = await gateway.ExportIndexAsync(Guid.NewGuid(), "customers-*");
+
+        var mapped = result.Fields.ToDictionary(field => field.Name, field => field.PostgresType);
+        Assert.Equal("bigint", mapped["count"]);
+        Assert.Equal("numeric", mapped["price"]);
+        Assert.Equal("boolean", mapped["active"]);
+        Assert.Equal("timestamptz", mapped["when"]);
+        Assert.Equal("text", mapped["label"]);
+        Assert.False(mapped.ContainsKey("parent"));
+        Assert.False(mapped.ContainsKey("blob"));
+    }
+
+    [Fact]
+    public async Task Export_flags_truncation_when_more_documents_follow_the_cap()
+    {
+        var searchCalls = 0;
+        var gateway = new OpenSearchDataGateway(
+            new StubHttpClientFactory(new StubHandler(async request =>
+            {
+                if (request.RequestUri!.AbsolutePath.Contains("_field_caps"))
+                    return Json("""
+                        { "fields": { "message": {"text": {"type":"text"}} } }
+                        """);
+                searchCalls++;
+                return Json($$"""
+                    {
+                      "hits": {"total":{"value":2,"relation":"eq"},"hits":[{
+                        "_index": "logs", "_id": "{{searchCalls}}",
+                        "_source": {"message": "m"},
+                        "sort": [{{searchCalls}}]
+                      }]}
+                    }
+                    """);
+            })),
+            new StubConnectionResolver());
+
+        // Cap of 1 row: the first page fills the cap, and the probe (a further search) finds more.
+        var result = await gateway.ExportIndexAsync(Guid.NewGuid(), "logs-*", maxRows: 1);
+
+        Assert.Single(result.Rows);
+        Assert.True(result.Truncated);
+        Assert.Equal(2, searchCalls); // page + truncation probe
     }
 
     private static HttpResponseMessage Json(string body) => new(HttpStatusCode.OK)

@@ -29,6 +29,15 @@ public interface IOpenSearchDataGateway
     Task<OpenSearchSearchView> SearchAsync(
         OpenSearchSearchRequest request, CancellationToken ct = default);
 
+    /// <summary>
+    /// Export an index's documents as flat, field-aligned rows — schema via <c>_field_caps</c>, docs
+    /// via stable <c>search_after</c> paging on <c>_doc</c>. <paramref name="maxRows"/> caps the export
+    /// (clamped to 100,000); <see cref="OpenSearchExportView.Truncated"/> is true when more documents
+    /// exist beyond the cap.
+    /// </summary>
+    Task<OpenSearchExportView> ExportIndexAsync(
+        Guid projectId, string indexPattern, int maxRows = 10000, CancellationToken ct = default);
+
     /// <summary>Run a SELECT-style query through OpenSearch's SQL engine against the project's indices.</summary>
     Task<ProjectQueryResult> SearchSqlAsync(
         Guid projectId, string sql, CancellationToken ct = default);

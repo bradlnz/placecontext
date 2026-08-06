@@ -1042,7 +1042,13 @@ else
             }
             <div class="form-actions">
                 <button class="dcbtn" @onclick="Vm.ClosePortalProvisioning">Cancel</button>
-                <button class="dcbtn primary" disabled="@Vm.SavingPortal" @onclick="Vm.SavePortalProvisioning">
+                @if (Vm.PortalTarget?.CustomerPortalEnabled == true)
+                {
+                    <button class="dcbtn" disabled="@(Vm.PortalRedeploying || Vm.SavingPortal)" @onclick="Vm.RedeployPortal">
+                        @(Vm.PortalRedeploying ? "Redeploying…" : "Redeploy portal")
+                    </button>
+                }
+                <button class="dcbtn primary" disabled="@(Vm.SavingPortal || Vm.PortalRedeploying)" @onclick="Vm.SavePortalProvisioning">
                     @(Vm.SavingPortal
                         ? "Saving…"
                         : Vm.PortalTarget?.CustomerPortalEnabled == true
