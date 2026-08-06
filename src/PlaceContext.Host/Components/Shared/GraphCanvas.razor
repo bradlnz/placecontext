@@ -121,9 +121,12 @@
     [Parameter] public Func<GraphNodeView, string?>? NodeUrl { get; set; }
     [Parameter] public bool Searchable { get; set; }
     [Parameter] public bool AllowFullscreen { get; set; }
+    [Parameter] public EventCallback<string?> NodeClick { get; set; }
     protected override void OnInitialized() => Vm.Attach(() => InvokeAsync(StateHasChanged));
-    protected override void OnParametersSet() => Vm.SetParameters(Graph, Height, NodeUrl, Searchable, AllowFullscreen);
+    protected override void OnParametersSet() =>
+        Vm.SetParameters(Graph, Height, NodeUrl, Searchable, AllowFullscreen, nodeId => NodeClick.InvokeAsync(nodeId));
     protected override Task OnAfterRenderAsync(bool firstRender) => Vm.AfterRenderAsync();
     private void OnSearchInput(ChangeEventArgs args) => Vm.SearchNodes(args.Value?.ToString());
     public ValueTask DisposeAsync() => Vm.DisposeAsync();
+    public Task SelectNodeAsync(string? nodeId) => Vm.SelectAsync(nodeId);
 }

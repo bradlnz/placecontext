@@ -37,6 +37,7 @@ public sealed class GraphCanvasViewModel(IJSRuntime js)
     private DotNetObjectReference<GraphCanvasViewModel>? _selfReference;
     private GraphVizView? _graph;
     private Func<GraphNodeView, string?>? _nodeUrl;
+    private Func<string?, Task>? _nodeClick;
     private string _search = string.Empty;
     public string Id { get; } = "pcgraph-" + Guid.NewGuid().ToString("N");
     public GraphVizView? Graph => _graph;
@@ -78,7 +79,8 @@ public sealed class GraphCanvasViewModel(IJSRuntime js)
         int height,
         Func<GraphNodeView, string?>? nodeUrl,
         bool searchable,
-        bool allowFullscreen
+        bool allowFullscreen,
+        Func<string?, Task>? nodeClick = null
     )
     {
         if (!ReferenceEquals(_graph, graph))
@@ -91,6 +93,7 @@ public sealed class GraphCanvasViewModel(IJSRuntime js)
         _nodeUrl = nodeUrl;
         Searchable = searchable;
         AllowFullscreen = allowFullscreen;
+        _nodeClick = nodeClick;
     }
 
     public async Task AfterRenderAsync()
@@ -124,7 +127,7 @@ public sealed class GraphCanvasViewModel(IJSRuntime js)
     }
 
     [JSInvokable]
-    public Task OnNodeClick(string? nodeId)
+    public async Task OnNodeClick(string? nodeId)
     {
         Selected = nodeId is null ? null : _graph?.Nodes.FirstOrDefault(node => node.Id == nodeId);
         ReachableArtifacts =
@@ -157,7 +160,8 @@ public sealed class GraphCanvasViewModel(IJSRuntime js)
                     .ThenByDescending(item => item.Item1.Degree)
                     .ToList();
         NotifyStateChanged();
-        return Task.CompletedTask;
+        if (_nodeClick is not null)
+            await _nodeClick(nodeId);
     }
 
     public void SearchNodes(string? input)

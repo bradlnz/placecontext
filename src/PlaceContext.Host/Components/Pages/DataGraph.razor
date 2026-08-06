@@ -2,22 +2,15 @@
 @attribute [Authorize(Policy = Permission.DataRead)]
 @layout PlaceContext.Host.Components.Layout.ProjectLayout
 @implements IDisposable
+@using PlaceContext.Application.Features
+@using PlaceContext.Application.Dtos
 @using PlaceContext.Host.Components.ViewModels
 @inject DataGraphViewModel Vm
 
 <PageTitle>PlaceContext — Graph</PageTitle>
 
-<div class="page">
+<div class="page graph-page">
     <DataTabs ProjectId="ProjectId" Active="@DataSection.Graph" />
-
-    <div class="page-head">
-        <div>
-            <h2 class="page-title">Graph</h2>
-            <div class="page-sub">
-                Project-wide knowledge graph — decisions, changes, jobs, tables, entities and how they connect.
-            </div>
-        </div>
-    </div>
 
     @if (Vm.Loading)
     {
@@ -35,17 +28,43 @@
     }
     else if (Vm.Graph is not null)
     {
-        <div class="dccard graph-card">
-            <GraphCanvas Graph="Vm.Graph" Height="640" Searchable="true" AllowFullscreen="true" />
-        </div>
-        <div class="legend">
-            <span><span class="dot-hub">●</span> hotspots</span>
-            <span><span class="dot-decision">●</span> decisions</span>
-            <span><span class="dot-change">●</span> changes</span>
-            <span><span class="dot-run">●</span> jobs / chains</span>
-            <span><span class="dot-table">●</span> tables / entities</span>
-            <span><span class="dot-good">●</span> run outputs</span>
-            <span>click a node to inspect details</span>
+        <div class="graph-studio">
+            <aside class="graph-sidebar">
+                <div class="graph-sidebar-head">
+                    <input class="dcinput graph-search"
+                           placeholder="Search nodes…"
+                           @bind="Vm.SearchTerm"
+                           @bind:event="oninput" />
+                    @if (Vm.SelectedNodeId is not null)
+                    {
+                        <button class="dcbtn sm" @onclick="Vm.ClearSelection">Show all</button>
+                    }
+                </div>
+                <div class="graph-node-list">
+                    @foreach (var node in Vm.FilteredNodes)
+                    {
+                        <button class="graph-node-item @(node.Id == Vm.SelectedNodeId ? "active" : "")"
+                                @onclick="() => Vm.SelectNode(node.Id)"
+                                title="@node.Label">
+                            <span class="graph-node-kind @DataGraphViewModel.NodeKindClass(node.Kind)"></span>
+                            <span class="graph-node-label">@Vm.ShortLabel(node.Label)</span>
+                            <span class="graph-node-degree">@node.Degree</span>
+                        </button>
+                    }
+                </div>
+                <div class="graph-sidebar-foot">
+                    <span>@Vm.Graph.Nodes.Count nodes</span>
+                    <span>@Vm.Graph.Links.Count links</span>
+                </div>
+            </aside>
+            <main class="graph-main">
+                <GraphCanvas @ref="_canvas"
+                             Graph="Vm.Graph"
+                             Height="640"
+                             Searchable="true"
+                             AllowFullscreen="true"
+                             NodeClick="Vm.SelectNode" />
+            </main>
         </div>
     }
 </div>
@@ -53,9 +72,25 @@
 @code {
     [Parameter] public Guid ProjectId { get; set; }
 
-    protected override void OnInitialized() => Vm.Attach(() => InvokeAsync(StateHasChanged));
+    private GraphCanvas _canvas = null!;
+
+    protected override void OnInitialized()
+    {
+        Vm.Attach(() => InvokeAsync(StateHasChanged));
+        Vm.NodeSelected += OnNodeSelected;
+    }
 
     protected override async Task OnParametersSetAsync() => await Vm.LoadAsync(ProjectId);
 
-    public void Dispose() => Vm.Detach();
+    private void OnNodeSelected(string? nodeId)
+    {
+        if (nodeId is not null)
+            _ = InvokeAsync(() => _canvas.SelectNodeAsync(nodeId));
+    }
+
+    public void Dispose()
+    {
+        Vm.NodeSelected -= OnNodeSelected;
+        Vm.Detach();
+    }
 }
