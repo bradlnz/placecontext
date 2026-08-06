@@ -183,6 +183,10 @@ public sealed class PlaceContextService : IPlaceContextService
         OpenSearchSearchRequest request, CancellationToken ct = default)
         => _dispatcher.Query(new SearchOpenSearchQuery(request), ct);
 
+    public Task<Ports.ProjectQueryResult> SearchOpenSearchSqlAsync(
+        Guid projectId, string sql, CancellationToken ct = default)
+        => _dispatcher.Query(new SearchOpenSearchSqlQuery(projectId, sql), ct);
+
     public Task<OpenSearchSyncView> TriggerOpenSearchSyncAsync(
         Guid projectId, CancellationToken ct = default)
         => _dispatcher.Send(new TriggerOpenSearchSyncCommand(projectId), ct);
@@ -204,6 +208,12 @@ public sealed class PlaceContextService : IPlaceContextService
 
     public Task<IReadOnlyList<RunArtifactLinkView>> ListJobRunArtifactsAsync(Guid jobId, CancellationToken ct = default)
         => _dispatcher.Query(new ListJobRunArtifactsQuery(jobId), ct);
+
+    public Task<IReadOnlyList<PendingOcrArtifactView>> ListPendingOcrAsync(int take = 10, CancellationToken ct = default)
+        => _dispatcher.Query(new ListPendingOcrQuery(take), ct);
+
+    public Task<bool> CompleteOcrAsync(Guid artifactId, string? markdown, string? error, CancellationToken ct = default)
+        => _dispatcher.Send(new CompleteOcrCommand(artifactId, markdown, error), ct);
 
     public Task<bool> DeleteJobAsync(Guid jobId, CancellationToken ct = default)
         => _dispatcher.Send(new DeleteJobCommand(jobId), ct);
@@ -235,8 +245,22 @@ public sealed class PlaceContextService : IPlaceContextService
         => _dispatcher.Send(command, ct);
 
     public Task<CrmClientView> ConfigureCrmClientPortalAsync(
-        Guid clientId, bool enabled, string? slug, string? domain, CancellationToken ct = default)
-        => _dispatcher.Send(new ConfigureCrmClientPortalCommand(clientId, enabled, slug, domain), ct);
+        Guid clientId,
+        bool enabled,
+        string? slug,
+        string? domain,
+        string? portalBrandName,
+        string? portalBrandLogoUrl,
+        CancellationToken ct = default)
+        => _dispatcher.Send(
+            new ConfigureCrmClientPortalCommand(
+                clientId,
+                enabled,
+                slug,
+                domain,
+                portalBrandName,
+                portalBrandLogoUrl),
+            ct);
 
     public Task<CrmClientView> MoveCrmClientAsync(
         Guid clientId,

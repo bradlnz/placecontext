@@ -63,6 +63,32 @@ public sealed class EfRunArtifactLinkRepository : IRunArtifactLinkRepository
         return rows.Select(ToDomain).ToList();
     }
 
+    public async Task<IReadOnlyList<RunArtifactLink>> ListPendingOcrAsync(int take, CancellationToken ct = default)
+    {
+        // Oldest-first so a freshly-deployed daemon drains the backlog in arrival order, and only
+        // content types the daemon can actually process. text/* is included so plain-text artifacts
+        // flow through the same pipeline even though no OCR is applied to them.
+        var rows = await _db.RunArtifacts.AsNoTracking()
+            .Where(r => r.OcrProcessedAt == null)
+            .Where(r => r.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase)
+                || r.ContentType.Equals("application/pdf", StringComparison.OrdinalIgnoreCase)
+                || r.ContentType.StartsWith("text/", StringComparison.OrdinalIgnoreCase))
+            .OrderBy(r => r.CreatedAt)
+            .Take(Math.Clamp(take, 1, 200))
+            .ToListAsync(ct);
+        return rows.Select(ToDomain).ToList();
+    }
+
+    public async Task MarkOcrProcessedAsync(Guid artifactId, DateTimeOffset processedAt, string? error, CancellationToken ct = default)
+    {
+        // Query (not FindAsync) so the tenant global filter applies — a caller can only mark an
+        // artifact that belongs to its own workspace.
+        var row = await _db.RunArtifacts.FirstOrDefaultAsync(r => r.Id == artifactId, ct);
+        if (row is null) return;
+        row.OcrProcessedAt = processedAt;
+        row.OcrError = string.IsNullOrWhiteSpace(error) ? null : error;
+    }
+
     public async Task RemoveAsync(Guid id, CancellationToken ct = default)
     {
         // Query (not FindAsync) so the tenant global filter applies — a caller can only delete
@@ -84,10 +110,13 @@ public sealed class EfRunArtifactLinkRepository : IRunArtifactLinkRepository
         ContentType = l.ContentType,
         SizeBytes = l.SizeBytes,
         CreatedAt = l.CreatedAt,
+        OcrProcessedAt = l.OcrProcessedAt,
+        OcrError = l.OcrError,
     };
 
     private static RunArtifactLink ToDomain(RunArtifactLinkRow r) => RunArtifactLink.Rehydrate(
         r.Id, r.RunId, r.JobId, r.ProjectId,
         Enum.TryParse<PostJobActionKind>(r.Kind, out var k) ? k : PostJobActionKind.HtmlReport,
-        r.Title, r.Bucket, r.ObjectKey, r.ContentType, r.SizeBytes, r.CreatedAt);
+        r.Title, r.Bucket, r.ObjectKey, r.ContentType, r.SizeBytes, r.CreatedAt,
+        r.OcrProcessedAt, r.OcrError);
 }

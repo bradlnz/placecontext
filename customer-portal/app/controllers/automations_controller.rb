@@ -1,4 +1,6 @@
 class AutomationsController < ApplicationController
+  before_action :require_manager_or_admin!, only: :run
+
   def index
     @projects = crm.projects
     @project_id = params[:project_id].presence || @projects.first["id"]
@@ -47,5 +49,11 @@ class AutomationsController < ApplicationController
       overrides[step_index.to_i] = JSON.generate(values)
     end
     overrides
+  end
+
+  def require_manager_or_admin!
+    return if current_portal_user&.can_manage_client_access?
+
+    redirect_to automations_path, alert: "Manager access is required to run automations."
   end
 end

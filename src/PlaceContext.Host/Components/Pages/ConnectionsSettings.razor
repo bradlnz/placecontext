@@ -1,0 +1,156 @@
+@page "/settings/connections"
+@layout PlaceContext.Host.Components.Layout.SettingsLayout
+@attribute [Authorize(Policy = Policies.DefaultAdmin)]
+@using PlaceContext.Host.Components.ViewModels
+@inject ConnectionsSettingsViewModel Vm
+@implements IDisposable
+<PageTitle>placecontext — Connections</PageTitle>
+@if (Vm.Loading)
+{
+    <Skeleton Kind="list" Rows="3" Padded />
+}
+else
+{
+    <div class="page">
+        <h2 class="page-title">Connections</h2>
+        <div class="page-sub">
+            What each project's data runs against. Every project uses the shared cluster database
+            and the workspace OpenSearch default until you connect an external one here. Credentials
+            are stored encrypted in the project's Vault and never displayed after save.
+        </div>
+
+        @if (Vm.Message is not null)
+        {
+            <div class="message @(Vm.MessageIsError ? "message-error" : null)">@Vm.Message</div>
+        }
+
+        <div class="dccard card">
+            <label class="field-label">Project</label>
+            <select class="dcinput project-select" value="@Vm.SelectedProjectId" @onchange="Vm.ProjectChanged">
+                @foreach (var project in Vm.Projects!)
+                {
+                    <option value="@project.Id">@project.Name</option>
+                }
+            </select>
+            <div class="project-hint">
+                @if (Vm.SelectedProjectId is null)
+                {
+                    <span class="muted">Select a project to configure its connections.</span>
+                }
+                else
+                {
+                    <text>@Vm.SelectedProjectName —
+                        @(Vm.HasExternalDatabase ? "external database configured" : "using the cluster database") ·
+                        @(Vm.HasExternalIndex ? "external search index configured" : "using the workspace OpenSearch default")</text>
+                }
+            </div>
+        </div>
+
+        @if (Vm.SelectedProjectId is not null)
+        {
+            <div class="dccard card">
+                <div class="card-head">
+                    <span class="add-title">External database</span>
+                    @if (Vm.HasExternalDatabase)
+                    {
+                        <button class="dcbtn" disabled="@Vm.Busy" @onclick="Vm.ResetExternalDatabaseAsync">Reset to cluster database</button>
+                    }
+                </div>
+                <div class="card-intro">
+                    Connect the project to its own Postgres. SQL Studio and the Records tab then run
+                    against it; DDL and DML are allowed as the configured user. Leave blank to keep
+                    the cluster database.
+                </div>
+                <div class="form-grid">
+                    <div class="field">
+                        <label class="field-label">Host</label>
+                        <input class="dcinput field-input" @bind="Vm.DbHost" placeholder="db.example.com" />
+                    </div>
+                    <div class="field field-small">
+                        <label class="field-label">Port</label>
+                        <input class="dcinput field-input" @bind="Vm.DbPort" placeholder="5432" />
+                    </div>
+                    <div class="field">
+                        <label class="field-label">Database</label>
+                        <input class="dcinput field-input" @bind="Vm.DbName" placeholder="defaults to username" />
+                    </div>
+                    <div class="field">
+                        <label class="field-label">Username</label>
+                        <input class="dcinput field-input" @bind="Vm.DbUser" placeholder="postgres" autocomplete="off" />
+                    </div>
+                    <div class="field">
+                        <label class="field-label">Password</label>
+                        <input class="dcinput field-input" type="password" @bind="Vm.DbPassword" placeholder="••••••••" autocomplete="new-password" />
+                    </div>
+                    <div class="field field-small">
+                        <label class="field-label">SSL mode</label>
+                        <select class="dcinput field-input" @bind="Vm.DbSslMode">
+                            @foreach (var mode in Vm.SslModeOptions)
+                            {
+                                <option value="@mode">@mode</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+                <div class="actions">
+                    <button class="dcbtn primary" disabled="@Vm.Busy" @onclick="Vm.SaveExternalDatabaseAsync">
+                        @(Vm.Busy ? "Saving…" : "Save external database")
+                    </button>
+                </div>
+                @if (Vm.FormError is not null)
+                {
+                    <div class="add-error">@Vm.FormError</div>
+                }
+            </div>
+
+            <div class="dccard card">
+                <div class="card-head">
+                    <span class="add-title">External search index</span>
+                    @if (Vm.HasExternalIndex)
+                    {
+                        <button class="dcbtn" disabled="@Vm.Busy" @onclick="Vm.ResetExternalIndexAsync">Reset to workspace default</button>
+                    }
+                </div>
+                <div class="card-intro">
+                    Point this project's Data Search at an external OpenSearch / Elasticsearch
+                    endpoint. Leave blank to keep the workspace default.
+                </div>
+                <div class="form-grid">
+                    <div class="field field-wide">
+                        <label class="field-label">Endpoint</label>
+                        <input class="dcinput field-input" @bind="Vm.OsEndpoint" placeholder="https://search.example.com" />
+                    </div>
+                    <div class="field">
+                        <label class="field-label">Username</label>
+                        <input class="dcinput field-input" @bind="Vm.OsUsername" placeholder="optional" autocomplete="off" />
+                    </div>
+                    <div class="field">
+                        <label class="field-label">Password</label>
+                        <input class="dcinput field-input" type="password" @bind="Vm.OsPassword" placeholder="optional" autocomplete="new-password" />
+                    </div>
+                    <div class="field">
+                        <label class="field-label">Index</label>
+                        <input class="dcinput field-input" @bind="Vm.OsIndex" placeholder="*" />
+                    </div>
+                </div>
+                <div class="actions">
+                    <button class="dcbtn primary" disabled="@Vm.Busy" @onclick="Vm.SaveExternalIndexAsync">
+                        @(Vm.Busy ? "Saving…" : "Save external index")
+                    </button>
+                </div>
+                @if (Vm.FormError is not null)
+                {
+                    <div class="add-error">@Vm.FormError</div>
+                }
+            </div>
+        }
+    </div>
+}
+
+@code {
+    protected override async Task OnInitializedAsync() => await Vm.LoadAsync();
+
+    protected override void OnInitialized() => Vm.Attach(() => InvokeAsync(StateHasChanged));
+
+    public void Dispose() => Vm.Detach();
+}

@@ -49,10 +49,11 @@
                     </div>
                     <div class="invite-role">
                         <label class="field-label">Portal role</label>
-                        <select class="dcinput input-full" @bind="Vm.PortalInviteRole">
-                            <option value="member">Member</option>
-                            <option value="manager">Manager</option>
-                        </select>
+                    <select class="dcinput input-full" @bind="Vm.PortalInviteRole">
+                        <option value="member">Member</option>
+                        <option value="manager">Manager</option>
+                        <option value="admin">Admin</option>
+                    </select>
                     </div>
                     <button class="dcbtn primary" disabled="@Vm.PortalInviting" @onclick="Vm.InviteCustomerPortalUserAsync">@(Vm.PortalInviting ? "Inviting…" : "Invite portal user")</button>
                 </div>

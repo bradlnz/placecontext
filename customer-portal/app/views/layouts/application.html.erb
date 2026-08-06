@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title><%= content_for?(:page_title) ? "#{yield(:page_title)} · PlaceContext" : "PlaceContext" %></title>
+    <title><%= content_for?(:page_title) ? "#{yield(:page_title)} · #{portal_brand_name}" : portal_brand_name %></title>
     <%= csrf_meta_tags %>
     <%= csp_meta_tag %>
     <%= stylesheet_link_tag "application", "data-turbo-track": "reload" %>
@@ -13,9 +13,13 @@
       <aside class="sidebar" aria-label="Main navigation">
         <div class="sidebar-brand">
           <div class="brand-logo">
-            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M12 2L2 7L12 12L22 7L12 2Z" fill="currentColor"/><path d="M2 17L12 22L22 17" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 12L12 17L22 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <% if portal_brand_logo_url %>
+              <img src="<%= portal_brand_logo_url %>" alt="<%= portal_brand_name %> logo" />
+            <% else %>
+              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M12 2L2 7L12 12L22 7L12 2Z" fill="currentColor"/><path d="M2 17L12 22L22 17" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 12L12 17L22 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <% end %>
           </div>
-          <span class="brand-name">PlaceContext</span>
+          <span class="brand-name"><%= portal_brand_name %></span>
         </div>
 
         <div class="sidebar-tenant">
@@ -28,6 +32,9 @@
           <%= nav_link_to "Clients", clients_path, icon: :clients %>
           <%= nav_link_to "Leads", leads_path, icon: :leads %>
           <%= nav_link_to "Automations", automations_path, icon: :automations %>
+          <% if current_portal_user&.can_manage_portal_users? %>
+            <%= nav_link_to "Portal logins", portal_users_path, icon: :users %>
+          <% end %>
         </nav>
 
         <div class="sidebar-footer">

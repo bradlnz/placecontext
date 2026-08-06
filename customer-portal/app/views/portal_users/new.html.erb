@@ -1,0 +1,39 @@
+<% page_title "Add portal user" %>
+
+<div class="page-header">
+  <div>
+    <div class="breadcrumbs">
+      <%= link_to "Dashboard", root_path %> ·
+      <%= link_to "Portal logins", portal_users_path %> · Add user
+    </div>
+  </div>
+</div>
+
+<div class="card form-card">
+  <%= form_with model: @portal_user, url: portal_users_path, local: true, class: "form-grid" do |form| %>
+    <div class="form-group">
+      <%= form.label :email %>
+      <%= form.email_field :email, required: true, autofocus: true, placeholder: "user@example.com" %>
+    </div>
+
+    <div class="form-group">
+      <%= form.label :role %>
+      <%= form.select :role, options_for_select(PortalUser.roles.keys.map { |role| [role.capitalize, role] }, @portal_user.role) %>
+    </div>
+
+    <div class="form-group">
+      <%= form.label :password %>
+      <%= form.password_field :password, placeholder: "Leave blank to auto-generate and email a reset link" %>
+    </div>
+
+    <div class="form-group">
+      <%= form.label :password_confirmation %>
+      <%= form.password_field :password_confirmation, placeholder: "Optional if leaving password blank" %>
+    </div>
+
+    <div class="form-group full-width form-actions">
+      <%= link_to "Back", portal_users_path, class: "btn btn-secondary" %>
+      <%= form.submit "Create login", class: "btn btn-primary" %>
+    </div>
+  <% end %>
+</div>

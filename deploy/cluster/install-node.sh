@@ -277,6 +277,15 @@ EOF
 
 # ── Apply K8s manifests (master role) ───────────────────────────────────────
 
+ensure_placecontext_namespace() {
+    if kubectl get namespace placecontext >/dev/null 2>&1; then
+        return
+    fi
+
+    log "Creating namespace placecontext..."
+    kubectl create namespace placecontext >/dev/null
+}
+
 apply_k8s_manifests() {
     if [[ "$ROLE" != "master" ]]; then
         return
@@ -288,6 +297,7 @@ apply_k8s_manifests() {
 
     # Download manifests from bucket
     if curl -fsSL "$BUCKET_URL/placecontext.yaml" -o "$CONFIG_DIR/placecontext.yaml" 2>/dev/null; then
+        ensure_placecontext_namespace
         kubectl apply -f "$CONFIG_DIR/placecontext.yaml"
         log "K8s manifests applied"
     else

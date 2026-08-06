@@ -15,4 +15,6 @@ public sealed class RunArtifactLinkRow : ITenantOwned
     public string ContentType { get; set; } = "";
     public long SizeBytes { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
+    public DateTimeOffset? OcrProcessedAt { get; set; }
+    public string? OcrError { get; set; }
 }

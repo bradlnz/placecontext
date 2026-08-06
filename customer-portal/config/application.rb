@@ -20,6 +20,5 @@ module CustomerPortal
     config.autoload_lib(ignore: %w[assets tasks])
     config.active_record.schema_format = :ruby
     config.generators.system_tests = nil
-    config.relative_url_root = ENV["RAILS_RELATIVE_URL_ROOT"] if ENV["RAILS_RELATIVE_URL_ROOT"].present?
   end
 end

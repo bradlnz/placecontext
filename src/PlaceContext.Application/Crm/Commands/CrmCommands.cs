@@ -28,7 +28,9 @@ public sealed record ConfigureCrmClientPortalCommand(
     Guid ClientId,
     bool Enabled,
     string? Slug,
-    string? Domain) : ICommand<CrmClientView>, IRequiresPermission
+    string? Domain,
+    string? PortalBrandName = null,
+    string? PortalBrandLogoUrl = null) : ICommand<CrmClientView>, IRequiresPermission
 {
     public string RequiredPermission => Permission.SettingsManage;
 }

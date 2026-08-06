@@ -113,18 +113,41 @@ public sealed class ConfigureCrmClientPortalHandler
     : ICommandHandler<ConfigureCrmClientPortalCommand, CrmClientView>
 {
     private readonly ICrmClientRepository _clients;
+    private readonly ICurrentTenant _tenant;
     private readonly IUnitOfWork _uow;
     private readonly IClock _clock;
+    private readonly ICustomerPortalProvisioner _provisioner;
 
     public ConfigureCrmClientPortalHandler(
-        ICrmClientRepository clients, IUnitOfWork uow, IClock clock)
-        => (_clients, _uow, _clock) = (clients, uow, clock);
+        ICrmClientRepository clients,
+        ICurrentTenant tenant,
+        IUnitOfWork uow,
+        IClock clock,
+        ICustomerPortalProvisioner provisioner)
+        => (_clients, _tenant, _uow, _clock, _provisioner) = (clients, tenant, uow, clock, provisioner);
 
     public async Task<CrmClientView> HandleAsync(
         ConfigureCrmClientPortalCommand command, CancellationToken ct = default)
     {
         var client = await _clients.GetByIdAsync(command.ClientId, ct)
             ?? throw new InvalidOperationException($"Client {command.ClientId} not found.");
+        if (command.Enabled)
+        {
+            if (!_tenant.IsResolved)
+                throw new InvalidOperationException("Cannot provision a customer portal outside a tenant request context.");
+
+            if (string.IsNullOrWhiteSpace(command.Slug))
+                throw new ArgumentException("Customer portal slug is required when enabling a portal.", nameof(command.Slug));
+
+            await _provisioner.ProvisionAsync(
+                _tenant.TenantId,
+                command.Slug.Trim(),
+                command.Domain?.Trim(),
+                command.PortalBrandName,
+                command.PortalBrandLogoUrl,
+                ct);
+        }
+
         client.ConfigurePortal(command.Enabled, command.Slug, command.Domain, _clock.UtcNow);
         await _clients.UpdateAsync(client, ct);
         await _uow.SaveChangesAsync(ct);

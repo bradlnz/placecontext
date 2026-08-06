@@ -2176,6 +2176,12 @@ namespace PlaceContext.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<string>("OcrError")
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset?>("OcrProcessedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<Guid>("ProjectId")
                         .HasColumnType("uuid");
 
@@ -2193,6 +2199,10 @@ namespace PlaceContext.Infrastructure.Migrations
                         .HasColumnType("text");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("OcrProcessedAt")
+                        .HasDatabaseName("ix_job_run_artifacts_ocr")
+                        .HasFilter("\"OcrProcessedAt\" IS NULL");
 
                     b.HasIndex("RunId");
 

@@ -15,9 +15,11 @@ RUN bundle config set without 'development test' \
 
 COPY customer-portal .
 RUN chmod +x bin/rails
+RUN bundle exec rails assets:precompile
 
 ENV RAILS_ENV=production \
     RAILS_LOG_TO_STDOUT=true \
+    RAILS_SERVE_STATIC_FILES=true \
     PORT=7701
 EXPOSE 7701
 ENTRYPOINT ["./bin/rails"]

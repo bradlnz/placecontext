@@ -1,10 +1,13 @@
 Rails.application.routes.draw do
-  devise_for :portal_users
+  devise_for :portal_users,
+    path: "",
+    path_names: { sign_in: "login", sign_out: "logout", sign_up: "register", password: "password" }
   post "/api/provision/users", to: "provisioning#create_user"
   post "/:slug/api/provision/users", to: "provisioning#create_user"
   post "/api/provision/impersonate", to: "provisioning#impersonate"
   post "/:slug/api/provision/impersonate", to: "provisioning#impersonate"
   get "/impersonate/:id", to: "impersonation#login"
+  resources :portal_users, only: %i[index new create]
 
   root "dashboard#show"
   get "/healthz", to: "health#show"
@@ -14,5 +17,5 @@ Rails.application.routes.draw do
   post "/automations/:id/run", to: "automations#run", as: :run_automation
   get "/automation_runs/:id", to: "automations#run_status", as: :automation_run
 
-  get "/:slug", to: redirect("/")
+  get "/:slug", to: "dashboard#show"
 end

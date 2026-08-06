@@ -41,6 +41,10 @@ spec:
               value: /p
             - name: RAILS_RELATIVE_URL_ROOT
               value: /p
+            - name: PORTAL_BRAND_NAME
+              value: ""
+            - name: PORTAL_BRAND_LOGO_URL
+              value: ""
             - name: PLACE_CONTEXT_CORE_API_URL
               value: http://placecontext.placecontext.svc.cluster.local
             - name: PLACE_CONTEXT_CORE_API_KEY

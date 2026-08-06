@@ -69,6 +69,7 @@ public static class DependencyInjection
         services.AddScoped<ICommandHandler<SaveCrmClientCommand, CrmClientView>, SaveCrmClientHandler>();
         services.AddScoped<ICommandHandler<MoveCrmClientCommand, CrmClientView>, MoveCrmClientHandler>();
         services.AddScoped<ICommandHandler<DeleteCrmClientCommand, bool>, DeleteCrmClientHandler>();
+        services.AddScoped<ICommandHandler<ConfigureCrmClientPortalCommand, CrmClientView>, ConfigureCrmClientPortalHandler>();
         services.AddScoped<ICommandHandler<RunCrmClientAutomationCommand, CrmChainRunView>, RunCrmClientAutomationHandler>();
         services.AddScoped<CrmArtifactAssociationService>();
         services.AddScoped<ICommandHandler<AddCrmClientNoteCommand, CrmCommunicationView>, AddCrmClientNoteHandler>();
@@ -187,6 +188,7 @@ public static class DependencyInjection
         services.AddScoped<IQueryHandler<ListOpenSearchFieldsQuery, IReadOnlyList<OpenSearchFieldView>>, ListOpenSearchFieldsHandler>();
         services.AddScoped<IQueryHandler<GetOpenSearchLastUpdatedQuery, OpenSearchLastUpdatedView>, GetOpenSearchLastUpdatedHandler>();
         services.AddScoped<IQueryHandler<SearchOpenSearchQuery, OpenSearchSearchView>, SearchOpenSearchHandler>();
+        services.AddScoped<IQueryHandler<SearchOpenSearchSqlQuery, ProjectQueryResult>, SearchOpenSearchSqlHandler>();
         services.AddScoped<IQueryHandler<ListOpenSearchDashboardsQuery, IReadOnlyList<OpenSearchDashboardView>>, ListOpenSearchDashboardsHandler>();
         services.AddScoped<IQueryHandler<ListRecentRunReportsQuery, IReadOnlyList<RunReportView>>, ListRecentRunReportsHandler>();
         services.AddScoped<IQueryHandler<GetJobQuery, JobView?>, GetJobHandler>();
@@ -205,6 +207,10 @@ public static class DependencyInjection
         services.AddScoped<IQueryHandler<ListProjectSecretsQuery, IReadOnlyList<ProjectSecretView>>, ListProjectSecretsHandler>();
         services.AddScoped<IQueryHandler<ListRunArtifactsQuery, IReadOnlyList<RunArtifactLinkView>>, ListRunArtifactsHandler>();
         services.AddScoped<IQueryHandler<ListJobRunArtifactsQuery, IReadOnlyList<RunArtifactLinkView>>, ListJobRunArtifactsHandler>();
+        // OCR daemon contract (server-side storage; the daemon deploys later).
+        services.AddScoped<OcrResultStorageService>();
+        services.AddScoped<IQueryHandler<ListPendingOcrQuery, IReadOnlyList<PendingOcrArtifactView>>, ListPendingOcrHandler>();
+        services.AddScoped<ICommandHandler<CompleteOcrCommand, bool>, CompleteOcrHandler>();
         services.AddScoped<ICommandHandler<ExecuteProjectDataCommand, Ports.ProjectQueryResult>, ExecuteProjectDataHandler>();
         services.AddScoped<IQueryHandler<ListProjectDataTablesQuery, IReadOnlyList<Ports.ProjectTableInfo>>, ListProjectDataTablesHandler>();
         services.AddScoped<IQueryHandler<QueryProjectTablePageQuery, Ports.ProjectTablePageResult>, QueryProjectTablePageHandler>();

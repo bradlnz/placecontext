@@ -9,6 +9,7 @@ public enum CrmSection
     Contacts,
     Opportunities,
     Automations,
+    Portals,
     Settings,
 }
 
@@ -74,6 +75,13 @@ public static class CrmPresentationCatalog
             "Add automation"
         ),
         new(
+            CrmSection.Portals,
+            "Customer portals",
+            "Provision, configure, and manage portal access for selected CRM clients.",
+            false,
+            ""
+        ),
+        new(
             CrmSection.Settings,
             "CRM settings",
             "Connect external lead forms without exposing the rest of your CRM.",
@@ -97,6 +105,7 @@ public static class CrmPresentationCatalog
             "contacts" => CrmSection.Contacts,
             "opportunities" => CrmSection.Opportunities,
             "automations" => CrmSection.Automations,
+            "portals" => CrmSection.Portals,
             _ => CrmSection.Settings,
         };
 
@@ -108,6 +117,7 @@ public static class CrmPresentationCatalog
             CrmSection.Contacts => "contacts",
             CrmSection.Opportunities => "opportunities",
             CrmSection.Automations => "automations",
+            CrmSection.Portals => "portals",
             _ => "settings",
         };
 

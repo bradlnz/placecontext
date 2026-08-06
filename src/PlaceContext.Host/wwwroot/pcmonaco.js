@@ -35,10 +35,39 @@ window.pcmonaco = (function () {
   // here would propagate through JS interop and terminate the Blazor circuit, freezing
   // the page on "Loading…".
   // The editor follows the portal's theme: light shells get Monaco's white 'vs', dark get
-  // 'vs-dark' — and a toggle mid-session re-themes every mounted editor live.
+  // a ClickHouse-inspired 'placecontext-ch' theme — and a toggle mid-session re-themes
+  // every mounted editor live.
   function shellTheme() {
     const shell = document.getElementById('dcshell');
-    return shell && shell.getAttribute('data-theme') === 'light' ? 'vs' : 'vs-dark';
+    return shell && shell.getAttribute('data-theme') === 'light' ? 'vs' : 'placecontext-ch';
+  }
+
+  let clickHouseThemeDefined = false;
+  function defineClickHouseTheme(monaco) {
+    if (clickHouseThemeDefined) return;
+    clickHouseThemeDefined = true;
+    monaco.editor.defineTheme('placecontext-ch', {
+      base: 'vs-dark',
+      inherit: true,
+      rules: [
+        { token: 'keyword.sql', foreground: 'FFCC00', fontStyle: 'bold' },
+        { token: 'operator.sql', foreground: 'E4E7EC' },
+        { token: 'identifier.sql', foreground: '7EE787' },
+        { token: 'string.sql', foreground: '9CDCFE' },
+        { token: 'number.sql', foreground: 'B5CEA8' },
+        { token: 'comment.sql', foreground: '7E838D', fontStyle: 'italic' }
+      ],
+      colors: {
+        'editor.background': '#1F2125',
+        'editor.lineHighlightBackground': '#2A2D33',
+        'editorLineNumber.foreground': '#7E838D',
+        'editorLineNumber.activeForeground': '#E4E7EC',
+        'editor.selectionBackground': '#3E4249',
+        'editor.inactiveSelectionBackground': '#33363D',
+        'editorCursor.foreground': '#FFCC00',
+        'editorWhitespace.foreground': '#4B4F57'
+      }
+    });
   }
 
   let themeWatcher = null;
@@ -46,8 +75,98 @@ window.pcmonaco = (function () {
     if (themeWatcher) return;
     const shell = document.getElementById('dcshell');
     if (!shell) return;
+    defineClickHouseTheme(monaco);
     themeWatcher = new MutationObserver(() => monaco.editor.setTheme(shellTheme()));
     themeWatcher.observe(shell, { attributes: true, attributeFilter: ['data-theme'] });
+  }
+
+  // ── SQL autocomplete ──────────────────────────────────────────────────────────────────────
+  // Schema-aware completion for every Monaco 'sql' editor: the Blazor side pushes the project's
+  // tables (and, lazily, their columns) through setSqlSchema, and this provider suggests
+  // keywords, table names, and columns for the tables referenced so far in the statement.
+  const SQL_KEYWORDS = [
+    'SELECT','FROM','WHERE','JOIN','LEFT JOIN','RIGHT JOIN','INNER JOIN','OUTER JOIN','FULL JOIN',
+    'ON','GROUP BY','ORDER BY','HAVING','LIMIT','OFFSET','AS','AND','OR','NOT','IN','IS','NULL',
+    'IS NULL','IS NOT NULL','BETWEEN','LIKE','ILIKE','DISTINCT','COUNT','SUM','AVG','MIN','MAX',
+    'CASE','WHEN','THEN','ELSE','END','INSERT INTO','UPDATE','DELETE FROM','VALUES','CREATE TABLE',
+    'CREATE VIEW','ALTER TABLE','DROP TABLE','UNION','ALL','EXISTS','WITH','ASC','DESC','SELECT *',
+  ];
+  let sqlSchema = [];          // [{ name, columns: [{ name, type }] }]
+  let sqlProviderRegistered = false;
+
+  function registerSqlCompletion(monaco) {
+    if (sqlProviderRegistered) return;
+    sqlProviderRegistered = true;
+    monaco.languages.registerCompletionItemProvider('sql', {
+      triggerCharacters: ['.', ' '],
+      provideCompletionItems(model, position) {
+        const until = model.getValueInRange({
+          startLineNumber: 1, startColumn: 1,
+          endLineNumber: position.lineNumber, endColumn: position.column,
+        });
+        const word = model.getWordUntilPosition(position);
+        const suggestions = [];
+
+        // `table.` → only that table's columns.
+        const dot = until.match(/([A-Za-z_][\w]*)\.\s*$/);
+        if (dot) {
+          const table = sqlSchema.find(t => t.name === dot[1]);
+          if (table) {
+            for (const c of table.columns)
+              suggestions.push({
+                label: c.name, insertText: c.name, kind: monaco.languages.CompletionItemKind.Field,
+                detail: c.type || 'column', range: word, sortText: 'a',
+              });
+          }
+          return { suggestions };
+        }
+
+        for (const kw of SQL_KEYWORDS)
+          suggestions.push({
+            label: kw, insertText: kw, kind: monaco.languages.CompletionItemKind.Keyword,
+            range: word, sortText: 'z' + kw,
+          });
+
+        for (const t of sqlSchema)
+          suggestions.push({
+            label: t.name, insertText: t.name, kind: monaco.languages.CompletionItemKind.Class,
+            detail: 'table', range: word, sortText: 'a' + t.name,
+          });
+
+        const referenced = referencedTables(until);
+        const scope = referenced.length > 0 ? referenced : sqlSchema;
+        const seen = new Set();
+        for (const table of scope) {
+          for (const c of table.columns) {
+            if (seen.has(c.name)) continue; // same label in two tables: keep the first
+            seen.add(c.name);
+            suggestions.push({
+              label: c.name, insertText: c.name, kind: monaco.languages.CompletionItemKind.Field,
+              detail: (c.type || 'column') + (scope.length > 1 ? ' · ' + table.name : ''),
+              range: word, sortText: 'b' + c.name,
+            });
+          }
+        }
+        return { suggestions };
+      },
+    });
+  }
+
+  function referencedTables(text) {
+    const found = new Set();
+    const re = /\b(?:from|join|into|update|table)\s+(?:"([^"]+)"|([A-Za-z_][\w]*))/gi;
+    let match;
+    while ((match = re.exec(text))) found.add(match[1] || match[2]);
+    const known = new Set(sqlSchema.map(t => t.name));
+    return [...found].filter(name => known.has(name));
+  }
+
+  function setSqlSchema(tables) {
+    sqlSchema = (tables || []).map(t => ({
+      name: t.name,
+      columns: (t.columns || []).map(c => ({ name: c.name, type: c.type })),
+    }));
+    if (window.monaco) registerSqlCompletion(window.monaco);
   }
 
   function modelKey(id, path) { return id + '::' + path; }
@@ -111,7 +230,7 @@ window.pcmonaco = (function () {
           ta.spellcheck = false;
           ta.style.cssText =
             'width:100%;height:100%;box-sizing:border-box;resize:none;border:none;outline:none;' +
-            'background:#1e1e1e;color:#d4d4d4;padding:10px 12px;font-size:12.5px;line-height:1.5;' +
+            'background:#1f2125;color:#e4e7ec;padding:10px 12px;font-size:13px;line-height:1.55;' +
             "font-family:'JetBrains Mono',ui-monospace,monospace;tab-size:2";
           el.appendChild(ta);
           fallbacks.set(id, ta);

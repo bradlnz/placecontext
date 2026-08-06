@@ -10,7 +10,7 @@
     <h1><%= @client["name"] %></h1>
   </div>
   <div class="btn-toolbar">
-    <% if current_portal_user.manager? %>
+    <% if current_portal_user&.can_manage_client_access? %>
       <%= link_to "Edit", edit_client_path(@client["id"], project_id: @project_id), class: "btn btn-secondary" %>
       <%= button_to "Delete", client_path(@client["id"], project_id: @project_id), method: :delete, data: { turbo_confirm: "Delete this client?" }, class: "btn btn-danger" %>
     <% end %>

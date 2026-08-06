@@ -20,6 +20,16 @@ public interface IRunArtifactLinkRepository
     /// (case-insensitive) — applied before the version-grouping the UI does client-side.</summary>
     Task<IReadOnlyList<RunArtifactLink>> ListForProjectAsync(Guid projectId, int take, string? search = null, CancellationToken ct = default);
 
+    /// <summary>
+    /// The oldest artifacts still awaiting OCR (<c>OcrProcessedAt IS NULL</c>) whose content type is
+    /// processable (image/*, application/pdf, text/*). A daemon pulls a small batch and, per item,
+    /// calls <see cref="MarkOcrProcessedAsync"/> when it finishes.
+    /// </summary>
+    Task<IReadOnlyList<RunArtifactLink>> ListPendingOcrAsync(int take, CancellationToken ct = default);
+
+    /// <summary>Records OCR completion for one artifact (timestamp + optional failure reason).</summary>
+    Task MarkOcrProcessedAsync(Guid artifactId, DateTimeOffset processedAt, string? error, CancellationToken ct = default);
+
     /// <summary>Permanently removes an artifact link row (the object bytes are deleted separately).</summary>
     Task RemoveAsync(Guid id, CancellationToken ct = default);
 }

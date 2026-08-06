@@ -6,7 +6,7 @@
       <%= link_to "Dashboard", root_path %> · Clients
     </div>
   </div>
-  <% if current_portal_user.manager? && @project_id %>
+  <% if current_portal_user&.can_manage_client_access? && @project_id %>
     <%= link_to new_client_path(project_id: @project_id), class: "btn btn-primary" do %>
       <%= icon :plus %>
       Add client
@@ -56,7 +56,7 @@
     <div class="empty-state">
       <div class="empty-state-title">No clients yet</div>
       <p>This project doesn't have any clients. Add your first client to get started.</p>
-      <% if current_portal_user.manager? && @project_id %>
+      <% if current_portal_user&.can_manage_client_access? && @project_id %>
         <div style="margin-top: 16px;">
           <%= link_to "Add client", new_client_path(project_id: @project_id), class: "btn btn-primary" %>
         </div>

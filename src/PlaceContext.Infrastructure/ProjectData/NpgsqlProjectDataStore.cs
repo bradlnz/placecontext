@@ -25,6 +25,7 @@ public sealed class NpgsqlProjectDataStore : IProjectDataStore
     private const int ProvisioningMaxAttempts = 3;
 
     private readonly string _connectionString;
+    private readonly IProjectDatabaseConnectionResolver? _dbResolver;
     private readonly ILogger<NpgsqlProjectDataStore>? _log;
     private readonly IDataEncryptor? _enc;
     private readonly bool _encryptAtRest;
@@ -44,10 +45,11 @@ public sealed class NpgsqlProjectDataStore : IProjectDataStore
     /// <summary>Test hook: clears the in-process provisioning cache so tests don't leak state.</summary>
     internal static void ResetProvisioningCacheForTests() => ProvisionedSchemas.Clear();
 
-    public NpgsqlProjectDataStore(IConfiguration config, ILogger<NpgsqlProjectDataStore>? log = null, IDataEncryptor? enc = null)
+    public NpgsqlProjectDataStore(IConfiguration config, IProjectDatabaseConnectionResolver? dbResolver = null, ILogger<NpgsqlProjectDataStore>? log = null, IDataEncryptor? enc = null)
     {
         _connectionString = config.GetSection("PlaceContext")["ConnectionString"]
             ?? new PlaceContextOptions().ConnectionString;
+        _dbResolver = dbResolver;
         _log = log;
         _enc = enc;
         // Encryption-at-rest for project-data cells is OFF by default: a jsonb column can't hold
@@ -55,6 +57,59 @@ public sealed class NpgsqlProjectDataStore : IProjectDataStore
         // jsonb column (22P02) and silently dropped the batch. Opt back in with
         // PlaceContext:EncryptProjectDataAtRest=true only once that path handles jsonb.
         _encryptAtRest = config.GetValue("PlaceContext:EncryptProjectDataAtRest", false);
+    }
+
+    /// <summary>
+    /// The project's effective database: Vault-configured external Postgres when present, else the
+    /// shared cluster DB. Tests / non-DI callers without a resolver always get the cluster default.
+    /// </summary>
+    private async Task<ProjectDatabaseConnection> ResolveDatabaseAsync(Guid projectId, CancellationToken ct)
+        => _dbResolver is null
+            ? new ProjectDatabaseConnection(_connectionString, IsExternal: false)
+            : await _dbResolver.ResolveAsync(projectId, ct);
+
+    /// <summary>Open a connection to the resolved database for <paramref name="projectId"/>.</summary>
+    private static async Task<NpgsqlConnection> OpenConnectionAsync(ProjectDatabaseConnection resolved, CancellationToken ct)
+    {
+        var conn = new NpgsqlConnection(resolved.ConnectionString);
+        await conn.OpenAsync(ct);
+        return conn;
+    }
+
+    /// <summary>
+    /// Provision the per-project schema/role when the project lives on the cluster DB. External
+    /// databases are the project's own — there is nothing to provision and no isolation to build.
+    /// </summary>
+    private async Task EnsureIsolationAsync(NpgsqlConnection conn, Guid projectId, ProjectDatabaseConnection resolved, CancellationToken ct)
+    {
+        if (!resolved.IsExternal)
+            await EnsureProvisionedAsync(conn, SchemaFor(projectId), ct);
+    }
+
+    /// <summary>
+    /// Pin the session for one execution. On the cluster DB this runs as the project's NOLOGIN role
+    /// with search_path pinned to its private schema; on an external DB the connecting credentials
+    /// are already the owner, so only the statement timeout is pinned. SET LOCAL scopes everything
+    /// to the enclosing transaction.
+    /// </summary>
+    private async Task SetupSessionAsync(NpgsqlConnection conn, NpgsqlTransaction tx, Guid projectId, ProjectDatabaseConnection resolved, CancellationToken ct)
+    {
+        await using var setup = conn.CreateCommand();
+        setup.Transaction = tx;
+        setup.CommandText = resolved.IsExternal
+            ? $"SET LOCAL statement_timeout = '{StatementTimeout}'"
+            : $"SET LOCAL ROLE \"{SchemaFor(projectId)}\"; SET LOCAL search_path TO \"{SchemaFor(projectId)}\"; SET LOCAL statement_timeout = '{StatementTimeout}'";
+        await setup.ExecuteNonQueryAsync(ct);
+    }
+
+    /// <summary>The schema whose tables a project sees: its private cluster schema, or (on an external
+    /// DB) the database's default search-path schema, resolved so it can be bound as a parameter.</summary>
+    private static async Task<string> EffectiveListSchemaAsync(NpgsqlConnection conn, ProjectDatabaseConnection resolved, Guid projectId, CancellationToken ct)
+    {
+        if (!resolved.IsExternal) return SchemaFor(projectId);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT current_schema()";
+        return await cmd.ExecuteScalarAsync(ct) as string ?? "public";
     }
 
     /// <summary>Encrypt a cell for storage; disabled/null encryptor (tests) or empty values pass through.</summary>
@@ -109,23 +164,15 @@ public sealed class NpgsqlProjectDataStore : IProjectDataStore
 
     public async Task<ProjectQueryResult> ExecuteAsync(Guid projectId, string sql, CancellationToken ct = default)
     {
-        var schema = SchemaFor(projectId);
-        await using var conn = new NpgsqlConnection(_connectionString);
-        await conn.OpenAsync(ct);
-        await EnsureProvisionedAsync(conn, schema, ct);
+        var resolved = await ResolveDatabaseAsync(projectId, ct);
+        await using var conn = await OpenConnectionAsync(resolved, ct);
+        await EnsureIsolationAsync(conn, projectId, resolved, ct);
 
-        // The user's SQL runs inside a transaction as the project's role, with search_path and a
-        // statement timeout pinned. SET LOCAL scopes all three to this transaction only.
+        // The user's SQL runs inside a transaction with search_path and a statement timeout pinned
+        // (and, on the cluster DB, as the project's NOLOGIN role). SET LOCAL scopes everything to
+        // this transaction only.
         await using var tx = await conn.BeginTransactionAsync(ct);
-        await using (var setup = conn.CreateCommand())
-        {
-            setup.Transaction = tx;
-            setup.CommandText =
-                $"SET LOCAL ROLE \"{schema}\"; " +
-                $"SET LOCAL search_path TO \"{schema}\"; " +
-                $"SET LOCAL statement_timeout = '{StatementTimeout}'";
-            await setup.ExecuteNonQueryAsync(ct);
-        }
+        await SetupSessionAsync(conn, tx, projectId, resolved, ct);
 
         var columns = new List<string>();
         var rows = new List<IReadOnlyList<string?>>();
@@ -207,21 +254,12 @@ public sealed class NpgsqlProjectDataStore : IProjectDataStore
         page = ClampPage(page);
         pageSize = ClampPageSize(pageSize);
 
-        var schema = SchemaFor(projectId);
-        await using var conn = new NpgsqlConnection(_connectionString);
-        await conn.OpenAsync(ct);
-        await EnsureProvisionedAsync(conn, schema, ct);
+        var resolved = await ResolveDatabaseAsync(projectId, ct);
+        await using var conn = await OpenConnectionAsync(resolved, ct);
+        await EnsureIsolationAsync(conn, projectId, resolved, ct);
 
         await using var tx = await conn.BeginTransactionAsync(ct);
-        await using (var setup = conn.CreateCommand())
-        {
-            setup.Transaction = tx;
-            setup.CommandText =
-                $"SET LOCAL ROLE \"{schema}\"; " +
-                $"SET LOCAL search_path TO \"{schema}\"; " +
-                $"SET LOCAL statement_timeout = '{StatementTimeout}'";
-            await setup.ExecuteNonQueryAsync(ct);
-        }
+        await SetupSessionAsync(conn, tx, projectId, resolved, ct);
 
         var quoted = QuoteIdent(tableName);
 
@@ -299,13 +337,14 @@ public sealed class NpgsqlProjectDataStore : IProjectDataStore
 
     public async Task<IReadOnlyList<ProjectTableInfo>> ListTablesAsync(Guid projectId, CancellationToken ct = default)
     {
-        var schema = SchemaFor(projectId);
-        await using var conn = new NpgsqlConnection(_connectionString);
-        await conn.OpenAsync(ct);
-        await EnsureProvisionedAsync(conn, schema, ct);
+        var resolved = await ResolveDatabaseAsync(projectId, ct);
+        await using var conn = await OpenConnectionAsync(resolved, ct);
+        await EnsureIsolationAsync(conn, projectId, resolved, ct);
 
         // A table the project role does not own is system-written and read-only for the project
-        // (the role holds SELECT at most — see AppendReadOnlyRowsAsync).
+        // (the role holds SELECT at most — see AppendReadOnlyRowsAsync). On an external database the
+        // connecting user owns its own tables, so nothing is read-only from the store's point of view.
+        var listSchema = await EffectiveListSchemaAsync(conn, resolved, projectId, ct);
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = """
             SELECT c.relname, GREATEST(c.reltuples, 0)::bigint,
@@ -315,11 +354,12 @@ public sealed class NpgsqlProjectDataStore : IProjectDataStore
             WHERE n.nspname = @schema AND c.relkind IN ('r', 'v')
             ORDER BY c.relname
             """;
-        cmd.Parameters.AddWithValue("schema", schema);
+        cmd.Parameters.AddWithValue("schema", listSchema);
         var tables = new List<ProjectTableInfo>();
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         while (await reader.ReadAsync(ct))
-            tables.Add(new ProjectTableInfo(reader.GetString(0), reader.GetInt64(1), reader.GetBoolean(2), reader.GetBoolean(3)));
+            tables.Add(new ProjectTableInfo(reader.GetString(0), reader.GetInt64(1),
+                resolved.IsExternal ? false : reader.GetBoolean(2), reader.GetBoolean(3)));
         return tables;
     }
 
@@ -365,10 +405,10 @@ public sealed class NpgsqlProjectDataStore : IProjectDataStore
     public async Task<IReadOnlyList<ProjectColumnInfo>> ListColumnsAsync(Guid projectId, string tableName, CancellationToken ct = default)
     {
         Ident(tableName, "table name");
-        var schema = SchemaFor(projectId);
-        await using var conn = new NpgsqlConnection(_connectionString);
-        await conn.OpenAsync(ct);
-        await EnsureProvisionedAsync(conn, schema, ct);
+        var resolved = await ResolveDatabaseAsync(projectId, ct);
+        await using var conn = await OpenConnectionAsync(resolved, ct);
+        await EnsureIsolationAsync(conn, projectId, resolved, ct);
+        var schema = await EffectiveListSchemaAsync(conn, resolved, projectId, ct);
 
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = """
@@ -443,6 +483,13 @@ public sealed class NpgsqlProjectDataStore : IProjectDataStore
         }
         if (rows.Any(r => r.Count != columns.Count))
             throw new ArgumentException("Every row must have exactly one value per column.");
+
+        // Read-only system tables are a cluster concept (the platform owns them and claws back
+        // write access from the project role). An external database has no such platform ownership.
+        var resolved = await ResolveDatabaseAsync(projectId, ct);
+        if (resolved.IsExternal)
+            throw new NotSupportedException(
+                "Read-only system tables are only available on the cluster database, not an external one.");
 
         var schema = SchemaFor(projectId);
         await using var conn = new NpgsqlConnection(_connectionString);
@@ -545,23 +592,16 @@ public sealed class NpgsqlProjectDataStore : IProjectDataStore
         if (rows.Any(r => r.Count != columns.Count))
             throw new ArgumentException("Every row must have exactly one value per column.");
 
-        var schema = SchemaFor(projectId);
-        await using var conn = new NpgsqlConnection(_connectionString);
-        await conn.OpenAsync(ct);
-        await EnsureProvisionedAsync(conn, schema, ct);
+        var resolved = await ResolveDatabaseAsync(projectId, ct);
+        await using var conn = await OpenConnectionAsync(resolved, ct);
+        await EnsureIsolationAsync(conn, projectId, resolved, ct);
 
-        // Runs as the PROJECT ROLE inside its schema, so the created table is project-owned and stays
-        // fully writable/alterable/droppable — the CSV import produces a normal user table, not a
-        // locked-down system one. Same isolation as ExecuteAsync/CreateTableAsync.
+        // Runs as the PROJECT ROLE inside its schema on the cluster DB, so the created table is
+        // project-owned and stays fully writable/alterable/droppable — the CSV import produces a
+        // normal user table, not a locked-down system one. On an external DB the connecting user
+        // is already the owner. Same isolation as ExecuteAsync/CreateTableAsync.
         await using var tx = await conn.BeginTransactionAsync(ct);
-        await using (var setup = conn.CreateCommand())
-        {
-            setup.Transaction = tx;
-            setup.CommandText =
-                $"SET LOCAL ROLE \"{schema}\"; SET LOCAL search_path TO \"{schema}\"; " +
-                $"SET LOCAL statement_timeout = '{StatementTimeout}'";
-            await setup.ExecuteNonQueryAsync(ct);
-        }
+        await SetupSessionAsync(conn, tx, projectId, resolved, ct);
 
         if (createTable)
         {
@@ -604,20 +644,12 @@ public sealed class NpgsqlProjectDataStore : IProjectDataStore
         var cols = values.Keys.ToList();
         foreach (var c in cols) Ident(c, "column name");
 
-        var schema = SchemaFor(projectId);
-        await using var conn = new NpgsqlConnection(_connectionString);
-        await conn.OpenAsync(ct);
-        await EnsureProvisionedAsync(conn, schema, ct);
+        var resolved = await ResolveDatabaseAsync(projectId, ct);
+        await using var conn = await OpenConnectionAsync(resolved, ct);
+        await EnsureIsolationAsync(conn, projectId, resolved, ct);
 
         await using var tx = await conn.BeginTransactionAsync(ct);
-        await using (var setup = conn.CreateCommand())
-        {
-            setup.Transaction = tx;
-            setup.CommandText =
-                $"SET LOCAL ROLE \"{schema}\"; SET LOCAL search_path TO \"{schema}\"; " +
-                $"SET LOCAL statement_timeout = '{StatementTimeout}'";
-            await setup.ExecuteNonQueryAsync(ct);
-        }
+        await SetupSessionAsync(conn, tx, projectId, resolved, ct);
 
         var colTypes = await LoadColumnTypesAsync(conn, tx, tableName, cols, ct);
         var colList = string.Join(", ", cols.Select(QuoteIdent));
@@ -649,19 +681,11 @@ public sealed class NpgsqlProjectDataStore : IProjectDataStore
         var valCols = values.Keys.ToList();
         foreach (var c in keyCols.Concat(valCols)) Ident(c, "column name");
 
-        var schema = SchemaFor(projectId);
-        await using var conn = new NpgsqlConnection(_connectionString);
-        await conn.OpenAsync(ct);
-        await EnsureProvisionedAsync(conn, schema, ct);
+        var resolved = await ResolveDatabaseAsync(projectId, ct);
+        await using var conn = await OpenConnectionAsync(resolved, ct);
+        await EnsureIsolationAsync(conn, projectId, resolved, ct);
         await using var tx = await conn.BeginTransactionAsync(ct);
-        await using (var setup = conn.CreateCommand())
-        {
-            setup.Transaction = tx;
-            setup.CommandText =
-                $"SET LOCAL ROLE \"{schema}\"; SET LOCAL search_path TO \"{schema}\"; " +
-                $"SET LOCAL statement_timeout = '{StatementTimeout}'";
-            await setup.ExecuteNonQueryAsync(ct);
-        }
+        await SetupSessionAsync(conn, tx, projectId, resolved, ct);
 
         var allCols = keyCols.Concat(valCols).Distinct(StringComparer.Ordinal).ToList();
         var colTypes = await LoadColumnTypesAsync(conn, tx, tableName, allCols, ct);
@@ -700,19 +724,11 @@ public sealed class NpgsqlProjectDataStore : IProjectDataStore
         var keyCols = keys.Keys.ToList();
         foreach (var c in keyCols) Ident(c, "column name");
 
-        var schema = SchemaFor(projectId);
-        await using var conn = new NpgsqlConnection(_connectionString);
-        await conn.OpenAsync(ct);
-        await EnsureProvisionedAsync(conn, schema, ct);
+        var resolved = await ResolveDatabaseAsync(projectId, ct);
+        await using var conn = await OpenConnectionAsync(resolved, ct);
+        await EnsureIsolationAsync(conn, projectId, resolved, ct);
         await using var tx = await conn.BeginTransactionAsync(ct);
-        await using (var setup = conn.CreateCommand())
-        {
-            setup.Transaction = tx;
-            setup.CommandText =
-                $"SET LOCAL ROLE \"{schema}\"; SET LOCAL search_path TO \"{schema}\"; " +
-                $"SET LOCAL statement_timeout = '{StatementTimeout}'";
-            await setup.ExecuteNonQueryAsync(ct);
-        }
+        await SetupSessionAsync(conn, tx, projectId, resolved, ct);
 
         var wheres = string.Join(" AND ", keyCols.Select((c, i) =>
             keys[c] is null ? $"{QuoteIdent(c)} IS NULL" : $"{QuoteIdent(c)}::text = @k{i}"));
@@ -765,22 +781,15 @@ public sealed class NpgsqlProjectDataStore : IProjectDataStore
         return map;
     }
 
-    // Run a single non-query statement inside the project's schema as its role (DDL helper).
+    // Run a single non-query statement inside the project's schema as its role (DDL helper). On an
+    // external database the connecting user is the owner, so the statement runs as them directly.
     private async Task RunAsRoleAsync(Guid projectId, string statement, CancellationToken ct)
     {
-        var schema = SchemaFor(projectId);
-        await using var conn = new NpgsqlConnection(_connectionString);
-        await conn.OpenAsync(ct);
-        await EnsureProvisionedAsync(conn, schema, ct);
+        var resolved = await ResolveDatabaseAsync(projectId, ct);
+        await using var conn = await OpenConnectionAsync(resolved, ct);
+        await EnsureIsolationAsync(conn, projectId, resolved, ct);
         await using var tx = await conn.BeginTransactionAsync(ct);
-        await using (var setup = conn.CreateCommand())
-        {
-            setup.Transaction = tx;
-            setup.CommandText =
-                $"SET LOCAL ROLE \"{schema}\"; SET LOCAL search_path TO \"{schema}\"; " +
-                $"SET LOCAL statement_timeout = '{StatementTimeout}'";
-            await setup.ExecuteNonQueryAsync(ct);
-        }
+        await SetupSessionAsync(conn, tx, projectId, resolved, ct);
         await using (var cmd = conn.CreateCommand())
         {
             cmd.Transaction = tx;

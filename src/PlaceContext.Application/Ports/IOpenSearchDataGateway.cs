@@ -28,6 +28,10 @@ public interface IOpenSearchDataGateway
         CancellationToken ct = default);
     Task<OpenSearchSearchView> SearchAsync(
         OpenSearchSearchRequest request, CancellationToken ct = default);
+
+    /// <summary>Run a SELECT-style query through OpenSearch's SQL engine against the project's indices.</summary>
+    Task<ProjectQueryResult> SearchSqlAsync(
+        Guid projectId, string sql, CancellationToken ct = default);
 }
 
 /// <summary>Triggers the external collector without coupling the application to its transport.</summary>

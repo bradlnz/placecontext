@@ -1,5 +1,6 @@
 @inject CrmViewModel Vm
 @using PlaceContext.Host.Components.ViewModels.Crm
+@using PlaceContext.Application.Features
 @using PlaceContext.Domain.ValueObjects
 @using PlaceContext.Infrastructure.Crm
 @page "/project/{ProjectId:guid}/crm"
@@ -10,7 +11,9 @@
 
 @if (Vm.Loading)
 {
-    <Skeleton Kind="card-grid" Cards="6" Padded />
+    <div class="crm-page">
+        <Skeleton Kind="card-grid" Cards="6" />
+    </div>
 }
 else
 {
@@ -96,6 +99,15 @@ else
                     </svg>
                     <span>Automations</span><small>@Vm.AutomationRules.Count</small>
                 </button>
+                <button class="@(Vm.CurrentSection == CrmSection.Portals ? "active" : "")"
+                        role="tab" aria-selected="@(Vm.CurrentSection == CrmSection.Portals)"
+                        @onclick="@(() => Vm.OpenCrmSection(CrmSection.Portals))">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                        <path d="M12 3v4M12 17v4M4 10h16" />
+                        <path d="M8 6h8M8 9h8M8 13h8M8 16h8" />
+                    </svg>
+                    <span>Customer portals</span><small>@Vm.Clients.Count(x => x.CustomerPortalEnabled)</small>
+                </button>
                 <button class="@(Vm.CurrentSection == CrmSection.Settings ? "active" : "")"
                         role="tab" aria-selected="@(Vm.CurrentSection == CrmSection.Settings)"
                         @onclick="@(() => Vm.OpenCrmSection(CrmSection.Settings))">
@@ -108,7 +120,7 @@ else
             </nav>
 
             <div class="crm-workspace">
-                @if (Vm.CurrentSection is CrmSection.Contacts or CrmSection.Opportunities)
+                @if (Vm.CurrentSection is CrmSection.Contacts or CrmSection.Opportunities or CrmSection.Portals)
                 {
                     <div class="crm-toolbar">
                         <div class="crm-search">
@@ -118,10 +130,16 @@ else
                             <input class="dcinput" @bind="Vm.Search" @bind:event="oninput"
                                    placeholder="Search name, company, email, or phone…" />
                         </div>
-                        @if (Vm.StageFilter is not null)
+                        @if ((Vm.CurrentSection is CrmSection.Contacts or CrmSection.Opportunities) && Vm.StageFilter is not null)
                         {
                             <button class="dcbtn xs clear-filter" @onclick="@(() => Vm.StageFilter = null)">
                                 Clear filter <span><CrmIcon Name="close" /></span>
+                            </button>
+                        }
+                        else if (Vm.CurrentSection == CrmSection.Portals && !string.IsNullOrWhiteSpace(Vm.Search))
+                        {
+                            <button class="dcbtn xs clear-filter" @onclick="@(() => Vm.Search = string.Empty)">
+                                Clear search <span><CrmIcon Name="close" /></span>
                             </button>
                         }
                     </div>
@@ -212,7 +230,7 @@ else
                         <span role="columnheader" class="visually-hidden">Open</span>
                     </div>
                     <div class="client-table-body" role="rowgroup">
-                        <Virtualize Items="Vm.FilteredClients" Context="client" ItemSize="58" OverscanCount="4">
+                        <Virtualize Items="Vm.FilteredClients" TItem="CrmClientView" Context="client" ItemSize="58" OverscanCount="4">
                             @{ var stage = CrmViewModel.ParseStage(client.LifecycleStage); }
                             <article class="client-row @CrmViewModel.StageClass(stage)" role="row"
                                      @onclick="@(() => Vm.OpenClient(client))">
@@ -541,6 +559,110 @@ else
                             </article>
                         }
                     </div>
+                }
+            </section>
+        }
+        else if (Vm.CurrentSection == CrmSection.Portals)
+        {
+            <section class="crm-portals">
+                <div class="crm-portals-head">
+                    <div>
+                        <span class="section-kicker">Portal access</span>
+                        <strong>@Vm.Clients.Count(c => c.CustomerPortalEnabled) of @Vm.Clients.Count portal@(Vm.Clients.Count == 1 ? "" : "s") configured</strong>
+                    </div>
+                </div>
+
+                @if (Vm.Clients.Count == 0)
+                {
+                    <div class="dccard crm-empty">
+                        <div class="empty-icon">
+                            <CrmIcon Name="globe" />
+                        </div>
+                        <strong>No clients yet</strong>
+                        <span>Add clients first, then provision customer portals from this tab.</span>
+                        <button class="dcbtn primary" @onclick="Vm.NewClient">Add a client</button>
+                    </div>
+                }
+                else if (!Vm.PortalClients.Any())
+                {
+                    <div class="dccard crm-empty">
+                        <strong>No matches</strong>
+                        <span>No customers match this search in the portals list.</span>
+                    </div>
+                }
+                else
+                {
+                    <div class="portal-table" role="table" aria-label="Customer portal directory">
+                        <div class="portal-table-head" role="row">
+                            <span role="columnheader">Customer</span>
+                            <span role="columnheader">Portal</span>
+                            <span role="columnheader">Status</span>
+                            <span role="columnheader" class="visually-hidden">Actions</span>
+                        </div>
+                        <div class="portal-table-body" role="rowgroup">
+                            <Virtualize Items="Vm.PortalClients.ToList()" TItem="CrmClientView" Context="client" ItemSize="66" OverscanCount="4">
+                                @{ var stage = CrmViewModel.ParseStage(client.LifecycleStage); }
+                                @{
+                                    var portalEnabled = client.CustomerPortalEnabled;
+                                    var portalHost = Vm.ClientPortalHost(client);
+                                }
+                                <article class="portal-row @(portalEnabled ? "portal-row-enabled" : "portal-row-disabled")" role="row">
+                                    <div class="portal-row-customer" role="cell">
+                                        <span class="client-avatar @CrmViewModel.StageClass(stage)">@CrmViewModel.Initials(client.Name)</span>
+                                        <span class="portal-row-copy">
+                                            <strong>@client.Name</strong>
+                                            <small>@(client.Email ?? client.Phone ?? "No contact details")</small>
+                                        </span>
+                                    </div>
+                                    <div class="portal-row-host" role="cell">
+                                        @if (portalEnabled)
+                                        {
+                                            <a class="portal-host-link" href="@portalHost" target="_blank" rel="noopener noreferrer">
+                                                @portalHost
+                                            </a>
+                                        }
+                                        else
+                                        {
+                                            <span class="portal-host-placeholder">Not provisioned</span>
+                                        }
+                                    </div>
+                                    <div class="portal-row-status" role="cell">
+                                        <span class="portal-status-pill @(portalEnabled ? "on" : "off")">
+                                            @(portalEnabled ? "Enabled" : "Not enabled")
+                                        </span>
+                                    </div>
+                                    <div class="portal-row-actions" role="cell">
+                                        @if (Vm.CanManagePortal)
+                                        {
+                                            <button class="dcbtn @(portalEnabled ? "" : "primary")" @onclick="@(() => Vm.OpenPortalProvisioningFor(client))">
+                                                @if (portalEnabled)
+                                                {
+                                                    <span><CrmIcon Name="edit" /></span>
+                                                    <text>Configure</text>
+                                                }
+                                                else
+                                                {
+                                                    <span><CrmIcon Name="globe" /></span>
+                                                    <text>Create portal</text>
+                                                }
+                                            </button>
+                                        }
+                                        else
+                                        {
+                                            <span class="field-help">No permission</span>
+                                        }
+                                    </div>
+                                </article>
+                            </Virtualize>
+                        </div>
+                    </div>
+
+                    @if (!Vm.CanManagePortal)
+                    {
+                        <div class="portal-permission-note">
+                            <span class="field-help">The settings.manage permission is required to provision or update customer portals.</span>
+                        </div>
+                    }
                 }
             </section>
         }
@@ -879,7 +1001,7 @@ else
     <div class="dcslide-scrim portal-scrim" @onclick="Vm.ClosePortalProvisioning"></div>
     <div class="dcslide crm-editor portal-editor">
         <div class="dcslide-head">
-            <span class="title-14">Create customer portal</span>
+            <span class="title-14">@(Vm.PortalTarget?.CustomerPortalEnabled == true ? "Update customer portal" : "Create customer portal")</span>
             <button class="dcslide-x" @onclick="Vm.ClosePortalProvisioning" aria-label="Close"><CrmIcon Name="close" /></button>
         </div>
         <div class="dcslide-body crm-form">
@@ -894,6 +1016,26 @@ else
                 <input class="dcinput" @bind="Vm.PortalDomain" placeholder="portal.example.com" aria-label="Portal domain" />
                 <small class="field-help">Leave blank to use the workspace origin plus <code>/p/{customer-slug}</code>.</small>
             </div>
+            <div class="dcfield">
+                <label>Portal brand name</label>
+                <input class="dcinput" @bind="Vm.PortalBrandName" placeholder="PlaceContext" aria-label="Portal brand name" />
+                <small class="field-help">Optional. Displayed in the portal header and browser title.</small>
+            </div>
+            <div class="dcfield">
+                <label>Portal brand logo URL</label>
+                <input class="dcinput" @bind="Vm.PortalBrandLogoUrl" placeholder="https://example.com/logo.svg" aria-label="Portal brand logo URL" />
+                <small class="field-help">Optional. Public URL used for the portal logo.</small>
+            </div>
+            <div class="dcfield">
+                <label>Portal username (email)</label>
+                <input class="dcinput" @bind="Vm.PortalUserName" placeholder="portal-user@example.com" aria-label="Portal username" />
+                <small class="field-help">Optional. If provided, this user will be created or updated on the portal.</small>
+            </div>
+            <div class="dcfield">
+                <label>Portal password</label>
+                <input class="dcinput" type="password" @bind="Vm.PortalPassword" placeholder="••••••••••" aria-label="Portal password" />
+                <small class="field-help">Optional. Leave blank to auto-generate and send a reset email.</small>
+            </div>
             @if (Vm.PortalMessage is not null)
             {
                 <div class="form-error">@Vm.PortalMessage</div>
@@ -901,7 +1043,11 @@ else
             <div class="form-actions">
                 <button class="dcbtn" @onclick="Vm.ClosePortalProvisioning">Cancel</button>
                 <button class="dcbtn primary" disabled="@Vm.SavingPortal" @onclick="Vm.SavePortalProvisioning">
-                    @(Vm.SavingPortal ? "Saving…" : "Create portal")
+                    @(Vm.SavingPortal
+                        ? "Saving…"
+                        : Vm.PortalTarget?.CustomerPortalEnabled == true
+                            ? "Save portal"
+                            : "Create portal")
                 </button>
             </div>
         </div>
@@ -927,7 +1073,7 @@ else
     </div>
 }
 
-@if (Vm.Selected is not null && Vm.CurrentSection != CrmSection.Conversations)
+@if (Vm.Selected is not null && Vm.CurrentSection is not CrmSection.Conversations and not CrmSection.Portals)
 {
     <div class="dcslide-scrim crm-detail-scrim" @onclick="Vm.CloseClient"></div>
     <div class="dcslide crm-detail">

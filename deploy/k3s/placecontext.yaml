@@ -1,7 +1,6 @@
 # PlaceContext Host deployment — portal + MCP + trigger scheduler.
-# __IMAGE__ is substituted by the `pctl` CLI with the container image ref; __NAMESPACE__ with
-# $PCTL_NAMESPACE (needed by the cluster-scoped ClusterRoleBinding below, which — unlike every other
-# resource here — isn't implicitly scoped by `kubectl apply -n`).
+# __IMAGE__ is substituted by the `pctl` CLI with the container image ref.
+# The deployment uses the `placecontext` namespace for all namespaced resources.
 # (Subscriptions/billing are handled by a separate web portal — no activation key here.)
 #
 # The scheduler is safe to scale: a Postgres advisory lock elects one replica to scan schedules, and the
@@ -13,11 +12,13 @@ apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: placecontext
+  namespace: placecontext
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
   name: placecontext-jobs
+  namespace: placecontext
 rules:
   - apiGroups: ["batch"]
     resources: ["jobs", "jobs/status"]
@@ -28,17 +29,25 @@ rules:
   - apiGroups: [""]
     resources: ["configmaps"]
     verbs: ["create", "get", "delete"]
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["create", "get", "list", "watch", "delete", "update", "patch"]
+  - apiGroups: [""]
+    resources: ["services"]
+    verbs: ["create", "get", "list", "watch", "delete", "update", "patch"]
   - apiGroups: ["networking.k8s.io"]
-    resources: ["networkpolicies"]
-    verbs: ["create", "get", "delete"]
+    resources: ["ingresses", "networkingpolicies"]
+    verbs: ["create", "get", "list", "watch", "delete", "update", "patch"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   name: placecontext-jobs
+  namespace: placecontext
 subjects:
   - kind: ServiceAccount
     name: placecontext
+    namespace: placecontext
 roleRef:
   kind: Role
   name: placecontext-jobs
@@ -66,7 +75,7 @@ metadata:
 subjects:
   - kind: ServiceAccount
     name: placecontext
-    namespace: __NAMESPACE__
+    namespace: placecontext
 roleRef:
   kind: ClusterRole
   name: placecontext-nodes
@@ -78,6 +87,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
   name: placecontext-cluster-admin
+  namespace: placecontext
 rules:
   # Designated master ConfigMap (create-or-replace). Scoped to this namespace only.
   - apiGroups: [""]
@@ -93,9 +103,11 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   name: placecontext-cluster-admin
+  namespace: placecontext
 subjects:
   - kind: ServiceAccount
     name: placecontext
+    namespace: placecontext
 roleRef:
   kind: Role
   name: placecontext-cluster-admin
@@ -105,6 +117,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: placecontext
+  namespace: placecontext
 spec:
   replicas: 1
   selector:
@@ -309,6 +322,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: placecontext
+  namespace: placecontext
   annotations:
     # Sticky sessions: Blazor Server interactive circuits (SignalR over WebSocket/long-poll) are stateful
     # and pinned to one pod; without affinity a reconnect hits another replica → "No Connection with that
@@ -327,6 +341,7 @@ apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: qdrant-storage
+  namespace: placecontext
 spec:
   accessModes: [ReadWriteOnce]
   storageClassName: local-path
@@ -338,6 +353,7 @@ apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   name: qdrant
+  namespace: placecontext
 spec:
   serviceName: qdrant
   replicas: 1
@@ -388,6 +404,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: qdrant
+  namespace: placecontext
 spec:
   selector: { app: qdrant }
   ports:
@@ -403,6 +420,7 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: placecontext
+  namespace: placecontext
   annotations:
     cert-manager.io/cluster-issuer: letsencrypt-prod
 spec:
@@ -415,6 +433,13 @@ spec:
   - host: feasibility.ossenpropertygroup.com.au
     http:
       paths:
+      - path: /p/
+        pathType: Prefix
+        backend:
+          service:
+            name: customer-portal
+            port:
+              number: 80
       - path: /
         pathType: Prefix
         backend:

@@ -1,0 +1,62 @@
+<% page_title "Portal logins" %>
+
+<div class="page-header">
+  <div>
+    <div class="breadcrumbs">
+      <%= link_to "Dashboard", root_path %> · Portal logins
+    </div>
+  </div>
+  <%= link_to new_portal_user_path, class: "btn btn-primary" do %>
+    <%= icon :plus %>
+    Add user
+  <% end %>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <h2 class="card-title">Portal login users</h2>
+    <span class="card-subtitle"><%= pluralize(@portal_users.size, "user") %> in this workspace</span>
+  </div>
+
+  <% if @portal_users.any? %>
+    <div class="table-wrap">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Email</th>
+            <th>Role</th>
+            <th>Status</th>
+            <th>Added</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% @portal_users.each do |user| %>
+            <tr>
+              <td><%= user.email %></td>
+              <td><%= user.role.capitalize %></td>
+              <td>
+                <% if user.enabled? %>
+                  <span class="badge badge-succeeded">Enabled</span>
+                <% else %>
+                  <span class="badge badge-failed">Disabled</span>
+                <% end %>
+              </td>
+              <td><%= user.created_at.to_fs(:db) %></td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    </div>
+  <% else %>
+    <div class="empty-state">
+      <div class="empty-state-title">No portal users yet</div>
+      <p>Add the first portal login to let a teammate access this workspace.</p>
+      <div style="margin-top: 16px;">
+        <%= link_to new_portal_user_path, class: "btn btn-primary" do %>
+          <%= icon :plus %>
+          Add user
+        <% end %>
+      </div>
+    </div>
+  <% end %>
+</div>

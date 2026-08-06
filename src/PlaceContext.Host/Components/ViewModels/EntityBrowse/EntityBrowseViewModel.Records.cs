@@ -174,7 +174,7 @@ public sealed partial class EntityBrowseViewModel
         Artifacts.Clear();
         LinkedRuns.Clear();
         RunArtifacts.Clear();
-        ShowGraph = false;
+        ShowGraph = true;
         if (Entity is null || Rows is null)
             return;
         await LoadLinkedArtifactsAsync(row);

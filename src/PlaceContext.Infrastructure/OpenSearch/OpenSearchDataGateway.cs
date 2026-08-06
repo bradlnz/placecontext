@@ -12,6 +12,8 @@ namespace PlaceContext.Infrastructure.OpenSearch;
 public sealed class OpenSearchDataGateway : IOpenSearchDataGateway
 {
     private const int MaxPageSize = 100;
+    private const int MaxSqlRows = 500;
+    private const int MaxSqlLength = 16000;
     private readonly IHttpClientFactory _httpFactory;
     private readonly IOpenSearchConnectionResolver _connections;
 
@@ -124,6 +126,88 @@ public sealed class OpenSearchDataGateway : IOpenSearchDataGateway
         var chart = ParseChart(root, request);
         return new OpenSearchSearchView(total, took, hits, chart?.ToJson());
     }
+
+    public async Task<ProjectQueryResult> SearchSqlAsync(
+        Guid projectId, string sql, CancellationToken ct = default)
+    {
+        var trimmed = (sql ?? "").Trim();
+        if (trimmed.Length is 0 or > MaxSqlLength)
+            throw new ArgumentException("Write a query up to 16,000 characters.");
+        if (!IsReadOnlySql(trimmed))
+            throw new ArgumentException("OpenSearch SQL here is read-only — start with SELECT.");
+
+        var connection = await RequiredConnectionAsync(projectId, ct);
+        var body = new JsonObject
+        {
+            ["query"] = trimmed,
+            ["fetch_size"] = MaxSqlRows,
+        };
+        using var response = await SendAsync(connection, HttpMethod.Post,
+            "/_plugins/_sql", body.ToJsonString(), ct);
+        using var document = await ReadSuccessAsync(response, ct);
+        return ParseSqlResult(document.RootElement);
+    }
+
+    private static bool IsReadOnlySql(string sql)
+    {
+        var first = sql.Split(new[] { ' ', '\t', '\r', '\n', '(', ';' },
+                StringSplitOptions.RemoveEmptyEntries)
+            .FirstOrDefault() ?? "";
+        return first.Equals("SELECT", StringComparison.OrdinalIgnoreCase)
+            || first.Equals("SHOW", StringComparison.OrdinalIgnoreCase)
+            || first.Equals("DESCRIBE", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static ProjectQueryResult ParseSqlResult(JsonElement root)
+    {
+        IReadOnlyList<string> columns;
+        List<IReadOnlyList<string?>> rows;
+
+        if (root.TryGetProperty("columns", out var columnsJson)
+            && root.TryGetProperty("rows", out var rowsJson))
+        {
+            columns = ColumnNames(columnsJson);
+            rows = rowsJson.EnumerateArray()
+                .Select(row => (IReadOnlyList<string?>)row.EnumerateArray()
+                    .Select(ScalarText).ToList())
+                .ToList();
+        }
+        else if (root.TryGetProperty("schema", out var schemaJson)
+                 && root.TryGetProperty("datarows", out var datarowsJson))
+        {
+            columns = ColumnNames(schemaJson);
+            rows = datarowsJson.EnumerateArray()
+                .Select(row => (IReadOnlyList<string?>)row.EnumerateArray()
+                    .Select(ScalarText).ToList())
+                .ToList();
+        }
+        else
+        {
+            throw new InvalidOperationException(
+                "OpenSearch SQL returned an unexpected response shape.");
+        }
+
+        var total = root.TryGetProperty("total", out var totalElement)
+            && totalElement.ValueKind == JsonValueKind.Number
+            ? totalElement.GetInt64()
+            : rows.Count;
+        return new ProjectQueryResult(columns, rows, 0, total > rows.Count);
+    }
+
+    private static IReadOnlyList<string> ColumnNames(JsonElement columns) =>
+        columns.EnumerateArray()
+            .Select(column => column.ValueKind == JsonValueKind.String
+                ? column.GetString() ?? ""
+                : column.TryGetProperty("name", out var name) ? name.GetString() ?? "" : "")
+            .ToList();
+
+    private static string? ScalarText(JsonElement value) => value.ValueKind switch
+    {
+        JsonValueKind.Null => null,
+        JsonValueKind.String => value.GetString(),
+        JsonValueKind.Number or JsonValueKind.True or JsonValueKind.False => value.ToString(),
+        _ => value.GetRawText().Length > 800 ? value.GetRawText()[..800] : value.GetRawText(),
+    };
 
     private static JsonObject BuildSearchBody(OpenSearchSearchRequest request)
     {

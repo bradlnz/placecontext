@@ -6,7 +6,7 @@
       <%= link_to "Dashboard", root_path %> · Leads
     </div>
   </div>
-  <% if current_portal_user.manager? && @project_id %>
+  <% if current_portal_user&.can_manage_client_access? && @project_id %>
     <%= link_to new_client_path(project_id: @project_id), class: "btn btn-primary" do %>
       <%= icon :plus %>
       Add lead
@@ -54,7 +54,7 @@
     <div class="empty-state">
       <div class="empty-state-title">No leads yet</div>
       <p>This project doesn't have any leads. Add a client with stage "Lead" to get started.</p>
-      <% if current_portal_user.manager? && @project_id %>
+      <% if current_portal_user&.can_manage_client_access? && @project_id %>
         <div style="margin-top: 16px;">
           <%= link_to "Add lead", new_client_path(project_id: @project_id), class: "btn btn-primary" %>
         </div>

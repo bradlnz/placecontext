@@ -1,5 +1,5 @@
 class ClientsController < ApplicationController
-  before_action :require_manager!, only: %i[new create edit update destroy]
+  before_action :require_manager_or_admin!, only: %i[new create edit update destroy]
 
   def index
     @projects = crm.projects
@@ -56,8 +56,8 @@ class ClientsController < ApplicationController
     params.require(:client).permit(:project_id, :name, :company, :email, :phone, :lifecycle_stage, :notes).to_h
   end
 
-  def require_manager!
-    return if current_portal_user.manager?
+  def require_manager_or_admin!
+    return if current_portal_user&.can_manage_client_access?
 
     redirect_to clients_path, alert: "Manager access is required to change CRM data."
   end

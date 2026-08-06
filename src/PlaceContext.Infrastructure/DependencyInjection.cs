@@ -2,6 +2,7 @@ using PlaceContext.Application.Ports;
 using PlaceContext.Domain.Repositories;
 using PlaceContext.Infrastructure.Git;
 using PlaceContext.Infrastructure.Persistence;
+using PlaceContext.Infrastructure.CustomerPortal;
 using PlaceContext.Infrastructure.Skills;
 using PlaceContext.Infrastructure.Tenancy;
 using PlaceContext.Infrastructure.Workload;
@@ -105,6 +106,11 @@ public static class DependencyInjection
             services.AddSingleton<IWorkloadRunner, KubernetesWorkloadRunner>();
         else
             services.AddSingleton<IWorkloadRunner, DockerWorkloadRunner>();
+
+        if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("KUBERNETES_SERVICE_HOST")))
+            services.AddSingleton<ICustomerPortalProvisioner, CustomerPortalProvisioningService>();
+        else
+            services.AddSingleton<ICustomerPortalProvisioner, NoOpCustomerPortalProvisioner>();
 
         // Field encryption at rest (AES via Data Protection). Portal/jobs decrypt in-process;
         // raw Postgres/MinIO without the DP key ring only see ciphertext.
@@ -297,6 +303,8 @@ public static class DependencyInjection
         services.AddHostedService<Scheduling.RunStatusWatcherService>();
 
         // Each project's own database (Postgres schema + role isolation; Monaco SQL in the portal).
+        // A project's external database override resolves through the Vault (cluster DB is the default).
+        services.AddScoped<IProjectDatabaseConnectionResolver, ProjectData.ProjectDatabaseConnectionResolver>();
         services.AddScoped<IProjectDataStore, ProjectData.NpgsqlProjectDataStore>();
 
         // Cluster page: node inventory + fleet-master admin (promote / join codes over Tailscale).

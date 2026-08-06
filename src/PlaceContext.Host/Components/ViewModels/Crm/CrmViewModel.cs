@@ -115,6 +115,10 @@ public sealed class CrmViewModel : PageViewModel
     public bool CanManagePortal;
     public string PortalCustomerSlug = "";
     public string PortalDomain = "";
+    public string PortalUserName = "";
+    public string PortalPassword = "";
+    public string PortalBrandName = "";
+    public string PortalBrandLogoUrl = "";
     public string PortalInviteRole = "member";
     public string? PortalMessage;
     public bool SelectedPortalEnabled => Selected?.CustomerPortalEnabled ?? false;
@@ -230,6 +234,7 @@ public sealed class CrmViewModel : PageViewModel
         }
     }
     public CrmClientView? Selected;
+    public CrmClientView? PortalTarget;
     public Guid? SelectedChainId;
     public Guid? ConfirmArtifactRemoveId;
     public Guid? EditId;
@@ -323,6 +328,16 @@ public sealed class CrmViewModel : PageViewModel
             )
             .ToList();
 
+    public IReadOnlyList<CrmClientView> PortalClients =>
+        string.IsNullOrWhiteSpace(Search)
+            ? Clients.OrderBy(client => client.Name).ToList()
+            : Clients
+                .Where(client =>
+                    Searchable(client).Contains(Search.Trim(), StringComparison.OrdinalIgnoreCase)
+                )
+                .OrderBy(client => client.Name)
+                .ToList();
+
     public IEnumerable<CrmClientView> FilteredConversationClients =>
         Clients
             .Where(client =>
@@ -334,7 +349,7 @@ public sealed class CrmViewModel : PageViewModel
 
     public async Task LoadAsync()
     {
-        Ui.Set("CRM", "conversations · calendars · contacts · opportunities");
+        Ui.Set("CRM", "conversations · calendars · contacts · opportunities · portals");
         Loading = true;
         try
         {
@@ -390,6 +405,7 @@ public sealed class CrmViewModel : PageViewModel
             "contacts" => "Contacts",
             "opportunities" => "Opportunities",
             "automations" => "Automations",
+            "portals" => "Customer portals",
             _ => "CRM settings",
         };
 
@@ -402,8 +418,23 @@ public sealed class CrmViewModel : PageViewModel
             "contacts" => "Manage customer contact details and relationship context.",
             "opportunities" => "Move customer opportunities through the full lifecycle pipeline.",
             "automations" => "Connect customer lifecycle events to durable job-chain workflows.",
+            "portals" => "Provision, configure, and manage portal access for selected CRM clients.",
             _ => "Connect external lead forms without exposing the rest of your CRM.",
         };
+
+    public string ClientPortalHost(CrmClientView client)
+    {
+        if (!string.IsNullOrWhiteSpace(client.CustomerPortalDomain))
+            return $"https://{client.CustomerPortalDomain.Trim()}";
+
+        var slug = client.CustomerPortalSlug;
+        if (string.IsNullOrWhiteSpace(slug))
+            slug = Slugify(client.Name);
+        if (string.IsNullOrWhiteSpace(slug))
+            slug = "tenant";
+
+        return $"{Nav.BaseUri.TrimEnd('/')}/p/{slug}";
+    }
 
     public void ToggleCrmNavigation() => CrmNavOpen = !CrmNavOpen;
 
@@ -1021,37 +1052,82 @@ public sealed class CrmViewModel : PageViewModel
         await Task.WhenAll(LoadRuns(), LoadCommunications(), LoadArtifacts());
     }
 
-    public void OpenPortalProvisioning(string? customerName = null)
+    public void OpenPortalProvisioningFor(CrmClientView client)
     {
-        PortalDomain = Selected?.CustomerPortalDomain ?? "";
-        PortalCustomerSlug = Selected?.CustomerPortalSlug ?? customerName ?? string.Empty;
+        PortalTarget = client;
+        PortalDomain = client.CustomerPortalDomain ?? "";
+        PortalCustomerSlug = !string.IsNullOrWhiteSpace(client.CustomerPortalSlug)
+            ? client.CustomerPortalSlug
+            : client.Name;
+        PortalUserName = "";
+        PortalPassword = "";
+        PortalBrandName = "";
+        PortalBrandLogoUrl = "";
         PortalMessage = null;
         PortalProvisioningOpen = true;
     }
 
-    public void ClosePortalProvisioning() => PortalProvisioningOpen = false;
+    public void OpenPortalProvisioning(string? customerName = null)
+    {
+        if (Selected is null)
+            return;
+
+        OpenPortalProvisioningFor(Selected);
+
+        if (!string.IsNullOrWhiteSpace(customerName))
+            PortalCustomerSlug = customerName;
+    }
+
+    public void ClosePortalProvisioning()
+    {
+        PortalProvisioningOpen = false;
+        PortalTarget = null;
+        PortalMessage = null;
+        PortalUserName = "";
+        PortalPassword = "";
+        PortalBrandName = "";
+        PortalBrandLogoUrl = "";
+    }
 
     public async Task SavePortalProvisioning()
     {
-        if (Selected is null) return;
+        if (PortalTarget is null && Selected is null)
+            return;
+
+        var target = PortalTarget ?? Selected;
+        if (target is null)
+            return;
+
         SavingPortal = true;
         PortalMessage = null;
         try
         {
             var slug = string.IsNullOrWhiteSpace(PortalCustomerSlug)
-                ? Slugify(Selected.Name)
+                ? Slugify(target.Name)
                 : Slugify(PortalCustomerSlug);
             var saved = await Svc.ConfigureCrmClientPortalAsync(
-                Selected.Id,
+                target.Id,
                 true,
                 slug,
-                string.IsNullOrWhiteSpace(PortalDomain) ? null : PortalDomain.Trim()
+                string.IsNullOrWhiteSpace(PortalDomain) ? null : PortalDomain.Trim(),
+                string.IsNullOrWhiteSpace(PortalBrandName) ? null : PortalBrandName.Trim(),
+                string.IsNullOrWhiteSpace(PortalBrandLogoUrl) ? null : PortalBrandLogoUrl.Trim()
             );
-            if (Selected.Id == saved.Id)
+            if (Selected?.Id == saved.Id)
                 Selected = saved;
+            if (PortalTarget?.Id == saved.Id)
+                PortalTarget = saved;
             await RefreshClients();
-            PortalMessage = "Customer portal provisioned.";
+            await TryCreateOrUpdatePortalUserAsync(saved, PortalUserName, PortalPassword);
+            PortalMessage = string.IsNullOrWhiteSpace(PortalUserName)
+                ? "Customer portal provisioned."
+                : "Customer portal provisioned and portal user updated.";
             PortalProvisioningOpen = false;
+            PortalTarget = null;
+            PortalUserName = "";
+            PortalPassword = "";
+            PortalBrandName = "";
+            PortalBrandLogoUrl = "";
         }
         catch (Exception ex)
         {
@@ -1061,6 +1137,46 @@ public sealed class CrmViewModel : PageViewModel
         {
             SavingPortal = false;
         }
+    }
+
+    private async Task TryCreateOrUpdatePortalUserAsync(CrmClientView client, string userName, string password)
+    {
+        if (string.IsNullOrWhiteSpace(userName))
+            return;
+
+        var host = BuildPortalHost(client, PortalCustomerSlug, PortalDomain);
+        var key = Configuration[ProvisioningKey];
+        if (string.IsNullOrWhiteSpace(key))
+            throw new InvalidOperationException("Customer portal provisioning is not configured.");
+
+        var clientApi = HttpClientFactory.CreateClient();
+        clientApi.BaseAddress = new Uri($"{host}/");
+        clientApi.DefaultRequestHeaders.Add("X-PlaceContext-Provisioning-Key", key);
+        clientApi.DefaultRequestHeaders.Add("X-PlaceContext-Tenant-Id", CurrentTenant.TenantId.ToString());
+        var payload = new
+        {
+            username = userName.Trim(),
+            password = string.IsNullOrWhiteSpace(password) ? null : password.Trim(),
+            role = "admin"
+        };
+        using var response = await clientApi.PostAsJsonAsync(ProvisionUsersRoute, payload);
+        if (!response.IsSuccessStatusCode)
+        {
+            var detail = await TryReadErrorDetailAsync(response);
+            throw new InvalidOperationException(detail ?? $"Portal user provisioning failed ({(int)response.StatusCode}).");
+        }
+    }
+
+    private string BuildPortalHost(CrmClientView? client, string slugInput, string domainInput)
+    {
+        if (!string.IsNullOrWhiteSpace(domainInput))
+            return $"https://{domainInput.Trim()}";
+
+        var slug = !string.IsNullOrWhiteSpace(slugInput)
+            ? Slugify(slugInput)
+            : (client is not null ? Slugify(client.CustomerPortalSlug ?? client.Name) : "customer");
+
+        return $"{Nav.BaseUri.TrimEnd('/')}/p/{slug}";
     }
 
     public async Task InviteSelectedToPortalAsync()
@@ -1738,4 +1854,3 @@ public sealed class CrmViewModel : PageViewModel
 }
 
 public sealed record PortalImpersonateResponse(string Url);
-

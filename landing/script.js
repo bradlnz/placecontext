@@ -7,13 +7,15 @@ document.querySelectorAll("[data-copy]").forEach((button) => {
   });
 });
 
-// Product console showcase: auto-rotating view tabs (no dependencies).
+// Product console showcase: auto-rotating app views (no dependencies).
 (() => {
-  const shell = document.querySelector(".mock-shell");
-  if (!shell) return;
-  const tabs = Array.from(shell.querySelectorAll('[role="tab"][data-view]'));
-  const views = Array.from(shell.querySelectorAll(".mock-view[data-view]"));
+  const showcase = document.querySelector(".showcase");
+  if (!showcase) return;
+  const tabs = Array.from(showcase.querySelectorAll('.console-picker [role="tab"][data-view]'));
+  const views = Array.from(showcase.querySelectorAll(".app-view[data-view]"));
   if (!tabs.length || !views.length) return;
+  const title = document.getElementById("console-title");
+  const subtitle = document.getElementById("console-subtitle");
   const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
   const INTERVAL_MS = 4500;
   let timer = null;
@@ -23,6 +25,10 @@ document.querySelectorAll("[data-copy]").forEach((button) => {
       const on = tab.dataset.view === key;
       tab.classList.toggle("is-active", on);
       tab.setAttribute("aria-selected", on ? "true" : "false");
+      if (on && title && subtitle) {
+        title.textContent = tab.dataset.title || tab.textContent;
+        subtitle.textContent = tab.dataset.subtitle || "";
+      }
     });
     views.forEach((view) => view.classList.toggle("is-active", view.dataset.view === key));
   };
@@ -40,10 +46,10 @@ document.querySelectorAll("[data-copy]").forEach((button) => {
   };
 
   tabs.forEach((tab) => tab.addEventListener("click", () => activate(tab.dataset.view)));
-  shell.addEventListener("mouseenter", stop);
-  shell.addEventListener("mouseleave", start);
-  shell.addEventListener("focusin", stop);
-  shell.addEventListener("focusout", start);
+  showcase.addEventListener("mouseenter", stop);
+  showcase.addEventListener("mouseleave", start);
+  showcase.addEventListener("focusin", stop);
+  showcase.addEventListener("focusout", start);
   if (reducedMotion.addEventListener) {
     reducedMotion.addEventListener("change", () => (reducedMotion.matches ? stop() : start()));
   }

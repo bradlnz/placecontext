@@ -1,5 +1,6 @@
 # Per-tenant Rails customer portal template.
-# Replace __TENANT__, __TENANT_ID__, __PORTAL_DOMAIN__, and __IMAGE__ before applying.
+# Replace __TENANT__, __TENANT_ID__, __PORTAL_DOMAIN__, __IMAGE__,
+# __BRAND_NAME__, and __BRAND_LOGO_URL__ before applying.
 apiVersion: v1
 kind: Namespace
 metadata:
@@ -52,6 +53,10 @@ spec:
               value: /p/__TENANT__
             - name: RAILS_RELATIVE_URL_ROOT
               value: /p/__TENANT__
+            - name: PORTAL_BRAND_NAME
+              value: __BRAND_NAME__
+            - name: PORTAL_BRAND_LOGO_URL
+              value: __BRAND_LOGO_URL__
             - name: PLACE_CONTEXT_CORE_API_URL
               value: https://placecontext.internal
             - name: PLACE_CONTEXT_CORE_API_KEY

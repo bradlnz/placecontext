@@ -406,6 +406,11 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
             e.ToTable("job_run_artifacts");
             e.HasKey(x => x.Id);
             e.HasIndex(x => x.RunId);
+            // Partial index over the "still pending OCR" set — keeps the daemon's oldest-first
+            // drain query fast as artifact count grows.
+            e.HasIndex(x => x.OcrProcessedAt)
+                .HasFilter("\"OcrProcessedAt\" IS NULL")
+                .HasDatabaseName("ix_job_run_artifacts_ocr");
             e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
             e.Property(x => x.CreatedAt).HasDefaultValueSql("now()");
         });

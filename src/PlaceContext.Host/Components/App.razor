@@ -8,7 +8,7 @@
     <link rel="icon" type="image/svg+xml" href="favicon.svg" />
     <link rel="alternate icon" type="image/x-icon" href="favicon.ico" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
     @* Blazor scoped-CSS bundle: per-component <Name>.razor.css files compile into this. Component
        classes resolve --var() values from the #dcshell ancestor's cascade below. *@
@@ -19,6 +19,7 @@
     <style>
         #dcshell {
             --bg:var(--tenant-bg,#182026); --panel:var(--tenant-panel,#202b33); --card:var(--tenant-panel,#202b33); --card-2:#293742; --hover:#30404d;
+            --bg-tilt:linear-gradient(150deg, rgba(22, 32, 44, 0.98), rgba(21, 35, 50, 0.94), rgba(26, 42, 58, 0.88));
             --border:#30404d; --border-2:#394b59;
             --text:var(--tenant-text,#f5f8fa); --text-2:#bfccd6; --text-3:#8a9ba8; --text-4:#738694;
             --brand:var(--tenant-accent,#137cbd); --brand-2:var(--tenant-accent,#48aff0); --brand-bg:rgba(19,124,189,0.18); --brand-fg:#fff;
@@ -27,11 +28,12 @@
             --bad:#db3737; --bad-bg:rgba(219,55,55,0.15);
             --human:#48aff0; --human-bg:rgba(72,175,240,0.16);
             --shadow:0 2px 6px rgba(16,22,26,.38), 0 8px 24px rgba(16,22,26,.28);
-            --font-sans:'Inter',system-ui,-apple-system,sans-serif;
-            --font-mono:'JetBrains Mono',ui-monospace,'SFMono-Regular',Menlo,monospace;
+            --font-sans:'Manrope',system-ui,-apple-system,sans-serif;
+            --font-mono:'IBM Plex Mono',ui-monospace,'SFMono-Regular',Menlo,monospace;
         }
         #dcshell[data-theme="light"] {
             --bg:#f5f8fa; --panel:#ffffff; --card:#ffffff; --card-2:#ebf1f5; --hover:#e1e8ed;
+            --bg-tilt:linear-gradient(150deg, #f5f8fb, #edf3f8, #f7fbff);
             --border:#d8e1e8; --border-2:#bfccd6;
             --text:#182026; --text-2:#5c7080; --text-3:#738694; --text-4:#8a9ba8;
             --brand:var(--tenant-accent,#137cbd); --brand-2:var(--tenant-accent,#106ba3); --brand-bg:rgba(19,124,189,0.11); --brand-fg:#ffffff;
@@ -44,8 +46,8 @@
         * { box-sizing:border-box; }
         html, body { margin:0; padding:0; height:100%; }
         html.pc-focus-layer-open, html.pc-focus-layer-open body { overflow:hidden; overscroll-behavior:none; }
-        body { font-family:var(--font-sans); background:#182026; -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility; }
-        #dcshell { font-family:var(--font-sans); color:var(--text); font-variant-numeric:tabular-nums; letter-spacing:-0.006em; }
+        body { font-family:var(--font-sans); background:linear-gradient(150deg, #111a24 10%, #15202e 70%, #101824); -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility; }
+        #dcshell { font-family:var(--font-sans); color:var(--text); font-variant-numeric:tabular-nums; letter-spacing:-0.005em; background:var(--bg-tilt); min-height:100vh; border-radius:0; }
         a { color:inherit; text-decoration:none; }
         button, a, [role="button"] { touch-action: manipulation; }
         ::selection { background:var(--brand-bg); }
@@ -83,12 +85,17 @@
         .dcnav.active { color:var(--text); background:var(--brand-bg); }
         .dcnav .bar { position:absolute; left:-12px; top:9px; bottom:9px; width:2.5px; border-radius:2px; background:var(--brand); opacity:0; }
         .dcnav.active .bar { opacity:1; }
-        .dcbtn { background:var(--card-2); color:var(--text-2); border:1px solid var(--border-2); border-radius:3px;
-            padding:6px 11px; cursor:pointer; font-size:12px; font-family:inherit; font-weight:600; }
-        .dcbtn:hover { background:var(--hover); border-color:var(--text-3); color:var(--text); }
-        .dcbtn.primary { background:var(--brand); border-color:var(--brand); color:var(--brand-fg,#fff); font-weight:600; }
-        .dcbtn.danger { background:var(--bad); border-color:var(--bad); color:#fff; font-weight:600; }
-        .dcbtn.danger:hover { filter:brightness(1.1); }
+        .dcbtn { appearance:none; background:var(--card-2); color:var(--text-2);
+            border:1px solid var(--border-2); border-radius:8px; padding:8px 14px; cursor:pointer; font-size:12.5px; font-family:inherit; font-weight:700;
+            letter-spacing:0.2px; transition:transform .14s ease, border-color .14s ease, box-shadow .14s ease, filter .14s ease; box-shadow:0 2px 0 rgba(0,0,0,.08); }
+        .dcbtn:hover { background:var(--hover); border-color:var(--text-2); color:var(--text); transform:translateY(-1px); box-shadow:0 5px 14px color-mix(in srgb, var(--brand) 16%, transparent); }
+        .dcbtn:active { transform:translateY(0); }
+        .dcbtn:focus-visible { outline:none; box-shadow:0 0 0 3px color-mix(in srgb, var(--brand) 24%, transparent); }
+        .dcbtn[disabled], .dcbtn[disabled]:hover { transform:none; filter:none; cursor:not-allowed; opacity:0.65; }
+        .dcbtn.primary { background:var(--brand); border-color:var(--brand); color:var(--brand-fg,#fff); }
+        .dcbtn.primary:hover { border-color:var(--brand-2); color:#fff; background:var(--brand-2); }
+        .dcbtn.danger { background:var(--bad); border-color:var(--bad); color:#fff; font-weight:700; }
+        .dcbtn.danger:hover { filter:brightness(1.04); }
         .dccard { background:var(--card); border:1px solid var(--border); border-radius:3px; }
         .dclink { background:none; border:none; color:var(--text-2); padding:0; cursor:pointer; font-size:inherit; font-family:inherit; font-weight:500; text-decoration:underline; text-decoration-color:transparent; transition:text-decoration-color .12s; }
         .dclink:hover { text-decoration-color:currentColor; }
@@ -182,6 +189,100 @@
             .dctabs { overflow-x:auto; }
             .dcbtn.sm { min-height:40px; }
         }
+
+        /* ClickHouse-style console palette: flat, high-contrast dark surfaces with a
+           bright yellow action accent. This replaces the previous ClickUp-style rounded
+           card override across the portal. */
+        #dcshell {
+            --ch-bg:#1f2125;
+            --ch-panel:#2a2d33;
+            --ch-panel-2:#33363d;
+            --ch-border:#3e4249;
+            --ch-border-2:#4b4f57;
+            --ch-text:#e4e7ec;
+            --ch-text-2:#b0b5bd;
+            --ch-text-3:#7e838d;
+            --ch-yellow:#fc0;
+            --ch-yellow-hover:#e6b800;
+            --ch-run-shadow:0 1px 0 rgba(0,0,0,.35);
+            --bg-tilt:linear-gradient(150deg, rgba(31,33,37,0.98), rgba(26,28,32,0.98), rgba(31,33,37,0.98));
+        }
+        #dcshell[data-theme="light"] {
+            --ch-bg:#ffffff;
+            --ch-panel:#f3f4f6;
+            --ch-panel-2:#e5e7eb;
+            --ch-border:#d1d5db;
+            --ch-border-2:#9ca3af;
+            --ch-text:#111827;
+            --ch-text-2:#4b5563;
+            --ch-text-3:#6b7280;
+            --ch-yellow:#f59e0b;
+            --ch-yellow-hover:#d97706;
+            --ch-run-shadow:none;
+        }
+        body {
+            background:var(--bg-tilt);
+            background-attachment:fixed;
+        }
+        .dccard {
+            background:var(--card);
+            border:1px solid var(--border);
+            border-radius:3px;
+        }
+        .dcinput { border-radius:3px; }
+        .dcseg { border-radius:3px; }
+        .dcseg button { border-radius:2px; }
+        .dcnav { border-radius:3px; }
+        .dctabs {
+            border-bottom:1px solid var(--border);
+            border-radius:0;
+            background:transparent;
+            padding:0;
+        }
+        .dctab {
+            border-radius:0;
+            font-weight:600;
+            padding:8px 12px;
+        }
+        .dctab.active {
+            background:transparent;
+            box-shadow:inset 0 -2px 0 var(--brand);
+        }
+        .dcbtn { border-radius:3px; }
+        .dcbtn.primary { border-radius:3px; }
+        .dcbtn.danger { border-radius:3px; }
+        .dcslide { border-radius:0; }
+        .dcmodal { border-radius:3px; }
+
+        .section-shell {
+            background:var(--panel);
+            border:1px solid var(--border);
+            border-radius:3px;
+            padding:14px;
+        }
+        .section-head {
+            display:flex;
+            align-items:center;
+            justify-content:space-between;
+            gap:12px;
+            border-bottom:1px solid var(--border);
+            padding-bottom:12px;
+            margin-bottom:14px;
+        }
+        .section-title {
+            font-size:16px;
+            font-weight:700;
+            color:var(--text);
+        }
+        .section-subtitle {
+            font-size:12px;
+            color:var(--text-3);
+        }
+        .section-grid {
+            display:grid;
+            grid-template-columns:repeat(auto-fit, minmax(250px, 1fr));
+            gap:14px;
+        }
     </style>
 </head>
 <body>
@@ -189,7 +290,7 @@
     <script src="_framework/blazor.web.js"></script>
     <script src="placecontext.js?v=6"></script>
     <script src="pcgraph.js?v=2"></script>
-    <script src="pcmonaco.js?v=2"></script>
+    <script src="pcmonaco.js?v=3"></script>
     <script src="vendor/chart.umd.min.js"></script>
     <script src="pcchart.js?v=3"></script>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>

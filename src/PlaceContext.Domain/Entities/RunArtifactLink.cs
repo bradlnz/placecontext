@@ -12,7 +12,8 @@ public sealed class RunArtifactLink
     private RunArtifactLink(
         Guid id, Guid runId, Guid jobId, Guid projectId,
         PostJobActionKind kind, string title, string bucket, string objectKey,
-        string contentType, long sizeBytes, DateTimeOffset createdAt)
+        string contentType, long sizeBytes, DateTimeOffset createdAt,
+        DateTimeOffset? ocrProcessedAt = null, string? ocrError = null)
     {
         Id = id;
         RunId = runId;
@@ -25,6 +26,8 @@ public sealed class RunArtifactLink
         ContentType = contentType;
         SizeBytes = sizeBytes;
         CreatedAt = createdAt;
+        OcrProcessedAt = ocrProcessedAt;
+        OcrError = ocrError;
     }
 
     public Guid Id { get; }
@@ -44,6 +47,19 @@ public sealed class RunArtifactLink
     public long SizeBytes { get; }
     public DateTimeOffset CreatedAt { get; }
 
+    /// <summary>When OCR completed for this artifact (null = still pending).</summary>
+    public DateTimeOffset? OcrProcessedAt { get; private set; }
+
+    /// <summary>Set when OCR was attempted but failed — the reason the daemon reported.</summary>
+    public string? OcrError { get; private set; }
+
+    /// <summary>Records OCR completion. <paramref name="error"/> null = success; otherwise the failure reason.</summary>
+    public void MarkOcrProcessed(DateTimeOffset at, string? error)
+    {
+        OcrProcessedAt = at;
+        OcrError = string.IsNullOrWhiteSpace(error) ? null : error;
+    }
+
     public static RunArtifactLink Create(
         Guid runId, Guid jobId, Guid projectId,
         PostJobActionKind kind, string title, string bucket, string objectKey,
@@ -53,6 +69,7 @@ public sealed class RunArtifactLink
     public static RunArtifactLink Rehydrate(
         Guid id, Guid runId, Guid jobId, Guid projectId,
         PostJobActionKind kind, string title, string bucket, string objectKey,
-        string contentType, long sizeBytes, DateTimeOffset createdAt)
-        => new(id, runId, jobId, projectId, kind, title, bucket, objectKey, contentType, sizeBytes, createdAt);
+        string contentType, long sizeBytes, DateTimeOffset createdAt,
+        DateTimeOffset? ocrProcessedAt = null, string? ocrError = null)
+        => new(id, runId, jobId, projectId, kind, title, bucket, objectKey, contentType, sizeBytes, createdAt, ocrProcessedAt, ocrError);
 }

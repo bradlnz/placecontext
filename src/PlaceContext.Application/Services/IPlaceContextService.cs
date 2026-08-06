@@ -69,6 +69,8 @@ public interface IPlaceContextService
         CancellationToken ct = default);
     Task<OpenSearchSearchView> SearchOpenSearchAsync(
         OpenSearchSearchRequest request, CancellationToken ct = default);
+    Task<ProjectQueryResult> SearchOpenSearchSqlAsync(
+        Guid projectId, string sql, CancellationToken ct = default);
     Task<OpenSearchSyncView> TriggerOpenSearchSyncAsync(
         Guid projectId, CancellationToken ct = default);
     Task<IReadOnlyList<OpenSearchDashboardView>> ListOpenSearchDashboardsAsync(
@@ -79,6 +81,10 @@ public interface IPlaceContextService
         Guid dashboardId, CancellationToken ct = default);
     Task<IReadOnlyList<RunArtifactLinkView>> ListRunArtifactsAsync(Guid runId, CancellationToken ct = default);
     Task<IReadOnlyList<RunArtifactLinkView>> ListJobRunArtifactsAsync(Guid jobId, CancellationToken ct = default);
+
+    // OCR daemon contract: oldest pending artifacts, and completing one (stores markdown + marks tracked).
+    Task<IReadOnlyList<Features.PendingOcrArtifactView>> ListPendingOcrAsync(int take = 10, CancellationToken ct = default);
+    Task<bool> CompleteOcrAsync(Guid artifactId, string? markdown, string? error, CancellationToken ct = default);
     Task<bool> DeleteJobAsync(Guid jobId, CancellationToken ct = default);
     Task<IReadOnlyList<Features.ArtifactFileView>> ListRecentArtifactsAsync(int take = 100, CancellationToken ct = default);
     Task<IReadOnlyList<Features.ArtifactFileView>> ListProjectArtifactsAsync(Guid projectId, int take = 2000, string? search = null, CancellationToken ct = default);
@@ -91,7 +97,13 @@ public interface IPlaceContextService
     // CRM mode: project-scoped customers and customer-linked job execution.
     Task<CrmClientView> SaveCrmClientAsync(SaveCrmClientCommand command, CancellationToken ct = default);
     Task<CrmClientView> ConfigureCrmClientPortalAsync(
-        Guid clientId, bool enabled, string? slug, string? domain, CancellationToken ct = default);
+        Guid clientId,
+        bool enabled,
+        string? slug,
+        string? domain,
+        string? portalBrandName = null,
+        string? portalBrandLogoUrl = null,
+        CancellationToken ct = default);
     Task<CrmClientView> MoveCrmClientAsync(Guid clientId, Domain.ValueObjects.CustomerLifecycleStage stage, CancellationToken ct = default);
     Task<bool> DeleteCrmClientAsync(Guid clientId, CancellationToken ct = default);
     Task<IReadOnlyList<CrmClientView>> ListCrmClientsAsync(Guid projectId, CancellationToken ct = default);

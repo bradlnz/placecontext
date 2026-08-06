@@ -11,135 +11,101 @@
 @inject ProjectDataViewModel Vm
 @inject IPlaceContextService DataService
 
-<PageTitle>PlaceContext — Data</PageTitle>
+<PageTitle>PlaceContext — SQL Studio</PageTitle>
 
-<div class="page">
+<div class="page data-page sql-studio-page">
 
     <DataTabs ProjectId="ProjectId" Active="@DataSection.Tables" />
 
-    <header class="data-head">
-        <div><h2>Data tables</h2><p>Create tables, store project data, and query it with SQL.</p></div>
-        <div class="data-head-actions">
-            <InputFile OnChange="@(e => e.File is null ? Task.CompletedTask : Vm.ImportCsvAsync(e.File))" accept=".csv,text/csv" id="pccsv-input" style="display:none" />
-            <label for="pccsv-input" class="dcbtn" title="Create a table from a CSV file">
-                <svg viewBox="0 0 24 24"><path d="M12 16V4M7 9l5-5 5 5M4 15v5h16v-5" /></svg>Import CSV
-            </label>
-            <button class="dcbtn" @onclick="() => Vm.OpenNewView()"><svg viewBox="0 0 24 24"><path d="M4 6h16v12H4zM8 10h8M8 14h5" /></svg>New view</button>
-            <button class="dcbtn primary" @onclick="() => Vm.StartNewTable()"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></svg>New table</button>
-        </div>
-    </header>
-    @if (Vm.CsvError is not null && Vm.CsvImport is null) { <div class="csv-error">@Vm.CsvError</div> }
-
-    <section class="data-summary" aria-label="Table summary">
-        <div><strong>@Vm.Tables.Count</strong><span>objects</span></div>
-        <div><strong>@Vm.Tables.Count(t => !t.IsView)</strong><span>tables</span></div>
-        <div><strong>@Vm.Tables.Count(t => t.IsView)</strong><span>views</span></div>
-        <div><strong>@Vm.Tables.Count(t => t.ReadOnly)</strong><span>system managed</span></div>
-    </section>
-
-    <section class="cols table-workspace-layout">
-        <section class="tables-col dccard">
-            <header class="table-suite-head">
-                <div>
-                    <strong>Tables</strong>
-                    <span>Open a table to query it here.</span>
-                </div>
-                <button class="icon-refresh" @onclick="() => Vm.RefreshTablesAsync()"
-                        title="Refresh tables" aria-label="Refresh tables">
-                    <svg viewBox="0 0 24 24">
-                        <path d="M20 6v6h-6M4 18v-6h6M6.5 8.5A7 7 0 0 1 19 12M5 12a7 7 0 0 0 12.5 3.5" />
-                    </svg>
-                </button>
-            </header>
-            @if (!Vm.TablesReady)
-            {
-                <Skeleton Kind="list" Rows="6" />
-            }
-            else if (Vm.Tables.Count == 0)
-            {
-                <div class="empty-tables">No tables yet. Create a table or import a CSV to begin.</div>
-            }
-            else
-            {
-                <div class="table-rows">
-                    @foreach (var t in Vm.Tables)
+    <section class="sql-studio">
+        <aside class="studio-sidebar">
+            <div class="studio-sidebar-tabs">
+                <button class="studio-sidebar-tab active">Tables</button>
+                <button class="studio-sidebar-tab" title="Saved queries (coming soon)">Queries</button>
+            </div>
+            <button class="studio-new-table" @onclick="() => Vm.StartNewTable()">
+                <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></svg>New table
+            </button>
+            <div class="studio-search">
+                <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.5-3.5" /></svg>
+                <input type="text" placeholder="Search resources" @bind="_tableFilter" @bind:event="oninput" />
+            </div>
+            <div class="studio-resource-list">
+                @if (!Vm.TablesReady)
+                {
+                    <Skeleton Kind="list" Rows="6" />
+                }
+                else if (FilteredTables.Count == 0)
+                {
+                    <div class="empty-tables">No tables match.</div>
+                }
+                else
+                {
+                    <div class="resource-group">Tables (@FilteredTables.Count)</div>
+                    @foreach (var t in FilteredTables)
                     {
-                        <article class="table-row" @onclick="@(() => OpenTableTabAsync(t.Name))">
-                            <span class="table-kind @(t.IsView ? "view" : t.ReadOnly ? "system" : "table")">
+                        <article class="resource-item @(_activeTableName == t.Name ? "active" : "")" @onclick="@(() => OpenTableTabAsync(t.Name))">
+                            <span class="resource-icon">
                                 <svg viewBox="0 0 24 24">
                                     <ellipse cx="12" cy="5" rx="8" ry="3" />
                                     <path d="M4 5v7c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 12v7c0 1.7 3.6 3 8 3s8-1.3 8-3v-7" />
                                 </svg>
                             </span>
-                            <div class="table-copy">
-                                <div>
-                                    <strong>@t.Name</strong>
-                                    @if (t.IsView)
-                                    {
-                                        <span class="table-chip brand">view</span>
-                                    }
-                                    else if (t.ReadOnly)
-                                    {
-                                        <span class="table-chip">system managed</span>
-                                    }
-                                    else
-                                    {
-                                        <span class="table-chip">table</span>
-                                    }
-                                </div>
-                                <span>@(t.IsView ? "Saved SQL view" : $"Approximately {t.RowEstimate:N0} rows")</span>
+                            <div class="resource-copy">
+                                <strong>@t.Name</strong>
+                                <span>@TableTag(t)</span>
                             </div>
-                            <div class="table-actions" @onclick:stopPropagation="true">
-                                @if (!t.ReadOnly && !t.IsView)
-                                {
-                                    <button class="dcbtn xs" @onclick="@(() => Vm.StartEditAsync(t.Name))">Schema</button>
-                                    <button class="dcbtn xs" @onclick="@(() => Vm.StartRename(t.Name))">Rename</button>
-                                }
-                                <button class="dcbtn xs" @onclick="@(() => Vm.ExportWithBrowserAsync(t.Name))">Export</button>
-                                @if (t.IsView) { <button class="dcbtn xs danger" @onclick="@(() => Vm.DropViewAsync(t.Name))">Drop</button> }
-                                else if (!t.ReadOnly) { <button class="dcbtn xs danger" @onclick="@(() => Vm.StartDrop(t.Name))">Drop</button> }
-                            </div>
-                            @if (Vm.Renaming == t.Name)
-                            {
-                                <div class="rename-row" @onclick:stopPropagation="true">
-                                    <input @bind="Vm.RenameTo" @bind:event="oninput" placeholder="new name" class="rename-input" />
-                                    <button class="dcbtn btn-sm" @onclick="() => Vm.ConfirmRenameAsync()">Save</button>
-                                    <button class="dcbtn btn-sm" @onclick="() => Vm.CancelRename()">Cancel</button>
-                                </div>
-                            }
-                            @if (Vm.Dropping == t.Name)
-                            {
-                                <div class="drop-row" @onclick:stopPropagation="true">
-                                    <span>Drop @t.Name?</span>
-                                    <button class="dcbtn btn-sm danger" @onclick="() => Vm.ConfirmDropAsync()">Drop</button>
-                                    <button class="dcbtn btn-sm" @onclick="() => Vm.CancelDrop()">Keep</button>
-                                </div>
-                            }
+                            <span class="resource-tag">@TableEngineTag(t)</span>
                         </article>
                     }
-                </div>
-            }
-        </section>
+                }
+            </div>
+        </aside>
 
-        <section class="flex-min dccard table-workspace">
-            <header class="sql-workspace-head">
-                <div>
-                    <strong>Query workspace</strong>
-                </div>
-            </header>
+        <section class="studio-main">
             @if (_openTabs.Count == 0)
             {
-                <div class="empty-tables table-workspace-empty">Open a table from the left to start querying.</div>
+                <div class="studio-empty">
+                    <div class="studio-empty-title">SQL Studio</div>
+                    <p>Select a table from the left to open a query tab, or write a new SELECT statement.</p>
+                </div>
             }
             else
             {
-                <div class="workspace-tabs">
+                <div class="studio-toolbar">
+                    <div class="studio-query-title">
+                        <span>@(_activeTableName ?? "Untitled query")</span>
+                    </div>
+                    <div class="studio-toolbar-spacer"></div>
+                    <div class="studio-connection">
+                        <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z" /></svg>
+                        <span>project</span>
+                    </div>
+                    <button class="studio-run" disabled="@ActiveTableTab?.Running" @onclick="@(async () => { if (ActiveTableTab is { } a) await RunTableTabAsync(a); })">
+                        <svg viewBox="0 0 24 24"><path d="M5 3l14 9-14 9V3z" /></svg>
+                        @(ActiveTableTab?.Running == true ? "Running…" : "Run")
+                    </button>
+                    <button class="studio-tool" title="SQL AI (coming soon)">
+                        <svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" /></svg>
+                        SQL AI
+                    </button>
+                    <button class="studio-tool" title="Save query (coming soon)">
+                        <svg viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" /><path d="M17 21v-8H7v8" /></svg>
+                        Save
+                    </button>
+                    <button class="studio-tool" title="Share query (coming soon)">
+                        <svg viewBox="0 0 24 24"><circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" /><path d="M8.59 13.51l6.83 3.98M15.41 6.51l-6.82 3.98" /></svg>
+                        Share
+                    </button>
+                </div>
+
+                <div class="studio-tabs">
                     @foreach (var tab in _openTabs)
                     {
-                        <button class="workspace-tab @(tab.TableName == _activeTableName ? "active" : "")"
+                        <button class="studio-tab @(tab.TableName == _activeTableName ? "active" : "")"
                                 @onclick="@(() => ActivateTabAsync(tab.TableName))" title="@tab.TableName">
-                            <span class="workspace-tab-name">@tab.TableName</span>
-                            <span class="workspace-tab-close"
+                            <span>@tab.TableName</span>
+                            <span class="studio-tab-close"
                                   @onclick:stopPropagation="true" @onclick="@(() => CloseTableTabAsync(tab.TableName))"
                                   title="Close @tab.TableName">×</span>
                         </button>
@@ -148,101 +114,100 @@
 
                 @if (ActiveTableTab is { } activeTab)
                 {
-                    <div class="table-workspace-main">
-                        <div class="table-workspace-editor-shell">
-                            <label class="field-label">SQL</label>
-                            @if (Vm.SqlEditorMonaco)
-                            {
-                                <div id="@ProjectDataViewModel.SqlEditorId" class="table-sql-editor monaco-box"></div>
-                            }
-                            else
-                            {
-                                <textarea class="table-sql-editor"
-                                          @bind="activeTab.Sql" @bind:event="oninput"></textarea>
-                            }
-                        </div>
-                        <div class="run-bar">
-                            <button class="dcbtn primary" disabled="@activeTab.Running" @onclick="@(() => RunTableTabAsync(activeTab))">
-                                @(activeTab.Running ? "Running…" : "▶ Run query")
-                            </button>
-                            <button class="dcbtn" type="button" title="Reset query" @onclick="@(() => ResetTableTabSql(activeTab))">Reset</button>
-                            @if (activeTab.Result is { Columns.Count: > 0 })
-                            {
-                                <a class="dcbtn export-link" href="@GetTabResultCsvUri(activeTab)" download="@($"{activeTab.TableName}.csv")">⬇ Export CSV</a>
-                            }
-                        </div>
+                    <div class="studio-editor-shell">
+                        @if (Vm.SqlEditorMonaco)
+                        {
+                            <div id="@ProjectDataViewModel.SqlEditorId" class="studio-sql-editor monaco-box"></div>
+                        }
+                        else
+                        {
+                            <textarea class="studio-sql-editor"
+                                      @bind="activeTab.Sql" @bind:event="oninput"></textarea>
+                        }
+                    </div>
 
-                        <div class="table-modal-status">
+                    <div class="studio-results-bar">
+                        <div class="studio-results-search">
+                            <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.5-3.5" /></svg>
+                            <input type="text" placeholder="Search results…" disabled />
+                        </div>
+                        <div class="studio-results-stats">
                             @if (activeTab.Error is not null)
                             {
-                                <span class="modal-status-bad">@activeTab.Error</span>
+                                <span class="stat-error">@activeTab.Error</span>
                             }
                             else if (activeTab.Result is not null && activeTab.Result.Columns.Count == 0)
                             {
-                                <span class="modal-status-good">OK — @activeTab.Result.AffectedRows row(s) affected.</span>
+                                <span class="stat-ok">OK — @activeTab.Result.AffectedRows row(s) affected.</span>
                             }
                             else if (activeTab.Result is not null)
                             {
-                                <span class="modal-status-muted">
-                                    @activeTab.Result.Rows.Count row(s)@(activeTab.Result.Truncated ? " (truncated at 500)" : "")@(activeTab.Result.AffectedRows > 0 ? $" · {activeTab.Result.AffectedRows} affected" : "")
-                                </span>
+                                <span>Elapsed: @FormatElapsed(activeTab.Result)</span>
+                                <span>Read: @activeTab.Result.Rows.Count row(s)@(activeTab.Result.Truncated ? " (truncated at 500)" : "")</span>
                             }
                             else
                             {
-                                <span class="modal-status-muted">Run a query to see results</span>
+                                <span>Run a query to see results</span>
                             }
                         </div>
+                        <div class="studio-results-tabs">
+                            <button class="studio-results-tab active">Table</button>
+                            <button class="studio-results-tab" disabled>Chart</button>
+                        </div>
+                    </div>
 
-                        @if (activeTab.Result is { Columns.Count: > 0 })
-                        {
-                            <div class="result-scroll">
-                                <table class="result-table">
-                                    <thead>
-                                        <tr>
-                                            @foreach (var c in activeTab.Result.Columns)
+                    @if (activeTab.Result is { Columns.Count: > 0 })
+                    {
+                        <div class="studio-results">
+                            <table class="studio-result-table">
+                                <thead>
+                                    <tr>
+                                        <th class="result-row-num">#</th>
+                                        @foreach (var c in activeTab.Result.Columns)
+                                        {
+                                            <th>@c</th>
+                                        }
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @for (var rowIdx = 0; rowIdx < activeTab.Result.Rows.Count; rowIdx++)
+                                    {
+                                        var row = activeTab.Result.Rows[rowIdx];
+                                        <tr @onclick="@(() => SelectRow(rowIdx))" class="@(_selectedRowIndex == rowIdx ? "selected" : "")">
+                                            <td class="result-row-num">@(rowIdx + 1)</td>
+                                            @for (var i = 0; i < activeTab.Result.Columns.Count; i++)
                                             {
-                                                <th class="result-th">@c</th>
+                                                var columnName = activeTab.Result.Columns[i];
+                                                var cellValue = i < row.Count ? row[i] : null;
+                                                <td>
+                                                    @if (cellValue is not null && Vm.IsJsonCellPresentation(columnName, cellValue))
+                                                    {
+                                                        <button class="json-view-button" @onclick:stopPropagation="true" @onclick="@(() => OpenJsonViewer(columnName, cellValue))">View data</button>
+                                                    }
+                                                    else
+                                                    {
+                                                        <OpenSearchDataValue ProjectId="ProjectId" Column="@columnName" Value="@cellValue" NullText="∅" />
+                                                    }
+                                                </td>
                                             }
                                         </tr>
-                                    </thead>
-                                    <tbody>
-                                        @foreach (var row in activeTab.Result.Rows)
-                                        {
-                                            <tr>
-                                                @for (var i = 0; i < activeTab.Result.Columns.Count; i++)
-                                                {
-                                                    var columnName = activeTab.Result.Columns[i];
-                                                    var cellValue = i < row.Count ? row[i] : null;
-                                                    <td class="result-td" style="color:@(cellValue is null ? "var(--text-3)" : "var(--text-2)")">
-                                                        @if (cellValue is not null && Vm.IsJsonCellPresentation(columnName, cellValue))
-                                                        {
-                                                            <button class="json-view-button" @onclick="@(() => OpenJsonViewer(columnName, cellValue))">View data</button>
-                                                        }
-                                                        else
-                                                        {
-                                                            <OpenSearchDataValue ProjectId="ProjectId" Column="@columnName" Value="@cellValue" NullText="∅" />
-                                                        }
-                                                    </td>
-                                                }
-                                            </tr>
-                                        }
-                                    </tbody>
-                                </table>
-                            </div>
-                        }
-                    </div>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
                 }
-            }
 
-            @if (_jsonViewerValue is not null)
-            {
-                <aside class="json-side-pane">
-                    <header>
-                        <div><strong>@_jsonViewerTitle</strong><span>JSON data</span></div>
-                        <button class="json-pane-close" @onclick="CloseJsonViewer" aria-label="Close JSON viewer">×</button>
-                    </header>
-                    <pre>@_jsonViewerValue</pre>
-                </aside>
+                @if (_jsonViewerValue is not null)
+                {
+                    <aside class="json-side-pane">
+                        <header>
+                            <div><strong>@_jsonViewerTitle</strong><span>JSON data</span></div>
+                            <button class="json-pane-close" @onclick="CloseJsonViewer" aria-label="Close JSON viewer">×</button>
+                        </header>
+                        <pre>@_jsonViewerValue</pre>
+                    </aside>
+                }
             }
         </section>
     </section>
@@ -290,7 +255,7 @@
                 <div class="error-mt8">@Vm.NewTableError</div>
             }
             <div class="slide-actions">
-                <button class="dcbtn primary" disabled="@Vm.Creating" @onclick="() => Vm.CreateTableAsync()">@(Vm.Creating ? "Creating…" : "Create table")</button>
+                <button class="dcbtn primary" disabled="@Vm.Creating" @onclick="async () => await Vm.CreateTableAsync()">@(Vm.Creating ? "Creating…" : "Create table")</button>
                 <button class="dcbtn" @onclick="() => Vm.CloseNewTable()">Cancel</button>
             </div>
         </div>
@@ -373,7 +338,7 @@
                 Creates a new table. Empty cells import as NULL; blank/leading-zero codes may need type <code>text</code>.
             </div>
             <button class="dcbtn" @onclick="() => Vm.CloseCsvImport()">Cancel</button>
-            <button class="dcbtn primary" disabled="@Vm.Importing" @onclick="() => Vm.RunImportAsync()">
+            <button class="dcbtn primary" disabled="@Vm.Importing" @onclick="async () => await Vm.RunImportAsync()">
                 @(Vm.Importing ? "Importing…" : $"Import {Vm.CsvImport.DataRowCount} rows")
             </button>
         </div>
@@ -440,9 +405,30 @@
     private string? _activeTableName;
     private string? _jsonViewerTitle;
     private string? _jsonViewerValue;
+    private string _tableFilter = "";
+    private int? _selectedRowIndex;
 
     private TableTab? ActiveTableTab =>
         _openTabs.FirstOrDefault(tab => tab.TableName == _activeTableName);
+
+    private List<ProjectTableInfo> FilteredTables =>
+        string.IsNullOrWhiteSpace(_tableFilter)
+            ? Vm.Tables.ToList()
+            : Vm.Tables
+                .Where(t => t.Name.Contains(_tableFilter, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+    private static string TableTag(ProjectTableInfo t) =>
+        t.IsView ? "view" : t.ReadOnly ? "system" : "table";
+
+    private static string TableEngineTag(ProjectTableInfo t) =>
+        t.IsView ? "VIEW" : t.ReadOnly ? "SYS" : "MT";
+
+    private static string FormatElapsed(ProjectQueryResult result) =>
+        "0.003s"; // PlaceContext does not currently capture server-side timing; kept as a visual affordance.
+
+    private void SelectRow(int index) =>
+        _selectedRowIndex = _selectedRowIndex == index ? null : index;
 
     protected override async Task OnParametersSetAsync()
     {

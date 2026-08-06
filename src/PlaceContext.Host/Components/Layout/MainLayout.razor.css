@@ -16,8 +16,8 @@
     position: relative;
     display: flex;
     flex-direction: column;
-    background: var(--panel);
-    border-right: 1px solid var(--border);
+    background: var(--ch-panel, var(--panel));
+    border-right: 1px solid var(--ch-border, var(--border));
     overflow: hidden;
     transition: width .2s cubic-bezier(.4, 0, .2, 1);
 }
@@ -455,8 +455,8 @@
     align-items: center;
     justify-content: space-between;
     padding: 0 20px;
-    border-bottom: 1px solid var(--border);
-    background: var(--panel);
+    border-bottom: 1px solid var(--ch-border, var(--border));
+    background: var(--ch-panel, var(--panel));
 }
 
 .topbar-left {

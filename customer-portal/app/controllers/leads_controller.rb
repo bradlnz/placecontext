@@ -1,5 +1,5 @@
 class LeadsController < ApplicationController
-  before_action :require_manager!, only: %i[new create edit update destroy]
+  before_action :require_manager_or_admin!, only: %i[new create edit update destroy]
 
   def index
     @projects = crm.projects
@@ -17,8 +17,8 @@ class LeadsController < ApplicationController
     @crm ||= PlaceContextCrmClient.new(current_user: current_portal_user)
   end
 
-  def require_manager!
-    return if current_portal_user.manager?
+  def require_manager_or_admin!
+    return if current_portal_user&.can_manage_client_access?
 
     redirect_to leads_path, alert: "Manager access is required to change CRM data."
   end

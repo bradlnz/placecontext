@@ -244,6 +244,15 @@ EOF
 
 # ── Setup master node ───────────────────────────────────────────────────────
 
+ensure_placecontext_namespace() {
+    if kubectl get namespace placecontext >/dev/null 2>&1; then
+        return
+    fi
+
+    log "Creating namespace placecontext..."
+    kubectl create namespace placecontext >/dev/null
+}
+
 setup_master() {
     log "Setting up master node..."
 
@@ -261,6 +270,7 @@ setup_master() {
 
     # Apply manifests
     if [[ -f "$CLUSTER_DIR/placecontext.yaml" ]]; then
+        ensure_placecontext_namespace
         kubectl apply -f "$CLUSTER_DIR/placecontext.yaml"
         log "K8s manifests applied"
     fi

@@ -12,6 +12,7 @@
     <a class="brand" href="/" aria-label="Placecontext home"><span class="brand-mark">›_</span><span>placecontext</span></a>
     <nav aria-label="Primary navigation">
       <a href="#fleet">Fleet</a>
+      <a href="#console">Console</a>
       <a href="#platform">Platform</a>
       <a href="#self-hosted">Self-hosted</a>
       <a href="https://github.com/bradlnz/placecontext">Source</a>
@@ -20,23 +21,39 @@
   </header>
 
   <main>
-    <section class="hero">
-      <div class="eyebrow"><span></span> Open source · self-hosted · yours</div>
-      <h1>Run your data, jobs, AI, and customer operations on infrastructure you own.</h1>
-      <p class="hero-copy">Placecontext is a self-hosted platform for operational data, automation, CRM, artifacts, and optional OpenSearch analytics. It also turns connected Macs and on-prem computers into a private fleet for 3D rendering, media processing, and sharded local AI.</p>
-      <div class="hero-actions">
-        <a class="button primary" href="https://get.placecontext.ai/install.sh">Install Placecontext <span>↗</span></a>
-        <a class="button secondary" href="#fleet">Build your fleet</a>
+    <section class="hero hero-split">
+      <div class="hero-copy-block">
+        <div class="eyebrow"><span></span> Open source · self-hosted · yours</div>
+        <h1>Run data, jobs, and AI on infrastructure you own.</h1>
+        <p class="hero-copy">Placecontext brings operational data, code-first automation, artifacts, CRM, and optional OpenSearch into one workspace — then schedules work across the Macs and on-prem machines you already own.</p>
+        <div class="hero-actions">
+          <a class="button primary" href="https://get.placecontext.ai/install.sh">Install Placecontext <span>↗</span></a>
+          <a class="button secondary" href="#console">See the console</a>
+        </div>
+        <div class="install-card" id="quick-start">
+          <div><span class="terminal-dot"></span><span class="terminal-dot"></span><span class="terminal-dot"></span></div>
+          <code><span class="prompt">$</span> curl -fsSL https://get.placecontext.ai/install.sh | bash</code>
+          <button class="copy" type="button" data-copy="curl -fsSL https://get.placecontext.ai/install.sh | bash">Copy</button>
+        </div>
+        <div class="capability-cloud" aria-label="Platform capabilities">
+          <span class="active">Jobs</span><span>Data</span><span>Artifacts</span><span>OpenSearch optional</span><span>Local AI</span><span>3D rendering</span><span>Agents · MCP</span>
+        </div>
       </div>
-      <div class="install-card" id="quick-start">
-        <div><span class="terminal-dot"></span><span class="terminal-dot"></span><span class="terminal-dot"></span></div>
-        <code><span class="prompt">$</span> curl -fsSL https://get.placecontext.ai/install.sh | bash</code>
-        <button class="copy" type="button" data-copy="curl -fsSL https://get.placecontext.ai/install.sh | bash">Copy</button>
+      <div class="hero-visual" aria-label="Placecontext jobs console preview">
+        <div class="app-window hero-app">
+          <div class="app-chrome"><span class="chrome-dot"></span><span class="chrome-dot"></span><span class="chrome-dot"></span><strong>Jobs</strong><span class="app-running"><i></i>2 running</span></div>
+          <div class="app-page">
+            <div class="app-page-head"><div><h3>Jobs</h3><p>Reusable workloads, schedules, and event triggers.</p></div><span class="app-button primary">New job</span></div>
+            <div class="app-summary"><div><strong>12</strong><span>jobs</span></div><div><strong>92</strong><span>shards</span></div><div><strong>9</strong><span>automated</span></div><div><strong>11</strong><span>triggers</span></div></div>
+            <div class="app-card job-catalogue">
+              <header><span>⌄</span><strong>Job catalogue</strong><small>12 reusable workloads</small></header>
+              <article class="job-row is-running"><span class="job-icon spinner"></span><div><div class="job-title"><strong>Blender scene render</strong><span>python code</span><span class="good-chip">2 triggers</span></div><p>Render frames and publish a 4K preview artifact.</p><small>12 shards · concurrency 6 · updated Aug 4</small></div><div class="job-actions">▶ ✎ &lt;/&gt; ⋯</div></article>
+              <article class="job-row"><span class="job-icon">⌁</span><div><div class="job-title"><strong>Shopify order sync</strong><span>node code</span><span>json output</span></div><p>Import orders and map them into project tables.</p><small>4 shards · cron 15 * * * * · updated Aug 3</small></div><div class="job-actions">▶ ✎ &lt;/&gt; ⋯</div></article>
+              <article class="job-row"><span class="job-icon">□</span><div><div class="job-title"><strong>OpenSearch indexer</strong><span>container</span><span class="good-chip">automated</span></div><p>Refresh optional search indexes after pipeline runs.</p><small>1 shard · event job.completed · updated Aug 1</small></div><div class="job-actions">▶ ✎ &lt;/&gt; ⋯</div></article>
+            </div>
+          </div>
+        </div>
       </div>
-    </section>
-
-    <section class="trust-row" aria-label="Platform values">
-      <span>3D rendering</span><span>Local AI shards</span><span>Mac + Linux workers</span><span>Kubernetes-ready</span><span>MIT licensed</span>
     </section>
 
     <section class="split-section fleet-section" id="fleet">
@@ -56,159 +73,151 @@
     <section class="section showcase" id="console">
       <div class="section-intro showcase-intro">
         <span class="eyebrow">Product console</span>
-        <h2>One dark console for the whole operation.</h2>
-        <p>Jobs, data, artifacts, optional OpenSearch, and your cluster live in a single authenticated workspace — the same console your team and your agents use.</p>
+        <h2>The actual workspace, rendered live.</h2>
+        <p>Jobs, data, artifacts, optional OpenSearch, and cluster capacity share one authenticated console — designed for operators and agents alike.</p>
       </div>
-      <div class="mock-shell" aria-label="Placecontext console preview">
-        <aside class="mock-sidebar" aria-label="Console navigation preview">
-          <div class="mock-brand"><span class="brand-mark">›_</span><span>placecontext</span><span class="mock-env">prod</span></div>
-          <nav class="mock-nav">
-            <span class="mock-nav-label">Workspace</span>
-            <span class="mock-nav-item is-active"><span class="bar"></span>Jobs<span class="mock-count">12</span></span>
-            <span class="mock-nav-item">Data</span>
-            <span class="mock-nav-item">Artifacts</span>
-            <span class="mock-nav-item">Search<em class="mock-optional">optional</em></span>
-            <span class="mock-nav-item">Cluster<span class="mock-pin ready" aria-label="cluster live"></span></span>
-            <span class="mock-nav-label">Automation</span>
-            <span class="mock-nav-item">Pipelines</span>
-            <span class="mock-nav-item">Agents · MCP</span>
-          </nav>
-          <div class="mock-sidebar-foot"><code>llama-3.1-8b</code><span>shard 2/4</span></div>
-        </aside>
-        <div class="mock-main">
-          <div class="mock-topbar">
-            <span class="mock-search">Search jobs, records, artifacts…<kbd>⌘K</kbd></span>
-            <span class="mock-running"><span class="mock-pulse"></span>2 running</span>
-            <span class="mock-avatar">BL</span>
-          </div>
-          <div class="mock-tabs" role="tablist" aria-label="Console views">
-            <button type="button" role="tab" id="mock-tab-jobs" aria-controls="mock-view-jobs" aria-selected="true" class="is-active" data-view="jobs">Jobs</button>
-            <button type="button" role="tab" id="mock-tab-data" aria-controls="mock-view-data" aria-selected="false" data-view="data">Data</button>
-            <button type="button" role="tab" id="mock-tab-artifacts" aria-controls="mock-view-artifacts" aria-selected="false" data-view="artifacts">Artifacts</button>
-            <button type="button" role="tab" id="mock-tab-search" aria-controls="mock-view-search" aria-selected="false" data-view="search">Search</button>
-            <button type="button" role="tab" id="mock-tab-cluster" aria-controls="mock-view-cluster" aria-selected="false" data-view="cluster">Cluster</button>
-          </div>
-          <div class="mock-views">
 
-            <section class="mock-view is-active" id="mock-view-jobs" role="tabpanel" aria-labelledby="mock-tab-jobs" data-view="jobs">
-              <div class="mock-toolbar"><strong>Jobs</strong><span class="mock-chip">12 active</span><span class="mock-chip">3 queued</span><span class="mock-spacer"></span><span class="mock-btn">New job</span></div>
-              <div class="mock-table-wrap">
-                <table class="mock-table">
-                  <thead><tr><th>Job</th><th>Runtime</th><th class="mock-hide-sm">Node</th><th>Status</th><th class="mock-hide-sm">Duration</th></tr></thead>
-                  <tbody>
-                    <tr>
-                      <td><code>render-hero-shot-04</code></td><td>blender 4.2</td><td class="mock-hide-sm"><code>mac-studio-01</code></td>
-                      <td><span class="mock-status running"><span class="mock-pulse"></span>Running</span><span class="mock-progress"><i style="--w:68%"></i></span></td>
-                      <td class="mock-hide-sm">12m 40s</td>
-                    </tr>
-                    <tr>
-                      <td><code>shopify-nightly-sync</code></td><td>node 20</td><td class="mock-hide-sm"><code>linux-worker-01</code></td>
-                      <td><span class="mock-status ok">Succeeded</span></td><td class="mock-hide-sm">2m 05s</td>
-                    </tr>
-                    <tr>
-                      <td><code>opensearch-reindex</code></td><td>python 3.12</td><td class="mock-hide-sm"><code>linux-worker-02</code></td>
-                      <td><span class="mock-status running"><span class="mock-pulse"></span>Running</span><span class="mock-progress"><i style="--w:34%"></i></span></td>
-                      <td class="mock-hide-sm">4m 12s</td>
-                    </tr>
-                    <tr>
-                      <td><code>llm-shard-preflight</code></td><td>go 1.22</td><td class="mock-hide-sm"><code>macbook-air-03</code></td>
-                      <td><span class="mock-status bad">Failed</span></td><td class="mock-hide-sm">0m 41s</td>
-                    </tr>
-                    <tr>
-                      <td><code>crm-digest-email</code></td><td>ruby 3.3</td><td class="mock-hide-sm"><code>linux-worker-01</code></td>
-                      <td><span class="mock-status queued">Queued</span></td><td class="mock-hide-sm">—</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-              <div class="mock-trace">
-                <span class="mock-trace-title">Trace <code>render-hero-shot-04</code></span>
-                <div class="mock-otel">
-                  <span class="mock-otel-row"><i style="--x:0%;--w:100%;--d:.05s"></i><code>job.run</code></span>
-                  <span class="mock-otel-row"><i style="--x:4%;--w:38%;--d:.15s"></i><code>scene.build</code></span>
-                  <span class="mock-otel-row"><i style="--x:42%;--w:30%;--d:.25s"></i><code>cycles.render</code></span>
-                  <span class="mock-otel-row"><i style="--x:72%;--w:18%;--d:.35s"></i><code>artifact.write</code></span>
-                </div>
-              </div>
-            </section>
+      <div class="console-picker" role="tablist" aria-label="Console views">
+        <button type="button" role="tab" id="console-tab-jobs" aria-controls="console-view-jobs" aria-selected="true" class="is-active" data-view="jobs" data-title="Jobs" data-subtitle="12 jobs · 92 shards · 9 automated">Jobs</button>
+        <button type="button" role="tab" id="console-tab-data" aria-controls="console-view-data" aria-selected="false" data-view="data" data-title="Data tables" data-subtitle="4 objects · SQL workspace">Data</button>
+        <button type="button" role="tab" id="console-tab-artifacts" aria-controls="console-view-artifacts" aria-selected="false" data-view="artifacts" data-title="Artifacts" data-subtitle="48 files · 12 reports">Artifacts</button>
+        <button type="button" role="tab" id="console-tab-search" aria-controls="console-view-search" aria-selected="false" data-view="search" data-title="Data Search" data-subtitle="Optional OpenSearch · 3 indexes">Search</button>
+        <button type="button" role="tab" id="console-tab-cluster" aria-controls="console-view-cluster" aria-selected="false" data-view="cluster" data-title="Cluster" data-subtitle="4 nodes · 3 healthy">Cluster</button>
+      </div>
 
-            <section class="mock-view" id="mock-view-data" role="tabpanel" aria-labelledby="mock-tab-data" data-view="data">
-              <div class="mock-toolbar"><strong>Data</strong><span class="mock-chip is-on">customers · 2,481</span><span class="mock-chip">orders · 18,204</span><span class="mock-chip">render_jobs · 1,096</span><span class="mock-spacer"></span><span class="mock-btn">SQL view</span></div>
-              <div class="mock-sql"><code><span class="prompt">›</span> select email, orders, ltv from customers order by ltv desc limit 5;</code></div>
-              <div class="mock-table-wrap">
-                <table class="mock-table">
-                  <thead><tr><th>id</th><th>email</th><th class="mock-hide-sm">orders</th><th>ltv</th></tr></thead>
-                  <tbody>
-                    <tr><td><code>c_9f2a41</code></td><td>mia@fernwick.co</td><td class="mock-hide-sm">34</td><td>$12,480</td></tr>
-                    <tr><td><code>c_71bd08</code></td><td>jonas@kelpdirect.io</td><td class="mock-hide-sm">27</td><td>$9,312</td></tr>
-                    <tr><td><code>c_e553c7</code></td><td>priya@northbeam.shop</td><td class="mock-hide-sm">19</td><td>$7,904</td></tr>
-                    <tr><td><code>c_2c88f0</code></td><td>sam@harborandpine.com</td><td class="mock-hide-sm">15</td><td>$6,220</td></tr>
-                    <tr><td><code>c_a41e96</code></td><td>lena@studiomoss.de</td><td class="mock-hide-sm">11</td><td>$4,875</td></tr>
-                  </tbody>
-                </table>
-              </div>
-              <div class="mock-footnote">2,481 rows · 38 ms · synced from Shopify 12 min ago</div>
-            </section>
+      <div class="console-stage">
+        <div class="app-shell" aria-label="Placecontext console preview">
+          <aside class="app-sidebar" aria-label="Console navigation preview">
+            <div class="sidebar-brand"><span class="app-logo">›_</span><div class="sidebar-brand-copy"><strong>PlaceContext</strong><span>Acme Studio</span></div></div>
+            <nav class="sidebar-nav">
+              <span class="nav-section">Workspace</span>
+              <span class="side-item is-active"><i>▦</i><span>Dashboard</span></span>
+              <span class="side-item"><i>↯</i><span>Jobs</span></span>
+              <span class="side-item"><i>◉</i><span>Data</span></span>
+              <span class="side-item"><i>⇢</i><span>Chains</span></span>
+              <span class="side-item"><i>▣</i><span>Artifacts</span></span>
+              <span class="nav-section">Intelligence</span>
+              <span class="side-item"><i>⌕</i><span>Search</span></span>
+              <span class="side-item"><i>✦</i><span>Agents</span></span>
+              <span class="nav-section">Infrastructure</span>
+              <span class="side-item"><i>◇</i><span>Cluster</span></span>
+            </nav>
+            <div class="sidebar-user"><span>BL</span><div><strong>Brad Lawrence</strong><small>owner</small></div></div>
+          </aside>
 
-            <section class="mock-view" id="mock-view-artifacts" role="tabpanel" aria-labelledby="mock-tab-artifacts" data-view="artifacts">
-              <div class="mock-toolbar"><strong>Artifacts</strong><span class="mock-chip">q2-launch</span><span class="mock-spacer"></span><span class="mock-btn">Share link</span></div>
-              <div class="mock-artifacts">
-                <div class="mock-artifact-list">
-                  <div class="mock-artifact is-active"><span class="mock-kind pdf">PDF</span><div><strong>q2-launch-report.pdf</strong><span>v4 · 2.1 MB</span></div></div>
-                  <div class="mock-artifact"><span class="mock-kind csv">CSV</span><div><strong>orders-2026-07.csv</strong><span>v2 · 18,204 rows</span></div></div>
-                  <div class="mock-artifact"><span class="mock-kind json">JSON</span><div><strong>sync-manifest.json</strong><span>v9 · 41 KB</span></div></div>
-                  <div class="mock-artifact"><span class="mock-kind img">PNG</span><div><strong>hero-shot-04.png</strong><span>v1 · 4K render</span></div></div>
-                  <div class="mock-artifact"><span class="mock-kind vid">MP4</span><div><strong>turntable-preview.mp4</strong><span>v3 · 0:24</span></div></div>
-                </div>
-                <div class="mock-preview">
-                  <div class="mock-preview-head"><code>q2-launch-report.pdf</code><span>v4 · expires in 6d</span></div>
-                  <div class="mock-shimmer mock-preview-page"></div>
-                  <div class="mock-preview-lines">
-                    <span class="mock-shimmer" style="--w:82%"></span>
-                    <span class="mock-shimmer" style="--w:64%"></span>
-                    <span class="mock-shimmer" style="--w:74%"></span>
+          <div class="app-main">
+            <header class="app-topbar">
+              <span class="nav-toggle">☰</span>
+              <div class="topbar-title"><strong id="console-title">Jobs</strong><span id="console-subtitle">12 jobs · 92 shards · 9 automated</span></div>
+              <div class="app-search"><span>⌕</span> Search context, files, changes <kbd>/</kbd></div>
+              <div class="app-running"><i></i>2 running</div>
+              <div class="project-switch"><i></i>Acme Studio ▾</div>
+            </header>
+
+            <div class="app-views">
+              <section class="app-view is-active" id="console-view-jobs" role="tabpanel" aria-labelledby="console-tab-jobs" data-view="jobs">
+                <div class="app-page">
+                  <div class="app-page-head"><div><h3>Jobs</h3><p>Create reusable workloads, then run them manually, on schedules, or from events.</p></div><span class="app-button primary">New job</span></div>
+                  <div class="app-summary"><div><strong>12</strong><span>jobs</span></div><div><strong>92</strong><span>shards</span></div><div><strong>9</strong><span>automated</span></div><div><strong>11</strong><span>active triggers</span></div><div class="summary-progress"><i style="--w:75%"></i></div></div>
+                  <div class="app-card job-catalogue">
+                    <header><span>⌄</span><strong>Job catalogue</strong><small>12 reusable workloads</small></header>
+                    <article class="job-row is-running"><span class="job-icon spinner"></span><div><div class="job-title"><strong>Blender scene render</strong><span>python code</span><span>json output</span><span class="good-chip">2 triggers</span></div><p>Render frames and publish a 4K preview artifact.</p><small>12 shards · concurrency 6 · updated Aug 4</small></div><div class="job-actions">▶ ✎ &lt;/&gt; ⋯</div></article>
+                    <article class="job-row"><span class="job-icon">⌁</span><div><div class="job-title"><strong>Shopify order sync</strong><span>node code</span><span>json output</span></div><p>Import orders and map them into project tables.</p><small>4 shards · cron 15 * * * * · updated Aug 3</small></div><div class="job-actions">▶ ✎ &lt;/&gt; ⋯</div></article>
+                    <article class="job-row"><span class="job-icon">□</span><div><div class="job-title"><strong>OpenSearch indexer</strong><span>container</span><span class="good-chip">automated</span></div><p>Refresh optional search indexes after pipeline runs.</p><small>1 shard · event job.completed · updated Aug 1</small></div><div class="job-actions">▶ ✎ &lt;/&gt; ⋯</div></article>
+                    <article class="job-row"><span class="job-icon">⌁</span><div><div class="job-title"><strong>Monthly CRM digest</strong><span>ruby code</span><span>email action</span></div><p>Summarise accounts and deliver a customer-health report.</p><small>2 shards · monthly · updated Jul 30</small></div><div class="job-actions">▶ ✎ &lt;/&gt; ⋯</div></article>
+                  </div>
+                  <div class="run-history">
+                    <header>RECENT RUN DURATIONS (OTEL)</header>
+                    <div class="run-bars"><i style="--h:38%"></i><i style="--h:56%"></i><i style="--h:44%"></i><i style="--h:72%"></i><i style="--h:61%"></i><i style="--h:82%"></i><i class="warn" style="--h:94%"></i><i style="--h:53%"></i><i style="--h:67%"></i><i style="--h:47%"></i><i style="--h:76%"></i><i style="--h:58%"></i></div>
+                    <div class="run-row"><span class="status-pill good">Succeeded</span><span>Aug 5, 2026 14:32</span><strong>✓ 11 · ~ 1 · ✗ 0</strong><span>2m 41s</span></div>
                   </div>
                 </div>
-              </div>
-            </section>
+              </section>
 
-            <section class="mock-view" id="mock-view-search" role="tabpanel" aria-labelledby="mock-tab-search" data-view="search">
-              <div class="mock-toolbar"><strong>Search</strong><span class="mock-optional-tag">Optional · OpenSearch</span><span class="mock-spacer"></span><span class="mock-chip">3 indexes</span></div>
-              <div class="mock-sql"><code><span class="prompt">›</span> status:failed AND runtime:blender*</code></div>
-              <div class="mock-indexes"><span class="mock-chip is-on">jobs-logs</span><span class="mock-chip">orders</span><span class="mock-chip">artifacts</span></div>
-              <div class="mock-chart" aria-label="Failed jobs per hour">
-                <i style="--h:22%;--d:.02s"></i><i style="--h:36%;--d:.06s"></i><i style="--h:18%;--d:.10s"></i><i style="--h:54%;--d:.14s"></i><i style="--h:31%;--d:.18s"></i><i style="--h:70%;--d:.22s"></i><i style="--h:44%;--d:.26s"></i><i style="--h:88%;--d:.30s"></i><i style="--h:40%;--d:.34s"></i><i style="--h:26%;--d:.38s"></i><i style="--h:58%;--d:.42s"></i><i style="--h:33%;--d:.46s"></i>
-              </div>
-              <div class="mock-footnote">1,284 hits in 41 ms · aggregation: failed jobs per hour · proxied through the authenticated server</div>
-            </section>
+              <section class="app-view" id="console-view-data" role="tabpanel" aria-labelledby="console-tab-data" data-view="data">
+                <div class="app-page">
+                  <div class="app-page-head"><div><h3>Data tables</h3><p>Create tables, store project data, and query it with SQL.</p></div><div class="head-actions"><span class="app-button">Import CSV</span><span class="app-button">New view</span><span class="app-button primary">New table</span></div></div>
+                  <div class="app-summary"><div><strong>4</strong><span>objects</span></div><div><strong>3</strong><span>tables</span></div><div><strong>1</strong><span>views</span></div><div><strong>1</strong><span>system managed</span></div></div>
+                  <div class="data-workspace">
+                    <aside class="app-card table-list">
+                      <header><strong>Tables</strong><span>↻</span></header>
+                      <div class="table-row is-active"><span class="table-icon">▤</span><div><strong>customers</strong><small>Approximately 12,400 rows</small></div><em>table</em></div>
+                      <div class="table-row"><span class="table-icon">▤</span><div><strong>orders</strong><small>Approximately 84,211 rows</small></div><em>table</em></div>
+                      <div class="table-row"><span class="table-icon">▤</span><div><strong>render_jobs</strong><small>System managed</small></div><em>system</em></div>
+                      <div class="table-row"><span class="table-icon">▥</span><div><strong>monthly_revenue</strong><small>Saved SQL view</small></div><em>view</em></div>
+                    </aside>
+                    <section class="app-card query-workspace">
+                      <div class="workspace-tabs"><span class="is-active">customers ×</span><span>monthly_revenue ×</span></div>
+                      <label>SQL</label>
+                      <pre>SELECT email, total_orders, lifetime_value
+FROM "customers"
+ORDER BY lifetime_value DESC
+LIMIT 5;</pre>
+                      <div class="result-table">
+                        <div class="result-row result-head"><span>email</span><span>total_orders</span><span>lifetime_value</span></div>
+                        <div class="result-row"><span>mia@fernwick.co</span><span>34</span><span>$12,480</span></div>
+                        <div class="result-row"><span>jonas@kelpdirect.io</span><span>27</span><span>$9,312</span></div>
+                        <div class="result-row"><span>priya@northbeam.shop</span><span>19</span><span>$7,904</span></div>
+                      </div>
+                    </section>
+                  </div>
+                </div>
+              </section>
 
-            <section class="mock-view" id="mock-view-cluster" role="tabpanel" aria-labelledby="mock-tab-cluster" data-view="cluster">
-              <div class="mock-toolbar"><strong>Cluster</strong><span class="mock-chip">3 ready</span><span class="mock-chip warn">1 not ready</span><span class="mock-spacer"></span><span class="mock-live"><span class="mock-pulse"></span>live</span></div>
-              <div class="mock-nodes">
-                <div class="mock-node">
-                  <span class="mock-pin ready"></span><div class="mock-node-id"><code>mac-studio-01</code><span>master · macOS · M2 Ultra</span></div>
-                  <div class="mock-node-meters"><label>CPU<i class="mock-meter"><b style="--w:62%"></b></i></label><label>MEM<i class="mock-meter"><b style="--w:41%"></b></i></label></div>
-                  <span class="mock-status ok">Ready</span>
+              <section class="app-view" id="console-view-artifacts" role="tabpanel" aria-labelledby="console-tab-artifacts" data-view="artifacts">
+                <div class="artifact-workspace">
+                  <aside class="app-card artifact-files">
+                    <header><strong>Artifact files</strong><span class="filter-input">search files…</span></header>
+                    <div class="project-filter">Acme Studio ▾</div>
+                    <div class="type-filters"><span class="is-active">All <b>48</b></span><span>Reports <b>12</b></span><span>Images <b>9</b></span><span>Other <b>5</b></span></div>
+                    <div class="artifact-row is-active"><span class="file-icon">▣</span><div><strong>pipeline-run-1842.json</strong><small>Acme Studio · manifest · 41 KB · Aug 5</small></div><em>v9 ▾</em></div>
+                    <div class="artifact-row"><span class="file-icon">▤</span><div><strong>monthly-report.pdf</strong><small>Acme Studio · report · 2.1 MB · Aug 4</small></div><em>v4 ▾</em></div>
+                    <div class="artifact-row"><span class="file-icon">▧</span><div><strong>hero-shot-04.png</strong><small>Render job · image · 8.4 MB · Aug 4</small></div><em>v1</em></div>
+                    <div class="artifact-row"><span class="file-icon">▦</span><div><strong>orders-export.csv</strong><small>Shopify sync · csv · 3.7 MB · Aug 3</small></div><em>v2 ▾</em></div>
+                  </aside>
+                  <section class="app-card artifact-viewer">
+                    <header><span>← Back</span><strong>pipeline-run-1842.json</strong><small>application/json</small><span>Open ↗</span><span>Share</span><span class="danger">Delete</span></header>
+                    <pre>{
+  "status": "Succeeded",
+  "duration": "2m 41s",
+  "shards": [
+    { "index": 0, "exitCode": 0, "artifact": "frame-0001.exr" },
+    { "index": 1, "exitCode": 0, "artifact": "frame-0002.exr" }
+  ],
+  "outputs": ["monthly-report.pdf", "hero-shot-04.png"]
+}</pre>
+                  </section>
                 </div>
-                <div class="mock-node">
-                  <span class="mock-pin ready"></span><div class="mock-node-id"><code>linux-worker-01</code><span>worker · Ubuntu 24.04 · 16 cores</span></div>
-                  <div class="mock-node-meters"><label>CPU<i class="mock-meter"><b style="--w:34%"></b></i></label><label>MEM<i class="mock-meter"><b style="--w:55%"></b></i></label></div>
-                  <span class="mock-status ok">Ready</span>
-                </div>
-                <div class="mock-node">
-                  <span class="mock-pin ready"></span><div class="mock-node-id"><code>linux-worker-02</code><span>worker · Debian 12 · 8 cores</span></div>
-                  <div class="mock-node-meters"><label>CPU<i class="mock-meter"><b style="--w:71%"></b></i></label><label>MEM<i class="mock-meter"><b style="--w:38%"></b></i></label></div>
-                  <span class="mock-status ok">Ready</span>
-                </div>
-                <div class="mock-node is-down">
-                  <span class="mock-pin down"></span><div class="mock-node-id"><code>macbook-air-03</code><span>worker · macOS · last seen 2h ago</span></div>
-                  <div class="mock-node-meters"><label>CPU<i class="mock-meter"><b style="--w:0%"></b></i></label><label>MEM<i class="mock-meter"><b style="--w:0%"></b></i></label></div>
-                  <span class="mock-status bad">NotReady</span>
-                </div>
-              </div>
-              <div class="mock-footnote">Tailscale mesh · pipeline-parallel shard 2/4 healthy · join code <code>PC2.7F3K</code> expires in 9m</div>
-            </section>
+              </section>
 
+              <section class="app-view" id="console-view-search" role="tabpanel" aria-labelledby="console-tab-search" data-view="search">
+                <div class="app-page">
+                  <div class="app-page-head"><div><h3>Data Search</h3><p>Search OpenSearch documents, explore fields, and turn aggregations into reusable charts.</p></div><div class="head-actions"><span class="app-button">Sync now</span><span class="proxy-chip"><i></i>server proxy</span></div></div>
+                  <div class="index-grid">
+                    <div class="index-card is-active"><code>orders-2026</code><strong>84,211</strong><span>documents · 142 MB</span></div>
+                    <div class="index-card"><code>crm-contacts</code><strong>12,480</strong><span>documents · 18 MB</span></div>
+                    <div class="index-card"><code>job-runs</code><strong>9,642</strong><span>documents · 26 MB</span></div>
+                  </div>
+                  <div class="app-card search-builder">
+                    <div class="search-query"><span>Index <code>orders-2026</code></span><span>Query <code>status:failed AND runtime:blender*</code></span><span class="app-button">Fields</span><span class="app-button primary">Search</span></div>
+                    <div class="chart-card"><header><strong>Failures by hour</strong><span>count by created_at</span></header><div class="chart-bars"><i style="--h:24%"></i><i style="--h:42%"></i><i style="--h:31%"></i><i style="--h:58%"></i><i style="--h:76%"></i><i style="--h:48%"></i><i style="--h:86%"></i><i style="--h:39%"></i><i style="--h:64%"></i><i style="--h:52%"></i></div></div>
+                    <div class="search-summary">84,211 documents · 23 ms · page 1 · results capped at 100</div>
+                  </div>
+                </div>
+              </section>
+
+              <section class="app-view" id="console-view-cluster" role="tabpanel" aria-labelledby="console-tab-cluster" data-view="cluster">
+                <div class="app-page">
+                  <div class="cluster-hero"><span>● Infrastructure</span><h3>Cluster overview</h3><p>Health, capacity, and worker placement across your fleet.</p><div><span class="app-button">↻ Refresh</span><span class="app-button primary">+ Add worker</span></div></div>
+                  <div class="cluster-metrics"><div><span>Total nodes</span><strong>4</strong><small>across 2 sites</small></div><div><span>Healthy</span><strong>3</strong><small>75% ready</small></div><div><span>Control plane</span><strong>1</strong><small>fleet master</small></div><div><span>Workers</span><strong>3</strong><small>job capacity</small></div></div>
+                  <div class="node-grid">
+                    <article class="node-card"><header><span class="node-avatar">◇</span><div><strong>studio-mac-pro</strong><small>this host</small></div><span class="status-pill good">Ready</span></header><div class="node-chips"><span>★ Fleet master</span><span>control-plane</span></div><div class="node-resources"><span>CPU <b>12 cores</b></span><span>Memory <b>64 GB</b></span></div><dl><div><dt>Address</dt><dd>100.64.1.10</dd></div><div><dt>Platform</dt><dd>darwin/arm64</dd></div><div><dt>Kubelet</dt><dd>v1.31.4</dd></div></dl></article>
+                    <article class="node-card"><header><span class="node-avatar">◆</span><div><strong>render-node-01</strong><small>worker</small></div><span class="status-pill good">Ready</span></header><div class="node-chips"><span>worker</span><span>gpu</span></div><div class="node-resources"><span>CPU <b>16 cores</b></span><span>Memory <b>128 GB</b></span></div><dl><div><dt>Address</dt><dd>100.64.1.21</dd></div><div><dt>Platform</dt><dd>linux/amd64</dd></div><div><dt>Joined</dt><dd>18 days ago</dd></div></dl></article>
+                    <article class="node-card is-down"><header><span class="node-avatar">◆</span><div><strong>macbook-air-03</strong><small>worker</small></div><span class="status-pill bad">NotReady</span></header><div class="node-chips"><span>worker</span><span>portable</span></div><div class="node-resources"><span>CPU <b>8 cores</b></span><span>Memory <b>24 GB</b></span></div><dl><div><dt>Address</dt><dd>100.64.1.34</dd></div><div><dt>Platform</dt><dd>darwin/arm64</dd></div><div><dt>Last seen</dt><dd>2h ago</dd></div></dl></article>
+                  </div>
+                </div>
+              </section>
+            </div>
           </div>
         </div>
       </div>
