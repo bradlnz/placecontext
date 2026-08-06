@@ -52,7 +52,7 @@
 
     const st = {
       canvas, ctx: canvas.getContext('2d'), nodes, links, neighbors, byId, dotnetRef,
-      pan: { x: 0, y: 0 }, scale: 1, alpha: 1, col: colors(),
+      pan: { x: 0, y: 0 }, scale: 1, alpha: 0.45, col: colors(),
       hover: null, selected: null, drag: null, panning: null, raf: 0, w: 0, h: 0, dpr: 1,
     };
     instances.set(id, st);
@@ -76,6 +76,10 @@
     st.ro = new ResizeObserver(resize); st.ro.observe(canvas);
 
     const toWorld = (sx, sy) => ({ x: (sx - st.pan.x) / st.scale, y: (sy - st.pan.y) / st.scale });
+    const requestFrame = () => {
+      if (st.raf) return;
+      st.raf = requestAnimationFrame(step);
+    };
     const mouse = e => { const r = canvas.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
     const pick = (wx, wy) => {
       let best = null, bd = Infinity;
@@ -88,12 +92,25 @@
       st.downAt = m;
       if (n) { st.drag = n; n.fixed = true; st.alpha = Math.max(st.alpha, 0.6); }
       else { st.panning = { x: m.x - st.pan.x, y: m.y - st.pan.y }; }
+      requestFrame();
     };
     st.onMove = e => {
       const m = mouse(e);
       if (st.drag) { const w = toWorld(m.x, m.y); st.drag.x = w.x; st.drag.y = w.y; st.drag.vx = st.drag.vy = 0; st.alpha = Math.max(st.alpha, 0.5); }
       else if (st.panning) { st.pan.x = m.x - st.panning.x; st.pan.y = m.y - st.panning.y; }
-      else { const w = toWorld(m.x, m.y); st.hover = pick(w.x, w.y); canvas.style.cursor = st.hover ? 'pointer' : 'default'; }
+      else
+      {
+        const w = toWorld(m.x, m.y);
+        const hover = pick(w.x, w.y);
+        if (hover !== st.hover)
+        {
+          st.hover = hover;
+          requestFrame();
+        }
+        canvas.style.cursor = st.hover ? 'pointer' : 'default';
+      }
+      if (st.drag || st.panning)
+        requestFrame();
     };
     st.onUp = e => {
       const moved = st.downAt && e && (() => { const m = mouse(e); return Math.hypot(m.x - st.downAt.x, m.y - st.downAt.y) > 4; })();
@@ -109,6 +126,7 @@
       const m = mouse(e), w = toWorld(m.x, m.y);
       st.scale = Math.min(4, Math.max(0.25, st.scale * (e.deltaY < 0 ? 1.1 : 0.9)));
       st.pan.x = m.x - w.x * st.scale; st.pan.y = m.y - w.y * st.scale;
+      requestFrame();
     };
     canvas.addEventListener('mousedown', st.onDown);
     window.addEventListener('mousemove', st.onMove);
@@ -123,26 +141,37 @@
           for (let j = i + 1; j < nodes.length; j++) {
             const o = nodes[j];
             let dx = n.x - o.x, dy = n.y - o.y, d2 = dx * dx + dy * dy || 0.01;
-            const f = (3500 * a) / d2, d = Math.sqrt(d2);
-            const fx = (dx / d) * f, fy = (dy / d) * f;
+            const f = (2200 * a) / d2, d = Math.sqrt(d2);
+            const fx = Math.max(-0.9, Math.min(0.9, (dx / d) * f));
+            const fy = Math.max(-0.9, Math.min(0.9, (dy / d) * f));
             n.vx += fx; n.vy += fy; o.vx -= fx; o.vy -= fy;
           }
-          n.vx -= n.x * 0.012 * a; n.vy -= n.y * 0.012 * a; // centering
+          n.vx -= n.x * 0.006 * a; n.vy -= n.y * 0.006 * a; // centering
         }
         for (const l of links) {
           const dx = l.t.x - l.s.x, dy = l.t.y - l.s.y, d = Math.hypot(dx, dy) || 0.01;
-          const f = (d - 64) * 0.015 * a, fx = (dx / d) * f, fy = (dy / d) * f;
+          const f = (d - 64) * 0.01 * a;
+          const fx = Math.max(-1.2, Math.min(1.2, (dx / d) * f));
+          const fy = Math.max(-1.2, Math.min(1.2, (dy / d) * f));
           l.s.vx += fx; l.s.vy += fy; l.t.vx -= fx; l.t.vy -= fy;
         }
         for (const n of nodes) {
           if (n.fixed) { n.vx = n.vy = 0; continue; }
-          n.vx *= 0.85; n.vy *= 0.85;
+          n.vx *= 0.9; n.vy *= 0.9;
           n.x += n.vx; n.y += n.vy;
         }
-        st.alpha *= 0.985;
+        st.alpha *= 0.992;
       }
       render();
-      st.raf = requestAnimationFrame(step);
+
+      if (a > 0.01 || st.drag || st.panning)
+      {
+        st.raf = requestAnimationFrame(step);
+      }
+      else
+      {
+        st.raf = 0;
+      }
     }
 
     function render() {
@@ -189,16 +218,17 @@
 
   // Programmatic selection (the details overlay's neighbor links): highlight the node, nudge the
   // sim so it settles visibly, and notify Blazor like a real click.
-  function select(id, nodeId) {
-    const st = instances.get(id);
-    if (!st) return;
-    st.selected = nodeId ? (st.byId.get(nodeId) || null) : null;
-    if (st.selected) { // centre the view on the node — search/card jumps land where you look
-      st.pan.x = st.w / 2 - st.selected.x * st.scale;
-      st.pan.y = st.h / 2 - st.selected.y * st.scale;
-    }
-    st.alpha = Math.max(st.alpha, 0.2);
+    function select(id, nodeId) {
+      const st = instances.get(id);
+      if (!st) return;
+      st.selected = nodeId ? (st.byId.get(nodeId) || null) : null;
+      if (st.selected) { // centre the view on the node — search/card jumps land where you look
+        st.pan.x = st.w / 2 - st.selected.x * st.scale;
+        st.pan.y = st.h / 2 - st.selected.y * st.scale;
+      }
+      st.alpha = Math.max(st.alpha, 0.2);
     if (st.dotnetRef) { try { st.dotnetRef.invokeMethodAsync('OnNodeClick', st.selected ? st.selected.id : null); } catch (e) {} }
+    requestFrame();
   }
 
   function destroy(id) {

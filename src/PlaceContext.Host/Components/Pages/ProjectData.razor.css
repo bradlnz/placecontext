@@ -900,7 +900,7 @@
 .graph-side-pane header strong { overflow: hidden; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
 .graph-side-pane header span { color: var(--text-3); font-size: 10px; text-transform: uppercase; }
 .graph-pane-close { display: grid; width: 30px; height: 30px; flex: none; place-items: center; border: 1px solid var(--border); border-radius: 7px; color: var(--text-2); background: var(--card-2); cursor: pointer; }
-.graph-side-pane-body { flex: 1; min-height: 0; padding: 12px; overflow: hidden; }
+.graph-side-pane-body { flex: 1; min-height: 0; padding: 14px; overflow: hidden; }
 
 .table-modal-head {
     display: flex;
