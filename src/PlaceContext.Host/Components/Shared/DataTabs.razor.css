@@ -3,11 +3,6 @@
     margin: -6px 0 16px;
 }
 
-.tabs-strip > .dctab {
-    flex: 1;
-    text-align: center;
-}
-
 @media (max-width: 700px) {
     .tabs-strip {
         overflow-x: auto;

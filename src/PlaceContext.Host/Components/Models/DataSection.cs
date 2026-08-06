@@ -19,7 +19,8 @@ public static class DataSectionNavigation
         new(DataSection.Tables, "Records", "data"),
         new(DataSection.Analytics, "Analytics", "analytics"),
         new(DataSection.DataMap, "Data map", "datamap"),
-        new(DataSection.Entities, "Entities", "entities")
+        new(DataSection.Entities, "Entities", "entities"),
+        new(DataSection.Graph, "Graph", "data-graph")
     ];
 
     public static string Route(Guid projectId, DataSectionItem item) =>
