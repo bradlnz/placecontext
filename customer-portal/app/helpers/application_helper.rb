@@ -23,14 +23,27 @@ module ApplicationHelper
     logo_url.presence
   end
 
+  def portal_relative_path(path)
+    prefix = portal_path.to_s.sub(%r{/\z}, "")
+    path = path.to_s
+
+    return path if prefix.blank? || prefix == "/"
+    return path if path == prefix || path.start_with?("#{prefix}/")
+
+    path = "/#{path}" unless path.start_with?("/")
+    "#{prefix}#{path}"
+  end
+
   def nav_link_to(label, path, icon: nil)
-    request_path_base = request.respond_to?(:path_base) ? request.path_base.to_s : request.script_name.to_s
-    request_path = "#{request_path_base}#{request.path}"
-    is_active = request_path == path || request_path.start_with?("#{path}/")
+    link_path = portal_relative_path(path)
+    request_path = "#{request.script_name}#{request.path}".sub(%r{/+\z}, "")
+    normalized_link = link_path.sub(%r{/+\z}, "")
+
+    is_active = request_path == normalized_link || request_path.start_with?("#{normalized_link}/")
     active_class = is_active ? "active" : ""
     icon_svg = icon.present? ? ICONS[icon.to_sym] : nil
 
-    link_to path, class: "nav-link #{active_class}" do
+    link_to link_path, class: "nav-link #{active_class}" do
       safe_join([raw(icon_svg), label].compact)
     end
   end

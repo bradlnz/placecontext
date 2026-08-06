@@ -1104,15 +1104,24 @@ public sealed class CrmViewModel : PageViewModel
         try
         {
             var saved = await ConfigurePortalAsync(target);
+            var defaultPortalUserName = string.IsNullOrWhiteSpace(PortalUserName) ? null : PortalUserName.Trim();
+            var defaultPortalUserEmail = string.IsNullOrWhiteSpace(saved.Email) ? null : saved.Email;
             if (Selected?.Id == saved.Id)
                 Selected = saved;
             if (PortalTarget?.Id == saved.Id)
                 PortalTarget = saved;
             await RefreshClients();
-            await TryCreateOrUpdatePortalUserAsync(saved, PortalUserName, PortalPassword);
-            PortalMessage = string.IsNullOrWhiteSpace(PortalUserName)
-                ? "Customer portal provisioned."
-                : "Customer portal provisioned and portal user updated.";
+            if (string.IsNullOrWhiteSpace(defaultPortalUserName) || string.IsNullOrWhiteSpace(defaultPortalUserEmail))
+            {
+                await TryCreateOrUpdatePortalUserAsync(saved, PortalUserName, PortalPassword);
+                PortalMessage = string.IsNullOrWhiteSpace(PortalUserName)
+                    ? "Customer portal provisioned."
+                    : "Customer portal provisioned and portal user updated.";
+            }
+            else
+            {
+                PortalMessage = "Customer portal provisioned and default portal user seeded.";
+            }
             PortalProvisioningOpen = false;
             PortalTarget = null;
             PortalUserName = "";
@@ -1256,13 +1265,18 @@ public sealed class CrmViewModel : PageViewModel
         var slug = string.IsNullOrWhiteSpace(PortalCustomerSlug)
             ? Slugify(target.Name)
             : Slugify(PortalCustomerSlug);
+        var defaultPortalUserName = string.IsNullOrWhiteSpace(PortalUserName) ? null : PortalUserName.Trim();
+        var defaultPortalUserEmail = string.IsNullOrWhiteSpace(target.Email) ? null : target.Email?.Trim();
         return await Svc.ConfigureCrmClientPortalAsync(
             target.Id,
             true,
             slug,
             string.IsNullOrWhiteSpace(PortalDomain) ? null : PortalDomain.Trim(),
             string.IsNullOrWhiteSpace(PortalBrandName) ? null : PortalBrandName.Trim(),
-            string.IsNullOrWhiteSpace(PortalBrandLogoUrl) ? null : PortalBrandLogoUrl.Trim()
+            string.IsNullOrWhiteSpace(PortalBrandLogoUrl) ? null : PortalBrandLogoUrl.Trim(),
+            defaultPortalUserName,
+            defaultPortalUserEmail,
+            string.IsNullOrWhiteSpace(PortalPassword) ? null : PortalPassword.Trim()
         );
     }
 

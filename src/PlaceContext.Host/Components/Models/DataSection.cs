@@ -6,7 +6,8 @@ public enum DataSection
     Analytics,
     Search,
     DataMap,
-    Entities
+    Entities,
+    Graph
 }
 
 public sealed record DataSectionItem(DataSection Section, string Label, string RouteSegment);
@@ -15,7 +16,7 @@ public static class DataSectionNavigation
 {
     public static IReadOnlyList<DataSectionItem> Items { get; } =
     [
-        new(DataSection.Tables, "Tables", "data"),
+        new(DataSection.Tables, "Records", "data"),
         new(DataSection.Analytics, "Analytics", "analytics"),
         new(DataSection.DataMap, "Data map", "datamap"),
         new(DataSection.Entities, "Entities", "entities")

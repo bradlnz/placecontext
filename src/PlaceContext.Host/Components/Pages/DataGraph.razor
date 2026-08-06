@@ -1,0 +1,61 @@
+@page "/project/{ProjectId:guid}/data-graph"
+@attribute [Authorize(Policy = Permission.DataRead)]
+@layout PlaceContext.Host.Components.Layout.ProjectLayout
+@implements IDisposable
+@using PlaceContext.Host.Components.ViewModels
+@inject DataGraphViewModel Vm
+
+<PageTitle>PlaceContext — Graph</PageTitle>
+
+<div class="page">
+    <DataTabs ProjectId="ProjectId" Active="@DataSection.Graph" />
+
+    <div class="page-head">
+        <div>
+            <h2 class="page-title">Graph</h2>
+            <div class="page-sub">
+                Project-wide knowledge graph — decisions, changes, jobs, tables, entities and how they connect.
+            </div>
+        </div>
+    </div>
+
+    @if (Vm.Loading)
+    {
+        <Skeleton Kind="list" Rows="6" Padded />
+    }
+    else if (Vm.Error is not null)
+    {
+        <div class="error-banner">@Vm.Error</div>
+    }
+    else if (Vm.Graph is { Nodes.Count: 0 })
+    {
+        <div class="dccard empty-note">
+            No graph yet — record decisions, run jobs and ingest data to build the project knowledge graph.
+        </div>
+    }
+    else if (Vm.Graph is not null)
+    {
+        <div class="dccard graph-card">
+            <GraphCanvas Graph="Vm.Graph" Height="640" Searchable="true" AllowFullscreen="true" />
+        </div>
+        <div class="legend">
+            <span><span class="dot-hub">●</span> hotspots</span>
+            <span><span class="dot-decision">●</span> decisions</span>
+            <span><span class="dot-change">●</span> changes</span>
+            <span><span class="dot-run">●</span> jobs / chains</span>
+            <span><span class="dot-table">●</span> tables / entities</span>
+            <span><span class="dot-good">●</span> run outputs</span>
+            <span>click a node to inspect details</span>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public Guid ProjectId { get; set; }
+
+    protected override void OnInitialized() => Vm.Attach(() => InvokeAsync(StateHasChanged));
+
+    protected override async Task OnParametersSetAsync() => await Vm.LoadAsync(ProjectId);
+
+    public void Dispose() => Vm.Detach();
+}

@@ -33,6 +33,9 @@ public sealed class CustomerPortalProvisioningService : ICustomerPortalProvision
         string? customDomain,
         string? brandName,
         string? brandLogoUrl,
+        string? defaultPortalUserName = null,
+        string? defaultPortalUserEmail = null,
+        string? defaultPortalUserPassword = null,
         CancellationToken ct = default)
     {
         if (tenantId == Guid.Empty) throw new InvalidOperationException("Tenant ID is required.");
@@ -56,7 +59,10 @@ public sealed class CustomerPortalProvisioningService : ICustomerPortalProvision
             portalPath,
             portalDomain,
             normalizedBrandName,
-            normalizedBrandLogoUrl);
+            normalizedBrandLogoUrl,
+            defaultPortalUserName?.Trim(),
+            defaultPortalUserEmail?.Trim(),
+            defaultPortalUserPassword);
         var service = BuildService(portalName);
         var ingress = BuildIngress(portalName, portalPath, normalizedDomain);
 
@@ -118,9 +124,15 @@ public sealed class CustomerPortalProvisioningService : ICustomerPortalProvision
         string portalPath,
         string portalDomain,
         string? brandName,
-        string? brandLogoUrl)
+        string? brandLogoUrl,
+        string? defaultPortalUserName = null,
+        string? defaultPortalUserEmail = null,
+        string? defaultPortalUserPassword = null)
     {
         var labels = new Dictionary<string, string> { ["app"] = portalName };
+        var normalizedDefaultPortalUserName = NormalizeValue(defaultPortalUserName);
+        var normalizedDefaultPortalUserEmail = NormalizeValue(defaultPortalUserEmail);
+        var normalizedDefaultPortalUserPassword = NormalizeValue(defaultPortalUserPassword);
         var env = new List<V1EnvVar>
         {
             new() { Name = "RAILS_ENV", Value = "production" },
@@ -223,6 +235,12 @@ public sealed class CustomerPortalProvisioningService : ICustomerPortalProvision
             env.Add(new() { Name = "PORTAL_BRAND_NAME", Value = brandName });
         if (brandLogoUrl is not null)
             env.Add(new() { Name = "PORTAL_BRAND_LOGO_URL", Value = brandLogoUrl });
+        if (normalizedDefaultPortalUserName is not null)
+            env.Add(new() { Name = "PORTAL_DEFAULT_USER_NAME", Value = normalizedDefaultPortalUserName });
+        if (normalizedDefaultPortalUserEmail is not null)
+            env.Add(new() { Name = "PORTAL_DEFAULT_USER_EMAIL", Value = normalizedDefaultPortalUserEmail });
+        if (normalizedDefaultPortalUserPassword is not null)
+            env.Add(new() { Name = "PORTAL_DEFAULT_USER_PASSWORD", Value = normalizedDefaultPortalUserPassword });
 
         return new V1Deployment
         {
@@ -364,6 +382,12 @@ public sealed class CustomerPortalProvisioningService : ICustomerPortalProvision
     }
 
     private static string? NormalizeBrandValue(string? value)
+    {
+        var trimmed = value?.Trim();
+        return string.IsNullOrWhiteSpace(trimmed) ? null : trimmed;
+    }
+
+    private static string? NormalizeValue(string? value)
     {
         var trimmed = value?.Trim();
         return string.IsNullOrWhiteSpace(trimmed) ? null : trimmed;

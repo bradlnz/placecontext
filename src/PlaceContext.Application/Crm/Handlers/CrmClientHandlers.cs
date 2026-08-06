@@ -145,6 +145,9 @@ public sealed class ConfigureCrmClientPortalHandler
                 command.Domain?.Trim(),
                 command.PortalBrandName,
                 command.PortalBrandLogoUrl,
+                command.DefaultPortalUserName,
+                command.DefaultPortalUserEmail,
+                command.DefaultPortalUserPassword,
                 ct);
         }
 

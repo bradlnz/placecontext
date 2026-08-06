@@ -109,6 +109,9 @@ public interface IPlaceContextService
         string? domain,
         string? portalBrandName = null,
         string? portalBrandLogoUrl = null,
+        string? defaultPortalUserName = null,
+        string? defaultPortalUserEmail = null,
+        string? defaultPortalUserPassword = null,
         CancellationToken ct = default);
     Task<CrmClientView> MoveCrmClientAsync(Guid clientId, Domain.ValueObjects.CustomerLifecycleStage stage, CancellationToken ct = default);
     Task<bool> DeleteCrmClientAsync(Guid clientId, CancellationToken ct = default);
@@ -217,6 +220,7 @@ public interface IPlaceContextService
     Task<RecordLinkService.RescanResult> RescanRecordLinksAsync(Guid projectId, CancellationToken ct = default);
     Task<IReadOnlyList<RecordLinkGroup>> ListRecordLinkGroupsAsync(Guid projectId, CancellationToken ct = default);
     Task<IReadOnlyList<RecordLink>> RelatedRecordLinksAsync(Guid projectId, string tableName, string rowKey, CancellationToken ct = default);
+    Task<IReadOnlyList<RecordLink>> RelatedRecordLinksForRowAsync(Guid projectId, string tableName, IReadOnlyDictionary<string, string?> values, CancellationToken ct = default);
 
     Task<IReadOnlyList<RunReportView>> ListRecentRunReportsAsync(int take = 24, CancellationToken ct = default);
     Task<JobView?> GetJobAsync(Guid jobId, CancellationToken ct = default);

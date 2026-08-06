@@ -246,9 +246,20 @@
 .preview-canvas { height: 330px; margin-top: 10px; }
 
 .results-card { overflow: hidden; }
-.table-scroll { overflow: auto; max-height: 620px; }
-table { width: 100%; border-collapse: collapse; font-size: 10.5px; }
-th {
+.table-scroll {
+    overflow-x: auto;
+    overflow-y: auto;
+    max-height: 620px;
+    width: 100%;
+    scrollbar-gutter: stable;
+}
+.results-card table {
+    width: 100%;
+    table-layout: fixed;
+    border-collapse: collapse;
+    font-size: 10.5px;
+}
+.results-card th {
     position: sticky;
     top: 0;
     z-index: 1;
@@ -260,7 +271,7 @@ th {
     font-weight: 550;
     white-space: nowrap;
 }
-td {
+.results-card td {
     max-width: 260px;
     padding: 8px 11px;
     border-bottom: 1px solid var(--border);
@@ -269,8 +280,161 @@ td {
     overflow: hidden;
     text-overflow: ellipsis;
 }
-tbody tr:hover td { background: color-mix(in srgb, var(--brand-2) 4%, transparent); }
-td code { color: var(--text-3); font-size: 9.5px; }
+.results-card tbody tr:hover td { background: color-mix(in srgb, var(--brand-2) 4%, transparent); }
+.results-card td code { color: var(--text-3); font-size: 9.5px; }
+.results-card .actions-column,
+.results-card .actions-cell {
+    width: 85px;
+    min-width: 85px;
+    max-width: 85px;
+}
+.results-card .actions-cell { text-align: right; }
+.results-card .action-btn {
+    height: 24px;
+    padding: 3px 8px;
+    font-size: 9.75px;
+}
+
+.record-sidepanel {
+    position: fixed;
+    top: 0;
+    right: 0;
+    width: min(540px, 92vw);
+    height: 100vh;
+    background: var(--bg);
+    border-left: 1px solid var(--border);
+    box-shadow: -30px 0 40px color-mix(in srgb, var(--text) 12%, transparent);
+    z-index: 24;
+    display: flex;
+    flex-direction: column;
+}
+
+.record-sidepanel-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 10px 10px 14px;
+    border-bottom: 1px solid var(--border);
+    background: var(--card);
+}
+
+.record-sidepanel-title {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+}
+
+.record-sidepanel-title strong {
+    font-size: 13px;
+}
+
+.record-sidepanel-title span {
+    color: var(--text-3);
+    font-size: 10px;
+}
+
+.record-sidepanel .close-panel {
+    width: 26px;
+    height: 26px;
+    border-radius: 6px;
+}
+
+.record-sidepanel-body {
+    overflow: auto;
+    flex: 1;
+    padding: 12px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.record-sidepanel-body section h4 {
+    margin: 0 0 8px;
+    font-size: 11px;
+    color: var(--text-2);
+}
+
+.record-sidepanel-body section h4::after {
+    content: "";
+    display: block;
+    margin-top: 5px;
+    height: 1px;
+    width: 34px;
+    background: var(--border);
+}
+
+.record-kv {
+    margin: 0;
+    display: grid;
+    gap: 7px;
+}
+
+.record-kv div {
+    display: grid;
+    gap: 3px;
+    min-width: 0;
+}
+
+.record-kv dt {
+    color: var(--text-3);
+    font-size: 10px;
+}
+
+.record-kv dd {
+    margin: 0;
+    color: var(--text-2);
+    font-size: 10.5px;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+.record-empty {
+    color: var(--text-3);
+    font-size: 10px;
+    padding-top: 2px;
+}
+
+.linked-record-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: grid;
+    gap: 7px;
+}
+
+.linked-record-btn {
+    width: 100%;
+    min-height: 28px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    text-align: left;
+}
+
+.linked-record-btn .linked-id {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--text-2);
+    font-size: 9.8px;
+}
+
+.linked-record-btn .linked-index {
+    color: var(--text-3);
+    font-size: 9px;
+}
+
+.record-chart {
+    height: 260px;
+}
+
+.record-chart canvas {
+    width: 100% !important;
+    height: 100% !important;
+}
 
 .pager {
     display: flex;
@@ -299,4 +463,5 @@ td code { color: var(--text-3); font-size: 9.5px; }
     .preview-canvas { height: 260px; }
     .saved-chart { height: 220px; }
     .proxy-chip { display: none; }
+    .record-sidepanel { width: 100vw; }
 }

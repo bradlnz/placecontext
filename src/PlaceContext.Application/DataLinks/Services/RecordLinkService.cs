@@ -83,6 +83,24 @@ public sealed class RecordLinkService
     }
 
     /// <summary>
+    /// Finds record links that share a normalized value with any identity cell of the supplied row.
+    /// The row key is computed the same way as during indexing so the current row is excluded and
+    /// related occurrences in other tables/rows are returned.
+    /// </summary>
+    public async Task<IReadOnlyList<RecordLink>> RelatedForRowAsync(Guid projectId, string table,
+        IReadOnlyDictionary<string, string?> values, int take = 30, CancellationToken ct = default)
+    {
+        var columns = await _store.ListColumnsAsync(projectId, table, ct);
+        var entities = await EntitiesAsync(projectId, ct);
+        var keyColumns = RowKeyColumns(table, columns, entities);
+        var rowKey = string.Join(" · ", keyColumns
+            .Select(k => values.FirstOrDefault(kv =>
+                string.Equals(kv.Key, k, StringComparison.OrdinalIgnoreCase)).Value)
+            .Where(v => !string.IsNullOrEmpty(v)));
+        return await _links.RelatedAsync(projectId, table, rowKey, take, ct);
+    }
+
+    /// <summary>
     /// Warn-only duplicate check for rows about to be added: fetches the table's existing identity
     /// values once and matches the new rows' normalized identity values in memory. Returns warnings
     /// like "possible duplicate of &lt;RowKey&gt; (shared &lt;column&gt;: &lt;value&gt;)", capped at

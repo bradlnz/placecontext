@@ -8,5 +8,8 @@ public interface ICustomerPortalProvisioner
         string? customDomain,
         string? brandName,
         string? brandLogoUrl,
+        string? defaultPortalUserName = null,
+        string? defaultPortalUserEmail = null,
+        string? defaultPortalUserPassword = null,
         CancellationToken ct = default);
 }

@@ -11,6 +11,9 @@ public sealed class NoOpCustomerPortalProvisioner : ICustomerPortalProvisioner
         string? customDomain,
         string? brandName,
         string? brandLogoUrl,
+        string? defaultPortalUserName,
+        string? defaultPortalUserEmail,
+        string? defaultPortalUserPassword,
         CancellationToken ct = default)
     {
         _ = tenantId;

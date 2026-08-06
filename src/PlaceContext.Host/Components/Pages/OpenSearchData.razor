@@ -9,7 +9,7 @@
 <div class="search-page">
     <DataTabs ProjectId="Vm.ProjectId" Active="@DataSection.Search" />
 
-    @if (!Vm.InitialLoadComplete)
+    @if (!Vm.InitialLoadComplete || Vm.Loading)
     {
         <div class="data-search-skeleton" aria-busy="true" aria-label="Loading data search">
             <Skeleton Kind="text" Rows="2" />
@@ -269,47 +269,123 @@
             </section>
         }
 
-        <section class="dccard results-card">
-            @if (Vm.Result.Hits.Count == 0)
-            {
-                <div class="no-results">No documents matched this query.</div>
-            }
-            else
-            {
-                <div class="table-scroll">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>_index</th>
-                                <th>_id</th>
+    <section class="dccard results-card">
+        @if (Vm.Result.Hits.Count == 0)
+        {
+            <div class="no-results">No documents matched this query.</div>
+        }
+        else
+        {
+            <div class="table-scroll">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>_index</th>
+                            <th>_id</th>
+                            @foreach (var column in Vm.VisibleColumns)
+                            {
+                                <th>@column</th>
+                            }
+                            <th class="actions-column">Details</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var hit in Vm.Result.Hits)
+                        {
+                            <tr class="@(hit.Id == Vm.RequestedDocument ? "linked-document" : null)">
+                                <td><code>@hit.Index</code></td>
+                                <td><code>@hit.Id</code></td>
                                 @foreach (var column in Vm.VisibleColumns)
                                 {
-                                    <th>@column</th>
+                                    <td title="@OpenSearchDataViewModel.Value(hit, column)">@OpenSearchDataViewModel.ShortValue(OpenSearchDataViewModel.Value(hit, column))</td>
                                 }
+                                <td class="actions-cell">
+                                    <button class="dcbtn action-btn"
+                                            @onclick="@(() => Vm.OpenRecordPanelAsync(hit))">
+                                        Inspect
+                                    </button>
+                                </td>
                             </tr>
-                        </thead>
-                        <tbody>
-                            @foreach (var hit in Vm.Result.Hits)
-                            {
-                                <tr class="@(hit.Id == Vm.RequestedDocument ? "linked-document" : null)">
-                                    <td><code>@hit.Index</code></td>
-                                    <td><code>@hit.Id</code></td>
-                                    @foreach (var column in Vm.VisibleColumns)
-                                    {
-                                        <td title="@OpenSearchDataViewModel.Value(hit, column)">@OpenSearchDataViewModel.ShortValue(OpenSearchDataViewModel.Value(hit, column))</td>
-                                    }
-                                </tr>
-                            }
-                        </tbody>
-                    </table>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <footer class="pager">
+                <button class="dcbtn" disabled="@(Vm.Page <= 1 || Vm.Searching)" @onclick="Vm.PreviousPageAsync">← Previous</button>
+                <span>Page @Vm.Page</span>
+                <button class="dcbtn" disabled="@(Vm.Result.Hits.Count < Vm.PageSize || Vm.Searching)" @onclick="Vm.NextPageAsync">Next →</button>
+            </footer>
+        }
+    </section>
+
+    @if (Vm.RecordPanelOpen && Vm.SelectedRecord is not null)
+    {
+        <aside class="record-sidepanel">
+            <header class="record-sidepanel-head">
+                <div class="record-sidepanel-title">
+                    <strong>Record details</strong>
+                    <span>@Vm.SelectedRecord.Index</span>
                 </div>
-                <footer class="pager">
-                    <button class="dcbtn" disabled="@(Vm.Page <= 1 || Vm.Searching)" @onclick="Vm.PreviousPageAsync">← Previous</button>
-                    <span>Page @Vm.Page</span>
-                    <button class="dcbtn" disabled="@(Vm.Result.Hits.Count < Vm.PageSize || Vm.Searching)" @onclick="Vm.NextPageAsync">Next →</button>
-                </footer>
-            }
-        </section>
+                <button class="dcbtn close-panel" @onclick="Vm.CloseRecordPanelAsync">×</button>
+            </header>
+            <div class="record-sidepanel-body">
+                <section>
+                    <h4>Record</h4>
+                    <dl class="record-kv">
+                        <div>
+                            <dt>_index</dt>
+                            <dd><code>@Vm.SelectedRecord.Index</code></dd>
+                        </div>
+                        <div>
+                            <dt>_id</dt>
+                            <dd><code>@Vm.SelectedRecord.Id</code></dd>
+                        </div>
+                        @foreach (var field in Vm.SelectedRecord.Fields.OrderBy(field => field.Key))
+                        {
+                            <div>
+                                <dt>@field.Key</dt>
+                                <dd title="@field.Value">@OpenSearchDataViewModel.ShortValue(field.Value)</dd>
+                            </div>
+                        }
+                    </dl>
+                </section>
+                <section>
+                    <h4>Linked records</h4>
+                    @if (Vm.LinkedRecords.Count == 0)
+                    {
+                        <div class="record-empty">No obvious linked records on this page.</div>
+                    }
+                    else
+                    {
+                        <ul class="linked-record-list">
+                            @foreach (var linked in Vm.LinkedRecords)
+                            {
+                                <li>
+                                    <button class="dcbtn linked-record-btn" @onclick="@(() => Vm.OpenRecordPanelAsync(linked))">
+                                        <span class="linked-id">@linked.Id</span>
+                                        <span class="linked-index">@linked.Index</span>
+                                    </button>
+                                </li>
+                            }
+                        </ul>
+                    }
+                </section>
+                <section>
+                    <h4>Graph</h4>
+                    @if (Vm.SelectedRecordGraphSpec is null)
+                    {
+                        <div class="record-empty">No graph available for this record.</div>
+                    }
+                    else
+                    {
+                        <div class="record-chart">
+                            <canvas id="@OpenSearchDataViewModel.RecordPanelCanvasId"></canvas>
+                        </div>
+                    }
+                </section>
+            </div>
+        </aside>
+    }
     }
     }
 </div>

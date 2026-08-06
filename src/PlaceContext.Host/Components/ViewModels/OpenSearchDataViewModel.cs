@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.JSInterop;
+using System.Globalization;
+using System.Text.Json;
 using PlaceContext.Application;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Features;
@@ -42,11 +44,16 @@ public sealed class OpenSearchDataViewModel : PageViewModel, IDisposable
     public string? RequestedDocument { get; set; }
 
     public const string PreviewCanvasId = "opensearch-chart-preview";
+    public const string RecordPanelCanvasId = "opensearch-record-graph";
 
     public IReadOnlyList<OpenSearchIndexView> Indices = Array.Empty<OpenSearchIndexView>();
     public IReadOnlyList<OpenSearchFieldView> Fields = Array.Empty<OpenSearchFieldView>();
     public List<OpenSearchDashboardView> Dashboards = new();
     public OpenSearchSearchView? Result;
+    public OpenSearchHitView? SelectedRecord;
+    public bool RecordPanelOpen;
+    public IReadOnlyList<OpenSearchHitView> LinkedRecords = Array.Empty<OpenSearchHitView>();
+    public string? SelectedRecordGraphSpec;
     public string IndexPattern = "*";
     public string QueryText = "";
     public string BucketField = "";
@@ -81,6 +88,7 @@ public sealed class OpenSearchDataViewModel : PageViewModel, IDisposable
     public int Page = 1;
     public int PageSize { get; } = 25;
     public string? LastPreviewSpec;
+    private string? LastRecordGraphSpec;
     public readonly Dictionary<Guid, DateTimeOffset> RenderedDashboards = new();
     public readonly HashSet<string> RenderedGeneratedCharts = new();
     public List<GeneratedOpenSearchChart> GeneratedCharts = new();
@@ -116,6 +124,8 @@ public sealed class OpenSearchDataViewModel : PageViewModel, IDisposable
     {
         Ui.Set("Data Search", "OpenSearch · queries · charts");
         Loading = true;
+        InitialLoadComplete = false;
+        CloseRecordPanel();
         try
         {
             var indicesTask = Svc.ListOpenSearchIndicesAsync(ProjectId);
@@ -247,6 +257,30 @@ public sealed class OpenSearchDataViewModel : PageViewModel, IDisposable
             }
             catch (JSException) { }
         }
+
+        if (!RecordPanelOpen)
+        {
+            if (LastRecordGraphSpec is not null)
+            {
+                try
+                {
+                    await JS.InvokeVoidAsync("pcchart.destroy", RecordPanelCanvasId);
+                }
+                catch (JSException) { }
+                LastRecordGraphSpec = null;
+            }
+            return;
+        }
+
+        if (SelectedRecordGraphSpec is { } recordSpec && recordSpec != LastRecordGraphSpec)
+        {
+            try
+            {
+                await JS.InvokeVoidAsync("pcchart.render", RecordPanelCanvasId, recordSpec);
+                LastRecordGraphSpec = recordSpec;
+            }
+            catch (JSException) { }
+        }
     }
 
     public async Task LoadFieldsAsync()
@@ -316,10 +350,27 @@ public sealed class OpenSearchDataViewModel : PageViewModel, IDisposable
     public async Task SelectIndexAsync(OpenSearchIndexView index)
     {
         IndexPattern = index.Name;
+        CloseRecordPanel();
         Page = 1;
         Result = null;
         await LoadFieldsAsync();
         await GenerateChartsAsync();
+    }
+
+    public Task OpenRecordPanelAsync(OpenSearchHitView hit)
+    {
+        SelectedRecord = hit;
+        RecordPanelOpen = true;
+        LinkedRecords = FindLinkedRecords(hit);
+        SelectedRecordGraphSpec = BuildRecordGraphSpec(hit, LinkedRecords);
+        LastRecordGraphSpec = null;
+        return Task.CompletedTask;
+    }
+
+    public Task CloseRecordPanelAsync()
+    {
+        CloseRecordPanel();
+        return Task.CompletedTask;
     }
 
     public async Task GenerateChartsAsync()
@@ -606,6 +657,7 @@ public sealed class OpenSearchDataViewModel : PageViewModel, IDisposable
     {
         Searching = true;
         Error = null;
+        CloseRecordPanel();
         try
         {
             Result = await Svc.SearchOpenSearchAsync(BuildRequest());
@@ -830,6 +882,80 @@ public sealed class OpenSearchDataViewModel : PageViewModel, IDisposable
     }
 
     public void Dispose() => Detach();
+
+    private void CloseRecordPanel()
+    {
+        SelectedRecord = null;
+        RecordPanelOpen = false;
+        LinkedRecords = Array.Empty<OpenSearchHitView>();
+        SelectedRecordGraphSpec = null;
+        LastRecordGraphSpec = null;
+    }
+
+    private IReadOnlyList<OpenSearchHitView> FindLinkedRecords(OpenSearchHitView selected)
+    {
+        var hits = Result?.Hits;
+        if (hits is null or { Count: 0 })
+            return Array.Empty<OpenSearchHitView>();
+
+        return hits
+            .Where(hit => hit.Id != selected.Id && SharesAnyFieldValue(selected, hit))
+            .OrderBy(hit => hit.Index)
+            .ThenBy(hit => hit.Id)
+            .Take(6)
+            .ToList();
+    }
+
+    private static bool SharesAnyFieldValue(OpenSearchHitView source, OpenSearchHitView target)
+    {
+        foreach (var sourceField in source.Fields)
+        {
+            if (string.IsNullOrWhiteSpace(sourceField.Value))
+                continue;
+            if (target.Fields.TryGetValue(sourceField.Key, out var targetValue) &&
+                sourceField.Value == targetValue)
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static string? BuildRecordGraphSpec(
+        OpenSearchHitView record,
+        IReadOnlyList<OpenSearchHitView> linkedRecords
+    )
+    {
+        var entries = record.Fields.Where(field => !string.IsNullOrWhiteSpace(field.Value)).Take(8).ToList();
+        if (entries.Count == 0)
+            return null;
+
+        var labels = entries.Select(entry => entry.Key).ToArray();
+        var selectedSeries = entries.Select(entry => NumericHint(entry.Value)).ToArray();
+        var linkedSeries = entries
+            .Select(entry =>
+                (double)linkedRecords.Count(link =>
+                    link.Fields.TryGetValue(entry.Key, out var value) && value == entry.Value
+                )
+            )
+            .ToArray();
+        var spec = new
+        {
+            type = "bar",
+            labels,
+            series = new[]
+            {
+                new { name = "Field value magnitude", values = selectedSeries },
+                new { name = "Linked matches", values = linkedSeries },
+            },
+        };
+        return JsonSerializer.Serialize(spec);
+    }
+
+    private static double NumericHint(string? value) =>
+        double.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out var parsed)
+            ? parsed
+            : (double)Math.Max(0, value?.Length ?? 0);
 
     public void ReplaceDashboard(OpenSearchDashboardView dashboard)
     {

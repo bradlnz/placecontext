@@ -263,6 +263,9 @@ public sealed class PlaceContextService : IPlaceContextService
         string? domain,
         string? portalBrandName,
         string? portalBrandLogoUrl,
+        string? defaultPortalUserName,
+        string? defaultPortalUserEmail,
+        string? defaultPortalUserPassword,
         CancellationToken ct = default)
         => _dispatcher.Send(
             new ConfigureCrmClientPortalCommand(
@@ -271,7 +274,10 @@ public sealed class PlaceContextService : IPlaceContextService
                 slug,
                 domain,
                 portalBrandName,
-                portalBrandLogoUrl),
+                portalBrandLogoUrl,
+                defaultPortalUserName,
+                defaultPortalUserEmail,
+                defaultPortalUserPassword),
             ct);
 
     public Task<CrmClientView> MoveCrmClientAsync(
@@ -507,6 +513,9 @@ public sealed class PlaceContextService : IPlaceContextService
 
     public Task<IReadOnlyList<RecordLink>> RelatedRecordLinksAsync(Guid projectId, string tableName, string rowKey, CancellationToken ct = default)
         => _linkStore.RelatedAsync(projectId, tableName, rowKey, ct: ct);
+
+    public Task<IReadOnlyList<RecordLink>> RelatedRecordLinksForRowAsync(Guid projectId, string tableName, IReadOnlyDictionary<string, string?> values, CancellationToken ct = default)
+        => _links.RelatedForRowAsync(projectId, tableName, values, ct: ct);
 
     public Task<IReadOnlyList<RunReportView>> ListRecentRunReportsAsync(int take = 24, CancellationToken ct = default)
         => _dispatcher.Query(new ListRecentRunReportsQuery(take), ct);

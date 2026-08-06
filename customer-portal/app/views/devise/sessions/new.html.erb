@@ -1,0 +1,50 @@
+<% page_title "Sign in" %>
+
+<div class="auth-page">
+  <div class="auth-card">
+    <div class="auth-brand">
+      <div class="brand-logo">
+        <% if portal_brand_logo_url %>
+          <img src="<%= portal_brand_logo_url %>" alt="<%= portal_brand_name %> logo" />
+        <% else %>
+          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M12 2L2 7L12 12L22 7L12 2Z" fill="currentColor"/><path d="M2 17L12 22L22 17" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 12L12 17L22 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <% end %>
+      </div>
+      <span class="brand-name"><%= portal_brand_name %></span>
+    </div>
+
+    <h1 class="auth-title">Sign in to your workspace</h1>
+
+    <% if alert %>
+      <div class="flash flash-alert" role="alert"><%= alert %></div>
+    <% end %>
+    <% if notice %>
+      <div class="flash flash-notice" role="status"><%= notice %></div>
+    <% end %>
+
+    <%= form_for(resource, as: resource_name, url: session_path(resource_name), html: { class: "auth-form" }) do |form| %>
+      <div class="form-group">
+        <%= form.label :email %>
+        <%= form.email_field :email, autofocus: true, autocomplete: "email", placeholder: "you@company.com", required: true %>
+      </div>
+
+      <div class="form-group">
+        <%= form.label :password %>
+        <%= form.password_field :password, autocomplete: "current-password", placeholder: "••••••••", required: true %>
+      </div>
+
+      <% if devise_mapping.rememberable? %>
+        <div class="form-group auth-remember">
+          <%= form.check_box :remember_me %>
+          <%= form.label :remember_me %>
+        </div>
+      <% end %>
+
+      <%= form.submit "Sign in", class: "btn btn-primary btn-block" %>
+    <% end %>
+
+    <div class="auth-links">
+      <%= link_to "Forgot your password?", new_password_path(resource_name) %>
+    </div>
+  </div>
+</div>

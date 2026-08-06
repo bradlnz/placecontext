@@ -1,0 +1,38 @@
+<% page_title "Reset password" %>
+
+<div class="auth-page">
+  <div class="auth-card">
+    <div class="auth-brand">
+      <div class="brand-logo">
+        <% if portal_brand_logo_url %>
+          <img src="<%= portal_brand_logo_url %>" alt="<%= portal_brand_name %> logo" />
+        <% else %>
+          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M12 2L2 7L12 12L22 7L12 2Z" fill="currentColor"/><path d="M2 17L12 22L22 17" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 12L12 17L22 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <% end %>
+      </div>
+      <span class="brand-name"><%= portal_brand_name %></span>
+    </div>
+
+    <h1 class="auth-title">Reset your password</h1>
+
+    <% if alert %>
+      <div class="flash flash-alert" role="alert"><%= alert %></div>
+    <% end %>
+    <% if notice %>
+      <div class="flash flash-notice" role="status"><%= notice %></div>
+    <% end %>
+
+    <%= form_for(resource, as: resource_name, url: password_path(resource_name), html: { method: :post, class: "auth-form" }) do |form| %>
+      <div class="form-group">
+        <%= form.label :email %>
+        <%= form.email_field :email, autofocus: true, autocomplete: "email", placeholder: "you@company.com", required: true %>
+      </div>
+
+      <%= form.submit "Send reset instructions", class: "btn btn-primary btn-block" %>
+    <% end %>
+
+    <div class="auth-links">
+      <%= link_to "Back to sign in", new_session_path(resource_name) %>
+    </div>
+  </div>
+</div>

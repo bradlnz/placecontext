@@ -174,10 +174,6 @@
                         <span>@(_activeTableName ?? "Untitled query")</span>
                     </div>
                     <div class="studio-toolbar-spacer"></div>
-                    <div class="studio-connection">
-                        <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z" /></svg>
-                        <span>@(ActiveTableTab?.IsIndex == true ? "index" : "project")</span>
-                    </div>
                     <button class="studio-run" disabled="@ActiveTableTab?.Running" @onclick="@(async () => { if (ActiveTableTab is { } a) await RunTableTabAsync(a); })">
                         <svg viewBox="0 0 24 24"><path d="M5 3l14 9-14 9V3z" /></svg>
                         @(ActiveTableTab?.Running == true ? "Running…" : "Run")
@@ -185,10 +181,6 @@
                     <button class="studio-tool" title="Save this query" @onclick="SaveCurrentQuery">
                         <svg viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" /><path d="M17 21v-8H7v8" /></svg>
                         Save
-                    </button>
-                    <button class="studio-tool" title="Share query (coming soon)">
-                        <svg viewBox="0 0 24 24"><circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" /><path d="M8.59 13.51l6.83 3.98M15.41 6.51l-6.82 3.98" /></svg>
-                        Share
                     </button>
                 </div>
 
@@ -275,6 +267,7 @@
                                             {
                                                 <th>@c</th>
                                             }
+                                            <th class="result-row-actions"></th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -296,6 +289,20 @@
                                                         }
                                                     </td>
                                                 }
+                                                <td class="result-row-actions">
+                                                    @if (!activeTab.IsIndex)
+                                                    {
+                                                        var rowValues = activeTab.Result!.Columns
+                                                            .Select((c, i) => (Column: c, Value: i < row.Row.Count ? row.Row[i] : null))
+                                                            .ToDictionary(x => x.Column, x => x.Value);
+                                                        <button class="row-graph-button"
+                                                                title="Show linked records"
+                                                                @onclick:stopPropagation="true"
+                                                                @onclick="@(() => Vm.OpenGraphPaneAsync(activeTab.TableName, rowValues, row.Index))">
+                                                            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" /><path d="M8.59 13.51l6.83 3.98M15.41 6.51l-6.82 3.98" /></svg>
+                                                        </button>
+                                                    }
+                                                </td>
                                             </tr>
                                         </Virtualize>
                                     </tbody>
@@ -328,6 +335,22 @@
                             <button class="json-pane-close" @onclick="CloseJsonViewer" aria-label="Close JSON viewer">×</button>
                         </header>
                         <pre>@_jsonViewerValue</pre>
+                    </aside>
+                }
+
+                @if (Vm.GraphSidePaneGraph is not null)
+                {
+                    <aside class="graph-side-pane">
+                        <header>
+                            <div>
+                                <strong>@Vm.GraphSidePaneTitle</strong>
+                                <span>@Vm.GraphSidePaneGraph.Links.Count linked record@(Vm.GraphSidePaneGraph.Links.Count == 1 ? "" : "s")</span>
+                            </div>
+                            <button class="graph-pane-close" @onclick="Vm.CloseGraphPane" aria-label="Close linked records">×</button>
+                        </header>
+                        <div class="graph-side-pane-body">
+                            <GraphCanvas Graph="Vm.GraphSidePaneGraph" Height="440" Searchable="true" AllowFullscreen="true" />
+                        </div>
                     </aside>
                 }
             }
@@ -739,6 +762,7 @@
         sb.Append((int)_resultsPane).Append('|');
         sb.Append(_selectedRowIndex ?? -1).Append('|');
         sb.Append(_jsonViewerTitle ?? "\0").Append('|').Append(_jsonViewerValue?.Length ?? 0).Append('|');
+        sb.Append(Vm.GraphSidePaneTitle ?? "\0").Append('|').Append(Vm.GraphSidePaneGraph?.Nodes.Count ?? 0).Append('|');
         sb.Append((int)Vm.SidebarPane).Append('|');
         sb.Append(Vm.TablesReady).Append('|').Append(Vm.IndicesReady).Append('|').Append(Vm.SavedQueriesReady).Append('|');
         sb.Append(Vm.Tables.Count).Append('|').Append(Vm.Indices.Count).Append('|').Append(Vm.SavedQueries.Count).Append('|');

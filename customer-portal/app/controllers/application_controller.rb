@@ -3,9 +3,15 @@ class ApplicationController < ActionController::Base
   before_action :authenticate_portal_user!,
     unless: -> { controller_name == "health" || static_asset_request? }
 
-  helper_method :portal_tenant_id
+  layout :resolve_layout
+
+  helper_method :portal_tenant_id, :portal_path
 
   private
+
+  def resolve_layout
+    devise_controller? ? "devise" : "application"
+  end
 
   def require_tenant_host!
     return if request.path == "/healthz" || request.path == "#{portal_path}/healthz"

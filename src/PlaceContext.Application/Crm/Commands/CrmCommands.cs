@@ -30,7 +30,10 @@ public sealed record ConfigureCrmClientPortalCommand(
     string? Slug,
     string? Domain,
     string? PortalBrandName = null,
-    string? PortalBrandLogoUrl = null) : ICommand<CrmClientView>, IRequiresPermission
+    string? PortalBrandLogoUrl = null,
+    string? DefaultPortalUserName = null,
+    string? DefaultPortalUserEmail = null,
+    string? DefaultPortalUserPassword = null) : ICommand<CrmClientView>, IRequiresPermission
 {
     public string RequiredPermission => Permission.SettingsManage;
 }

@@ -513,6 +513,8 @@ internal static class MainLayoutIconCatalog
                 "<svg width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M4 4h16M4 20h16M8 4v16M12 4v16M16 4v16'/></svg>",
             "data.entities" =>
                 "<svg width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><circle cx='9' cy='8' r='3'></circle><circle cx='16' cy='8' r='3'></circle><path d='M4 21a4 4 0 0 1 4-4h8a4 4 0 0 1 4 4'></path><path d='M2 19.5c0-4 4-5 7-5s7 1 7 5'></path><path d='M9 21a7 7 0 0 1 14 0'></path></svg>",
+            "data.graph" =>
+                "<svg width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><circle cx='5' cy='12' r='3'></circle><circle cx='19' cy='5' r='3'></circle><circle cx='19' cy='19' r='3'></circle><path d='M8 10.5l8-4M8 13.5l8 4'></path></svg>",
             "observability" =>
                 "<svg width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'><path d='M3 3v18h18M7 15v-4M12 15V9M17 15V11'></path></svg>",
             "overview" =>

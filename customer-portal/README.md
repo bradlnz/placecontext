@@ -15,6 +15,9 @@ tenant and receives its identity from the host configuration:
 - `PLACE_CONTEXT_CORE_API_KEY`
 - `PLACE_CONTEXT_PROVISIONING_KEY`
 - `SMTP_ADDRESS`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`
+- `PORTAL_DEFAULT_USER_NAME`
+- `PORTAL_DEFAULT_USER_EMAIL`
+- `PORTAL_DEFAULT_USER_PASSWORD` (optional)
 
 Devise owns portal authentication in the local `portal_users` table. These are
 not Placecontext operator users. Placecontext enables, disables, and invites
