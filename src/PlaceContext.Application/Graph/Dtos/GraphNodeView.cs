@@ -5,4 +5,6 @@ public sealed record GraphNodeView(string Id, string Label, int Degree, bool IsG
     /// <summary>Optional palette kind ("good" | "human") for typed nodes (artifacts, related records).</summary>
     string? Kind = null,
     /// <summary>Always draw this node's label (hubs and hovered nodes are labeled regardless).</summary>
-    bool Labeled = false);
+    bool Labeled = false,
+    /// <summary>When the node represents an artifact, the metadata needed to render it inline.</summary>
+    GraphNodeArtifactRef? Artifact = null);

@@ -1,4 +1,5 @@
 using PlaceContext.Application.Ports;
+using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.Repositories;
 using PlaceContext.Domain.Services;
 using PlaceContext.Domain.ValueObjects;
@@ -18,6 +19,9 @@ public sealed class DecisionTreeProvider : IDecisionTreeProvider
     private readonly IDataMappingRepository _mappings;
     private readonly IProjectDataStore _projectData;
     private readonly IDataEntityRepository _entities;
+    private readonly IJobRunRepository? _runs;
+    private readonly IRunArtifactLinkRepository? _artifacts;
+    private readonly IRecordLinkStore? _links;
 
     public DecisionTreeProvider(
         IProjectRepository projects, IActivityLogRepository ledgers, IDecisionRepository decisions,
@@ -26,7 +30,10 @@ public sealed class DecisionTreeProvider : IDecisionTreeProvider
         IProjectDataStore projectData, IDataEntityRepository entities,
         // Optional: when the embedding store is present, embedded run outputs are woven into the graph
         // as semantically-linked "brain" nodes. The graph still assembles fully without it.
-        IRunEmbeddingRepository? runOutputs = null)
+        IRunEmbeddingRepository? runOutputs = null,
+        IJobRunRepository? runs = null,
+        IRunArtifactLinkRepository? artifacts = null,
+        IRecordLinkStore? links = null)
     {
         _projects = projects;
         _ledgers = ledgers;
@@ -39,6 +46,9 @@ public sealed class DecisionTreeProvider : IDecisionTreeProvider
         _projectData = projectData;
         _entities = entities;
         _runOutputs = runOutputs;
+        _runs = runs;
+        _artifacts = artifacts;
+        _links = links;
     }
 
     public async Task<DecisionTree> BuildAsync(ProjectId projectId, CancellationToken ct = default)
@@ -85,7 +95,49 @@ public sealed class DecisionTreeProvider : IDecisionTreeProvider
                 .ToList();
         }
 
+        // Entity-aligned runtime data: recent job runs, their artifacts, and shared record-link values
+        // (addresses/locations, emails, phones, etc.). Best-effort — the graph still assembles if any
+        // store is unavailable or empty.
+        IReadOnlyList<JobRun> runs = Array.Empty<JobRun>();
+        IReadOnlyList<RunArtifactLink> artifacts = Array.Empty<RunArtifactLink>();
+        IReadOnlyList<RecordLinkCluster> linkClusters = Array.Empty<RecordLinkCluster>();
+
+        try
+        {
+            if (_runs is not null)
+            {
+                var allRuns = new List<JobRun>();
+                foreach (var job in jobs)
+                    allRuns.AddRange(await _runs.ListForJobAsync(job.Id, ct));
+                runs = allRuns.OrderByDescending(r => r.StartedAt).Take(60).ToList();
+            }
+        }
+        catch { }
+
+        try
+        {
+            artifacts = _artifacts is not null
+                ? await _artifacts.ListForProjectAsync(projectId.Value, take: 200, ct: ct)
+                : Array.Empty<RunArtifactLink>();
+        }
+        catch { }
+
+        try
+        {
+            if (_links is not null)
+            {
+                var groups = await _links.GroupsAsync(projectId.Value, take: 100, ct);
+                linkClusters = groups.Select(g => new RecordLinkCluster(
+                    g.Kind,
+                    g.NormalizedValue,
+                    g.DisplayValue,
+                    g.Occurrences.Select(o => new RecordLinkClusterOccurrence(o.TableName, o.ColumnName, o.RowKey)).ToList()
+                )).ToList();
+            }
+        }
+        catch { }
+
         return _assembler.Assemble(project.Name, decisions, ledger, activity, runOutputs,
-            jobs, chains, mappings, tables, entities);
+            jobs, chains, mappings, tables, entities, runs, artifacts, linkClusters);
     }
 }

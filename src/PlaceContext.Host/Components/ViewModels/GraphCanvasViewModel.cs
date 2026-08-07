@@ -191,6 +191,41 @@ public sealed class GraphCanvasViewModel(IJSRuntime js)
     public bool IsAmbiguous(GraphLinkConfidence confidence) =>
         confidence == GraphLinkConfidence.Ambiguous;
 
+    public string PreviewUrl(GraphNodeArtifactRef artifact) =>
+        $"/runs/{artifact.RunId}/artifacts/{artifact.Id}?v={artifact.CreatedAt.ToUnixTimeSeconds()}";
+
+    public bool IsImage(GraphNodeArtifactRef artifact)
+    {
+        if (artifact.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+            return true;
+        var extension = Path.GetExtension(artifact.Title);
+        return extension.Equals(".png", StringComparison.OrdinalIgnoreCase)
+            || extension.Equals(".jpg", StringComparison.OrdinalIgnoreCase)
+            || extension.Equals(".jpeg", StringComparison.OrdinalIgnoreCase)
+            || extension.Equals(".gif", StringComparison.OrdinalIgnoreCase)
+            || extension.Equals(".webp", StringComparison.OrdinalIgnoreCase)
+            || extension.Equals(".avif", StringComparison.OrdinalIgnoreCase)
+            || extension.Equals(".bmp", StringComparison.OrdinalIgnoreCase)
+            || extension.Equals(".tif", StringComparison.OrdinalIgnoreCase)
+            || extension.Equals(".tiff", StringComparison.OrdinalIgnoreCase)
+            || extension.Equals(".svg", StringComparison.OrdinalIgnoreCase);
+    }
+
+    public bool IsPdf(GraphNodeArtifactRef artifact) =>
+        artifact.ContentType.Equals("application/pdf", StringComparison.OrdinalIgnoreCase);
+
+    public bool IsPreviewable(GraphNodeArtifactRef artifact) =>
+        artifact.ContentType.StartsWith("text/", StringComparison.OrdinalIgnoreCase)
+        || artifact.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase)
+        || artifact.ContentType.StartsWith("video/", StringComparison.OrdinalIgnoreCase)
+        || artifact.ContentType == "application/pdf"
+        || artifact.ContentType.Contains("svg", StringComparison.OrdinalIgnoreCase);
+
+    public GraphNodeArtifactRef? FirstPreviewableArtifact =>
+        ReachableArtifacts
+            .Select(r => r.Node.Artifact)
+            .FirstOrDefault(a => a is not null && IsPreviewable(a));
+
     public async Task JumpAsync(string nodeId)
     {
         Matches = [];

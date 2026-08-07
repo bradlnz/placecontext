@@ -1,4 +1,6 @@
 Rails.application.routes.draw do
+  legacy_portal_path = ENV.fetch("PLACE_CONTEXT_PORTAL_PATH", "/")
+  get "/portal_users/sign_in", to: redirect("#{legacy_portal_path.sub(%r{/\\z}, "")}/login")
   devise_for :portal_users,
     path: "",
     path_names: { sign_in: "login", sign_out: "logout", sign_up: "register", password: "password" }

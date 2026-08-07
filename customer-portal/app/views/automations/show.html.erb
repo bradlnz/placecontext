@@ -16,6 +16,10 @@
 <% end %>
 
 <%= form_with url: run_automation_path(@chain["id"], project_id: @project_id), method: :post, local: true do %>
+  <% if params[:client_id].present? %>
+    <%= hidden_field_tag :client_id, params[:client_id] %>
+  <% end %>
+
   <% @chain["steps"].each do |step| %>
     <fieldset class="step-card">
       <legend>Step <%= step["index"] + 1 %>: <%= step["jobName"] %></legend>

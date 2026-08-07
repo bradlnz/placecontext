@@ -50,6 +50,7 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
     public DbSet<CrmAppointmentRow> CrmAppointments => Set<CrmAppointmentRow>();
     public DbSet<CrmCalendarRow> CrmCalendars => Set<CrmCalendarRow>();
     public DbSet<CrmClientArtifactRow> CrmClientArtifacts => Set<CrmClientArtifactRow>();
+    public DbSet<CrmClientJobChainAssignmentRow> CrmClientJobChainAssignments => Set<CrmClientJobChainAssignmentRow>();
     public DbSet<CrmAutomationRuleRow> CrmAutomationRules => Set<CrmAutomationRuleRow>();
     public DbSet<CrmAutomationQueueRow> CrmAutomationQueue => Set<CrmAutomationQueueRow>();
     public DbSet<CrmIngestionSettingsRow> CrmIngestionSettings => Set<CrmIngestionSettingsRow>();
@@ -370,6 +371,18 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
             e.HasIndex(x => new { x.ClientId, x.SourceArtifactId }).IsUnique();
             e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
             e.Property(x => x.CreatedAt).HasDefaultValueSql("now()");
+        });
+
+        b.Entity<CrmClientJobChainAssignmentRow>(e =>
+        {
+            e.ToTable("crm_client_job_chain_assignments");
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => new { x.ProjectId, x.ClientId, x.ChainId }).IsUnique();
+            e.HasIndex(x => new { x.ProjectId, x.ClientId });
+            e.HasIndex(x => x.ChainId);
+            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
+            e.Property(x => x.CreatedAt).HasDefaultValueSql("now()");
+            e.Property(x => x.UpdatedAt).HasDefaultValueSql("now()");
         });
 
         b.Entity<CrmAutomationRuleRow>(e =>

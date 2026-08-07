@@ -126,6 +126,15 @@ public interface IPlaceContextService
         Guid clientId,
         Guid chainId,
         CancellationToken ct = default);
+    Task<IReadOnlyList<Guid>> ListCrmClientAssignedJobChainIdsAsync(
+        Guid clientId,
+        Guid projectId,
+        CancellationToken ct = default);
+    Task<IReadOnlyList<Guid>> SetCrmClientAssignedJobChainIdsAsync(
+        Guid clientId,
+        Guid projectId,
+        IReadOnlyList<Guid> chainIds,
+        CancellationToken ct = default);
     Task<IReadOnlyList<CrmChainRunView>> ListCrmClientChainRunsAsync(
         Guid clientId,
         int take = 20,

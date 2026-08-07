@@ -51,6 +51,15 @@ public sealed class EfTenantStore : ITenantStore
         }
     }
 
+    public async Task<IReadOnlyList<TenantInfo>> ListTenantsAsync(int take = 1000, CancellationToken ct = default)
+    {
+        var rows = await _db.Tenants.AsNoTracking()
+            .OrderBy(t => t.Name)
+            .Take(take)
+            .ToListAsync(ct);
+        return rows.Select(ToInfo).ToList();
+    }
+
     public Task<TenantRow?> GetRowAsync(Guid tenantId, CancellationToken ct = default)
         => _db.Tenants.FirstOrDefaultAsync(t => t.Id == tenantId, ct)!;
 

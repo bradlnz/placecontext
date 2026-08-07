@@ -288,6 +288,11 @@ public sealed class TargetPageViewModelTests
             bool enabled,
             CancellationToken ct = default
         ) => throw new NotImplementedException();
+
+        public Task<IReadOnlyList<TenantInfo>> ListTenantsAsync(
+            int take = 1000,
+            CancellationToken ct = default
+        ) => Task.FromResult<IReadOnlyList<TenantInfo>>(Array.Empty<TenantInfo>());
     }
 
     private sealed class StubCurrentTenant : ICurrentTenant

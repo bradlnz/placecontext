@@ -47,10 +47,12 @@ public sealed record DecisionTree
         var avgDegree = nodeCount == 0 ? 0.0 : (double)linkCount * 2 / nodeCount;
 
         // The low-confidence ratio is a *coupling-provenance* signal (orphan changes, failed tool calls),
-        // so it ignores the run-output "brain" subgraph: its semantic similarity links are legitimately
-        // Inferred but say nothing about code coupling, and must not inflate technical risk.
-        var brain = Nodes.Where(n => n.Kind == TreeNodeKind.JobRunOutput).Select(n => n.Id).ToHashSet();
-        var coupling = Edges.Where(e => !brain.Contains(e.ParentId) && !brain.Contains(e.ChildId)).ToList();
+        // so it ignores the run-output "brain" subgraph and entity-aligned data nodes (runs, artifacts,
+        // addresses/locations): their links are real but say nothing about code coupling, and must not
+        // inflate technical risk.
+        var nonCouplingKinds = new[] { TreeNodeKind.JobRunOutput, TreeNodeKind.JobRun, TreeNodeKind.Artifact, TreeNodeKind.Address, TreeNodeKind.Location };
+        var nonCoupling = Nodes.Where(n => nonCouplingKinds.Contains(n.Kind)).Select(n => n.Id).ToHashSet();
+        var coupling = Edges.Where(e => !nonCoupling.Contains(e.ParentId) && !nonCoupling.Contains(e.ChildId)).ToList();
         var lowConf = coupling.Count == 0 ? 0.0
             : (double)coupling.Count(e => e.Confidence != ConfidenceTag.Extracted) / coupling.Count;
         return GraphMetrics.From(nodeCount, linkCount, hotspots, avgDegree, lowConf);

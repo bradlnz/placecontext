@@ -1,9 +1,10 @@
 .graph-page {
     display: flex;
     flex-direction: column;
-    padding: 0;
+    padding: 16px 24px 24px;
     height: calc(100vh - 50px);
     min-height: 0;
+    box-sizing: border-box;
 }
 
 .graph-studio {
@@ -84,6 +85,10 @@
 .graph-node-kind.kind-run { background: #95e1d3; }
 .graph-node-kind.kind-table { background: #a8d8ea; }
 .graph-node-kind.kind-good { background: #96ceb4; }
+.graph-node-kind.kind-artifact { background: #43d675; }
+.graph-node-kind.kind-jobrun { background: #e0a458; }
+.graph-node-kind.kind-address { background: #58a6ff; }
+.graph-node-kind.kind-location { background: #c084fc; }
 
 .graph-node-label {
     flex: 1;

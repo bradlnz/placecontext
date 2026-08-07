@@ -69,6 +69,7 @@ public sealed partial class EntityBrowseViewModel : PageViewModel
     public string ChartCanvasIdentifier(string slot) => ChartCanvasId(slot);
 
     private bool _defaultsTried;
+    private bool _sqlSchemaPushed;
 
     public IReadOnlyList<ProjectChartView> EntityCharts() =>
         Charts
@@ -146,6 +147,11 @@ public sealed partial class EntityBrowseViewModel : PageViewModel
     {
         if (ViewTab != "analytics")
             return;
+        if (!_sqlSchemaPushed)
+        {
+            _sqlSchemaPushed = true;
+            await SqlSchemaHelper.PushAsync(_svc, _js, ProjectId, includeIndexes: true);
+        }
         if (ShowChartEditor && ChartMonaco && !ChartMonacoReady)
         {
             ChartMonacoReady = true;

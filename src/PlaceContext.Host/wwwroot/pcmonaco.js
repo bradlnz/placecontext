@@ -82,8 +82,8 @@ window.pcmonaco = (function () {
 
   // ── SQL autocomplete ──────────────────────────────────────────────────────────────────────
   // Schema-aware completion for every Monaco 'sql' editor: the Blazor side pushes the project's
-  // tables (and, lazily, their columns) through setSqlSchema, and this provider suggests
-  // keywords, table names, and columns for the tables referenced so far in the statement.
+  // tables and OpenSearch indexes (with their columns/fields) through setSqlSchema, and this
+  // provider suggests keywords, table/index names, and columns for the tables referenced so far.
   const SQL_KEYWORDS = [
     'SELECT','FROM','WHERE','JOIN','LEFT JOIN','RIGHT JOIN','INNER JOIN','OUTER JOIN','FULL JOIN',
     'ON','GROUP BY','ORDER BY','HAVING','LIMIT','OFFSET','AS','AND','OR','NOT','IN','IS','NULL',
@@ -91,8 +91,11 @@ window.pcmonaco = (function () {
     'CASE','WHEN','THEN','ELSE','END','INSERT INTO','UPDATE','DELETE FROM','VALUES','CREATE TABLE',
     'CREATE VIEW','ALTER TABLE','DROP TABLE','UNION','ALL','EXISTS','WITH','ASC','DESC','SELECT *',
   ];
-  let sqlSchema = [];          // [{ name, columns: [{ name, type }] }]
+  let sqlTables = [];          // [{ name, columns: [{ name, type }], kind: 'table' }]
+  let sqlIndexes = [];         // [{ name, columns: [{ name, type }], kind: 'index' }]
   let sqlProviderRegistered = false;
+
+  function allSchemaObjects() { return sqlTables.concat(sqlIndexes); }
 
   function registerSqlCompletion(monaco) {
     if (sqlProviderRegistered) return;
@@ -107,15 +110,15 @@ window.pcmonaco = (function () {
         const word = model.getWordUntilPosition(position);
         const suggestions = [];
 
-        // `table.` → only that table's columns.
+        // `table.` or `index.` → only that object's columns/fields.
         const dot = until.match(/([A-Za-z_][\w]*)\.\s*$/);
         if (dot) {
-          const table = sqlSchema.find(t => t.name === dot[1]);
-          if (table) {
-            for (const c of table.columns)
+          const obj = allSchemaObjects().find(t => t.name === dot[1]);
+          if (obj) {
+            for (const c of obj.columns)
               suggestions.push({
                 label: c.name, insertText: c.name, kind: monaco.languages.CompletionItemKind.Field,
-                detail: c.type || 'column', range: word, sortText: 'a',
+                detail: c.type || (obj.kind === 'index' ? 'field' : 'column'), range: word, sortText: 'a',
               });
           }
           return { suggestions };
@@ -127,22 +130,29 @@ window.pcmonaco = (function () {
             range: word, sortText: 'z' + kw,
           });
 
-        for (const t of sqlSchema)
+        for (const t of sqlTables)
           suggestions.push({
             label: t.name, insertText: t.name, kind: monaco.languages.CompletionItemKind.Class,
             detail: 'table', range: word, sortText: 'a' + t.name,
           });
 
-        const referenced = referencedTables(until);
-        const scope = referenced.length > 0 ? referenced : sqlSchema;
+        for (const i of sqlIndexes)
+          suggestions.push({
+            label: i.name, insertText: i.name, kind: monaco.languages.CompletionItemKind.Interface,
+            detail: 'index', range: word, sortText: 'a' + i.name,
+          });
+
+        const referenced = referencedSchemaObjects(until);
+        const scope = referenced.length > 0 ? referenced : allSchemaObjects();
         const seen = new Set();
-        for (const table of scope) {
-          for (const c of table.columns) {
-            if (seen.has(c.name)) continue; // same label in two tables: keep the first
+        for (const obj of scope) {
+          for (const c of obj.columns) {
+            if (seen.has(c.name)) continue; // same label in two objects: keep the first
             seen.add(c.name);
             suggestions.push({
               label: c.name, insertText: c.name, kind: monaco.languages.CompletionItemKind.Field,
-              detail: (c.type || 'column') + (scope.length > 1 ? ' · ' + table.name : ''),
+              detail: (c.type || (obj.kind === 'index' ? 'field' : 'column'))
+                + (scope.length > 1 ? ' · ' + obj.name : ''),
               range: word, sortText: 'b' + c.name,
             });
           }
@@ -152,19 +162,35 @@ window.pcmonaco = (function () {
     });
   }
 
-  function referencedTables(text) {
+  function referencedSchemaObjects(text) {
     const found = new Set();
-    const re = /\b(?:from|join|into|update|table)\s+(?:"([^"]+)"|([A-Za-z_][\w]*))/gi;
+    const re = /\b(?:from|join|into|update|table|index)\s+(?:"([^"]+)"|([A-Za-z_][\w]*))/gi;
     let match;
     while ((match = re.exec(text))) found.add(match[1] || match[2]);
-    const known = new Set(sqlSchema.map(t => t.name));
-    return [...found].filter(name => known.has(name));
+    const known = new Map(allSchemaObjects().map(t => [t.name, t]));
+    return [...found].map(name => known.get(name)).filter(Boolean);
   }
 
-  function setSqlSchema(tables) {
-    sqlSchema = (tables || []).map(t => ({
+  function normalizeSchema(schema) {
+    // Backward-compat: callers used to pass a plain array of tables.
+    if (Array.isArray(schema)) return { tables: schema, indexes: [] };
+    return {
+      tables: schema && schema.tables || [],
+      indexes: schema && schema.indexes || [],
+    };
+  }
+
+  function setSqlSchema(schema) {
+    const normalized = normalizeSchema(schema);
+    sqlTables = (normalized.tables || []).map(t => ({
       name: t.name,
+      kind: 'table',
       columns: (t.columns || []).map(c => ({ name: c.name, type: c.type })),
+    }));
+    sqlIndexes = (normalized.indexes || []).map(i => ({
+      name: i.name,
+      kind: 'index',
+      columns: (i.columns || []).map(c => ({ name: c.name, type: c.type })),
     }));
     if (window.monaco) registerSqlCompletion(window.monaco);
   }

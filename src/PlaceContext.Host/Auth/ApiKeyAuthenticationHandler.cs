@@ -1,3 +1,4 @@
+using System;
 using System.Security.Claims;
 using System.Text.Encodings.Web;
 using Microsoft.AspNetCore.Authentication;
@@ -15,8 +16,12 @@ public sealed class ApiKeyAuthenticationOptions : AuthenticationSchemeOptions
 
 /// <summary>
 /// Authenticates machine callers (the Terraform provider, and any other IaC/CI client) against a single
-/// configured admin key — <c>PlaceContext:Api:Key</c> — read from <c>Authorization: Bearer &lt;key&gt;</c>
-/// or <c>X-Api-Key: &lt;key&gt;</c>. Deliberately separate from the portal cookie and the MCP JWT-bearer
+/// configured admin key — <c>PlaceContext:Api:Key</c> for admin endpoints, and
+/// <c>PlaceContext:CustomerPortal:ApiKey</c> for <c>/api/customer-portal/*</c>. For compatibility with
+/// current portal provisioning, the customer-portal key can also be supplied via
+/// <c>PLACE_CONTEXT_CORE_API_KEY</c>.
+/// Read from <c>Authorization: Bearer &lt;key&gt;</c> or <c>X-Api-Key: &lt;key&gt;</c>.
+/// Deliberately separate from the portal cookie and the MCP JWT-bearer
 /// scheme (see Program.cs): a caller must opt an endpoint into this scheme explicitly via
 /// <c>[Authorize(AuthenticationSchemes = ApiKeyAuthenticationHandler.SchemeName, ...)]</c>.
 ///
@@ -57,11 +62,18 @@ public sealed class ApiKeyAuthenticationHandler : AuthenticationHandler<ApiKeyAu
 
     protected override Task<AuthenticateResult> HandleAuthenticateAsync()
     {
-        var configuredKey = Request.Path.StartsWithSegments("/api/customer-portal")
-            ? _config["PlaceContext:CustomerPortal:ApiKey"]
+        var isCustomerPortalCall = Request.Path.StartsWithSegments("/api/customer-portal");
+        var configuredKey = isCustomerPortalCall
+            ? _config["PlaceContext:CustomerPortal:ApiKey"] ?? Environment.GetEnvironmentVariable("PLACE_CONTEXT_CORE_API_KEY")
             : _config["PlaceContext:Api:Key"];
         if (string.IsNullOrWhiteSpace(configuredKey))
-            return Task.FromResult(AuthenticateResult.Fail("The management API is disabled: no PlaceContext:Api:Key is configured."));
+        {
+            var configuredSource = isCustomerPortalCall
+                ? "PlaceContext:CustomerPortal:ApiKey (or PLACE_CONTEXT_CORE_API_KEY)"
+                : "PlaceContext:Api:Key";
+            return Task.FromResult(
+                AuthenticateResult.Fail($"The API key is not configured: {configuredSource} is required."));
+        }
 
         var presented = ExtractKey(Request);
         if (string.IsNullOrEmpty(presented) || !KeysMatch(presented, configuredKey))

@@ -10,6 +10,8 @@ public interface ITenantStore
     Task<TenantInfo?> FindByCustomerPortalDomainAsync(string domain, CancellationToken ct = default);
     /// <summary>Resolves the tenant for a slug, provisioning one on first sight (self-service signup).</summary>
     Task<TenantInfo> GetOrCreateAsync(string slug, CancellationToken ct = default);
+    /// <summary>Lists all known tenants. Used for startup warmers and admin operations.</summary>
+    Task<IReadOnlyList<TenantInfo>> ListTenantsAsync(int take = 1000, CancellationToken ct = default);
     Task<TenantRow?> GetRowAsync(Guid tenantId, CancellationToken ct = default);
     Task SaveGitHubAsync(Guid tenantId, string githubLogin, string accessToken, CancellationToken ct = default);
     Task SetTimeZoneAsync(Guid tenantId, string timeZoneId, CancellationToken ct = default);

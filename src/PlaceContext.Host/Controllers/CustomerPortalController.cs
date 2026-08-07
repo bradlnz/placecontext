@@ -104,6 +104,17 @@ public sealed class CustomerPortalController : ControllerBase
 
         try
         {
+            if (request.ClientId is { } clientId
+                && !string.IsNullOrWhiteSpace(request.ClientId.ToString()))
+            {
+                var assignedChains = await _service.ListCrmClientAssignedJobChainIdsAsync(
+                    clientId,
+                    request.ProjectId,
+                    ct);
+                if (!assignedChains.Contains(id))
+                    return BadRequest(new { error = "This automation is not assigned to the selected client." });
+            }
+
             var run = await _service.RunJobChainAsync(
                 id,
                 inputPayload: request.InputPayload,
@@ -115,6 +126,31 @@ public sealed class CustomerPortalController : ControllerBase
         {
             return BadRequest(new { error = ex.Message });
         }
+    }
+
+    [HttpGet("clients/{id:guid}/job-chains")]
+    public async Task<ActionResult<IReadOnlyList<Guid>>> ListClientAssignedJobChains(
+        Guid id,
+        [FromQuery] Guid projectId,
+        CancellationToken ct)
+    {
+        if (projectId == Guid.Empty) return BadRequest("project_id is required.");
+        return Ok(await _service.ListCrmClientAssignedJobChainIdsAsync(id, projectId, ct));
+    }
+
+    [HttpPut("clients/{id:guid}/job-chains")]
+    public async Task<ActionResult<IReadOnlyList<Guid>>> SetClientAssignedJobChains(
+        Guid id,
+        [FromQuery] Guid projectId,
+        [FromBody] SetClientJobChainsRequest request,
+        CancellationToken ct)
+    {
+        if (projectId == Guid.Empty) return BadRequest("project_id is required.");
+        return Ok(await _service.SetCrmClientAssignedJobChainIdsAsync(
+            id,
+            projectId,
+            request.ChainIds,
+            ct));
     }
 
     [HttpGet("chain-runs/{id:guid}")]
@@ -176,7 +212,10 @@ public sealed class CustomerPortalController : ControllerBase
     public sealed record RunJobChainRequest(
         Guid ProjectId,
         string? InputPayload = null,
-        IReadOnlyDictionary<int, string>? StepPayloadOverrides = null);
+        IReadOnlyDictionary<int, string>? StepPayloadOverrides = null,
+        Guid? ClientId = null);
+
+    public sealed record SetClientJobChainsRequest(IReadOnlyList<Guid> ChainIds);
 
     public sealed record CustomerPortalJobChainView(
         Guid Id,

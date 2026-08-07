@@ -66,6 +66,9 @@ public sealed class DataGraphViewModel : PageViewModel
 
     public void SelectNode(string? nodeId)
     {
+        if (SelectedNodeId == nodeId)
+            return;
+
         SelectedNodeId = nodeId;
         NodeSelected?.Invoke(nodeId);
         NotifyStateChanged();

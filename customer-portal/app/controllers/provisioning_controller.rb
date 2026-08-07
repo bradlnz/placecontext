@@ -25,7 +25,7 @@ class ProvisioningController < ActionController::API
       user.password = password
     end
     user.save!
-    user.send_reset_password_instructions
+    send_portal_invite(user)
 
     render json: { id: user.id, email: user.email, role: user.role, status: "invited" }, status: :created
   rescue ActiveRecord::RecordInvalid => e
@@ -65,5 +65,11 @@ class ProvisioningController < ActionController::API
 
   def normalize_role(value, fallback)
     PortalUser.roles.key?(value) ? value : fallback
+  end
+
+  def send_portal_invite(user)
+    user.send_reset_password_instructions
+  rescue StandardError => e
+    Rails.logger.warn("Skipping portal invite email for #{user.email}: #{e.class}: #{e.message}")
   end
 end

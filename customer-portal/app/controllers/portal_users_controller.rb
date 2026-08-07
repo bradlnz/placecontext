@@ -17,7 +17,7 @@ class PortalUsersController < ApplicationController
     set_portal_user_password
 
     if @portal_user.save
-      @portal_user.send_reset_password_instructions
+      send_portal_invite(@portal_user)
       redirect_to portal_users_path, notice: "Portal login created for #{@portal_user.email}. A reset link has been sent."
       return
     end
@@ -57,5 +57,11 @@ class PortalUsersController < ApplicationController
 
   def first_portal_user_for_tenant?
     !PortalUser.exists?(tenant_id: portal_tenant_id)
+  end
+
+  def send_portal_invite(portal_user)
+    portal_user.send_reset_password_instructions
+  rescue StandardError => e
+    Rails.logger.warn("Skipping portal invite email for #{portal_user.email}: #{e.class}: #{e.message}")
   end
 end

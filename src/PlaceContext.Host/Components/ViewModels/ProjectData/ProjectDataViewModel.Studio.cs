@@ -3,6 +3,7 @@ using PlaceContext.Application;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Features;
 using PlaceContext.Application.Ports;
+using PlaceContext.Host.Components.ViewModels.Helpers;
 
 namespace PlaceContext.Host.Components.ViewModels;
 
@@ -241,24 +242,7 @@ public sealed partial class ProjectDataViewModel
     {
         if (_sqlSchemaPushed || !SqlEditorMonaco)
             return;
-        try
-        {
-            var tables = new List<object>(Tables.Count);
-            foreach (var table in Tables)
-            {
-                var columns = await _svc.ListProjectTableColumnsAsync(ProjectId, table.Name);
-                tables.Add(new
-                {
-                    name = table.Name,
-                    columns = columns.Select(c => new { name = c.Name, type = c.Type }).ToList(),
-                });
-            }
-            await _js.InvokeVoidAsync("pcmonaco.setSqlSchema", tables);
-            _sqlSchemaPushed = true;
-        }
-        catch
-        {
-            // Schema is best-effort; the editor still works without it.
-        }
+        await SqlSchemaHelper.PushAsync(_svc, _js, ProjectId, includeIndexes: true);
+        _sqlSchemaPushed = true;
     }
 }

@@ -1,7 +1,19 @@
 <% page_title "Sign in" %>
 
 <div class="auth-page">
-  <div class="auth-card">
+  <section class="auth-copy">
+    <p class="auth-copy-kicker">Customer portal</p>
+    <h1 class="auth-copy-title">Welcome back</h1>
+    <p class="auth-copy-text">Use your portal credentials to access your workspace, property details, and communications securely.</p>
+    <ul class="auth-copy-list">
+      <li>Fast, secure sign in</li>
+      <li>Tenant-scoped access only</li>
+      <li>Built for client approvals and updates</li>
+    </ul>
+    <p class="auth-copy-meta">Workspace: <%= portal_tenant_id %></p>
+  </section>
+
+  <section class="auth-card">
     <div class="auth-brand">
       <div class="brand-logo">
         <% if portal_brand_logo_url %>
@@ -13,7 +25,7 @@
       <span class="brand-name"><%= portal_brand_name %></span>
     </div>
 
-    <h1 class="auth-title">Sign in to your workspace</h1>
+    <h2 class="auth-title">Sign in to your account</h2>
 
     <% if alert %>
       <div class="flash flash-alert" role="alert"><%= alert %></div>
@@ -22,7 +34,7 @@
       <div class="flash flash-notice" role="status"><%= notice %></div>
     <% end %>
 
-    <%= form_for(resource, as: resource_name, url: session_path(resource_name), html: { class: "auth-form" }) do |form| %>
+    <%= form_for(resource, as: resource_name, url: portal_user_session_path, html: { class: "auth-form", id: "new_portal_user" }) do |form| %>
       <div class="form-group">
         <%= form.label :email %>
         <%= form.email_field :email, autofocus: true, autocomplete: "email", placeholder: "you@company.com", required: true %>
@@ -40,11 +52,13 @@
         </div>
       <% end %>
 
-      <%= form.submit "Sign in", class: "btn btn-primary btn-block" %>
+      <%= form.submit "Sign in", class: "btn btn-primary btn-block auth-submit" %>
     <% end %>
 
     <div class="auth-links">
-      <%= link_to "Forgot your password?", new_password_path(resource_name) %>
+      <%= link_to "Forgot your password?", new_portal_user_password_path %>
     </div>
+  </section>
+</div>
   </div>
 </div>

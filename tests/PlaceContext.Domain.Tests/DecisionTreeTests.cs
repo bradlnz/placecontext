@@ -203,4 +203,77 @@ public class DecisionTreeTests
         Assert.Contains(tree.Edges, e => e.ParentId == "table:feasibility_matrix" && e.ChildId == sitesId);
         Assert.DoesNotContain(tree.Edges, e => e.ParentId == "root" && e.ChildId == sitesId);
     }
+
+    [Fact]
+    public void Job_runs_and_artifacts_link_to_their_job()
+    {
+        var pid = ProjectId.New();
+        var map = new MapSpec("img", new[] { "{}" }, new Dictionary<string, string>());
+        var job = Job.Create(pid.Value, "scrape", null, map, null, 1, ExitCodePolicy.Default, T0);
+        var snapshot = WorkloadSnapshot.From(job.MapSpec, job.ReduceSpec, job.ConcurrencyLimit);
+        var run = JobRun.Start(job.Id, pid.Value, T0, snapshot);
+        run.Complete(Array.Empty<ShardResult>(), null, T0.AddMinutes(1));
+        var artifact = RunArtifactLink.Create(run.Id, job.Id, pid.Value, PostJobActionKind.HtmlReport,
+            "report.html", "bucket", "key", "text/html", 1024, T0.AddMinutes(2));
+
+        var tree = new DecisionTreeAssembler().Assemble(
+            ProjectName.From("alpha"), Array.Empty<Decision>(), ActivityLog.Start(pid),
+            Array.Empty<ToolActivity>(), jobs: new[] { job }, runs: new[] { run }, artifacts: new[] { artifact });
+
+        var jobId = "job:" + job.Id.ToString("N");
+        var runNodeId = "run:" + run.Id.ToString("N")[..8];
+        var artifactNodeId = "artifact:" + artifact.Id.ToString("N");
+
+        Assert.Contains(tree.Nodes, n => n.Kind == TreeNodeKind.JobRun && n.Id == runNodeId);
+        Assert.Contains(tree.Nodes, n => n.Kind == TreeNodeKind.Artifact && n.Id == artifactNodeId);
+        Assert.Contains(tree.Edges, e => e.ParentId == jobId && e.ChildId == runNodeId);
+        Assert.Contains(tree.Edges, e => e.ParentId == runNodeId && e.ChildId == artifactNodeId);
+    }
+
+    [Fact]
+    public void Record_link_clusters_create_address_nodes_linked_to_entities()
+    {
+        var pid = ProjectId.New();
+        var sites = DataEntity.Create(pid.Value, "Sites", "feasibility_matrix", "address",
+            Array.Empty<EntityRelation>(), T0);
+        var listings = DataEntity.Create(pid.Value, "Listings", "listings", "address",
+            Array.Empty<EntityRelation>(), T0);
+        var cluster = new RecordLinkCluster("address", "123 main st", "123 Main St", new[]
+        {
+            new RecordLinkClusterOccurrence("feasibility_matrix", "address", "row-1"),
+            new RecordLinkClusterOccurrence("listings", "address", "row-2"),
+        });
+
+        var tree = new DecisionTreeAssembler().Assemble(
+            ProjectName.From("alpha"), Array.Empty<Decision>(), ActivityLog.Start(pid),
+            Array.Empty<ToolActivity>(), entities: new[] { sites, listings }, linkClusters: new[] { cluster });
+
+        var sitesId = "entity:" + sites.Id.ToString("N");
+        var listingsId = "entity:" + listings.Id.ToString("N");
+        var linkId = "link:address:123 main st";
+
+        Assert.Contains(tree.Nodes, n => n.Kind == TreeNodeKind.Address && n.Id == linkId);
+        Assert.Contains(tree.Edges, e => e.ParentId == sitesId && e.ChildId == linkId);
+        Assert.Contains(tree.Edges, e => e.ParentId == listingsId && e.ChildId == linkId);
+    }
+
+    [Fact]
+    public void Entity_aligned_nodes_do_not_inflate_coupling_metrics()
+    {
+        var pid = ProjectId.New();
+        var map = new MapSpec("img", new[] { "{}" }, new Dictionary<string, string>());
+        var job = Job.Create(pid.Value, "scrape", null, map, null, 1, ExitCodePolicy.Default, T0);
+        var snapshot = WorkloadSnapshot.From(job.MapSpec, job.ReduceSpec, job.ConcurrencyLimit);
+        var run = JobRun.Start(job.Id, pid.Value, T0, snapshot);
+        run.Complete(Array.Empty<ShardResult>(), null, T0.AddMinutes(1));
+        var artifact = RunArtifactLink.Create(run.Id, job.Id, pid.Value, PostJobActionKind.HtmlReport,
+            "report.html", "bucket", "key", "text/html", 1024, T0.AddMinutes(2));
+
+        var tree = new DecisionTreeAssembler().Assemble(
+            ProjectName.From("alpha"), Array.Empty<Decision>(), ActivityLog.Start(pid),
+            Array.Empty<ToolActivity>(), jobs: new[] { job }, runs: new[] { run }, artifacts: new[] { artifact });
+
+        // With no decisions/changes, the structural coupling low-confidence ratio must stay zero.
+        Assert.Equal(0.0, tree.ToMetrics().LowConfidenceLinkRatio);
+    }
 }

@@ -2687,6 +2687,32 @@
     color: var(--brand-2);
 }
 
+.client-chain-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 12px;
+    max-height: 240px;
+    overflow-y: auto;
+    padding-right: 4px;
+}
+
+.client-chain-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 9px;
+    background: var(--card);
+    color: var(--text-2);
+    font-size: 11px;
+}
+
+.client-chain-item input {
+    margin: 0;
+}
+
 .run-controls {
     display: flex;
     gap: 8px;

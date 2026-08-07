@@ -49,6 +49,14 @@ public sealed record RunCrmClientAutomationCommand(Guid ClientId, Guid ChainId)
     public string RequiredPermission => Permission.JobsRun;
 }
 
+public sealed record SetCrmClientAssignedJobChainsCommand(
+    Guid ProjectId,
+    Guid ClientId,
+    IReadOnlyList<Guid> ChainIds) : ICommand<IReadOnlyList<Guid>>, IRequiresPermission
+{
+    public string RequiredPermission => Permission.DataWrite;
+}
+
 public sealed record AddCrmClientNoteCommand(Guid ClientId, string Body)
     : ICommand<CrmCommunicationView>, IRequiresPermission
 {

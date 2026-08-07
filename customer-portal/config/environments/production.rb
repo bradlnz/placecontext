@@ -19,7 +19,9 @@ Rails.application.configure do
       authentication: ENV.fetch("SMTP_AUTHENTICATION", "plain"),
       enable_starttls_auto: ENV.fetch("SMTP_ENABLE_STARTTLS", "true") == "true"
     }
+    config.action_mailer.perform_deliveries = true
   else
-    config.action_mailer.delivery_method = :logger
+    config.action_mailer.delivery_method = :test
+    config.action_mailer.perform_deliveries = false
   end
 end

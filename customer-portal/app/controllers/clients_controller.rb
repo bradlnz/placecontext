@@ -1,46 +1,45 @@
 class ClientsController < ApplicationController
   before_action :require_manager_or_admin!, only: %i[new create edit update destroy]
+  before_action :load_project_options, only: %i[index new]
+  before_action :set_project_id, only: %i[index new]
 
   def index
-    @projects = crm.projects
-    @project_id = params[:project_id].presence || @projects.first["id"]
-    @clients = @project_id ? crm.clients(@project_id) : []
+    @clients = tenant_clients.where(project_id: @project_id).order(updated_at: :desc)
   end
 
   def show
-    @project_id = params[:project_id]
-    @client = crm.client(params[:id], @project_id)
-  rescue StandardError => e
-    redirect_to clients_path, alert: e.message
+    @client = tenant_client
+    @project_id = params[:project_id].presence || @client.project_id
   end
 
   def new
-    @projects = crm.projects
-    @project_id = params[:project_id] || @projects.first["id"]
-    @client = {}
+    @project_id = params[:project_id].presence || @project_id
+    @client = PortalClient.new(project_id: @project_id)
   end
 
   def create
-    result = crm.create_client(client_attributes)
-    redirect_to client_path(result["id"], project_id: result["projectId"]), notice: "Client saved."
+    client = tenant_clients.new(client_attributes)
+    client.save!
+    redirect_to client_path(client, project_id: client.project_id), notice: "Client saved."
   rescue StandardError => e
-    redirect_to new_client_path(project_id: params[:client]["project_id"]), alert: e.message
+    redirect_to new_client_path(project_id: client_attributes["project_id"]), alert: e.message
   end
 
   def edit
-    @project_id = params[:project_id]
-    @client = crm.client(params[:id], @project_id)
+    @client = tenant_client
+    @project_id = params[:project_id].presence || @client.project_id
   end
 
   def update
-    result = crm.update_client(params[:id], client_attributes)
-    redirect_to client_path(result["id"], project_id: result["projectId"]), notice: "Client updated."
+    client = tenant_client
+    client.update!(client_attributes)
+    redirect_to client_path(client, project_id: client.project_id), notice: "Client updated."
   rescue StandardError => e
-    redirect_to edit_client_path(params[:id], project_id: params[:client]["project_id"]), alert: e.message
+    redirect_to edit_client_path(params[:id], project_id: client_attributes["project_id"]), alert: e.message
   end
 
   def destroy
-    crm.delete_client(params[:id])
+    tenant_client.destroy!
     redirect_to clients_path(project_id: params[:project_id]), notice: "Client deleted."
   rescue StandardError => e
     redirect_to clients_path, alert: e.message
@@ -48,12 +47,32 @@ class ClientsController < ApplicationController
 
   private
 
-  def crm
-    @crm ||= PlaceContextCrmClient.new(current_user: current_portal_user)
+  def tenant_clients
+    @tenant_clients ||= accessible_portal_clients
+  end
+
+  def tenant_client
+    tenant_clients.find(params[:id])
+  end
+
+  def load_project_options
+    project_ids = tenant_clients.pluck(:project_id).reject(&:blank?).uniq.sort
+    project_ids = [PortalClient::DEFAULT_PROJECT_ID] if project_ids.empty?
+    @projects = project_ids.map { |project_id| { "id" => project_id, "name" => project_label(project_id) } }
+  end
+
+  def project_label(project_id)
+    project_id == PortalClient::DEFAULT_PROJECT_ID ? "Default project" : project_id
+  end
+
+  def set_project_id
+    @project_id = params[:project_id].presence || @projects.first["id"]
   end
 
   def client_attributes
-    params.require(:client).permit(:project_id, :name, :company, :email, :phone, :lifecycle_stage, :notes).to_h
+    permitted = params.require(:client).permit(:project_id, :name, :company, :email, :phone, :lifecycle_stage, :notes).to_h
+    tenant_id = portal_tenant_id.to_s
+    permitted.merge("tenant_id" => tenant_id, "project_id" => (permitted["project_id"].presence || PortalClient::DEFAULT_PROJECT_ID))
   end
 
   def require_manager_or_admin!

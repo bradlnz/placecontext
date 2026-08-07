@@ -18,7 +18,7 @@ public static class LinkValues
 
     // Column-name allowlists, checked in this order (first match wins).
     private static readonly HashSet<string> AddressTokens = new(StringComparer.Ordinal)
-        { "address", "street", "suburb", "city", "postcode", "state", "country" };
+        { "address", "location", "street", "suburb", "city", "postcode", "state", "country" };
     private static readonly HashSet<string> EmailTokens = new(StringComparer.Ordinal) { "email" };
     private static readonly HashSet<string> PhoneTokens = new(StringComparer.Ordinal) { "phone", "mobile", "fax" };
     private static readonly HashSet<string> NameTokens = new(StringComparer.Ordinal) { "name", "title", "contact", "company" };

@@ -68,6 +68,49 @@
                 @* The note behind the node — decision rationale, a change's why, or run-output text. *@
                 <div class="sel-content">@sel.Content</div>
             }
+            @if (sel.Artifact is { } artifact)
+            {
+                @* Inline preview for an artifact node — image, PDF, video, or other previewable file. *@
+                <div class="section-cap">Preview</div>
+                @if (Vm.IsImage(artifact))
+                {
+                    <img src="@Vm.PreviewUrl(artifact)" class="graph-preview-img" alt="@artifact.Title" loading="lazy" />
+                }
+                else if (Vm.IsPdf(artifact))
+                {
+                    <iframe src="@Vm.PreviewUrl(artifact)" class="graph-preview-frame" title="@artifact.Title"
+                            loading="lazy" referrerpolicy="no-referrer"></iframe>
+                }
+                else if (Vm.IsPreviewable(artifact))
+                {
+                    <iframe src="@Vm.PreviewUrl(artifact)" class="graph-preview-frame" title="@artifact.Title"
+                            loading="lazy" referrerpolicy="no-referrer"></iframe>
+                }
+                else
+                {
+                    <div class="preview-none">No inline preview for @artifact.ContentType.</div>
+                }
+            }
+            else if (Vm.FirstPreviewableArtifact is { } preview)
+            {
+                @* The selected entity is not itself an artifact, but it is linked to at least one
+                   previewable artifact — render the first one inline so the graph is immediately useful. *@
+                <div class="section-cap">Artifact preview</div>
+                @if (Vm.IsImage(preview))
+                {
+                    <img src="@Vm.PreviewUrl(preview)" class="graph-preview-img" alt="@preview.Title" loading="lazy" />
+                }
+                else if (Vm.IsPdf(preview))
+                {
+                    <iframe src="@Vm.PreviewUrl(preview)" class="graph-preview-frame" title="@preview.Title"
+                            loading="lazy" referrerpolicy="no-referrer"></iframe>
+                }
+                else
+                {
+                    <iframe src="@Vm.PreviewUrl(preview)" class="graph-preview-frame" title="@preview.Title"
+                            loading="lazy" referrerpolicy="no-referrer"></iframe>
+                }
+            }
             @if (Vm.ReachableArtifacts.Count > 0)
             {
                 @* Related artifacts — including ones reached by stepping UP the tree from an
@@ -76,15 +119,20 @@
                 <div class="col-4">
                     @foreach (var (node, hops) in Vm.ReachableArtifacts)
                     {
-                        <a href="@(NodeUrl?.Invoke(node) ?? "#")"
-                           class="artifact-link">
-                            <span class="ellipsis-flex">@Vm.ShortLabel(node.Label)</span>
-                            @if (hops > 1)
+                        <div class="artifact-row">
+                            <button type="button" class="artifact-link" @onclick="@(() => Vm.SelectAsync(node.Id))"
+                                    title="@node.Id">
+                                <span class="ellipsis-flex">@Vm.ShortLabel(node.Label)</span>
+                                @if (hops > 1)
+                                {
+                                    <span class="hops">@hops hops</span>
+                                }
+                            </button>
+                            @if (NodeUrl?.Invoke(node) is { Length: > 0 } nurl)
                             {
-                                <span class="hops">@hops hops</span>
+                                <a href="@nurl" class="artifact-open" target="_blank" title="Open">↗</a>
                             }
-                            <span class="flex-none">↗</span>
-                        </a>
+                        </div>
                     }
                 </div>
             }

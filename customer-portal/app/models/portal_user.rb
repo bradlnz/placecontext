@@ -21,11 +21,23 @@ class PortalUser < ApplicationRecord
   end
 
   def active_for_authentication?
-    super && enabled?
+    super && enabled? && tenant_matches_current_host?
   end
 
   def inactive_message
+    return :tenant_mismatch unless tenant_matches_current_host?
+
     enabled? ? super : :account_disabled
+  end
+
+  def self.find_for_database_authentication(warden_conditions = {})
+    conditions = warden_conditions.dup
+    conditions[:tenant_id] = ENV.fetch("PLACE_CONTEXT_TENANT_ID")
+    super(conditions)
+  end
+
+  def tenant_matches_current_host?
+    tenant_id.to_s == ENV.fetch("PLACE_CONTEXT_TENANT_ID")
   end
 
   private

@@ -18,6 +18,11 @@ public sealed class DecisionTreeAssembler
     /// <summary>Node content (rationale / run-output text) is clipped to this for the detail panel.</summary>
     private const int MaxContent = 500;
 
+    /// <summary>Caps on entity-aligned data nodes so the graph stays readable.</summary>
+    private const int MaxJobRuns = 30;
+    private const int MaxArtifacts = 40;
+    private const int MaxLinkClusters = 30;
+
     /// <summary>Two run-output nodes are linked when their embeddings are at least this cosine-similar.</summary>
     private const double SimilarityThreshold = 0.6;
     /// <summary>Each run-output node links to at most this many of its nearest semantic neighbours.</summary>
@@ -33,7 +38,10 @@ public sealed class DecisionTreeAssembler
         IReadOnlyList<JobChain>? chains = null,
         IReadOnlyList<DataMapping>? mappings = null,
         IReadOnlyList<string>? tables = null,
-        IReadOnlyList<DataEntity>? entities = null)
+        IReadOnlyList<DataEntity>? entities = null,
+        IReadOnlyList<JobRun>? runs = null,
+        IReadOnlyList<RunArtifactLink>? artifacts = null,
+        IReadOnlyList<RecordLinkCluster>? linkClusters = null)
     {
         const string rootId = "root";
         var specs = new List<(string Id, string Label, TreeNodeKind Kind, string? Content)>
@@ -174,6 +182,55 @@ public sealed class DecisionTreeAssembler
                 {
                     edges.Add(new DecisionTreeEdge(from, to, ConfidenceTag.Extracted));
                 }
+            }
+        }
+
+        // ── Entity-aligned runtime data: job runs, their artifacts, and shared record-link values
+        // (addresses, locations, emails, phones, names, urls). These nodes make the data graph useful
+        // for tracing from a business entity through the runs and outputs that touched it. ──
+        var entityByTable = entityList
+            .Where(e => entityNodeIds.TryGetValue(e.Name, out var _))
+            .ToDictionary(e => e.TableName, e => entityNodeIds[e.Name], StringComparer.OrdinalIgnoreCase);
+
+        var runNodeIds = new Dictionary<Guid, string>();
+        foreach (var run in runs ?? (IReadOnlyList<JobRun>)Array.Empty<JobRun>())
+        {
+            if (runNodeIds.Count >= MaxJobRuns) break;
+            var id = "run:" + run.Id.ToString("N")[..8];
+            runNodeIds[run.Id] = id;
+            AddNode(id, $"run {run.Id.ToString("N")[..8]}", TreeNodeKind.JobRun,
+                $"{run.Status} · {run.StartedAt:yyyy-MM-dd HH:mm}");
+            var parentId = jobNodeIds.TryGetValue(run.JobId, out var jobNodeId) ? jobNodeId : rootId;
+            edges.Add(new DecisionTreeEdge(parentId, id, ConfidenceTag.Extracted));
+        }
+
+        foreach (var art in artifacts ?? (IReadOnlyList<RunArtifactLink>)Array.Empty<RunArtifactLink>())
+        {
+            var id = "artifact:" + art.Id.ToString("N");
+            if (seen.Contains(id)) continue;
+            if (specs.Count(s => s.Kind == TreeNodeKind.Artifact) >= MaxArtifacts) break;
+            AddNode(id, Clip(art.Title), TreeNodeKind.Artifact, $"{art.Kind} · {art.ContentType}");
+            var parentId = runNodeIds.TryGetValue(art.RunId, out var runNodeId)
+                ? runNodeId
+                : (jobNodeIds.TryGetValue(art.JobId, out var jobNodeId) ? jobNodeId : rootId);
+            edges.Add(new DecisionTreeEdge(parentId, id, ConfidenceTag.Extracted));
+        }
+
+        foreach (var cluster in linkClusters ?? (IReadOnlyList<RecordLinkCluster>)Array.Empty<RecordLinkCluster>())
+        {
+            if (specs.Count(s => s.Kind is TreeNodeKind.Address or TreeNodeKind.Location) >= MaxLinkClusters) break;
+            var kind = cluster.Kind switch
+            {
+                var k when string.Equals(k, "address", StringComparison.OrdinalIgnoreCase) => TreeNodeKind.Address,
+                _ => TreeNodeKind.Location,
+            };
+            var id = $"link:{cluster.Kind}:{cluster.NormalizedValue}";
+            if (seen.Contains(id)) continue;
+            AddNode(id, Clip(cluster.DisplayValue), kind, $"shared {cluster.Kind}");
+            foreach (var occ in cluster.Occurrences.DistinctBy(o => o.TableName))
+            {
+                if (entityByTable.TryGetValue(occ.TableName, out var entityNodeId))
+                    edges.Add(new DecisionTreeEdge(entityNodeId, id, ConfidenceTag.Extracted));
             }
         }
 

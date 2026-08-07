@@ -46,6 +46,10 @@ public sealed class EfCrmClientRepository : ICrmClientRepository
         _db.CrmChainRuns.RemoveRange(chainRuns);
         var links = await _db.CrmJobRuns.Where(r => r.ClientId == clientId).ToListAsync(ct);
         _db.CrmJobRuns.RemoveRange(links);
+        var assignments = await _db.CrmClientJobChainAssignments
+            .Where(r => r.ClientId == clientId)
+            .ToListAsync(ct);
+        _db.CrmClientJobChainAssignments.RemoveRange(assignments);
         var row = await _db.CrmClients.FindAsync(new object[] { clientId }, ct);
         if (row is not null) _db.CrmClients.Remove(row);
     }

@@ -43,7 +43,7 @@
               <td><%= link_to client["name"], client_path(client["id"], project_id: @project_id) %></td>
               <td><%= client["company"].presence || "—" %></td>
               <td><%= client["email"].presence || "—" %></td>
-              <td><%= status_badge(client["lifecycleStage"]) %></td>
+              <td><%= status_badge(client["lifecycle_stage"]) %></td>
               <td>
                 <%= link_to "View", client_path(client["id"], project_id: @project_id), class: "btn btn-sm btn-secondary" %>
               </td>

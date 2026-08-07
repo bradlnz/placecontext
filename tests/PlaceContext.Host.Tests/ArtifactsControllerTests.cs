@@ -161,6 +161,18 @@ public class ArtifactsControllerTests
 
         public Task RemoveAsync(Guid id, CancellationToken ct = default) => Task.CompletedTask;
 
+        public Task<IReadOnlyList<RunArtifactLink>> ListPendingOcrAsync(
+            int take,
+            CancellationToken ct = default
+        ) => Empty();
+
+        public Task MarkOcrProcessedAsync(
+            Guid artifactId,
+            DateTimeOffset processedAt,
+            string? error,
+            CancellationToken ct = default
+        ) => Task.CompletedTask;
+
         private static Task<IReadOnlyList<RunArtifactLink>> Empty() =>
             Task.FromResult<IReadOnlyList<RunArtifactLink>>(Array.Empty<RunArtifactLink>());
     }

@@ -35,7 +35,7 @@
 .btn-11 { padding:3px 10px; font-size:11px }
 .btn-11-del { padding:3px 10px; font-size:11px; color:var(--bad) }
 .chart-canvas-box { height:300px; padding:10px 8px 6px }
-.graph-card { border-radius:10px; overflow:hidden; margin-bottom:14px }
+.graph-card { border-radius:10px; overflow:hidden; margin-bottom:14px; padding:12px }
 .focus-row { display:flex; align-items:center; gap:10px; margin-bottom:10px; font-size:12px }
 .focus-chip { padding:3px 10px; border-radius:99px; background:var(--brand-bg); color:var(--brand-2); font-family:var(--font-sans) }
 .legend { font-size:11px; color:var(--text-3); display:flex; gap:16px; margin-bottom:14px }

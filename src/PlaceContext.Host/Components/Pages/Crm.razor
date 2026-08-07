@@ -1223,6 +1223,38 @@ else
                     </section>
                 }
 
+                <section class="detail-section action-panel">
+                    <div class="section-label">Automation access</div>
+                    <p class="section-help">Assign this client’s available automations. This list controls which automations are exposed in the customer portal.</p>
+                    @if (Vm.LoadingClientChainAssignments)
+                    {
+                        <div class="run-empty">Loading automation assignments…</div>
+                    }
+                    else if (Vm.Chains.Count == 0)
+                    {
+                        <div class="run-empty">No job chains exist in this project yet.</div>
+                    }
+                    else
+                    {
+                        <div class="client-chain-list">
+                            @foreach (var chain in Vm.Chains)
+                            {
+                                <label class="client-chain-item">
+                                    <input type="checkbox" checked="@Vm.IsChainAssigned(chain.Id)" disabled="@Vm.SavingClientChainAssignments" @onchange="e => Vm.ToggleClientChainAssignment(chain.Id, (e.Value is bool assigned) && assigned)" />
+                                    <span>@chain.Name (@chain.Steps.Count step@(chain.Steps.Count == 1 ? "" : "s"))</span>
+                                </label>
+                            }
+                        </div>
+                        <button class="dcbtn primary" disabled="@Vm.SavingClientChainAssignments" @onclick="Vm.SaveClientChainAssignments">
+                            @(Vm.SavingClientChainAssignments ? "Saving assignments…" : "Save automation assignments")
+                        </button>
+                        @if (Vm.ClientChainAssignmentMessage is not null)
+                        {
+                            <div class="portal-message">@Vm.ClientChainAssignmentMessage</div>
+                        }
+                    }
+                </section>
+
                 <section class="detail-section run-section action-panel">
                     <div class="section-label">Run a lifecycle automation</div>
                     <p class="section-help">The chain starts with this client’s contact details, notes, and lifecycle stage as JSON.</p>

@@ -2,9 +2,11 @@ class LeadsController < ApplicationController
   before_action :require_manager_or_admin!, only: %i[new create edit update destroy]
 
   def index
-    @projects = crm.projects
+    project_ids = tenant_clients.pluck(:project_id).reject(&:blank?).uniq.sort
+    project_ids = [PortalClient::DEFAULT_PROJECT_ID] if project_ids.empty?
+    @projects = project_ids.map { |project_id| { "id" => project_id, "name" => project_label(project_id) } }
     @project_id = params[:project_id].presence || @projects.first["id"]
-    @leads = @project_id ? crm.clients(@project_id).select { |client| client["lifecycleStage"] == "Lead" } : []
+    @leads = tenant_clients.where(project_id: @project_id, lifecycle_stage: "Lead").order(updated_at: :desc)
   end
 
   def show
@@ -13,8 +15,12 @@ class LeadsController < ApplicationController
 
   private
 
-  def crm
-    @crm ||= PlaceContextCrmClient.new(current_user: current_portal_user)
+  def tenant_clients
+    @tenant_clients ||= accessible_portal_clients
+  end
+
+  def project_label(project_id)
+    project_id == PortalClient::DEFAULT_PROJECT_ID ? "Default project" : project_id
   end
 
   def require_manager_or_admin!

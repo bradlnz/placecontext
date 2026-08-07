@@ -166,6 +166,10 @@ public class AgentContextBuilderTests
             LastSearch = search;
             return Task.FromResult(LinksToReturn);
         }
+        public Task<IReadOnlyList<RunArtifactLink>> ListPendingOcrAsync(int take, CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<RunArtifactLink>>(Array.Empty<RunArtifactLink>());
+        public Task MarkOcrProcessedAsync(Guid artifactId, DateTimeOffset processedAt, string? error, CancellationToken ct = default)
+            => Task.CompletedTask;
         public Task RemoveAsync(Guid id, CancellationToken ct = default) => Task.CompletedTask;
     }
 

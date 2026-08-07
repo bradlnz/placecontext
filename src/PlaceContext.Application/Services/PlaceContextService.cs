@@ -313,6 +313,19 @@ public sealed class PlaceContextService : IPlaceContextService
         CancellationToken ct = default)
         => _dispatcher.Send(new RunCrmClientAutomationCommand(clientId, chainId), ct);
 
+    public Task<IReadOnlyList<Guid>> ListCrmClientAssignedJobChainIdsAsync(
+        Guid clientId,
+        Guid projectId,
+        CancellationToken ct = default)
+        => _dispatcher.Query(new ListCrmClientAssignedJobChainsQuery(clientId, projectId), ct);
+
+    public Task<IReadOnlyList<Guid>> SetCrmClientAssignedJobChainIdsAsync(
+        Guid clientId,
+        Guid projectId,
+        IReadOnlyList<Guid> chainIds,
+        CancellationToken ct = default)
+        => _dispatcher.Send(new SetCrmClientAssignedJobChainsCommand(projectId, clientId, chainIds), ct);
+
     public Task<IReadOnlyList<CrmChainRunView>> ListCrmClientChainRunsAsync(
         Guid clientId,
         int take = 20,

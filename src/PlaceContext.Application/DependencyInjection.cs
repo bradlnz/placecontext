@@ -85,6 +85,8 @@ public static class DependencyInjection
         services.AddScoped<ICommandHandler<SaveCrmAutomationRuleCommand, CrmAutomationRuleView>, SaveCrmAutomationRuleHandler>();
         services.AddScoped<ICommandHandler<SetCrmAutomationEnabledCommand, CrmAutomationRuleView>, SetCrmAutomationEnabledHandler>();
         services.AddScoped<ICommandHandler<DeleteCrmAutomationRuleCommand, bool>, DeleteCrmAutomationRuleHandler>();
+        services.AddScoped<ICommandHandler<SetCrmClientAssignedJobChainsCommand, IReadOnlyList<Guid>>,
+            SetCrmClientAssignedJobChainsHandler>();
         services.AddScoped<ICommandHandler<CreateJobChainCommand, JobChainView>, CreateJobChainHandler>();
         services.AddScoped<ICommandHandler<UpdateJobChainCommand, JobChainView>, UpdateJobChainHandler>();
         services.AddScoped<ICommandHandler<DeleteJobChainCommand, bool>, DeleteJobChainHandler>();
@@ -164,6 +166,8 @@ public static class DependencyInjection
         services.AddScoped<IQueryHandler<ListJobsQuery, IReadOnlyList<JobView>>, ListJobsHandler>();
         services.AddScoped<IQueryHandler<ListJobRunsQuery, IReadOnlyList<JobRunView>>, ListJobRunsHandler>();
         services.AddScoped<IQueryHandler<ListCrmClientsQuery, IReadOnlyList<CrmClientView>>, ListCrmClientsHandler>();
+        services.AddScoped<IQueryHandler<ListCrmClientAssignedJobChainsQuery, IReadOnlyList<Guid>>,
+            ListCrmClientAssignedJobChainsHandler>();
         services.AddScoped<IQueryHandler<ListCrmClientChainRunsQuery, IReadOnlyList<CrmChainRunView>>, ListCrmClientChainRunsHandler>();
         services.AddScoped<IQueryHandler<ListCrmClientCommunicationsQuery, IReadOnlyList<CrmCommunicationView>>, ListCrmClientCommunicationsHandler>();
         services.AddScoped<IQueryHandler<ListCrmAppointmentsQuery, IReadOnlyList<CrmAppointmentView>>, ListCrmAppointmentsHandler>();

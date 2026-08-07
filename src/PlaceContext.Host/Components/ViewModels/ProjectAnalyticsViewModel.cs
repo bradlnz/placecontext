@@ -5,6 +5,7 @@ using PlaceContext.Application;
 using PlaceContext.Application.Features;
 using PlaceContext.Application.Ports;
 using PlaceContext.Host.Components.Models;
+using PlaceContext.Host.Components.ViewModels.Helpers;
 using PlaceContext.Infrastructure.Scheduling;
 
 namespace PlaceContext.Host.Components.ViewModels;
@@ -36,6 +37,7 @@ public sealed class ProjectAnalyticsViewModel(
     public string? SqlError { get; private set; }
     private System.Threading.Timer? _poll;
     private readonly Dictionary<string, DateTimeOffset> _rendered = new();
+    private bool _sqlSchemaPushed;
 
     public async Task LoadAsync(Guid projectId)
     {
@@ -68,6 +70,11 @@ public sealed class ProjectAnalyticsViewModel(
 
     public async Task RenderAsync()
     {
+        if (!_sqlSchemaPushed)
+        {
+            _sqlSchemaPushed = true;
+            await SqlSchemaHelper.PushAsync(service, js, ProjectId, includeIndexes: true);
+        }
         if (ShowSqlEditor && SqlMonaco && !SqlMonacoReady)
         {
             SqlMonacoReady = true;

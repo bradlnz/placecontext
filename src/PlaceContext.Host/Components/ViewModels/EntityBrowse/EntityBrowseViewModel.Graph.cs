@@ -63,13 +63,9 @@ public sealed partial class EntityBrowseViewModel
         {
             try
             {
-                var hits = await _svc.ExecuteProjectDataAsync(
-                    ProjectId,
-                    $"SELECT DISTINCT run_id::text FROM job_run_data WHERE artifact ILIKE '%{key.Replace("'", "''")}%' LIMIT 10"
-                );
-                foreach (var r in hits.Rows)
-                    if (r.Count > 0 && Guid.TryParse(r[0], out var id))
-                        runIds.Add(id);
+                var hits = await _svc.ListProjectArtifactsAsync(ProjectId, take: 20, search: key);
+                foreach (var art in hits)
+                    runIds.Add(art.RunId);
             }
             catch { }
         }
@@ -273,6 +269,34 @@ public sealed partial class EntityBrowseViewModel
                     runEdges.Add((recIdx, ri));
             }
 
+            // Fallback: for any visible record key that entity tags didn't link to a run, search
+            // stored run artifact titles for that key. Artifact titles usually include the entity
+            // value (a site address, a customer name, etc.) even when the tagging pass missed it.
+            var keyedRecords = runEdges.Select(e => e.Record).ToHashSet();
+            foreach (var key in keyToRecord.Keys.Where(k => !keyedRecords.Contains(keyToRecord[k])).Take(20))
+            {
+                try
+                {
+                    var hits = await _svc.ListProjectArtifactsAsync(ProjectId, take: 20, search: key);
+                    foreach (var art in hits.OrderByDescending(a => a.CreatedAt))
+                    {
+                        if (runNodes.Count >= 8)
+                            break;
+                        var ri = runNodes.IndexOf(art.RunId);
+                        if (ri < 0)
+                        {
+                            runNodes.Add(art.RunId);
+                            ri = runNodes.Count - 1;
+                        }
+                        if (!runEdges.Contains((keyToRecord[key], ri)))
+                            runEdges.Add((keyToRecord[key], ri));
+                    }
+                }
+                catch { }
+                if (runNodes.Count >= 8)
+                    break;
+            }
+
             var allArts = new List<(int Run, RunArtifactLinkView Art)>();
             for (var ri = 0; ri < runNodes.Count; ri++)
             {
@@ -360,22 +384,30 @@ public sealed partial class EntityBrowseViewModel
         }
         for (var i = 0; i < arts.Count; i++)
         {
+            var art = arts[i].Art;
             nodes.Add(
                 new GraphNodeView(
                     $"art:{i}",
                     arts[i].Versions > 1
-                        ? $"{arts[i].Art.Title} · v{arts[i].Versions}"
-                        : arts[i].Art.Title,
+                        ? $"{art.Title} · v{arts[i].Versions}"
+                        : art.Title,
                     0,
                     false,
                     Content: arts[i].Versions > 1
-                        ? $"artifact · {arts[i].Art.Kind} · latest of {arts[i].Versions} versions"
-                        : $"artifact · {arts[i].Art.Kind}",
+                        ? $"artifact · {art.Kind} · latest of {arts[i].Versions} versions"
+                        : $"artifact · {art.Kind}",
                     Kind: "good",
-                    Labeled: true
+                    Labeled: true,
+                    Artifact: new GraphNodeArtifactRef(
+                        art.Id,
+                        art.RunId,
+                        art.Kind.ToString(),
+                        art.Title,
+                        art.ContentType,
+                        art.CreatedAt)
                 )
             );
-            NodeUrls[$"art:{i}"] = $"/artifacts?artifact={arts[i].Art.Id}";
+            NodeUrls[$"art:{i}"] = $"/artifacts?artifact={art.Id}";
         }
 
         foreach (var (rec, rel) in relEdges)

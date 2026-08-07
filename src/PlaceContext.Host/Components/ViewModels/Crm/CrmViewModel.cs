@@ -260,6 +260,10 @@ public sealed class CrmViewModel : PageViewModel
     public string? NewIngestionToken;
     public string? IngestionError;
     public string? IngestionMessage;
+    public HashSet<Guid> SelectedClientChainIds = new();
+    public bool LoadingClientChainAssignments;
+    public bool SavingClientChainAssignments;
+    public string? ClientChainAssignmentMessage;
 
     public bool HasPrimaryAction => CurrentSectionPresentation.CanAdd;
     public string PrimaryActionLabel => CurrentSectionPresentation.AddLabel;
@@ -1040,6 +1044,7 @@ public sealed class CrmViewModel : PageViewModel
     {
         Selected = client;
         SelectedChainId = null;
+        SelectedClientChainIds = new HashSet<Guid>();
         ConfirmDelete = false;
         DetailTab = "overview";
         ComposeChannel = "Note";
@@ -1050,7 +1055,7 @@ public sealed class CrmViewModel : PageViewModel
         ArtifactSourceFilter = "all";
         ConfirmArtifactRemoveId = null;
         PortalMessage = null;
-        await Task.WhenAll(LoadRuns(), LoadCommunications(), LoadArtifacts());
+        await Task.WhenAll(LoadRuns(), LoadCommunications(), LoadArtifacts(), LoadClientChainAssignments());
     }
 
     public void OpenPortalProvisioningFor(CrmClientView client)
@@ -1347,7 +1352,11 @@ public sealed class CrmViewModel : PageViewModel
         ClientRuns = Array.Empty<CrmChainRunView>();
         Communications = Array.Empty<CrmCommunicationView>();
         ClientArtifacts = Array.Empty<CrmClientArtifactView>();
+        SelectedClientChainIds = new HashSet<Guid>();
         PortalMessage = null;
+        ClientChainAssignmentMessage = null;
+        LoadingClientChainAssignments = false;
+        SavingClientChainAssignments = false;
         NotesMetadataOpen = false;
         NotesMetadataJson = null;
     }
@@ -1465,6 +1474,70 @@ public sealed class CrmViewModel : PageViewModel
         finally
         {
             Running = false;
+        }
+    }
+
+    public bool IsChainAssigned(Guid chainId)
+    {
+        return SelectedClientChainIds.Contains(chainId);
+    }
+
+    public void ToggleClientChainAssignment(Guid chainId, bool assigned)
+    {
+        if (assigned)
+            SelectedClientChainIds.Add(chainId);
+        else
+            SelectedClientChainIds.Remove(chainId);
+    }
+
+    public async Task SaveClientChainAssignments()
+    {
+        if (Selected is null)
+            return;
+
+        SavingClientChainAssignments = true;
+        ClientChainAssignmentMessage = null;
+        try
+        {
+            var chainIds = SelectedClientChainIds.OrderBy(chainId => chainId).ToList();
+            SelectedClientChainIds = (await Svc.SetCrmClientAssignedJobChainIdsAsync(
+                Selected.Id,
+                ProjectId,
+                chainIds
+            )).ToHashSet();
+            ClientChainAssignmentMessage = "Automation assignment settings saved.";
+        }
+        catch (Exception ex)
+        {
+            ClientChainAssignmentMessage = ex.Message;
+        }
+        finally
+        {
+            SavingClientChainAssignments = false;
+        }
+    }
+
+    private async Task LoadClientChainAssignments()
+    {
+        if (Selected is null)
+            return;
+
+        LoadingClientChainAssignments = true;
+        ClientChainAssignmentMessage = null;
+        try
+        {
+            SelectedClientChainIds = (await Svc.ListCrmClientAssignedJobChainIdsAsync(
+                Selected.Id,
+                ProjectId
+            )).ToHashSet();
+        }
+        catch (Exception ex)
+        {
+            ClientChainAssignmentMessage = ex.Message;
+        }
+        finally
+        {
+            LoadingClientChainAssignments = false;
         }
     }
 
