@@ -7,7 +7,7 @@ namespace PlaceContext.Application.Ports;
 /// </summary>
 public interface ICurrentProject
 {
-    Guid? ProjectId { get; }
-    string? ProjectName { get; }
+    Guid ProjectId { get; }
+    string ProjectName { get; }
     bool IsResolved { get; }
 }

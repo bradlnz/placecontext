@@ -17,32 +17,41 @@ public sealed class ArtifactsController : ControllerBase
     private readonly IObjectStore _store;
 
     public ArtifactsController(IRunArtifactLinkRepository links, IObjectStore store)
-    {
-        _links = links;
-        _store = store;
-    }
+        => (_links, _store)
+        = (links, store);
 
     [HttpGet("/runs/{runId:guid}/artifacts/{artifactId:guid}")]
     public async Task<IActionResult> Get(Guid runId, Guid artifactId)
     {
         var link = await _links.GetByIdAsync(artifactId, HttpContext.RequestAborted);
-        if (link is null || link.RunId != runId) return NotFound();
-        var obj = await _store.OpenReadAsync(link.Bucket, link.ObjectKey, HttpContext.RequestAborted);
-        if (obj is null) return NotFound();
+        if (link is null || link.RunId != runId)
+        {
+            return NotFound("Artifact not found");
+        }
 
-        // Some object-store uploads lose their metadata and come back as octet-stream even though
-        // the durable artifact record still has the authoritative image/PDF type. Prefer that
-        // record when the object metadata is absent or generic so inline previews keep working.
-        var contentType = string.IsNullOrWhiteSpace(obj.ContentType)
-            || obj.ContentType.Equals("application/octet-stream", StringComparison.OrdinalIgnoreCase)
-            ? link.ContentType
-            : obj.ContentType;
-        if (string.IsNullOrWhiteSpace(contentType)) contentType = "application/octet-stream";
+        var storeObject = await _store.OpenReadAsync(link.Bucket, link.ObjectKey, HttpContext.RequestAborted);
+        if (storeObject is null)
+        {
+            return NotFound("Artifact not found");
+        }
+
+        string contentType = storeObject.ContentType;
+        if (string.IsNullOrWhiteSpace(storeObject.ContentType) ||
+            storeObject.ContentType.Equals("application/octet-stream", StringComparison.OrdinalIgnoreCase))
+        {
+            contentType = link.ContentType;
+        }
+
+        if (string.IsNullOrWhiteSpace(contentType))
+        {
+            contentType = "application/octet-stream";
+        }
+
         var fileName = link.ObjectKey[(link.ObjectKey.LastIndexOf('/') + 1)..];
-        if (string.IsNullOrEmpty(fileName)) fileName = "artifact";
-
-        // Relative iframe src (/runs/…) uses the browser's current host — correct behind DNS/TLS
-        // reverse proxies. Do not rewrite to Request.Host (often the internal k8s name without ForwardedHeaders).
-        return InlinePreview.StreamResult(Response, obj.Content, contentType, fileName);
+        if (string.IsNullOrEmpty(fileName))
+        {
+            fileName = "artifact";
+        }
+        return InlinePreview.StreamResult(Response, storeObject.Content, contentType, fileName);
     }
 }

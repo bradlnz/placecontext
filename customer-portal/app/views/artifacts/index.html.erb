@@ -1,0 +1,60 @@
+<% page_title "Artifacts" %>
+
+<div class="page-intro">
+  <div>
+    <span class="eyebrow">Files & deliverables</span>
+    <h2>Artifacts</h2>
+    <p>Reports, documents, and data created for your customer workspace.</p>
+  </div>
+  <div class="page-intro-badge"><%= @artifacts.size %> files</div>
+</div>
+
+<%= form_with url: artifacts_path, method: :get, local: true, class: "filter-bar" do |form| %>
+  <% if @projects.many? %>
+    <div class="filter-control">
+      <%= form.label :project_id, "Project" %>
+      <%= form.select :project_id, @projects.map { |project| [project["name"], project["id"]] }, { selected: @project_id }, { onchange: "this.form.submit()" } %>
+    </div>
+  <% else %>
+    <%= form.hidden_field :project_id, value: @project_id %>
+  <% end %>
+  <% if current_portal_user&.can_manage_client_access? && @portal_clients.many? %>
+    <div class="filter-control">
+      <%= form.label :client_id, "Customer" %>
+      <%= form.select :client_id, @portal_clients.map { |client| [client["name"], client["id"]] }, { selected: @client&.dig("id") }, { onchange: "this.form.submit()" } %>
+    </div>
+  <% end %>
+  <% if @client %>
+    <div class="filter-context"><span>Showing files for</span><strong><%= @client["name"] %></strong></div>
+  <% end %>
+<% end %>
+
+<div class="card card-flush artifact-panel">
+  <% if @artifacts.any? %>
+    <div class="artifact-list-header">
+      <span>Name</span><span>Source</span><span>Created</span><span>Size</span><span></span>
+    </div>
+    <div class="artifact-list">
+      <% @artifacts.each do |artifact| %>
+        <% kind, kind_class = artifact_kind(artifact["contentType"]) %>
+        <%= link_to open_artifact_path(artifact["id"], project_id: @project_id, client_id: @client["id"]), class: "artifact-row", target: "_blank", rel: "noopener" do %>
+          <span class="artifact-title-cell">
+            <span class="artifact-file-icon <%= kind_class %>"><%= kind %></span>
+            <span><strong><%= artifact["title"] %></strong><small><%= artifact["contentType"] %></small></span>
+          </span>
+          <span><span class="source-pill"><%= artifact["source"].to_s == "automation" ? "Automation" : artifact["source"].to_s.titleize %></span></span>
+          <span class="artifact-muted"><%= time_ago_in_words(Time.zone.parse(artifact["createdAt"])) %> ago</span>
+          <span class="artifact-muted"><%= number_to_human_size(artifact["sizeBytes"]) %></span>
+          <span class="artifact-open">Open ↗</span>
+        <% end %>
+      <% end %>
+    </div>
+  <% else %>
+    <div class="empty-state empty-state-rich">
+      <div class="empty-state-icon"><%= icon :artifacts %></div>
+      <div class="empty-state-title">No artifacts yet</div>
+      <p>Outputs from completed automations will appear here automatically.</p>
+      <%= link_to "Browse automations", automations_path(project_id: @project_id, client_id: @client&.dig("id")), class: "btn btn-primary" if @client %>
+    </div>
+  <% end %>
+</div>

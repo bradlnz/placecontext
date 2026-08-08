@@ -1,10 +1,10 @@
 <% page_title "Leads" %>
 
-<div class="page-header">
+<div class="page-intro">
   <div>
-    <div class="breadcrumbs">
-      <%= link_to "Dashboard", root_path %> · Leads
-    </div>
+    <span class="eyebrow">Opportunity pipeline</span>
+    <h2>Leads</h2>
+    <p>Prospective customers currently moving through your pipeline.</p>
   </div>
   <% if current_portal_user&.can_manage_client_access? && @project_id %>
     <%= link_to new_client_path(project_id: @project_id), class: "btn btn-primary" do %>
@@ -14,15 +14,18 @@
   <% end %>
 </div>
 
-<%= form_with url: leads_path, method: :get, local: true, class: "project-selector" do |form| %>
-  <%= form.label :project_id, "CRM project" %>
-  <%= form.select :project_id, @projects.map { |project| [project["name"], project["id"]] }, { selected: @project_id }, { onchange: "this.form.submit()" } %>
+<%= form_with url: leads_path, method: :get, local: true, class: "filter-bar" do |form| %>
+  <div class="filter-control">
+    <%= form.label :project_id, "Project" %>
+    <%= form.select :project_id, @projects.map { |project| [project["name"], project["id"]] }, { selected: @project_id }, { onchange: "this.form.submit()" } %>
+  </div>
+  <div class="filter-context"><span>Pipeline</span><strong><%= pluralize(@leads.size, "open lead") %></strong></div>
 <% end %>
 
 <div class="card">
   <div class="card-header">
     <h2 class="card-title">All leads</h2>
-    <span class="card-subtitle"><%= pluralize(@leads.size, "lead") %> in this project</span>
+    <span class="page-intro-badge"><%= pluralize(@leads.size, "record") %></span>
   </div>
 
   <% if @leads.any? %>
@@ -55,7 +58,7 @@
       <div class="empty-state-title">No leads yet</div>
       <p>This project doesn't have any leads. Add a client with stage "Lead" to get started.</p>
       <% if current_portal_user&.can_manage_client_access? && @project_id %>
-        <div style="margin-top: 16px;">
+        <div class="empty-state-actions">
           <%= link_to "Add lead", new_client_path(project_id: @project_id), class: "btn btn-primary" %>
         </div>
       <% end %>

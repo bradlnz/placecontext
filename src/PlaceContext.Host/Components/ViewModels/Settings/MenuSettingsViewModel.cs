@@ -5,16 +5,6 @@ namespace PlaceContext.Host.Components.ViewModels;
 
 public sealed class MenuSettingsViewModel(IMenuConfigService menu, PortalUiState ui) : PageViewModel
 {
-    public sealed class Row
-    {
-        public string Id { get; init; } = "";
-        public string DefaultLabel { get; init; } = "";
-        public string Label { get; set; } = "";
-        public int Order { get; set; }
-        public bool Visible { get; set; } = true;
-        public string Section { get; set; } = "";
-    }
-
     private static readonly IReadOnlyDictionary<string, string> CatalogLabels = new Dictionary<
         string,
         string
@@ -40,7 +30,7 @@ public sealed class MenuSettingsViewModel(IMenuConfigService menu, PortalUiState
         ["about"] = "About",
     };
 
-    public List<Row> Workspace { get; private set; } = [];
+    public List<MenuSettingsRow> Workspace { get; private set; } = [];
     public bool Saving { get; private set; }
     public string? Message { get; private set; }
 
@@ -103,7 +93,7 @@ public sealed class MenuSettingsViewModel(IMenuConfigService menu, PortalUiState
         }
     }
 
-    public static List<Row> MergeRows(
+    public static List<MenuSettingsRow> MergeRows(
         IReadOnlyList<MenuItemOverride> defaults,
         IReadOnlyList<MenuItemOverride> current
     )
@@ -115,7 +105,7 @@ public sealed class MenuSettingsViewModel(IMenuConfigService menu, PortalUiState
             {
                 byId.TryGetValue(item.Id, out var currentItem);
                 CatalogLabels.TryGetValue(item.Id, out var label);
-                return new Row
+                return new MenuSettingsRow
                 {
                     Id = item.Id,
                     DefaultLabel = label ?? item.Id,
@@ -129,7 +119,7 @@ public sealed class MenuSettingsViewModel(IMenuConfigService menu, PortalUiState
             .ToList();
     }
 
-    private static void Renumber(List<Row> rows)
+    private static void Renumber(List<MenuSettingsRow> rows)
     {
         for (var i = 0; i < rows.Count; i++)
             rows[i].Order = i * 10;

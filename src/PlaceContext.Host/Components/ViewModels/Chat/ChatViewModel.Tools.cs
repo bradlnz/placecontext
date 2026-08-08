@@ -5,13 +5,16 @@ using PlaceContext.Application.Features;
 using PlaceContext.Application.Mcp;
 using PlaceContext.Application.Ports;
 using PlaceContext.Domain.Repositories;
-using PlaceContext.Infrastructure.Caching;
-using PlaceContext.Infrastructure.Chat;
+using PlaceContext.AgentChat.Infrastructure.Caching;
+using PlaceContext.AgentChat.Infrastructure.Chat;
 
 namespace PlaceContext.Host.Components.ViewModels;
 
 public sealed partial class ChatViewModel
 {
+    private Guid RequiredProjectId =>
+        ProjectId ?? throw new InvalidOperationException(ChatCopy.NoProjectSelected);
+
     // ── Tool execution ───────────────────────────────────────────────────────
 
     private async Task<ToolCallResult> ExecuteToolAsync(
@@ -60,7 +63,7 @@ public sealed partial class ChatViewModel
         var page = parts.Length > 1 ? int.Parse(parts[1]) : 1;
         AddActiveAction(AgentToolNames.QueryTable, ChatCopy.QueryingTable(tableName));
         var result = await _svc.QueryProjectTablePageAsync(
-            ProjectId!.Value,
+            RequiredProjectId,
             tableName,
             null,
             page,
@@ -87,7 +90,7 @@ public sealed partial class ChatViewModel
     private async Task<ToolCallResult> ExecuteListTablesAsync(CancellationToken ct)
     {
         AddActiveAction(AgentToolNames.ListTables, ChatCopy.LoadingTables);
-        var tables = await _svc.ListProjectDataTablesAsync(ProjectId!.Value, ct);
+        var tables = await _svc.ListProjectDataTablesAsync(RequiredProjectId, ct);
         var sb = new System.Text.StringBuilder();
         sb.Append($"Project tables: {tables.Count}\n");
         foreach (var t in tables)
@@ -98,7 +101,7 @@ public sealed partial class ChatViewModel
     private async Task<ToolCallResult> ExecuteListJobsAsync(CancellationToken ct)
     {
         AddActiveAction(AgentToolNames.ListJobs, ChatCopy.LoadingJobs);
-        var jobs = await _svc.ListJobsAsync(ProjectId!.Value, ct);
+        var jobs = await _svc.ListJobsAsync(RequiredProjectId, ct);
         var sb = new System.Text.StringBuilder();
         sb.Append($"Jobs: {jobs.Count}\n");
         foreach (var j in jobs)
@@ -385,7 +388,7 @@ public sealed partial class ChatViewModel
                     try
                     {
                         await _contentIndexer.IndexAsync(
-                            ProjectId!.Value,
+                            RequiredProjectId,
                             ContentKind.Document,
                             $"artifact:{link.Id}",
                             $"{link.Title}\n\n{indexText}",
@@ -446,7 +449,7 @@ public sealed partial class ChatViewModel
             try
             {
                 var probe = await _svc.QueryProjectTablePageAsync(
-                    ProjectId!.Value,
+                    RequiredProjectId,
                     tableName,
                     null,
                     1,
@@ -462,7 +465,7 @@ public sealed partial class ChatViewModel
         }
         if (!tableValid)
         {
-            var tables = await _svc.ListProjectDataTablesAsync(ProjectId!.Value, ct);
+            var tables = await _svc.ListProjectDataTablesAsync(RequiredProjectId, ct);
             if (tables.Count == 0)
                 return ToolCallResult.Fail("No data tables found in this project.");
             var clarify = await AskClarificationAsync(
@@ -492,7 +495,7 @@ public sealed partial class ChatViewModel
         if (!string.IsNullOrEmpty(column))
         {
             var probe = await _svc.QueryProjectTablePageAsync(
-                ProjectId!.Value,
+                RequiredProjectId,
                 tableName,
                 null,
                 1,
@@ -505,7 +508,7 @@ public sealed partial class ChatViewModel
         if (columns.Count == 0)
         {
             var probe = await _svc.QueryProjectTablePageAsync(
-                ProjectId!.Value,
+                RequiredProjectId,
                 tableName,
                 null,
                 1,
@@ -515,7 +518,7 @@ public sealed partial class ChatViewModel
             if (probe.Columns.Count == 0)
                 return ToolCallResult.Fail($"Table '{tableName}' has no columns.");
             var numericProbe = await _svc.QueryProjectTablePageAsync(
-                ProjectId!.Value,
+                RequiredProjectId,
                 tableName,
                 null,
                 1,
@@ -549,7 +552,7 @@ public sealed partial class ChatViewModel
             columns = clarify.SelectedIds;
         }
         var result = await _svc.QueryProjectTablePageAsync(
-            ProjectId!.Value,
+            RequiredProjectId,
             tableName,
             null,
             1,
@@ -602,7 +605,7 @@ public sealed partial class ChatViewModel
         AddActiveAction(AgentToolNames.QueryGraph, "Loading project graph...");
         try
         {
-            var graph = await _svc.GetGraphVizAsync(ProjectId!.Value, ct);
+            var graph = await _svc.GetGraphVizAsync(RequiredProjectId, ct);
             var sb = new System.Text.StringBuilder();
             sb.AppendLine(
                 $"# Project Dependency Graph\n- **Nodes:** {graph.NodeCount}\n- **Links:** {graph.LinkCount}\n"
@@ -704,7 +707,7 @@ public sealed partial class ChatViewModel
         if (!ProjectId.HasValue)
             return ToolCallResult.Fail(ChatCopy.NoProjectSelected);
         var jobId = Guid.TryParse(args.Trim(), out var id) ? id : Guid.Empty;
-        var triggers = await _svc.ListTriggersAsync(ProjectId!.Value, ct);
+        var triggers = await _svc.ListTriggersAsync(RequiredProjectId, ct);
         if (jobId != Guid.Empty)
             triggers = triggers.Where(t => t.JobId == jobId).ToList();
         var sb = new System.Text.StringBuilder();
@@ -747,7 +750,7 @@ public sealed partial class ChatViewModel
     private async Task<ToolCallResult> ExecuteListChainsAsync(CancellationToken ct)
     {
         AddActiveAction(AgentToolNames.ListChains, ChatCopy.LoadingChains);
-        var chains = await _svc.ListJobChainsAsync(ProjectId!.Value, ct);
+        var chains = await _svc.ListJobChainsAsync(RequiredProjectId, ct);
         var sb = new System.Text.StringBuilder();
         sb.Append($"Job chains: {chains.Count}\n");
         foreach (var c in chains)
@@ -846,7 +849,7 @@ public sealed partial class ChatViewModel
 
         if (string.IsNullOrEmpty(serverName))
         {
-            var mcps = await _svc.ListMcpConnectionsAsync(ProjectId!.Value, ct);
+            var mcps = await _svc.ListMcpConnectionsAsync(RequiredProjectId, ct);
             if (mcps.Count == 0)
                 return ToolCallResult.Ok(
                     "No MCP servers configured. Add one in Settings → MCP Servers."
@@ -866,7 +869,7 @@ public sealed partial class ChatViewModel
             return ToolCallResult.Fail("Usage: call_mcp|serverName|toolName|[jsonArgs]");
 
         AddActiveAction(AgentToolNames.CallMcp, ChatCopy.CallingMcp(serverName, toolName));
-        var connections = await _svc.ListMcpConnectionsAsync(ProjectId!.Value, ct);
+        var connections = await _svc.ListMcpConnectionsAsync(RequiredProjectId, ct);
         var connection = connections.FirstOrDefault(c =>
             c.Name.Equals(serverName, StringComparison.OrdinalIgnoreCase)
         );
@@ -904,7 +907,7 @@ public sealed partial class ChatViewModel
     private async Task<ToolCallResult> ExecuteListMcpToolsAsync(string args, CancellationToken ct)
     {
         var serverName = args.Trim();
-        var connections = await _svc.ListMcpConnectionsAsync(ProjectId!.Value, ct);
+        var connections = await _svc.ListMcpConnectionsAsync(RequiredProjectId, ct);
         if (connections.Count == 0)
             return ToolCallResult.Ok(
                 "No MCP servers configured. Add one in Settings → MCP Servers."

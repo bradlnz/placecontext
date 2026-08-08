@@ -1,27 +1,5 @@
 namespace PlaceContext.Host.Components.ViewModels;
 
-public enum ChatRole
-{
-    System,
-    User,
-    Assistant,
-}
-
-public enum ChatResultKind
-{
-    Text,
-    Graph,
-    Map,
-    Artifact,
-}
-
-public enum ChatSettingsTab
-{
-    Prompt,
-    Rag,
-    Commands,
-}
-
 public static class ChatPresentationCatalog
 {
     public static ChatRole ParseRole(string value) =>

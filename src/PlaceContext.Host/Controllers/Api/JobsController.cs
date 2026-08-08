@@ -18,10 +18,10 @@ namespace PlaceContext.Host.Controllers.Api;
 [Route("api/v1")]
 [Authorize(AuthenticationSchemes = ApiKeyAuthenticationHandler.SchemeName)]
 [Produces("application/json")]
-public sealed class JobsController : ControllerBase
+public sealed class JobsController(IPlaceContextService placeContextService) : ControllerBase
 {
-    private readonly IPlaceContextService _svc;
-    public JobsController(IPlaceContextService svc) => _svc = svc;
+    private readonly IPlaceContextService _placeContextService
+        = placeContextService ?? throw new NullReferenceException($"Missing dependency {nameof(placeContextService)}");
 
     /// <summary>GET /api/v1/projects/{projectId}/jobs — every job defined under the project, or 404 if
     /// the project itself doesn't exist.</summary>
@@ -30,9 +30,9 @@ public sealed class JobsController : ControllerBase
     public async Task<ActionResult<IReadOnlyList<JobResponse>>> ListForProject(Guid projectId)
     {
         var ct = HttpContext.RequestAborted;
-        if (await _svc.GetProjectByIdAsync(projectId, ct) is null) return NotFound();
+        if (await _placeContextService.GetProjectByIdAsync(projectId, ct) is null) return NotFound();
 
-        var jobs = await _svc.ListJobsAsync(projectId, ct);
+        var jobs = await _placeContextService.ListJobsAsync(projectId, ct);
         return Ok(jobs.Select(JobApiMapper.ToResponse).ToList());
     }
 
@@ -41,7 +41,7 @@ public sealed class JobsController : ControllerBase
     [Authorize(Policy = Permission.JobsView)]
     public async Task<ActionResult<JobResponse>> GetById(Guid id)
     {
-        var job = await _svc.GetJobAsync(id, HttpContext.RequestAborted);
+        var job = await _placeContextService.GetJobAsync(id, HttpContext.RequestAborted);
         return job is null ? NotFound() : Ok(JobApiMapper.ToResponse(job));
     }
 
@@ -53,11 +53,11 @@ public sealed class JobsController : ControllerBase
     public async Task<ActionResult<JobResponse>> Create(Guid projectId, [FromBody] JobRequest request)
     {
         var ct = HttpContext.RequestAborted;
-        if (await _svc.GetProjectByIdAsync(projectId, ct) is null) return NotFound();
+        if (await _placeContextService.GetProjectByIdAsync(projectId, ct) is null) return NotFound();
 
         try
         {
-            var job = await _svc.CreateJobAsync(JobApiMapper.ToCreateCommand(projectId, request), ct);
+            var job = await _placeContextService.CreateJobAsync(JobApiMapper.ToCreateCommand(projectId, request), ct);
             var response = JobApiMapper.ToResponse(job);
             return CreatedAtRoute("GetJobById", new { id = response.Id }, response);
         }
@@ -74,11 +74,11 @@ public sealed class JobsController : ControllerBase
     public async Task<ActionResult<JobResponse>> Update(Guid id, [FromBody] JobRequest request)
     {
         var ct = HttpContext.RequestAborted;
-        if (await _svc.GetJobAsync(id, ct) is null) return NotFound();
+        if (await _placeContextService.GetJobAsync(id, ct) is null) return NotFound();
 
         try
         {
-            var job = await _svc.UpdateJobAsync(JobApiMapper.ToUpdateCommand(id, request), ct);
+            var job = await _placeContextService.UpdateJobAsync(JobApiMapper.ToUpdateCommand(id, request), ct);
             return Ok(JobApiMapper.ToResponse(job));
         }
         catch (ArgumentException ex)
@@ -94,7 +94,7 @@ public sealed class JobsController : ControllerBase
     [Authorize(Policy = Permission.JobsEdit)]
     public async Task<IActionResult> Delete(Guid id)
     {
-        var deleted = await _svc.DeleteJobAsync(id, HttpContext.RequestAborted);
+        var deleted = await _placeContextService.DeleteJobAsync(id, HttpContext.RequestAborted);
         return deleted ? NoContent() : NotFound();
     }
 
@@ -110,7 +110,7 @@ public sealed class JobsController : ControllerBase
     public async Task<ActionResult<bool>> CancelJobRun(Guid runId)
     {
         var ct = HttpContext.RequestAborted;
-        return Ok(await _svc.CancelJobRunAsync(runId, ct));
+        return Ok(await _placeContextService.CancelJobRunAsync(runId, ct));
     }
 
     // ── Chain Run Cancel ──────────────────────────────────────────────────
@@ -124,7 +124,7 @@ public sealed class JobsController : ControllerBase
     public async Task<ActionResult<bool>> CancelChainRun(Guid chainRunId)
     {
         var ct = HttpContext.RequestAborted;
-        return Ok(await _svc.CancelChainRunAsync(chainRunId, ct));
+        return Ok(await _placeContextService.CancelChainRunAsync(chainRunId, ct));
     }
 
     // ── Chain Trigger ────────────────────────────────────────────────────────
@@ -143,7 +143,7 @@ public sealed class JobsController : ControllerBase
         var ct = HttpContext.RequestAborted;
         try
         {
-            var result = await _svc.RunJobChainAsync(
+            var result = await _placeContextService.RunJobChainAsync(
                 chainId,
                 inputPayload: request?.InputPayload,
                 ct: ct);
@@ -171,7 +171,7 @@ public sealed class JobsController : ControllerBase
         var ct = HttpContext.RequestAborted;
         try
         {
-            var result = await _svc.ReplayJobChainAsync(
+            var result = await _placeContextService.ReplayJobChainAsync(
                 new PlaceContext.Application.Features.ReplayJobChainCommand(
                     chainId,
                     request.OriginalRunId,
@@ -189,26 +189,4 @@ public sealed class JobsController : ControllerBase
             return BadRequest(new { error = ex.Message });
         }
     }
-}
-
-public sealed class TriggerChainRequest
-{
-    /// <summary>Optional input payload for the first stage (JSON string). Omit to use the first
-    /// job's stored shard payloads.</summary>
-    public string? InputPayload { get; set; }
-}
-
-public sealed class ReplayChainRequest
-{
-    /// <summary>The original chain run to replay from.</summary>
-    public Guid OriginalRunId { get; set; }
-
-    /// <summary>0-based step index to resume from. Null = first failed step.</summary>
-    public int? FromStepIndex { get; set; }
-
-    /// <summary>Optional input payload override for the replay start step.</summary>
-    public string? InputPayload { get; set; }
-
-    /// <summary>Optional per-step parameter overrides (keyed by step index).</summary>
-    public IReadOnlyDictionary<int, string>? StepPayloadOverrides { get; set; }
 }

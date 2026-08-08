@@ -65,7 +65,7 @@ public sealed class PlaceContextPrompts
         in the PlaceContext workflow:
         - **Pre-action**: load the project overview (`get_project_overview`), note starting tokens.
         - **Guardrails** every change must pass: rationale, checks, review, live verification.
-        - **Post-action**: `record_activity` (rationale/items/check deltas/guardrail flags) and `record_usage`
+        - **Post-action**: `record_activity` (rationale/items/check deltas/guardrail flags)
           (tokens spent on that change — cost per change).
 
         ## Requirements

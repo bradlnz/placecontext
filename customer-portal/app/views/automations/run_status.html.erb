@@ -3,20 +3,30 @@
 <div class="page-header">
   <div>
     <div class="breadcrumbs">
-      <%= link_to "Dashboard", root_path %> ·
-      <%= link_to "Automations", automations_path(project_id: @project_id) %> ·
-      Run status
+      <%= link_to "Automations", automations_path(project_id: @project_id, client_id: @client&.dig("id")) %> <span>›</span> Run status
     </div>
-    <h1>Automation run</h1>
+    <span class="eyebrow"><%= @client ? "Running for #{@client["name"]}" : "Workflow execution" %></span>
+    <h1><%= @run["chainName"].presence || "Automation run" %></h1>
+    <p class="profile-subheading">Started <%= time_ago_in_words(Time.zone.parse(@run["startedAt"])) %> ago</p>
   </div>
   <div>
     <%= run_status_badge(@run["status"]) %>
   </div>
 </div>
 
-<div class="card">
+<% steps = @run["steps"] || [] %>
+<% finished_steps = steps.count { |step| %w[Succeeded Completed Skipped Partial Failed Cancelled].include?(step["status"]) } %>
+<div class="run-summary-grid">
+  <div class="run-summary-card"><span>Status</span><%= run_status_badge(@run["status"]) %></div>
+  <div class="run-summary-card"><span>Progress</span><strong><%= finished_steps %> / <%= steps.size %> steps</strong></div>
+  <div class="run-summary-card"><span>Started</span><strong><%= Time.zone.parse(@run["startedAt"]).to_fs(:short) %></strong></div>
+  <div class="run-summary-card"><span>Customer</span><strong><%= @client&.dig("name") || "Customer workflow" %></strong></div>
+</div>
+
+<div class="card run-timeline-card">
   <div class="card-header">
-    <h2 class="card-title">Step timeline</h2>
+    <div><span class="eyebrow">Live progress</span><h2 class="card-title card-title-lg">Step timeline</h2></div>
+    <% unless %w[Succeeded Failed Cancelled Partial].include?(@run["status"]) %><span class="live-pill"><i></i> Updating</span><% end %>
   </div>
 
   <% if @run["steps"].present? && @run["steps"].any? %>
@@ -26,7 +36,7 @@
           <div class="run-step-marker"><%= index + 1 %></div>
           <div class="run-step-body">
             <div class="run-step-name"><%= step["jobName"] %></div>
-            <div class="run-step-status"><%= step["status"] %></div>
+            <div class="run-step-status"><%= step["status"] %><% if step["finishedAt"].present? %> · <%= Time.zone.parse(step["finishedAt"]).to_fs(:short) %><% end %></div>
             <% if step["error"].present? %>
               <div class="run-step-error"><%= step["error"] %></div>
             <% end %>
@@ -53,7 +63,8 @@
 <% end %>
 
 <div class="btn-toolbar">
-  <%= link_to "Back to automations", automations_path(project_id: @project_id), class: "btn btn-secondary" %>
+  <%= link_to "Back to automations", automations_path(project_id: @project_id, client_id: @client&.dig("id")), class: "btn btn-secondary" %>
+  <%= link_to "View artifacts", artifacts_path(project_id: @project_id, client_id: @client&.dig("id")), class: "btn btn-primary" if @client %>
 </div>
 
 <% unless %w[Succeeded Failed Cancelled Partial].include?(@run["status"]) %>

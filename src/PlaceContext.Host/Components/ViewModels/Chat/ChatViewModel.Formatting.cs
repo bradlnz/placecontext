@@ -5,8 +5,8 @@ using PlaceContext.Application.Features;
 using PlaceContext.Application.Mcp;
 using PlaceContext.Application.Ports;
 using PlaceContext.Domain.Repositories;
-using PlaceContext.Infrastructure.Caching;
-using PlaceContext.Infrastructure.Chat;
+using PlaceContext.AgentChat.Infrastructure.Caching;
+using PlaceContext.AgentChat.Infrastructure.Chat;
 
 namespace PlaceContext.Host.Components.ViewModels;
 
@@ -376,15 +376,7 @@ public sealed partial class ChatViewModel
 
     // ── Hallucination detection ──────────────────────────────────────────────
 
-    private sealed class HallucinationResult
-    {
-        public bool Detected { get; init; }
-        public string Reason { get; init; } = "";
-        public string? ArtifactId { get; init; }
-        public string? CorrectionPrompt { get; init; }
-    }
-
-    private HallucinationResult DetectHallucination()
+    private ChatHallucinationResult DetectHallucination()
     {
         var lastAssistant = Messages.LastOrDefault(m => m.Role == "assistant");
         if (lastAssistant == null)
@@ -443,7 +435,7 @@ public sealed partial class ChatViewModel
         return new() { Detected = false };
     }
 
-    private static HallucinationResult DetectGenericHallucination(string content)
+    private static ChatHallucinationResult DetectGenericHallucination(string content)
     {
         if (string.IsNullOrWhiteSpace(content) || content.Length < 10)
             return new() { Detected = false };
@@ -517,7 +509,7 @@ public sealed partial class ChatViewModel
         return new() { Detected = false };
     }
 
-    private static HallucinationResult DetectArtifactHallucination(
+    private static ChatHallucinationResult DetectArtifactHallucination(
         List<ToolCallInfo> toolCalls,
         string content
     )
@@ -547,7 +539,7 @@ public sealed partial class ChatViewModel
         };
     }
 
-    private static HallucinationResult DetectEmptyAfterTools(
+    private static ChatHallucinationResult DetectEmptyAfterTools(
         List<ToolCallInfo> toolCalls,
         string content
     )
@@ -568,7 +560,7 @@ public sealed partial class ChatViewModel
         };
     }
 
-    private static HallucinationResult DetectTableHallucination(
+    private static ChatHallucinationResult DetectTableHallucination(
         List<ToolCallInfo> toolCalls,
         List<string> toolResults,
         string content
@@ -615,7 +607,7 @@ public sealed partial class ChatViewModel
         return new() { Detected = false };
     }
 
-    private static HallucinationResult DetectSearchHallucination(
+    private static ChatHallucinationResult DetectSearchHallucination(
         List<ToolCallInfo> toolCalls,
         List<string> toolResults,
         string content
@@ -647,7 +639,7 @@ public sealed partial class ChatViewModel
         return new() { Detected = false };
     }
 
-    private static HallucinationResult DetectRunsHallucination(
+    private static ChatHallucinationResult DetectRunsHallucination(
         List<ToolCallInfo> toolCalls,
         List<string> toolResults,
         string content
@@ -680,7 +672,7 @@ public sealed partial class ChatViewModel
         return new() { Detected = false };
     }
 
-    private static HallucinationResult DetectJobsHallucination(
+    private static ChatHallucinationResult DetectJobsHallucination(
         List<ToolCallInfo> toolCalls,
         List<string> toolResults,
         string content
@@ -700,7 +692,7 @@ public sealed partial class ChatViewModel
         return new() { Detected = false };
     }
 
-    private static HallucinationResult DetectErrorMaskingHallucination(
+    private static ChatHallucinationResult DetectErrorMaskingHallucination(
         List<ToolCallInfo> toolCalls,
         string content
     )
@@ -736,7 +728,7 @@ public sealed partial class ChatViewModel
         return new() { Detected = false };
     }
 
-    private static HallucinationResult DetectIntentMismatch(string content)
+    private static ChatHallucinationResult DetectIntentMismatch(string content)
     {
         if (string.IsNullOrWhiteSpace(content) || content.Length < 20)
             return new() { Detected = false };

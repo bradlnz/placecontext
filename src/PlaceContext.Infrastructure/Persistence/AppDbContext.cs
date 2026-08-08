@@ -36,7 +36,6 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
     public DbSet<ActivityRecordRow> ActivityRecords => Set<ActivityRecordRow>();
     public DbSet<DecisionRow> Decisions => Set<DecisionRow>();
     public DbSet<RequirementsRow> Requirements => Set<RequirementsRow>();
-    public DbSet<UsageRow> UsageRecords => Set<UsageRow>();
     public DbSet<ToolCallRow> ToolCalls => Set<ToolCallRow>();
     public DbSet<JobRow> Jobs => Set<JobRow>();
     public DbSet<JobRunRow> JobRuns => Set<JobRunRow>();
@@ -57,7 +56,6 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
     public DbSet<CommunicationProviderRow> CommunicationProviders => Set<CommunicationProviderRow>();
     public DbSet<RunArtifactLinkRow> RunArtifacts => Set<RunArtifactLinkRow>();
     public DbSet<ArtifactShareTokenRow> ArtifactShareTokens => Set<ArtifactShareTokenRow>();
-    public DbSet<JobSecretRow> JobSecrets => Set<JobSecretRow>();
     public DbSet<JobTriggerRow> JobTriggers => Set<JobTriggerRow>();
     public DbSet<JobChainRow> JobChains => Set<JobChainRow>();
     public DbSet<ChainRunRow> ChainRuns => Set<ChainRunRow>();
@@ -70,10 +68,6 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
     public DbSet<EntityTagRow> EntityTags => Set<EntityTagRow>();
     public DbSet<RecordLinkRow> RecordLinks => Set<RecordLinkRow>();
     public DbSet<UserApiTokenRow> UserApiTokens => Set<UserApiTokenRow>();
-    public DbSet<AgentConfigRow> AgentConfigs => Set<AgentConfigRow>();
-    public DbSet<AgentChatSessionRow> AgentChatSessions => Set<AgentChatSessionRow>();
-    public DbSet<McpConnectionRow> McpConnections => Set<McpConnectionRow>();
-    public DbSet<ChatCommandRow> ChatCommands => Set<ChatCommandRow>();
 
     Task<int> IUnitOfWork.SaveChangesAsync(CancellationToken ct) => SaveChangesAsync(ct);
 
@@ -207,14 +201,6 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
             e.ToTable("requirements");
             // Composite key: each tenant has its own per-project docs AND its own global doc (ProjectId = Guid.Empty).
             e.HasKey(x => new { x.TenantId, x.ProjectId });
-            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
-        });
-
-        b.Entity<UsageRow>(e =>
-        {
-            e.ToTable("usage_records");
-            e.HasKey(x => x.Id);
-            e.HasIndex(x => new { x.ProjectId, x.RecordedAt });
             e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
         });
 
@@ -502,13 +488,6 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
             e.Property(x => x.SourceKind).HasDefaultValue("job");
         });
 
-        b.Entity<JobSecretRow>(e =>
-        {
-            e.ToTable("job_secrets");
-            e.HasKey(x => new { x.ProjectId, x.Name });
-            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
-        });
-
         b.Entity<JobRunRow>(e =>
         {
             e.ToTable("job_runs");
@@ -575,61 +554,5 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
             e.HasIndex(x => new { x.ClaimedAt, x.EnqueuedAt });
         });
 
-        b.Entity<AgentConfigRow>(e =>
-        {
-            e.ToTable("agent_configs");
-            e.HasKey(x => x.Id);
-            e.HasIndex(x => x.ProjectId).IsUnique(); // one config per project
-            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
-            e.Property(x => x.BaseModel).HasDefaultValue("qwen3.5:0.8b");
-            e.Property(x => x.SystemPrompt).HasDefaultValue("");
-            e.Property(x => x.Preamble).HasDefaultValue("");
-            e.Property(x => x.ToolCatalog).HasDefaultValue("");
-            e.Property(x => x.LaunchpadToolCatalog).HasDefaultValue("");
-            e.Property(x => x.MaxContextChunks).HasDefaultValue(5);
-            e.Property(x => x.Temperature).HasDefaultValue(0.7f);
-            e.Property(x => x.TopP).HasDefaultValue(0.9f);
-            e.Property(x => x.Enabled).HasDefaultValue(true);
-        });
-
-        b.Entity<AgentChatSessionRow>(e =>
-        {
-            e.ToTable("agent_chat_sessions");
-            e.HasKey(x => x.Id);
-            e.HasIndex(x => new { x.ProjectId, x.UpdatedAt });
-            e.Property(x => x.MessagesJson).HasDefaultValue("[]");
-            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
-        });
-
-        b.Entity<McpConnectionRow>(e =>
-        {
-            e.ToTable("mcp_connections");
-            e.HasKey(r => r.Id);
-            e.Property(r => r.Id).HasColumnType(DataColumnTypes.Uuid);
-            e.Property(r => r.ProjectId).HasColumnType(DataColumnTypes.Uuid);
-            e.Property(r => r.TenantId).HasColumnType(DataColumnTypes.Uuid);
-            e.Property(r => r.Name).HasMaxLength(100);
-            e.Property(r => r.Transport).HasMaxLength(20);
-            e.Property(r => r.EndpointUrl).HasMaxLength(500);
-            e.Property(r => r.Command).HasMaxLength(200);
-            e.Property(r => r.Args).HasMaxLength(1000);
-            e.Property(r => r.LastStatus).HasMaxLength(200);
-            e.Property(r => r.OAuthClientId).HasMaxLength(200);
-            e.Property(r => r.OAuthScopes).HasMaxLength(500);
-            e.HasQueryFilter(r => r.TenantId == _tenant.TenantId);
-        });
-
-        b.Entity<ChatCommandRow>(e =>
-        {
-            e.ToTable("chat_commands");
-            e.HasKey(r => r.Id);
-            e.Property(r => r.Id).HasColumnType(DataColumnTypes.Uuid);
-            e.Property(r => r.ProjectId).HasColumnType(DataColumnTypes.Uuid);
-            e.Property(r => r.TenantId).HasColumnType(DataColumnTypes.Uuid);
-            e.Property(r => r.Name).HasMaxLength(100);
-            e.Property(r => r.ToolName).HasMaxLength(100);
-            e.HasIndex(r => new { r.ProjectId, r.Name }).IsUnique();
-            e.HasQueryFilter(r => r.TenantId == _tenant.TenantId);
-        });
     }
 }

@@ -25,7 +25,7 @@ public sealed class EfRunEmbeddingRepository : IRunEmbeddingRepository
     private readonly IEmbeddingGateway _embeddings;
     private readonly IDataEncryptor _enc;
     private readonly ILogger<EfRunEmbeddingRepository> _log;
-    private static string TextPurpose => IDataEncryptor.Purpose.EmbeddingText;
+    private static string TextPurpose => DataEncryptionPurpose.EmbeddingText;
 
     public EfRunEmbeddingRepository(
         AppDbContext db, ICurrentTenant tenant, IEmbeddingGateway embeddings, IDataEncryptor enc,

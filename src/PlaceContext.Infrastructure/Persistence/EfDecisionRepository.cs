@@ -10,7 +10,7 @@ public sealed class EfDecisionRepository : IDecisionRepository
 {
     private readonly AppDbContext _db;
     private readonly IDataEncryptor _enc;
-    private static string P => IDataEncryptor.Purpose.Decision;
+    private static string P => DataEncryptionPurpose.Decision;
 
     public EfDecisionRepository(AppDbContext db, IDataEncryptor enc) => (_db, _enc) = (db, enc);
 

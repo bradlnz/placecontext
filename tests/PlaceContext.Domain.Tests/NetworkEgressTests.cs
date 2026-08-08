@@ -93,7 +93,7 @@ public class NetworkEgressTests
     public void WorkloadSnapshot_is_immutable_after_construction()
     {
         var snap = new WorkloadSnapshot(
-            new WorkloadSource.ImageWorkload("img"),
+            new ImageWorkload("img"),
             new[] { "{}" },
             new Dictionary<string, string>(),
             null, null, 1,

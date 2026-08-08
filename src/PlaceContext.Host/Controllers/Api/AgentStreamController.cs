@@ -3,7 +3,8 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using PlaceContext.Application.Ports;
 using PlaceContext.Host.Auth;
-using PlaceContext.Infrastructure.Chat;
+using PlaceContext.AgentChat.Infrastructure.Chat;
+using PlaceContext.Host.Controllers.Api.Records;
 
 namespace PlaceContext.Host.Controllers.Api;
 
@@ -22,6 +23,8 @@ public sealed class AgentStreamController(IChatGateway chat) : ControllerBase
 {
     private const int MaxMessageChars = 4_000;
     private const int MaxContextChars = 80_000;
+    private readonly IChatGateway _chat = chat
+        ?? throw new NullReferenceException("Missing dependency");
 
     [HttpPost("stream")]
     [DisableRequestSizeLimit]
@@ -39,7 +42,7 @@ public sealed class AgentStreamController(IChatGateway chat) : ControllerBase
             await Response.WriteAsJsonAsync(new { error = "agent input is too large" }, ct);
             return;
         }
-        if (!chat.IsEnabled)
+        if (!_chat.IsEnabled)
         {
             Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
             await Response.WriteAsJsonAsync(new { error = "PlaceContext agent is not configured" }, ct);
@@ -65,7 +68,7 @@ public sealed class AgentStreamController(IChatGateway chat) : ControllerBase
 
         try
         {
-            if (chat is ClusterChatGateway streaming)
+            if (_chat is ClusterChatGateway streaming)
             {
                 await foreach (var token in streaming.ChatStreamAsync(
                     messages, new ChatSettings(Temperature: 0.1f, MaxTokens: 1_000), ct))
@@ -73,17 +76,20 @@ public sealed class AgentStreamController(IChatGateway chat) : ControllerBase
             }
             else
             {
-                var answer = await chat.ChatAsync(
+                var answer = await _chat.ChatAsync(
                     messages, new ChatSettings(Temperature: 0.1f, MaxTokens: 1_000), ct);
                 await WriteEvent("delta", new { text = answer }, ct);
             }
             await WriteEvent("done", new { completed = true }, ct);
         }
-        catch (OperationCanceledException) when (ct.IsCancellationRequested) { }
-        catch (Exception)
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            await WriteEvent("info", new { info = "request cancelled"}, CancellationToken.None);
+        }
+        catch (Exception ex)
         {
             if (!Response.HttpContext.RequestAborted.IsCancellationRequested)
-                await WriteEvent("error", new { error = "agent stream failed" }, CancellationToken.None);
+                await WriteEvent("error", new { error = "agent stream failed", exception = ex.Message }, CancellationToken.None);
         }
     }
 
@@ -94,8 +100,3 @@ public sealed class AgentStreamController(IChatGateway chat) : ControllerBase
         await Response.Body.FlushAsync(ct);
     }
 }
-
-public sealed record AgentStreamRequest(
-    string Message,
-    string? Context,
-    [property: System.Text.Json.Serialization.JsonPropertyName("correlation_id")] string? CorrelationId);

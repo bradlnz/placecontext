@@ -151,7 +151,7 @@
             <div class="dcfield">
                 <div class="flex-between">
                     <label>Relations <span class="code code-hint">this column ↔ that entity's column</span></label>
-                    <button class="dcbtn rel-add-btn" @onclick="@(() => Vm.EditRelations.Add(new DataEntitiesViewModel.RelationEdit()))">+ relation</button>
+                    <button class="dcbtn rel-add-btn" @onclick="@(() => Vm.EditRelations.Add(new DataEntityRelationEdit()))">+ relation</button>
                 </div>
                 <div class="rel-list">
                     @for (var i = 0; i < Vm.EditRelations.Count; i++)

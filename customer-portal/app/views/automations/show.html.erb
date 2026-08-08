@@ -1,28 +1,28 @@
 <% page_title @chain["name"] %>
 
-<div class="page-header">
+<div class="page-header automation-detail-header">
   <div>
     <div class="breadcrumbs">
-      <%= link_to "Dashboard", root_path %> ·
-      <%= link_to "Automations", automations_path(project_id: @project_id) %> ·
-      <%= @chain["name"] %>
+      <%= link_to "Automations", automations_path(project_id: @project_id, client_id: @client["id"]) %>
+      <span>›</span> Configure workflow
     </div>
+    <span class="eyebrow">Running for <%= @client["name"] %></span>
     <h1><%= @chain["name"] %></h1>
   </div>
+  <span class="automation-available"><i></i> Ready to run</span>
 </div>
 
 <% if @chain["description"].present? %>
-  <p class="card-subtitle" style="margin-bottom: 20px; font-size: 14px;"><%= @chain["description"] %></p>
+  <p class="automation-detail-description"><%= @chain["description"] %></p>
 <% end %>
 
 <%= form_with url: run_automation_path(@chain["id"], project_id: @project_id), method: :post, local: true do %>
-  <% if params[:client_id].present? %>
-    <%= hidden_field_tag :client_id, params[:client_id] %>
-  <% end %>
+  <%= hidden_field_tag :client_id, @client["id"] %>
 
-  <% @chain["steps"].each do |step| %>
+  <div class="workflow-steps">
+  <% @chain["steps"].each_with_index do |step, index| %>
     <fieldset class="step-card">
-      <legend>Step <%= step["index"] + 1 %>: <%= step["jobName"] %></legend>
+      <legend><span class="step-number"><%= step["index"] + 1 %></span><span><small>Workflow step</small><%= step["jobName"] %></span></legend>
 
       <% if step["conditionExpression"].present? %>
         <div class="step-condition">
@@ -44,7 +44,7 @@
               <%= number_field_tag field_name, nil, required: param["required"] %>
             <% when "file" %>
               <%= text_field_tag field_name, nil, required: param["required"], placeholder: "File URL or identifier" %>
-              <small style="color: var(--color-text-muted);">File uploads are not supported in this preview.</small>
+              <small class="form-help">File uploads are not supported in this preview.</small>
             <% when "textarea" %>
               <%= text_area_tag field_name, nil, required: param["required"] %>
             <% else %>
@@ -55,9 +55,13 @@
       </div>
     </fieldset>
   <% end %>
+  </div>
 
-  <div class="btn-toolbar">
-    <%= submit_tag "Run automation", class: "btn btn-primary" %>
-    <%= link_to "Back to automations", automations_path(project_id: @project_id), class: "btn btn-secondary" %>
+  <div class="run-toolbar">
+    <div><strong>Ready to start?</strong><span>PlaceContext will run this workflow for <%= @client["name"] %>.</span></div>
+    <div class="btn-toolbar">
+      <%= link_to "Cancel", automations_path(project_id: @project_id, client_id: @client["id"]), class: "btn btn-secondary" %>
+      <%= submit_tag "Run automation →", class: "btn btn-primary" %>
+    </div>
   </div>
 <% end %>

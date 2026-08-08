@@ -6,36 +6,8 @@ using PlaceContext.Domain.ValueObjects;
 
 namespace PlaceContext.Host.Components.ViewModels;
 
-public enum ScheduleFrequency
-{
-    Hour,
-    Day,
-    Weekday,
-    Week,
-    Month,
-}
-
 public sealed class SchedulesViewModel : PageViewModel
 {
-    private static class Copy
-    {
-        public const string PageTitle = "Schedules";
-        public const string PageSubtitle = "cron + event triggers + launchpads across this project";
-        public const string NameRequired = "Name is required.";
-        public const string ChainRequired = "Pick a chain.";
-        public const string PromptRequired = "Prompt is required.";
-        public const string JobRequired = "Pick a job.";
-        public const string DeletedJob = "(deleted job)";
-        public const string DeletedChain = "(deleted chain)";
-    }
-
-    private static class Cron
-    {
-        public const string Hourly = "0 * * * *";
-        public const string Default = "0 0 * * *";
-        public const string Weekdays = "1-5";
-    }
-
     private readonly IPlaceContextService _service;
     private readonly PortalUiState _ui;
     private readonly ICurrentTenant _tenant;
@@ -64,7 +36,7 @@ public sealed class SchedulesViewModel : PageViewModel
     public Guid NewJobId { get; set; }
     public string NewName { get; set; } = string.Empty;
     public TriggerKind NewKind { get; set; } = TriggerKind.Schedule;
-    public string NewCron { get; set; } = Cron.Default;
+    public string NewCron { get; set; } = ScheduleCron.Default;
     public string NewEvent { get; set; } = string.Empty;
     public Guid NewChainId { get; set; }
     public string NewSourceTable { get; set; } = string.Empty;
@@ -93,7 +65,7 @@ public sealed class SchedulesViewModel : PageViewModel
             Triggers = await _service.ListTriggersAsync(projectId);
             EventTypes = await _service.ListEventTypesAsync();
             NewEvent = EventTypes.FirstOrDefault()?.Name ?? string.Empty;
-            _ui.Set(Copy.PageTitle, Copy.PageSubtitle);
+            _ui.Set(ScheduleCopy.PageTitle, ScheduleCopy.PageSubtitle);
         }
         catch (Exception ex)
         {
@@ -127,8 +99,8 @@ public sealed class SchedulesViewModel : PageViewModel
     ) =>
         frequency switch
         {
-            ScheduleFrequency.Hour => Cron.Hourly,
-            ScheduleFrequency.Weekday => $"{time.Minute} {time.Hour} * * {Cron.Weekdays}",
+            ScheduleFrequency.Hour => ScheduleCron.Hourly,
+            ScheduleFrequency.Weekday => $"{time.Minute} {time.Hour} * * {ScheduleCron.Weekdays}",
             ScheduleFrequency.Week => $"{time.Minute} {time.Hour} * * {weekday}",
             ScheduleFrequency.Month => $"{time.Minute} {time.Hour} {Math.Clamp(day, 1, 28)} * *",
             ScheduleFrequency.Day => $"{time.Minute} {time.Hour} * * *",
@@ -162,7 +134,7 @@ public sealed class SchedulesViewModel : PageViewModel
         Error = null;
         if (string.IsNullOrWhiteSpace(NewName))
         {
-            Error = Copy.NameRequired;
+            Error = ScheduleCopy.NameRequired;
             NotifyStateChanged();
             return;
         }
@@ -174,13 +146,13 @@ public sealed class SchedulesViewModel : PageViewModel
             {
                 if (NewChainId == Guid.Empty)
                 {
-                    Error = Copy.ChainRequired;
+                    Error = ScheduleCopy.ChainRequired;
                     return;
                 }
 
                 if (string.IsNullOrWhiteSpace(NewPrompt))
                 {
-                    Error = Copy.PromptRequired;
+                    Error = ScheduleCopy.PromptRequired;
                     return;
                 }
 
@@ -201,7 +173,7 @@ public sealed class SchedulesViewModel : PageViewModel
             {
                 if (NewJobId == Guid.Empty)
                 {
-                    Error = Copy.JobRequired;
+                    Error = ScheduleCopy.JobRequired;
                     return;
                 }
 
@@ -291,7 +263,7 @@ public sealed class SchedulesViewModel : PageViewModel
         EditError = null;
         if (string.IsNullOrWhiteSpace(EditName))
         {
-            EditError = Copy.NameRequired;
+            EditError = ScheduleCopy.NameRequired;
             NotifyStateChanged();
             return;
         }
@@ -326,10 +298,10 @@ public sealed class SchedulesViewModel : PageViewModel
         AdvancedCron ? NewCron : ComposeCron(Frequency, Weekday, Day, Time);
 
     private string JobName(Guid jobId) =>
-        Jobs?.FirstOrDefault(job => job.Id == jobId)?.Name ?? Copy.DeletedJob;
+        Jobs?.FirstOrDefault(job => job.Id == jobId)?.Name ?? ScheduleCopy.DeletedJob;
 
     private string ChainName(Guid? chainId) =>
-        Chains?.FirstOrDefault(chain => chain.Id == chainId)?.Name ?? Copy.DeletedChain;
+        Chains?.FirstOrDefault(chain => chain.Id == chainId)?.Name ?? ScheduleCopy.DeletedChain;
 
     private static TriggerKind ParseKind(string kind) =>
         Enum.TryParse<TriggerKind>(kind, ignoreCase: true, out var parsed)

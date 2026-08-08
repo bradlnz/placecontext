@@ -1,56 +1,10 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using PlaceContext.Application.Ports;
-using PlaceContext.Domain.Repositories;
 using PlaceContext.Infrastructure.Persistence;
+using PlaceContext.Vault.Domain.Repositories;
 
 namespace PlaceContext.Infrastructure.Comms;
-
-public sealed record CommunicationProviderView(
-    Guid Id,
-    string Channel,
-    string Kind,
-    string Name,
-    bool Enabled,
-    bool IsDefault,
-    bool UseForTwoFactor,
-    string AuthType,
-    string? AuthHeaderName,
-    Guid? VaultProjectId,
-    string? ApiKeySecretName,
-    string SettingsJson,
-    DateTimeOffset CreatedAt,
-    DateTimeOffset UpdatedAt);
-
-public sealed record CommunicationProviderInput(
-    string Channel,
-    string Kind,
-    string Name,
-    bool Enabled,
-    string AuthType,
-    string? AuthHeaderName,
-    Guid? VaultProjectId,
-    string? ApiKeySecretName,
-    string SettingsJson);
-
-/// <summary>
-/// A provider row resolved for sending, with the Vault secret decrypted. <see cref="SecretResolved"/>
-/// is false when the row references a secret that no longer exists — sends throw, capabilities
-/// report the channel as not ready.
-/// </summary>
-public sealed record ResolvedProvider(
-    Guid Id,
-    string Channel,
-    string Kind,
-    string Name,
-    string AuthType,
-    string? AuthHeaderName,
-    string? Secret,
-    bool SecretResolved,
-    string SettingsJson)
-{
-    public bool RequiresSecret => AuthType is "bearer" or "header" or "basic";
-}
 
 /// <summary>
 /// Tenant-scoped CRUD + resolution for communication providers. Stores only a reference to a
@@ -261,11 +215,11 @@ public sealed class CommunicationProviderService
 
         if (authType is "bearer" or "header" or "basic")
         {
-            if (input.VaultProjectId is null || input.VaultProjectId == Guid.Empty)
-                throw new ArgumentException("Choose the project containing the provider's Vault secret.");
+            if (input.VaultProjectId is not { } vaultProjectId || vaultProjectId == Guid.Empty)
+                throw new ArgumentException("Choose the Vault project containing the provider API key.");
             if (string.IsNullOrWhiteSpace(input.ApiKeySecretName))
                 throw new ArgumentException("Choose the Vault secret containing the provider API key.");
-            if (!(await _secrets.ListAsync(input.VaultProjectId!.Value, ct))
+            if (!(await _secrets.ListAsync(vaultProjectId, ct))
                 .Any(secret => secret.Name == input.ApiKeySecretName))
                 throw new InvalidOperationException(
                     $"Vault secret '{input.ApiKeySecretName}' was not found in the selected project.");

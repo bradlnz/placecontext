@@ -597,12 +597,6 @@ public sealed partial class JobChainsViewModel
     private static string AppendTemplate(string current, string template) =>
         string.IsNullOrWhiteSpace(current) ? template : $"{current} {template}";
 
-    public sealed record EmailJsonPathSuggestion(
-        string Path,
-        string Preview,
-        bool IsAttachmentCandidate
-    );
-
     public void OpenNewSmsAction()
     {
         if (!CanSendSmsAction)

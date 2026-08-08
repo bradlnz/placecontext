@@ -21,9 +21,8 @@ public sealed class CoreApiAuthenticationHandler : AuthenticationHandler<Authent
         IOptionsMonitor<AuthenticationSchemeOptions> options,
         ILoggerFactory logger,
         UrlEncoder encoder,
-        ISystemClock clock,
         IOptions<CoreApiOptions> coreApiOptions)
-        : base(options, logger, encoder, clock)
+        : base(options, logger, encoder)
     {
         _coreApiOptions = coreApiOptions.Value;
     }

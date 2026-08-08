@@ -7,24 +7,9 @@ namespace PlaceContext.Host.Components.ViewModels;
 
 public sealed partial class ProjectDataViewModel
 {
-    // ── New table wizard ──────────────────────────────────────────────────────────────────────
-    public sealed class ColumnDraft
-    {
-        public string Name = "";
-        public string Type = DataColumnTypes.Text;
-        public bool NotNull;
-        public bool PrimaryKey;
-    }
-
-    public sealed class TableDraft
-    {
-        public string Name = "";
-        public List<ColumnDraft> Columns = new();
-    }
-
     public static readonly string[] ColumnTypes = DataColumnTypes.All.ToArray();
 
-    public TableDraft? NewTable { get; private set; }
+    public ProjectDataTableDraft? NewTable { get; private set; }
     public string? NewTableError { get; private set; }
     public bool Creating { get; private set; }
 
@@ -37,21 +22,7 @@ public sealed partial class ProjectDataViewModel
     public bool ViewMonacoReady { get; set; }
     public const string ViewEditorId = "pcmonaco-newview";
 
-    // ── CSV import ────────────────────────────────────────────────────────────────────────────
-    public sealed class CsvImportDraft
-    {
-        public string FileName = "";
-        public string TableName = "";
-        public bool HasHeader = true;
-        public List<ColumnDraft> Columns = new();
-        public List<string[]> Records = new();
-        public IEnumerable<string[]> DataRecords => HasHeader ? Records.Skip(1) : Records;
-        public int DataRowCount => Math.Max(0, HasHeader ? Records.Count - 1 : Records.Count);
-
-        public IEnumerable<string[]> PreviewRows() => DataRecords.Take(8);
-    }
-
-    public CsvImportDraft? CsvImport { get; private set; }
+    public ProjectDataCsvImportDraft? CsvImport { get; private set; }
     public string? CsvError { get; private set; }
     public IReadOnlyList<string> ImportWarnings { get; private set; } = Array.Empty<string>();
     public bool Importing { get; private set; }
@@ -66,11 +37,11 @@ public sealed partial class ProjectDataViewModel
     public void StartNewTable()
     {
         NewTableError = null;
-        NewTable = new TableDraft
+        NewTable = new ProjectDataTableDraft
         {
             Columns =
             {
-                new ColumnDraft
+                new ProjectDataColumnDraft
                 {
                     Name = "id",
                     Type = DataColumnTypes.Uuid,
@@ -84,7 +55,7 @@ public sealed partial class ProjectDataViewModel
 
     public void AddColumn()
     {
-        NewTable?.Columns.Add(new ColumnDraft());
+        NewTable?.Columns.Add(new ProjectDataColumnDraft());
         NotifyStateChanged();
     }
 
@@ -145,7 +116,7 @@ public sealed partial class ProjectDataViewModel
         // This method is called after parsing.
     }
 
-    public void SetCsvImport(CsvImportDraft draft)
+    public void SetCsvImport(ProjectDataCsvImportDraft draft)
     {
         CsvImport = draft;
         CsvError = null;
@@ -236,12 +207,12 @@ public sealed partial class ProjectDataViewModel
         NotifyStateChanged();
     }
 
-    public static void BuildColumns(CsvImportDraft d)
+    public static void BuildColumns(ProjectDataCsvImportDraft d)
     {
         var width = d.Records.Max(r => r.Length);
         var header = d.Records[0];
         var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var cols = new List<ColumnDraft>();
+        var cols = new List<ProjectDataColumnDraft>();
         for (var c = 0; c < width; c++)
         {
             var raw = d.HasHeader && c < header.Length ? header[c] : $"col{c + 1}";
@@ -251,7 +222,7 @@ public sealed partial class ProjectDataViewModel
             while (!used.Add(name))
                 name = $"{baseName}_{n++}";
             var sample = d.DataRecords.Take(200).Select(r => c < r.Length ? r[c] : null);
-            cols.Add(new ColumnDraft { Name = name, Type = InferType(sample) });
+            cols.Add(new ProjectDataColumnDraft { Name = name, Type = InferType(sample) });
         }
         d.Columns = cols;
     }

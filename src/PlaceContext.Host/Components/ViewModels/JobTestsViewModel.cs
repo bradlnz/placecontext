@@ -41,9 +41,9 @@ public sealed class JobTestsViewModel : PageViewModel
     public List<JobTestCaseView> EnabledTests => Tests.Where(test => test.Enabled).ToList();
     public int TotalMethodCount => Tests.Sum(MethodCount);
     public int PassedCount =>
-        Tests.SelectMany(MethodResults).Count(result => result.Status == TestStatuses.Passed);
+        Tests.SelectMany(MethodResults).Count(result => result.Status == JobTestStatuses.Passed);
     public int FailedCount =>
-        Tests.SelectMany(MethodResults).Count(result => result.Status == TestStatuses.Failed);
+        Tests.SelectMany(MethodResults).Count(result => result.Status == JobTestStatuses.Failed);
     public int NotRunCount => Math.Max(0, TotalMethodCount - PassedCount - FailedCount);
     public int PassPercent =>
         TotalMethodCount == 0 ? 0 : (int)Math.Round(PassedCount * 100d / TotalMethodCount);
@@ -62,12 +62,6 @@ public sealed class JobTestsViewModel : PageViewModel
         };
     public const string DefaultScenario =
         "{\n  \"input\": {\"customerId\":\"example\"},\n  \"run\": {\"status\": \"Succeeded\", \"output\": {\"status\":\"active\"}, \"shards\": []}\n}";
-
-    private static class TestStatuses
-    {
-        public const string Passed = "Passed";
-        public const string Failed = "Failed";
-    }
 
     public async Task LoadAsync(Guid projectId)
     {

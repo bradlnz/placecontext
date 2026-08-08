@@ -6,7 +6,7 @@ using PlaceContext.Domain.ValueObjects;
 namespace PlaceContext.Infrastructure.Caching;
 
 /// <summary>
-/// Caching decorator over <see cref="DecisionTreeProvider"/>. Assembling a project's tree replays
+/// Caching decorator over <see cref="IUncachedDecisionTreeProvider"/>. Assembling a project's tree replays
 /// the full activity ledger, all decisions, the tool-call log, and an O(n²) all-pairs cosine pass
 /// over every embedded run output — and the portal recomputed all of that on every project page
 /// open. A short TTL keeps repeated opens (and the org-wide brain rollup, which builds every
@@ -18,10 +18,10 @@ public sealed class CachedDecisionTreeProvider : IDecisionTreeProvider
 {
     private static readonly TimeSpan Ttl = TimeSpan.FromSeconds(30);
 
-    private readonly DecisionTreeProvider _inner;
+    private readonly IUncachedDecisionTreeProvider _inner;
     private readonly IMemoryCache _cache;
 
-    public CachedDecisionTreeProvider(DecisionTreeProvider inner, IMemoryCache cache)
+    public CachedDecisionTreeProvider(IUncachedDecisionTreeProvider inner, IMemoryCache cache)
         => (_inner, _cache) = (inner, cache);
 
     private static string Key(ProjectId projectId) => "dtree:" + projectId.Value;

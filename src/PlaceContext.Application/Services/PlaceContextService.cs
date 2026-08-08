@@ -80,15 +80,6 @@ public sealed class PlaceContextService : IPlaceContextService
     public Task<EffectiveRequirementsView> GetEffectiveRequirementsAsync(Guid projectId, CancellationToken ct = default)
         => _dispatcher.Query(new GetEffectiveRequirementsQuery(projectId), ct);
 
-    public Task<UsageEntryView> RecordUsageAsync(Guid projectId, string model, long inputTokens, long outputTokens, string? description, CancellationToken ct = default)
-        => _dispatcher.Send(new RecordUsageCommand(projectId, model, inputTokens, outputTokens, description), ct);
-
-    public Task<CostDashboardView> GetCostDashboardAsync(Guid projectId, CancellationToken ct = default)
-        => _dispatcher.Query(new GetCostDashboardQuery(projectId), ct);
-
-    public Task<RootCostView> GetRootCostAsync(CancellationToken ct = default)
-        => _dispatcher.Query(new GetRootCostQuery(), ct);
-
     public Task<SearchResultsView> SearchAsync(string term, CancellationToken ct = default)
         => _dispatcher.Query(new SearchQuery(term), ct);
 
@@ -310,8 +301,11 @@ public sealed class PlaceContextService : IPlaceContextService
     public Task<CrmChainRunView> RunCrmClientAutomationAsync(
         Guid clientId,
         Guid chainId,
+        string? inputPayload = null,
+        IReadOnlyDictionary<int, string>? stepPayloadOverrides = null,
         CancellationToken ct = default)
-        => _dispatcher.Send(new RunCrmClientAutomationCommand(clientId, chainId), ct);
+        => _dispatcher.Send(new RunCrmClientAutomationCommand(
+            clientId, chainId, inputPayload, stepPayloadOverrides), ct);
 
     public Task<IReadOnlyList<Guid>> ListCrmClientAssignedJobChainIdsAsync(
         Guid clientId,
@@ -518,7 +512,7 @@ public sealed class PlaceContextService : IPlaceContextService
     public Task<int> DeleteEntityRecordAsync(Guid projectId, string tableName, IReadOnlyDictionary<string, string?> keys, CancellationToken ct = default)
         => _dispatcher.Send(new DeleteEntityRecordCommand(projectId, tableName, keys), ct);
 
-    public Task<RecordLinkService.RescanResult> RescanRecordLinksAsync(Guid projectId, CancellationToken ct = default)
+    public Task<RecordLinkRescanResult> RescanRecordLinksAsync(Guid projectId, CancellationToken ct = default)
         => _links.RescanProjectAsync(projectId, ct);
 
     public Task<IReadOnlyList<RecordLinkGroup>> ListRecordLinkGroupsAsync(Guid projectId, CancellationToken ct = default)

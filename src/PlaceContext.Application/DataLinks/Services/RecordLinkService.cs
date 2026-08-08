@@ -31,14 +31,11 @@ public sealed class RecordLinkService
         _log = log;
     }
 
-    /// <summary>Outcome of a full project rescan: tables actually scanned, link occurrences stored.</summary>
-    public sealed record RescanResult(int TablesScanned, int LinksFound);
-
     /// <summary>
     /// Rebuilds the project's whole index. Each table is scanned independently — one failing table
     /// is skipped (logged) and never stops the rest.
     /// </summary>
-    public async Task<RescanResult> RescanProjectAsync(Guid projectId, CancellationToken ct = default)
+    public async Task<RecordLinkRescanResult> RescanProjectAsync(Guid projectId, CancellationToken ct = default)
     {
         var tables = await _store.ListTablesAsync(projectId, ct);
         var entities = await EntitiesAsync(projectId, ct);
@@ -63,7 +60,7 @@ public sealed class RecordLinkService
         await _links.ReplaceForProjectAsync(projectId, links, ct);
         _log?.LogInformation("Record-link rescan of project {ProjectId}: {Tables} table(s) scanned, {Links} link(s) stored.",
             projectId, scanned, links.Count);
-        return new RescanResult(scanned, links.Count);
+        return new RecordLinkRescanResult(scanned, links.Count);
     }
 
     /// <summary>Re-scans one table and replaces its slice of the index. Never throws.</summary>

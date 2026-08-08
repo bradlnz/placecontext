@@ -1,12 +1,28 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
 
   <ItemGroup>
+    <ProjectReference Include="..\PlaceContext.Agents\PlaceContext.Agents.csproj" />
+    <ProjectReference Include="..\PlaceContext.Agents\PlaceContext.Agents.Infrastructure.csproj" />
     <ProjectReference Include="..\PlaceContext.Infrastructure\PlaceContext.Infrastructure.csproj" />
     <ProjectReference Include="..\PlaceContext.Application\PlaceContext.Application.csproj" />
     <ProjectReference Include="..\PlaceContext.Domain\PlaceContext.Domain.csproj" />
+    <ProjectReference Include="..\PlaceContext.Jobs\PlaceContext.Jobs.csproj" />
+    <ProjectReference Include="..\PlaceContext.Jobs\PlaceContext.Jobs.Infrastructure.csproj" />
+    <ProjectReference Include="..\PlaceContext.Crm\PlaceContext.Crm.csproj" />
+    <ProjectReference Include="..\PlaceContext.Crm\PlaceContext.Crm.Infrastructure.csproj" />
+    <ProjectReference Include="..\PlaceContext.Data\PlaceContext.Data.csproj" />
+    <ProjectReference Include="..\PlaceContext.Data\PlaceContext.Data.Infrastructure.csproj" />
+    <ProjectReference Include="..\PlaceContext.Search\PlaceContext.Search.csproj" />
+    <ProjectReference Include="..\PlaceContext.Search\PlaceContext.Search.Infrastructure.csproj" />
+    <ProjectReference Include="..\PlaceContext.Vault\PlaceContext.Vault.csproj" />
+    <ProjectReference Include="..\PlaceContext.Vault\PlaceContext.Vault.Infrastructure.csproj" />
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\PlaceContext.Artifacts\PlaceContext.Artifacts.csproj" />
+    <ProjectReference Include="..\PlaceContext.Artifacts\PlaceContext.Artifacts.Infrastructure.csproj" />
+    <ProjectReference Include="..\PlaceContext.AgentChat\PlaceContext.AgentChat.csproj" />
+    <ProjectReference Include="..\PlaceContext.AgentChat\PlaceContext.AgentChat.Infrastructure.csproj" />
     <PackageReference Include="FluentValidation" Version="12.1.1" />
     <PackageReference Include="Markdig" Version="1.3.2" />
     <PackageReference Include="ModelContextProtocol" Version="1.4.0" />

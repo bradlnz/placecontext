@@ -350,25 +350,4 @@ public sealed class DatabaseCommunicationSender : IClientCommunicationSender
 
     private static string Trim(string value) => value.Length > 500 ? value[..500] : value;
 
-    private sealed class PostmarkSettings
-    {
-        public string FromEmail { get; set; } = "";
-        public string FromName { get; set; } = "";
-        public string MessageStream { get; set; } = "";
-        public string? Endpoint { get; set; }
-    }
-
-    private sealed class SendGridSettings
-    {
-        public string FromEmail { get; set; } = "";
-        public string FromName { get; set; } = "";
-        public string? Endpoint { get; set; }
-    }
-
-    private sealed class TwilioSettings
-    {
-        public string AccountSid { get; set; } = "";
-        public string FromNumber { get; set; } = "";
-        public string? Endpoint { get; set; }
-    }
 }

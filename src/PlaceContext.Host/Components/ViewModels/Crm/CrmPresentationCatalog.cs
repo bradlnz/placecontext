@@ -2,39 +2,6 @@ using PlaceContext.Domain.ValueObjects;
 
 namespace PlaceContext.Host.Components.ViewModels.Crm;
 
-public enum CrmSection
-{
-    Conversations,
-    Calendars,
-    Contacts,
-    Opportunities,
-    Automations,
-    Portals,
-    Settings,
-}
-
-public enum CrmDetailTab
-{
-    Overview,
-    Communications,
-    Artifacts,
-}
-
-public enum CrmArtifactSource
-{
-    All,
-    Upload,
-    Automation,
-}
-
-public sealed record CrmSectionPresentation(
-    CrmSection Section,
-    string Title,
-    string Description,
-    bool CanAdd,
-    string AddLabel
-);
-
 public static class CrmPresentationCatalog
 {
     public static readonly CrmSectionPresentation[] Sections =

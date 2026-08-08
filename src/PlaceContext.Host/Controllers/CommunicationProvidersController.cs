@@ -1,32 +1,56 @@
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using PlaceContext.Application;
 using PlaceContext.Application.Ports;
 using PlaceContext.Host.Auth;
+using PlaceContext.Host.Controllers.Api.Records;
 using PlaceContext.Infrastructure.Comms;
 
 namespace PlaceContext.Host.Controllers;
 
+[ApiController]
 [Authorize(Policy = Policies.DefaultAdmin)]
-[Route("/api/settings/communication-providers")]
+[Authorize(AuthenticationSchemes = CookieAuthenticationDefaults.AuthenticationScheme)]
+[Route("api/v1/settings/communications")]
+[Produces("application/json")]
+[ResponseCache(Location = ResponseCacheLocation.None, NoStore = true)]
 public sealed class CommunicationProvidersController : ControllerBase
 {
     private readonly CommunicationProviderService _providers;
     private readonly DatabaseCommunicationSender _sender;
+    private readonly IPlaceContextService _placeContext;
 
     public CommunicationProvidersController(
         CommunicationProviderService providers,
-        DatabaseCommunicationSender sender)
-        => (_providers, _sender) = (providers, sender);
+        DatabaseCommunicationSender sender,
+        IPlaceContextService placeContext)
+        => (_providers, _sender, _placeContext) = (providers, sender, placeContext);
 
-    [HttpGet]
+    [HttpGet("context")]
+    public async Task<ActionResult<CommunicationsSettingsResponse>> Context(CancellationToken ct)
+    {
+        var providersTask = _providers.ListAsync(ct);
+        var projectsTask = _placeContext.GetProjectsAsync(ct);
+        await Task.WhenAll(providersTask, projectsTask);
+        return Ok(new CommunicationsSettingsResponse(
+            await providersTask,
+            await projectsTask));
+    }
+
+    [HttpGet("projects/{projectId:guid}/secrets")]
+    public async Task<IActionResult> Secrets(Guid projectId, CancellationToken ct)
+        => Ok(await _placeContext.ListProjectSecretsAsync(projectId, ct));
+
+    [HttpGet("providers")]
     public async Task<IActionResult> List(CancellationToken ct)
         => Ok(await _providers.ListAsync(ct));
 
-    [HttpGet("{id:guid}")]
+    [HttpGet("providers/{id:guid}")]
     public async Task<IActionResult> Get(Guid id, CancellationToken ct)
         => await _providers.GetAsync(id, ct) is { } provider ? Ok(provider) : NotFound();
 
-    [HttpPost]
+    [HttpPost("providers")]
     public async Task<IActionResult> Create(
         [FromBody] CommunicationProviderInput request,
         CancellationToken ct)
@@ -39,7 +63,7 @@ public sealed class CommunicationProvidersController : ControllerBase
         catch (InvalidOperationException ex) { return BadRequest(new { error = ex.Message }); }
     }
 
-    [HttpPut("{id:guid}")]
+    [HttpPut("providers/{id:guid}")]
     public async Task<IActionResult> Update(
         Guid id,
         [FromBody] CommunicationProviderInput request,
@@ -53,7 +77,7 @@ public sealed class CommunicationProvidersController : ControllerBase
         catch (InvalidOperationException ex) { return BadRequest(new { error = ex.Message }); }
     }
 
-    [HttpDelete("{id:guid}")]
+    [HttpDelete("providers/{id:guid}")]
     public async Task<IActionResult> Delete(Guid id, CancellationToken ct)
     {
         try
@@ -64,7 +88,7 @@ public sealed class CommunicationProvidersController : ControllerBase
         catch (InvalidOperationException ex) { return NotFound(new { error = ex.Message }); }
     }
 
-    [HttpPost("{id:guid}/default")]
+    [HttpPost("providers/{id:guid}/default")]
     public async Task<IActionResult> SetDefault(Guid id, CancellationToken ct)
     {
         try
@@ -74,7 +98,7 @@ public sealed class CommunicationProvidersController : ControllerBase
         catch (InvalidOperationException ex) { return NotFound(new { error = ex.Message }); }
     }
 
-    [HttpPost("{id:guid}/two-factor")]
+    [HttpPost("providers/{id:guid}/two-factor")]
     public async Task<IActionResult> SetTwoFactor(
         Guid id,
         [FromBody] SetTwoFactorRequest request,
@@ -87,7 +111,7 @@ public sealed class CommunicationProvidersController : ControllerBase
         catch (InvalidOperationException ex) { return NotFound(new { error = ex.Message }); }
     }
 
-    [HttpPost("{id:guid}/test")]
+    [HttpPost("providers/{id:guid}/test")]
     public async Task<IActionResult> SendTest(
         Guid id,
         [FromBody] SendTestRequest request,
@@ -102,6 +126,4 @@ public sealed class CommunicationProvidersController : ControllerBase
         catch (InvalidOperationException ex) { return BadRequest(new { error = ex.Message }); }
     }
 
-    public sealed record SetTwoFactorRequest(bool Enabled);
-    public sealed record SendTestRequest(string Recipient);
 }

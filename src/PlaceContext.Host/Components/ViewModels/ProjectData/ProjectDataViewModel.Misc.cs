@@ -17,7 +17,7 @@ public sealed partial class ProjectDataViewModel
         Array.Empty<ProjectColumnInfo>();
     public string? EditError { get; private set; }
     public string? ConfirmDropColumn { get; set; }
-    public ColumnDraft AddCol { get; set; } = new();
+    public ProjectDataColumnDraft AddCol { get; set; } = new();
     public bool AlteringColumn { get; private set; }
 
     // ── Edit table ────────────────────────────────────────────────────────────────────────────
@@ -26,7 +26,7 @@ public sealed partial class ProjectDataViewModel
         EditTable = table;
         EditError = null;
         ConfirmDropColumn = null;
-        AddCol = new ColumnDraft();
+        AddCol = new ProjectDataColumnDraft();
         await RefreshColumnsAsync();
         NotifyStateChanged();
     }
@@ -75,7 +75,7 @@ public sealed partial class ProjectDataViewModel
                     PrimaryKey: false
                 )
             );
-            AddCol = new ColumnDraft();
+            AddCol = new ProjectDataColumnDraft();
             await RefreshColumnsAsync();
             await RefreshTablesAsync();
         }

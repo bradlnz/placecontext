@@ -4,11 +4,13 @@ using System.Text;
 using System.Text.Json;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.DataProtection;
-using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.SignalR;
 using PlaceContext.Host;
 using PlaceContext.Host.Auth;
 using PlaceContext.Application;
+using PlaceContext.AgentChat;
+using PlaceContext.Agents;
+using PlaceContext.Artifacts;
 using PlaceContext.Application.Ports;
 using PlaceContext.Host.Components;
 using PlaceContext.Host.Components.ViewModels;
@@ -17,17 +19,17 @@ using PlaceContext.Host.CoreApi;
 using PlaceContext.Host.Tenancy;
 using PlaceContext.Host.Tools;
 using PlaceContext.Infrastructure;
-using PlaceContext.Infrastructure.Crm;
-using PlaceContext.Infrastructure.Tenancy;
-using Microsoft.AspNetCore.Antiforgery;
+using PlaceContext.Crm.Infrastructure.Crm;
+using PlaceContext.Crm;
+using PlaceContext.Data;
+using PlaceContext.Jobs;
+using PlaceContext.Search;
+using PlaceContext.Vault;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Server.Circuits;
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
@@ -38,7 +40,6 @@ using Microsoft.AspNetCore.DataProtection.XmlEncryption;
 using Microsoft.AspNetCore.DataProtection.KeyManagement;
 using PlaceContext.Infrastructure.Persistence;
 using Microsoft.AspNetCore.ResponseCompression;
-using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.StaticFiles;
 using FluentValidation;
 
@@ -60,7 +61,23 @@ builder.Logging.ClearProviders();
 builder.Logging.AddConsole();
 
 builder.Services.AddApplication();
+builder.Services.AddAgentChatModule();
+builder.Services.AddAgentsModule();
+builder.Services.AddArtifactsModule();
+builder.Services.AddCrmModule();
+builder.Services.AddDataModule();
+builder.Services.AddJobsModule();
+builder.Services.AddSearchModule();
+builder.Services.AddVaultModule();
 builder.Services.AddInfrastructure(builder.Configuration);
+builder.Services.AddAgentChatInfrastructure(builder.Configuration);
+builder.Services.AddAgentsInfrastructure(builder.Configuration);
+builder.Services.AddJobsInfrastructure(builder.Configuration);
+builder.Services.AddCrmInfrastructure();
+builder.Services.AddArtifactsInfrastructure(builder.Configuration);
+builder.Services.AddDataInfrastructure();
+builder.Services.AddSearchInfrastructure(builder.Configuration);
+builder.Services.AddVaultInfrastructure(builder.Configuration);
 
 // OpenTelemetry: traces + metrics for the jobs pipeline (and ASP.NET/runtime), giving a realtime,
 // exportable view into runs. Emits over OTLP to the endpoint in PlaceContext:Otel:Endpoint (or the
@@ -108,7 +125,15 @@ builder.Services.AddResponseCompression(o =>
 });
 // The former minimal-API endpoints (ingest, backup, auth, artifacts, health) now live as controllers
 // under Controllers/ — attribute-routed, same paths/auth, wired below with MapControllers().
-builder.Services.AddControllers();
+builder.Services.AddControllers()
+    .AddApplicationPart(typeof(PlaceContext.AgentChat.Controllers.AgentChatController).Assembly)
+    .AddApplicationPart(typeof(PlaceContext.Agents.Controllers.AgentsController).Assembly)
+    .AddApplicationPart(typeof(PlaceContext.Artifacts.Controllers.ArtifactsController).Assembly)
+    .AddApplicationPart(typeof(PlaceContext.Crm.Controllers.CrmController).Assembly)
+    .AddApplicationPart(typeof(PlaceContext.Data.Controllers.DataController).Assembly)
+    .AddApplicationPart(typeof(PlaceContext.Jobs.Controllers.JobsController).Assembly)
+    .AddApplicationPart(typeof(PlaceContext.Search.Controllers.SearchController).Assembly)
+    .AddApplicationPart(typeof(PlaceContext.Vault.Controllers.VaultController).Assembly);
 builder.Services.AddScoped<IValidator<LeadIngestionRequest>, LeadIngestionRequestValidator>();
 builder.Services.AddScoped<IValidator<JsonElement>, CrmIngestionPayloadValidator>();
 builder.Services.Configure<CoreApiOptions>(builder.Configuration.GetSection("PlaceContext:CoreApi"));
@@ -169,7 +194,7 @@ builder.Services.AddScoped<BrandingService>();
 // ── Page ViewModels ──────────────────────────────────────────────────────────
 // Page ViewModels are scoped to the Blazor circuit. Repeated stateful component ViewModels opt
 // into IComponentViewModel and are transient so each rendered component gets isolated state.
-var pageViewModelType = typeof(PlaceContext.Host.Components.ViewModels.PageViewModel);
+var pageViewModelType = typeof(PageViewModel);
 foreach (var viewModelType in pageViewModelType.Assembly.GetTypes()
              .Where(type => !type.IsAbstract && pageViewModelType.IsAssignableFrom(type)))
 {
@@ -376,7 +401,7 @@ builder.Services.AddScoped<IAuthorizationHandler, DefaultAdminAuthorizationHandl
 builder.Services.AddSingleton<IAuthorizationHandler, CoreApiScopeAuthorizationHandler>();
 builder.Services.AddSingleton<IAuthorizationHandler, BlazorHubBypassHandler>();
 builder.Services.AddScoped<ICoreApiResourceResolver, CoreApiResourceResolver>();
-builder.Services.AddScoped<IOAuthAuthCodeStore, PlaceContext.Infrastructure.Persistence.EfOAuthAuthCodeStore>();
+builder.Services.AddScoped<IOAuthAuthCodeStore, EfOAuthAuthCodeStore>();
 builder.Services.AddSingleton<PortalToken>();
 
 // Exposes the current request's ClaimsPrincipal to MCP tools (e.g. whoami reads the bearer's claims).
@@ -422,6 +447,12 @@ app.Use(async (ctx, next) =>
 });
 
 PlaceContext.Infrastructure.DependencyInjection.MigrateDatabase(app.Services);
+await PlaceContext.AgentChat.Infrastructure.Persistence.AgentChatDatabaseMigrationExtensions
+    .MigrateAgentChatDatabaseAsync(app.Services);
+await PlaceContext.Agents.Infrastructure.Persistence.AgentsDatabaseMigrationExtensions
+    .MigrateAgentsDatabaseAsync(app.Services);
+await PlaceContext.Vault.Infrastructure.Persistence.VaultDatabaseMigrationExtensions
+    .MigrateVaultDatabaseAsync(app.Services);
 // CRM records are small, and older releases stored client identity/contact fields in plaintext.
 // Rewrite those legacy rows in bounded batches before accepting requests. New writes are encrypted
 // in their repositories, so this normally becomes a quick no-op after the first upgraded launch.
@@ -431,7 +462,7 @@ await PlaceContext.Infrastructure.DependencyInjection.EncryptExistingCrmDataAsyn
 // columns. The bootstrap remains available via PlaceContext:DataMapFlattening:BootstrapOnStartup=true
 // for backfilling historically flattened tables if ever needed.
 if (app.Configuration.GetValue("PlaceContext:DataMapFlattening:BootstrapOnStartup", false))
-    await PlaceContext.Infrastructure.ProjectData.JsonFlatteningBootstrap.RunAsync(app.Services);
+    await PlaceContext.Data.Infrastructure.ProjectData.JsonFlatteningBootstrap.RunAsync(app.Services);
 else
     app.Logger.LogInformation("Data-map flattening bootstrap skipped (PlaceContext:DataMapFlattening:BootstrapOnStartup is false).");
 
@@ -440,7 +471,10 @@ else
 // artifacts, MBs per row, all tenants) into memory at once and OOM the pod. Opt in with
 // PlaceContext:EncryptionAtRest:BootstrapOnStartup=true only on a host sized for the one-shot scan.
 if (app.Configuration.GetValue("PlaceContext:EncryptionAtRest:BootstrapOnStartup", false))
+{
     await PlaceContext.Infrastructure.DependencyInjection.EncryptExistingDataAsync(app.Services);
+    await PlaceContext.Vault.Infrastructure.Security.VaultEncryptionAtRestBootstrap.RunAsync(app.Services);
+}
 else
     app.Logger.LogInformation("Encryption-at-rest startup bootstrap skipped (PlaceContext:EncryptionAtRest:BootstrapOnStartup is not true).");
 
@@ -494,6 +528,11 @@ app.MapOAuthServer();
 // Ingest/backup/artifact/auth/health endpoints now live as attribute-routed controllers under
 // Controllers/ (same paths, same [Authorize]/[AllowAnonymous] as the minimal APIs they replace).
 app.MapControllers();
+
+// React pages migrate under /app so the existing Blazor route table can continue serving every
+// unmigrated page. Vite emits fingerprinted assets under wwwroot/app; client-side routes fall back to
+// its entry document without broadening the fallback to API, MCP, auth, or Blazor URLs.
+app.MapFallbackToFile("/app/{*path:nonfile}", "app/index.html");
 
 await app.RunAsync();
 

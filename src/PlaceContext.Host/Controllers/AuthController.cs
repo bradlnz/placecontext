@@ -157,8 +157,6 @@ public sealed class AuthController : ControllerBase
         return Ok(new { email = admin.Email, displayName = admin.DisplayName, role = admin.Role.ToString() });
     }
 
-    public sealed record SetupCliRequest(string Email, string? DisplayName, string Password, string? ConfirmPassword);
-
     // Password login. Always shows the same generic error on failure (unknown email, wrong password, or a
     // member with no password set) so a response can't be used to enumerate accounts, and applies a small
     // fixed delay on failure (see LoginThrottle) so a naive brute-force loop can't run at line rate.
@@ -201,7 +199,7 @@ public sealed class AuthController : ControllerBase
                 }
             }
 
-            var stateToken = ProtectEmailState(new EmailTwoFactorState
+            var stateToken = ProtectEmailState(new EmailTwoFactorStateModel
             {
                 UserId = user.Id, TenantId = user.TenantId, Email = user.Email,
                 DisplayName = user.DisplayName, Role = user.Role.ToString(),
@@ -462,7 +460,7 @@ public sealed class AuthController : ControllerBase
         return Redirect($"/auth/email-verify?{qs}");
     }
 
-    private IActionResult RenderVerify(EmailTwoFactorState pending, string state, string? error)
+    private IActionResult RenderVerify(EmailTwoFactorStateModel pending, string state, string? error)
     {
         var tokens = _antiforgery.GetAndStoreTokens(HttpContext);
         string? switchHref = null;
@@ -478,54 +476,36 @@ public sealed class AuthController : ControllerBase
 
         var destination = WebUtility.HtmlEncode(pending.Destination);
         var model = pending.NeedsPhone
-            ? new AuthPages.EmailVerifyModel(
+            ? new EmailVerifyModel(
                 "Add your phone number",
                 "Verification codes are delivered by SMS. Enter your mobile number and we'll text you a code.",
                 RequiresPhone: true, switchHref, switchLabel)
             : pending.Channel == "sms"
-                ? new AuthPages.EmailVerifyModel(
+                ? new EmailVerifyModel(
                     "Check your phone",
                     $"Enter the 6-digit verification code sent by SMS to <strong>{destination}</strong>.",
                     RequiresPhone: false, switchHref, switchLabel)
-                : new AuthPages.EmailVerifyModel(
+                : new EmailVerifyModel(
                     "Check your email",
                     $"Enter the 6-digit verification code sent to <strong>{destination}</strong>.",
                     RequiresPhone: false, switchHref, switchLabel);
         return Content(AuthPages.EmailVerify(tokens, state, model, error), "text/html");
     }
 
-    private string ProtectEmailState(EmailTwoFactorState state)
+    private string ProtectEmailState(EmailTwoFactorStateModel state)
         => _encryptor.Protect(
-            JsonSerializer.Serialize(state), IDataEncryptor.Purpose.EmailTwoFactorState);
+            JsonSerializer.Serialize(state), DataEncryptionPurpose.EmailTwoFactorState);
 
-    private EmailTwoFactorState? DecryptEmailState(string state)
+    private EmailTwoFactorStateModel? DecryptEmailState(string state)
     {
         try
         {
-            var json = _encryptor.Unprotect(state, IDataEncryptor.Purpose.EmailTwoFactorState);
+            var json = _encryptor.Unprotect(state, DataEncryptionPurpose.EmailTwoFactorState);
             return string.IsNullOrEmpty(json)
                 ? null
-                : JsonSerializer.Deserialize<EmailTwoFactorState>(json);
+                : JsonSerializer.Deserialize<EmailTwoFactorStateModel>(json);
         }
         catch { return null; }
-    }
-
-    private sealed class EmailTwoFactorState
-    {
-        public Guid UserId { get; set; }
-        public Guid TenantId { get; set; }
-        public string Email { get; set; } = "";
-        public string DisplayName { get; set; } = "";
-        public string Role { get; set; } = "";
-        public string? ReturnUrl { get; set; }
-        /// <summary>Channel the code was (or will be) delivered on: "email" | "sms".</summary>
-        public string Channel { get; set; } = "email";
-        /// <summary>Masked delivery target shown on the page (masked email or phone).</summary>
-        public string Destination { get; set; } = "";
-        /// <summary>True when SMS delivery is required but no phone number is on file yet.</summary>
-        public bool NeedsPhone { get; set; }
-        public bool EmailAvailable { get; set; }
-        public bool SmsAvailable { get; set; }
     }
 
     // ── 2FA Management API ─────────────────────────────────────────────────────────────────────
@@ -587,6 +567,4 @@ public sealed class AuthController : ControllerBase
         return claim is not null && Guid.TryParse(claim.Value, out var id) ? id : null;
     }
 
-    public sealed record TwoFactorPhoneRequest(string? PhoneNumber);
-    public sealed record TwoFactorChannelRequest(string Channel);
 }

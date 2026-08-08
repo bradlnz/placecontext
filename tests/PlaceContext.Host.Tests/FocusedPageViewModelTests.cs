@@ -27,13 +27,13 @@ public sealed class FocusedPageViewModelTests
     [Fact]
     public void Project_tabs_are_typed_and_unknown_tabs_fall_back_to_overview()
     {
-        Assert.Equal(ProjectViewModel.Tabs.Overview, ProjectViewModel.NormalizeTab("overview"));
+        Assert.Equal(ProjectViewTabs.Overview, ProjectViewModel.NormalizeTab("overview"));
         Assert.Equal(
-            ProjectViewModel.Tabs.Requirements,
+            ProjectViewTabs.Requirements,
             ProjectViewModel.NormalizeTab("requirements")
         );
-        Assert.Equal(ProjectViewModel.Tabs.Activity, ProjectViewModel.NormalizeTab("activity"));
-        Assert.Equal(ProjectViewModel.Tabs.Overview, ProjectViewModel.NormalizeTab("retired-tab"));
+        Assert.Equal(ProjectViewTabs.Activity, ProjectViewModel.NormalizeTab("activity"));
+        Assert.Equal(ProjectViewTabs.Overview, ProjectViewModel.NormalizeTab("retired-tab"));
     }
 
     [Fact]

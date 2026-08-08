@@ -18,12 +18,12 @@ public sealed class PostJobActionService
 {
     private readonly IObjectStore _store;
     private readonly IRunArtifactLinkRepository _links;
-    private readonly IUnitOfWork _uow;
+    private readonly IArtifactsUnitOfWork _uow;
     private readonly IClock _clock;
     private readonly ILogger<PostJobActionService>? _log;
     private readonly IContentIndexer? _contentIndexer;
 
-    public PostJobActionService(IObjectStore store, IRunArtifactLinkRepository links, IUnitOfWork uow, IClock clock,
+    public PostJobActionService(IObjectStore store, IRunArtifactLinkRepository links, IArtifactsUnitOfWork uow, IClock clock,
         ILogger<PostJobActionService>? log = null, IContentIndexer? contentIndexer = null)
     {
         _store = store;
@@ -125,7 +125,7 @@ public sealed class PostJobActionService
         }
     }
 
-    private (PostJobActionKind Kind, PostJobArtifacts.BuiltFile File) BuildPrimaryArtifact(
+    private (PostJobActionKind Kind, PostJobBuiltFile File) BuildPrimaryArtifact(
         Job job, JobRun run) => job.ReturnType switch
     {
         JobReturnType.Table => (PostJobActionKind.HtmlReport, PostJobArtifacts.HtmlReport(job, run)),
@@ -147,7 +147,7 @@ public sealed class PostJobActionService
     // first matching file (reduce step wins over shards) is the run's primary artifact. When the
     // job emitted no matching file, the deterministic report stands in so the mandatory artifact
     // still exists (and the mismatch is logged).
-    private PostJobArtifacts.BuiltFile FileResult(Job job, JobRun run, string[] extensions)
+    private PostJobBuiltFile FileResult(Job job, JobRun run, string[] extensions)
     {
         var files = (run.ReduceResult?.Artifacts ?? Array.Empty<RunArtifact>())
             .Concat(run.ShardResults.OrderBy(s => s.Index).SelectMany(s => s.Artifacts))
@@ -159,7 +159,7 @@ public sealed class PostJobActionService
                 string.Equals(f.Name, declared, StringComparison.OrdinalIgnoreCase)
                 || string.Equals(Path.GetFileName(f.Name), declared, StringComparison.OrdinalIgnoreCase));
             if (named is not null)
-                return new PostJobArtifacts.BuiltFile(Path.GetFileName(named.Name), named.GetBytes(),
+                return new PostJobBuiltFile(Path.GetFileName(named.Name), named.GetBytes(),
                     DocContentType(named.Name) ?? "application/octet-stream", Path.GetFileName(named.Name));
         }
         foreach (var f in files)
@@ -167,7 +167,7 @@ public sealed class PostJobActionService
             var ext = Path.GetExtension(f.Name).ToLowerInvariant();
             if (!extensions.Contains(ext)) continue;
             var contentType = DocContentType(f.Name) ?? "application/octet-stream";
-            return new PostJobArtifacts.BuiltFile(Path.GetFileName(f.Name), f.GetBytes(), contentType,
+            return new PostJobBuiltFile(Path.GetFileName(f.Name), f.GetBytes(), contentType,
                 Path.GetFileName(f.Name));
         }
         _log?.LogWarning("Run {RunId} (job {JobId}) declares a {ReturnType} return type but emitted no matching file to /out — rendering a report instead.",
@@ -177,7 +177,7 @@ public sealed class PostJobActionService
 
     // The chart page is themed (LlmHtml.StyleChart) so it reads correctly embedded in the portal's
     // run-history panel.
-    private static PostJobArtifacts.BuiltFile StyledChart(Job job, JobRun run)
+    private static PostJobBuiltFile StyledChart(Job job, JobRun run)
     {
         var file = PostJobArtifacts.Chart(job, run);
         return file with { Content = Encoding.UTF8.GetBytes(LlmHtml.StyleChart(Encoding.UTF8.GetString(file.Content))) };
@@ -185,25 +185,25 @@ public sealed class PostJobActionService
 
     // Even an empty return yields a well-formed artifact — mandatory generation has no
     // "nothing to store" path.
-    private static PostJobArtifacts.BuiltFile JsonResult(JobRun run)
+    private static PostJobBuiltFile JsonResult(JobRun run)
     {
         var data = PrimaryData(run);
         if (string.IsNullOrWhiteSpace(data)) data = "null";
-        return new PostJobArtifacts.BuiltFile("result.json", Encoding.UTF8.GetBytes(data),
+        return new PostJobBuiltFile("result.json", Encoding.UTF8.GetBytes(data),
             "application/json", "JSON result");
     }
 
-    private static PostJobArtifacts.BuiltFile TextResult(JobRun run) =>
+    private static PostJobBuiltFile TextResult(JobRun run) =>
         new("result.txt", Encoding.UTF8.GetBytes(PrimaryData(run)),
             "text/plain; charset=utf-8", "Text result");
 
     // A job declared Html must return an HTML document; when it doesn't, the deterministic report
     // stands in so the mandatory artifact still exists (and the mismatch is logged).
-    private PostJobArtifacts.BuiltFile HtmlResult(Job job, JobRun run)
+    private PostJobBuiltFile HtmlResult(Job job, JobRun run)
     {
         var data = PrimaryData(run);
         if (IsHtmlDocument(data))
-            return new PostJobArtifacts.BuiltFile("output.html", Encoding.UTF8.GetBytes(data),
+            return new PostJobBuiltFile("output.html", Encoding.UTF8.GetBytes(data),
                 "text/html; charset=utf-8", "HTML output");
         _log?.LogWarning("Run {RunId} (job {JobId}) declares an Html return type but did not return an HTML document — rendering a report instead.",
             run.Id, job.Id);
@@ -220,7 +220,7 @@ public sealed class PostJobActionService
 
         async Task StoreDocAsync(string fileName, byte[] content, string title, PostJobActionKind kind, string contentType) =>
             added |= await StoreAsync(job, run, kind,
-                new PostJobArtifacts.BuiltFile(fileName, content, contentType, title), bucket, ct);
+                new PostJobBuiltFile(fileName, content, contentType, title), bucket, ct);
 
         Task StoreHtmlAsync(string fileName, string content, string title) =>
             StoreDocAsync(fileName, Encoding.UTF8.GetBytes(content), title, PostJobActionKind.HtmlOutput, "text/html; charset=utf-8");
@@ -295,7 +295,7 @@ public sealed class PostJobActionService
     }
 
     private async Task<bool> StoreAsync(Job job, JobRun run, PostJobActionKind kind,
-        PostJobArtifacts.BuiltFile file, string bucket, CancellationToken ct)
+        PostJobBuiltFile file, string bucket, CancellationToken ct)
     {
         var key = $"runs/{run.Id:N}/{file.FileName}";
         await _store.PutAsync(bucket, key, file.Content, file.ContentType, ct);

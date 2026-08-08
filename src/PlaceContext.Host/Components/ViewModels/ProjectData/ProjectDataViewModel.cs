@@ -153,10 +153,10 @@ public sealed partial class ProjectDataViewModel : PageViewModel
                 .ToList();
             if (records.Count == 0)
             {
-                SetCsvImport(new CsvImportDraft { FileName = file.Name });
+                SetCsvImport(new ProjectDataCsvImportDraft { FileName = file.Name });
                 return;
             }
-            var draft = new CsvImportDraft
+            var draft = new ProjectDataCsvImportDraft
             {
                 FileName = file.Name,
                 HasHeader = true,
@@ -168,7 +168,7 @@ public sealed partial class ProjectDataViewModel : PageViewModel
         }
         catch
         {
-            SetCsvImport(new CsvImportDraft { FileName = file.Name });
+            SetCsvImport(new ProjectDataCsvImportDraft { FileName = file.Name });
         }
     }
 

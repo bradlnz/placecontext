@@ -7,14 +7,6 @@ using PlaceContext.Host.Components.ViewModels.Helpers;
 
 namespace PlaceContext.Host.Components.ViewModels;
 
-/// <summary>Which resource list the SQL Studio sidebar is showing.</summary>
-public enum SidebarPane
-{
-    Tables,
-    Indexes,
-    Queries,
-}
-
 public sealed partial class ProjectDataViewModel
 {
     private bool _loadingIndices;

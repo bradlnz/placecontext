@@ -6,6 +6,7 @@ using PlaceContext.Application.Ports;
 using PlaceContext.Infrastructure.Comms;
 using PlaceContext.Infrastructure.Persistence;
 using PlaceContext.TestSupport;
+using PlaceContext.Vault.Domain.Repositories;
 
 namespace PlaceContext.Infrastructure.Tests;
 
@@ -312,14 +313,14 @@ public sealed class CommunicationProviderTests
         private readonly StubState _state;
 
         public AppDbContext Db { get; }
-        public EfProjectSecretRepository Secrets { get; }
+        public IProjectSecretRepository Secrets { get; }
         public CommunicationProviderService Service { get; }
         public Guid VaultProjectId { get; }
         public CapturedRequest? Captured => _state.Captured;
 
         private Fixture(
             AppDbContext db,
-            EfProjectSecretRepository secrets,
+            IProjectSecretRepository secrets,
             CommunicationProviderService service,
             IHttpClientFactory factory,
             StubState state,
@@ -335,12 +336,11 @@ public sealed class CommunicationProviderTests
                 .UseInMemoryDatabase(Guid.NewGuid().ToString("N"))
                 .Options;
             var db = new AppDbContext(dbOptions, tenant);
-            var secrets = new EfProjectSecretRepository(db);
+            var secrets = new InMemoryProjectSecretRepository();
             var vaultProjectId = Guid.NewGuid();
             if (withSecret)
             {
                 await secrets.AddAsync(vaultProjectId, "API_KEY", secretValue, DateTimeOffset.UtcNow);
-                await db.SaveChangesAsync();
             }
 
             var state = new StubState();

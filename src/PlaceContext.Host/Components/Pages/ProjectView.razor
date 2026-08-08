@@ -38,7 +38,7 @@ else
             }
         </div>
 
-        @if (Vm.Tab == ProjectViewModel.Tabs.Overview)
+        @if (Vm.Tab == ProjectViewTabs.Overview)
         {
         <!-- god-nodes -->
         <div class="dccard section-card pad-card">
@@ -66,7 +66,7 @@ else
         </div>
         }
 
-        @if (Vm.Tab == ProjectViewModel.Tabs.Requirements)
+        @if (Vm.Tab == ProjectViewTabs.Requirements)
         {
         <!-- project requirements -->
         <div class="dccard section-card">
@@ -98,7 +98,7 @@ else
         </div>
         }
 
-        @if (Vm.Tab == ProjectViewModel.Tabs.Activity)
+        @if (Vm.Tab == ProjectViewTabs.Activity)
         {
         <!-- decisions -->
         <div id="decisions" class="dccard section-card">
@@ -131,7 +131,7 @@ else
         </div>
         }
 
-        @if (Vm.Tab == ProjectViewModel.Tabs.Activity)
+        @if (Vm.Tab == ProjectViewTabs.Activity)
         {
         <!-- recent changes -->
         <div id="changes" class="dccard section-card">

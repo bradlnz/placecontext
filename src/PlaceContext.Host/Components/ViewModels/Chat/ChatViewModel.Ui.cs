@@ -77,10 +77,10 @@ public sealed partial class ChatViewModel
     public RenderFragment RenderArtifact(ToolCallInfo tc) =>
         builder =>
         {
-            ArtifactRenderInfo? info = null;
+            ChatArtifactRenderInfo? info = null;
             try
             {
-                info = System.Text.Json.JsonSerializer.Deserialize<ArtifactRenderInfo>(
+                info = System.Text.Json.JsonSerializer.Deserialize<ChatArtifactRenderInfo>(
                     tc.Result ?? "{}"
                 );
             }
@@ -216,26 +216,12 @@ public sealed partial class ChatViewModel
             }
         };
 
-    private sealed class ArtifactRenderInfo
-    {
-        public Guid Id { get; set; }
-        public Guid RunId { get; set; }
-        public string Title { get; set; } = "";
-        public string ContentType { get; set; } = "";
-        public long SizeBytes { get; set; }
-        public bool IsText { get; set; }
-        public string? Content { get; set; }
-        public string? ExtractedText { get; set; }
-        public bool ExtractedTruncated { get; set; }
-        public bool Truncated { get; set; }
-    }
-
     private static bool IsJson(string ct) =>
         ct.Contains("json", StringComparison.OrdinalIgnoreCase);
 
     private static bool IsCsv(string ct) => ct.Contains("csv", StringComparison.OrdinalIgnoreCase);
 
-    private static string PdfPreviewMarkup(ArtifactRenderInfo info, string url)
+    private static string PdfPreviewMarkup(ChatArtifactRenderInfo info, string url)
     {
         var title = System.Net.WebUtility.HtmlEncode(info.Title);
         return $"""

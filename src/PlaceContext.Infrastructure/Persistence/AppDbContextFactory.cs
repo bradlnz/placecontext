@@ -1,4 +1,3 @@
-using PlaceContext.Application.Ports;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
 
@@ -15,14 +14,6 @@ public sealed class AppDbContextFactory : IDesignTimeDbContextFactory<AppDbConte
         var options = new DbContextOptionsBuilder<AppDbContext>()
             .UseNpgsql("Host=localhost;Port=5433;Database=placecontext;Username=postgres;Password=postgres")
             .Options;
-        return new AppDbContext(options, new DesignTimeTenant());
-    }
-
-    private sealed class DesignTimeTenant : ICurrentTenant
-    {
-        public Guid TenantId => Guid.Empty;
-        public string Slug => string.Empty;
-        public string TimeZoneId => "UTC";
-        public bool IsResolved => false;
+        return new AppDbContext(options, new AppDbDesignTimeTenant());
     }
 }

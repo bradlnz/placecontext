@@ -6,14 +6,7 @@ namespace PlaceContext.Host.Components.ViewModels;
 public sealed class ArtifactSettingsViewModel(IArtifactViewConfigService config, PortalUiState ui)
     : PageViewModel
 {
-    public sealed class RuleRow
-    {
-        public string Id { get; set; } = "";
-        public string Label { get; set; } = "";
-        public string PrefixText { get; set; } = "";
-    }
-
-    public List<RuleRow> Rows { get; } = [];
+    public List<ArtifactRuleRow> Rows { get; } = [];
     public bool Saving { get; private set; }
     public bool Saved { get; private set; }
     public string? Message { get; private set; }
@@ -27,11 +20,11 @@ public sealed class ArtifactSettingsViewModel(IArtifactViewConfigService config,
 
     public void AddRule()
     {
-        Rows.Add(new RuleRow { Id = $"category-{Guid.NewGuid():N}" });
+        Rows.Add(new ArtifactRuleRow { Id = $"category-{Guid.NewGuid():N}" });
         NotifyStateChanged();
     }
 
-    public void Remove(RuleRow row)
+    public void Remove(ArtifactRuleRow row)
     {
         Rows.Remove(row);
         NotifyStateChanged();
@@ -108,7 +101,7 @@ public sealed class ArtifactSettingsViewModel(IArtifactViewConfigService config,
     {
         Rows.Clear();
         Rows.AddRange(
-            value.Categories.Select(category => new RuleRow
+            value.Categories.Select(category => new ArtifactRuleRow
             {
                 Id = category.Id,
                 Label = category.Label,

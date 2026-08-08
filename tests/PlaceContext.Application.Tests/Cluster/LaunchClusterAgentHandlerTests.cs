@@ -1,6 +1,6 @@
 using PlaceContext.Application.Cluster;
 using PlaceContext.Application.Ports;
-using PlaceContext.Domain.Repositories;
+using PlaceContext.Vault.Domain.Repositories;
 
 namespace PlaceContext.Application.Tests.Cluster;
 

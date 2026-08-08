@@ -365,9 +365,7 @@ public sealed class KubernetesClusterInfoProvider : IClusterInfoProvider, IClust
         }
     }
 
-    private sealed record JoinSecretData(string Token, string? ServerUrl, string? TailscaleAuthKey);
-
-    private static async Task<JoinSecretData?> TryReadJoinSecretAsync(Kubernetes client, string ns, CancellationToken ct)
+    private static async Task<ClusterJoinSecretData?> TryReadJoinSecretAsync(Kubernetes client, string ns, CancellationToken ct)
     {
         try
         {
@@ -380,7 +378,7 @@ public sealed class KubernetesClusterInfoProvider : IClusterInfoProvider, IClust
             }
             var token = Dec("node-token");
             if (string.IsNullOrWhiteSpace(token)) return null;
-            return new JoinSecretData(token!, Dec("server-url"), Dec("ts-authkey"));
+            return new ClusterJoinSecretData(token!, Dec("server-url"), Dec("ts-authkey"));
         }
         catch { return null; }
     }

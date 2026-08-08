@@ -1,9 +1,17 @@
-# PlaceContext — multi-stage build for Host + ClusterHost sidecar.
+# PlaceContext — multi-stage build for React, Host + ClusterHost sidecar.
+FROM node:24-alpine AS frontend-build
+WORKDIR /src/frontend
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci
+COPY frontend/ ./
+RUN PLACE_CONTEXT_FRONTEND_OUT_DIR=dist npm run build
+
 FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 ARG TARGETARCH
 WORKDIR /src
 
 COPY . .
+COPY --from=frontend-build /src/frontend/dist ./src/PlaceContext.Host/wwwroot/app
 RUN TARGET_ARCH="$TARGETARCH"; \
   if [ "$TARGET_ARCH" = "amd64" ]; then TARGET_ARCH="x64"; fi; \
   dotnet restore src/PlaceContext.Host/PlaceContext.Host.csproj -a "$TARGET_ARCH"

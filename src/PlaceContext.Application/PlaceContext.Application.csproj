@@ -1,7 +1,23 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
+    <Compile Remove="bin/**/*.cs;obj/**/*.cs;BuildingBlocks/**/*.cs;Runtime/**/*.cs" />
+    <ProjectReference Include="PlaceContext.BuildingBlocks.csproj" />
+    <ProjectReference Include="..\PlaceContext.Artifacts\PlaceContext.Artifacts.Contracts.csproj" />
+    <ProjectReference Include="..\PlaceContext.Artifacts\PlaceContext.Artifacts.Domain.csproj" />
+    <ProjectReference Include="..\PlaceContext.AgentChat\PlaceContext.AgentChat.Contracts.csproj" />
+    <ProjectReference Include="..\PlaceContext.AgentChat\PlaceContext.AgentChat.Domain.csproj" />
+    <ProjectReference Include="..\PlaceContext.Crm\PlaceContext.Crm.Contracts.csproj" />
+    <ProjectReference Include="..\PlaceContext.Crm\PlaceContext.Crm.Domain.csproj" />
+    <ProjectReference Include="..\PlaceContext.Data\PlaceContext.Data.Contracts.csproj" />
+    <ProjectReference Include="..\PlaceContext.Data\PlaceContext.Data.Domain.csproj" />
     <ProjectReference Include="..\PlaceContext.Domain\PlaceContext.Domain.csproj" />
+    <ProjectReference Include="..\PlaceContext.Jobs\PlaceContext.Jobs.Contracts.csproj" />
+    <ProjectReference Include="..\PlaceContext.Jobs\PlaceContext.Jobs.Domain.csproj" />
+    <ProjectReference Include="..\PlaceContext.Search\PlaceContext.Search.Contracts.csproj" />
+    <ProjectReference Include="..\PlaceContext.Search\PlaceContext.Search.Domain.csproj" />
+    <ProjectReference Include="..\PlaceContext.Vault\PlaceContext.Vault.Contracts.csproj" />
+    <ProjectReference Include="..\PlaceContext.Vault\PlaceContext.Vault.Domain.csproj" />
   </ItemGroup>
 
   <ItemGroup>

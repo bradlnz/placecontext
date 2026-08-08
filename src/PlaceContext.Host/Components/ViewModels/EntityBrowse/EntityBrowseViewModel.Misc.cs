@@ -26,8 +26,6 @@ public sealed partial class EntityBrowseViewModel
     public bool Saving { get; private set; }
     public string? EditError { get; private set; }
 
-    public record FormColumn(string Name, string Type);
-
     public List<FormColumn> FormColumns { get; private set; } = new();
     public Dictionary<string, string?> FormValues { get; private set; } =
         new(StringComparer.Ordinal);

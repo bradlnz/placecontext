@@ -15,13 +15,6 @@ public sealed partial class EntityBrowseViewModel
     public bool ShowGraph { get; set; }
 
     // ── Insights ──────────────────────────────────────────────────────────────────────────────
-    public sealed record Insight(
-        string Title,
-        string? Big,
-        string? Sub,
-        IReadOnlyList<(string Label, string Count, int Frac)> Bars
-    );
-
     public List<Insight> Insights { get; } = new();
 
     // ── Artifacts ─────────────────────────────────────────────────────────────────────────────

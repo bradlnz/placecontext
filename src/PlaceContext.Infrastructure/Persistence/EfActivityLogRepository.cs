@@ -10,7 +10,7 @@ public sealed class EfActivityLogRepository : IActivityLogRepository
 {
     private readonly AppDbContext _db;
     private readonly IDataEncryptor _enc;
-    private static string P => IDataEncryptor.Purpose.Activity;
+    private static string P => DataEncryptionPurpose.Activity;
 
     public EfActivityLogRepository(AppDbContext db, IDataEncryptor enc) => (_db, _enc) = (db, enc);
 

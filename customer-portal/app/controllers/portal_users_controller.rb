@@ -22,9 +22,8 @@ class PortalUsersController < ApplicationController
       return
     end
 
-    @portal_users = PortalUser.where(tenant_id: portal_tenant_id).order(:email)
     flash.now[:alert] = @portal_user.errors.full_messages.to_sentence
-    render :index, status: :unprocessable_entity
+    render :new, status: :unprocessable_entity
   end
 
   private

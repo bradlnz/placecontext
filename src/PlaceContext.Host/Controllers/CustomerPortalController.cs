@@ -4,7 +4,6 @@ using PlaceContext.Application;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Features;
 using PlaceContext.Application.Ports;
-using PlaceContext.Domain.ValueObjects;
 using PlaceContext.Host.Auth;
 using PlaceContext.Infrastructure.Tenancy;
 
@@ -104,22 +103,29 @@ public sealed class CustomerPortalController : ControllerBase
 
         try
         {
-            if (request.ClientId is { } clientId
-                && !string.IsNullOrWhiteSpace(request.ClientId.ToString()))
-            {
-                var assignedChains = await _service.ListCrmClientAssignedJobChainIdsAsync(
-                    clientId,
-                    request.ProjectId,
-                    ct);
-                if (!assignedChains.Contains(id))
-                    return BadRequest(new { error = "This automation is not assigned to the selected client." });
-            }
+            if (request.ClientId is not { } clientId || clientId == Guid.Empty)
+                return BadRequest(new { error = "client_id is required for customer portal automations." });
 
-            var run = await _service.RunJobChainAsync(
+            var clients = await _service.ListCrmClientsAsync(request.ProjectId, ct);
+            if (clients.All(client => client.Id != clientId))
+                return BadRequest(new { error = "The selected client does not belong to this project." });
+
+            var assignedChains = await _service.ListCrmClientAssignedJobChainIdsAsync(
+                clientId,
+                request.ProjectId,
+                ct);
+            if (!assignedChains.Contains(id))
+                return BadRequest(new { error = "This automation is not assigned to the selected client." });
+
+            var crmRun = await _service.RunCrmClientAutomationAsync(
+                clientId,
                 id,
-                inputPayload: request.InputPayload,
-                stepPayloadOverrides: request.StepPayloadOverrides,
-                ct: ct);
+                request.InputPayload,
+                request.StepPayloadOverrides,
+                ct);
+            var run = await _service.GetChainRunAsync(crmRun.ChainRunId, ct);
+            if (run is null)
+                return Problem("The automation started but its run could not be loaded.");
             return Ok(run);
         }
         catch (InvalidOperationException ex)
@@ -196,38 +202,4 @@ public sealed class CustomerPortalController : ControllerBase
             steps);
     }
 
-    public sealed record SaveClientRequest(
-        Guid ProjectId,
-        string Name,
-        string? Company,
-        string? Email,
-        string? Phone,
-        CustomerLifecycleStage LifecycleStage,
-        string? Notes)
-    {
-        public SaveCrmClientCommand ToCommand(Guid? id = null)
-            => new(ProjectId, Name, Company, Email, Phone, LifecycleStage, Notes, id);
-    }
-
-    public sealed record RunJobChainRequest(
-        Guid ProjectId,
-        string? InputPayload = null,
-        IReadOnlyDictionary<int, string>? StepPayloadOverrides = null,
-        Guid? ClientId = null);
-
-    public sealed record SetClientJobChainsRequest(IReadOnlyList<Guid> ChainIds);
-
-    public sealed record CustomerPortalJobChainView(
-        Guid Id,
-        Guid ProjectId,
-        string Name,
-        string? Description,
-        IReadOnlyList<CustomerPortalJobChainStepView> Steps);
-
-    public sealed record CustomerPortalJobChainStepView(
-        int Index,
-        Guid JobId,
-        string JobName,
-        IReadOnlyList<JobParameterDto> Parameters,
-        string? ConditionExpression);
 }

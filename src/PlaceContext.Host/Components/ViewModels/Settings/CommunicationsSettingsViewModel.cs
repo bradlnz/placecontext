@@ -10,24 +10,6 @@ using PlaceContext.Infrastructure.Comms;
 
 namespace PlaceContext.Host.Components.ViewModels;
 
-public enum CommunicationChannel
-{
-    Email,
-    Sms,
-}
-
-public enum CommunicationProviderKind
-{
-    Postmark,
-    SendGrid,
-    Twilio,
-}
-
-public sealed record CommunicationKindOption(
-    CommunicationProviderKind Kind,
-    CommunicationChannel Channel
-);
-
 public sealed class CommunicationsSettingsViewModel(
     IServiceScopeFactory ScopeFactory,
     PortalUiState Ui

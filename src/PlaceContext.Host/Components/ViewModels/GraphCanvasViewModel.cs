@@ -3,31 +3,6 @@ using PlaceContext.Application.Dtos;
 
 namespace PlaceContext.Host.Components.ViewModels;
 
-public enum GraphNodeKind
-{
-    Unknown,
-    Artifact,
-}
-
-public enum GraphLinkConfidence
-{
-    Normal,
-    Ambiguous,
-}
-
-public static class GraphCatalog
-{
-    public static GraphNodeKind NodeKind(string? value) =>
-        string.Equals(value, "good", StringComparison.OrdinalIgnoreCase)
-            ? GraphNodeKind.Artifact
-            : GraphNodeKind.Unknown;
-
-    public static GraphLinkConfidence LinkConfidence(string? value) =>
-        string.Equals(value, "Ambiguous", StringComparison.OrdinalIgnoreCase)
-            ? GraphLinkConfidence.Ambiguous
-            : GraphLinkConfidence.Normal;
-}
-
 public sealed class GraphCanvasViewModel(IJSRuntime js)
     : PageViewModel,
         IComponentViewModel,

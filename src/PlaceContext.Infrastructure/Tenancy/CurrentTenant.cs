@@ -8,7 +8,7 @@ namespace PlaceContext.Infrastructure.Tenancy;
 /// child DI scopes (a plain scoped service would be a fresh, unresolved instance there). The tenant
 /// resolution middleware calls <see cref="Set"/> at the start of each request.
 /// </summary>
-public sealed class CurrentTenant : ICurrentTenant
+public sealed class CurrentTenant : ICurrentTenant, ICurrentTenantAccessor
 {
     private static readonly AsyncLocal<TenantInfo?> _current = new();
 
@@ -17,6 +17,11 @@ public sealed class CurrentTenant : ICurrentTenant
 
     public static void Set(TenantInfo tenant) => _current.Value = tenant;
     public static void Clear() => _current.Value = null;
+
+    void ICurrentTenantAccessor.Set(TenantContext tenant)
+        => _current.Value = new TenantInfo(tenant.Id, tenant.Slug, tenant.Slug, tenant.TimeZoneId);
+
+    void ICurrentTenantAccessor.Clear() => Clear();
 
     public Guid TenantId => _current.Value?.Id ?? Guid.Empty;
     public string Slug => _current.Value?.Slug ?? string.Empty;

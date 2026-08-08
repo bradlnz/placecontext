@@ -23,8 +23,6 @@ public sealed class OverviewViewModel : PageViewModel
     public IReadOnlyList<Stat> Stats { get; private set; } = Array.Empty<Stat>();
     public bool Busy { get; private set; }
 
-    public sealed record Stat(string Label, string Value, string Sub, string Color);
-
     public async Task LoadAsync()
     {
         Projects = await _service.GetProjectsAsync();

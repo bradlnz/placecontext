@@ -3,14 +3,18 @@
 <div class="page-header">
   <div>
     <div class="breadcrumbs">
-      <%= link_to "Dashboard", root_path %> ·
-      <%= link_to "Portal logins", portal_users_path %> · Add user
+      <%= link_to "Portal logins", portal_users_path %> <span>›</span> Add user
     </div>
+    <span class="eyebrow">Access management</span>
+    <h1>Add portal user</h1>
+    <p class="profile-subheading">Invite someone into this customer workspace.</p>
   </div>
 </div>
 
-<div class="card form-card">
-  <%= form_with model: @portal_user, url: portal_users_path, local: true, class: "form-grid" do |form| %>
+<div class="editor-layout">
+  <%= form_with model: @portal_user, url: portal_users_path, local: true, class: "card form-card editor-card" do |form| %>
+    <div class="editor-card-header"><div class="editor-card-icon"><%= icon :users %></div><div><strong>Login details</strong><span>An invitation and password reset link will be emailed automatically.</span></div></div>
+    <div class="form-grid">
     <div class="form-group">
       <%= form.label :email %>
       <%= form.email_field :email, required: true, autofocus: true, placeholder: "user@example.com" %>
@@ -31,9 +35,17 @@
       <%= form.password_field :password_confirmation, placeholder: "Optional if leaving password blank" %>
     </div>
 
-    <div class="form-group full-width form-actions">
+    </div>
+    <div class="form-actions">
       <%= link_to "Back", portal_users_path, class: "btn btn-secondary" %>
       <%= form.submit "Create login", class: "btn btn-primary" %>
     </div>
   <% end %>
+  <aside class="editor-help card">
+    <span class="eyebrow">Role guide</span>
+    <h2>Choose the right access</h2>
+    <div class="role-guide-row"><strong>Member</strong><span>Sees only the customer record matching their email.</span></div>
+    <div class="role-guide-row"><strong>Manager</strong><span>Can work across customer records and portal data.</span></div>
+    <div class="role-guide-row"><strong>Admin</strong><span>Can also invite and manage portal logins.</span></div>
+  </aside>
 </div>

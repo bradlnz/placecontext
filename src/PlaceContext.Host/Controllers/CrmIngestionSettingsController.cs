@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using PlaceContext.Application.Ports;
-using PlaceContext.Infrastructure.Crm;
+using PlaceContext.Crm.Infrastructure.Crm;
 
 namespace PlaceContext.Host.Controllers;
 
@@ -46,5 +46,4 @@ public sealed class CrmIngestionSettingsController : ControllerBase
         return NoContent();
     }
 
-    public sealed record SaveCrmIngestionSettingsRequest(Guid ProjectId, string AllowedOrigin);
 }

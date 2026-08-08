@@ -1,10 +1,10 @@
 <% page_title "Portal logins" %>
 
-<div class="page-header">
+<div class="page-intro">
   <div>
-    <div class="breadcrumbs">
-      <%= link_to "Dashboard", root_path %> · Portal logins
-    </div>
+    <span class="eyebrow">Access management</span>
+    <h2>Portal logins</h2>
+    <p>Control who can enter this customer workspace and what they can manage.</p>
   </div>
   <%= link_to new_portal_user_path, class: "btn btn-primary" do %>
     <%= icon :plus %>
@@ -12,10 +12,16 @@
   <% end %>
 </div>
 
-<div class="card">
+<div class="access-overview">
+  <div class="access-overview-icon"><%= icon :users %></div>
+  <div><strong>Customer access is isolated</strong><span>Every login is restricted to this tenant and its permitted customer records.</span></div>
+  <span class="connection-pill"><span class="connection-dot"></span>Protected</span>
+</div>
+
+<div class="card card-flush">
   <div class="card-header">
-    <h2 class="card-title">Portal login users</h2>
-    <span class="card-subtitle"><%= pluralize(@portal_users.size, "user") %> in this workspace</span>
+    <div><span class="eyebrow">Workspace members</span><h2 class="card-title card-title-lg">People with access</h2></div>
+    <span class="page-intro-badge"><%= pluralize(@portal_users.size, "user") %></span>
   </div>
 
   <% if @portal_users.any? %>
@@ -32,8 +38,8 @@
         <tbody>
           <% @portal_users.each do |user| %>
             <tr>
-              <td><%= user.email %></td>
-              <td><%= user.role.capitalize %></td>
+              <td><div class="person-cell"><span class="person-avatar"><%= user.email.first.upcase %></span><span><strong><%= user.email %></strong><small>Portal user</small></span></div></td>
+              <td><span class="role-pill"><%= user.role.capitalize %></span></td>
               <td>
                 <% if user.enabled? %>
                   <span class="badge badge-succeeded">Enabled</span>
@@ -41,22 +47,21 @@
                   <span class="badge badge-failed">Disabled</span>
                 <% end %>
               </td>
-              <td><%= user.created_at.to_fs(:db) %></td>
+              <td class="table-muted"><%= user.created_at.to_date.to_fs(:long) %></td>
             </tr>
           <% end %>
         </tbody>
       </table>
     </div>
   <% else %>
-    <div class="empty-state">
+    <div class="empty-state empty-state-rich">
+      <div class="empty-state-icon"><%= icon :users %></div>
       <div class="empty-state-title">No portal users yet</div>
       <p>Add the first portal login to let a teammate access this workspace.</p>
-      <div style="margin-top: 16px;">
-        <%= link_to new_portal_user_path, class: "btn btn-primary" do %>
-          <%= icon :plus %>
-          Add user
-        <% end %>
-      </div>
+      <%= link_to new_portal_user_path, class: "btn btn-primary" do %>
+        <%= icon :plus %>
+        Add user
+      <% end %>
     </div>
   <% end %>
 </div>

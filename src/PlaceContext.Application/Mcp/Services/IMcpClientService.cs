@@ -24,21 +24,3 @@ public interface IMcpClientService
     /// </summary>
     Task<IReadOnlyList<McpConnectionInfo>> ListConnectionsAsync(Guid projectId, CancellationToken ct = default);
 }
-
-public sealed record McpToolDefinition(
-    string Name,
-    string? Description,
-    JsonElement? InputSchema);
-
-public sealed record McpToolResult(
-    bool Success,
-    string? Content,
-    string? Error,
-    JsonElement? RawContent = null);
-
-public sealed record McpConnectionInfo(
-    Guid Id,
-    string Name,
-    string Transport,
-    string? EndpointUrl,
-    bool Enabled);

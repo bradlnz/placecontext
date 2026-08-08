@@ -392,18 +392,25 @@
 
 @code {
     [Parameter]
-    public Guid ProjectId { get => Vm.ProjectId; set => Vm.ProjectId = value; }
+    public Guid ProjectId { get; set; }
     [Parameter]
-    public string? RequestedIndex { get => Vm.RequestedIndex; set => Vm.RequestedIndex = value; }
+    public string? RequestedIndex { get; set; }
     [Parameter]
-    public string? RequestedQuery { get => Vm.RequestedQuery; set => Vm.RequestedQuery = value; }
+    public string? RequestedQuery { get; set; }
     [Parameter]
-    public string? RequestedDocument { get => Vm.RequestedDocument; set => Vm.RequestedDocument = value; }
+    public string? RequestedDocument { get; set; }
 
     protected override Task OnInitializedAsync()
         => Vm.AttachAndInitializeAsync(() => InvokeAsync(StateHasChanged));
 
-    protected override Task OnParametersSetAsync() => Vm.SetParametersAsync();
+    protected override Task OnParametersSetAsync()
+    {
+        Vm.ProjectId = ProjectId;
+        Vm.RequestedIndex = RequestedIndex;
+        Vm.RequestedQuery = RequestedQuery;
+        Vm.RequestedDocument = RequestedDocument;
+        return Vm.SetParametersAsync();
+    }
 
     protected override Task OnAfterRenderAsync(bool firstRender) => Vm.AfterRenderAsync(firstRender);
 

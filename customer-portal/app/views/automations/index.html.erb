@@ -1,44 +1,61 @@
 <% page_title "Automations" %>
 
-<div class="page-header">
+<div class="page-intro">
   <div>
-    <div class="breadcrumbs">
-      <%= link_to "Dashboard", root_path %> · Automations
-    </div>
+    <span class="eyebrow">Customer workflows</span>
+    <h2>Automations</h2>
+    <p>Purpose-built workflows enabled for this customer by your PlaceContext team.</p>
   </div>
+  <div class="page-intro-badge"><%= @chains.size %> available</div>
 </div>
 
-<%= form_with url: automations_path, method: :get, local: true, class: "project-selector" do |form| %>
-  <%= form.label :project_id, "CRM project" %>
-  <%= form.select :project_id, @projects.map { |project| [project["name"], project["id"]] }, { selected: @project_id }, { onchange: "this.form.submit()" } %>
+<%= form_with url: automations_path, method: :get, local: true, class: "filter-bar" do |form| %>
+  <% if @projects.many? %>
+    <div class="filter-control">
+      <%= form.label :project_id, "Project" %>
+      <%= form.select :project_id, @projects.map { |project| [project["name"], project["id"]] }, { selected: @project_id }, { onchange: "this.form.submit()" } %>
+    </div>
+  <% else %>
+    <%= form.hidden_field :project_id, value: @project_id %>
+  <% end %>
+  <% if current_portal_user&.can_manage_client_access? && @portal_clients.many? %>
+    <div class="filter-control">
+      <%= form.label :client_id, "Customer" %>
+      <%= form.select :client_id, @portal_clients.map { |client| [client["name"], client["id"]] }, { selected: @client&.dig("id") }, { onchange: "this.form.submit()" } %>
+    </div>
+  <% end %>
+  <% if @client %>
+    <div class="filter-context"><span>Configured for</span><strong><%= @client["name"] %></strong></div>
+  <% end %>
 <% end %>
 
-<div class="card">
-  <div class="card-header">
-    <div>
-      <h2 class="card-title">Available automations</h2>
-      <p class="card-subtitle">Choose an automation to configure and run on your data.</p>
-    </div>
-  </div>
-
-  <% if @project_id && @chains.any? %>
-    <div class="automation-grid">
+<% if @project_id && @client && @chains.any? %>
+  <div class="automation-grid">
       <% @chains.each do |chain| %>
-        <%= link_to automation_path(chain["id"], project_id: @project_id), class: "automation-card" do %>
+        <%= link_to automation_path(chain["id"], project_id: @project_id, client_id: @client["id"]), class: "automation-card" do %>
+          <div class="automation-card-top">
+            <span class="automation-icon"><%= icon :automations %></span>
+            <span class="automation-available"><i></i> Available</span>
+          </div>
           <h3 class="automation-card-title"><%= chain["name"] %></h3>
           <% if chain["description"].present? %>
             <p class="automation-card-desc"><%= chain["description"] %></p>
           <% else %>
             <p class="automation-card-desc">Run this PlaceContext automation on your project.</p>
           <% end %>
-          <span class="automation-card-meta"><%= chain["steps"]&.size || 0 %> steps · Configure & run →</span>
+          <div class="automation-card-footer">
+            <span class="automation-card-meta"><strong><%= chain["steps"]&.size || 0 %></strong> workflow steps</span>
+            <span class="automation-card-action">Configure <b>→</b></span>
+          </div>
         <% end %>
       <% end %>
+  </div>
+<% else %>
+  <div class="card">
+    <div class="empty-state empty-state-rich">
+      <div class="empty-state-icon"><%= icon :automations %></div>
+      <div class="empty-state-title"><%= @client ? "No automations assigned" : "No customer workspace found" %></div>
+      <p><%= @client ? "Your PlaceContext team controls which automations appear here for this customer." : "A customer record must be connected before automations can be shown." %></p>
     </div>
-  <% else %>
-    <div class="empty-state">
-      <div class="empty-state-title">No automations available</div>
-      <p>There are no automations configured for this project yet.</p>
-    </div>
-  <% end %>
-</div>
+  </div>
+<% end %>

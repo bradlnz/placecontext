@@ -1,5 +1,8 @@
-<%= form_with scope: :client, url: @client["id"].present? ? client_path(@client["id"], project_id: @project_id) : clients_path, method: @client["id"].present? ? :put : :post, local: true, html: { class: "card form-card" } do |form| %>
+<div class="editor-layout">
+<%= form_with scope: :client, url: @client["id"].present? ? client_path(@client["id"], project_id: @project_id) : clients_path, method: @client["id"].present? ? :put : :post, local: true, html: { class: "card form-card editor-card" } do |form| %>
   <%= form.hidden_field :project_id, value: @project_id %>
+
+  <div class="editor-card-header"><div class="editor-card-icon"><%= icon :clients %></div><div><strong>Customer information</strong><span>Keep the details your team uses to deliver work accurate.</span></div></div>
 
   <div class="form-grid">
     <div class="form-group">
@@ -38,3 +41,11 @@
     <%= link_to "Cancel", clients_path(project_id: @project_id), class: "btn btn-secondary" %>
   </div>
 <% end %>
+<aside class="editor-help card">
+  <span class="eyebrow">Good to know</span>
+  <h2>Customer access</h2>
+  <p>A member’s portal login email is matched with the customer email stored in PlaceContext.</p>
+  <div class="editor-tip"><span>1</span><p>Use the same email address when granting portal access.</p></div>
+  <div class="editor-tip"><span>2</span><p>Automation availability is controlled from the customer record in PlaceContext.</p></div>
+</aside>
+</div>

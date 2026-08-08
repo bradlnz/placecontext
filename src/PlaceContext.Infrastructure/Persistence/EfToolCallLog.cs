@@ -15,7 +15,7 @@ public sealed class EfToolCallLog : IToolCallLog
     private const int Capacity = 200;
     private readonly IServiceScopeFactory _scopes;
     private readonly IDataEncryptor _enc;
-    private static string P => IDataEncryptor.Purpose.ToolCall;
+    private static string P => DataEncryptionPurpose.ToolCall;
 
     public EfToolCallLog(IServiceScopeFactory scopes, IDataEncryptor enc)
     {

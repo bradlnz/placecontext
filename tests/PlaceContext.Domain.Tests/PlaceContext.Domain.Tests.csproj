@@ -7,6 +7,9 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\src\PlaceContext.Artifacts\PlaceContext.Artifacts.Domain.csproj" />
+    <ProjectReference Include="..\..\src\PlaceContext.AgentChat\PlaceContext.AgentChat.Domain.csproj" />
+    <ProjectReference Include="..\..\src\PlaceContext.Crm\PlaceContext.Crm.Domain.csproj" />
     <PackageReference Include="coverlet.collector" Version="6.0.4" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
     <PackageReference Include="xunit" Version="2.9.3" />

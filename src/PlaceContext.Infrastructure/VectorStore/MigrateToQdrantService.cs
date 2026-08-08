@@ -49,7 +49,7 @@ public sealed class MigrateToQdrantService : IHostedService
 
         var http = scope.ServiceProvider.GetRequiredService<IHttpClientFactory>().CreateClient();
         var baseUrl = qdrantUrl.TrimEnd('/');
-        var purpose = IDataEncryptor.Purpose.EmbeddingText;
+        var purpose = DataEncryptionPurpose.EmbeddingText;
 
         var conn = db.Database.GetDbConnection();
         await conn.OpenAsync(ct);

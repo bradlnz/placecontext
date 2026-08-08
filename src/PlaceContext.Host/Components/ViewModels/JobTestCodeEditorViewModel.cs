@@ -22,7 +22,7 @@ public sealed class JobTestCodeEditorViewModel : PageViewModel, IAsyncDisposable
     private readonly PortalUiState _ui;
     private readonly NavigationManager _navigation;
     private readonly IJSRuntime _js;
-    private readonly List<EditorFile> _files = new();
+    private readonly List<JobTestEditorFile> _files = new();
     private JobTestCaseView? _test;
     private int _active;
     private bool _monacoReady;
@@ -51,7 +51,7 @@ public sealed class JobTestCodeEditorViewModel : PageViewModel, IAsyncDisposable
     public string EditorId { get; }
     public JobTestCaseView? Test => _test;
     public JobTestCaseView? LastResult { get; private set; }
-    public IReadOnlyList<EditorFile> Files => _files;
+    public IReadOnlyList<JobTestEditorFile> Files => _files;
     public string RuntimeId { get; private set; } = DefaultRuntime;
     public string? Entrypoint { get; private set; }
     public string? Message => _message;
@@ -114,7 +114,7 @@ public sealed class JobTestCodeEditorViewModel : PageViewModel, IAsyncDisposable
                 Entrypoint = _test.Entrypoint;
                 _files.Clear();
                 _files.AddRange(
-                    _test.CodeFiles.Select(file => new EditorFile(file.Path, file.Content))
+                    _test.CodeFiles.Select(file => new JobTestEditorFile(file.Path, file.Content))
                 );
                 if (_files.Count == 0)
                 {
@@ -221,7 +221,7 @@ public sealed class JobTestCodeEditorViewModel : PageViewModel, IAsyncDisposable
         }
 
         await SyncActiveAsync();
-        _files.Add(new EditorFile(path, string.Empty));
+        _files.Add(new JobTestEditorFile(path, string.Empty));
         _active = _files.Count - 1;
         _addingFile = false;
         await OpenFileAsync(_files[_active]);
@@ -309,14 +309,14 @@ public sealed class JobTestCodeEditorViewModel : PageViewModel, IAsyncDisposable
     {
         var starter = JobTestRuntimeCatalog.Starter(runtime);
         _files.Clear();
-        _files.Add(new EditorFile(starter.Path, starter.Content));
+        _files.Add(new JobTestEditorFile(starter.Path, starter.Content));
         if (runtime == JobTestRuntimeCatalog.Go)
         {
-            _files.Add(new EditorFile("go.mod", "module placecontext_tests\n\ngo 1.23\n"));
+            _files.Add(new JobTestEditorFile("go.mod", "module placecontext_tests\n\ngo 1.23\n"));
         }
         else if (runtime == JobTestRuntimeCatalog.Python)
         {
-            _files.Add(new EditorFile("requirements.txt", "pytest==8.4.1\n"));
+            _files.Add(new JobTestEditorFile("requirements.txt", "pytest==8.4.1\n"));
         }
 
         Entrypoint = starter.Path;
@@ -397,7 +397,7 @@ public sealed class JobTestCodeEditorViewModel : PageViewModel, IAsyncDisposable
         catch { }
     }
 
-    private async Task OpenFileAsync(EditorFile file)
+    private async Task OpenFileAsync(JobTestEditorFile file)
     {
         try
         {
@@ -424,15 +424,4 @@ public sealed class JobTestCodeEditorViewModel : PageViewModel, IAsyncDisposable
         catch { }
     }
 
-    public sealed class EditorFile
-    {
-        public EditorFile(string path, string content)
-        {
-            Path = path;
-            Content = content;
-        }
-
-        public string Path { get; set; }
-        public string Content { get; set; }
-    }
 }

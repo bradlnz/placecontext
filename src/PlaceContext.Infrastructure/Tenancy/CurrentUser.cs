@@ -9,7 +9,7 @@ namespace PlaceContext.Infrastructure.Tenancy;
 /// once per request by the Host's <c>UserResolutionMiddleware</c> (after authorization has resolved the
 /// scheme-correct principal) and re-applied per Blazor circuit activity by <c>UserCircuitHandler</c>.
 /// </summary>
-public sealed class CurrentUser : ICurrentUser
+public sealed class CurrentUser : ICurrentUser, ICurrentUserAccessor
 {
     private static readonly AsyncLocal<UserIdentity?> _current = new();
 
@@ -19,10 +19,12 @@ public sealed class CurrentUser : ICurrentUser
     public static void Set(UserIdentity user) => _current.Value = user;
     public static void Clear() => _current.Value = null;
 
+    void ICurrentUserAccessor.Set(UserContext user)
+        => _current.Value = new UserIdentity(user.Id, user.Role);
+
+    void ICurrentUserAccessor.Clear() => Clear();
+
     public Guid UserId => _current.Value?.Id ?? Guid.Empty;
     public string Role => _current.Value?.Role ?? nameof(UserRole.Viewer);
     public bool IsAuthenticated => _current.Value is not null;
 }
-
-/// <summary>The id + role name resolved off a request's authenticated principal.</summary>
-public sealed record UserIdentity(Guid Id, string Role);

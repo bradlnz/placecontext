@@ -108,119 +108,6 @@ namespace PlaceContext.Infrastructure.Migrations
                     b.ToTable("activity_log", (string)null);
                 });
 
-            modelBuilder.Entity("PlaceContext.Infrastructure.Persistence.AgentChatSessionRow", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("MessagesJson")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("text")
-                        .HasDefaultValue("[]");
-
-                    b.Property<Guid>("ProjectId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("TenantId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Title")
-                        .HasColumnType("text");
-
-                    b.Property<DateTimeOffset>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid?>("UserId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ProjectId", "UpdatedAt");
-
-                    b.ToTable("agent_chat_sessions", (string)null);
-                });
-
-            modelBuilder.Entity("PlaceContext.Infrastructure.Persistence.AgentConfigRow", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("BaseModel")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("text")
-                        .HasDefaultValue("qwen3.5:0.8b");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<bool>("Enabled")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(true);
-
-                    b.Property<string>("LaunchpadToolCatalog")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("text")
-                        .HasDefaultValue("");
-
-                    b.Property<int>("MaxContextChunks")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasDefaultValue(5);
-
-                    b.Property<string>("Preamble")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("text")
-                        .HasDefaultValue("");
-
-                    b.Property<Guid>("ProjectId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("SystemPrompt")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("text")
-                        .HasDefaultValue("");
-
-                    b.Property<float>("Temperature")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("real")
-                        .HasDefaultValue(0.7f);
-
-                    b.Property<Guid>("TenantId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("ToolCatalog")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("text")
-                        .HasDefaultValue("");
-
-                    b.Property<float>("TopP")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("real")
-                        .HasDefaultValue(0.9f);
-
-                    b.Property<DateTimeOffset>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ProjectId")
-                        .IsUnique();
-
-                    b.ToTable("agent_configs", (string)null);
-                });
-
             modelBuilder.Entity("PlaceContext.Infrastructure.Persistence.ArtifactShareTokenRow", b =>
                 {
                     b.Property<Guid>("Id")
@@ -332,48 +219,6 @@ namespace PlaceContext.Infrastructure.Migrations
                     b.HasIndex("Status", "ResumeAt", "ContinuationClaimedAt");
 
                     b.ToTable("chain_runs", (string)null);
-                });
-
-            modelBuilder.Entity("PlaceContext.Infrastructure.Persistence.ChatCommandRow", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Args")
-                        .HasColumnType("text");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Description")
-                        .HasColumnType("text");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
-                    b.Property<Guid>("ProjectId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("TenantId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("ToolName")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
-                    b.Property<DateTimeOffset>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ProjectId", "Name")
-                        .IsUnique();
-
-                    b.ToTable("chat_commands", (string)null);
                 });
 
             modelBuilder.Entity("PlaceContext.Infrastructure.Persistence.CommunicationProviderRow", b =>
@@ -762,6 +607,46 @@ namespace PlaceContext.Infrastructure.Migrations
                         .IsUnique();
 
                     b.ToTable("crm_client_artifacts", (string)null);
+                });
+
+            modelBuilder.Entity("PlaceContext.Infrastructure.Persistence.CrmClientJobChainAssignmentRow", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ChainId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ClientId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("now()");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ChainId");
+
+                    b.HasIndex("ProjectId", "ClientId");
+
+                    b.HasIndex("ProjectId", "ClientId", "ChainId")
+                        .IsUnique();
+
+                    b.ToTable("crm_client_job_chain_assignments", (string)null);
                 });
 
             modelBuilder.Entity("PlaceContext.Infrastructure.Persistence.CrmClientRow", b =>
@@ -1502,29 +1387,6 @@ namespace PlaceContext.Infrastructure.Migrations
                     b.ToTable("job_runs", (string)null);
                 });
 
-            modelBuilder.Entity("PlaceContext.Infrastructure.Persistence.JobSecretRow", b =>
-                {
-                    b.Property<Guid>("ProjectId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Name")
-                        .HasColumnType("text");
-
-                    b.Property<string>("Cipher")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid>("TenantId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("ProjectId", "Name");
-
-                    b.ToTable("job_secrets", (string)null);
-                });
-
             modelBuilder.Entity("PlaceContext.Infrastructure.Persistence.JobTestCaseRow", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1688,84 +1550,6 @@ namespace PlaceContext.Infrastructure.Migrations
                     b.HasIndex("Enabled", "Kind", "NextRunAt");
 
                     b.ToTable("job_triggers", (string)null);
-                });
-
-            modelBuilder.Entity("PlaceContext.Infrastructure.Persistence.McpConnectionRow", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Args")
-                        .HasMaxLength(1000)
-                        .HasColumnType("character varying(1000)");
-
-                    b.Property<string>("AuthHeader")
-                        .HasColumnType("text");
-
-                    b.Property<string>("AuthToken")
-                        .HasColumnType("text");
-
-                    b.Property<string>("AuthType")
-                        .HasColumnType("text");
-
-                    b.Property<string>("Command")
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<bool>("Enabled")
-                        .HasColumnType("boolean");
-
-                    b.Property<string>("EndpointUrl")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
-
-                    b.Property<DateTimeOffset?>("LastConnectedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("LastStatus")
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
-                    b.Property<string>("OAuthAccessToken")
-                        .HasColumnType("text");
-
-                    b.Property<string>("OAuthClientId")
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
-
-                    b.Property<string>("OAuthRefreshToken")
-                        .HasColumnType("text");
-
-                    b.Property<string>("OAuthScopes")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
-
-                    b.Property<DateTimeOffset?>("OAuthTokenExpiresAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid>("ProjectId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("TenantId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Transport")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("mcp_connections", (string)null);
                 });
 
             modelBuilder.Entity("PlaceContext.Infrastructure.Persistence.OAuthAuthCodeRow", b =>
@@ -2355,41 +2139,6 @@ namespace PlaceContext.Infrastructure.Migrations
                     b.HasIndex("At");
 
                     b.ToTable("tool_calls", (string)null);
-                });
-
-            modelBuilder.Entity("PlaceContext.Infrastructure.Persistence.UsageRow", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Description")
-                        .HasColumnType("text");
-
-                    b.Property<long>("InputTokens")
-                        .HasColumnType("bigint");
-
-                    b.Property<string>("Model")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<long>("OutputTokens")
-                        .HasColumnType("bigint");
-
-                    b.Property<Guid>("ProjectId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTimeOffset>("RecordedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid>("TenantId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ProjectId", "RecordedAt");
-
-                    b.ToTable("usage_records", (string)null);
                 });
 
             modelBuilder.Entity("PlaceContext.Infrastructure.Persistence.UserApiTokenRow", b =>

@@ -3,9 +3,8 @@ using Microsoft.AspNetCore.Mvc;
 using PlaceContext.Application;
 using PlaceContext.Application.Cluster;
 using PlaceContext.Application.Ports;
-using PlaceContext.Domain.Repositories;
-using PlaceContext.Host.Auth;
-
+using PlaceContext.Host.Controllers.Api.Records;
+using PlaceContext.Vault.Domain.Repositories;
 namespace PlaceContext.Host.Controllers.Api;
 
 [ApiController]
@@ -47,21 +46,30 @@ public sealed class AgentController : ControllerBase
 
     [HttpPost("exchange")]
     [AllowAnonymous]
-    public async Task<IActionResult> Exchange([FromBody] ExchangeRequest request, CancellationToken ct)
+    public async Task<IActionResult> Exchange([FromBody] AgentExchangeRequest request, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(request.Token))
+        {
             return BadRequest(new { error = "token is required" });
+        }
 
         var agentToken = await _tokens.ConsumeTokenAsync(request.Token);
         if (agentToken is null)
+        {
             return Unauthorized(new { error = "Invalid or expired token" });
+        }
 
         if (agentToken.TenantId != _tenant.TenantId)
+        {
             return Unauthorized(new { error = "Token tenant mismatch" });
+        }
 
         var ciphers = await _secrets.GetCiphersAsync(SystemProjects.Cluster, ct);
-        if (!ciphers.TryGetValue(LaunchClusterAgentHandler.ClientIdSecretName, out var clientIdCipher)
-            || !ciphers.TryGetValue(LaunchClusterAgentHandler.ClientSecretSecretName, out var clientSecretCipher))
+        ciphers.TryGetValue(LaunchClusterAgentHandler.ClientIdSecretName, out var clientIdCipher);
+        ciphers.TryGetValue(LaunchClusterAgentHandler.ClientSecretSecretName, out var clientSecretCipher);
+
+        if (string.IsNullOrWhiteSpace(clientIdCipher)
+            || string.IsNullOrWhiteSpace(clientSecretCipher))
         {
             return StatusCode(502, new
             {
@@ -71,23 +79,27 @@ public sealed class AgentController : ControllerBase
 
         var clientId = _protector.Unprotect(clientIdCipher);
         var clientSecret = _protector.Unprotect(clientSecretCipher);
+
         var tags = ciphers.TryGetValue(LaunchClusterAgentHandler.TagSecretName, out var tagCipher)
             ? _protector.Unprotect(tagCipher)
             : LaunchClusterAgentHandler.DefaultTag;
-        if (string.IsNullOrWhiteSpace(tags)) tags = LaunchClusterAgentHandler.DefaultTag;
+
+        if (string.IsNullOrWhiteSpace(tags))
+        {
+            tags = LaunchClusterAgentHandler.DefaultTag;
+        }
 
         var tsKey = await _minter.MintEphemeralAgentKeyAsync(clientId, clientSecret, tags, ct);
         if (string.IsNullOrWhiteSpace(tsKey))
+        {
             return StatusCode(502, new { error = "Failed to mint Tailscale auth key." });
+        }
 
         var join = await _admin.GetJoinMaterialAsync(tsKey, ct);
         if (join is null)
+        {
             return StatusCode(502, new { error = "Cluster join material not available (deploy the master first)." });
-
-        return Ok(new ExchangeResult(join.JoinCode, join.ServerUrl, join.Instructions));
+        }
+        return Ok(new AgentExchangeResult(join.JoinCode, join.ServerUrl, join.Instructions));
     }
 }
-
-public sealed record ExchangeRequest(string Token);
-
-public sealed record ExchangeResult(string JoinCode, string ServerUrl, string Command);

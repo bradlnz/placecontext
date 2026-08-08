@@ -369,12 +369,16 @@
 
 @code {
     [Parameter]
-    public string? ArtifactId { get => Vm.ArtifactId; set => Vm.ArtifactId = value; }
+    public string? ArtifactId { get; set; }
 
     protected override Task OnInitializedAsync()
         => Vm.AttachAndInitializeAsync(() => InvokeAsync(StateHasChanged));
 
-    protected override Task OnParametersSetAsync() => Vm.ApplyDeepLinkAsync();
+    protected override Task OnParametersSetAsync()
+    {
+        Vm.ArtifactId = ArtifactId;
+        return Vm.ApplyDeepLinkAsync();
+    }
 
     protected override Task OnAfterRenderAsync(bool firstRender) => Vm.AfterRenderAsync(firstRender);
 

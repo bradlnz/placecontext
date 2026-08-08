@@ -6,7 +6,7 @@ using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Options;
 using PlaceContext.Application.Agents.Services;
 using PlaceContext.Application.Ports;
-using PlaceContext.Infrastructure.Slack;
+using PlaceContext.AgentChat.Infrastructure.Slack;
 using PlaceContext.Infrastructure.Tenancy;
 
 namespace PlaceContext.Host.Controllers;
@@ -146,5 +146,4 @@ public sealed class SlackController : ControllerBase
         return true;
     }
 
-    private sealed record InboundMessage(string Channel, string Ts, string? ThreadTs, string UserId, string Text);
 }

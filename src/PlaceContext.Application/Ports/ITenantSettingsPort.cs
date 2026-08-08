@@ -14,6 +14,3 @@ public interface ITenantSettingsPort
     /// out settings it didn't capture).</summary>
     Task ApplyAsync(Guid tenantId, TenantSettingsSnapshot snapshot, CancellationToken ct = default);
 }
-
-/// <summary>Portable tenant settings — see <see cref="ITenantSettingsPort"/> for what's excluded and why.</summary>
-public sealed record TenantSettingsSnapshot(string TimeZoneId, string? BrandingJson, string? GitHubLogin);

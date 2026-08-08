@@ -29,14 +29,6 @@ public static class AuthPages
     public static string JoinInvalid() => Cache.GetOrAdd("joininvalid", static name =>
         File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Auth", "templates", name + ".html")));
 
-    /// <summary>View data for the login verification-code page (email or SMS delivery).</summary>
-    public sealed record EmailVerifyModel(
-        string Heading,
-        string DestinationHint,
-        bool RequiresPhone,
-        string? SwitchHref,
-        string? SwitchLabel);
-
     public static string EmailVerify(
         AntiforgeryTokenSet tokens,
         string state,

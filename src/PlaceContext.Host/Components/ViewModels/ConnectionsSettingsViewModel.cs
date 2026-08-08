@@ -1,8 +1,7 @@
 using Microsoft.AspNetCore.Components;
 using PlaceContext.Application;
 using PlaceContext.Application.Dtos;
-using PlaceContext.Infrastructure.OpenSearch;
-using PlaceContext.Infrastructure.ProjectData;
+using PlaceContext.Application.Ports;
 
 namespace PlaceContext.Host.Components.ViewModels;
 
@@ -21,20 +20,20 @@ public sealed class ConnectionsSettingsViewModel(
 
     private static readonly string[] ExternalDatabaseKeys =
     [
-        ProjectDatabaseConnectionResolver.HostVariable,
-        ProjectDatabaseConnectionResolver.PortVariable,
-        ProjectDatabaseConnectionResolver.NameVariable,
-        ProjectDatabaseConnectionResolver.UsernameVariable,
-        ProjectDatabaseConnectionResolver.PasswordVariable,
-        ProjectDatabaseConnectionResolver.SslModeVariable,
+        ProjectDatabaseEnvironmentVariables.Host,
+        ProjectDatabaseEnvironmentVariables.Port,
+        ProjectDatabaseEnvironmentVariables.Name,
+        ProjectDatabaseEnvironmentVariables.Username,
+        ProjectDatabaseEnvironmentVariables.Password,
+        ProjectDatabaseEnvironmentVariables.SslMode,
     ];
 
     private static readonly string[] ExternalIndexKeys =
     [
-        OpenSearchConnectionResolver.EndpointVariable,
-        OpenSearchConnectionResolver.UsernameVariable,
-        OpenSearchConnectionResolver.PasswordVariable,
-        OpenSearchConnectionResolver.IndexVariable,
+        OpenSearchEnvironmentVariables.Endpoint,
+        OpenSearchEnvironmentVariables.Username,
+        OpenSearchEnvironmentVariables.Password,
+        OpenSearchEnvironmentVariables.Index,
     ];
 
     private static readonly string[] SslModes = ["Disable", "Allow", "Prefer", "Require", "Verify-CA", "Verify-Full"];
@@ -65,10 +64,10 @@ public sealed class ConnectionsSettingsViewModel(
     public string? SelectedProjectName => Projects?.FirstOrDefault(p => p.Id == SelectedProjectId)?.Name;
 
     public bool HasExternalDatabase =>
-        Secrets.Any(s => s.Name == ProjectDatabaseConnectionResolver.HostVariable);
+        Secrets.Any(s => s.Name == ProjectDatabaseEnvironmentVariables.Host);
 
     public bool HasExternalIndex =>
-        Secrets.Any(s => s.Name == OpenSearchConnectionResolver.EndpointVariable);
+        Secrets.Any(s => s.Name == OpenSearchEnvironmentVariables.Endpoint);
 
     public IReadOnlyList<string> SslModeOptions => SslModes;
 
@@ -155,15 +154,15 @@ public sealed class ConnectionsSettingsViewModel(
         {
             var values = new Dictionary<string, string>
             {
-                [ProjectDatabaseConnectionResolver.HostVariable] = DbHost.Trim(),
-                [ProjectDatabaseConnectionResolver.UsernameVariable] = DbUser.Trim(),
-                [ProjectDatabaseConnectionResolver.PasswordVariable] = DbPassword,
-                [ProjectDatabaseConnectionResolver.SslModeVariable] = DbSslMode.Trim(),
+                [ProjectDatabaseEnvironmentVariables.Host] = DbHost.Trim(),
+                [ProjectDatabaseEnvironmentVariables.Username] = DbUser.Trim(),
+                [ProjectDatabaseEnvironmentVariables.Password] = DbPassword,
+                [ProjectDatabaseEnvironmentVariables.SslMode] = DbSslMode.Trim(),
             };
             if (port is not null)
-                values[ProjectDatabaseConnectionResolver.PortVariable] = port;
+                values[ProjectDatabaseEnvironmentVariables.Port] = port;
             if (!string.IsNullOrWhiteSpace(DbName))
-                values[ProjectDatabaseConnectionResolver.NameVariable] = DbName.Trim();
+                values[ProjectDatabaseEnvironmentVariables.Name] = DbName.Trim();
             await WriteSecretsAsync(id, values);
             Message = $"External database for '{SelectedProjectName}' saved. This project now runs against it; reset to return to the cluster database.";
             MessageIsError = false;
@@ -234,14 +233,14 @@ public sealed class ConnectionsSettingsViewModel(
         {
             var values = new Dictionary<string, string>
             {
-                [OpenSearchConnectionResolver.EndpointVariable] = OsEndpoint.Trim().TrimEnd('/'),
+                [OpenSearchEnvironmentVariables.Endpoint] = OsEndpoint.Trim().TrimEnd('/'),
             };
             if (!string.IsNullOrWhiteSpace(OsUsername))
-                values[OpenSearchConnectionResolver.UsernameVariable] = OsUsername.Trim();
+                values[OpenSearchEnvironmentVariables.Username] = OsUsername.Trim();
             if (!string.IsNullOrWhiteSpace(OsPassword))
-                values[OpenSearchConnectionResolver.PasswordVariable] = OsPassword;
+                values[OpenSearchEnvironmentVariables.Password] = OsPassword;
             if (!string.IsNullOrWhiteSpace(OsIndex))
-                values[OpenSearchConnectionResolver.IndexVariable] = OsIndex.Trim();
+                values[OpenSearchEnvironmentVariables.Index] = OsIndex.Trim();
             await WriteSecretsAsync(id, values);
             Message = $"External index for '{SelectedProjectName}' saved. Data Search now targets it; reset to fall back to the workspace default.";
             MessageIsError = false;

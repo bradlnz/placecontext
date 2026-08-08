@@ -8,7 +8,7 @@ using PlaceContext.Application.Features;
 using PlaceContext.Application.Ports;
 using PlaceContext.Domain.ValueObjects;
 using PlaceContext.Host;
-using PlaceContext.Infrastructure.Crm;
+using PlaceContext.Crm.Infrastructure.Crm;
 using System.Net.Http.Json;
 using System.Text.Json;
 
@@ -1319,6 +1319,9 @@ public sealed class CrmViewModel : PageViewModel
             }
 
             var payload = await response.Content.ReadFromJsonAsync<PortalImpersonateResponse>();
+            if (string.IsNullOrWhiteSpace(payload?.Url))
+                throw new InvalidOperationException("The customer portal returned an invalid impersonation response.");
+
             Nav.NavigateTo($"{SelectedPortalHost}{payload.Url}", forceLoad: true);
         }
         catch (Exception ex)
@@ -1984,5 +1987,3 @@ public sealed class CrmViewModel : PageViewModel
         return string.Concat(parts.Take(2).Select(part => char.ToUpperInvariant(part[0])));
     }
 }
-
-public sealed record PortalImpersonateResponse(string Url);

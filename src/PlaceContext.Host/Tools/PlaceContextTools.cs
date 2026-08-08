@@ -153,17 +153,6 @@ public sealed class PlaceContextTools
             () => svc.SetupHermesAsync(projectId));
 
     [Authorize(Policy = "Member")]
-    [McpServerTool(Name = "record_usage"), Description("Record LLM token usage for a project (metadata only — model name and token counts, never code or prompts). Powers the cost dashboards. Returns the entry with its computed USD cost.")]
-    public static Task<string> RecordUsage(IPlaceContextService svc, IToolCallLog log,
-        Guid projectId,
-        [Description("Model id, e.g. claude-opus-4-8 or claude-sonnet-4-6")] string model,
-        [Description("Input (prompt) tokens consumed")] long inputTokens,
-        [Description("Output (completion) tokens generated")] long outputTokens,
-        [Description("Optional label, e.g. 'review pass' — never code or prompt content")] string? description = null)
-        => Traced(log, "record_usage", projectId.ToString(), $"usage {model}", new { projectId, model, inputTokens, outputTokens, description },
-            () => svc.RecordUsageAsync(projectId, model, inputTokens, outputTokens, description));
-
-    [Authorize(Policy = "Member")]
     [McpServerTool(Name = "job_authoring_guide"), Description("Return instructions for structuring PlaceContext job code: the sandbox contract (stdin input, /work entrypoint, stdout output, exit codes), available runtimes, how environment variables/secrets are provided, and the next step (upload_job_code). Call this BEFORE writing a job so the code matches the runtime contract.")]
     public static string JobAuthoringGuide() => JobGuide;
 
@@ -634,10 +623,10 @@ public sealed class PlaceContextTools
         if (string.IsNullOrWhiteSpace(filesJson))
             throw new ArgumentException("filesJson must be a non-empty JSON array of {path, content}.");
 
-        List<FileInput>? parsed;
+        List<ToolFileInputDto>? parsed;
         try
         {
-            parsed = JsonSerializer.Deserialize<List<FileInput>>(filesJson,
+            parsed = JsonSerializer.Deserialize<List<ToolFileInputDto>>(filesJson,
                 new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
         }
         catch (JsonException ex)
@@ -654,12 +643,6 @@ public sealed class PlaceContextTools
                 throw new ArgumentException("Every file must have a non-empty 'path'.");
             return new CodeFileDto(f.Path!, f.Content ?? "");
         }).ToList();
-    }
-
-    private sealed class FileInput
-    {
-        public string? Path { get; set; }
-        public string? Content { get; set; }
     }
 
     /// <summary>Times a tool call, serializes its result, and records the trace for the Inspector.</summary>

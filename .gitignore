@@ -88,3 +88,8 @@ scratchpad/test-render-map.mjs
 scratchpad/**
 scratchpad/*
 scratchpad
+
+# React frontend build and dependency artifacts
+frontend/node_modules/
+frontend/coverage/
+src/PlaceContext.Host/wwwroot/app/

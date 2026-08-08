@@ -76,6 +76,19 @@ class PlaceContextCrmClient
     get("/api/customer-portal/chain-runs/#{run_id}")
   end
 
+  def client_artifacts(client_id, take: 200)
+    get("/api/customer-portal/clients/#{client_id}/artifacts", take: take)
+  end
+
+  def download_client_artifact(client_id, artifact_id)
+    path = "/api/customer-portal/clients/#{client_id}/artifacts/#{artifact_id}"
+    response = raw_get(path)
+    {
+      body: response.body,
+      content_type: response["Content-Type"].presence || "application/octet-stream"
+    }
+  end
+
   private
 
   def get(path, query = {})
@@ -115,6 +128,24 @@ class PlaceContextCrmClient
     return payload if response.is_a?(Net::HTTPSuccess)
 
     raise ApiError.new(status: response.code.to_i, payload:)
+  end
+
+  def raw_get(path)
+    core_api_url = ENV.fetch("PLACE_CONTEXT_CORE_API_URL")
+    uri = URI.join(core_api_url.end_with?("/") ? core_api_url : "#{core_api_url}/", path.delete_prefix("/"))
+    http = Net::HTTP.new(uri.host, uri.port)
+    http.use_ssl = uri.scheme == "https"
+    http.open_timeout = 5
+    http.read_timeout = 30
+
+    request = Net::HTTP::Get.new(uri)
+    request["Accept"] = "*/*"
+    request["Authorization"] = "Bearer #{api_key}"
+    request["X-PlaceContext-Tenant-Id"] = tenant_id
+    response = http.request(request)
+    return response if response.is_a?(Net::HTTPSuccess)
+
+    raise ApiError.new(status: response.code.to_i, payload: parse_json_body(response.body))
   end
 
   def tenant_id

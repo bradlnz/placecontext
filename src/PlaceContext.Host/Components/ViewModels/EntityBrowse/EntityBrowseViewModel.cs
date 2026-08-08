@@ -10,13 +10,6 @@ namespace PlaceContext.Host.Components.ViewModels;
 
 public sealed partial class EntityBrowseViewModel : PageViewModel
 {
-    public enum BrowseTab
-    {
-        Records,
-        Graph,
-        Analytics,
-    }
-
     public IReadOnlyList<string> ChartTypes { get; } = ["bar", "line", "pie"];
     public bool IsRecordsTab => ViewTab == "records";
     public bool IsGraphTab => ViewTab == "graph";

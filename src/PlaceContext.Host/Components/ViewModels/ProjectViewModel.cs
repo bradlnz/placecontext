@@ -20,24 +20,17 @@ public sealed class ProjectViewModel : PageViewModel
         IJSRuntime js
     ) => (_service, _ui, _navigation, _js) = (service, ui, navigation, js);
 
-    public static class Tabs
-    {
-        public const string Overview = "overview";
-        public const string Requirements = "requirements";
-        public const string Activity = "activity";
-    }
-
     public static IReadOnlyList<(string Key, string Label)> TabItems { get; } =
-    [(Tabs.Overview, "Overview"), (Tabs.Requirements, "Requirements"), (Tabs.Activity, "Activity")];
+    [(ProjectViewTabs.Overview, "Overview"), (ProjectViewTabs.Requirements, "Requirements"), (ProjectViewTabs.Activity, "Activity")];
 
     public static string NormalizeTab(string? tab) =>
-        tab is Tabs.Requirements or Tabs.Activity ? tab : Tabs.Overview;
+        tab is ProjectViewTabs.Requirements or ProjectViewTabs.Activity ? tab : ProjectViewTabs.Overview;
 
     public Guid Id { get; private set; }
     public ProjectOverviewView? Overview { get; private set; }
     public ActivityTimelineView? Timeline { get; private set; }
     public IReadOnlyList<DecisionView>? Decisions { get; private set; }
-    public string Tab { get; private set; } = Tabs.Overview;
+    public string Tab { get; private set; } = ProjectViewTabs.Overview;
     public string? Message { get; private set; }
     public RequirementsView? Requirements { get; private set; }
     public string RequirementsDraft { get; set; } = "";

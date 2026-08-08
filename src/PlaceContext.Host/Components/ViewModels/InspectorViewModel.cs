@@ -20,7 +20,7 @@ public sealed class InspectorViewModel : PageViewModel, IDisposable
 
     public async Task LoadAsync()
     {
-        Calls = await _service.GetRecentToolCallsAsync(PageConstants.ToolCallLimit);
+        Calls = await _service.GetRecentToolCallsAsync(InspectorPageConstants.ToolCallLimit);
         Active ??= Calls.FirstOrDefault();
         NotifyStateChanged();
     }
@@ -33,44 +33,30 @@ public sealed class InspectorViewModel : PageViewModel, IDisposable
 
     public void StartPolling()
     {
-        _ui.Set(PageConstants.Title, PageConstants.Subtitle);
+        _ui.Set(InspectorPageConstants.Title, InspectorPageConstants.Subtitle);
         _poll = new Timer(
             _ => _ = LoadAsync(),
             null,
-            PageConstants.PollInterval,
-            PageConstants.PollInterval
+            InspectorPageConstants.PollInterval,
+            InspectorPageConstants.PollInterval
         );
     }
 
     public static string StatusColor(string status) =>
         status switch
         {
-            Statuses.Ok => "var(--good)",
-            Statuses.Warn => "var(--warn)",
+            InspectorStatuses.Ok => "var(--good)",
+            InspectorStatuses.Warn => "var(--warn)",
             _ => "var(--bad)",
         };
 
     public static string StatusBackground(string status) =>
         status switch
         {
-            Statuses.Ok => "var(--good-bg)",
-            Statuses.Warn => "var(--warn-bg)",
+            InspectorStatuses.Ok => "var(--good-bg)",
+            InspectorStatuses.Warn => "var(--warn-bg)",
             _ => "var(--bad-bg)",
         };
-
-    private static class Statuses
-    {
-        public const string Ok = "Ok";
-        public const string Warn = "Warn";
-    }
-
-    private static class PageConstants
-    {
-        public const string Title = "MCP Inspector";
-        public const string Subtitle = "live tool traffic · MCP via Streamable HTTP";
-        public const int ToolCallLimit = 20;
-        public static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(3);
-    }
 
     public void Dispose() => _poll?.Dispose();
 }

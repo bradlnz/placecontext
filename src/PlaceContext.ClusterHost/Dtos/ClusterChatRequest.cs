@@ -9,14 +9,3 @@ public sealed class ClusterChatRequest
     [JsonPropertyName("top_p")] public float? TopP { get; set; }
     [JsonPropertyName("max_tokens")] public int? MaxTokens { get; set; }
 }
-
-public sealed class ClusterMessageDto
-{
-    [JsonPropertyName("role")] public string Role { get; set; } = "";
-    [JsonPropertyName("content")] public string Content { get; set; } = "";
-}
-
-public sealed class ClusterEmbedRequest
-{
-    [JsonPropertyName("input")] public List<string> Input { get; set; } = new();
-}

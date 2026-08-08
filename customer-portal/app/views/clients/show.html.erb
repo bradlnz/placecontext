@@ -3,11 +3,12 @@
 <div class="page-header">
   <div>
     <div class="breadcrumbs">
-      <%= link_to "Dashboard", root_path %> ·
-      <%= link_to "Clients", clients_path(project_id: @project_id) %> ·
+      <%= link_to "Clients", clients_path(project_id: @project_id) %> <span>›</span>
       <%= @client["name"] %>
     </div>
-    <h1><%= @client["name"] %></h1>
+    <span class="eyebrow">Customer profile</span>
+    <h1 class="profile-heading"><%= @client["name"] %></h1>
+    <p class="profile-subheading"><%= @client["company"].presence || "Individual customer" %></p>
   </div>
   <div class="btn-toolbar">
     <% if current_portal_user&.can_manage_client_access? %>
@@ -17,7 +18,13 @@
   </div>
 </div>
 
-<div class="card">
+<div class="profile-layout">
+<div class="card profile-card">
+  <div class="profile-identity">
+    <div class="profile-avatar"><%= @client["name"].to_s.first.upcase %></div>
+    <div><strong><%= @client["name"] %></strong><span><%= @client["email"].presence || "No email added" %></span></div>
+    <%= status_badge(@client["lifecycle_stage"]) %>
+  </div>
   <div class="profile-grid">
     <div>
       <div class="profile-label">Company</div>
@@ -35,9 +42,16 @@
       <div class="profile-label">Phone</div>
       <div class="profile-value"><%= @client["phone"].presence || "—" %></div>
     </div>
-    <div class="full-width" style="grid-column: 1 / -1;">
+    <div class="full-width profile-notes">
       <div class="profile-label">Notes</div>
       <div class="profile-value"><%= simple_format(@client["notes"].presence || "—") %></div>
     </div>
   </div>
+</div>
+<aside class="card profile-actions-card">
+  <span class="eyebrow">Quick links</span>
+  <h2>Customer workspace</h2>
+  <%= link_to automations_path(project_id: @project_id), class: "profile-action-link" do %><span class="stat-icon-purple"><%= icon :automations %></span><div><strong>Automations</strong><small>View assigned workflows</small></div><b>→</b><% end %>
+  <%= link_to artifacts_path(project_id: @project_id), class: "profile-action-link" do %><span class="stat-icon-green"><%= icon :artifacts %></span><div><strong>Artifacts</strong><small>Open customer deliverables</small></div><b>→</b><% end %>
+</aside>
 </div>

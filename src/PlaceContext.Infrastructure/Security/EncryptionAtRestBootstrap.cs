@@ -42,7 +42,6 @@ public static class EncryptionAtRestBootstrap
         n += await EncryptToolCallsAsync(db, enc, ct);
         n += await EncryptPendingRunsAsync(db, enc, ct);
         n += await EncryptChainRunsAsync(db, enc, crmOnly: false, ct);
-        n += await EncryptVaultIfLegacyAsync(db, enc, ct);
         n += await EncryptCrmClientsAsync(db, enc, ct);
         n += await EncryptCrmCommunicationsAsync(db, enc, ct);
         n += await EncryptCrmArtifactMetadataAsync(db, enc, ct);
@@ -100,11 +99,11 @@ public static class EncryptionAtRestBootstrap
 
             foreach (var row in rows)
             {
-                if (NeedsProtect(enc, row.Name)) { row.Name = enc.Protect(row.Name, IDataEncryptor.Purpose.CrmClient); n++; }
-                if (NeedsProtect(enc, row.Company)) { row.Company = enc.Protect(row.Company, IDataEncryptor.Purpose.CrmClient); n++; }
-                if (NeedsProtect(enc, row.Email)) { row.Email = enc.Protect(row.Email, IDataEncryptor.Purpose.CrmClient); n++; }
-                if (NeedsProtect(enc, row.Phone)) { row.Phone = enc.Protect(row.Phone, IDataEncryptor.Purpose.CrmClient); n++; }
-                if (NeedsProtect(enc, row.Notes)) { row.Notes = enc.Protect(row.Notes, IDataEncryptor.Purpose.CrmClient); n++; }
+                if (NeedsProtect(enc, row.Name)) { row.Name = enc.Protect(row.Name, DataEncryptionPurpose.CrmClient); n++; }
+                if (NeedsProtect(enc, row.Company)) { row.Company = enc.Protect(row.Company, DataEncryptionPurpose.CrmClient); n++; }
+                if (NeedsProtect(enc, row.Email)) { row.Email = enc.Protect(row.Email, DataEncryptionPurpose.CrmClient); n++; }
+                if (NeedsProtect(enc, row.Phone)) { row.Phone = enc.Protect(row.Phone, DataEncryptionPurpose.CrmClient); n++; }
+                if (NeedsProtect(enc, row.Notes)) { row.Notes = enc.Protect(row.Notes, DataEncryptionPurpose.CrmClient); n++; }
             }
             await db.SaveChangesAsync(ct);
             db.ChangeTracker.Clear();
@@ -115,7 +114,7 @@ public static class EncryptionAtRestBootstrap
     private static async Task<int> EncryptCrmCommunicationsAsync(
         AppDbContext db, IDataEncryptor enc, CancellationToken ct)
     {
-        var p = IDataEncryptor.Purpose.CrmCommunication;
+        var p = DataEncryptionPurpose.CrmCommunication;
         var n = 0;
         while (true)
         {
@@ -146,7 +145,7 @@ public static class EncryptionAtRestBootstrap
     private static async Task<int> EncryptCrmArtifactMetadataAsync(
         AppDbContext db, IDataEncryptor enc, CancellationToken ct)
     {
-        var p = IDataEncryptor.Purpose.CrmArtifactMetadata;
+        var p = DataEncryptionPurpose.CrmArtifactMetadata;
         var n = 0;
         while (true)
         {
@@ -171,7 +170,7 @@ public static class EncryptionAtRestBootstrap
     private static async Task<int> EncryptCrmAutomationErrorsAsync(
         AppDbContext db, IDataEncryptor enc, CancellationToken ct)
     {
-        var p = IDataEncryptor.Purpose.CrmAutomation;
+        var p = DataEncryptionPurpose.CrmAutomation;
         var n = 0;
         while (true)
         {
@@ -197,7 +196,7 @@ public static class EncryptionAtRestBootstrap
     private static async Task<int> EncryptChainRunsAsync(
         AppDbContext db, IDataEncryptor enc, bool crmOnly, CancellationToken ct)
     {
-        var p = IDataEncryptor.Purpose.ChainRun;
+        var p = DataEncryptionPurpose.ChainRun;
         var n = 0;
         while (true)
         {
@@ -226,7 +225,7 @@ public static class EncryptionAtRestBootstrap
 
     private static async Task<int> EncryptJobColumnsAsync(AppDbContext db, IDataEncryptor enc, CancellationToken ct)
     {
-        var p = IDataEncryptor.Purpose.JobSource;
+        var p = DataEncryptionPurpose.JobSource;
         var rows = await db.Jobs.IgnoreQueryFilters().ToListAsync(ct);
         var n = 0;
         foreach (var r in rows)
@@ -245,7 +244,7 @@ public static class EncryptionAtRestBootstrap
 
     private static async Task<int> EncryptJobRunColumnsAsync(AppDbContext db, IDataEncryptor enc, CancellationToken ct)
     {
-        var p = IDataEncryptor.Purpose.JobRun;
+        var p = DataEncryptionPurpose.JobRun;
         var rows = await db.JobRuns.IgnoreQueryFilters().ToListAsync(ct);
         var n = 0;
         foreach (var r in rows)
@@ -260,7 +259,7 @@ public static class EncryptionAtRestBootstrap
 
     private static async Task<int> EncryptRequirementsAsync(AppDbContext db, IDataEncryptor enc, CancellationToken ct)
     {
-        var p = IDataEncryptor.Purpose.Requirements;
+        var p = DataEncryptionPurpose.Requirements;
         var rows = await db.Requirements.IgnoreQueryFilters().ToListAsync(ct);
         var n = 0;
         foreach (var r in rows)
@@ -273,7 +272,7 @@ public static class EncryptionAtRestBootstrap
 
     private static async Task<int> EncryptEventPayloadsAsync(AppDbContext db, IDataEncryptor enc, CancellationToken ct)
     {
-        var p = IDataEncryptor.Purpose.EventPayload;
+        var p = DataEncryptionPurpose.EventPayload;
         var rows = await db.EventOccurrences.IgnoreQueryFilters().ToListAsync(ct);
         var n = 0;
         foreach (var r in rows)
@@ -286,7 +285,7 @@ public static class EncryptionAtRestBootstrap
 
     private static async Task<int> EncryptDecisionsAsync(AppDbContext db, IDataEncryptor enc, CancellationToken ct)
     {
-        var p = IDataEncryptor.Purpose.Decision;
+        var p = DataEncryptionPurpose.Decision;
         var rows = await db.Decisions.IgnoreQueryFilters().ToListAsync(ct);
         var n = 0;
         foreach (var r in rows)
@@ -301,7 +300,7 @@ public static class EncryptionAtRestBootstrap
 
     private static async Task<int> EncryptActivityAsync(AppDbContext db, IDataEncryptor enc, CancellationToken ct)
     {
-        var p = IDataEncryptor.Purpose.Activity;
+        var p = DataEncryptionPurpose.Activity;
         var rows = await db.ActivityRecords.IgnoreQueryFilters().ToListAsync(ct);
         var n = 0;
         foreach (var r in rows)
@@ -315,7 +314,7 @@ public static class EncryptionAtRestBootstrap
 
     private static async Task<int> EncryptChartsAsync(AppDbContext db, IDataEncryptor enc, CancellationToken ct)
     {
-        var p = IDataEncryptor.Purpose.Chart;
+        var p = DataEncryptionPurpose.Chart;
         var rows = await db.ProjectCharts.IgnoreQueryFilters().ToListAsync(ct);
         var n = 0;
         foreach (var r in rows)
@@ -328,7 +327,7 @@ public static class EncryptionAtRestBootstrap
 
     private static async Task<int> EncryptToolCallsAsync(AppDbContext db, IDataEncryptor enc, CancellationToken ct)
     {
-        var p = IDataEncryptor.Purpose.ToolCall;
+        var p = DataEncryptionPurpose.ToolCall;
         var rows = await db.ToolCalls.IgnoreQueryFilters().ToListAsync(ct);
         var n = 0;
         foreach (var r in rows)
@@ -343,31 +342,12 @@ public static class EncryptionAtRestBootstrap
 
     private static async Task<int> EncryptPendingRunsAsync(AppDbContext db, IDataEncryptor enc, CancellationToken ct)
     {
-        var p = IDataEncryptor.Purpose.PendingRun;
+        var p = DataEncryptionPurpose.PendingRun;
         var rows = await db.PendingRuns.ToListAsync(ct);
         var n = 0;
         foreach (var r in rows)
         {
             if (NeedsProtect(enc, r.Payload)) { r.Payload = enc.Protect(r.Payload, p); n++; }
-        }
-        if (n > 0) await db.SaveChangesAsync(ct);
-        return n;
-    }
-
-    private static async Task<int> EncryptVaultIfLegacyAsync(AppDbContext db, IDataEncryptor enc, CancellationToken ct)
-    {
-        var p = IDataEncryptor.Purpose.Vault;
-        var rows = await db.JobSecrets.IgnoreQueryFilters().ToListAsync(ct);
-        var n = 0;
-        foreach (var r in rows)
-        {
-            // Leave legacy DP payloads (no pcenc1.) alone — vault historically used DP without our
-            // prefix. Only wrap values that look like accidental plaintext.
-            if (NeedsProtect(enc, r.Cipher) && LooksLikeAccidentalPlaintext(r.Cipher))
-            {
-                r.Cipher = enc.Protect(r.Cipher, p);
-                n++;
-            }
         }
         if (n > 0) await db.SaveChangesAsync(ct);
         return n;
@@ -391,7 +371,7 @@ public static class EncryptionAtRestBootstrap
     {
         var cs = config.GetSection("PlaceContext")["ConnectionString"]
             ?? new PlaceContextOptions().ConnectionString;
-        var purpose = IDataEncryptor.Purpose.ProjectData;
+        var purpose = DataEncryptionPurpose.ProjectData;
         var n = 0;
 
         await using var conn = new NpgsqlConnection(cs);

@@ -1,8 +1,22 @@
 document.querySelectorAll("[data-copy]").forEach((button) => {
   button.addEventListener("click", async () => {
-    await navigator.clipboard.writeText(button.dataset.copy);
     const original = button.textContent;
-    button.textContent = "Copied";
+    try {
+      await navigator.clipboard.writeText(button.dataset.copy);
+      button.textContent = "Copied";
+    } catch {
+      button.textContent = "Select command";
+      const code = button.closest(".install-card")?.querySelector("code");
+      if (code) {
+        const range = document.createRange();
+        range.selectNodeContents(code);
+        const selection = window.getSelection();
+        if (selection) {
+          selection.removeAllRanges();
+          selection.addRange(range);
+        }
+      }
+    }
     setTimeout(() => { button.textContent = original; }, 1600);
   });
 });
@@ -45,7 +59,17 @@ document.querySelectorAll("[data-copy]").forEach((button) => {
     }, INTERVAL_MS);
   };
 
-  tabs.forEach((tab) => tab.addEventListener("click", () => activate(tab.dataset.view)));
+  tabs.forEach((tab, index) => {
+    tab.addEventListener("click", () => activate(tab.dataset.view));
+    tab.addEventListener("keydown", (event) => {
+      if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+      event.preventDefault();
+      const direction = event.key === "ArrowRight" ? 1 : -1;
+      const next = tabs[(index + direction + tabs.length) % tabs.length];
+      activate(next.dataset.view);
+      next.focus();
+    });
+  });
   showcase.addEventListener("mouseenter", stop);
   showcase.addEventListener("mouseleave", start);
   showcase.addEventListener("focusin", stop);
@@ -53,5 +77,6 @@ document.querySelectorAll("[data-copy]").forEach((button) => {
   if (reducedMotion.addEventListener) {
     reducedMotion.addEventListener("change", () => (reducedMotion.matches ? stop() : start()));
   }
+  document.addEventListener("visibilitychange", () => (document.hidden ? stop() : start()));
   start();
 })();

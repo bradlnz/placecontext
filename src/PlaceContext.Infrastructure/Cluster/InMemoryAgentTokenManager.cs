@@ -59,14 +59,4 @@ public sealed class InMemoryAgentTokenManager : IAgentTokenManager
     private static string HashToken(string token) =>
         Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(token))).ToLowerInvariant();
 
-    private sealed class TokenEntry
-    {
-        public Guid Id { get; set; }
-        public Guid TenantId { get; set; }
-        public string TokenPrefix { get; set; } = "";
-        public string Hash { get; set; } = "";
-        public DateTimeOffset CreatedAt { get; set; }
-        public DateTimeOffset ExpiresAt { get; set; }
-        public DateTimeOffset? UsedAt { get; set; }
-    }
 }

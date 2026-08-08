@@ -9,7 +9,7 @@ namespace PlaceContext.Infrastructure.Embeddings;
 
 /// <summary>
 /// pgvector-backed universal content indexer. Source text is encrypted with
-/// <see cref="IDataEncryptor.Purpose.EmbeddingText"/>; vectors stay as float arrays for ANN search
+/// <see cref="DataEncryptionPurpose.EmbeddingText"/>; vectors stay as float arrays for ANN search
 /// (encrypting vectors would break cosine operators). Self-inits <c>content_embeddings</c> lazily.
 /// </summary>
 public sealed class ContentIndexer : IContentIndexer
@@ -23,7 +23,7 @@ public sealed class ContentIndexer : IContentIndexer
     private readonly IEmbeddingGateway _gateway;
     private readonly IDataEncryptor _enc;
     private readonly ILogger<ContentIndexer> _log;
-    private static string TextPurpose => IDataEncryptor.Purpose.EmbeddingText;
+    private static string TextPurpose => DataEncryptionPurpose.EmbeddingText;
 
     public ContentIndexer(
         AppDbContext db,

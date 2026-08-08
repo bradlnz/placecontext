@@ -64,5 +64,4 @@ public sealed class SettingsLayoutViewModel : PageViewModel
         NotifyStateChanged();
     }
 
-    public sealed record SettingsItem(string Label, string Path);
 }

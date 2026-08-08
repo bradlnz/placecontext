@@ -11,12 +11,12 @@ public class WorkloadSourceTests
 {
     private static readonly DateTimeOffset T0 = new(2026, 6, 25, 12, 0, 0, TimeSpan.Zero);
 
-    // ── WorkloadSource.ImageWorkload ────────────────────────────────────────────────────────────
+    // ── ImageWorkload ────────────────────────────────────────────────────────────
 
     [Fact]
     public void ImageWorkload_stores_image_name_trimmed()
     {
-        var ws = new WorkloadSource.ImageWorkload("  myorg/worker:latest  ");
+        var ws = new ImageWorkload("  myorg/worker:latest  ");
         Assert.Equal("myorg/worker:latest", ws.Image);
         Assert.Equal("myorg/worker:latest", ws.Label);
     }
@@ -24,16 +24,16 @@ public class WorkloadSourceTests
     [Fact]
     public void ImageWorkload_rejects_empty_image()
     {
-        Assert.Throws<ArgumentException>(() => new WorkloadSource.ImageWorkload(""));
-        Assert.Throws<ArgumentException>(() => new WorkloadSource.ImageWorkload("   "));
+        Assert.Throws<ArgumentException>(() => new ImageWorkload(""));
+        Assert.Throws<ArgumentException>(() => new ImageWorkload("   "));
     }
 
-    // ── WorkloadSource.CodeWorkload ─────────────────────────────────────────────────────────────
+    // ── CodeWorkload ─────────────────────────────────────────────────────────────
 
     [Fact]
     public void CodeWorkload_stores_all_fields()
     {
-        var ws = new WorkloadSource.CodeWorkload("node", "console.log('hello');", "index.js");
+        var ws = new CodeWorkload("node", "console.log('hello');", "index.js");
         Assert.Equal("node", ws.RuntimeId);
         Assert.Equal("console.log('hello');", ws.Source);
         Assert.Equal("index.js", ws.Entrypoint);
@@ -43,29 +43,29 @@ public class WorkloadSourceTests
     [Fact]
     public void CodeWorkload_null_entrypoint_stored_as_null()
     {
-        var ws = new WorkloadSource.CodeWorkload("python", "print('hi')", null);
+        var ws = new CodeWorkload("python", "print('hi')", null);
         Assert.Null(ws.Entrypoint);
     }
 
     [Fact]
     public void CodeWorkload_whitespace_entrypoint_normalised_to_null()
     {
-        var ws = new WorkloadSource.CodeWorkload("python", "print('hi')", "   ");
+        var ws = new CodeWorkload("python", "print('hi')", "   ");
         Assert.Null(ws.Entrypoint);
     }
 
     [Fact]
     public void CodeWorkload_rejects_empty_runtimeId()
     {
-        Assert.Throws<ArgumentException>(() => new WorkloadSource.CodeWorkload("", "print('hi')", null));
-        Assert.Throws<ArgumentException>(() => new WorkloadSource.CodeWorkload("  ", "print('hi')", null));
+        Assert.Throws<ArgumentException>(() => new CodeWorkload("", "print('hi')", null));
+        Assert.Throws<ArgumentException>(() => new CodeWorkload("  ", "print('hi')", null));
     }
 
     [Fact]
     public void CodeWorkload_rejects_empty_source()
     {
-        Assert.Throws<ArgumentException>(() => new WorkloadSource.CodeWorkload("python", "", null));
-        Assert.Throws<ArgumentException>(() => new WorkloadSource.CodeWorkload("python", "  ", null));
+        Assert.Throws<ArgumentException>(() => new CodeWorkload("python", "", null));
+        Assert.Throws<ArgumentException>(() => new CodeWorkload("python", "  ", null));
     }
 
     // ── MapSpec with WorkloadSource ──────────────────────────────────────────────────────────────
@@ -74,16 +74,16 @@ public class WorkloadSourceTests
     public void MapSpec_image_ctor_creates_ImageWorkload_source()
     {
         var spec = new MapSpec("myorg/img:1.0", new[] { "{}" }, new Dictionary<string, string>());
-        Assert.IsType<WorkloadSource.ImageWorkload>(spec.Source);
+        Assert.IsType<ImageWorkload>(spec.Source);
         Assert.Equal("myorg/img:1.0", spec.Image);
     }
 
     [Fact]
     public void MapSpec_with_CodeWorkload_source_image_property_is_null()
     {
-        var source = new WorkloadSource.CodeWorkload("node", "process.exit(0);", null);
+        var source = new CodeWorkload("node", "process.exit(0);", null);
         var spec = new MapSpec(source, new[] { "{}" }, new Dictionary<string, string>());
-        Assert.IsType<WorkloadSource.CodeWorkload>(spec.Source);
+        Assert.IsType<CodeWorkload>(spec.Source);
         Assert.Null(spec.Image);
     }
 
@@ -92,7 +92,7 @@ public class WorkloadSourceTests
     {
         // Invariant lives in Job.Create, but the spec accepts zero payloads.
         // (Job.Create is the gatekeeper — tested in JobRunTests.)
-        var source = new WorkloadSource.CodeWorkload("node", "x", null);
+        var source = new CodeWorkload("node", "x", null);
         var spec = new MapSpec(source, Array.Empty<string>(), new Dictionary<string, string>());
         Assert.Equal(0, spec.ShardCount);
     }
@@ -103,16 +103,16 @@ public class WorkloadSourceTests
     public void ReduceSpec_image_ctor_creates_ImageWorkload_source()
     {
         var spec = new ReduceSpec("reduce/img:latest", new Dictionary<string, string>());
-        Assert.IsType<WorkloadSource.ImageWorkload>(spec.Source);
+        Assert.IsType<ImageWorkload>(spec.Source);
         Assert.Equal("reduce/img:latest", spec.Image);
     }
 
     [Fact]
     public void ReduceSpec_with_CodeWorkload_source()
     {
-        var source = new WorkloadSource.CodeWorkload("python", "import json, sys; print('{}')", null);
+        var source = new CodeWorkload("python", "import json, sys; print('{}')", null);
         var spec = new ReduceSpec(source, new Dictionary<string, string>());
-        Assert.IsType<WorkloadSource.CodeWorkload>(spec.Source);
+        Assert.IsType<CodeWorkload>(spec.Source);
         Assert.Null(spec.Image);
     }
 
@@ -127,10 +127,10 @@ public class WorkloadSourceTests
 
         var snap = WorkloadSnapshot.From(mapSpec, reduceSpec, concurrencyLimit: 2);
 
-        Assert.IsType<WorkloadSource.ImageWorkload>(snap.MapSource);
+        Assert.IsType<ImageWorkload>(snap.MapSource);
         Assert.Equal(2, snap.InputPayloads.Count);
         Assert.Equal("V", snap.MapEnv["K"]);
-        Assert.IsType<WorkloadSource.ImageWorkload>(snap.ReduceSource);
+        Assert.IsType<ImageWorkload>(snap.ReduceSource);
         Assert.NotNull(snap.ReduceEnv);
         Assert.Equal(2, snap.ConcurrencyLimit);
     }
@@ -138,12 +138,12 @@ public class WorkloadSourceTests
     [Fact]
     public void WorkloadSnapshot_From_with_code_map_source()
     {
-        var codeSource = new WorkloadSource.CodeWorkload("node", "process.exit(0);", "index.js");
+        var codeSource = new CodeWorkload("node", "process.exit(0);", "index.js");
         var mapSpec = new MapSpec(codeSource, new[] { "{}" }, new Dictionary<string, string>());
 
         var snap = WorkloadSnapshot.From(mapSpec, null, concurrencyLimit: 1);
 
-        var code = Assert.IsType<WorkloadSource.CodeWorkload>(snap.MapSource);
+        var code = Assert.IsType<CodeWorkload>(snap.MapSource);
         Assert.Equal("node", code.RuntimeId);
         Assert.Null(snap.ReduceSource);
         Assert.Null(snap.ReduceEnv);
@@ -165,13 +165,13 @@ public class WorkloadSourceTests
         var job = Entities.Job.Create(Guid.NewGuid(), "Original", null, map1, null, 1, ExitCodePolicy.Default, T0);
         Assert.Equal("Original", job.Name);
 
-        var codeSource = new WorkloadSource.CodeWorkload("node", "process.exit(0);", null);
+        var codeSource = new CodeWorkload("node", "process.exit(0);", null);
         var map2 = new MapSpec(codeSource, new[] { "{}", "{}" }, new Dictionary<string, string>());
         job.Update("Renamed", "now a code job", map2, null, 2, ExitCodePolicy.Default, T0.AddMinutes(5));
 
         Assert.Equal("Renamed", job.Name);
         Assert.Equal("now a code job", job.Description);
-        Assert.IsType<WorkloadSource.CodeWorkload>(job.MapSpec.Source);
+        Assert.IsType<CodeWorkload>(job.MapSpec.Source);
         Assert.Equal(2, job.MapSpec.ShardCount);
         Assert.Equal(2, job.ConcurrencyLimit);
         Assert.Equal(T0.AddMinutes(5), job.UpdatedAt);
@@ -206,9 +206,9 @@ public class WorkloadSourceTests
         var run = Entities.JobRun.Start(jobId, projectId, T0, snap);
 
         Assert.NotNull(run.Snapshot);
-        Assert.IsType<WorkloadSource.ImageWorkload>(run.Snapshot.MapSource);
+        Assert.IsType<ImageWorkload>(run.Snapshot.MapSource);
         Assert.Equal("V", run.Snapshot.MapEnv["K"]);
-        Assert.Equal(1, run.Snapshot.InputPayloads.Count);
+        Assert.Single(run.Snapshot.InputPayloads);
     }
 
     [Fact]
@@ -229,6 +229,6 @@ public class WorkloadSourceTests
             null, T0.AddSeconds(5));
 
         // Snapshot unchanged after completion
-        Assert.IsType<WorkloadSource.ImageWorkload>(run.Snapshot.MapSource);
+        Assert.IsType<ImageWorkload>(run.Snapshot.MapSource);
     }
 }

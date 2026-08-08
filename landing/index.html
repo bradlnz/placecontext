@@ -3,19 +3,24 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Placecontext is an open-source, self-hosted platform for data, jobs, automation, artifacts, CRM, optional OpenSearch analytics, and on-prem AI workloads.">
-  <title>Placecontext — self-hosted data, jobs, AI, and automation</title>
+  <meta name="description" content="Placecontext is the open-source, self-hosted data platform for agentic workflows: durable project context, governed tools, jobs, artifacts, lineage, and observability.">
+  <meta name="theme-color" content="#111c2b">
+  <meta property="og:title" content="Placecontext — the data platform for agentic workflows">
+  <meta property="og:description" content="Give agents durable context, governed tools, and a traceable place to work.">
+  <meta property="og:type" content="website">
+  <title>Placecontext — the data platform for agentic workflows</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23111c2b'/%3E%3Cpath d='m8 10 5 6-5 6m9 0h7' fill='none' stroke='white' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <header class="site-header">
     <a class="brand" href="/" aria-label="Placecontext home"><span class="brand-mark">›_</span><span>placecontext</span></a>
     <nav aria-label="Primary navigation">
-      <a href="#fleet">Fleet</a>
-      <a href="#console">Console</a>
+      <a href="#console">Product</a>
+      <a href="#fleet">How it works</a>
       <a href="#platform">Platform</a>
-      <a href="#self-hosted">Self-hosted</a>
-      <a href="https://github.com/bradlnz/placecontext">Source</a>
+      <a href="#self-hosted">Why self-host</a>
+      <a href="https://github.com/bradlnz/placecontext">GitHub</a>
       <a class="nav-button" href="https://get.placecontext.ai/install.sh">Install</a>
     </nav>
   </header>
@@ -23,58 +28,67 @@
   <main>
     <section class="hero hero-split">
       <div class="hero-copy-block">
-        <div class="eyebrow"><span></span> Open source · self-hosted · yours</div>
-        <h1>Run data, jobs, and AI on infrastructure you own.</h1>
-        <p class="hero-copy">Placecontext brings operational data, code-first automation, artifacts, CRM, and optional OpenSearch into one workspace — then schedules work across the Macs and on-prem machines you already own.</p>
+        <div class="eyebrow"><span></span> The self-hosted data platform</div>
+        <h1>Built for data.<br><span class="headline-accent">Ready for agents.</span></h1>
+        <p class="hero-copy">Unify operational data, jobs, artifacts, and governance in one project-scoped workspace. Agents get durable context and useful tools — through the same permission model as your team.</p>
         <div class="hero-actions">
           <a class="button primary" href="https://get.placecontext.ai/install.sh">Install Placecontext <span>↗</span></a>
-          <a class="button secondary" href="#console">See the console</a>
+          <a class="button secondary" href="#fleet">See how it works <span>↓</span></a>
         </div>
         <div class="install-card" id="quick-start">
           <div><span class="terminal-dot"></span><span class="terminal-dot"></span><span class="terminal-dot"></span></div>
           <code><span class="prompt">$</span> curl -fsSL https://get.placecontext.ai/install.sh | bash</code>
           <button class="copy" type="button" data-copy="curl -fsSL https://get.placecontext.ai/install.sh | bash">Copy</button>
         </div>
-        <div class="capability-cloud" aria-label="Platform capabilities">
-          <span class="active">Jobs</span><span>Data</span><span>Artifacts</span><span>OpenSearch optional</span><span>Local AI</span><span>3D rendering</span><span>Agents · MCP</span>
+        <div class="hero-assurances" aria-label="Platform assurances">
+          <span>Project-scoped</span><span>OAuth + PKCE</span><span>MIT licensed</span>
         </div>
       </div>
-      <div class="hero-visual" aria-label="Placecontext jobs console preview">
+      <div class="hero-visual" aria-label="Placecontext agent workflow preview">
+        <div class="visual-note visual-note-top"><i></i><span><strong>Agent connected</strong>OAuth · project scoped</span></div>
         <div class="app-window hero-app">
-          <div class="app-chrome"><span class="chrome-dot"></span><span class="chrome-dot"></span><span class="chrome-dot"></span><strong>Jobs</strong><span class="app-running"><i></i>2 running</span></div>
+          <div class="app-chrome"><span class="chrome-dot"></span><span class="chrome-dot"></span><span class="chrome-dot"></span><strong>Agent workflow</strong><span class="app-running"><i></i>Live</span></div>
           <div class="app-page">
-            <div class="app-page-head"><div><h3>Jobs</h3><p>Reusable workloads, schedules, and event triggers.</p></div><span class="app-button primary">New job</span></div>
-            <div class="app-summary"><div><strong>12</strong><span>jobs</span></div><div><strong>92</strong><span>shards</span></div><div><strong>9</strong><span>automated</span></div><div><strong>11</strong><span>triggers</span></div></div>
+            <div class="app-page-head"><div><h3>Development assessment</h3><p>Agent run · Ossen planning · project context enabled</p></div><span class="app-button primary">Open run</span></div>
+            <div class="app-summary"><div><strong>24</strong><span>data tables</span></div><div><strong>128</strong><span>entities</span></div><div><strong>7</strong><span>tool calls</span></div><div><strong>3</strong><span>artifacts</span></div></div>
             <div class="app-card job-catalogue">
-              <header><span>⌄</span><strong>Job catalogue</strong><small>12 reusable workloads</small></header>
-              <article class="job-row is-running"><span class="job-icon spinner"></span><div><div class="job-title"><strong>Blender scene render</strong><span>python code</span><span class="good-chip">2 triggers</span></div><p>Render frames and publish a 4K preview artifact.</p><small>12 shards · concurrency 6 · updated Aug 4</small></div><div class="job-actions">▶ ✎ &lt;/&gt; ⋯</div></article>
-              <article class="job-row"><span class="job-icon">⌁</span><div><div class="job-title"><strong>Shopify order sync</strong><span>node code</span><span>json output</span></div><p>Import orders and map them into project tables.</p><small>4 shards · cron 15 * * * * · updated Aug 3</small></div><div class="job-actions">▶ ✎ &lt;/&gt; ⋯</div></article>
-              <article class="job-row"><span class="job-icon">□</span><div><div class="job-title"><strong>OpenSearch indexer</strong><span>container</span><span class="good-chip">automated</span></div><p>Refresh optional search indexes after pipeline runs.</p><small>1 shard · event job.completed · updated Aug 1</small></div><div class="job-actions">▶ ✎ &lt;/&gt; ⋯</div></article>
+              <header><span>⌄</span><strong>Workflow trace</strong><small>durable context · 2m 41s</small></header>
+              <article class="job-row"><span class="job-icon">✓</span><div><div class="job-title"><strong>Retrieve project context</strong><span>RAG</span><span class="good-chip">governed</span></div><p>Found relevant site records, decisions, and prior run outputs.</p><small>18 context chunks · tenant boundary enforced</small></div><div class="job-actions">▶ ✎ &lt;/&gt; ⋯</div></article>
+              <article class="job-row"><span class="job-icon">✓</span><div><div class="job-title"><strong>Query planning data</strong><span>SQL</span><span>tool call</span></div><p>Joined parcels, overlays, and assessment rules through MCP.</p><small>2 tables · 84 rows · 31 ms</small></div><div class="job-actions">▶ ✎ &lt;/&gt; ⋯</div></article>
+              <article class="job-row is-running"><span class="job-icon spinner"></span><div><div class="job-title"><strong>Build assessment</strong><span>job chain</span><span class="good-chip">traceable</span></div><p>Generate the report and preserve structured outputs as artifacts.</p><small>3 of 4 stages · lineage and logs recording</small></div><div class="job-actions">▶ ✎ &lt;/&gt; ⋯</div></article>
             </div>
           </div>
         </div>
+        <div class="visual-note visual-note-bottom"><span class="visual-note-icon">✓</span><span><strong>Context retained</strong>data · trace · artifacts</span></div>
       </div>
+    </section>
+
+    <section class="proof-strip" aria-label="Placecontext platform highlights">
+      <div><span class="proof-icon">◇</span><p><strong>Durable context</strong><small>Data survives beyond one conversation</small></p></div>
+      <div><span class="proof-icon">⌘</span><p><strong>Governed tools</strong><small>One permission model for people and agents</small></p></div>
+      <div><span class="proof-icon">↗</span><p><strong>Useful outputs</strong><small>Queryable data and versioned artifacts</small></p></div>
+      <div><span class="proof-icon">◉</span><p><strong>Traceable work</strong><small>Lineage, tool calls, logs, and runs</small></p></div>
     </section>
 
     <section class="split-section fleet-section" id="fleet">
       <div>
-        <span class="eyebrow">On-prem workloads</span>
-        <h2>Build a render farm and local AI cluster from idle machines.</h2>
-        <p>Join a Mac, Linux workstation, or office server with one command. Place render, media, data-pipeline, and custom automation jobs on worker nodes, or split a local model into pipeline-parallel shards across multiple computers so prompts and inference stay on your network.</p>
-        <div class="workload-tags" aria-label="Example workloads"><span>3D rendering</span><span>Video processing</span><span>Local LLMs</span><span>Data pipelines</span></div>
+        <span class="eyebrow">A workspace agents can use</span>
+        <h2>Context in. Accountable work out.</h2>
+        <p>Placecontext connects the entire agentic loop: source data, project knowledge, governed actions, containerised jobs, and durable results. Agents can reason over the same operational picture your team sees — and every meaningful output stays in the platform.</p>
+        <div class="workload-tags" aria-label="Agent workflow capabilities"><span>Project data</span><span>Entity context</span><span>Jobs + pipelines</span><span>Artifacts</span><span>MCP</span></div>
       </div>
-      <div class="fleet-card" aria-label="Connect render and AI workers">
-        <div class="fleet-step"><span>01</span><div><strong>Launch agent</strong><p>Generate a short-lived PC2 join code from the Cluster page.</p></div></div>
-        <div class="fleet-step"><span>02</span><div><strong>Connect your computers</strong><code><span class="prompt">$</span> curl -fsSL https://get.placecontext.ai/install.sh | bash<br><span class="prompt">$</span> placecontext connect --code PC2.…</code></div></div>
-        <div class="fleet-step"><span>03</span><div><strong>Run heavy workloads</strong><p>Schedule renders, data pipelines, or any automation as Kubernetes jobs across your connected machines.</p></div></div>
+      <div class="fleet-card" aria-label="Agentic data workflow">
+        <div class="fleet-step"><span>01</span><div><strong>Ingest and model</strong><p>Build project-scoped tables and entities. Import operational data, code history, records, and prior outcomes.</p></div></div>
+        <div class="fleet-step"><span>02</span><div><strong>Query and act</strong><p>Agents use OAuth-secured MCP tools to inspect context, submit jobs and pipelines, and record decisions.</p></div></div>
+        <div class="fleet-step"><span>03</span><div><strong>Retain and observe</strong><p>Persist outputs as data and artifacts, then inspect lineage, tool calls, execution traces, and run history.</p></div></div>
       </div>
     </section>
 
     <section class="section showcase" id="console">
       <div class="section-intro showcase-intro">
-        <span class="eyebrow">Product console</span>
-        <h2>The actual workspace, rendered live.</h2>
-        <p>Jobs, data, artifacts, optional OpenSearch, and cluster capacity share one authenticated console — designed for operators and agents alike.</p>
+        <span class="eyebrow">The product, not a concept</span>
+        <h2>One workspace. Shared context.</h2>
+        <p>People and agents work across the same project data, workloads, artifacts, search, and permissions — without stitching together another pile of point tools.</p>
       </div>
 
       <div class="console-picker" role="tablist" aria-label="Console views">
@@ -224,25 +238,29 @@ LIMIT 5;</pre>
     </section>
 
     <section class="section" id="platform">
-      <div class="section-intro"><span class="eyebrow">One durable workspace</span><h2>The platform around your compute.</h2><p>Keep rendering, local AI, data pipelines, business data, optional search, and customer operations connected instead of scattered across disconnected tools.</p></div>
+      <div class="section-intro platform-intro"><span class="eyebrow">One durable workspace</span><h2>From raw input to useful outcome.</h2><p>Keep data, workloads, outputs, search, and customer operations connected instead of scattering context across disconnected tools.</p></div>
       <div class="feature-grid">
-        <article><span class="feature-number">01</span><h3>Data section</h3><p>Create tables, import CSV files, write SQL views, map job outputs into queryable data, and model entities with records, graphs, and analytics.</p></article>
-        <article><span class="feature-number">02</span><h3>Artifacts view</h3><p>Search and filter outputs across projects, inspect versions, preview JSON, CSV, PDF, image, video, and HTML files, and share expiring links.</p></article>
-        <article><span class="feature-number">03</span><h3>Job code editor</h3><p>Supported runtimes: Node.js, Python, Go, Ruby, and C#. Write multi-file jobs, test and deploy them, then chain them into a data pipeline or any automation.</p></article>
-        <article><span class="feature-number">04</span><h3>Optional OpenSearch</h3><p>Connect OpenSearch only when you need it: search indexes through the authenticated server proxy, explore fields, turn aggregations into charts, and save reusable dashboards.</p></article>
-        <article><span class="feature-number">05</span><h3>CRM and automation</h3><p>Move customers from lead to retention with calendars, appointments, notes, messages, and automations that file outputs against their records.</p></article>
-        <article><span class="feature-number">06</span><h3>Agents and MCP</h3><p>Give automation and AI clients governed access to the same data and operations as your team.</p></article>
-        <article><span class="feature-number">07</span><h3>Local AI shards</h3><p>Split supported local models across multiple computers for private inference without sending prompts outside your network.</p></article>
+        <article class="feature-wide feature-data"><span class="feature-number">01 / DATA</span><h3>Give every workflow a source of truth.</h3><p>Create tables, import CSV files, write SQL views, map job outputs into queryable data, and model entities with records, graphs, and analytics.</p><div class="mini-data"><span>customers</span><span>orders</span><span>render_jobs</span><i>SELECT *</i></div></article>
+        <article><span class="feature-number">02 / WORKLOADS</span><h3>Write it once. Run it anywhere.</h3><p>Build multi-file jobs in Node.js, Python, Go, Ruby, or C#. Test, deploy, schedule, trigger, and chain them.</p></article>
+        <article><span class="feature-number">03 / ARTIFACTS</span><h3>Keep the output, not just the logs.</h3><p>Version, preview, search, and share JSON, CSV, PDF, image, video, and HTML outputs across projects.</p></article>
+        <article><span class="feature-number">04 / SEARCH</span><h3>Add search when you need it.</h3><p>Connect optional OpenSearch through the authenticated proxy, explore fields, build charts, and save dashboards.</p></article>
+        <article><span class="feature-number">05 / OPERATIONS</span><h3>Close the loop with people.</h3><p>Connect CRM, calendars, appointments, notes, messages, and automations that file results against customer records.</p></article>
+        <article class="feature-wide feature-agents"><span class="feature-number">06 / INTELLIGENCE</span><h3>Let agents act with context — and boundaries.</h3><p>Give AI clients governed access through MCP, or split supported local models across your own computers for private inference.</p><div class="agent-flow"><span>Agent</span><i>→</i><span>MCP</span><i>→</i><span>Placecontext</span><i>→</i><span>Your data</span></div></article>
       </div>
     </section>
 
     <section class="split-section" id="self-hosted">
-      <div><span class="eyebrow">Your infrastructure</span><h2>Heavy compute without the cloud bill.</h2><p>Deploy the control plane on a local machine, private server, or cloud VM. Join Macs and on-prem Linux machines over Tailscale, then let worker nodes run renders, media jobs, automations, and sharded local models while source data and secrets stay in your environment.</p><a class="text-link" href="https://get.placecontext.ai/install.sh">Start with one command →</a></div>
-      <div class="principles"><div><strong>Own the boundary</strong><span>Run the control plane where your security model lives.</span></div><div><strong>Put hardware to work</strong><span>Turn idle Macs and workstations into render and AI capacity.</span></div><div><strong>Extend openly</strong><span>Use containers, APIs, MCP, and source code to fit your workflow.</span></div></div>
+      <div><span class="eyebrow">Your infrastructure</span><h2>Your data platform should belong to you.</h2><p>Deploy Placecontext on a local machine, private server, or cloud VM. Keep project data, agent context, secrets, models, and execution inside your environment, then add Macs and Linux workers when workflows need more compute.</p><a class="text-link" href="https://get.placecontext.ai/install.sh">Start with one command →</a></div>
+      <div class="principles"><div><strong>Own the boundary</strong><span>Run the control plane where your security model lives.</span></div><div><strong>Put hardware to work</strong><span>Turn idle Macs and workstations into data-processing and AI capacity.</span></div><div><strong>Extend openly</strong><span>Use containers, APIs, MCP, and source code to fit your workflow.</span></div></div>
+    </section>
+
+    <section class="final-cta">
+      <div><span class="eyebrow">Ready when you are</span><h2>Give agents a durable place to work.</h2><p>Start with the data platform. Connect agents, tools, and workers when you need them.</p></div>
+      <div class="final-cta-actions"><a class="button primary" href="https://get.placecontext.ai/install.sh">Install Placecontext <span>↗</span></a><a class="button cta-secondary" href="https://github.com/bradlnz/placecontext">View source</a></div>
     </section>
   </main>
 
-  <footer><a class="brand" href="/"><span class="brand-mark">›_</span><span>placecontext</span></a><span>Open source infrastructure for the work you own.</span><span>© 2026 Placecontext contributors</span></footer>
+  <footer><a class="brand" href="/"><span class="brand-mark">›_</span><span>placecontext</span></a><span class="footer-line">The self-hosted data platform for agentic workflows.</span><span><a href="https://github.com/bradlnz/placecontext">GitHub</a> · © 2026 Placecontext contributors</span></footer>
   <script src="script.js"></script>
 </body>
 </html>

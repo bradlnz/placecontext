@@ -37,15 +37,10 @@ public sealed class EventsViewModel : PageViewModel
     public string? EmitError { get; private set; }
     public int CustomTypeCount => Types?.Count(type => !type.IsBuiltIn) ?? 0;
     public int ActiveSubscriptionCount =>
-        Triggers?.Count(trigger => trigger.Enabled && trigger.Kind == TriggerKinds.Event) ?? 0;
+        Triggers?.Count(trigger => trigger.Enabled && trigger.Kind == EventTriggerKinds.Event) ?? 0;
     public int SubscribedTypeCount => Types?.Count(type => SubscriberCount(type.Name) > 0) ?? 0;
     public int SubscriptionPercent =>
         Types is not { Count: > 0 } ? 0 : (int)Math.Round(SubscribedTypeCount * 100d / Types.Count);
-
-    private static class TriggerKinds
-    {
-        public const string Event = "Event";
-    }
 
     public async Task LoadAsync(Guid projectId)
     {
@@ -86,25 +81,20 @@ public sealed class EventsViewModel : PageViewModel
             ? 0
             : Triggers?.Count(trigger =>
                 trigger.Enabled
-                && trigger.Kind == TriggerKinds.Event
+                && trigger.Kind == EventTriggerKinds.Event
                 && string.Equals(trigger.EventName, name, StringComparison.OrdinalIgnoreCase)
             )
                 ?? 0;
 
     public static string SourceClass(string source) =>
-        string.Equals(source, EventSources.Domain, StringComparison.OrdinalIgnoreCase)
+        string.Equals(source, EventSourceNames.Domain, StringComparison.OrdinalIgnoreCase)
             ? "domain"
             : "user";
 
     public static string SourceLabel(string source) =>
-        string.Equals(source, EventSources.Domain, StringComparison.OrdinalIgnoreCase)
+        string.Equals(source, EventSourceNames.Domain, StringComparison.OrdinalIgnoreCase)
             ? "system"
             : "manual";
-
-    private static class EventSources
-    {
-        public const string Domain = "Domain";
-    }
 
     public void BeginDefine()
     {

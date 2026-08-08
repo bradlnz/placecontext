@@ -32,9 +32,6 @@ public interface IPlaceContextService
     Task<RequirementsView> GetProjectRequirementsAsync(Guid projectId, CancellationToken ct = default);
     Task<RequirementsView> SetProjectRequirementsAsync(Guid projectId, string markdown, CancellationToken ct = default);
     Task<EffectiveRequirementsView> GetEffectiveRequirementsAsync(Guid projectId, CancellationToken ct = default);
-    Task<UsageEntryView> RecordUsageAsync(Guid projectId, string model, long inputTokens, long outputTokens, string? description, CancellationToken ct = default);
-    Task<CostDashboardView> GetCostDashboardAsync(Guid projectId, CancellationToken ct = default);
-    Task<RootCostView> GetRootCostAsync(CancellationToken ct = default);
     Task<SearchResultsView> SearchAsync(string term, CancellationToken ct = default);
     Task<SearchResultsView> SearchAsync(string term, Guid? projectId, CancellationToken ct = default);
     Task<SearchResultsView> SearchAsync(string term, Guid? projectId, int limit, CancellationToken ct = default);
@@ -125,6 +122,8 @@ public interface IPlaceContextService
     Task<CrmChainRunView> RunCrmClientAutomationAsync(
         Guid clientId,
         Guid chainId,
+        string? inputPayload = null,
+        IReadOnlyDictionary<int, string>? stepPayloadOverrides = null,
         CancellationToken ct = default);
     Task<IReadOnlyList<Guid>> ListCrmClientAssignedJobChainIdsAsync(
         Guid clientId,
@@ -226,7 +225,7 @@ public interface IPlaceContextService
     Task<int> DeleteEntityRecordAsync(Guid projectId, string tableName, IReadOnlyDictionary<string, string?> keys, CancellationToken ct = default);
 
     // Record-link index: value-based linking across project tables + duplicate warnings on row add.
-    Task<RecordLinkService.RescanResult> RescanRecordLinksAsync(Guid projectId, CancellationToken ct = default);
+    Task<RecordLinkRescanResult> RescanRecordLinksAsync(Guid projectId, CancellationToken ct = default);
     Task<IReadOnlyList<RecordLinkGroup>> ListRecordLinkGroupsAsync(Guid projectId, CancellationToken ct = default);
     Task<IReadOnlyList<RecordLink>> RelatedRecordLinksAsync(Guid projectId, string tableName, string rowKey, CancellationToken ct = default);
     Task<IReadOnlyList<RecordLink>> RelatedRecordLinksForRowAsync(Guid projectId, string tableName, IReadOnlyDictionary<string, string?> values, CancellationToken ct = default);

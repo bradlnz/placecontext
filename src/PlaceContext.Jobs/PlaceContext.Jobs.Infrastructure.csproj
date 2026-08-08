@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="Infrastructure/**/*.cs" Exclude="Infrastructure/**/bin/**/*.cs;Infrastructure/**/obj/**/*.cs" />
+    <EmbeddedResource Include="Infrastructure/Workload/Scripts/**/*" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="PlaceContext.Jobs.csproj" />
+    <ProjectReference Include="..\PlaceContext.Infrastructure\PlaceContext.Infrastructure.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Cronos" Version="0.10.0" />
+    <PackageReference Include="KubernetesClient" Version="19.0.2" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.9" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.9" />
+    <PackageReference Include="Microsoft.Extensions.Caching.StackExchangeRedis" Version="10.0.9" />
+  </ItemGroup>
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+</Project>

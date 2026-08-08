@@ -7,32 +7,51 @@
     <%= csrf_meta_tags %>
     <%= csp_meta_tag %>
     <%= stylesheet_link_tag "application", "data-turbo-track": "reload" %>
+    <%= stylesheet_link_tag "clickup", "data-turbo-track": "reload" %>
   </head>
   <body>
     <div class="app-shell">
+      <aside class="workspace-rail" aria-label="Workspace shortcuts">
+        <%= link_to portal_relative_path(root_path), class: "rail-brand", aria: { label: portal_brand_name } do %>
+          <% if portal_brand_logo_url %>
+            <img src="<%= portal_brand_logo_url %>" alt="" />
+          <% else %>
+            <span><%= portal_brand_name.first.upcase %></span>
+          <% end %>
+        <% end %>
+        <nav class="rail-nav">
+          <%= link_to portal_relative_path(root_path), class: "rail-link", aria: { label: "Home" }, title: "Home" do %><%= icon :dashboard %><% end %>
+          <%= link_to portal_relative_path(clients_path), class: "rail-link", aria: { label: "Clients" }, title: "Clients" do %><%= icon :clients %><% end %>
+          <%= link_to portal_relative_path(automations_path), class: "rail-link", aria: { label: "Automations" }, title: "Automations" do %><%= icon :automations %><% end %>
+          <%= link_to portal_relative_path(artifacts_path), class: "rail-link", aria: { label: "Artifacts" }, title: "Artifacts" do %><%= icon :artifacts %><% end %>
+        </nav>
+        <div class="rail-footer"><span><%= current_portal_user.email.first.upcase if current_portal_user %></span></div>
+      </aside>
+
       <aside class="sidebar" aria-label="Main navigation">
-        <div class="sidebar-brand">
-          <div class="brand-logo">
-            <% if portal_brand_logo_url %>
-              <img src="<%= portal_brand_logo_url %>" alt="<%= portal_brand_name %> logo" />
-            <% else %>
-              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M12 2L2 7L12 12L22 7L12 2Z" fill="currentColor"/><path d="M2 17L12 22L22 17" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 12L12 17L22 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            <% end %>
-          </div>
-          <span class="brand-name"><%= portal_brand_name %></span>
+        <div class="sidebar-heading">
+          <strong>Home</strong>
+          <span class="sidebar-add" aria-hidden="true">＋</span>
         </div>
 
         <div class="sidebar-tenant">
-          <span class="tenant-label">Workspace</span>
-          <span class="tenant-name"><%= portal_tenant_id %></span>
+          <div class="tenant-avatar"><%= portal_brand_name.first.upcase %></div>
+          <div class="tenant-copy">
+            <span class="tenant-label">Workspace</span>
+            <span class="tenant-name"><%= portal_brand_name %></span>
+          </div>
+          <span class="tenant-chevron" aria-hidden="true">⌄</span>
         </div>
 
         <nav class="sidebar-nav">
-          <%= nav_link_to "Dashboard", root_path, icon: :dashboard %>
+          <%= nav_link_to "Overview", root_path, icon: :dashboard %>
           <%= nav_link_to "Clients", clients_path, icon: :clients %>
           <%= nav_link_to "Leads", leads_path, icon: :leads %>
+          <span class="nav-section-label nav-section-label-spaced">Workspace</span>
           <%= nav_link_to "Automations", automations_path, icon: :automations %>
+          <%= nav_link_to "Artifacts", artifacts_path, icon: :artifacts %>
           <% if current_portal_user&.can_manage_portal_users? %>
+            <span class="nav-section-label nav-section-label-spaced">Manage</span>
             <%= nav_link_to "Portal logins", portal_users_path, icon: :users %>
           <% end %>
         </nav>
@@ -48,17 +67,14 @@
       <div class="app-body">
         <header class="topbar">
           <div class="topbar-section">
-            <h1 class="page-heading"><%= content_for?(:page_title) ? yield(:page_title) : "Dashboard" %></h1>
+            <div class="mobile-brand-mark"><%= portal_brand_name.first.upcase %></div>
+            <div>
+              <h1 class="page-heading"><%= content_for?(:page_title) ? yield(:page_title) : "Dashboard" %></h1>
+            </div>
           </div>
           <div class="topbar-section">
             <% if current_portal_user %>
-              <div class="user-menu">
-                <div class="user-avatar"><%= current_portal_user.email.first.upcase %></div>
-                <div class="user-info">
-                  <span class="user-email"><%= current_portal_user.email %></span>
-                  <span class="user-role"><%= current_portal_user.role.capitalize %></span>
-                </div>
-              </div>
+              <div class="topbar-user"><span class="connection-dot"></span><%= current_portal_user.email %></div>
             <% end %>
           </div>
         </header>
@@ -75,5 +91,12 @@
         </main>
       </div>
     </div>
+
+    <nav class="mobile-nav" aria-label="Mobile navigation">
+      <%= nav_link_to "Home", root_path, icon: :dashboard %>
+      <%= nav_link_to "Clients", clients_path, icon: :clients %>
+      <%= nav_link_to "Automations", automations_path, icon: :automations %>
+      <%= nav_link_to "Artifacts", artifacts_path, icon: :artifacts %>
+    </nav>
   </body>
 </html>

@@ -9,8 +9,8 @@ using PlaceContext.Application.Mcp;
 using PlaceContext.Application.Ports;
 using PlaceContext.Domain.Mcp;
 using PlaceContext.Domain.Repositories;
-using PlaceContext.Infrastructure.Caching;
-using PlaceContext.Infrastructure.Chat;
+using PlaceContext.AgentChat.Infrastructure.Caching;
+using PlaceContext.AgentChat.Infrastructure.Chat;
 
 namespace PlaceContext.Host.Components.ViewModels;
 

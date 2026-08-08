@@ -7,9 +7,6 @@ namespace PlaceContext.Host.Components.ViewModels;
 public sealed class ApiTokensSettingsViewModel(IUserApiTokenService tokens, PortalUiState ui, IJSRuntime js)
     : PageViewModel
 {
-    public sealed record ApiEndpoint(string Method, string Path, string Description);
-    public sealed record ApiEndpointExample(string Title, string Command);
-
     public const string DefaultLifetimeDays = "90";
     public IReadOnlyList<UserApiTokenView> Tokens { get; private set; } =
         Array.Empty<UserApiTokenView>();

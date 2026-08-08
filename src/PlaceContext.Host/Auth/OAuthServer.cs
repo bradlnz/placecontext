@@ -1,7 +1,6 @@
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
-using System.Text.Json.Serialization;
 using PlaceContext.Application.Ports;
 using PlaceContext.Host.Tenancy;
 using Microsoft.AspNetCore.Authentication;
@@ -265,7 +264,4 @@ public static class OAuthServer
         return new OAuthClient(configuredId, new[] { configuredRedirect }, configuredName ?? "Trusted Admin Portal");
     }
 
-    private sealed record RegisterRequest(
-        [property: JsonPropertyName("redirect_uris")] string[]? RedirectUris,
-        [property: JsonPropertyName("client_name")] string? ClientName);
 }

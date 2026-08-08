@@ -2,7 +2,7 @@
 @using PlaceContext.Host.Components.ViewModels.Crm
 @using PlaceContext.Application.Features
 @using PlaceContext.Domain.ValueObjects
-@using PlaceContext.Infrastructure.Crm
+@using PlaceContext.Crm.Infrastructure.Crm
 @page "/project/{ProjectId:guid}/crm"
 @attribute [Authorize(Policy = Permission.CrmView)]
 @layout PlaceContext.Host.Components.Layout.ProjectLayout

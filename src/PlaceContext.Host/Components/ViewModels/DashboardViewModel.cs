@@ -91,11 +91,6 @@ public sealed class DashboardViewModel : PageViewModel, IDisposable
 
     public string StartedLabel(DateTimeOffset value) => Presentation.TimeWithMonth(value);
 
-    public sealed record EntityChart(
-        string Column,
-        IReadOnlyList<(string Label, string Count, int Frac)> Bars
-    );
-
     public void Initialize()
     {
         _operations.Changed += OnOperationsChanged;

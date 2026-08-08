@@ -7,28 +7,6 @@ using PlaceContext.Application.Ports;
 
 namespace PlaceContext.Host.Components.ViewModels;
 
-public enum ParameterInputType
-{
-    Text,
-    Select,
-    Number,
-    Checkbox,
-    File,
-}
-
-public static class ParameterInputCatalog
-{
-    public static ParameterInputType Parse(string? value) =>
-        value?.ToLowerInvariant() switch
-        {
-            "select" => ParameterInputType.Select,
-            "number" => ParameterInputType.Number,
-            "checkbox" => ParameterInputType.Checkbox,
-            "file" => ParameterInputType.File,
-            _ => ParameterInputType.Text,
-        };
-}
-
 public sealed class ParamInputViewModel(
     IObjectStore objectStore,
     IHttpClientFactory httpClientFactory

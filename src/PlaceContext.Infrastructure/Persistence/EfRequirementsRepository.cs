@@ -13,7 +13,7 @@ public sealed class EfRequirementsRepository : IRequirementsRepository
 
     private readonly AppDbContext _db;
     private readonly IDataEncryptor _enc;
-    private static string P => IDataEncryptor.Purpose.Requirements;
+    private static string P => DataEncryptionPurpose.Requirements;
 
     public EfRequirementsRepository(AppDbContext db, IDataEncryptor enc) => (_db, _enc) = (db, enc);
 

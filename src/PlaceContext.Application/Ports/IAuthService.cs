@@ -94,25 +94,3 @@ public interface IAuthService
     /// <summary>Disables 2FA for the user after consuming a current emailed code (legacy opt-in flow).</summary>
     Task<bool> DisableTwoFactorAsync(Guid userId, string currentCode, CancellationToken ct = default);
 }
-
-/// <summary>A verification code dispatched to the user.</summary>
-public sealed record TwoFactorChallenge(
-    string Channel,
-    string MaskedDestination,
-    DateTimeOffset ExpiresAt);
-
-/// <summary>Delivery routing for the login verify page (see <see cref="IAuthService.GetTwoFactorDeliveryInfoAsync"/>).</summary>
-public sealed record TwoFactorDeliveryInfo(
-    string Channel,
-    string MaskedDestination,
-    bool RequiresPhoneEnrollment,
-    bool EmailAvailable,
-    bool SmsAvailable);
-
-/// <summary>Org-wide 2FA requirement plus the user's own delivery preferences.</summary>
-public sealed record TwoFactorSettingsInfo(
-    bool Required,
-    string PreferredChannel,
-    string? PhoneNumber,
-    bool EmailAvailable,
-    bool SmsAvailable);

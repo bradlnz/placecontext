@@ -1,7 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using PlaceContext.Application.Ports;
@@ -58,7 +57,7 @@ public sealed class McpOAuthController : ControllerBase
         if (string.IsNullOrEmpty(conn.EndpointUrl)) return BadRequest("Endpoint URL required.");
 
         // Discover the external server's OAuth metadata
-        OAuthMetadata? meta;
+        McpOAuthMetadata? meta;
         try
         {
             meta = await DiscoverMetadataAsync(conn.EndpointUrl, HttpContext.RequestAborted);
@@ -100,7 +99,7 @@ public sealed class McpOAuthController : ControllerBase
         var callbackUrl = Url.Action(nameof(Callback), "McpOAuth", null, Request.Scheme, Request.Host.Value)!;
 
         // Store state in a signed cookie
-        var statePayload = JsonSerializer.Serialize(new OAuthState
+        var statePayload = JsonSerializer.Serialize(new McpOAuthState
         {
             ConnectionId = connectionId,
             CodeVerifier = codeVerifier,
@@ -149,10 +148,10 @@ public sealed class McpOAuthController : ControllerBase
         if (!Request.Cookies.TryGetValue(StateCookie, out var stateJson) || string.IsNullOrEmpty(stateJson))
             return ReturnToOpener("OAuth session expired. Please try again.", false);
 
-        OAuthState? oauthState;
+        McpOAuthState? oauthState;
         try
         {
-            oauthState = JsonSerializer.Deserialize<OAuthState>(stateJson, Json);
+            oauthState = JsonSerializer.Deserialize<McpOAuthState>(stateJson, Json);
         }
         catch
         {
@@ -229,7 +228,7 @@ public sealed class McpOAuthController : ControllerBase
             return BadRequest("Refresh token is invalid. Please re-authenticate.");
 
         // Discover token endpoint
-        OAuthMetadata? meta;
+        McpOAuthMetadata? meta;
         try
         {
             meta = await DiscoverMetadataAsync(conn.EndpointUrl!, HttpContext.RequestAborted);
@@ -298,7 +297,7 @@ public sealed class McpOAuthController : ControllerBase
 
     // ── Private helpers ──────────────────────────────────────────────────────────────
 
-    private async Task<OAuthMetadata?> DiscoverMetadataAsync(string endpointUrl, CancellationToken ct)
+    private async Task<McpOAuthMetadata?> DiscoverMetadataAsync(string endpointUrl, CancellationToken ct)
     {
         // Strip trailing path to get the base URL
         var uri = new Uri(endpointUrl);
@@ -314,7 +313,7 @@ public sealed class McpOAuthController : ControllerBase
             if (resourceResp.IsSuccessStatusCode)
             {
                 var resourceJson = await resourceResp.Content.ReadAsStringAsync(ct);
-                var resource = JsonSerializer.Deserialize<ProtectedResourceMetadata>(resourceJson, Json);
+                var resource = JsonSerializer.Deserialize<McpProtectedResourceMetadata>(resourceJson, Json);
                 if (resource?.AuthorizationServers?.Length > 0)
                 {
                     var authServer = resource.AuthorizationServers[0];
@@ -322,7 +321,7 @@ public sealed class McpOAuthController : ControllerBase
                     if (metaResp.IsSuccessStatusCode)
                     {
                         var metaJson = await metaResp.Content.ReadAsStringAsync(ct);
-                        return JsonSerializer.Deserialize<OAuthMetadata>(metaJson, Json);
+                        return JsonSerializer.Deserialize<McpOAuthMetadata>(metaJson, Json);
                     }
                 }
             }
@@ -339,7 +338,7 @@ public sealed class McpOAuthController : ControllerBase
             if (metaResp.IsSuccessStatusCode)
             {
                 var metaJson = await metaResp.Content.ReadAsStringAsync(ct);
-                return JsonSerializer.Deserialize<OAuthMetadata>(metaJson, Json);
+                return JsonSerializer.Deserialize<McpOAuthMetadata>(metaJson, Json);
             }
         }
         catch { }
@@ -365,11 +364,11 @@ public sealed class McpOAuthController : ControllerBase
         resp.EnsureSuccessStatusCode();
 
         var json = await resp.Content.ReadAsStringAsync(ct);
-        var result = JsonSerializer.Deserialize<RegisterResponse>(json, Json);
+        var result = JsonSerializer.Deserialize<McpOAuthRegisterResponse>(json, Json);
         return result?.ClientId ?? throw new InvalidOperationException("No client_id in DCR response.");
     }
 
-    private async Task<TokenResponse> ExchangeCodeAsync(
+    private async Task<McpOAuthTokenResponse> ExchangeCodeAsync(
         string tokenEndpoint, string code, string redirectUri,
         string clientId, string codeVerifier, CancellationToken ct)
     {
@@ -390,11 +389,11 @@ public sealed class McpOAuthController : ControllerBase
         if (!resp.IsSuccessStatusCode)
             throw new InvalidOperationException($"Token endpoint returned {(int)resp.StatusCode}: {json}");
 
-        return JsonSerializer.Deserialize<TokenResponse>(json, Json)
+        return JsonSerializer.Deserialize<McpOAuthTokenResponse>(json, Json)
             ?? throw new InvalidOperationException("Invalid token response.");
     }
 
-    private async Task<TokenResponse> RefreshTokenAsync(
+    private async Task<McpOAuthTokenResponse> RefreshTokenAsync(
         string tokenEndpoint, string refreshToken, string clientId, CancellationToken ct)
     {
         var client = _http.CreateClient();
@@ -412,7 +411,7 @@ public sealed class McpOAuthController : ControllerBase
         if (!resp.IsSuccessStatusCode)
             throw new InvalidOperationException($"Token refresh failed ({(int)resp.StatusCode}): {json}");
 
-        return JsonSerializer.Deserialize<TokenResponse>(json, Json)
+        return JsonSerializer.Deserialize<McpOAuthTokenResponse>(json, Json)
             ?? throw new InvalidOperationException("Invalid token response.");
     }
 
@@ -441,49 +440,4 @@ window.close();
         return Content(html, "text/html");
     }
 
-    // ── Internal DTOs ──────────────────────────────────────────────────────────────
-
-    private sealed class OAuthState
-    {
-        public Guid ConnectionId { get; set; }
-        public string CodeVerifier { get; set; } = "";
-        public string ClientId { get; set; } = "";
-        public string TokenEndpoint { get; set; } = "";
-        public string CallbackUrl { get; set; } = "";
-        public string? State { get; set; }
-    }
-
-    private sealed class OAuthMetadata
-    {
-        [JsonPropertyName("authorization_endpoint")]
-        public string? AuthorizationEndpoint { get; set; }
-        [JsonPropertyName("token_endpoint")]
-        public string? TokenEndpoint { get; set; }
-        [JsonPropertyName("registration_endpoint")]
-        public string? RegistrationEndpoint { get; set; }
-    }
-
-    private sealed class ProtectedResourceMetadata
-    {
-        [JsonPropertyName("authorization_servers")]
-        public string[]? AuthorizationServers { get; set; }
-    }
-
-    private sealed class RegisterResponse
-    {
-        [JsonPropertyName("client_id")]
-        public string? ClientId { get; set; }
-    }
-
-    private sealed class TokenResponse
-    {
-        [JsonPropertyName("access_token")]
-        public string AccessToken { get; set; } = "";
-        [JsonPropertyName("refresh_token")]
-        public string? RefreshToken { get; set; }
-        [JsonPropertyName("expires_in")]
-        public long ExpiresIn { get; set; }
-        [JsonPropertyName("token_type")]
-        public string? TokenType { get; set; }
-    }
 }

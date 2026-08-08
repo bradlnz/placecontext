@@ -18,6 +18,8 @@ Rails.application.routes.draw do
   resources :automations, only: %i[index show]
   post "/automations/:id/run", to: "automations#run", as: :run_automation
   get "/automation_runs/:id", to: "automations#run_status", as: :automation_run
+  resources :artifacts, only: %i[index]
+  get "/artifacts/:id/open", to: "artifacts#open", as: :open_artifact
 
   get "/:slug", to: "dashboard#show"
 end

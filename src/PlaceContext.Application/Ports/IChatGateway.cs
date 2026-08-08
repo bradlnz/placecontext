@@ -13,12 +13,3 @@ public interface IChatGateway
     /// <summary>Sends the conversation to the model and returns the assistant's reply text.</summary>
     Task<string> ChatAsync(IReadOnlyList<ChatMessage> messages, ChatSettings? settings = null, CancellationToken ct = default);
 }
-
-/// <summary>A single message in a chat conversation.</summary>
-public sealed record ChatMessage(string Role, string Content);
-
-/// <summary>Optional generation parameters forwarded to the model backend.</summary>
-public sealed record ChatSettings(
-    float? Temperature = null,
-    float? TopP = null,
-    int? MaxTokens = null);

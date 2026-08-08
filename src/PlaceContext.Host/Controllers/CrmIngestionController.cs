@@ -11,7 +11,7 @@ using PlaceContext.Application.Ports;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.Repositories;
 using PlaceContext.Domain.ValueObjects;
-using PlaceContext.Infrastructure.Crm;
+using PlaceContext.Crm.Infrastructure.Crm;
 using PlaceContext.Infrastructure.Persistence;
 using PlaceContext.Infrastructure.Tenancy;
 
@@ -197,7 +197,7 @@ public sealed class CrmIngestionController : ControllerBase
                 ? await _service.GetChainRunAsync(chainRunId, ct)
                 : null;
             var error = row.LastError is { Length: > 0 }
-                ? _encryptor.Unprotect(row.LastError, IDataEncryptor.Purpose.CrmAutomation)
+                ? _encryptor.Unprotect(row.LastError, DataEncryptionPurpose.CrmAutomation)
                 : null;
             var status = row.CompletedAt is not null
                 ? chain?.Status ?? row.ResultStatus ?? "Completed"
@@ -329,107 +329,4 @@ public sealed class CrmIngestionController : ControllerBase
     private static string? Clean(string? value)
         => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
-}
-
-public sealed record LeadIngestionRequest(
-    string? Name,
-    string? Email,
-    string? Phone,
-    string? Company,
-    string? Message,
-    string? Source,
-    string? Address,
-    Dictionary<string, JsonElement>? Metadata,
-    string? Website);
-
-/// <summary>
-/// Produces the payload consumed by ingestion-triggered job chains. Report clients historically
-/// sent the report-order contract inside a contact-form metadata property; the report chain uses
-/// that contract directly. All other ingestion payloads remain opaque and are forwarded unchanged.
-/// </summary>
-public static class CrmIngestionPayload
-{
-    public static string JobChainInput(JsonElement payload)
-    {
-        if (IsReportOrder(payload)) return payload.GetRawText();
-
-        if (payload.ValueKind == JsonValueKind.Object
-            && payload.TryGetProperty("metadata", out var metadata)
-            && IsReportOrder(metadata))
-            return metadata.GetRawText();
-
-        return payload.GetRawText();
-    }
-
-    private static bool IsReportOrder(JsonElement payload)
-        => payload.ValueKind == JsonValueKind.Object
-            && payload.TryGetProperty("event", out var eventName)
-            && eventName.ValueKind == JsonValueKind.String
-            && string.Equals(eventName.GetString(), "feasibility_report_ordered", StringComparison.Ordinal)
-            && payload.TryGetProperty("site", out var site)
-            && site.ValueKind == JsonValueKind.Object;
-}
-
-/// <summary>
-/// Converts an address-bearing CRM submission into the existing Ossen project queue contract.
-/// The metadata fallback accepts older report clients that only supplied metadata.site.address.
-/// </summary>
-public sealed record CrmSiteQueueSubmission(Guid Id, IReadOnlyDictionary<string, string?> Values)
-{
-    public const string TableName = "queue_sites";
-
-    public static CrmSiteQueueSubmission? From(LeadIngestionRequest? request)
-    {
-        var address = Clean(request?.Address) ?? MetadataAddress(request?.Metadata);
-        return FromAddress(address);
-    }
-
-    public static CrmSiteQueueSubmission? From(JsonElement payload, LeadIngestionRequest? request = null)
-    {
-        var address = Clean(request?.Address)
-            ?? SiteAddress(payload)
-            ?? MetadataAddress(request?.Metadata);
-        return FromAddress(address);
-    }
-
-    private static CrmSiteQueueSubmission? FromAddress(string? address)
-    {
-        if (address is null) return null;
-
-        var id = Guid.NewGuid();
-        return new CrmSiteQueueSubmission(id, new Dictionary<string, string?>
-        {
-            ["id"] = id.ToString(),
-            ["address"] = address,
-            ["status"] = "NOT_RUN",
-            ["error"] = null,
-            ["retry_attempt"] = "0",
-            ["last_run_at"] = null,
-        });
-    }
-
-    private static string? SiteAddress(JsonElement payload)
-    {
-        if (payload.ValueKind != JsonValueKind.Object
-            || !payload.TryGetProperty("site", out var site)
-            || site.ValueKind != JsonValueKind.Object
-            || !site.TryGetProperty("address", out var address)
-            || address.ValueKind != JsonValueKind.String)
-            return null;
-        return Clean(address.GetString());
-    }
-
-    private static string? MetadataAddress(Dictionary<string, JsonElement>? metadata)
-    {
-        if (metadata is null
-            || !metadata.TryGetValue("site", out var site)
-            || site.ValueKind != JsonValueKind.Object
-            || !site.TryGetProperty("address", out var address)
-            || address.ValueKind != JsonValueKind.String)
-            return null;
-        return Clean(address.GetString());
-    }
-
-    private static string? Clean(string? value)
-        => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }

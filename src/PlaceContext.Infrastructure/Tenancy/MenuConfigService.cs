@@ -33,7 +33,7 @@ public sealed class MenuConfigService : IMenuConfigService
     }
 
     /// <summary>Built-in catalog — ids are stable; do not rename without a migration of stored layouts.</summary>
-    internal static readonly CatalogItem[] WorkspaceCatalog =
+    internal static readonly MenuCatalogItem[] WorkspaceCatalog =
     {
         new("dashboard", "Dashboard", "link", "/", Permission.ProjectsView, "grid", null),
         new("crm", "CRM", "link", "/project/{projectId}/crm", Permission.CrmView, "crm", null),
@@ -54,10 +54,6 @@ public sealed class MenuConfigService : IMenuConfigService
         new("settings", "Settings", "link", "/settings/branding", Permission.SettingsManage, "key", "Workspace"),
         new("about", "About", "link", "/about", null, "grid", "Workspace"),
     };
-
-    internal sealed record CatalogItem(
-        string Id, string DefaultLabel, string Kind, string? HrefTemplate,
-        string? RequiredPermission, string? Icon, string? DefaultSection, string? Parent = null);
 
     public MenuLayout DefaultLayout()
     {
@@ -182,7 +178,7 @@ public sealed class MenuConfigService : IMenuConfigService
         return new MenuLayout(MergeSide(stored.Workspace, WorkspaceCatalog));
     }
 
-    private static List<MenuItemOverride> MergeSide(List<MenuItemDto>? stored, CatalogItem[] catalog)
+    private static List<MenuItemOverride> MergeSide(List<MenuItemDto>? stored, MenuCatalogItem[] catalog)
     {
         var knownIds = catalog.Select(c => c.Id).ToHashSet(StringComparer.Ordinal);
         var result = (stored ?? new())
@@ -224,6 +220,4 @@ public sealed class MenuConfigService : IMenuConfigService
         return result.Select((item, index) => item with { Order = index * 10 }).ToList();
     }
 
-    private sealed record MenuLayoutDto(List<MenuItemDto>? Workspace);
-    private sealed record MenuItemDto(string Id, string? Label, int Order, bool Visible, string? Section);
 }

@@ -25,7 +25,7 @@ public class AuthServiceTests
             .Options;
         var db = new AppDbContext(options, tenant);
         var providers = new CommunicationProviderService(
-            db, new EfProjectSecretRepository(db), new PlaintextSecretProtector());
+            db, new InMemoryProjectSecretRepository(), new PlaintextSecretProtector());
         return (new AuthService(db, communications ?? new FakeCommunicationSender(), providers), db);
     }
 

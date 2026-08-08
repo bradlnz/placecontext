@@ -22,7 +22,7 @@ public sealed class JobEditorViewModel : PageViewModel, IAsyncDisposable
     private readonly PortalUiState _ui;
     private readonly NavigationManager _navigation;
     private readonly IJSRuntime _js;
-    private readonly List<EditorFile> _files = new();
+    private readonly List<JobEditorFile> _files = new();
     private JobView? _job;
     private int _active;
     private bool _monacoReady;
@@ -52,7 +52,7 @@ public sealed class JobEditorViewModel : PageViewModel, IAsyncDisposable
     public Guid JobId { get; private set; }
     public string EditorId { get; }
     public JobView? Job => _job;
-    public IReadOnlyList<EditorFile> Files => _files;
+    public IReadOnlyList<JobEditorFile> Files => _files;
     public int ActiveIndex => _active;
     public string? Entrypoint { get; private set; }
     public string RuntimeId { get; private set; } = DefaultRuntime;
@@ -113,12 +113,12 @@ public sealed class JobEditorViewModel : PageViewModel, IAsyncDisposable
                 _files.Clear();
                 foreach (var file in _job.MapFiles)
                 {
-                    _files.Add(new EditorFile(file.Path, file.Content));
+                    _files.Add(new JobEditorFile(file.Path, file.Content));
                 }
 
                 if (_files.Count == 0 && _job.MapSource is not null)
                 {
-                    _files.Add(new EditorFile(Entrypoint ?? "main", _job.MapSource));
+                    _files.Add(new JobEditorFile(Entrypoint ?? "main", _job.MapSource));
                 }
 
                 _active = Math.Max(0, _files.FindIndex(file => file.Path == Entrypoint));
@@ -221,7 +221,7 @@ public sealed class JobEditorViewModel : PageViewModel, IAsyncDisposable
         }
 
         await SyncActiveAsync();
-        _files.Add(new EditorFile(path, string.Empty));
+        _files.Add(new JobEditorFile(path, string.Empty));
         _active = _files.Count - 1;
         _addingFile = false;
         await OpenFileAsync(_files[_active]);
@@ -445,7 +445,7 @@ public sealed class JobEditorViewModel : PageViewModel, IAsyncDisposable
         catch { }
     }
 
-    private async Task OpenFileAsync(EditorFile file)
+    private async Task OpenFileAsync(JobEditorFile file)
     {
         try
         {
@@ -472,15 +472,4 @@ public sealed class JobEditorViewModel : PageViewModel, IAsyncDisposable
         catch { }
     }
 
-    public sealed class EditorFile
-    {
-        public EditorFile(string path, string content)
-        {
-            Path = path;
-            Content = content;
-        }
-
-        public string Path { get; set; }
-        public string Content { get; set; }
-    }
 }

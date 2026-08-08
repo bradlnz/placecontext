@@ -6,8 +6,8 @@ using PlaceContext.Application.Mcp;
 using PlaceContext.Application.Ports;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.Repositories;
-using PlaceContext.Infrastructure.Caching;
-using PlaceContext.Infrastructure.Chat;
+using PlaceContext.AgentChat.Infrastructure.Caching;
+using PlaceContext.AgentChat.Infrastructure.Chat;
 
 namespace PlaceContext.Host.Components.ViewModels;
 
@@ -79,7 +79,7 @@ public sealed partial class ChatViewModel
                     _attachmentsBucketEnsured = true;
                 }
                 var key =
-                    $"chat/{_tenant.TenantId}/{ProjectId!.Value}/{_sessionId.Value}/{Guid.NewGuid():N}-{SanitizeFileName(AttachedFileName)}";
+                    $"chat/{_tenant.TenantId}/{ProjectId}/{_sessionId.Value}/{Guid.NewGuid():N}-{SanitizeFileName(AttachedFileName)}";
                 await _objectStore.PutAsync(
                     AttachmentsBucket,
                     key,

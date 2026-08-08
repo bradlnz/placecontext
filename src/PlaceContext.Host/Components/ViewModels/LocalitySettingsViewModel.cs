@@ -11,15 +11,6 @@ public sealed class LocalitySettingsViewModel(
     NavigationManager navigation
 ) : PageViewModel
 {
-    private static class Copy
-    {
-        public const string Title = "Locality";
-        public const string Subtitle = "workspace timezone — schedules and displayed times obey it";
-        public const string Saving = "Saving…";
-        public const string Saved = "Saved — reloading…";
-        public const string UnknownTimezone = "Unknown timezone id '{0}'.";
-    }
-
     public string TimeZoneId { get; set; } = "UTC";
     public bool Busy { get; private set; }
     public string? Message { get; private set; }
@@ -27,7 +18,7 @@ public sealed class LocalitySettingsViewModel(
     public void Initialize()
     {
         TimeZoneId = tenant.TimeZoneId;
-        ui.Set(Copy.Title, Copy.Subtitle);
+        ui.Set(LocalitySettingsCopy.Title, LocalitySettingsCopy.Subtitle);
     }
 
     public string PreviewNow()
@@ -56,16 +47,16 @@ public sealed class LocalitySettingsViewModel(
             var timeZoneId = TimeZoneId.Trim();
             _ = TimeZoneInfo.FindSystemTimeZoneById(timeZoneId);
             await tenants.SetTimeZoneAsync(tenant.TenantId, timeZoneId, cancellationToken);
-            Message = Copy.Saved;
+            Message = LocalitySettingsCopy.Saved;
             navigation.NavigateTo(PageRoutes.LocalitySettings, forceLoad: true);
         }
         catch (TimeZoneNotFoundException)
         {
-            Message = string.Format(Copy.UnknownTimezone, TimeZoneId.Trim());
+            Message = string.Format(LocalitySettingsCopy.UnknownTimezone, TimeZoneId.Trim());
         }
         catch (InvalidTimeZoneException)
         {
-            Message = string.Format(Copy.UnknownTimezone, TimeZoneId.Trim());
+            Message = string.Format(LocalitySettingsCopy.UnknownTimezone, TimeZoneId.Trim());
         }
         catch (Exception ex)
         {

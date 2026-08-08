@@ -13,7 +13,7 @@ namespace PlaceContext.Application.Mcp;
 public sealed class McpClientService : IMcpClientService
 {
     private readonly IMcpConnectionRepository _repo;
-    private readonly IUnitOfWork _uow;
+    private readonly IAgentChatUnitOfWork _uow;
     private readonly IHttpClientFactory _http;
     private readonly IDataEncryptor _encryptor;
     private readonly ILogger<McpClientService> _log;
@@ -21,7 +21,7 @@ public sealed class McpClientService : IMcpClientService
 
     public McpClientService(
         IMcpConnectionRepository repo,
-        IUnitOfWork uow,
+        IAgentChatUnitOfWork uow,
         IHttpClientFactory http,
         IDataEncryptor encryptor,
         ILogger<McpClientService> log)

@@ -52,36 +52,9 @@ public sealed class SearchController : ControllerBase
         if (limit is < 1 or > 100)
             return BadRequest(new { error = "limit must be between 1 and 100." });
 
-        var projectId = _project.ProjectId!.Value;
+        var projectId = _project.ProjectId;
         var results = await _svc.SearchAsync(
             term, projectId, SearchCandidateLimit, HttpContext.RequestAborted);
         return Ok(SearchApiMapper.ToResponse(results, projectId, limit));
-    }
-}
-
-public sealed record SearchApiResponse(
-    string Query,
-    Guid ProjectId,
-    int Count,
-    IReadOnlyList<SearchApiHitResponse> Hits);
-
-public sealed record SearchApiHitResponse(
-    string Kind,
-    Guid ProjectId,
-    string Title,
-    string Subtitle,
-    string Url);
-
-public static class SearchApiMapper
-{
-    public static SearchApiResponse ToResponse(SearchResultsView results, Guid projectId, int limit)
-    {
-        var hits = results.Hits
-            .Where(hit => hit.ProjectId == projectId)
-            .Take(Math.Clamp(limit, 1, 100))
-            .Select(hit => new SearchApiHitResponse(
-                hit.Kind, hit.ProjectId, hit.Title, hit.Subtitle, hit.Url))
-            .ToList();
-        return new SearchApiResponse(results.Term, projectId, hits.Count, hits);
     }
 }

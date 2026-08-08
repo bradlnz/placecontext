@@ -8,12 +8,6 @@ using PlaceContext.Infrastructure.Security;
 
 namespace PlaceContext.Host.Auth;
 
-/// <summary>Options bag for the "ApiKey" scheme — no per-request state, but AuthenticationHandler
-/// requires an options type.</summary>
-public sealed class ApiKeyAuthenticationOptions : AuthenticationSchemeOptions
-{
-}
-
 /// <summary>
 /// Authenticates machine callers (the Terraform provider, and any other IaC/CI client) against a single
 /// configured admin key — <c>PlaceContext:Api:Key</c> for admin endpoints, and

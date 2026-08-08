@@ -997,22 +997,4 @@ public sealed class OpenSearchDataViewModel : PageViewModel, IDisposable
             ? "You do not have permission to search project data."
             : ex.Message;
 
-    public sealed record GeneratedOpenSearchChart(
-        string Id,
-        string Title,
-        string Subtitle,
-        string ChartSpecJson
-    );
-
-    public sealed record GeneratedChartCandidate(
-        string Id,
-        string Title,
-        string Subtitle,
-        string BucketField,
-        string BucketType,
-        string ChartType,
-        string MetricType,
-        string? MetricField,
-        string? DateInterval
-    );
 }

@@ -1,9 +1,5 @@
 namespace PlaceContext.Domain.Repositories;
 
-/// <summary>A named permission grant set members can be assigned — the editable, per-tenant form of
-/// what <c>RolePermissionDefaults</c> hardcodes for the four system roles.</summary>
-public sealed record RoleDefinition(Guid Id, string Name, bool IsSystem, IReadOnlyList<string> Permissions);
-
 /// <summary>
 /// Tenant-scoped role definitions. The four system roles (Viewer/Member/Admin/Owner) are materialized
 /// lazily: any read against a tenant with no rows yet seeds them from the hardcoded

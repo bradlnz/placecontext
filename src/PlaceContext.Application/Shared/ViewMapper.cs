@@ -39,6 +39,4 @@ public static class ViewMapper
     public static RequirementsView ToView(Requirements r) => new(
         r.ProjectId?.Value, r.IsGlobal, r.Markdown, r.IsEmpty, r.UpdatedAt);
 
-    public static UsageEntryView ToView(UsageRecord r, decimal costUsd) => new(
-        r.Id, r.Usage.Model, r.Usage.InputTokens, r.Usage.OutputTokens, costUsd, r.Description, r.RecordedAt);
 }

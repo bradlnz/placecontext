@@ -16,9 +16,8 @@ public sealed class CurrentProject : ICurrentProject
     public static void Set(Guid id, string name) => _current.Value = new ProjectScope(id, name);
     public static void Clear() => _current.Value = null;
 
-    public Guid? ProjectId => _current.Value?.Id;
-    public string? ProjectName => _current.Value?.Name;
+    public Guid ProjectId => _current.Value?.Id ?? Guid.Empty;
+    public string ProjectName => _current.Value?.Name ?? string.Empty;
     public bool IsResolved => _current.Value is not null;
 
-    public sealed record ProjectScope(Guid Id, string Name);
 }

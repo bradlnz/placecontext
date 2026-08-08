@@ -31,20 +31,13 @@ public sealed class DataEntitiesViewModel : PageViewModel
     public string EditTable { get; set; } = "";
     public string EditLabel { get; set; } = "";
     public string? Error { get; private set; }
-    public List<RelationEdit> EditRelations { get; } = new();
+    public List<DataEntityRelationEdit> EditRelations { get; } = new();
     public List<string> EditTags { get; } = new();
     public string TagInput { get; set; } = "";
     public IReadOnlyList<RecordLinkGroup> LinkGroups { get; private set; } =
         Array.Empty<RecordLinkGroup>();
     public bool Rescanning { get; private set; }
     public string? RescanMessage { get; private set; }
-
-    public sealed class RelationEdit
-    {
-        public string Column { get; set; } = "";
-        public string TargetEntity { get; set; } = "";
-        public string TargetColumn { get; set; } = "";
-    }
 
     public async Task LoadAsync(Guid projectId)
     {
@@ -109,7 +102,7 @@ public sealed class DataEntitiesViewModel : PageViewModel
         EditRelations.Clear();
         if (entity is not null)
             EditRelations.AddRange(
-                entity.Relations.Select(r => new RelationEdit
+                entity.Relations.Select(r => new DataEntityRelationEdit
                 {
                     Column = r.Column,
                     TargetEntity = r.TargetEntity,

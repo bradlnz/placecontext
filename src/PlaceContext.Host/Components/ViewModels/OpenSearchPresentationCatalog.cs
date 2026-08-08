@@ -1,20 +1,5 @@
 namespace PlaceContext.Host.Components.ViewModels;
 
-public enum OpenSearchMetricMode
-{
-    Count,
-    Sum,
-    Average,
-    Minimum,
-    Maximum,
-}
-
-public enum OpenSearchBucketMode
-{
-    Terms,
-    DateHistogram,
-}
-
 public static class OpenSearchPresentationCatalog
 {
     public static OpenSearchMetricMode ParseMetric(string value) =>
