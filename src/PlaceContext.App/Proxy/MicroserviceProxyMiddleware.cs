@@ -1,5 +1,4 @@
 using System.Net;
-using Microsoft.AspNetCore.Http.Extensions;
 using Microsoft.Extensions.Options;
 using Microsoft.Net.Http.Headers;
 
@@ -39,6 +38,8 @@ public sealed class MicroserviceProxyMiddleware
         HeaderNames.Trailer,
         HeaderNames.TransferEncoding,
         HeaderNames.Upgrade,
+        HeaderNames.SetCookie,
+        HeaderNames.Server,
         "Proxy-Connection",
     };
 
@@ -114,7 +115,7 @@ public sealed class MicroserviceProxyMiddleware
                 HttpCompletionOption.ResponseHeadersRead,
                 context.RequestAborted);
 
-            await CopyResponseAsync(context, proxyResponse);
+            await CopyResponseAsync(context, proxyResponse, destination);
         }
         catch (HttpRequestException exception)
         {
@@ -141,7 +142,8 @@ public sealed class MicroserviceProxyMiddleware
         var origin = destination.AbsoluteUri.EndsWith("/", StringComparison.Ordinal)
             ? destination
             : new Uri(destination.AbsoluteUri + '/', UriKind.Absolute);
-        var relativeTarget = request.GetEncodedPathAndQuery().TrimStart('/');
+        var relativeTarget = $"{request.Path.ToUriComponent()}{request.QueryString.ToUriComponent()}"
+            .TrimStart('/');
         return new Uri(origin, relativeTarget);
     }
 
@@ -168,6 +170,12 @@ public sealed class MicroserviceProxyMiddleware
         message.Headers.TryAddWithoutValidation(
             "X-Forwarded-Proto",
             request.Scheme);
+        if (request.PathBase.HasValue)
+        {
+            message.Headers.TryAddWithoutValidation(
+                "X-Forwarded-Prefix",
+                request.PathBase.Value);
+        }
 
         if (context.Connection.RemoteIpAddress is { } remoteAddress)
             message.Headers.TryAddWithoutValidation("X-Forwarded-For", remoteAddress.ToString());
@@ -180,17 +188,44 @@ public sealed class MicroserviceProxyMiddleware
 
     private static async Task CopyResponseAsync(
         HttpContext context,
-        HttpResponseMessage proxyResponse)
+        HttpResponseMessage proxyResponse,
+        Uri destination)
     {
         context.Response.StatusCode = (int)proxyResponse.StatusCode;
 
         CopyHeaders(proxyResponse.Headers, context.Response.Headers);
         CopyHeaders(proxyResponse.Content.Headers, context.Response.Headers);
+        RewriteLocation(context, proxyResponse.Headers.Location, destination);
 
         foreach (var excluded in ExcludedResponseHeaders)
             context.Response.Headers.Remove(excluded);
 
         await proxyResponse.Content.CopyToAsync(context.Response.Body, context.RequestAborted);
+    }
+
+    private static void RewriteLocation(
+        HttpContext context,
+        Uri? location,
+        Uri destination)
+    {
+        if (location is null)
+            return;
+
+        if (!location.IsAbsoluteUri)
+        {
+            context.Response.Headers.Location = location.OriginalString;
+            return;
+        }
+
+        if (!string.Equals(location.Scheme, destination.Scheme, StringComparison.OrdinalIgnoreCase)
+            || !string.Equals(location.Host, destination.Host, StringComparison.OrdinalIgnoreCase)
+            || location.Port != destination.Port)
+        {
+            return;
+        }
+
+        var publicOrigin = $"{context.Request.Scheme}://{context.Request.Host}{context.Request.PathBase}";
+        context.Response.Headers.Location = $"{publicOrigin}{location.PathAndQuery}{location.Fragment}";
     }
 
     private static void CopyHeaders(

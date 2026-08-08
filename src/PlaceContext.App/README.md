@@ -1,12 +1,12 @@
 # PlaceContext App gateway
 
-`PlaceContext.App` is the permanent authenticated edge for the React application. `PlaceContext.Host`
-is migration scaffolding and is not part of the target runtime.
+`PlaceContext.App` is the permanent edge for the React application. `PlaceContext.Host` is migration
+scaffolding and is not part of the target runtime.
 
 The Vite production build emits to `wwwroot/app`. App serves those fingerprinted assets and uses an
-anonymous SPA fallback for `/app` routes. Proxied requests are dispatched before App's fallback
-authorization policy: the destination service validates its own bearer token or explicitly permits
-an anonymous route such as public ingestion or an artifact share.
+anonymous SPA fallback for `/app` routes. App does not register the microservice runtime or require
+`PlaceContext:ServiceAuth` merely to start. The destination service validates the forwarded bearer
+token/API key or explicitly permits an anonymous route such as public ingestion or an artifact share.
 
 The API has two responsibilities:
 

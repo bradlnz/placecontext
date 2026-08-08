@@ -26,10 +26,14 @@ public sealed class MicroserviceProxyRoute
     public static MicroserviceProxyRoute ForPattern(string serviceName, string pathPattern)
         => new(serviceName, null, new Regex(
             pathPattern,
-            RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.IgnoreCase));
+            RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.IgnoreCase,
+            TimeSpan.FromMilliseconds(100)));
 
     public bool Matches(PathString path)
         => _pathPrefix is { } prefix
             ? path.StartsWithSegments(prefix)
             : _pathPattern!.IsMatch(path.Value ?? string.Empty);
+
+    public bool Matches(string path)
+        => Matches(new PathString(path));
 }

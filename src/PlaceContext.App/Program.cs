@@ -1,17 +1,17 @@
-using PlaceContext.Application.Runtime;
 using PlaceContext.App.Proxy;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddPlaceContextServiceRuntime(builder.Configuration, typeof(Program).Assembly);
 builder.Services.AddMicroserviceProxy(builder.Configuration);
+builder.Services.AddHealthChecks();
 
 var app = builder.Build();
 app.UseStaticFiles();
-// The owning service authorizes proxied requests. Dispatch first so explicitly anonymous service
-// routes (for example public ingestion and artifact shares) are not blocked by App's fallback JWT.
+// App is an edge proxy, not a microservice. The owning service validates bearer/API-key credentials
+// or explicitly permits anonymous routes such as public ingestion and artifact shares.
 app.UseMicroserviceProxy();
-app.UsePlaceContextServiceRuntime("app");
+app.MapHealthChecks("/health");
+app.MapGet("/", () => Results.Ok(new { service = "app", status = "ready" }));
 app.MapFallbackToFile("/app/{*path:nonfile}", "app/index.html").AllowAnonymous();
 await app.RunAsync();
 

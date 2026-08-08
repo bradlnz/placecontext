@@ -59,4 +59,11 @@ public sealed class MicroserviceProxyRouteCatalogTests
 
         Assert.Equal("Jobs", route.ServiceName);
     }
+
+    [Theory]
+    [InlineData("/api/v1/jobs/98f44a9b-6067-4a17-8636-cc16b4d51c45/history")]
+    [InlineData("/api/v1/schedules/98f44a9b-6067-4a17-8636-cc16b4d51c45/history")]
+    [InlineData("/api/v1/chains/98f44a9b-6067-4a17-8636-cc16b4d51c45/trigger/extra")]
+    public void Catalog_does_not_claim_unowned_nested_management_routes(string path)
+        => Assert.DoesNotContain(MicroserviceProxyRouteCatalog.All, route => route.Matches(path));
 }

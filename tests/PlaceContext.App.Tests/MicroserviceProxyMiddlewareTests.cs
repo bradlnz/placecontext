@@ -28,9 +28,13 @@ public sealed class MicroserviceProxyMiddlewareTests
             };
             response.Headers.TryAddWithoutValidation("X-Upstream", "jobs");
             response.Headers.TryAddWithoutValidation("Connection", "keep-alive");
+            response.Headers.TryAddWithoutValidation("Set-Cookie", "service_cookie=do-not-expose");
+            response.Headers.TryAddWithoutValidation("Server", "internal-kestrel");
+            response.Headers.Location = new Uri("https://jobs.internal/api/jobs/42");
             return response;
         });
         var context = CreateContext("POST", "/api/jobs/projects/one/runs", "?wait=true");
+        context.Request.PathBase = "/edge";
         context.Request.Headers.Authorization = "Bearer signed-service-token";
         context.Request.Headers.Cookie = "portal=do-not-forward";
         context.Request.Headers["X-Forwarded-For"] = "203.0.113.99";
@@ -58,13 +62,37 @@ public sealed class MicroserviceProxyMiddlewareTests
         Assert.Equal("192.0.2.10", SingleHeader(forwarded, "X-Forwarded-For"));
         Assert.Equal("portal.placecontext.test", SingleHeader(forwarded, "X-Forwarded-Host"));
         Assert.Equal("https", SingleHeader(forwarded, "X-Forwarded-Proto"));
+        Assert.Equal("/edge", SingleHeader(forwarded, "X-Forwarded-Prefix"));
         Assert.Equal("request-42", SingleHeader(forwarded, "X-Request-Id"));
         Assert.Equal("{\"jobId\":1}", forwardedBody);
 
         Assert.Equal(StatusCodes.Status201Created, context.Response.StatusCode);
         Assert.Equal("jobs", context.Response.Headers["X-Upstream"]);
         Assert.False(context.Response.Headers.ContainsKey("Connection"));
+        Assert.False(context.Response.Headers.ContainsKey("Set-Cookie"));
+        Assert.False(context.Response.Headers.ContainsKey("Server"));
+        Assert.Equal(
+            "https://portal.placecontext.test/edge/api/jobs/42",
+            context.Response.Headers.Location);
         Assert.Equal("{\"id\":42}", await ReadResponseBody(context));
+    }
+
+    [Fact]
+    public async Task Leaves_external_redirect_locations_unchanged()
+    {
+        var handler = new RecordingHandler(_ => Task.FromResult(new HttpResponseMessage(
+            HttpStatusCode.TemporaryRedirect)
+        {
+            Headers = { Location = new Uri("https://login.example.com/authorize") },
+        }));
+        var context = CreateContext("GET", "/api/search");
+        var middleware = CreateMiddleware(
+            handler,
+            new Dictionary<string, string> { ["Search"] = "https://search.internal" });
+
+        await middleware.InvokeAsync(context);
+
+        Assert.Equal("https://login.example.com/authorize", context.Response.Headers.Location);
     }
 
     [Fact]
