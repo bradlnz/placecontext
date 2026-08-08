@@ -514,6 +514,45 @@ public sealed class SourceOrganizationTests
             });
     }
 
+    [Fact]
+    public void Agents_persistence_is_owned_by_agents_infrastructure()
+    {
+        var serviceDirectory = Path.Combine(Root, "src", "PlaceContext.Agents");
+        var infrastructureProject = Path.Combine(
+            serviceDirectory,
+            "PlaceContext.Agents.Infrastructure.csproj");
+        var apiProject = Path.Combine(serviceDirectory, "PlaceContext.Agents.Api.csproj");
+        var rowTypes = new[]
+        {
+            "AgentProfileRow",
+            "StaffMemberRow",
+            "AgentAssignmentRow",
+            "AgentApprovalRow",
+        };
+        var required = new[]
+        {
+            Path.Combine(serviceDirectory, "Infrastructure", "Persistence", "AgentsDbContext.cs"),
+            Path.Combine(serviceDirectory, "Domain", "Persistence", "IAgentsUnitOfWork.cs"),
+            Path.Combine(
+                serviceDirectory,
+                "Infrastructure",
+                "Persistence",
+                "Migrations",
+                "AgentsDbContextModelSnapshot.cs"),
+        }.Concat(rowTypes.Select(typeName =>
+            Path.Combine(serviceDirectory, "Infrastructure", "Persistence", typeName + ".cs")));
+
+        Assert.All(required, path => Assert.True(File.Exists(path), $"Missing {Relative(path)}"));
+        Assert.DoesNotContain(
+            "PlaceContext.Infrastructure.csproj",
+            File.ReadAllText(infrastructureProject),
+            StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(
+            "PlaceContext.Infrastructure.csproj",
+            File.ReadAllText(apiProject),
+            StringComparison.OrdinalIgnoreCase);
+    }
+
     private static IEnumerable<string> SourceFiles()
         => Directory.EnumerateFiles(Path.Combine(Root, "src"), "*.cs", SearchOption.AllDirectories)
             .Where(file => !HasPathPart(file, "bin") && !HasPathPart(file, "obj"))

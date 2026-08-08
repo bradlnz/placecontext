@@ -17,7 +17,8 @@ public static class AgentsInfrastructureDependencyInjection
             ?? configuration[$"{AgentsPersistenceOptions.SectionName}:ConnectionString"]
             ?? configuration["PlaceContext:ConnectionString"]
             ?? AgentsPersistenceOptions.DefaultConnectionString;
-        services.Configure<AgentsPersistenceOptions>(configuration.GetSection(AgentsPersistenceOptions.SectionName));
+        services.Configure<AgentsPersistenceOptions>(options =>
+            options.ConnectionString = connectionString);
         services.AddDbContext<AgentsDbContext>(options =>
         {
             options.UseNpgsql(connectionString, postgres =>
