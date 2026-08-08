@@ -47,6 +47,11 @@ Last updated: 2026-08-08 (Australia/Brisbane)
 - Rewired AgentChat handlers and shared MCP command handlers to the AgentChat-specific commit boundary so they cannot commit unrelated shared persistence.
 - Removed shared Infrastructure project references from both `PlaceContext.AgentChat.Infrastructure` and `PlaceContext.AgentChat.Api`; the standalone runtime now composes its own persistence directly.
 - Added AgentChat tenant-isolation and four-repository round-trip coverage, plus an architecture check that locks its context, rows, unit of work, migration snapshot, and project boundaries to the service.
+- Gave Artifacts its own `ArtifactsDbContext`, two owned rows, `IArtifactsUnitOfWork`, connection configuration, health check, `__EFMigrationsHistory_Artifacts` history table, and non-destructive initial migration for legacy gateway data.
+- Removed `job_run_artifacts` and `artifact_share_tokens` from the shared `AppDbContext`; the shared handoff migration records ownership transfer without dropping either table.
+- Rewired artifact handlers and the shared post-job action service to the Artifacts-specific commit boundary, and removed shared Infrastructure references from the Artifacts API and infrastructure projects.
+- Kept the shared encryption contract in Application while placing concrete ASP.NET Data Protection adapters in each runtime infrastructure layer, preserving compatibility without introducing framework dependencies into Application.
+- Added Artifacts persistence tenant-isolation coverage and an architecture check that locks its context, rows, unit of work, migration snapshot, and project boundaries to the service.
 - Removed the unused Host `BrowseTab` enum and moved controller/view-model records into matching `Records` folders.
 - Aligned Vault infrastructure's EF Core/Relational dependencies at 10.0.9 so the extracted project builds without assembly-conflict warnings.
 - Extracted OpenSearch connection/data/sync gateways and the dashboard persistence adapter into `PlaceContext.Search.Infrastructure`; the gateway now composes them through `AddSearchInfrastructure`.
@@ -89,48 +94,48 @@ Last updated: 2026-08-08 (Australia/Brisbane)
 - `PlaceContext.AgentChat.Infrastructure` builds with 0 warnings and 0 errors.
 - Full `PlaceContext.slnx` build: 0 warnings and 0 errors.
 - All seven API runtimes pass Development-mode dependency validation; Jobs reached a listening Kestrel endpoint and Vault `/health` returned HTTP 200 `Healthy`.
-- Source organization, required-layer, and project-boundary architecture tests: 11/11 passing.
+- Source organization, required-layer, persistence-ownership, and project-boundary architecture tests: 12/12 passing.
 - Service test projects passing independently:
   - AgentChat: 42 tests
-  - Artifacts: 56 tests
+  - Artifacts: 57 tests
   - CRM: 19 tests
   - Data: 167 passing, 1 integration test skipped
   - Jobs: 208 passing, 5 Docker integration tests skipped
   - Search: 32 tests
   - Vault: 4 tests
-- Full architecture suite: 11/11 passing after the Vault and AgentChat persistence ownership moves.
+- Full architecture suite: 12/12 passing after the Vault, AgentChat, and Artifacts persistence ownership moves.
 - Vault tests are 4/4 passing after its database and encryption lifecycle extraction.
 - Search tests are 32/32 passing after the OpenSearch infrastructure/test move.
 - Data tests are 167/167 passing with one local-Postgres integration test skipped after its infrastructure/test move.
 - Jobs tests are 208/208 passing with five Docker integration tests skipped after its infrastructure/test move.
 - CRM tests are 19/19 passing after its infrastructure/test move.
-- Artifacts tests are 56/56 passing after its infrastructure/test move.
+- Artifacts tests are 57/57 passing after its owned database and tenant-isolation move.
 - AgentChat tests are 42/42 passing after its owned database, unit-of-work, and repository-test move.
 - Shared Infrastructure tests: 96/96 passing after obsolete Vault implementation coverage moved to Vault and contract-level fakes replaced concrete Vault EF dependencies.
-- Complete test set: 870 passed, 6 environment-dependent integration tests skipped, 0 failed.
+- Complete test set: 876 passed, 6 environment-dependent integration tests skipped, 0 failed.
 - Artifacts presigned-URL coverage now allows the AWS SDK's two-second signing-clock tolerance instead of intermittently requiring an exact expiry second.
 - React frontend: lint passes with zero warnings, 12 test files/23 tests pass, and a production build succeeds when emitted to an isolated output directory.
 
 ## In progress
 
-- Continue splitting the shared `AppDbContext`, row model, and migration history; Vault and AgentChat are complete and the remaining service/platform tables still need owned database lifecycles.
+- Continue splitting the shared `AppDbContext`, row model, and migration history; Vault, AgentChat, and Artifacts are complete and the remaining service/platform tables still need owned database lifecycles.
 - Decide explicit ownership for the remaining platform capabilities in shared Infrastructure, especially authentication/tenancy, communications, embeddings/vector storage, cluster integration, and analytics refresh.
 
 ## Remaining coupling to remove
 
 - Service implementations still reference the main Application assembly as an extraction seam.
 - The current host still references service implementations directly.
-- Remaining extracted service adapters still depend on the shared `PlaceContext.Infrastructure` assembly for `AppDbContext`, persistence rows, security, and tenancy primitives; Vault and AgentChat no longer do.
+- Remaining extracted service adapters still depend on the shared `PlaceContext.Infrastructure` assembly for `AppDbContext`, persistence rows, security, and tenancy primitives; Vault, AgentChat, and Artifacts no longer do.
 - The shared database model and migration history still contain tables for the other services and platform capabilities, preventing their independent database evolution.
 - Standalone Data/Search runtimes currently fall back to service configuration when Vault adapters are absent; replace this transition seam with authenticated service-to-service Vault contracts.
 - API runtimes currently expose the explicitly migrated controller surface; remaining gateway-only commands must move behind their owning service APIs before the gateway can drop implementation references.
 - Search's decision-tree read model consumes Jobs, Data, and Artifacts domain models transitively; replace these with service contracts/read models.
-- The remaining service runtimes need owned databases/migrations and integration-event/outbox wiring; Vault and AgentChat now own their database migration and health-check paths.
+- The remaining service runtimes need owned databases/migrations and integration-event/outbox wiring; Vault, AgentChat, and Artifacts now own their database migration and health-check paths.
 - Contracts retain legacy `PlaceContext.Application.*` namespaces for source compatibility; physical ownership is correct, namespace cleanup remains.
 
 ## Next steps
 
-1. Extract the next bounded persistence slice (Artifacts is the leading candidate) from shared `AppDbContext`, following the proven Vault/AgentChat context, migration-history, and unit-of-work pattern.
+1. Extract the next bounded persistence slice from shared `AppDbContext`, following the proven Vault/AgentChat/Artifacts context, migration-history, and unit-of-work pattern; Search is the leading candidate.
 2. Expand each service controller to cover its remaining gateway-only commands and replace cross-service repository reads with HTTP/integration-event contracts.
 3. Remove direct service implementation references from the gateway in favor of HTTP clients/integration events.
 4. Continue the root `frontend/` migration one vertical slice at a time after each corresponding runtime/API boundary is independent.

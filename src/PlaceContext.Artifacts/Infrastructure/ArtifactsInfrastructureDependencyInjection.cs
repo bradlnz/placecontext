@@ -1,7 +1,9 @@
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using PlaceContext.Application.Ports;
 using PlaceContext.Artifacts.Infrastructure.Artifacts;
 using PlaceContext.Artifacts.Infrastructure.Documents;
@@ -35,6 +37,14 @@ public static class ArtifactsInfrastructureDependencyInjection
             .AddDbContextCheck<ArtifactsDbContext>("artifacts-database");
         services.AddScoped<IArtifactsUnitOfWork>(provider =>
             provider.GetRequiredService<ArtifactsDbContext>());
+
+        services.Configure<ArtifactsDataProtectionOptions>(
+            configuration.GetSection(ArtifactsDataProtectionOptions.SectionName));
+        var dataProtection = services.AddDataProtection().SetApplicationName("placecontext");
+        var keyDirectory = configuration[$"{ArtifactsDataProtectionOptions.SectionName}:KeyDirectory"];
+        if (!string.IsNullOrWhiteSpace(keyDirectory))
+            dataProtection.PersistKeysToFileSystem(new DirectoryInfo(keyDirectory));
+        services.TryAddSingleton<IDataEncryptor, ArtifactDataProtectionEncryptor>();
 
         services.AddScoped<IArtifactShareTokenService, ArtifactShareTokenService>();
         services.Configure<ObjectStoreOptions>(configuration.GetSection("PlaceContext:ObjectStore"));

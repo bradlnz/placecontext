@@ -54,8 +54,6 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
     public DbSet<CrmAutomationQueueRow> CrmAutomationQueue => Set<CrmAutomationQueueRow>();
     public DbSet<CrmIngestionSettingsRow> CrmIngestionSettings => Set<CrmIngestionSettingsRow>();
     public DbSet<CommunicationProviderRow> CommunicationProviders => Set<CommunicationProviderRow>();
-    public DbSet<RunArtifactLinkRow> RunArtifacts => Set<RunArtifactLinkRow>();
-    public DbSet<ArtifactShareTokenRow> ArtifactShareTokens => Set<ArtifactShareTokenRow>();
     public DbSet<JobTriggerRow> JobTriggers => Set<JobTriggerRow>();
     public DbSet<JobChainRow> JobChains => Set<JobChainRow>();
     public DbSet<ChainRunRow> ChainRuns => Set<ChainRunRow>();
@@ -409,35 +407,6 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
             e.Property(x => x.SettingsJson).HasDefaultValue("{}");
             e.Property(x => x.CreatedAt).HasDefaultValueSql("now()");
             e.Property(x => x.UpdatedAt).HasDefaultValueSql("now()");
-        });
-
-        b.Entity<RunArtifactLinkRow>(e =>
-        {
-            e.ToTable("job_run_artifacts");
-            e.HasKey(x => x.Id);
-            e.HasIndex(x => x.RunId);
-            // Partial index over the "still pending OCR" set — keeps the daemon's oldest-first
-            // drain query fast as artifact count grows.
-            e.HasIndex(x => x.OcrProcessedAt)
-                .HasFilter("\"OcrProcessedAt\" IS NULL")
-                .HasDatabaseName("ix_job_run_artifacts_ocr");
-            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
-            e.Property(x => x.CreatedAt).HasDefaultValueSql("now()");
-        });
-
-        b.Entity<ArtifactShareTokenRow>(e =>
-        {
-            e.ToTable("artifact_share_tokens");
-            e.HasKey(x => x.Id);
-            e.HasIndex(x => x.ArtifactId).IsUnique();
-            e.HasIndex(x => x.TokenHash).IsUnique();
-            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
-            e.Property(x => x.TokenHash).HasMaxLength(64);
-            e.Property(x => x.TokenPrefix).HasMaxLength(20);
-            e.HasOne<RunArtifactLinkRow>()
-                .WithMany()
-                .HasForeignKey(x => x.ArtifactId)
-                .OnDelete(DeleteBehavior.Cascade);
         });
 
         b.Entity<ProjectChartRow>(e =>

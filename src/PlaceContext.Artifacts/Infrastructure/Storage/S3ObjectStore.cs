@@ -3,7 +3,6 @@ using Amazon.S3;
 using Amazon.S3.Model;
 using Microsoft.Extensions.Options;
 using PlaceContext.Application.Ports;
-using PlaceContext.Infrastructure.Security;
 
 namespace PlaceContext.Artifacts.Infrastructure.Storage;
 
@@ -48,7 +47,7 @@ public sealed class S3ObjectStore : IObjectStore, IDisposable
     public string DepsBucket => _o.DepsBucket;
 
     /// <summary>Hard cap on object size before encryption (matches field-encryptor max bytes).</summary>
-    public const int MaxObjectBytes = DataProtectionEncryptor.MaxPlaintextBytes;
+    public const int MaxObjectBytes = ArtifactDataProtectionEncryptor.MaxPlaintextBytes;
 
     public async Task PutAsync(string bucket, string key, byte[] content, string contentType, CancellationToken ct = default)
     {

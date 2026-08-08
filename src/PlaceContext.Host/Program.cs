@@ -451,6 +451,8 @@ await PlaceContext.AgentChat.Infrastructure.Persistence.AgentChatDatabaseMigrati
     .MigrateAgentChatDatabaseAsync(app.Services);
 await PlaceContext.Agents.Infrastructure.Persistence.AgentsDatabaseMigrationExtensions
     .MigrateAgentsDatabaseAsync(app.Services);
+await PlaceContext.Artifacts.Infrastructure.Persistence.ArtifactsDatabaseMigrationExtensions
+    .MigrateArtifactsDatabaseAsync(app.Services);
 await PlaceContext.Vault.Infrastructure.Persistence.VaultDatabaseMigrationExtensions
     .MigrateVaultDatabaseAsync(app.Services);
 // CRM records are small, and older releases stored client identity/contact fields in plaintext.

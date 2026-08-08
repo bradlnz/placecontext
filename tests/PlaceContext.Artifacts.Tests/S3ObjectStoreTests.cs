@@ -1,6 +1,5 @@
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Options;
-using PlaceContext.Infrastructure.Security;
 using PlaceContext.Artifacts.Infrastructure.Storage;
 
 namespace PlaceContext.Artifacts.Tests;
@@ -13,7 +12,7 @@ public class S3ObjectStoreTests
 {
     private static S3ObjectStore Create(string endpoint = "http://minio:9000") => new(
         Options.Create(new ObjectStoreOptions { Endpoint = endpoint, AccessKey = "ak", SecretKey = "sk" }),
-        new DataProtectionEncryptor(new EphemeralDataProtectionProvider()));
+        new ArtifactDataProtectionEncryptor(new EphemeralDataProtectionProvider()));
 
     [Fact]
     public async Task Presigned_download_targets_endpoint_bucket_and_key_with_the_requested_expiry()
@@ -37,7 +36,7 @@ public class S3ObjectStoreTests
     public async Task A_disabled_store_cannot_presign()
     {
         var store = new S3ObjectStore(Options.Create(new ObjectStoreOptions()),
-            new DataProtectionEncryptor(new EphemeralDataProtectionProvider()));
+            new ArtifactDataProtectionEncryptor(new EphemeralDataProtectionProvider()));
         Assert.False(store.IsEnabled);
         await Assert.ThrowsAsync<InvalidOperationException>(() => store.PresignDownloadAsync("b", "k", TimeSpan.FromMinutes(1)));
     }
@@ -54,7 +53,7 @@ public class S3ObjectStoreTests
                 Region = "us-east-1",
                 ForcePathStyle = false
             }),
-            new DataProtectionEncryptor(new EphemeralDataProtectionProvider()));
+            new ArtifactDataProtectionEncryptor(new EphemeralDataProtectionProvider()));
 
         var url = await store.PresignDownloadAsync("my-bucket", "key/file.txt", TimeSpan.FromHours(1));
 
@@ -74,7 +73,7 @@ public class S3ObjectStoreTests
                 Region = "nyc3",
                 ForcePathStyle = false
             }),
-            new DataProtectionEncryptor(new EphemeralDataProtectionProvider()));
+            new ArtifactDataProtectionEncryptor(new EphemeralDataProtectionProvider()));
 
         var url = await store.PresignDownloadAsync("my-space", "data/report.csv", TimeSpan.FromMinutes(30));
 
@@ -94,7 +93,7 @@ public class S3ObjectStoreTests
                 Region = "us-east-1",
                 ForcePathStyle = true
             }),
-            new DataProtectionEncryptor(new EphemeralDataProtectionProvider()));
+            new ArtifactDataProtectionEncryptor(new EphemeralDataProtectionProvider()));
 
         var url = await store.PresignDownloadAsync("my-bucket", "key/file.txt", TimeSpan.FromHours(1));
 
