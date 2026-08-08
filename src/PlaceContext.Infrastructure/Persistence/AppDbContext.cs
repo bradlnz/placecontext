@@ -37,17 +37,6 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
     public DbSet<DecisionRow> Decisions => Set<DecisionRow>();
     public DbSet<RequirementsRow> Requirements => Set<RequirementsRow>();
     public DbSet<ToolCallRow> ToolCalls => Set<ToolCallRow>();
-    public DbSet<CrmClientRow> CrmClients => Set<CrmClientRow>();
-    public DbSet<CrmJobRunRow> CrmJobRuns => Set<CrmJobRunRow>();
-    public DbSet<CrmChainRunRow> CrmChainRuns => Set<CrmChainRunRow>();
-    public DbSet<CrmCommunicationRow> CrmCommunications => Set<CrmCommunicationRow>();
-    public DbSet<CrmAppointmentRow> CrmAppointments => Set<CrmAppointmentRow>();
-    public DbSet<CrmCalendarRow> CrmCalendars => Set<CrmCalendarRow>();
-    public DbSet<CrmClientArtifactRow> CrmClientArtifacts => Set<CrmClientArtifactRow>();
-    public DbSet<CrmClientJobChainAssignmentRow> CrmClientJobChainAssignments => Set<CrmClientJobChainAssignmentRow>();
-    public DbSet<CrmAutomationRuleRow> CrmAutomationRules => Set<CrmAutomationRuleRow>();
-    public DbSet<CrmAutomationQueueRow> CrmAutomationQueue => Set<CrmAutomationQueueRow>();
-    public DbSet<CrmIngestionSettingsRow> CrmIngestionSettings => Set<CrmIngestionSettingsRow>();
     public DbSet<CommunicationProviderRow> CommunicationProviders => Set<CommunicationProviderRow>();
     public DbSet<UserApiTokenRow> UserApiTokens => Set<UserApiTokenRow>();
 
@@ -192,121 +181,6 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
             e.HasKey(x => x.Id);
             e.HasIndex(x => x.At);
             e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
-        });
-
-        b.Entity<CrmClientRow>(e =>
-        {
-            e.ToTable("crm_clients");
-            e.HasKey(x => x.Id);
-            e.HasIndex(x => new { x.ProjectId, x.LifecycleStage });
-            e.HasIndex(x => new { x.ProjectId, x.Email });
-            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
-            e.Property(x => x.LifecycleStage).HasDefaultValue("Lead");
-            e.Property(x => x.CustomerPortalEnabled).HasDefaultValue(false);
-            e.Property(x => x.CreatedAt).HasDefaultValueSql("now()");
-            e.Property(x => x.UpdatedAt).HasDefaultValueSql("now()");
-        });
-
-        b.Entity<CrmIngestionSettingsRow>(e =>
-        {
-            e.ToTable("crm_ingestion_settings");
-            e.HasKey(x => x.ProjectId);
-            e.HasIndex(x => x.TokenHash).IsUnique();
-            e.HasIndex(x => x.AllowedOrigin);
-            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
-            e.Property(x => x.CreatedAt).HasDefaultValueSql("now()");
-            e.Property(x => x.UpdatedAt).HasDefaultValueSql("now()");
-        });
-
-        b.Entity<CrmJobRunRow>(e =>
-        {
-            e.ToTable("crm_job_runs");
-            e.HasKey(x => x.Id);
-            e.HasIndex(x => new { x.ClientId, x.StartedAt });
-            e.HasIndex(x => x.RunId).IsUnique();
-            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
-            e.Property(x => x.StartedAt).HasDefaultValueSql("now()");
-        });
-
-        b.Entity<CrmChainRunRow>(e =>
-        {
-            e.ToTable("crm_chain_runs");
-            e.HasKey(x => x.Id);
-            e.HasIndex(x => new { x.ClientId, x.StartedAt });
-            e.HasIndex(x => x.ChainRunId).IsUnique();
-            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
-            e.Property(x => x.StartedAt).HasDefaultValueSql("now()");
-        });
-
-        b.Entity<CrmCommunicationRow>(e =>
-        {
-            e.ToTable("crm_communications");
-            e.HasKey(x => x.Id);
-            e.HasIndex(x => new { x.ClientId, x.CreatedAt });
-            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
-            e.Property(x => x.CreatedAt).HasDefaultValueSql("now()");
-        });
-
-        b.Entity<CrmAppointmentRow>(e =>
-        {
-            e.ToTable("crm_appointments");
-            e.HasKey(x => x.Id);
-            e.HasIndex(x => new { x.ProjectId, x.StartsAt });
-            e.HasIndex(x => x.ClientId);
-            e.HasIndex(x => x.CalendarId);
-            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
-            e.Property(x => x.CreatedAt).HasDefaultValueSql("now()");
-        });
-
-        b.Entity<CrmCalendarRow>(e =>
-        {
-            e.ToTable("crm_calendars"); e.HasKey(x => x.Id);
-            e.HasIndex(x => new { x.ProjectId, x.Name }).IsUnique();
-            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
-            e.Property(x => x.CreatedAt).HasDefaultValueSql("now()");
-            e.Property(x => x.UpdatedAt).HasDefaultValueSql("now()");
-        });
-
-        b.Entity<CrmClientArtifactRow>(e =>
-        {
-            e.ToTable("crm_client_artifacts");
-            e.HasKey(x => x.Id);
-            e.HasIndex(x => new { x.ClientId, x.CreatedAt });
-            e.HasIndex(x => new { x.ClientId, x.SourceArtifactId }).IsUnique();
-            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
-            e.Property(x => x.CreatedAt).HasDefaultValueSql("now()");
-        });
-
-        b.Entity<CrmClientJobChainAssignmentRow>(e =>
-        {
-            e.ToTable("crm_client_job_chain_assignments");
-            e.HasKey(x => x.Id);
-            e.HasIndex(x => new { x.ProjectId, x.ClientId, x.ChainId }).IsUnique();
-            e.HasIndex(x => new { x.ProjectId, x.ClientId });
-            e.HasIndex(x => x.ChainId);
-            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
-            e.Property(x => x.CreatedAt).HasDefaultValueSql("now()");
-            e.Property(x => x.UpdatedAt).HasDefaultValueSql("now()");
-        });
-
-        b.Entity<CrmAutomationRuleRow>(e =>
-        {
-            e.ToTable("crm_automation_rules");
-            e.HasKey(x => x.Id);
-            e.HasIndex(x => new { x.ProjectId, x.EventType, x.LifecycleStage });
-            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
-            e.Property(x => x.Enabled).HasDefaultValue(true);
-            e.Property(x => x.CreatedAt).HasDefaultValueSql("now()");
-            e.Property(x => x.UpdatedAt).HasDefaultValueSql("now()");
-        });
-
-        b.Entity<CrmAutomationQueueRow>(e =>
-        {
-            e.ToTable("crm_automation_queue");
-            e.HasKey(x => x.Id);
-            e.HasIndex(x => new { x.CompletedAt, x.FailedAt, x.ClaimedAt, x.NextAttemptAt });
-            e.HasIndex(x => new { x.TenantId, x.ProjectId, x.Id });
-            e.HasIndex(x => x.ChainRunId);
         });
 
         b.Entity<CommunicationProviderRow>(e =>

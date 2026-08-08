@@ -1,13 +1,13 @@
-namespace PlaceContext.Infrastructure.Persistence;
+namespace PlaceContext.Crm.Infrastructure.Persistence;
 
-public sealed class CrmChainRunRow : ITenantOwned
+public sealed class CrmJobRunRow : ICrmTenantOwned
 {
     public Guid Id { get; set; }
     public Guid TenantId { get; set; }
     public Guid ProjectId { get; set; }
     public Guid ClientId { get; set; }
-    public Guid ChainId { get; set; }
-    public Guid ChainRunId { get; set; }
+    public Guid JobId { get; set; }
+    public Guid RunId { get; set; }
     public string LifecycleStage { get; set; } = "Lead";
     public DateTimeOffset StartedAt { get; set; }
 }

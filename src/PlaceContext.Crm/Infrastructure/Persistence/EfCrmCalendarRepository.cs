@@ -4,7 +4,7 @@ using PlaceContext.Domain.Repositories;
 namespace PlaceContext.Crm.Infrastructure.Persistence;
 public sealed class EfCrmCalendarRepository : ICrmCalendarRepository
 {
-    private readonly AppDbContext _db; public EfCrmCalendarRepository(AppDbContext db) => _db = db;
+    private readonly CrmDbContext _db; public EfCrmCalendarRepository(CrmDbContext db) => _db = db;
     public async Task AddAsync(CrmCalendar calendar, CancellationToken ct = default) => await _db.CrmCalendars.AddAsync(ToRow(calendar), ct);
     public async Task<CrmCalendar?> GetByIdAsync(Guid id, CancellationToken ct = default) { var row = await _db.CrmCalendars.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id, ct); return row is null ? null : ToDomain(row); }
     public async Task UpdateAsync(CrmCalendar calendar, CancellationToken ct = default) { var row = await _db.CrmCalendars.SingleOrDefaultAsync(x => x.Id == calendar.Id, ct); if (row is null) return; row.Name = calendar.Name; row.Color = calendar.Color; row.UpdatedAt = calendar.UpdatedAt; }

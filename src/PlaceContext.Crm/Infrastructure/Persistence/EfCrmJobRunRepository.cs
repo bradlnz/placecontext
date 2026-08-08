@@ -7,9 +7,9 @@ namespace PlaceContext.Crm.Infrastructure.Persistence;
 
 public sealed class EfCrmJobRunRepository : ICrmJobRunRepository
 {
-    private readonly AppDbContext _db;
+    private readonly CrmDbContext _db;
 
-    public EfCrmJobRunRepository(AppDbContext db) => _db = db;
+    public EfCrmJobRunRepository(CrmDbContext db) => _db = db;
 
     public async Task AddAsync(CrmJobRun run, CancellationToken ct = default)
         => await _db.CrmJobRuns.AddAsync(new CrmJobRunRow

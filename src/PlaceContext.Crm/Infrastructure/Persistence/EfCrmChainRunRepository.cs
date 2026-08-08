@@ -7,9 +7,9 @@ namespace PlaceContext.Crm.Infrastructure.Persistence;
 
 public sealed class EfCrmChainRunRepository : ICrmChainRunRepository
 {
-    private readonly AppDbContext _db;
+    private readonly CrmDbContext _db;
 
-    public EfCrmChainRunRepository(AppDbContext db) => _db = db;
+    public EfCrmChainRunRepository(CrmDbContext db) => _db = db;
 
     public async Task AddAsync(CrmChainRun run, CancellationToken ct = default)
         => await _db.CrmChainRuns.AddAsync(new CrmChainRunRow

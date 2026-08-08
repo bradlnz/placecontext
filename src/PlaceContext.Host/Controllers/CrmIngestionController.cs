@@ -12,7 +12,7 @@ using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.Repositories;
 using PlaceContext.Domain.ValueObjects;
 using PlaceContext.Crm.Infrastructure.Crm;
-using PlaceContext.Infrastructure.Persistence;
+using PlaceContext.Crm.Infrastructure.Persistence;
 using PlaceContext.Infrastructure.Tenancy;
 
 namespace PlaceContext.Host.Controllers;
@@ -28,7 +28,7 @@ public sealed class CrmIngestionController : ControllerBase
     private readonly ICommandHandler<SaveCrmClientCommand, CrmClientView> _save;
     private readonly CrmAutomationDispatcher _automations;
     private readonly IProjectDataStore _projectData;
-    private readonly AppDbContext _db;
+    private readonly CrmDbContext _db;
     private readonly IDataEncryptor _encryptor;
     private readonly IPlaceContextService _service;
     private readonly IRunArtifactLinkRepository _artifactLinks;
@@ -43,7 +43,7 @@ public sealed class CrmIngestionController : ControllerBase
         ICommandHandler<SaveCrmClientCommand, CrmClientView> save,
         CrmAutomationDispatcher automations,
         IProjectDataStore projectData,
-        AppDbContext db,
+        CrmDbContext db,
         IDataEncryptor encryptor,
         IPlaceContextService service,
         IRunArtifactLinkRepository artifactLinks,

@@ -7,8 +7,8 @@ namespace PlaceContext.Application.Features;
 
 public sealed class SaveCrmCalendarHandler : ICommandHandler<SaveCrmCalendarCommand, CrmCalendarView>
 {
-    private readonly ICrmCalendarRepository _calendars; private readonly IUnitOfWork _uow; private readonly IClock _clock;
-    public SaveCrmCalendarHandler(ICrmCalendarRepository calendars, IUnitOfWork uow, IClock clock) => (_calendars, _uow, _clock) = (calendars, uow, clock);
+    private readonly ICrmCalendarRepository _calendars; private readonly ICrmUnitOfWork _uow; private readonly IClock _clock;
+    public SaveCrmCalendarHandler(ICrmCalendarRepository calendars, ICrmUnitOfWork uow, IClock clock) => (_calendars, _uow, _clock) = (calendars, uow, clock);
     public async Task<CrmCalendarView> HandleAsync(SaveCrmCalendarCommand command, CancellationToken ct = default)
     {
         CrmCalendar value;

@@ -12,12 +12,12 @@ public sealed class SaveCrmAutomationRuleHandler
     private readonly ICrmAutomationRuleRepository _rules;
     private readonly IJobChainRepository _chains;
     private readonly IJobRepository _jobs;
-    private readonly IUnitOfWork _uow;
+    private readonly ICrmUnitOfWork _uow;
     private readonly IClock _clock;
 
     public SaveCrmAutomationRuleHandler(
         ICrmAutomationRuleRepository rules, IJobChainRepository chains, IJobRepository jobs,
-        IUnitOfWork uow, IClock clock)
+        ICrmUnitOfWork uow, IClock clock)
         => (_rules, _chains, _jobs, _uow, _clock) = (rules, chains, jobs, uow, clock);
 
     public async Task<CrmAutomationRuleView> HandleAsync(

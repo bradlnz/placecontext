@@ -16,7 +16,7 @@ public sealed class RunCrmClientAutomationHandler
     private readonly ICommandHandler<RunJobChainCommand, ChainRunView> _chainRunner;
     private readonly IRunArtifactLinkRepository _runArtifacts;
     private readonly ICrmClientArtifactRepository _clientArtifacts;
-    private readonly IUnitOfWork _uow;
+    private readonly ICrmUnitOfWork _uow;
 
     public RunCrmClientAutomationHandler(
         ICrmClientRepository clients,
@@ -25,7 +25,7 @@ public sealed class RunCrmClientAutomationHandler
         ICommandHandler<RunJobChainCommand, ChainRunView> chainRunner,
         IRunArtifactLinkRepository runArtifacts,
         ICrmClientArtifactRepository clientArtifacts,
-        IUnitOfWork uow)
+        ICrmUnitOfWork uow)
         => (_clients, _crmRuns, _chains, _chainRunner, _runArtifacts, _clientArtifacts, _uow)
             = (clients, crmRuns, chains, chainRunner, runArtifacts, clientArtifacts, uow);
 

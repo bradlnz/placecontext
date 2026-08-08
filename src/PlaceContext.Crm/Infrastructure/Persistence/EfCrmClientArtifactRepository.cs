@@ -7,11 +7,11 @@ namespace PlaceContext.Crm.Infrastructure.Persistence;
 
 public sealed class EfCrmClientArtifactRepository : ICrmClientArtifactRepository
 {
-    private readonly AppDbContext _db;
+    private readonly CrmDbContext _db;
     private readonly IDataEncryptor _encryptor;
     private static string Purpose => DataEncryptionPurpose.CrmArtifactMetadata;
 
-    public EfCrmClientArtifactRepository(AppDbContext db, IDataEncryptor encryptor)
+    public EfCrmClientArtifactRepository(CrmDbContext db, IDataEncryptor encryptor)
         => (_db, _encryptor) = (db, encryptor);
 
     public async Task AddAsync(CrmClientArtifact artifact, CancellationToken ct = default)

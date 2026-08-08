@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using PlaceContext.Crm.Infrastructure.Crm;
+using PlaceContext.Crm.Infrastructure.Persistence;
 using PlaceContext.Infrastructure.Persistence;
 using PlaceContext.TestSupport;
 
@@ -12,10 +13,15 @@ public sealed class CrmIngestionSettingsTests
     {
         var tenantId = Guid.NewGuid();
         var tenant = new FakeCurrentTenant(tenantId);
+        var databaseName = Guid.NewGuid().ToString("N");
         var options = new DbContextOptionsBuilder<AppDbContext>()
-            .UseInMemoryDatabase(Guid.NewGuid().ToString("N"))
+            .UseInMemoryDatabase(databaseName)
             .Options;
         await using var db = new AppDbContext(options, tenant);
+        var crmOptions = new DbContextOptionsBuilder<CrmDbContext>()
+            .UseInMemoryDatabase(databaseName)
+            .Options;
+        await using var crmDb = new CrmDbContext(crmOptions, tenant);
         await db.Tenants.AddAsync(new TenantRow
         {
             Id = tenantId, Slug = "example", Name = "Example", TimeZoneId = "Australia/Brisbane"
@@ -26,13 +32,13 @@ public sealed class CrmIngestionSettingsTests
         };
         await db.Projects.AddAsync(project);
         await db.SaveChangesAsync();
-        var service = new CrmIngestionSettingsService(db, tenant);
+        var service = new CrmIngestionSettingsService(crmDb, db, tenant);
 
         var rotated = await service.RotateAsync(project.Id, "https://forms.example.com/");
 
         Assert.StartsWith("pc_crm_", rotated.Token);
         Assert.Equal("https://forms.example.com", rotated.Settings.AllowedOrigin);
-        var row = await db.CrmIngestionSettings.SingleAsync();
+        var row = await crmDb.CrmIngestionSettings.SingleAsync();
         Assert.DoesNotContain(rotated.Token, row.TokenHash!);
         Assert.NotEqual(rotated.Token, row.TokenHash);
         var resolved = await service.ResolveAsync(rotated.Token);

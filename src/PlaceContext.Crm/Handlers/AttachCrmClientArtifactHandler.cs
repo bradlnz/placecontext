@@ -14,7 +14,7 @@ public sealed class AttachCrmClientArtifactHandler
     private readonly ICrmClientRepository _clients;
     private readonly ICrmClientArtifactRepository _artifacts;
     private readonly IObjectStore _store;
-    private readonly IUnitOfWork _uow;
+    private readonly ICrmUnitOfWork _uow;
     private readonly IClock _clock;
     private readonly CrmAutomationDispatcher? _automations;
 
@@ -22,7 +22,7 @@ public sealed class AttachCrmClientArtifactHandler
         ICrmClientRepository clients,
         ICrmClientArtifactRepository artifacts,
         IObjectStore store,
-        IUnitOfWork uow,
+        ICrmUnitOfWork uow,
         IClock clock,
         CrmAutomationDispatcher? automations = null)
         => (_clients, _artifacts, _store, _uow, _clock, _automations)

@@ -7,9 +7,9 @@ namespace PlaceContext.Crm.Infrastructure.Persistence;
 
 public sealed class EfCrmAutomationRuleRepository : ICrmAutomationRuleRepository
 {
-    private readonly AppDbContext _db;
+    private readonly CrmDbContext _db;
 
-    public EfCrmAutomationRuleRepository(AppDbContext db) => _db = db;
+    public EfCrmAutomationRuleRepository(CrmDbContext db) => _db = db;
 
     public async Task AddAsync(CrmAutomationRule rule, CancellationToken ct = default)
         => await _db.CrmAutomationRules.AddAsync(ToRow(rule), ct);

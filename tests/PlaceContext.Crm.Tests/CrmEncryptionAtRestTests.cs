@@ -7,7 +7,7 @@ using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.ValueObjects;
 using PlaceContext.Crm.Infrastructure.Persistence;
 using PlaceContext.Crm.Infrastructure.Scheduling;
-using PlaceContext.Infrastructure.Persistence;
+using PlaceContext.Crm.Infrastructure.Security;
 using PlaceContext.Infrastructure.Security;
 using PlaceContext.Jobs.Infrastructure.Persistence;
 using PlaceContext.TestSupport;
@@ -168,14 +168,14 @@ public sealed class CrmEncryptionAtRestTests
             .AddLogging()
             .AddSingleton<ICurrentTenant>(new FakeCurrentTenant(tenantId))
             .AddSingleton<IDataEncryptor>(encryptor)
-            .AddDbContext<AppDbContext>(options => options.UseInMemoryDatabase(databaseName))
+            .AddDbContext<CrmDbContext>(options => options.UseInMemoryDatabase(databaseName))
             .BuildServiceProvider();
 
         var clientId = Guid.NewGuid();
         var chainRunId = Guid.NewGuid();
         await using (var scope = services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<CrmDbContext>();
             db.CrmClients.Add(new CrmClientRow
             {
                 Id = clientId,
@@ -243,12 +243,12 @@ public sealed class CrmEncryptionAtRestTests
             await db.SaveChangesAsync();
         }
 
-        await EncryptionAtRestBootstrap.RunCrmAsync(services);
-        await EncryptionAtRestBootstrap.RunCrmAsync(services);
+        await CrmEncryptionAtRestBootstrap.RunAsync(services);
+        await CrmEncryptionAtRestBootstrap.RunAsync(services);
 
         await using (var scope = services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<CrmDbContext>();
             var client = await db.CrmClients.IgnoreQueryFilters().SingleAsync();
             AssertProtected(encryptor, client.Name, "Legacy Client");
             AssertProtected(encryptor, client.Email, "legacy@example.com");
@@ -271,14 +271,14 @@ public sealed class CrmEncryptionAtRestTests
         await services.DisposeAsync();
     }
 
-    private static (AppDbContext Db, IDataEncryptor Encryptor) CreateDb()
+    private static (CrmDbContext Db, IDataEncryptor Encryptor) CreateDb()
     {
         var tenant = new FakeCurrentTenant(Guid.NewGuid());
-        var options = new DbContextOptionsBuilder<AppDbContext>()
+        var options = new DbContextOptionsBuilder<CrmDbContext>()
             .UseInMemoryDatabase(Guid.NewGuid().ToString("N"))
             .Options;
         return (
-            new AppDbContext(options, tenant),
+            new CrmDbContext(options, tenant),
             new DataProtectionEncryptor(new EphemeralDataProtectionProvider()));
     }
 

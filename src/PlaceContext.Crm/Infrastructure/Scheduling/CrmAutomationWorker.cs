@@ -6,6 +6,7 @@ using PlaceContext.Application.Ports;
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Features;
 using PlaceContext.Application.Dtos;
+using PlaceContext.Crm.Infrastructure.Persistence;
 using PlaceContext.Infrastructure.Persistence;
 using PlaceContext.Infrastructure.Tenancy;
 
@@ -51,7 +52,7 @@ public sealed class CrmAutomationWorker : BackgroundService
     private async Task<IReadOnlyList<CrmAutomationQueueRow>> ClaimAsync(CancellationToken ct)
     {
         await using var scope = _scopes.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<CrmDbContext>();
         await using var tx = await db.Database.BeginTransactionAsync(ct);
         var now = DateTimeOffset.UtcNow;
         var rows = await db.CrmAutomationQueue.FromSqlRaw(
@@ -144,7 +145,7 @@ public sealed class CrmAutomationWorker : BackgroundService
     private async Task MarkRunningAsync(Guid id, Guid chainRunId, CancellationToken ct)
     {
         await using var scope = _scopes.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<CrmDbContext>();
         var row = await db.CrmAutomationQueue.FirstOrDefaultAsync(x => x.Id == id, ct);
         if (row is null) return;
         row.ChainRunId = chainRunId;
@@ -155,7 +156,7 @@ public sealed class CrmAutomationWorker : BackgroundService
         Guid id, Guid chainRunId, string resultStatus, CancellationToken ct)
     {
         await using var scope = _scopes.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<CrmDbContext>();
         var row = await db.CrmAutomationQueue.FirstOrDefaultAsync(x => x.Id == id, ct);
         if (row is null) return;
         row.ChainRunId = chainRunId;
@@ -168,7 +169,7 @@ public sealed class CrmAutomationWorker : BackgroundService
     private async Task ReleaseOrFailAsync(Guid id, string error, CancellationToken ct)
     {
         await using var scope = _scopes.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<CrmDbContext>();
         var encryptor = scope.ServiceProvider.GetRequiredService<IDataEncryptor>();
         var row = await db.CrmAutomationQueue.FirstOrDefaultAsync(x => x.Id == id, ct);
         if (row is null) return;
@@ -190,7 +191,7 @@ public sealed class CrmAutomationWorker : BackgroundService
     private async Task CleanupTrackingAsync(CancellationToken ct)
     {
         await using var scope = _scopes.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<CrmDbContext>();
         var cutoff = DateTimeOffset.UtcNow.Subtract(TrackingRetention);
         var removed = await db.CrmAutomationQueue
             .Where(row => row.CompletedAt < cutoff || row.FailedAt < cutoff)

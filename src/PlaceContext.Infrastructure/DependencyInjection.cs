@@ -222,30 +222,6 @@ public static class DependencyInjection
         }
         catch { /* non-Postgres or already applied via migration */ }
 
-        // Additive CRM client → job-chain assignment table for customer-specific automation visibility.
-        try
-        {
-            db.Database.ExecuteSqlRaw(
-                """
-                CREATE TABLE IF NOT EXISTS crm_client_job_chain_assignments (
-                    "Id" uuid PRIMARY KEY,
-                    "TenantId" uuid NOT NULL,
-                    "ProjectId" uuid NOT NULL,
-                    "ClientId" uuid NOT NULL,
-                    "ChainId" uuid NOT NULL,
-                    "CreatedAt" timestamptz NOT NULL DEFAULT now(),
-                    "UpdatedAt" timestamptz NOT NULL DEFAULT now()
-                );
-                CREATE INDEX IF NOT EXISTS ix_crm_client_job_chain_assignments_project_client
-                    ON crm_client_job_chain_assignments ("ProjectId", "ClientId");
-                CREATE INDEX IF NOT EXISTS ix_crm_client_job_chain_assignments_chain_id
-                    ON crm_client_job_chain_assignments ("ChainId");
-                CREATE UNIQUE INDEX IF NOT EXISTS uq_crm_client_job_chain_assignments_project_client_chain
-                    ON crm_client_job_chain_assignments ("ProjectId", "ClientId", "ChainId");
-                """);
-        }
-        catch { /* non-Postgres or partially initialized database */ }
-
     }
 
     /// <summary>
@@ -254,10 +230,4 @@ public static class DependencyInjection
     public static Task EncryptExistingDataAsync(IServiceProvider provider, CancellationToken ct = default)
         => Security.EncryptionAtRestBootstrap.RunAsync(provider, ct);
 
-    /// <summary>
-    /// Bounded, idempotent CRM-only backfill. Runs on every Host launch so customer data created by
-    /// versions predating CRM field encryption cannot remain plaintext after an upgrade.
-    /// </summary>
-    public static Task EncryptExistingCrmDataAsync(IServiceProvider provider, CancellationToken ct = default)
-        => Security.EncryptionAtRestBootstrap.RunCrmAsync(provider, ct);
 }

@@ -5,9 +5,9 @@ namespace PlaceContext.Crm.Infrastructure.Persistence;
 
 public sealed class EfCrmClientJobChainAssignmentRepository : ICrmClientJobChainAssignmentRepository
 {
-    private readonly AppDbContext _db;
+    private readonly CrmDbContext _db;
 
-    public EfCrmClientJobChainAssignmentRepository(AppDbContext db) => _db = db;
+    public EfCrmClientJobChainAssignmentRepository(CrmDbContext db) => _db = db;
 
     public async Task<IReadOnlyList<Guid>> ListForClientAsync(
         Guid projectId,

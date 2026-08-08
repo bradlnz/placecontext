@@ -12,11 +12,11 @@ public sealed class CreateCrmAppointmentHandler
     private readonly ICrmClientRepository _clients;
     private readonly ICrmCalendarRepository _calendars;
     private readonly ICurrentUser _currentUser;
-    private readonly IUnitOfWork _uow;
+    private readonly ICrmUnitOfWork _uow;
     private readonly IClock _clock;
 
     public CreateCrmAppointmentHandler(ICrmAppointmentRepository appointments,
-        ICrmClientRepository clients, ICrmCalendarRepository calendars, ICurrentUser currentUser, IUnitOfWork uow, IClock clock)
+        ICrmClientRepository clients, ICrmCalendarRepository calendars, ICurrentUser currentUser, ICrmUnitOfWork uow, IClock clock)
         => (_appointments, _clients, _calendars, _currentUser, _uow, _clock)
             = (appointments, clients, calendars, currentUser, uow, clock);
 

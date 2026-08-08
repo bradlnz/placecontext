@@ -1,15 +1,15 @@
 using PlaceContext.Application.Ports;
-using PlaceContext.Infrastructure.Persistence;
+using PlaceContext.Crm.Infrastructure.Persistence;
 
 namespace PlaceContext.Crm.Infrastructure.Scheduling;
 
 public sealed class DbCrmAutomationQueue : ICrmAutomationQueue
 {
-    private readonly AppDbContext _db;
+    private readonly CrmDbContext _db;
     private readonly IClock _clock;
     private readonly IDataEncryptor _encryptor;
 
-    public DbCrmAutomationQueue(AppDbContext db, IClock clock, IDataEncryptor encryptor)
+    public DbCrmAutomationQueue(CrmDbContext db, IClock clock, IDataEncryptor encryptor)
         => (_db, _clock, _encryptor) = (db, clock, encryptor);
 
     public async Task<Guid> EnqueueAsync(QueuedCrmAutomation value, CancellationToken ct = default)

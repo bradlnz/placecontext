@@ -17,8 +17,6 @@ public static class EncryptionAtRestBootstrap
 {
     private const string Prefix = DataProtectionEncryptor.Prefix;
     private const int ProjectDataBatch = 200;
-    private const int CrmBatch = 200;
-    private const int CrmPayloadBatch = 20;
 
     public static async Task RunAsync(IServiceProvider services, CancellationToken ct = default)
     {
@@ -36,10 +34,6 @@ public static class EncryptionAtRestBootstrap
         n += await EncryptDecisionsAsync(db, enc, ct);
         n += await EncryptActivityAsync(db, enc, ct);
         n += await EncryptToolCallsAsync(db, enc, ct);
-        n += await EncryptCrmClientsAsync(db, enc, ct);
-        n += await EncryptCrmCommunicationsAsync(db, enc, ct);
-        n += await EncryptCrmArtifactMetadataAsync(db, enc, ct);
-        n += await EncryptCrmAutomationErrorsAsync(db, enc, ct);
         n += await EncryptProjectDataTextCellsAsync(config, enc, log, ct);
 
         if (n > 0)
@@ -48,143 +42,8 @@ public static class EncryptionAtRestBootstrap
             log.LogInformation("Encryption-at-rest bootstrap: nothing to rewrite (already encrypted or empty).");
     }
 
-    /// <summary>
-    /// Lightweight startup backfill for CRM customer data. Unlike the opt-in historical bootstrap,
-    /// this is safe to run before every launch: it reads at most <see cref="CrmBatch"/> small rows at
-    /// a time and only selects legacy plaintext. This guarantees that pre-encryption CRM rows do not
-    /// remain readable in a database snapshot after an upgrade.
-    /// </summary>
-    public static async Task RunCrmAsync(IServiceProvider services, CancellationToken ct = default)
-    {
-        using var scope = services.CreateScope();
-        var sp = scope.ServiceProvider;
-        var log = sp.GetRequiredService<ILoggerFactory>().CreateLogger("CrmEncryptionAtRestBootstrap");
-        var enc = sp.GetRequiredService<IDataEncryptor>();
-        var db = sp.GetRequiredService<AppDbContext>();
-
-        var n = 0;
-        n += await EncryptCrmClientsAsync(db, enc, ct);
-        n += await EncryptCrmCommunicationsAsync(db, enc, ct);
-        n += await EncryptCrmArtifactMetadataAsync(db, enc, ct);
-        n += await EncryptCrmAutomationErrorsAsync(db, enc, ct);
-        if (n > 0)
-            log.LogInformation("CRM encryption-at-rest bootstrap rewrote {Count} field(s).", n);
-    }
-
     private static bool NeedsProtect(IDataEncryptor enc, string? value)
         => !string.IsNullOrEmpty(value) && !enc.IsProtected(value);
-
-    private static async Task<int> EncryptCrmClientsAsync(
-        AppDbContext db, IDataEncryptor enc, CancellationToken ct)
-    {
-        var n = 0;
-        while (true)
-        {
-            var rows = await db.CrmClients.IgnoreQueryFilters()
-                .Where(r => (r.Name != "" && !r.Name.StartsWith(Prefix))
-                    || (r.Company != null && r.Company != "" && !r.Company.StartsWith(Prefix))
-                    || (r.Email != null && r.Email != "" && !r.Email.StartsWith(Prefix))
-                    || (r.Phone != null && r.Phone != "" && !r.Phone.StartsWith(Prefix))
-                    || (r.Notes != null && r.Notes != "" && !r.Notes.StartsWith(Prefix)))
-                .Take(CrmBatch)
-                .ToListAsync(ct);
-            if (rows.Count == 0) break;
-
-            foreach (var row in rows)
-            {
-                if (NeedsProtect(enc, row.Name)) { row.Name = enc.Protect(row.Name, DataEncryptionPurpose.CrmClient); n++; }
-                if (NeedsProtect(enc, row.Company)) { row.Company = enc.Protect(row.Company, DataEncryptionPurpose.CrmClient); n++; }
-                if (NeedsProtect(enc, row.Email)) { row.Email = enc.Protect(row.Email, DataEncryptionPurpose.CrmClient); n++; }
-                if (NeedsProtect(enc, row.Phone)) { row.Phone = enc.Protect(row.Phone, DataEncryptionPurpose.CrmClient); n++; }
-                if (NeedsProtect(enc, row.Notes)) { row.Notes = enc.Protect(row.Notes, DataEncryptionPurpose.CrmClient); n++; }
-            }
-            await db.SaveChangesAsync(ct);
-            db.ChangeTracker.Clear();
-        }
-        return n;
-    }
-
-    private static async Task<int> EncryptCrmCommunicationsAsync(
-        AppDbContext db, IDataEncryptor enc, CancellationToken ct)
-    {
-        var p = DataEncryptionPurpose.CrmCommunication;
-        var n = 0;
-        while (true)
-        {
-            var rows = await db.CrmCommunications.IgnoreQueryFilters()
-                .Where(r => (r.BodyProtected != "" && !r.BodyProtected.StartsWith(Prefix))
-                    || (r.SubjectProtected != null && r.SubjectProtected != "" && !r.SubjectProtected.StartsWith(Prefix))
-                    || (r.RecipientProtected != null && r.RecipientProtected != "" && !r.RecipientProtected.StartsWith(Prefix))
-                    || (r.ExternalId != null && r.ExternalId != "" && !r.ExternalId.StartsWith(Prefix))
-                    || (r.ErrorProtected != null && r.ErrorProtected != "" && !r.ErrorProtected.StartsWith(Prefix)))
-                .Take(CrmBatch)
-                .ToListAsync(ct);
-            if (rows.Count == 0) break;
-
-            foreach (var row in rows)
-            {
-                if (NeedsProtect(enc, row.BodyProtected)) { row.BodyProtected = enc.Protect(row.BodyProtected, p); n++; }
-                if (NeedsProtect(enc, row.SubjectProtected)) { row.SubjectProtected = enc.Protect(row.SubjectProtected, p); n++; }
-                if (NeedsProtect(enc, row.RecipientProtected)) { row.RecipientProtected = enc.Protect(row.RecipientProtected, p); n++; }
-                if (NeedsProtect(enc, row.ExternalId)) { row.ExternalId = enc.Protect(row.ExternalId, p); n++; }
-                if (NeedsProtect(enc, row.ErrorProtected)) { row.ErrorProtected = enc.Protect(row.ErrorProtected, p); n++; }
-            }
-            await db.SaveChangesAsync(ct);
-            db.ChangeTracker.Clear();
-        }
-        return n;
-    }
-
-    private static async Task<int> EncryptCrmArtifactMetadataAsync(
-        AppDbContext db, IDataEncryptor enc, CancellationToken ct)
-    {
-        var p = DataEncryptionPurpose.CrmArtifactMetadata;
-        var n = 0;
-        while (true)
-        {
-            var rows = await db.CrmClientArtifacts.IgnoreQueryFilters()
-                .Where(r => (r.Title != "" && !r.Title.StartsWith(Prefix))
-                    || (r.ObjectKey != "" && !r.ObjectKey.StartsWith(Prefix)))
-                .Take(CrmBatch)
-                .ToListAsync(ct);
-            if (rows.Count == 0) break;
-
-            foreach (var row in rows)
-            {
-                if (NeedsProtect(enc, row.Title)) { row.Title = enc.Protect(row.Title, p); n++; }
-                if (NeedsProtect(enc, row.ObjectKey)) { row.ObjectKey = enc.Protect(row.ObjectKey, p); n++; }
-            }
-            await db.SaveChangesAsync(ct);
-            db.ChangeTracker.Clear();
-        }
-        return n;
-    }
-
-    private static async Task<int> EncryptCrmAutomationErrorsAsync(
-        AppDbContext db, IDataEncryptor enc, CancellationToken ct)
-    {
-        var p = DataEncryptionPurpose.CrmAutomation;
-        var n = 0;
-        while (true)
-        {
-            var rows = await db.CrmAutomationQueue
-                .Where(r => r.LastError != null && r.LastError != ""
-                    && !r.LastError.StartsWith(Prefix))
-                .Take(CrmBatch)
-                .ToListAsync(ct);
-            if (rows.Count == 0) break;
-
-            foreach (var row in rows)
-                if (NeedsProtect(enc, row.LastError))
-                {
-                    row.LastError = enc.Protect(row.LastError, p);
-                    n++;
-                }
-            await db.SaveChangesAsync(ct);
-            db.ChangeTracker.Clear();
-        }
-        return n;
-    }
 
     private static async Task<int> EncryptRequirementsAsync(AppDbContext db, IDataEncryptor enc, CancellationToken ct)
     {

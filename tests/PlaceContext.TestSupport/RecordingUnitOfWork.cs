@@ -5,10 +5,11 @@ using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.Repositories;
 using PlaceContext.Domain.ValueObjects;
 using PlaceContext.Jobs.Domain.Persistence;
+using PlaceContext.Crm.Domain.Persistence;
 
 namespace PlaceContext.TestSupport;
 
-public sealed class RecordingUnitOfWork : IUnitOfWork, IDataUnitOfWork, IJobsUnitOfWork
+public sealed class RecordingUnitOfWork : IUnitOfWork, IDataUnitOfWork, IJobsUnitOfWork, ICrmUnitOfWork
 {
     public int SaveCount { get; private set; }
     public Task<int> SaveChangesAsync(CancellationToken ct = default)

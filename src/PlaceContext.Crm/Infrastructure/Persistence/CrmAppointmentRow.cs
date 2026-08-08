@@ -1,6 +1,6 @@
-namespace PlaceContext.Infrastructure.Persistence;
+namespace PlaceContext.Crm.Infrastructure.Persistence;
 
-public sealed class CrmAppointmentRow : ITenantOwned
+public sealed class CrmAppointmentRow : ICrmTenantOwned
 {
     public Guid Id { get; set; }
     public Guid TenantId { get; set; }

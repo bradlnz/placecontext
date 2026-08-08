@@ -7,9 +7,9 @@ namespace PlaceContext.Crm.Infrastructure.Persistence;
 
 public sealed class EfCrmAppointmentRepository : ICrmAppointmentRepository
 {
-    private readonly AppDbContext _db;
+    private readonly CrmDbContext _db;
     private readonly IDataEncryptor _encryptor;
-    public EfCrmAppointmentRepository(AppDbContext db, IDataEncryptor encryptor)
+    public EfCrmAppointmentRepository(CrmDbContext db, IDataEncryptor encryptor)
         => (_db, _encryptor) = (db, encryptor);
 
     public async Task AddAsync(CrmAppointment appointment, CancellationToken ct = default)

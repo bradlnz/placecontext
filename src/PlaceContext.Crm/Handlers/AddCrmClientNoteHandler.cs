@@ -13,7 +13,7 @@ public sealed class AddCrmClientNoteHandler
     private readonly ICrmClientRepository _clients;
     private readonly ICrmCommunicationRepository _communications;
     private readonly ICurrentUser _currentUser;
-    private readonly IUnitOfWork _uow;
+    private readonly ICrmUnitOfWork _uow;
     private readonly IClock _clock;
     private readonly CrmAutomationDispatcher? _automations;
 
@@ -21,7 +21,7 @@ public sealed class AddCrmClientNoteHandler
         ICrmClientRepository clients,
         ICrmCommunicationRepository communications,
         ICurrentUser currentUser,
-        IUnitOfWork uow,
+        ICrmUnitOfWork uow,
         IClock clock,
         CrmAutomationDispatcher? automations = null)
         => (_clients, _communications, _currentUser, _uow, _clock, _automations)

@@ -14,7 +14,7 @@ public sealed class SendCrmClientMessageHandler
     private readonly ICrmCommunicationRepository _communications;
     private readonly IClientCommunicationSender _sender;
     private readonly ICurrentUser _currentUser;
-    private readonly IUnitOfWork _uow;
+    private readonly ICrmUnitOfWork _uow;
     private readonly IClock _clock;
     private readonly CrmAutomationDispatcher? _automations;
 
@@ -23,7 +23,7 @@ public sealed class SendCrmClientMessageHandler
         ICrmCommunicationRepository communications,
         IClientCommunicationSender sender,
         ICurrentUser currentUser,
-        IUnitOfWork uow,
+        ICrmUnitOfWork uow,
         IClock clock,
         CrmAutomationDispatcher? automations = null)
         => (_clients, _communications, _sender, _currentUser, _uow, _clock, _automations)

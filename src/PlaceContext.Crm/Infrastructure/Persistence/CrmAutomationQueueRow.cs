@@ -1,4 +1,4 @@
-namespace PlaceContext.Infrastructure.Persistence;
+namespace PlaceContext.Crm.Infrastructure.Persistence;
 
 /// <summary>Global durable queue; tenant context is restored by the CRM automation worker.</summary>
 public sealed class CrmAutomationQueueRow

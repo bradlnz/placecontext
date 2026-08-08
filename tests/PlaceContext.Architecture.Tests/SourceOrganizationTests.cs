@@ -457,6 +457,49 @@ public sealed class SourceOrganizationTests
             });
     }
 
+    [Fact]
+    public void Crm_persistence_is_owned_by_crm_infrastructure()
+    {
+        var serviceDirectory = Path.Combine(Root, "src", "PlaceContext.Crm");
+        var sharedPersistence = Path.Combine(Root, "src", "PlaceContext.Infrastructure", "Persistence");
+        var sharedContextText = File.ReadAllText(Path.Combine(sharedPersistence, "AppDbContext.cs"));
+        var rowTypes = new[]
+        {
+            "CrmClientRow",
+            "CrmJobRunRow",
+            "CrmChainRunRow",
+            "CrmCommunicationRow",
+            "CrmAppointmentRow",
+            "CrmCalendarRow",
+            "CrmClientArtifactRow",
+            "CrmClientJobChainAssignmentRow",
+            "CrmAutomationRuleRow",
+            "CrmAutomationQueueRow",
+            "CrmIngestionSettingsRow",
+        };
+        var required = new[]
+        {
+            Path.Combine(serviceDirectory, "Infrastructure", "Persistence", "CrmDbContext.cs"),
+            Path.Combine(serviceDirectory, "Domain", "Persistence", "ICrmUnitOfWork.cs"),
+            Path.Combine(
+                serviceDirectory,
+                "Infrastructure",
+                "Persistence",
+                "Migrations",
+                "CrmDbContextModelSnapshot.cs"),
+        }.Concat(rowTypes.Select(typeName =>
+            Path.Combine(serviceDirectory, "Infrastructure", "Persistence", typeName + ".cs")));
+
+        Assert.All(required, path => Assert.True(File.Exists(path), $"Missing {Relative(path)}"));
+        Assert.All(
+            rowTypes,
+            typeName =>
+            {
+                Assert.DoesNotContain($"DbSet<{typeName}>", sharedContextText, StringComparison.Ordinal);
+                Assert.False(File.Exists(Path.Combine(sharedPersistence, typeName + ".cs")));
+            });
+    }
+
     private static IEnumerable<string> SourceFiles()
         => Directory.EnumerateFiles(Path.Combine(Root, "src"), "*.cs", SearchOption.AllDirectories)
             .Where(file => !HasPathPart(file, "bin") && !HasPathPart(file, "obj"))

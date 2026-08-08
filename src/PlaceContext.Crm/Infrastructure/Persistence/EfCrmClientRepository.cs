@@ -8,11 +8,11 @@ namespace PlaceContext.Crm.Infrastructure.Persistence;
 
 public sealed class EfCrmClientRepository : ICrmClientRepository
 {
-    private readonly AppDbContext _db;
+    private readonly CrmDbContext _db;
     private readonly IDataEncryptor _encryptor;
     private static string Purpose => DataEncryptionPurpose.CrmClient;
 
-    public EfCrmClientRepository(AppDbContext db, IDataEncryptor encryptor)
+    public EfCrmClientRepository(CrmDbContext db, IDataEncryptor encryptor)
         => (_db, _encryptor) = (db, encryptor);
 
     public async Task AddAsync(CrmClient client, CancellationToken ct = default)

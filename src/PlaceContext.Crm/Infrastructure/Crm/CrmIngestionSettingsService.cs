@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
 using PlaceContext.Application.Ports;
+using PlaceContext.Crm.Infrastructure.Persistence;
 using PlaceContext.Infrastructure.Persistence;
 using PlaceContext.Infrastructure.Tenancy;
 
@@ -14,11 +15,15 @@ namespace PlaceContext.Crm.Infrastructure.Crm;
 public sealed class CrmIngestionSettingsService
 {
     public const string TokenHeader = "X-PlaceContext-CRM-Token";
-    private readonly AppDbContext _db;
+    private readonly CrmDbContext _db;
+    private readonly AppDbContext _platformDb;
     private readonly ICurrentTenant _tenant;
 
-    public CrmIngestionSettingsService(AppDbContext db, ICurrentTenant tenant)
-        => (_db, _tenant) = (db, tenant);
+    public CrmIngestionSettingsService(
+        CrmDbContext db,
+        AppDbContext platformDb,
+        ICurrentTenant tenant)
+        => (_db, _platformDb, _tenant) = (db, platformDb, tenant);
 
     public async Task<CrmIngestionSettingsView> GetAsync(
         Guid projectId,
@@ -97,15 +102,18 @@ public sealed class CrmIngestionSettingsService
     {
         if (string.IsNullOrWhiteSpace(token) || token.Length > 256) return null;
         var hash = Hash(token.Trim());
-        return await (
-            from settings in _db.CrmIngestionSettings.IgnoreQueryFilters().AsNoTracking()
-            join tenant in _db.Tenants.AsNoTracking() on settings.TenantId equals tenant.Id
-            where settings.TokenHash == hash && settings.AllowedOrigin != ""
-            select new ResolvedCrmIngestion(
+        var settings = await _db.CrmIngestionSettings.IgnoreQueryFilters().AsNoTracking()
+            .SingleOrDefaultAsync(item => item.TokenHash == hash && item.AllowedOrigin != "", ct);
+        if (settings is null) return null;
+
+        var tenant = await _platformDb.Tenants.AsNoTracking()
+            .SingleOrDefaultAsync(item => item.Id == settings.TenantId, ct);
+        return tenant is null
+            ? null
+            : new ResolvedCrmIngestion(
                 settings.ProjectId,
                 new TenantInfo(tenant.Id, tenant.Slug, tenant.Name, tenant.TimeZoneId),
-                settings.AllowedOrigin))
-            .SingleOrDefaultAsync(ct);
+                settings.AllowedOrigin);
     }
 
     public async Task<bool> IsKnownOriginAsync(string origin, CancellationToken ct = default)
@@ -135,7 +143,7 @@ public sealed class CrmIngestionSettingsService
     private async Task EnsureProjectAsync(Guid projectId, CancellationToken ct)
     {
         if (projectId == Guid.Empty
-            || !await _db.Projects.AsNoTracking().AnyAsync(item => item.Id == projectId, ct))
+            || !await _platformDb.Projects.AsNoTracking().AnyAsync(item => item.Id == projectId, ct))
             throw new InvalidOperationException("Project not found.");
     }
 

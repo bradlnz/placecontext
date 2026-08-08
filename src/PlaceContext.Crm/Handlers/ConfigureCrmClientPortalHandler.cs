@@ -12,14 +12,14 @@ public sealed class ConfigureCrmClientPortalHandler
 {
     private readonly ICrmClientRepository _clients;
     private readonly ICurrentTenant _tenant;
-    private readonly IUnitOfWork _uow;
+    private readonly ICrmUnitOfWork _uow;
     private readonly IClock _clock;
     private readonly ICustomerPortalProvisioner _provisioner;
 
     public ConfigureCrmClientPortalHandler(
         ICrmClientRepository clients,
         ICurrentTenant tenant,
-        IUnitOfWork uow,
+        ICrmUnitOfWork uow,
         IClock clock,
         ICustomerPortalProvisioner provisioner)
         => (_clients, _tenant, _uow, _clock, _provisioner) = (clients, tenant, uow, clock, provisioner);

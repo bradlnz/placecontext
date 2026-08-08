@@ -10,9 +10,9 @@ public sealed class DeleteCrmAutomationRuleHandler
     : ICommandHandler<DeleteCrmAutomationRuleCommand, bool>
 {
     private readonly ICrmAutomationRuleRepository _rules;
-    private readonly IUnitOfWork _uow;
+    private readonly ICrmUnitOfWork _uow;
 
-    public DeleteCrmAutomationRuleHandler(ICrmAutomationRuleRepository rules, IUnitOfWork uow)
+    public DeleteCrmAutomationRuleHandler(ICrmAutomationRuleRepository rules, ICrmUnitOfWork uow)
         => (_rules, _uow) = (rules, uow);
 
     public async Task<bool> HandleAsync(

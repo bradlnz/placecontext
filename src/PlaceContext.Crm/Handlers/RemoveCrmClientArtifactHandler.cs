@@ -12,12 +12,12 @@ public sealed class RemoveCrmClientArtifactHandler
 {
     private readonly ICrmClientArtifactRepository _artifacts;
     private readonly IObjectStore _store;
-    private readonly IUnitOfWork _uow;
+    private readonly ICrmUnitOfWork _uow;
 
     public RemoveCrmClientArtifactHandler(
         ICrmClientArtifactRepository artifacts,
         IObjectStore store,
-        IUnitOfWork uow)
+        ICrmUnitOfWork uow)
         => (_artifacts, _store, _uow) = (artifacts, store, uow);
 
     public async Task<bool> HandleAsync(

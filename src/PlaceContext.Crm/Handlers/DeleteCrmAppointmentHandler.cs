@@ -7,8 +7,8 @@ namespace PlaceContext.Application.Features;
 
 public sealed class DeleteCrmAppointmentHandler : ICommandHandler<DeleteCrmAppointmentCommand, bool>
 {
-    private readonly ICrmAppointmentRepository _appointments; private readonly IUnitOfWork _uow;
-    public DeleteCrmAppointmentHandler(ICrmAppointmentRepository appointments, IUnitOfWork uow) => (_appointments, _uow) = (appointments, uow);
+    private readonly ICrmAppointmentRepository _appointments; private readonly ICrmUnitOfWork _uow;
+    public DeleteCrmAppointmentHandler(ICrmAppointmentRepository appointments, ICrmUnitOfWork uow) => (_appointments, _uow) = (appointments, uow);
     public async Task<bool> HandleAsync(DeleteCrmAppointmentCommand command, CancellationToken ct = default)
     {
         if (await _appointments.GetByIdAsync(command.AppointmentId, ct) is null) return false;

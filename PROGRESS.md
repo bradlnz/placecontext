@@ -66,6 +66,10 @@ Last updated: 2026-08-08 (Australia/Brisbane)
 - Rewired Jobs repositories, queueing, schedule scanning, event dispatch, continuation/status workers, and command handlers to the Jobs-specific commit boundary; shared activity workflows now raise events through `IEventDispatcher` rather than a concrete Jobs service.
 - Moved schedule/event implementations out of the shared Application source tree into Jobs, and moved legacy Jobs/chain/event encryption plus hot run indexes into the Jobs database lifecycle.
 - Added Jobs tenant-isolation, global queue, legacy encryption, and CRM/Jobs cross-boundary persistence coverage plus an architecture check that locks Jobs persistence ownership to the service.
+- Gave CRM its own `CrmDbContext`, eleven owned rows, `ICrmUnitOfWork`, connection configuration, health check, `__EFMigrationsHistory_Crm` history table, and non-destructive initial migration for legacy gateway data.
+- Moved clients, CRM job/chain run links, communications, appointments, calendars, client artifacts/chain assignments, automation rules/queue, and ingestion settings out of the shared `AppDbContext`; the shared handoff migration releases all eleven tables without dropping them.
+- Rewired CRM repositories, handlers, ingestion, workers, encryption bootstrap, and the public ingestion controller to CRM-owned persistence while keeping tenant/project lookup as an explicit transitional platform dependency.
+- Added CRM tenant-isolation/global-queue coverage and a sixteenth architecture check that locks its context, rows, unit of work, and migration snapshot to the service.
 - Removed the unused Host `BrowseTab` enum and moved controller/view-model records into matching `Records` folders.
 - Aligned Vault infrastructure's EF Core/Relational dependencies at 10.0.9 so the extracted project builds without assembly-conflict warnings.
 - Extracted OpenSearch connection/data/sync gateways and the dashboard persistence adapter into `PlaceContext.Search.Infrastructure`; the gateway now composes them through `AddSearchInfrastructure`.
@@ -110,21 +114,21 @@ Last updated: 2026-08-08 (Australia/Brisbane)
 - `PlaceContext.AgentChat.Infrastructure` builds with 0 warnings and 0 errors.
 - Full `PlaceContext.slnx` build: 0 warnings and 0 errors.
 - All seven API runtimes pass Development-mode dependency validation; Jobs reached a listening Kestrel endpoint and Vault `/health` returned HTTP 200 `Healthy`.
-- Jobs persistence ownership architecture coverage is passing; the current shared-worktree architecture run has 13/15 passing, with its two failures limited to concurrent uncommitted Host frontend-migration files that still contain multiple declarations.
+- Jobs and CRM persistence ownership architecture coverage is passing; the current shared-worktree architecture run has 14/16 passing, with its two failures limited to concurrent uncommitted Host frontend-migration files that still contain multiple declarations.
 - Service test projects passing independently:
   - AgentChat: 42 tests
   - Artifacts: 57 tests
-  - CRM: 19 tests
+  - CRM: 20 tests
   - Data: 169 passing, 1 integration test skipped
   - Jobs: 210 passing, 5 Docker integration tests skipped
   - Search: 34 tests
   - Vault: 4 tests
-- The last clean full architecture suite was 14/14; Jobs adds a fifteenth ownership check, which passes independently of the two concurrent Host source-organization violations noted above.
+- The last clean full architecture suite was 14/14; Jobs and CRM add two ownership checks, both of which pass independently of the two concurrent Host source-organization violations noted above.
 - Vault tests are 4/4 passing after its database and encryption lifecycle extraction.
 - Search tests are 34/34 passing after its owned dashboard database and tenant-isolation move.
 - Data tests are 169/169 passing with one local-Postgres integration test skipped after its owned database and tenant-isolation move.
 - Jobs tests are 210/210 passing with five Docker integration tests skipped after its owned database, encryption, and tenant-isolation move.
-- CRM tests are 19/19 passing after its infrastructure/test move.
+- CRM tests are 20/20 passing after its owned database, encryption, and tenant-isolation move.
 - Artifacts tests are 57/57 passing after its owned database and tenant-isolation move.
 - AgentChat tests are 42/42 passing after its owned database, unit-of-work, and repository-test move.
 - Shared Infrastructure tests: 96/96 passing after obsolete Vault implementation coverage moved to Vault and contract-level fakes replaced concrete Vault EF dependencies.
@@ -134,24 +138,24 @@ Last updated: 2026-08-08 (Australia/Brisbane)
 
 ## In progress
 
-- Continue splitting the shared `AppDbContext`, row model, and migration history; Vault, AgentChat, Artifacts, Search dashboards, Data, and Jobs are complete and the remaining CRM/platform tables still need owned database lifecycles.
+- Continue reducing the shared `AppDbContext`, row model, and migration history; Vault, AgentChat, Artifacts, Search dashboards, Data, Jobs, and CRM persistence ownership are complete, leaving shared platform tables and explicit platform-service seams.
 - Decide explicit ownership for the remaining platform capabilities in shared Infrastructure, especially authentication/tenancy, communications, embeddings/vector storage, cluster integration, and analytics refresh.
 
 ## Remaining coupling to remove
 
 - Service implementations still reference the main Application assembly as an extraction seam.
 - The current host still references service implementations directly.
-- CRM and Jobs still reference shared `PlaceContext.Infrastructure` platform adapters; Jobs persistence is isolated, but its cross-tenant scheduler still needs explicit tenant-catalog/ambient-context and operation-notification ports before that project reference can be removed. Vault, AgentChat, Artifacts, Search, and Data no longer reference shared Infrastructure.
+- CRM and Jobs still reference shared `PlaceContext.Infrastructure` platform adapters: both have isolated persistence, but their cross-tenant workers still need explicit tenant-catalog/ambient-context ports; Jobs also needs an operation-notification port, and CRM ingestion still validates tenant/project registry data through the platform context. Vault, AgentChat, Artifacts, Search, and Data no longer reference shared Infrastructure.
 - The shared database model and migration history still contain tables for the other services and platform capabilities, preventing their independent database evolution.
 - Standalone Data/Search runtimes currently fall back to service configuration when Vault adapters are absent; replace this transition seam with authenticated service-to-service Vault contracts.
 - API runtimes currently expose the explicitly migrated controller surface; remaining gateway-only commands must move behind their owning service APIs before the gateway can drop implementation references.
 - Search's decision-tree read model consumes Jobs, Data, and Artifacts domain models transitively; replace these with service contracts/read models.
-- The remaining service runtimes need owned databases/migrations and integration-event/outbox wiring; Vault, AgentChat, Artifacts, Search, Data, and Jobs now own their database migration and health-check paths.
+- The extracted service runtimes need integration-event/outbox wiring; Vault, AgentChat, Artifacts, Search, Data, Jobs, and CRM now own their database migration and health-check paths.
 - Contracts retain legacy `PlaceContext.Application.*` namespaces for source compatibility; physical ownership is correct, namespace cleanup remains.
 
 ## Next steps
 
-1. Extract CRM persistence from shared `AppDbContext`, then replace Jobs' remaining shared tenant-catalog/ambient-context and operation-notification dependencies with explicit platform ports.
+1. Replace Jobs/CRM shared tenant-catalog and ambient-context dependencies, plus Jobs operation notifications, with explicit platform ports so both runtimes can drop their shared Infrastructure project references.
 2. Expand each service controller to cover its remaining gateway-only commands and replace cross-service repository reads with HTTP/integration-event contracts.
 3. Remove direct service implementation references from the gateway in favor of HTTP clients/integration events.
 4. Continue the root `frontend/` migration one vertical slice at a time after each corresponding runtime/API boundary is independent.

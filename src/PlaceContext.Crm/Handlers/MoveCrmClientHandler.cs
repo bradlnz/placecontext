@@ -10,12 +10,12 @@ namespace PlaceContext.Application.Features;
 public sealed class MoveCrmClientHandler : ICommandHandler<MoveCrmClientCommand, CrmClientView>
 {
     private readonly ICrmClientRepository _clients;
-    private readonly IUnitOfWork _uow;
+    private readonly ICrmUnitOfWork _uow;
     private readonly IClock _clock;
     private readonly CrmAutomationDispatcher? _automations;
 
     public MoveCrmClientHandler(
-        ICrmClientRepository clients, IUnitOfWork uow, IClock clock,
+        ICrmClientRepository clients, ICrmUnitOfWork uow, IClock clock,
         CrmAutomationDispatcher? automations = null)
         => (_clients, _uow, _clock, _automations) = (clients, uow, clock, automations);
 

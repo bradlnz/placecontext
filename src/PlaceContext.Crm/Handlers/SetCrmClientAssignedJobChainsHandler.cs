@@ -13,13 +13,13 @@ public sealed class SetCrmClientAssignedJobChainsHandler
     private readonly ICrmClientRepository _clients;
     private readonly ICrmClientJobChainAssignmentRepository _assignments;
     private readonly IJobChainRepository _chains;
-    private readonly IUnitOfWork _uow;
+    private readonly ICrmUnitOfWork _uow;
 
     public SetCrmClientAssignedJobChainsHandler(
         ICrmClientRepository clients,
         ICrmClientJobChainAssignmentRepository assignments,
         IJobChainRepository chains,
-        IUnitOfWork uow)
+        ICrmUnitOfWork uow)
         => (_clients, _assignments, _chains, _uow) = (clients, assignments, chains, uow);
 
     public async Task<IReadOnlyList<Guid>> HandleAsync(

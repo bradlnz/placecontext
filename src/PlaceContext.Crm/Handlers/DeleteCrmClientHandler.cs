@@ -12,13 +12,13 @@ public sealed class DeleteCrmClientHandler : ICommandHandler<DeleteCrmClientComm
     private readonly ICrmClientRepository _clients;
     private readonly ICrmClientArtifactRepository _artifacts;
     private readonly IObjectStore _store;
-    private readonly IUnitOfWork _uow;
+    private readonly ICrmUnitOfWork _uow;
 
     public DeleteCrmClientHandler(
         ICrmClientRepository clients,
         ICrmClientArtifactRepository artifacts,
         IObjectStore store,
-        IUnitOfWork uow)
+        ICrmUnitOfWork uow)
         => (_clients, _artifacts, _store, _uow) = (clients, artifacts, store, uow);
 
     public async Task<bool> HandleAsync(DeleteCrmClientCommand command, CancellationToken ct = default)

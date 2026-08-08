@@ -8,10 +8,10 @@ namespace PlaceContext.Crm.Infrastructure.Persistence;
 
 public sealed class EfCrmCommunicationRepository : ICrmCommunicationRepository
 {
-    private readonly AppDbContext _db;
+    private readonly CrmDbContext _db;
     private readonly IDataEncryptor _encryptor;
 
-    public EfCrmCommunicationRepository(AppDbContext db, IDataEncryptor encryptor)
+    public EfCrmCommunicationRepository(CrmDbContext db, IDataEncryptor encryptor)
         => (_db, _encryptor) = (db, encryptor);
 
     public async Task AddAsync(CrmCommunication communication, CancellationToken ct = default)

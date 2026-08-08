@@ -1,9 +1,9 @@
 using PlaceContext.Application.Ports;
 
-namespace PlaceContext.Infrastructure.Persistence;
+namespace PlaceContext.Crm.Infrastructure.Persistence;
 
 /// <summary>One public lead-ingestion credential and browser origin per CRM project.</summary>
-public sealed class CrmIngestionSettingsRow : ITenantOwned
+public sealed class CrmIngestionSettingsRow : ICrmTenantOwned
 {
     public Guid ProjectId { get; set; }
     public Guid TenantId { get; set; }
