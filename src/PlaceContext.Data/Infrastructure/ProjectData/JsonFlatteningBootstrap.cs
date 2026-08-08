@@ -6,7 +6,7 @@ using Npgsql;
 using PlaceContext.Application.Shared;
 using NpgsqlTypes;
 using PlaceContext.Application.Features;
-using PlaceContext.Infrastructure;
+using PlaceContext.Data.Infrastructure.Persistence;
 
 namespace PlaceContext.Data.Infrastructure.ProjectData;
 
@@ -30,7 +30,10 @@ public static class JsonFlatteningBootstrap
         var sp = scope.ServiceProvider;
         var log = sp.GetRequiredService<ILoggerFactory>().CreateLogger("JsonFlatteningBootstrap");
         var config = sp.GetRequiredService<IConfiguration>();
-        var cs = config.GetSection("PlaceContext")["ConnectionString"] ?? new PlaceContextOptions().ConnectionString;
+        var cs = config.GetConnectionString("Data")
+            ?? config[$"{DataPersistenceOptions.SectionName}:ConnectionString"]
+            ?? config["PlaceContext:ConnectionString"]
+            ?? DataPersistenceOptions.DefaultConnectionString;
 
         await using var conn = new NpgsqlConnection(cs);
         await conn.OpenAsync(ct);

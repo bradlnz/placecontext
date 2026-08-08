@@ -75,7 +75,7 @@ builder.Services.AddAgentsInfrastructure(builder.Configuration);
 builder.Services.AddJobsInfrastructure(builder.Configuration);
 builder.Services.AddCrmInfrastructure();
 builder.Services.AddArtifactsInfrastructure(builder.Configuration);
-builder.Services.AddDataInfrastructure();
+builder.Services.AddDataInfrastructure(builder.Configuration);
 builder.Services.AddSearchInfrastructure(builder.Configuration);
 builder.Services.AddVaultInfrastructure(builder.Configuration);
 
@@ -453,6 +453,8 @@ await PlaceContext.Agents.Infrastructure.Persistence.AgentsDatabaseMigrationExte
     .MigrateAgentsDatabaseAsync(app.Services);
 await PlaceContext.Artifacts.Infrastructure.Persistence.ArtifactsDatabaseMigrationExtensions
     .MigrateArtifactsDatabaseAsync(app.Services);
+await PlaceContext.Data.Infrastructure.Persistence.DataDatabaseMigrationExtensions
+    .MigrateDataDatabaseAsync(app.Services);
 await PlaceContext.Search.Infrastructure.Persistence.SearchDatabaseMigrationExtensions
     .MigrateSearchDatabaseAsync(app.Services);
 await PlaceContext.Vault.Infrastructure.Persistence.VaultDatabaseMigrationExtensions
@@ -477,6 +479,7 @@ else
 if (app.Configuration.GetValue("PlaceContext:EncryptionAtRest:BootstrapOnStartup", false))
 {
     await PlaceContext.Infrastructure.DependencyInjection.EncryptExistingDataAsync(app.Services);
+    await PlaceContext.Data.Infrastructure.Security.DataEncryptionAtRestBootstrap.RunAsync(app.Services);
     await PlaceContext.Vault.Infrastructure.Security.VaultEncryptionAtRestBootstrap.RunAsync(app.Services);
 }
 else

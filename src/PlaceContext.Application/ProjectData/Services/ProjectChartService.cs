@@ -20,12 +20,12 @@ public sealed class ProjectChartService
 
     private readonly IProjectDataStore _store;
     private readonly IProjectChartRepository _charts;
-    private readonly IUnitOfWork _uow;
+    private readonly IDataUnitOfWork _uow;
     private readonly IClock _clock;
     private readonly ILogger<ProjectChartService>? _log;
 
     public ProjectChartService(IProjectDataStore store, IProjectChartRepository charts,
-        IUnitOfWork uow, IClock clock, ILogger<ProjectChartService>? log = null)
+        IDataUnitOfWork uow, IClock clock, ILogger<ProjectChartService>? log = null)
     {
         _store = store;
         _charts = charts;

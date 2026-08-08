@@ -3,23 +3,22 @@ using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.Repositories;
 using PlaceContext.Domain.ValueObjects;
 using Microsoft.EntityFrameworkCore;
-using PlaceContext.Infrastructure.Persistence;
 
 namespace PlaceContext.Data.Infrastructure.Persistence;
 
 public sealed class EfDataEntityRepository : IDataEntityRepository
 {
     private static readonly JsonSerializerOptions Json = new() { WriteIndented = false };
-    private readonly AppDbContext _db;
+    private readonly DataDbContext _db;
 
-    public EfDataEntityRepository(AppDbContext db) => _db = db;
+    public EfDataEntityRepository(DataDbContext db) => _db = db;
 
     public async Task AddAsync(DataEntity entity, CancellationToken ct = default)
         => await _db.DataEntities.AddAsync(ToRow(entity), ct);
 
     public async Task UpdateAsync(DataEntity entity, CancellationToken ct = default)
     {
-        var existing = await _db.DataEntities.FindAsync(new object[] { entity.Id }, ct);
+        var existing = await _db.DataEntities.FirstOrDefaultAsync(row => row.Id == entity.Id, ct);
         if (existing is null) return;
         existing.Name = entity.Name;
         existing.TableName = entity.TableName;
@@ -31,7 +30,7 @@ public sealed class EfDataEntityRepository : IDataEntityRepository
 
     public async Task DeleteAsync(Guid entityId, CancellationToken ct = default)
     {
-        var existing = await _db.DataEntities.FindAsync(new object[] { entityId }, ct);
+        var existing = await _db.DataEntities.FirstOrDefaultAsync(row => row.Id == entityId, ct);
         if (existing is not null) _db.DataEntities.Remove(existing);
     }
 

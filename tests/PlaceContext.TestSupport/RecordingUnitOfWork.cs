@@ -7,7 +7,7 @@ using PlaceContext.Domain.ValueObjects;
 
 namespace PlaceContext.TestSupport;
 
-public sealed class RecordingUnitOfWork : IUnitOfWork
+public sealed class RecordingUnitOfWork : IUnitOfWork, IDataUnitOfWork
 {
     public int SaveCount { get; private set; }
     public Task<int> SaveChangesAsync(CancellationToken ct = default)

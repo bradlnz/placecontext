@@ -1,16 +1,15 @@
 using Microsoft.EntityFrameworkCore;
 using PlaceContext.Application.Features;
 using PlaceContext.Application.Ports;
-using PlaceContext.Infrastructure.Persistence;
 
 namespace PlaceContext.Data.Infrastructure.Persistence;
 
 public sealed class EfEntityTagStore : IEntityTagStore
 {
-    private readonly AppDbContext _db;
+    private readonly DataDbContext _db;
     private readonly IClock _clock;
 
-    public EfEntityTagStore(AppDbContext db, IClock clock)
+    public EfEntityTagStore(DataDbContext db, IClock clock)
     {
         _db = db;
         _clock = clock;

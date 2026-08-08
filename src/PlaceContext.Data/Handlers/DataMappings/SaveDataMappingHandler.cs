@@ -12,12 +12,12 @@ public sealed class SaveDataMappingHandler : ICommandHandler<SaveDataMappingComm
     private readonly IDataMappingRepository _mappings;
     private readonly IJobRepository _jobs;
     private readonly IJobChainRepository _chains;
-    private readonly IUnitOfWork _uow;
+    private readonly IDataUnitOfWork _uow;
     private readonly IClock _clock;
     private readonly IProjectDataStore? _store;
 
     public SaveDataMappingHandler(IDataMappingRepository mappings, IJobRepository jobs,
-        IJobChainRepository chains, IUnitOfWork uow, IClock clock, IProjectDataStore? store = null)
+        IJobChainRepository chains, IDataUnitOfWork uow, IClock clock, IProjectDataStore? store = null)
     {
         _mappings = mappings;
         _jobs = jobs;

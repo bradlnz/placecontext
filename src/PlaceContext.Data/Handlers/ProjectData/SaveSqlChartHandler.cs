@@ -13,10 +13,10 @@ public sealed class SaveSqlChartHandler : ICommandHandler<SaveSqlChartCommand, P
 
     private readonly IProjectDataStore _store;
     private readonly IProjectChartRepository _charts;
-    private readonly IUnitOfWork _uow;
+    private readonly IDataUnitOfWork _uow;
     private readonly IClock _clock;
 
-    public SaveSqlChartHandler(IProjectDataStore store, IProjectChartRepository charts, IUnitOfWork uow, IClock clock)
+    public SaveSqlChartHandler(IProjectDataStore store, IProjectChartRepository charts, IDataUnitOfWork uow, IClock clock)
     {
         _store = store;
         _charts = charts;

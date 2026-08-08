@@ -38,7 +38,6 @@ public static class EncryptionAtRestBootstrap
         n += await EncryptEventPayloadsAsync(db, enc, ct);
         n += await EncryptDecisionsAsync(db, enc, ct);
         n += await EncryptActivityAsync(db, enc, ct);
-        n += await EncryptChartsAsync(db, enc, ct);
         n += await EncryptToolCallsAsync(db, enc, ct);
         n += await EncryptPendingRunsAsync(db, enc, ct);
         n += await EncryptChainRunsAsync(db, enc, crmOnly: false, ct);
@@ -307,19 +306,6 @@ public static class EncryptionAtRestBootstrap
         {
             if (NeedsProtect(enc, r.Summary)) { r.Summary = enc.Protect(r.Summary, p); n++; }
             if (NeedsProtect(enc, r.Rationale)) { r.Rationale = enc.Protect(r.Rationale, p); n++; }
-        }
-        if (n > 0) await db.SaveChangesAsync(ct);
-        return n;
-    }
-
-    private static async Task<int> EncryptChartsAsync(AppDbContext db, IDataEncryptor enc, CancellationToken ct)
-    {
-        var p = DataEncryptionPurpose.Chart;
-        var rows = await db.ProjectCharts.IgnoreQueryFilters().ToListAsync(ct);
-        var n = 0;
-        foreach (var r in rows)
-        {
-            if (NeedsProtect(enc, r.Html)) { r.Html = enc.Protect(r.Html, p); n++; }
         }
         if (n > 0) await db.SaveChangesAsync(ct);
         return n;

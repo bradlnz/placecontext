@@ -2,17 +2,16 @@ using Microsoft.EntityFrameworkCore;
 using PlaceContext.Application.Ports;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.Repositories;
-using PlaceContext.Infrastructure.Persistence;
 
 namespace PlaceContext.Data.Infrastructure.Persistence;
 
 public sealed class EfProjectChartRepository : IProjectChartRepository
 {
-    private readonly AppDbContext _db;
+    private readonly DataDbContext _db;
     private readonly IDataEncryptor _enc;
     private static string P => DataEncryptionPurpose.Chart;
 
-    public EfProjectChartRepository(AppDbContext db, IDataEncryptor enc) => (_db, _enc) = (db, enc);
+    public EfProjectChartRepository(DataDbContext db, IDataEncryptor enc) => (_db, _enc) = (db, enc);
 
     public async Task UpsertAsync(ProjectChart chart, CancellationToken ct = default)
     {

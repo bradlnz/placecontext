@@ -9,9 +9,9 @@ namespace PlaceContext.Application.Features;
 public sealed class DeleteDataEntityHandler : ICommandHandler<DeleteDataEntityCommand, bool>
 {
     private readonly IDataEntityRepository _entities;
-    private readonly IUnitOfWork _uow;
+    private readonly IDataUnitOfWork _uow;
 
-    public DeleteDataEntityHandler(IDataEntityRepository entities, IUnitOfWork uow)
+    public DeleteDataEntityHandler(IDataEntityRepository entities, IDataUnitOfWork uow)
     {
         _entities = entities;
         _uow = uow;

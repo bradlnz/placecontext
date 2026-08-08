@@ -7,9 +7,9 @@ namespace PlaceContext.Application.Features;
 public sealed class DeleteDataMappingHandler : ICommandHandler<DeleteDataMappingCommand, bool>
 {
     private readonly IDataMappingRepository _mappings;
-    private readonly IUnitOfWork _uow;
+    private readonly IDataUnitOfWork _uow;
 
-    public DeleteDataMappingHandler(IDataMappingRepository mappings, IUnitOfWork uow)
+    public DeleteDataMappingHandler(IDataMappingRepository mappings, IDataUnitOfWork uow)
     {
         _mappings = mappings;
         _uow = uow;

@@ -3,23 +3,22 @@ using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.Repositories;
 using PlaceContext.Domain.ValueObjects;
 using Microsoft.EntityFrameworkCore;
-using PlaceContext.Infrastructure.Persistence;
 
 namespace PlaceContext.Data.Infrastructure.Persistence;
 
 public sealed class EfDataMappingRepository : IDataMappingRepository
 {
-    private readonly AppDbContext _db;
+    private readonly DataDbContext _db;
     private static readonly JsonSerializerOptions Json = new() { WriteIndented = false };
 
-    public EfDataMappingRepository(AppDbContext db) => _db = db;
+    public EfDataMappingRepository(DataDbContext db) => _db = db;
 
     public async Task AddAsync(DataMapping mapping, CancellationToken ct = default)
         => await _db.DataMappings.AddAsync(ToRow(mapping), ct);
 
     public async Task UpdateAsync(DataMapping mapping, CancellationToken ct = default)
     {
-        var existing = await _db.DataMappings.FindAsync(new object[] { mapping.Id }, ct);
+        var existing = await _db.DataMappings.FirstOrDefaultAsync(row => row.Id == mapping.Id, ct);
         if (existing is null) return;
         existing.TargetTable = mapping.TargetTable;
         existing.RowsPath = mapping.RowsPath;
@@ -30,7 +29,7 @@ public sealed class EfDataMappingRepository : IDataMappingRepository
 
     public async Task DeleteAsync(Guid mappingId, CancellationToken ct = default)
     {
-        var existing = await _db.DataMappings.FindAsync(new object[] { mappingId }, ct);
+        var existing = await _db.DataMappings.FirstOrDefaultAsync(row => row.Id == mappingId, ct);
         if (existing is not null) _db.DataMappings.Remove(existing);
     }
 

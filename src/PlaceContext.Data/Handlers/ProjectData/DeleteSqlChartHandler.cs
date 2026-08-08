@@ -9,9 +9,9 @@ namespace PlaceContext.Application.Features;
 public sealed class DeleteSqlChartHandler : ICommandHandler<DeleteSqlChartCommand, bool>
 {
     private readonly IProjectChartRepository _charts;
-    private readonly IUnitOfWork _uow;
+    private readonly IDataUnitOfWork _uow;
 
-    public DeleteSqlChartHandler(IProjectChartRepository charts, IUnitOfWork uow)
+    public DeleteSqlChartHandler(IProjectChartRepository charts, IDataUnitOfWork uow)
     {
         _charts = charts;
         _uow = uow;

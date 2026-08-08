@@ -81,7 +81,6 @@ public static class DependencyInjection
         services.AddSingleton<IToolCallLog, EfToolCallLog>();
 
         // EF repositories.
-        services.AddScoped<ISavedQueryStore, EfSavedQueryStore>();
         services.AddScoped<IActivityLogRepository, EfActivityLogRepository>();
         services.AddScoped<IDecisionRepository, EfDecisionRepository>();
         services.AddScoped<IRequirementsRepository, EfRequirementsRepository>();

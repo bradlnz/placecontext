@@ -368,6 +368,54 @@ public sealed class SourceOrganizationTests
         Assert.False(File.Exists(Path.Combine(sharedPersistence, "OpenSearchDashboardRow.cs")));
     }
 
+    [Fact]
+    public void Data_persistence_is_owned_by_data_infrastructure()
+    {
+        var serviceDirectory = Path.Combine(Root, "src", "PlaceContext.Data");
+        var infrastructureProject = Path.Combine(serviceDirectory, "PlaceContext.Data.Infrastructure.csproj");
+        var apiProject = Path.Combine(serviceDirectory, "PlaceContext.Data.Api.csproj");
+        var sharedPersistence = Path.Combine(Root, "src", "PlaceContext.Infrastructure", "Persistence");
+        var sharedContextText = File.ReadAllText(Path.Combine(sharedPersistence, "AppDbContext.cs"));
+        var rowTypes = new[]
+        {
+            "ProjectChartRow",
+            "DataMappingRow",
+            "DataEntityRow",
+            "EntityTagRow",
+            "RecordLinkRow",
+            "SavedQueryRow",
+        };
+        var required = new[]
+        {
+            Path.Combine(serviceDirectory, "Infrastructure", "Persistence", "DataDbContext.cs"),
+            Path.Combine(serviceDirectory, "Domain", "Persistence", "IDataUnitOfWork.cs"),
+            Path.Combine(
+                serviceDirectory,
+                "Infrastructure",
+                "Persistence",
+                "Migrations",
+                "DataDbContextModelSnapshot.cs"),
+        }.Concat(rowTypes.Select(typeName =>
+            Path.Combine(serviceDirectory, "Infrastructure", "Persistence", typeName + ".cs")));
+
+        Assert.All(required, path => Assert.True(File.Exists(path), $"Missing {Relative(path)}"));
+        Assert.DoesNotContain(
+            "PlaceContext.Infrastructure.csproj",
+            File.ReadAllText(infrastructureProject),
+            StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(
+            "PlaceContext.Infrastructure.csproj",
+            File.ReadAllText(apiProject),
+            StringComparison.OrdinalIgnoreCase);
+        Assert.All(
+            rowTypes,
+            typeName =>
+            {
+                Assert.DoesNotContain(typeName, sharedContextText, StringComparison.Ordinal);
+                Assert.False(File.Exists(Path.Combine(sharedPersistence, typeName + ".cs")));
+            });
+    }
+
     private static IEnumerable<string> SourceFiles()
         => Directory.EnumerateFiles(Path.Combine(Root, "src"), "*.cs", SearchOption.AllDirectories)
             .Where(file => !HasPathPart(file, "bin") && !HasPathPart(file, "obj"))

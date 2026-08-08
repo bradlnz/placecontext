@@ -40,7 +40,6 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
     public DbSet<JobRow> Jobs => Set<JobRow>();
     public DbSet<JobRunRow> JobRuns => Set<JobRunRow>();
     public DbSet<JobTestCaseRow> JobTestCases => Set<JobTestCaseRow>();
-    public DbSet<SavedQueryRow> SavedQueries => Set<SavedQueryRow>();
     public DbSet<CrmClientRow> CrmClients => Set<CrmClientRow>();
     public DbSet<CrmJobRunRow> CrmJobRuns => Set<CrmJobRunRow>();
     public DbSet<CrmChainRunRow> CrmChainRuns => Set<CrmChainRunRow>();
@@ -59,11 +58,6 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
     public DbSet<EventDefinitionRow> EventDefinitions => Set<EventDefinitionRow>();
     public DbSet<EventOccurrenceRow> EventOccurrences => Set<EventOccurrenceRow>();
     public DbSet<PendingRunRow> PendingRuns => Set<PendingRunRow>();
-    public DbSet<ProjectChartRow> ProjectCharts => Set<ProjectChartRow>();
-    public DbSet<DataMappingRow> DataMappings => Set<DataMappingRow>();
-    public DbSet<DataEntityRow> DataEntities => Set<DataEntityRow>();
-    public DbSet<EntityTagRow> EntityTags => Set<EntityTagRow>();
-    public DbSet<RecordLinkRow> RecordLinks => Set<RecordLinkRow>();
     public DbSet<UserApiTokenRow> UserApiTokens => Set<UserApiTokenRow>();
 
     Task<int> IUnitOfWork.SaveChangesAsync(CancellationToken ct) => SaveChangesAsync(ct);
@@ -249,16 +243,6 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
                 .OnDelete(DeleteBehavior.Cascade);
         });
 
-        b.Entity<SavedQueryRow>(e =>
-        {
-            e.ToTable("saved_queries");
-            e.HasKey(x => x.Id);
-            e.HasIndex(x => new { x.ProjectId, x.Name }).IsUnique();
-            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
-            e.Property(x => x.CreatedAt).HasDefaultValueSql("now()");
-            e.Property(x => x.UpdatedAt).HasDefaultValueSql("now()");
-        });
-
         b.Entity<CrmClientRow>(e =>
         {
             e.ToTable("crm_clients");
@@ -392,54 +376,6 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
             e.Property(x => x.SettingsJson).HasDefaultValue("{}");
             e.Property(x => x.CreatedAt).HasDefaultValueSql("now()");
             e.Property(x => x.UpdatedAt).HasDefaultValueSql("now()");
-        });
-
-        b.Entity<ProjectChartRow>(e =>
-        {
-            e.ToTable("project_charts");
-            e.HasKey(x => x.Id);
-            e.HasIndex(x => new { x.ProjectId, x.TableName }).IsUnique();
-            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
-        });
-
-        b.Entity<EntityTagRow>(e =>
-        {
-            e.ToTable("entity_tags");
-            e.HasKey(x => x.Id);
-            e.HasIndex(x => new { x.EntityId, x.Key });
-            e.HasIndex(x => x.RunId);
-            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
-        });
-
-        b.Entity<RecordLinkRow>(e =>
-        {
-            e.ToTable("record_links");
-            e.HasKey(x => x.Id);
-            e.HasIndex(x => new { x.ProjectId, x.NormalizedValue });
-            e.HasIndex(x => new { x.ProjectId, x.TableName, x.RowKey });
-            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
-        });
-
-        b.Entity<DataEntityRow>(e =>
-        {
-            e.ToTable("data_entities");
-            e.HasKey(x => x.Id);
-            e.HasIndex(x => x.ProjectId);
-            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
-            e.Property(x => x.RelationsJson).HasDefaultValue("[]");
-            e.Property(x => x.TagsJson).HasDefaultValue("[]");
-        });
-
-        b.Entity<DataMappingRow>(e =>
-        {
-            e.ToTable("data_mappings");
-            e.HasKey(x => x.Id);
-            e.HasIndex(x => x.ProjectId);
-            e.HasIndex(x => x.JobId);
-            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
-            e.Property(x => x.FieldsJson).HasDefaultValue("[]");
-            e.Property(x => x.Enabled).HasDefaultValue(true);
-            e.Property(x => x.SourceKind).HasDefaultValue("job");
         });
 
         b.Entity<JobRunRow>(e =>

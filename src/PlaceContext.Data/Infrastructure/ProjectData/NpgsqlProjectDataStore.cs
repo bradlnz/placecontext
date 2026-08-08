@@ -7,8 +7,8 @@ using Microsoft.Extensions.Logging;
 using Npgsql;
 using PlaceContext.Application.Ports;
 using PlaceContext.Application.Shared;
-using PlaceContext.Infrastructure;
 using PlaceContext.Application.Agents;
+using PlaceContext.Data.Infrastructure.Persistence;
 
 namespace PlaceContext.Data.Infrastructure.ProjectData;
 
@@ -49,8 +49,10 @@ public sealed class NpgsqlProjectDataStore : IProjectDataStore
 
     public NpgsqlProjectDataStore(IConfiguration config, IProjectDatabaseConnectionResolver? dbResolver = null, ILogger<NpgsqlProjectDataStore>? log = null, IDataEncryptor? enc = null)
     {
-        _connectionString = config.GetSection("PlaceContext")["ConnectionString"]
-            ?? new PlaceContextOptions().ConnectionString;
+        _connectionString = config.GetConnectionString("Data")
+            ?? config[$"{DataPersistenceOptions.SectionName}:ConnectionString"]
+            ?? config["PlaceContext:ConnectionString"]
+            ?? DataPersistenceOptions.DefaultConnectionString;
         _dbResolver = dbResolver;
         _log = log;
         _enc = enc;

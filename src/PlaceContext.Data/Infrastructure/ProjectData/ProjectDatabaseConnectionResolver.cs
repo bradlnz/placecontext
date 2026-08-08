@@ -2,7 +2,7 @@ using System.Globalization;
 using Microsoft.Extensions.Options;
 using Npgsql;
 using PlaceContext.Application.Ports;
-using PlaceContext.Infrastructure;
+using PlaceContext.Data.Infrastructure.Persistence;
 using PlaceContext.Vault.Domain.Repositories;
 
 namespace PlaceContext.Data.Infrastructure.ProjectData;
@@ -18,12 +18,12 @@ public sealed class ProjectDatabaseConnectionResolver : IProjectDatabaseConnecti
     private const string DefaultPort = "5432";
     private const string DefaultSslMode = "Prefer";
 
-    private readonly PlaceContextOptions _options;
+    private readonly DataPersistenceOptions _options;
     private readonly IProjectSecretRepository? _secrets;
     private readonly ISecretProtector? _protector;
 
     public ProjectDatabaseConnectionResolver(
-        IOptions<PlaceContextOptions> options,
+        IOptions<DataPersistenceOptions> options,
         IProjectSecretRepository? secrets = null,
         ISecretProtector? protector = null)
         => (_options, _secrets, _protector) = (options.Value, secrets, protector);

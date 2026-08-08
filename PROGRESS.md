@@ -56,6 +56,11 @@ Last updated: 2026-08-08 (Australia/Brisbane)
 - Removed `opensearch_dashboards` from the shared `AppDbContext`; the shared handoff migration records ownership transfer without dropping the table.
 - Rewired the OpenSearch dashboard store to Search-owned persistence and a runtime-local data-protection adapter, and removed shared Infrastructure references from the Search API and infrastructure projects.
 - Added Search dashboard tenant-isolation/encryption round-trip coverage and an architecture check that locks its context, row, unit of work, migration snapshot, and project boundaries to the service.
+- Gave Data its own `DataDbContext`, six owned rows, `IDataUnitOfWork`, connection configuration, health check, `__EFMigrationsHistory_Data` history table, and non-destructive initial migration for legacy gateway data.
+- Moved mappings, entities, entity tags, record links, charts, and saved SQL queries out of the shared `AppDbContext`; the shared handoff migration releases all six tables without dropping them.
+- Rewired Data repositories, handlers, chart generation, project-database resolution, JSON flattening, and legacy chart encryption to Data-owned persistence and runtime configuration.
+- Removed shared Infrastructure references from the Data API and infrastructure projects, and changed tenant-sensitive entity/mapping mutations from `FindAsync` to query-filtered lookups.
+- Added Data tenant-isolation and saved-query round-trip coverage plus an architecture check that locks the context, rows, unit of work, migration snapshot, and project boundaries to the service.
 - Removed the unused Host `BrowseTab` enum and moved controller/view-model records into matching `Records` folders.
 - Aligned Vault infrastructure's EF Core/Relational dependencies at 10.0.9 so the extracted project builds without assembly-conflict warnings.
 - Extracted OpenSearch connection/data/sync gateways and the dashboard persistence adapter into `PlaceContext.Search.Infrastructure`; the gateway now composes them through `AddSearchInfrastructure`.
@@ -100,48 +105,48 @@ Last updated: 2026-08-08 (Australia/Brisbane)
 - `PlaceContext.AgentChat.Infrastructure` builds with 0 warnings and 0 errors.
 - Full `PlaceContext.slnx` build: 0 warnings and 0 errors.
 - All seven API runtimes pass Development-mode dependency validation; Jobs reached a listening Kestrel endpoint and Vault `/health` returned HTTP 200 `Healthy`.
-- Source organization, required-layer, persistence-ownership, and project-boundary architecture tests: 13/13 passing.
+- Source organization, required-layer, persistence-ownership, and project-boundary architecture tests: 14/14 passing.
 - Service test projects passing independently:
   - AgentChat: 42 tests
   - Artifacts: 57 tests
   - CRM: 19 tests
-  - Data: 167 passing, 1 integration test skipped
+  - Data: 169 passing, 1 integration test skipped
   - Jobs: 208 passing, 5 Docker integration tests skipped
   - Search: 34 tests
   - Vault: 4 tests
-- Full architecture suite: 13/13 passing after the Vault, AgentChat, Artifacts, and Search persistence ownership moves.
+- Full architecture suite: 14/14 passing after the Vault, AgentChat, Artifacts, Search, and Data persistence ownership moves.
 - Vault tests are 4/4 passing after its database and encryption lifecycle extraction.
 - Search tests are 34/34 passing after its owned dashboard database and tenant-isolation move.
-- Data tests are 167/167 passing with one local-Postgres integration test skipped after its infrastructure/test move.
+- Data tests are 169/169 passing with one local-Postgres integration test skipped after its owned database and tenant-isolation move.
 - Jobs tests are 208/208 passing with five Docker integration tests skipped after its infrastructure/test move.
 - CRM tests are 19/19 passing after its infrastructure/test move.
 - Artifacts tests are 57/57 passing after its owned database and tenant-isolation move.
 - AgentChat tests are 42/42 passing after its owned database, unit-of-work, and repository-test move.
 - Shared Infrastructure tests: 96/96 passing after obsolete Vault implementation coverage moved to Vault and contract-level fakes replaced concrete Vault EF dependencies.
-- Complete test set: 879 passed, 6 environment-dependent integration tests skipped, 0 failed.
+- Complete test set: 882 passed, 6 environment-dependent integration tests skipped, 0 failed.
 - Artifacts presigned-URL coverage now allows the AWS SDK's two-second signing-clock tolerance instead of intermittently requiring an exact expiry second.
 - React frontend: lint passes with zero warnings, 46 test files/89 tests pass, and a production build succeeds when emitted to an isolated output directory.
 
 ## In progress
 
-- Continue splitting the shared `AppDbContext`, row model, and migration history; Vault, AgentChat, Artifacts, and Search dashboards are complete and the remaining service/platform tables still need owned database lifecycles.
+- Continue splitting the shared `AppDbContext`, row model, and migration history; Vault, AgentChat, Artifacts, Search dashboards, and Data are complete and the remaining service/platform tables still need owned database lifecycles.
 - Decide explicit ownership for the remaining platform capabilities in shared Infrastructure, especially authentication/tenancy, communications, embeddings/vector storage, cluster integration, and analytics refresh.
 
 ## Remaining coupling to remove
 
 - Service implementations still reference the main Application assembly as an extraction seam.
 - The current host still references service implementations directly.
-- Remaining extracted service adapters still depend on the shared `PlaceContext.Infrastructure` assembly for `AppDbContext`, persistence rows, security, and tenancy primitives; Vault, AgentChat, Artifacts, and Search no longer do.
+- Remaining extracted service adapters still depend on the shared `PlaceContext.Infrastructure` assembly for `AppDbContext`, persistence rows, security, and tenancy primitives; Vault, AgentChat, Artifacts, Search, and Data no longer do.
 - The shared database model and migration history still contain tables for the other services and platform capabilities, preventing their independent database evolution.
 - Standalone Data/Search runtimes currently fall back to service configuration when Vault adapters are absent; replace this transition seam with authenticated service-to-service Vault contracts.
 - API runtimes currently expose the explicitly migrated controller surface; remaining gateway-only commands must move behind their owning service APIs before the gateway can drop implementation references.
 - Search's decision-tree read model consumes Jobs, Data, and Artifacts domain models transitively; replace these with service contracts/read models.
-- The remaining service runtimes need owned databases/migrations and integration-event/outbox wiring; Vault, AgentChat, Artifacts, and Search now own their database migration and health-check paths.
+- The remaining service runtimes need owned databases/migrations and integration-event/outbox wiring; Vault, AgentChat, Artifacts, Search, and Data now own their database migration and health-check paths.
 - Contracts retain legacy `PlaceContext.Application.*` namespaces for source compatibility; physical ownership is correct, namespace cleanup remains.
 
 ## Next steps
 
-1. Extract the next bounded persistence slice from shared `AppDbContext`, following the proven Vault/AgentChat/Artifacts/Search context, migration-history, and unit-of-work pattern; Data is the leading candidate.
+1. Extract the Jobs persistence slice (jobs, runs, tests, triggers, chains, schedules/events, and pending queue) from shared `AppDbContext` as one coherent runtime boundary.
 2. Expand each service controller to cover its remaining gateway-only commands and replace cross-service repository reads with HTTP/integration-event contracts.
 3. Remove direct service implementation references from the gateway in favor of HTTP clients/integration events.
 4. Continue the root `frontend/` migration one vertical slice at a time after each corresponding runtime/API boundary is independent.

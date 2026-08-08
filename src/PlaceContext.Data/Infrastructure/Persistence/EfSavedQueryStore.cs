@@ -1,13 +1,13 @@
 using Microsoft.EntityFrameworkCore;
 using PlaceContext.Application.Ports;
 
-namespace PlaceContext.Infrastructure.Persistence;
+namespace PlaceContext.Data.Infrastructure.Persistence;
 
 public sealed class EfSavedQueryStore : ISavedQueryStore
 {
-    private readonly AppDbContext _db;
+    private readonly DataDbContext _db;
 
-    public EfSavedQueryStore(AppDbContext db) => _db = db;
+    public EfSavedQueryStore(DataDbContext db) => _db = db;
 
     public async Task<IReadOnlyList<SavedQueryRecord>> ListAsync(
         Guid projectId, CancellationToken ct = default)
@@ -18,8 +18,7 @@ public sealed class EfSavedQueryStore : ISavedQueryStore
             .Select(ToRecord)
             .ToList();
 
-    public async Task<SavedQueryRecord?> GetAsync(
-        Guid id, CancellationToken ct = default)
+    public async Task<SavedQueryRecord?> GetAsync(Guid id, CancellationToken ct = default)
     {
         var row = await _db.SavedQueries.AsNoTracking()
             .FirstOrDefaultAsync(item => item.Id == id, ct);
@@ -36,13 +35,13 @@ public sealed class EfSavedQueryStore : ISavedQueryStore
 
     public async Task SaveAsync(SavedQueryRecord item, CancellationToken ct = default)
     {
-        var row = await _db.SavedQueries
-            .FirstOrDefaultAsync(existing => existing.Id == item.Id, ct);
+        var row = await _db.SavedQueries.FirstOrDefaultAsync(existing => existing.Id == item.Id, ct);
         if (row is null)
         {
             row = new SavedQueryRow { Id = item.Id };
             _db.SavedQueries.Add(row);
         }
+
         row.ProjectId = item.ProjectId;
         row.Name = item.Name;
         row.Sql = item.Sql;
@@ -54,7 +53,9 @@ public sealed class EfSavedQueryStore : ISavedQueryStore
     public async Task<bool> DeleteAsync(Guid id, CancellationToken ct = default)
     {
         var row = await _db.SavedQueries.FirstOrDefaultAsync(item => item.Id == id, ct);
-        if (row is null) return false;
+        if (row is null)
+            return false;
+
         _db.SavedQueries.Remove(row);
         await _db.SaveChangesAsync(ct);
         return true;

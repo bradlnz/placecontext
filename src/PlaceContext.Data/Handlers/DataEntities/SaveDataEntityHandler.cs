@@ -9,10 +9,10 @@ namespace PlaceContext.Application.Features;
 public sealed class SaveDataEntityHandler : ICommandHandler<SaveDataEntityCommand, DataEntityView>
 {
     private readonly IDataEntityRepository _entities;
-    private readonly IUnitOfWork _uow;
+    private readonly IDataUnitOfWork _uow;
     private readonly IClock _clock;
 
-    public SaveDataEntityHandler(IDataEntityRepository entities, IUnitOfWork uow, IClock clock)
+    public SaveDataEntityHandler(IDataEntityRepository entities, IDataUnitOfWork uow, IClock clock)
     {
         _entities = entities;
         _uow = uow;

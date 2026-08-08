@@ -1,16 +1,15 @@
 using Microsoft.EntityFrameworkCore;
 using PlaceContext.Application.Features;
 using PlaceContext.Application.Ports;
-using PlaceContext.Infrastructure.Persistence;
 
 namespace PlaceContext.Data.Infrastructure.Persistence;
 
 public sealed class EfRecordLinkStore : IRecordLinkStore
 {
-    private readonly AppDbContext _db;
+    private readonly DataDbContext _db;
     private readonly IClock _clock;
 
-    public EfRecordLinkStore(AppDbContext db, IClock clock)
+    public EfRecordLinkStore(DataDbContext db, IClock clock)
     {
         _db = db;
         _clock = clock;
