@@ -7,9 +7,20 @@
     <%= csrf_meta_tags %>
     <%= csp_meta_tag %>
     <%= stylesheet_link_tag "application", "data-turbo-track": "reload" %>
-    <%= stylesheet_link_tag "clickup", "data-turbo-track": "reload" %>
   </head>
   <body>
+    <header class="workspace-bar">
+      <div class="workspace-switcher">
+        <span class="workspace-switcher-mark"><%= portal_brand_name.first.upcase %></span>
+        <strong><%= portal_brand_name %></strong>
+        <span aria-hidden="true">⌄</span>
+      </div>
+      <div class="workspace-bar-context">
+        <span class="connection-dot"></span>
+        Customer portal
+      </div>
+    </header>
+
     <div class="app-shell">
       <aside class="workspace-rail" aria-label="Workspace shortcuts">
         <%= link_to portal_relative_path(root_path), class: "rail-brand", aria: { label: portal_brand_name } do %>
@@ -31,23 +42,15 @@
       <aside class="sidebar" aria-label="Main navigation">
         <div class="sidebar-heading">
           <strong>Home</strong>
-          <span class="sidebar-add" aria-hidden="true">＋</span>
-        </div>
-
-        <div class="sidebar-tenant">
-          <div class="tenant-avatar"><%= portal_brand_name.first.upcase %></div>
-          <div class="tenant-copy">
-            <span class="tenant-label">Workspace</span>
-            <span class="tenant-name"><%= portal_brand_name %></span>
-          </div>
-          <span class="tenant-chevron" aria-hidden="true">⌄</span>
+          <%= link_to portal_relative_path(root_path), class: "sidebar-add", aria: { label: "Open home" } do %>＋<% end %>
         </div>
 
         <nav class="sidebar-nav">
           <%= nav_link_to "Overview", root_path, icon: :dashboard %>
+          <span class="nav-section-label nav-section-label-spaced">Customers</span>
           <%= nav_link_to "Clients", clients_path, icon: :clients %>
           <%= nav_link_to "Leads", leads_path, icon: :leads %>
-          <span class="nav-section-label nav-section-label-spaced">Workspace</span>
+          <span class="nav-section-label nav-section-label-spaced">Work</span>
           <%= nav_link_to "Automations", automations_path, icon: :automations %>
           <%= nav_link_to "Artifacts", artifacts_path, icon: :artifacts %>
           <% if current_portal_user&.can_manage_portal_users? %>
@@ -66,17 +69,28 @@
 
       <div class="app-body">
         <header class="topbar">
-          <div class="topbar-section">
-            <div class="mobile-brand-mark"><%= portal_brand_name.first.upcase %></div>
-            <div>
-              <h1 class="page-heading"><%= content_for?(:page_title) ? yield(:page_title) : "Dashboard" %></h1>
+          <div class="topbar-main">
+            <div class="topbar-section">
+              <div class="mobile-brand-mark"><%= portal_brand_name.first.upcase %></div>
+              <div class="page-heading-wrap">
+                <span class="page-heading-icon"><%= icon :dashboard %></span>
+                <h1 class="page-heading"><%= content_for?(:page_title) ? yield(:page_title) : "Dashboard" %></h1>
+                <span class="page-heading-chevron" aria-hidden="true">⌄</span>
+              </div>
+            </div>
+            <div class="topbar-section">
+              <% if current_portal_user %>
+                <div class="topbar-user"><span class="topbar-avatar"><%= current_portal_user.email.first.upcase %></span><%= current_portal_user.email %></div>
+              <% end %>
             </div>
           </div>
-          <div class="topbar-section">
-            <% if current_portal_user %>
-              <div class="topbar-user"><span class="connection-dot"></span><%= current_portal_user.email %></div>
-            <% end %>
-          </div>
+          <nav class="content-tabs" aria-label="Workspace views">
+            <%= nav_link_to "Overview", root_path, icon: :dashboard %>
+            <%= nav_link_to "Clients", clients_path, icon: :clients %>
+            <%= nav_link_to "Leads", leads_path, icon: :leads %>
+            <%= nav_link_to "Automations", automations_path, icon: :automations %>
+            <%= nav_link_to "Artifacts", artifacts_path, icon: :artifacts %>
+          </nav>
         </header>
 
         <main class="main-content">

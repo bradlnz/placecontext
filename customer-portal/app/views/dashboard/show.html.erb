@@ -1,82 +1,88 @@
 <% page_title "Dashboard" %>
 
-<section class="welcome-panel">
-  <div class="welcome-copy">
-    <span class="eyebrow">Your shared workspace</span>
-    <h2>Good to see you, <%= current_portal_user.email.split("@").first.titleize %>.</h2>
-    <p>Track your work, run the automations assigned by your PlaceContext team, and collect every output in one place.</p>
-    <div class="welcome-actions">
-      <%= link_to automations_path(client_id: @client&.dig("id")), class: "btn btn-primary btn-lg" do %>
-        <%= icon :automations %> Browse automations
-      <% end %>
-      <%= link_to artifacts_path(client_id: @client&.dig("id")), class: "btn btn-quiet btn-lg" do %>
-        View artifacts <span aria-hidden="true">→</span>
-      <% end %>
-    </div>
+<section class="dashboard-intro">
+  <div>
+    <span class="dashboard-kicker">Home / Overview</span>
+    <h2>Workspace overview</h2>
+    <p>Clients, active work, and completed deliverables in one place.</p>
   </div>
-  <div class="welcome-orbit" aria-hidden="true">
-    <div class="orbit-card orbit-card-one"><%= icon :automations %><span>Automate</span></div>
-    <div class="orbit-card orbit-card-two"><%= icon :artifacts %><span>Deliver</span></div>
-    <div class="orbit-core"><span></span></div>
-  </div>
+  <%= link_to automations_path(client_id: @client&.dig("id")), class: "btn btn-primary" do %>
+    <%= icon :plus %> Run automation
+  <% end %>
 </section>
 
-<div class="stats-grid stats-grid-four">
-  <%= link_to clients_path, class: "stat-card stat-card-link" do %>
-    <div class="stat-icon stat-icon-blue"><%= icon :clients %></div>
-    <div><div class="stat-value"><%= @clients_count %></div><div class="stat-label">Clients</div></div>
-    <span class="stat-arrow">→</span>
-  <% end %>
-  <%= link_to leads_path, class: "stat-card stat-card-link" do %>
-    <div class="stat-icon stat-icon-amber"><%= icon :leads %></div>
-    <div><div class="stat-value"><%= @leads_count %></div><div class="stat-label">Open leads</div></div>
-    <span class="stat-arrow">→</span>
-  <% end %>
-  <%= link_to automations_path(client_id: @client&.dig("id")), class: "stat-card stat-card-link" do %>
-    <div class="stat-icon stat-icon-purple"><%= icon :automations %></div>
-    <div><div class="stat-value"><%= @automations_count %></div><div class="stat-label">Assigned automations</div></div>
-    <span class="stat-arrow">→</span>
-  <% end %>
-  <%= link_to artifacts_path(client_id: @client&.dig("id")), class: "stat-card stat-card-link" do %>
-    <div class="stat-icon stat-icon-green"><%= icon :artifacts %></div>
-    <div><div class="stat-value"><%= @artifacts_count %></div><div class="stat-label">Artifacts</div></div>
-    <span class="stat-arrow">→</span>
-  <% end %>
-</div>
+<section class="dashboard-layout">
+  <div class="work-list" aria-label="Workspace summary">
+    <div class="work-list-columns" aria-hidden="true">
+      <span>Name</span>
+      <span>Items</span>
+    </div>
 
-<section class="dashboard-grid">
-  <div class="card card-flush">
-    <div class="card-header card-header-padded">
-      <div>
-        <span class="eyebrow">Get things done</span>
-        <h2 class="card-title card-title-lg">Your workspace</h2>
-      </div>
-    </div>
-    <div class="workspace-list">
-      <%= link_to automations_path(client_id: @client&.dig("id")), class: "workspace-row" do %>
-        <span class="workspace-row-icon stat-icon-purple"><%= icon :automations %></span>
-        <span class="workspace-row-copy"><strong>Run an automation</strong><small>Launch a workflow enabled for your customer account.</small></span>
-        <span class="workspace-row-action">Open →</span>
+    <section class="work-group">
+      <header class="work-group-heading">
+        <span class="work-group-toggle" aria-hidden="true">⌄</span>
+        <span class="work-group-label work-group-label-green"><i>✓</i> Customers</span>
+        <span class="work-group-count">2</span>
+      </header>
+      <%= link_to clients_path, class: "work-row" do %>
+        <span class="work-row-status work-row-status-green">✓</span>
+        <span class="work-row-copy"><strong>Client records</strong><small>Manage customer contacts and project details</small></span>
+        <span class="work-row-value"><%= @clients_count %></span>
+        <span class="work-row-arrow">›</span>
       <% end %>
-      <%= link_to artifacts_path(client_id: @client&.dig("id")), class: "workspace-row" do %>
-        <span class="workspace-row-icon stat-icon-green"><%= icon :artifacts %></span>
-        <span class="workspace-row-copy"><strong>Review deliverables</strong><small>Open reports, documents, and data from completed work.</small></span>
-        <span class="workspace-row-action">Open →</span>
+      <%= link_to leads_path, class: "work-row" do %>
+        <span class="work-row-status work-row-status-green">✓</span>
+        <span class="work-row-copy"><strong>Open leads</strong><small>Review prospects that need attention</small></span>
+        <span class="work-row-value"><%= @leads_count %></span>
+        <span class="work-row-arrow">›</span>
       <% end %>
-      <%= link_to clients_path, class: "workspace-row" do %>
-        <span class="workspace-row-icon stat-icon-blue"><%= icon :clients %></span>
-        <span class="workspace-row-copy"><strong>Customer details</strong><small>Keep contact and project information up to date.</small></span>
-        <span class="workspace-row-action">Open →</span>
+    </section>
+
+    <section class="work-group">
+      <header class="work-group-heading">
+        <span class="work-group-toggle" aria-hidden="true">⌄</span>
+        <span class="work-group-label work-group-label-blue"><i>◷</i> Delivery</span>
+        <span class="work-group-count">2</span>
+      </header>
+      <%= link_to automations_path(client_id: @client&.dig("id")), class: "work-row" do %>
+        <span class="work-row-status work-row-status-blue"><%= icon :automations %></span>
+        <span class="work-row-copy"><strong>Assigned automations</strong><small>Workflows available for this account</small></span>
+        <span class="work-row-value"><%= @automations_count %></span>
+        <span class="work-row-arrow">›</span>
       <% end %>
-    </div>
+      <%= link_to artifacts_path(client_id: @client&.dig("id")), class: "work-row" do %>
+        <span class="work-row-status work-row-status-blue"><%= icon :artifacts %></span>
+        <span class="work-row-copy"><strong>Artifacts</strong><small>Reports and files ready to review</small></span>
+        <span class="work-row-value"><%= @artifacts_count %></span>
+        <span class="work-row-arrow">›</span>
+      <% end %>
+      <%= link_to automations_path(client_id: @client&.dig("id")), class: "work-row work-row-add" do %>
+        <span class="work-row-status">＋</span>
+        <span class="work-row-copy"><strong>Start new work</strong></span>
+      <% end %>
+    </section>
   </div>
 
-  <aside class="card workspace-health">
-    <div class="health-icon"><span></span></div>
-    <span class="eyebrow">Workspace status</span>
-    <h2 class="card-title card-title-lg">Everything is connected</h2>
-    <p>Your portal is synced with PlaceContext. Automation access and artifacts are managed securely for each customer.</p>
-    <div class="health-row"><span>PlaceContext connection</span><strong><i></i> Online</strong></div>
-    <div class="health-row"><span>Customer access</span><strong>Scoped</strong></div>
+  <aside class="dashboard-side-panel">
+    <section class="side-panel-section">
+      <span class="side-panel-label">Workspace status</span>
+      <div class="sync-status"><i></i><strong>Connected</strong></div>
+      <p>Data and deliverables are synced with PlaceContext.</p>
+    </section>
+    <section class="side-panel-section">
+      <div class="side-panel-heading">
+        <span class="side-panel-label">Quick access</span>
+      </div>
+      <%= link_to automations_path(client_id: @client&.dig("id")), class: "quick-link" do %>
+        <span class="quick-link-icon quick-link-purple"><%= icon :automations %></span>
+        <span><strong>Automations</strong><small>Run assigned workflows</small></span>
+        <b>›</b>
+      <% end %>
+      <%= link_to artifacts_path(client_id: @client&.dig("id")), class: "quick-link" do %>
+        <span class="quick-link-icon quick-link-blue"><%= icon :artifacts %></span>
+        <span><strong>Artifacts</strong><small>Open completed outputs</small></span>
+        <b>›</b>
+      <% end %>
+    </section>
   </aside>
 </section>
