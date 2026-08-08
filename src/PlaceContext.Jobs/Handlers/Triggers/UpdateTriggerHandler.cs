@@ -10,14 +10,14 @@ public sealed class UpdateTriggerHandler : ICommandHandler<UpdateTriggerCommand,
     private readonly IJobTriggerRepository _triggers;
     private readonly ICronSchedule _cron;
     private readonly ICurrentTenant _tenant;
-    private readonly IUnitOfWork _uow;
+    private readonly IJobsUnitOfWork _uow;
     private readonly IClock _clock;
 
     public UpdateTriggerHandler(
         IJobTriggerRepository triggers,
         ICronSchedule cron,
         ICurrentTenant tenant,
-        IUnitOfWork uow,
+        IJobsUnitOfWork uow,
         IClock clock)
     {
         _triggers = triggers;

@@ -5,6 +5,7 @@ using PlaceContext.Application.Ports;
 using PlaceContext.Infrastructure.Operations;
 using PlaceContext.Infrastructure.Persistence;
 using PlaceContext.Infrastructure.Tenancy;
+using PlaceContext.Jobs.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -90,7 +91,7 @@ public sealed class TriggerSchedulerService : BackgroundService
     private async Task ScanOnceAsLeaderAsync(CancellationToken ct)
     {
         await using var lockScope = _scopes.CreateAsyncScope();
-        var db = lockScope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var db = lockScope.ServiceProvider.GetRequiredService<JobsDbContext>();
         var conn = (NpgsqlConnection)db.Database.GetDbConnection();
         if (conn.State != System.Data.ConnectionState.Open) await conn.OpenAsync(ct);
 
@@ -211,7 +212,7 @@ public sealed class TriggerSchedulerService : BackgroundService
                 // and used as the op's correlation key, so the run-status watcher converges on
                 // this entry (and flips it terminal the moment the row commits) instead of
                 // waiting for the dispatcher to return behind the slow enrichment.
-                var job = await scope.ServiceProvider.GetRequiredService<Domain.Repositories.IJobRepository>()
+                var job = await scope.ServiceProvider.GetRequiredService<global::PlaceContext.Domain.Repositories.IJobRepository>()
                     .GetByIdAsync(run.JobId, ct);
                 var runId = Guid.NewGuid();
                 var op = _opCenter.Track(tenant, job?.ProjectId,
@@ -267,7 +268,7 @@ public sealed class TriggerSchedulerService : BackgroundService
     private async Task ReapOrphanedRunsAsync(CancellationToken ct)
     {
         await using var scope = _scopes.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<JobsDbContext>();
         var conn = (NpgsqlConnection)db.Database.GetDbConnection();
         if (conn.State != System.Data.ConnectionState.Open) await conn.OpenAsync(ct);
 
@@ -307,7 +308,7 @@ public sealed class TriggerSchedulerService : BackgroundService
     private async Task<List<ClaimedTriggerRun>> ClaimAsync(CancellationToken ct)
     {
         await using var scope = _scopes.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<JobsDbContext>();
         var conn = (NpgsqlConnection)db.Database.GetDbConnection();
         if (conn.State != System.Data.ConnectionState.Open) await conn.OpenAsync(ct);
 
@@ -349,7 +350,7 @@ public sealed class TriggerSchedulerService : BackgroundService
     {
         if (ids.Count == 0) return;
         await using var scope = _scopes.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<JobsDbContext>();
         var conn = (NpgsqlConnection)db.Database.GetDbConnection();
         if (conn.State != System.Data.ConnectionState.Open) await conn.OpenAsync(ct);
         await using var cmd = conn.CreateCommand();
@@ -403,9 +404,9 @@ public sealed class TriggerSchedulerService : BackgroundService
         if (run.JobId != Guid.Empty) return false;
 
         await using var scope = _scopes.CreateAsyncScope();
-        var trigger = await scope.ServiceProvider.GetRequiredService<Domain.Repositories.IJobTriggerRepository>()
+        var trigger = await scope.ServiceProvider.GetRequiredService<global::PlaceContext.Domain.Repositories.IJobTriggerRepository>()
             .GetByIdAsync(run.TriggerId, ct);
-        if (trigger is null || trigger.Kind != Domain.ValueObjects.TriggerKind.Launchpad || trigger.ChainId is not { } chainId)
+        if (trigger is null || trigger.Kind != global::PlaceContext.Domain.ValueObjects.TriggerKind.Launchpad || trigger.ChainId is not { } chainId)
         {
             _log.LogWarning("Launchpad trigger {TriggerId} missing or invalid — dropping queued row.", run.TriggerId);
             return true;

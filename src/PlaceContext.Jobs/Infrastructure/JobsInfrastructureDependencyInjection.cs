@@ -1,5 +1,8 @@
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using PlaceContext.Jobs.Domain.Persistence;
 using PlaceContext.Application.Ports;
 using PlaceContext.Domain.Repositories;
 using PlaceContext.Jobs.Infrastructure.Caching;
@@ -16,6 +19,25 @@ public static class JobsInfrastructureDependencyInjection
         this IServiceCollection services,
         IConfiguration configuration)
     {
+        var connectionString = configuration.GetConnectionString("Jobs")
+            ?? configuration[$"{JobsPersistenceOptions.SectionName}:ConnectionString"]
+            ?? configuration["PlaceContext:ConnectionString"]
+            ?? JobsPersistenceOptions.DefaultConnectionString;
+
+        services.Configure<JobsPersistenceOptions>(options =>
+            options.ConnectionString = connectionString);
+        services.AddDbContext<JobsDbContext>(options =>
+        {
+            options.UseNpgsql(connectionString, postgres =>
+                postgres.MigrationsHistoryTable("__EFMigrationsHistory_Jobs"));
+            options.ConfigureWarnings(warnings =>
+                warnings.Ignore(RelationalEventId.PendingModelChangesWarning));
+        });
+        services.AddHealthChecks()
+            .AddCheck<JobsDatabaseHealthCheck>("jobs-database");
+        services.AddScoped<IJobsUnitOfWork>(provider =>
+            provider.GetRequiredService<JobsDbContext>());
+
         services.Configure<WorkloadRunnerOptions>(
             configuration.GetSection("PlaceContext:WorkloadRunner"));
         services.AddSingleton<IWorkloadOutputBuffer, InMemoryWorkloadOutputBuffer>();

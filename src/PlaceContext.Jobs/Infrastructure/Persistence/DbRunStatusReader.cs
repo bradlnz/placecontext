@@ -15,9 +15,9 @@ public sealed class DbRunStatusReader : IRunStatusReader
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
-    private readonly AppDbContext _db;
+    private readonly JobsDbContext _db;
 
-    public DbRunStatusReader(AppDbContext db) => _db = db;
+    public DbRunStatusReader(JobsDbContext db) => _db = db;
 
     public async Task<IReadOnlyList<JobRunStatusRow>> ListJobRunsAsync(
         DateTimeOffset finishedSince, CancellationToken ct = default)

@@ -1,4 +1,4 @@
-using PlaceContext.Infrastructure.Persistence;
+using PlaceContext.Jobs.Infrastructure.Persistence;
 using Xunit;
 
 namespace PlaceContext.Jobs.Tests;

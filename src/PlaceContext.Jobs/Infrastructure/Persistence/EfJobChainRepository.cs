@@ -9,9 +9,9 @@ namespace PlaceContext.Jobs.Infrastructure.Persistence;
 
 public sealed class EfJobChainRepository : IJobChainRepository
 {
-    private readonly AppDbContext _db;
+    private readonly JobsDbContext _db;
 
-    public EfJobChainRepository(AppDbContext db) => _db = db;
+    public EfJobChainRepository(JobsDbContext db) => _db = db;
 
     public async Task AddAsync(JobChain chain, CancellationToken ct = default)
         => await _db.JobChains.AddAsync(ToRow(chain), ct);

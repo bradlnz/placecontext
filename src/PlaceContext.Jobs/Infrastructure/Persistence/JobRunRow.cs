@@ -1,11 +1,11 @@
-namespace PlaceContext.Infrastructure.Persistence;
+namespace PlaceContext.Jobs.Infrastructure.Persistence;
 
 /// <summary>
 /// Flat EF Core row for a <see cref="PlaceContext.Domain.Entities.JobRun"/>.
 /// ShardResults and ReduceResult are persisted as JSON columns (opaque JSON blobs).
 /// The WorkloadSnapshot is persisted as a JSON column for full run-history fidelity.
 /// </summary>
-public sealed class JobRunRow : ITenantOwned
+public sealed class JobRunRow : IJobsTenantOwned
 {
     public Guid Id { get; set; }
     public Guid TenantId { get; set; }

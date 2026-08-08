@@ -8,11 +8,11 @@ namespace PlaceContext.Jobs.Infrastructure.Persistence;
 
 public sealed class EfEventRepository : IEventRepository
 {
-    private readonly AppDbContext _db;
+    private readonly JobsDbContext _db;
     private readonly IDataEncryptor _enc;
     private static string P => DataEncryptionPurpose.EventPayload;
 
-    public EfEventRepository(AppDbContext db, IDataEncryptor enc) => (_db, _enc) = (db, enc);
+    public EfEventRepository(JobsDbContext db, IDataEncryptor enc) => (_db, _enc) = (db, enc);
 
     // ── Definitions ──────────────────────────────────────────────────────────────────────────────
 

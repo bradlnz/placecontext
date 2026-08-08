@@ -11,10 +11,10 @@ public sealed class CreateJobChainHandler : ICommandHandler<CreateJobChainComman
 {
     private readonly IJobChainRepository _chains;
     private readonly IJobRepository _jobs;
-    private readonly IUnitOfWork _uow;
+    private readonly IJobsUnitOfWork _uow;
     private readonly IClock _clock;
 
-    public CreateJobChainHandler(IJobChainRepository chains, IJobRepository jobs, IUnitOfWork uow, IClock clock)
+    public CreateJobChainHandler(IJobChainRepository chains, IJobRepository jobs, IJobsUnitOfWork uow, IClock clock)
     {
         _chains = chains;
         _jobs = jobs;

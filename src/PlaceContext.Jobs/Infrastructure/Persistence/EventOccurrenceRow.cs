@@ -1,7 +1,7 @@
-namespace PlaceContext.Infrastructure.Persistence;
+namespace PlaceContext.Jobs.Infrastructure.Persistence;
 
 /// <summary>Flat EF Core row for an <see cref="PlaceContext.Domain.Entities.EventOccurrence"/> — the event log.</summary>
-public sealed class EventOccurrenceRow : ITenantOwned
+public sealed class EventOccurrenceRow : IJobsTenantOwned
 {
     public Guid Id { get; set; }
     public Guid TenantId { get; set; }

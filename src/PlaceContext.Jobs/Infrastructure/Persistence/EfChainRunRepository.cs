@@ -11,11 +11,11 @@ public sealed class EfChainRunRepository : IChainRunRepository
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
-    private readonly AppDbContext _db;
+    private readonly JobsDbContext _db;
     private readonly IDataEncryptor _encryptor;
     private static string Purpose => DataEncryptionPurpose.ChainRun;
 
-    public EfChainRunRepository(AppDbContext db, IDataEncryptor encryptor)
+    public EfChainRunRepository(JobsDbContext db, IDataEncryptor encryptor)
         => (_db, _encryptor) = (db, encryptor);
 
     public async Task AddAsync(ChainRun run, CancellationToken ct = default)

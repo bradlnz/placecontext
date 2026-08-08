@@ -3,16 +3,17 @@ using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Ports;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.Repositories;
+using PlaceContext.Jobs.Domain.Persistence;
 
 namespace PlaceContext.Application.Features;
 
 public sealed class DefineEventTypeHandler : ICommandHandler<DefineEventTypeCommand, EventTypeView>
 {
     private readonly IEventRepository _events;
-    private readonly IUnitOfWork _uow;
+    private readonly IJobsUnitOfWork _uow;
     private readonly IClock _clock;
 
-    public DefineEventTypeHandler(IEventRepository events, IUnitOfWork uow, IClock clock)
+    public DefineEventTypeHandler(IEventRepository events, IJobsUnitOfWork uow, IClock clock)
     {
         _events = events;
         _uow = uow;

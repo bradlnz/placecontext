@@ -416,6 +416,47 @@ public sealed class SourceOrganizationTests
             });
     }
 
+    [Fact]
+    public void Jobs_persistence_is_owned_by_jobs_infrastructure()
+    {
+        var serviceDirectory = Path.Combine(Root, "src", "PlaceContext.Jobs");
+        var sharedPersistence = Path.Combine(Root, "src", "PlaceContext.Infrastructure", "Persistence");
+        var sharedContextText = File.ReadAllText(Path.Combine(sharedPersistence, "AppDbContext.cs"));
+        var rowTypes = new[]
+        {
+            "JobRow",
+            "JobRunRow",
+            "JobTestCaseRow",
+            "JobTriggerRow",
+            "JobChainRow",
+            "ChainRunRow",
+            "EventDefinitionRow",
+            "EventOccurrenceRow",
+            "PendingRunRow",
+        };
+        var required = new[]
+        {
+            Path.Combine(serviceDirectory, "Infrastructure", "Persistence", "JobsDbContext.cs"),
+            Path.Combine(serviceDirectory, "Domain", "Persistence", "IJobsUnitOfWork.cs"),
+            Path.Combine(
+                serviceDirectory,
+                "Infrastructure",
+                "Persistence",
+                "Migrations",
+                "JobsDbContextModelSnapshot.cs"),
+        }.Concat(rowTypes.Select(typeName =>
+            Path.Combine(serviceDirectory, "Infrastructure", "Persistence", typeName + ".cs")));
+
+        Assert.All(required, path => Assert.True(File.Exists(path), $"Missing {Relative(path)}"));
+        Assert.All(
+            rowTypes,
+            typeName =>
+            {
+                Assert.DoesNotContain($"DbSet<{typeName}>", sharedContextText, StringComparison.Ordinal);
+                Assert.False(File.Exists(Path.Combine(sharedPersistence, typeName + ".cs")));
+            });
+    }
+
     private static IEnumerable<string> SourceFiles()
         => Directory.EnumerateFiles(Path.Combine(Root, "src"), "*.cs", SearchOption.AllDirectories)
             .Where(file => !HasPathPart(file, "bin") && !HasPathPart(file, "obj"))

@@ -7,9 +7,9 @@ namespace PlaceContext.Jobs.Infrastructure.Persistence;
 
 public sealed class EfJobTriggerRepository : IJobTriggerRepository
 {
-    private readonly AppDbContext _db;
+    private readonly JobsDbContext _db;
 
-    public EfJobTriggerRepository(AppDbContext db) => _db = db;
+    public EfJobTriggerRepository(JobsDbContext db) => _db = db;
 
     public async Task AddAsync(JobTrigger trigger, CancellationToken ct = default)
         => await _db.JobTriggers.AddAsync(ToRow(trigger), ct);

@@ -1,4 +1,4 @@
-namespace PlaceContext.Infrastructure.Persistence;
+namespace PlaceContext.Jobs.Infrastructure.Persistence;
 
 /// <summary>
 /// A durable, cross-tenant queue row for a job run requested by a trigger. NOT tenant-owned — it is a

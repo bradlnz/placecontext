@@ -37,8 +37,6 @@ public static class DependencyInjection
             provider.GetRequiredService<DecisionTreeProvider>());
 
         // Trigger + event application services (event fan-out, schedule scanning, run watching).
-        services.AddScoped<EventDispatchService>();
-        services.AddScoped<ScheduleScanService>();
         services.AddScoped<RunStatusWatchService>();
         services.AddScoped<PostJobActionService>();
         services.AddScoped<JobRunDataRecorder>();
@@ -63,8 +61,6 @@ public static class DependencyInjection
         services.AddScoped<ICommandHandler<SaveSavedQueryCommand, SavedQueryRecord>, SaveSavedQueryHandler>();
         services.AddScoped<ICommandHandler<DeleteSavedQueryCommand, bool>, DeleteSavedQueryHandler>();
         services.AddScoped<CrmArtifactAssociationService>();
-        services.AddScoped<ICommandHandler<DefineEventTypeCommand, EventTypeView>, DefineEventTypeHandler>();
-        services.AddScoped<ICommandHandler<EmitEventCommand, EventOccurrenceView>, EmitEventHandler>();
 
         services.AddScoped<IMcpClientService, McpClientService>();
 

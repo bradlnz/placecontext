@@ -7,8 +7,8 @@ namespace PlaceContext.Jobs.Infrastructure.Persistence;
 
 public sealed class EfJobTestStore : IJobTestStore
 {
-    private readonly AppDbContext _db;
-    public EfJobTestStore(AppDbContext db) => _db = db;
+    private readonly JobsDbContext _db;
+    public EfJobTestStore(JobsDbContext db) => _db = db;
 
     public async Task<JobTestCaseRecord?> GetAsync(Guid id, CancellationToken ct = default)
         => ToRecord(await _db.JobTestCases.AsNoTracking()

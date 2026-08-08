@@ -7,9 +7,9 @@ namespace PlaceContext.Application.Features;
 public sealed class DeleteTriggerHandler : ICommandHandler<DeleteTriggerCommand, bool>
 {
     private readonly IJobTriggerRepository _triggers;
-    private readonly IUnitOfWork _uow;
+    private readonly IJobsUnitOfWork _uow;
 
-    public DeleteTriggerHandler(IJobTriggerRepository triggers, IUnitOfWork uow)
+    public DeleteTriggerHandler(IJobTriggerRepository triggers, IJobsUnitOfWork uow)
     {
         _triggers = triggers;
         _uow = uow;

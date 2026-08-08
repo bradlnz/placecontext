@@ -1,7 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.ValueObjects;
-using PlaceContext.Infrastructure.Persistence;
 using PlaceContext.Jobs.Infrastructure.Persistence;
 using PlaceContext.TestSupport;
 
@@ -15,10 +14,10 @@ public sealed class JobChainActionPersistenceTests
     public async Task Typed_email_action_round_trips_through_stages_json()
     {
         var tenant = new FakeCurrentTenant(Guid.NewGuid());
-        var options = new DbContextOptionsBuilder<AppDbContext>()
+        var options = new DbContextOptionsBuilder<JobsDbContext>()
             .UseInMemoryDatabase(Guid.NewGuid().ToString("N"))
             .Options;
-        await using var db = new AppDbContext(options, tenant);
+        await using var db = new JobsDbContext(options, tenant);
         var repository = new EfJobChainRepository(db);
         var email = new SendEmailChainAction(
             "{{client.email}}", "{{client.name}}", "Report {{report.id}}", "Ready",
@@ -41,10 +40,10 @@ public sealed class JobChainActionPersistenceTests
     public async Task Legacy_flat_job_id_array_still_deserializes()
     {
         var tenant = new FakeCurrentTenant(Guid.NewGuid());
-        var options = new DbContextOptionsBuilder<AppDbContext>()
+        var options = new DbContextOptionsBuilder<JobsDbContext>()
             .UseInMemoryDatabase(Guid.NewGuid().ToString("N"))
             .Options;
-        await using var db = new AppDbContext(options, tenant);
+        await using var db = new JobsDbContext(options, tenant);
         var jobId = Guid.NewGuid();
         var row = new JobChainRow
         {

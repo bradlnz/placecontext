@@ -1,5 +1,6 @@
 using PlaceContext.Application.Ports;
 using PlaceContext.Domain.Repositories;
+using PlaceContext.Jobs.Domain.Persistence;
 
 namespace PlaceContext.Application.Features;
 
@@ -15,12 +16,12 @@ public sealed class ScheduleScanService
     private readonly IJobRunQueue _queue;
     private readonly ICronSchedule _cron;
     private readonly ICurrentTenant _tenant;
-    private readonly IUnitOfWork _uow;
+    private readonly IJobsUnitOfWork _uow;
     private readonly IClock _clock;
 
     public ScheduleScanService(
         IJobTriggerRepository triggers, IJobRunQueue queue, ICronSchedule cron,
-        ICurrentTenant tenant, IUnitOfWork uow, IClock clock)
+        ICurrentTenant tenant, IJobsUnitOfWork uow, IClock clock)
     {
         _triggers = triggers;
         _queue = queue;

@@ -14,13 +14,13 @@ public sealed class CreateTriggerHandler : ICommandHandler<CreateTriggerCommand,
     private readonly IJobTriggerRepository _triggers;
     private readonly ICronSchedule _cron;
     private readonly ICurrentTenant _tenant;
-    private readonly IUnitOfWork _uow;
+    private readonly IJobsUnitOfWork _uow;
     private readonly IClock _clock;
 
     public CreateTriggerHandler(
         IJobRepository jobs, IJobChainRepository chains,
         IJobTriggerRepository triggers, ICronSchedule cron,
-        ICurrentTenant tenant, IUnitOfWork uow, IClock clock)
+        ICurrentTenant tenant, IJobsUnitOfWork uow, IClock clock)
     {
         _jobs = jobs;
         _chains = chains;

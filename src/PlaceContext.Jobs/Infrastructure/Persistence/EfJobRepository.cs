@@ -9,12 +9,12 @@ namespace PlaceContext.Jobs.Infrastructure.Persistence;
 
 public sealed class EfJobRepository : IJobRepository
 {
-    private readonly AppDbContext _db;
+    private readonly JobsDbContext _db;
     private readonly IDataEncryptor _enc;
     private static readonly JsonSerializerOptions Json = new() { WriteIndented = false };
     private static string P => DataEncryptionPurpose.JobSource;
 
-    public EfJobRepository(AppDbContext db, IDataEncryptor enc) => (_db, _enc) = (db, enc);
+    public EfJobRepository(JobsDbContext db, IDataEncryptor enc) => (_db, _enc) = (db, enc);
 
     public async Task AddAsync(Job job, CancellationToken ct = default)
         => await _db.Jobs.AddAsync(ToRow(job), ct);

@@ -216,7 +216,6 @@ public static class DependencyInjection
         {
             db.Database.ExecuteSqlRaw(
                 """
-                ALTER TABLE jobs ADD COLUMN IF NOT EXISTS "AllowApiInvocation" boolean NOT NULL DEFAULT false;
                 ALTER TABLE tenants ADD COLUMN IF NOT EXISTS "MenuJson" text NULL;
                 ALTER TABLE tenants ADD COLUMN IF NOT EXISTS "ArtifactViewJson" text NULL;
                 """);
@@ -247,63 +246,6 @@ public static class DependencyInjection
         }
         catch { /* non-Postgres or partially initialized database */ }
 
-        // Additive indexes for the hot run queries (safe if already present). The status watcher
-        // scans job_runs/chain_runs for in-flight or recently-finished rows every 2 seconds — a
-        // sequential scan of the whole run history without these. Partial indexes keep the active-
-        // status side tiny (the working set of live runs), FinishedAt serves the "recently finished"
-        // arm of the OR, and (TenantId, StartedAt) serves the tenant-filtered newest-first lists.
-        try
-        {
-            db.Database.ExecuteSqlRaw(
-                """
-                CREATE INDEX IF NOT EXISTS ix_job_runs_active ON job_runs ("Status") WHERE "Status" IN ('Queued','Running');
-                CREATE INDEX IF NOT EXISTS ix_job_runs_finished_at ON job_runs ("FinishedAt");
-                CREATE INDEX IF NOT EXISTS ix_job_runs_tenant_started ON job_runs ("TenantId", "StartedAt");
-                CREATE INDEX IF NOT EXISTS ix_chain_runs_active ON chain_runs ("Status") WHERE "Status" IN ('Queued','Running');
-                CREATE INDEX IF NOT EXISTS ix_chain_runs_finished_at ON chain_runs ("FinishedAt");
-                CREATE INDEX IF NOT EXISTS ix_chain_runs_tenant_started ON chain_runs ("TenantId", "StartedAt");
-                """);
-        }
-        catch { /* non-Postgres, or the tables predate these columns */ }
-
-        // Backfill denormalized shard counts for existing runs.
-        // The JSON is encrypted at the app layer, so we must read/decrypt/count in C#.
-        BackfillShardCounts(db, scope.ServiceProvider);
-    }
-
-    private static void BackfillShardCounts(AppDbContext db, IServiceProvider sp)
-    {
-        try
-        {
-            var enc = sp.GetService<IDataEncryptor>();
-            if (enc is null) return;
-            var purpose = DataEncryptionPurpose.JobRun;
-            var rows = db.JobRuns
-                .FromSqlRaw("""SELECT * FROM job_runs WHERE "ShardCount" = 0 AND "ShardResultsJson" IS NOT NULL""")
-                .ToList();
-            if (rows.Count == 0) return;
-
-            foreach (var row in rows)
-            {
-                try
-                {
-                    var json = enc.Unprotect(row.ShardResultsJson, purpose);
-                    var shards = System.Text.Json.JsonSerializer.Deserialize<List<JobRunShardCountDto>>(json,
-                        new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-                    if (shards is null) continue;
-                    row.ShardCount = shards.Count;
-                    row.SucceededShards = shards.Count(s =>
-                        string.Equals(s.Outcome, "Succeeded", StringComparison.OrdinalIgnoreCase));
-                    row.PartialShards = shards.Count(s =>
-                        string.Equals(s.Outcome, "Partial", StringComparison.OrdinalIgnoreCase));
-                    row.FailedShards = shards.Count(s =>
-                        string.Equals(s.Outcome, "Failed", StringComparison.OrdinalIgnoreCase));
-                }
-                catch { /* row with unparseable JSON — leave counts at 0 */ }
-            }
-            db.SaveChanges();
-        }
-        catch { /* backfill is best-effort */ }
     }
 
     /// <summary>

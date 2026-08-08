@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Features;
+using PlaceContext.Application.Ports;
 
 namespace PlaceContext.Jobs;
 
@@ -18,6 +19,11 @@ public static class DependencyInjection
 
     public static IServiceCollection AddJobsModule(this IServiceCollection services)
     {
+        services.AddScoped<EventDispatchService>();
+        services.AddScoped<IEventDispatcher>(provider => provider.GetRequiredService<EventDispatchService>());
+        services.AddScoped<ScheduleScanService>();
+        services.AddScoped<ICommandHandler<DefineEventTypeCommand, EventTypeView>, DefineEventTypeHandler>();
+        services.AddScoped<ICommandHandler<EmitEventCommand, EventOccurrenceView>, EmitEventHandler>();
         services.AddScoped<IJobRunner, JobRunner>();
         services.AddScoped<ICommandHandler<CreateJobCommand, JobView>, CreateJobHandler>();
         services.AddScoped<ICommandHandler<UpdateJobCommand, JobView>, UpdateJobHandler>();

@@ -14,13 +14,13 @@ public sealed class CancelJobRunHandler : ICommandHandler<CancelJobRunCommand, b
 {
     private readonly IJobRunRepository _runs;
     private readonly IWorkloadRunner _runner;
-    private readonly IUnitOfWork _uow;
+    private readonly IJobsUnitOfWork _uow;
     private readonly IClock _clock;
 
     public CancelJobRunHandler(
         IJobRunRepository runs,
         IWorkloadRunner runner,
-        IUnitOfWork uow,
+        IJobsUnitOfWork uow,
         IClock clock)
     {
         _runs = runs;

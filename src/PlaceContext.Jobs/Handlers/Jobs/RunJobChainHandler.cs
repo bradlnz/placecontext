@@ -50,7 +50,7 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
     private readonly IJobChainRepository _chains;
     private readonly IJobRepository _jobs;
     private readonly IChainRunRepository _runs;
-    private readonly IUnitOfWork _uow;
+    private readonly IJobsUnitOfWork _uow;
     private readonly IClock _clock;
     private readonly IJobRunner _jobRunner;
     private readonly IClientCommunicationSender? _communications;
@@ -62,7 +62,7 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
     private readonly ILogger<RunJobChainHandler>? _log;
 
     public RunJobChainHandler(IJobChainRepository chains, IJobRepository jobs, IChainRunRepository runs,
-        IUnitOfWork uow, IClock clock, IJobRunner jobRunner,
+        IJobsUnitOfWork uow, IClock clock, IJobRunner jobRunner,
         // Optional so unit tests construct the handler unchanged; DI always supplies it.
         DataMappingIngestionService? dataMappings = null,
         IClientCommunicationSender? communications = null,

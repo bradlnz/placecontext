@@ -1,7 +1,7 @@
-namespace PlaceContext.Infrastructure.Persistence;
+namespace PlaceContext.Jobs.Infrastructure.Persistence;
 
 /// <summary>Flat EF Core row for a user-defined <see cref="PlaceContext.Domain.Entities.EventDefinition"/>.</summary>
-public sealed class EventDefinitionRow : ITenantOwned
+public sealed class EventDefinitionRow : IJobsTenantOwned
 {
     public Guid Id { get; set; }
     public Guid TenantId { get; set; }

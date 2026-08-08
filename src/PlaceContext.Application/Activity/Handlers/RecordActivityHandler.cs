@@ -14,13 +14,13 @@ public sealed class RecordActivityHandler : ICommandHandler<RecordActivityComman
     private readonly IGitPort _git;
     private readonly IUnitOfWork _uow;
     private readonly IClock _clock;
-    private readonly EventDispatchService? _events;
+    private readonly IEventDispatcher? _events;
 
     public RecordActivityHandler(
         IProjectRepository projects, IActivityLogRepository ledgers,
         IGitPort git, IUnitOfWork uow, IClock clock,
         // Optional so unit tests can construct the handler without the event layer; DI always supplies it.
-        EventDispatchService? events = null)
+        IEventDispatcher? events = null)
     {
         _projects = projects;
         _ledgers = ledgers;

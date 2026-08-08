@@ -1,7 +1,7 @@
-namespace PlaceContext.Infrastructure.Persistence;
+namespace PlaceContext.Jobs.Infrastructure.Persistence;
 
 /// <summary>Flat EF Core row for a <see cref="PlaceContext.Domain.Entities.JobTrigger"/>.</summary>
-public sealed class JobTriggerRow : ITenantOwned
+public sealed class JobTriggerRow : IJobsTenantOwned
 {
     public Guid Id { get; set; }
     public Guid TenantId { get; set; }

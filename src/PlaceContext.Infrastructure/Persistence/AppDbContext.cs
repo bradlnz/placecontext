@@ -37,9 +37,6 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
     public DbSet<DecisionRow> Decisions => Set<DecisionRow>();
     public DbSet<RequirementsRow> Requirements => Set<RequirementsRow>();
     public DbSet<ToolCallRow> ToolCalls => Set<ToolCallRow>();
-    public DbSet<JobRow> Jobs => Set<JobRow>();
-    public DbSet<JobRunRow> JobRuns => Set<JobRunRow>();
-    public DbSet<JobTestCaseRow> JobTestCases => Set<JobTestCaseRow>();
     public DbSet<CrmClientRow> CrmClients => Set<CrmClientRow>();
     public DbSet<CrmJobRunRow> CrmJobRuns => Set<CrmJobRunRow>();
     public DbSet<CrmChainRunRow> CrmChainRuns => Set<CrmChainRunRow>();
@@ -52,12 +49,6 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
     public DbSet<CrmAutomationQueueRow> CrmAutomationQueue => Set<CrmAutomationQueueRow>();
     public DbSet<CrmIngestionSettingsRow> CrmIngestionSettings => Set<CrmIngestionSettingsRow>();
     public DbSet<CommunicationProviderRow> CommunicationProviders => Set<CommunicationProviderRow>();
-    public DbSet<JobTriggerRow> JobTriggers => Set<JobTriggerRow>();
-    public DbSet<JobChainRow> JobChains => Set<JobChainRow>();
-    public DbSet<ChainRunRow> ChainRuns => Set<ChainRunRow>();
-    public DbSet<EventDefinitionRow> EventDefinitions => Set<EventDefinitionRow>();
-    public DbSet<EventOccurrenceRow> EventOccurrences => Set<EventOccurrenceRow>();
-    public DbSet<PendingRunRow> PendingRuns => Set<PendingRunRow>();
     public DbSet<UserApiTokenRow> UserApiTokens => Set<UserApiTokenRow>();
 
     Task<int> IUnitOfWork.SaveChangesAsync(CancellationToken ct) => SaveChangesAsync(ct);
@@ -203,46 +194,6 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
             e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
         });
 
-        b.Entity<JobRow>(e =>
-        {
-            e.ToTable("jobs");
-            e.HasKey(x => x.Id);
-            e.HasIndex(x => x.ProjectId);
-            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
-            // New columns added for WorkloadSource discriminated union.
-            e.Property(x => x.MapSourceKind).HasDefaultValue("image");
-            e.Property(x => x.UpdatedAt).HasDefaultValueSql("now()");
-            e.Property(x => x.AllowNetworkEgress).HasDefaultValue(false);
-            e.Property(x => x.AllowApiInvocation).HasDefaultValue(false);
-            e.Property(x => x.TimeoutSeconds).HasDefaultValue(1800);
-            e.Property(x => x.ParametersJson).HasDefaultValue("[]");
-            e.Property(x => x.PostJobActionsJson).HasDefaultValue("[]");
-            e.Property(x => x.ReturnType).HasDefaultValue("Json");
-            e.Property(x => x.RetryCount).HasDefaultValue(0);
-            e.Property(x => x.RetryDelaySeconds).HasDefaultValue(0);
-        });
-
-        b.Entity<JobTestCaseRow>(e =>
-        {
-            e.ToTable("job_test_cases");
-            e.HasKey(x => x.Id);
-            e.HasIndex(x => new { x.ProjectId, x.JobId });
-            e.HasIndex(x => new { x.JobId, x.Name }).IsUnique();
-            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
-            e.Property(x => x.AssertionType).HasDefaultValue("Succeeds");
-            e.Property(x => x.Enabled).HasDefaultValue(true);
-            e.Property(x => x.LastStatus).HasDefaultValue("NotRun");
-            e.Property(x => x.CodeFilesJson).HasDefaultValue("[]");
-            e.Property(x => x.MethodResultsJson).HasDefaultValue("[]");
-            e.Property(x => x.AllowNetworkEgress).HasDefaultValue(false);
-            e.Property(x => x.CreatedAt).HasDefaultValueSql("now()");
-            e.Property(x => x.UpdatedAt).HasDefaultValueSql("now()");
-            e.HasOne<JobRow>()
-                .WithMany()
-                .HasForeignKey(x => x.JobId)
-                .OnDelete(DeleteBehavior.Cascade);
-        });
-
         b.Entity<CrmClientRow>(e =>
         {
             e.ToTable("crm_clients");
@@ -376,72 +327,6 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
             e.Property(x => x.SettingsJson).HasDefaultValue("{}");
             e.Property(x => x.CreatedAt).HasDefaultValueSql("now()");
             e.Property(x => x.UpdatedAt).HasDefaultValueSql("now()");
-        });
-
-        b.Entity<JobRunRow>(e =>
-        {
-            e.ToTable("job_runs");
-            e.HasKey(x => x.Id);
-            e.HasIndex(x => new { x.JobId, x.StartedAt });
-            e.HasIndex(x => x.ProjectId);
-            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
-            // SnapshotJson stores the full WorkloadSnapshot at run-start.
-            e.Property(x => x.SnapshotJson).HasDefaultValue("{}");
-            e.Property(x => x.AttemptNumber).HasDefaultValue(1);
-        });
-
-        b.Entity<JobTriggerRow>(e =>
-        {
-            e.ToTable("job_triggers");
-            e.HasKey(x => x.Id);
-            e.Property(x => x.JobId).IsRequired(false);
-            e.HasIndex(x => x.JobId);
-            // Scheduler scans by (Enabled, Kind, NextRunAt) across tenants.
-            e.HasIndex(x => new { x.Enabled, x.Kind, x.NextRunAt });
-            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
-        });
-
-        b.Entity<JobChainRow>(e =>
-        {
-            e.ToTable("job_chains");
-            e.HasKey(x => x.Id);
-            e.HasIndex(x => x.ProjectId);
-            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
-        });
-
-        b.Entity<ChainRunRow>(e =>
-        {
-            e.ToTable("chain_runs");
-            e.HasKey(x => x.Id);
-            // The pipeline history is read newest-first per chain.
-            e.HasIndex(x => new { x.ChainId, x.StartedAt });
-            e.HasIndex(x => x.ProjectId);
-            e.HasIndex(x => new { x.Status, x.ResumeAt, x.ContinuationClaimedAt });
-            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
-        });
-
-        b.Entity<EventDefinitionRow>(e =>
-        {
-            e.ToTable("event_definitions");
-            e.HasKey(x => x.Id);
-            e.HasIndex(x => new { x.TenantId, x.Name }).IsUnique(); // event name unique within a tenant
-            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
-        });
-
-        b.Entity<EventOccurrenceRow>(e =>
-        {
-            e.ToTable("event_occurrences");
-            e.HasKey(x => x.Id);
-            e.HasIndex(x => new { x.Name, x.OccurredAt });
-            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
-        });
-
-        b.Entity<PendingRunRow>(e =>
-        {
-            e.ToTable("pending_job_runs"); // global system queue — NOT tenant-filtered
-            e.HasKey(x => x.Id);
-            // Drained oldest-first among unclaimed rows.
-            e.HasIndex(x => new { x.ClaimedAt, x.EnqueuedAt });
         });
 
     }

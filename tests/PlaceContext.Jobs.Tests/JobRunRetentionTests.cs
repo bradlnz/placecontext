@@ -1,10 +1,9 @@
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using PlaceContext.Application.Ports;
-using PlaceContext.Infrastructure.Persistence;
+using PlaceContext.Jobs.Infrastructure.Persistence;
 using PlaceContext.Infrastructure.Security;
 using PlaceContext.Jobs.Infrastructure.Caching;
-using PlaceContext.Jobs.Infrastructure.Persistence;
 using Xunit;
 
 namespace PlaceContext.Jobs.Tests;
@@ -16,11 +15,11 @@ public sealed class JobRunRetentionTests
     {
         var tenantId = Guid.NewGuid();
         var otherTenantId = Guid.NewGuid();
-        var options = new DbContextOptionsBuilder<AppDbContext>()
+        var options = new DbContextOptionsBuilder<JobsDbContext>()
             .UseInMemoryDatabase(Guid.NewGuid().ToString("N"))
             .Options;
 
-        await using var db = new AppDbContext(options, new Tenant(tenantId));
+        await using var db = new JobsDbContext(options, new Tenant(tenantId));
         var start = DateTimeOffset.Parse("2026-08-02T00:00:00Z");
         for (var i = 0; i < 105; i++)
             db.JobRuns.Add(Row(tenantId, start.AddMinutes(i), "Succeeded"));

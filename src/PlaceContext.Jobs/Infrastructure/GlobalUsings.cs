@@ -1,1 +1,1 @@
-global using PlaceContext.Infrastructure.Persistence;
+global using PlaceContext.Jobs.Infrastructure.Persistence;

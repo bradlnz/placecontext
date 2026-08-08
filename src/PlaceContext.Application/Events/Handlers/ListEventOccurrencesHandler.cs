@@ -17,7 +17,8 @@ public sealed class ListEventOccurrencesHandler
         var occurrences = await _events.ListOccurrencesAsync(query.Take, ct);
         // TriggeredRuns is only known at emit time; the log view reports 0 (not persisted per-occurrence).
         return occurrences
-            .Select(o => EventDispatchService.ToView(o, triggeredRuns: 0))
+            .Select(o => new EventOccurrenceView(
+                o.Id, o.Name, o.Source.ToString(), o.ProjectId, o.Payload, o.OccurredAt, 0))
             .ToList();
     }
 }

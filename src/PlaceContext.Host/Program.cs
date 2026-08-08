@@ -23,6 +23,7 @@ using PlaceContext.Crm.Infrastructure.Crm;
 using PlaceContext.Crm;
 using PlaceContext.Data;
 using PlaceContext.Jobs;
+using PlaceContext.Jobs.Infrastructure.Persistence;
 using PlaceContext.Search;
 using PlaceContext.Vault;
 using Microsoft.AspNetCore.Authentication;
@@ -447,6 +448,7 @@ app.Use(async (ctx, next) =>
 });
 
 PlaceContext.Infrastructure.DependencyInjection.MigrateDatabase(app.Services);
+await app.Services.MigrateJobsDatabaseAsync();
 await PlaceContext.AgentChat.Infrastructure.Persistence.AgentChatDatabaseMigrationExtensions
     .MigrateAgentChatDatabaseAsync(app.Services);
 await PlaceContext.Agents.Infrastructure.Persistence.AgentsDatabaseMigrationExtensions
@@ -479,6 +481,7 @@ else
 if (app.Configuration.GetValue("PlaceContext:EncryptionAtRest:BootstrapOnStartup", false))
 {
     await PlaceContext.Infrastructure.DependencyInjection.EncryptExistingDataAsync(app.Services);
+    await PlaceContext.Jobs.Infrastructure.Security.JobsEncryptionAtRestBootstrap.RunAsync(app.Services);
     await PlaceContext.Data.Infrastructure.Security.DataEncryptionAtRestBootstrap.RunAsync(app.Services);
     await PlaceContext.Vault.Infrastructure.Security.VaultEncryptionAtRestBootstrap.RunAsync(app.Services);
 }

@@ -11,7 +11,7 @@ namespace PlaceContext.Jobs.Infrastructure.Persistence;
 
 public sealed class EfJobRunRepository : IJobRunRepository
 {
-    private readonly AppDbContext _db;
+    private readonly JobsDbContext _db;
     private readonly IDataEncryptor _enc;
     private readonly IJobRunCache _cache;
     private static string P => DataEncryptionPurpose.JobRun;
@@ -22,7 +22,7 @@ public sealed class EfJobRunRepository : IJobRunRepository
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
     };
 
-    public EfJobRunRepository(AppDbContext db, IDataEncryptor enc, IJobRunCache cache)
+    public EfJobRunRepository(JobsDbContext db, IDataEncryptor enc, IJobRunCache cache)
         => (_db, _enc, _cache) = (db, enc, cache);
 
     public async Task AddAsync(JobRun run, CancellationToken ct = default)

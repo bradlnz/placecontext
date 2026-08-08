@@ -32,15 +32,10 @@ public static class EncryptionAtRestBootstrap
         log.LogInformation("Encryption-at-rest bootstrap: scanning for legacy plaintext…");
 
         var n = 0;
-        n += await EncryptJobColumnsAsync(db, enc, ct);
-        n += await EncryptJobRunColumnsAsync(db, enc, ct);
         n += await EncryptRequirementsAsync(db, enc, ct);
-        n += await EncryptEventPayloadsAsync(db, enc, ct);
         n += await EncryptDecisionsAsync(db, enc, ct);
         n += await EncryptActivityAsync(db, enc, ct);
         n += await EncryptToolCallsAsync(db, enc, ct);
-        n += await EncryptPendingRunsAsync(db, enc, ct);
-        n += await EncryptChainRunsAsync(db, enc, crmOnly: false, ct);
         n += await EncryptCrmClientsAsync(db, enc, ct);
         n += await EncryptCrmCommunicationsAsync(db, enc, ct);
         n += await EncryptCrmArtifactMetadataAsync(db, enc, ct);
@@ -72,7 +67,6 @@ public static class EncryptionAtRestBootstrap
         n += await EncryptCrmCommunicationsAsync(db, enc, ct);
         n += await EncryptCrmArtifactMetadataAsync(db, enc, ct);
         n += await EncryptCrmAutomationErrorsAsync(db, enc, ct);
-        n += await EncryptChainRunsAsync(db, enc, crmOnly: true, ct);
         if (n > 0)
             log.LogInformation("CRM encryption-at-rest bootstrap rewrote {Count} field(s).", n);
     }
@@ -192,70 +186,6 @@ public static class EncryptionAtRestBootstrap
         return n;
     }
 
-    private static async Task<int> EncryptChainRunsAsync(
-        AppDbContext db, IDataEncryptor enc, bool crmOnly, CancellationToken ct)
-    {
-        var p = DataEncryptionPurpose.ChainRun;
-        var n = 0;
-        while (true)
-        {
-            IQueryable<ChainRunRow> query = db.ChainRuns.IgnoreQueryFilters();
-            if (crmOnly)
-                query = query.Where(run => db.CrmChainRuns.IgnoreQueryFilters()
-                    .Any(link => link.ChainRunId == run.Id));
-            var rows = await query
-                .Where(r => (r.StepsJson != "" && !r.StepsJson.StartsWith(Prefix))
-                    || (r.FinalOutput != null && r.FinalOutput != ""
-                        && !r.FinalOutput.StartsWith(Prefix)))
-                .Take(CrmPayloadBatch)
-                .ToListAsync(ct);
-            if (rows.Count == 0) break;
-
-            foreach (var row in rows)
-            {
-                if (NeedsProtect(enc, row.StepsJson)) { row.StepsJson = enc.Protect(row.StepsJson, p); n++; }
-                if (NeedsProtect(enc, row.FinalOutput)) { row.FinalOutput = enc.Protect(row.FinalOutput, p); n++; }
-            }
-            await db.SaveChangesAsync(ct);
-            db.ChangeTracker.Clear();
-        }
-        return n;
-    }
-
-    private static async Task<int> EncryptJobColumnsAsync(AppDbContext db, IDataEncryptor enc, CancellationToken ct)
-    {
-        var p = DataEncryptionPurpose.JobSource;
-        var rows = await db.Jobs.IgnoreQueryFilters().ToListAsync(ct);
-        var n = 0;
-        foreach (var r in rows)
-        {
-            if (NeedsProtect(enc, r.MapSource)) { r.MapSource = enc.Protect(r.MapSource, p); n++; }
-            if (NeedsProtect(enc, r.MapFilesJson)) { r.MapFilesJson = enc.Protect(r.MapFilesJson, p); n++; }
-            if (NeedsProtect(enc, r.InputPayloadsJson)) { r.InputPayloadsJson = enc.Protect(r.InputPayloadsJson, p); n++; }
-            if (NeedsProtect(enc, r.MapEnvJson)) { r.MapEnvJson = enc.Protect(r.MapEnvJson, p); n++; }
-            if (NeedsProtect(enc, r.ReduceSource)) { r.ReduceSource = enc.Protect(r.ReduceSource, p); n++; }
-            if (NeedsProtect(enc, r.ReduceFilesJson)) { r.ReduceFilesJson = enc.Protect(r.ReduceFilesJson, p); n++; }
-            if (NeedsProtect(enc, r.ReduceEnvJson)) { r.ReduceEnvJson = enc.Protect(r.ReduceEnvJson, p); n++; }
-        }
-        if (n > 0) await db.SaveChangesAsync(ct);
-        return n;
-    }
-
-    private static async Task<int> EncryptJobRunColumnsAsync(AppDbContext db, IDataEncryptor enc, CancellationToken ct)
-    {
-        var p = DataEncryptionPurpose.JobRun;
-        var rows = await db.JobRuns.IgnoreQueryFilters().ToListAsync(ct);
-        var n = 0;
-        foreach (var r in rows)
-        {
-            if (NeedsProtect(enc, r.ShardResultsJson)) { r.ShardResultsJson = enc.Protect(r.ShardResultsJson, p); n++; }
-            if (NeedsProtect(enc, r.ReduceResultJson)) { r.ReduceResultJson = enc.Protect(r.ReduceResultJson, p); n++; }
-            if (NeedsProtect(enc, r.SnapshotJson)) { r.SnapshotJson = enc.Protect(r.SnapshotJson, p); n++; }
-        }
-        if (n > 0) await db.SaveChangesAsync(ct);
-        return n;
-    }
-
     private static async Task<int> EncryptRequirementsAsync(AppDbContext db, IDataEncryptor enc, CancellationToken ct)
     {
         var p = DataEncryptionPurpose.Requirements;
@@ -264,19 +194,6 @@ public static class EncryptionAtRestBootstrap
         foreach (var r in rows)
         {
             if (NeedsProtect(enc, r.Markdown)) { r.Markdown = enc.Protect(r.Markdown, p); n++; }
-        }
-        if (n > 0) await db.SaveChangesAsync(ct);
-        return n;
-    }
-
-    private static async Task<int> EncryptEventPayloadsAsync(AppDbContext db, IDataEncryptor enc, CancellationToken ct)
-    {
-        var p = DataEncryptionPurpose.EventPayload;
-        var rows = await db.EventOccurrences.IgnoreQueryFilters().ToListAsync(ct);
-        var n = 0;
-        foreach (var r in rows)
-        {
-            if (NeedsProtect(enc, r.Payload)) { r.Payload = enc.Protect(r.Payload, p); n++; }
         }
         if (n > 0) await db.SaveChangesAsync(ct);
         return n;
@@ -321,19 +238,6 @@ public static class EncryptionAtRestBootstrap
             if (NeedsProtect(enc, r.Summary)) { r.Summary = enc.Protect(r.Summary, p); n++; }
             if (NeedsProtect(enc, r.RequestJson)) { r.RequestJson = enc.Protect(r.RequestJson, p); n++; }
             if (NeedsProtect(enc, r.ResponseJson)) { r.ResponseJson = enc.Protect(r.ResponseJson, p); n++; }
-        }
-        if (n > 0) await db.SaveChangesAsync(ct);
-        return n;
-    }
-
-    private static async Task<int> EncryptPendingRunsAsync(AppDbContext db, IDataEncryptor enc, CancellationToken ct)
-    {
-        var p = DataEncryptionPurpose.PendingRun;
-        var rows = await db.PendingRuns.ToListAsync(ct);
-        var n = 0;
-        foreach (var r in rows)
-        {
-            if (NeedsProtect(enc, r.Payload)) { r.Payload = enc.Protect(r.Payload, p); n++; }
         }
         if (n > 0) await db.SaveChangesAsync(ct);
         return n;

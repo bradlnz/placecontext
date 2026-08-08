@@ -87,6 +87,11 @@ public sealed class CrmEncryptionAtRestTests
         var (db, encryptor) = CreateDb();
         await using (db)
         {
+            var jobsOptions = new DbContextOptionsBuilder<JobsDbContext>()
+                .UseInMemoryDatabase(Guid.NewGuid().ToString("N"))
+                .Options;
+            await using var jobsDb = new JobsDbContext(
+                jobsOptions, new FakeCurrentTenant(Guid.NewGuid()));
             var projectId = Guid.NewGuid();
             var clientId = Guid.NewGuid();
             var now = DateTimeOffset.UtcNow;
@@ -118,10 +123,12 @@ public sealed class CrmEncryptionAtRestTests
                 },
                 "{\"client\":\"client@example.com\",\"result\":\"approved\"}",
                 now, now.AddSeconds(1));
-            var chainRuns = new EfChainRunRepository(db, encryptor);
+            var chainRuns = new EfChainRunRepository(jobsDb, encryptor);
             await chainRuns.AddAsync(chainRun);
             await db.SaveChangesAsync();
+            await jobsDb.SaveChangesAsync();
             db.ChangeTracker.Clear();
+            jobsDb.ChangeTracker.Clear();
 
             var storedMessage = await db.CrmCommunications.AsNoTracking().SingleAsync();
             AssertProtected(encryptor, storedMessage.SubjectProtected, "Your proposal");
@@ -135,7 +142,7 @@ public sealed class CrmEncryptionAtRestTests
             Assert.DoesNotContain("proposal", storedArtifact.Title, StringComparison.OrdinalIgnoreCase);
             Assert.DoesNotContain("proposal", storedArtifact.ObjectKey, StringComparison.OrdinalIgnoreCase);
 
-            var storedChainRun = await db.ChainRuns.AsNoTracking().SingleAsync();
+            var storedChainRun = await jobsDb.ChainRuns.AsNoTracking().SingleAsync();
             Assert.True(encryptor.IsProtected(storedChainRun.StepsJson));
             Assert.True(encryptor.IsProtected(storedChainRun.FinalOutput));
             Assert.DoesNotContain("client@example.com", storedChainRun.FinalOutput!, StringComparison.Ordinal);
@@ -208,19 +215,6 @@ public sealed class CrmEncryptionAtRestTests
                 SizeBytes = 42,
                 CreatedAt = DateTimeOffset.UtcNow,
             });
-            db.ChainRuns.Add(new ChainRunRow
-            {
-                Id = chainRunId,
-                TenantId = tenantId,
-                ChainId = Guid.NewGuid(),
-                ProjectId = Guid.NewGuid(),
-                ChainName = "Legacy CRM automation",
-                Status = "Succeeded",
-                StepsJson = "[{\"error\":\"client@example.com rejected\"}]",
-                FinalOutput = "{\"email\":\"legacy@example.com\"}",
-                StartedAt = DateTimeOffset.UtcNow,
-                FinishedAt = DateTimeOffset.UtcNow,
-            });
             db.CrmChainRuns.Add(new CrmChainRunRow
             {
                 Id = Guid.NewGuid(),
@@ -268,12 +262,6 @@ public sealed class CrmEncryptionAtRestTests
             var artifact = await db.CrmClientArtifacts.IgnoreQueryFilters().SingleAsync();
             Assert.True(encryptor.IsProtected(artifact.Title));
             Assert.True(encryptor.IsProtected(artifact.ObjectKey));
-
-            var chainRun = await db.ChainRuns.IgnoreQueryFilters().SingleAsync();
-            AssertProtected(encryptor, chainRun.StepsJson,
-                "[{\"error\":\"client@example.com rejected\"}]");
-            AssertProtected(encryptor, chainRun.FinalOutput,
-                "{\"email\":\"legacy@example.com\"}");
 
             var queued = await db.CrmAutomationQueue.SingleAsync();
             Assert.True(encryptor.IsProtected(queued.LastError));

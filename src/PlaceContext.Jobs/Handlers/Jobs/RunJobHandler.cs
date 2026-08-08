@@ -31,7 +31,7 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
     private readonly IJobRepository _jobs;
     private readonly IJobRunRepository _runs;
     private readonly IWorkloadRunner _runner;
-    private readonly IUnitOfWork _uow;
+    private readonly IJobsUnitOfWork _uow;
     private readonly IClock _clock;
     private readonly EventDispatchService? _events;
     private readonly IEmbeddingGateway? _embeddings;
@@ -54,7 +54,7 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
         IJobRepository jobs,
         IJobRunRepository runs,
         IWorkloadRunner runner,
-        IUnitOfWork uow,
+        IJobsUnitOfWork uow,
         IClock clock,
         // Optional so unit tests can construct the handler without the event/embedding/secret layers; DI always supplies them.
         EventDispatchService? events = null,

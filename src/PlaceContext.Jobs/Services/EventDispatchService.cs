@@ -2,6 +2,7 @@ using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Ports;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.Repositories;
+using PlaceContext.Jobs.Domain.Persistence;
 using PlaceContext.Domain.ValueObjects;
 
 namespace PlaceContext.Application.Features;
@@ -14,18 +15,18 @@ namespace PlaceContext.Application.Features;
 /// Firing only enqueues — the background runner executes the job — so emitting an event never blocks
 /// on container execution. Scoped: shares the request's DbContext/UoW.
 /// </summary>
-public sealed class EventDispatchService
+public sealed class EventDispatchService : IEventDispatcher
 {
     private readonly IEventRepository _events;
     private readonly IJobTriggerRepository _triggers;
     private readonly IJobRunQueue _queue;
     private readonly ICurrentTenant _tenant;
-    private readonly IUnitOfWork _uow;
+    private readonly IJobsUnitOfWork _uow;
     private readonly IClock _clock;
 
     public EventDispatchService(
         IEventRepository events, IJobTriggerRepository triggers, IJobRunQueue queue,
-        ICurrentTenant tenant, IUnitOfWork uow, IClock clock)
+        ICurrentTenant tenant, IJobsUnitOfWork uow, IClock clock)
     {
         _events = events;
         _triggers = triggers;

@@ -13,13 +13,13 @@ namespace PlaceContext.Application.Features;
 public sealed class CancelChainRunHandler : ICommandHandler<CancelChainRunCommand, bool>
 {
     private readonly IChainRunRepository _runs;
-    private readonly IUnitOfWork _uow;
+    private readonly IJobsUnitOfWork _uow;
     private readonly IClock _clock;
     private readonly IDispatcher _dispatcher;
 
     public CancelChainRunHandler(
         IChainRunRepository runs,
-        IUnitOfWork uow,
+        IJobsUnitOfWork uow,
         IClock clock,
         IDispatcher dispatcher)
     {

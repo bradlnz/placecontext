@@ -7,9 +7,9 @@ namespace PlaceContext.Application.Features;
 public sealed class DeleteJobHandler : ICommandHandler<DeleteJobCommand, bool>
 {
     private readonly IJobRepository _jobs;
-    private readonly IUnitOfWork _uow;
+    private readonly IJobsUnitOfWork _uow;
 
-    public DeleteJobHandler(IJobRepository jobs, IUnitOfWork uow)
+    public DeleteJobHandler(IJobRepository jobs, IJobsUnitOfWork uow)
     {
         _jobs = jobs;
         _uow = uow;

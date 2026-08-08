@@ -1,7 +1,7 @@
-namespace PlaceContext.Infrastructure.Persistence;
+namespace PlaceContext.Jobs.Infrastructure.Persistence;
 
 /// <summary>Flat tenant-owned row for a persisted job verification case.</summary>
-public sealed class JobTestCaseRow : ITenantOwned
+public sealed class JobTestCaseRow : IJobsTenantOwned
 {
     public Guid Id { get; set; }
     public Guid TenantId { get; set; }

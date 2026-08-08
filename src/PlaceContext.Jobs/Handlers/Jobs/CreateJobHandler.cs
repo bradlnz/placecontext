@@ -10,10 +10,10 @@ namespace PlaceContext.Application.Features;
 public sealed class CreateJobHandler : ICommandHandler<CreateJobCommand, JobView>
 {
     private readonly IJobRepository _jobs;
-    private readonly IUnitOfWork _uow;
+    private readonly IJobsUnitOfWork _uow;
     private readonly IClock _clock;
 
-    public CreateJobHandler(IJobRepository jobs, IUnitOfWork uow, IClock clock)
+    public CreateJobHandler(IJobRepository jobs, IJobsUnitOfWork uow, IClock clock)
     {
         _jobs = jobs;
         _uow = uow;

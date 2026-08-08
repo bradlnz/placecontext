@@ -7,6 +7,7 @@ using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Features;
 using PlaceContext.Infrastructure.Persistence;
 using PlaceContext.Infrastructure.Tenancy;
+using PlaceContext.Jobs.Infrastructure.Persistence;
 
 namespace PlaceContext.Jobs.Infrastructure.Scheduling;
 
@@ -40,7 +41,7 @@ public sealed class ChainContinuationWorker : BackgroundService
     private async Task<IReadOnlyList<ChainContinuation>> ClaimAsync(CancellationToken ct)
     {
         await using var scope = _scopes.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<JobsDbContext>();
         await using var tx = await db.Database.BeginTransactionAsync(ct);
         var rows = await db.ChainRuns.FromSqlRaw(
                 """
@@ -76,7 +77,7 @@ public sealed class ChainContinuationWorker : BackgroundService
             try
             {
                 await using var scope = _scopes.CreateAsyncScope();
-                var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+                var db = scope.ServiceProvider.GetRequiredService<JobsDbContext>();
                 var persisted = await db.ChainRuns.AsNoTracking()
                     .FirstAsync(row => row.Id == value.RunId, ct);
                 var encryptor = scope.ServiceProvider.GetRequiredService<Application.Ports.IDataEncryptor>();
@@ -116,7 +117,7 @@ public sealed class ChainContinuationWorker : BackgroundService
     private async Task ReleaseAsync(Guid runId, CancellationToken ct)
     {
         await using var scope = _scopes.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var db = scope.ServiceProvider.GetRequiredService<JobsDbContext>();
         var row = await db.ChainRuns.IgnoreQueryFilters().FirstOrDefaultAsync(x => x.Id == runId, ct);
         if (row is null) return;
         row.Status = "Waiting";

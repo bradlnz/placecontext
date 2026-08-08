@@ -1,10 +1,10 @@
-namespace PlaceContext.Infrastructure.Persistence;
+namespace PlaceContext.Jobs.Infrastructure.Persistence;
 
 /// <summary>
 /// Flat EF Core row for a <see cref="PlaceContext.Domain.Entities.Job"/> definition.
 /// WorkloadSource is persisted discriminated: a "kind" column + image-or-code columns.
 /// </summary>
-public sealed class JobRow : ITenantOwned
+public sealed class JobRow : IJobsTenantOwned
 {
     public Guid Id { get; set; }
     public Guid TenantId { get; set; }

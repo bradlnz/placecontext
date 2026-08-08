@@ -11,11 +11,11 @@ public sealed class SetTriggerEnabledHandler : ICommandHandler<SetTriggerEnabled
     private readonly IJobTriggerRepository _triggers;
     private readonly ICronSchedule _cron;
     private readonly ICurrentTenant _tenant;
-    private readonly IUnitOfWork _uow;
+    private readonly IJobsUnitOfWork _uow;
     private readonly IClock _clock;
 
     public SetTriggerEnabledHandler(
-        IJobTriggerRepository triggers, ICronSchedule cron, ICurrentTenant tenant, IUnitOfWork uow, IClock clock)
+        IJobTriggerRepository triggers, ICronSchedule cron, ICurrentTenant tenant, IJobsUnitOfWork uow, IClock clock)
     {
         _triggers = triggers;
         _cron = cron;
