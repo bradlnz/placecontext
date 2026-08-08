@@ -25,7 +25,7 @@ module ApplicationHelper
   end
 
   def portal_relative_path(path)
-    prefix = portal_path.to_s.sub(%r{/\z}, "")
+    prefix = request.script_name.to_s.sub(%r{/\z}, "")
     path = path.to_s
 
     return path if prefix.blank? || prefix == "/"
