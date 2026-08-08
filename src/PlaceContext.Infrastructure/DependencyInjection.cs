@@ -28,6 +28,7 @@ public static class DependencyInjection
         services.AddSingleton<CurrentTenant>();
         services.AddSingleton<ICurrentTenant>(provider => provider.GetRequiredService<CurrentTenant>());
         services.AddSingleton<ICurrentTenantAccessor>(provider => provider.GetRequiredService<CurrentTenant>());
+        services.AddScoped<ITenantCatalog, EfTenantCatalog>();
         services.AddSingleton<ICurrentProject, CurrentProject>();
         services.AddSingleton<CurrentUser>();
         services.AddSingleton<ICurrentUser>(provider => provider.GetRequiredService<CurrentUser>());
@@ -48,6 +49,8 @@ public static class DependencyInjection
         services.AddSingleton<IDataEncryptor, Security.DataProtectionEncryptor>();
         services.AddHttpClient();
         services.AddSingleton<Operations.OperationCenter>();
+        services.AddSingleton<IBackgroundOperationNotifier,
+            Operations.OperationCenterBackgroundOperationNotifier>();
         services.AddSingleton<IRunStatusNotifier, Operations.OperationCenterRunStatusNotifier>();
         return services;
     }

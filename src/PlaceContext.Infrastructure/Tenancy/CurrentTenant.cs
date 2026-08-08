@@ -16,6 +16,8 @@ public sealed class CurrentTenant : ICurrentTenant, ICurrentTenantAccessor
     public static TenantInfo? Current => _current.Value;
 
     public static void Set(TenantInfo tenant) => _current.Value = tenant;
+    public static void Set(TenantContext tenant)
+        => _current.Value = new TenantInfo(tenant.Id, tenant.Slug, tenant.Slug, tenant.TimeZoneId);
     public static void Clear() => _current.Value = null;
 
     void ICurrentTenantAccessor.Set(TenantContext tenant)

@@ -5,8 +5,7 @@ using Microsoft.Extensions.Logging;
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Features;
-using PlaceContext.Infrastructure.Persistence;
-using PlaceContext.Infrastructure.Tenancy;
+using PlaceContext.Application.Ports;
 using PlaceContext.Jobs.Infrastructure.Persistence;
 
 namespace PlaceContext.Jobs.Infrastructure.Scheduling;
@@ -16,11 +15,15 @@ public sealed class ChainContinuationWorker : BackgroundService
 {
     private static readonly TimeSpan Interval = TimeSpan.FromSeconds(1);
     private readonly IServiceScopeFactory _scopes;
+    private readonly ICurrentTenantAccessor _tenantAccessor;
     private readonly ILogger<ChainContinuationWorker> _log;
     private readonly string _instanceId = $"{Environment.MachineName}:{Guid.NewGuid():N}";
 
-    public ChainContinuationWorker(IServiceScopeFactory scopes, ILogger<ChainContinuationWorker> log)
-        => (_scopes, _log) = (scopes, log);
+    public ChainContinuationWorker(
+        IServiceScopeFactory scopes,
+        ICurrentTenantAccessor tenantAccessor,
+        ILogger<ChainContinuationWorker> log)
+        => (_scopes, _tenantAccessor, _log) = (scopes, tenantAccessor, log);
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -73,7 +76,7 @@ public sealed class ChainContinuationWorker : BackgroundService
         {
             var tenant = await LoadTenantAsync(value.TenantId, ct)
                 ?? throw new InvalidOperationException($"Tenant {value.TenantId} no longer exists.");
-            CurrentTenant.Set(tenant);
+            _tenantAccessor.Set(tenant);
             try
             {
                 await using var scope = _scopes.CreateAsyncScope();
@@ -96,7 +99,7 @@ public sealed class ChainContinuationWorker : BackgroundService
                     value.ChainId, payload, value.RunId, overrides,
                     ResumeFromStageIndex: value.StageIndex), ct);
             }
-            finally { CurrentTenant.Clear(); }
+            finally { _tenantAccessor.Clear(); }
         }
         catch (OperationCanceledException) { throw; }
         catch (Exception ex)
@@ -106,12 +109,10 @@ public sealed class ChainContinuationWorker : BackgroundService
         }
     }
 
-    private async Task<TenantInfo?> LoadTenantAsync(Guid id, CancellationToken ct)
+    private async Task<TenantContext?> LoadTenantAsync(Guid id, CancellationToken ct)
     {
         await using var scope = _scopes.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        var row = await db.Tenants.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id, ct);
-        return row is null ? null : new TenantInfo(row.Id, row.Slug, row.Name, row.TimeZoneId);
+        return await scope.ServiceProvider.GetRequiredService<ITenantCatalog>().FindAsync(id, ct);
     }
 
     private async Task ReleaseAsync(Guid runId, CancellationToken ct)

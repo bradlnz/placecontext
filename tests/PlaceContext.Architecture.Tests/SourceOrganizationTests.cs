@@ -420,6 +420,9 @@ public sealed class SourceOrganizationTests
     public void Jobs_persistence_is_owned_by_jobs_infrastructure()
     {
         var serviceDirectory = Path.Combine(Root, "src", "PlaceContext.Jobs");
+        var infrastructureProject = Path.Combine(
+            serviceDirectory,
+            "PlaceContext.Jobs.Infrastructure.csproj");
         var sharedPersistence = Path.Combine(Root, "src", "PlaceContext.Infrastructure", "Persistence");
         var sharedContextText = File.ReadAllText(Path.Combine(sharedPersistence, "AppDbContext.cs"));
         var rowTypes = new[]
@@ -448,6 +451,10 @@ public sealed class SourceOrganizationTests
             Path.Combine(serviceDirectory, "Infrastructure", "Persistence", typeName + ".cs")));
 
         Assert.All(required, path => Assert.True(File.Exists(path), $"Missing {Relative(path)}"));
+        Assert.DoesNotContain(
+            "PlaceContext.Infrastructure.csproj",
+            File.ReadAllText(infrastructureProject),
+            StringComparison.OrdinalIgnoreCase);
         Assert.All(
             rowTypes,
             typeName =>
@@ -461,6 +468,9 @@ public sealed class SourceOrganizationTests
     public void Crm_persistence_is_owned_by_crm_infrastructure()
     {
         var serviceDirectory = Path.Combine(Root, "src", "PlaceContext.Crm");
+        var infrastructureProject = Path.Combine(
+            serviceDirectory,
+            "PlaceContext.Crm.Infrastructure.csproj");
         var sharedPersistence = Path.Combine(Root, "src", "PlaceContext.Infrastructure", "Persistence");
         var sharedContextText = File.ReadAllText(Path.Combine(sharedPersistence, "AppDbContext.cs"));
         var rowTypes = new[]
@@ -491,6 +501,10 @@ public sealed class SourceOrganizationTests
             Path.Combine(serviceDirectory, "Infrastructure", "Persistence", typeName + ".cs")));
 
         Assert.All(required, path => Assert.True(File.Exists(path), $"Missing {Relative(path)}"));
+        Assert.DoesNotContain(
+            "PlaceContext.Infrastructure.csproj",
+            File.ReadAllText(infrastructureProject),
+            StringComparison.OrdinalIgnoreCase);
         Assert.All(
             rowTypes,
             typeName =>

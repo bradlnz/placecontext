@@ -1,7 +1,5 @@
 using PlaceContext.Application.Features;
-using PlaceContext.Infrastructure.Persistence;
-using PlaceContext.Infrastructure.Tenancy;
-using Microsoft.EntityFrameworkCore;
+using PlaceContext.Application.Ports;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -11,7 +9,7 @@ namespace PlaceContext.Jobs.Infrastructure.Scheduling;
 /// <summary>
 /// Background worker that keeps the notifications pane in step with the persisted run statuses.
 /// Every tick it sweeps each tenant's job/chain runs (via <see cref="RunStatusWatchService"/>) and
-/// pushes transitions into the OperationCenter — so a run's terminal status reaches the bell the
+/// pushes transitions through the notification port — so a run's terminal status reaches the bell the
 /// moment it is committed, instead of when the in-process driver finally returns (minutes later
 /// behind LLM enrichment), and runs executed by other replicas or via MCP/triggers appear too.
 /// Runs on every replica by design: each replica feeds its own in-memory ledger.
@@ -22,14 +20,19 @@ public sealed class RunStatusWatcherService : BackgroundService
     private static readonly TimeSpan TenantCacheInterval = TimeSpan.FromMinutes(5);
 
     private readonly IServiceScopeFactory _scopes;
+    private readonly ICurrentTenantAccessor _tenantAccessor;
     private readonly ILogger<RunStatusWatcherService> _log;
     private readonly Dictionary<Guid, RunWatchState> _states = new();
-    private List<TenantInfo> _cachedTenants = new();
+    private IReadOnlyList<TenantContext> _cachedTenants = [];
     private DateTimeOffset _tenantsRefreshAt = DateTimeOffset.MinValue;
 
-    public RunStatusWatcherService(IServiceScopeFactory scopes, ILogger<RunStatusWatcherService> log)
+    public RunStatusWatcherService(
+        IServiceScopeFactory scopes,
+        ICurrentTenantAccessor tenantAccessor,
+        ILogger<RunStatusWatcherService> log)
     {
         _scopes = scopes;
+        _tenantAccessor = tenantAccessor;
         _log = log;
     }
 
@@ -53,7 +56,7 @@ public sealed class RunStatusWatcherService : BackgroundService
             if (!_states.TryGetValue(tenant.Id, out var state))
                 _states[tenant.Id] = state = new RunWatchState();
 
-            CurrentTenant.Set(tenant);
+            _tenantAccessor.Set(tenant);
             try
             {
                 await using var scope = _scopes.CreateAsyncScope();
@@ -61,22 +64,20 @@ public sealed class RunStatusWatcherService : BackgroundService
             }
             catch (OperationCanceledException) { throw; }
             catch (Exception ex) { _log.LogWarning(ex, "Run-status sweep failed for tenant {Slug}.", tenant.Slug); }
-            finally { CurrentTenant.Clear(); }
+            finally { _tenantAccessor.Clear(); }
         }
 
         foreach (var gone in _states.Keys.Where(id => tenants.All(t => t.Id != id)).ToList())
             _states.Remove(gone);
     }
 
-    private async Task<IReadOnlyList<TenantInfo>> GetTenantsAsync(CancellationToken ct)
+    private async Task<IReadOnlyList<TenantContext>> GetTenantsAsync(CancellationToken ct)
     {
         if (_cachedTenants.Count > 0 && DateTimeOffset.UtcNow < _tenantsRefreshAt)
             return _cachedTenants;
 
         await using var scope = _scopes.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        _cachedTenants = await db.Tenants.AsNoTracking()
-            .Select(t => new TenantInfo(t.Id, t.Slug, t.Name, t.TimeZoneId)).ToListAsync(ct);
+        _cachedTenants = await scope.ServiceProvider.GetRequiredService<ITenantCatalog>().ListAsync(ct);
         _tenantsRefreshAt = DateTimeOffset.UtcNow + TenantCacheInterval;
         return _cachedTenants;
     }

@@ -1,7 +1,9 @@
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using PlaceContext.Jobs.Domain.Persistence;
 using PlaceContext.Application.Ports;
 using PlaceContext.Domain.Repositories;
@@ -9,6 +11,7 @@ using PlaceContext.Jobs.Infrastructure.Caching;
 using PlaceContext.Jobs.Infrastructure.Observability;
 using PlaceContext.Jobs.Infrastructure.Persistence;
 using PlaceContext.Jobs.Infrastructure.Scheduling;
+using PlaceContext.Jobs.Infrastructure.Security;
 using PlaceContext.Jobs.Infrastructure.Workload;
 
 namespace PlaceContext.Jobs;
@@ -37,6 +40,8 @@ public static class JobsInfrastructureDependencyInjection
             .AddCheck<JobsDatabaseHealthCheck>("jobs-database");
         services.AddScoped<IJobsUnitOfWork>(provider =>
             provider.GetRequiredService<JobsDbContext>());
+        services.AddDataProtection().SetApplicationName("placecontext");
+        services.TryAddSingleton<IDataEncryptor, JobsDataProtectionEncryptor>();
 
         services.Configure<WorkloadRunnerOptions>(
             configuration.GetSection("PlaceContext:WorkloadRunner"));

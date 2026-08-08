@@ -7,8 +7,6 @@ using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Features;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Crm.Infrastructure.Persistence;
-using PlaceContext.Infrastructure.Persistence;
-using PlaceContext.Infrastructure.Tenancy;
 
 namespace PlaceContext.Crm.Infrastructure.Scheduling;
 
@@ -21,14 +19,16 @@ public sealed class CrmAutomationWorker : BackgroundService
     private static readonly TimeSpan TrackingRetention = TimeSpan.FromDays(30);
     private static readonly TimeSpan CleanupInterval = TimeSpan.FromHours(1);
     private readonly IServiceScopeFactory _scopes;
+    private readonly ICurrentTenantAccessor _tenantAccessor;
     private readonly ILogger<CrmAutomationWorker> _log;
     private readonly string _instanceId = $"{Environment.MachineName}:{Guid.NewGuid():N}";
     private DateTimeOffset _nextCleanupAt = DateTimeOffset.MinValue;
 
     public CrmAutomationWorker(
         IServiceScopeFactory scopes,
+        ICurrentTenantAccessor tenantAccessor,
         ILogger<CrmAutomationWorker> log)
-        => (_scopes, _log) = (scopes, log);
+        => (_scopes, _tenantAccessor, _log) = (scopes, tenantAccessor, log);
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -83,7 +83,7 @@ public sealed class CrmAutomationWorker : BackgroundService
         {
             var tenant = await LoadTenantAsync(item.TenantId, ct);
             if (tenant is null) throw new InvalidOperationException($"Tenant {item.TenantId} no longer exists.");
-            CurrentTenant.Set(tenant);
+            _tenantAccessor.Set(tenant);
             try
             {
                 await using var scope = _scopes.CreateAsyncScope();
@@ -114,7 +114,7 @@ public sealed class CrmAutomationWorker : BackgroundService
                 }
                 await CompleteAsync(item.Id, chainRunId, resultStatus, ct);
             }
-            finally { CurrentTenant.Clear(); }
+            finally { _tenantAccessor.Clear(); }
 
             if (item.ClientId is { } loggedClientId)
                 _log.LogInformation(
@@ -134,12 +134,10 @@ public sealed class CrmAutomationWorker : BackgroundService
         }
     }
 
-    private async Task<TenantInfo?> LoadTenantAsync(Guid id, CancellationToken ct)
+    private async Task<TenantContext?> LoadTenantAsync(Guid id, CancellationToken ct)
     {
         await using var scope = _scopes.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        var row = await db.Tenants.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id, ct);
-        return row is null ? null : new TenantInfo(row.Id, row.Slug, row.Name, row.TimeZoneId);
+        return await scope.ServiceProvider.GetRequiredService<ITenantCatalog>().FindAsync(id, ct);
     }
 
     private async Task MarkRunningAsync(Guid id, Guid chainRunId, CancellationToken ct)

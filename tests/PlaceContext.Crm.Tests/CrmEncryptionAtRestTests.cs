@@ -8,7 +8,6 @@ using PlaceContext.Domain.ValueObjects;
 using PlaceContext.Crm.Infrastructure.Persistence;
 using PlaceContext.Crm.Infrastructure.Scheduling;
 using PlaceContext.Crm.Infrastructure.Security;
-using PlaceContext.Infrastructure.Security;
 using PlaceContext.Jobs.Infrastructure.Persistence;
 using PlaceContext.TestSupport;
 
@@ -163,7 +162,7 @@ public sealed class CrmEncryptionAtRestTests
     {
         var tenantId = Guid.NewGuid();
         var databaseName = Guid.NewGuid().ToString("N");
-        var encryptor = new DataProtectionEncryptor(new EphemeralDataProtectionProvider());
+        var encryptor = new CrmDataProtectionEncryptor(new EphemeralDataProtectionProvider());
         var services = new ServiceCollection()
             .AddLogging()
             .AddSingleton<ICurrentTenant>(new FakeCurrentTenant(tenantId))
@@ -279,7 +278,7 @@ public sealed class CrmEncryptionAtRestTests
             .Options;
         return (
             new CrmDbContext(options, tenant),
-            new DataProtectionEncryptor(new EphemeralDataProtectionProvider()));
+            new CrmDataProtectionEncryptor(new EphemeralDataProtectionProvider()));
     }
 
     private static void AssertProtected(IDataEncryptor encryptor, string? stored, string plaintext)

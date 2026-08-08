@@ -2,7 +2,6 @@ using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using PlaceContext.Application.Ports;
-using PlaceContext.Infrastructure.Security;
 using PlaceContext.Jobs.Infrastructure.Persistence;
 using PlaceContext.Jobs.Infrastructure.Security;
 using PlaceContext.TestSupport;
@@ -15,7 +14,7 @@ public sealed class JobsEncryptionAtRestBootstrapTests
     public async Task Bootstrap_encrypts_legacy_job_chain_event_and_queue_payloads()
     {
         var tenantId = Guid.NewGuid();
-        var encryptor = new DataProtectionEncryptor(new EphemeralDataProtectionProvider());
+        var encryptor = new JobsDataProtectionEncryptor(new EphemeralDataProtectionProvider());
         var databaseName = Guid.NewGuid().ToString("N");
         var services = new ServiceCollection()
             .AddLogging()

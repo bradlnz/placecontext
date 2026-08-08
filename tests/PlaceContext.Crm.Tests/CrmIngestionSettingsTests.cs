@@ -1,7 +1,9 @@
 using Microsoft.EntityFrameworkCore;
+using PlaceContext.Application.Ports;
 using PlaceContext.Crm.Infrastructure.Crm;
 using PlaceContext.Crm.Infrastructure.Persistence;
-using PlaceContext.Infrastructure.Persistence;
+using PlaceContext.Domain.Entities;
+using PlaceContext.Domain.ValueObjects;
 using PlaceContext.TestSupport;
 
 namespace PlaceContext.Crm.Tests;
@@ -13,28 +15,25 @@ public sealed class CrmIngestionSettingsTests
     {
         var tenantId = Guid.NewGuid();
         var tenant = new FakeCurrentTenant(tenantId);
-        var databaseName = Guid.NewGuid().ToString("N");
-        var options = new DbContextOptionsBuilder<AppDbContext>()
-            .UseInMemoryDatabase(databaseName)
-            .Options;
-        await using var db = new AppDbContext(options, tenant);
         var crmOptions = new DbContextOptionsBuilder<CrmDbContext>()
-            .UseInMemoryDatabase(databaseName)
+            .UseInMemoryDatabase(Guid.NewGuid().ToString("N"))
             .Options;
         await using var crmDb = new CrmDbContext(crmOptions, tenant);
-        await db.Tenants.AddAsync(new TenantRow
-        {
-            Id = tenantId, Slug = "example", Name = "Example", TimeZoneId = "Australia/Brisbane"
-        });
-        var project = new ProjectRow
-        {
-            Id = Guid.NewGuid(), TenantId = tenantId, Name = "CRM", Path = "/crm", Status = "Active"
-        };
-        await db.Projects.AddAsync(project);
-        await db.SaveChangesAsync();
-        var service = new CrmIngestionSettingsService(crmDb, db, tenant);
+        var projectId = Guid.NewGuid();
+        var projects = new InMemoryProjectRepository();
+        await projects.AddAsync(Project.Rehydrate(
+            ProjectId.From(projectId),
+            ProjectName.From("CRM"),
+            ProjectPath.From("/crm"),
+            ProjectStatus.Registered,
+            DateTimeOffset.UtcNow,
+            DateTimeOffset.UtcNow,
+            null));
+        var tenants = new FakeTenantCatalog(
+            new TenantContext(tenantId, "example", "Australia/Brisbane"));
+        var service = new CrmIngestionSettingsService(crmDb, tenants, projects, tenant);
 
-        var rotated = await service.RotateAsync(project.Id, "https://forms.example.com/");
+        var rotated = await service.RotateAsync(projectId, "https://forms.example.com/");
 
         Assert.StartsWith("pc_crm_", rotated.Token);
         Assert.Equal("https://forms.example.com", rotated.Settings.AllowedOrigin);
@@ -43,10 +42,10 @@ public sealed class CrmIngestionSettingsTests
         Assert.NotEqual(rotated.Token, row.TokenHash);
         var resolved = await service.ResolveAsync(rotated.Token);
         Assert.NotNull(resolved);
-        Assert.Equal(project.Id, resolved.ProjectId);
+        Assert.Equal(projectId, resolved.ProjectId);
         Assert.Equal(tenantId, resolved.Tenant.Id);
 
-        await service.DisableAsync(project.Id);
+        await service.DisableAsync(projectId);
         Assert.Null(await service.ResolveAsync(rotated.Token));
     }
 

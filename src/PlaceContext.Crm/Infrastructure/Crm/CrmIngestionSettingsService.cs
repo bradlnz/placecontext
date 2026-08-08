@@ -3,8 +3,8 @@ using System.Text;
 using Microsoft.EntityFrameworkCore;
 using PlaceContext.Application.Ports;
 using PlaceContext.Crm.Infrastructure.Persistence;
-using PlaceContext.Infrastructure.Persistence;
-using PlaceContext.Infrastructure.Tenancy;
+using PlaceContext.Domain.Repositories;
+using PlaceContext.Domain.ValueObjects;
 
 namespace PlaceContext.Crm.Infrastructure.Crm;
 
@@ -16,14 +16,16 @@ public sealed class CrmIngestionSettingsService
 {
     public const string TokenHeader = "X-PlaceContext-CRM-Token";
     private readonly CrmDbContext _db;
-    private readonly AppDbContext _platformDb;
+    private readonly ITenantCatalog _tenants;
+    private readonly IProjectRepository _projects;
     private readonly ICurrentTenant _tenant;
 
     public CrmIngestionSettingsService(
         CrmDbContext db,
-        AppDbContext platformDb,
+        ITenantCatalog tenants,
+        IProjectRepository projects,
         ICurrentTenant tenant)
-        => (_db, _platformDb, _tenant) = (db, platformDb, tenant);
+        => (_db, _tenants, _projects, _tenant) = (db, tenants, projects, tenant);
 
     public async Task<CrmIngestionSettingsView> GetAsync(
         Guid projectId,
@@ -106,13 +108,12 @@ public sealed class CrmIngestionSettingsService
             .SingleOrDefaultAsync(item => item.TokenHash == hash && item.AllowedOrigin != "", ct);
         if (settings is null) return null;
 
-        var tenant = await _platformDb.Tenants.AsNoTracking()
-            .SingleOrDefaultAsync(item => item.Id == settings.TenantId, ct);
+        var tenant = await _tenants.FindAsync(settings.TenantId, ct);
         return tenant is null
             ? null
             : new ResolvedCrmIngestion(
                 settings.ProjectId,
-                new TenantInfo(tenant.Id, tenant.Slug, tenant.Name, tenant.TimeZoneId),
+                tenant,
                 settings.AllowedOrigin);
     }
 
@@ -143,7 +144,7 @@ public sealed class CrmIngestionSettingsService
     private async Task EnsureProjectAsync(Guid projectId, CancellationToken ct)
     {
         if (projectId == Guid.Empty
-            || !await _platformDb.Projects.AsNoTracking().AnyAsync(item => item.Id == projectId, ct))
+            || await _projects.GetByIdAsync(ProjectId.From(projectId), ct) is null)
             throw new InvalidOperationException("Project not found.");
     }
 

@@ -2,9 +2,6 @@ using System.Collections.Concurrent;
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Features;
 using PlaceContext.Application.Ports;
-using PlaceContext.Infrastructure.Operations;
-using PlaceContext.Infrastructure.Persistence;
-using PlaceContext.Infrastructure.Tenancy;
 using PlaceContext.Jobs.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -50,14 +47,18 @@ public sealed class TriggerSchedulerService : BackgroundService
     private static readonly TimeSpan ChainOrphanGrace = TimeSpan.FromHours(1);
 
     private readonly IServiceScopeFactory _scopes;
-    private readonly OperationCenter _opCenter;
+    private readonly ICurrentTenantAccessor _tenantAccessor;
+    private readonly IBackgroundOperationNotifier _operations;
     private readonly IDataEncryptor _enc;
     private readonly ILogger<TriggerSchedulerService> _log;
     private readonly string _instanceId = $"{Environment.MachineName}:{Guid.NewGuid():N}";
     private readonly int _drainParallelism;
     private static string PendingPurpose => DataEncryptionPurpose.PendingRun;
 
-    public TriggerSchedulerService(IServiceScopeFactory scopes, OperationCenter opCenter,
+    public TriggerSchedulerService(
+        IServiceScopeFactory scopes,
+        ICurrentTenantAccessor tenantAccessor,
+        IBackgroundOperationNotifier operations,
         IDataEncryptor enc,
         ILogger<TriggerSchedulerService> log,
         // Test-only override for the drain batch's max degree of parallelism; DI never supplies this
@@ -65,7 +66,8 @@ public sealed class TriggerSchedulerService : BackgroundService
         int? drainParallelism = null)
     {
         _scopes = scopes;
-        _opCenter = opCenter;
+        _tenantAccessor = tenantAccessor;
+        _operations = operations;
         _enc = enc;
         _log = log;
         _drainParallelism = drainParallelism is > 0 ? drainParallelism.Value : DrainParallelism;
@@ -100,7 +102,7 @@ public sealed class TriggerSchedulerService : BackgroundService
         {
             foreach (var tenant in await LoadTenantsAsync(ct))
             {
-                CurrentTenant.Set(tenant);
+                _tenantAccessor.Set(tenant);
                 try
                 {
                     await using var scope = _scopes.CreateAsyncScope();
@@ -108,7 +110,7 @@ public sealed class TriggerSchedulerService : BackgroundService
                     if (fired > 0)
                         _log.LogInformation("Fired {Count} schedule trigger(s) for tenant {Slug}.", fired, tenant.Slug);
                 }
-                finally { CurrentTenant.Clear(); }
+                finally { _tenantAccessor.Clear(); }
             }
         }
         finally
@@ -130,7 +132,7 @@ public sealed class TriggerSchedulerService : BackgroundService
                 // batch and reused by every batch drained afterwards, so what used to be one DB round
                 // trip per run is now at most one per tick (refreshed next tick, so a tenant created
                 // mid-tick still resolves within ~DrainInterval via ProcessOneRunAsync's fallback).
-                Dictionary<Guid, TenantInfo>? tenantCache = null;
+                Dictionary<Guid, TenantContext>? tenantCache = null;
                 int drained;
                 do { (drained, tenantCache) = await DrainBatchAsync(tenantCache, ct); }
                 while (drained > 0);
@@ -141,8 +143,8 @@ public sealed class TriggerSchedulerService : BackgroundService
         while (await SafeWaitAsync(timer, ct));
     }
 
-    private async Task<(int Count, Dictionary<Guid, TenantInfo>? TenantCache)> DrainBatchAsync(
-        Dictionary<Guid, TenantInfo>? tenantCache, CancellationToken ct)
+    private async Task<(int Count, Dictionary<Guid, TenantContext>? TenantCache)> DrainBatchAsync(
+        Dictionary<Guid, TenantContext>? tenantCache, CancellationToken ct)
     {
         var claimed = await ClaimAsync(ct);
         if (claimed.Count == 0) return (0, tenantCache);
@@ -158,7 +160,7 @@ public sealed class TriggerSchedulerService : BackgroundService
     /// <summary>
     /// Executes every claimed run with bounded parallelism (<see cref="_drainParallelism"/>) instead of
     /// the old serial <c>foreach</c> — one slow run no longer head-of-line-blocks the rest of the batch.
-    /// Each run gets its OWN <see cref="IServiceScopeFactory.CreateAsyncScope"/> (its own AppDbContext,
+    /// Each run gets its OWN <see cref="IServiceScopeFactory.CreateAsyncScope"/> (its own persistence context,
     /// dispatcher, repositories) inside <see cref="ProcessOneRunAsync"/> — scopes/DbContexts are never
     /// shared across parallel iterations, since EF's DbContext is not thread-safe. Returns every claimed
     /// run's id (whether it succeeded or failed) so the caller can drop the durable queue rows in one
@@ -167,7 +169,7 @@ public sealed class TriggerSchedulerService : BackgroundService
     /// </summary>
     internal async Task<IReadOnlyCollection<Guid>> RunBatchInParallelAsync(
         IReadOnlyList<ClaimedTriggerRun> claimed,
-        IReadOnlyDictionary<Guid, TenantInfo> tenantCache,
+        IReadOnlyDictionary<Guid, TenantContext> tenantCache,
         CancellationToken ct)
     {
         var processed = new ConcurrentBag<Guid>();
@@ -183,7 +185,7 @@ public sealed class TriggerSchedulerService : BackgroundService
     /// <summary>Runs a single claimed queue row. Identical error handling/status-transition semantics
     /// to the old serial loop body — only the caller (now parallel) changed.</summary>
     private async Task ProcessOneRunAsync(
-        ClaimedTriggerRun run, IReadOnlyDictionary<Guid, TenantInfo> tenantCache, CancellationToken ct)
+        ClaimedTriggerRun run, IReadOnlyDictionary<Guid, TenantContext> tenantCache, CancellationToken ct)
     {
         try
         {
@@ -196,7 +198,7 @@ public sealed class TriggerSchedulerService : BackgroundService
                 return;
             }
 
-            CurrentTenant.Set(tenant);
+            _tenantAccessor.Set(tenant);
             try
             {
                 // Launchpad rows don't run a job — they kick an autonomous agent session.
@@ -215,27 +217,29 @@ public sealed class TriggerSchedulerService : BackgroundService
                 var job = await scope.ServiceProvider.GetRequiredService<global::PlaceContext.Domain.Repositories.IJobRepository>()
                     .GetByIdAsync(run.JobId, ct);
                 var runId = Guid.NewGuid();
-                var op = _opCenter.Track(tenant, job?.ProjectId,
+                var operationId = _operations.Track(tenant, job?.ProjectId,
                     $"Run job — {job?.Name ?? "job"} · {run.TriggerName}",
                     $"/observability?run={runId}",
                     correlationKey: RunStatusWatchService.JobRunKey(runId));
-                _opCenter.MarkRunning(op.Id);
+                _operations.MarkRunning(operationId);
                 try
                 {
                     var jobRunner = scope.ServiceProvider.GetRequiredService<IJobRunner>();
                     var result = await jobRunner.RunAsync(run.JobId, run.Payload, runId, ct: ct);
-                    if (result.Status == "Failed") _opCenter.MarkFailed(op.Id, "run finished — Failed");
-                    else _opCenter.MarkDone(op.Id, $"run finished — {result.Status}");
+                    if (result.Status == "Failed")
+                        _operations.MarkFailed(operationId, "run finished — Failed");
+                    else
+                        _operations.MarkDone(operationId, $"run finished — {result.Status}");
                 }
                 catch (Exception ex)
                 {
-                    _opCenter.MarkFailed(op.Id, ex.Message);
+                    _operations.MarkFailed(operationId, ex.Message);
                     throw;
                 }
                 _log.LogInformation("Trigger '{Trigger}' ran job {JobId} for tenant {Slug}.",
                     run.TriggerName, run.JobId, tenant.Slug);
             }
-            finally { CurrentTenant.Clear(); }
+            finally { _tenantAccessor.Clear(); }
         }
         catch (OperationCanceledException) { throw; }
         catch (Exception ex) { _log.LogError(ex, "Queued job run {JobId} failed.", run.JobId); }
@@ -372,22 +376,16 @@ public sealed class TriggerSchedulerService : BackgroundService
         return await cmd.ExecuteScalarAsync(ct);
     }
 
-    private async Task<IReadOnlyList<TenantInfo>> LoadTenantsAsync(CancellationToken ct)
+    private async Task<IReadOnlyList<TenantContext>> LoadTenantsAsync(CancellationToken ct)
     {
         await using var scope = _scopes.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        return await db.Tenants.AsNoTracking()
-            .Select(t => new TenantInfo(t.Id, t.Slug, t.Name, t.TimeZoneId)).ToListAsync(ct);
+        return await scope.ServiceProvider.GetRequiredService<ITenantCatalog>().ListAsync(ct);
     }
 
-    private async Task<TenantInfo?> FindTenantAsync(Guid tenantId, CancellationToken ct)
+    private async Task<TenantContext?> FindTenantAsync(Guid tenantId, CancellationToken ct)
     {
         await using var scope = _scopes.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        return await db.Tenants.AsNoTracking()
-            .Where(t => t.Id == tenantId)
-            .Select(t => new TenantInfo(t.Id, t.Slug, t.Name, t.TimeZoneId))
-            .FirstOrDefaultAsync(ct);
+        return await scope.ServiceProvider.GetRequiredService<ITenantCatalog>().FindAsync(tenantId, ct);
     }
 
     private static async Task<bool> SafeWaitAsync(PeriodicTimer timer, CancellationToken ct)
@@ -398,7 +396,7 @@ public sealed class TriggerSchedulerService : BackgroundService
 
     // ── Launchpad support ──────────────────────────────────────────────────────────────────────────
 
-    private async Task<bool> TryKickLaunchpadAsync(ClaimedTriggerRun run, TenantInfo tenant, CancellationToken ct)
+    private async Task<bool> TryKickLaunchpadAsync(ClaimedTriggerRun run, TenantContext tenant, CancellationToken ct)
     {
         // Launchpad queue rows carry no job id; they are agent-session starts, not job runs.
         if (run.JobId != Guid.Empty) return false;
@@ -418,19 +416,19 @@ public sealed class TriggerSchedulerService : BackgroundService
         return true;
     }
 
-    private async Task RunLaunchpadDetachedAsync(Guid tenantId, TenantInfo tenant, Guid projectId,
+    private async Task RunLaunchpadDetachedAsync(Guid tenantId, TenantContext tenant, Guid projectId,
         string triggerName, string prompt, string? sourceTable, Guid chainId)
     {
         try
         {
-            CurrentTenant.Set(tenant);
+            _tenantAccessor.Set(tenant);
             try
             {
                 await using var scope = _scopes.CreateAsyncScope();
                 var runner = scope.ServiceProvider.GetRequiredService<ILaunchpadRunner>();
                 await runner.RunLaunchpadAsync(projectId, triggerName, prompt, sourceTable, chainId, CancellationToken.None);
             }
-            finally { CurrentTenant.Clear(); }
+            finally { _tenantAccessor.Clear(); }
         }
         catch (Exception ex)
         {

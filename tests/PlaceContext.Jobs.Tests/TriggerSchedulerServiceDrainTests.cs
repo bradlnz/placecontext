@@ -5,13 +5,11 @@ using PlaceContext.Application.Ports;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.Repositories;
 using PlaceContext.Domain.ValueObjects;
-using PlaceContext.Infrastructure.Operations;
 using PlaceContext.Jobs.Infrastructure.Scheduling;
-using PlaceContext.Infrastructure.Security;
-using PlaceContext.Infrastructure.Tenancy;
+using PlaceContext.Jobs.Infrastructure.Security;
+using PlaceContext.TestSupport;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
@@ -26,9 +24,9 @@ namespace PlaceContext.Jobs.Tests;
 /// </summary>
 public class TriggerSchedulerServiceDrainTests
 {
-    private static readonly TenantInfo Tenant = new(Guid.NewGuid(), "acme", "Acme", "UTC");
+    private static readonly TenantContext Tenant = new(Guid.NewGuid(), "acme", "UTC");
     private static IDataEncryptor TestEnc()
-        => new DataProtectionEncryptor(new EphemeralDataProtectionProvider());
+        => new JobsDataProtectionEncryptor(new EphemeralDataProtectionProvider());
 
     [Fact]
     public async Task RunBatchInParallelAsync_RunsClaimedRunsConcurrently_NotSerially()
@@ -45,11 +43,11 @@ public class TriggerSchedulerServiceDrainTests
         services.AddScoped<IJobRunner, JobRunner>();
         var scopeFactory = services.BuildServiceProvider().GetRequiredService<IServiceScopeFactory>();
 
-        var opCenter = new OperationCenter(new StubScopeFactory(), new StubLifetime());
-        var svc = new TriggerSchedulerService(scopeFactory, opCenter, TestEnc(),
+        var svc = new TriggerSchedulerService(
+            scopeFactory, new FakeCurrentTenantAccessor(), new FakeBackgroundOperationNotifier(), TestEnc(),
             NullLogger<TriggerSchedulerService>.Instance, drainParallelism: expectedConcurrency);
 
-        var tenantCache = new Dictionary<Guid, TenantInfo> { [Tenant.Id] = Tenant };
+        var tenantCache = new Dictionary<Guid, TenantContext> { [Tenant.Id] = Tenant };
         var claimed = Enumerable.Range(0, expectedConcurrency)
             .Select(_ => new ClaimedTriggerRun(Guid.NewGuid(), Tenant.Id, Guid.NewGuid(), Guid.NewGuid(), "nightly", null))
             .ToList();
@@ -77,11 +75,11 @@ public class TriggerSchedulerServiceDrainTests
         services.AddScoped<IJobRunner, JobRunner>();
         var scopeFactory = services.BuildServiceProvider().GetRequiredService<IServiceScopeFactory>();
 
-        var opCenter = new OperationCenter(new StubScopeFactory(), new StubLifetime());
-        var svc = new TriggerSchedulerService(scopeFactory, opCenter, TestEnc(),
+        var svc = new TriggerSchedulerService(
+            scopeFactory, new FakeCurrentTenantAccessor(), new FakeBackgroundOperationNotifier(), TestEnc(),
             NullLogger<TriggerSchedulerService>.Instance, drainParallelism: drainParallelism);
 
-        var tenantCache = new Dictionary<Guid, TenantInfo> { [Tenant.Id] = Tenant };
+        var tenantCache = new Dictionary<Guid, TenantContext> { [Tenant.Id] = Tenant };
         var claimed = Enumerable.Range(0, 6)
             .Select(_ => new ClaimedTriggerRun(Guid.NewGuid(), Tenant.Id, Guid.NewGuid(), Guid.NewGuid(), "nightly", null))
             .ToList();
@@ -105,20 +103,19 @@ public class TriggerSchedulerServiceDrainTests
         services.AddScoped<IJobRunner, JobRunner>();
         var scopeFactory = services.BuildServiceProvider().GetRequiredService<IServiceScopeFactory>();
 
-        var opCenter = new OperationCenter(new StubScopeFactory(), new StubLifetime());
         // drainParallelism: 1 keeps this test's single claimed run trivially deterministic.
-        var svc = new TriggerSchedulerService(scopeFactory, opCenter, TestEnc(),
+        var svc = new TriggerSchedulerService(
+            scopeFactory, new FakeCurrentTenantAccessor(), new FakeBackgroundOperationNotifier(), TestEnc(),
             NullLogger<TriggerSchedulerService>.Instance, drainParallelism: 1);
 
-        var tenantCache = new Dictionary<Guid, TenantInfo> { [Tenant.Id] = Tenant };
+        var tenantCache = new Dictionary<Guid, TenantContext> { [Tenant.Id] = Tenant };
         var claimed = new List<ClaimedTriggerRun>
         {
             new(Guid.NewGuid(), Tenant.Id, Guid.NewGuid(), Guid.NewGuid(), "nightly", null),
         };
 
-        // FindTenantAsync (the DB fallback) needs a real AppDbContext/Postgres connection — it is never
-        // registered in this test's DI container, so if the cache lookup were skipped this call would
-        // throw resolving the service, not silently pass. A clean completion is the assertion.
+        // FindTenantAsync resolves ITenantCatalog, which is intentionally absent here. If the cache
+        // lookup were skipped this call would throw rather than silently pass.
         var processed = await svc.RunBatchInParallelAsync(claimed, tenantCache, CancellationToken.None);
 
         Assert.Single(processed);
@@ -186,18 +183,4 @@ public class TriggerSchedulerServiceDrainTests
             => Task.FromResult<IReadOnlyList<Job>>(Array.Empty<Job>());
     }
 
-    // OperationCenter's Track/MarkRunning/MarkDone/MarkFailed never touch the scope factory or the
-    // lifetime — only its (unused-here) Run() helper does — so these stubs just need to exist.
-    private sealed class StubScopeFactory : IServiceScopeFactory
-    {
-        public IServiceScope CreateScope() => throw new NotSupportedException("not used by Track/Mark*.");
-    }
-
-    private sealed class StubLifetime : IHostApplicationLifetime
-    {
-        public CancellationToken ApplicationStarted => CancellationToken.None;
-        public CancellationToken ApplicationStopping => CancellationToken.None;
-        public CancellationToken ApplicationStopped => CancellationToken.None;
-        public void StopApplication() { }
-    }
 }

@@ -1,12 +1,10 @@
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using PlaceContext.Application.Features;
+using PlaceContext.Application.Ports;
 using PlaceContext.Domain.Repositories;
 using PlaceContext.Domain.ValueObjects;
-using PlaceContext.Infrastructure.Persistence;
-using PlaceContext.Infrastructure.Tenancy;
 
 namespace PlaceContext.Crm.Infrastructure.Scheduling;
 
@@ -17,27 +15,27 @@ namespace PlaceContext.Crm.Infrastructure.Scheduling;
 public sealed class CrmArtifactReconciliationWorker : BackgroundService
 {
     private readonly IServiceScopeFactory _scopes;
+    private readonly ICurrentTenantAccessor _tenantAccessor;
     private readonly ILogger<CrmArtifactReconciliationWorker> _log;
 
     public CrmArtifactReconciliationWorker(
         IServiceScopeFactory scopes,
+        ICurrentTenantAccessor tenantAccessor,
         ILogger<CrmArtifactReconciliationWorker> log)
-        => (_scopes, _log) = (scopes, log);
+        => (_scopes, _tenantAccessor, _log) = (scopes, tenantAccessor, log);
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         try
         {
             await using var rootScope = _scopes.CreateAsyncScope();
-            var db = rootScope.ServiceProvider.GetRequiredService<AppDbContext>();
-            var tenants = await db.Tenants.AsNoTracking()
-                .Select(row => new TenantInfo(row.Id, row.Slug, row.Name, row.TimeZoneId))
-                .ToListAsync(stoppingToken);
+            var tenants = await rootScope.ServiceProvider.GetRequiredService<ITenantCatalog>()
+                .ListAsync(stoppingToken);
 
             var associated = 0;
             foreach (var tenant in tenants)
             {
-                CurrentTenant.Set(tenant);
+                _tenantAccessor.Set(tenant);
                 try
                 {
                     await using var scope = _scopes.CreateAsyncScope();
@@ -48,7 +46,7 @@ public sealed class CrmArtifactReconciliationWorker : BackgroundService
                                      && run.Status is not (ChainRunStatus.Running or ChainRunStatus.Waiting)))
                         associated += await linker.AssociateAsync(run, stoppingToken);
                 }
-                finally { CurrentTenant.Clear(); }
+                finally { _tenantAccessor.Clear(); }
             }
 
             if (associated > 0)
@@ -59,6 +57,6 @@ public sealed class CrmArtifactReconciliationWorker : BackgroundService
         {
             _log.LogError(ex, "CRM artifact reconciliation failed.");
         }
-        finally { CurrentTenant.Clear(); }
+        finally { _tenantAccessor.Clear(); }
     }
 }

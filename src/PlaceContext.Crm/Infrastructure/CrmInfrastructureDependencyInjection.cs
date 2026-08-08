@@ -1,11 +1,14 @@
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using PlaceContext.Application.Ports;
 using PlaceContext.Crm.Infrastructure.Crm;
 using PlaceContext.Crm.Infrastructure.Persistence;
 using PlaceContext.Crm.Infrastructure.Scheduling;
+using PlaceContext.Crm.Infrastructure.Security;
 using PlaceContext.Domain.Repositories;
 
 namespace PlaceContext.Crm;
@@ -33,6 +36,8 @@ public static class CrmInfrastructureDependencyInjection
         services.AddHealthChecks().AddCheck<CrmDatabaseHealthCheck>("crm-database");
         services.AddScoped<ICrmUnitOfWork>(provider =>
             provider.GetRequiredService<CrmDbContext>());
+        services.AddDataProtection().SetApplicationName("placecontext");
+        services.TryAddSingleton<IDataEncryptor, CrmDataProtectionEncryptor>();
 
         services.AddScoped<CrmIngestionSettingsService>();
         services.AddScoped<ICrmClientRepository, EfCrmClientRepository>();

@@ -2,8 +2,8 @@ using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using PlaceContext.Application.Ports;
 using PlaceContext.Jobs.Infrastructure.Persistence;
-using PlaceContext.Infrastructure.Security;
 using PlaceContext.Jobs.Infrastructure.Caching;
+using PlaceContext.Jobs.Infrastructure.Security;
 using Xunit;
 
 namespace PlaceContext.Jobs.Tests;
@@ -31,7 +31,7 @@ public sealed class JobRunRetentionTests
 
         var repository = new EfJobRunRepository(
             db,
-            new DataProtectionEncryptor(new EphemeralDataProtectionProvider()),
+            new JobsDataProtectionEncryptor(new EphemeralDataProtectionProvider()),
             new NullJobRunCache());
 
         var removed = await repository.TrimToLatestAsync(100);
