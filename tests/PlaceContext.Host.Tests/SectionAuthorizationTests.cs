@@ -46,6 +46,7 @@ public sealed class SectionAuthorizationTests
             typeof(Pages.BackupSettings),
             typeof(Pages.BrandingSettings),
             typeof(Pages.CommunicationsSettings),
+            typeof(Pages.ConnectionsSettings),
             typeof(Pages.LocalitySettings),
             typeof(Pages.McpSettings),
             typeof(Pages.MenuSettings),
@@ -91,6 +92,7 @@ public sealed class SectionAuthorizationTests
         {
             typeof(BackupController),
             typeof(CommunicationProvidersController),
+            typeof(ConnectionsSettingsController),
             typeof(JobMcpController),
         };
 

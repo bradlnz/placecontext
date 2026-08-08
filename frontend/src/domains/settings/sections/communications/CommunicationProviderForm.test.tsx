@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 
 import type { CommunicationProviderDraft } from '../../model/communications'
@@ -13,5 +14,13 @@ describe('CommunicationProviderForm', () => {
     expect(screen.getByLabelText('API key secret')).toHaveValue('POSTMARK_TOKEN')
     expect(screen.getByLabelText('Message stream')).toHaveValue('outbound')
     expect(screen.getByRole('button', { name: 'Save changes' })).toBeEnabled()
+  })
+
+  it('keeps the provider-specific header default in sync with the selected kind', async () => {
+    const user = userEvent.setup()
+    const onChange = vi.fn()
+    render(<CommunicationProviderForm busy={false} draft={draft} editing onCancel={vi.fn()} onChange={onChange} onProjectChange={vi.fn()} onSave={vi.fn()} projects={[]} secrets={[]} />)
+    await user.selectOptions(screen.getByLabelText('Provider kind'), 'sendgrid')
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ kind: 'sendgrid', authHeaderName: '' }))
   })
 })

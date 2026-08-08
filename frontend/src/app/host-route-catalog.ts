@@ -48,7 +48,7 @@ export const hostRouteCatalog = [
   { domain: 'settings', section: 'artifacts', hostPath: '/settings/artifacts', reactPath: '/settings/artifacts', status: 'migrated' },
   { domain: 'settings', section: 'backup', hostPath: '/settings/backup', reactPath: '/settings/backup', status: 'migrated' },
   { domain: 'settings', section: 'communications', hostPath: '/settings/communications', reactPath: '/settings/communications', status: 'migrated' },
-  { domain: 'settings', section: 'connections', hostPath: '/settings/connections', reactPath: '/settings/connections', status: 'planned' },
+  { domain: 'settings', section: 'connections', hostPath: '/settings/connections', reactPath: '/settings/connections', status: 'migrated' },
   { domain: 'settings', section: 'locality', hostPath: '/settings/locality', reactPath: '/settings/locality', status: 'migrated' },
   { domain: 'settings', section: 'mcp', hostPath: '/settings/mcp', reactPath: '/settings/mcp', status: 'planned' },
   { domain: 'settings', section: 'menu', hostPath: '/settings/menu', reactPath: '/settings/menu', status: 'migrated' },

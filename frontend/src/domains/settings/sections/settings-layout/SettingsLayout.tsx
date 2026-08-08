@@ -14,7 +14,7 @@ const SETTINGS_ITEMS = [
   ['Menu', 'menu'],
 ] as const
 
-const MIGRATED_SETTINGS = new Set(['api-tokens', 'artifacts', 'backup', 'branding', 'communications', 'locality', 'menu'])
+const MIGRATED_SETTINGS = new Set(['api-tokens', 'artifacts', 'backup', 'branding', 'communications', 'connections', 'locality', 'menu'])
 
 export function SettingsLayout() {
   const [navigationOpen, setNavigationOpen] = useState(false)

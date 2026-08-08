@@ -20,6 +20,7 @@ export interface SettingsEventMap {
   'settings.communication-save-requested': { providerId: string | null; input: CommunicationProviderInput }
   'settings.communication-action-requested': CommunicationAction
   'settings.communication-changed': { providerId: string }
+  'settings.connections-changed': { projectId: string }
   'settings.backup-import-requested': {
     manifest: Record<string, unknown>
   }
@@ -41,7 +42,9 @@ interface ArtifactFiltersEventPayload {
   categories: ArtifactFilter[]
 }
 
-type CommunicationAction =
-  | { kind: 'delete' | 'default'; providerId: string }
-  | { kind: 'toggle-enabled' | 'two-factor'; providerId: string; enabled: boolean }
+export type CommunicationAction =
+  | { kind: 'delete'; providerId: string }
+  | { kind: 'default'; providerId: string }
+  | { kind: 'toggle-enabled'; providerId: string; enabled: boolean }
+  | { kind: 'two-factor'; providerId: string; enabled: boolean }
   | { kind: 'test'; providerId: string; recipient: string }

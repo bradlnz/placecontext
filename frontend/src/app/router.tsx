@@ -115,6 +115,14 @@ export const appRoutes: RouteObject[] = [
             },
           },
           {
+            path: 'connections',
+            handle: { title: 'Connections', subtitle: 'external databases and search indices per project' },
+            lazy: async () => {
+              const { ConnectionsPage } = await import('../domains/settings/sections/connections/ConnectionsPage')
+              return { Component: ConnectionsPage }
+            },
+          },
+          {
             path: 'locality',
             handle: { title: 'Locality', subtitle: 'workspace timezone — schedules and displayed times obey it' },
             lazy: async () => {

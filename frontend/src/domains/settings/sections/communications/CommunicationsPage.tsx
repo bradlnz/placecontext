@@ -16,13 +16,17 @@ function readSetting(json: string, key: string): string {
   try {
     const parsed: unknown = JSON.parse(json)
     if (typeof parsed !== 'object' || parsed === null) return ''
-    const value = Reflect.get(parsed, key)
+    const value: unknown = (parsed as Record<string, unknown>)[key]
     return typeof value === 'string' ? value : ''
   } catch { return '' }
 }
 
+function defaultHeaderName(kind: CommunicationProvider['kind']): string {
+  return kind === 'postmark' ? 'X-Postmark-Server-Token' : ''
+}
+
 function providerDraft(provider: CommunicationProvider): CommunicationProviderDraft {
-  return { channel: provider.channel, kind: provider.kind, name: provider.name, enabled: provider.enabled, authType: provider.authType, authHeaderName: provider.authHeaderName, vaultProjectId: provider.vaultProjectId, apiKeySecretName: provider.apiKeySecretName, settingsJson: provider.settingsJson, fromEmail: readSetting(provider.settingsJson, 'fromEmail'), fromName: readSetting(provider.settingsJson, 'fromName'), messageStream: readSetting(provider.settingsJson, 'messageStream') || 'outbound', accountSid: readSetting(provider.settingsJson, 'accountSid'), fromNumber: readSetting(provider.settingsJson, 'fromNumber'), endpoint: readSetting(provider.settingsJson, 'endpoint') }
+  return { channel: provider.channel, kind: provider.kind, name: provider.name, enabled: provider.enabled, authType: provider.authType, authHeaderName: provider.authHeaderName ?? defaultHeaderName(provider.kind), vaultProjectId: provider.vaultProjectId, apiKeySecretName: provider.apiKeySecretName, settingsJson: provider.settingsJson, fromEmail: readSetting(provider.settingsJson, 'fromEmail'), fromName: readSetting(provider.settingsJson, 'fromName'), messageStream: readSetting(provider.settingsJson, 'messageStream') || 'outbound', accountSid: readSetting(provider.settingsJson, 'accountSid'), fromNumber: readSetting(provider.settingsJson, 'fromNumber'), endpoint: readSetting(provider.settingsJson, 'endpoint') }
 }
 
 function providerInput(draft: CommunicationProviderDraft): CommunicationProviderInput {

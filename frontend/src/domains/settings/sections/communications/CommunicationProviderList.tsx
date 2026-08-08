@@ -1,11 +1,12 @@
 import { useState } from 'react'
 
+import type { CommunicationAction } from '../../events/settings-events'
 import type { CommunicationProvider } from '../../model/communications'
 
 interface CommunicationProviderListProps {
   busy: boolean
   providers: CommunicationProvider[]
-  onAction: (action: { kind: 'delete' | 'default'; providerId: string } | { kind: 'toggle-enabled' | 'two-factor'; providerId: string; enabled: boolean } | { kind: 'test'; providerId: string; recipient: string }) => Promise<void>
+  onAction: (action: CommunicationAction) => Promise<void>
   onEdit: (provider: CommunicationProvider) => Promise<void>
 }
 
