@@ -10,7 +10,9 @@ export function FocusPanel({ focus }: FocusPanelProps) {
   return (
     <section className="dccard focus-card" aria-labelledby="focus-title">
       <div className="focus-head">
-        <span className="section-title" id="focus-title">Current focus</span>
+        <span className="section-title" id="focus-title">
+          Current focus
+        </span>
         <span className="section-hint">what needs attention across your workspace</span>
         {hasItems ? <span className="focus-count">{focus.items.length}</span> : null}
       </div>
@@ -18,7 +20,11 @@ export function FocusPanel({ focus }: FocusPanelProps) {
       {hasItems ? (
         <div>
           {focus.items.map((item) => (
-            <a className={`dcfocus-row sev-${item.severity}`} href={item.url} key={`${item.kind}:${item.projectId}:${item.title}`}>
+            <a
+              className={`dcfocus-row sev-${item.severity}`}
+              href={item.url}
+              key={`${item.kind}:${item.projectId}:${item.title}`}
+            >
               <span className="dcfocus-box" aria-hidden="true" />
               <span className="min-w-0">
                 <span className="dcfocus-title">{item.title}</span>

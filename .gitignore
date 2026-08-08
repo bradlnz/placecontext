@@ -93,3 +93,4 @@ scratchpad
 frontend/node_modules/
 frontend/coverage/
 src/PlaceContext.Host/wwwroot/app/
+src/PlaceContext.App/wwwroot/app/

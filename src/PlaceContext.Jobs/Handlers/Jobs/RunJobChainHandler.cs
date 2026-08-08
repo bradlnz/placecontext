@@ -8,6 +8,7 @@ using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Observability;
 using PlaceContext.Application.Ports;
+using PlaceContext.Jobs.Contracts.Integration;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.Repositories;
 using PlaceContext.Domain.ValueObjects;
@@ -56,7 +57,7 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
     private readonly IClientCommunicationSender? _communications;
     private readonly IPermissionService? _permissions;
     private readonly ICrmClientRepository? _crmClients;
-    private readonly CrmArtifactAssociationService? _crmArtifacts;
+    private readonly IReadOnlyList<IChainRunCompletionObserver> _completionObservers;
     private readonly IRunArtifactLinkRepository? _runArtifacts;
     private readonly IChainContextStore? _contextStore;
     private readonly ILogger<RunJobChainHandler>? _log;
@@ -68,7 +69,7 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
         IClientCommunicationSender? communications = null,
         IPermissionService? permissions = null,
         ICrmClientRepository? crmClients = null,
-        CrmArtifactAssociationService? crmArtifacts = null,
+        IEnumerable<IChainRunCompletionObserver>? completionObservers = null,
         IRunArtifactLinkRepository? runArtifacts = null,
         IChainContextStore? contextStore = null,
         ILogger<RunJobChainHandler>? log = null)
@@ -83,7 +84,7 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
         _communications = communications;
         _permissions = permissions;
         _crmClients = crmClients;
-        _crmArtifacts = crmArtifacts;
+        _completionObservers = completionObservers?.ToList() ?? [];
         _runArtifacts = runArtifacts;
         _contextStore = contextStore;
         _log = log;
@@ -411,18 +412,16 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
         await SaveProgressAsync(chainRun, ct);
         await SaveContextAsync(chainRun, payload, ct);
 
-        // CRM artifacts are derived from the finished persisted steps. This must happen here—not
-        // in the ingestion worker—so resumed wait chains and every other CRM launch path converge.
-        if (_crmArtifacts is not null)
+        // Notify integrations only after the final chain state and context have been persisted.
+        // Observer failures never rewrite a successfully completed chain as failed.
+        foreach (var observer in _completionObservers)
         {
-            try { await _crmArtifacts.AssociateAsync(chainRun, ct); }
+            try { await observer.OnCompletedAsync(chainRun, ct); }
             catch (Exception ex)
             {
-                // Artifact tagging must not rewrite a successfully completed chain as failed. The
-                // startup reconciler retries recent terminal CRM runs after transient failures.
                 _log?.LogWarning(ex,
-                    "Could not associate artifacts from chain run {ChainRunId} to CRM customer {ClientId}.",
-                    chainRun.Id, chainRun.CrmClientId);
+                    "Chain completion observer {ObserverType} failed for run {ChainRunId}.",
+                    observer.GetType().Name, chainRun.Id);
             }
         }
 

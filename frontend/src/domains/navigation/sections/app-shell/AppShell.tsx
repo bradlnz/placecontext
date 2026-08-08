@@ -104,27 +104,36 @@ export function AppShell() {
 
   async function handleThemeToggle(): Promise<void> {
     await Promise.resolve()
-    setTheme((current) => current === 'dark' ? 'light' : 'dark')
+    setTheme((current) => (current === 'dark' ? 'light' : 'dark'))
   }
 
-  const projectNavigation = currentProject === undefined
-    ? []
-    : PROJECT_NAVIGATION.map((item) => ({
-        ...item,
-        href: `/project/${currentProject.id}/${PROJECT_PATHS[item.label] ?? ''}`,
-      }))
-  const navigation = [
-    DASHBOARD_NAVIGATION,
-    ...projectNavigation,
-    ...WORKSPACE_NAVIGATION,
-  ]
+  const projectNavigation =
+    currentProject === undefined
+      ? []
+      : PROJECT_NAVIGATION.map((item) => ({
+          ...item,
+          href: `/project/${currentProject.id}/${PROJECT_PATHS[item.label] ?? ''}`,
+        }))
+  const navigation = [DASHBOARD_NAVIGATION, ...projectNavigation, ...WORKSPACE_NAVIGATION]
 
   return (
     <div id="dcshell" data-theme={theme} className="shell">
-      <aside className={navigationOpen ? 'sidebar open' : 'sidebar'} aria-label="Primary navigation">
+      <aside
+        className={navigationOpen ? 'sidebar open' : 'sidebar'}
+        aria-label="Primary navigation"
+      >
         <div className="brand-row">
           <div className="brand-mark" aria-hidden="true">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round">
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="#fff"
+              strokeWidth="2.1"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
               <path d="M5 8l3.5 4L5 16" />
               <path d="M13 16h6" />
             </svg>
@@ -133,7 +142,14 @@ export function AppShell() {
             <span className="title-14">placecontext</span>
             <span className="org-name">{session?.tenant ?? 'organisation'}</span>
           </div>
-          <button className="sidebar-close" onClick={() => void handleNavigationClose()} aria-label="Close navigation" type="button">×</button>
+          <button
+            className="sidebar-close"
+            onClick={() => void handleNavigationClose()}
+            aria-label="Close navigation"
+            type="button"
+          >
+            ×
+          </button>
         </div>
 
         <nav className="nav-list" aria-label="Workspace menu">
@@ -152,9 +168,13 @@ export function AppShell() {
               <div key={item.label}>
                 {showSection ? <div className="nav-section">{item.section}</div> : null}
                 {item.href.startsWith('/app/') ? (
-                  <NavLink className="dcnav" to={item.href.slice('/app'.length)} end>{itemContent}</NavLink>
+                  <NavLink className="dcnav" to={item.href.slice('/app'.length)} end>
+                    {itemContent}
+                  </NavLink>
                 ) : (
-                  <a className="dcnav" href={item.href}>{itemContent}</a>
+                  <a className="dcnav" href={item.href}>
+                    {itemContent}
+                  </a>
                 )}
               </div>
             )
@@ -163,7 +183,9 @@ export function AppShell() {
 
         <div className="user-bar">
           <div className="user-info">
-            <div className="user-avatar">{session?.displayName.slice(0, 1).toUpperCase() ?? 'P'}</div>
+            <div className="user-avatar">
+              {session?.displayName.slice(0, 1).toUpperCase() ?? 'P'}
+            </div>
             <div className="user-detail">
               <div className="user-name">{session?.displayName ?? 'PlaceContext user'}</div>
               <div className="user-role">{session?.role ?? 'Viewer'}</div>
@@ -173,13 +195,26 @@ export function AppShell() {
       </aside>
 
       {navigationOpen ? (
-        <button aria-label="Close navigation" className="nav-backdrop" onClick={() => void handleNavigationClose()} type="button" />
+        <button
+          aria-label="Close navigation"
+          className="nav-backdrop"
+          onClick={() => void handleNavigationClose()}
+          type="button"
+        />
       ) : null}
 
       <main className="main">
         <header className="topbar">
           <div className="topbar-left">
-            <button className="nav-toggle" onClick={() => void handleNavigationToggle()} title="Menu" aria-label="Toggle navigation" type="button">☰</button>
+            <button
+              className="nav-toggle"
+              onClick={() => void handleNavigationToggle()}
+              title="Menu"
+              aria-label="Toggle navigation"
+              type="button"
+            >
+              ☰
+            </button>
             <span className="title-14">{pageHandle?.title ?? 'PlaceContext'}</span>
             <span className="topbar-sub">{pageHandle?.subtitle ?? 'workspace'}</span>
           </div>
@@ -189,18 +224,34 @@ export function AppShell() {
               <span className="dcsearch-text">Search context, files, changes</span>
               <kbd>/</kbd>
             </a>
-            <div className="running-badge"><span className="running-dot" />{runningCount} running</div>
-            <a className="icon-btn" href="/observability" aria-label="Notifications">♢</a>
+            <div className="running-badge">
+              <span className="running-dot" />
+              {runningCount} running
+            </div>
+            <a className="icon-btn" href="/observability" aria-label="Notifications">
+              ♢
+            </a>
             <div className="topbar-switcher-wrap switcher-wrap">
-              <button className="topbar-switcher-pill switcher-pill" onClick={() => void handleSwitcherToggle()} type="button">
+              <button
+                className="topbar-switcher-pill switcher-pill"
+                onClick={() => void handleSwitcherToggle()}
+                type="button"
+              >
                 <span className="switcher-dot" />
-                <span className="topbar-switcher-name switcher-name">{currentProject?.name ?? 'select project'}</span>
+                <span className="topbar-switcher-name switcher-name">
+                  {currentProject?.name ?? 'select project'}
+                </span>
                 <span className="topbar-switcher-caret switcher-caret">▾</span>
               </button>
               {switcherOpen ? (
                 <div className="switcher-menu">
                   {(projectsQuery.data ?? []).map((project) => (
-                    <button className="switcher-item" key={project.id} onClick={() => void handleProjectSelected(project.id)} type="button">
+                    <button
+                      className="switcher-item"
+                      key={project.id}
+                      onClick={() => void handleProjectSelected(project.id)}
+                      type="button"
+                    >
                       <span className="switcher-item-dot" />
                       <span className="switcher-item-name">{project.name}</span>
                     </button>
@@ -208,7 +259,14 @@ export function AppShell() {
                 </div>
               ) : null}
             </div>
-            <button className="icon-btn" onClick={() => void handleThemeToggle()} aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`} type="button">◐</button>
+            <button
+              className="icon-btn"
+              onClick={() => void handleThemeToggle()}
+              aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+              type="button"
+            >
+              ◐
+            </button>
           </div>
         </header>
 

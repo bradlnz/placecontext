@@ -15,7 +15,9 @@ describe('AuthShell', () => {
 
     render(<RouterProvider router={router} />)
 
-    expect(screen.getByRole('main')).toContainElement(screen.getByRole('heading', { name: 'Sign in content' }))
+    expect(screen.getByRole('main')).toContainElement(
+      screen.getByRole('heading', { name: 'Sign in content' }),
+    )
     expect(screen.queryByRole('navigation')).not.toBeInTheDocument()
   })
 })

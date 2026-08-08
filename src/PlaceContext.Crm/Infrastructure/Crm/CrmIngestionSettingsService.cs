@@ -2,6 +2,8 @@ using System.Security.Cryptography;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
 using PlaceContext.Application.Ports;
+using PlaceContext.Crm.Contracts.Ingestion;
+using PlaceContext.Crm.Services;
 using PlaceContext.Crm.Infrastructure.Persistence;
 using PlaceContext.Domain.Repositories;
 using PlaceContext.Domain.ValueObjects;
@@ -12,7 +14,7 @@ namespace PlaceContext.Crm.Infrastructure.Crm;
 /// Manages the narrowly-scoped public CRM ingestion credential. Only a SHA-256 token digest is
 /// persisted; rotating returns the plaintext once. Origin matching is exact after normalization.
 /// </summary>
-public sealed class CrmIngestionSettingsService
+public sealed class CrmIngestionSettingsService : ICrmIngestionSettingsService
 {
     public const string TokenHeader = "X-PlaceContext-CRM-Token";
     private readonly CrmDbContext _db;

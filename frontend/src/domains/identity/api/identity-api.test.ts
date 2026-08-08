@@ -9,10 +9,17 @@ describe('fetchIdentityContext', () => {
       antiforgeryFieldName: '__RequestVerificationToken',
       antiforgeryToken: 'verification-token',
     }
-    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(new Response(JSON.stringify(context), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-    }))))
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() =>
+        Promise.resolve(
+          new Response(JSON.stringify(context), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          }),
+        ),
+      ),
+    )
 
     await expect(fetchIdentityContext(new AbortController().signal)).resolves.toEqual(context)
   })

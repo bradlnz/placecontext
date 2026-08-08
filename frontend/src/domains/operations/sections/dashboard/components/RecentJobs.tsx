@@ -41,7 +41,9 @@ export function RecentJobs({ runs }: RecentJobsProps) {
   return (
     <section aria-labelledby="recent-jobs-title" className="dccard dashboard-jobs-card">
       <div className="jobs-head">
-        <h2 className="jobs-title" id="recent-jobs-title">Recent jobs</h2>
+        <h2 className="jobs-title" id="recent-jobs-title">
+          Recent jobs
+        </h2>
         <div className="jobs-filters">
           {FILTERS.map((option) => (
             <button
@@ -57,20 +59,40 @@ export function RecentJobs({ runs }: RecentJobsProps) {
         </div>
       </div>
       <div className="jobs-scroll">
-        <div aria-hidden="true" className="jobs-grid-head"><span>STATUS</span><span>JOB</span><span>PROJECT</span><span>SHARDS</span><span>DURATION</span><span>STARTED</span><span>RETURN</span></div>
+        <div aria-hidden="true" className="jobs-grid-head">
+          <span>STATUS</span>
+          <span>JOB</span>
+          <span>PROJECT</span>
+          <span>SHARDS</span>
+          <span>DURATION</span>
+          <span>STARTED</span>
+          <span>RETURN</span>
+        </div>
         {filteredRuns.length === 0 ? (
-          <div className="jobs-empty">No runs yet — submit a job and its run appears here live.</div>
-        ) : filteredRuns.map((run) => (
-          <a className="dashboard-jobs-row" href={`/observability?run=${run.id}`} key={run.id}>
-            <span className={`job-status status-${run.status.toLowerCase()}`}><span className="job-status-dot" />{run.status.toUpperCase()}</span>
-            <span className="job-name">{run.jobName}</span>
-            <span className="job-project">{run.projectName}</span>
-            <span className="job-cell">✓{run.succeededShards}{run.failedShards > 0 ? ` ✗${String(run.failedShards)}` : ''}</span>
-            <span className="job-cell">{formatDuration(run)}</span>
-            <time className="job-started" dateTime={run.startedAt}>{formatStarted(run.startedAt)}</time>
-            <span className="job-return">{run.sourceKind}</span>
-          </a>
-        ))}
+          <div className="jobs-empty">
+            No runs yet — submit a job and its run appears here live.
+          </div>
+        ) : (
+          filteredRuns.map((run) => (
+            <a className="dashboard-jobs-row" href={`/observability?run=${run.id}`} key={run.id}>
+              <span className={`job-status status-${run.status.toLowerCase()}`}>
+                <span className="job-status-dot" />
+                {run.status.toUpperCase()}
+              </span>
+              <span className="job-name">{run.jobName}</span>
+              <span className="job-project">{run.projectName}</span>
+              <span className="job-cell">
+                ✓{run.succeededShards}
+                {run.failedShards > 0 ? ` ✗${String(run.failedShards)}` : ''}
+              </span>
+              <span className="job-cell">{formatDuration(run)}</span>
+              <time className="job-started" dateTime={run.startedAt}>
+                {formatStarted(run.startedAt)}
+              </time>
+              <span className="job-return">{run.sourceKind}</span>
+            </a>
+          ))
+        )}
       </div>
     </section>
   )

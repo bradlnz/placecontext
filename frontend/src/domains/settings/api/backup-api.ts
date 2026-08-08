@@ -19,7 +19,8 @@ const backupImportResultSchema = z.looseObject({
 })
 
 export async function readBackupManifest(file: File): Promise<BackupManifestPreview> {
-  if (file.size > 20 * 1024 * 1024) throw new Error('File too large — a manifest should be well under 20 MB.')
+  if (file.size > 20 * 1024 * 1024)
+    throw new Error('File too large — a manifest should be well under 20 MB.')
   const parsed: unknown = JSON.parse(await file.text())
   const manifest = backupManifestSchema.parse(parsed)
 

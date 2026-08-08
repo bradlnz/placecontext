@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using PlaceContext.Application.Ports;
 using PlaceContext.Application.Shared;
+using PlaceContext.Crm.Automation;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.ValueObjects;
 using PlaceContext.Crm.Infrastructure.Persistence;

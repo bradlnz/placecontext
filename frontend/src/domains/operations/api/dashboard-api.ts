@@ -4,10 +4,7 @@ import type {
   RunDashboardChainCommand,
   RunDashboardChainResult,
 } from '../model/dashboard'
-import {
-  dashboardSchema,
-  runDashboardChainResultSchema,
-} from './dashboard-schemas'
+import { dashboardSchema, runDashboardChainResultSchema } from './dashboard-schemas'
 
 const DASHBOARD_API_PATH = '/api/v1/dashboard'
 

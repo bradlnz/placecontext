@@ -7,9 +7,7 @@ import { AsyncEventBus } from '../../../../shared/events/async-event-bus'
 import { OverviewPage } from './OverviewPage'
 
 vi.mock('./overview-query', async () => {
-  const { workspaceOverviewFixture: fixture } = await import(
-    '../../../../test/fixtures/workspace'
-  )
+  const { workspaceOverviewFixture: fixture } = await import('../../../../test/fixtures/workspace')
 
   return {
     useWorkspaceOverview: () => ({

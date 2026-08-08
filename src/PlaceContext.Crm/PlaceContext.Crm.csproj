@@ -7,6 +7,7 @@
     <ProjectReference Include="PlaceContext.Crm.Contracts.csproj" />
     <ProjectReference Include="..\PlaceContext.Application\PlaceContext.Application.csproj" />
     <ProjectReference Include="..\PlaceContext.Domain\PlaceContext.Domain.csproj" />
+    <ProjectReference Include="..\PlaceContext.Jobs\PlaceContext.Jobs.Contracts.csproj" />
   </ItemGroup>
   <ItemGroup><Compile Remove="bin/**/*.cs;obj/**/*.cs;Contracts/**/*.cs;Domain/**/*.cs;Infrastructure/**/*.cs;Runtime/**/*.cs" /></ItemGroup>
   <ItemGroup><FrameworkReference Include="Microsoft.AspNetCore.App" /></ItemGroup>

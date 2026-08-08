@@ -2,8 +2,8 @@ import babel from '@rolldown/plugin-babel'
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vitest/config'
 
-const outputDirectory = process.env.PLACE_CONTEXT_FRONTEND_OUT_DIR
-  ?? '../src/PlaceContext.Host/wwwroot/app'
+const outputDirectory =
+  process.env.PLACE_CONTEXT_FRONTEND_OUT_DIR ?? '../src/PlaceContext.App/wwwroot/app'
 const apiOrigin = process.env.PLACE_CONTEXT_API_ORIGIN ?? 'http://localhost:7700'
 
 export default defineConfig({
@@ -31,7 +31,7 @@ export default defineConfig({
         target: apiOrigin,
         changeOrigin: true,
       },
-      '^/(chart\\.umd\\.js|pcchart\\.js)$': {
+      '^/(chart\\.umd\\.js|pcchart\\.js|pcgraph\\.js|pcmonaco\\.js)$': {
         target: apiOrigin,
         changeOrigin: true,
       },

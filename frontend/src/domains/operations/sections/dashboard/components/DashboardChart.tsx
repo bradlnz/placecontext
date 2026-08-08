@@ -37,9 +37,13 @@ export function DashboardChart({ chart }: DashboardChartProps) {
       <div className="chart-card-head">
         <span className="chart-title">{chart.name}</span>
         <span className="spacer" />
-        <time className="chart-time" dateTime={chart.generatedAt}>{formatChartDate(chart.generatedAt)}</time>
+        <time className="chart-time" dateTime={chart.generatedAt}>
+          {formatChartDate(chart.generatedAt)}
+        </time>
       </div>
-      <div className="chart-canvas-wrap"><canvas aria-label={`${chart.name} chart`} id={canvasId} role="img" /></div>
+      <div className="chart-canvas-wrap">
+        <canvas aria-label={`${chart.name} chart`} id={canvasId} role="img" />
+      </div>
     </article>
   )
 }

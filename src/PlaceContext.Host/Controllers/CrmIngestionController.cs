@@ -13,6 +13,7 @@ using PlaceContext.Domain.Repositories;
 using PlaceContext.Domain.ValueObjects;
 using PlaceContext.Crm.Infrastructure.Crm;
 using PlaceContext.Crm.Infrastructure.Persistence;
+using PlaceContext.Crm.Automation;
 using PlaceContext.Infrastructure.Tenancy;
 
 namespace PlaceContext.Host.Controllers;

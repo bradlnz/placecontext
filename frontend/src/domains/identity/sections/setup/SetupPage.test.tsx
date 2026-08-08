@@ -16,7 +16,9 @@ function renderSetup(configured: boolean, entry = '/setup') {
 
   return render(
     <MemoryRouter initialEntries={[entry]}>
-      <QueryClientProvider client={queryClient}><SetupPage /></QueryClientProvider>
+      <QueryClientProvider client={queryClient}>
+        <SetupPage />
+      </QueryClientProvider>
     </MemoryRouter>,
   )
 }

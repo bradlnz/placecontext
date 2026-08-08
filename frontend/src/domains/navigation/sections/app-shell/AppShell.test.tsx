@@ -46,7 +46,10 @@ describe('AppShell', () => {
     expect(screen.getByText('Overview content')).toBeVisible()
     expect(screen.getByRole('link', { name: 'Dashboard' })).toHaveAttribute('href', '/')
     expect(screen.getByRole('link', { name: /overview/i })).toHaveAttribute('href', '/overview')
-    expect(screen.getByRole('link', { name: /search context/i })).toHaveAttribute('href', '/inspector')
+    expect(screen.getByRole('link', { name: /search context/i })).toHaveAttribute(
+      'href',
+      '/inspector',
+    )
     expect(screen.getByRole('link', { name: /artifacts/i })).toHaveAttribute('href', '/artifacts')
     expect(screen.getByText('Ada Lovelace')).toBeVisible()
   })

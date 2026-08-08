@@ -14,11 +14,14 @@ function fieldKey(stepIndex: number, parameterName: string): string {
 }
 
 function initialValues(chain: DashboardChain): Record<string, string> {
-  return Object.fromEntries(chain.promptSteps.flatMap((step) =>
-    step.parameters.map((parameter) => [
-      fieldKey(step.index, parameter.name),
-      parameter.defaultValue,
-    ])))
+  return Object.fromEntries(
+    chain.promptSteps.flatMap((step) =>
+      step.parameters.map((parameter) => [
+        fieldKey(step.index, parameter.name),
+        parameter.defaultValue,
+      ]),
+    ),
+  )
 }
 
 function parameterField({
@@ -34,7 +37,9 @@ function parameterField({
     return (
       <select value={value} onChange={(event) => void onChange(event.target.value)}>
         <option value="">Select…</option>
-        {parameter.options.map((option) => <option key={option}>{option}</option>)}
+        {parameter.options.map((option) => (
+          <option key={option}>{option}</option>
+        ))}
       </select>
     )
   }
@@ -71,22 +76,33 @@ export function ChainRunDialog({ chain, running, onClose }: ChainRunDialogProps)
   }
 
   async function handleSubmit(): Promise<void> {
-    const missing = chain.promptSteps.flatMap((step) => step.parameters
-      .filter((parameter) => parameter.required
-        && (values[fieldKey(step.index, parameter.name)] ?? '').trim().length === 0)
-      .map((parameter) => `step ${String(step.index + 1)}: ${parameter.label}`))
+    const missing = chain.promptSteps.flatMap((step) =>
+      step.parameters
+        .filter(
+          (parameter) =>
+            parameter.required &&
+            (values[fieldKey(step.index, parameter.name)] ?? '').trim().length === 0,
+        )
+        .map((parameter) => `step ${String(step.index + 1)}: ${parameter.label}`),
+    )
     if (missing.length > 0) {
       setError(`Required: ${missing.join(', ')}`)
       return
     }
 
-    const stepPayloadOverrides = Object.fromEntries(chain.promptSteps.map((step) => [
-      step.index,
-      JSON.stringify(Object.fromEntries(step.parameters.map((parameter) => [
-        parameter.name,
-        values[fieldKey(step.index, parameter.name)] ?? '',
-      ]))),
-    ]))
+    const stepPayloadOverrides = Object.fromEntries(
+      chain.promptSteps.map((step) => [
+        step.index,
+        JSON.stringify(
+          Object.fromEntries(
+            step.parameters.map((parameter) => [
+              parameter.name,
+              values[fieldKey(step.index, parameter.name)] ?? '',
+            ]),
+          ),
+        ),
+      ]),
+    )
 
     await eventBus.publish('dashboard.chain-run-requested', {
       projectId: chain.projectId,
@@ -99,23 +115,46 @@ export function ChainRunDialog({ chain, running, onClose }: ChainRunDialogProps)
 
   return (
     <div className="dcmodal-overlay" role="presentation">
-      <div aria-labelledby="chain-run-title" aria-modal="true" className="dcmodal chain-run-modal" role="dialog">
+      <div
+        aria-labelledby="chain-run-title"
+        aria-modal="true"
+        className="dcmodal chain-run-modal"
+        role="dialog"
+      >
         <div className="dcmodal-head">
           <div>
-            <div className="title-14" id="chain-run-title">Run {chain.name}</div>
-            <div className="chain-run-modal-sub">Enter the declared inputs for each chain step. Stored job values are prefilled.</div>
+            <div className="title-14" id="chain-run-title">
+              Run {chain.name}
+            </div>
+            <div className="chain-run-modal-sub">
+              Enter the declared inputs for each chain step. Stored job values are prefilled.
+            </div>
           </div>
-          <button aria-label="Close run input prompt" disabled={running} onClick={onClose} type="button">×</button>
+          <button
+            aria-label="Close run input prompt"
+            disabled={running}
+            onClick={onClose}
+            type="button"
+          >
+            ×
+          </button>
         </div>
         <div className="dcmodal-body">
           {chain.promptSteps.map((step) => (
             <section className="chain-prompt-step" key={step.index}>
-              <div className="chain-prompt-head"><span>step {step.index + 1}</span><strong>{step.jobName}</strong></div>
+              <div className="chain-prompt-head">
+                <span>step {step.index + 1}</span>
+                <strong>{step.jobName}</strong>
+              </div>
               {step.parameters.map((parameter) => {
                 const key = fieldKey(step.index, parameter.name)
                 return (
                   <label className="dcfield" key={key}>
-                    <span>{parameter.label}{parameter.required ? <span className="required"> *</span> : null} <code>{parameter.name}</code></span>
+                    <span>
+                      {parameter.label}
+                      {parameter.required ? <span className="required"> *</span> : null}{' '}
+                      <code>{parameter.name}</code>
+                    </span>
                     {parameterField({
                       parameter,
                       value: values[key] ?? '',
@@ -126,11 +165,22 @@ export function ChainRunDialog({ chain, running, onClose }: ChainRunDialogProps)
               })}
             </section>
           ))}
-          {error === null ? null : <div className="chain-prompt-error" role="alert">{error}</div>}
+          {error === null ? null : (
+            <div className="chain-prompt-error" role="alert">
+              {error}
+            </div>
+          )}
         </div>
         <div className="dcmodal-foot">
-          <button className="dcbtn" disabled={running} onClick={onClose} type="button">Cancel</button>
-          <button className="dcbtn primary" disabled={running} onClick={() => void handleSubmit()} type="button">
+          <button className="dcbtn" disabled={running} onClick={onClose} type="button">
+            Cancel
+          </button>
+          <button
+            className="dcbtn primary"
+            disabled={running}
+            onClick={() => void handleSubmit()}
+            type="button"
+          >
             {running ? 'Starting…' : '▶ Run chain'}
           </button>
         </div>

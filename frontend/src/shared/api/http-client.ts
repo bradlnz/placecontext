@@ -32,11 +32,24 @@ async function parseJsonResponse<TResponse>(
   }
 
   if (!response.ok) {
-    throw new HttpError(response.status, `Request failed with status ${String(response.status)}.`)
+    throw new HttpError(response.status, await readErrorMessage(response))
   }
 
   const body: unknown = await response.json()
   return schema.parse(body)
+}
+
+async function readErrorMessage(response: Response): Promise<string> {
+  try {
+    const body: unknown = await response.json()
+    if (typeof body === 'object' && body !== null) {
+      const error: unknown = (body as Record<string, unknown>).error
+      if (typeof error === 'string' && error.trim() !== '') return error
+    }
+  } catch {
+    // The endpoint returned no JSON error contract; use the stable status fallback.
+  }
+  return `Request failed with status ${String(response.status)}.`
 }
 
 export async function getJson<TResponse>({
@@ -104,7 +117,10 @@ export async function deleteJson<TResponse>({
   const response = await fetch(path, {
     method: 'DELETE',
     credentials: 'same-origin',
-    headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+    headers: {
+      Accept: 'application/json',
+      'X-Requested-With': 'XMLHttpRequest',
+    },
     signal,
   })
   return parseJsonResponse(response, schema)
@@ -114,9 +130,30 @@ export async function deleteRequest(path: string, signal: AbortSignal): Promise<
   const response = await fetch(path, {
     method: 'DELETE',
     credentials: 'same-origin',
-    headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+    headers: {
+      Accept: 'application/json',
+      'X-Requested-With': 'XMLHttpRequest',
+    },
     signal,
   })
-  if (response.status === 401) throw new HttpError(response.status, 'Your PlaceContext session has expired.')
-  if (!response.ok) throw new HttpError(response.status, `Request failed with status ${String(response.status)}.`)
+  if (response.status === 401)
+    throw new HttpError(response.status, 'Your PlaceContext session has expired.')
+  if (!response.ok) throw new HttpError(response.status, await readErrorMessage(response))
+}
+
+export async function putRequest(path: string, body: unknown, signal: AbortSignal): Promise<void> {
+  const response = await fetch(path, {
+    method: 'PUT',
+    credentials: 'same-origin',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+      'X-Requested-With': 'XMLHttpRequest',
+    },
+    body: JSON.stringify(body),
+    signal,
+  })
+  if (response.status === 401)
+    throw new HttpError(response.status, 'Your PlaceContext session has expired.')
+  if (!response.ok) throw new HttpError(response.status, await readErrorMessage(response))
 }

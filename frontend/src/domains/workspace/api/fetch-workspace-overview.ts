@@ -41,9 +41,7 @@ export async function fetchWorkspaceSession(signal: AbortSignal) {
   })
 }
 
-export async function fetchWorkspaceOverview(
-  signal: AbortSignal,
-): Promise<WorkspaceOverview> {
+export async function fetchWorkspaceOverview(signal: AbortSignal): Promise<WorkspaceOverview> {
   const projectsPromise = fetchWorkspaceProjects(signal)
   const focusPromise = fetchWorkspaceFocus(signal)
   const statsPromise = fetchWorkspaceStats(signal)

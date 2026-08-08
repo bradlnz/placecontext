@@ -23,11 +23,18 @@ export function OverviewPage() {
       <section aria-labelledby="projects-title">
         <div className="projects-head">
           <div className="projects-title-group">
-            <h2 className="projects-title" id="projects-title">Projects</h2>
+            <h2 className="projects-title" id="projects-title">
+              Projects
+            </h2>
             <span className="projects-count">{data.projects.length}</span>
           </div>
           <div className="projects-actions">
-            <button className="dcbtn primary" disabled={isRefreshing} onClick={() => void handleRefresh()} type="button">
+            <button
+              className="dcbtn primary"
+              disabled={isRefreshing}
+              onClick={() => void handleRefresh()}
+              type="button"
+            >
               {isRefreshing ? 'Refreshing…' : 'Refresh'}
             </button>
           </div>

@@ -18,7 +18,10 @@ describe('SettingsLayout', () => {
 
     expect(screen.getByRole('navigation', { name: 'Settings sections' })).toBeVisible()
     expect(screen.getByRole('link', { name: 'Backup' })).toHaveAttribute('href', '/settings/backup')
-    expect(screen.getByRole('link', { name: 'Communications' })).toHaveAttribute('href', '/settings/communications')
+    expect(screen.getByRole('link', { name: 'Communications' })).toHaveAttribute(
+      'href',
+      '/settings/communications',
+    )
 
     const toggle = screen.getByRole('button', { name: /settings sections/i })
     await user.click(toggle)

@@ -57,6 +57,8 @@ describe('hostRouteCatalog', () => {
     const reactPaths = hostRouteCatalog.map(({ reactPath }) => reactPath)
 
     expect(new Set(reactPaths)).toHaveLength(reactPaths.length)
-    expect(hostRouteCatalog.every(({ domain, section }) => domain.length > 0 && section.length > 0)).toBe(true)
+    expect(
+      hostRouteCatalog.every(({ domain, section }) => domain.length > 0 && section.length > 0),
+    ).toBe(true)
   })
 })

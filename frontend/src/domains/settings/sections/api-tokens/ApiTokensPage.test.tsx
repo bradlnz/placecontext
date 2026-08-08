@@ -11,8 +11,23 @@ describe('ApiTokensPage', () => {
   it('replicates endpoint documentation, creation, and active token controls', async () => {
     const user = userEvent.setup()
     const queryClient = new QueryClient()
-    queryClient.setQueryData(apiTokensQueryOptions.queryKey, [{ id: '7b4eed95-c20a-4522-86f4-2f9ae5891302', name: 'CI', tokenPrefix: 'pc_123456', createdAt: '2026-08-08T00:00:00+00:00', lastUsedAt: null, expiresAt: null }])
-    render(<QueryClientProvider client={queryClient}><AppEventBusProvider><ApiTokensPage /></AppEventBusProvider></QueryClientProvider>)
+    queryClient.setQueryData(apiTokensQueryOptions.queryKey, [
+      {
+        id: '7b4eed95-c20a-4522-86f4-2f9ae5891302',
+        name: 'CI',
+        tokenPrefix: 'pc_123456',
+        createdAt: '2026-08-08T00:00:00+00:00',
+        lastUsedAt: null,
+        expiresAt: null,
+      },
+    ])
+    render(
+      <QueryClientProvider client={queryClient}>
+        <AppEventBusProvider>
+          <ApiTokensPage />
+        </AppEventBusProvider>
+      </QueryClientProvider>,
+    )
     expect(screen.getByText('GET /api/v1/entities')).toBeVisible()
     expect(screen.getByText('pc_123456…')).toBeVisible()
     await user.click(screen.getByRole('button', { name: 'Create' }))

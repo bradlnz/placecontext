@@ -2,7 +2,7 @@ using System.Text;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using PlaceContext.Application.Ports;
-using PlaceContext.Host.Controllers;
+using PlaceContext.Artifacts.Controllers;
 using Xunit;
 
 namespace PlaceContext.Host.Tests;

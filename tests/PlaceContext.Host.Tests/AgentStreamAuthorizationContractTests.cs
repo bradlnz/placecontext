@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 using PlaceContext.Application.Ports;
 using PlaceContext.Host.Auth;
 using PlaceContext.Host.Controllers.Api;
+using PlaceContext.Host.Controllers.Api.Records;
 
 namespace PlaceContext.Host.Tests;
 

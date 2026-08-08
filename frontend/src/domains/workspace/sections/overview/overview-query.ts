@@ -31,10 +31,11 @@ export function useWorkspaceOverview(): {
     stats: statsQuery.data,
     session: sessionQuery.data,
   }
-  const isRefreshing = projectsQuery.isFetching
-    || focusQuery.isFetching
-    || statsQuery.isFetching
-    || sessionQuery.isFetching
+  const isRefreshing =
+    projectsQuery.isFetching ||
+    focusQuery.isFetching ||
+    statsQuery.isFetching ||
+    sessionQuery.isFetching
 
   useEffect(() => {
     return eventBus.subscribe('workspace.overview-refresh-requested', async () => {

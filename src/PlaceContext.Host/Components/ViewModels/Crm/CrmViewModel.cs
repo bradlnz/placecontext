@@ -9,6 +9,7 @@ using PlaceContext.Application.Ports;
 using PlaceContext.Domain.ValueObjects;
 using PlaceContext.Host;
 using PlaceContext.Crm.Infrastructure.Crm;
+using PlaceContext.Crm.Contracts.Ingestion;
 using System.Net.Http.Json;
 using System.Text.Json;
 

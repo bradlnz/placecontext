@@ -12,7 +12,10 @@ function jsonResponse(body: unknown, status = 200): Response {
 
 describe('dashboard API', () => {
   it('loads and validates the Dashboard API contract', async () => {
-    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(jsonResponse(dashboardFixture))))
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.resolve(jsonResponse(dashboardFixture))),
+    )
 
     await expect(fetchDashboard(new AbortController().signal)).resolves.toEqual(dashboardFixture)
   })
@@ -39,7 +42,10 @@ describe('dashboard API', () => {
   })
 
   it('rejects an invalid Dashboard payload before it reaches components', async () => {
-    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(jsonResponse({ project: 'invalid' }))))
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.resolve(jsonResponse({ project: 'invalid' }))),
+    )
 
     await expect(fetchDashboard(new AbortController().signal)).rejects.toThrow()
   })

@@ -11,8 +11,16 @@ describe('ArtifactFiltersPage', () => {
   it('renders, adds, and validates artifact filter rules asynchronously', async () => {
     const user = userEvent.setup()
     const queryClient = new QueryClient()
-    queryClient.setQueryData(artifactFiltersQueryOptions.queryKey, { categories: [{ id: 'reports', label: 'Reports', prefixes: ['report_'] }] })
-    render(<QueryClientProvider client={queryClient}><AppEventBusProvider><ArtifactFiltersPage /></AppEventBusProvider></QueryClientProvider>)
+    queryClient.setQueryData(artifactFiltersQueryOptions.queryKey, {
+      categories: [{ id: 'reports', label: 'Reports', prefixes: ['report_'] }],
+    })
+    render(
+      <QueryClientProvider client={queryClient}>
+        <AppEventBusProvider>
+          <ArtifactFiltersPage />
+        </AppEventBusProvider>
+      </QueryClientProvider>,
+    )
     expect(screen.getByDisplayValue('Reports')).toBeVisible()
     await user.click(screen.getByRole('button', { name: '＋ Add filter' }))
     expect(screen.getAllByLabelText('Button label')).toHaveLength(2)

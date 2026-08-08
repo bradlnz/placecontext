@@ -1,5 +1,6 @@
 <Solution>
   <Folder Name="/src/">
+    <Project Path="src/PlaceContext.App/PlaceContext.App.csproj" />
     <Project Path="src/PlaceContext.Agents/PlaceContext.Agents.csproj" />
     <Project Path="src/PlaceContext.Agents/PlaceContext.Agents.Contracts.csproj" />
     <Project Path="src/PlaceContext.Agents/PlaceContext.Agents.Domain.csproj" />
@@ -64,6 +65,7 @@
     <Project Path="src/PlaceContext.Vault/PlaceContext.Vault.Api.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/PlaceContext.App.Tests/PlaceContext.App.Tests.csproj" />
     <Project Path="tests/PlaceContext.Agents.Tests/PlaceContext.Agents.Tests.csproj" />
     <Project Path="tests/PlaceContext.AgentChat.Tests/PlaceContext.AgentChat.Tests.csproj" />
     <Project Path="tests/PlaceContext.Application.Tests/PlaceContext.Application.Tests.csproj" />

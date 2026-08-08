@@ -42,18 +42,21 @@ export function BrandingPage() {
   })
 
   useEffect(() => {
-    const unsubscribeSave = eventBus.subscribe('settings.branding-save-requested', async ({ branding: value }) => {
-      setMessage(null)
-      try {
-        const saved = await saveMutation.mutateAsync(value)
-        setBranding(saved)
-        queryClient.setQueryData(brandingQueryOptions.queryKey, saved)
-        setMessage('Branding saved. Changes apply on the next page load.')
-        await eventBus.publish('settings.branding-saved', { branding: saved })
-      } catch (error: unknown) {
-        setMessage(error instanceof Error ? error.message : 'Branding could not be saved.')
-      }
-    })
+    const unsubscribeSave = eventBus.subscribe(
+      'settings.branding-save-requested',
+      async ({ branding: value }) => {
+        setMessage(null)
+        try {
+          const saved = await saveMutation.mutateAsync(value)
+          setBranding(saved)
+          queryClient.setQueryData(brandingQueryOptions.queryKey, saved)
+          setMessage('Branding saved. Changes apply on the next page load.')
+          await eventBus.publish('settings.branding-saved', { branding: saved })
+        } catch (error: unknown) {
+          setMessage(error instanceof Error ? error.message : 'Branding could not be saved.')
+        }
+      },
+    )
     const unsubscribeReset = eventBus.subscribe('settings.branding-reset-requested', async () => {
       setMessage(null)
       try {
@@ -65,7 +68,10 @@ export function BrandingPage() {
         setMessage(error instanceof Error ? error.message : 'Branding could not be reset.')
       }
     })
-    return () => { unsubscribeSave(); unsubscribeReset() }
+    return () => {
+      unsubscribeSave()
+      unsubscribeReset()
+    }
   }, [eventBus, queryClient, resetMutation, saveMutation])
 
   async function handleLogoSelected(file: File | undefined): Promise<void> {
@@ -89,7 +95,10 @@ export function BrandingPage() {
     setBranding({ ...branding, logoDataUri: null })
   }
 
-  async function handleColorChanged(key: keyof typeof DEFAULT_COLORS, value: string): Promise<void> {
+  async function handleColorChanged(
+    key: keyof typeof DEFAULT_COLORS,
+    value: string,
+  ): Promise<void> {
     await Promise.resolve()
     setBranding({ ...branding, [key]: value })
   }
@@ -100,19 +109,96 @@ export function BrandingPage() {
     <div className="settings-page branding-page">
       <title>placecontext — Branding</title>
       <h1>Whitelabel branding</h1>
-      <p className="settings-intro">Make the portal yours — a name, a logo, and the shell colors. Applies to everyone in this workspace; leave a field empty to keep the default.</p>
+      <p className="settings-intro">
+        Make the portal yours — a name, a logo, and the shell colors. Applies to everyone in this
+        workspace; leave a field empty to keep the default.
+      </p>
       <section className="dccard settings-form-card">
         <div className="settings-field-grid two-columns">
-          <label className="dcfield"><span>Product name</span><input onChange={(event) => { void handleNameChanged(event.target.value) }} placeholder="placecontext" value={branding.productName ?? ''} /></label>
-          <label className="dcfield"><span>Logo <code>png/svg, ≤200 KB</code></span><input accept="image/png,image/svg+xml,image/jpeg,image/webp" onChange={(event) => void handleLogoSelected(event.target.files?.[0])} type="file" /></label>
+          <label className="dcfield">
+            <span>Product name</span>
+            <input
+              onChange={(event) => {
+                void handleNameChanged(event.target.value)
+              }}
+              placeholder="placecontext"
+              value={branding.productName ?? ''}
+            />
+          </label>
+          <label className="dcfield">
+            <span>
+              Logo <code>png/svg, ≤200 KB</code>
+            </span>
+            <input
+              accept="image/png,image/svg+xml,image/jpeg,image/webp"
+              onChange={(event) => void handleLogoSelected(event.target.files?.[0])}
+              type="file"
+            />
+          </label>
         </div>
-        {branding.logoDataUri === null ? null : <div className="branding-logo-row"><img alt="logo" src={branding.logoDataUri} /><button className="dcbtn" onClick={() => { void handleLogoRemoved() }} type="button">remove logo</button></div>}
+        {branding.logoDataUri === null ? null : (
+          <div className="branding-logo-row">
+            <img alt="logo" src={branding.logoDataUri} />
+            <button
+              className="dcbtn"
+              onClick={() => {
+                void handleLogoRemoved()
+              }}
+              type="button"
+            >
+              remove logo
+            </button>
+          </div>
+        )}
         <div className="settings-field-grid color-grid">
-          {([['Background', 'bgColor'], ['Panels & cards', 'panelColor'], ['Text', 'textColor'], ['Accent', 'accentColor']] as const).map(([label, key]) => <label className="dcfield" key={key}><span>{label}</span><input aria-label={label} onChange={(event) => { void handleColorChanged(key, event.target.value) }} type="color" value={branding[key] ?? DEFAULT_COLORS[key]} /></label>)}
+          {(
+            [
+              ['Background', 'bgColor'],
+              ['Panels & cards', 'panelColor'],
+              ['Text', 'textColor'],
+              ['Accent', 'accentColor'],
+            ] as const
+          ).map(([label, key]) => (
+            <label className="dcfield" key={key}>
+              <span>{label}</span>
+              <input
+                aria-label={label}
+                onChange={(event) => {
+                  void handleColorChanged(key, event.target.value)
+                }}
+                type="color"
+                value={branding[key] ?? DEFAULT_COLORS[key]}
+              />
+            </label>
+          ))}
         </div>
-        <div className="settings-actions"><button className="dcbtn primary" disabled={busy} onClick={() => void eventBus.publish('settings.branding-save-requested', { branding })} type="button">{saveMutation.isPending ? 'Saving…' : 'Save branding'}</button><button className="dcbtn" disabled={busy} onClick={() => void eventBus.publish('settings.branding-reset-requested', {})} type="button">Reset to default</button></div>
-        {message === null ? null : <div className="settings-message" role="status">{message}</div>}
-        <div className="settings-hint">Changes apply on the next page load. Colors override the dark theme&apos;s shell variables.</div>
+        <div className="settings-actions">
+          <button
+            className="dcbtn primary"
+            disabled={busy}
+            onClick={() => void eventBus.publish('settings.branding-save-requested', { branding })}
+            type="button"
+          >
+            {saveMutation.isPending ? 'Saving…' : 'Save branding'}
+          </button>
+          <button
+            className="dcbtn"
+            disabled={busy}
+            onClick={() => void eventBus.publish('settings.branding-reset-requested', {})}
+            type="button"
+          >
+            Reset to default
+          </button>
+        </div>
+        {message === null ? null : (
+          <div className="settings-message" role="status">
+            {message}
+          </div>
+        )}
+        <div className="settings-hint">
+          Changes apply on the next page load. Colors override the dark theme&apos;s shell
+          variables.
+        </div>
       </section>
     </div>
   )

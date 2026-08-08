@@ -45,7 +45,6 @@ public static class DependencyInjection
         services.AddScoped<RecordLinkService>();
         services.AddScoped<ProjectChartService>();
         services.AddScoped<ObsidianVaultImporter>();
-        services.AddScoped<CrmAutomationDispatcher>();
 
         // Commands.
         services.AddScoped<ICommandHandler<CreateProjectCommand, ProjectSummaryView>, CreateProjectHandler>();
@@ -60,7 +59,6 @@ public static class DependencyInjection
         services.AddScoped<ICommandHandler<OnboardCommand, OnboardResultView>, OnboardHandler>();
         services.AddScoped<ICommandHandler<SaveSavedQueryCommand, SavedQueryRecord>, SaveSavedQueryHandler>();
         services.AddScoped<ICommandHandler<DeleteSavedQueryCommand, bool>, DeleteSavedQueryHandler>();
-        services.AddScoped<CrmArtifactAssociationService>();
 
         services.AddScoped<IMcpClientService, McpClientService>();
 

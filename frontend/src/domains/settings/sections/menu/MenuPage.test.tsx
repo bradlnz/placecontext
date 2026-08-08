@@ -11,11 +11,33 @@ describe('MenuPage', () => {
   it('renders and asynchronously reorders every sidebar item', async () => {
     const user = userEvent.setup()
     const queryClient = new QueryClient()
-    queryClient.setQueryData(menuQueryOptions.queryKey, { workspace: [
-      { id: 'dashboard', defaultLabel: 'Dashboard', label: '', order: 0, visible: true, section: '' },
-      { id: 'overview', defaultLabel: 'Projects overview', label: '', order: 10, visible: true, section: 'Workspace' },
-    ] })
-    render(<QueryClientProvider client={queryClient}><AppEventBusProvider><MenuPage /></AppEventBusProvider></QueryClientProvider>)
+    queryClient.setQueryData(menuQueryOptions.queryKey, {
+      workspace: [
+        {
+          id: 'dashboard',
+          defaultLabel: 'Dashboard',
+          label: '',
+          order: 0,
+          visible: true,
+          section: '',
+        },
+        {
+          id: 'overview',
+          defaultLabel: 'Projects overview',
+          label: '',
+          order: 10,
+          visible: true,
+          section: 'Workspace',
+        },
+      ],
+    })
+    render(
+      <QueryClientProvider client={queryClient}>
+        <AppEventBusProvider>
+          <MenuPage />
+        </AppEventBusProvider>
+      </QueryClientProvider>,
+    )
 
     const list = screen.getByRole('region', { name: 'Sidebar items' })
     expect(within(list).getAllByRole('article')).toHaveLength(2)

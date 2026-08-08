@@ -6,12 +6,7 @@ import { RecentJobs } from './components/RecentJobs'
 import { useDashboard } from './use-dashboard'
 
 export function DashboardPage() {
-  const {
-    dashboard,
-    chainMessage,
-    chainError,
-    runningChainId,
-  } = useDashboard()
+  const { dashboard, chainMessage, chainError, runningChainId } = useDashboard()
 
   return (
     <div className="dashboard-page">
@@ -19,7 +14,10 @@ export function DashboardPage() {
       <header className="dashboard-page-head">
         <div>
           <h1>Dashboard</h1>
-          <p>Jobs across <strong>{dashboard.project?.name ?? 'the workspace'}</strong> · every run yields an artifact</p>
+          <p>
+            Jobs across <strong>{dashboard.project?.name ?? 'the workspace'}</strong> · every run
+            yields an artifact
+          </p>
         </div>
       </header>
 

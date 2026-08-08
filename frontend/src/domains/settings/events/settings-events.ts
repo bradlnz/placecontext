@@ -17,10 +17,17 @@ export interface SettingsEventMap {
   'settings.api-token-created': { tokenId: string }
   'settings.api-token-revoke-requested': { tokenId: string }
   'settings.api-token-revoked': { tokenId: string }
-  'settings.communication-save-requested': { providerId: string | null; input: CommunicationProviderInput }
+  'settings.communication-save-requested': {
+    providerId: string | null
+    input: CommunicationProviderInput
+  }
   'settings.communication-action-requested': CommunicationAction
   'settings.communication-changed': { providerId: string }
   'settings.connections-changed': { projectId: string }
+  'settings.mcp-connections-changed': { projectId: string }
+  'settings.access-changed': {
+    scope: 'member' | 'permission' | 'portal' | 'role'
+  }
   'settings.backup-import-requested': {
     manifest: Record<string, unknown>
   }

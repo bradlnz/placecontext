@@ -12,22 +12,35 @@ describe('BackupPage', () => {
     const queryClient = new QueryClient()
     render(
       <QueryClientProvider client={queryClient}>
-        <AppEventBusProvider><BackupPage /></AppEventBusProvider>
+        <AppEventBusProvider>
+          <BackupPage />
+        </AppEventBusProvider>
       </QueryClientProvider>,
     )
 
-    expect(screen.getByRole('link', { name: 'Download backup' })).toHaveAttribute('href', '/backup/export')
-    expect(screen.getByRole('link', { name: 'Download job code' })).toHaveAttribute('href', '/backup/jobs-code')
+    expect(screen.getByRole('link', { name: 'Download backup' })).toHaveAttribute(
+      'href',
+      '/backup/export',
+    )
+    expect(screen.getByRole('link', { name: 'Download job code' })).toHaveAttribute(
+      'href',
+      '/backup/jobs-code',
+    )
 
-    const file = new File([
-      JSON.stringify({ projects: [{}], jobs: [{}, {}], jobChains: [{}] }),
-    ], 'workspace.json', { type: 'application/json' })
+    const file = new File(
+      [JSON.stringify({ projects: [{}], jobs: [{}, {}], jobChains: [{}] })],
+      'workspace.json',
+      { type: 'application/json' },
+    )
     await user.upload(screen.getByLabelText('Backup manifest'), file)
 
-    expect(await screen.findByText((_, element) => (
-      element?.tagName === 'P'
-      && element.textContent === 'Loaded workspace.json — 1 project(s), 2 job(s), 1 chain(s).'
-    ))).toBeVisible()
+    expect(
+      await screen.findByText(
+        (_, element) =>
+          element?.tagName === 'P' &&
+          element.textContent === 'Loaded workspace.json — 1 project(s), 2 job(s), 1 chain(s).',
+      ),
+    ).toBeVisible()
     await user.click(screen.getByRole('button', { name: 'Import into this workspace' }))
     expect(screen.getByRole('button', { name: 'Confirm import' })).toBeVisible()
   })

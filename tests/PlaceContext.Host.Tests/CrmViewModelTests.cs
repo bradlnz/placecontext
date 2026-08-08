@@ -1,5 +1,6 @@
 using PlaceContext.Domain.ValueObjects;
 using PlaceContext.Host.Components.ViewModels.Crm;
+using System.Text.Json;
 
 namespace PlaceContext.Host.Tests;
 
@@ -77,7 +78,10 @@ public sealed class CrmViewModelTests
         else
         {
             Assert.NotNull(extracted);
-            Assert.Contains(expectedJson, extracted, StringComparison.Ordinal);
+            Assert.Equal(
+                JsonSerializer.Serialize(JsonDocument.Parse(expectedJson).RootElement),
+                JsonSerializer.Serialize(JsonDocument.Parse(extracted).RootElement)
+            );
         }
     }
 

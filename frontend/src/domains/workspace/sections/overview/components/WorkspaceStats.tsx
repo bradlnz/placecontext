@@ -37,7 +37,9 @@ export function WorkspaceStats({ stats }: WorkspaceStatsProps) {
       {statItems.map((item) => (
         <article className="stat-cell" key={item.label}>
           <div className="stat-label">{item.label}</div>
-          <div className="stat-value" style={{ color: item.color }}>{item.value.toLocaleString()}</div>
+          <div className="stat-value" style={{ color: item.color }}>
+            {item.value.toLocaleString()}
+          </div>
           <div className="stat-sub">{item.detail}</div>
         </article>
       ))}

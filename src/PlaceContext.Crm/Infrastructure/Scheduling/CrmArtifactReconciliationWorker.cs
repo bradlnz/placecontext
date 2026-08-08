@@ -3,6 +3,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using PlaceContext.Application.Features;
 using PlaceContext.Application.Ports;
+using PlaceContext.Crm.Services;
 using PlaceContext.Domain.Repositories;
 using PlaceContext.Domain.ValueObjects;
 

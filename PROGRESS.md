@@ -7,7 +7,7 @@ Last updated: 2026-08-08 (Australia/Brisbane)
 - Independently replaceable services: AgentChat, Agents, Artifacts, CRM, Data, Jobs (jobs, chains, schedules and triggers), Search (including OpenSearch), and Vault.
 - Each service owns its contracts, domain, implementation, controllers, runtime, persistence adapters, and tests.
 - Shared types live physically under `src/PlaceContext.Application`; low-level shared contracts are compiled by `PlaceContext.BuildingBlocks` to avoid circular dependencies.
-- `PlaceContext.Host` is the temporary API gateway/BFF. Its Blazor frontend will later be replaced by a root-level React application in `frontend/`.
+- The React application lives in the root-level `frontend/` workspace. Its frontend-facing HTTP surface will move into a dedicated `PlaceContext.App` project; `PlaceContext.Host` remains the legacy Blazor host during the migration.
 - Service APIs will have explicit route ownership such as `/api/jobs`, `/api/search`, `/api/data`, `/api/vault`, `/api/crm`, `/api/agent-chat`, and `/api/artifacts`.
 
 ## Completed and verified
@@ -118,7 +118,7 @@ Last updated: 2026-08-08 (Australia/Brisbane)
 - `PlaceContext.AgentChat.Infrastructure` builds with 0 warnings and 0 errors.
 - Full `PlaceContext.slnx` build: 0 warnings and 0 errors.
 - All eight API runtime projects build independently; the previously exercised runtime validation remains green, Jobs reached a listening Kestrel endpoint, and Vault `/health` returned HTTP 200 `Healthy`.
-- Jobs, CRM, and Agents persistence ownership architecture coverage is passing; the clean staged snapshot passes 17/17 architecture tests. The current shared worktree includes concurrent uncommitted Host frontend-migration files that still contain multiple declarations and are excluded from this checkpoint.
+- Jobs, CRM, and Agents persistence ownership architecture coverage is passing. The live production tree, including the current uncommitted Host BFF/frontend-migration controllers and records, passes all 17 architecture tests.
 - Service test projects passing independently:
   - AgentChat: 42 tests
   - Agents: 6 tests
@@ -140,9 +140,13 @@ Last updated: 2026-08-08 (Australia/Brisbane)
 - Complete clean staged snapshot: 891 passed, 6 environment-dependent integration tests skipped, 0 failed.
 - Artifacts presigned-URL coverage now allows the AWS SDK's two-second signing-clock tolerance instead of intermittently requiring an exact expiry second.
 - React frontend: lint passes with zero warnings, 46 test files/89 tests pass, and a production build succeeds when emitted to an isolated output directory.
+- Host tests now compile against explicit Artifacts, Data, and Jobs contract/domain project references instead of relying on transitive service assemblies. The current run is 285/289 passing; stale source-path, response-shape, authentication-message, and JSON-format assertions have been reconciled.
 
 ## In progress
 
+- Organize the current React-migration BFF surface: 58 newly added Host request/response records have been split into filename-matched files, `JobTestPageMapper` moved from `Controllers` to `Controllers/Api/Mappers`, and the nested `OptionalLoad` helper moved to its own record file. The live production source-organization suite is 17/17 passing and the Host builds with zero warnings/errors.
+- Complete the remaining four Host contract-test fixes. `ProjectData.razor` now contains only its parameter/lifecycle glue, injects only `ProjectDataViewModel`, and no longer declares its table-tab class, chart record, or enums; those types each live in filename-matched files and SQL Studio behavior is isolated in `ProjectDataViewModel.Studio.cs`. Two SQL Studio contract assertions need updating, while `DataGraph` and `JobChains` still have page-owned state to move into their view models.
+- Create `PlaceContext.App` as the dedicated backend for the root `frontend/` React workspace, then move the React/BFF controllers, mappers, and request/response records out of `PlaceContext.Host` without mixing UI code into the app gateway project.
 - Continue reducing the shared `AppDbContext`, row model, and migration history; Vault, AgentChat, Agents, Artifacts, Search dashboards, Data, Jobs, and CRM persistence ownership are complete, leaving shared platform tables and explicit platform-service seams.
 - Decide explicit ownership for the remaining platform capabilities in shared Infrastructure, especially authentication/tenancy, communications, embeddings/vector storage, cluster integration, and analytics refresh.
 
@@ -163,6 +167,130 @@ Last updated: 2026-08-08 (Australia/Brisbane)
 1. Introduce the platform/auth service contract and client adapters so the Jobs and CRM executable API projects can stop composing shared Infrastructure.
 2. Expand each service controller to cover its remaining gateway-only commands and replace CRM-to-Jobs/shared repository reads with HTTP/integration-event contracts.
 3. Remove direct service implementation references from the gateway in favor of HTTP clients/integration events.
-4. Continue the root `frontend/` migration one vertical slice at a time after each corresponding runtime/API boundary is independent.
+4. Continue building the React application in the root `frontend/` folder one vertical slice at a time, backed by `PlaceContext.App` and independently owned microservice routes.
 5. Apply the referenced .NET architecture guidance per microservice while retaining ubiquitous-language aggregate names and filename/type alignment.
 6. Continue reducing `PlaceContext.Infrastructure` to shared platform primitives only.
+
+---
+
+## React portal migration handoff — 2026-08-08
+
+### Goal and delivery rule
+
+- Migrate every route declared in `PlaceContext.Host/Components/Pages` to the React application in `frontend/`.
+- TypeScript and TSX must be normally formatted and readable; do not leave generated-looking one-line source.
+- Do not commit or push until every catalog route is migrated and the final frontend/Host verification passes.
+- When complete, intentionally stage only the React-migration changes, commit, and push branch `agent/compact-portal-workspace`.
+
+### React routes completed
+
+The migration catalog is `frontend/src/app/host-route-catalog.ts`. These routes are marked `migrated` and have React pages plus React-facing Host APIs where required:
+
+- Dashboard, Workspace Overview, MCP Inspector, Project overview
+- Identity: Login, Setup, Onboarding
+- System: About
+- Settings: Access, API tokens, Artifact filters, Backup, Branding, Communications, Connections, Locality, MCP, Menu
+- Data: Analytics, Data Graph
+- Security: Vault / project secrets
+- Collaboration: Wiki index and article
+- Operations: Cluster
+- Automation: Schedules, Jobs, multi-file Job editor, Tests, multi-file Test editor, Job Chains
+- Events: project Events page is now wired into the router and marked migrated, but its newest changes have not yet been compiled or tested (see current partial work)
+
+Important implementation additions include:
+
+- Shared host Monaco loader at `frontend/src/shared/editor/load-host-monaco.ts`
+- Shared graph support under `frontend/src/shared/graph/`
+- React-facing controllers under `src/PlaceContext.Host/Controllers/` and response/request records under `Controllers/Api/Records/`
+- Matching controller authorization coverage in `tests/PlaceContext.Host.Tests/SectionAuthorizationTests.cs`
+
+### Current partial work
+
+Events was interrupted by the previous Codex crash and has now been wired up:
+
+- Backend: `EventsPageController.cs` and Events page records
+- Frontend: `frontend/src/domains/events/`
+- Route: `project/:projectId/events` in `frontend/src/app/router.tsx`
+- Catalog status changed to `migrated`
+- Event page styles appended to `frontend/src/styles/global.css`
+- The Events TSX is still densely laid out because formatting was deliberately deferred until the functional migration is complete. Run Prettier before final verification.
+- Add a focused Events UI test and compile this slice before treating it as verified.
+
+Work began on a shared backend for Data Map and Entities:
+
+- New unverified file: `src/PlaceContext.Host/Controllers/ProjectDataAdminController.cs`
+- It exposes the mappings/jobs/tables/entities/link-groups page model plus mapping CRUD, entity CRUD, and linked-value rescan.
+- Authorization coverage was added for `Permission.DataRead`.
+- This file currently contains several public request/response record declarations alongside the controller. Before building, split each record into its own matching file under `Controllers/Api/Records/` to satisfy the repository's one-declaration-per-file architecture tests.
+- No React Data Map or Entities screen has been created against this API yet.
+
+### Routes still marked planned
+
+Nine catalog entries remain:
+
+1. CRM — `/project/:projectId/crm`
+2. Project data — `/project/:projectId/data`
+3. Entities — `/project/:projectId/entities`
+4. Entity browse — `/project/:projectId/entity/:entityName`
+5. Data map — `/project/:projectId/datamap`
+6. Data search — `/project/:projectId/data-search`
+7. Chat — `/chat`
+8. Artifacts — `/artifacts`
+9. Observability — `/observability`
+
+Confirm with:
+
+```bash
+rg -n "status: 'planned'" frontend/src/app/host-route-catalog.ts
+```
+
+Suggested order is Data Map → Entities → Entity browse → Project data → Data Search → Events verification → Chat → Artifacts → Observability → CRM. The first five can reuse a coherent data-domain API/model layer.
+
+### Formatting/readability guard
+
+Prettier was installed as a frontend dev dependency and these scripts were added to `frontend/package.json`:
+
+```bash
+npm run format
+npm run format:check
+```
+
+Configuration is in `frontend/.prettierrc.json` (`printWidth: 100`, no semicolons, single quotes, trailing commas). The entire existing frontend was formatted once, which explains the broad formatting-only TS/TSX diff. New Events code and anything added after it still need the final formatting pass. The user explicitly requested that all TypeScript remain readable.
+
+### Last known verification
+
+Before the latest Events and `ProjectDataAdminController` edits:
+
+- `npm run lint` passed.
+- Frontend production build passed to an isolated `/tmp` output directory.
+- Focused UI tests passed for prior migrated slices; Tests has three focused tests and Jobs has two.
+- `dotnet build src/PlaceContext.Host/PlaceContext.Host.csproj --no-restore` passed with zero errors after fixing the extracted `ProjectChartView` namespace import.
+
+The Events wiring and new data-admin controller are unverified. Resume by splitting the new controller records, then run a Host build and frontend lint/build before expanding further.
+
+### Final verification and publishing checklist
+
+After zero routes remain `planned`:
+
+```bash
+cd frontend
+npm run format
+npm run format:check
+npm run lint
+npm test -- --run
+npm run build -- --outDir /tmp/placecontext-react-final-build
+cd ..
+dotnet build src/PlaceContext.Host/PlaceContext.Host.csproj --no-restore
+dotnet test tests/PlaceContext.Host.Tests/PlaceContext.Host.Tests.csproj --no-build
+```
+
+Also run the catalog test and architecture/source-organization tests if the focused Host test command does not include them.
+
+Review `git status` and `git diff` carefully before staging. This worktree also contains the broader microservice extraction, so do not blindly use `git add .`; stage the intended frontend migration files and their Host BFF/test support explicitly. Nothing from this React migration checkpoint has been committed or pushed yet.
+
+### Incremental React migration log
+
+- 2026-08-08 — Stabilized the partial Events slice: router entry and styles are present, Events is marked migrated, frontend lint issues were corrected, and the production frontend build succeeded with the Events chunk included. A focused Events UI test is still pending.
+- 2026-08-08 — Completed the Data Map and Entities React slices. Added the shared `ProjectDataAdminController` and split all page request/response records into architecture-compliant files. The React pages support mapping CRUD, entity CRUD, relation/tag editing, linked-value rescans, summary/catalog views, and migrated Data Tabs navigation. Frontend lint and a production build passed after these changes.
+- 2026-08-08 — Added the Entity Browse React slice and `EntityBrowsePageController`. It supports paginated/searchable entity rows, typed create/edit/delete forms, record detail, auto-linked record discovery, and navigation to the migrated Graph and Analytics tools. The Host build passes with 0 warnings and 0 errors. Frontend lint/build for this newest slice is the immediate next check.
+- Route catalog after the Entity Browse change: six routes remain planned — CRM, Project Data, Data Search, Chat, Artifacts, and Observability.

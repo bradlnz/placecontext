@@ -9,10 +9,14 @@ function EventProbe() {
   const eventBus = useAppEventBus()
   const [projectId, setProjectId] = useState('none')
 
-  useEffect(() => eventBus.subscribe('workspace.project-selected', async (event) => {
-    await Promise.resolve()
-    setProjectId(event.projectId)
-  }), [eventBus])
+  useEffect(
+    () =>
+      eventBus.subscribe('workspace.project-selected', async (event) => {
+        await Promise.resolve()
+        setProjectId(event.projectId)
+      }),
+    [eventBus],
+  )
 
   async function handlePublish(): Promise<void> {
     await eventBus.publish('workspace.project-selected', { projectId: 'project-7' })
@@ -21,7 +25,9 @@ function EventProbe() {
   return (
     <div>
       <output>{projectId}</output>
-      <button onClick={() => void handlePublish()} type="button">Publish</button>
+      <button onClick={() => void handlePublish()} type="button">
+        Publish
+      </button>
     </div>
   )
 }

@@ -7,5 +7,9 @@ export function OnboardingPage() {
     void navigateToLegacyPath('/wiki/getting-started')
   }, [])
 
-  return <div className="page onboarding-redirect" role="status">Opening the getting started guide…</div>
+  return (
+    <div className="page onboarding-redirect" role="status">
+      Opening the getting started guide…
+    </div>
+  )
 }

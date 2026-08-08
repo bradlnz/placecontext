@@ -16,7 +16,8 @@ export function ProjectGrid({ projects }: ProjectGridProps) {
   if (projects.length === 0) {
     return (
       <div className="dccard empty-card">
-        No projects yet. Projects register themselves through the MCP <code>create_project</code> tool when an agent starts working in a repo.
+        No projects yet. Projects register themselves through the MCP <code>create_project</code>{' '}
+        tool when an agent starts working in a repo.
       </div>
     )
   }
@@ -37,7 +38,9 @@ export function ProjectGrid({ projects }: ProjectGridProps) {
                 <span className="lang-dot" aria-hidden="true" />
                 <span className="project-name">{project.name}</span>
               </span>
-              <span className="project-path" title={project.path}>{project.path}</span>
+              <span className="project-path" title={project.path}>
+                {project.path}
+              </span>
             </span>
             <span className="status-badge">
               <span className="status-dot" aria-hidden="true" />
@@ -45,7 +48,9 @@ export function ProjectGrid({ projects }: ProjectGridProps) {
             </span>
           </div>
 
-          <div className="map-row"><ProjectMinimap project={project} /></div>
+          <div className="map-row">
+            <ProjectMinimap project={project} />
+          </div>
 
           <div className="project-foot">
             <span className="foot-graphified">

@@ -2,10 +2,10 @@ using System.Text;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using PlaceContext.Application.Ports;
+using PlaceContext.Artifacts.Controllers;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.Repositories;
 using PlaceContext.Domain.ValueObjects;
-using PlaceContext.Host.Controllers;
 using Xunit;
 
 namespace PlaceContext.Host.Tests;
@@ -88,7 +88,8 @@ public class ArtifactsControllerTests
 
         var result = await controller.Get(Guid.NewGuid(), link.Id); // wrong run for this artifact
 
-        Assert.IsType<NotFoundResult>(result);
+        var notFound = Assert.IsType<NotFoundObjectResult>(result);
+        Assert.Equal("Artifact not found", notFound.Value);
     }
 
     private static async Task<(IActionResult Result, IHeaderDictionary Headers)> GetAsync(
@@ -116,14 +117,14 @@ public class ArtifactsControllerTests
             DateTimeOffset.UtcNow
         );
 
-    private static ArtifactsController MakeController(
+    private static ArtifactDownloadsController MakeController(
         RunArtifactLink link,
         out DefaultHttpContext http,
         string? storedContentType = null
     )
     {
         http = new DefaultHttpContext();
-        return new ArtifactsController(new StubLinks(link), new StubStore(link, storedContentType))
+        return new ArtifactDownloadsController(new StubLinks(link), new StubStore(link, storedContentType))
         {
             ControllerContext = new ControllerContext { HttpContext = http },
         };

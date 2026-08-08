@@ -11,15 +11,11 @@ export class AsyncEventBus<TEvents extends Record<keyof TEvents, unknown>> {
     handler: AsyncEventHandler<TEvents[TKey]>,
   ): () => void {
     const existingHandlers = this.handlers.get(eventName) as
-      | Set<AsyncEventHandler<TEvents[TKey]>>
-      | undefined
+      Set<AsyncEventHandler<TEvents[TKey]>> | undefined
     const eventHandlers = existingHandlers ?? new Set<AsyncEventHandler<TEvents[TKey]>>()
 
     eventHandlers.add(handler)
-    this.handlers.set(
-      eventName,
-      eventHandlers as Set<AsyncEventHandler<TEvents[keyof TEvents]>>,
-    )
+    this.handlers.set(eventName, eventHandlers as Set<AsyncEventHandler<TEvents[keyof TEvents]>>)
 
     return () => {
       eventHandlers.delete(handler)
@@ -35,8 +31,7 @@ export class AsyncEventBus<TEvents extends Record<keyof TEvents, unknown>> {
     payload: TEvents[TKey],
   ): Promise<void> {
     const eventHandlers = this.handlers.get(eventName) as
-      | Set<AsyncEventHandler<TEvents[TKey]>>
-      | undefined
+      Set<AsyncEventHandler<TEvents[TKey]>> | undefined
 
     if (eventHandlers === undefined) {
       return

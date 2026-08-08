@@ -80,6 +80,7 @@
       if (st.raf) return;
       st.raf = requestAnimationFrame(step);
     };
+    st.requestFrame = requestFrame;
     const mouse = e => { const r = canvas.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
     const pick = (wx, wy) => {
       let best = null, bd = Infinity;
@@ -228,7 +229,7 @@
       }
       st.alpha = Math.max(st.alpha, 0.2);
     if (st.dotnetRef) { try { st.dotnetRef.invokeMethodAsync('OnNodeClick', st.selected ? st.selected.id : null); } catch (e) {} }
-    requestFrame();
+    st.requestFrame();
   }
 
   function destroy(id) {

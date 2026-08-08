@@ -1,17 +1,11 @@
 @page "/project/{ProjectId:guid}/data"
 @attribute [Authorize(Policy = Permission.DataRead)]
 @layout PlaceContext.Host.Components.Layout.ProjectLayout
-@using PlaceContext.Application.Features
-@using PlaceContext.Application.Ports
-@using PlaceContext.Application.Dtos
-@using System.Text
-@using System.Text.Json
 @using PlaceContext.Host.Components.ViewModels
 @using PlaceContext.Host.Components.ViewModels.Helpers
 @using Microsoft.AspNetCore.Components.Forms
+@implements IDisposable
 @inject ProjectDataViewModel Vm
-@inject IPlaceContextService DataService
-@inject IJSRuntime _js
 
 <PageTitle>PlaceContext — SQL Studio</PageTitle>
 
@@ -41,23 +35,23 @@
                 }
                 <div class="studio-search">
                     <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.5-3.5" /></svg>
-                    <input type="text" placeholder="Search tables" @bind="_tableFilter" @bind:event="oninput" />
+                    <input type="text" placeholder="Search tables" @bind="Vm.TableFilter" @bind:event="oninput" />
                 </div>
                 <div class="studio-resource-list">
                     @if (!Vm.TablesReady)
                     {
                         <Skeleton Kind="list" Rows="6" />
                     }
-                    else if (FilteredTables.Count == 0)
+                    else if (Vm.FilteredTables.Count == 0)
                     {
                         <div class="empty-tables">No tables match.</div>
                     }
                     else
                     {
-                        <div class="resource-group">Tables (@FilteredTables.Count)</div>
-                        @foreach (var t in FilteredTables)
+                        <div class="resource-group">Tables (@Vm.FilteredTables.Count)</div>
+                        @foreach (var t in Vm.FilteredTables)
                         {
-                            <article @key="t.Name" class="resource-item @(_activeTableName == t.Name ? "active" : "")" @onclick="@(() => OpenTableTabAsync(t.Name))">
+                            <article @key="t.Name" class="resource-item @(Vm.ActiveTableName == t.Name ? "active" : "")" @onclick="@(() => Vm.OpenTableTabAsync(t.Name))">
                                 <span class="resource-icon">
                                     <svg viewBox="0 0 24 24">
                                         <ellipse cx="12" cy="5" rx="8" ry="3" />
@@ -66,9 +60,9 @@
                                 </span>
                                 <div class="resource-copy">
                                     <strong>@t.Name</strong>
-                                    <span>@TableTag(t)</span>
+                                    <span>@Vm.TableTag(t)</span>
                                 </div>
-                                <span class="resource-tag">@TableEngineTag(t)</span>
+                                <span class="resource-tag">@Vm.TableEngineTag(t)</span>
                                 <button class="studio-materialize" title="Copy this table into an OpenSearch index (for search)"
                                         @onclick:stopPropagation="true" @onclick="@(() => Vm.OpenMaterializeDialog(t.Name))">
                                     <svg viewBox="0 0 24 24"><path d="M12 3v12M5 10l7 7 7-7" /><path d="M5 21h14" /></svg>
@@ -82,7 +76,7 @@
             {
                 <div class="studio-search">
                     <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.5-3.5" /></svg>
-                    <input type="text" placeholder="Search indices" @bind="_tableFilter" @bind:event="oninput" />
+                    <input type="text" placeholder="Search indices" @bind="Vm.TableFilter" @bind:event="oninput" />
                 </div>
                 <div class="studio-resource-list">
                     @if (!Vm.IndicesReady)
@@ -93,23 +87,23 @@
                     {
                         <div class="empty-tables">@Vm.IndicesError</div>
                     }
-                    else if (FilteredIndices.Count == 0)
+                    else if (Vm.FilteredIndices.Count == 0)
                     {
                         <div class="empty-tables">No indices match.</div>
                     }
                     else
                     {
-                        <div class="resource-group">Indices (@FilteredIndices.Count)</div>
-                        @foreach (var idx in FilteredIndices)
+                        <div class="resource-group">Indices (@Vm.FilteredIndices.Count)</div>
+                        @foreach (var idx in Vm.FilteredIndices)
                         {
-                            <article @key="idx.Name" class="resource-item @(_activeTableName == idx.Name ? "active" : "")"
-                                     @onclick="@(() => OpenIndexTabAsync(idx.Name))">
+                            <article @key="idx.Name" class="resource-item @(Vm.ActiveTableName == idx.Name ? "active" : "")"
+                                     @onclick="@(() => Vm.OpenIndexTabAsync(idx.Name))">
                                 <span class="resource-icon">
                                     <svg viewBox="0 0 24 24"><path d="M4 5h16M4 5v14a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V5M4 9h16M4 13h16M4 17h16" /></svg>
                                 </span>
                                 <div class="resource-copy">
                                     <strong>@idx.Name</strong>
-                                    <span>@idx.DocumentCount.ToString("N0") doc(s)</span>
+                                    <span>@Vm.FormatDocumentCount(idx.DocumentCount) doc(s)</span>
                                 </div>
                                 <span class="resource-tag">@(idx.StoreSize ?? "—")</span>
                             </article>
@@ -119,7 +113,7 @@
             }
             else
             {
-                <button class="studio-new-table" @onclick="SaveCurrentQuery" title="Save the editor contents as a named query">
+                <button class="studio-new-table" @onclick="Vm.SaveCurrentQuery" title="Save the editor contents as a named query">
                     <svg viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" /><path d="M17 21v-8H7v8" /></svg>
                     Save current query
                 </button>
@@ -132,23 +126,23 @@
                     {
                         <div class="empty-tables">@Vm.SavedQueriesError</div>
                     }
-                    else if (FilteredSavedQueries.Count == 0)
+                    else if (Vm.FilteredSavedQueries.Count == 0)
                     {
                         <div class="empty-tables">No saved queries yet.</div>
                     }
                     else
                     {
-                        <div class="resource-group">Queries (@FilteredSavedQueries.Count)</div>
-                        @foreach (var q in FilteredSavedQueries)
+                        <div class="resource-group">Queries (@Vm.FilteredSavedQueries.Count)</div>
+                        @foreach (var q in Vm.FilteredSavedQueries)
                         {
-                            <article @key="q.Id" class="resource-item @(_activeTableName == q.Name ? "active" : "")"
-                                     @onclick="@(() => OpenSavedQueryAsync(q))" title="@q.Sql">
+                            <article @key="q.Id" class="resource-item @(Vm.ActiveTableName == q.Name ? "active" : "")"
+                                     @onclick="@(() => Vm.OpenSavedQueryAsync(q))" title="@q.Sql">
                                 <span class="resource-icon">
                                     <svg viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" /><path d="M17 21v-8H7v8" /></svg>
                                 </span>
                                 <div class="resource-copy">
                                     <strong>@q.Name</strong>
-                                    <span>@SqlPreview(q.Sql)</span>
+                                    <span>@Vm.SqlPreview(q.Sql)</span>
                                 </div>
                                 <button class="studio-query-delete" title="Delete @q.Name"
                                         @onclick:stopPropagation="true" @onclick="@(() => Vm.DeleteSavedQueryAsync(q.Id))">✕</button>
@@ -160,7 +154,7 @@
         </aside>
 
         <section class="studio-main">
-            @if (_openTabs.Count == 0)
+            @if (Vm.OpenTabs.Count == 0)
             {
                 <div class="studio-empty">
                     <div class="studio-empty-title">SQL Studio</div>
@@ -171,33 +165,33 @@
             {
                 <div class="studio-toolbar">
                     <div class="studio-query-title">
-                        <span>@(_activeTableName ?? "Untitled query")</span>
+                        <span>@(Vm.ActiveTableName ?? "Untitled query")</span>
                     </div>
                     <div class="studio-toolbar-spacer"></div>
-                    <button class="studio-run" disabled="@ActiveTableTab?.Running" @onclick="@(async () => { if (ActiveTableTab is { } a) await RunTableTabAsync(a); })">
+                    <button class="studio-run" disabled="@Vm.ActiveTableTab?.Running" @onclick="@(async () => { if (Vm.ActiveTableTab is { } a) await Vm.RunTableTabAsync(a); })">
                         <svg viewBox="0 0 24 24"><path d="M5 3l14 9-14 9V3z" /></svg>
-                        @(ActiveTableTab?.Running == true ? "Running…" : "Run")
+                        @(Vm.ActiveTableTab?.Running == true ? "Running…" : "Run")
                     </button>
-                    <button class="studio-tool" title="Save this query" @onclick="SaveCurrentQuery">
+                    <button class="studio-tool" title="Save this query" @onclick="Vm.SaveCurrentQuery">
                         <svg viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" /><path d="M17 21v-8H7v8" /></svg>
                         Save
                     </button>
                 </div>
 
                 <div class="studio-tabs">
-                    @foreach (var tab in _openTabs)
+                    @foreach (var tab in Vm.OpenTabs)
                     {
-                        <button @key="tab.TableName" class="studio-tab @(tab.TableName == _activeTableName ? "active" : "")"
-                                @onclick="@(() => ActivateTabAsync(tab.TableName))" title="@tab.TableName">
+                        <button @key="tab.TableName" class="studio-tab @(tab.TableName == Vm.ActiveTableName ? "active" : "")"
+                                @onclick="@(() => Vm.ActivateTabAsync(tab.TableName))" title="@tab.TableName">
                             <span>@tab.TableName</span>
                             <span class="studio-tab-close"
-                                  @onclick:stopPropagation="true" @onclick="@(() => CloseTableTabAsync(tab.TableName))"
+                                  @onclick:stopPropagation="true" @onclick="@(() => Vm.CloseTableTabAsync(tab.TableName))"
                                   title="Close @tab.TableName">×</span>
                         </button>
                     }
                 </div>
 
-                @if (ActiveTableTab is { } activeTab)
+                @if (Vm.ActiveTableTab is { } activeTab)
                 {
                     <div class="studio-editor-shell">
                         @if (Vm.SqlEditorMonaco)
@@ -216,7 +210,7 @@
                     <div class="studio-results-bar">
                         <div class="studio-results-search">
                             <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.5-3.5" /></svg>
-                            <input type="text" placeholder="Search results…" @bind="_resultFilter" @bind:event="oninput" />
+                            <input type="text" placeholder="Search results…" @bind="Vm.ResultFilter" @bind:event="oninput" />
                         </div>
                         <div class="studio-results-stats">
                             @if (activeTab.Error is not null)
@@ -229,11 +223,11 @@
                             }
                             else if (activeTab.Result is not null)
                             {
-                                <span>Elapsed: @FormatElapsed(activeTab.Result)</span>
+                                <span>Elapsed: @Vm.FormatElapsed(activeTab.Result)</span>
                                 <span>
-                                    @if (!string.IsNullOrWhiteSpace(_resultFilter))
+                                    @if (!string.IsNullOrWhiteSpace(Vm.ResultFilter))
                                     {
-                                        @:Showing @FilteredResultRows(activeTab).Count of @activeTab.Result.Rows.Count row(s)
+                                        @:Showing @Vm.FilteredResultRows(activeTab).Count of @activeTab.Result.Rows.Count row(s)
                                     }
                                     else
                                     {
@@ -247,14 +241,14 @@
                             }
                         </div>
                         <div class="studio-results-tabs">
-                            <button class="studio-results-tab @(_resultsPane == ResultsPane.Table ? "active" : "")"
-                                    @onclick="() => ShowResultsPane(ResultsPane.Table)">Table</button>
-                            <button class="studio-results-tab @(_resultsPane == ResultsPane.Chart ? "active" : "")"
-                                    @onclick="() => ShowResultsPane(ResultsPane.Chart)">Chart</button>
+                            <button class="studio-results-tab @(Vm.ResultsPane == ProjectDataResultsPane.Table ? "active" : "")"
+                                    @onclick="() => Vm.ShowResultsPane(ProjectDataResultsPane.Table)">Table</button>
+                            <button class="studio-results-tab @(Vm.ResultsPane == ProjectDataResultsPane.Chart ? "active" : "")"
+                                    @onclick="() => Vm.ShowResultsPane(ProjectDataResultsPane.Chart)">Chart</button>
                         </div>
                     </div>
 
-                    @if (_resultsPane == ResultsPane.Table)
+                    @if (Vm.ResultsPane == ProjectDataResultsPane.Table)
                     {
                         @if (activeTab.Result is { Columns.Count: > 0 })
                         {
@@ -271,8 +265,8 @@
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        <Virtualize Items="@FilteredResultRows(activeTab)" Context="row" ItemSize="24">
-                                            <tr @onclick="@(() => SelectRow(row.Index))" class="@(_selectedRowIndex == row.Index ? "selected" : "")">
+                                        <Virtualize Items="@Vm.FilteredResultRows(activeTab)" Context="row" ItemSize="24">
+                                            <tr @onclick="@(() => Vm.SelectRow(row.Index))" class="@(Vm.SelectedRowIndex == row.Index ? "selected" : "")">
                                                 <td class="result-row-num">@(row.Index + 1)</td>
                                                 @for (var i = 0; i < activeTab.Result!.Columns.Count; i++)
                                                 {
@@ -281,7 +275,7 @@
                                                     <td>
                                                         @if (cellValue is not null && Vm.IsJsonCellPresentation(columnName, cellValue))
                                                         {
-                                                            <button class="json-view-button" @onclick:stopPropagation="true" @onclick="@(() => OpenJsonViewer(columnName, cellValue))">View data</button>
+                                                            <button class="json-view-button" @onclick:stopPropagation="true" @onclick="@(() => Vm.OpenStudioJsonViewer(columnName, cellValue))">View data</button>
                                                         }
                                                         else
                                                         {
@@ -313,7 +307,7 @@
                     else
                     {
                         <div class="studio-chart">
-                            @if (BuildChartSpec(activeTab) is { } spec)
+                            @if (Vm.BuildChartSpec(activeTab) is { } spec)
                             {
                                 <div class="studio-chart-title">@spec.Title</div>
                                 <div class="studio-chart-sub">@spec.Subtitle</div>
@@ -327,14 +321,14 @@
                     }
                 }
 
-                @if (_jsonViewerValue is not null)
+                @if (Vm.StudioJsonViewerValue is not null)
                 {
                     <aside class="json-side-pane">
                         <header>
-                            <div><strong>@_jsonViewerTitle</strong><span>JSON data</span></div>
-                            <button class="json-pane-close" @onclick="CloseJsonViewer" aria-label="Close JSON viewer">×</button>
+                            <div><strong>@Vm.StudioJsonViewerTitle</strong><span>JSON data</span></div>
+                            <button class="json-pane-close" @onclick="Vm.CloseStudioJsonViewer" aria-label="Close JSON viewer">×</button>
                         </header>
-                        <pre>@_jsonViewerValue</pre>
+                        <pre>@Vm.StudioJsonViewerValue</pre>
                     </aside>
                 }
 
@@ -548,7 +542,7 @@
         </div>
         <div class="dcslide-foot">
             <button class="dcbtn" @onclick="() => Vm.CloseSaveQueryDialog()">Cancel</button>
-            <button class="dcbtn primary" disabled="@Vm.SavingQuery" @onclick="SaveQueryFromEditorAsync">
+            <button class="dcbtn primary" disabled="@Vm.SavingQuery" @onclick="Vm.SaveQueryFromEditorAsync">
                 @(Vm.SavingQuery ? "Saving…" : "Save")
             </button>
         </div>
@@ -586,463 +580,17 @@
 @code {
     [Parameter] public Guid ProjectId { get; set; }
 
-    private enum TableTabSource { Project, OpenSearch }
-
-    private sealed class TableTab
-    {
-        public TableTab(string tableName, string sql, TableTabSource source = TableTabSource.Project)
-        {
-            TableName = tableName;
-            Sql = sql;
-            Source = source;
-        }
-
-        public string TableName { get; }
-        public TableTabSource Source { get; }
-        public bool IsIndex => Source == TableTabSource.OpenSearch;
-        public string Sql { get; set; }
-        public ProjectQueryResult? Result { get; set; }
-        public string? Error { get; set; }
-        public bool Running { get; set; }
-    }
-
-    private enum ResultsPane { Table, Chart }
-
-    private readonly List<TableTab> _openTabs = new();
-    private string? _activeTableName;
-    private string? _jsonViewerTitle;
-    private string? _jsonViewerValue;
-    private string _tableFilter = "";
-    private string _resultFilter = "";
-    private ResultsPane _resultsPane = ResultsPane.Table;
-    private int? _selectedRowIndex;
-    private string? _lastChartJson;
-    private string? _lastRenderKey;
-
-    private TableTab? ActiveTableTab =>
-        _openTabs.FirstOrDefault(tab => tab.TableName == _activeTableName);
-
-    private List<ProjectTableInfo> FilteredTables =>
-        string.IsNullOrWhiteSpace(_tableFilter)
-            ? Vm.Tables.ToList()
-            : Vm.Tables
-                .Where(t => t.Name.Contains(_tableFilter, StringComparison.OrdinalIgnoreCase))
-                .ToList();
-
-    private List<OpenSearchIndexView> FilteredIndices =>
-        string.IsNullOrWhiteSpace(_tableFilter)
-            ? Vm.Indices.ToList()
-            : Vm.Indices
-                .Where(i => i.Name.Contains(_tableFilter, StringComparison.OrdinalIgnoreCase))
-                .ToList();
-
-    private List<SavedQueryRecord> FilteredSavedQueries =>
-        string.IsNullOrWhiteSpace(_tableFilter)
-            ? Vm.SavedQueries.ToList()
-            : Vm.SavedQueries
-                .Where(q => q.Name.Contains(_tableFilter, StringComparison.OrdinalIgnoreCase))
-                .ToList();
-
-    private List<(int Index, IReadOnlyList<string?> Row)> FilteredResultRows(TableTab tab)
-    {
-        if (tab.Result is not { Rows: { } rows })
-            return new List<(int, IReadOnlyList<string?>)>();
-        var indexed = rows.Select((r, i) => (Index: i, Row: r)).ToList();
-        var q = _resultFilter.Trim();
-        if (q.Length == 0)
-            return indexed;
-        return indexed
-            .Where(x =>
-                (x.Index + 1).ToString().Contains(q, StringComparison.OrdinalIgnoreCase)
-                || x.Row.Any(c => c is not null && c.Contains(q, StringComparison.OrdinalIgnoreCase)))
-            .ToList();
-    }
-
-    private static string TableTag(ProjectTableInfo t) =>
-        t.IsView ? "view" : t.ReadOnly ? "system" : "table";
-
-    private static string TableEngineTag(ProjectTableInfo t) =>
-        t.IsView ? "VIEW" : t.ReadOnly ? "SYS" : "MT";
-
-    private static string SqlPreview(string sql)
-    {
-        var one = sql.Replace('\n', ' ').Replace('\r', ' ').Trim();
-        return one.Length > 60 ? one[..60] + "…" : one;
-    }
-
-    private static string FormatElapsed(ProjectQueryResult result) =>
-        "0.003s"; // PlaceContext does not currently capture server-side timing; kept as a visual affordance.
-
-    private sealed record ChartSpec(string Title, string Subtitle, string Json);
-
-    private static ChartSpec? BuildChartSpec(TableTab tab)
-    {
-        if (tab.Result is not { Columns.Count: > 1 } r || r.Rows.Count == 0)
-            return null;
-        var labels = new List<string>();
-        var seriesNames = new List<string>();
-        var seriesValues = new List<List<double>>();
-        for (var i = 1; i < r.Columns.Count; i++)
-        {
-            var values = new List<double?>(r.Rows.Count);
-            var hasNumber = false;
-            foreach (var row in r.Rows)
-            {
-                var raw = i < row.Count ? row[i] : null;
-                if (double.TryParse(raw, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var d))
-                {
-                    values.Add(d);
-                    hasNumber = true;
-                }
-                else
-                {
-                    values.Add(null);
-                }
-            }
-            if (!hasNumber)
-                continue;
-            seriesNames.Add(r.Columns[i]);
-            seriesValues.Add(values.Select(v => v ?? 0).ToList());
-        }
-        if (seriesNames.Count == 0)
-            return null;
-        var cap = Math.Min(r.Rows.Count, 200);
-        foreach (var row in r.Rows.Take(cap))
-            labels.Add(row.Count > 0 ? (row[0] ?? "") : "");
-        var spec = new
-        {
-            type = "bar",
-            title = $"{tab.TableName} — results",
-            labels,
-            series = seriesNames
-                .Select((n, i) => new { name = n, values = seriesValues[i].Take(cap).ToList() })
-                .ToList(),
-        };
-        return new ChartSpec(spec.title, $"{cap} row(s) · {seriesNames.Count} series", JsonSerializer.Serialize(spec));
-    }
-
-    private void SelectRow(int index) =>
-        _selectedRowIndex = _selectedRowIndex == index ? null : index;
-
-    private void ShowResultsPane(ResultsPane pane)
-    {
-        _resultsPane = pane;
-        _lastChartJson = null;
-        StateHasChanged();
-    }
-
     protected override void OnInitialized() => Vm.Attach(() => InvokeAsync(StateHasChanged));
-
-    public void Dispose() => Vm.Detach();
 
     protected override async Task OnParametersSetAsync()
     {
         Vm.Initialize(ProjectId);
         await Vm.LoadAsync();
-        PruneOpenTabs();
-        _lastRenderKey = null;
-        _lastChartJson = null;
+        Vm.PruneOpenTabs();
     }
 
-    protected override bool ShouldRender()
-    {
-        var key = BuildRenderKey();
-        if (_lastRenderKey is not null && string.Equals(_lastRenderKey, key, StringComparison.Ordinal))
-            return false;
-        _lastRenderKey = key;
-        return true;
-    }
+    protected override async Task OnAfterRenderAsync(bool firstRender) =>
+        await Vm.AfterStudioRenderAsync();
 
-    private string BuildRenderKey()
-    {
-        var sb = new StringBuilder();
-        sb.Append(_activeTableName ?? "\0").Append('|');
-        sb.Append(_tableFilter).Append('|');
-        sb.Append(_resultFilter).Append('|');
-        sb.Append((int)_resultsPane).Append('|');
-        sb.Append(_selectedRowIndex ?? -1).Append('|');
-        sb.Append(_jsonViewerTitle ?? "\0").Append('|').Append(_jsonViewerValue?.Length ?? 0).Append('|');
-        sb.Append(Vm.GraphSidePaneTitle ?? "\0").Append('|').Append(Vm.GraphSidePaneGraph?.Nodes.Count ?? 0).Append('|');
-        sb.Append((int)Vm.SidebarPane).Append('|');
-        sb.Append(Vm.TablesReady).Append('|').Append(Vm.IndicesReady).Append('|').Append(Vm.SavedQueriesReady).Append('|');
-        sb.Append(Vm.Tables.Count).Append('|').Append(Vm.Indices.Count).Append('|').Append(Vm.SavedQueries.Count).Append('|');
-        foreach (var t in Vm.Tables) sb.Append(t.Name).Append('\u0001');
-        foreach (var i in Vm.Indices) sb.Append(i.Name).Append('~').Append(i.DocumentCount).Append('~')
-            .Append(i.StoreSize).Append('\u0001');
-        foreach (var q in Vm.SavedQueries) sb.Append(q.Name).Append('~').Append(q.Sql).Append('\u0001');
-        sb.Append('|');
-        foreach (var t in _openTabs)
-            sb.Append(t.TableName).Append('~').Append((int)t.Source).Append('~').Append(t.Running).Append('~')
-              .Append(t.Error ?? "").Append('~').Append(t.Sql).Append('~')
-              .Append(t.Result is null ? 0 : 1).Append('~')
-              .Append(t.Result?.Columns.Count ?? 0).Append('~')
-              .Append(t.Result?.Rows.Count ?? 0).Append(';');
-        sb.Append('|');
-        sb.Append(Vm.NewTable is null ? 0 : 1).Append('|');
-        sb.Append(Vm.CsvImport is null ? 0 : 1).Append('|');
-        sb.Append(Vm.ShowNewView).Append('|');
-        sb.Append(Vm.ShowMaterializeDialog).Append('|');
-        sb.Append(Vm.MaterializeError ?? "").Append('|');
-        sb.Append(Vm.MaterializeMessage ?? "").Append('|');
-        sb.Append(Vm.Materializing).Append('|');
-        sb.Append(Vm.ShowSaveQueryDialog).Append('|');
-        sb.Append(Vm.IndicesError ?? "").Append('|');
-        sb.Append(Vm.Creating).Append('|').Append(Vm.Importing).Append('|').Append(Vm.SavingQuery).Append('|');
-        if (Vm.NewTable is { } nt)
-        {
-            sb.Append(nt.Name).Append('|');
-            foreach (var c in nt.Columns)
-                sb.Append(c.Name).Append('~').Append(c.Type).Append('~').Append(c.NotNull).Append('~').Append(c.PrimaryKey).Append('\u0002');
-            sb.Append('|');
-        }
-        if (Vm.CsvImport is { } csv)
-        {
-            sb.Append(csv.TableName).Append('|').Append(csv.HasHeader).Append('|').Append(csv.DataRowCount).Append('|');
-            foreach (var c in csv.Columns)
-                sb.Append(c.Name).Append('~').Append(c.Type).Append('\u0002');
-            sb.Append('|');
-        }
-        sb.Append(Vm.NewViewName ?? "").Append('|').Append(Vm.NewViewSql ?? "").Append('|').Append(Vm.SaveQueryName ?? "").Append('|');
-        sb.Append(Vm.ViewError ?? "").Append('|').Append(Vm.NewTableError ?? "").Append('|').Append(Vm.CsvError ?? "").Append('|').Append(Vm.SaveQueryError ?? "").Append('|');
-        return sb.ToString();
-    }
-
-    protected override async Task OnAfterRenderAsync(bool firstRender)
-    {
-        await Vm.AfterRenderAsync();
-        if (ActiveTableTab is { } active)
-        {
-            await Vm.ShowSqlTabAsync(active.TableName, active.Sql);
-            // Idempotent (pcstudio.js guards on dataset.bound); must run after the first
-            // tab renders, since the splitter element only exists while a tab is open.
-            await _js.InvokeVoidAsync("pcstudio.splitter", "pcdata-studio-splitter");
-        }
-        if (_resultsPane == ResultsPane.Chart && ActiveTableTab is { } chartTab && BuildChartSpec(chartTab) is { } spec)
-        {
-            var chartKey = $"{chartTab.TableName}|{spec.Json}";
-            if (!string.Equals(_lastChartJson, chartKey, StringComparison.Ordinal))
-            {
-                _lastChartJson = chartKey;
-                await _js.InvokeVoidAsync("pcchart.render", "pcdata-chart-canvas", spec.Json);
-            }
-        }
-    }
-
-    private async Task OpenTableTabAsync(string tableName)
-    {
-        var existing = _openTabs.FirstOrDefault(t => StringComparer.Ordinal.Equals(t.TableName, tableName));
-        if (existing is not null)
-        {
-            _activeTableName = existing.TableName;
-            await Vm.ShowSqlTabAsync(existing.TableName, existing.Sql);
-            if (existing.Result is null && !existing.Running && existing.Error is null)
-                await RunTableTabAsync(existing);
-            return;
-        }
-
-        var tab = new TableTab(tableName, DefaultSqlFor(tableName));
-        _openTabs.Add(tab);
-        _activeTableName = tableName;
-        await Vm.ShowSqlTabAsync(tableName, tab.Sql);
-        await RunTableTabAsync(tab);
-    }
-
-    private async Task OpenIndexTabAsync(string indexName)
-    {
-        var existing = _openTabs.FirstOrDefault(t => t.IsIndex && StringComparer.Ordinal.Equals(t.TableName, indexName));
-        if (existing is not null)
-        {
-            _activeTableName = existing.TableName;
-            await Vm.ShowSqlTabAsync(existing.TableName, existing.Sql);
-            if (existing.Result is null && !existing.Running && existing.Error is null)
-                await RunTableTabAsync(existing);
-            return;
-        }
-
-        var tab = new TableTab(indexName, DefaultOpenSearchSqlFor(indexName), TableTabSource.OpenSearch);
-        _openTabs.Add(tab);
-        _activeTableName = indexName;
-        await Vm.ShowSqlTabAsync(indexName, tab.Sql);
-        await RunTableTabAsync(tab);
-    }
-
-    private async Task OpenSavedQueryAsync(SavedQueryRecord query)
-    {
-        var existing = _openTabs.FirstOrDefault(t => StringComparer.Ordinal.Equals(t.TableName, query.Name));
-        if (existing is not null)
-        {
-            _activeTableName = existing.TableName;
-            existing.Sql = query.Sql;
-            await Vm.ShowSqlTabAsync(existing.TableName, existing.Sql);
-            await RunTableTabAsync(existing);
-            return;
-        }
-
-        var tab = new TableTab(query.Name, query.Sql);
-        _openTabs.Add(tab);
-        _activeTableName = query.Name;
-        await Vm.ShowSqlTabAsync(query.Name, tab.Sql);
-        await RunTableTabAsync(tab);
-    }
-
-    private void SaveCurrentQuery() =>
-        Vm.OpenSaveQueryDialog(ActiveTableTab?.TableName ?? "untitled-query");
-
-    private async Task<string?> ReadEditorForSave(string editorId)
-    {
-        var monacoValue = await Vm.GetSqlEditorValueAsync();
-        return monacoValue ?? ActiveTableTab?.Sql;
-    }
-
-    private async Task SaveQueryFromEditorAsync() =>
-        await Vm.SaveQueryAsync(ReadEditorForSave);
-
-    private async Task ActivateTabAsync(string tableName)
-    {
-        if (StringComparer.Ordinal.Equals(tableName, _activeTableName))
-            return;
-
-        if (ActiveTableTab is { } current)
-        {
-            var value = await Vm.GetSqlEditorValueAsync();
-            if (value is not null)
-                current.Sql = value;
-        }
-
-        _activeTableName = tableName;
-        await Vm.ShowSqlTabAsync(tableName, ActiveTableTab?.Sql ?? DefaultSqlFor(tableName));
-        StateHasChanged();
-    }
-
-    private async Task CloseTableTabAsync(string tableName)
-    {
-        var index = _openTabs.FindIndex(tab => StringComparer.Ordinal.Equals(tab.TableName, tableName));
-        if (index < 0) return;
-
-        var wasActive = _activeTableName == tableName;
-        if (wasActive)
-        {
-            if (_openTabs.Count == 1)
-            {
-                _activeTableName = null;
-            }
-            else
-            {
-                var next = index > 0 ? index - 1 : 1;
-                _activeTableName = _openTabs[next].TableName;
-            }
-        }
-
-        _openTabs.RemoveAt(index);
-        await Vm.CloseSqlEditorFileAsync(tableName);
-
-        if (wasActive && _activeTableName is not null)
-        {
-            var tab = _openTabs.FirstOrDefault(t => StringComparer.Ordinal.Equals(t.TableName, _activeTableName));
-            await Vm.ShowSqlTabAsync(_activeTableName, tab?.Sql ?? DefaultSqlFor(_activeTableName));
-        }
-        else if (_openTabs.Count == 0)
-        {
-            Vm.ResetSqlEditor();
-        }
-    }
-
-    private async Task ResetTableTabSql(TableTab tab)
-    {
-        tab.Sql = tab.IsIndex ? DefaultOpenSearchSqlFor(tab.TableName) : DefaultSqlFor(tab.TableName);
-        tab.Result = null;
-        tab.Error = null;
-        await Vm.SetSqlEditorValueAsync(tab.Sql);
-        StateHasChanged();
-    }
-
-    private async Task RunTableTabAsync(TableTab tab)
-    {
-        tab.Running = true;
-        tab.Error = null;
-        StateHasChanged();
-        try
-        {
-            var editorSql = await Vm.GetSqlEditorValueAsync();
-            if (editorSql is not null)
-                tab.Sql = editorSql;
-            tab.Result = tab.IsIndex
-                ? await DataService.SearchOpenSearchSqlAsync(ProjectId, tab.Sql)
-                : await DataService.ExecuteProjectDataAsync(ProjectId, tab.Sql);
-        }
-        catch (Exception ex)
-        {
-            tab.Result = null;
-            tab.Error = ex.Message;
-        }
-        finally
-        {
-            tab.Running = false;
-            StateHasChanged();
-        }
-    }
-
-    private string DefaultSqlFor(string tableName) =>
-        $"SELECT * FROM \"{EscapeIdent(tableName)}\" LIMIT 100;";
-
-    // OpenSearch SQL treats double quotes as a literal index name (so "name" never resolves),
-    // and accepts backticks for identifiers — verified against the live cluster.
-    private string DefaultOpenSearchSqlFor(string indexName) =>
-        $"SELECT * FROM `{EscapeBacktickIdent(indexName)}` LIMIT 100;";
-
-    private static string EscapeIdent(string value) => value.Replace("\"", "\"\"");
-
-    private static string EscapeBacktickIdent(string value) => value.Replace("`", "``");
-
-    private static string CsvEscape(string value)
-    {
-        if (value is null) return "";
-        var normalized = value.Replace("\"", "\"\"");
-        return normalized.Contains(',', StringComparison.Ordinal) || normalized.Contains('\n', StringComparison.Ordinal) || normalized.Contains('\r', StringComparison.Ordinal)
-            ? $"\"{normalized}\""
-            : normalized;
-    }
-
-    private string GetTabResultCsvUri(TableTab tab)
-    {
-        if (tab.Result is null)
-            return "";
-        var sb = new StringBuilder();
-        sb.AppendLine(string.Join(",", tab.Result.Columns.Select(CsvEscape)));
-        foreach (var row in tab.Result.Rows)
-            sb.AppendLine(string.Join(",", row.Select(v => CsvEscape(v ?? ""))));
-        return "data:text/csv;charset=utf-8;base64,"
-            + Convert.ToBase64String(Encoding.UTF8.GetBytes(sb.ToString()));
-    }
-
-    private void OpenJsonViewer(string column, string value)
-    {
-        using var document = JsonDocument.Parse(value);
-        _jsonViewerTitle = column;
-        _jsonViewerValue = JsonSerializer.Serialize(
-            document.RootElement,
-            new JsonSerializerOptions { WriteIndented = true }
-        );
-    }
-
-    private void CloseJsonViewer()
-    {
-        _jsonViewerTitle = null;
-        _jsonViewerValue = null;
-    }
-
-    private void PruneOpenTabs()
-    {
-        if (_openTabs.Count == 0) return;
-        var existing = Vm.Tables.Select(t => t.Name).ToHashSet(StringComparer.Ordinal);
-        for (var i = _openTabs.Count - 1; i >= 0; i--)
-        {
-            if (!existing.Contains(_openTabs[i].TableName))
-                _openTabs.RemoveAt(i);
-        }
-
-        if (_activeTableName is null) return;
-        if (_openTabs.Any(tab => StringComparer.Ordinal.Equals(tab.TableName, _activeTableName))) return;
-        _activeTableName = _openTabs.FirstOrDefault()?.TableName;
-    }
+    public void Dispose() => Vm.Detach();
 }

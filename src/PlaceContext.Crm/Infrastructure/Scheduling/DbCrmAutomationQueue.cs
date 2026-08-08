@@ -1,4 +1,5 @@
 using PlaceContext.Application.Ports;
+using PlaceContext.Crm.Automation;
 using PlaceContext.Crm.Infrastructure.Persistence;
 
 namespace PlaceContext.Crm.Infrastructure.Scheduling;

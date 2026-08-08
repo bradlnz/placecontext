@@ -2,6 +2,8 @@ using Microsoft.AspNetCore.Authorization;
 using PlaceContext.Application.Ports;
 using PlaceContext.Host.Auth;
 using PlaceContext.Host.Controllers;
+using ArtifactDownloadsController = PlaceContext.Artifacts.Controllers.ArtifactDownloadsController;
+using ArtifactChatAttachmentsController = PlaceContext.Artifacts.Controllers.ChatAttachmentsController;
 using Pages = PlaceContext.Host.Components.Pages;
 
 namespace PlaceContext.Host.Tests;
@@ -71,12 +73,37 @@ public sealed class SectionAuthorizationTests
         Assert.DoesNotContain(attributes, attribute => attribute.Policy == Policies.DefaultAdmin);
     }
 
+    [Fact]
+    public void Wiki_api_stays_open_to_any_authenticated_member()
+    {
+        var attributes = typeof(WikiController)
+            .GetCustomAttributes(typeof(AuthorizeAttribute), inherit: true)
+            .Cast<AuthorizeAttribute>()
+            .ToList();
+        Assert.Contains(attributes, attribute => attribute.Policy is null);
+    }
+
     public static TheoryData<Type, string> SensitiveControllers =>
         new()
         {
-            { typeof(ArtifactsController), Permission.ArtifactsView },
-            { typeof(ChatAttachmentsController), Permission.AgentsChat },
+            { typeof(ArtifactDownloadsController), Permission.ArtifactsView },
+            { typeof(ArtifactChatAttachmentsController), Permission.AgentsChat },
             { typeof(CrmArtifactsController), Permission.CrmView },
+            { typeof(InspectorController), Permission.JobsView },
+            { typeof(ProjectSecretsController), Permission.SecretsManage },
+            { typeof(ProjectDataGraphController), Permission.DataRead },
+            { typeof(ProjectPageController), Permission.ProjectsView },
+            { typeof(ClusterPageController), Permission.SettingsManage },
+            { typeof(ProjectAnalyticsController), Permission.DataRead },
+            { typeof(SchedulePageController), Permission.TriggersManage },
+            { typeof(JobTestsPageController), Permission.JobsView },
+            { typeof(JobTestCodePageController), Permission.JobsEdit },
+            { typeof(JobsPageController), Permission.JobsView },
+            { typeof(JobCodePageController), Permission.JobsEdit },
+            { typeof(JobChainsPageController), Permission.ChainsManage },
+            { typeof(EventsPageController), Permission.EventsManage },
+            { typeof(ProjectDataAdminController), Permission.DataRead },
+            { typeof(EntityBrowsePageController), Permission.DataRead },
         };
 
     [Theory]
@@ -91,8 +118,10 @@ public sealed class SectionAuthorizationTests
         new()
         {
             typeof(BackupController),
+            typeof(AccessSettingsController),
             typeof(CommunicationProvidersController),
             typeof(ConnectionsSettingsController),
+            typeof(McpSettingsController),
             typeof(JobMcpController),
         };
 

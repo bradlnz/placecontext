@@ -4,9 +4,11 @@ import { importBackupManifest, readBackupManifest } from './backup-api'
 
 describe('backup API', () => {
   it('validates a selected manifest before enabling import', async () => {
-    const file = new File([
-      JSON.stringify({ projects: [{}], jobs: [{}, {}], jobChains: [] }),
-    ], 'backup.json', { type: 'application/json' })
+    const file = new File(
+      [JSON.stringify({ projects: [{}], jobs: [{}, {}], jobChains: [] })],
+      'backup.json',
+      { type: 'application/json' },
+    )
 
     await expect(readBackupManifest(file)).resolves.toMatchObject({
       fileName: 'backup.json',
@@ -25,13 +27,19 @@ describe('backup API', () => {
       jobsSkipped: 0,
       warnings: [],
     }
-    const fetchMock = vi.fn(() => Promise.resolve(new Response(JSON.stringify(result), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-    })))
+    const fetchMock = vi.fn(() =>
+      Promise.resolve(
+        new Response(JSON.stringify(result), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      ),
+    )
     vi.stubGlobal('fetch', fetchMock)
 
-    await expect(importBackupManifest({ projects: [], jobs: [], jobChains: [] }, new AbortController().signal)).resolves.toEqual(result)
+    await expect(
+      importBackupManifest({ projects: [], jobs: [], jobChains: [] }, new AbortController().signal),
+    ).resolves.toEqual(result)
     expect(fetchMock).toHaveBeenCalledWith(
       '/api/v1/settings/backup/imports',
       expect.objectContaining({ method: 'POST' }),

@@ -8,13 +8,21 @@ import { dashboardFixture } from '../../../../../test/fixtures/dashboard'
 import type { RunDashboardChainCommand } from '../../../model/dashboard'
 import { ChainRunDialog } from './ChainRunDialog'
 
-function ChainRequestProbe({ onRequest }: { onRequest: (command: RunDashboardChainCommand) => void }) {
+function ChainRequestProbe({
+  onRequest,
+}: {
+  onRequest: (command: RunDashboardChainCommand) => void
+}) {
   const eventBus = useAppEventBus()
 
-  useEffect(() => eventBus.subscribe('dashboard.chain-run-requested', async (command) => {
-    await Promise.resolve()
-    onRequest(command)
-  }), [eventBus, onRequest])
+  useEffect(
+    () =>
+      eventBus.subscribe('dashboard.chain-run-requested', async (command) => {
+        await Promise.resolve()
+        onRequest(command)
+      }),
+    [eventBus, onRequest],
+  )
 
   return null
 }
@@ -55,11 +63,13 @@ describe('ChainRunDialog', () => {
 
     await user.click(screen.getByRole('button', { name: /run chain/i }))
 
-    expect(onRequest).toHaveBeenCalledWith(expect.objectContaining({
-      projectId: chain.projectId,
-      chainId: chain.id,
-      stepPayloadOverrides: { 0: '{"branch":"main"}' },
-    }))
+    expect(onRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        projectId: chain.projectId,
+        chainId: chain.id,
+        stepPayloadOverrides: { 0: '{"branch":"main"}' },
+      }),
+    )
     expect(onClose).toHaveBeenCalledOnce()
   })
 })

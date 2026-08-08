@@ -5,10 +5,12 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using PlaceContext.Application.Ports;
+using PlaceContext.Crm.Automation;
 using PlaceContext.Crm.Infrastructure.Crm;
 using PlaceContext.Crm.Infrastructure.Persistence;
 using PlaceContext.Crm.Infrastructure.Scheduling;
 using PlaceContext.Crm.Infrastructure.Security;
+using PlaceContext.Crm.Services;
 using PlaceContext.Domain.Repositories;
 
 namespace PlaceContext.Crm;
@@ -40,6 +42,8 @@ public static class CrmInfrastructureDependencyInjection
         services.TryAddSingleton<IDataEncryptor, CrmDataProtectionEncryptor>();
 
         services.AddScoped<CrmIngestionSettingsService>();
+        services.AddScoped<ICrmIngestionSettingsService>(provider =>
+            provider.GetRequiredService<CrmIngestionSettingsService>());
         services.AddScoped<ICrmClientRepository, EfCrmClientRepository>();
         services.AddScoped<ICrmJobRunRepository, EfCrmJobRunRepository>();
         services.AddScoped<ICrmChainRunRepository, EfCrmChainRunRepository>();

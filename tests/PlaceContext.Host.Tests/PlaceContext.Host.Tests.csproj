@@ -27,6 +27,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\src\PlaceContext.Artifacts\PlaceContext.Artifacts.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\PlaceContext.Artifacts\PlaceContext.Artifacts.Domain.csproj" />
+    <ProjectReference Include="..\..\src\PlaceContext.Data\PlaceContext.Data.Contracts.csproj" />
     <ProjectReference Include="..\..\src\PlaceContext.Host\PlaceContext.Host.csproj" />
+    <ProjectReference Include="..\..\src\PlaceContext.Jobs\PlaceContext.Jobs.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\PlaceContext.Jobs\PlaceContext.Jobs.Domain.csproj" />
   </ItemGroup>
 </Project>

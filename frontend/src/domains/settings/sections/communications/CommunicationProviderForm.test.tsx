@@ -5,11 +5,39 @@ import { describe, expect, it, vi } from 'vitest'
 import type { CommunicationProviderDraft } from '../../model/communications'
 import { CommunicationProviderForm } from './CommunicationProviderForm'
 
-const draft: CommunicationProviderDraft = { channel: 'email', kind: 'postmark', name: 'Mail', enabled: true, authType: 'header', authHeaderName: 'X-Key', vaultProjectId: 'a102ed75-e94a-48fe-9826-2532d524857f', apiKeySecretName: 'POSTMARK_TOKEN', settingsJson: '{}', fromEmail: 'hello@example.com', fromName: 'Example', messageStream: 'outbound', accountSid: '', fromNumber: '', endpoint: '' }
+const draft: CommunicationProviderDraft = {
+  channel: 'email',
+  kind: 'postmark',
+  name: 'Mail',
+  enabled: true,
+  authType: 'header',
+  authHeaderName: 'X-Key',
+  vaultProjectId: 'a102ed75-e94a-48fe-9826-2532d524857f',
+  apiKeySecretName: 'POSTMARK_TOKEN',
+  settingsJson: '{}',
+  fromEmail: 'hello@example.com',
+  fromName: 'Example',
+  messageStream: 'outbound',
+  accountSid: '',
+  fromNumber: '',
+  endpoint: '',
+}
 
 describe('CommunicationProviderForm', () => {
   it('renders provider, Vault, and Postmark-specific controls', () => {
-    render(<CommunicationProviderForm busy={false} draft={draft} editing onCancel={vi.fn()} onChange={vi.fn()} onProjectChange={vi.fn()} onSave={vi.fn()} projects={[{ id: 'a102ed75-e94a-48fe-9826-2532d524857f', name: 'Atlas' }]} secrets={[{ name: 'POSTMARK_TOKEN', createdAt: '2026-08-08T00:00:00Z' }]} />)
+    render(
+      <CommunicationProviderForm
+        busy={false}
+        draft={draft}
+        editing
+        onCancel={vi.fn()}
+        onChange={vi.fn()}
+        onProjectChange={vi.fn()}
+        onSave={vi.fn()}
+        projects={[{ id: 'a102ed75-e94a-48fe-9826-2532d524857f', name: 'Atlas' }]}
+        secrets={[{ name: 'POSTMARK_TOKEN', createdAt: '2026-08-08T00:00:00Z' }]}
+      />,
+    )
     expect(screen.getByRole('heading', { name: 'Edit Mail' })).toBeVisible()
     expect(screen.getByLabelText('API key secret')).toHaveValue('POSTMARK_TOKEN')
     expect(screen.getByLabelText('Message stream')).toHaveValue('outbound')
@@ -19,8 +47,22 @@ describe('CommunicationProviderForm', () => {
   it('keeps the provider-specific header default in sync with the selected kind', async () => {
     const user = userEvent.setup()
     const onChange = vi.fn()
-    render(<CommunicationProviderForm busy={false} draft={draft} editing onCancel={vi.fn()} onChange={onChange} onProjectChange={vi.fn()} onSave={vi.fn()} projects={[]} secrets={[]} />)
+    render(
+      <CommunicationProviderForm
+        busy={false}
+        draft={draft}
+        editing
+        onCancel={vi.fn()}
+        onChange={onChange}
+        onProjectChange={vi.fn()}
+        onSave={vi.fn()}
+        projects={[]}
+        secrets={[]}
+      />,
+    )
     await user.selectOptions(screen.getByLabelText('Provider kind'), 'sendgrid')
-    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ kind: 'sendgrid', authHeaderName: '' }))
+    expect(onChange).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'sendgrid', authHeaderName: '' }),
+    )
   })
 })

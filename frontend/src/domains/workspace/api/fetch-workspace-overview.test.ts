@@ -14,9 +14,10 @@ describe('fetchWorkspaceOverview', () => {
   it('starts each independent workspace request before awaiting responses', async () => {
     const resolvers: ((response: Response) => void)[] = []
     const fetchMock = vi.fn(
-      () => new Promise<Response>((resolve) => {
-        resolvers.push(resolve)
-      }),
+      () =>
+        new Promise<Response>((resolve) => {
+          resolvers.push(resolve)
+        }),
     )
     vi.stubGlobal('fetch', fetchMock)
 
@@ -39,10 +40,11 @@ describe('fetchWorkspaceOverview', () => {
   })
 
   it('rejects an invalid API contract', async () => {
-    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(jsonResponse({ unexpected: true }))))
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.resolve(jsonResponse({ unexpected: true }))),
+    )
 
-    await expect(
-      fetchWorkspaceOverview(new AbortController().signal),
-    ).rejects.toThrow()
+    await expect(fetchWorkspaceOverview(new AbortController().signal)).rejects.toThrow()
   })
 })

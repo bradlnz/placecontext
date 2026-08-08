@@ -28,7 +28,11 @@ public class ApiKeyAuthenticationHandlerTests
         );
 
         Assert.False(result.Succeeded);
-        Assert.Contains("disabled", result.Failure!.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(
+            "not configured",
+            result.Failure!.Message,
+            StringComparison.OrdinalIgnoreCase
+        );
     }
 
     [Fact]

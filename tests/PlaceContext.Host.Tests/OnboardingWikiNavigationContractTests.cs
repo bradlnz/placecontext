@@ -10,7 +10,7 @@ public sealed class OnboardingWikiNavigationContractTests
         );
         var onboarding = ReadHostSource("Components/Pages/Onboarding.razor");
         var onboardingViewModel = ReadHostSource("Components/ViewModels/OnboardingViewModel.cs");
-        var routes = ReadHostSource("Components/ViewModels/TargetPageRoutes.cs");
+        var routes = ReadHostSource("Components/ViewModels/PageRoutes.cs");
         var gettingStarted = ReadHostSource("Wiki/getting-started.md");
 
         Assert.DoesNotContain("new(\"onboarding\"", menu);

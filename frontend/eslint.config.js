@@ -22,7 +22,7 @@ export default tseslint.config(
       '@typescript-eslint/no-floating-promises': ['error', { ignoreVoid: true }],
       '@typescript-eslint/no-misused-promises': [
         'error',
-        { checksVoidReturn: { attributes: false } }
+        { checksVoidReturn: { attributes: false } },
       ],
     },
   },

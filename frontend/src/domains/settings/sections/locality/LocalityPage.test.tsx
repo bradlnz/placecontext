@@ -12,9 +12,16 @@ describe('LocalityPage', () => {
     const user = userEvent.setup()
     const queryClient = new QueryClient()
     queryClient.setQueryData(localityQueryOptions.queryKey, {
-      timeZoneId: 'UTC', timeZones: ['UTC', 'Australia/Brisbane'],
+      timeZoneId: 'UTC',
+      timeZones: ['UTC', 'Australia/Brisbane'],
     })
-    render(<QueryClientProvider client={queryClient}><AppEventBusProvider><LocalityPage /></AppEventBusProvider></QueryClientProvider>)
+    render(
+      <QueryClientProvider client={queryClient}>
+        <AppEventBusProvider>
+          <LocalityPage />
+        </AppEventBusProvider>
+      </QueryClientProvider>,
+    )
 
     const picker = screen.getByLabelText(/Workspace timezone/)
     await user.selectOptions(picker, 'Australia/Brisbane')

@@ -10,12 +10,16 @@ describe('WorkspaceStats', () => {
 
     expect(screen.getByText('1,234')).toBeVisible()
     expect(screen.getByText('5 agent · 3 human')).toBeVisible()
-    expect(screen.getByText('need re-index').closest('article')?.querySelector('.stat-value')).toHaveStyle({ color: 'var(--warn)' })
+    expect(
+      screen.getByText('need re-index').closest('article')?.querySelector('.stat-value'),
+    ).toHaveStyle({ color: 'var(--warn)' })
   })
 
   it('uses the positive state when context is current', () => {
     render(<WorkspaceStats stats={{ ...workspaceOverviewFixture.stats, staleContextCount: 0 }} />)
 
-    expect(screen.getByText('all current').closest('article')?.querySelector('.stat-value')).toHaveStyle({ color: 'var(--good)' })
+    expect(
+      screen.getByText('all current').closest('article')?.querySelector('.stat-value'),
+    ).toHaveStyle({ color: 'var(--good)' })
   })
 })

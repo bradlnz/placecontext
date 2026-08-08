@@ -20,16 +20,16 @@ public static class ServiceRuntimeExtensions
         Assembly controllerAssembly)
     {
         services.TryAddSingleton<ServiceCurrentTenant>();
-        services.TryAddSingleton<ICurrentTenant>(provider =>
-            provider.GetRequiredService<ServiceCurrentTenant>());
-        services.TryAddSingleton<ICurrentTenantAccessor>(provider =>
-            provider.GetRequiredService<ServiceCurrentTenant>());
+        services.Replace(ServiceDescriptor.Singleton<ICurrentTenant>(provider =>
+            provider.GetRequiredService<ServiceCurrentTenant>()));
+        services.Replace(ServiceDescriptor.Singleton<ICurrentTenantAccessor>(provider =>
+            provider.GetRequiredService<ServiceCurrentTenant>()));
         services.TryAddSingleton<ServiceCurrentUser>();
-        services.TryAddSingleton<ICurrentUser>(provider =>
-            provider.GetRequiredService<ServiceCurrentUser>());
-        services.TryAddSingleton<ICurrentUserAccessor>(provider =>
-            provider.GetRequiredService<ServiceCurrentUser>());
-        services.TryAddSingleton<IClock, ServiceSystemClock>();
+        services.Replace(ServiceDescriptor.Singleton<ICurrentUser>(provider =>
+            provider.GetRequiredService<ServiceCurrentUser>()));
+        services.Replace(ServiceDescriptor.Singleton<ICurrentUserAccessor>(provider =>
+            provider.GetRequiredService<ServiceCurrentUser>()));
+        services.Replace(ServiceDescriptor.Singleton<IClock, ServiceSystemClock>());
 
         var auth = configuration.GetSection(ServiceAuthenticationDefaults.SectionName);
         var authority = auth["Authority"];

@@ -1,0 +1,45 @@
+using PlaceContext.App.Proxy;
+
+namespace PlaceContext.App.Tests;
+
+public sealed class MicroserviceProxyRouteCatalogTests
+{
+    [Fact]
+    public void Catalog_contains_each_independently_hosted_service_route()
+    {
+        var routes = MicroserviceProxyRouteCatalog.All;
+
+        Assert.Contains(routes, route => route.ServiceName == "AgentChat" && route.Matches("/api/agent-chat"));
+        Assert.Contains(routes, route => route.ServiceName == "Agents" && route.Matches("/api/v1/agents"));
+        Assert.Contains(routes, route => route.ServiceName == "Artifacts" && route.Matches("/api/artifacts"));
+        Assert.Contains(routes, route => route.ServiceName == "Crm" && route.Matches("/api/crm"));
+        Assert.Contains(routes, route => route.ServiceName == "Data" && route.Matches("/api/data"));
+        Assert.Contains(routes, route => route.ServiceName == "Jobs" && route.Matches("/api/jobs"));
+        Assert.Contains(routes, route => route.ServiceName == "Search" && route.Matches("/api/search"));
+        Assert.Contains(routes, route => route.ServiceName == "Vault" && route.Matches("/api/vault"));
+    }
+
+    [Fact]
+    public void Catalog_routes_the_legacy_opensearch_contract_to_search()
+    {
+        var route = Assert.Single(MicroserviceProxyRouteCatalog.All, candidate =>
+            candidate.Matches("/api/v1/projects/8fbcc0ff-e259-4d9f-b9eb-c0ea064a3e46/opensearch/search"));
+
+        Assert.Equal("Search", route.ServiceName);
+        Assert.DoesNotContain(MicroserviceProxyRouteCatalog.All, candidate =>
+            candidate.Matches("/api/v1/projects/8fbcc0ff-e259-4d9f-b9eb-c0ea064a3e46/jobs"));
+    }
+
+    [Theory]
+    [InlineData("/runs/98f44a9b-6067-4a17-8636-cc16b4d51c45/artifacts/8ae108e3-c13f-4b1c-9874-73b0dd144e1f")]
+    [InlineData("/share/artifacts/pc_share_example")]
+    [InlineData("/chat/attachments/chat/98f44a9b-6067-4a17-8636-cc16b4d51c45/project/session/file.txt")]
+    public void Catalog_routes_artifact_download_contracts_to_artifacts(string path)
+    {
+        var route = Assert.Single(
+            MicroserviceProxyRouteCatalog.All,
+            candidate => candidate.Matches(path));
+
+        Assert.Equal("Artifacts", route.ServiceName);
+    }
+}

@@ -10,7 +10,11 @@ export function PinnedEntities({ entities }: PinnedEntitiesProps) {
   return (
     <section aria-label="Pinned entities" className="dashboard-entity-grid">
       {entities.map((entity) => (
-        <a className="dccard dashboard-entity-card" href={`/project/${entity.projectId}/entity/${encodeURIComponent(entity.name)}`} key={entity.id}>
+        <a
+          className="dccard dashboard-entity-card"
+          href={`/project/${entity.projectId}/entity/${encodeURIComponent(entity.name)}`}
+          key={entity.id}
+        >
           <div className="entity-head">
             <span className="entity-name">{entity.name}</span>
             <span className="entity-count">{entity.rowCount?.toLocaleString() ?? '—'}</span>
@@ -21,14 +25,23 @@ export function PinnedEntities({ entities }: PinnedEntitiesProps) {
               <div className="entity-bars">
                 {entity.bars.map((bar) => (
                   <div className="entity-bar-row" key={bar.label}>
-                    <span className="entity-bar-label" title={bar.label}>{bar.label}</span>
-                    <span className="entity-bar-track"><span className="entity-bar-fill" style={{ width: `${String(bar.percentage)}%` }} /></span>
+                    <span className="entity-bar-label" title={bar.label}>
+                      {bar.label}
+                    </span>
+                    <span className="entity-bar-track">
+                      <span
+                        className="entity-bar-fill"
+                        style={{ width: `${String(bar.percentage)}%` }}
+                      />
+                    </span>
                     <span className="entity-bar-count">{bar.count}</span>
                   </div>
                 ))}
               </div>
             </>
-          ) : <div className="entity-table">{entity.tableName}</div>}
+          ) : (
+            <div className="entity-table">{entity.tableName}</div>
+          )}
         </a>
       ))}
     </section>

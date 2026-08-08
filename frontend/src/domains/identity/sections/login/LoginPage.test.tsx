@@ -16,8 +16,14 @@ describe('LoginPage', () => {
     })
 
     const { container } = render(
-      <MemoryRouter initialEntries={['/login?error=Invalid%20credentials&returnUrl=%2Fcluster&email=ada%40example.com']}>
-        <QueryClientProvider client={queryClient}><LoginPage /></QueryClientProvider>
+      <MemoryRouter
+        initialEntries={[
+          '/login?error=Invalid%20credentials&returnUrl=%2Fcluster&email=ada%40example.com',
+        ]}
+      >
+        <QueryClientProvider client={queryClient}>
+          <LoginPage />
+        </QueryClientProvider>
       </MemoryRouter>,
     )
 
@@ -26,7 +32,9 @@ describe('LoginPage', () => {
     expect(screen.getByRole('textbox', { name: 'Email' })).toHaveValue('ada@example.com')
     const form = container.querySelector('form')
     expect(form).toHaveAttribute('action', '/auth/login')
-    expect(container.querySelector('input[name="__RequestVerificationToken"]')).toHaveValue('secure-token')
+    expect(container.querySelector('input[name="__RequestVerificationToken"]')).toHaveValue(
+      'secure-token',
+    )
     expect(container.querySelector('input[name="returnUrl"]')).toHaveValue('/cluster')
   })
 })

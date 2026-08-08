@@ -30,7 +30,13 @@ describe('QuickChains', () => {
   it('renders the Host empty state without a project', () => {
     render(
       <AppEventBusProvider>
-        <QuickChains chains={[]} hasError={false} message={null} project={null} runningChainId={null} />
+        <QuickChains
+          chains={[]}
+          hasError={false}
+          message={null}
+          project={null}
+          runningChainId={null}
+        />
       </AppEventBusProvider>,
     )
 

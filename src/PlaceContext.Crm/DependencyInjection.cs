@@ -1,7 +1,11 @@
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Features;
+using PlaceContext.Crm.Automation;
+using PlaceContext.Crm.Services;
+using PlaceContext.Jobs.Contracts.Integration;
 
 namespace PlaceContext.Crm;
 
@@ -9,6 +13,7 @@ public static class DependencyInjection
 {
     public static IServiceCollection AddCrmApi(this IServiceCollection services)
     {
+        AddCrmOwnedServices(services);
         services.AddScoped<IQueryHandler<ListCrmClientsQuery, IReadOnlyList<CrmClientView>>, ListCrmClientsHandler>();
         services.AddScoped<IQueryHandler<ListCrmAppointmentsQuery, IReadOnlyList<CrmAppointmentView>>, ListCrmAppointmentsHandler>();
         services.AddScoped<IQueryHandler<ListCrmCalendarsQuery, IReadOnlyList<CrmCalendarView>>, ListCrmCalendarsHandler>();
@@ -17,6 +22,7 @@ public static class DependencyInjection
 
     public static IServiceCollection AddCrmModule(this IServiceCollection services)
     {
+        AddCrmOwnedServices(services);
         services.AddScoped<ICommandHandler<SaveCrmClientCommand, CrmClientView>, SaveCrmClientHandler>();
         services.AddScoped<ICommandHandler<MoveCrmClientCommand, CrmClientView>, MoveCrmClientHandler>();
         services.AddScoped<ICommandHandler<DeleteCrmClientCommand, bool>, DeleteCrmClientHandler>();
@@ -44,5 +50,13 @@ public static class DependencyInjection
         services.AddScoped<IQueryHandler<ListCrmClientArtifactsQuery, IReadOnlyList<CrmClientArtifactView>>, ListCrmClientArtifactsHandler>();
         services.AddScoped<IQueryHandler<ListCrmAutomationRulesQuery, IReadOnlyList<CrmAutomationRuleView>>, ListCrmAutomationRulesHandler>();
         return services;
+    }
+
+    private static void AddCrmOwnedServices(IServiceCollection services)
+    {
+        services.TryAddScoped<CrmAutomationDispatcher>();
+        services.TryAddScoped<CrmArtifactAssociationService>();
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IChainRunCompletionObserver>(provider =>
+            provider.GetRequiredService<CrmArtifactAssociationService>()));
     }
 }

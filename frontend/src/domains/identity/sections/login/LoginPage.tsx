@@ -19,18 +19,42 @@ export function LoginPage() {
       <p className="auth-sub">Enter this workspace&apos;s admin (or member) credentials.</p>
 
       <form action="/auth/login" className="auth-form" method="post">
-        <input name={identity.antiforgeryFieldName} type="hidden" value={identity.antiforgeryToken} />
-        {error === null ? null : <div className="auth-error" role="alert">{error}</div>}
+        <input
+          name={identity.antiforgeryFieldName}
+          type="hidden"
+          value={identity.antiforgeryToken}
+        />
+        {error === null ? null : (
+          <div className="auth-error" role="alert">
+            {error}
+          </div>
+        )}
         {returnUrl === null ? null : <input name="returnUrl" type="hidden" value={returnUrl} />}
         <label className="dcfield">
           <span>Email</span>
-          <input autoComplete="username" autoFocus className="dcinput" defaultValue={email} name="email" required type="email" />
+          <input
+            autoComplete="username"
+            autoFocus
+            className="dcinput"
+            defaultValue={email}
+            name="email"
+            required
+            type="email"
+          />
         </label>
         <label className="dcfield">
           <span>Password</span>
-          <input autoComplete="current-password" className="dcinput" name="password" required type="password" />
+          <input
+            autoComplete="current-password"
+            className="dcinput"
+            name="password"
+            required
+            type="password"
+          />
         </label>
-        <button className="dcbtn primary auth-submit" type="submit">Sign in</button>
+        <button className="dcbtn primary auth-submit" type="submit">
+          Sign in
+        </button>
       </form>
     </section>
   )

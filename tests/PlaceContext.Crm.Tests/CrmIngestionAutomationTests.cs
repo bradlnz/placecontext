@@ -1,11 +1,10 @@
-using PlaceContext.Application.Features;
-using PlaceContext.Application.Ports;
+using PlaceContext.Crm.Automation;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.Repositories;
 using PlaceContext.Domain.ValueObjects;
 using PlaceContext.TestSupport;
 
-namespace PlaceContext.Application.Tests;
+namespace PlaceContext.Crm.Tests;
 
 public sealed class CrmIngestionAutomationTests
 {
