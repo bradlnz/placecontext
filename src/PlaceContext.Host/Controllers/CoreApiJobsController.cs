@@ -4,6 +4,8 @@ using PlaceContext.Application;
 using PlaceContext.Host.Api;
 using PlaceContext.Host.Auth;
 using PlaceContext.Host.CoreApi;
+using PlaceContext.Jobs.Contracts.Management;
+using PlaceContext.Jobs.Management;
 
 namespace PlaceContext.Host.Controllers;
 

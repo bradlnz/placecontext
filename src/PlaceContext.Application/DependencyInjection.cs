@@ -36,10 +36,7 @@ public static class DependencyInjection
         services.AddScoped<IDecisionTreeProvider>(provider =>
             provider.GetRequiredService<DecisionTreeProvider>());
 
-        // Trigger + event application services (event fan-out, schedule scanning, run watching).
-        services.AddScoped<RunStatusWatchService>();
-        services.AddScoped<PostJobActionService>();
-        services.AddScoped<JobRunDataRecorder>();
+        // Cross-domain application services still awaiting their destination boundaries.
         services.AddScoped<DataMappingIngestionService>();
         services.AddScoped<EntityTagService>();
         services.AddScoped<RecordLinkService>();
@@ -61,9 +58,6 @@ public static class DependencyInjection
         services.AddScoped<ICommandHandler<DeleteSavedQueryCommand, bool>, DeleteSavedQueryHandler>();
 
         services.AddScoped<IMcpClientService, McpClientService>();
-
-        // Job execution orchestrator (applies per-job retry policy).
-        services.AddScoped<IJobRunner, JobRunner>();
 
         // MCP connections
         services.AddScoped<ICommandHandler<Features.CreateMcpConnectionCommand, Dtos.McpConnectionView>, Features.CreateMcpConnectionHandler>();
@@ -97,9 +91,6 @@ public static class DependencyInjection
         services.AddScoped<IQueryHandler<GetGraphVizQuery, GraphVizView>, GetGraphVizHandler>();
         services.AddScoped<IQueryHandler<GetRecentToolCallsQuery, IReadOnlyList<ToolCallView>>, GetRecentToolCallsHandler>();
         services.AddScoped<IQueryHandler<ListSavedQueriesQuery, IReadOnlyList<SavedQueryRecord>>, ListSavedQueriesHandler>();
-        services.AddScoped<IQueryHandler<ListEventTypesQuery, IReadOnlyList<EventTypeView>>, ListEventTypesHandler>();
-        services.AddScoped<IQueryHandler<ListEventOccurrencesQuery, IReadOnlyList<EventOccurrenceView>>, ListEventOccurrencesHandler>();
-
         // Backup/restore (tenant settings + job definitions → a portable manifest).
         services.AddScoped<IQueryHandler<ExportManifestQuery, BackupManifest>, ExportManifestHandler>();
         services.AddScoped<ICommandHandler<ImportManifestCommand, ImportResultView>, ImportManifestHandler>();

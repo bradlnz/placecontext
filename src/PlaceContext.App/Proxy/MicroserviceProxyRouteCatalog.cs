@@ -15,6 +15,12 @@ public static class MicroserviceProxyRouteCatalog
         MicroserviceProxyRoute.ForPrefix("Crm", "/api/crm"),
         MicroserviceProxyRoute.ForPrefix("Data", "/api/data"),
         MicroserviceProxyRoute.ForPrefix("Jobs", "/api/jobs"),
+        MicroserviceProxyRoute.ForPrefix("Jobs", "/ingest"),
+        MicroserviceProxyRoute.ForPattern("Jobs", "^/api/v1/jobs/[^/]+(?:/|$)"),
+        MicroserviceProxyRoute.ForPattern("Jobs", "^/api/v1/schedules/[^/]+(?:/|$)"),
+        MicroserviceProxyRoute.ForPattern("Jobs", "^/api/v1/job-runs/[^/]+/cancel(?:/|$)"),
+        MicroserviceProxyRoute.ForPattern("Jobs", "^/api/v1/chain-runs/[^/]+/cancel(?:/|$)"),
+        MicroserviceProxyRoute.ForPattern("Jobs", "^/api/v1/chains/[^/]+/(?:trigger|replay)(?:/|$)"),
         MicroserviceProxyRoute.ForPrefix("Search", "/api/search"),
         MicroserviceProxyRoute.ForPattern(
             "Search",

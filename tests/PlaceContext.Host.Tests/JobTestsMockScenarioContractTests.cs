@@ -11,7 +11,7 @@ public sealed class JobTestsMockScenarioContractTests
             "src/PlaceContext.Host/Components/ViewModels/JobTestCodeEditorViewModel.cs"
         );
         var handler = Source("src/PlaceContext.Jobs/Handlers/Jobs/RunJobTestCaseHandler.cs");
-        var framework = Source("src/PlaceContext.Application/Jobs/Frameworks/JobTestFramework.cs");
+        var framework = Source("src/PlaceContext.Jobs/Testing/JobTestFramework.cs");
 
         Assert.Contains("Mock scenario JSON", testsPage, StringComparison.Ordinal);
         Assert.Contains("Never executes the selected Job", testsPage, StringComparison.Ordinal);

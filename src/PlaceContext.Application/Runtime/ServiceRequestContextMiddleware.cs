@@ -13,7 +13,8 @@ public sealed class ServiceRequestContextMiddleware(RequestDelegate next)
     public async Task InvokeAsync(
         HttpContext httpContext,
         ICurrentTenantAccessor tenantAccessor,
-        ICurrentUserAccessor userAccessor)
+        ICurrentUserAccessor userAccessor,
+        IRequestTenantResolver tenantResolver)
     {
         tenantAccessor.Clear();
         userAccessor.Clear();
@@ -22,7 +23,31 @@ public sealed class ServiceRequestContextMiddleware(RequestDelegate next)
         {
             if (httpContext.User.Identity?.IsAuthenticated == true)
             {
-                SetTenant(httpContext.User, tenantAccessor);
+                if (!SetTenant(httpContext.User, tenantAccessor)
+                    && string.Equals(
+                        httpContext.User.Identity.AuthenticationType,
+                        ServiceApiKeyAuthenticationDefaults.Scheme,
+                        StringComparison.Ordinal))
+                {
+                    var forwardedHost = httpContext.Request.Headers["X-Forwarded-Host"]
+                        .ToString().Split(',')[0].Trim();
+                    var requestHost = string.IsNullOrWhiteSpace(forwardedHost)
+                        ? httpContext.Request.Host.Value ?? string.Empty
+                        : forwardedHost;
+                    var tenant = await tenantResolver.ResolveAsync(
+                        requestHost,
+                        httpContext.RequestAborted);
+                    if (tenant is null)
+                    {
+                        httpContext.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
+                        await httpContext.Response.WriteAsJsonAsync(
+                            new { error = "The workspace tenant resolver is not configured." },
+                            httpContext.RequestAborted);
+                        return;
+                    }
+
+                    tenantAccessor.Set(tenant);
+                }
                 SetUser(httpContext.User, userAccessor);
             }
 
@@ -35,10 +60,10 @@ public sealed class ServiceRequestContextMiddleware(RequestDelegate next)
         }
     }
 
-    private static void SetTenant(ClaimsPrincipal principal, ICurrentTenantAccessor accessor)
+    private static bool SetTenant(ClaimsPrincipal principal, ICurrentTenantAccessor accessor)
     {
         if (!Guid.TryParse(principal.FindFirst("tenant")?.Value, out var tenantId))
-            return;
+            return false;
 
         var slug = principal.FindFirst("tenant_slug")?.Value;
         var timeZone = principal.FindFirst("tenant_timezone")?.Value;
@@ -46,6 +71,7 @@ public sealed class ServiceRequestContextMiddleware(RequestDelegate next)
             tenantId,
             string.IsNullOrWhiteSpace(slug) ? tenantId.ToString("N") : slug,
             string.IsNullOrWhiteSpace(timeZone) ? "UTC" : timeZone));
+        return true;
     }
 
     private static void SetUser(ClaimsPrincipal principal, ICurrentUserAccessor accessor)

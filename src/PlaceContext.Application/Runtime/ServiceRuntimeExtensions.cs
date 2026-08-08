@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Text;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;
@@ -20,6 +21,7 @@ public static class ServiceRuntimeExtensions
         Assembly controllerAssembly)
     {
         services.TryAddSingleton<ServiceCurrentTenant>();
+        services.TryAddScoped<IRequestTenantResolver, NullRequestTenantResolver>();
         services.Replace(ServiceDescriptor.Singleton<ICurrentTenant>(provider =>
             provider.GetRequiredService<ServiceCurrentTenant>()));
         services.Replace(ServiceDescriptor.Singleton<ICurrentTenantAccessor>(provider =>
@@ -70,7 +72,10 @@ public static class ServiceRuntimeExtensions
                     ValidateLifetime = true,
                     ClockSkew = TimeSpan.FromMinutes(1),
                 };
-            });
+            })
+            .AddScheme<AuthenticationSchemeOptions, ServiceApiKeyAuthenticationHandler>(
+                ServiceApiKeyAuthenticationDefaults.Scheme,
+                _ => { });
 
         services.AddAuthorization(options =>
         {

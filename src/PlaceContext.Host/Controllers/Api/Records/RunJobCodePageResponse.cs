@@ -1,4 +1,4 @@
-using PlaceContext.Host.Api;
+using PlaceContext.Jobs.Contracts.Management;
 
 namespace PlaceContext.Host.Controllers.Api.Records;
 

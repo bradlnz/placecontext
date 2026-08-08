@@ -207,7 +207,7 @@ public class BackupTests
         Assert.Single(await target.Chains.ListForProjectAsync(project.Id.Value));
         Assert.Single(await target.Triggers.ListForProjectAsync(project.Id.Value));
         Assert.Single(await target.Mappings.ListForProjectAsync(project.Id.Value));
-        Assert.Single(await new ListEventTypesHandler(target.Events).HandleAsync(new ListEventTypesQuery()), e => !e.IsBuiltIn);
+        Assert.Single(await target.Events.ListDefinitionsAsync());
     }
 
     [Fact]

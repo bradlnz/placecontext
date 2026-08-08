@@ -3,8 +3,9 @@ using Microsoft.AspNetCore.Mvc;
 using PlaceContext.Application;
 using PlaceContext.Application.Features;
 using PlaceContext.Application.Ports;
-using PlaceContext.Host.Api;
 using PlaceContext.Host.Auth;
+using PlaceContext.Jobs.Contracts.Management;
+using PlaceContext.Jobs.Management;
 
 namespace PlaceContext.Host.Controllers.Api;
 
@@ -34,14 +35,6 @@ public sealed class SchedulesController : ControllerBase
 
         var triggers = await _svc.ListTriggersAsync(projectId, ct);
         return Ok(triggers.Select(ScheduleApiMapper.ToResponse).ToList());
-    }
-
-    /// <summary>GET /api/v1/schedules/{id} — a single schedule/event trigger, or 404.</summary>
-    [HttpGet("schedules/{id:guid}", Name = "GetScheduleById")]
-    public async Task<ActionResult<ScheduleResponse>> GetById(Guid id)
-    {
-        var trigger = await _svc.GetTriggerAsync(id, HttpContext.RequestAborted);
-        return trigger is null ? NotFound() : Ok(ScheduleApiMapper.ToResponse(trigger));
     }
 
     /// <summary>
@@ -74,40 +67,4 @@ public sealed class SchedulesController : ControllerBase
         }
     }
 
-    /// <summary>
-    /// PUT /api/v1/schedules/{id} — updates a trigger. Any combination of name, cron expression, event
-    /// name, and enabled flag can be supplied (null fields are left unchanged). Re-enabling a cron
-    /// schedule recomputes its next-run time; changing the cron expression also recomputes it. 404 if
-    /// the trigger doesn't exist.
-    /// </summary>
-    [HttpPut("schedules/{id:guid}")]
-    public async Task<ActionResult<ScheduleResponse>> Update(Guid id, [FromBody] UpdateScheduleRequest request)
-    {
-        var ct = HttpContext.RequestAborted;
-        if (await _svc.GetTriggerAsync(id, ct) is null) return NotFound();
-
-        try
-        {
-            var trigger = await _svc.UpdateTriggerAsync(
-                new UpdateTriggerCommand(id, request.Name, request.CronExpression, request.EventName, request.Enabled), ct);
-            return Ok(ScheduleApiMapper.ToResponse(trigger));
-        }
-        catch (ArgumentException ex)
-        {
-            return BadRequest(new { error = ex.Message });
-        }
-        catch (InvalidOperationException ex)
-        {
-            return NotFound(new { error = ex.Message });
-        }
-    }
-
-    /// <summary>DELETE /api/v1/schedules/{id} — permanently removes the schedule. 204 on success, 404 if
-    /// it didn't exist.</summary>
-    [HttpDelete("schedules/{id:guid}")]
-    public async Task<IActionResult> Delete(Guid id)
-    {
-        var deleted = await _svc.DeleteTriggerAsync(id, HttpContext.RequestAborted);
-        return deleted ? NoContent() : NotFound();
-    }
 }

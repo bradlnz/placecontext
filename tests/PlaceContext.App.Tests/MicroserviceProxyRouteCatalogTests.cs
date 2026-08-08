@@ -15,6 +15,7 @@ public sealed class MicroserviceProxyRouteCatalogTests
         Assert.Contains(routes, route => route.ServiceName == "Crm" && route.Matches("/api/crm"));
         Assert.Contains(routes, route => route.ServiceName == "Data" && route.Matches("/api/data"));
         Assert.Contains(routes, route => route.ServiceName == "Jobs" && route.Matches("/api/jobs"));
+        Assert.Contains(routes, route => route.ServiceName == "Jobs" && route.Matches("/ingest/deploy.completed"));
         Assert.Contains(routes, route => route.ServiceName == "Search" && route.Matches("/api/search"));
         Assert.Contains(routes, route => route.ServiceName == "Vault" && route.Matches("/api/vault"));
     }
@@ -41,5 +42,21 @@ public sealed class MicroserviceProxyRouteCatalogTests
             candidate => candidate.Matches(path));
 
         Assert.Equal("Artifacts", route.ServiceName);
+    }
+
+    [Theory]
+    [InlineData("/api/v1/jobs/98f44a9b-6067-4a17-8636-cc16b4d51c45")]
+    [InlineData("/api/v1/schedules/98f44a9b-6067-4a17-8636-cc16b4d51c45")]
+    [InlineData("/api/v1/job-runs/98f44a9b-6067-4a17-8636-cc16b4d51c45/cancel")]
+    [InlineData("/api/v1/chain-runs/98f44a9b-6067-4a17-8636-cc16b4d51c45/cancel")]
+    [InlineData("/api/v1/chains/98f44a9b-6067-4a17-8636-cc16b4d51c45/trigger")]
+    [InlineData("/api/v1/chains/98f44a9b-6067-4a17-8636-cc16b4d51c45/replay")]
+    public void Catalog_routes_job_operations_to_jobs(string path)
+    {
+        var route = Assert.Single(
+            MicroserviceProxyRouteCatalog.All,
+            candidate => candidate.Matches(path));
+
+        Assert.Equal("Jobs", route.ServiceName);
     }
 }

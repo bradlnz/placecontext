@@ -1,8 +1,4 @@
-using PlaceContext.Application.Dtos;
-using PlaceContext.Application.Features;
-using PlaceContext.Domain.ValueObjects;
-
-namespace PlaceContext.Host.Api;
+namespace PlaceContext.Jobs.Contracts.Management;
 
 /// <summary>Public read model for a job definition, including its full workload source.</summary>
 public sealed record JobResponse(
@@ -10,7 +6,6 @@ public sealed record JobResponse(
     Guid ProjectId,
     string Name,
     string? Description,
-    /// <summary>"image" or "code".</summary>
     string MapSourceKind,
     string? MapImage,
     string? MapRuntimeId,

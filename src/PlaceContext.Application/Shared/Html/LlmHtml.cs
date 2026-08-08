@@ -6,7 +6,7 @@ namespace PlaceContext.Application.Features;
 /// result reads correctly embedded in a dark portal card (and standalone). Used by the post-job
 /// actions (report/chart artifacts) and the Analytics tab.
 /// </summary>
-internal static class LlmHtml
+public static class LlmHtml
 {
     // Portal chart theme, injected into every generated chart so it reads correctly embedded in the
     // dark run-history card (and standalone). !important on the page surface/ink/font defeats the

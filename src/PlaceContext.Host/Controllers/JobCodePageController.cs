@@ -7,6 +7,8 @@ using PlaceContext.Application.Features;
 using PlaceContext.Application.Ports;
 using PlaceContext.Host.Api;
 using PlaceContext.Host.Controllers.Api.Records;
+using PlaceContext.Jobs.Contracts.Management;
+using PlaceContext.Jobs.Management;
 
 namespace PlaceContext.Host.Controllers;
 

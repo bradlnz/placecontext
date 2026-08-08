@@ -29,6 +29,8 @@ public static class DependencyInjection
         services.AddSingleton<ICurrentTenant>(provider => provider.GetRequiredService<CurrentTenant>());
         services.AddSingleton<ICurrentTenantAccessor>(provider => provider.GetRequiredService<CurrentTenant>());
         services.AddScoped<ITenantCatalog, EfTenantCatalog>();
+        services.AddScoped<ITenantStore, EfTenantStore>();
+        services.AddScoped<IRequestTenantResolver, LegacyRequestTenantResolver>();
         services.AddSingleton<ICurrentProject, CurrentProject>();
         services.AddSingleton<CurrentUser>();
         services.AddSingleton<ICurrentUser>(provider => provider.GetRequiredService<CurrentUser>());
