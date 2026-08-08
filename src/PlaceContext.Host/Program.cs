@@ -453,6 +453,8 @@ await PlaceContext.Agents.Infrastructure.Persistence.AgentsDatabaseMigrationExte
     .MigrateAgentsDatabaseAsync(app.Services);
 await PlaceContext.Artifacts.Infrastructure.Persistence.ArtifactsDatabaseMigrationExtensions
     .MigrateArtifactsDatabaseAsync(app.Services);
+await PlaceContext.Search.Infrastructure.Persistence.SearchDatabaseMigrationExtensions
+    .MigrateSearchDatabaseAsync(app.Services);
 await PlaceContext.Vault.Infrastructure.Persistence.VaultDatabaseMigrationExtensions
     .MigrateVaultDatabaseAsync(app.Services);
 // CRM records are small, and older releases stored client identity/contact fields in plaintext.

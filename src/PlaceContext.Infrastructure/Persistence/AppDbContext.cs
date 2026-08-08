@@ -40,7 +40,6 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
     public DbSet<JobRow> Jobs => Set<JobRow>();
     public DbSet<JobRunRow> JobRuns => Set<JobRunRow>();
     public DbSet<JobTestCaseRow> JobTestCases => Set<JobTestCaseRow>();
-    public DbSet<OpenSearchDashboardRow> OpenSearchDashboards => Set<OpenSearchDashboardRow>();
     public DbSet<SavedQueryRow> SavedQueries => Set<SavedQueryRow>();
     public DbSet<CrmClientRow> CrmClients => Set<CrmClientRow>();
     public DbSet<CrmJobRunRow> CrmJobRuns => Set<CrmJobRunRow>();
@@ -248,20 +247,6 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
                 .WithMany()
                 .HasForeignKey(x => x.JobId)
                 .OnDelete(DeleteBehavior.Cascade);
-        });
-
-        b.Entity<OpenSearchDashboardRow>(e =>
-        {
-            e.ToTable("opensearch_dashboards");
-            e.HasKey(x => x.Id);
-            e.HasIndex(x => new { x.ProjectId, x.Name }).IsUnique();
-            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
-            e.Property(x => x.IndexPattern).HasDefaultValue("*");
-            e.Property(x => x.BucketType).HasDefaultValue("terms");
-            e.Property(x => x.ChartType).HasDefaultValue("bar");
-            e.Property(x => x.MetricType).HasDefaultValue("count");
-            e.Property(x => x.CreatedAt).HasDefaultValueSql("now()");
-            e.Property(x => x.UpdatedAt).HasDefaultValueSql("now()");
         });
 
         b.Entity<SavedQueryRow>(e =>

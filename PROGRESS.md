@@ -52,6 +52,10 @@ Last updated: 2026-08-08 (Australia/Brisbane)
 - Rewired artifact handlers and the shared post-job action service to the Artifacts-specific commit boundary, and removed shared Infrastructure references from the Artifacts API and infrastructure projects.
 - Kept the shared encryption contract in Application while placing concrete ASP.NET Data Protection adapters in each runtime infrastructure layer, preserving compatibility without introducing framework dependencies into Application.
 - Added Artifacts persistence tenant-isolation coverage and an architecture check that locks its context, rows, unit of work, migration snapshot, and project boundaries to the service.
+- Gave Search its own `SearchDbContext`, dashboard row, `ISearchUnitOfWork`, connection configuration, health check, `__EFMigrationsHistory_Search` history table, and non-destructive initial migration for legacy gateway data.
+- Removed `opensearch_dashboards` from the shared `AppDbContext`; the shared handoff migration records ownership transfer without dropping the table.
+- Rewired the OpenSearch dashboard store to Search-owned persistence and a runtime-local data-protection adapter, and removed shared Infrastructure references from the Search API and infrastructure projects.
+- Added Search dashboard tenant-isolation/encryption round-trip coverage and an architecture check that locks its context, row, unit of work, migration snapshot, and project boundaries to the service.
 - Removed the unused Host `BrowseTab` enum and moved controller/view-model records into matching `Records` folders.
 - Aligned Vault infrastructure's EF Core/Relational dependencies at 10.0.9 so the extracted project builds without assembly-conflict warnings.
 - Extracted OpenSearch connection/data/sync gateways and the dashboard persistence adapter into `PlaceContext.Search.Infrastructure`; the gateway now composes them through `AddSearchInfrastructure`.
@@ -78,6 +82,8 @@ Last updated: 2026-08-08 (Australia/Brisbane)
 - Updated the Host authentication handler to the current `TimeProvider`-based framework API, guarded a nullable CRM portal response, and converted Blazor parameters to analyzer-compliant auto-properties.
 - Removed empty source folders left behind by the physical moves.
 - Preserved the existing root `frontend/` React 19/Vite workspace and its first Workspace Overview vertical slice; it is mounted at `/app` while the Blazor portal remains available during migration.
+- Migrated the dashboard, identity entry points, About page, and the Branding, API Tokens, Artifact Filters, Backup, Communications, Connections, Locality, and Menu settings routes into route-split React vertical slices backed by canonical `/api/v1` contracts.
+- Added the Connections settings API and React page for encrypted per-project Postgres and OpenSearch configuration without exposing saved credential values to the browser.
 - Reviewed the referenced .NET architecture guidance. It supports bounded contexts, dependency inversion, aggregate boundaries, and domain events, but does not require concrete aggregate type names to end in `AggregateRoot`; concrete types retain their ubiquitous-language names while filenames continue to match types.
 
 ## Current verification state
@@ -94,48 +100,48 @@ Last updated: 2026-08-08 (Australia/Brisbane)
 - `PlaceContext.AgentChat.Infrastructure` builds with 0 warnings and 0 errors.
 - Full `PlaceContext.slnx` build: 0 warnings and 0 errors.
 - All seven API runtimes pass Development-mode dependency validation; Jobs reached a listening Kestrel endpoint and Vault `/health` returned HTTP 200 `Healthy`.
-- Source organization, required-layer, persistence-ownership, and project-boundary architecture tests: 12/12 passing.
+- Source organization, required-layer, persistence-ownership, and project-boundary architecture tests: 13/13 passing.
 - Service test projects passing independently:
   - AgentChat: 42 tests
   - Artifacts: 57 tests
   - CRM: 19 tests
   - Data: 167 passing, 1 integration test skipped
   - Jobs: 208 passing, 5 Docker integration tests skipped
-  - Search: 32 tests
+  - Search: 34 tests
   - Vault: 4 tests
-- Full architecture suite: 12/12 passing after the Vault, AgentChat, and Artifacts persistence ownership moves.
+- Full architecture suite: 13/13 passing after the Vault, AgentChat, Artifacts, and Search persistence ownership moves.
 - Vault tests are 4/4 passing after its database and encryption lifecycle extraction.
-- Search tests are 32/32 passing after the OpenSearch infrastructure/test move.
+- Search tests are 34/34 passing after its owned dashboard database and tenant-isolation move.
 - Data tests are 167/167 passing with one local-Postgres integration test skipped after its infrastructure/test move.
 - Jobs tests are 208/208 passing with five Docker integration tests skipped after its infrastructure/test move.
 - CRM tests are 19/19 passing after its infrastructure/test move.
 - Artifacts tests are 57/57 passing after its owned database and tenant-isolation move.
 - AgentChat tests are 42/42 passing after its owned database, unit-of-work, and repository-test move.
 - Shared Infrastructure tests: 96/96 passing after obsolete Vault implementation coverage moved to Vault and contract-level fakes replaced concrete Vault EF dependencies.
-- Complete test set: 876 passed, 6 environment-dependent integration tests skipped, 0 failed.
+- Complete test set: 879 passed, 6 environment-dependent integration tests skipped, 0 failed.
 - Artifacts presigned-URL coverage now allows the AWS SDK's two-second signing-clock tolerance instead of intermittently requiring an exact expiry second.
-- React frontend: lint passes with zero warnings, 12 test files/23 tests pass, and a production build succeeds when emitted to an isolated output directory.
+- React frontend: lint passes with zero warnings, 46 test files/89 tests pass, and a production build succeeds when emitted to an isolated output directory.
 
 ## In progress
 
-- Continue splitting the shared `AppDbContext`, row model, and migration history; Vault, AgentChat, and Artifacts are complete and the remaining service/platform tables still need owned database lifecycles.
+- Continue splitting the shared `AppDbContext`, row model, and migration history; Vault, AgentChat, Artifacts, and Search dashboards are complete and the remaining service/platform tables still need owned database lifecycles.
 - Decide explicit ownership for the remaining platform capabilities in shared Infrastructure, especially authentication/tenancy, communications, embeddings/vector storage, cluster integration, and analytics refresh.
 
 ## Remaining coupling to remove
 
 - Service implementations still reference the main Application assembly as an extraction seam.
 - The current host still references service implementations directly.
-- Remaining extracted service adapters still depend on the shared `PlaceContext.Infrastructure` assembly for `AppDbContext`, persistence rows, security, and tenancy primitives; Vault, AgentChat, and Artifacts no longer do.
+- Remaining extracted service adapters still depend on the shared `PlaceContext.Infrastructure` assembly for `AppDbContext`, persistence rows, security, and tenancy primitives; Vault, AgentChat, Artifacts, and Search no longer do.
 - The shared database model and migration history still contain tables for the other services and platform capabilities, preventing their independent database evolution.
 - Standalone Data/Search runtimes currently fall back to service configuration when Vault adapters are absent; replace this transition seam with authenticated service-to-service Vault contracts.
 - API runtimes currently expose the explicitly migrated controller surface; remaining gateway-only commands must move behind their owning service APIs before the gateway can drop implementation references.
 - Search's decision-tree read model consumes Jobs, Data, and Artifacts domain models transitively; replace these with service contracts/read models.
-- The remaining service runtimes need owned databases/migrations and integration-event/outbox wiring; Vault, AgentChat, and Artifacts now own their database migration and health-check paths.
+- The remaining service runtimes need owned databases/migrations and integration-event/outbox wiring; Vault, AgentChat, Artifacts, and Search now own their database migration and health-check paths.
 - Contracts retain legacy `PlaceContext.Application.*` namespaces for source compatibility; physical ownership is correct, namespace cleanup remains.
 
 ## Next steps
 
-1. Extract the next bounded persistence slice from shared `AppDbContext`, following the proven Vault/AgentChat/Artifacts context, migration-history, and unit-of-work pattern; Search is the leading candidate.
+1. Extract the next bounded persistence slice from shared `AppDbContext`, following the proven Vault/AgentChat/Artifacts/Search context, migration-history, and unit-of-work pattern; Data is the leading candidate.
 2. Expand each service controller to cover its remaining gateway-only commands and replace cross-service repository reads with HTTP/integration-event contracts.
 3. Remove direct service implementation references from the gateway in favor of HTTP clients/integration events.
 4. Continue the root `frontend/` migration one vertical slice at a time after each corresponding runtime/API boundary is independent.

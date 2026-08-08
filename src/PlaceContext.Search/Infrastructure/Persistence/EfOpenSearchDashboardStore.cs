@@ -1,16 +1,15 @@
 using Microsoft.EntityFrameworkCore;
 using PlaceContext.Application.Ports;
-using PlaceContext.Infrastructure.Persistence;
 
 namespace PlaceContext.Search.Infrastructure.Persistence;
 
 public sealed class EfOpenSearchDashboardStore : IOpenSearchDashboardStore
 {
     private const string Purpose = "opensearch.dashboard.v1";
-    private readonly AppDbContext _db;
+    private readonly SearchDbContext _db;
     private readonly IDataEncryptor _encryptor;
 
-    public EfOpenSearchDashboardStore(AppDbContext db, IDataEncryptor encryptor)
+    public EfOpenSearchDashboardStore(SearchDbContext db, IDataEncryptor encryptor)
         => (_db, _encryptor) = (db, encryptor);
 
     public async Task<IReadOnlyList<OpenSearchDashboardRecord>> ListAsync(

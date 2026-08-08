@@ -9,6 +9,5 @@
     <ProjectReference Include="PlaceContext.Search.csproj" />
     <ProjectReference Include="PlaceContext.Search.Infrastructure.csproj" />
     <ProjectReference Include="..\PlaceContext.Application\PlaceContext.ServiceDefaults.csproj" />
-    <ProjectReference Include="..\PlaceContext.Infrastructure\PlaceContext.Infrastructure.csproj" />
   </ItemGroup>
 </Project>

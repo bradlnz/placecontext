@@ -327,6 +327,47 @@ public sealed class SourceOrganizationTests
             });
     }
 
+    [Fact]
+    public void Search_persistence_is_owned_by_search_infrastructure()
+    {
+        var serviceDirectory = Path.Combine(Root, "src", "PlaceContext.Search");
+        var infrastructureProject = Path.Combine(
+            serviceDirectory,
+            "PlaceContext.Search.Infrastructure.csproj");
+        var apiProject = Path.Combine(serviceDirectory, "PlaceContext.Search.Api.csproj");
+        var sharedPersistence = Path.Combine(
+            Root,
+            "src",
+            "PlaceContext.Infrastructure",
+            "Persistence");
+        var sharedContextText = File.ReadAllText(Path.Combine(sharedPersistence, "AppDbContext.cs"));
+        var required = new[]
+        {
+            Path.Combine(serviceDirectory, "Infrastructure", "Persistence", "SearchDbContext.cs"),
+            Path.Combine(serviceDirectory, "Infrastructure", "Persistence", "OpenSearchDashboardRow.cs"),
+            Path.Combine(serviceDirectory, "Domain", "Persistence", "ISearchUnitOfWork.cs"),
+            Path.Combine(
+                serviceDirectory,
+                "Infrastructure",
+                "Persistence",
+                "Migrations",
+                "SearchDbContextModelSnapshot.cs"),
+        };
+
+        Assert.All(required, path => Assert.True(File.Exists(path), $"Missing {Relative(path)}"));
+        Assert.DoesNotContain(
+            "PlaceContext.Infrastructure.csproj",
+            File.ReadAllText(infrastructureProject),
+            StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(
+            "PlaceContext.Infrastructure.csproj",
+            File.ReadAllText(apiProject),
+            StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("OpenSearchDashboardRow", sharedContextText, StringComparison.Ordinal);
+        Assert.DoesNotContain("opensearch_dashboards", sharedContextText, StringComparison.Ordinal);
+        Assert.False(File.Exists(Path.Combine(sharedPersistence, "OpenSearchDashboardRow.cs")));
+    }
+
     private static IEnumerable<string> SourceFiles()
         => Directory.EnumerateFiles(Path.Combine(Root, "src"), "*.cs", SearchOption.AllDirectories)
             .Where(file => !HasPathPart(file, "bin") && !HasPathPart(file, "obj"))
