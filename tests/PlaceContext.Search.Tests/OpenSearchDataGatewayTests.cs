@@ -5,7 +5,7 @@ using Microsoft.Extensions.Options;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Ports;
 using PlaceContext.Search.Infrastructure.OpenSearch;
-using PlaceContext.Vault.Domain.Repositories;
+using PlaceContext.Search.Integration;
 
 namespace PlaceContext.Search.Tests;
 
@@ -15,7 +15,7 @@ public sealed class OpenSearchDataGatewayTests
     public async Task Project_vault_connection_is_exposed_to_jobs_as_runtime_environment()
     {
         var projectId = Guid.NewGuid();
-        var secrets = new StubProjectSecretRepository(new Dictionary<string, string>
+        var secrets = new StubSearchSecretProvider(new Dictionary<string, string>
         {
             [OpenSearchEnvironmentVariables.Endpoint] = "https://vault-search.test",
             [OpenSearchEnvironmentVariables.Username] = "job-user",
@@ -24,8 +24,7 @@ public sealed class OpenSearchDataGatewayTests
         });
         var resolver = new OpenSearchConnectionResolver(
             Options.Create(new OpenSearchOptions()),
-            secrets,
-            new PlaintextProtector());
+            secrets);
 
         var env = await resolver.GetJobEnvironmentAsync(projectId);
 
@@ -287,30 +286,14 @@ public sealed class OpenSearchDataGatewayTests
                 new Dictionary<string, string>());
     }
 
-    private sealed class PlaintextProtector : ISecretProtector
+    private sealed class StubSearchSecretProvider(
+        IReadOnlyDictionary<string, string> values) : ISearchSecretProvider
     {
-        public string Protect(string plaintext) => plaintext;
-        public string Unprotect(string ciphertext) => ciphertext;
-    }
-
-    private sealed class StubProjectSecretRepository(
-        IReadOnlyDictionary<string, string> ciphers) : IProjectSecretRepository
-    {
-        public Task<IReadOnlyList<(string Name, DateTimeOffset CreatedAt)>> ListAsync(
-            Guid projectId, CancellationToken ct = default)
-            => Task.FromResult<IReadOnlyList<(string, DateTimeOffset)>>(Array.Empty<(string, DateTimeOffset)>());
-
-        public Task AddAsync(
-            Guid projectId, string name, string cipher, DateTimeOffset now,
-            CancellationToken ct = default)
-            => throw new NotSupportedException();
-
-        public Task DeleteAsync(Guid projectId, string name, CancellationToken ct = default)
-            => throw new NotSupportedException();
-
-        public Task<IReadOnlyDictionary<string, string>> GetCiphersAsync(
-            Guid projectId, CancellationToken ct = default)
-            => Task.FromResult(ciphers);
+        public Task<IReadOnlyDictionary<string, string>> GetSecretsAsync(
+            Guid projectId, IReadOnlyList<string> names, CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyDictionary<string, string>>(names
+                .Where(values.ContainsKey)
+                .ToDictionary(name => name, name => values[name]));
     }
 
     private sealed class StubHandler : HttpMessageHandler

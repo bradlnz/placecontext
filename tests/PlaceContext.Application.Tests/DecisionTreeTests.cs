@@ -1,6 +1,7 @@
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.Services;
 using PlaceContext.Domain.ValueObjects;
+using PlaceContext.Data.Integration;
 using Xunit;
 
 namespace PlaceContext.Domain.Tests;
@@ -97,10 +98,10 @@ public class DecisionTreeTests
     public void Lineage_links_chains_jobs_and_the_tables_jobs_write()
     {
         var pid = ProjectId.New();
-        var map = new MapSpec("img", new[] { "{}" }, new Dictionary<string, string>());
-        var jobA = Job.Create(pid.Value, "scrape", null, map, null, 1, ExitCodePolicy.Default, T0);
-        var jobB = Job.Create(pid.Value, "feasibility", null, map, null, 1, ExitCodePolicy.Default, T0);
-        var chain = JobChain.Create(pid.Value, "nightly", null, new[] { jobA.Id, jobB.Id }, T0);
+        var jobA = new DataJobSummary(Guid.NewGuid(), pid.Value, "scrape", null, "json");
+        var jobB = new DataJobSummary(Guid.NewGuid(), pid.Value, "feasibility", null, "json");
+        var chain = new DataChainSummary(Guid.NewGuid(), pid.Value, "nightly", null,
+            new[] { new DataChainStageSummary(new[] { jobA.Id }), new DataChainStageSummary(new[] { jobB.Id }) });
         var mapping = DataMapping.Create(pid.Value, jobB.Id, "feasibility_matrix", null,
             new[] { new DataFieldMapping("$.margin", "margin_pct", "numeric") }, T0);
 
@@ -134,8 +135,7 @@ public class DecisionTreeTests
     public void Unchained_jobs_hang_off_the_root()
     {
         var pid = ProjectId.New();
-        var map = new MapSpec("img", new[] { "{}" }, new Dictionary<string, string>());
-        var job = Job.Create(pid.Value, "ad-hoc", null, map, null, 1, ExitCodePolicy.Default, T0);
+        var job = new DataJobSummary(Guid.NewGuid(), pid.Value, "ad-hoc", null, "json");
 
         var tree = new DecisionTreeAssembler().Assemble(
             ProjectName.From("alpha"), Array.Empty<Decision>(), ActivityLog.Start(pid),
@@ -148,8 +148,7 @@ public class DecisionTreeTests
     public void Run_outputs_link_to_their_job_when_the_job_is_known()
     {
         var pid = ProjectId.New();
-        var map = new MapSpec("img", new[] { "{}" }, new Dictionary<string, string>());
-        var job = Job.Create(pid.Value, "nightly etl", null, map, null, 1, ExitCodePolicy.Default, T0);
+        var job = new DataJobSummary(Guid.NewGuid(), pid.Value, "nightly etl", null, "json");
         var runOutputs = new[]
         {
             new RunOutputNode("aaaaaaaa", "## Organized run output: nightly etl", new[] { 1f, 0f }, job.Id),
@@ -208,13 +207,10 @@ public class DecisionTreeTests
     public void Job_runs_and_artifacts_link_to_their_job()
     {
         var pid = ProjectId.New();
-        var map = new MapSpec("img", new[] { "{}" }, new Dictionary<string, string>());
-        var job = Job.Create(pid.Value, "scrape", null, map, null, 1, ExitCodePolicy.Default, T0);
-        var snapshot = WorkloadSnapshot.From(job.MapSpec, job.ReduceSpec, job.ConcurrencyLimit);
-        var run = JobRun.Start(job.Id, pid.Value, T0, snapshot);
-        run.Complete(Array.Empty<ShardResult>(), null, T0.AddMinutes(1));
-        var artifact = RunArtifactLink.Create(run.Id, job.Id, pid.Value, PostJobActionKind.HtmlReport,
-            "report.html", "bucket", "key", "text/html", 1024, T0.AddMinutes(2));
+        var job = new DataJobSummary(Guid.NewGuid(), pid.Value, "scrape", null, "json");
+        var run = new DataRunSummary(Guid.NewGuid(), job.Id, "Succeeded", T0);
+        var artifact = new DataArtifactSummary(
+            Guid.NewGuid(), run.Id, job.Id, "report.html", "HtmlReport", "text/html");
 
         var tree = new DecisionTreeAssembler().Assemble(
             ProjectName.From("alpha"), Array.Empty<Decision>(), ActivityLog.Start(pid),
@@ -261,13 +257,10 @@ public class DecisionTreeTests
     public void Entity_aligned_nodes_do_not_inflate_coupling_metrics()
     {
         var pid = ProjectId.New();
-        var map = new MapSpec("img", new[] { "{}" }, new Dictionary<string, string>());
-        var job = Job.Create(pid.Value, "scrape", null, map, null, 1, ExitCodePolicy.Default, T0);
-        var snapshot = WorkloadSnapshot.From(job.MapSpec, job.ReduceSpec, job.ConcurrencyLimit);
-        var run = JobRun.Start(job.Id, pid.Value, T0, snapshot);
-        run.Complete(Array.Empty<ShardResult>(), null, T0.AddMinutes(1));
-        var artifact = RunArtifactLink.Create(run.Id, job.Id, pid.Value, PostJobActionKind.HtmlReport,
-            "report.html", "bucket", "key", "text/html", 1024, T0.AddMinutes(2));
+        var job = new DataJobSummary(Guid.NewGuid(), pid.Value, "scrape", null, "json");
+        var run = new DataRunSummary(Guid.NewGuid(), job.Id, "Succeeded", T0);
+        var artifact = new DataArtifactSummary(
+            Guid.NewGuid(), run.Id, job.Id, "report.html", "HtmlReport", "text/html");
 
         var tree = new DecisionTreeAssembler().Assemble(
             ProjectName.From("alpha"), Array.Empty<Decision>(), ActivityLog.Start(pid),

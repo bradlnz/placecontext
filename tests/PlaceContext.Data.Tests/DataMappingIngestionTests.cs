@@ -21,9 +21,8 @@ public class DataMappingIngestionTests
         return (job, run);
     }
 
-    private static DataMappingIngestionService Service(Job job, DataMapping mapping, FakeDataStore store,
-        FakeNotifier? notifier = null)
-        => new(new FakeMappings(mapping), store, new FakeClock(), indexer: null, notifier: notifier);
+    private static DataMappingIngestionService Service(Job job, DataMapping mapping, FakeDataStore store)
+        => new(new FakeMappings(mapping), store, new FakeClock(), indexer: null);
 
     [Fact]
     public async Task Ingests_each_record_of_the_rows_path_array_with_provenance()
@@ -36,7 +35,7 @@ public class DataMappingIngestionTests
         }, T0);
         var store = new FakeDataStore();
 
-        await Service(job, mapping, store).IngestAsync(job, run);
+        await Service(job, mapping, store).IngestJobOutputAsync(job.Id, run.Id, job.ProjectId, run.ShardResults.Single().Artifact);
 
         var append = Assert.Single(store.Appends);
         Assert.Equal("listings", append.Table);
@@ -59,7 +58,7 @@ public class DataMappingIngestionTests
         }, T0);
         var store = new FakeDataStore();
 
-        await Service(job, mapping, store).IngestAsync(job, run);
+        await Service(job, mapping, store).IngestJobOutputAsync(job.Id, run.Id, job.ProjectId, run.ShardResults.Single().Artifact);
 
         var append = Assert.Single(store.Appends);
         var row = Assert.Single(append.Rows);
@@ -74,12 +73,12 @@ public class DataMappingIngestionTests
         var disabled = DataMapping.Create(job.ProjectId, job.Id, "t1", "rows",
             new[] { new DataFieldMapping("a", "a", "integer") }, T0, enabled: false);
         var store = new FakeDataStore();
-        await Service(job, disabled, store).IngestAsync(job, run);
+        await Service(job, disabled, store).IngestJobOutputAsync(job.Id, run.Id, job.ProjectId, run.ShardResults.Single().Artifact);
         Assert.Empty(store.Appends);
 
         var missingPath = DataMapping.Create(job.ProjectId, job.Id, "t2", "nope.here",
             new[] { new DataFieldMapping("a", "a", "integer") }, T0);
-        await Service(job, missingPath, store).IngestAsync(job, run);
+        await Service(job, missingPath, store).IngestJobOutputAsync(job.Id, run.Id, job.ProjectId, run.ShardResults.Single().Artifact);
         Assert.Empty(store.Appends);
     }
 
@@ -100,14 +99,11 @@ public class DataMappingIngestionTests
             new ProjectColumnInfo("ingested_at", "timestamptz", true, false),
             new ProjectColumnInfo("run_id", "uuid", true, false),
         };
-        var notifier = new FakeNotifier();
-
-        await Service(job, mapping, store, notifier).IngestAsync(job, run);
+        await Service(job, mapping, store).IngestJobOutputAsync(job.Id, run.Id, job.ProjectId, run.ShardResults.Single().Artifact);
 
         var append = Assert.Single(store.Appends);
         Assert.Contains(append.Columns, column => column.Name == "lga");
         Assert.Equal("Logan", append.Rows[0][3]);
-        Assert.Empty(notifier.Updates);
     }
 
     [Fact]
@@ -125,13 +121,10 @@ public class DataMappingIngestionTests
             new ProjectColumnInfo("suburb", "text", false, false),
             new ProjectColumnInfo("council_code", "text", false, false),
         };
-        var notifier = new FakeNotifier();
-
-        await Service(job, mapping, store, notifier).IngestAsync(job, run);
+        await Service(job, mapping, store).IngestJobOutputAsync(job.Id, run.Id, job.ProjectId, run.ShardResults.Single().Artifact);
 
         var append = Assert.Single(store.Appends);
         Assert.Equal("Logan", append.Rows[0][3]); // council_code value
-        Assert.Empty(notifier.Updates);
     }
 
     [Fact]
@@ -150,7 +143,7 @@ public class DataMappingIngestionTests
         }, T0);
         var store = new FakeDataStore();
 
-        await Service(job, mapping, store).IngestAsync(job, run);
+        await Service(job, mapping, store).IngestJobOutputAsync(job.Id, run.Id, job.ProjectId, run.ShardResults.Single().Artifact);
 
         var append = Assert.Single(store.Appends);
         // Objects are no longer flattened — they land as JSON text in the declared column.
@@ -169,7 +162,7 @@ public class DataMappingIngestionTests
             new[] { new DataFieldMapping("meta", "meta", "jsonb") }, T0);
         var store = new FakeDataStore();
 
-        await Service(job, mapping, store).IngestAsync(job, run);
+        await Service(job, mapping, store).IngestJobOutputAsync(job.Id, run.Id, job.ProjectId, run.ShardResults.Single().Artifact);
 
         var append = Assert.Single(store.Appends);
         Assert.Equal(new[] { "ingested_at", "run_id", "meta", "source_kind", "source_id", "mapping_id" }, append.Columns.Select(c => c.Name));
@@ -187,7 +180,7 @@ public class DataMappingIngestionTests
         }, T0);
         var store = new FakeDataStore();
 
-        await Service(job, mapping, store).IngestAsync(job, run);
+        await Service(job, mapping, store).IngestJobOutputAsync(job.Id, run.Id, job.ProjectId, run.ShardResults.Single().Artifact);
 
         var append = Assert.Single(store.Appends);
         Assert.Equal(new[] { "ingested_at", "run_id", "tags", "extra", "source_kind", "source_id", "mapping_id" }, append.Columns.Select(c => c.Name));
@@ -203,7 +196,7 @@ public class DataMappingIngestionTests
             new[] { new DataFieldMapping("meta", "meta", "text") }, T0);
         var store = new FakeDataStore();
 
-        await Service(job, mapping, store).IngestAsync(job, run);
+        await Service(job, mapping, store).IngestJobOutputAsync(job.Id, run.Id, job.ProjectId, run.ShardResults.Single().Artifact);
 
         var append = Assert.Single(store.Appends);
         Assert.Equal(new[] { "ingested_at", "run_id", "meta", "source_kind", "source_id", "mapping_id" }, append.Columns.Select(c => c.Name));
@@ -228,14 +221,11 @@ public class DataMappingIngestionTests
             new ProjectColumnInfo("city", "text", false, false),
             new ProjectColumnInfo("meta", "jsonb", false, false),
         };
-        var notifier = new FakeNotifier();
-
-        await Service(job, mapping, store, notifier).IngestAsync(job, run);
+        await Service(job, mapping, store).IngestJobOutputAsync(job.Id, run.Id, job.ProjectId, run.ShardResults.Single().Artifact);
 
         var append = Assert.Single(store.Appends);
         Assert.Equal(new[] { "ingested_at", "run_id", "city", "meta", "source_kind", "source_id", "mapping_id" }, append.Columns.Select(c => c.Name));
         Assert.Equal("""{"region":"QLD"}""", append.Rows[0][3]);
-        Assert.Empty(notifier.Updates);
     }
 
     [Fact]
@@ -250,7 +240,7 @@ public class DataMappingIngestionTests
         }, T0);
         var store = new FakeDataStore();
 
-        await Service(job, mapping, store).IngestAsync(job, run);
+        await Service(job, mapping, store).IngestJobOutputAsync(job.Id, run.Id, job.ProjectId, run.ShardResults.Single().Artifact);
 
         var append = Assert.Single(store.Appends);
         Assert.Equal(new[] { "ingested_at", "run_id", "m", "m_a", "source_kind", "source_id", "mapping_id" }, append.Columns.Select(c => c.Name));
@@ -270,8 +260,8 @@ public class DataMappingIngestionTests
             new[] { new DataFieldMapping("score", "score", "integer") }, T0);
         var store = new FakeDataStore();
 
-        await Service(firstJob, firstMapping, store).IngestAsync(firstJob, firstRun);
-        await Service(secondJob, secondMapping, store).IngestAsync(secondJob, secondRun);
+        await Service(firstJob, firstMapping, store).IngestJobOutputAsync(firstJob.Id, firstRun.Id, firstJob.ProjectId, firstRun.ShardResults.Single().Artifact);
+        await Service(secondJob, secondMapping, store).IngestJobOutputAsync(secondJob.Id, secondRun.Id, secondJob.ProjectId, secondRun.ShardResults.Single().Artifact);
 
         Assert.Equal(2, store.Appends.Count);
         Assert.All(store.Appends, append => Assert.Equal("property_facts", append.Table));
@@ -293,7 +283,7 @@ public class DataMappingIngestionTests
             new[] { new DataFieldMapping("$", "message", "text") }, T0);
         var store = new FakeDataStore();
 
-        await Service(job, mapping, store).IngestAsync(job, run);
+        await Service(job, mapping, store).IngestJobOutputAsync(job.Id, run.Id, job.ProjectId, run.ShardResults.Single().Artifact);
 
         var append = Assert.Single(store.Appends);
         Assert.Equal("analysis complete", append.Rows[0][2]);
@@ -364,12 +354,6 @@ public class DataMappingIngestionTests
         public Task<ProjectTableReadResult> ReadTableAsync(
             Guid projectId, string tableName, long maxRows = 10000, CancellationToken ct = default)
             => throw new NotSupportedException();
-    }
-
-    private sealed class FakeNotifier : IRunStatusNotifier
-    {
-        public List<RunStatusUpdate> Updates { get; } = new();
-        public void Sync(RunStatusUpdate update) => Updates.Add(update);
     }
 
     private sealed class FakeClock : IClock

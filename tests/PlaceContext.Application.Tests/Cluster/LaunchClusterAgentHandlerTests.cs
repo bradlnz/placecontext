@@ -1,6 +1,6 @@
 using PlaceContext.Application.Cluster;
 using PlaceContext.Application.Ports;
-using PlaceContext.Vault.Domain.Repositories;
+using PlaceContext.Agents.Cluster;
 
 namespace PlaceContext.Application.Tests.Cluster;
 
@@ -12,7 +12,7 @@ public sealed class LaunchClusterAgentHandlerTests
         var secrets = new FakeSecrets();
         var minter = new FakeMinter { Key = "tskey-auth-should-not-be-used" };
         var admin = new FakeAdmin();
-        var h = new LaunchClusterAgentHandler(secrets, new FakeProtector(), minter, admin);
+        var h = new LaunchClusterAgentHandler(secrets, minter, admin);
 
         var r = await h.HandleAsync(new LaunchClusterAgentCommand(), default);
 
@@ -31,7 +31,7 @@ public sealed class LaunchClusterAgentHandlerTests
         secrets.Seed(LaunchClusterAgentHandler.ClientSecretSecretName, "secret-1");
         var minter = new FakeMinter { Key = null };
         var admin = new FakeAdmin();
-        var h = new LaunchClusterAgentHandler(secrets, new FakeProtector(), minter, admin);
+        var h = new LaunchClusterAgentHandler(secrets, minter, admin);
 
         var r = await h.HandleAsync(new LaunchClusterAgentCommand(), default);
 
@@ -52,7 +52,7 @@ public sealed class LaunchClusterAgentHandlerTests
         {
             JoinResult = new ClusterJoinMaterial("PC2.abc", "https://master:6443", true, "instructions"),
         };
-        var h = new LaunchClusterAgentHandler(secrets, new FakeProtector(), minter, admin);
+        var h = new LaunchClusterAgentHandler(secrets, minter, admin);
 
         var r = await h.HandleAsync(new LaunchClusterAgentCommand(), default);
 
@@ -76,7 +76,7 @@ public sealed class LaunchClusterAgentHandlerTests
         {
             JoinResult = new ClusterJoinMaterial("PC2.abc", "https://master:6443", true, "instructions"),
         };
-        var h = new LaunchClusterAgentHandler(secrets, new FakeProtector(), minter, admin);
+        var h = new LaunchClusterAgentHandler(secrets, minter, admin);
 
         await h.HandleAsync(new LaunchClusterAgentCommand(), default);
 
@@ -91,7 +91,7 @@ public sealed class LaunchClusterAgentHandlerTests
         secrets.Seed(LaunchClusterAgentHandler.ClientSecretSecretName, "secret-1");
         var minter = new FakeMinter { Key = "tskey-auth-abc123" };
         var admin = new FakeAdmin { JoinResult = null };
-        var h = new LaunchClusterAgentHandler(secrets, new FakeProtector(), minter, admin);
+        var h = new LaunchClusterAgentHandler(secrets, minter, admin);
 
         var r = await h.HandleAsync(new LaunchClusterAgentCommand(), default);
 
@@ -101,43 +101,17 @@ public sealed class LaunchClusterAgentHandlerTests
 
     // ── fakes ─────────────────────────────────────────────────────────────────────────────────────
 
-    private sealed class FakeSecrets : IProjectSecretRepository
+    private sealed class FakeSecrets : IAgentSecretProvider
     {
-        private readonly Dictionary<string, string> _ciphers = new();
+        private readonly Dictionary<string, string> _values = new();
 
-        public void Seed(string name, string plaintext) => _ciphers[name] = FakeProtector.Encode(plaintext);
+        public void Seed(string name, string plaintext) => _values[name] = plaintext;
 
-        public Task<IReadOnlyList<(string Name, DateTimeOffset CreatedAt)>> ListAsync(Guid projectId, CancellationToken ct = default)
-            => Task.FromResult<IReadOnlyList<(string, DateTimeOffset)>>(Array.Empty<(string, DateTimeOffset)>());
-
-        public Task AddAsync(Guid projectId, string name, string cipher, DateTimeOffset now, CancellationToken ct = default)
-        {
-            _ciphers[name] = cipher;
-            return Task.CompletedTask;
-        }
-
-        public Task DeleteAsync(Guid projectId, string name, CancellationToken ct = default)
-        {
-            _ciphers.Remove(name);
-            return Task.CompletedTask;
-        }
-
-        public Task<IReadOnlyDictionary<string, string>> GetCiphersAsync(Guid projectId, CancellationToken ct = default)
-            => Task.FromResult<IReadOnlyDictionary<string, string>>(new Dictionary<string, string>(_ciphers));
-    }
-
-    /// <summary>Reversible fake — "protects" by prefixing so tests can assert round-tripping without real crypto.</summary>
-    private sealed class FakeProtector : ISecretProtector
-    {
-        private const string Prefix = "enc:";
-
-        public static string Encode(string plaintext) => Prefix + plaintext;
-
-        public string Protect(string plaintext) => Encode(plaintext);
-
-        public string Unprotect(string ciphertext) => ciphertext.StartsWith(Prefix, StringComparison.Ordinal)
-            ? ciphertext[Prefix.Length..]
-            : ciphertext;
+        public Task<IReadOnlyDictionary<string, string>> GetSecretsAsync(
+            Guid projectId, IReadOnlyList<string> names, CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyDictionary<string, string>>(names
+                .Where(_values.ContainsKey)
+                .ToDictionary(name => name, name => _values[name]));
     }
 
     private sealed class FakeMinter : ITailscaleKeyMinter

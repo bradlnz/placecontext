@@ -310,11 +310,9 @@ Last updated: 2026-08-09 (Australia/Brisbane)
   HTTP request models now live under folders matching their architectural roles.
 - Added Projects-owned build output/intermediate isolation so its four co-located projects can build
   safely in parallel instead of corrupting shared `obj` state and reporting a false project cycle.
-- Architecture tests now pass 18/18. A clean serialized restore followed by a parallel full-solution
-  test reaches the remaining stale test-fake migrations; passing suites include Infrastructure 93/93,
-  Domain 144/144, Agents 10/10, Identity 5/5, Artifacts 21/21, App 28/28, MCP 2/2, and Vault 4/4.
-- Remaining full-suite blockers are compile-time test migrations in Application, Search, Data, CRM,
-  Jobs, and AgentChat. Production and architecture compilation are no longer blocking execution.
+- Architecture tests now pass 19/19. The stale Application, Search, Data, CRM, Jobs, and AgentChat
+  fixtures have been migrated to current service-owned seams; the complete solution builds and all
+  runnable tests pass.
 
 ### Projects-owned persistence and composition — 2026-08-09T18:24:42+10:00
 
@@ -344,6 +342,17 @@ Last updated: 2026-08-09 (Australia/Brisbane)
   behavior.
 - Verified Jobs tests pass 248/253 with five environment-dependent Docker tests skipped, Search tests
   pass 39/39, architecture tests pass 19/19, and the complete solution test command exits 0.
+
+### Stale test migration and full solution gate — 2026-08-09T18:42:46+10:00
+
+- Migrated stale Application, Search, Data, CRM, Jobs, and AgentChat tests away from removed direct
+  repositories/providers and onto their service-owned handlers, caller-local clients, and current
+  constructor contracts. Shared test fakes were narrowed to the boundaries each service now consumes.
+- Preserved behavioral coverage for completed-run Data processing and Search indexing rather than
+  deleting tests whose old in-process implementations no longer exist.
+- `dotnet test PlaceContext.slnx` now exits 0 in the .NET 10 SDK container. Runnable suites pass in full;
+  five Jobs Docker-runtime tests and one Data PostgreSQL-specific test remain explicitly skipped because
+  their external runtime prerequisites are unavailable in the test container.
 
 ## Remaining coupling to remove
 

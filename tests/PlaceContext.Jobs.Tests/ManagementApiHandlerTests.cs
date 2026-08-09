@@ -7,48 +7,12 @@ using Xunit;
 namespace PlaceContext.Application.Tests;
 
 /// <summary>
-/// Application-layer tests for the handlers added to back the /api/v1 management API: get-by-id reads
-/// for projects and triggers, and job deletion. Unit tests over in-memory fakes.
+/// Application-layer tests for Jobs-owned management handlers. Unit tests over in-memory fakes.
 /// </summary>
 public class ManagementApiHandlerTests
 {
     private static readonly DateTimeOffset T0 = new(2026, 7, 15, 12, 0, 0, TimeSpan.Zero);
 
-    // ── GetProjectById ────────────────────────────────────────────────────────────────────────────
-
-    [Fact]
-    public async Task GetProjectById_returns_the_matching_project()
-    {
-        var repo = new InMemoryProjectRepository();
-        var project = Project.Discover(ProjectPath.From("/home/brad/code/alpha"), ProjectName.From("alpha"), T0);
-        project.Register(T0);
-        await repo.AddAsync(project);
-
-        var handler = new GetProjectByIdHandler(repo);
-        var view = await handler.HandleAsync(new GetProjectByIdQuery(project.Id.Value));
-
-        Assert.NotNull(view);
-        Assert.Equal("alpha", view!.Name);
-        Assert.Equal(project.Id.Value, view.Id);
-    }
-
-    [Fact]
-    public async Task GetProjectById_returns_null_for_an_unknown_id()
-    {
-        var handler = new GetProjectByIdHandler(new InMemoryProjectRepository());
-        var view = await handler.HandleAsync(new GetProjectByIdQuery(Guid.NewGuid()));
-        Assert.Null(view);
-    }
-
-    [Fact]
-    public async Task GetProjectById_returns_null_for_an_empty_guid_rather_than_throwing()
-    {
-        // ProjectId.From rejects Guid.Empty — the handler must treat that as "not found", not blow up
-        // into a 500 for a caller that (mis)requests /api/v1/projects/00000000-0000-0000-0000-000000000000.
-        var handler = new GetProjectByIdHandler(new InMemoryProjectRepository());
-        var view = await handler.HandleAsync(new GetProjectByIdQuery(Guid.Empty));
-        Assert.Null(view);
-    }
 
     // ── DeleteJob ─────────────────────────────────────────────────────────────────────────────────
 

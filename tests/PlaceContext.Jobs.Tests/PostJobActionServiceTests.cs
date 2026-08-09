@@ -4,6 +4,7 @@ using PlaceContext.Application.Ports;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.Repositories;
 using PlaceContext.Domain.ValueObjects;
+using PlaceContext.Jobs.Integration;
 using Xunit;
 
 namespace PlaceContext.Application.Tests;
@@ -27,8 +28,7 @@ public class PostJobActionServiceTests
         return (job, run);
     }
 
-    private static PostJobActionService Service(FakeStore store, FakeLinks? links = null) =>
-        new(store, links ?? new FakeLinks(), new FakeUow(), new FakeClock());
+    private static PostJobActionService Service(FakeStore store) => new(store, new FakeClock());
 
     // ── The return type drives the mandatory primary artifact ────────────────────────────────────────
 
@@ -37,13 +37,12 @@ public class PostJobActionServiceTests
     {
         var (job, run) = Sample(JobReturnType.Json);
         var store = new FakeStore();
-        var links = new FakeLinks();
 
-        await Service(store, links).RunAsync(job, run);
+        await Service(store).RunAsync(job, run);
 
         var obj = Assert.Single(store.Objects, o => o.Key.EndsWith("result.json"));
         Assert.Contains("\"rows\"", Encoding.UTF8.GetString(obj.Content));
-        Assert.Single(links.Links); // exactly the mandatory primary artifact, nothing else
+        Assert.Single(store.Links); // exactly the mandatory primary artifact, nothing else
     }
 
     [Fact]
@@ -141,13 +140,12 @@ public class PostJobActionServiceTests
         }, null, T0.AddSeconds(2));
 
         var store = new FakeStore();
-        var links = new FakeLinks();
-        await Service(store, links).RunAsync(job, run);
+        await Service(store).RunAsync(job, run);
 
         // Stored twice by design: auto-captured under out/ and as the typed primary artifact.
-        var primary = Assert.Single(store.Objects, o => o.Key.EndsWith($"runs/{run.Id:N}/report.pdf"));
+        var primary = Assert.Single(store.Objects, o => o.Key == "report.pdf");
         Assert.Equal(pdfBytes, primary.Content);
-        Assert.Contains(links.Links, l => l.ContentType == "application/pdf");
+        Assert.Contains(store.Links, l => l.ContentType == "application/pdf");
     }
 
     [Fact]
@@ -174,12 +172,11 @@ public class PostJobActionServiceTests
         }, null, T0.AddSeconds(2));
 
         var store = new FakeStore();
-        var links = new FakeLinks();
-        await Service(store, links).RunAsync(job, run);
+        await Service(store).RunAsync(job, run);
 
         var obj = Assert.Single(store.Objects, o => o.Key.EndsWith("result.json"));
         Assert.Equal("null", Encoding.UTF8.GetString(obj.Content)); // well-formed even when empty
-        Assert.Single(links.Links);
+        Assert.Single(store.Links);
     }
 
     [Fact]
@@ -210,12 +207,11 @@ public class PostJobActionServiceTests
         }, null, T0.AddSeconds(2));
 
         var store = new FakeStore();
-        var links = new FakeLinks();
-        await Service(store, links).RunAsync(job, run);
+        await Service(store).RunAsync(job, run);
 
         var obj = Assert.Single(store.Objects, o => o.Key.EndsWith("shard-0.html"));
         Assert.Contains("<h1>hi</h1>", Encoding.UTF8.GetString(obj.Content));
-        Assert.Single(links.Links, l => l.Kind == PostJobActionKind.HtmlOutput);
+        Assert.Single(store.Links, l => l.Kind == PostJobActionKind.HtmlOutput);
     }
 
     [Fact]
@@ -281,13 +277,12 @@ public class PostJobActionServiceTests
         }, null, T0.AddSeconds(2));
 
         var store = new FakeStore();
-        var links = new FakeLinks();
-        await Service(store, links).RunAsync(job, run);
+        await Service(store).RunAsync(job, run);
 
         var obj = Assert.Single(store.Objects, o => o.Key.EndsWith("out/0/listings.pdf"));
         Assert.Equal(pdfBytes, obj.Content);
         Assert.DoesNotContain(store.Objects, o => o.Key.EndsWith("notes.txt")); // plain text is not auto-stored
-        var link = Assert.Single(links.Links, l => l.ContentType == "application/pdf");
+        var link = Assert.Single(store.Links, l => l.ContentType == "application/pdf");
         Assert.Equal(PostJobActionKind.RawBundle, link.Kind);
     }
 
@@ -306,77 +301,28 @@ public class PostJobActionServiceTests
         }, null, T0.AddSeconds(2));
 
         var store = new FakeStore();
-        var links = new FakeLinks();
-        await Service(store, links).RunAsync(job, run);
+        await Service(store).RunAsync(job, run);
 
         var obj = Assert.Single(store.Objects, o => o.Key.EndsWith("out/0/chart.png"));
         Assert.Equal(pngBytes, obj.Content);
-        Assert.Single(links.Links, l => l.ContentType == "image/png");
+        Assert.Single(store.Links, l => l.ContentType == "image/png");
     }
 
     // ── fakes ───────────────────────────────────────────────────────────────────────────────────────
-    private sealed class FakeStore : IObjectStore
+    private sealed class FakeStore : IJobArtifactClient
     {
         public List<(string Key, byte[] Content)> Objects { get; } = new();
+        public List<(PostJobActionKind Kind, string ContentType)> Links { get; } = new();
         public bool IsEnabled => true;
-        public string ReportsBucket => "placecontext-reports";
-        public string DepsBucket => "placecontext-deps";
-        public Task PutAsync(string bucket, string key, byte[] content, string contentType, CancellationToken ct = default)
-        {
-            Objects.Add((key, content));
-            return Task.CompletedTask;
-        }
-        public Task<ObjectDownload?> OpenReadAsync(string bucket, string key, CancellationToken ct = default)
-            => Task.FromResult<ObjectDownload?>(null);
-        public Task DeleteAsync(string bucket, string key, CancellationToken ct = default)
-        {
-            Objects.RemoveAll(o => o.Key == key);
-            return Task.CompletedTask;
-        }
-        public Task<bool> ExistsAsync(string bucket, string key, CancellationToken ct = default) => Task.FromResult(false);
-        public Task EnsureBucketAsync(string bucket, CancellationToken ct = default) => Task.CompletedTask;
-        public Task<string> PresignDownloadAsync(string bucket, string key, TimeSpan ttl, CancellationToken ct = default) => Task.FromResult("");
-        public Task<string> PresignUploadAsync(string bucket, string key, TimeSpan ttl, CancellationToken ct = default) => Task.FromResult("");
-    }
 
-    private sealed class FakeLinks : IRunArtifactLinkRepository
-    {
-        public List<RunArtifactLink> Links { get; } = new();
-        public Task AddAsync(RunArtifactLink link, CancellationToken ct = default)
+        public Task StoreAsync(Guid projectId, Guid jobId, Guid runId, string jobName,
+            PostJobActionKind kind, string fileName, string title, string contentType, byte[] content,
+            CancellationToken ct = default)
         {
-            Links.Add(link);
+            Objects.Add((fileName, content));
+            Links.Add((kind, contentType));
             return Task.CompletedTask;
         }
-        public Task<IReadOnlyList<RunArtifactLink>> ListForRunAsync(Guid runId, CancellationToken ct = default)
-            => Task.FromResult<IReadOnlyList<RunArtifactLink>>(Array.Empty<RunArtifactLink>());
-        public Task<RunArtifactLink?> GetByIdAsync(Guid id, CancellationToken ct = default)
-            => Task.FromResult<RunArtifactLink?>(null);
-        public Task<IReadOnlyList<RunArtifactLink>> ListForJobAsync(Guid jobId, CancellationToken ct = default)
-            => Task.FromResult<IReadOnlyList<RunArtifactLink>>(Array.Empty<RunArtifactLink>());
-        public Task<IReadOnlyList<RunArtifactLink>> ListRecentAsync(int take, CancellationToken ct = default)
-            => Task.FromResult<IReadOnlyList<RunArtifactLink>>(Links.Take(take).ToList());
-        public Task<IReadOnlyList<RunArtifactLink>> ListForProjectAsync(Guid projectId, int take, string? search = null, CancellationToken ct = default)
-        {
-            IEnumerable<RunArtifactLink> q = Links.Where(l => l.ProjectId == projectId);
-            if (!string.IsNullOrWhiteSpace(search))
-                q = q.Where(l => l.Title.Contains(search, StringComparison.OrdinalIgnoreCase)
-                              || l.Kind.ToString().Contains(search, StringComparison.OrdinalIgnoreCase));
-            return Task.FromResult<IReadOnlyList<RunArtifactLink>>(q.Take(take).ToList());
-        }
-        public Task<IReadOnlyList<RunArtifactLink>> ListPendingOcrAsync(int take, CancellationToken ct = default)
-            => Task.FromResult<IReadOnlyList<RunArtifactLink>>(Array.Empty<RunArtifactLink>());
-        public Task MarkOcrProcessedAsync(Guid artifactId, DateTimeOffset processedAt, string? error, CancellationToken ct = default)
-            => Task.CompletedTask;
-        public Task RemoveAsync(Guid id, CancellationToken ct = default)
-        {
-            Links.RemoveAll(l => l.Id == id);
-            return Task.CompletedTask;
-        }
-    }
-
-    private sealed class FakeUow : IArtifactsUnitOfWork
-    {
-        public Task<int> SaveChangesAsync(CancellationToken ct = default) => Task.FromResult(0);
     }
 
     private sealed class FakeClock : IClock

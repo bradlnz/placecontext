@@ -105,7 +105,8 @@ public class AgentHandlerTests
         var chat = new FakeChatGateway();
         var uow = new RecordingAgentChatUnitOfWork();
 
-        var handler = new SendAgentMessageHandler(configs, sessions, chat, uow, new FakeClock(T0), new AgentContextBuilder());
+        var handler = new SendAgentMessageHandler(
+            configs, sessions, chat, uow, new FakeClock(T0), CreateContextBuilder());
 
         var projectId = Guid.NewGuid();
         var view = await handler.HandleAsync(new SendAgentMessageCommand(projectId, null, "hello"));
@@ -127,7 +128,8 @@ public class AgentHandlerTests
         var config = AgentConfig.Create(projectId, T0);
         await configs.AddAsync(config);
 
-        var handler = new SendAgentMessageHandler(configs, sessions, chat, uow, new FakeClock(T0), new AgentContextBuilder());
+        var handler = new SendAgentMessageHandler(
+            configs, sessions, chat, uow, new FakeClock(T0), CreateContextBuilder());
 
         var view = await handler.HandleAsync(new SendAgentMessageCommand(projectId, null, "hello"));
 
@@ -146,7 +148,8 @@ public class AgentHandlerTests
         var config = AgentConfig.Create(projectId, T0);
         await configs.AddAsync(config);
 
-        var handler = new SendAgentMessageHandler(configs, sessions, chat, uow, new FakeClock(T0), new AgentContextBuilder());
+        var handler = new SendAgentMessageHandler(
+            configs, sessions, chat, uow, new FakeClock(T0), CreateContextBuilder());
 
         var view = await handler.HandleAsync(new SendAgentMessageCommand(projectId, null, "hi there"));
 
@@ -180,7 +183,8 @@ public class AgentHandlerTests
         var config = AgentConfig.Create(projectId, T0);
         await configs.AddAsync(config);
 
-        var handler = new SendAgentMessageHandler(configs, sessions, chat, uow, clock, new AgentContextBuilder());
+        var handler = new SendAgentMessageHandler(
+            configs, sessions, chat, uow, clock, CreateContextBuilder());
 
         // First message — creates new session.
         var view1 = await handler.HandleAsync(new SendAgentMessageCommand(projectId, null, "first"));
@@ -229,4 +233,7 @@ public class AgentHandlerTests
 
         Assert.Null(result);
     }
+
+    private static AgentContextBuilder CreateContextBuilder()
+        => new(new FakeAgentChatWorkspaceClient());
 }

@@ -1,6 +1,7 @@
 using PlaceContext.Application.Agents.Services;
 using PlaceContext.Application.Features;
 using PlaceContext.Application.Ports;
+using PlaceContext.AgentChat.Integration;
 using PlaceContext.TestSupport;
 using Xunit;
 
@@ -44,6 +45,8 @@ public class AgentSessionRunnerTests
         // First user message carries the launchpad context block.
         Assert.Contains("Process today's orders.", memory.Messages[0].Content);
         Assert.Contains("orders", memory.Messages[0].Content);
+        Assert.Contains("Source table: orders (2 rows)", memory.Messages[0].Content);
+        Assert.Contains("alpha", memory.Messages[0].Content);
         Assert.Contains($"Target chain: {chainId}", memory.Messages[0].Content);
 
         // Tool call recorded on the assistant message, Chat.razor-shaped results message.
@@ -135,14 +138,27 @@ public class AgentSessionRunnerTests
 
     private static AgentSessionRunner CreateRunner(
         ScriptedChatGateway gateway, RecordingExecutor executor, FakeAgentSessionStore store)
-        => new(
+    {
+        var workspace = new FakeAgentChatWorkspaceClient
+        {
+            TablePageToReturn = new AgentChatTablePage(
+                new[] { "id", "name" },
+                new IReadOnlyList<string?>[]
+                {
+                    new string?[] { "1", "alpha" },
+                    new string?[] { "2", "beta" },
+                },
+                TotalCount: 2),
+        };
+        return new AgentSessionRunner(
             gateway,
-            new AgentContextBuilder(),
+            new AgentContextBuilder(workspace),
             new InMemoryAgentConfigRepository(),
-            new StubProjectDataStore(),
+            workspace,
             store,
             executor,
             new FakeClock(T0));
+    }
 
     // ── Fakes ────────────────────────────────────────────────────────────────────────────────
 
@@ -193,37 +209,4 @@ public class AgentSessionRunnerTests
         }
     }
 
-    private sealed class StubProjectDataStore : IProjectDataStore
-    {
-        public Task<ProjectTablePageResult> QueryTablePageAsync(Guid projectId, string tableName, string? search,
-            int page, int pageSize, string? sortColumn = null, bool sortDescending = false, CancellationToken ct = default)
-            => Task.FromResult(new ProjectTablePageResult(
-                new[] { "id", "name" },
-                new IReadOnlyList<string?>[]
-                {
-                    new string?[] { "1", "alpha" },
-                    new string?[] { "2", "beta" },
-                },
-                TotalCount: 2, Page: page, PageSize: pageSize));
-
-        public Task<ProjectTableReadResult> ReadTableAsync(
-            Guid projectId, string tableName, long maxRows = 10000, CancellationToken ct = default)
-            => throw new NotSupportedException();
-
-        // Everything else is irrelevant to the runner and must not be called.
-        public Task<ProjectQueryResult> ExecuteAsync(Guid projectId, string sql, CancellationToken ct = default) => throw new NotSupportedException();
-        public Task<IReadOnlyList<ProjectTableInfo>> ListTablesAsync(Guid projectId, CancellationToken ct = default) => throw new NotSupportedException();
-        public Task CreateTableAsync(Guid projectId, string tableName, IReadOnlyList<ProjectColumnSpec> columns, CancellationToken ct = default) => throw new NotSupportedException();
-        public Task RenameTableAsync(Guid projectId, string from, string to, CancellationToken ct = default) => throw new NotSupportedException();
-        public Task<IReadOnlyList<ProjectColumnInfo>> ListColumnsAsync(Guid projectId, string tableName, CancellationToken ct = default) => throw new NotSupportedException();
-        public Task AddColumnAsync(Guid projectId, string tableName, ProjectColumnSpec column, CancellationToken ct = default) => throw new NotSupportedException();
-        public Task DropColumnAsync(Guid projectId, string tableName, string columnName, CancellationToken ct = default) => throw new NotSupportedException();
-        public Task DropTableAsync(Guid projectId, string tableName, CancellationToken ct = default) => throw new NotSupportedException();
-        public Task<string> ExportTableCsvAsync(Guid projectId, string tableName, CancellationToken ct = default) => throw new NotSupportedException();
-        public Task AppendReadOnlyRowsAsync(Guid projectId, string tableName, IReadOnlyList<ProjectColumnSpec> columns, IReadOnlyList<IReadOnlyList<string?>> rows, CancellationToken ct = default) => throw new NotSupportedException();
-        public Task<int> ImportRowsAsync(Guid projectId, string tableName, IReadOnlyList<ProjectColumnSpec> columns, IReadOnlyList<IReadOnlyList<string?>> rows, bool createTable, CancellationToken ct = default) => throw new NotSupportedException();
-        public Task InsertRowAsync(Guid projectId, string tableName, IReadOnlyDictionary<string, string?> values, CancellationToken ct = default) => throw new NotSupportedException();
-        public Task<int> UpdateRowsAsync(Guid projectId, string tableName, IReadOnlyDictionary<string, string?> keys, IReadOnlyDictionary<string, string?> values, CancellationToken ct = default) => throw new NotSupportedException();
-        public Task<int> DeleteRowsAsync(Guid projectId, string tableName, IReadOnlyDictionary<string, string?> keys, CancellationToken ct = default) => throw new NotSupportedException();
-    }
 }

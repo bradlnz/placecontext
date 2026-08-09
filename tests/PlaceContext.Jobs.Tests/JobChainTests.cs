@@ -5,6 +5,7 @@ using PlaceContext.Application.Ports;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.Repositories;
 using PlaceContext.Domain.ValueObjects;
+using PlaceContext.Jobs.Integration;
 using PlaceContext.TestSupport;
 using Xunit;
 
@@ -17,9 +18,9 @@ public class JobChainTests
 
     private static RunJobChainHandler RunHandler(InMemoryJobChainRepository chains, InMemoryJobRepository jobs,
         FakeRunDispatcher dispatcher, InMemoryChainRunRepository? runs = null,
-        IClientCommunicationSender? communications = null,
+        IJobCommunicationsClient? communications = null,
         IPermissionService? permissions = null,
-        ICrmClientRepository? crmClients = null)
+        IJobCrmClient? crmClients = null)
         => new(chains, jobs, runs ?? new InMemoryChainRunRepository(),
             new RecordingUnitOfWork(), new FakeClock(T0), new FakeJobRunner(dispatcher),
             communications: communications, permissions: permissions, crmClients: crmClients);
@@ -415,46 +416,32 @@ public class JobChainTests
         Assert.Equal("sms-123", view.Steps[0].ExternalId);
     }
 
-    private sealed class FakeCommunicationSender : IClientCommunicationSender
+    private sealed class FakeCommunicationSender : IJobCommunicationsClient
     {
         public string EmailProvider => "Postmark";
         public string SmsProvider => "Twilio";
-        public Task<IReadOnlyList<string>> TwoFactorChannelsAsync(CancellationToken ct = default)
-            => Task.FromResult<IReadOnlyList<string>>([]);
         public Exception? Failure { get; init; }
         public List<(string Recipient, string RecipientName, string Subject, string Body,
-            IReadOnlyList<ClientEmailAttachment> Attachments)> Emails { get; } = new();
+            IReadOnlyList<JobEmailAttachment> Attachments)> Emails { get; } = new();
         public List<(string Recipient, string Body)> SmsMessages { get; } = new();
 
-        public Task<ClientCommsCapabilities> GetCapabilitiesAsync(CancellationToken ct = default)
-            => Task.FromResult(new ClientCommsCapabilities(true, false, EmailProvider, SmsProvider));
-
-        public Task<ClientMessageDelivery> SendEmailAsync(string recipient, string recipientName,
+        public Task<JobMessageDelivery> SendEmailAsync(string recipient, string recipientName,
             string subject, string body, CancellationToken ct = default,
-            IReadOnlyList<ClientEmailAttachment>? attachments = null)
+            IReadOnlyList<JobEmailAttachment>? attachments = null)
         {
             if (Failure is not null) throw Failure;
             Emails.Add((recipient, recipientName, subject, body,
-                attachments ?? Array.Empty<ClientEmailAttachment>()));
-            return Task.FromResult(new ClientMessageDelivery("Postmark", "message-123"));
+                attachments ?? Array.Empty<JobEmailAttachment>()));
+            return Task.FromResult(new JobMessageDelivery("Postmark", "message-123"));
         }
 
-        public Task<ClientMessageDelivery> SendAuthenticationEmailAsync(
-            string recipient, string recipientName, string subject, string body,
-            CancellationToken ct = default)
-            => Task.FromResult(new ClientMessageDelivery("Postmark", "auth-message-123"));
-
-        public Task<ClientMessageDelivery> SendSmsAsync(
+        public Task<JobMessageDelivery> SendSmsAsync(
             string recipient, string body, CancellationToken ct = default)
         {
             if (Failure is not null) throw Failure;
             SmsMessages.Add((recipient, body));
-            return Task.FromResult(new ClientMessageDelivery("Twilio", "sms-123"));
+            return Task.FromResult(new JobMessageDelivery("Twilio", "sms-123"));
         }
-
-        public Task<ClientMessageDelivery> SendAuthenticationSmsAsync(
-            string recipient, string body, CancellationToken ct = default)
-            => Task.FromResult(new ClientMessageDelivery("Twilio", "auth-sms-123"));
     }
 
     private sealed class FakePermissionService : IPermissionService
@@ -761,18 +748,15 @@ public class JobChainTests
             => _dispatcher.Send(new RunJobCommand(jobId, inputPayload, runId, replayOfRunId), ct);
     }
 
-    private sealed class SingleCrmClientRepository : ICrmClientRepository
+    private sealed class SingleCrmClientRepository : IJobCrmClient
     {
         private readonly CrmClient _client;
         public SingleCrmClientRepository(CrmClient client) => _client = client;
-        public Task AddAsync(CrmClient client, CancellationToken ct = default) => Task.CompletedTask;
-        public Task UpdateAsync(CrmClient client, CancellationToken ct = default) => Task.CompletedTask;
-        public Task DeleteAsync(Guid clientId, CancellationToken ct = default) => Task.CompletedTask;
-        public Task<CrmClient?> GetByIdAsync(Guid clientId, CancellationToken ct = default)
-            => Task.FromResult<CrmClient?>(clientId == _client.Id ? _client : null);
-        public Task<IReadOnlyList<CrmClient>> ListForProjectAsync(Guid projectId, CancellationToken ct = default)
-            => Task.FromResult<IReadOnlyList<CrmClient>>(projectId == _client.ProjectId
-                ? new[] { _client }
-                : Array.Empty<CrmClient>());
+        public Task<JobCrmCustomer?> GetCustomerAsync(Guid clientId, CancellationToken ct = default)
+            => Task.FromResult(clientId == _client.Id
+                ? new JobCrmCustomer(_client.Id, _client.Name, _client.Company, _client.Email, _client.Phone)
+                : null);
+        public Task NotifyChainCompletedAsync(JobCrmChainCompletion completion, CancellationToken ct = default)
+            => Task.CompletedTask;
     }
 }

@@ -2,8 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using PlaceContext.Application.Ports;
 using PlaceContext.Crm.Infrastructure.Crm;
 using PlaceContext.Crm.Infrastructure.Persistence;
-using PlaceContext.Domain.Entities;
-using PlaceContext.Domain.ValueObjects;
+using PlaceContext.Crm.Integration;
 using PlaceContext.TestSupport;
 
 namespace PlaceContext.Crm.Tests;
@@ -20,15 +19,7 @@ public sealed class CrmIngestionSettingsTests
             .Options;
         await using var crmDb = new CrmDbContext(crmOptions, tenant);
         var projectId = Guid.NewGuid();
-        var projects = new InMemoryProjectRepository();
-        await projects.AddAsync(Project.Rehydrate(
-            ProjectId.From(projectId),
-            ProjectName.From("CRM"),
-            ProjectPath.From("/crm"),
-            ProjectStatus.Registered,
-            DateTimeOffset.UtcNow,
-            DateTimeOffset.UtcNow,
-            null));
+        var projects = new ProjectsClient(projectId);
         var tenants = new FakeTenantCatalog(
             new TenantContext(tenantId, "example", "Australia/Brisbane"));
         var service = new CrmIngestionSettingsService(crmDb, tenants, projects, tenant);
@@ -65,5 +56,11 @@ public sealed class CrmIngestionSettingsTests
             CrmIngestionSettingsService.NormalizeOrigin("https://forms.example.com/"));
         Assert.Equal("http://localhost:5173",
             CrmIngestionSettingsService.NormalizeOrigin("http://localhost:5173"));
+    }
+
+    private sealed class ProjectsClient(params Guid[] projectIds) : ICrmProjectsClient
+    {
+        public Task<bool> ExistsAsync(Guid projectId, CancellationToken ct = default)
+            => Task.FromResult(projectIds.Contains(projectId));
     }
 }

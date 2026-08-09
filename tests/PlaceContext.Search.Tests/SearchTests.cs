@@ -218,9 +218,9 @@ public class SearchTests
         public Task DeleteIndexAsync(Guid projectId, string indexName, CancellationToken ct = default)
             => Task.CompletedTask;
 
-        public Task<ProjectQueryResult> SearchSqlAsync(
+        public Task<OpenSearchSqlResult> SearchSqlAsync(
             Guid projectId, string sql, CancellationToken ct = default)
-            => Task.FromResult(new ProjectQueryResult(
+            => Task.FromResult(new OpenSearchSqlResult(
                 new[] { "index" }, new IReadOnlyList<string?>[] { new[] { sql } }, 0, false));
     }
 

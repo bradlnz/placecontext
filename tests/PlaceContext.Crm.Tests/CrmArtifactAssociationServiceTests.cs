@@ -1,4 +1,5 @@
 using PlaceContext.Crm.Services;
+using PlaceContext.Crm.Integration;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.Repositories;
 using PlaceContext.Domain.ValueObjects;
@@ -27,13 +28,17 @@ public sealed class CrmArtifactAssociationServiceTests
         var pdf = RunArtifactLink.Create(jobRunId, jobId, projectId,
             PostJobActionKind.HtmlReport, "Site feasibility report.pdf", "reports",
             "runs/report.pdf", "application/pdf", 12_345, now.AddMinutes(1));
-        var runArtifacts = new RunArtifacts(pdf);
+        var runArtifacts = new CrmArtifacts(new CrmRunArtifactSummary(
+            pdf.Id, pdf.RunId, pdf.JobId, pdf.Title, pdf.Bucket, pdf.ObjectKey,
+            pdf.ContentType, pdf.SizeBytes, pdf.CreatedAt));
         var clientArtifacts = new ClientArtifacts();
         var uow = new RecordingUnitOfWork();
         var service = new CrmArtifactAssociationService(runArtifacts, clientArtifacts, uow);
 
-        Assert.Equal(1, await service.AssociateAsync(run));
-        Assert.Equal(0, await service.AssociateAsync(run));
+        Assert.Equal(1, await service.AssociateAsync(
+            projectId, clientId, run.Id, new[] { jobRunId }));
+        Assert.Equal(0, await service.AssociateAsync(
+            projectId, clientId, run.Id, new[] { jobRunId }));
 
         var tagged = Assert.Single(clientArtifacts.Values);
         Assert.Equal(clientId, tagged.ClientId);
@@ -56,31 +61,30 @@ public sealed class CrmArtifactAssociationServiceTests
         run.Pause(0, null, now.AddMinutes(5));
         var clientArtifacts = new ClientArtifacts();
         var service = new CrmArtifactAssociationService(
-            new RunArtifacts(), clientArtifacts, new RecordingUnitOfWork());
+            new CrmArtifacts(), clientArtifacts, new RecordingUnitOfWork());
 
-        Assert.Equal(0, await service.AssociateAsync(run));
+        Assert.Equal(0, await service.AssociateAsync(
+            projectId, clientId, run.Id, Array.Empty<Guid>()));
         Assert.Empty(clientArtifacts.Values);
     }
 
-    private sealed class RunArtifacts(params RunArtifactLink[] values) : IRunArtifactLinkRepository
+    private sealed class CrmArtifacts(params CrmRunArtifactSummary[] values) : ICrmArtifactsClient
     {
-        public Task AddAsync(RunArtifactLink link, CancellationToken ct = default) => Task.CompletedTask;
-        public Task<IReadOnlyList<RunArtifactLink>> ListForRunAsync(Guid runId, CancellationToken ct = default)
-            => Task.FromResult<IReadOnlyList<RunArtifactLink>>(values.Where(value => value.RunId == runId).ToList());
-        public Task<RunArtifactLink?> GetByIdAsync(Guid id, CancellationToken ct = default)
-            => Task.FromResult(values.FirstOrDefault(value => value.Id == id));
-        public Task<IReadOnlyList<RunArtifactLink>> ListForJobAsync(Guid jobId, CancellationToken ct = default)
-            => Task.FromResult<IReadOnlyList<RunArtifactLink>>(values.Where(value => value.JobId == jobId).ToList());
-        public Task<IReadOnlyList<RunArtifactLink>> ListRecentAsync(int take, CancellationToken ct = default)
-            => Task.FromResult<IReadOnlyList<RunArtifactLink>>(values.Take(take).ToList());
-        public Task<IReadOnlyList<RunArtifactLink>> ListForProjectAsync(Guid projectId, int take,
-            string? search = null, CancellationToken ct = default)
-            => Task.FromResult<IReadOnlyList<RunArtifactLink>>(values.Where(value => value.ProjectId == projectId).Take(take).ToList());
-        public Task<IReadOnlyList<RunArtifactLink>> ListPendingOcrAsync(int take, CancellationToken ct = default)
-            => Task.FromResult<IReadOnlyList<RunArtifactLink>>(Array.Empty<RunArtifactLink>());
-        public Task MarkOcrProcessedAsync(Guid artifactId, DateTimeOffset processedAt, string? error, CancellationToken ct = default)
-            => Task.CompletedTask;
-        public Task RemoveAsync(Guid id, CancellationToken ct = default) => Task.CompletedTask;
+        public Task<IReadOnlyList<CrmRunArtifactSummary>> ListForRunAsync(
+            Guid runId, CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<CrmRunArtifactSummary>>(
+                values.Where(value => value.RunId == runId).ToList());
+
+        public Task<CrmStoredObject> StoreAsync(Guid projectId, Guid clientId, Guid objectId,
+            byte[] content, string contentType, CancellationToken ct = default)
+            => throw new NotSupportedException();
+
+        public Task<CrmArtifactContent?> ReadAsync(
+            string bucket, string objectKey, CancellationToken ct = default)
+            => throw new NotSupportedException();
+
+        public Task DeleteAsync(string bucket, string objectKey, CancellationToken ct = default)
+            => throw new NotSupportedException();
     }
 
     private sealed class ClientArtifacts : ICrmClientArtifactRepository
