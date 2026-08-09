@@ -15,5 +15,6 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\PlaceContext.Identity\PlaceContext.Identity.csproj" />
     <ProjectReference Include="..\..\src\PlaceContext.Identity\PlaceContext.Identity.Infrastructure.csproj" />
+    <ProjectReference Include="..\PlaceContext.TestSupport\PlaceContext.TestSupport.csproj" />
   </ItemGroup>
 </Project>

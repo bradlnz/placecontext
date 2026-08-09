@@ -4,7 +4,9 @@ using PlaceContext.Application.Ports;
 using PlaceContext.Host.Auth;
 using PlaceContext.Host.Branding;
 using PlaceContext.Host.Controllers.Api.Records;
-using PlaceContext.Infrastructure.Tenancy;
+using PlaceContext.Settings.Configuration;
+using PlaceContext.Settings.Contracts.Configuration;
+using PlaceContext.Settings.Persistence;
 
 namespace PlaceContext.Host.Controllers.Api;
 
@@ -15,10 +17,10 @@ namespace PlaceContext.Host.Controllers.Api;
 [ResponseCache(Location = ResponseCacheLocation.None, NoStore = true)]
 public sealed class SettingsController(
     BrandingService branding,
-    ITenantStore tenants,
+    ISettingsStore settings,
     ICurrentTenant tenant,
-    IMenuConfigService menu,
-    IArtifactViewConfigService artifactViews) : ControllerBase
+    MenuConfigService menu,
+    ArtifactViewConfigService artifactViews) : ControllerBase
 {
     private static readonly IReadOnlyDictionary<string, string> MenuLabels =
         new Dictionary<string, string>(StringComparer.Ordinal)
@@ -86,7 +88,7 @@ public sealed class SettingsController(
             return BadRequest(new { error = $"Unknown timezone: {timeZoneId}" });
         }
 
-        await tenants.SetTimeZoneAsync(tenant.TenantId, timeZoneId, cancellationToken);
+        await settings.SetTimeZoneAsync(tenant.TenantId, timeZoneId, cancellationToken);
         return Ok(ToLocalityResponse(timeZoneId));
     }
 

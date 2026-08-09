@@ -5,6 +5,7 @@
     <ProjectReference Include="..\..\src\PlaceContext.Application\PlaceContext.Application.csproj" />
     <ProjectReference Include="..\..\src\PlaceContext.Jobs\PlaceContext.Jobs.Domain.csproj" />
     <ProjectReference Include="..\..\src\PlaceContext.Crm\PlaceContext.Crm.Domain.csproj" />
+    <ProjectReference Include="..\..\src\PlaceContext.Operations\PlaceContext.Operations.Contracts.csproj" />
   </ItemGroup>
 
   <PropertyGroup>

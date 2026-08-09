@@ -1,12 +1,11 @@
 using System.Text.Json;
 using Microsoft.AspNetCore.Components.Forms;
-using PlaceContext.Application;
-using PlaceContext.Application.Dtos;
 using PlaceContext.Host;
+using PlaceContext.Operations.Contracts.Backup;
 
 namespace PlaceContext.Host.Components.ViewModels;
 
-public sealed class BackupSettingsViewModel(IPlaceContextService service, PortalUiState ui)
+public sealed class BackupSettingsViewModel(IBackupService backupService, PortalUiState ui)
     : PageViewModel
 {
     public const long MaxManifestBytes = 20 * 1024 * 1024;
@@ -57,7 +56,7 @@ public sealed class BackupSettingsViewModel(IPlaceContextService service, Portal
         NotifyStateChanged();
         try
         {
-            Result = await service.ImportManifestAsync(Pending);
+            Result = await backupService.ImportManifestAsync(Pending);
             Message = "Import complete.";
             Confirming = false;
         }

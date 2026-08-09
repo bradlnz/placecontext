@@ -2,6 +2,7 @@ using System.IO.Compression;
 using System.Text;
 using System.Text.Json;
 using PlaceContext.Application.Dtos;
+using PlaceContext.Operations.Contracts.Backup;
 
 namespace PlaceContext.Operations.Backup;
 

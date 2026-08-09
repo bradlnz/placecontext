@@ -13,6 +13,7 @@
     <ProjectReference Include="..\PlaceContext.Data\PlaceContext.Data.Contracts.csproj" />
     <ProjectReference Include="..\PlaceContext.Data\PlaceContext.Data.Domain.csproj" />
     <ProjectReference Include="..\PlaceContext.Domain\PlaceContext.Domain.csproj" />
+    <ProjectReference Include="..\PlaceContext.Identity\PlaceContext.Identity.Contracts.csproj" />
     <ProjectReference Include="..\PlaceContext.Jobs\PlaceContext.Jobs.Contracts.csproj" />
     <ProjectReference Include="..\PlaceContext.Jobs\PlaceContext.Jobs.Domain.csproj" />
     <ProjectReference Include="..\PlaceContext.Mcp\PlaceContext.Mcp.Domain.csproj" />

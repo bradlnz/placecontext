@@ -1,8 +1,8 @@
+using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using PlaceContext.Application;
-using PlaceContext.Application.Dtos;
 using PlaceContext.Host.Auth;
+using PlaceContext.Settings.Integration;
 
 namespace PlaceContext.Host.Controllers;
 
@@ -11,18 +11,16 @@ namespace PlaceContext.Host.Controllers;
 [Authorize(Policy = Policies.DefaultAdmin)]
 [Produces("application/json")]
 [ResponseCache(Location = ResponseCacheLocation.None, NoStore = true)]
-public sealed class BackupSettingsController(IPlaceContextService placeContextService) : ControllerBase
+public sealed class BackupSettingsController(ISettingsBackupClient backup) : ControllerBase
 {
     [HttpPost("imports")]
-    public async Task<ActionResult<ImportResultView>> Import(
-        [FromBody] BackupManifest manifest,
+    public async Task<ActionResult<JsonElement>> Import(
+        [FromBody] JsonElement manifest,
         CancellationToken cancellationToken)
     {
         try
         {
-            return Ok(await placeContextService.ImportManifestAsync(
-                manifest,
-                ct: cancellationToken));
+            return Ok(await backup.ImportAsync(manifest, cancellationToken));
         }
         catch (ArgumentException exception)
         {

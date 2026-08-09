@@ -149,6 +149,20 @@ public sealed class SourceOrganizationTests
     }
 
     [Fact]
+    public void Identity_projects_do_not_reference_legacy_application()
+    {
+        var identityDirectory = Path.Combine(Root, "src", "PlaceContext.Identity");
+        var failures = Directory.GetFiles(identityDirectory, "*.csproj", SearchOption.TopDirectoryOnly)
+            .Where(project => File.ReadAllText(project).Contains(
+                "PlaceContext.Application.csproj",
+                StringComparison.OrdinalIgnoreCase))
+            .Select(Relative)
+            .ToList();
+
+        Assert.Empty(failures);
+    }
+
+    [Fact]
     public void Health_routes_are_owned_by_the_app_edge()
     {
         Assert.False(File.Exists(Path.Combine(

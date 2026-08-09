@@ -65,7 +65,7 @@ public static class DependencyInjection
 
         // Multi-tenancy: ambient current-tenant (AsyncLocal singleton) + the tenant registry.
         services.AddScoped<ITenantStore, EfTenantStore>();
-        services.AddScoped<ITenantSettingsPort, EfTenantSettingsPort>();
+        services.AddScoped<PlaceContext.Operations.Contracts.Backup.ITenantSettingsPort, EfTenantSettingsPort>();
         services.AddScoped<IMenuConfigService, Tenancy.MenuConfigService>();
         services.AddScoped<IArtifactViewConfigService, Tenancy.ArtifactViewConfigService>();
 

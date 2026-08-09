@@ -2,9 +2,8 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using PlaceContext.Application;
-using PlaceContext.Application.Dtos;
 using PlaceContext.Operations.Backup;
+using PlaceContext.Operations.Contracts.Backup;
 
 namespace PlaceContext.Operations.Controllers;
 
@@ -17,17 +16,17 @@ namespace PlaceContext.Operations.Controllers;
 [Route("backup")]
 public sealed class BackupController : ControllerBase
 {
-    private readonly IPlaceContextService _svc;
+    private readonly IBackupService _backupService;
 
-    public BackupController(IPlaceContextService svc)
+    public BackupController(IBackupService backupService)
     {
-        _svc = svc;
+        _backupService = backupService;
     }
 
     [HttpGet("export")]
     public async Task<IActionResult> Export()
     {
-        var manifest = await _svc.ExportManifestAsync(HttpContext.RequestAborted);
+        var manifest = await _backupService.ExportManifestAsync(HttpContext.RequestAborted);
         var json = JsonSerializer.Serialize(manifest, new JsonSerializerOptions { WriteIndented = true });
         var fileName = $"placecontext-backup-{DateTimeOffset.UtcNow:yyyy-MM-dd}.json";
         return File(Encoding.UTF8.GetBytes(json), "application/json", fileName);
@@ -36,7 +35,7 @@ public sealed class BackupController : ControllerBase
     [HttpGet("jobs-code")]
     public async Task<IActionResult> ExportJobsCode()
     {
-        var manifest = await _svc.ExportManifestAsync(HttpContext.RequestAborted);
+        var manifest = await _backupService.ExportManifestAsync(HttpContext.RequestAborted);
         var archive = JobsCodeArchiveBuilder.Build(manifest);
         var fileName = $"placecontext-jobs-code-{manifest.ExportedAt:yyyy-MM-dd}.zip";
         return File(archive, "application/zip", fileName);
@@ -59,7 +58,9 @@ public sealed class BackupController : ControllerBase
 
         try
         {
-            var result = await _svc.ImportManifestAsync(manifest, ct: HttpContext.RequestAborted);
+            var result = await _backupService.ImportManifestAsync(
+                manifest,
+                cancellationToken: HttpContext.RequestAborted);
             return Ok(result);
         }
         catch (ArgumentException ex)

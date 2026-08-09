@@ -1,40 +1,25 @@
 using System.Text.Json;
-using Microsoft.EntityFrameworkCore;
 using PlaceContext.Application.Ports;
-using PlaceContext.Infrastructure.Persistence;
+using PlaceContext.Settings.Persistence;
 
 namespace PlaceContext.Host.Branding;
 
-public sealed class BrandingService
+public sealed class BrandingService(ISettingsStore store, ICurrentTenant tenant)
 {
     private static readonly JsonSerializerOptions Json = new() { PropertyNameCaseInsensitive = true };
-    private readonly AppDbContext _db;
-    private readonly ICurrentTenant _tenant;
-
-    public BrandingService(AppDbContext db, ICurrentTenant tenant)
-    {
-        _db = db;
-        _tenant = tenant;
-    }
 
     public async Task<TenantBranding> GetAsync(CancellationToken ct = default)
     {
-        if (!_tenant.IsResolved) return new TenantBranding();
-        var json = await _db.Tenants.AsNoTracking()
-            .Where(t => t.Id == _tenant.TenantId)
-            .Select(t => t.BrandingJson)
-            .FirstOrDefaultAsync(ct);
+        if (!tenant.IsResolved) return new TenantBranding();
+        var json = await store.GetBrandingAsync(tenant.TenantId, ct);
         if (string.IsNullOrWhiteSpace(json)) return new TenantBranding();
         try { return JsonSerializer.Deserialize<TenantBranding>(json, Json) ?? new TenantBranding(); }
-        catch { return new TenantBranding(); }
+        catch (JsonException) { return new TenantBranding(); }
     }
 
-    public async Task SetAsync(TenantBranding branding, CancellationToken ct = default)
-    {
-        if (!_tenant.IsResolved) return;
-        var row = await _db.Tenants.FirstOrDefaultAsync(t => t.Id == _tenant.TenantId, ct);
-        if (row is null) return;
-        row.BrandingJson = branding.IsDefault ? null : JsonSerializer.Serialize(branding, Json);
-        await _db.SaveChangesAsync(ct);
-    }
+    public Task SetAsync(TenantBranding branding, CancellationToken ct = default)
+        => tenant.IsResolved
+            ? store.SetBrandingAsync(tenant.TenantId,
+                branding.IsDefault ? null : JsonSerializer.Serialize(branding, Json), ct)
+            : Task.CompletedTask;
 }

@@ -3,14 +3,9 @@
   <ItemGroup>
     <ProjectReference Include="PlaceContext.Settings.Contracts.csproj" />
     <ProjectReference Include="PlaceContext.Settings.Domain.csproj" />
-    <ProjectReference Include="..\PlaceContext.Application\PlaceContext.Application.csproj" />
-    <ProjectReference Include="..\PlaceContext.Data\PlaceContext.Data.csproj" />
+    <ProjectReference Include="..\PlaceContext.BuildingBlocks\PlaceContext.BuildingBlocks.csproj" />
     <ProjectReference Include="..\PlaceContext.Data\PlaceContext.Data.Contracts.csproj" />
-    <ProjectReference Include="..\PlaceContext.Infrastructure\PlaceContext.Infrastructure.csproj" />
-    <ProjectReference Include="..\PlaceContext.Jobs\PlaceContext.Jobs.csproj" />
-    <ProjectReference Include="..\PlaceContext.Projects\PlaceContext.Projects.csproj" />
     <ProjectReference Include="..\PlaceContext.Search\PlaceContext.Search.Contracts.csproj" />
-    <ProjectReference Include="..\PlaceContext.Vault\PlaceContext.Vault.csproj" />
   </ItemGroup>
   <ItemGroup><Compile Remove="bin/**/*.cs;obj/**/*.cs;Contracts/**/*.cs;Domain/**/*.cs;Infrastructure/**/*.cs;Runtime/**/*.cs" /></ItemGroup>
   <ItemGroup><FrameworkReference Include="Microsoft.AspNetCore.App" /></ItemGroup>

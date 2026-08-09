@@ -1,10 +1,9 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using PlaceContext.Application;
-using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Ports;
 using PlaceContext.Host.Auth;
 using PlaceContext.Host.Controllers.Api.Records;
+using PlaceContext.Settings.Integration;
 
 namespace PlaceContext.Host.Controllers;
 
@@ -13,7 +12,7 @@ namespace PlaceContext.Host.Controllers;
 [Route("api/v1/settings/connections")]
 [Produces("application/json")]
 [ResponseCache(Location = ResponseCacheLocation.None, NoStore = true)]
-public sealed class ConnectionsSettingsController(IPlaceContextService placeContext) : ControllerBase
+public sealed class ConnectionsSettingsController(ISettingsConnectionsClient connections) : ControllerBase
 {
     private static readonly string[] DatabaseKeys =
     [
@@ -39,7 +38,7 @@ public sealed class ConnectionsSettingsController(IPlaceContextService placeCont
     [HttpGet("context")]
     public async Task<ActionResult<ConnectionsSettingsResponse>> Context(CancellationToken ct)
     {
-        var projects = await placeContext.GetProjectsAsync(ct);
+        var projects = await connections.ListProjectsAsync(ct);
         var response = new List<ConnectionProjectView>(projects.Count);
         foreach (var project in projects)
             response.Add(await ToViewAsync(project, ct));
@@ -136,7 +135,7 @@ public sealed class ConnectionsSettingsController(IPlaceContextService placeCont
             return NotFound();
 
         foreach (var key in keys)
-            await placeContext.DeleteProjectSecretAsync(projectId, key, ct);
+            await connections.DeleteSecretAsync(projectId, key, ct);
 
         return Ok(await ToViewAsync(project, ct));
     }
@@ -148,21 +147,21 @@ public sealed class ConnectionsSettingsController(IPlaceContextService placeCont
     {
         foreach (var (key, value) in values)
         {
-            await placeContext.DeleteProjectSecretAsync(projectId, key, ct);
-            await placeContext.AddProjectSecretAsync(projectId, key, value, ct);
+            await connections.DeleteSecretAsync(projectId, key, ct);
+            await connections.SetSecretAsync(projectId, key, value, ct);
         }
     }
 
-    private async Task<ProjectSummaryView?> FindProjectAsync(Guid projectId, CancellationToken ct)
-        => (await placeContext.GetProjectsAsync(ct)).FirstOrDefault(project => project.Id == projectId);
+    private async Task<SettingsProject?> FindProjectAsync(Guid projectId, CancellationToken ct)
+        => (await connections.ListProjectsAsync(ct)).FirstOrDefault(project => project.Id == projectId);
 
-    private async Task<ConnectionProjectView> ToViewAsync(ProjectSummaryView project, CancellationToken ct)
+    private async Task<ConnectionProjectView> ToViewAsync(SettingsProject project, CancellationToken ct)
     {
-        var secrets = await placeContext.ListProjectSecretsAsync(project.Id, ct);
+        var secrets = await connections.ListSecretNamesAsync(project.Id, ct);
         return new ConnectionProjectView(
             project.Id,
             project.Name,
-            secrets.Any(secret => secret.Name == ProjectDatabaseEnvironmentVariables.Host),
-            secrets.Any(secret => secret.Name == OpenSearchEnvironmentVariables.Endpoint));
+            secrets.Contains(ProjectDatabaseEnvironmentVariables.Host, StringComparer.Ordinal),
+            secrets.Contains(OpenSearchEnvironmentVariables.Endpoint, StringComparer.Ordinal));
     }
 }

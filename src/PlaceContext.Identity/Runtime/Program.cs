@@ -1,14 +1,12 @@
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.Net.Http.Headers;
-using PlaceContext.Application;
 using PlaceContext.ServiceDefaults;
 using PlaceContext.Identity;
 using PlaceContext.Identity.Controllers;
 using PlaceContext.Identity.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
-builder.Services.AddApplication();
 builder.Services.AddIdentityModule();
 builder.Services.AddPlaceContextServiceRuntime(
     builder.Configuration,

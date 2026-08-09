@@ -28,19 +28,6 @@ public static class DependencyInjection
         services.AddScoped<ICommandHandler<ScaffoldSkillCommand, SkillScaffoldView>, ScaffoldSkillHandler>();
         services.AddScoped<ICommandHandler<SetupHermesCommand, SkillScaffoldView>, SetupHermesHandler>();
 
-        // Backup/restore (tenant settings + job definitions → a portable manifest).
-        services.AddScoped<IQueryHandler<ExportManifestQuery, BackupManifest>, ExportManifestHandler>();
-        services.AddScoped<ICommandHandler<ImportManifestCommand, ImportResultView>, ImportManifestHandler>();
-
-        // Granular RBAC: a member's permission matrix (role defaults + tenant-scoped overrides).
-        services.AddScoped<IQueryHandler<GetUserPermissionsQuery, UserPermissionsView>, GetUserPermissionsHandler>();
-        services.AddScoped<ICommandHandler<SetUserPermissionOverrideCommand, UserPermissionsView>, SetUserPermissionOverrideHandler>();
-
-        // Editable roles: list/create/update/delete role definitions (the Access "Roles & permissions" UI).
-        services.AddScoped<IQueryHandler<ListRolesQuery, IReadOnlyList<RoleView>>, ListRolesHandler>();
-        services.AddScoped<ICommandHandler<CreateRoleCommand, RoleView>, CreateRoleHandler>();
-        services.AddScoped<ICommandHandler<UpdateRolePermissionsCommand, RoleView>, UpdateRolePermissionsHandler>();
-        services.AddScoped<ICommandHandler<DeleteRoleCommand, bool>, DeleteRoleHandler>();
 
 
         return services;

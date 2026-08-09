@@ -15,6 +15,20 @@
   </ItemGroup>
   <ItemGroup><Using Include="Xunit" /></ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\..\src\PlaceContext.Crm\PlaceContext.Crm.Domain.csproj" />
     <ProjectReference Include="..\..\src\PlaceContext.Operations\PlaceContext.Operations.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="..\PlaceContext.TestSupport\InMemoryProjectRepository.cs" Link="TestSupport\InMemoryProjectRepository.cs" />
+    <Compile Include="..\PlaceContext.TestSupport\InMemoryJobRepository.cs" Link="TestSupport\InMemoryJobRepository.cs" />
+    <Compile Include="..\PlaceContext.TestSupport\InMemoryJobChainRepository.cs" Link="TestSupport\InMemoryJobChainRepository.cs" />
+    <Compile Include="..\PlaceContext.TestSupport\InMemoryJobTriggerRepository.cs" Link="TestSupport\InMemoryJobTriggerRepository.cs" />
+    <Compile Include="..\PlaceContext.TestSupport\InMemoryEventRepository.cs" Link="TestSupport\InMemoryEventRepository.cs" />
+    <Compile Include="..\PlaceContext.TestSupport\InMemoryDataMappingRepository.cs" Link="TestSupport\InMemoryDataMappingRepository.cs" />
+    <Compile Include="..\PlaceContext.TestSupport\FakeTenantSettingsPort.cs" Link="TestSupport\FakeTenantSettingsPort.cs" />
+    <Compile Include="..\PlaceContext.TestSupport\FakeCronSchedule.cs" Link="TestSupport\FakeCronSchedule.cs" />
+    <Compile Include="..\PlaceContext.TestSupport\FakeCurrentTenant.cs" Link="TestSupport\FakeCurrentTenant.cs" />
+    <Compile Include="..\PlaceContext.TestSupport\RecordingUnitOfWork.cs" Link="TestSupport\RecordingUnitOfWork.cs" />
+    <Compile Include="..\PlaceContext.TestSupport\FakeClock.cs" Link="TestSupport\FakeClock.cs" />
   </ItemGroup>
 </Project>

@@ -3,9 +3,9 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
-using PlaceContext.Application;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Ports;
+using PlaceContext.Identity.Access;
 using PlaceContext.Identity.Auth;
 using PlaceContext.Identity.Contracts.Api;
 using PlaceContext.Identity.Domain.Tenants;
@@ -21,7 +21,7 @@ namespace PlaceContext.Identity.Controllers;
 [ResponseCache(Location = ResponseCacheLocation.None, NoStore = true)]
 public sealed class AccessSettingsController(
     IMembershipService membership,
-    IPlaceContextService placeContext,
+    IIdentityAccessService access,
     IIdentityTenantStore tenantStore,
     ICurrentTenant tenant,
     ICurrentUser currentUser,
@@ -141,7 +141,7 @@ public sealed class AccessSettingsController(
     public async Task<ActionResult<UserPermissionsView>> GetMemberPermissions(
         Guid userId,
         CancellationToken ct)
-        => Ok(await placeContext.GetUserPermissionsAsync(userId, ct));
+        => Ok(await access.GetUserPermissionsAsync(userId, ct));
 
     [HttpPut("members/{userId:guid}/permission")]
     public async Task<ActionResult<UserPermissionsView>> SetMemberPermission(
@@ -151,7 +151,7 @@ public sealed class AccessSettingsController(
     {
         try
         {
-            return Ok(await placeContext.SetUserPermissionOverrideAsync(
+            return Ok(await access.SetUserPermissionOverrideAsync(
                 userId,
                 request.Permission,
                 request.Allowed,
@@ -174,7 +174,7 @@ public sealed class AccessSettingsController(
     {
         try
         {
-            return Ok(await placeContext.CreateRoleAsync(request.Name.Trim(), request.Permissions, ct));
+            return Ok(await access.CreateRoleAsync(request.Name.Trim(), request.Permissions, ct));
         }
         catch (ArgumentException ex)
         {
@@ -194,7 +194,7 @@ public sealed class AccessSettingsController(
     {
         try
         {
-            return Ok(await placeContext.UpdateRolePermissionsAsync(roleId, request.Permissions, ct));
+            return Ok(await access.UpdateRolePermissionsAsync(roleId, request.Permissions, ct));
         }
         catch (ArgumentException ex)
         {
@@ -208,14 +208,14 @@ public sealed class AccessSettingsController(
 
     [HttpDelete("roles/{roleId:guid}")]
     public async Task<IActionResult> DeleteRole(Guid roleId, CancellationToken ct)
-        => await placeContext.DeleteRoleAsync(roleId, ct)
+        => await access.DeleteRoleAsync(roleId, ct)
             ? NoContent()
             : NotFound(new { error = "Role not found." });
 
     private async Task<AccessSettingsResponse> BuildContextAsync(CancellationToken ct)
     {
         var members = await membership.ListMembersAsync(ct);
-        var roles = await placeContext.ListRolesAsync(ct);
+        var roles = await access.ListRolesAsync(ct);
         var portalEnabled = (await tenantStore.FindByIdAsync(tenant.TenantId, ct))?.CustomerPortalEnabled == true;
         return new AccessSettingsResponse(
             members.Select(member => new AccessMemberResponse(

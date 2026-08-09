@@ -586,13 +586,6 @@ public sealed class PlaceContextService : IPlaceContextService
     public Task<JobView> UploadJobCodeAsync(UploadJobCodeCommand command, CancellationToken ct = default)
         => _dispatcher.Send(command, ct);
 
-    // ── Backup/restore ────────────────────────────────────────────────────────────────────────────
-
-    public Task<BackupManifest> ExportManifestAsync(CancellationToken ct = default)
-        => _dispatcher.Query(new ExportManifestQuery(), ct);
-
-    public Task<ImportResultView> ImportManifestAsync(BackupManifest manifest, ImportMode mode = ImportMode.Merge, CancellationToken ct = default)
-        => _dispatcher.Send(new ImportManifestCommand(manifest, mode), ct);
 
     // ── Granular RBAC ─────────────────────────────────────────────────────────────────────────────
 

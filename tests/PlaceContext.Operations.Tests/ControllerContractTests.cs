@@ -3,10 +3,9 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using PlaceContext.Application;
-using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Ports;
 using PlaceContext.Operations.Contracts.Api;
+using PlaceContext.Operations.Contracts.Backup;
 using PlaceContext.Operations.Controllers;
 
 namespace PlaceContext.Operations.Tests;
@@ -40,27 +39,24 @@ public sealed class ControllerContractTests
     [InlineData(101, 100)]
     public async Task Inspector_clamps_take_and_maps_the_wire_response(int requested, int expected)
     {
-        var service = DispatchProxy.Create<IPlaceContextService, InspectorServiceProxy>();
-        var proxy = (InspectorServiceProxy)(object)service;
+        var log = new RecordingToolCallLog();
         var at = new DateTimeOffset(2026, 8, 9, 1, 2, 3, TimeSpan.Zero);
-        proxy.Calls =
-        [
-            new ToolCallView(
+        log.Record(
+            new ToolCallEntry(
                 "call-1",
                 "search",
                 "outbound",
                 "project",
                 "summary",
-                "ok",
+                ToolCallStatus.Ok,
                 42,
                 "{\"request\":true}",
                 "{\"response\":true}",
-                at),
-        ];
+                at));
 
-        var result = await new InspectorController(service).GetToolCalls(requested);
+        var result = await new InspectorController(log).GetToolCalls(requested);
 
-        Assert.Equal(expected, proxy.RequestedTake);
+        Assert.Equal(expected, log.RequestedTake);
         var ok = Assert.IsType<OkObjectResult>(result.Result);
         var response = Assert.Single(
             Assert.IsAssignableFrom<IEnumerable<InspectorToolCallResponse>>(ok.Value));
@@ -71,7 +67,7 @@ public sealed class ControllerContractTests
                 "outbound",
                 "project",
                 "summary",
-                "ok",
+                "Ok",
                 42,
                 "{\"request\":true}",
                 "{\"response\":true}",
@@ -82,10 +78,9 @@ public sealed class ControllerContractTests
     [Fact]
     public async Task Backup_import_keeps_invalid_json_as_a_bad_request()
     {
-        var service = DispatchProxy.Create<IPlaceContextService, InspectorServiceProxy>();
         var context = new DefaultHttpContext();
         context.Request.Body = new MemoryStream("{"u8.ToArray());
-        var controller = new BackupController(service)
+        var controller = new BackupController(new StubBackupService())
         {
             ControllerContext = new ControllerContext { HttpContext = context },
         };
@@ -110,20 +105,29 @@ public sealed class ControllerContractTests
     private static string? HttpPost<TController>(string method) =>
         typeof(TController).GetMethod(method)?.GetCustomAttribute<HttpPostAttribute>()?.Template;
 
-    private class InspectorServiceProxy : DispatchProxy
+    private sealed class RecordingToolCallLog : IToolCallLog
     {
-        public IReadOnlyList<ToolCallView> Calls { get; set; } = [];
+        private readonly List<ToolCallEntry> _calls = [];
         public int RequestedTake { get; private set; }
 
-        protected override object? Invoke(MethodInfo? targetMethod, object?[]? args)
-        {
-            if (targetMethod?.Name == nameof(IPlaceContextService.GetRecentToolCallsAsync))
-            {
-                RequestedTake = Assert.IsType<int>(args![0]);
-                return Task.FromResult(Calls);
-            }
+        public void Record(ToolCallEntry entry) => _calls.Add(entry);
 
-            throw new NotSupportedException(targetMethod?.Name);
+        public IReadOnlyList<ToolCallEntry> Recent(int take = 100)
+        {
+            RequestedTake = take;
+            return _calls.Take(take).ToList();
         }
+    }
+
+    private sealed class StubBackupService : IBackupService
+    {
+        public Task<BackupManifest> ExportManifestAsync(CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task<ImportResultView> ImportManifestAsync(
+            BackupManifest manifest,
+            ImportMode mode = ImportMode.Merge,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
     }
 }

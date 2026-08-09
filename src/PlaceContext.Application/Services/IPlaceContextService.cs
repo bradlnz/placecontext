@@ -253,9 +253,6 @@ public interface IPlaceContextService
     Task<GraphVizView> GetGraphVizAsync(Guid projectId, CancellationToken ct = default);
     Task<IReadOnlyList<ToolCallView>> GetRecentToolCallsAsync(int take = 100, CancellationToken ct = default);
 
-    // Backup/restore (tenant settings + job definitions → a portable manifest).
-    Task<BackupManifest> ExportManifestAsync(CancellationToken ct = default);
-    Task<ImportResultView> ImportManifestAsync(BackupManifest manifest, ImportMode mode = ImportMode.Merge, CancellationToken ct = default);
 
     // Granular RBAC: a member's permission matrix (role defaults + overrides) and editing an override.
     Task<UserPermissionsView> GetUserPermissionsAsync(Guid userId, CancellationToken ct = default);

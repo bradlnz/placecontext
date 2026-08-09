@@ -1,6 +1,6 @@
 # PlaceContext Microservice Migration Progress
 
-Last updated: 2026-08-09 20:51 AEST (Australia/Brisbane)
+Last updated: 2026-08-09 21:08 AEST (Australia/Brisbane)
 
 ## Target architecture
 
@@ -434,12 +434,19 @@ Last updated: 2026-08-09 20:51 AEST (Australia/Brisbane)
   Settings, plus stronger service ownership/source-organization architecture assertions.
 - Moved all thirteen wiki Markdown resources from Host into App; App no longer embeds files through
   a cross-project Host path. App tests remain **50/50**.
-- Full Dockerized `.NET 10` solution run passed: **1010 passed, 6 explicit environment-dependent
-  skips, 0 failed**. Architecture passed **23/23**. Identity passed **7/7** after aligning its
+- Moved Identity access/RBAC, authentication, membership, API-token, OAuth, two-factor, and related
+  tests into Identity ownership; Identity no longer references the Application assembly.
+- Moved backup manifests, import/export orchestration, and tenant-settings backup contracts into
+  Operations; Operations no longer references the Application assembly.
+- Added Settings-owned configuration contracts, persistence, tenant/menu/artifact services, and
+  service-local integration clients; Settings no longer references shared Application or Infrastructure.
+- Only shared Infrastructure and transitional Host now retain project references to Application.
+- Full Dockerized `.NET 10` solution run passed: **1011 passed, 6 explicit environment-dependent
+  skips, 0 failed**. Architecture passed **24/24**. Identity passed **51/51** after aligning its
   Microsoft persistence packages to the patched `10.0.10` servicing line. `git diff --check` is clean.
-- Remaining compile-time legacy edges are explicit and not hidden: Identity, Settings, Operations,
-  shared Infrastructure, and Host still consume Application contracts/facades; Settings and Host
-  still consume shared Infrastructure. These must be removed before deleting Application/Host.
+- Remaining compile-time legacy edges are explicit and not hidden: shared Infrastructure and Host
+  still consume Application, and Host still consumes shared Infrastructure. These must be removed
+  before deleting Application/Host.
 
 ---
 

@@ -1,1 +1,13 @@
-<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable></PropertyGroup><ItemGroup><ProjectReference Include="PlaceContext.Operations.Contracts.csproj" /><ProjectReference Include="..\PlaceContext.Application\PlaceContext.Application.csproj" /></ItemGroup><ItemGroup><Compile Remove="bin/**/*.cs;obj/**/*.cs;Contracts/**/*.cs;Infrastructure/**/*.cs;Runtime/**/*.cs" /></ItemGroup><ItemGroup><FrameworkReference Include="Microsoft.AspNetCore.App" /></ItemGroup></Project>
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable></PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="PlaceContext.Operations.Contracts.csproj" />
+    <ProjectReference Include="..\PlaceContext.BuildingBlocks\PlaceContext.BuildingBlocks.csproj" />
+    <ProjectReference Include="..\PlaceContext.Data\PlaceContext.Data.Domain.csproj" />
+    <ProjectReference Include="..\PlaceContext.Domain\PlaceContext.Domain.csproj" />
+    <ProjectReference Include="..\PlaceContext.Jobs\PlaceContext.Jobs.Contracts.csproj" />
+    <ProjectReference Include="..\PlaceContext.Jobs\PlaceContext.Jobs.Domain.csproj" />
+  </ItemGroup>
+  <ItemGroup><Compile Remove="bin/**/*.cs;obj/**/*.cs;Contracts/**/*.cs;Infrastructure/**/*.cs;Runtime/**/*.cs" /></ItemGroup>
+  <ItemGroup><FrameworkReference Include="Microsoft.AspNetCore.App" /></ItemGroup>
+</Project>

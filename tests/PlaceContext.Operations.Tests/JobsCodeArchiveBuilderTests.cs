@@ -1,5 +1,6 @@
 using System.IO.Compression;
 using System.Text;
+using PlaceContext.Operations.Contracts.Backup;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Domain.ValueObjects;
 using PlaceContext.Operations.Backup;

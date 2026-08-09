@@ -1,1 +1,13 @@
-<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable><EnableDefaultCompileItems>false</EnableDefaultCompileItems></PropertyGroup><ItemGroup><Compile Include="Contracts/**/*.cs" /></ItemGroup></Project>
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+  <ItemGroup><Compile Include="Contracts/**/*.cs" /></ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\PlaceContext.BuildingBlocks\PlaceContext.BuildingBlocks.csproj" />
+    <ProjectReference Include="..\PlaceContext.Data\PlaceContext.Data.Contracts.csproj" />
+    <ProjectReference Include="..\PlaceContext.Jobs\PlaceContext.Jobs.Contracts.csproj" />
+  </ItemGroup>
+</Project>
