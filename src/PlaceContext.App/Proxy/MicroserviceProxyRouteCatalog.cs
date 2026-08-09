@@ -52,5 +52,15 @@ public static class MicroserviceProxyRouteCatalog
             "Search",
             "^/api/v1/projects/[^/]+/opensearch(?:/.*)?$"),
         MicroserviceProxyRoute.ForPrefix("Vault", "/api/vault"),
+        MicroserviceProxyRoute.ForPattern("Data", "^/api/v1/entities/?$"),
+        MicroserviceProxyRoute.ForPattern(
+            "Data",
+            "^/api/v1/projects/[^/]+/entity-page/[^/]+(?:/records/(?:create|update|delete|links))?/?$"),
+        MicroserviceProxyRoute.ForPattern(
+            "Data",
+            "^/api/v1/[A-Za-z][A-Za-z0-9_-]*/jobs/[0-9A-Fa-f-]+/run/?$"),
+        MicroserviceProxyRoute.ForPattern(
+            "Data",
+            "^/api/v1/(?!entities(?:/|$)|projects(?:/|$)|jobs(?:/|$)|schedules(?:/|$)|search(?:/|$)|identity(?:/|$)|settings(?:/|$)|chains(?:/|$)|job-runs(?:/|$)|chain-runs(?:/|$))[A-Za-z][A-Za-z0-9_-]*(?:/[^/]+)?/?$"),
     ];
 }

@@ -5,4 +5,5 @@ public sealed record DataJobSummary(
     Guid ProjectId,
     string Name,
     string? Description,
-    string ReturnType);
+    string ReturnType,
+    bool AllowApiInvocation = false);

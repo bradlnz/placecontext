@@ -49,6 +49,19 @@ public sealed class MicroserviceProxyRouteCatalogTests
     }
 
     [Theory]
+    [InlineData("/api/v1/entities")]
+    [InlineData("/api/v1/council-sites")]
+    [InlineData("/api/v1/council-sites/site-1")]
+    [InlineData("/api/v1/council-sites/jobs/98f44a9b-6067-4a17-8636-cc16b4d51c45/run")]
+    [InlineData("/api/v1/projects/98f44a9b-6067-4a17-8636-cc16b4d51c45/entity-page/council-sites")]
+    [InlineData("/api/v1/projects/98f44a9b-6067-4a17-8636-cc16b4d51c45/entity-page/council-sites/records/create")]
+    public void Catalog_routes_entity_contracts_to_data(string path)
+    {
+        var route = Assert.Single(MicroserviceProxyRouteCatalog.All, candidate => candidate.Matches(path));
+        Assert.Equal("Data", route.ServiceName);
+    }
+
+    [Theory]
     [InlineData("/runs/98f44a9b-6067-4a17-8636-cc16b4d51c45/artifacts/8ae108e3-c13f-4b1c-9874-73b0dd144e1f")]
     [InlineData("/share/artifacts/pc_share_example")]
     [InlineData("/chat/attachments/chat/98f44a9b-6067-4a17-8636-cc16b4d51c45/project/session/file.txt")]

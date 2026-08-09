@@ -1,5 +1,5 @@
 using PlaceContext.Application.Features;
-using PlaceContext.Host.Controllers.Api;
+using PlaceContext.Data.Controllers;
 
 namespace PlaceContext.Host.Tests;
 

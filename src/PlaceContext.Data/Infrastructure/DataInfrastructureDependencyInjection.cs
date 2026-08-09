@@ -55,6 +55,7 @@ public static class DataInfrastructureDependencyInjection
         services.AddScoped<IProjectChartRepository, EfProjectChartRepository>();
         services.AddScoped<ISavedQueryStore, EfSavedQueryStore>();
         services.AddScoped<IDataJobsClient, HttpDataJobsClient>();
+        services.AddScoped<IDataProjectsClient, HttpDataProjectsClient>();
         services.AddScoped<IDataSearchClient, HttpDataSearchClient>();
         services.AddScoped<IDataVaultClient, HttpDataVaultClient>();
         services.AddHttpClient();

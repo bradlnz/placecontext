@@ -32,6 +32,7 @@ public sealed class InternalJobsController(IDispatcher dispatcher) : ControllerB
                 job.Name,
                 job.Description,
                 returnType = job.ReturnType.ToString(),
+                job.AllowApiInvocation,
                 job.Parameters,
             }),
             chains = chains.Select(chain => new
@@ -69,7 +70,8 @@ public sealed class InternalJobsController(IDispatcher dispatcher) : ControllerB
         var job = await dispatcher.Query(new GetJobQuery(jobId), ct);
         if (job is null || job.ProjectId != request.ProjectId)
             return NotFound(new { error = "Job not found for this project." });
-        return Ok(await dispatcher.Send(new RunJobCommand(jobId, request.InputPayload), ct));
+        return Ok(await dispatcher.Send(new RunJobCommand(
+            jobId, request.InputPayload, request.RunId), ct));
     }
 
     [HttpPost("chains/{chainId:guid}/runs")]
