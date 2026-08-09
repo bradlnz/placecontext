@@ -24,6 +24,8 @@
     <ProjectReference Include="..\..\src\PlaceContext.Application\PlaceContext.Application.csproj" />
     <ProjectReference Include="..\..\src\PlaceContext.Infrastructure\PlaceContext.Infrastructure.csproj" />
     <ProjectReference Include="..\..\src\PlaceContext.Host\PlaceContext.Host.csproj" />
+    <ProjectReference Include="..\..\src\PlaceContext.Identity\PlaceContext.Identity.csproj" />
+    <ProjectReference Include="..\..\src\PlaceContext.Identity\PlaceContext.Identity.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>

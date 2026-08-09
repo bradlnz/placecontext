@@ -4,6 +4,8 @@ using PlaceContext.Host.Auth;
 using PlaceContext.Host.Controllers;
 using ArtifactDownloadsController = PlaceContext.Artifacts.Controllers.ArtifactDownloadsController;
 using ArtifactChatAttachmentsController = PlaceContext.Artifacts.Controllers.ChatAttachmentsController;
+using BackupController = PlaceContext.Operations.Controllers.BackupController;
+using InspectorController = PlaceContext.Operations.Controllers.InspectorController;
 using Pages = PlaceContext.Host.Components.Pages;
 
 namespace PlaceContext.Host.Tests;
@@ -71,16 +73,6 @@ public sealed class SectionAuthorizationTests
             .ToList();
         Assert.Contains(attributes, attribute => attribute.Policy is null);
         Assert.DoesNotContain(attributes, attribute => attribute.Policy == Policies.DefaultAdmin);
-    }
-
-    [Fact]
-    public void Wiki_api_stays_open_to_any_authenticated_member()
-    {
-        var attributes = typeof(WikiController)
-            .GetCustomAttributes(typeof(AuthorizeAttribute), inherit: true)
-            .Cast<AuthorizeAttribute>()
-            .ToList();
-        Assert.Contains(attributes, attribute => attribute.Policy is null);
     }
 
     public static TheoryData<Type, string> SensitiveControllers =>

@@ -149,6 +149,39 @@ public sealed class SourceOrganizationTests
     }
 
     [Fact]
+    public void Customer_portal_routes_are_owned_by_crm_and_use_the_artifacts_boundary()
+    {
+        var hostDirectory = Path.Combine(Root, "src", "PlaceContext.Host");
+        var crmDirectory = Path.Combine(Root, "src", "PlaceContext.Crm");
+        var artifactsController = Path.Combine(
+            Root,
+            "src",
+            "PlaceContext.Artifacts",
+            "Controllers",
+            "InternalJobArtifactsController.cs");
+        var crmArtifactsController = Path.Combine(
+            crmDirectory,
+            "Controllers",
+            "CustomerPortalArtifactsController.cs");
+
+        Assert.True(File.Exists(Path.Combine(
+            crmDirectory,
+            "Controllers",
+            "CustomerPortalController.cs")));
+        Assert.True(File.Exists(crmArtifactsController));
+        Assert.False(File.Exists(Path.Combine(
+            hostDirectory,
+            "Controllers",
+            "CustomerPortalController.cs")));
+        Assert.False(File.Exists(Path.Combine(
+            hostDirectory,
+            "Controllers",
+            "CustomerPortalArtifactsController.cs")));
+        Assert.Contains("ICrmArtifactsClient", File.ReadAllText(crmArtifactsController));
+        Assert.Contains("api/artifacts/internal/crm-objects/read", File.ReadAllText(artifactsController));
+    }
+
+    [Fact]
     public void Every_service_has_owned_layers_controller_runtime_and_tests()
     {
         var serviceNames = new[] { "AgentChat", "Agents", "Artifacts", "Crm", "Data", "Identity", "Jobs", "Mcp", "Search", "Vault" };

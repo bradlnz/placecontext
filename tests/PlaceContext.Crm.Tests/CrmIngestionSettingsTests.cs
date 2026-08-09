@@ -60,6 +60,9 @@ public sealed class CrmIngestionSettingsTests
 
     private sealed class ProjectsClient(params Guid[] projectIds) : ICrmProjectsClient
     {
+        public Task<IReadOnlyList<CrmProjectSummary>> ListAsync(CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<CrmProjectSummary>>([]);
+
         public Task<bool> ExistsAsync(Guid projectId, CancellationToken ct = default)
             => Task.FromResult(projectIds.Contains(projectId));
     }

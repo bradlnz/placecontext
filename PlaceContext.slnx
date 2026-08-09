@@ -118,8 +118,10 @@
     <Project Path="tests/PlaceContext.Identity.Tests/PlaceContext.Identity.Tests.csproj" />
     <Project Path="tests/PlaceContext.Jobs.Tests/PlaceContext.Jobs.Tests.csproj" />
     <Project Path="tests/PlaceContext.Mcp.Tests/PlaceContext.Mcp.Tests.csproj" />
+    <Project Path="tests/PlaceContext.Operations.Tests/PlaceContext.Operations.Tests.csproj" />
     <Project Path="tests/PlaceContext.Projects.Tests/PlaceContext.Projects.Tests.csproj" />
     <Project Path="tests/PlaceContext.Search.Tests/PlaceContext.Search.Tests.csproj" />
+    <Project Path="tests/PlaceContext.Settings.Tests/PlaceContext.Settings.Tests.csproj" />
     <Project Path="tests/PlaceContext.TestSupport/PlaceContext.TestSupport.csproj" />
     <Project Path="tests/PlaceContext.Vault.Tests/PlaceContext.Vault.Tests.csproj" />
   </Folder>

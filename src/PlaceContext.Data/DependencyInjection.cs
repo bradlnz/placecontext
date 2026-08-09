@@ -18,6 +18,8 @@ public static class DependencyInjection
         services.AddScoped<IQueryHandler<ListDataEntitiesQuery, IReadOnlyList<DataEntityView>>, ListDataEntitiesHandler>();
         services.AddScoped<IQueryHandler<ListDataMappingsQuery, IReadOnlyList<DataMappingView>>, ListDataMappingsHandler>();
         services.AddScoped<IQueryHandler<ListProjectDataTablesQuery, IReadOnlyList<ProjectTableInfo>>, ListProjectDataTablesHandler>();
+        services.AddScoped<ICommandHandler<SaveSqlChartCommand, ProjectChartView>, SaveSqlChartHandler>();
+        services.AddScoped<ICommandHandler<DeleteSqlChartCommand, bool>, DeleteSqlChartHandler>();
         return services;
     }
 

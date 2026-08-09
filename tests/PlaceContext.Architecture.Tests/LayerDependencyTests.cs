@@ -20,6 +20,8 @@ public class LayerDependencyTests
     private static readonly Assembly DomainAsm = typeof(Project).Assembly;
     private static readonly Assembly ApplicationAsm = Load(Application);
     private static readonly Assembly InfrastructureAsm = Load(Infrastructure);
+    private static readonly Assembly IdentityAsm = Load("PlaceContext.Identity");
+    private static readonly Assembly IdentityInfrastructureAsm = Load("PlaceContext.Identity.Infrastructure");
 
     [Fact]
     public void Domain_depends_on_nothing_outward()
@@ -32,6 +34,13 @@ public class LayerDependencyTests
     [Fact]
     public void Infrastructure_does_not_depend_on_host()
         => AssertNoDependency(InfrastructureAsm, Host);
+
+    [Fact]
+    public void Identity_projects_do_not_depend_on_shared_infrastructure()
+    {
+        AssertNoDependency(IdentityAsm, Infrastructure);
+        AssertNoDependency(IdentityInfrastructureAsm, Infrastructure);
+    }
 
     [Fact]
     public void Inner_layers_are_free_of_infrastructure_concerns()

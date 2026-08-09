@@ -1,4 +1,5 @@
 using System.Net;
+using PlaceContext.App.Authentication;
 
 namespace PlaceContext.App.Proxy;
 
@@ -11,6 +12,7 @@ public static class MicroserviceProxyServiceCollectionExtensions
         services.Configure<MicroserviceProxyOptions>(
             configuration.GetSection(MicroserviceProxyOptions.SectionName));
         services.AddScoped<EdgeServiceTokenClient>();
+        services.AddScoped<EdgeCallerContext>();
 
         services
             .AddHttpClient(MicroserviceProxyMiddleware.HttpClientName)

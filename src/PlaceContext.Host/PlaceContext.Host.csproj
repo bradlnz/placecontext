@@ -8,12 +8,14 @@
     <ProjectReference Include="..\PlaceContext.Domain\PlaceContext.Domain.csproj" />
     <ProjectReference Include="..\PlaceContext.Jobs\PlaceContext.Jobs.csproj" />
     <ProjectReference Include="..\PlaceContext.Jobs\PlaceContext.Jobs.Infrastructure.csproj" />
+    <ProjectReference Include="..\PlaceContext.Operations\PlaceContext.Operations.csproj" />
     <ProjectReference Include="..\PlaceContext.Crm\PlaceContext.Crm.csproj" />
     <ProjectReference Include="..\PlaceContext.Crm\PlaceContext.Crm.Infrastructure.csproj" />
     <ProjectReference Include="..\PlaceContext.Data\PlaceContext.Data.csproj" />
     <ProjectReference Include="..\PlaceContext.Data\PlaceContext.Data.Infrastructure.csproj" />
     <ProjectReference Include="..\PlaceContext.Search\PlaceContext.Search.csproj" />
     <ProjectReference Include="..\PlaceContext.Search\PlaceContext.Search.Infrastructure.csproj" />
+    <ProjectReference Include="..\PlaceContext.Settings\PlaceContext.Settings.csproj" />
     <ProjectReference Include="..\PlaceContext.Vault\PlaceContext.Vault.csproj" />
     <ProjectReference Include="..\PlaceContext.Vault\PlaceContext.Vault.Infrastructure.csproj" />
   </ItemGroup>
@@ -50,6 +52,17 @@
              CopyToOutputDirectory="PreserveNewest"
              CopyToPublishDirectory="PreserveNewest" />
     <EmbeddedResource Include="Wiki\*.md" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- App owns these edge contracts/read models; Host compiles links while its Blazor shell and
+         blocked Dashboard composition remain as migration scaffolding. -->
+    <Compile Include="..\PlaceContext.App\Dashboard\*.cs"
+             Link="Records\%(Filename)%(Extension)" />
+    <Compile Include="..\PlaceContext.App\Wiki\WikiArticle.cs"
+             Link="Wiki\WikiArticle.cs" />
+    <Compile Include="..\PlaceContext.App\Wiki\WikiLibrary.cs"
+             Link="Wiki\WikiLibrary.cs" />
   </ItemGroup>
 
 </Project>

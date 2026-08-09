@@ -1,6 +1,6 @@
 # PlaceContext Microservice Migration Progress
 
-Last updated: 2026-08-09 (Australia/Brisbane)
+Last updated: 2026-08-09 20:04 AEST (Australia/Brisbane)
 
 ## Target architecture
 
@@ -411,6 +411,32 @@ Last updated: 2026-08-09 (Australia/Brisbane)
 7. Run a Host-free deployment proof with the agent-shard cluster and job cluster configured as
    distinct workloads. Verify Kubernetes health probes, then create and execute a real job through
    React/App → Jobs and observe terminal run state and artifacts without Host or Application loaded.
+
+## Parallel ownership checkpoint — 2026-08-09 20:04 AEST
+
+- Identity now owns its EF persistence, ten identity table sets, authentication/membership/API-token
+  implementations, OAuth stores, roles and permission grants, request tenancy, and Data Protection
+  key storage. Both Identity projects have no shared-Infrastructure reference or namespace usage.
+- Moved legacy Host routes and their local API records/helpers to their owners:
+  - project page and requirements routes → Projects;
+  - SQL chart mutation routes → Data;
+  - compatibility search route → Search;
+  - branding, locality, menu, connections, and backup settings routes → Settings;
+  - backup/restore and inspector routes → Operations;
+  - customer portal and portal artifact routes → CRM;
+  - wiki plus edge contracts/authentication/context helpers → App.
+- Removed ten Host controllers after service-owned replacements compiled. Six legacy controllers
+  remain: Dashboard, Workspace, ProjectAnalytics composition/refresh, Entities, EntityBrowsePage,
+  and Health. Dashboard/Workspace remain multi-service edge composition; Data/entity ownership is
+  the next mechanical Host slice.
+- Added route/controller contract tests across App, CRM, Data, Operations, Projects, Search, and
+  Settings, plus stronger service ownership/source-organization architecture assertions.
+- Full Dockerized `.NET 10` solution run passed: **985 passed, 6 explicit environment-dependent
+  skips, 0 failed**. Architecture passed **21/21**. Identity passed **7/7** after aligning its
+  Microsoft persistence packages to the patched `10.0.10` servicing line. `git diff --check` is clean.
+- Remaining compile-time legacy edges are explicit and not hidden: Identity, Settings, Operations,
+  shared Infrastructure, and Host still consume Application contracts/facades; Settings and Host
+  still consume shared Infrastructure. These must be removed before deleting Application/Host.
 
 ---
 

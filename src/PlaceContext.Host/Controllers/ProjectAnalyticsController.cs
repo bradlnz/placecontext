@@ -7,6 +7,7 @@ using PlaceContext.Application;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Features;
 using PlaceContext.Application.Ports;
+using PlaceContext.Data.Contracts.Api;
 using PlaceContext.Host.Controllers.Api.Records;
 using PlaceContext.Infrastructure.Scheduling;
 using PlaceContext.Infrastructure.Tenancy;
@@ -51,32 +52,6 @@ public sealed class ProjectAnalyticsController(
         return Accepted(new AnalyticsMessageResponse(
             queued ? "Chart generation queued." : "That chart generation is already pending."));
     }
-
-    [HttpPut("sql-charts")]
-    public async Task<ActionResult<AnalyticsChartResponse>> SaveSqlChart(
-        Guid projectId,
-        [FromBody] SaveSqlChartRequest request,
-        CancellationToken cancellationToken)
-    {
-        if (string.IsNullOrWhiteSpace(request.Name)) return BadRequest(new { error = "Chart name is required." });
-        if (string.IsNullOrWhiteSpace(request.Sql)) return BadRequest(new { error = "SQL query is required." });
-        if (request.ChartType is not ("bar" or "line" or "pie")) return BadRequest(new { error = "Chart type must be bar, line, or pie." });
-        try
-        {
-            return Ok(MapChart(await placeContextService.SaveSqlChartAsync(
-                projectId, request.Name.Trim(), request.Sql, request.ChartType, cancellationToken)));
-        }
-        catch (InvalidOperationException exception)
-        {
-            return BadRequest(new { error = exception.Message });
-        }
-    }
-
-    [HttpDelete("sql-charts/{name}")]
-    public async Task<IActionResult> DeleteSqlChart(Guid projectId, string name, CancellationToken cancellationToken) =>
-        await placeContextService.DeleteSqlChartAsync(projectId, name, cancellationToken)
-            ? NoContent()
-            : NotFound(new { error = "The SQL chart does not exist." });
 
     private static AnalyticsChartResponse MapChart(ProjectChartView chart)
     {

@@ -1,4 +1,4 @@
-using PlaceContext.Host.Wiki;
+using PlaceContext.App.Wiki;
 
 namespace PlaceContext.Host.Components.ViewModels;
 

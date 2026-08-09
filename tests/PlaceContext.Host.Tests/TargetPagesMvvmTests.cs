@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Components;
+using PlaceContext.App.Wiki;
 using PlaceContext.Application.Ports;
 using PlaceContext.Host.Components.ViewModels;
-using PlaceContext.Host.Wiki;
 using PlaceContext.Infrastructure.Persistence;
 using PlaceContext.Infrastructure.Tenancy;
 

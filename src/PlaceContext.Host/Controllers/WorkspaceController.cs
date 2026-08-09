@@ -20,8 +20,7 @@ namespace PlaceContext.Host.Controllers;
 [Produces("application/json")]
 [ResponseCache(Location = ResponseCacheLocation.None, NoStore = true)]
 public sealed class WorkspaceController(
-    IPlaceContextService placeContextService,
-    ICurrentTenant currentTenant) : ControllerBase
+    IPlaceContextService placeContextService) : ControllerBase
 {
     [HttpGet("projects")]
     public async Task<ActionResult<IReadOnlyList<ProjectSummaryView>>> Projects(
@@ -36,10 +35,4 @@ public sealed class WorkspaceController(
     public async Task<ActionResult<RootStatsView>> Stats(CancellationToken cancellationToken)
         => Ok(await placeContextService.GetRootStatsAsync(cancellationToken));
 
-    [HttpGet("session")]
-    public Task<ActionResult<SessionResponse>> Session()
-        => Task.FromResult<ActionResult<SessionResponse>>(Ok(new SessionResponse(
-            User.Identity?.Name ?? "PlaceContext user",
-            User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value ?? "Viewer",
-            currentTenant.Slug)));
 }

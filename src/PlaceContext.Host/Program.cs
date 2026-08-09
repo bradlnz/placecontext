@@ -23,6 +23,7 @@ using PlaceContext.Crm;
 using PlaceContext.Data;
 using PlaceContext.Jobs;
 using PlaceContext.Jobs.Infrastructure.Persistence;
+using PlaceContext.Operations;
 using PlaceContext.Search;
 using PlaceContext.Vault;
 using Microsoft.AspNetCore.Authentication;
@@ -67,6 +68,7 @@ builder.Services.AddArtifactsModule();
 builder.Services.AddCrmModule();
 builder.Services.AddDataModule();
 builder.Services.AddJobsModule();
+builder.Services.AddOperationsModule();
 builder.Services.AddSearchModule();
 builder.Services.AddVaultModule();
 builder.Services.AddInfrastructure(builder.Configuration);
@@ -132,7 +134,9 @@ builder.Services.AddControllers()
     .AddApplicationPart(typeof(PlaceContext.Crm.Controllers.CrmController).Assembly)
     .AddApplicationPart(typeof(PlaceContext.Data.Controllers.DataController).Assembly)
     .AddApplicationPart(typeof(PlaceContext.Jobs.Controllers.JobsController).Assembly)
+    .AddApplicationPart(typeof(PlaceContext.Operations.Controllers.OperationsController).Assembly)
     .AddApplicationPart(typeof(PlaceContext.Search.Controllers.SearchController).Assembly)
+    .AddApplicationPart(typeof(PlaceContext.Settings.Controllers.SettingsServiceController).Assembly)
     .AddApplicationPart(typeof(PlaceContext.Vault.Controllers.VaultController).Assembly);
 builder.Services.AddScoped<IValidator<LeadIngestionRequest>, LeadIngestionRequestValidator>();
 builder.Services.AddScoped<IValidator<JsonElement>, CrmIngestionPayloadValidator>();

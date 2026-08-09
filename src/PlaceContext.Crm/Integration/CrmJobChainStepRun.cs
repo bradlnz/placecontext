@@ -10,4 +10,7 @@ public sealed record CrmJobChainStepRun(
     string Status,
     DateTimeOffset? StartedAt,
     DateTimeOffset? FinishedAt,
-    string? Error);
+    string? ActionType = null,
+    string? Provider = null,
+    string? ExternalId = null,
+    string? Error = null);

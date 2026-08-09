@@ -8,4 +8,13 @@ public sealed record CrmJobChainRun(
     IReadOnlyList<CrmJobChainStepRun> Steps,
     string? FinalOutput,
     DateTimeOffset StartedAt,
-    DateTimeOffset? FinishedAt);
+    DateTimeOffset? FinishedAt)
+{
+    public IReadOnlyList<IReadOnlyList<CrmJobChainStepRun>> StepsByStage => Steps
+        .GroupBy(step => step.StageIndex)
+        .OrderBy(group => group.Key)
+        .Select(group => (IReadOnlyList<CrmJobChainStepRun>)group
+            .OrderBy(step => step.BranchIndex)
+            .ToList())
+        .ToList();
+}

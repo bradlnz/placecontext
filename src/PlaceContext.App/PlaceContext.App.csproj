@@ -4,4 +4,11 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
   <ItemGroup><ProjectReference Include="..\PlaceContext.ServiceDefaults\PlaceContext.ServiceDefaults.csproj" /></ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Markdig" Version="1.3.2" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="..\PlaceContext.Host\Wiki\*.md"
+                      Link="Wiki\%(Filename)%(Extension)" />
+  </ItemGroup>
 </Project>

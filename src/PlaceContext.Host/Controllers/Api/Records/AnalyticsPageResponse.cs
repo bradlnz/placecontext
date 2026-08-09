@@ -1,3 +1,5 @@
+using PlaceContext.Data.Contracts.Api;
+
 namespace PlaceContext.Host.Controllers.Api.Records;
 
 public sealed record AnalyticsPageResponse(

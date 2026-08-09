@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using PlaceContext.Application.Cqrs;
+using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Features;
 using PlaceContext.Jobs.Contracts.Api;
 
@@ -31,6 +32,7 @@ public sealed class InternalJobsController(IDispatcher dispatcher) : ControllerB
                 job.Name,
                 job.Description,
                 returnType = job.ReturnType.ToString(),
+                job.Parameters,
             }),
             chains = chains.Select(chain => new
             {
@@ -41,7 +43,10 @@ public sealed class InternalJobsController(IDispatcher dispatcher) : ControllerB
                 stepCount = chain.Steps.Count,
                 stages = chain.Stages.Select(stage => new
                 {
-                    jobIds = stage.Jobs.Select(job => job.JobId),
+                    jobs = stage.Jobs.Select(job => new { job.JobId, job.JobName }),
+                    conditionExpression = stage.Gate is ConditionGateView condition
+                        ? condition.Expression
+                        : null,
                 }),
             }),
             runs = runTasks.SelectMany(task => task.Result).Select(run => new

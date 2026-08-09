@@ -7,7 +7,7 @@ builder.Services.AddSettingsModule();
 builder.Services.AddSettingsInfrastructure(builder.Configuration);
 builder.Services.AddPlaceContextServiceRuntime(
     builder.Configuration,
-    typeof(SettingsController).Assembly);
+    typeof(SettingsServiceController).Assembly);
 
 var app = builder.Build();
 app.UsePlaceContextServiceRuntime("settings");

@@ -21,7 +21,19 @@ public sealed class MicroserviceProxyRouteCatalogTests
         Assert.Contains(routes, route => route.ServiceName == "Mcp" && route.Matches("/api/mcp"));
         Assert.Contains(routes, route => route.ServiceName == "Mcp" && route.Matches("/api/job-mcp/project/tools"));
         Assert.Contains(routes, route => route.ServiceName == "Search" && route.Matches("/api/search"));
+        Assert.Contains(routes, route => route.ServiceName == "Search" && route.Matches("/api/v1/search"));
         Assert.Contains(routes, route => route.ServiceName == "Vault" && route.Matches("/api/vault"));
+    }
+
+    [Fact]
+    public void Catalog_claims_only_the_exact_legacy_search_route()
+    {
+        var route = Assert.Single(MicroserviceProxyRouteCatalog.All, candidate =>
+            candidate.Matches("/api/v1/search"));
+
+        Assert.Equal("Search", route.ServiceName);
+        Assert.True(route.Matches("/api/v1/search/"));
+        Assert.False(route.Matches("/api/v1/search/history"));
     }
 
     [Fact]

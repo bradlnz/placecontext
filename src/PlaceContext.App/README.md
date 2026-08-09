@@ -50,6 +50,24 @@ An owned route with no valid absolute HTTP(S) destination returns `503`. A conne
 configured destination returns `502`. The proxy does not retry requests because several service
 routes perform non-idempotent writes.
 
+## Edge-owned controller migration
+
+App directly owns the static `GET /api/v1/wiki` read and the
+`GET /api/v1/workspace/session` caller projection. Both retain cookie-authenticated behavior by
+using Identity's existing cookie-to-service-token adapter; App does not accept or validate the
+legacy Host cookie itself.
+
+The remaining Workspace reads stay in Host until Projects exposes contract-equivalent adapters:
+
+- `GET /api/v1/projects` omits the graph counts required by `/api/v1/workspace/projects`;
+- no Projects HTTP adapter currently exposes the focus or root-statistics read models.
+
+Dashboard's wire contracts are edge-owned here, but its controller remains in Host. A coherent move
+still needs Data adapters for stored chart reads and table columns, an Operations adapter for queued
+operation counts/background tracking, and a Jobs run adapter that preserves the existing immediate
+`202 Accepted` response and caller-selected chain-run id. The existing Jobs page run waits for the
+run and therefore cannot replace that route without changing its behavior.
+
 ## Host removal gate
 
 The legacy Host can be deleted when:

@@ -30,9 +30,13 @@ public sealed class ServiceApiKeyAuthenticationHandler
 
     protected override Task<AuthenticateResult> HandleAuthenticateAsync()
     {
-        var configured = _configuration[ServiceApiKeyAuthenticationDefaults.ConfigurationKey];
+        var configurationKey = Request.Path.StartsWithSegments("/api/customer-portal")
+            ? ServiceApiKeyAuthenticationDefaults.CustomerPortalConfigurationKey
+            : ServiceApiKeyAuthenticationDefaults.ConfigurationKey;
+        var configured = _configuration[configurationKey];
         if (string.IsNullOrWhiteSpace(configured))
-            return Task.FromResult(AuthenticateResult.Fail("The workspace API key is not configured."));
+            return Task.FromResult(AuthenticateResult.Fail(
+                $"The API key is not configured: {configurationKey} is required."));
 
         var presented = ExtractKey(Request);
         if (string.IsNullOrEmpty(presented) || !KeysMatch(presented, configured))
