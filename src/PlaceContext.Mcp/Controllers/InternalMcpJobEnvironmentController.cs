@@ -38,6 +38,4 @@ public sealed class InternalMcpJobEnvironmentController(
 
     private string Unprotect(string? value) =>
         string.IsNullOrEmpty(value) ? string.Empty : encryptor.Unprotect(value, EncryptPurpose) ?? string.Empty;
-
-    public sealed record JobEnvironmentRequest(IReadOnlyList<Guid> ConnectionIds);
 }

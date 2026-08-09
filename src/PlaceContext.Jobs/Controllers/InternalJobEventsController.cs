@@ -16,6 +16,4 @@ public sealed class InternalJobEventsController(IDispatcher dispatcher) : Contro
         await dispatcher.Send(new EmitEventCommand(request.EventType, request.ProjectId, request.Payload), ct);
         return Accepted();
     }
-
-    public sealed record EventRequest(string EventType, Guid ProjectId, string Payload);
 }

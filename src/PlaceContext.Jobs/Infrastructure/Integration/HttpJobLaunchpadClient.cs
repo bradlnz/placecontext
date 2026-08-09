@@ -34,6 +34,4 @@ public sealed class HttpJobLaunchpadClient(
             ?? throw new InvalidOperationException("Agents returned no launchpad identifier.");
         return result.Id;
     }
-
-    private sealed record Response(Guid Id);
 }

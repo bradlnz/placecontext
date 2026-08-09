@@ -15,15 +15,3 @@ public interface IDataSearchClient
         IReadOnlyList<string> jsonColumnNames,
         CancellationToken ct = default);
 }
-
-public sealed record DataSearchIndexSummary(string Name, long DocumentCount, string? StoreSize);
-public sealed record DataSearchMappingField(string Name, string OpenSearchType);
-
-public sealed record ReplaceDataSearchIndexRequest(
-    string IndexName,
-    IReadOnlyList<DataSearchMappingField> MappingFields,
-    IReadOnlyList<string> ColumnNames,
-    IReadOnlyList<IReadOnlyList<string?>> Rows,
-    IReadOnlyList<string> JsonColumnNames);
-
-public sealed record DataSearchSqlRequest(string Sql);

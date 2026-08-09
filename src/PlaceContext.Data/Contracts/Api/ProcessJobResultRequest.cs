@@ -7,5 +7,3 @@ public sealed record ProcessJobResultRequest(
     Guid ProjectId,
     string? PrimaryOutput,
     IReadOnlyList<JobResultDocument> Documents);
-
-public sealed record JobResultDocument(string Name, string Content, bool IsBinary);

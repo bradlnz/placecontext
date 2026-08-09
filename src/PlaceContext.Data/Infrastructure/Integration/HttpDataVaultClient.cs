@@ -30,6 +30,4 @@ public sealed class HttpDataVaultClient(
         response.EnsureSuccessStatusCode();
         return await response.Content.ReadFromJsonAsync<Dictionary<string, string>>(ct) ?? [];
     }
-
-    private sealed record ResolveSecretsRequest(IReadOnlyList<string> Names);
 }

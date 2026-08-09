@@ -109,14 +109,4 @@ public sealed class HttpJobDataClient(
             .Concat(run.ReduceResult?.Artifacts ?? Array.Empty<RunArtifact>())
             .Select(artifact => new JobResultDocument(artifact.Name, artifact.Content, artifact.IsBinary))
             .ToList();
-
-    private sealed record ProcessJobResultRequest(
-        string SourceKind,
-        Guid SourceId,
-        Guid RunId,
-        Guid ProjectId,
-        string? PrimaryOutput,
-        IReadOnlyList<JobResultDocument> Documents);
-
-    private sealed record JobResultDocument(string Name, string Content, bool IsBinary);
 }

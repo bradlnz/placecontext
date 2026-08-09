@@ -57,13 +57,4 @@ public sealed class InternalSearchController(
             request.JsonColumnNames);
         return Ok(new { indexed });
     }
-
-    public sealed record DataSearchSqlRequest(string Sql);
-    public sealed record DataSearchMappingField(string Name, string OpenSearchType);
-    public sealed record ReplaceDataSearchIndexRequest(
-        string IndexName,
-        IReadOnlyList<DataSearchMappingField> MappingFields,
-        IReadOnlyList<string> ColumnNames,
-        IReadOnlyList<IReadOnlyList<string?>> Rows,
-        IReadOnlyList<string> JsonColumnNames);
 }

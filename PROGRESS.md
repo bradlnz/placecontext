@@ -303,6 +303,19 @@ Last updated: 2026-08-09 (Australia/Brisbane)
   tests pass 10/10. The transport-neutral key-minter boundary remains available for a separately
   configured Headscale implementation without coupling the two control planes.
 
+### Source-organization recovery — 2026-08-09T17:21:48+10:00
+
+- Completed the interrupted one-type-per-file split across AgentChat, Agents, Artifacts,
+  Communications, Data, Jobs, MCP, Projects, Search, and Vault. Communication senders/services and
+  HTTP request models now live under folders matching their architectural roles.
+- Added Projects-owned build output/intermediate isolation so its four co-located projects can build
+  safely in parallel instead of corrupting shared `obj` state and reporting a false project cycle.
+- Architecture tests now pass 18/18. A clean serialized restore followed by a parallel full-solution
+  test reaches the remaining stale test-fake migrations; passing suites include Infrastructure 93/93,
+  Domain 144/144, Agents 10/10, Identity 5/5, Artifacts 21/21, App 28/28, MCP 2/2, and Vault 4/4.
+- Remaining full-suite blockers are compile-time test migrations in Application, Search, Data, CRM,
+  Jobs, and AgentChat. Production and architecture compilation are no longer blocking execution.
+
 ## Remaining coupling to remove
 
 - Shared Infrastructure still references Application, and Projects/Identity still compose

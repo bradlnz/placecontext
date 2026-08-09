@@ -14,11 +14,4 @@ public sealed class InternalLaunchpadController(ILaunchpadRunner runner) : Contr
         => Ok(new { id = await runner.RunLaunchpadAsync(
             request.ProjectId, request.TriggerName, request.Prompt,
             request.SourceTable, request.ChainId, ct) });
-
-    public sealed record LaunchpadRequest(
-        Guid ProjectId,
-        string TriggerName,
-        string Prompt,
-        string? SourceTable,
-        Guid ChainId);
 }

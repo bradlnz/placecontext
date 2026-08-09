@@ -41,14 +41,4 @@ public sealed class HttpArtifactDataClient(
         using var response = await httpClientFactory.CreateClient().SendAsync(request, cancellationToken);
         response.EnsureSuccessStatusCode();
     }
-
-    private sealed record StoreOcrResultRequest(
-        Guid ProjectId,
-        Guid ArtifactId,
-        Guid RunId,
-        Guid JobId,
-        string? Title,
-        string? ContentType,
-        string Markdown,
-        DateTimeOffset IngestedAt);
 }

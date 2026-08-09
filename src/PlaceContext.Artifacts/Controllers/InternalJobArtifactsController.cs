@@ -130,15 +130,4 @@ public sealed class InternalJobArtifactsController(
         await store.DeleteAsync(request.Bucket, request.ObjectKey, ct);
         return NoContent();
     }
-
-    public sealed record StoreJobArtifactRequest(
-        Guid ProjectId,
-        Guid JobId,
-        Guid RunId,
-        string JobName,
-        string Kind,
-        string FileName,
-        string Title,
-        string ContentType,
-        string ContentBase64);
 }

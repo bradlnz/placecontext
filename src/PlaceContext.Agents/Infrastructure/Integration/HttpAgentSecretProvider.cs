@@ -31,6 +31,4 @@ public sealed class HttpAgentSecretProvider(
         return await response.Content.ReadFromJsonAsync<Dictionary<string, string>>(cancellationToken)
             ?? new Dictionary<string, string>();
     }
-
-    private sealed record ResolveSecretsRequest(IReadOnlyList<string> Names);
 }

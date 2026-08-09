@@ -42,6 +42,4 @@ public sealed class InternalVaultController(
             .ToDictionary(pair => pair.Key, pair => protector.Unprotect(pair.Value), StringComparer.Ordinal);
         return Ok(values);
     }
-
-    public sealed record ResolveSecretsRequest(IReadOnlyList<string> Names);
 }

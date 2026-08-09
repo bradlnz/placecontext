@@ -47,15 +47,4 @@ public sealed class HttpJobArtifactClient(
             logger.LogWarning("Artifacts service rejected output for run {RunId}: {Status}.", runId, response.StatusCode);
         response.EnsureSuccessStatusCode();
     }
-
-    private sealed record StoreJobArtifactRequest(
-        Guid ProjectId,
-        Guid JobId,
-        Guid RunId,
-        string JobName,
-        string Kind,
-        string FileName,
-        string Title,
-        string ContentType,
-        string ContentBase64);
 }
