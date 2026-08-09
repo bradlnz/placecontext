@@ -1,6 +1,6 @@
 # PlaceContext Microservice Migration Progress
 
-Last updated: 2026-08-09 20:48 AEST (Australia/Brisbane)
+Last updated: 2026-08-09 20:51 AEST (Australia/Brisbane)
 
 ## Target architecture
 
@@ -432,6 +432,8 @@ Last updated: 2026-08-09 20:48 AEST (Australia/Brisbane)
   proxies the complete route family. An architecture guard requires Host's controller tree to stay empty.
 - Added route/controller contract tests across App, CRM, Data, Operations, Projects, Search, and
   Settings, plus stronger service ownership/source-organization architecture assertions.
+- Moved all thirteen wiki Markdown resources from Host into App; App no longer embeds files through
+  a cross-project Host path. App tests remain **50/50**.
 - Full Dockerized `.NET 10` solution run passed: **1010 passed, 6 explicit environment-dependent
   skips, 0 failed**. Architecture passed **23/23**. Identity passed **7/7** after aligning its
   Microsoft persistence packages to the patched `10.0.10` servicing line. `git diff --check` is clean.

@@ -8,7 +8,6 @@
     <PackageReference Include="Markdig" Version="1.3.2" />
   </ItemGroup>
   <ItemGroup>
-    <EmbeddedResource Include="..\PlaceContext.Host\Wiki\*.md"
-                      Link="Wiki\%(Filename)%(Extension)" />
+    <EmbeddedResource Include="Wiki\*.md" />
   </ItemGroup>
 </Project>
