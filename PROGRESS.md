@@ -316,15 +316,33 @@ Last updated: 2026-08-09 (Australia/Brisbane)
 - Remaining full-suite blockers are compile-time test migrations in Application, Search, Data, CRM,
   Jobs, and AgentChat. Production and architecture compilation are no longer blocking execution.
 
+### Projects-owned persistence and composition — 2026-08-09T18:24:42+10:00
+
+- Added a Projects-owned `ProjectsDbContext`, tenant stamping/query filters, repositories for projects,
+  activity, decisions, and requirements, and Projects-owned git, repository-file, and data-protection
+  adapters. The standalone Projects runtime no longer invokes or references shared Infrastructure.
+- Added a separate `__EFMigrationsHistory_Projects`, EF-generated model snapshot, and an adoption-safe
+  initial migration using `CREATE TABLE IF NOT EXISTS` so existing gateway databases retain their data
+  while fresh standalone Projects databases can initialize independently.
+- Added focused tenant-isolation and migration-ownership tests, registered the Projects test project in
+  the solution, and added an architecture guard preventing a shared-Infrastructure dependency from
+  returning.
+- Verified in the .NET 10 SDK container: Projects API builds with 0 warnings and 0 errors, Projects
+  persistence tests pass 2/2, architecture tests pass 19/19, and Projects source/project audits find
+  zero shared Application/Infrastructure references.
+- The legacy Host still uses the shared project rows through `AppDbContext`. Releasing those duplicate
+  mappings is intentionally paired with the Host Projects-controller cutover because Host currently
+  shares one `IUnitOfWork` across several unmigrated domains.
+
 ## Remaining coupling to remove
 
-- Shared Infrastructure still references Application, and Projects/Identity still compose
-  portions of shared Infrastructure. Move each required adapter to its owning service or replace it
-  with authenticated HTTP before deleting Application.
+- Shared Infrastructure still references Application, and Identity still composes portions of shared
+  Infrastructure. Move each required adapter to its owning service or replace it with authenticated
+  HTTP before deleting Application.
 - The current host still references service implementations directly.
-- Jobs, Data, Search, Artifacts, Vault, AgentChat, Agents, MCP, Communications, Settings, Operations, and CRM APIs
-  do not require shared Infrastructure. Identity and Projects still have transitional
-  shared-Infrastructure composition to remove.
+- Jobs, Data, Search, Artifacts, Vault, AgentChat, Agents, MCP, Communications, Settings, Operations,
+  CRM, and Projects APIs do not require shared Infrastructure. Identity is the remaining service API
+  with transitional shared-Infrastructure composition to remove.
 - The shared database model and migration history still contain tables for the other services and platform capabilities, preventing their independent database evolution.
 - Data and Search now resolve Vault-owned secrets over authenticated HTTP, with service configuration
   retained only as the explicit fallback when no per-project override exists.
@@ -340,8 +358,9 @@ Last updated: 2026-08-09 (Australia/Brisbane)
    invitations, tenant, and domain persistence. Replace its two-factor sender/provider lookup with
    an Identity-owned HTTP client to Communications, then remove Identity's shared Infrastructure
    composition.
-2. Finish Projects and Agents persistence/composition ownership and replace any remaining shared
-   Infrastructure adapters with service-owned implementations or authenticated HTTP clients.
+2. Cut the legacy Host Projects routes over to the Projects runtime, introduce a Projects-specific
+   unit-of-work boundary for mixed Host composition, then release project/activity/decision/requirements
+   rows and repositories from shared `AppDbContext` without dropping their physical tables.
 3. Remove the released `communication_providers` model and Postmark/SendGrid/Twilio implementation
    from shared Infrastructure after Identity is cut over. Connections remain configured through
    Settings; MCP runtime connections/tokens are consumed by Jobs through the MCP HTTP boundary.

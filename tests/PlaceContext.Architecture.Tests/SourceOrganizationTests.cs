@@ -555,6 +555,53 @@ public sealed class SourceOrganizationTests
     }
 
     [Fact]
+    public void Projects_persistence_is_owned_by_projects_infrastructure()
+    {
+        var serviceDirectory = Path.Combine(Root, "src", "PlaceContext.Projects");
+        var infrastructureProject = Path.Combine(
+            serviceDirectory,
+            "PlaceContext.Projects.Infrastructure.csproj");
+        var apiProject = Path.Combine(serviceDirectory, "PlaceContext.Projects.Api.csproj");
+        var rowTypes = new[]
+        {
+            "ProjectRow",
+            "ActivityRecordRow",
+            "DecisionRow",
+            "RequirementsRow",
+        };
+        var required = new[]
+        {
+            Path.Combine(serviceDirectory, "Infrastructure", "Persistence", "ProjectsDbContext.cs"),
+            Path.Combine(serviceDirectory, "Infrastructure", "Persistence", "EfProjectRepository.cs"),
+            Path.Combine(serviceDirectory, "Infrastructure", "Persistence", "EfActivityLogRepository.cs"),
+            Path.Combine(serviceDirectory, "Infrastructure", "Persistence", "EfDecisionRepository.cs"),
+            Path.Combine(serviceDirectory, "Infrastructure", "Persistence", "EfRequirementsRepository.cs"),
+            Path.Combine(
+                serviceDirectory,
+                "Infrastructure",
+                "Persistence",
+                "Migrations",
+                "ProjectsDbContextModelSnapshot.cs"),
+            Path.Combine(
+                Root,
+                "tests",
+                "PlaceContext.Projects.Tests",
+                "PlaceContext.Projects.Tests.csproj"),
+        }.Concat(rowTypes.Select(typeName =>
+            Path.Combine(serviceDirectory, "Infrastructure", "Persistence", typeName + ".cs")));
+
+        Assert.All(required, path => Assert.True(File.Exists(path), $"Missing {Relative(path)}"));
+        Assert.DoesNotContain(
+            "PlaceContext.Infrastructure.csproj",
+            File.ReadAllText(infrastructureProject),
+            StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(
+            "PlaceContext.Infrastructure.csproj",
+            File.ReadAllText(apiProject),
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void Agents_persistence_is_owned_by_agents_infrastructure()
     {
         var serviceDirectory = Path.Combine(Root, "src", "PlaceContext.Agents");
