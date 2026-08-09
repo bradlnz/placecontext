@@ -15,7 +15,6 @@ using PlaceContext.Application.Ports;
 using PlaceContext.Host.Components;
 using PlaceContext.Host.Components.ViewModels;
 using PlaceContext.Host.Controllers;
-using PlaceContext.Host.CoreApi;
 using PlaceContext.Host.Tenancy;
 using PlaceContext.Host.Tools;
 using PlaceContext.Infrastructure;
@@ -137,7 +136,6 @@ builder.Services.AddControllers()
     .AddApplicationPart(typeof(PlaceContext.Vault.Controllers.VaultController).Assembly);
 builder.Services.AddScoped<IValidator<LeadIngestionRequest>, LeadIngestionRequestValidator>();
 builder.Services.AddScoped<IValidator<JsonElement>, CrmIngestionPayloadValidator>();
-builder.Services.Configure<CoreApiOptions>(builder.Configuration.GetSection("PlaceContext:CoreApi"));
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
@@ -352,11 +350,6 @@ builder.Services
     // — it never becomes the ambient default, so it can't accidentally widen the portal or MCP surfaces.
     .AddScheme<ApiKeyAuthenticationOptions, ApiKeyAuthenticationHandler>(
         ApiKeyAuthenticationHandler.SchemeName, _ => { })
-    // Frontend-only Core API clients (engine/API clients). This scheme is intentionally separate from
-    // user cookies / MCP bearer tokens so only explicitly registered frontend applications can call
-    // /api/core/*.
-    .AddScheme<AuthenticationSchemeOptions, CoreApiAuthenticationHandler>(
-        CoreApiAuthenticationHandler.SchemeName, _ => { })
     // Personal user API tokens (Settings → API tokens), used by the entity data API at /api/v1/data/*.
     .AddScheme<UserApiTokenAuthenticationOptions, UserApiTokenAuthenticationHandler>(
         UserApiTokenAuthenticationHandler.SchemeName, _ => { });
@@ -386,24 +379,13 @@ builder.Services.AddAuthorization(o =>
     // page) and the controllers backing it to the tenant's bootstrap administrator.
     o.AddPolicy(Policies.DefaultAdmin, p => p.RequireAuthenticatedUser()
         .AddRequirements(new DefaultAdminRequirement()));
-    foreach (var scope in CoreApiScopes.All)
-    {
-        var scopeName = scope;
-        o.AddPolicy(scopeName, p => p
-            .RequireAuthenticatedUser()
-            .AddAuthenticationSchemes(CoreApiAuthenticationHandler.SchemeName)
-            .AddRequirements(new CoreApiScopeRequirement(scopeName)));
-    }
 });
 // Scoped, not singleton: it depends on the scoped IPermissionService (which in turn depends on the
 // scoped IUserPermissionGrantRepository / DbContext).
 builder.Services.AddScoped<IAuthorizationHandler, PermissionAuthorizationHandler>();
 builder.Services.AddScoped<IAuthorizationHandler, DefaultAdminAuthorizationHandler>();
-builder.Services.AddSingleton<IAuthorizationHandler, CoreApiScopeAuthorizationHandler>();
 builder.Services.AddSingleton<IAuthorizationHandler, BlazorHubBypassHandler>();
-builder.Services.AddScoped<ICoreApiResourceResolver, CoreApiResourceResolver>();
 builder.Services.AddScoped<IOAuthAuthCodeStore, EfOAuthAuthCodeStore>();
-builder.Services.AddSingleton<PortalToken>();
 
 // Exposes the current request's ClaimsPrincipal to MCP tools (e.g. whoami reads the bearer's claims).
 builder.Services.AddHttpContextAccessor();

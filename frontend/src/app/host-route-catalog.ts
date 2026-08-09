@@ -49,7 +49,7 @@ export const hostRouteCatalog = [
     section: 'workspace',
     hostPath: '/project/{ProjectId:guid}/crm',
     reactPath: '/project/:projectId/crm',
-    status: 'planned',
+    status: 'migrated',
   },
   {
     domain: 'automation',
@@ -98,7 +98,7 @@ export const hostRouteCatalog = [
     section: 'project-data',
     hostPath: '/project/{ProjectId:guid}/data',
     reactPath: '/project/:projectId/data',
-    status: 'planned',
+    status: 'migrated',
   },
   {
     domain: 'data',
@@ -133,7 +133,7 @@ export const hostRouteCatalog = [
     section: 'search',
     hostPath: '/project/{ProjectId:guid}/data-search',
     reactPath: '/project/:projectId/data-search',
-    status: 'planned',
+    status: 'migrated',
   },
   {
     domain: 'data',
@@ -161,7 +161,7 @@ export const hostRouteCatalog = [
     section: 'chat',
     hostPath: '/chat',
     reactPath: '/chat',
-    status: 'planned',
+    status: 'migrated',
   },
   {
     domain: 'collaboration',
@@ -182,14 +182,14 @@ export const hostRouteCatalog = [
     section: 'library',
     hostPath: '/artifacts',
     reactPath: '/artifacts',
-    status: 'planned',
+    status: 'migrated',
   },
   {
     domain: 'operations',
     section: 'observability',
     hostPath: '/observability',
     reactPath: '/observability',
-    status: 'planned',
+    status: 'migrated',
   },
   {
     domain: 'operations',

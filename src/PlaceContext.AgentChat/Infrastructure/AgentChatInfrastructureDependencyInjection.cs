@@ -6,6 +6,8 @@ using PlaceContext.AgentChat.Infrastructure.Caching;
 using PlaceContext.AgentChat.Infrastructure.Chat;
 using PlaceContext.AgentChat.Infrastructure.Persistence;
 using PlaceContext.AgentChat.Infrastructure.Slack;
+using PlaceContext.AgentChat.Infrastructure.Tenancy;
+using PlaceContext.AgentChat.Slack;
 using PlaceContext.Application.Ports;
 using PlaceContext.Domain.Repositories;
 
@@ -95,9 +97,12 @@ public static class AgentChatInfrastructureDependencyInjection
 
         services.AddScoped<IAgentConfigRepository, EfAgentConfigRepository>();
         services.AddScoped<IAgentChatSessionRepository, EfAgentChatSessionRepository>();
-        services.AddScoped<IMcpConnectionRepository, EfMcpConnectionRepository>();
         services.AddScoped<IChatCommandRepository, EfChatCommandRepository>();
         services.AddHttpClient();
+        var identityAddress = configuration["PlaceContext:AgentChat:Identity:BaseAddress"]
+            ?? configuration["PlaceContext:Microservices:Destinations:Identity"];
+        if (!string.IsNullOrWhiteSpace(identityAddress))
+            services.AddScoped<IRequestTenantResolver, HttpIdentityTenantResolver>();
         return services;
     }
 }

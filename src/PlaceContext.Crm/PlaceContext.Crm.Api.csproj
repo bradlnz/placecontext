@@ -8,7 +8,7 @@
   <ItemGroup>
     <ProjectReference Include="PlaceContext.Crm.csproj" />
     <ProjectReference Include="PlaceContext.Crm.Infrastructure.csproj" />
-    <ProjectReference Include="..\PlaceContext.Application\PlaceContext.ServiceDefaults.csproj" />
     <ProjectReference Include="..\PlaceContext.Infrastructure\PlaceContext.Infrastructure.csproj" />
   </ItemGroup>
+  <ItemGroup><ProjectReference Include="..\PlaceContext.ServiceDefaults\PlaceContext.ServiceDefaults.csproj" /></ItemGroup>
 </Project>

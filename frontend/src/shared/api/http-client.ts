@@ -23,6 +23,10 @@ interface WriteJsonOptions<TRequest, TResponse> {
   signal: AbortSignal
 }
 
+interface DeleteJsonOptions<TRequest, TResponse> extends GetJsonOptions<TResponse> {
+  body: TRequest
+}
+
 async function parseJsonResponse<TResponse>(
   response: Response,
   schema: ZodType<TResponse>,
@@ -88,6 +92,23 @@ export async function postJson<TRequest, TResponse>({
   return parseJsonResponse(response, schema)
 }
 
+export async function postRequest(path: string, body: unknown, signal: AbortSignal): Promise<void> {
+  const response = await fetch(path, {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+      'X-Requested-With': 'XMLHttpRequest',
+    },
+    body: JSON.stringify(body),
+    signal,
+  })
+  if (response.status === 401)
+    throw new HttpError(response.status, 'Your PlaceContext session has expired.')
+  if (!response.ok) throw new HttpError(response.status, await readErrorMessage(response))
+}
+
 export async function putJson<TRequest, TResponse>({
   path,
   body,
@@ -139,6 +160,26 @@ export async function deleteRequest(path: string, signal: AbortSignal): Promise<
   if (response.status === 401)
     throw new HttpError(response.status, 'Your PlaceContext session has expired.')
   if (!response.ok) throw new HttpError(response.status, await readErrorMessage(response))
+}
+
+export async function deleteJsonWithBody<TRequest, TResponse>({
+  path,
+  body,
+  schema,
+  signal,
+}: DeleteJsonOptions<TRequest, TResponse>): Promise<TResponse> {
+  const response = await fetch(path, {
+    method: 'DELETE',
+    credentials: 'same-origin',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+      'X-Requested-With': 'XMLHttpRequest',
+    },
+    body: JSON.stringify(body),
+    signal,
+  })
+  return parseJsonResponse(response, schema)
 }
 
 export async function putRequest(path: string, body: unknown, signal: AbortSignal): Promise<void> {

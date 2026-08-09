@@ -10,12 +10,14 @@ public static class DependencyInjection
 {
     public static IServiceCollection AddJobsApi(this IServiceCollection services)
     {
+        services.AddScoped<ICommandHandler<CreateJobCommand, JobView>, CreateJobHandler>();
         services.AddScoped<IQueryHandler<ListJobsQuery, IReadOnlyList<JobView>>, ListJobsHandler>();
         services.AddScoped<IQueryHandler<GetJobQuery, JobView?>, GetJobHandler>();
         services.AddScoped<ICommandHandler<UpdateJobCommand, JobView>, UpdateJobHandler>();
         services.AddScoped<ICommandHandler<DeleteJobCommand, bool>, DeleteJobHandler>();
         services.AddScoped<IQueryHandler<ListJobChainsQuery, IReadOnlyList<JobChainView>>, ListJobChainsHandler>();
         services.AddScoped<IQueryHandler<ListTriggersQuery, IReadOnlyList<TriggerView>>, ListTriggersHandler>();
+        services.AddScoped<ICommandHandler<CreateTriggerCommand, TriggerView>, CreateTriggerHandler>();
         services.AddScoped<IQueryHandler<GetTriggerByIdQuery, TriggerView?>, GetTriggerByIdHandler>();
         services.AddScoped<ICommandHandler<UpdateTriggerCommand, TriggerView>, UpdateTriggerHandler>();
         services.AddScoped<ICommandHandler<DeleteTriggerCommand, bool>, DeleteTriggerHandler>();

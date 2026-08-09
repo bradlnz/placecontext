@@ -9,15 +9,10 @@ public sealed class PlaceContextService : IPlaceContextService
 {
     private readonly IDispatcher _dispatcher;
     private readonly IJobRunner _jobRunner;
-    private readonly RecordLinkService _links;
-    private readonly IRecordLinkStore _linkStore;
-
-    public PlaceContextService(IDispatcher dispatcher, IJobRunner jobRunner, RecordLinkService links, IRecordLinkStore linkStore)
+    public PlaceContextService(IDispatcher dispatcher, IJobRunner jobRunner)
     {
         _dispatcher = dispatcher;
         _jobRunner = jobRunner;
-        _links = links;
-        _linkStore = linkStore;
     }
 
     public Task<ProjectSummaryView> CreateProjectAsync(string path, string? name, CancellationToken ct = default)
@@ -29,8 +24,22 @@ public sealed class PlaceContextService : IPlaceContextService
     public Task<ProjectSummaryView> RegisterProjectAsync(Guid projectId, CancellationToken ct = default)
         => _dispatcher.Send(new RegisterProjectCommand(projectId), ct);
 
-    public Task<ProjectSummaryView> RebuildGraphAsync(Guid projectId, bool incremental = true, CancellationToken ct = default)
-        => _dispatcher.Send(new RebuildGraphCommand(projectId, incremental), ct);
+    public async Task<ProjectSummaryView> RebuildGraphAsync(
+        Guid projectId,
+        bool incremental = true,
+        CancellationToken ct = default)
+    {
+        var result = await _dispatcher.Send(new RebuildGraphCommand(projectId, incremental), ct);
+        return new ProjectSummaryView(
+            result.ProjectId,
+            result.ProjectName,
+            result.ProjectPath,
+            result.ProjectStatus,
+            result.IsGraphified,
+            result.GodNodeCount,
+            result.NodeCount,
+            result.LinkCount);
+    }
 
     public Task<ActivityRecordView> RecordActivityAsync(RecordActivityCommand command, CancellationToken ct = default)
         => _dispatcher.Send(command, ct);
@@ -513,16 +522,16 @@ public sealed class PlaceContextService : IPlaceContextService
         => _dispatcher.Send(new DeleteEntityRecordCommand(projectId, tableName, keys), ct);
 
     public Task<RecordLinkRescanResult> RescanRecordLinksAsync(Guid projectId, CancellationToken ct = default)
-        => _links.RescanProjectAsync(projectId, ct);
+        => _dispatcher.Send(new RescanRecordLinksCommand(projectId), ct);
 
     public Task<IReadOnlyList<RecordLinkGroup>> ListRecordLinkGroupsAsync(Guid projectId, CancellationToken ct = default)
-        => _linkStore.GroupsAsync(projectId, ct: ct);
+        => _dispatcher.Query(new ListRecordLinkGroupsQuery(projectId), ct);
 
     public Task<IReadOnlyList<RecordLink>> RelatedRecordLinksAsync(Guid projectId, string tableName, string rowKey, CancellationToken ct = default)
-        => _linkStore.RelatedAsync(projectId, tableName, rowKey, ct: ct);
+        => _dispatcher.Query(new RelatedRecordLinksQuery(projectId, tableName, rowKey), ct);
 
     public Task<IReadOnlyList<RecordLink>> RelatedRecordLinksForRowAsync(Guid projectId, string tableName, IReadOnlyDictionary<string, string?> values, CancellationToken ct = default)
-        => _links.RelatedForRowAsync(projectId, tableName, values, ct: ct);
+        => _dispatcher.Query(new RelatedRecordLinksForRowQuery(projectId, tableName, values), ct);
 
     public Task<IReadOnlyList<RunReportView>> ListRecentRunReportsAsync(int take = 24, CancellationToken ct = default)
         => _dispatcher.Query(new ListRecentRunReportsQuery(take), ct);

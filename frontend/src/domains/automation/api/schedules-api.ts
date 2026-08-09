@@ -1,12 +1,22 @@
 import { deleteRequest, getJson, postJson, putJson } from '../../../shared/api/http-client'
 import type { SchedulePageModel, ScheduleTrigger } from '../model/schedules'
-import { schedulePage, trigger } from './schedules-schemas'
+import { scheduleDataTables, schedulePage, scheduleServicePage, trigger } from './schedules-schemas'
 const path = (projectId: string) =>
-  `/api/v1/projects/${encodeURIComponent(projectId)}/schedule-page`
+  `/api/jobs/projects/${encodeURIComponent(projectId)}/schedule-page`
 export const fetchSchedules = (
   projectId: string,
   signal: AbortSignal,
-): Promise<SchedulePageModel> => getJson({ path: path(projectId), schema: schedulePage, signal })
+): Promise<SchedulePageModel> =>
+  Promise.all([
+    getJson({ path: path(projectId), schema: scheduleServicePage, signal }),
+    getJson({
+      path: `/api/data/projects/${encodeURIComponent(projectId)}/tables`,
+      schema: scheduleDataTables,
+      signal,
+    }),
+  ]).then(([page, tables]) =>
+    schedulePage.parse({ ...page, tables: tables.map((table) => table.name) }),
+  )
 export const createSchedule = (
   projectId: string,
   body: object,

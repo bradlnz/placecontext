@@ -8,7 +8,7 @@
     <Compile Include="Domain/**/*.cs" Exclude="Domain/**/bin/**/*.cs;Domain/**/obj/**/*.cs" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\PlaceContext.Application\PlaceContext.BuildingBlocks.csproj" />
     <ProjectReference Include="..\PlaceContext.Domain\PlaceContext.Domain.csproj" />
   </ItemGroup>
+  <ItemGroup><ProjectReference Include="..\PlaceContext.BuildingBlocks\PlaceContext.BuildingBlocks.csproj" /></ItemGroup>
 </Project>

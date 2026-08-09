@@ -1,12 +1,12 @@
 using System.Threading.RateLimiting;
 using PlaceContext.Application;
-using PlaceContext.Application.Runtime;
+using PlaceContext.ServiceDefaults;
 using PlaceContext.Artifacts;
 using PlaceContext.Artifacts.Controllers;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddApplicationCore();
-builder.Services.AddArtifactsApi();
+builder.Services.AddArtifactsModule();
 builder.Services.AddArtifactsInfrastructure(builder.Configuration);
 builder.Services.AddPlaceContextServiceRuntime(builder.Configuration, typeof(ArtifactsController).Assembly);
 builder.Services.AddRateLimiter(options =>

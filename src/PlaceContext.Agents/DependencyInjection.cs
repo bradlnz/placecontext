@@ -4,6 +4,8 @@ using PlaceContext.Agents.Contracts.Dtos;
 using PlaceContext.Agents.Contracts.Queries;
 using PlaceContext.Agents.Handlers;
 using PlaceContext.Application.Cqrs;
+using PlaceContext.Application.Cluster;
+using PlaceContext.Application.Ports;
 
 namespace PlaceContext.Agents;
 
@@ -18,6 +20,11 @@ public static class DependencyInjection
         services.AddScoped<ICommandHandler<CreateAgentAssignmentCommand, AgentAssignmentView>, CreateAgentAssignmentHandler>();
         services.AddScoped<ICommandHandler<ResolveAgentApprovalCommand, AgentApprovalView?>, ResolveAgentApprovalHandler>();
         services.AddScoped<IQueryHandler<GetAgentsWorkspaceQuery, AgentsWorkspaceView>, GetAgentsWorkspaceHandler>();
+        services.AddScoped<IQueryHandler<GetClusterInfoQuery, ClusterInfo>, GetClusterInfoHandler>();
+        services.AddScoped<ICommandHandler<PromoteNodeToMasterCommand, PromoteMasterResult>, PromoteNodeToMasterHandler>();
+        services.AddScoped<IQueryHandler<GetClusterJoinMaterialQuery, ClusterJoinMaterial?>, GetClusterJoinMaterialHandler>();
+        services.AddScoped<ICommandHandler<LaunchClusterAgentCommand, LaunchAgentResult>, LaunchClusterAgentHandler>();
+        services.AddScoped<ICommandHandler<CreateAgentJoinTokenCommand, string>, CreateAgentJoinTokenHandler>();
         return services;
     }
 

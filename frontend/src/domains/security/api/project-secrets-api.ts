@@ -3,7 +3,7 @@ import type { CreateProjectSecretCommand, ProjectSecret } from '../model/project
 import { projectSecretSchema, projectSecretsSchema } from './project-secrets-schemas'
 
 function projectSecretsPath(projectId: string): string {
-  return `/api/v1/projects/${encodeURIComponent(projectId)}/secrets`
+  return `/api/vault/projects/${encodeURIComponent(projectId)}/secrets`
 }
 
 export async function fetchProjectSecrets(

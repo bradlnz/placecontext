@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable><EnableDefaultCompileItems>false</EnableDefaultCompileItems></PropertyGroup>
+  <ItemGroup><Compile Include="Runtime/**/*.cs" /></ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="PlaceContext.Settings.csproj" />
+    <ProjectReference Include="PlaceContext.Settings.Infrastructure.csproj" />
+  </ItemGroup>
+  <ItemGroup><ProjectReference Include="..\PlaceContext.ServiceDefaults\PlaceContext.ServiceDefaults.csproj" /></ItemGroup>
+</Project>

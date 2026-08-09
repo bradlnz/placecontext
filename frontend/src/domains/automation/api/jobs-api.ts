@@ -10,7 +10,7 @@ import type {
   RunJobCodeResult,
 } from '../model/jobs'
 import { job, jobCodePage, jobRunDetail, jobRuns, jobsPage, runJobCodeResult } from './jobs-schemas'
-const root = (projectId: string) => `/api/v1/projects/${encodeURIComponent(projectId)}/job-page`
+const root = (projectId: string) => `/api/jobs/projects/${encodeURIComponent(projectId)}/job-page`
 const jobPath = (projectId: string, jobId: string) =>
   `${root(projectId)}/jobs/${encodeURIComponent(jobId)}`
 export const fetchJobs = (projectId: string, signal: AbortSignal): Promise<JobsPageModel> =>

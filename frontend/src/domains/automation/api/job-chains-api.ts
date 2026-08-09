@@ -1,7 +1,7 @@
 import { deleteRequest, getJson, postJson, putJson } from '../../../shared/api/http-client'
 import type { ChainRun, JobChain, JobChainsPageModel, SaveChainBody } from '../model/job-chains'
 import { chain, chainRun, chainRuns, chainsPage } from './job-chains-schemas'
-const root = (projectId: string) => `/api/v1/projects/${encodeURIComponent(projectId)}/chain-page`
+const root = (projectId: string) => `/api/jobs/projects/${encodeURIComponent(projectId)}/chain-page`
 const chainPath = (projectId: string, chainId: string) =>
   `${root(projectId)}/chains/${encodeURIComponent(chainId)}`
 export const fetchChains = (projectId: string, signal: AbortSignal): Promise<JobChainsPageModel> =>

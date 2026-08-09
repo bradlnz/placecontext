@@ -58,7 +58,7 @@ class ApplicationController < ActionController::Base
     status_code = exception.respond_to?(:status) ? exception.status : nil
     message =
       if status_code == 401
-        "Customer CRM authentication failed (401). Verify PLACE_CONTEXT_CORE_API_KEY (or PlaceContext__CustomerPortal__ApiKey) is configured for this portal."
+        "Customer CRM authentication failed (401). Verify PLACE_CONTEXT_CUSTOMER_PORTAL_API_KEY (or PlaceContext__CustomerPortal__ApiKey) is configured for this portal."
       else
         exception.message
       end

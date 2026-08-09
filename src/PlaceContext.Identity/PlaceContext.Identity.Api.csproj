@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+  <ItemGroup><Compile Include="Runtime/**/*.cs" /></ItemGroup>
+  <ItemGroup>
+    <Content Include="Auth/templates/*.html" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="PlaceContext.Identity.csproj" />
+    <ProjectReference Include="PlaceContext.Identity.Infrastructure.csproj" />
+  </ItemGroup>
+  <ItemGroup><ProjectReference Include="..\PlaceContext.ServiceDefaults\PlaceContext.ServiceDefaults.csproj" /></ItemGroup>
+</Project>

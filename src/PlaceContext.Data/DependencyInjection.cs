@@ -3,6 +3,8 @@ using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Features;
 using PlaceContext.Application.Ports;
+using PlaceContext.Data.Contracts.Graph;
+using PlaceContext.Domain.Services;
 
 namespace PlaceContext.Data;
 
@@ -10,6 +12,9 @@ public static class DependencyInjection
 {
     public static IServiceCollection AddDataApi(this IServiceCollection services)
     {
+        services.AddScoped<DataMappingIngestionService>();
+        services.AddScoped<EntityTagService>();
+        services.AddScoped<RecordLinkService>();
         services.AddScoped<IQueryHandler<ListDataEntitiesQuery, IReadOnlyList<DataEntityView>>, ListDataEntitiesHandler>();
         services.AddScoped<IQueryHandler<ListDataMappingsQuery, IReadOnlyList<DataMappingView>>, ListDataMappingsHandler>();
         services.AddScoped<IQueryHandler<ListProjectDataTablesQuery, IReadOnlyList<ProjectTableInfo>>, ListProjectDataTablesHandler>();
@@ -18,6 +23,30 @@ public static class DependencyInjection
 
     public static IServiceCollection AddDataModule(this IServiceCollection services)
     {
+        services.AddSingleton<DecisionTreeAssembler>();
+        services.AddScoped<DecisionTreeProvider>();
+        services.AddScoped<IUncachedDecisionTreeProvider>(provider =>
+            provider.GetRequiredService<DecisionTreeProvider>());
+        services.AddScoped<IDecisionTreeProvider>(provider =>
+            provider.GetRequiredService<DecisionTreeProvider>());
+        services.AddScoped<DataMappingIngestionService>();
+        services.AddScoped<EntityTagService>();
+        services.AddScoped<RecordLinkService>();
+        services.AddScoped<ProjectChartService>();
+        services.AddScoped<IProjectChartRefresher>(provider =>
+            provider.GetRequiredService<ProjectChartService>());
+
+        services.AddScoped<ICommandHandler<RebuildGraphCommand, GraphRebuildResult>, RebuildGraphHandler>();
+        services.AddScoped<IQueryHandler<QueryGraphQuery, GraphQueryView>, QueryGraphHandler>();
+        services.AddScoped<IQueryHandler<GetGraphVizQuery, GraphVizView>, GetGraphVizHandler>();
+        services.AddScoped<ICommandHandler<SaveSavedQueryCommand, SavedQueryRecord>, SaveSavedQueryHandler>();
+        services.AddScoped<ICommandHandler<DeleteSavedQueryCommand, bool>, DeleteSavedQueryHandler>();
+        services.AddScoped<IQueryHandler<ListSavedQueriesQuery, IReadOnlyList<SavedQueryRecord>>, ListSavedQueriesHandler>();
+        services.AddScoped<ICommandHandler<RescanRecordLinksCommand, RecordLinkRescanResult>, RescanRecordLinksHandler>();
+        services.AddScoped<IQueryHandler<ListRecordLinkGroupsQuery, IReadOnlyList<RecordLinkGroup>>, ListRecordLinkGroupsHandler>();
+        services.AddScoped<IQueryHandler<RelatedRecordLinksQuery, IReadOnlyList<RecordLink>>, RelatedRecordLinksHandler>();
+        services.AddScoped<IQueryHandler<RelatedRecordLinksForRowQuery, IReadOnlyList<RecordLink>>, RelatedRecordLinksForRowHandler>();
+
         services.AddScoped<ICommandHandler<SaveDataMappingCommand, DataMappingView>, SaveDataMappingHandler>();
         services.AddScoped<ICommandHandler<DeleteDataMappingCommand, bool>, DeleteDataMappingHandler>();
         services.AddScoped<IQueryHandler<ListDataMappingsQuery, IReadOnlyList<DataMappingView>>, ListDataMappingsHandler>();

@@ -4,6 +4,7 @@
   <ItemGroup>
     <ProjectReference Include="PlaceContext.Agents.csproj" />
     <ProjectReference Include="PlaceContext.Agents.Infrastructure.csproj" />
-    <ProjectReference Include="..\PlaceContext.Application\PlaceContext.ServiceDefaults.csproj" />
+    <ProjectReference Include="..\PlaceContext.Infrastructure\PlaceContext.Infrastructure.csproj" />
   </ItemGroup>
+  <ItemGroup><ProjectReference Include="..\PlaceContext.ServiceDefaults\PlaceContext.ServiceDefaults.csproj" /></ItemGroup>
 </Project>

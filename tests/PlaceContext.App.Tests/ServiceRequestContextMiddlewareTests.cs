@@ -1,7 +1,7 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Http;
 using PlaceContext.Application.Ports;
-using PlaceContext.Application.Runtime;
+using PlaceContext.ServiceDefaults;
 
 namespace PlaceContext.App.Tests;
 

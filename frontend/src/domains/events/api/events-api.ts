@@ -3,8 +3,7 @@ import type { EventsPageModel, EventType } from '../model/events'
 import { emittedEvent, eventsPage } from './events-schemas'
 import type { z } from 'zod'
 
-const root = (projectId: string) =>
-  `/api/v1/projects/${encodeURIComponent(projectId)}/event-page`
+const root = (projectId: string) => `/api/jobs/projects/${encodeURIComponent(projectId)}/events`
 
 export const fetchEvents = (projectId: string, signal: AbortSignal): Promise<EventsPageModel> =>
   getJson({ path: root(projectId), schema: eventsPage, signal })

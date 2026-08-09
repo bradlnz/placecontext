@@ -1,7 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using PlaceContext.AgentChat.Infrastructure.Persistence;
 using PlaceContext.Domain.Entities;
-using PlaceContext.Domain.Mcp;
 using PlaceContext.TestSupport;
 
 namespace PlaceContext.AgentChat.Tests;
@@ -20,7 +19,6 @@ public sealed class AgentChatRepositoryTests
             .Options;
 
         Guid sessionId;
-        Guid connectionId;
         Guid commandId;
         await using (var writeContext = new AgentChatDbContext(options, tenant))
         {
@@ -43,27 +41,6 @@ public sealed class AgentChatRepositoryTests
             sessionId = session.Id;
             await new EfAgentChatSessionRepository(writeContext).AddAsync(session);
 
-            var connection = McpConnection.Create(
-                projectId,
-                "tools",
-                McpTransport.Http,
-                "https://mcp.example.test",
-                null,
-                null,
-                McpAuthType.OAuth,
-                null,
-                null,
-                now);
-            connection.SetOAuthCredentials("client-id", "tools.read", now);
-            connection.StoreOAuthTokens(
-                "access-token",
-                "refresh-token",
-                now.AddHours(1),
-                now);
-            connection.RecordConnection("connected", now.AddMinutes(1));
-            connectionId = connection.Id;
-            await new EfMcpConnectionRepository(writeContext).AddAsync(connection);
-
             var command = ChatCommand.Create(
                 projectId,
                 "summarize",
@@ -82,15 +59,11 @@ public sealed class AgentChatRepositoryTests
             .GetByProjectIdAsync(projectId);
         var savedSession = await new EfAgentChatSessionRepository(readContext)
             .GetByIdAsync(sessionId);
-        var savedConnection = await new EfMcpConnectionRepository(readContext)
-            .GetByIdAsync(connectionId);
         var savedCommand = await new EfChatCommandRepository(readContext)
             .GetByIdAsync(commandId);
 
         Assert.Equal("agent-model", savedConfig?.BaseModel);
         Assert.Equal("g'day", savedSession?.Messages.Last().Content);
-        Assert.Equal("access-token", savedConnection?.OAuthAccessToken);
-        Assert.Equal("connected", savedConnection?.LastStatus);
         Assert.Equal("summary", savedCommand?.ToolName);
     }
 }

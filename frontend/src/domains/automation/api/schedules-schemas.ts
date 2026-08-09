@@ -23,3 +23,11 @@ export const schedulePage = z.object({
   eventTypes: z.array(z.string()),
   triggers: z.array(trigger),
 })
+
+export const scheduleServicePage = schedulePage.omit({ tables: true }).extend({
+  tables: z.array(z.string()),
+})
+
+export const scheduleDataTables = z.array(
+  z.looseObject({ name: z.string() }),
+)

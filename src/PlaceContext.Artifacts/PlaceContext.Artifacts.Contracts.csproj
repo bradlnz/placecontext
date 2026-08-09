@@ -1,9 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable><EnableDefaultCompileItems>false</EnableDefaultCompileItems></PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="..\PlaceContext.Application\PlaceContext.BuildingBlocks.csproj" />
     <Compile Include="Contracts/**/*.cs" />
     <ProjectReference Include="PlaceContext.Artifacts.Domain.csproj" />
     <ProjectReference Include="..\PlaceContext.Domain\PlaceContext.Domain.csproj" />
   </ItemGroup>
+  <ItemGroup><ProjectReference Include="..\PlaceContext.BuildingBlocks\PlaceContext.BuildingBlocks.csproj" /></ItemGroup>
 </Project>

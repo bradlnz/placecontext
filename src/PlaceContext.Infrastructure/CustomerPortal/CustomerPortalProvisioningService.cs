@@ -14,7 +14,7 @@ public sealed class CustomerPortalProvisioningService : ICustomerPortalProvision
     private readonly string _portalImage;
     private readonly string _sharedHost;
     private readonly string _sharedSecretName;
-    private readonly string _coreApiUrl;
+    private readonly string _crmApiUrl;
 
     public CustomerPortalProvisioningService(IConfiguration configuration)
     {
@@ -22,9 +22,8 @@ public sealed class CustomerPortalProvisioningService : ICustomerPortalProvision
         _portalImage = configuration["PlaceContext:CustomerPortal:Image"] ?? DefaultImage;
         _sharedHost = ResolveSharedHost(configuration);
         _sharedSecretName = configuration["PlaceContext:CustomerPortal:SharedTlsSecret"] ?? "feasibility-tls";
-        var ns = _namespace;
-        _coreApiUrl = configuration["PlaceContext:CustomerPortal:CoreApiUrl"]
-            ?? $"http://placecontext.{ns}.svc.cluster.local";
+        _crmApiUrl = configuration["PlaceContext:CustomerPortal:CrmApiUrl"]
+            ?? $"http://placecontext.{_namespace}.svc.cluster.local";
     }
 
     public async Task ProvisionAsync(
@@ -148,10 +147,10 @@ public sealed class CustomerPortalProvisioningService : ICustomerPortalProvision
                 Name = "RAILS_RELATIVE_URL_ROOT",
                 Value = portalPath,
             },
-            new() { Name = "PLACE_CONTEXT_CORE_API_URL", Value = _coreApiUrl },
+            new() { Name = "PLACE_CONTEXT_CRM_API_URL", Value = _crmApiUrl },
             new()
             {
-                Name = "PLACE_CONTEXT_CORE_API_KEY",
+                Name = "PLACE_CONTEXT_CUSTOMER_PORTAL_API_KEY",
                 ValueFrom = new V1EnvVarSource
                 {
                     SecretKeyRef = new V1SecretKeySelector

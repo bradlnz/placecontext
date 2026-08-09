@@ -33,6 +33,8 @@ Configure upstream origins under `PlaceContext:Microservices:Destinations`. For 
         "Crm": "http://placecontext-crm:8080",
         "Data": "http://placecontext-data:8080",
         "Jobs": "http://placecontext-jobs:8080",
+        "Identity": "http://placecontext-identity:8080",
+        "Mcp": "http://placecontext-mcp:8080",
         "Search": "http://placecontext-search:8080",
         "Vault": "http://placecontext-vault:8080"
       }

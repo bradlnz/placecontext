@@ -21,8 +21,8 @@ interface NavigationItem {
 const DASHBOARD_NAVIGATION: NavigationItem = { label: 'Dashboard', href: '/app/', icon: 'grid' }
 
 const WORKSPACE_NAVIGATION: readonly NavigationItem[] = [
-  { label: 'Chat', href: '/chat', icon: 'chat' },
-  { label: 'Artifacts', href: '/artifacts', icon: 'file' },
+  { label: 'Chat', href: '/app/chat', icon: 'chat' },
+  { label: 'Artifacts', href: '/app/artifacts', icon: 'file' },
   { label: 'Observability', href: '/observability', icon: 'pulse' },
   { label: 'Cluster', href: '/cluster', icon: 'box' },
   { label: 'Projects overview', href: '/app/overview', icon: 'pulse', section: 'Workspace' },

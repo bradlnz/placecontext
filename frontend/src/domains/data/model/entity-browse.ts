@@ -9,7 +9,7 @@ export interface ProjectColumn {
 
 export interface ProjectTablePage {
   columns: string[]
-  rows: Array<Array<string | null>>
+  rows: (string | null)[][]
   totalCount: number
   page: number
   pageSize: number

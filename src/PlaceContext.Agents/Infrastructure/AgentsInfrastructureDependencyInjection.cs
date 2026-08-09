@@ -5,6 +5,8 @@ using Microsoft.Extensions.DependencyInjection;
 using PlaceContext.Agents.Domain.Persistence;
 using PlaceContext.Agents.Domain.Repositories;
 using PlaceContext.Agents.Infrastructure.Persistence;
+using PlaceContext.Agents.Infrastructure.Integration;
+using PlaceContext.Agents.Cluster;
 
 namespace PlaceContext.Agents;
 
@@ -28,6 +30,8 @@ public static class AgentsInfrastructureDependencyInjection
         services.AddHealthChecks().AddDbContextCheck<AgentsDbContext>("agents-database");
         services.AddScoped<IAgentsUnitOfWork>(provider => provider.GetRequiredService<AgentsDbContext>());
         services.AddScoped<IAgentsRepository, EfAgentsRepository>();
+        services.AddHttpClient();
+        services.AddScoped<IAgentSecretProvider, HttpAgentSecretProvider>();
         return services;
     }
 }

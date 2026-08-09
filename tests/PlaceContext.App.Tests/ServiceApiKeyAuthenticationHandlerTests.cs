@@ -5,7 +5,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using PlaceContext.Application.Ports;
-using PlaceContext.Application.Runtime;
+using PlaceContext.ServiceDefaults;
 
 namespace PlaceContext.App.Tests;
 

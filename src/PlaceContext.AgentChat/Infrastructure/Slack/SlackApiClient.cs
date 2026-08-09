@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
 using PlaceContext.Application.Ports;
+using PlaceContext.AgentChat.Slack;
 
 namespace PlaceContext.AgentChat.Infrastructure.Slack;
 

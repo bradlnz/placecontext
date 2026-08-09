@@ -1,12 +1,16 @@
 # PlaceContext Microservice Migration Progress
 
-Last updated: 2026-08-08 (Australia/Brisbane)
+Last updated: 2026-08-09 (Australia/Brisbane)
 
 ## Target architecture
 
-- Independently replaceable services: AgentChat, Agents, Artifacts, CRM, Data, Jobs (jobs, chains, schedules and triggers), Search (including OpenSearch), and Vault.
+- Independently replaceable services: AgentChat, Agents, Artifacts, Communications, CRM, Data,
+  Identity, Jobs (jobs, chains, schedules and triggers), MCP, Operations, Projects, Search
+  (including OpenSearch), Settings, Vault, and the React/App edge.
 - Each service owns its contracts, domain, implementation, controllers, runtime, persistence adapters, and tests.
-- Shared types live physically under `src/PlaceContext.Application`; low-level shared contracts are compiled by `PlaceContext.BuildingBlocks` to avoid circular dependencies.
+- Shared kernel and service-runtime projects now live at `src/PlaceContext.BuildingBlocks` and
+  `src/PlaceContext.ServiceDefaults`; executable services no longer depend on Application for
+  authentication, request context, controller discovery, or Kubernetes health endpoints.
 - The React application lives in the root-level `frontend/` workspace. Its frontend-facing HTTP surface will move into a dedicated `PlaceContext.App` project; `PlaceContext.Host` remains the legacy Blazor host during the migration.
 - Service APIs will have explicit route ownership such as `/api/jobs`, `/api/search`, `/api/data`, `/api/vault`, `/api/crm`, `/api/agent-chat`, and `/api/artifacts`.
 
@@ -16,8 +20,10 @@ Last updated: 2026-08-08 (Australia/Brisbane)
 - Reorganized role folders so checked folders contain matching types (`Services` → `*Service`, `Handlers` → `*Handler`, etc.).
 - Created service implementation and nested contract projects for all eight services.
 - Created service-owned domain projects for AgentChat, Agents, Artifacts, CRM, Data, Jobs, Search, and Vault.
-- Moved BuildingBlocks physically to `src/PlaceContext.Application/BuildingBlocks`.
-- Moved the shared `PostJobActionKind` type into Application BuildingBlocks because both Jobs and Artifacts consume it.
+- Moved BuildingBlocks physically to `src/PlaceContext.BuildingBlocks`, including the neutral CQRS,
+  permission, tenant/user context, clock, and `PostJobActionKind` types shared by service boundaries.
+- Moved ServiceDefaults physically to `src/PlaceContext.ServiceDefaults` and removed its dependency
+  on the main Application assembly.
 - Added all extracted projects to `PlaceContext.slnx` and wired module registration into the current host.
 - Removed the unused Cost feature end-to-end from Application, Domain, Infrastructure, MCP tools, and tests.
 - Removed Infrastructure's concrete dependency on the Search `DecisionTreeProvider` by adding the shared `IUncachedDecisionTreeProvider` seam.
@@ -31,7 +37,8 @@ Last updated: 2026-08-08 (Australia/Brisbane)
 - Moved semantic run-output search (`SearchRunOutputsQuery`, DTO, and handler) from Jobs to Search.
 - Added service-owned ASP.NET controllers and stable route prefixes for all eight services; the current gateway discovers them as MVC application parts.
 - Added independently executable `.Api` runtime projects for AgentChat, Artifacts, CRM, Data, Jobs, Search, and Vault.
-- Added shared `PlaceContext.ServiceDefaults` under Application with JWT validation, permission-claim policies, authenticated tenant/user context propagation, controller discovery, and `/health` endpoints.
+- Added top-level `PlaceContext.ServiceDefaults` with JWT validation, permission-claim policies,
+  authenticated tenant/user context propagation, controller discovery, and `/health` endpoints.
 - Split monolithic composition into `AddApplicationCore`/`AddInfrastructureCore` for service runtimes while retaining the full gateway composition methods.
 - Added API-surface-only DI composition per service so a runtime does not activate unrelated bounded-context handlers.
 - Removed Jobs' direct `IChatCommandRepository` dependency; creation of the old command-trigger mode now fails explicitly because its scheduler path never executed command triggers.
@@ -144,11 +151,70 @@ Last updated: 2026-08-08 (Australia/Brisbane)
 
 ## In progress
 
-- Organize the current React-migration BFF surface: 58 newly added Host request/response records have been split into filename-matched files, `JobTestPageMapper` moved from `Controllers` to `Controllers/Api/Mappers`, and the nested `OptionalLoad` helper moved to its own record file. The live production source-organization suite is 17/17 passing and the Host builds with zero warnings/errors.
-- Complete the remaining four Host contract-test fixes. `ProjectData.razor` now contains only its parameter/lifecycle glue, injects only `ProjectDataViewModel`, and no longer declares its table-tab class, chart record, or enums; those types each live in filename-matched files and SQL Studio behavior is isolated in `ProjectDataViewModel.Studio.cs`. Two SQL Studio contract assertions need updating, while `DataGraph` and `JobChains` still have page-owned state to move into their view models.
-- Create `PlaceContext.App` as the dedicated backend for the root `frontend/` React workspace, then move the React/BFF controllers, mappers, and request/response records out of `PlaceContext.Host` without mixing UI code into the app gateway project.
-- Continue reducing the shared `AppDbContext`, row model, and migration history; Vault, AgentChat, Agents, Artifacts, Search dashboards, Data, Jobs, and CRM persistence ownership are complete, leaving shared platform tables and explicit platform-service seams.
-- Decide explicit ownership for the remaining platform capabilities in shared Infrastructure, especially authentication/tenancy, communications, embeddings/vector storage, cluster integration, and analytics refresh.
+- Finish the interrupted `PlaceContext.Application` extraction without restoring feature code to
+  Application. Existing user moves are treated as intentional and completed in place.
+- `PlaceContext.Identity` now owns login/setup/logout, identity context, 2FA, access/role settings,
+  API tokens, and MCP OAuth. App routes Identity cookie traffic directly to that service.
+- `PlaceContext.Mcp` now owns MCP connections, MCP execution, OAuth token persistence, its database
+  context/migration history, and the former Host MCP controllers.
+- `PlaceContext.Projects` is being introduced for project registry/context capabilities that do not
+  belong in Identity or Data: projects, onboarding, requirements, activity, decisions, focus,
+  workspace rollups, and improvement suggestions.
+- `PlaceContext.Communications` and `PlaceContext.Settings` now have independent executable service
+  scaffolds and App routes. Communications will own provider/email/SMS delivery configuration;
+  Settings will own branding, locality, menu, backup settings, and connection configuration while
+  calling Data/Search/Vault over HTTP for owner-specific mutations.
+- `PlaceContext.Operations` now has an independent executable service scaffold and App route. It will
+  own backup/restore execution, inspector, and operational administration after their Host controllers
+  and adapters are moved.
+- Data feature files moved out of Application are being split correctly between
+  `PlaceContext.Data.Contracts` (requests/read models/ports) and the Data implementation project
+  (handlers/services). The initial incorrect placement of implementations under `Data/Contracts`
+  has been corrected.
+- The remaining Application slices are queued by owner: Access/Auth/Membership to Identity;
+  ChatCommands to AgentChat; Cluster/Skills to Agents; MCP commands/handlers/client to MCP;
+  saved-query/data/graph code to Data; job telemetry to Jobs; and backup orchestration to its final
+  cross-service boundary.
+- Keep the two cluster concepts separate: `PlaceContext.Agents` owns the agent/fleet cluster
+  (node inventory, join tokens, master promotion, Tailscale/k3s), while `PlaceContext.Jobs` owns the
+  job cluster (workers, queues, schedules, executions, shards, and shard telemetry).
+- No microservice may project-reference another microservice, including its Contracts assembly.
+  Cross-service operations use authenticated HTTP with caller-local wire DTOs; shared kernel/runtime
+  projects are the only allowed compile-time dependencies.
+- Every executable service owns its own `/health` endpoint for Kubernetes probes. Host aggregate
+  health is not migrated into a service; an optional multi-service status view belongs at the App
+  edge and calls those health endpoints over HTTP.
+- After Application extraction, migrate every remaining Host controller to its service or to the
+  read-composition App edge, then remove obsolete Host records/auth/wiring and finally remove Host.
+- Core API compatibility is retired rather than migrated: `/api/core/*`, its frontend-client auth,
+  scopes, resource resolver, and Core DTOs have been deleted. Customer Portal configuration now uses
+  CRM/customer-portal names instead of the retired Core API environment-variable names.
+- Host currently has 24 controllers remaining. Ownership queue: Data (6), Projects (2), Search (1),
+  Jobs (0 after Core API retirement), CRM/customer portal (4), Artifacts/OCR (1), split settings (3),
+  App-edge composition/static routes (3), Backup/operations/inspector (3), and old Host health (1).
+
+### Recovery verification checkpoint — 2026-08-09
+
+- Branch: `agent/compact-portal-workspace`; this recovery work is being preserved in a checkpoint
+  commit before the remaining controller and Application extraction continues.
+- React frontend lint and production build pass after the Identity/MCP route changes.
+- Before the concurrent Application cleanup, Identity API, MCP API, App, and Host builds passed;
+  Identity tests were 1/1, MCP tests 2/2, and AgentChat tests 42/42.
+- The main Application project builds again after completing the interrupted Agents cluster,
+  AgentChat command, MCP command/client, and Jobs telemetry ownership moves. Executable service
+  builds are the current verification focus; the full solution is not green yet.
+- Focused builds currently pass for App, Jobs, Data, MCP, AgentChat, Agents, and Vault. Jobs-to-Data
+  result enrichment and Agents-to-Vault secret resolution now cross authenticated HTTP boundaries;
+  neither caller project-references the callee service.
+- BuildingBlocks, ServiceDefaults, Communications API, Settings API, and Operations API build with
+  0 warnings and 0 errors after the shared-runtime extraction. The three new services each inherit
+  an independently owned `/health` endpoint from ServiceDefaults.
+- Identity now owns caller-local MCP OAuth wire DTOs and no longer project-references MCP. The
+  Identity API builds with 0 warnings and 0 errors after restoring the updated graph.
+- Removed the Projects/Data project-reference cycle: graph rebuild now returns a Data-owned result,
+  and the transitional Application facade maps it to the legacy project summary at its own boundary.
+- Do not treat the older green full-solution snapshot above as the current working-tree result;
+  it remains the pre-extraction baseline for regression comparison.
 
 ## Remaining coupling to remove
 
@@ -164,12 +230,23 @@ Last updated: 2026-08-08 (Australia/Brisbane)
 
 ## Next steps
 
-1. Introduce the platform/auth service contract and client adapters so the Jobs and CRM executable API projects can stop composing shared Infrastructure.
-2. Expand each service controller to cover its remaining gateway-only commands and replace CRM-to-Jobs/shared repository reads with HTTP/integration-event contracts.
-3. Remove direct service implementation references from the gateway in favor of HTTP clients/integration events.
-4. Continue building the React application in the root `frontend/` folder one vertical slice at a time, backed by `PlaceContext.App` and independently owned microservice routes.
-5. Apply the referenced .NET architecture guidance per microservice while retaining ubiquitous-language aggregate names and filename/type alignment.
-6. Continue reducing `PlaceContext.Infrastructure` to shared platform primitives only.
+1. Complete service-owned contracts, handlers, and DI registration for Projects, Data, MCP,
+   AgentChat, Identity, Agents, and Jobs; remove all service-to-service project references and use
+   authenticated HTTP clients with caller-local wire DTOs instead. Leave only genuinely shared
+   building blocks, runtime defaults, and temporary facade code in Application.
+2. Replace remaining facade-only direct service calls with service-owned commands/queries, then
+   remove `IPlaceContextService` consumers as Host/App controllers move to explicit service contracts.
+3. Move remaining Host controllers by ownership: Agents/AgentChat, Artifacts, CRM, Data, Jobs,
+   Search, Identity, MCP, Projects, and backup/operations; move only multi-service read composition
+   and static Wiki/compatibility endpoints to `PlaceContext.App`.
+4. Extend App proxy coverage for every retained route, preserve Identity cookie forwarding only on
+   Identity routes, and replace controller dependencies on Host-only auth/record/helper types.
+5. Delete migrated Host controllers, records, auth helpers, Blazor-only composition, and stale static
+   assets; remove `PlaceContext.Host` only after no route or runtime dependency remains.
+6. Run service builds/tests, architecture tests, App/Host compatibility tests while Host remains,
+   frontend lint/tests/build, and finally the full solution build. Fix all regressions before staging.
+7. Review the complete dirty tree against `origin/main`; do not commit or push until the migration
+   is fully green and the intended change set is confirmed.
 
 ---
 
@@ -293,4 +370,9 @@ Review `git status` and `git diff` carefully before staging. This worktree also 
 - 2026-08-08 — Stabilized the partial Events slice: router entry and styles are present, Events is marked migrated, frontend lint issues were corrected, and the production frontend build succeeded with the Events chunk included. A focused Events UI test is still pending.
 - 2026-08-08 — Completed the Data Map and Entities React slices. Added the shared `ProjectDataAdminController` and split all page request/response records into architecture-compliant files. The React pages support mapping CRUD, entity CRUD, relation/tag editing, linked-value rescans, summary/catalog views, and migrated Data Tabs navigation. Frontend lint and a production build passed after these changes.
 - 2026-08-08 — Added the Entity Browse React slice and `EntityBrowsePageController`. It supports paginated/searchable entity rows, typed create/edit/delete forms, record detail, auto-linked record discovery, and navigation to the migrated Graph and Analytics tools. The Host build passes with 0 warnings and 0 errors. Frontend lint/build for this newest slice is the immediate next check.
-- Route catalog after the Entity Browse change: six routes remain planned — CRM, Project Data, Data Search, Chat, Artifacts, and Observability.
+- Route catalog after the Entity Browse change: six routes remained planned — CRM, Project Data, Data Search, Chat, Artifacts, and Observability.
+- 2026-08-09 — Completed the Project Data / SQL Studio React slice. Added the versioned `ProjectDataStudioController` for composed tables, OpenSearch indices, and saved queries plus query execution, saved-query commands, table creation, materialization, and row-link lookup. The React page preserves the table/index/query sidebar, tabs, SQL editor, filtering, table/chart results, JSON inspection, linked-record inspection, and creation/materialization dialogs. Entity Browse received its missing focused test and lint fixes, and the five deferred Events/Data migration files were formatted. Frontend format/lint, catalog and focused data tests, the production frontend build, Host build, section authorization tests, and source-organization tests all pass. Five routes remain planned — CRM, Data Search, Chat, Artifacts, and Observability; Data Search is next.
+- 2026-08-09 — Completed the Data Search React slice on the Search-owned `/api/v1/projects/{projectId}/opensearch` boundary. The Search service now exposes a composed page model, dashboard create/update/delete, and settings-gated sync alongside its existing constrained fields and search operations. The React page supports index selection and metadata, generated insights, free-text search, aggregation/chart controls, dashboard edit/duplicate/refresh/delete, paging, query-linked records, and record inspection. Frontend format/lint, the catalog and focused data tests, the production frontend build, Host build, all 37 Search tests, and the 13 source-organization tests pass. Four routes remain planned — Chat, Artifacts, Observability, and CRM; Chat is next.
+- 2026-08-09 — Completed the Agent Chat React slice. Added the permission-aligned `/api/v1/projects/{projectId}/chat` browser contract over Agent Chat-owned configuration and persisted sessions, including project/session ownership validation, message sending, and settings updates. The React route preserves project status, conversation history and selection, new sessions, starter prompts, pending-response feedback, quick follow-ups, copy actions, the collapsible side panel, and agent settings. Frontend format/lint, focused Chat and catalog tests, the production frontend build, Host build, all 52 section authorization checks, and the 13 source-organization tests pass. Three routes remain planned — Artifacts, Observability, and CRM; Artifacts is next.
+- 2026-08-09 — Completed the Artifact Library React slice. Added the versioned `/api/v1/artifacts` browser composition contract for project/recent files, workspace category rules, permission capabilities, bulk deletion, and expiring public-share lifecycle. The React route preserves project/type/search filters, version-stacked files, paging and selection, deep-linked viewers, inline JSON/CSV/image/PDF/text previews, direct downloads, deletion confirmation, and share create/copy/revoke controls. Frontend format/lint, focused Artifacts and catalog tests, the production frontend build, Host build, and the 13 source-organization tests pass. Two routes remain planned — Observability and CRM; Observability is next.
+- 2026-08-09 — Completed the Observability React slice. Added the permission-aligned `/api/v1/observability` composition contract for workspace run/chain history, live in-process telemetry, artifact/span-tree detail, and replay. The React route preserves the job, chain, and live-trace lenses; status summaries; deep-linked run and chain drawers; fan-out pipeline navigation; trace waterfalls; shard/reduce artifacts and logs; project links; and permission-gated replay. Frontend format/lint, focused Observability and catalog tests, the production frontend build, Host build, all 52 section authorization checks, and source organization checks pass. The full Host suite remains at its documented baseline of 287 passing and four unrelated legacy Blazor contract failures (`ProjectData`, `DataGraph`, and `JobChains`). CRM is the only planned route remaining.

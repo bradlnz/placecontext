@@ -8,6 +8,6 @@
   <ItemGroup>
     <ProjectReference Include="PlaceContext.Artifacts.csproj" />
     <ProjectReference Include="PlaceContext.Artifacts.Infrastructure.csproj" />
-    <ProjectReference Include="..\PlaceContext.Application\PlaceContext.ServiceDefaults.csproj" />
   </ItemGroup>
+  <ItemGroup><ProjectReference Include="..\PlaceContext.ServiceDefaults\PlaceContext.ServiceDefaults.csproj" /></ItemGroup>
 </Project>

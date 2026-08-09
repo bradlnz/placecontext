@@ -12,6 +12,7 @@ using PlaceContext.Jobs.Contracts.Integration;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.Repositories;
 using PlaceContext.Domain.ValueObjects;
+using PlaceContext.Jobs.Integration;
 
 namespace PlaceContext.Application.Features;
 
@@ -65,7 +66,7 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
     public RunJobChainHandler(IJobChainRepository chains, IJobRepository jobs, IChainRunRepository runs,
         IJobsUnitOfWork uow, IClock clock, IJobRunner jobRunner,
         // Optional so unit tests construct the handler unchanged; DI always supplies it.
-        DataMappingIngestionService? dataMappings = null,
+        IJobDataClient? dataClient = null,
         IClientCommunicationSender? communications = null,
         IPermissionService? permissions = null,
         ICrmClientRepository? crmClients = null,
@@ -74,7 +75,7 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
         IChainContextStore? contextStore = null,
         ILogger<RunJobChainHandler>? log = null)
     {
-        _dataMappings = dataMappings;
+        _dataClient = dataClient;
         _chains = chains;
         _jobs = jobs;
         _runs = runs;
@@ -90,7 +91,7 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
         _log = log;
     }
 
-    private readonly DataMappingIngestionService? _dataMappings;
+    private readonly IJobDataClient? _dataClient;
 
     public async Task<ChainRunView> HandleAsync(RunJobChainCommand command, CancellationToken ct = default)
     {
@@ -434,9 +435,9 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
 
         // The data map's chain edges: the pipeline's final output flows into its mapped tables.
         // Best-effort — ingestion must never fail the chain.
-        if (_dataMappings is not null)
+        if (_dataClient is not null)
         {
-            try { await _dataMappings.IngestChainOutputAsync(chain.Id, chainRun.Id, chain.ProjectId, payload, ct); }
+            try { await _dataClient.ProcessChainResultAsync(chain.Id, chainRun.Id, chain.ProjectId, payload, ct); }
             catch { /* isolated inside the service too */ }
         }
 

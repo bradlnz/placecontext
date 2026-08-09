@@ -8,6 +8,9 @@
     <ProjectReference Include="..\PlaceContext.Application\PlaceContext.Application.csproj" />
     <ProjectReference Include="..\PlaceContext.Domain\PlaceContext.Domain.csproj" />
   </ItemGroup>
-  <ItemGroup><Compile Remove="bin/**/*.cs;obj/**/*.cs;Contracts/**/*.cs;Domain/**/*.cs;Infrastructure/**/*.cs;Runtime/**/*.cs" /></ItemGroup>
+  <ItemGroup>
+    <Compile Remove="bin/**/*.cs;obj/**/*.cs;Contracts/**/*.cs;Domain/**/*.cs;Infrastructure/**/*.cs;Runtime/**/*.cs" />
+    <Compile Remove="ChatCommands/Commands/**/*.cs;ChatCommands/Dtos/**/*.cs;ChatCommands/Queries/**/*.cs" />
+  </ItemGroup>
   <ItemGroup><FrameworkReference Include="Microsoft.AspNetCore.App" /></ItemGroup>
 </Project>

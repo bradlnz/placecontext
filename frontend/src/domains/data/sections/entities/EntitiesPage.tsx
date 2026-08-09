@@ -131,7 +131,13 @@ export function EntitiesPage() {
           >
             {rescanMutation.isPending ? 'Scanning…' : '↻ Rescan links'}
           </button>
-          <button className="dcbtn primary" onClick={() => { open(emptyEntity()); }} type="button">
+          <button
+            className="dcbtn primary"
+            onClick={() => {
+              open(emptyEntity())
+            }}
+            type="button"
+          >
             ＋ New entity
           </button>
         </div>
@@ -149,7 +155,9 @@ export function EntitiesPage() {
           <span>entities</span>
         </div>
         <div>
-          <strong>{data.entities.reduce((total, entity) => total + entity.relations.length, 0)}</strong>
+          <strong>
+            {data.entities.reduce((total, entity) => total + entity.relations.length, 0)}
+          </strong>
           <span>relations</span>
         </div>
         <div>
@@ -196,7 +204,13 @@ export function EntitiesPage() {
                 </div>
               </div>
               <div className="data-admin-actions-react">
-                <button className="dcbtn" onClick={() => { open(editEntity(entity)); }} type="button">
+                <button
+                  className="dcbtn"
+                  onClick={() => {
+                    open(editEntity(entity))
+                  }}
+                  type="button"
+                >
                   Edit
                 </button>
                 <button
@@ -246,7 +260,13 @@ export function EntitiesPage() {
                 <strong>{draft.id === null ? 'New entity' : 'Edit entity'}</strong>
                 <span>A named business view over an ingested table.</span>
               </div>
-              <button aria-label="Close" onClick={() => { setDraft(null); }} type="button">
+              <button
+                aria-label="Close"
+                onClick={() => {
+                  setDraft(null)
+                }}
+                type="button"
+              >
                 ×
               </button>
             </header>
@@ -255,7 +275,9 @@ export function EntitiesPage() {
                 Name
                 <input
                   className="dcinput"
-                  onChange={(event) => { setDraft({ ...draft, name: event.target.value }); }}
+                  onChange={(event) => {
+                    setDraft({ ...draft, name: event.target.value })
+                  }}
                   placeholder="Sites"
                   value={draft.name}
                 />
@@ -264,7 +286,9 @@ export function EntitiesPage() {
                 Source table or view
                 <select
                   className="dcinput"
-                  onChange={(event) => { setDraft({ ...draft, tableName: event.target.value }); }}
+                  onChange={(event) => {
+                    setDraft({ ...draft, tableName: event.target.value })
+                  }}
                   value={draft.tableName}
                 >
                   <option value="">— pick —</option>
@@ -280,7 +304,9 @@ export function EntitiesPage() {
                 Label column
                 <input
                   className="dcinput"
-                  onChange={(event) => { setDraft({ ...draft, labelColumn: event.target.value || null }); }}
+                  onChange={(event) => {
+                    setDraft({ ...draft, labelColumn: event.target.value || null })
+                  }}
                   placeholder="name"
                   value={draft.labelColumn ?? ''}
                 />
@@ -289,7 +315,9 @@ export function EntitiesPage() {
                 Tags · comma separated
                 <input
                   className="dcinput"
-                  onChange={(event) => { setTagsInput(event.target.value); }}
+                  onChange={(event) => {
+                    setTagsInput(event.target.value)
+                  }}
                   placeholder="site, address, customer"
                   value={tagsInput}
                 />
@@ -300,15 +328,15 @@ export function EntitiesPage() {
                 <strong>Relations</strong>
                 <button
                   className="dcbtn"
-                  onClick={() =>
-                    { setDraft({
+                  onClick={() => {
+                    setDraft({
                       ...draft,
                       relations: [
                         ...draft.relations,
                         { column: '', targetEntity: '', targetColumn: '' },
                       ],
-                    }); }
-                  }
+                    })
+                  }}
                   type="button"
                 >
                   ＋ Relation
@@ -334,7 +362,9 @@ export function EntitiesPage() {
                     className="dcinput"
                     onChange={(event) => {
                       const relations = draft.relations.map((item, relationIndex) =>
-                        relationIndex === index ? { ...item, targetEntity: event.target.value } : item,
+                        relationIndex === index
+                          ? { ...item, targetEntity: event.target.value }
+                          : item,
                       )
                       setDraft({ ...draft, relations })
                     }}
@@ -354,7 +384,9 @@ export function EntitiesPage() {
                     className="dcinput"
                     onChange={(event) => {
                       const relations = draft.relations.map((item, relationIndex) =>
-                        relationIndex === index ? { ...item, targetColumn: event.target.value } : item,
+                        relationIndex === index
+                          ? { ...item, targetColumn: event.target.value }
+                          : item,
                       )
                       setDraft({ ...draft, relations })
                     }}
@@ -364,14 +396,14 @@ export function EntitiesPage() {
                   <button
                     aria-label={`Remove relation ${String(index + 1)}`}
                     className="dcbtn"
-                    onClick={() =>
-                      { setDraft({
+                    onClick={() => {
+                      setDraft({
                         ...draft,
                         relations: draft.relations.filter(
                           (_, relationIndex) => relationIndex !== index,
                         ),
-                      }); }
-                    }
+                      })
+                    }}
                     type="button"
                   >
                     ×
@@ -386,7 +418,13 @@ export function EntitiesPage() {
                 </button>
               )}
               <span />
-              <button className="dcbtn" onClick={() => { setDraft(null); }} type="button">
+              <button
+                className="dcbtn"
+                onClick={() => {
+                  setDraft(null)
+                }}
+                type="button"
+              >
                 Cancel
               </button>
               <button

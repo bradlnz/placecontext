@@ -108,8 +108,8 @@ class PlaceContextCrmClient
   end
 
   def request(method, path, query: {}, body: nil)
-    core_api_url = ENV.fetch("PLACE_CONTEXT_CORE_API_URL")
-    base = URI.join(core_api_url.end_with?("/") ? core_api_url : "#{core_api_url}/", path.delete_prefix("/"))
+    crm_api_url = ENV.fetch("PLACE_CONTEXT_CRM_API_URL")
+    base = URI.join(crm_api_url.end_with?("/") ? crm_api_url : "#{crm_api_url}/", path.delete_prefix("/"))
     base.query = URI.encode_www_form(query.transform_keys { |key| key.to_s.camelize(:lower) }) unless query.empty?
     http = Net::HTTP.new(base.host, base.port)
     http.use_ssl = base.scheme == "https"
@@ -131,8 +131,8 @@ class PlaceContextCrmClient
   end
 
   def raw_get(path)
-    core_api_url = ENV.fetch("PLACE_CONTEXT_CORE_API_URL")
-    uri = URI.join(core_api_url.end_with?("/") ? core_api_url : "#{core_api_url}/", path.delete_prefix("/"))
+    crm_api_url = ENV.fetch("PLACE_CONTEXT_CRM_API_URL")
+    uri = URI.join(crm_api_url.end_with?("/") ? crm_api_url : "#{crm_api_url}/", path.delete_prefix("/"))
     http = Net::HTTP.new(uri.host, uri.port)
     http.use_ssl = uri.scheme == "https"
     http.open_timeout = 5
@@ -153,14 +153,14 @@ class PlaceContextCrmClient
   end
 
   def api_key
-    ENV["PLACE_CONTEXT_CORE_API_KEY"].presence ||
+    ENV["PLACE_CONTEXT_CUSTOMER_PORTAL_API_KEY"].presence ||
       ENV["PlaceContext__CustomerPortal__ApiKey"].presence ||
       ENV["PlaceContext:CustomerPortal:ApiKey"].presence ||
       raise(
         ApiError.new(
           status: 401,
           payload: {
-            "error" => "Missing customer portal API key. Set PLACE_CONTEXT_CORE_API_KEY or PlaceContext__CustomerPortal__ApiKey."
+            "error" => "Missing customer portal API key. Set PLACE_CONTEXT_CUSTOMER_PORTAL_API_KEY or PlaceContext__CustomerPortal__ApiKey."
           }
         )
       )

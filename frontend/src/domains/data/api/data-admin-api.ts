@@ -13,8 +13,7 @@ import {
   recordLinkRescanSchema,
 } from './data-admin-schemas'
 
-const root = (projectId: string) =>
-  `/api/v1/projects/${encodeURIComponent(projectId)}/data-admin`
+const root = (projectId: string) => `/api/v1/projects/${encodeURIComponent(projectId)}/data-admin`
 
 export const fetchProjectDataAdmin = (
   projectId: string,

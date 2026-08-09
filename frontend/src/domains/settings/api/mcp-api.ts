@@ -1,6 +1,7 @@
 import { z } from 'zod'
 
-import { deleteRequest, getJson, postJson } from '../../../shared/api/http-client'
+import { deleteRequest, getJson, HttpError, postJson } from '../../../shared/api/http-client'
+import { fetchWorkspaceProjects } from '../../workspace/api/fetch-workspace-overview'
 import type { CreateMcpConnectionInput, McpConnection, McpSettings } from '../model/mcp'
 
 const mcpConnectionSchema: z.ZodType<McpConnection> = z.object({
@@ -21,24 +22,32 @@ const mcpConnectionSchema: z.ZodType<McpConnection> = z.object({
   oAuthScopes: z.string().nullable(),
 })
 
-const mcpSettingsSchema: z.ZodType<McpSettings> = z.object({
-  projectId: z.uuid().nullable(),
-  projects: z.array(z.object({ id: z.uuid(), name: z.string() })),
-  connections: z.array(mcpConnectionSchema),
-})
-
-const ROOT = '/api/v1/settings/mcp'
+const ROOT = '/api/mcp'
 
 export async function fetchMcpSettings(
   projectId: string | undefined,
   signal: AbortSignal,
 ): Promise<McpSettings> {
-  const query = projectId === undefined ? '' : `?projectId=${encodeURIComponent(projectId)}`
-  return getJson({
-    path: `${ROOT}/context${query}`,
-    schema: mcpSettingsSchema,
-    signal,
-  })
+  const projects = await fetchWorkspaceProjects(signal)
+  const selectedProjectId = projectId ?? projects[0]?.id ?? null
+  if (selectedProjectId !== null && !projects.some((project) => project.id === selectedProjectId)) {
+    throw new HttpError(404, 'Project not found.')
+  }
+
+  const connections =
+    selectedProjectId === null
+      ? []
+      : await getJson({
+          path: `${ROOT}/projects/${encodeURIComponent(selectedProjectId)}/connections`,
+          schema: mcpConnectionSchema.array(),
+          signal,
+        })
+
+  return {
+    projectId: selectedProjectId,
+    projects: projects.map(({ id, name }) => ({ id, name })),
+    connections,
+  }
 }
 
 export async function createMcpConnection(

@@ -7,7 +7,16 @@ import { deleteDataMapping, saveDataMapping } from '../../api/data-admin-api'
 import { dataAdminQueryOptions } from '../../api/data-admin-query'
 import type { DataMapping, SaveDataMappingRequest } from '../../model/data-admin'
 
-const columnTypes = ['text', 'integer', 'bigint', 'numeric', 'boolean', 'date', 'timestamp', 'jsonb']
+const columnTypes = [
+  'text',
+  'integer',
+  'bigint',
+  'numeric',
+  'boolean',
+  'date',
+  'timestamp',
+  'jsonb',
+]
 
 function emptyMapping(jobId = '', targetTable = ''): SaveDataMappingRequest {
   return {
@@ -103,7 +112,13 @@ export function DataMapPage() {
           <h1>Data map</h1>
           <p>Choose which Job results become queryable project tables after a completed run.</p>
         </div>
-        <button className="dcbtn primary" onClick={() => { setDraft(emptyMapping()); }} type="button">
+        <button
+          className="dcbtn primary"
+          onClick={() => {
+            setDraft(emptyMapping())
+          }}
+          type="button"
+        >
           ＋ New mapping
         </button>
       </header>
@@ -148,7 +163,9 @@ export function DataMapPage() {
             const mappings = data.mappings.filter((mapping) => mapping.jobId === job.id)
             return (
               <article className="data-mapping-row-react" key={job.id}>
-                <span className={mappings.length === 0 ? 'mapping-missing-react' : 'mapping-ok-react'}>
+                <span
+                  className={mappings.length === 0 ? 'mapping-missing-react' : 'mapping-ok-react'}
+                >
                   {mappings.length === 0 ? '!' : '✓'}
                 </span>
                 <div>
@@ -164,14 +181,19 @@ export function DataMapPage() {
                         <button
                           className="mapping-detail-react"
                           key={mapping.id}
-                          onClick={() => { setDraft(editMapping(mapping)); }}
+                          onClick={() => {
+                            setDraft(editMapping(mapping))
+                          }}
                           type="button"
                         >
                           <strong>{mapping.targetTable}</strong>
                           <span>
-                            {mapping.rowsPath === null ? 'root object' : `rows at ${mapping.rowsPath}`}
+                            {mapping.rowsPath === null
+                              ? 'root object'
+                              : `rows at ${mapping.rowsPath}`}
                             {' · '}
-                            {mapping.fields.length} fields · {mapping.enabled ? 'enabled' : 'paused'}
+                            {mapping.fields.length} fields ·{' '}
+                            {mapping.enabled ? 'enabled' : 'paused'}
                           </span>
                         </button>
                       ))}
@@ -180,9 +202,11 @@ export function DataMapPage() {
                 </div>
                 <button
                   className="dcbtn"
-                  onClick={() =>
-                    { setDraft(emptyMapping(job.id, job.name.toLowerCase().replaceAll(/[^a-z0-9]+/g, '_'))); }
-                  }
+                  onClick={() => {
+                    setDraft(
+                      emptyMapping(job.id, job.name.toLowerCase().replaceAll(/[^a-z0-9]+/g, '_')),
+                    )
+                  }}
                   type="button"
                 >
                   {mappings.length === 0 ? 'Create mapping' : '＋ Add'}
@@ -201,7 +225,13 @@ export function DataMapPage() {
                 <strong>{draft.id === null ? 'New mapping' : 'Edit mapping'}</strong>
                 <span>Job result → project table</span>
               </div>
-              <button aria-label="Close" onClick={() => { setDraft(null); }} type="button">
+              <button
+                aria-label="Close"
+                onClick={() => {
+                  setDraft(null)
+                }}
+                type="button"
+              >
                 ×
               </button>
             </header>
@@ -210,7 +240,9 @@ export function DataMapPage() {
                 Source Job
                 <select
                   className="dcinput"
-                  onChange={(event) => { setDraft({ ...draft, jobId: event.target.value }); }}
+                  onChange={(event) => {
+                    setDraft({ ...draft, jobId: event.target.value })
+                  }}
                   value={draft.jobId}
                 >
                   <option value="">— pick a Job —</option>
@@ -226,7 +258,9 @@ export function DataMapPage() {
                 <input
                   className="dcinput"
                   list="project-data-tables"
-                  onChange={(event) => { setDraft({ ...draft, targetTable: event.target.value }); }}
+                  onChange={(event) => {
+                    setDraft({ ...draft, targetTable: event.target.value })
+                  }}
                   value={draft.targetTable}
                 />
               </label>
@@ -239,7 +273,9 @@ export function DataMapPage() {
                 Records at · optional dot path
                 <input
                   className="dcinput"
-                  onChange={(event) => { setDraft({ ...draft, rowsPath: event.target.value || null }); }}
+                  onChange={(event) => {
+                    setDraft({ ...draft, rowsPath: event.target.value || null })
+                  }}
                   placeholder="rows"
                   value={draft.rowsPath ?? ''}
                 />
@@ -247,7 +283,9 @@ export function DataMapPage() {
               <label className="data-admin-check-react">
                 <input
                   checked={draft.enabled}
-                  onChange={(event) => { setDraft({ ...draft, enabled: event.target.checked }); }}
+                  onChange={(event) => {
+                    setDraft({ ...draft, enabled: event.target.checked })
+                  }}
                   type="checkbox"
                 />
                 Enabled after every completed run
@@ -258,12 +296,12 @@ export function DataMapPage() {
                 <strong>Fields</strong>
                 <button
                   className="dcbtn"
-                  onClick={() =>
-                    { setDraft({
+                  onClick={() => {
+                    setDraft({
                       ...draft,
                       fields: [...draft.fields, { sourcePath: '', column: '', type: 'text' }],
-                    }); }
-                  }
+                    })
+                  }}
                   type="button"
                 >
                   ＋ Field
@@ -314,12 +352,12 @@ export function DataMapPage() {
                   <button
                     aria-label={`Remove field ${String(index + 1)}`}
                     className="dcbtn"
-                    onClick={() =>
-                      { setDraft({
+                    onClick={() => {
+                      setDraft({
                         ...draft,
                         fields: draft.fields.filter((_, fieldIndex) => fieldIndex !== index),
-                      }); }
-                    }
+                      })
+                    }}
                     type="button"
                   >
                     ×
@@ -334,7 +372,13 @@ export function DataMapPage() {
                 </button>
               )}
               <span />
-              <button className="dcbtn" onClick={() => { setDraft(null); }} type="button">
+              <button
+                className="dcbtn"
+                onClick={() => {
+                  setDraft(null)
+                }}
+                type="button"
+              >
                 Cancel
               </button>
               <button

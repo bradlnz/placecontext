@@ -76,6 +76,31 @@ export const appRoutes: RouteObject[] = [
         },
       },
       {
+        path: 'project/:projectId/crm',
+        handle: {
+          title: 'CRM',
+          subtitle: 'customers · conversations · calendars · automations',
+        },
+        lazy: async () => {
+          const { CrmPage } = await import('../domains/crm/sections/workspace/CrmPage')
+
+          return { Component: CrmPage }
+        },
+      },
+      {
+        path: 'project/:projectId/data',
+        handle: {
+          title: 'SQL Studio',
+          subtitle: 'project tables · indexes · saved queries',
+        },
+        lazy: async () => {
+          const { ProjectDataPage } =
+            await import('../domains/data/sections/project-data/ProjectDataPage')
+
+          return { Component: ProjectDataPage }
+        },
+      },
+      {
         path: 'project/:projectId/data-graph',
         handle: {
           title: 'Graph',
@@ -123,6 +148,19 @@ export const appRoutes: RouteObject[] = [
             await import('../domains/data/sections/entity-browse/EntityBrowsePage')
 
           return { Component: EntityBrowsePage }
+        },
+      },
+      {
+        path: 'project/:projectId/data-search',
+        handle: {
+          title: 'Data Search',
+          subtitle: 'OpenSearch · queries · charts',
+        },
+        lazy: async () => {
+          const { DataSearchPage } =
+            await import('../domains/data/sections/data-search/DataSearchPage')
+
+          return { Component: DataSearchPage }
         },
       },
       {
@@ -200,6 +238,44 @@ export const appRoutes: RouteObject[] = [
           const { EventsPage } = await import('../domains/events/sections/events/EventsPage')
 
           return { Component: EventsPage }
+        },
+      },
+      {
+        path: 'chat',
+        handle: {
+          title: 'Agent Chat',
+          subtitle: 'project context · sessions · local model',
+        },
+        lazy: async () => {
+          const { ChatPage } = await import('../domains/collaboration/sections/chat/ChatPage')
+
+          return { Component: ChatPage }
+        },
+      },
+      {
+        path: 'artifacts',
+        handle: {
+          title: 'Artifacts',
+          subtitle: 'every file your runs produced',
+        },
+        lazy: async () => {
+          const { ArtifactsPage } =
+            await import('../domains/artifacts/sections/library/ArtifactsPage')
+
+          return { Component: ArtifactsPage }
+        },
+      },
+      {
+        path: 'observability',
+        handle: {
+          title: 'Observability',
+          subtitle: 'cross-project job history · chains · traces',
+        },
+        lazy: async () => {
+          const { ObservabilityPage } =
+            await import('../domains/operations/sections/observability/ObservabilityPage')
+
+          return { Component: ObservabilityPage }
         },
       },
       {

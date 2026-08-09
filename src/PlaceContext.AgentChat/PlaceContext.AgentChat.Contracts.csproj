@@ -1,9 +1,14 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable><EnableDefaultCompileItems>false</EnableDefaultCompileItems></PropertyGroup>
-  <ItemGroup><Compile Include="Contracts/**/*.cs" Exclude="Contracts/**/bin/**/*.cs;Contracts/**/obj/**/*.cs" /></ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\PlaceContext.Application\PlaceContext.BuildingBlocks.csproj" />
+    <Compile Include="Contracts/**/*.cs" Exclude="Contracts/**/bin/**/*.cs;Contracts/**/obj/**/*.cs" />
+    <Compile Include="ChatCommands/Commands/**/*.cs" />
+    <Compile Include="ChatCommands/Dtos/**/*.cs" />
+    <Compile Include="ChatCommands/Queries/**/*.cs" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="PlaceContext.AgentChat.Domain.csproj" />
     <ProjectReference Include="..\PlaceContext.Domain\PlaceContext.Domain.csproj" />
   </ItemGroup>
+  <ItemGroup><ProjectReference Include="..\PlaceContext.BuildingBlocks\PlaceContext.BuildingBlocks.csproj" /></ItemGroup>
 </Project>

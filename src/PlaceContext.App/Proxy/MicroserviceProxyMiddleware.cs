@@ -105,7 +105,7 @@ public sealed class MicroserviceProxyMiddleware
         Uri destination)
     {
         var target = BuildTargetUri(destination, context.Request);
-        using var proxyRequest = CreateProxyRequest(context, target);
+        using var proxyRequest = CreateProxyRequest(context, route, target);
 
         try
         {
@@ -115,7 +115,7 @@ public sealed class MicroserviceProxyMiddleware
                 HttpCompletionOption.ResponseHeadersRead,
                 context.RequestAborted);
 
-            await CopyResponseAsync(context, proxyResponse, destination);
+            await CopyResponseAsync(context, route, proxyResponse, destination);
         }
         catch (HttpRequestException exception)
         {
@@ -147,7 +147,10 @@ public sealed class MicroserviceProxyMiddleware
         return new Uri(origin, relativeTarget);
     }
 
-    private static HttpRequestMessage CreateProxyRequest(HttpContext context, Uri target)
+    private static HttpRequestMessage CreateProxyRequest(
+        HttpContext context,
+        MicroserviceProxyRoute route,
+        Uri target)
     {
         var request = context.Request;
         var message = new HttpRequestMessage(new HttpMethod(request.Method), target);
@@ -157,7 +160,9 @@ public sealed class MicroserviceProxyMiddleware
 
         foreach (var header in request.Headers)
         {
-            if (ExcludedRequestHeaders.Contains(header.Key))
+            if (ExcludedRequestHeaders.Contains(header.Key)
+                && !(route.ServiceName == "Identity"
+                    && header.Key.Equals(HeaderNames.Cookie, StringComparison.OrdinalIgnoreCase)))
                 continue;
 
             if (!message.Headers.TryAddWithoutValidation(header.Key, header.Value.ToArray()))
@@ -188,6 +193,7 @@ public sealed class MicroserviceProxyMiddleware
 
     private static async Task CopyResponseAsync(
         HttpContext context,
+        MicroserviceProxyRoute route,
         HttpResponseMessage proxyResponse,
         Uri destination)
     {
@@ -195,10 +201,17 @@ public sealed class MicroserviceProxyMiddleware
 
         CopyHeaders(proxyResponse.Headers, context.Response.Headers);
         CopyHeaders(proxyResponse.Content.Headers, context.Response.Headers);
+        if (route.ServiceName == "Identity"
+            && proxyResponse.Headers.TryGetValues(HeaderNames.SetCookie, out var setCookies))
+            context.Response.Headers[HeaderNames.SetCookie] = setCookies.ToArray();
         RewriteLocation(context, proxyResponse.Headers.Location, destination);
 
         foreach (var excluded in ExcludedResponseHeaders)
-            context.Response.Headers.Remove(excluded);
+        {
+            if (route.ServiceName != "Identity"
+                || !excluded.Equals(HeaderNames.SetCookie, StringComparison.OrdinalIgnoreCase))
+                context.Response.Headers.Remove(excluded);
+        }
 
         await proxyResponse.Content.CopyToAsync(context.Response.Body, context.RequestAborted);
     }

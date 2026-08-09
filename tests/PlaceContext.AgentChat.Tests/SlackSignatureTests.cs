@@ -1,6 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
-using PlaceContext.AgentChat.Infrastructure.Slack;
+using PlaceContext.AgentChat.Slack;
 
 namespace PlaceContext.AgentChat.Tests;
 

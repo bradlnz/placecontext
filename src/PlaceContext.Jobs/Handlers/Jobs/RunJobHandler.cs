@@ -10,6 +10,7 @@ using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.Repositories;
 using PlaceContext.Domain.ValueObjects;
 using PlaceContext.Vault.Domain.Repositories;
+using PlaceContext.Jobs.Integration;
 
 namespace PlaceContext.Application.Features;
 
@@ -41,8 +42,7 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
     private readonly ISecretProtector? _secretProtector;
     private readonly PostJobActionService? _postActions;
     private readonly JobRunDataRecorder? _runData;
-    private readonly DataMappingIngestionService? _dataMappings;
-    private readonly EntityTagService? _entityTags;
+    private readonly IJobDataClient? _dataClient;
     private readonly IMcpConnectionRepository? _mcpRepo;
     private readonly IDataEncryptor? _encryptor;
     private readonly IObjectStore? _objectStore;
@@ -65,8 +65,7 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
         ISecretProtector? secretProtector = null,
         PostJobActionService? postActions = null,
         JobRunDataRecorder? runData = null,
-        DataMappingIngestionService? dataMappings = null,
-        EntityTagService? entityTags = null,
+        IJobDataClient? dataClient = null,
         IMcpConnectionRepository? mcpRepo = null,
         IDataEncryptor? encryptor = null,
         IObjectStore? objectStore = null,
@@ -76,8 +75,7 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
         _secretProtector = secretProtector;
         _postActions = postActions;
         _runData = runData;
-        _dataMappings = dataMappings;
-        _entityTags = entityTags;
+        _dataClient = dataClient;
         _mcpRepo = mcpRepo;
         _encryptor = encryptor;
         _objectStore = objectStore;
@@ -205,15 +203,9 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
         if (_runData is not null)
             await _runData.RecordAsync(job, run, ct);
 
-        // The project's data map: mappings declared for this job extract records from the run's
-        // primary artifact and append them to their target tables. Best-effort.
-        if (_dataMappings is not null)
-            await _dataMappings.IngestAsync(job, run, ct);
-
-        // The relation tree: values in this run's output that match entity keys (a site's address,
-        // say) persist run ⇄ entity tags, linking the job and its artifacts to those records.
-        if (_entityTags is not null)
-            await _entityTags.TagRunAsync(job, run, ct);
+        // Data enrichment belongs to the Data service and crosses the boundary over HTTP.
+        if (_dataClient is not null)
+            await _dataClient.ProcessJobResultAsync(job, run, ct);
 
         // Embed a summary of the run for search/the dependency graph. Best-effort — isolated so it
         // can't fail or stall the run.

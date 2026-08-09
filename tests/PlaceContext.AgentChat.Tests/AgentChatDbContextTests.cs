@@ -35,14 +35,6 @@ public sealed class AgentChatDbContextTests
                 CreatedAt = now,
                 UpdatedAt = now,
             });
-            owner.McpConnections.Add(new McpConnectionRow
-            {
-                Id = Guid.NewGuid(),
-                ProjectId = projectId,
-                Name = "tools",
-                Transport = "http",
-                CreatedAt = now,
-            });
             owner.ChatCommands.Add(new ChatCommandRow
             {
                 Id = Guid.NewGuid(),
@@ -57,7 +49,6 @@ public sealed class AgentChatDbContextTests
 
             Assert.Equal(tenantId, Assert.Single(owner.AgentConfigs.Local).TenantId);
             Assert.Equal(tenantId, Assert.Single(owner.AgentChatSessions.Local).TenantId);
-            Assert.Equal(tenantId, Assert.Single(owner.McpConnections.Local).TenantId);
             Assert.Equal(tenantId, Assert.Single(owner.ChatCommands.Local).TenantId);
         }
 
@@ -66,7 +57,6 @@ public sealed class AgentChatDbContextTests
             new FakeCurrentTenant(Guid.NewGuid()));
         Assert.Empty(await otherTenant.AgentConfigs.ToListAsync());
         Assert.Empty(await otherTenant.AgentChatSessions.ToListAsync());
-        Assert.Empty(await otherTenant.McpConnections.ToListAsync());
         Assert.Empty(await otherTenant.ChatCommands.ToListAsync());
     }
 }

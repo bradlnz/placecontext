@@ -8,7 +8,7 @@ import type {
 } from '../model/job-tests'
 import { jobTestBlock, jobTestCodePage, jobTestsPage } from './job-tests-schemas'
 
-const root = (projectId: string) => `/api/v1/projects/${encodeURIComponent(projectId)}/test-page`
+const root = (projectId: string) => `/api/jobs/projects/${encodeURIComponent(projectId)}/test-page`
 const testPath = (projectId: string, testId: string) =>
   `${root(projectId)}/tests/${encodeURIComponent(testId)}`
 export const fetchJobTests = (projectId: string, signal: AbortSignal): Promise<JobTestsPageModel> =>

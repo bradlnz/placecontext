@@ -16,6 +16,10 @@ public sealed class MicroserviceProxyRouteCatalogTests
         Assert.Contains(routes, route => route.ServiceName == "Data" && route.Matches("/api/data"));
         Assert.Contains(routes, route => route.ServiceName == "Jobs" && route.Matches("/api/jobs"));
         Assert.Contains(routes, route => route.ServiceName == "Jobs" && route.Matches("/ingest/deploy.completed"));
+        Assert.Contains(routes, route => route.ServiceName == "Identity" && route.Matches("/api/v1/identity/context"));
+        Assert.Contains(routes, route => route.ServiceName == "Identity" && route.Matches("/mcp-oauth/start"));
+        Assert.Contains(routes, route => route.ServiceName == "Mcp" && route.Matches("/api/mcp"));
+        Assert.Contains(routes, route => route.ServiceName == "Mcp" && route.Matches("/api/job-mcp/project/tools"));
         Assert.Contains(routes, route => route.ServiceName == "Search" && route.Matches("/api/search"));
         Assert.Contains(routes, route => route.ServiceName == "Vault" && route.Matches("/api/vault"));
     }

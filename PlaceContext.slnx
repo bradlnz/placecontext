@@ -11,23 +11,39 @@
     <Project Path="src/PlaceContext.AgentChat/PlaceContext.AgentChat.Contracts.csproj" />
     <Project Path="src/PlaceContext.AgentChat/PlaceContext.AgentChat.Domain.csproj" />
     <Project Path="src/PlaceContext.Application/PlaceContext.Application.csproj" />
-    <Project Path="src/PlaceContext.Application/PlaceContext.BuildingBlocks.csproj" />
-    <Project Path="src/PlaceContext.Application/PlaceContext.ServiceDefaults.csproj" />
+    <Project Path="src/PlaceContext.BuildingBlocks/PlaceContext.BuildingBlocks.csproj" />
     <Project Path="src/PlaceContext.Crm/PlaceContext.Crm.csproj" />
     <Project Path="src/PlaceContext.Crm/PlaceContext.Crm.Contracts.csproj" />
     <Project Path="src/PlaceContext.Crm/PlaceContext.Crm.Domain.csproj" />
+    <Project Path="src/PlaceContext.Communications/PlaceContext.Communications.csproj" />
+    <Project Path="src/PlaceContext.Communications/PlaceContext.Communications.Contracts.csproj" />
+    <Project Path="src/PlaceContext.Communications/PlaceContext.Communications.Domain.csproj" />
     <Project Path="src/PlaceContext.Data/PlaceContext.Data.csproj" />
     <Project Path="src/PlaceContext.Data/PlaceContext.Data.Contracts.csproj" />
     <Project Path="src/PlaceContext.Data/PlaceContext.Data.Domain.csproj" />
     <Project Path="src/PlaceContext.Domain/PlaceContext.Domain.csproj" />
     <Project Path="src/PlaceContext.Host/PlaceContext.Host.csproj" />
     <Project Path="src/PlaceContext.Infrastructure/PlaceContext.Infrastructure.csproj" />
+    <Project Path="src/PlaceContext.Identity/PlaceContext.Identity.csproj" />
+    <Project Path="src/PlaceContext.Identity/PlaceContext.Identity.Contracts.csproj" />
+    <Project Path="src/PlaceContext.Identity/PlaceContext.Identity.Domain.csproj" />
     <Project Path="src/PlaceContext.Jobs/PlaceContext.Jobs.csproj" />
     <Project Path="src/PlaceContext.Jobs/PlaceContext.Jobs.Contracts.csproj" />
     <Project Path="src/PlaceContext.Jobs/PlaceContext.Jobs.Domain.csproj" />
+    <Project Path="src/PlaceContext.Mcp/PlaceContext.Mcp.csproj" />
+    <Project Path="src/PlaceContext.Mcp/PlaceContext.Mcp.Contracts.csproj" />
+    <Project Path="src/PlaceContext.Mcp/PlaceContext.Mcp.Domain.csproj" />
+    <Project Path="src/PlaceContext.Operations/PlaceContext.Operations.csproj" />
+    <Project Path="src/PlaceContext.Operations/PlaceContext.Operations.Contracts.csproj" />
+    <Project Path="src/PlaceContext.Projects/PlaceContext.Projects.csproj" />
+    <Project Path="src/PlaceContext.Projects/PlaceContext.Projects.Contracts.csproj" />
     <Project Path="src/PlaceContext.Search/PlaceContext.Search.csproj" />
     <Project Path="src/PlaceContext.Search/PlaceContext.Search.Contracts.csproj" />
     <Project Path="src/PlaceContext.Search/PlaceContext.Search.Domain.csproj" />
+    <Project Path="src/PlaceContext.ServiceDefaults/PlaceContext.ServiceDefaults.csproj" />
+    <Project Path="src/PlaceContext.Settings/PlaceContext.Settings.csproj" />
+    <Project Path="src/PlaceContext.Settings/PlaceContext.Settings.Contracts.csproj" />
+    <Project Path="src/PlaceContext.Settings/PlaceContext.Settings.Domain.csproj" />
     <Project Path="src/PlaceContext.Vault/PlaceContext.Vault.csproj" />
     <Project Path="src/PlaceContext.Vault/PlaceContext.Vault.Contracts.csproj" />
     <Project Path="src/PlaceContext.Vault/PlaceContext.Vault.Domain.csproj" />
@@ -49,6 +65,10 @@
     <Project Path="src/PlaceContext.Crm/PlaceContext.Crm.Api.csproj" />
     <Project Path="src/PlaceContext.Crm/PlaceContext.Crm.Infrastructure.csproj" />
   </Folder>
+  <Folder Name="/src/PlaceContext.Communications/">
+    <Project Path="src/PlaceContext.Communications/PlaceContext.Communications.Api.csproj" />
+    <Project Path="src/PlaceContext.Communications/PlaceContext.Communications.Infrastructure.csproj" />
+  </Folder>
   <Folder Name="/src/PlaceContext.Data/">
     <Project Path="src/PlaceContext.Data/PlaceContext.Data.Api.csproj" />
     <Project Path="src/PlaceContext.Data/PlaceContext.Data.Infrastructure.csproj" />
@@ -57,9 +77,29 @@
     <Project Path="src/PlaceContext.Jobs/PlaceContext.Jobs.Api.csproj" />
     <Project Path="src/PlaceContext.Jobs/PlaceContext.Jobs.Infrastructure.csproj" />
   </Folder>
+  <Folder Name="/src/PlaceContext.Identity/">
+    <Project Path="src/PlaceContext.Identity/PlaceContext.Identity.Api.csproj" />
+    <Project Path="src/PlaceContext.Identity/PlaceContext.Identity.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/src/PlaceContext.Mcp/">
+    <Project Path="src/PlaceContext.Mcp/PlaceContext.Mcp.Api.csproj" />
+    <Project Path="src/PlaceContext.Mcp/PlaceContext.Mcp.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/src/PlaceContext.Projects/">
+    <Project Path="src/PlaceContext.Projects/PlaceContext.Projects.Api.csproj" />
+    <Project Path="src/PlaceContext.Projects/PlaceContext.Projects.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/src/PlaceContext.Operations/">
+    <Project Path="src/PlaceContext.Operations/PlaceContext.Operations.Api.csproj" />
+    <Project Path="src/PlaceContext.Operations/PlaceContext.Operations.Infrastructure.csproj" />
+  </Folder>
   <Folder Name="/src/PlaceContext.Search/">
     <Project Path="src/PlaceContext.Search/PlaceContext.Search.Api.csproj" />
     <Project Path="src/PlaceContext.Search/PlaceContext.Search.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/src/PlaceContext.Settings/">
+    <Project Path="src/PlaceContext.Settings/PlaceContext.Settings.Api.csproj" />
+    <Project Path="src/PlaceContext.Settings/PlaceContext.Settings.Infrastructure.csproj" />
   </Folder>
   <Folder Name="/src/PlaceContext.Vault/">
     <Project Path="src/PlaceContext.Vault/PlaceContext.Vault.Api.csproj" />
@@ -75,7 +115,9 @@
     <Project Path="tests/PlaceContext.Data.Tests/PlaceContext.Data.Tests.csproj" />
     <Project Path="tests/PlaceContext.Domain.Tests/PlaceContext.Domain.Tests.csproj" />
     <Project Path="tests/PlaceContext.Infrastructure.Tests/PlaceContext.Infrastructure.Tests.csproj" />
+    <Project Path="tests/PlaceContext.Identity.Tests/PlaceContext.Identity.Tests.csproj" />
     <Project Path="tests/PlaceContext.Jobs.Tests/PlaceContext.Jobs.Tests.csproj" />
+    <Project Path="tests/PlaceContext.Mcp.Tests/PlaceContext.Mcp.Tests.csproj" />
     <Project Path="tests/PlaceContext.Search.Tests/PlaceContext.Search.Tests.csproj" />
     <Project Path="tests/PlaceContext.TestSupport/PlaceContext.TestSupport.csproj" />
     <Project Path="tests/PlaceContext.Vault.Tests/PlaceContext.Vault.Tests.csproj" />

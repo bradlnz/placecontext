@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using PlaceContext.Application.Features;
+using PlaceContext.Application.Ports;
 using PlaceContext.Infrastructure.Operations;
 using PlaceContext.Infrastructure.Tenancy;
 
@@ -41,7 +42,7 @@ public sealed class AnalyticsWorkerService : BackgroundService
                 _log.LogInformation("Analytics: refreshing {Scope} for project {ProjectId} ({Tenant})…",
                     req.TableName ?? "all tables", req.ProjectId, req.Tenant.Slug);
                 await using var scope = _scopes.CreateAsyncScope();
-                var charts = scope.ServiceProvider.GetRequiredService<ProjectChartService>();
+                var charts = scope.ServiceProvider.GetRequiredService<IProjectChartRefresher>();
                 if (req.TableName is null)
                     await charts.RefreshProjectAsync(req.ProjectId, stoppingToken);
                 else

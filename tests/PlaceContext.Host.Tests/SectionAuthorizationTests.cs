@@ -90,19 +90,12 @@ public sealed class SectionAuthorizationTests
             { typeof(ArtifactChatAttachmentsController), Permission.AgentsChat },
             { typeof(CrmArtifactsController), Permission.CrmView },
             { typeof(InspectorController), Permission.JobsView },
-            { typeof(ProjectSecretsController), Permission.SecretsManage },
             { typeof(ProjectDataGraphController), Permission.DataRead },
             { typeof(ProjectPageController), Permission.ProjectsView },
             { typeof(ClusterPageController), Permission.SettingsManage },
             { typeof(ProjectAnalyticsController), Permission.DataRead },
-            { typeof(SchedulePageController), Permission.TriggersManage },
-            { typeof(JobTestsPageController), Permission.JobsView },
-            { typeof(JobTestCodePageController), Permission.JobsEdit },
-            { typeof(JobsPageController), Permission.JobsView },
-            { typeof(JobCodePageController), Permission.JobsEdit },
-            { typeof(JobChainsPageController), Permission.ChainsManage },
-            { typeof(EventsPageController), Permission.EventsManage },
             { typeof(ProjectDataAdminController), Permission.DataRead },
+            { typeof(ProjectDataStudioController), Permission.DataRead },
             { typeof(EntityBrowsePageController), Permission.DataRead },
         };
 
@@ -118,11 +111,8 @@ public sealed class SectionAuthorizationTests
         new()
         {
             typeof(BackupController),
-            typeof(AccessSettingsController),
             typeof(CommunicationProvidersController),
             typeof(ConnectionsSettingsController),
-            typeof(McpSettingsController),
-            typeof(JobMcpController),
         };
 
     [Theory]

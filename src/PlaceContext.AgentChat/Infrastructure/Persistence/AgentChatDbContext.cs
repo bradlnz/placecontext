@@ -5,7 +5,7 @@ using PlaceContext.Domain.Repositories;
 
 namespace PlaceContext.AgentChat.Infrastructure.Persistence;
 
-/// <summary>AgentChat-owned persistence boundary for chat, agent, MCP, and command state.</summary>
+/// <summary>AgentChat-owned persistence boundary for chat, agent, and command state.</summary>
 public sealed class AgentChatDbContext : DbContext, IAgentChatUnitOfWork
 {
     private readonly ICurrentTenant _currentTenant;
@@ -18,7 +18,6 @@ public sealed class AgentChatDbContext : DbContext, IAgentChatUnitOfWork
 
     public DbSet<AgentConfigRow> AgentConfigs => Set<AgentConfigRow>();
     public DbSet<AgentChatSessionRow> AgentChatSessions => Set<AgentChatSessionRow>();
-    public DbSet<McpConnectionRow> McpConnections => Set<McpConnectionRow>();
     public DbSet<ChatCommandRow> ChatCommands => Set<ChatCommandRow>();
 
     public override int SaveChanges()
@@ -58,24 +57,6 @@ public sealed class AgentChatDbContext : DbContext, IAgentChatUnitOfWork
             entity.HasKey(row => row.Id);
             entity.HasIndex(row => new { row.ProjectId, row.UpdatedAt });
             entity.Property(row => row.MessagesJson).HasDefaultValue("[]");
-            entity.HasQueryFilter(row => row.TenantId == _currentTenant.TenantId);
-        });
-
-        modelBuilder.Entity<McpConnectionRow>(entity =>
-        {
-            entity.ToTable("mcp_connections");
-            entity.HasKey(row => row.Id);
-            entity.Property(row => row.Id).HasColumnType(DataColumnTypes.Uuid);
-            entity.Property(row => row.ProjectId).HasColumnType(DataColumnTypes.Uuid);
-            entity.Property(row => row.TenantId).HasColumnType(DataColumnTypes.Uuid);
-            entity.Property(row => row.Name).HasMaxLength(100);
-            entity.Property(row => row.Transport).HasMaxLength(20);
-            entity.Property(row => row.EndpointUrl).HasMaxLength(500);
-            entity.Property(row => row.Command).HasMaxLength(200);
-            entity.Property(row => row.Args).HasMaxLength(1000);
-            entity.Property(row => row.LastStatus).HasMaxLength(200);
-            entity.Property(row => row.OAuthClientId).HasMaxLength(200);
-            entity.Property(row => row.OAuthScopes).HasMaxLength(500);
             entity.HasQueryFilter(row => row.TenantId == _currentTenant.TenantId);
         });
 

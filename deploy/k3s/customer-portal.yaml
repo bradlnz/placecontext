@@ -45,9 +45,9 @@ spec:
               value: ""
             - name: PORTAL_BRAND_LOGO_URL
               value: ""
-            - name: PLACE_CONTEXT_CORE_API_URL
+            - name: PLACE_CONTEXT_CRM_API_URL
               value: http://placecontext.placecontext.svc.cluster.local
-            - name: PLACE_CONTEXT_CORE_API_KEY
+            - name: PLACE_CONTEXT_CUSTOMER_PORTAL_API_KEY
               valueFrom:
                 secretKeyRef: { name: customer-portal-secrets, key: core-api-key }
             - name: PLACE_CONTEXT_PROVISIONING_KEY

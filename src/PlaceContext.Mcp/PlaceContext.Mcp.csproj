@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="PlaceContext.Mcp.Contracts.csproj" />
+    <ProjectReference Include="PlaceContext.Mcp.Domain.csproj" />
+    <ProjectReference Include="..\PlaceContext.Application\PlaceContext.Application.csproj" />
+    <ProjectReference Include="..\PlaceContext.Domain\PlaceContext.Domain.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Remove="bin/**/*.cs;obj/**/*.cs;Contracts/**/*.cs;Domain/**/*.cs;Infrastructure/**/*.cs;Runtime/**/*.cs" />
+  </ItemGroup>
+  <ItemGroup><FrameworkReference Include="Microsoft.AspNetCore.App" /></ItemGroup>
+</Project>

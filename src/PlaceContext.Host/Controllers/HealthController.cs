@@ -5,7 +5,7 @@ namespace PlaceContext.Host.Controllers;
 
 /// <summary>
 /// Liveness/readiness probe. Must stay a cookieless 200 — auto-login turning "/" into a redirect
-/// dance made kubelet treat the pod as failing after 10 hops (see <see cref="AuthController"/>).
+/// dance made kubelet treat the pod as failing after 10 hops (see the Identity auth controller).
 /// </summary>
 [AllowAnonymous]
 [Route("/healthz")]

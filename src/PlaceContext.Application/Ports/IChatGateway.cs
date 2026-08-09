@@ -12,4 +12,15 @@ public interface IChatGateway
 
     /// <summary>Sends the conversation to the model and returns the assistant's reply text.</summary>
     Task<string> ChatAsync(IReadOnlyList<ChatMessage> messages, ChatSettings? settings = null, CancellationToken ct = default);
+
+    /// <summary>Streams completion chunks when the backend supports streaming.</summary>
+    async IAsyncEnumerable<string> ChatStreamAsync(
+        IReadOnlyList<ChatMessage> messages,
+        ChatSettings? settings = null,
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
+    {
+        var response = await ChatAsync(messages, settings, ct);
+        if (!string.IsNullOrEmpty(response))
+            yield return response;
+    }
 }

@@ -11,9 +11,7 @@ namespace PlaceContext.Host.Auth;
 /// <summary>
 /// Authenticates machine callers (the Terraform provider, and any other IaC/CI client) against a single
 /// configured admin key — <c>PlaceContext:Api:Key</c> for admin endpoints, and
-/// <c>PlaceContext:CustomerPortal:ApiKey</c> for <c>/api/customer-portal/*</c>. For compatibility with
-/// current portal provisioning, the customer-portal key can also be supplied via
-/// <c>PLACE_CONTEXT_CORE_API_KEY</c>.
+/// <c>PlaceContext:CustomerPortal:ApiKey</c> for <c>/api/customer-portal/*</c>.
 /// Read from <c>Authorization: Bearer &lt;key&gt;</c> or <c>X-Api-Key: &lt;key&gt;</c>.
 /// Deliberately separate from the portal cookie and the MCP JWT-bearer
 /// scheme (see Program.cs): a caller must opt an endpoint into this scheme explicitly via
@@ -58,12 +56,12 @@ public sealed class ApiKeyAuthenticationHandler : AuthenticationHandler<ApiKeyAu
     {
         var isCustomerPortalCall = Request.Path.StartsWithSegments("/api/customer-portal");
         var configuredKey = isCustomerPortalCall
-            ? _config["PlaceContext:CustomerPortal:ApiKey"] ?? Environment.GetEnvironmentVariable("PLACE_CONTEXT_CORE_API_KEY")
+            ? _config["PlaceContext:CustomerPortal:ApiKey"]
             : _config["PlaceContext:Api:Key"];
         if (string.IsNullOrWhiteSpace(configuredKey))
         {
             var configuredSource = isCustomerPortalCall
-                ? "PlaceContext:CustomerPortal:ApiKey (or PLACE_CONTEXT_CORE_API_KEY)"
+                ? "PlaceContext:CustomerPortal:ApiKey"
                 : "PlaceContext:Api:Key";
             return Task.FromResult(
                 AuthenticateResult.Fail($"The API key is not configured: {configuredSource} is required."));

@@ -8,6 +8,6 @@
   <ItemGroup>
     <ProjectReference Include="PlaceContext.AgentChat.csproj" />
     <ProjectReference Include="PlaceContext.AgentChat.Infrastructure.csproj" />
-    <ProjectReference Include="..\PlaceContext.Application\PlaceContext.ServiceDefaults.csproj" />
   </ItemGroup>
+  <ItemGroup><ProjectReference Include="..\PlaceContext.ServiceDefaults\PlaceContext.ServiceDefaults.csproj" /></ItemGroup>
 </Project>

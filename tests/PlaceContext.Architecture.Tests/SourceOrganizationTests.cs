@@ -112,7 +112,7 @@ public sealed class SourceOrganizationTests
     [Fact]
     public void Service_projects_do_not_reference_other_service_implementations_or_runtimes()
     {
-        var serviceNames = new[] { "AgentChat", "Agents", "Artifacts", "Crm", "Data", "Jobs", "Search", "Vault" };
+        var serviceNames = new[] { "AgentChat", "Agents", "Artifacts", "Crm", "Data", "Identity", "Jobs", "Mcp", "Search", "Vault" };
         var failures = new List<string>();
 
         foreach (var service in serviceNames)
@@ -151,7 +151,7 @@ public sealed class SourceOrganizationTests
     [Fact]
     public void Every_service_has_owned_layers_controller_runtime_and_tests()
     {
-        var serviceNames = new[] { "AgentChat", "Agents", "Artifacts", "Crm", "Data", "Jobs", "Search", "Vault" };
+        var serviceNames = new[] { "AgentChat", "Agents", "Artifacts", "Crm", "Data", "Identity", "Jobs", "Mcp", "Search", "Vault" };
         var missing = new List<string>();
 
         foreach (var service in serviceNames)
@@ -240,7 +240,6 @@ public sealed class SourceOrganizationTests
             Path.Combine(serviceDirectory, "Infrastructure", "Persistence", "AgentChatDbContext.cs"),
             Path.Combine(serviceDirectory, "Infrastructure", "Persistence", "AgentConfigRow.cs"),
             Path.Combine(serviceDirectory, "Infrastructure", "Persistence", "AgentChatSessionRow.cs"),
-            Path.Combine(serviceDirectory, "Infrastructure", "Persistence", "McpConnectionRow.cs"),
             Path.Combine(serviceDirectory, "Infrastructure", "Persistence", "ChatCommandRow.cs"),
             Path.Combine(serviceDirectory, "Domain", "Persistence", "IAgentChatUnitOfWork.cs"),
             Path.Combine(
@@ -254,7 +253,6 @@ public sealed class SourceOrganizationTests
         {
             "AgentConfigRow",
             "AgentChatSessionRow",
-            "McpConnectionRow",
             "ChatCommandRow",
         };
 
@@ -274,6 +272,48 @@ public sealed class SourceOrganizationTests
                 Assert.DoesNotContain(typeName, sharedContextText, StringComparison.Ordinal);
                 Assert.False(File.Exists(Path.Combine(sharedPersistence, typeName + ".cs")));
             });
+    }
+
+    [Fact]
+    public void Mcp_persistence_is_owned_by_mcp_infrastructure()
+    {
+        var serviceDirectory = Path.Combine(Root, "src", "PlaceContext.Mcp");
+        var infrastructureProject = Path.Combine(
+            serviceDirectory,
+            "PlaceContext.Mcp.Infrastructure.csproj");
+        var apiProject = Path.Combine(serviceDirectory, "PlaceContext.Mcp.Api.csproj");
+        var agentChatContext = File.ReadAllText(Path.Combine(
+            Root,
+            "src",
+            "PlaceContext.AgentChat",
+            "Infrastructure",
+            "Persistence",
+            "AgentChatDbContext.cs"));
+        var required = new[]
+        {
+            Path.Combine(serviceDirectory, "Infrastructure", "Persistence", "McpDbContext.cs"),
+            Path.Combine(serviceDirectory, "Infrastructure", "Persistence", "McpConnectionRow.cs"),
+            Path.Combine(serviceDirectory, "Domain", "Persistence", "IMcpUnitOfWork.cs"),
+            Path.Combine(serviceDirectory, "Domain", "Repositories", "IMcpConnectionRepository.cs"),
+            Path.Combine(
+                serviceDirectory,
+                "Infrastructure",
+                "Persistence",
+                "Migrations",
+                "20260809000000_AdoptMcpPersistence.cs"),
+        };
+
+        Assert.All(required, path => Assert.True(File.Exists(path), $"Missing {Relative(path)}"));
+        Assert.DoesNotContain(
+            "PlaceContext.Infrastructure.csproj",
+            File.ReadAllText(infrastructureProject),
+            StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(
+            "PlaceContext.Infrastructure.csproj",
+            File.ReadAllText(apiProject),
+            StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("McpConnectionRow", agentChatContext, StringComparison.Ordinal);
+        Assert.DoesNotContain("mcp_connections", agentChatContext, StringComparison.Ordinal);
     }
 
     [Fact]

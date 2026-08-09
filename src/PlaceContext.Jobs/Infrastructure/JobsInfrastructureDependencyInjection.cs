@@ -13,6 +13,8 @@ using PlaceContext.Jobs.Infrastructure.Persistence;
 using PlaceContext.Jobs.Infrastructure.Scheduling;
 using PlaceContext.Jobs.Infrastructure.Security;
 using PlaceContext.Jobs.Infrastructure.Workload;
+using PlaceContext.Jobs.Infrastructure.Integration;
+using PlaceContext.Jobs.Integration;
 
 namespace PlaceContext.Jobs;
 
@@ -42,6 +44,8 @@ public static class JobsInfrastructureDependencyInjection
             provider.GetRequiredService<JobsDbContext>());
         services.AddDataProtection().SetApplicationName("placecontext");
         services.TryAddSingleton<IDataEncryptor, JobsDataProtectionEncryptor>();
+        services.AddHttpClient();
+        services.AddScoped<IJobDataClient, HttpJobDataClient>();
 
         services.Configure<WorkloadRunnerOptions>(
             configuration.GetSection("PlaceContext:WorkloadRunner"));
