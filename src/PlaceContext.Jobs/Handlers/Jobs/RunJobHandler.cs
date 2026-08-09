@@ -37,6 +37,7 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
     private readonly IJobRuntimeEnvironmentClient? _runtimeEnvironment;
     private readonly PostJobActionService? _postActions;
     private readonly IJobDataClient? _dataClient;
+    private readonly IJobSearchClient? _searchClient;
     private readonly IObjectStore? _objectStore;
     private IReadOnlyDictionary<string, string> _runSecrets = new Dictionary<string, string>();
 
@@ -51,11 +52,13 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
         IJobRuntimeEnvironmentClient? runtimeEnvironment = null,
         PostJobActionService? postActions = null,
         IJobDataClient? dataClient = null,
+        IJobSearchClient? searchClient = null,
         IObjectStore? objectStore = null)
     {
         _runtimeEnvironment = runtimeEnvironment;
         _postActions = postActions;
         _dataClient = dataClient;
+        _searchClient = searchClient;
         _objectStore = objectStore;
         _jobs = jobs;
         _runs = runs;
@@ -444,11 +447,9 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
 
         var toStore = sb.ToString().TrimEnd();
 
-        // Search owns run-output indexing. This summary remains available for the upcoming
-        // authenticated Jobs-to-Search ingestion endpoint.
         var text = toStore.Length > 8000 ? toStore[..8000] : toStore;
-        _ = text;
-        await Task.CompletedTask;
+        if (_searchClient is not null)
+            await _searchClient.IndexRunOutputAsync(run.Id, job.Id, job.ProjectId, text, ct);
     }
 
     private static IReadOnlyList<RunArtifact> MapArtifacts(IReadOnlyList<WorkloadArtifact>? artifacts)

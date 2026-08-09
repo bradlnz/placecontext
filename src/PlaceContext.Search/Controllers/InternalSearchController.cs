@@ -4,6 +4,8 @@ using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Features;
 using PlaceContext.Application.Ports;
+using PlaceContext.Search.Contracts.Api;
+using PlaceContext.Search.Contracts.Commands;
 
 namespace PlaceContext.Search.Controllers;
 
@@ -15,6 +17,21 @@ public sealed class InternalSearchController(
     IOpenSearchDataGateway gateway,
     IOpenSearchConnectionResolver connectionResolver) : ControllerBase
 {
+    [HttpPost("run-outputs")]
+    public async Task<IActionResult> IndexRunOutput(
+        IndexRunOutputRequest request,
+        CancellationToken ct)
+    {
+        var indexed = await dispatcher.Send(
+            new IndexRunOutputCommand(
+                request.RunId,
+                request.JobId,
+                request.ProjectId,
+                request.Text),
+            ct);
+        return Ok(new { indexed });
+    }
+
     [HttpGet("projects/{projectId:guid}/run-outputs")]
     public async Task<IActionResult> SearchRunOutputs(
         Guid projectId,

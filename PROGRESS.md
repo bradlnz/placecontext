@@ -334,6 +334,17 @@ Last updated: 2026-08-09 (Australia/Brisbane)
   mappings is intentionally paired with the Host Projects-controller cutover because Host currently
   shares one `IUnitOfWork` across several unmigrated domains.
 
+### Jobs-to-Search run-output indexing — 2026-08-09T18:42:05+10:00
+
+- Replaced Jobs' discarded in-process embedding path with an authenticated caller-local HTTP adapter to
+  a Search-owned internal ingestion endpoint. Jobs sends only run/job/project IDs and organized text;
+  Search owns embedding generation and `RunEmbedding` persistence.
+- Restored the migrated behavioral coverage instead of deleting it: Jobs verifies summary dispatch,
+  the HTTP adapter verifies route/API-key/payload, and Search verifies enabled and disabled embedding
+  behavior.
+- Verified Jobs tests pass 248/253 with five environment-dependent Docker tests skipped, Search tests
+  pass 39/39, architecture tests pass 19/19, and the complete solution test command exits 0.
+
 ## Remaining coupling to remove
 
 - Shared Infrastructure still references Application, and Identity still composes portions of shared

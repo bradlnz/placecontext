@@ -47,6 +47,7 @@ public static class JobsInfrastructureDependencyInjection
         services.TryAddSingleton<IDataEncryptor, JobsDataProtectionEncryptor>();
         services.AddHttpClient();
         services.AddScoped<IJobDataClient, HttpJobDataClient>();
+        services.AddScoped<IJobSearchClient, HttpJobSearchClient>();
         services.AddScoped<IJobArtifactClient, HttpJobArtifactClient>();
         services.AddScoped<IJobRuntimeEnvironmentClient, HttpJobRuntimeEnvironmentClient>();
         services.AddSingleton<IBackgroundOperationNotifier, LoggingBackgroundOperationNotifier>();
