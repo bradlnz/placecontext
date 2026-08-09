@@ -6,7 +6,9 @@ using PlaceContext.Agents.Domain.Persistence;
 using PlaceContext.Agents.Domain.Repositories;
 using PlaceContext.Agents.Infrastructure.Persistence;
 using PlaceContext.Agents.Infrastructure.Integration;
+using PlaceContext.Agents.Infrastructure.Cluster;
 using PlaceContext.Agents.Cluster;
+using PlaceContext.Application.Ports;
 
 namespace PlaceContext.Agents;
 
@@ -32,6 +34,24 @@ public static class AgentsInfrastructureDependencyInjection
         services.AddScoped<IAgentsRepository, EfAgentsRepository>();
         services.AddHttpClient();
         services.AddScoped<IAgentSecretProvider, HttpAgentSecretProvider>();
+        if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("KUBERNETES_SERVICE_HOST")))
+        {
+            services.AddSingleton<KubernetesClusterInfoProvider>();
+            services.AddSingleton<IClusterInfoProvider>(provider =>
+                provider.GetRequiredService<KubernetesClusterInfoProvider>());
+            services.AddSingleton<IClusterAdminPort>(provider =>
+                provider.GetRequiredService<KubernetesClusterInfoProvider>());
+        }
+        else
+        {
+            services.AddSingleton<LocalClusterInfoProvider>();
+            services.AddSingleton<IClusterInfoProvider>(provider =>
+                provider.GetRequiredService<LocalClusterInfoProvider>());
+            services.AddSingleton<IClusterAdminPort>(provider =>
+                provider.GetRequiredService<LocalClusterInfoProvider>());
+        }
+        services.AddSingleton<ITailscaleKeyMinter, TailscaleApiKeyMinter>();
+        services.AddSingleton<IAgentTokenManager, InMemoryAgentTokenManager>();
         return services;
     }
 }

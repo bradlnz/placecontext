@@ -177,30 +177,7 @@ public static class DependencyInjection
         // Each project's own database (Postgres schema + role isolation; Monaco SQL in the portal).
         // A project's external database override resolves through the Vault (cluster DB is the default).
 
-        // Cluster page: node inventory + fleet-master admin (promote / join codes over Tailscale).
-        // Same in-cluster vs local detection as the workload runner above.
-        if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("KUBERNETES_SERVICE_HOST")))
-        {
-            services.AddSingleton<Cluster.KubernetesClusterInfoProvider>();
-            services.AddSingleton<IClusterInfoProvider>(sp =>
-                sp.GetRequiredService<Cluster.KubernetesClusterInfoProvider>());
-            services.AddSingleton<IClusterAdminPort>(sp =>
-                sp.GetRequiredService<Cluster.KubernetesClusterInfoProvider>());
-        }
-        else
-        {
-            services.AddSingleton<Cluster.LocalClusterInfoProvider>();
-            services.AddSingleton<IClusterInfoProvider>(sp =>
-                sp.GetRequiredService<Cluster.LocalClusterInfoProvider>());
-            services.AddSingleton<IClusterAdminPort>(sp =>
-                sp.GetRequiredService<Cluster.LocalClusterInfoProvider>());
-        }
-
-        // Mints fresh Tailscale auth keys from vaulted OAuth client credentials for agent join codes.
-        services.AddSingleton<ITailscaleKeyMinter, Cluster.TailscaleApiKeyMinter>();
-
-        // Agent join tokens — short-lived, one-time tokens exchanged for join codes from join.sh.
-        services.AddSingleton<IAgentTokenManager, Cluster.InMemoryAgentTokenManager>();
+        // Agent/fleet cluster adapters are composed by PlaceContext.Agents.Infrastructure.
 
 
         return services;

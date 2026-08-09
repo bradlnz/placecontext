@@ -291,14 +291,26 @@ Last updated: 2026-08-09 (Australia/Brisbane)
   source-file splits, two Communications role-folder mismatches, and Agents' shared-Infrastructure
   reference. Those are separate extraction units, not regressions in this cutover.
 
+### Agents fleet-infrastructure ownership — 2026-08-09T17:02:59+10:00
+
+- Moved Kubernetes fleet inventory/admin, local-cluster fallback, agent join-token storage, and the
+  Tailscale API key minter from shared Infrastructure into Agents Infrastructure, together with the
+  Tailscale adapter tests.
+- Agents Infrastructure now composes its own fleet adapters. The standalone Agents API no longer
+  references or invokes shared Infrastructure; ServiceDefaults supplies its authenticated tenant,
+  user, permission, and clock runtime context.
+- Verified in the .NET 10 SDK container: Agents API builds with 0 warnings and 0 errors, and Agents
+  tests pass 10/10. The transport-neutral key-minter boundary remains available for a separately
+  configured Headscale implementation without coupling the two control planes.
+
 ## Remaining coupling to remove
 
-- Shared Infrastructure still references Application, and Projects/Identity/Agents still compose
+- Shared Infrastructure still references Application, and Projects/Identity still compose
   portions of shared Infrastructure. Move each required adapter to its owning service or replace it
   with authenticated HTTP before deleting Application.
 - The current host still references service implementations directly.
-- Jobs, Data, Search, Artifacts, Vault, AgentChat, MCP, Communications, Settings, Operations, and CRM APIs
-  do not require shared Infrastructure. Identity, Projects, and Agents still have transitional
+- Jobs, Data, Search, Artifacts, Vault, AgentChat, Agents, MCP, Communications, Settings, Operations, and CRM APIs
+  do not require shared Infrastructure. Identity and Projects still have transitional
   shared-Infrastructure composition to remove.
 - The shared database model and migration history still contain tables for the other services and platform capabilities, preventing their independent database evolution.
 - Data and Search now resolve Vault-owned secrets over authenticated HTTP, with service configuration

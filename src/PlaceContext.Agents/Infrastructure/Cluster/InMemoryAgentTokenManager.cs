@@ -3,7 +3,7 @@ using System.Security.Cryptography;
 using System.Text;
 using PlaceContext.Application.Ports;
 
-namespace PlaceContext.Infrastructure.Cluster;
+namespace PlaceContext.Agents.Infrastructure.Cluster;
 
 public sealed class InMemoryAgentTokenManager : IAgentTokenManager
 {

@@ -1,4 +1,4 @@
-namespace PlaceContext.Infrastructure.Cluster;
+namespace PlaceContext.Agents.Infrastructure.Cluster;
 
 internal sealed record ClusterJoinSecretData(
     string Token,

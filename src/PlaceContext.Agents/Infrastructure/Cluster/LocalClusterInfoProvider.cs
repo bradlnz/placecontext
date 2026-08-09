@@ -1,7 +1,7 @@
 using System.Runtime.InteropServices;
 using PlaceContext.Application.Ports;
 
-namespace PlaceContext.Infrastructure.Cluster;
+namespace PlaceContext.Agents.Infrastructure.Cluster;
 
 /// <summary>
 /// Local-dev fallback when PlaceContext is not running in a Kubernetes cluster (no

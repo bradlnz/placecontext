@@ -1,8 +1,8 @@
 using System.Net;
 using System.Text;
-using PlaceContext.Infrastructure.Cluster;
+using PlaceContext.Agents.Infrastructure.Cluster;
 
-namespace PlaceContext.Infrastructure.Tests;
+namespace PlaceContext.Agents.Tests;
 
 /// <summary>
 /// Payload/URL construction only — no real network calls. A fake <see cref="HttpMessageHandler"/>

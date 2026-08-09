@@ -4,7 +4,7 @@ using k8s;
 using k8s.Models;
 using PlaceContext.Application.Ports;
 
-namespace PlaceContext.Infrastructure.Cluster;
+namespace PlaceContext.Agents.Infrastructure.Cluster;
 
 /// <summary>
 /// In-cluster node inventory + fleet-master admin via the Kubernetes API. Designated master lives in

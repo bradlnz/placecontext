@@ -3,7 +3,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using PlaceContext.Application.Ports;
 
-namespace PlaceContext.Infrastructure.Cluster;
+namespace PlaceContext.Agents.Infrastructure.Cluster;
 
 /// <summary>
 /// Real Tailscale API-backed <see cref="ITailscaleKeyMinter"/>: exchanges an OAuth client
