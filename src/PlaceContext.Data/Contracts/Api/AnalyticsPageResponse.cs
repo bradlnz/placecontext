@@ -1,6 +1,4 @@
-using PlaceContext.Data.Contracts.Api;
-
-namespace PlaceContext.Host.Controllers.Api.Records;
+namespace PlaceContext.Data.Contracts.Api;
 
 public sealed record AnalyticsPageResponse(
     IReadOnlyList<AnalyticsTableResponse> Tables,

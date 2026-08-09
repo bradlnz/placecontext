@@ -1,8 +1,10 @@
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Features;
 using PlaceContext.Application.Ports;
+using PlaceContext.Data.Analytics;
 using PlaceContext.Data.Contracts.Graph;
 using PlaceContext.Domain.Services;
 
@@ -12,6 +14,7 @@ public static class DependencyInjection
 {
     public static IServiceCollection AddDataApi(this IServiceCollection services)
     {
+        services.TryAddSingleton<AnalyticsRefreshQueue>();
         services.AddScoped<DataMappingIngestionService>();
         services.AddScoped<EntityTagService>();
         services.AddScoped<RecordLinkService>();
@@ -31,6 +34,7 @@ public static class DependencyInjection
 
     public static IServiceCollection AddDataModule(this IServiceCollection services)
     {
+        services.TryAddSingleton<AnalyticsRefreshQueue>();
         services.AddSingleton<DecisionTreeAssembler>();
         services.AddScoped<DecisionTreeProvider>();
         services.AddScoped<IUncachedDecisionTreeProvider>(provider =>

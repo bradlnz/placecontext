@@ -165,6 +165,23 @@ public sealed class SourceOrganizationTests
     }
 
     [Fact]
+    public void Legacy_host_has_no_api_controllers()
+    {
+        var controllerDirectory = Path.Combine(Root, "src", "PlaceContext.Host", "Controllers");
+        var controllers = Directory.Exists(controllerDirectory)
+            ? Directory.GetFiles(controllerDirectory, "*Controller.cs", SearchOption.AllDirectories)
+            : [];
+
+        Assert.Empty(controllers);
+        Assert.True(File.Exists(Path.Combine(
+            Root,
+            "src",
+            "PlaceContext.Data",
+            "Controllers",
+            "ProjectAnalyticsController.cs")));
+    }
+
+    [Fact]
     public void Customer_portal_routes_are_owned_by_crm_and_use_the_artifacts_boundary()
     {
         var hostDirectory = Path.Combine(Root, "src", "PlaceContext.Host");

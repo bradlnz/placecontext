@@ -4,9 +4,10 @@ using Microsoft.JSInterop;
 using PlaceContext.Application;
 using PlaceContext.Application.Features;
 using PlaceContext.Application.Ports;
+using PlaceContext.Data.Analytics;
 using PlaceContext.Host.Components.Models;
 using PlaceContext.Host.Components.ViewModels.Helpers;
-using PlaceContext.Infrastructure.Scheduling;
+
 
 namespace PlaceContext.Host.Components.ViewModels;
 
@@ -14,6 +15,7 @@ public sealed class ProjectAnalyticsViewModel(
     IPlaceContextService service,
     PortalUiState ui,
     IJSRuntime js,
+    ICurrentTenant currentTenant,
     AnalyticsRefreshQueue queue
 ) : PageViewModel, IDisposable
 {
@@ -244,9 +246,13 @@ public sealed class ProjectAnalyticsViewModel(
 
     private void Enqueue(string? table = null)
     {
-        if (PlaceContext.Infrastructure.Tenancy.CurrentTenant.Current is { } tenant)
+        if (currentTenant.IsResolved)
         {
-            queue.TryEnqueue(tenant, ProjectId, tableName: table, instruction: Instruction);
+            queue.TryEnqueue(
+                new TenantContext(currentTenant.TenantId, currentTenant.Slug, currentTenant.TimeZoneId),
+                ProjectId,
+                tableName: table,
+                instruction: Instruction);
             SweepPending = true;
         }
         else

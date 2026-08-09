@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Features;
 using PlaceContext.Application.Ports;
+using PlaceContext.Data.Analytics;
 using PlaceContext.Data.Contracts.Api;
 using PlaceContext.Data.Controllers;
 
@@ -34,6 +35,72 @@ public sealed class ProjectAnalyticsControllerTests
         Assert.Contains(services, descriptor =>
             descriptor.ServiceType == typeof(ICommandHandler<DeleteSqlChartCommand, bool>)
             && descriptor.ImplementationType == typeof(DeleteSqlChartHandler));
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(AnalyticsRefreshQueue));
+    }
+
+    [Fact]
+    public async Task Get_dispatches_data_queries_and_maps_pending_tables()
+    {
+        var projectId = Guid.NewGuid();
+        var dispatcher = new StubDispatcher
+        {
+            QueryResult = query => query switch
+            {
+                ListProjectDataTablesQuery => new List<ProjectTableInfo>
+                {
+                    new("population", 42),
+                    new("permits", 7),
+                },
+                ListProjectChartsQuery => new List<ProjectChartView>(),
+                _ => throw new InvalidOperationException("Unexpected query."),
+            },
+        };
+        var tenant = new StubTenant("UTC");
+        var queue = new AnalyticsRefreshQueue(new StubOperationNotifier());
+        queue.TryEnqueue(
+            new TenantContext(tenant.TenantId, tenant.Slug, tenant.TimeZoneId),
+            projectId,
+            tableName: "population");
+        var controller = new ProjectAnalyticsController(dispatcher, tenant, queue);
+
+        var result = await controller.Get(projectId, default);
+
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        var response = Assert.IsType<AnalyticsPageResponse>(ok.Value);
+        Assert.Equal(2, response.Tables.Count);
+        Assert.True(response.SweepPending);
+        Assert.Equal(["population"], response.PendingTables);
+    }
+
+    [Fact]
+    public void Queue_refresh_requires_a_resolved_tenant()
+    {
+        var controller = CreateController(new StubDispatcher(), new StubTenant("UTC", isResolved: false));
+
+        var result = controller.QueueRefresh(
+            Guid.NewGuid(),
+            new QueueAnalyticsRefreshRequest(null, null));
+
+        Assert.IsType<UnauthorizedObjectResult>(result.Result);
+    }
+
+    [Fact]
+    public void Queue_refresh_preserves_duplicate_pending_behavior()
+    {
+        var projectId = Guid.NewGuid();
+        var tenant = new StubTenant("UTC");
+        var controller = CreateController(new StubDispatcher(), tenant);
+        var request = new QueueAnalyticsRefreshRequest("population", "group by locality");
+
+        var first = controller.QueueRefresh(projectId, request);
+        var duplicate = controller.QueueRefresh(projectId, request);
+
+        var firstResponse = Assert.IsType<AnalyticsMessageResponse>(
+            Assert.IsType<AcceptedResult>(first.Result).Value);
+        var duplicateResponse = Assert.IsType<AnalyticsMessageResponse>(
+            Assert.IsType<AcceptedResult>(duplicate.Result).Value);
+        Assert.Equal("Chart generation queued.", firstResponse.Message);
+        Assert.Equal("That chart generation is already pending.", duplicateResponse.Message);
     }
 
     [Fact]
@@ -48,7 +115,7 @@ public sealed class ProjectAnalyticsControllerTests
                 "{\"labels\":[\"North\"],\"series\":[],\"sql\":\"select 1\",\"type\":\"line\"}",
                 generatedAt),
         };
-        var controller = new ProjectAnalyticsController(dispatcher, new StubTenant("Europe/London"));
+        var controller = CreateController(dispatcher, new StubTenant("Europe/London"));
 
         var result = await controller.SaveSqlChart(
             projectId,
@@ -81,7 +148,7 @@ public sealed class ProjectAnalyticsControllerTests
         string expectedError)
     {
         var dispatcher = new StubDispatcher();
-        var controller = new ProjectAnalyticsController(dispatcher, new StubTenant("UTC"));
+        var controller = CreateController(dispatcher, new StubTenant("UTC"));
 
         var result = await controller.SaveSqlChart(
             Guid.NewGuid(), new SaveSqlChartRequest(name, sql, chartType), default);
@@ -98,7 +165,7 @@ public sealed class ProjectAnalyticsControllerTests
         {
             CommandException = new InvalidOperationException("The query result isn't chartable."),
         };
-        var controller = new ProjectAnalyticsController(dispatcher, new StubTenant("UTC"));
+        var controller = CreateController(dispatcher, new StubTenant("UTC"));
 
         var result = await controller.SaveSqlChart(
             Guid.NewGuid(), new SaveSqlChartRequest("name", "select label", "bar"), default);
@@ -112,7 +179,7 @@ public sealed class ProjectAnalyticsControllerTests
     {
         var projectId = Guid.NewGuid();
         var dispatcher = new StubDispatcher { CommandResult = _ => false };
-        var controller = new ProjectAnalyticsController(dispatcher, new StubTenant("UTC"));
+        var controller = CreateController(dispatcher, new StubTenant("UTC"));
 
         var result = await controller.DeleteSqlChart(projectId, "Population", default);
 
@@ -122,9 +189,15 @@ public sealed class ProjectAnalyticsControllerTests
         Assert.Equal("Population", command.Name);
     }
 
+    private static ProjectAnalyticsController CreateController(
+        IDispatcher dispatcher,
+        ICurrentTenant tenant) =>
+        new(dispatcher, tenant, new AnalyticsRefreshQueue(new StubOperationNotifier()));
+
     private sealed class StubDispatcher : IDispatcher
     {
         public Func<object, object?>? CommandResult { get; init; }
+        public Func<object, object?>? QueryResult { get; init; }
         public Exception? CommandException { get; init; }
         public object? LastCommand { get; private set; }
 
@@ -136,14 +209,23 @@ public sealed class ProjectAnalyticsControllerTests
         }
 
         public Task<TResult> Query<TResult>(IQuery<TResult> query, CancellationToken ct = default) =>
-            throw new NotSupportedException();
+            Task.FromResult((TResult)QueryResult!(query)!);
     }
 
-    private sealed class StubTenant(string timeZoneId) : ICurrentTenant
+    private sealed class StubTenant(string timeZoneId, bool isResolved = true) : ICurrentTenant
     {
-        public Guid TenantId => Guid.NewGuid();
+        public Guid TenantId { get; } = Guid.NewGuid();
         public string Slug => "test";
         public string TimeZoneId => timeZoneId;
-        public bool IsResolved => true;
+        public bool IsResolved => isResolved;
+    }
+
+    private sealed class StubOperationNotifier : IBackgroundOperationNotifier
+    {
+        public Guid Track(TenantContext tenant, Guid? projectId, string title, string? link, string? correlationKey = null) =>
+            Guid.NewGuid();
+        public void MarkRunning(Guid operationId) { }
+        public void MarkDone(Guid operationId, string? outcome = null) { }
+        public void MarkFailed(Guid operationId, string error) { }
     }
 }

@@ -165,11 +165,6 @@ public static class DependencyInjection
         // Trigger scheduling: cron evaluation, a durable DB-backed run queue, and the background firing
         // service (advisory-lock-elected schedule scan + atomic queue drain — correct across replicas).
 
-        // Background portal operations (the notifications-pane ledger) + the analytics chart sweep
-        // worker (generation can be slow; the portal only enqueues and reads stored charts).
-        services.AddSingleton<Scheduling.AnalyticsRefreshQueue>();
-        services.AddHostedService<Scheduling.AnalyticsWorkerService>();
-
         // Run-status watcher: syncs persisted job/chain run statuses into the notifications pane on
         // a short tick, so the bell reflects finish/fail the moment the row commits — independent of
         // the (slow, best-effort) in-process enrichment and of which replica executed the run.

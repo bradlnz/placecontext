@@ -52,6 +52,9 @@ public static class MicroserviceProxyRouteCatalog
             "Search",
             "^/api/v1/projects/[^/]+/opensearch(?:/.*)?$"),
         MicroserviceProxyRoute.ForPrefix("Vault", "/api/vault"),
+        MicroserviceProxyRoute.ForPattern(
+            "Data",
+            "^/api/v1/projects/[^/]+/analytics(?:/refreshes|/sql-charts(?:/[^/]+)?)?/?$"),
         MicroserviceProxyRoute.ForPattern("Data", "^/api/v1/entities/?$"),
         MicroserviceProxyRoute.ForPattern(
             "Data",

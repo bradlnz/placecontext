@@ -1,3 +1,3 @@
-namespace PlaceContext.Host.Controllers.Api.Records;
+namespace PlaceContext.Data.Contracts.Api;
 
 public sealed record QueueAnalyticsRefreshRequest(string? TableName, string? Instruction);

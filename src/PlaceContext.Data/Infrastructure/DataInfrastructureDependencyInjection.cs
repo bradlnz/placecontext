@@ -6,6 +6,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using PlaceContext.Application.Features;
 using PlaceContext.Application.Ports;
+using PlaceContext.Data.Analytics;
+using PlaceContext.Data.Infrastructure.Analytics;
 using PlaceContext.Data.Infrastructure.Persistence;
 using PlaceContext.Data.Infrastructure.ProjectData;
 using PlaceContext.Data.Infrastructure.Security;
@@ -58,6 +60,9 @@ public static class DataInfrastructureDependencyInjection
         services.AddScoped<IDataProjectsClient, HttpDataProjectsClient>();
         services.AddScoped<IDataSearchClient, HttpDataSearchClient>();
         services.AddScoped<IDataVaultClient, HttpDataVaultClient>();
+        services.TryAddSingleton<AnalyticsRefreshQueue>();
+        services.TryAddSingleton<IBackgroundOperationNotifier, LoggingAnalyticsOperationNotifier>();
+        services.AddHostedService<AnalyticsWorkerService>();
         services.AddHttpClient();
         services.AddScoped<IProjectDatabaseConnectionResolver, ProjectDatabaseConnectionResolver>();
         services.AddScoped<IProjectDataStore, NpgsqlProjectDataStore>();
