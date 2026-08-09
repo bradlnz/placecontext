@@ -6,6 +6,7 @@ using ArtifactDownloadsController = PlaceContext.Artifacts.Controllers.ArtifactD
 using ArtifactChatAttachmentsController = PlaceContext.Artifacts.Controllers.ChatAttachmentsController;
 using BackupController = PlaceContext.Operations.Controllers.BackupController;
 using InspectorController = PlaceContext.Operations.Controllers.InspectorController;
+using DataEntityBrowsePageController = PlaceContext.Data.Controllers.EntityBrowsePageController;
 using Pages = PlaceContext.Host.Components.Pages;
 
 namespace PlaceContext.Host.Tests;
@@ -88,7 +89,7 @@ public sealed class SectionAuthorizationTests
             { typeof(ProjectAnalyticsController), Permission.DataRead },
             { typeof(ProjectDataAdminController), Permission.DataRead },
             { typeof(ProjectDataStudioController), Permission.DataRead },
-            { typeof(EntityBrowsePageController), Permission.DataRead },
+            { typeof(DataEntityBrowsePageController), Permission.DataRead },
         };
 
     [Theory]

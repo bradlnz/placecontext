@@ -1,5 +1,7 @@
 using System.Net;
 using PlaceContext.App.Authentication;
+using PlaceContext.App.Dashboard;
+using PlaceContext.App.Workspace;
 
 namespace PlaceContext.App.Proxy;
 
@@ -13,6 +15,9 @@ public static class MicroserviceProxyServiceCollectionExtensions
             configuration.GetSection(MicroserviceProxyOptions.SectionName));
         services.AddScoped<EdgeServiceTokenClient>();
         services.AddScoped<EdgeCallerContext>();
+        services.AddScoped<EdgeHttpClient>();
+        services.AddScoped<IWorkspaceHttpClient, WorkspaceHttpClient>();
+        services.AddScoped<IDashboardHttpClient, DashboardHttpClient>();
 
         services
             .AddHttpClient(MicroserviceProxyMiddleware.HttpClientName)

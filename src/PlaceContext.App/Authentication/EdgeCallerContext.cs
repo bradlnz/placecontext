@@ -12,7 +12,10 @@ public sealed class EdgeCallerContext(EdgeServiceTokenClient serviceTokens)
 
     public async Task<EdgeCallerIdentity?> AuthenticateAsync(HttpContext context)
     {
-        var token = await (_exchange ??= serviceTokens.ExchangeAsync(context));
+        var token = await GetServiceTokenAsync(context);
         return token is null ? null : EdgeCallerIdentity.FromServiceToken(token);
     }
+
+    public Task<string?> GetServiceTokenAsync(HttpContext context)
+        => _exchange ??= serviceTokens.ExchangeAsync(context);
 }

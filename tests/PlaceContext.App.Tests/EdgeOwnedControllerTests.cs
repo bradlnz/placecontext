@@ -1,8 +1,10 @@
 using System.Net;
+using System.Reflection;
 using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Routing;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using PlaceContext.App.Authentication;
@@ -73,6 +75,27 @@ public sealed class EdgeOwnedControllerTests
     }
 
     [Fact]
+    public void App_owns_dashboard_and_complete_workspace_routes()
+    {
+        var assembly = typeof(WorkspaceController).Assembly;
+        var dashboard = Assert.Single(assembly.GetTypes(), type => type.Name == "DashboardController");
+
+        Assert.Equal("api/v1/dashboard", dashboard.GetCustomAttribute<RouteAttribute>()?.Template);
+        Assert.Contains(dashboard.GetMethods(), method => HttpTemplate(method) is null && method.Name == "Get");
+        Assert.Contains(dashboard.GetMethods(), method =>
+            HttpTemplate(method) == "projects/{projectId:guid}/chains/{chainId:guid}/runs"
+            && method.GetCustomAttribute<HttpPostAttribute>() is not null);
+
+        var workspaceRoutes = typeof(WorkspaceController).GetMethods()
+            .Select(HttpTemplate)
+            .OfType<string>()
+            .ToHashSet(StringComparer.Ordinal);
+        Assert.Equal(
+            new HashSet<string>(["session", "projects", "focus", "stats"], StringComparer.Ordinal),
+            workspaceRoutes);
+    }
+
+    [Fact]
     public void Dashboard_wire_contract_keeps_the_legacy_json_shape()
     {
         var projectId = Guid.NewGuid();
@@ -92,6 +115,9 @@ public sealed class EdgeOwnedControllerTests
         Assert.Equal(2, json.RootElement.GetProperty("stats").GetProperty("queued").GetInt32());
         Assert.Equal(JsonValueKind.Array, json.RootElement.GetProperty("recentRuns").ValueKind);
     }
+
+    private static string? HttpTemplate(MethodInfo method) =>
+        method.GetCustomAttributes<HttpMethodAttribute>().SingleOrDefault()?.Template;
 
     private static EdgeCallerContext CreateCaller(HttpMessageHandler handler)
     {
