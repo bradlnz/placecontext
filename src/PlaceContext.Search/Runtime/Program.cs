@@ -1,10 +1,10 @@
-using PlaceContext.Application;
+using PlaceContext.BuildingBlocks;
 using PlaceContext.ServiceDefaults;
 using PlaceContext.Search;
 using PlaceContext.Search.Controllers;
 
 var builder = WebApplication.CreateBuilder(args);
-builder.Services.AddApplicationCore();
+builder.Services.AddPlaceContextCqrs();
 builder.Services.AddSearchApi();
 builder.Services.AddSearchInfrastructure(builder.Configuration);
 builder.Services.AddPlaceContextServiceRuntime(builder.Configuration, typeof(SearchController).Assembly);

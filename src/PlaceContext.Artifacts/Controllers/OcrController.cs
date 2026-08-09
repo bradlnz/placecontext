@@ -1,11 +1,11 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using PlaceContext.Application;
+using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Features;
 using PlaceContext.Application.Ports;
-using PlaceContext.Host.Auth;
+using PlaceContext.Artifacts.Contracts.Api;
 
-namespace PlaceContext.Host.Controllers;
+namespace PlaceContext.Artifacts.Controllers;
 
 /// <summary>
 /// OCR daemon contract (server side of the plan in docs/OCR-DAEMON-PLAN.md).
@@ -22,20 +22,17 @@ namespace PlaceContext.Host.Controllers;
 [ApiController]
 [Route("api/ocr")]
 [Authorize(AuthenticationSchemes =
-    UserApiTokenAuthenticationHandler.SchemeName + "," + ApiKeyAuthenticationHandler.SchemeName)]
+    "PlaceContextServiceBearer,ApiKey")]
 [Produces("application/json")]
-public sealed class OcrController : ControllerBase
+public sealed class OcrController(IDispatcher dispatcher) : ControllerBase
 {
-    private readonly IPlaceContextService _svc;
-    public OcrController(IPlaceContextService svc) => _svc = svc;
-
     /// <summary>GET /api/ocr/pending — the oldest artifacts still needing OCR (default batch 10).</summary>
     [HttpGet("pending")]
     [Authorize(Policy = Permission.ArtifactsView)]
     public async Task<ActionResult<IReadOnlyList<PendingOcrArtifactView>>> ListPending([FromQuery] int take = 10)
     {
         take = Math.Clamp(take, 1, 100);
-        var pending = await _svc.ListPendingOcrAsync(take, HttpContext.RequestAborted);
+        var pending = await dispatcher.Query(new ListPendingOcrQuery(take), HttpContext.RequestAborted);
         return Ok(pending);
     }
 
@@ -49,7 +46,9 @@ public sealed class OcrController : ControllerBase
         if (string.IsNullOrWhiteSpace(request.Markdown) && string.IsNullOrWhiteSpace(request.Error))
             return BadRequest(new { error = "Provide markdown (success) or error (failure)." });
 
-        var ok = await _svc.CompleteOcrAsync(request.ArtifactId, request.Markdown, request.Error, HttpContext.RequestAborted);
+        var ok = await dispatcher.Send(
+            new CompleteOcrCommand(request.ArtifactId, request.Markdown, request.Error),
+            HttpContext.RequestAborted);
         if (!ok) return NotFound(new { error = "Artifact not found." });
         return Ok(new { processed = true });
     }

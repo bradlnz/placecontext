@@ -4,6 +4,7 @@ using PlaceContext.Application.Ports;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.Repositories;
 using PlaceContext.Domain.ValueObjects;
+using PlaceContext.Projects.Integration;
 
 namespace PlaceContext.Application.Features;
 
@@ -14,13 +15,13 @@ public sealed class RecordActivityHandler : ICommandHandler<RecordActivityComman
     private readonly IGitPort _git;
     private readonly IUnitOfWork _uow;
     private readonly IClock _clock;
-    private readonly IEventDispatcher? _events;
+    private readonly IProjectEventPublisher? _events;
 
     public RecordActivityHandler(
         IProjectRepository projects, IActivityLogRepository ledgers,
         IGitPort git, IUnitOfWork uow, IClock clock,
         // Optional so unit tests can construct the handler without the event layer; DI always supplies it.
-        IEventDispatcher? events = null)
+        IProjectEventPublisher? events = null)
     {
         _projects = projects;
         _ledgers = ledgers;
@@ -62,7 +63,7 @@ public sealed class RecordActivityHandler : ICommandHandler<RecordActivityComman
         if (_events is not null)
         {
             var payload = $"{{\"changeId\":\"{record.Id}\",\"projectId\":\"{command.ProjectId:N}\"}}";
-            await _events.RaiseAsync(BuiltInEvents.ActivityRecorded, command.ProjectId, payload, ct);
+            await _events.RaiseAsync("activity.recorded", command.ProjectId, payload, ct);
         }
 
         return ViewMapper.ToView(record);

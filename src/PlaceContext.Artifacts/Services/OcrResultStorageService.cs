@@ -1,6 +1,6 @@
 using Microsoft.Extensions.Logging;
 using PlaceContext.Application.Ports;
-using PlaceContext.Application.Shared;
+using PlaceContext.Artifacts.Integration;
 using PlaceContext.Domain.Entities;
 
 namespace PlaceContext.Application.Features;
@@ -15,24 +15,13 @@ namespace PlaceContext.Application.Features;
 /// </summary>
 public sealed class OcrResultStorageService
 {
-    private static readonly IReadOnlyList<ProjectColumnSpec> Columns = new[]
-    {
-        new ProjectColumnSpec("ingested_at", DataColumnTypes.Timestamptz, NotNull: true, PrimaryKey: false),
-        new ProjectColumnSpec("artifact_id", DataColumnTypes.Uuid, NotNull: true, PrimaryKey: false),
-        new ProjectColumnSpec("run_id", DataColumnTypes.Uuid, NotNull: true, PrimaryKey: false),
-        new ProjectColumnSpec("job_id", DataColumnTypes.Uuid, NotNull: true, PrimaryKey: false),
-        new ProjectColumnSpec("title", DataColumnTypes.Text, NotNull: false, PrimaryKey: false),
-        new ProjectColumnSpec("content_type", DataColumnTypes.Text, NotNull: false, PrimaryKey: false),
-        new ProjectColumnSpec("markdown", DataColumnTypes.Text, NotNull: true, PrimaryKey: false),
-    };
-
-    private readonly IProjectDataStore _store;
+    private readonly IArtifactDataClient _data;
     private readonly IClock _clock;
     private readonly ILogger<OcrResultStorageService>? _log;
 
-    public OcrResultStorageService(IProjectDataStore store, IClock clock, ILogger<OcrResultStorageService>? log = null)
+    public OcrResultStorageService(IArtifactDataClient data, IClock clock, ILogger<OcrResultStorageService>? log = null)
     {
-        _store = store;
+        _data = data;
         _clock = clock;
         _log = log;
     }
@@ -45,17 +34,7 @@ public sealed class OcrResultStorageService
     {
         if (string.IsNullOrWhiteSpace(markdown)) return;
 
-        var row = new string?[]
-        {
-            _clock.UtcNow.ToString("O"),
-            link.Id.ToString(),
-            link.RunId.ToString(),
-            link.JobId.ToString(),
-            link.Title,
-            link.ContentType,
-            markdown,
-        };
-        await _store.AppendReadOnlyRowsAsync(link.ProjectId, "ocr_results", Columns, new[] { row }, ct);
+        await _data.StoreOcrResultAsync(link, markdown, _clock.UtcNow, ct);
         _log?.LogInformation("Stored OCR result for artifact {ArtifactId} (run {RunId}).", link.Id, link.RunId);
     }
 }

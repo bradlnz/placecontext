@@ -46,6 +46,11 @@ public static class JobsInfrastructureDependencyInjection
         services.TryAddSingleton<IDataEncryptor, JobsDataProtectionEncryptor>();
         services.AddHttpClient();
         services.AddScoped<IJobDataClient, HttpJobDataClient>();
+        services.AddScoped<IJobArtifactClient, HttpJobArtifactClient>();
+        services.AddScoped<IJobRuntimeEnvironmentClient, HttpJobRuntimeEnvironmentClient>();
+        services.AddSingleton<IBackgroundOperationNotifier, LoggingBackgroundOperationNotifier>();
+        services.AddScoped<ITenantCatalog, HttpJobTenantCatalog>();
+        services.AddScoped<IJobLaunchpadClient, HttpJobLaunchpadClient>();
 
         services.Configure<WorkloadRunnerOptions>(
             configuration.GetSection("PlaceContext:WorkloadRunner"));

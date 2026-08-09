@@ -9,7 +9,6 @@ using PlaceContext.Application.Ports;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.Repositories;
 using PlaceContext.Domain.ValueObjects;
-using PlaceContext.Vault.Domain.Repositories;
 using PlaceContext.Jobs.Integration;
 
 namespace PlaceContext.Application.Features;
@@ -35,20 +34,11 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
     private readonly IJobsUnitOfWork _uow;
     private readonly IClock _clock;
     private readonly EventDispatchService? _events;
-    private readonly IEmbeddingGateway? _embeddings;
-    private readonly IRunEmbeddingRepository? _embeddingStore;
-    private readonly IContentIndexer? _contentIndexer;
-    private readonly IProjectSecretRepository? _secretRepo;
-    private readonly ISecretProtector? _secretProtector;
+    private readonly IJobRuntimeEnvironmentClient? _runtimeEnvironment;
     private readonly PostJobActionService? _postActions;
-    private readonly JobRunDataRecorder? _runData;
     private readonly IJobDataClient? _dataClient;
-    private readonly IMcpConnectionRepository? _mcpRepo;
-    private readonly IDataEncryptor? _encryptor;
     private readonly IObjectStore? _objectStore;
-    private readonly IOpenSearchConnectionResolver? _openSearchConnections;
     private IReadOnlyDictionary<string, string> _runSecrets = new Dictionary<string, string>();
-    private IReadOnlyDictionary<string, string> _mcpEnv = new Dictionary<string, string>();
 
     public RunJobHandler(
         IJobRepository jobs,
@@ -58,37 +48,21 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
         IClock clock,
         // Optional so unit tests can construct the handler without the event/embedding/secret layers; DI always supplies them.
         EventDispatchService? events = null,
-        IEmbeddingGateway? embeddings = null,
-        IRunEmbeddingRepository? embeddingStore = null,
-        IContentIndexer? contentIndexer = null,
-        IProjectSecretRepository? secretRepo = null,
-        ISecretProtector? secretProtector = null,
+        IJobRuntimeEnvironmentClient? runtimeEnvironment = null,
         PostJobActionService? postActions = null,
-        JobRunDataRecorder? runData = null,
         IJobDataClient? dataClient = null,
-        IMcpConnectionRepository? mcpRepo = null,
-        IDataEncryptor? encryptor = null,
-        IObjectStore? objectStore = null,
-        IOpenSearchConnectionResolver? openSearchConnections = null)
+        IObjectStore? objectStore = null)
     {
-        _secretRepo = secretRepo;
-        _secretProtector = secretProtector;
+        _runtimeEnvironment = runtimeEnvironment;
         _postActions = postActions;
-        _runData = runData;
         _dataClient = dataClient;
-        _mcpRepo = mcpRepo;
-        _encryptor = encryptor;
         _objectStore = objectStore;
-        _openSearchConnections = openSearchConnections;
         _jobs = jobs;
         _runs = runs;
         _runner = runner;
         _uow = uow;
         _clock = clock;
         _events = events;
-        _embeddings = embeddings;
-        _embeddingStore = embeddingStore;
-        _contentIndexer = contentIndexer;
     }
 
     public async Task<JobRunDetailView> HandleAsync(RunJobCommand command, CancellationToken ct = default)
@@ -109,17 +83,9 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
 
         // Load the project's vault secrets (decrypted) for injection as env into each sandbox. Never
         // persisted to the run snapshot — only merged into the live WorkloadRunRequest below.
-        _runSecrets = await LoadSecretsAsync(job.ProjectId, ct);
-        if (_openSearchConnections is not null)
-        {
-            var merged = new Dictionary<string, string>(_runSecrets);
-            foreach (var (name, value) in await _openSearchConnections.GetJobEnvironmentAsync(job.ProjectId, ct))
-                merged[name] = value;
-            _runSecrets = merged;
-        }
-
-        // Load MCP connection tokens for the job's enabled connections. Injected as env var.
-        _mcpEnv = await LoadMcpEnvAsync(job.McpConnectionIds, ct);
+        _runSecrets = _runtimeEnvironment is null
+            ? new Dictionary<string, string>()
+            : await _runtimeEnvironment.GetEnvironmentAsync(job.ProjectId, job.McpConnectionIds, ct);
 
         // Resolve the execution plan: replaying a prior run reproduces its captured snapshot verbatim,
         // otherwise we run the job's current spec (optionally with a single-shard input override).
@@ -198,11 +164,6 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
             catch { /* isolated inside the service too; belt-and-suspenders */ }
         }
 
-        // The run's results also land in the project's own database: appended to the read-only
-        // job_run_data table so they can be queried and charted from the Data tab. Best-effort.
-        if (_runData is not null)
-            await _runData.RecordAsync(job, run, ct);
-
         // Data enrichment belongs to the Data service and crosses the boundary over HTTP.
         if (_dataClient is not null)
             await _dataClient.ProcessJobResultAsync(job, run, ct);
@@ -261,7 +222,7 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
             // Source/env/egress come from the effective plan (job spec or a replayed snapshot); the
             // exit-code policy and timeout are job metadata not captured in the snapshot.
             var resolvedPayload = await ResolveFileInputsAsync(payload, job.ProjectId, job.TimeoutSeconds, ct);
-            var request = BuildRequest(map.Source, resolvedPayload, MergeMcpEnv(MergeSecrets(map.Env)),
+            var request = BuildRequest(map.Source, resolvedPayload, MergeSecrets(map.Env),
                 Array.Empty<(string, string)>(), correlationId, allowEgress, job.TimeoutSeconds);
 
             var result = await _runner.RunAsync(request, ct);
@@ -377,7 +338,7 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
             .ToList();
 
         var correlationId = $"{runId:N}-reduce";
-        var request = BuildRequest(reduceSpec.Source, "{}", MergeMcpEnv(MergeSecrets(reduceSpec.Env)),
+        var request = BuildRequest(reduceSpec.Source, "{}", MergeSecrets(reduceSpec.Env),
             artifactMounts, correlationId, allowEgress, job.TimeoutSeconds);
 
         var result = await _runner.RunAsync(request, ct);
@@ -435,19 +396,6 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
         };
     }
 
-    // Decrypt the project's vault secrets for run-time env injection. Empty when the vault isn't wired.
-    private async Task<IReadOnlyDictionary<string, string>> LoadSecretsAsync(Guid projectId, CancellationToken ct)
-    {
-        if (_secretRepo is null || _secretProtector is null) return new Dictionary<string, string>();
-        var ciphers = await _secretRepo.GetCiphersAsync(projectId, ct);
-        var plain = new Dictionary<string, string>(ciphers.Count);
-        foreach (var (name, cipher) in ciphers)
-        {
-            try { plain[name] = _secretProtector.Unprotect(cipher); } catch { /* skip un-decryptable */ }
-        }
-        return plain;
-    }
-
     // Vault secrets form the base env; the job's own env overrides on key collision.
     private IReadOnlyDictionary<string, string> MergeSecrets(IReadOnlyDictionary<string, string> env)
     {
@@ -455,46 +403,6 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
         var merged = new Dictionary<string, string>(_runSecrets);
         foreach (var (k, v) in env) merged[k] = v;
         return merged;
-    }
-
-    // MCP connection tokens are injected on top of the merged env.
-    private IReadOnlyDictionary<string, string> MergeMcpEnv(IReadOnlyDictionary<string, string> env)
-    {
-        if (_mcpEnv.Count == 0) return env;
-        var merged = new Dictionary<string, string>(env);
-        foreach (var (k, v) in _mcpEnv) merged[k] = v;
-        return merged;
-    }
-
-    // Load MCP connection tokens for the job's enabled connections. Returns empty if none.
-    private async Task<IReadOnlyDictionary<string, string>> LoadMcpEnvAsync(IReadOnlyList<Guid> mcpConnectionIds, CancellationToken ct)
-    {
-        if (_mcpRepo is null || _encryptor is null || mcpConnectionIds.Count == 0)
-            return new Dictionary<string, string>();
-
-        var env = new Dictionary<string, string>();
-        var connections = new List<(string Name, string Url, string Token)>();
-        var purpose = "mcp.oauth.tokens";
-
-        foreach (var connId in mcpConnectionIds)
-        {
-            var conn = await _mcpRepo.GetByIdAsync(connId, ct);
-            if (conn is null) continue;
-
-            var token = conn.AuthType == "oauth"
-                ? (_encryptor.Unprotect(conn.OAuthAccessToken, purpose) ?? "")
-                : conn.AuthToken ?? "";
-
-            connections.Add((conn.Name, conn.EndpointUrl ?? "", token));
-        }
-
-        if (connections.Count > 0)
-        {
-            env["MCP_CONNECTIONS_JSON"] = JsonSerializer.Serialize(
-                connections.Select(c => new { c.Name, Url = c.Url, Token = c.Token }));
-        }
-
-        return env;
     }
 
     // ---- RUN SUMMARY EMBEDDING ----
@@ -536,33 +444,11 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
 
         var toStore = sb.ToString().TrimEnd();
 
-        // Vectorize the organized output for RAG + dependency graph. Dual-write: legacy
-        // job_run_embeddings (encrypted text) and universal content_embeddings. Best-effort.
+        // Search owns run-output indexing. This summary remains available for the upcoming
+        // authenticated Jobs-to-Search ingestion endpoint.
         var text = toStore.Length > 8000 ? toStore[..8000] : toStore;
-        if (_embeddings is { IsEnabled: true } && _embeddingStore is not null)
-        {
-            try
-            {
-                var vectors = await _embeddings.EmbedAsync(new[] { text }, ct);
-                if (vectors.Count > 0 && vectors[0].Length > 0)
-                {
-                    var embedding = RunEmbedding.Create(run.Id, job.Id, run.ProjectId, text, vectors[0], _clock.UtcNow);
-                    await _embeddingStore.AddAsync(embedding, ct);
-                }
-            }
-            catch
-            {
-                // Embedding is best-effort; a gateway/store failure must not fail the job run.
-            }
-        }
-        if (_contentIndexer is { IsEnabled: true })
-        {
-            try
-            {
-                await _contentIndexer.IndexAsync(run.ProjectId, ContentKind.RunOutput, $"run:{run.Id}", text, ct);
-            }
-            catch { /* best-effort */ }
-        }
+        _ = text;
+        await Task.CompletedTask;
     }
 
     private static IReadOnlyList<RunArtifact> MapArtifacts(IReadOnlyList<WorkloadArtifact>? artifacts)

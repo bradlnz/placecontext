@@ -1,4 +1,4 @@
-using PlaceContext.Application;
+using PlaceContext.BuildingBlocks;
 using PlaceContext.ServiceDefaults;
 using PlaceContext.Crm;
 using PlaceContext.Crm.Controllers;
@@ -6,7 +6,7 @@ using PlaceContext.Crm.Infrastructure.Persistence;
 using PlaceContext.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
-builder.Services.AddApplicationCore();
+builder.Services.AddPlaceContextCqrs();
 builder.Services.AddCrmApi();
 builder.Services.AddInfrastructureCore(builder.Configuration);
 builder.Services.AddCrmInfrastructure(builder.Configuration);

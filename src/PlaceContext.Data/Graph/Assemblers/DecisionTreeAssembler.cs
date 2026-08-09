@@ -1,5 +1,6 @@
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.ValueObjects;
+using PlaceContext.Data.Integration;
 
 namespace PlaceContext.Domain.Services;
 
@@ -34,13 +35,13 @@ public sealed class DecisionTreeAssembler
         ActivityLog ledger,
         IReadOnlyList<ToolActivity> activity,
         IReadOnlyList<RunOutputNode>? runOutputs = null,
-        IReadOnlyList<Job>? jobs = null,
-        IReadOnlyList<JobChain>? chains = null,
+        IReadOnlyList<DataJobSummary>? jobs = null,
+        IReadOnlyList<DataChainSummary>? chains = null,
         IReadOnlyList<DataMapping>? mappings = null,
         IReadOnlyList<string>? tables = null,
         IReadOnlyList<DataEntity>? entities = null,
-        IReadOnlyList<JobRun>? runs = null,
-        IReadOnlyList<RunArtifactLink>? artifacts = null,
+        IReadOnlyList<DataRunSummary>? runs = null,
+        IReadOnlyList<DataArtifactSummary>? artifacts = null,
         IReadOnlyList<RecordLinkCluster>? linkClusters = null)
     {
         const string rootId = "root";
@@ -100,7 +101,7 @@ public sealed class DecisionTreeAssembler
         // mappings). This is the structural dependency graph of the data platform — derived
         // from recorded configuration, no embeddings needed. ──
         var jobNodeIds = new Dictionary<Guid, string>();
-        foreach (var job in jobs ?? (IReadOnlyList<Job>)Array.Empty<Job>())
+        foreach (var job in jobs ?? (IReadOnlyList<DataJobSummary>)Array.Empty<DataJobSummary>())
         {
             var id = "job:" + job.Id.ToString("N");
             jobNodeIds[job.Id] = id;
@@ -108,7 +109,7 @@ public sealed class DecisionTreeAssembler
         }
 
         var chainedJobIds = new HashSet<Guid>();
-        foreach (var chain in chains ?? (IReadOnlyList<JobChain>)Array.Empty<JobChain>())
+        foreach (var chain in chains ?? (IReadOnlyList<DataChainSummary>)Array.Empty<DataChainSummary>())
         {
             var chainId = "chain:" + chain.Id.ToString("N");
             AddNode(chainId, Clip(chain.Name), TreeNodeKind.Chain, chain.Description);
@@ -193,7 +194,7 @@ public sealed class DecisionTreeAssembler
             .ToDictionary(e => e.TableName, e => entityNodeIds[e.Name], StringComparer.OrdinalIgnoreCase);
 
         var runNodeIds = new Dictionary<Guid, string>();
-        foreach (var run in runs ?? (IReadOnlyList<JobRun>)Array.Empty<JobRun>())
+        foreach (var run in runs ?? (IReadOnlyList<DataRunSummary>)Array.Empty<DataRunSummary>())
         {
             if (runNodeIds.Count >= MaxJobRuns) break;
             var id = "run:" + run.Id.ToString("N")[..8];
@@ -204,7 +205,7 @@ public sealed class DecisionTreeAssembler
             edges.Add(new DecisionTreeEdge(parentId, id, ConfidenceTag.Extracted));
         }
 
-        foreach (var art in artifacts ?? (IReadOnlyList<RunArtifactLink>)Array.Empty<RunArtifactLink>())
+        foreach (var art in artifacts ?? (IReadOnlyList<DataArtifactSummary>)Array.Empty<DataArtifactSummary>())
         {
             var id = "artifact:" + art.Id.ToString("N");
             if (seen.Contains(id)) continue;

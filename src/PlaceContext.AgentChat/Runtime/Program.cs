@@ -1,11 +1,11 @@
 using PlaceContext.AgentChat;
 using PlaceContext.AgentChat.Controllers;
-using PlaceContext.Application;
+using PlaceContext.BuildingBlocks;
 using PlaceContext.ServiceDefaults;
 using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
-builder.Services.AddApplicationCore();
+builder.Services.AddPlaceContextCqrs();
 builder.Services.AddAgentChatModule();
 builder.Services.AddAgentChatInfrastructure(builder.Configuration);
 builder.Services.AddPlaceContextServiceRuntime(builder.Configuration, typeof(AgentChatController).Assembly);

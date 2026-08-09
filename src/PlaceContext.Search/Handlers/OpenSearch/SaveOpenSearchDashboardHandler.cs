@@ -1,6 +1,7 @@
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Ports;
+using System.Text.Json;
 
 namespace PlaceContext.Application.Features;
 
@@ -22,7 +23,7 @@ public sealed class SaveOpenSearchDashboardHandler
             throw new ArgumentException("Index is required.", nameof(command));
         if (string.IsNullOrWhiteSpace(command.BucketField))
             throw new ArgumentException("A chart group field is required.", nameof(command));
-        if (ChartSpec.TryParse(command.ChartSpecJson) is null)
+        if (!IsValidChartSpec(command.ChartSpecJson))
             throw new ArgumentException("The chart result is invalid.", nameof(command));
 
         var existing = command.DashboardId is { } id ? await _store.GetAsync(id, ct) : null;
@@ -44,4 +45,33 @@ public sealed class SaveOpenSearchDashboardHandler
 
     private static string? NullIfBlank(string? value)
         => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private static bool IsValidChartSpec(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return false;
+        try
+        {
+            using var document = JsonDocument.Parse(raw);
+            var root = document.RootElement;
+            if (!root.TryGetProperty("type", out var type)
+                || type.GetString() is not ("bar" or "line" or "pie"))
+                return false;
+            if (!root.TryGetProperty("labels", out var labels)
+                || labels.ValueKind != JsonValueKind.Array
+                || labels.GetArrayLength() is < 1 or > 24)
+                return false;
+            if (!root.TryGetProperty("series", out var series)
+                || series.ValueKind != JsonValueKind.Array
+                || series.GetArrayLength() is < 1 or > 4)
+                return false;
+            return series.EnumerateArray().All(item =>
+                item.TryGetProperty("values", out var values)
+                && values.ValueKind == JsonValueKind.Array
+                && values.GetArrayLength() >= labels.GetArrayLength());
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
 }

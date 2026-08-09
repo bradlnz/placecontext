@@ -1,10 +1,10 @@
-using PlaceContext.Application;
+using PlaceContext.BuildingBlocks;
 using PlaceContext.ServiceDefaults;
 using PlaceContext.Projects;
 using PlaceContext.Projects.Controllers;
 
 var builder = WebApplication.CreateBuilder(args);
-builder.Services.AddApplicationCore();
+builder.Services.AddPlaceContextCqrs();
 builder.Services.AddProjectsModule();
 builder.Services.AddProjectsInfrastructure(builder.Configuration);
 builder.Services.AddPlaceContextServiceRuntime(

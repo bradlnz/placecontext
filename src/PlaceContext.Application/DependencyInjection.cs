@@ -3,6 +3,7 @@ using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Features;
 using PlaceContext.Application.Ports;
 using Microsoft.Extensions.DependencyInjection;
+using PlaceContext.BuildingBlocks;
 
 namespace PlaceContext.Application;
 
@@ -15,8 +16,7 @@ public static class DependencyInjection
 {
     public static IServiceCollection AddApplicationCore(this IServiceCollection services)
     {
-        services.AddScoped<IDispatcher, Dispatcher>();
-        return services;
+        return services.AddPlaceContextCqrs();
     }
 
     public static IServiceCollection AddApplication(this IServiceCollection services)

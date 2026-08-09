@@ -3,7 +3,7 @@ using Microsoft.Extensions.Options;
 using Npgsql;
 using PlaceContext.Application.Ports;
 using PlaceContext.Data.Infrastructure.Persistence;
-using PlaceContext.Vault.Domain.Repositories;
+using PlaceContext.Data.Integration;
 
 namespace PlaceContext.Data.Infrastructure.ProjectData;
 
@@ -19,26 +19,34 @@ public sealed class ProjectDatabaseConnectionResolver : IProjectDatabaseConnecti
     private const string DefaultSslMode = "Prefer";
 
     private readonly DataPersistenceOptions _options;
-    private readonly IProjectSecretRepository? _secrets;
-    private readonly ISecretProtector? _protector;
+    private readonly IDataVaultClient? _vault;
 
     public ProjectDatabaseConnectionResolver(
         IOptions<DataPersistenceOptions> options,
-        IProjectSecretRepository? secrets = null,
-        ISecretProtector? protector = null)
-        => (_options, _secrets, _protector) = (options.Value, secrets, protector);
+        IDataVaultClient? vault = null)
+        => (_options, _vault) = (options.Value, vault);
 
     public async Task<ProjectDatabaseConnection> ResolveAsync(
         Guid projectId, CancellationToken ct = default)
     {
         var values = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        if (_secrets is not null && _protector is not null)
+        if (_vault is not null)
         {
-            foreach (var (name, cipher) in await _secrets.GetCiphersAsync(projectId, ct))
+            string[] names =
+            [
+                ProjectDatabaseEnvironmentVariables.Host,
+                ProjectDatabaseEnvironmentVariables.Port,
+                ProjectDatabaseEnvironmentVariables.Name,
+                ProjectDatabaseEnvironmentVariables.Username,
+                ProjectDatabaseEnvironmentVariables.Password,
+                ProjectDatabaseEnvironmentVariables.SslMode,
+            ];
+            try
             {
-                try { values[name] = _protector.Unprotect(cipher); }
-                catch { /* A damaged unrelated Vault entry must not disable project data. */ }
+                foreach (var pair in await _vault.GetSecretsAsync(projectId, names, ct))
+                    values[pair.Key] = pair.Value;
             }
+            catch (HttpRequestException) { /* Vault unavailable: use the cluster database. */ }
         }
 
         var host = Value(values, ProjectDatabaseEnvironmentVariables.Host);

@@ -1,31 +1,32 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using PlaceContext.Application;
+using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Features;
 using PlaceContext.Application.Ports;
 using PlaceContext.Data.Contracts.Api;
+using PlaceContext.Data.Integration;
 
 namespace PlaceContext.Data.Controllers;
 
 [ApiController]
 [Route("api/v1/projects/{projectId:guid}/data-admin")]
 [Authorize(Policy = Permission.DataRead)]
-public sealed class ProjectDataAdminController(IPlaceContextService placeContext) : ControllerBase
+public sealed class ProjectDataAdminController(IDispatcher dispatcher, IDataJobsClient jobs) : ControllerBase
 {
     [HttpGet]
     public async Task<ActionResult<ProjectDataAdminResponse>> Get(Guid projectId, CancellationToken cancellationToken)
     {
-        var mappingsTask = placeContext.ListDataMappingsAsync(projectId, cancellationToken);
-        var jobsTask = placeContext.ListJobsAsync(projectId, cancellationToken);
-        var tablesTask = placeContext.ListProjectDataTablesAsync(projectId, cancellationToken);
-        var entitiesTask = placeContext.ListDataEntitiesAsync(projectId, cancellationToken);
-        var linksTask = placeContext.ListRecordLinkGroupsAsync(projectId, cancellationToken);
+        var mappingsTask = dispatcher.Query(new ListDataMappingsQuery(projectId), cancellationToken);
+        var jobsTask = jobs.GetCatalogAsync(projectId, cancellationToken);
+        var tablesTask = dispatcher.Query(new ListProjectDataTablesQuery(projectId), cancellationToken);
+        var entitiesTask = dispatcher.Query(new ListDataEntitiesQuery(projectId), cancellationToken);
+        var linksTask = dispatcher.Query(new ListRecordLinkGroupsQuery(projectId), cancellationToken);
         await Task.WhenAll(mappingsTask, jobsTask, tablesTask, entitiesTask, linksTask);
 
         return Ok(new ProjectDataAdminResponse(
             (await mappingsTask).Where(mapping => !string.Equals(mapping.SourceKind, "chain", StringComparison.OrdinalIgnoreCase)).ToArray(),
-            (await jobsTask).Select(job => new DataAdminJobResponse(job.Id, job.Name, job.ReturnType.ToString())).ToArray(),
+            (await jobsTask).Jobs.Select(job => new DataAdminJobResponse(job.Id, job.Name, job.ReturnType)).ToArray(),
             await tablesTask,
             await entitiesTask,
             await linksTask));
@@ -40,7 +41,7 @@ public sealed class ProjectDataAdminController(IPlaceContextService placeContext
         if (request.JobId == Guid.Empty || string.IsNullOrWhiteSpace(request.TargetTable) || request.Fields.Count == 0)
             return BadRequest(new { error = "A source job, target table, and at least one field are required." });
 
-        var result = await placeContext.SaveDataMappingAsync(new SaveDataMappingCommand(
+        var result = await dispatcher.Send(new SaveDataMappingCommand(
             projectId,
             request.JobId,
             request.TargetTable.Trim(),
@@ -56,7 +57,7 @@ public sealed class ProjectDataAdminController(IPlaceContextService placeContext
     public async Task<IActionResult> DeleteMapping(Guid projectId, Guid mappingId, CancellationToken cancellationToken)
     {
         _ = projectId;
-        await placeContext.DeleteDataMappingAsync(mappingId, cancellationToken);
+        await dispatcher.Send(new DeleteDataMappingCommand(mappingId), cancellationToken);
         return NoContent();
     }
 
@@ -69,7 +70,7 @@ public sealed class ProjectDataAdminController(IPlaceContextService placeContext
         if (string.IsNullOrWhiteSpace(request.Name) || string.IsNullOrWhiteSpace(request.TableName))
             return BadRequest(new { error = "An entity name and source table are required." });
 
-        var result = await placeContext.SaveDataEntityAsync(new SaveDataEntityCommand(
+        var result = await dispatcher.Send(new SaveDataEntityCommand(
             projectId,
             request.Name.Trim(),
             request.TableName.Trim(),
@@ -84,14 +85,14 @@ public sealed class ProjectDataAdminController(IPlaceContextService placeContext
     public async Task<IActionResult> DeleteEntity(Guid projectId, Guid entityId, CancellationToken cancellationToken)
     {
         _ = projectId;
-        await placeContext.DeleteDataEntityAsync(entityId, cancellationToken);
+        await dispatcher.Send(new DeleteDataEntityCommand(entityId), cancellationToken);
         return NoContent();
     }
 
     [HttpPost("links/rescan")]
     public async Task<ActionResult<object>> Rescan(Guid projectId, CancellationToken cancellationToken)
     {
-        var result = await placeContext.RescanRecordLinksAsync(projectId, cancellationToken);
+        var result = await dispatcher.Send(new RescanRecordLinksCommand(projectId), cancellationToken);
         return Ok(result);
     }
 }

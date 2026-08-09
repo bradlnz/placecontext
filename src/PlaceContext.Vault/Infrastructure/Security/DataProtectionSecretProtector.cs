@@ -4,15 +4,15 @@ using PlaceContext.Application.Ports;
 
 namespace PlaceContext.Vault.Infrastructure.Security;
 
-/// <summary>Vault secrets: thin façade over <see cref="IDataEncryptor"/> with the vault purpose.</summary>
+/// <summary>Vault secrets encrypted with the service-owned Data Protection purpose.</summary>
 public sealed class DataProtectionSecretProtector : ISecretProtector
 {
     private const string Prefix = "pcenc1.";
+    private const string ProtectionPurpose = "placecontext.data.vault.secrets.v1";
     private readonly IDataProtector _protector;
 
     public DataProtectionSecretProtector(IDataProtectionProvider provider)
-        => _protector = provider.CreateProtector(
-            "placecontext.data." + DataEncryptionPurpose.Vault);
+        => _protector = provider.CreateProtector(ProtectionPurpose);
 
     public string Protect(string plaintext)
     {

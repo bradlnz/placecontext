@@ -1,10 +1,10 @@
-using PlaceContext.Application;
+using PlaceContext.BuildingBlocks;
 using PlaceContext.ServiceDefaults;
 using PlaceContext.Vault;
 using PlaceContext.Vault.Controllers;
 
 var builder = WebApplication.CreateBuilder(args);
-builder.Services.AddApplicationCore();
+builder.Services.AddPlaceContextCqrs();
 builder.Services.AddVaultApi();
 builder.Services.AddVaultInfrastructure(builder.Configuration);
 builder.Services.AddPlaceContextServiceRuntime(builder.Configuration, typeof(VaultController).Assembly);

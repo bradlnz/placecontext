@@ -425,7 +425,7 @@ public sealed class TriggerSchedulerService : BackgroundService
             try
             {
                 await using var scope = _scopes.CreateAsyncScope();
-                var runner = scope.ServiceProvider.GetRequiredService<ILaunchpadRunner>();
+                var runner = scope.ServiceProvider.GetRequiredService<PlaceContext.Jobs.Integration.IJobLaunchpadClient>();
                 await runner.RunLaunchpadAsync(projectId, triggerName, prompt, sourceTable, chainId, CancellationToken.None);
             }
             finally { _tenantAccessor.Clear(); }

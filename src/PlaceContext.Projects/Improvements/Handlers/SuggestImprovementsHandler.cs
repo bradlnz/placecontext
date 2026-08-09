@@ -2,17 +2,18 @@ using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Domain.Repositories;
 using PlaceContext.Domain.ValueObjects;
+using PlaceContext.Projects.Integration;
 
 namespace PlaceContext.Application.Features;
 
 public sealed class SuggestImprovementsHandler
     : IQueryHandler<SuggestImprovementsQuery, ImprovementsView>
 {
-    private readonly IDecisionTreeProvider _tree;
+    private readonly IProjectGraphClient _tree;
     private readonly IActivityLogRepository _ledgers;
 
     public SuggestImprovementsHandler(
-        IDecisionTreeProvider tree,
+        IProjectGraphClient tree,
         IActivityLogRepository ledgers)
     {
         _tree = tree;
@@ -24,16 +25,16 @@ public sealed class SuggestImprovementsHandler
         CancellationToken ct = default)
     {
         var projectId = ProjectId.From(query.ProjectId);
-        var tree = await _tree.BuildAsync(projectId, ct);
+        var hotspots = await _tree.GetHotspotsAsync(projectId.Value, ct);
         var ledger = await _ledgers.GetForProjectAsync(projectId, ct);
         var items = new List<ImprovementView>();
 
-        foreach (var hotspot in tree.Hotspots())
+        foreach (var hotspot in hotspots)
         {
             items.Add(new ImprovementView(
                 "churn-hotspot",
                 hotspot.Degree >= 6 ? "high" : "medium",
-                $"Churn hotspot: {hotspot.Label.Value}",
+                $"Churn hotspot: {hotspot.Label}",
                 $"Touched by {hotspot.Degree} changes. Consider refactoring or adding regression tests to stabilize it."));
         }
 

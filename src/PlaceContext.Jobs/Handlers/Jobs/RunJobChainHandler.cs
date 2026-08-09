@@ -55,11 +55,11 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
     private readonly IJobsUnitOfWork _uow;
     private readonly IClock _clock;
     private readonly IJobRunner _jobRunner;
-    private readonly IClientCommunicationSender? _communications;
+    private readonly IJobCommunicationsClient? _communications;
     private readonly IPermissionService? _permissions;
-    private readonly ICrmClientRepository? _crmClients;
+    private readonly IJobCrmClient? _crmClients;
     private readonly IReadOnlyList<IChainRunCompletionObserver> _completionObservers;
-    private readonly IRunArtifactLinkRepository? _runArtifacts;
+    private readonly IJobArtifactQueryClient? _runArtifacts;
     private readonly IChainContextStore? _contextStore;
     private readonly ILogger<RunJobChainHandler>? _log;
 
@@ -67,11 +67,11 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
         IJobsUnitOfWork uow, IClock clock, IJobRunner jobRunner,
         // Optional so unit tests construct the handler unchanged; DI always supplies it.
         IJobDataClient? dataClient = null,
-        IClientCommunicationSender? communications = null,
+        IJobCommunicationsClient? communications = null,
         IPermissionService? permissions = null,
-        ICrmClientRepository? crmClients = null,
+        IJobCrmClient? crmClients = null,
         IEnumerable<IChainRunCompletionObserver>? completionObservers = null,
-        IRunArtifactLinkRepository? runArtifacts = null,
+        IJobArtifactQueryClient? runArtifacts = null,
         IChainContextStore? contextStore = null,
         ILogger<RunJobChainHandler>? log = null)
     {
@@ -461,8 +461,7 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
                 if (step.RunId is not { } stepRunId)
                     continue;
 
-                var artifacts = await _runArtifacts!.ListForRunAsync(stepRunId, ct);
-                if (artifacts.Any(a => a.Kind == PostJobActionKind.HtmlReport))
+                if (await _runArtifacts!.HasHtmlReportAsync(stepRunId, ct))
                     return run;
             }
         }
@@ -715,16 +714,16 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
         return null;
     }
 
-    private async Task<CrmClient?> LoadChainCustomerAsync(ChainRun run, CancellationToken ct)
+    private async Task<JobCrmCustomer?> LoadChainCustomerAsync(ChainRun run, CancellationToken ct)
     {
         if (run.CrmClientId is not { } clientId) return null;
         if (_crmClients is null)
             throw new InvalidOperationException("CRM customer lookup is unavailable.");
-        return await _crmClients.GetByIdAsync(clientId, ct)
+        return await _crmClients.GetCustomerAsync(clientId, ct)
             ?? throw new InvalidOperationException($"CRM customer {clientId} no longer exists.");
     }
 
-    internal static string? AddCustomerContext(string? payload, CrmClient? customer)
+    internal static string? AddCustomerContext(string? payload, JobCrmCustomer? customer)
     {
         if (customer is null) return payload;
         var root = string.IsNullOrWhiteSpace(payload)
@@ -934,11 +933,11 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
     /// the explicit base64 key or set <c>isBinary</c>/<c>isBase64</c> to true. URLs are deliberately
     /// not fetched, avoiding an SSRF path from workload output into the portal network.
     /// </summary>
-    internal static IReadOnlyList<ClientEmailAttachment> ResolveEmailAttachments(
+    internal static IReadOnlyList<JobEmailAttachment> ResolveEmailAttachments(
         string attachmentPath,
         string? payload)
     {
-        if (string.IsNullOrWhiteSpace(attachmentPath)) return Array.Empty<ClientEmailAttachment>();
+        if (string.IsNullOrWhiteSpace(attachmentPath)) return Array.Empty<JobEmailAttachment>();
         if (string.IsNullOrWhiteSpace(payload))
             throw new InvalidOperationException("Email attachments need a previous-stage JSON payload.");
 
@@ -957,11 +956,11 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
         var values = value.ValueKind == JsonValueKind.Array
             ? value.EnumerateArray().Select(item => item.Clone()).ToList()
             : new List<JsonElement> { value.Clone() };
-        if (values.Count == 0) return Array.Empty<ClientEmailAttachment>();
+        if (values.Count == 0) return Array.Empty<JobEmailAttachment>();
         if (values.Count > 20)
             throw new InvalidOperationException("An email action can attach at most 20 files.");
 
-        var result = new List<ClientEmailAttachment>(values.Count);
+        var result = new List<JobEmailAttachment>(values.Count);
         long totalBytes = 0;
         foreach (var (item, index) in values.Select((item, index) => (item, index)))
         {
@@ -1000,7 +999,7 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
             var contentType = JsonString(item, "contentType", "mimeType");
             if (string.IsNullOrWhiteSpace(contentType))
                 contentType = binary ? "application/octet-stream" : "text/plain; charset=utf-8";
-            result.Add(new ClientEmailAttachment(name, contentType, Convert.ToBase64String(bytes)));
+            result.Add(new JobEmailAttachment(name, contentType, Convert.ToBase64String(bytes)));
         }
         return result;
     }

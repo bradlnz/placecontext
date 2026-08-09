@@ -1,12 +1,12 @@
 using PlaceContext.Agents;
 using PlaceContext.Agents.Controllers;
 using PlaceContext.Agents.Infrastructure.Persistence;
-using PlaceContext.Application;
+using PlaceContext.BuildingBlocks;
 using PlaceContext.ServiceDefaults;
 using PlaceContext.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
-builder.Services.AddApplicationCore();
+builder.Services.AddPlaceContextCqrs();
 builder.Services.AddAgentsApi();
 builder.Services.AddAgentsInfrastructure(builder.Configuration);
 builder.Services.AddInfrastructureCore(builder.Configuration);

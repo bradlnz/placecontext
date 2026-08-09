@@ -9,7 +9,8 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="PlaceContext.Vault.Domain.csproj" />
-    <ProjectReference Include="..\PlaceContext.Application\PlaceContext.Application.csproj" />
+    <ProjectReference Include="PlaceContext.Vault.Contracts.csproj" />
+    <ProjectReference Include="..\PlaceContext.BuildingBlocks\PlaceContext.BuildingBlocks.csproj" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.9" />

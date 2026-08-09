@@ -37,15 +37,6 @@ public sealed class EntityTagService
         _log = log;
     }
 
-    public async Task TagRunAsync(Job job, JobRun run, CancellationToken ct = default)
-        => await TagRunOutputAsync(
-            job.Id,
-            run.Id,
-            run.ProjectId,
-            PrimaryArtifact(run),
-            RunDocuments(run),
-            ct);
-
     public async Task TagRunOutputAsync(
         Guid jobId,
         Guid runId,
@@ -234,13 +225,4 @@ public sealed class EntityTagService
         }
     }
 
-    private static string? PrimaryArtifact(JobRun run) =>
-        run.ReduceResult?.Artifact
-        ?? run.ShardResults.FirstOrDefault(result => !string.IsNullOrWhiteSpace(result.Artifact))?.Artifact;
-
-    private static IReadOnlyList<RunDocumentContent> RunDocuments(JobRun run) =>
-        run.ShardResults.SelectMany(result => result.Artifacts)
-            .Concat(run.ReduceResult?.Artifacts ?? Array.Empty<RunArtifact>())
-            .Select(artifact => new RunDocumentContent(artifact.Name, artifact.Content, artifact.IsBinary))
-            .ToList();
 }

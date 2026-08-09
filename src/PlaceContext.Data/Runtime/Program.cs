@@ -1,10 +1,10 @@
-using PlaceContext.Application;
+using PlaceContext.BuildingBlocks;
 using PlaceContext.ServiceDefaults;
 using PlaceContext.Data;
 using PlaceContext.Data.Controllers;
 
 var builder = WebApplication.CreateBuilder(args);
-builder.Services.AddApplicationCore();
+builder.Services.AddPlaceContextCqrs();
 builder.Services.AddDataApi();
 builder.Services.AddDataInfrastructure(builder.Configuration);
 builder.Services.AddPlaceContextServiceRuntime(builder.Configuration, typeof(DataController).Assembly);

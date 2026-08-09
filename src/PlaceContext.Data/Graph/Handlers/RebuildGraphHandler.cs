@@ -10,11 +10,11 @@ public sealed class RebuildGraphHandler : ICommandHandler<RebuildGraphCommand, G
 {
     private readonly IProjectRepository _projects;
     private readonly IDecisionTreeProvider _tree;
-    private readonly IUnitOfWork _uow;
+    private readonly IDataUnitOfWork _uow;
     private readonly IClock _clock;
 
     public RebuildGraphHandler(
-        IProjectRepository projects, IDecisionTreeProvider tree, IUnitOfWork uow, IClock clock)
+        IProjectRepository projects, IDecisionTreeProvider tree, IDataUnitOfWork uow, IClock clock)
     {
         _projects = projects;
         _tree = tree;

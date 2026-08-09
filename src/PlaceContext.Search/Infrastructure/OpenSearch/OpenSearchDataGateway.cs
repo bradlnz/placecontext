@@ -125,7 +125,7 @@ public sealed class OpenSearchDataGateway : IOpenSearchDataGateway
             .Select(ParseHit)
             .ToList();
         var chart = ParseChart(root, request);
-        return new OpenSearchSearchView(total, took, hits, chart?.ToJson());
+        return new OpenSearchSearchView(total, took, hits, chart);
     }
 
     public async Task CreateIndexAsync(
@@ -247,7 +247,7 @@ public sealed class OpenSearchDataGateway : IOpenSearchDataGateway
         return (count, firstReason);
     }
 
-    public async Task<ProjectQueryResult> SearchSqlAsync(
+    public async Task<OpenSearchSqlResult> SearchSqlAsync(
         Guid projectId, string sql, CancellationToken ct = default)
     {
         var trimmed = (sql ?? "").Trim();
@@ -278,7 +278,7 @@ public sealed class OpenSearchDataGateway : IOpenSearchDataGateway
             || first.Equals("DESCRIBE", StringComparison.OrdinalIgnoreCase);
     }
 
-    private static ProjectQueryResult ParseSqlResult(JsonElement root)
+    private static OpenSearchSqlResult ParseSqlResult(JsonElement root)
     {
         if (!TryGetSqlPayload(root, out var payload))
             throw new InvalidOperationException(
@@ -297,7 +297,7 @@ public sealed class OpenSearchDataGateway : IOpenSearchDataGateway
                            && cursor.ValueKind == JsonValueKind.String
                            && !string.IsNullOrWhiteSpace(cursor.GetString()))
             || total > rows.Count;
-        return new ProjectQueryResult(columns, rows, 0, hasMore);
+        return new OpenSearchSqlResult(columns, rows, 0, hasMore);
     }
 
     private static bool TryGetSqlPayload(JsonElement root, out JsonElement payload)
@@ -574,7 +574,7 @@ public sealed class OpenSearchDataGateway : IOpenSearchDataGateway
                 ["terms"] = new JsonObject
                 {
                     ["field"] = bucketField,
-                    ["size"] = ChartSpec.MaxLabels,
+                    ["size"] = 24,
                     ["order"] = new JsonObject { ["_count"] = "desc" },
                 },
             };
@@ -601,7 +601,7 @@ public sealed class OpenSearchDataGateway : IOpenSearchDataGateway
         return root;
     }
 
-    private static ChartSpec? ParseChart(JsonElement root, OpenSearchSearchRequest request)
+    private static string? ParseChart(JsonElement root, OpenSearchSearchRequest request)
     {
         if (string.IsNullOrWhiteSpace(request.BucketField)
             || !root.TryGetProperty("aggregations", out var aggregations)
@@ -625,11 +625,18 @@ public sealed class OpenSearchDataGateway : IOpenSearchDataGateway
                     : 0);
         }
         if (labels.Count == 0) return null;
-        return new ChartSpec(
-            request.ChartType is "bar" or "line" or "pie" ? request.ChartType : "bar",
-            request.QueryText,
-            labels,
-            new[] { new ChartSeries(request.MetricType, values) });
+        var spec = new JsonObject
+        {
+            ["type"] = request.ChartType is "bar" or "line" or "pie" ? request.ChartType : "bar",
+            ["title"] = request.QueryText,
+            ["labels"] = JsonSerializer.SerializeToNode(labels),
+            ["series"] = new JsonArray(new JsonObject
+            {
+                ["name"] = request.MetricType,
+                ["values"] = JsonSerializer.SerializeToNode(values),
+            }),
+        };
+        return spec.ToJsonString();
     }
 
     private static OpenSearchHitView ParseHit(JsonElement hit)

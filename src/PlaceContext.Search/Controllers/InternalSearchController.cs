@@ -1,0 +1,57 @@
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using PlaceContext.Application.Dtos;
+using PlaceContext.Application.Ports;
+
+namespace PlaceContext.Search.Controllers;
+
+[ApiController]
+[Route("api/search/internal")]
+[Authorize(AuthenticationSchemes = "ApiKey")]
+public sealed class InternalSearchController(
+    IOpenSearchDataGateway gateway,
+    IOpenSearchConnectionResolver connectionResolver) : ControllerBase
+{
+    [HttpGet("projects/{projectId:guid}/job-environment")]
+    public async Task<IActionResult> JobEnvironment(Guid projectId, CancellationToken ct)
+        => Ok(await connectionResolver.GetJobEnvironmentAsync(projectId, ct));
+
+    [HttpGet("projects/{projectId:guid}/indices")]
+    public async Task<IActionResult> Indices(Guid projectId, CancellationToken ct)
+        => Ok(await gateway.ListIndicesAsync(projectId, ct));
+
+    [HttpPost("projects/{projectId:guid}/sql")]
+    public async Task<IActionResult> Sql(Guid projectId, DataSearchSqlRequest request, CancellationToken ct)
+        => Ok(await gateway.SearchSqlAsync(projectId, request.Sql, ct));
+
+    [HttpPut("projects/{projectId:guid}/indices")]
+    public async Task<IActionResult> ReplaceIndex(
+        Guid projectId,
+        ReplaceDataSearchIndexRequest request,
+        CancellationToken ct)
+    {
+        await gateway.DeleteIndexAsync(projectId, request.IndexName, ct);
+        await gateway.CreateIndexAsync(
+            projectId,
+            request.IndexName,
+            request.MappingFields.Select(field => new OpenSearchMappingField(field.Name, field.OpenSearchType)).ToList(),
+            ct);
+        var indexed = await gateway.IndexBulkAsync(
+            projectId,
+            request.IndexName,
+            request.ColumnNames,
+            request.Rows,
+            ct,
+            request.JsonColumnNames);
+        return Ok(new { indexed });
+    }
+
+    public sealed record DataSearchSqlRequest(string Sql);
+    public sealed record DataSearchMappingField(string Name, string OpenSearchType);
+    public sealed record ReplaceDataSearchIndexRequest(
+        string IndexName,
+        IReadOnlyList<DataSearchMappingField> MappingFields,
+        IReadOnlyList<string> ColumnNames,
+        IReadOnlyList<IReadOnlyList<string?>> Rows,
+        IReadOnlyList<string> JsonColumnNames);
+}

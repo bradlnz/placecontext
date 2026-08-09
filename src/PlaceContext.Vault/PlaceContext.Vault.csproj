@@ -6,7 +6,6 @@
   <ItemGroup>
     <ProjectReference Include="PlaceContext.Vault.Contracts.csproj" />
     <ProjectReference Include="PlaceContext.Vault.Domain.csproj" />
-    <ProjectReference Include="..\PlaceContext.Application\PlaceContext.Application.csproj" />
   </ItemGroup>
   <ItemGroup><Compile Remove="bin/**/*.cs;obj/**/*.cs;Contracts/**/*.cs;Domain/**/*.cs;Infrastructure/**/*.cs;Runtime/**/*.cs" /></ItemGroup>
   <ItemGroup><FrameworkReference Include="Microsoft.AspNetCore.App" /></ItemGroup>

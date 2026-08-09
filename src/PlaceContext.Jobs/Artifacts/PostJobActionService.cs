@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.Repositories;
 using PlaceContext.Domain.ValueObjects;
+using PlaceContext.Jobs.Integration;
 
 namespace PlaceContext.Application.Features;
 
@@ -16,27 +17,21 @@ namespace PlaceContext.Application.Features;
 /// </summary>
 public sealed class PostJobActionService
 {
-    private readonly IObjectStore _store;
-    private readonly IRunArtifactLinkRepository _links;
-    private readonly IArtifactsUnitOfWork _uow;
+    private readonly IJobArtifactClient _artifacts;
     private readonly IClock _clock;
     private readonly ILogger<PostJobActionService>? _log;
-    private readonly IContentIndexer? _contentIndexer;
 
-    public PostJobActionService(IObjectStore store, IRunArtifactLinkRepository links, IArtifactsUnitOfWork uow, IClock clock,
-        ILogger<PostJobActionService>? log = null, IContentIndexer? contentIndexer = null)
+    public PostJobActionService(IJobArtifactClient artifacts, IClock clock,
+        ILogger<PostJobActionService>? log = null)
     {
-        _store = store;
-        _links = links;
-        _uow = uow;
+        _artifacts = artifacts;
         _clock = clock;
         _log = log;
-        _contentIndexer = contentIndexer;
     }
 
     public async Task RunAsync(Job job, JobRun run, CancellationToken ct = default)
     {
-        if (!_store.IsEnabled)
+        if (!_artifacts.IsEnabled)
         {
             // Artifacts are mandatory (driven by the job's return type) — a disabled object store
             // means none can be produced, which must be loudly visible, not a silent skip.
@@ -45,7 +40,7 @@ public sealed class PostJobActionService
             return;
         }
 
-        var bucket = _store.ReportsBucket;
+        const string bucket = "artifacts-service";
         var added = false;
 
         // HTML the job itself returned is always captured — no configuration needed.
@@ -92,7 +87,7 @@ public sealed class PostJobActionService
             }
         }
 
-        if (added) await _uow.SaveChangesAsync(ct);
+        _ = added;
     }
 
     // ── The mandatory, return-type-driven primary artifact ──────────────────────────────────────────
@@ -297,27 +292,10 @@ public sealed class PostJobActionService
     private async Task<bool> StoreAsync(Job job, JobRun run, PostJobActionKind kind,
         PostJobBuiltFile file, string bucket, CancellationToken ct)
     {
-        var key = $"runs/{run.Id:N}/{file.FileName}";
-        await _store.PutAsync(bucket, key, file.Content, file.ContentType, ct);
-        await _links.AddAsync(RunArtifactLink.Create(
-            run.Id, job.Id, run.ProjectId, kind, file.Title, bucket, key,
-            file.ContentType, file.Content.LongLength, _clock.UtcNow), ct);
-
-        // Index artifact text for RAG search.
-        if (_contentIndexer is { IsEnabled: true } && file.Content.Length > 0)
-        {
-            try
-            {
-                var bytes = file.Content.Length > 8000 ? file.Content[..8000] : file.Content;
-                var text = Encoding.UTF8.GetString(bytes);
-                if (!string.IsNullOrWhiteSpace(text))
-                    await _contentIndexer.IndexAsync(
-                        run.ProjectId, ContentKind.Document,
-                        $"run/{run.Id:N}/{file.FileName}",
-                        $"{job.Name} — {file.Title}\n\n{text}", ct);
-            }
-            catch { }
-        }
+        _ = bucket;
+        await _artifacts.StoreAsync(
+            run.ProjectId, job.Id, run.Id, job.Name, kind, file.FileName,
+            file.Title, file.ContentType, file.Content, ct);
 
         return true;
     }

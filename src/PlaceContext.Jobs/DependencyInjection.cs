@@ -32,7 +32,6 @@ public static class DependencyInjection
     {
         services.AddScoped<RunStatusWatchService>();
         services.AddScoped<PostJobActionService>();
-        services.AddScoped<JobRunDataRecorder>();
         services.AddScoped<EventDispatchService>();
         services.AddScoped<IEventDispatcher>(provider => provider.GetRequiredService<EventDispatchService>());
         services.AddScoped<ScheduleScanService>();

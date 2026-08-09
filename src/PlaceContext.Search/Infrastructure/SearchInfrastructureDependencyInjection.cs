@@ -7,8 +7,10 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using PlaceContext.Application.Ports;
 using PlaceContext.Domain.Repositories;
 using PlaceContext.Search.Infrastructure.OpenSearch;
+using PlaceContext.Search.Infrastructure.Integration;
 using PlaceContext.Search.Infrastructure.Persistence;
 using PlaceContext.Search.Infrastructure.Security;
+using PlaceContext.Search.Integration;
 
 namespace PlaceContext.Search;
 
@@ -49,6 +51,7 @@ public static class SearchInfrastructureDependencyInjection
             configuration.GetSection("PlaceContext:OpenSearch"));
         services.AddScoped<IOpenSearchDashboardStore, EfOpenSearchDashboardStore>();
         services.AddScoped<IOpenSearchConnectionResolver, OpenSearchConnectionResolver>();
+        services.AddScoped<ISearchSecretProvider, HttpSearchSecretProvider>();
         services.AddScoped<IOpenSearchDataGateway, OpenSearchDataGateway>();
         services.AddScoped<IOpenSearchSyncGateway, OpenSearchSyncGateway>();
         services.AddHttpClient("opensearch", client =>

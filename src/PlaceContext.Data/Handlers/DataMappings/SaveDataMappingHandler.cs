@@ -4,24 +4,23 @@ using PlaceContext.Application.Ports;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.Repositories;
 using PlaceContext.Domain.ValueObjects;
+using PlaceContext.Data.Integration;
 
 namespace PlaceContext.Application.Features;
 
 public sealed class SaveDataMappingHandler : ICommandHandler<SaveDataMappingCommand, DataMappingView>
 {
     private readonly IDataMappingRepository _mappings;
-    private readonly IJobRepository _jobs;
-    private readonly IJobChainRepository _chains;
+    private readonly IDataJobsClient _jobs;
     private readonly IDataUnitOfWork _uow;
     private readonly IClock _clock;
     private readonly IProjectDataStore? _store;
 
-    public SaveDataMappingHandler(IDataMappingRepository mappings, IJobRepository jobs,
-        IJobChainRepository chains, IDataUnitOfWork uow, IClock clock, IProjectDataStore? store = null)
+    public SaveDataMappingHandler(IDataMappingRepository mappings, IDataJobsClient jobs,
+        IDataUnitOfWork uow, IClock clock, IProjectDataStore? store = null)
     {
         _mappings = mappings;
         _jobs = jobs;
-        _chains = chains;
         _uow = uow;
         _clock = clock;
         _store = store;
@@ -31,10 +30,11 @@ public sealed class SaveDataMappingHandler : ICommandHandler<SaveDataMappingComm
     {
         // The source is a job's runs or a chain's final output — either way it must exist in
         // this project.
+        var catalog = await _jobs.GetCatalogAsync(command.ProjectId, ct);
         string sourceName;
         if (command.SourceKind == "chain")
         {
-            var chain = await _chains.GetByIdAsync(command.JobId, ct)
+            var chain = catalog.Chains.FirstOrDefault(item => item.Id == command.JobId)
                 ?? throw new InvalidOperationException($"Chain {command.JobId} not found.");
             if (chain.ProjectId != command.ProjectId)
                 throw new InvalidOperationException("The mapping's chain must belong to the same project.");
@@ -42,7 +42,7 @@ public sealed class SaveDataMappingHandler : ICommandHandler<SaveDataMappingComm
         }
         else
         {
-            var job = await _jobs.GetByIdAsync(command.JobId, ct)
+            var job = catalog.Jobs.FirstOrDefault(item => item.Id == command.JobId)
                 ?? throw new InvalidOperationException($"Job {command.JobId} not found.");
             if (job.ProjectId != command.ProjectId)
                 throw new InvalidOperationException("The mapping's job must belong to the same project.");

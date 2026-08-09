@@ -7,7 +7,6 @@ using Microsoft.Extensions.Logging;
 using Npgsql;
 using PlaceContext.Application.Ports;
 using PlaceContext.Application.Shared;
-using PlaceContext.Application.Agents;
 using PlaceContext.Data.Infrastructure.Persistence;
 
 namespace PlaceContext.Data.Infrastructure.ProjectData;
@@ -290,7 +289,7 @@ public sealed class NpgsqlProjectDataStore : IProjectDataStore
             countCmd.Transaction = tx;
             countCmd.CommandText = $"SELECT count(*) FROM {quoted}{whereSql}";
             // The search term is always bound as a parameter — never interpolated into the SQL text.
-            if (hasSearch) countCmd.Parameters.AddWithValue(AgentToolNames.Search, $"%{search}%");
+            if (hasSearch) countCmd.Parameters.AddWithValue("search", $"%{search}%");
             total = Convert.ToInt64(await countCmd.ExecuteScalarAsync(ct) ?? 0L);
         }
 
@@ -312,7 +311,7 @@ public sealed class NpgsqlProjectDataStore : IProjectDataStore
             else
             {
                 pageCmd.CommandText = $"SELECT * FROM {quoted}{whereSql}{orderBy} LIMIT @take OFFSET @skip";
-                if (hasSearch) pageCmd.Parameters.AddWithValue(AgentToolNames.Search, $"%{search}%");
+                if (hasSearch) pageCmd.Parameters.AddWithValue("search", $"%{search}%");
                 pageCmd.Parameters.AddWithValue("take", pageSize);
                 pageCmd.Parameters.AddWithValue("skip", offset);
             }

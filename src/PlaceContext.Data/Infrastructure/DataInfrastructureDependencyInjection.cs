@@ -9,6 +9,8 @@ using PlaceContext.Application.Ports;
 using PlaceContext.Data.Infrastructure.Persistence;
 using PlaceContext.Data.Infrastructure.ProjectData;
 using PlaceContext.Data.Infrastructure.Security;
+using PlaceContext.Data.Infrastructure.Integration;
+using PlaceContext.Data.Integration;
 using PlaceContext.Domain.Repositories;
 
 namespace PlaceContext.Data;
@@ -52,6 +54,10 @@ public static class DataInfrastructureDependencyInjection
         services.AddScoped<IRecordLinkStore, EfRecordLinkStore>();
         services.AddScoped<IProjectChartRepository, EfProjectChartRepository>();
         services.AddScoped<ISavedQueryStore, EfSavedQueryStore>();
+        services.AddScoped<IDataJobsClient, HttpDataJobsClient>();
+        services.AddScoped<IDataSearchClient, HttpDataSearchClient>();
+        services.AddScoped<IDataVaultClient, HttpDataVaultClient>();
+        services.AddHttpClient();
         services.AddScoped<IProjectDatabaseConnectionResolver, ProjectDatabaseConnectionResolver>();
         services.AddScoped<IProjectDataStore, NpgsqlProjectDataStore>();
         return services;

@@ -10,4 +10,5 @@
     <ProjectReference Include="PlaceContext.Projects.Infrastructure.csproj" />
   </ItemGroup>
   <ItemGroup><ProjectReference Include="..\PlaceContext.ServiceDefaults\PlaceContext.ServiceDefaults.csproj" /></ItemGroup>
+  <ItemGroup><ProjectReference Include="..\PlaceContext.BuildingBlocks\PlaceContext.BuildingBlocks.csproj" /></ItemGroup>
 </Project>

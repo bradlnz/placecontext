@@ -12,6 +12,16 @@ public sealed class InternalVaultController(
     IProjectSecretRepository secrets,
     ISecretProtector protector) : ControllerBase
 {
+    [HttpGet("projects/{projectId:guid}/secrets/resolve-all")]
+    public async Task<IActionResult> ResolveAll(Guid projectId, CancellationToken cancellationToken)
+    {
+        var ciphers = await secrets.GetCiphersAsync(projectId, cancellationToken);
+        return Ok(ciphers.ToDictionary(
+            pair => pair.Key,
+            pair => protector.Unprotect(pair.Value),
+            StringComparer.Ordinal));
+    }
+
     [HttpPost("projects/{projectId:guid}/secrets/resolve")]
     public async Task<IActionResult> Resolve(
         Guid projectId,

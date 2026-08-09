@@ -5,11 +5,11 @@ using PlaceContext.Application.Ports;
 namespace PlaceContext.Application.Features;
 
 public sealed class SearchOpenSearchSqlHandler
-    : IQueryHandler<SearchOpenSearchSqlQuery, ProjectQueryResult>
+    : IQueryHandler<SearchOpenSearchSqlQuery, OpenSearchSqlResult>
 {
     private readonly IOpenSearchDataGateway _gateway;
     public SearchOpenSearchSqlHandler(IOpenSearchDataGateway gateway) => _gateway = gateway;
-    public Task<ProjectQueryResult> HandleAsync(
+    public Task<OpenSearchSqlResult> HandleAsync(
         SearchOpenSearchSqlQuery query, CancellationToken ct = default)
         => _gateway.SearchSqlAsync(query.ProjectId, query.Sql, ct);
 }

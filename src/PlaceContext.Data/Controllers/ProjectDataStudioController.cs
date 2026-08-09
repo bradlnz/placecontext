@@ -1,9 +1,10 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using PlaceContext.Application;
+using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Features;
 using PlaceContext.Application.Ports;
 using PlaceContext.Data.Contracts.Api;
+using PlaceContext.Data.Integration;
 
 namespace PlaceContext.Data.Controllers;
 
@@ -12,16 +13,16 @@ namespace PlaceContext.Data.Controllers;
 [Authorize(Policy = Permission.DataRead)]
 [Produces("application/json")]
 [ResponseCache(Location = ResponseCacheLocation.None, NoStore = true)]
-public sealed class ProjectDataStudioController(IPlaceContextService placeContext) : ControllerBase
+public sealed class ProjectDataStudioController(IDispatcher dispatcher, IDataSearchClient search) : ControllerBase
 {
     [HttpGet]
     public async Task<ActionResult<ProjectDataStudioResponse>> Get(
         Guid projectId,
         CancellationToken cancellationToken)
     {
-        var tablesTask = placeContext.ListProjectDataTablesAsync(projectId, cancellationToken);
-        var indicesTask = placeContext.ListOpenSearchIndicesAsync(projectId, cancellationToken);
-        var queriesTask = placeContext.ListSavedQueriesAsync(projectId, cancellationToken);
+        var tablesTask = dispatcher.Query(new ListProjectDataTablesQuery(projectId), cancellationToken);
+        var indicesTask = search.ListIndicesAsync(projectId, cancellationToken);
+        var queriesTask = dispatcher.Query(new ListSavedQueriesQuery(projectId), cancellationToken);
         await Task.WhenAll(tablesTask, indicesTask, queriesTask);
         return Ok(new ProjectDataStudioResponse(
             await tablesTask,
@@ -46,9 +47,9 @@ public sealed class ProjectDataStudioController(IPlaceContextService placeContex
         try
         {
             var result = string.Equals(request.Source, "opensearch", StringComparison.OrdinalIgnoreCase)
-                ? await placeContext.SearchOpenSearchSqlAsync(projectId, request.Sql, cancellationToken)
+                ? await search.QueryAsync(projectId, request.Sql, cancellationToken)
                 : string.Equals(request.Source, "postgres", StringComparison.OrdinalIgnoreCase)
-                    ? await placeContext.ExecuteProjectDataAsync(projectId, request.Sql, cancellationToken)
+                    ? await dispatcher.Send(new ExecuteProjectDataCommand(projectId, request.Sql), cancellationToken)
                     : null;
             return result is null
                 ? BadRequest(new { error = "Source must be postgres or opensearch." })
@@ -69,11 +70,8 @@ public sealed class ProjectDataStudioController(IPlaceContextService placeContex
     {
         if (string.IsNullOrWhiteSpace(request.Name) || string.IsNullOrWhiteSpace(request.Sql))
             return BadRequest(new { error = "A name and SQL are required." });
-        return Ok(await placeContext.SaveSavedQueryAsync(
-            projectId,
-            request.Name.Trim(),
-            request.Sql,
-            cancellationToken));
+        return Ok(await dispatcher.Send(new SaveSavedQueryCommand(
+            projectId, request.Name.Trim(), request.Sql), cancellationToken));
     }
 
     [HttpDelete("saved-queries/{queryId:guid}")]
@@ -84,7 +82,7 @@ public sealed class ProjectDataStudioController(IPlaceContextService placeContex
         CancellationToken cancellationToken)
     {
         _ = projectId;
-        return await placeContext.DeleteSavedQueryAsync(queryId, cancellationToken)
+        return await dispatcher.Send(new DeleteSavedQueryCommand(queryId), cancellationToken)
             ? NoContent()
             : NotFound(new { error = "The saved query does not exist." });
     }
@@ -98,11 +96,8 @@ public sealed class ProjectDataStudioController(IPlaceContextService placeContex
     {
         if (string.IsNullOrWhiteSpace(request.Name) || request.Columns.Count == 0)
             return BadRequest(new { error = "A table name and at least one column are required." });
-        await placeContext.CreateProjectTableAsync(
-            projectId,
-            request.Name.Trim(),
-            request.Columns,
-            cancellationToken);
+        await dispatcher.Send(new CreateProjectTableCommand(
+            projectId, request.Name.Trim(), request.Columns), cancellationToken);
         return NoContent();
     }
 
@@ -115,11 +110,8 @@ public sealed class ProjectDataStudioController(IPlaceContextService placeContex
     {
         if (string.IsNullOrWhiteSpace(request.TableName))
             return BadRequest(new { error = "A source table is required." });
-        return Ok(await placeContext.MaterializeTableIndexAsync(
-            projectId,
-            request.TableName,
-            request.IndexName,
-            cancellationToken));
+        return Ok(await dispatcher.Send(new MaterializeTableIndexCommand(
+            projectId, request.TableName, request.IndexName), cancellationToken));
     }
 
     [HttpPost("row-links")]
@@ -130,10 +122,7 @@ public sealed class ProjectDataStudioController(IPlaceContextService placeContex
     {
         if (string.IsNullOrWhiteSpace(request.TableName))
             return BadRequest(new { error = "A table name is required." });
-        return Ok(await placeContext.RelatedRecordLinksForRowAsync(
-            projectId,
-            request.TableName,
-            request.Values,
-            cancellationToken));
-    }
+        return Ok(await dispatcher.Query(new RelatedRecordLinksForRowQuery(
+            projectId, request.TableName, request.Values), cancellationToken));
+}
 }

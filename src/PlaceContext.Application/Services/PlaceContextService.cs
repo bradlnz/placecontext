@@ -183,9 +183,16 @@ public sealed class PlaceContextService : IPlaceContextService
         OpenSearchSearchRequest request, CancellationToken ct = default)
         => _dispatcher.Query(new SearchOpenSearchQuery(request), ct);
 
-    public Task<Ports.ProjectQueryResult> SearchOpenSearchSqlAsync(
+    public async Task<Ports.ProjectQueryResult> SearchOpenSearchSqlAsync(
         Guid projectId, string sql, CancellationToken ct = default)
-        => _dispatcher.Query(new SearchOpenSearchSqlQuery(projectId, sql), ct);
+    {
+        var result = await _dispatcher.Query(new SearchOpenSearchSqlQuery(projectId, sql), ct);
+        return new Ports.ProjectQueryResult(
+            result.Columns,
+            result.Rows,
+            result.AffectedRows,
+            result.Truncated);
+    }
 
     public Task<OpenSearchSyncView> TriggerOpenSearchSyncAsync(
         Guid projectId, CancellationToken ct = default)

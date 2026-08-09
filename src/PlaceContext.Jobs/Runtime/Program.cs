@@ -1,18 +1,16 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading.RateLimiting;
-using PlaceContext.Application;
+using PlaceContext.BuildingBlocks;
 using PlaceContext.ServiceDefaults;
-using PlaceContext.Infrastructure;
 using PlaceContext.Jobs;
 using PlaceContext.Jobs.Controllers;
 using PlaceContext.Jobs.Infrastructure.Persistence;
 
 var builder = WebApplication.CreateBuilder(args);
-builder.Services.AddApplicationCore();
+builder.Services.AddPlaceContextCqrs();
 builder.Services.AddJobsApi();
 builder.Services.AddJobsModule();
-builder.Services.AddInfrastructureCore(builder.Configuration);
 builder.Services.AddJobsInfrastructure(builder.Configuration);
 builder.Services.AddPlaceContextServiceRuntime(builder.Configuration, typeof(JobsController).Assembly);
 builder.Services.AddRateLimiter(options =>

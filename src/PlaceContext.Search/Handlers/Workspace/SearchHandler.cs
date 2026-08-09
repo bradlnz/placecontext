@@ -10,8 +10,6 @@ public sealed class SearchHandler : IQueryHandler<SearchQuery, SearchResultsView
     private readonly IProjectRepository? _projects;
     private readonly IActivityLogRepository? _ledgers;
     private readonly IDecisionRepository? _decisions;
-    private readonly IRunArtifactLinkRepository? _artifacts;
-    private readonly IEntityTagStore? _tagIndex;
     private readonly IContentIndexer? _contentIndex;
     private readonly IOpenSearchDataGateway? _openSearch;
     private readonly IPermissionService? _permissions;
@@ -20,9 +18,6 @@ public sealed class SearchHandler : IQueryHandler<SearchQuery, SearchResultsView
         IProjectRepository? projects = null,
         IActivityLogRepository? ledgers = null,
         IDecisionRepository? decisions = null,
-        // Optional so existing tests construct the handler unchanged; DI always supplies it.
-        IRunArtifactLinkRepository? artifacts = null,
-        IEntityTagStore? tagIndex = null,
         IContentIndexer? contentIndex = null,
         IOpenSearchDataGateway? openSearch = null,
         IPermissionService? permissions = null)
@@ -30,8 +25,6 @@ public sealed class SearchHandler : IQueryHandler<SearchQuery, SearchResultsView
         _projects = projects;
         _ledgers = ledgers;
         _decisions = decisions;
-        _artifacts = artifacts;
-        _tagIndex = tagIndex;
         _contentIndex = contentIndex;
         _openSearch = openSearch;
         _permissions = permissions;
@@ -80,24 +73,6 @@ public sealed class SearchHandler : IQueryHandler<SearchQuery, SearchResultsView
             {
                 // Search remains useful when OpenSearch is unavailable or not configured.
             }
-        }
-
-        // The tag index: every tagged piece of data is searchable, answered as graph nodes —
-        // hits land on the record inside its entity's business view.
-        if (_tagIndex is not null)
-        {
-            foreach (var t in await _tagIndex.SearchKeysAsync(term, 8, ct))
-                hits.Add(new SearchHit("entity", t.ProjectId, t.Key, $"{t.EntityName} · data graph",
-                    $"/project/{t.ProjectId}/entity/{Uri.EscapeDataString(t.EntityName)}?record={Uri.EscapeDataString(t.Key)}"));
-        }
-
-        // Stored run artifacts: title/kind matches open straight in the file viewer's stream URL.
-        if (_artifacts is not null)
-        {
-            foreach (var a in (await _artifacts.ListRecentAsync(300, ct))
-                     .Where(a => Match(a.Title) || Match(a.Kind.ToString()) || Match(a.ContentType)).Take(8))
-                hits.Add(new SearchHit("artifact", a.ProjectId, a.Title,
-                    $"{a.Kind} · {a.ContentType}", $"/artifacts?artifact={a.Id}"));
         }
 
         if (_projects is not null && _ledgers is not null && _decisions is not null)

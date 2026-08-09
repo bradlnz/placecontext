@@ -7,9 +7,11 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using PlaceContext.Application.Ports;
 using PlaceContext.Artifacts.Infrastructure.Artifacts;
 using PlaceContext.Artifacts.Infrastructure.Documents;
+using PlaceContext.Artifacts.Infrastructure.Integration;
 using PlaceContext.Artifacts.Infrastructure.Persistence;
 using PlaceContext.Artifacts.Infrastructure.Storage;
 using PlaceContext.Domain.Repositories;
+using PlaceContext.Artifacts.Integration;
 
 namespace PlaceContext.Artifacts;
 
@@ -51,6 +53,8 @@ public static class ArtifactsInfrastructureDependencyInjection
         services.AddSingleton<IObjectStore, S3ObjectStore>();
         services.AddScoped<IRunArtifactLinkRepository, EfRunArtifactLinkRepository>();
         services.AddSingleton<IDocumentTextExtractor, DocumentTextExtractor>();
+        services.AddHttpClient();
+        services.AddScoped<IArtifactDataClient, HttpArtifactDataClient>();
         return services;
     }
 }

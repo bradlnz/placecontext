@@ -6,7 +6,6 @@
   <ItemGroup>
     <ProjectReference Include="PlaceContext.Search.Contracts.csproj" />
     <ProjectReference Include="PlaceContext.Search.Domain.csproj" />
-    <ProjectReference Include="..\PlaceContext.Application\PlaceContext.Application.csproj" />
     <ProjectReference Include="..\PlaceContext.Domain\PlaceContext.Domain.csproj" />
   </ItemGroup>
   <ItemGroup><Compile Remove="bin/**/*.cs;obj/**/*.cs;Contracts/**/*.cs;Domain/**/*.cs;Infrastructure/**/*.cs;Runtime/**/*.cs" /></ItemGroup>

@@ -39,7 +39,6 @@ public sealed class DataMappingIngestionService
     private readonly IProjectDataStore _store;
     private readonly IClock _clock;
     private readonly IContentIndexer? _indexer;
-    private readonly IRunStatusNotifier? _notifier;
     private readonly RecordLinkService? _links;
     private readonly ILogger<DataMappingIngestionService>? _log;
 
@@ -48,7 +47,6 @@ public sealed class DataMappingIngestionService
         IProjectDataStore store,
         IClock clock,
         IContentIndexer? indexer = null,
-        IRunStatusNotifier? notifier = null,
         RecordLinkService? links = null,
         ILogger<DataMappingIngestionService>? log = null)
     {
@@ -56,13 +54,9 @@ public sealed class DataMappingIngestionService
         _store = store;
         _clock = clock;
         _indexer = indexer;
-        _notifier = notifier;
         _links = links;
         _log = log;
     }
-
-    public async Task IngestAsync(Job job, JobRun run, CancellationToken ct = default)
-        => await IngestJobOutputAsync(job.Id, run.Id, run.ProjectId, PrimaryArtifact(run), ct);
 
     public async Task IngestJobOutputAsync(
         Guid jobId,
@@ -258,29 +252,8 @@ public sealed class DataMappingIngestionService
     private void Surface(Guid projectId, Guid runId, string table, string detail, Exception? ex = null)
     {
         _log?.LogError(ex, "Data map → '{Table}' for run {RunId}: {Detail}", table, runId, detail);
-        if (_notifier is null) return;
-        var at = _clock.UtcNow;
-        _notifier.Sync(new RunStatusUpdate(
-            $"data-map:{runId:N}:{table}", projectId, $"Data map failed — {table}",
-            RunOutcome.Failed, detail, $"/observability?run={runId}", at, at));
-    }
-
-    // The run's primary data: the reduce artifact (final aggregate) when present, else the lone
-    // shard's artifact, else a JSON array of all shard artifacts — same shape chains thread forward.
-    private static string? PrimaryArtifact(JobRun run)
-    {
-        if (run.ReduceResult?.Artifact is { Length: > 0 } r) return r;
-        var shardArtifacts = run.ShardResults
-            .OrderBy(s => s.Index)
-            .Where(s => !string.IsNullOrWhiteSpace(s.Artifact))
-            .Select(s => s.Artifact!)
-            .ToList();
-        return shardArtifacts.Count switch
-        {
-            0 => null,
-            1 => shardArtifacts[0],
-            _ => "[" + string.Join(",", shardArtifacts) + "]",
-        };
+        // Operations receives run-level failures from Jobs. Data owns this additional diagnostic
+        // and keeps it in its service log until the Operations HTTP ingestion endpoint is available.
     }
 
     // Parse the whole artifact first (the clean case); on failure, use the last line that parses as

@@ -2,6 +2,7 @@ using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Ports;
 using PlaceContext.Domain.Repositories;
+using PlaceContext.Data.Integration;
 
 namespace PlaceContext.Application.Features;
 
@@ -11,12 +12,12 @@ public sealed class MaterializeTableIndexHandler : ICommandHandler<MaterializeTa
     private const long MaxRows = 10000;
 
     private readonly IProjectRepository _projects;
-    private readonly IOpenSearchDataGateway _openSearch;
+    private readonly IDataSearchClient _openSearch;
     private readonly IProjectDataStore _store;
 
     public MaterializeTableIndexHandler(
         IProjectRepository projects,
-        IOpenSearchDataGateway openSearch,
+        IDataSearchClient openSearch,
         IProjectDataStore store)
     {
         _projects = projects;
@@ -42,7 +43,7 @@ public sealed class MaterializeTableIndexHandler : ICommandHandler<MaterializeTa
             : c.IndexName.Trim();
 
         var mappingFields = read.Columns.Select((name, i) =>
-            new OpenSearchMappingField(name, MaterializeTableIndexCommand.OpenSearchTypeFor(read.ColumnTypes[i])))
+            new DataSearchMappingField(name, MaterializeTableIndexCommand.OpenSearchTypeFor(read.ColumnTypes[i])))
             .ToList();
         var jsonbColumns = read.ColumnTypes
             .Select((t, i) => (t, i))
@@ -50,11 +51,10 @@ public sealed class MaterializeTableIndexHandler : ICommandHandler<MaterializeTa
             .Select(p => read.Columns[p.i])
             .ToList();
 
-        // Replace any existing index with the same name, then rebuild from the current table state.
-        await _openSearch.DeleteIndexAsync(c.ProjectId, indexName, ct);
-        await _openSearch.CreateIndexAsync(c.ProjectId, indexName, mappingFields, ct);
-        var indexed = await _openSearch.IndexBulkAsync(
-            c.ProjectId, indexName, read.Columns, read.Rows, ct, jsonbColumns);
+        // Search owns OpenSearch credentials and replaces the index atomically from Data's bounded payload.
+        await _openSearch.ReplaceIndexAsync(
+            c.ProjectId, indexName, mappingFields, read.Columns, read.Rows, jsonbColumns, ct);
+        var indexed = read.Rows.Count;
 
         return new MaterializeTableIndexResult(
             indexName, indexed, mappingFields.Count, read.Truncated, c.TableName);
