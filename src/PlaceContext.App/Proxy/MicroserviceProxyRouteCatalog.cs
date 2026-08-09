@@ -43,6 +43,8 @@ public static class MicroserviceProxyRouteCatalog
         MicroserviceProxyRoute.ForPrefix("Settings", "/api/v1/settings"),
         MicroserviceProxyRoute.ForPrefix("Mcp", "/api/mcp"),
         MicroserviceProxyRoute.ForPrefix("Mcp", "/api/job-mcp"),
+        MicroserviceProxyRoute.ForPattern("Projects", "^/api/v1/projects/?$"),
+        MicroserviceProxyRoute.ForPattern("Projects", "^/api/v1/projects/[^/]+/?$"),
         MicroserviceProxyRoute.ForPrefix("Operations", "/api/operations"),
         MicroserviceProxyRoute.ForPrefix("Search", "/api/search"),
         MicroserviceProxyRoute.ForPattern(

@@ -354,6 +354,20 @@ Last updated: 2026-08-09 (Australia/Brisbane)
   five Jobs Docker-runtime tests and one Data PostgreSQL-specific test remain explicitly skipped because
   their external runtime prerequisites are unavailable in the test container.
 
+### Projects management API Host cutover — 2026-08-09T19:06:07+10:00
+
+- Moved `GET /api/v1/projects`, `GET /api/v1/projects/{id}`, and `POST /api/v1/projects` from
+  legacy Host into a Projects-owned management controller using Projects CQRS handlers and persistence.
+  The stable request/response contract and mapper now live with Projects; the duplicate Host controller
+  and DTOs were removed.
+- Added exact App proxy patterns for only the collection and one-segment item routes, preventing the
+  Projects route from capturing nested Jobs, Search, Data, or future owner-service endpoints.
+- Added a Projects-owned authenticated Identity tenant resolver so forwarded API-key requests resolve
+  tenant context before EF tenant filters execute. Tests cover successful resolution, Identity `404`,
+  registration, route isolation, list/get/create mapping, blank-path validation, and `CreatedAtRoute`.
+- Verified Projects tests 9/9, App tests 32/32, Host build with 0 warnings/errors, architecture 19/19,
+  and the complete solution test command exits 0. Legacy Host now contains 16 controllers.
+
 ## Remaining coupling to remove
 
 - Shared Infrastructure still references Application, and Identity still composes portions of shared

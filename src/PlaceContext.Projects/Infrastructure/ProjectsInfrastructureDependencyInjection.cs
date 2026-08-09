@@ -10,6 +10,7 @@ using PlaceContext.Projects.Infrastructure.Git;
 using PlaceContext.Projects.Infrastructure.Integration;
 using PlaceContext.Projects.Infrastructure.Persistence;
 using PlaceContext.Projects.Infrastructure.Security;
+using PlaceContext.Projects.Infrastructure.Tenancy;
 using PlaceContext.Projects.Integration;
 
 namespace PlaceContext.Projects;
@@ -47,6 +48,7 @@ public static class ProjectsInfrastructureDependencyInjection
         services.AddSingleton<IRepoFiles, FileRepoFiles>();
 
         services.AddHttpClient();
+        services.AddScoped<IRequestTenantResolver, HttpIdentityTenantResolver>();
         services.AddScoped<IProjectGraphClient, HttpProjectGraphClient>();
         services.AddScoped<IProjectEventPublisher, HttpProjectEventPublisher>();
         return services;
