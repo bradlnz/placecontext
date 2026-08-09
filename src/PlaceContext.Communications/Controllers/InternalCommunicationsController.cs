@@ -9,6 +9,12 @@ namespace PlaceContext.Communications.Controllers;
 [Authorize(AuthenticationSchemes = "ApiKey")]
 public sealed class InternalCommunicationsController(ICommunicationSender sender) : ControllerBase
 {
+    [HttpGet("two-factor-channels")]
+    public async Task<IActionResult> TwoFactorChannels(
+        [FromServices] ICommunicationProviderService providers,
+        CancellationToken ct)
+        => Ok(await providers.TwoFactorChannelsAsync(ct));
+
     [HttpGet("capabilities")]
     public async Task<IActionResult> Capabilities(CancellationToken ct)
         => Ok(await sender.GetCapabilitiesAsync(ct));

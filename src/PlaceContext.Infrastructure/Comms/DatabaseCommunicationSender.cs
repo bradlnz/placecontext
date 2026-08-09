@@ -40,6 +40,9 @@ public sealed class DatabaseCommunicationSender : IClientCommunicationSender
     public string EmailProvider => "Email";
     public string SmsProvider => "SMS";
 
+    public Task<IReadOnlyList<string>> TwoFactorChannelsAsync(CancellationToken ct = default)
+        => _providers.TwoFactorChannelsAsync(ct);
+
     public async Task<ClientCommsCapabilities> GetCapabilitiesAsync(CancellationToken ct = default)
     {
         var email = await _providers.ResolveForSendAsync("email", ct);

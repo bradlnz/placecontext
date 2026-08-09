@@ -419,6 +419,8 @@ public class JobChainTests
     {
         public string EmailProvider => "Postmark";
         public string SmsProvider => "Twilio";
+        public Task<IReadOnlyList<string>> TwoFactorChannelsAsync(CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<string>>([]);
         public Exception? Failure { get; init; }
         public List<(string Recipient, string RecipientName, string Subject, string Body,
             IReadOnlyList<ClientEmailAttachment> Attachments)> Emails { get; } = new();

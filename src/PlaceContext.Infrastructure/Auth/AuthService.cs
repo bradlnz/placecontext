@@ -21,22 +21,24 @@ public sealed class AuthService : IAuthService
 
     private readonly AppDbContext _db;
     private readonly IClientCommunicationSender _communications;
-    private readonly CommunicationProviderService _providers;
+    private readonly CommunicationProviderService? _providers;
 
     // A fixed, precomputed hash verified against on every *unknown* login attempt, so the real PBKDF2
     // work happens whether or not the email exists — otherwise a "known email, wrong password" request
     // and an "unknown email" request would take measurably different time and leak account existence.
     private static readonly string DummyHashForTiming = PasswordHasher.Hash(Guid.NewGuid().ToString("N"));
 
-    public AuthService(
-        AppDbContext db,
-        IClientCommunicationSender communications,
-        CommunicationProviderService providers)
+    public AuthService(AppDbContext db, IClientCommunicationSender communications)
     {
         _db = db;
         _communications = communications;
-        _providers = providers;
     }
+
+    public AuthService(
+        AppDbContext db,
+        IClientCommunicationSender communications,
+        CommunicationProviderService providers) : this(db, communications)
+        => _providers = providers;
 
     public async Task<bool> EmailExistsAsync(string email, CancellationToken ct = default)
         => await _db.Users.AsNoTracking().AnyAsync(u => u.Email == Normalize(email), ct);
@@ -154,7 +156,7 @@ public sealed class AuthService : IAuthService
     private static string Normalize(string email) => (email ?? string.Empty).Trim().ToLowerInvariant();
 
     public async Task<bool> IsTwoFactorRequiredAsync(CancellationToken ct = default)
-        => (await _providers.TwoFactorChannelsAsync(ct)).Count > 0;
+        => (await TwoFactorChannelsAsync(ct)).Count > 0;
 
     public async Task<bool> IsTwoFactorEnabledAsync(Guid userId, CancellationToken ct = default)
         => await _db.Users.AsNoTracking()
@@ -166,7 +168,7 @@ public sealed class AuthService : IAuthService
         var row = await _db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userId, ct);
         if (row is null) throw new InvalidOperationException("User not found.");
 
-        var flagged = await _providers.TwoFactorChannelsAsync(ct);
+        var flagged = await TwoFactorChannelsAsync(ct);
         var effective = ResolveChannel(row, flagged, channel);
         var needsPhone = effective == "sms" && string.IsNullOrWhiteSpace(row.PhoneNumber);
         var destination = effective == "sms"
@@ -183,7 +185,7 @@ public sealed class AuthService : IAuthService
         var row = await _db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userId, ct);
         if (row is null) throw new InvalidOperationException("User not found.");
 
-        var flagged = await _providers.TwoFactorChannelsAsync(ct);
+        var flagged = await TwoFactorChannelsAsync(ct);
         return new TwoFactorSettingsInfo(
             flagged.Count > 0,
             row.TwoFactorChannel,
@@ -204,7 +206,7 @@ public sealed class AuthService : IAuthService
             && sentAt > now.AddMinutes(-1))
             throw new InvalidOperationException("Wait one minute before requesting another code.");
 
-        var flagged = await _providers.TwoFactorChannelsAsync(ct);
+        var flagged = await TwoFactorChannelsAsync(ct);
         var effective = ResolveChannel(row, flagged, channel);
         if (effective == "sms" && string.IsNullOrWhiteSpace(row.PhoneNumber))
             throw new InvalidOperationException(
@@ -277,7 +279,7 @@ public sealed class AuthService : IAuthService
         if (channel is not ("email" or "sms"))
             throw new ArgumentException("Channel must be 'email' or 'sms'.");
 
-        var flagged = await _providers.TwoFactorChannelsAsync(ct);
+        var flagged = await TwoFactorChannelsAsync(ct);
         if (!flagged.Contains(channel))
             throw new InvalidOperationException(
                 $"The {channel} channel is not available for verification codes.");
@@ -298,6 +300,11 @@ public sealed class AuthService : IAuthService
         if (flagged.Contains("email")) return "email";
         return flagged.FirstOrDefault() ?? "email";
     }
+
+    private Task<IReadOnlyList<string>> TwoFactorChannelsAsync(CancellationToken ct)
+        => _providers is null
+            ? _communications.TwoFactorChannelsAsync(ct)
+            : _providers.TwoFactorChannelsAsync(ct);
 
     public async Task<bool> ConfirmTwoFactorSetupAsync(
         Guid userId, string code, CancellationToken ct = default)

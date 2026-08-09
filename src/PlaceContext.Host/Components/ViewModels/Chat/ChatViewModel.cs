@@ -18,6 +18,7 @@ public sealed partial class ChatViewModel : PageViewModel
 {
     private readonly IChatGateway _gateway;
     private readonly IPlaceContextService _svc;
+    private readonly IMcpClientService _mcpClient;
     private readonly PortalUiState _ui;
     private readonly IChatMemoryStore _memoryStore;
     private readonly AgentContextBuilder _contextBuilder;

@@ -4,6 +4,7 @@ public interface IClientCommunicationSender
 {
     string EmailProvider { get; }
     string SmsProvider { get; }
+    Task<IReadOnlyList<string>> TwoFactorChannelsAsync(CancellationToken ct = default);
     Task<ClientCommsCapabilities> GetCapabilitiesAsync(CancellationToken ct = default);
     Task<ClientMessageDelivery> SendEmailAsync(
         string recipient,

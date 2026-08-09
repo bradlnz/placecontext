@@ -13,5 +13,6 @@
   <ItemGroup><Using Include="Xunit" /></ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\PlaceContext.Identity\PlaceContext.Identity.csproj" />
+    <ProjectReference Include="..\..\src\PlaceContext.Identity\PlaceContext.Identity.Infrastructure.csproj" />
   </ItemGroup>
 </Project>

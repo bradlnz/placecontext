@@ -276,6 +276,21 @@ Last updated: 2026-08-09 (Australia/Brisbane)
   with separate agent-shard and job-cluster configuration, green per-service health probes, and a
   real React/App → Jobs create-and-execute flow.
 
+### Identity communications cutover — 2026-08-09T16:58:09+10:00
+
+- Identity two-factor channel discovery and authentication email/SMS delivery now cross the
+  authenticated Communications HTTP boundary through an Identity-owned adapter; Identity no longer
+  requires the shared communication-provider implementation at runtime.
+- Communications exposes its enabled two-factor channels on the existing service-only internal API.
+  Focused adapter tests cover the route, API-key authentication header, authentication-delivery
+  payload, response contract, and deterministic empty-response failure.
+- Verified in the .NET 10 SDK container: Communications API and Identity API build with 0 warnings and
+  0 errors; Identity tests pass 5/5 and shared Infrastructure tests pass 97/97.
+- Restored the missing legacy Host `IMcpClientService` field so the architecture suite can compile and
+  execute. Its current result is 14/18 passing; the four remaining failures identify interrupted
+  source-file splits, two Communications role-folder mismatches, and Agents' shared-Infrastructure
+  reference. Those are separate extraction units, not regressions in this cutover.
+
 ## Remaining coupling to remove
 
 - Shared Infrastructure still references Application, and Projects/Identity/Agents still compose

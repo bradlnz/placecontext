@@ -409,6 +409,9 @@ public class AuthServiceTests
         public List<(string Recipient, string Body)> AuthenticationEmails { get; } = new();
         public List<(string Recipient, string Body)> AuthenticationSmses { get; } = new();
 
+        public Task<IReadOnlyList<string>> TwoFactorChannelsAsync(CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<string>>([]);
+
         public Task<ClientCommsCapabilities> GetCapabilitiesAsync(CancellationToken ct = default)
             => Task.FromResult(new ClientCommsCapabilities(true, false, "Postmark", "Twilio"));
 
