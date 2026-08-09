@@ -10,10 +10,11 @@ using PlaceContext.Identity.Infrastructure;
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddApplication();
 builder.Services.AddIdentityModule();
-builder.Services.AddIdentityInfrastructure(builder.Configuration);
 builder.Services.AddPlaceContextServiceRuntime(
     builder.Configuration,
     typeof(IdentityServiceController).Assembly);
+// Identity owns persisted permissions; register it after the shared runtime's claim-only fallback.
+builder.Services.AddIdentityInfrastructure(builder.Configuration);
 builder.Services
     .AddAuthentication(options =>
     {

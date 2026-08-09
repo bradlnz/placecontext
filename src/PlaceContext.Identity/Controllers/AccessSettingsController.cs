@@ -8,7 +8,7 @@ using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Ports;
 using PlaceContext.Identity.Auth;
 using PlaceContext.Identity.Contracts.Api;
-using PlaceContext.Infrastructure.Tenancy;
+using PlaceContext.Identity.Domain.Tenants;
 
 namespace PlaceContext.Identity.Controllers;
 
@@ -22,7 +22,7 @@ namespace PlaceContext.Identity.Controllers;
 public sealed class AccessSettingsController(
     IMembershipService membership,
     IPlaceContextService placeContext,
-    ITenantStore tenantStore,
+    IIdentityTenantStore tenantStore,
     ICurrentTenant tenant,
     ICurrentUser currentUser,
     IHttpClientFactory httpClientFactory,
@@ -55,7 +55,7 @@ public sealed class AccessSettingsController(
         if (!IsValidEmail(request.Email))
             return BadRequest(new { error = "Enter a valid customer email." });
 
-        var tenantRow = await tenantStore.GetRowAsync(tenant.TenantId, ct);
+        var tenantRow = await tenantStore.FindByIdAsync(tenant.TenantId, ct);
         var key = configuration[ProvisioningKey];
         if (tenantRow is null || !tenantRow.CustomerPortalEnabled)
             return BadRequest(new { error = "Enable the customer portal before inviting users." });
@@ -216,7 +216,7 @@ public sealed class AccessSettingsController(
     {
         var members = await membership.ListMembersAsync(ct);
         var roles = await placeContext.ListRolesAsync(ct);
-        var portalEnabled = (await tenantStore.GetRowAsync(tenant.TenantId, ct))?.CustomerPortalEnabled == true;
+        var portalEnabled = (await tenantStore.FindByIdAsync(tenant.TenantId, ct))?.CustomerPortalEnabled == true;
         return new AccessSettingsResponse(
             members.Select(member => new AccessMemberResponse(
                 member.Id,
