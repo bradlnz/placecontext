@@ -1,5 +1,6 @@
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Ports;
+using PlaceContext.Crm.Integration;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.Repositories;
 using PlaceContext.Domain.ValueObjects;
@@ -10,15 +11,14 @@ public sealed class SetCrmAutomationEnabledHandler
     : ICommandHandler<SetCrmAutomationEnabledCommand, CrmAutomationRuleView>
 {
     private readonly ICrmAutomationRuleRepository _rules;
-    private readonly IJobChainRepository _chains;
-    private readonly IJobRepository _jobs;
+    private readonly ICrmJobsClient _jobs;
     private readonly ICrmUnitOfWork _uow;
     private readonly IClock _clock;
 
     public SetCrmAutomationEnabledHandler(
-        ICrmAutomationRuleRepository rules, IJobChainRepository chains, IJobRepository jobs,
+        ICrmAutomationRuleRepository rules, ICrmJobsClient jobs,
         ICrmUnitOfWork uow, IClock clock)
-        => (_rules, _chains, _jobs, _uow, _clock) = (rules, chains, jobs, uow, clock);
+        => (_rules, _jobs, _uow, _clock) = (rules, jobs, uow, clock);
 
     public async Task<CrmAutomationRuleView> HandleAsync(
         SetCrmAutomationEnabledCommand command, CancellationToken ct = default)
@@ -28,7 +28,8 @@ public sealed class SetCrmAutomationEnabledHandler
         rule.SetEnabled(command.Enabled, _clock.UtcNow);
         await _rules.UpdateAsync(rule, ct);
         await _uow.SaveChangesAsync(ct);
-        return await SaveCrmAutomationRuleHandler.MapAsync(
-            rule, await _chains.GetByIdAsync(rule.ChainId, ct), _jobs, ct);
+        var chain = (await _jobs.GetCatalogAsync(rule.ProjectId, ct)).Chains
+            .FirstOrDefault(candidate => candidate.Id == rule.ChainId);
+        return SaveCrmAutomationRuleHandler.Map(rule, chain);
     }
 }

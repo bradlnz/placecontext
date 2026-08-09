@@ -10,6 +10,10 @@ namespace PlaceContext.Data.Controllers;
 [Route("api/data/internal/projects/{projectId:guid}/graph-hotspots")]
 public sealed class InternalGraphController(IDispatcher dispatcher) : ControllerBase
 {
+    [HttpGet("/api/data/internal/projects/{projectId:guid}/graph")]
+    public async Task<IActionResult> GetGraph(Guid projectId, CancellationToken ct)
+        => Ok(await dispatcher.Query(new GetGraphVizQuery(projectId), ct));
+
     [HttpGet]
     public async Task<IActionResult> Get(Guid projectId, CancellationToken ct)
     {

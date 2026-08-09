@@ -10,6 +10,7 @@ public static class MicroserviceProxyServiceCollectionExtensions
     {
         services.Configure<MicroserviceProxyOptions>(
             configuration.GetSection(MicroserviceProxyOptions.SectionName));
+        services.AddScoped<EdgeServiceTokenClient>();
 
         services
             .AddHttpClient(MicroserviceProxyMiddleware.HttpClientName)

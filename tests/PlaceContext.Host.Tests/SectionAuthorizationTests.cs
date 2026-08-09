@@ -111,7 +111,6 @@ public sealed class SectionAuthorizationTests
         new()
         {
             typeof(BackupController),
-            typeof(CommunicationProvidersController),
             typeof(ConnectionsSettingsController),
         };
 

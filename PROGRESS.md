@@ -243,22 +243,47 @@ Last updated: 2026-08-09 (Australia/Brisbane)
 - The Jobs test project currently does not compile because legacy tests still construct the removed
   in-process CRM/communications/artifact/embedding/Data-recorder dependencies. Migrate those tests to
   caller-local HTTP client fakes before claiming the Jobs suite green again.
-- The architecture suite currently stops while compiling CRM because `CrmIngestionController` still
-  reaches CRM Infrastructure and shared platform types from the CRM implementation project. Moving
-  that controller/runtime composition and CRM↔Jobs automation to HTTP is the next hard boundary.
-- Remaining direct Application project references are exactly AgentChat, CRM, Identity, shared
-  Infrastructure, and legacy Host. Host and Application remain intentionally undeleted until those
-  three service seams and shared persistence composition are replaced.
+- CRM and AgentChat now build independently after their remaining in-process Jobs/Data/Search/
+  Artifacts/Projects/Identity calls were replaced with authenticated HTTP clients and caller-local
+  wire DTOs. Jobs sends CRM completion callbacks over HTTP.
+- Remaining direct Application project references are now exactly shared Infrastructure and legacy
+  Host. Identity, Projects, and Agents still reach Application transitively by composing shared
+  Infrastructure, so Host and Application remain intentionally undeleted.
+
+### Communications and edge-token checkpoint — 2026-08-09
+
+- `PlaceContext.Communications` now owns the `communication_providers` persistence model, its own
+  `CommunicationsDbContext`, `__EFMigrationsHistory_Communications`, safe initial adoption migration,
+  database health check, provider validation/resolution, and Postmark, SendGrid, and Twilio HTTP
+  integrations. Provider credentials remain Vault-owned and are resolved by authenticated HTTP.
+- Communications now owns the browser settings contract at `/api/v1/settings/communications` and
+  service-only capabilities/email/SMS endpoints at `/api/communications/internal`. Settings setup
+  reads Projects and Vault metadata over authenticated HTTP; no service project-references either.
+- The migrated `CommunicationProvidersController` and its Host-only request/response records have
+  been removed from `PlaceContext.Host`; the App route catalog sends that browser surface directly
+  to Communications.
+- CRM and Jobs now send mail/SMS through Communications over authenticated HTTP. Identity two-factor
+  is the remaining runtime caller of the legacy shared communication sender and must be converted
+  during Identity persistence/composition extraction before the old Postmark implementation can be
+  deleted from shared Infrastructure.
+- The React/App edge now exchanges the Identity cookie for a five-minute signed service JWT and
+  forwards it to non-Identity services. Identity routes alone retain cookie forwarding. App tests
+  cover cookie exchange, bearer forwarding, cookie isolation, and direct Identity forwarding (28/28).
+- Focused zero-warning builds pass for App, AgentChat API, CRM API, Communications API, Jobs API,
+  Projects API, and Vault API. Identity token issuance tests pass 2/2. The architecture suite still
+  cannot start because the legacy Host has the pre-existing undefined `_mcpClient` compile error.
+- This is not yet a proven Host/Application-free runtime. The final gate remains a Host-free deploy
+  with separate agent-shard and job-cluster configuration, green per-service health probes, and a
+  real React/App → Jobs create-and-execute flow.
 
 ## Remaining coupling to remove
 
-- AgentChat, CRM, and Identity still reference the main Application assembly as extraction seams.
-- Shared Infrastructure still references Application, and Projects/CRM/Identity/Agents still compose
+- Shared Infrastructure still references Application, and Projects/Identity/Agents still compose
   portions of shared Infrastructure. Move each required adapter to its owning service or replace it
   with authenticated HTTP before deleting Application.
 - The current host still references service implementations directly.
-- Jobs, Data, Search, Artifacts, Vault, AgentChat, MCP, Communications, Settings, and Operations APIs
-  do not require shared Infrastructure. CRM, Identity, Projects, and Agents still have transitional
+- Jobs, Data, Search, Artifacts, Vault, AgentChat, MCP, Communications, Settings, Operations, and CRM APIs
+  do not require shared Infrastructure. Identity, Projects, and Agents still have transitional
   shared-Infrastructure composition to remove.
 - The shared database model and migration history still contain tables for the other services and platform capabilities, preventing their independent database evolution.
 - Data and Search now resolve Vault-owned secrets over authenticated HTTP, with service configuration
@@ -271,31 +296,28 @@ Last updated: 2026-08-09 (Australia/Brisbane)
 
 ## Next steps
 
-1. Remove AgentChat's Application dependency by replacing its Data/Search/Artifacts/Jobs facade and
-   RAG dependencies with authenticated HTTP clients and caller-local DTOs.
-2. Remove CRM's Application and Jobs.Contracts dependencies. CRM automation must call Jobs over HTTP;
-   Jobs chain completion/customer/communications/artifact lookups must call CRM, Communications, and
-   Artifacts over HTTP rather than consuming repositories or observer contracts.
-3. Finish Identity ownership of Access/Auth/Membership/OAuth and move its tenant/access persistence
-   out of shared Infrastructure; then remove Identity's Application dependency.
-4. Remove shared Infrastructure's Application dependency and the remaining service runtime references
-   to shared Infrastructure. At that gate, Application can be deleted.
-5. Replace remaining facade-only direct service calls with service-owned commands/queries, then
-   remove `IPlaceContextService` consumers as Host/App controllers move to explicit service contracts.
-6. Move remaining Host controllers by ownership: Agents/AgentChat, Artifacts, CRM, Data, Jobs,
-   Search, Identity, MCP, Projects, and backup/operations; move only multi-service read composition
-   and static Wiki/compatibility endpoints to `PlaceContext.App`.
-7. Implement App cookie-to-service-token exchange/forwarding for authenticated service routes;
-   preserve Identity cookie forwarding only on Identity routes and keep service-to-service keys
-   server-side.
-8. Extend App proxy coverage for every retained route, preserve Identity cookie forwarding only on
-   Identity routes, and replace controller dependencies on Host-only auth/record/helper types.
-9. Delete migrated Host controllers, records, auth helpers, Blazor-only composition, and stale static
-   assets; remove `PlaceContext.Host` only after no route or runtime dependency remains.
-10. Run service builds/tests, architecture tests, App/Host compatibility tests while Host remains,
-   frontend lint/tests/build, and finally the full solution build. Fix all regressions before staging.
-11. Run a Host-free deployment proof across the separate agent-shard and job clusters, then create
-   and execute a real job through React/App → Jobs and verify service health probes and run state.
+1. Finish Identity ownership of Access/Auth/Membership/OAuth and its users, roles, API tokens,
+   invitations, tenant, and domain persistence. Replace its two-factor sender/provider lookup with
+   an Identity-owned HTTP client to Communications, then remove Identity's shared Infrastructure
+   composition.
+2. Finish Projects and Agents persistence/composition ownership and replace any remaining shared
+   Infrastructure adapters with service-owned implementations or authenticated HTTP clients.
+3. Remove the released `communication_providers` model and Postmark/SendGrid/Twilio implementation
+   from shared Infrastructure after Identity is cut over. Connections remain configured through
+   Settings; MCP runtime connections/tokens are consumed by Jobs through the MCP HTTP boundary.
+4. Inventory and migrate every remaining Host controller by owner: service-owned single-context
+   routes go to that service; backup/cluster operations go to Operations; tenant/branding/menu/
+   locality and connection setup go to Settings; only genuine multi-service edge composition and
+   static compatibility routes may remain in App.
+5. Remove shared Infrastructure's Application dependency, then delete `PlaceContext.Application`,
+   `PlaceContext.Host`, and retired CoreApi code only when repository-wide reference/route audits are
+   empty. Preserve independent `/health` endpoints on every runtime.
+6. Repair or remove the stale Host `_mcpClient` code so the architecture/full-suite checks can run,
+   update Jobs/CRM/AgentChat test fakes for the new caller-local HTTP seams, and run all service,
+   architecture, frontend, and solution verification.
+7. Run a Host-free deployment proof with the agent-shard cluster and job cluster configured as
+   distinct workloads. Verify Kubernetes health probes, then create and execute a real job through
+   React/App → Jobs and observe terminal run state and artifacts without Host or Application loaded.
 
 ---
 

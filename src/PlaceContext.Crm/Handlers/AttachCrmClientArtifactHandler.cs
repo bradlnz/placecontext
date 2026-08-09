@@ -1,8 +1,8 @@
 using System.Text.Json;
 using PlaceContext.Application.Cqrs;
-using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Ports;
 using PlaceContext.Crm.Automation;
+using PlaceContext.Crm.Integration;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.Repositories;
 
@@ -14,7 +14,7 @@ public sealed class AttachCrmClientArtifactHandler
     public const int MaxFileBytes = 20 * 1024 * 1024;
     private readonly ICrmClientRepository _clients;
     private readonly ICrmClientArtifactRepository _artifacts;
-    private readonly IObjectStore _store;
+    private readonly ICrmArtifactsClient _storage;
     private readonly ICrmUnitOfWork _uow;
     private readonly IClock _clock;
     private readonly CrmAutomationDispatcher? _automations;
@@ -22,12 +22,12 @@ public sealed class AttachCrmClientArtifactHandler
     public AttachCrmClientArtifactHandler(
         ICrmClientRepository clients,
         ICrmClientArtifactRepository artifacts,
-        IObjectStore store,
+        ICrmArtifactsClient storage,
         ICrmUnitOfWork uow,
         IClock clock,
         CrmAutomationDispatcher? automations = null)
-        => (_clients, _artifacts, _store, _uow, _clock, _automations)
-            = (clients, artifacts, store, uow, clock, automations);
+        => (_clients, _artifacts, _storage, _uow, _clock, _automations)
+            = (clients, artifacts, storage, uow, clock, automations);
 
     public async Task<CrmClientArtifactView> HandleAsync(
         AttachCrmClientArtifactCommand command,
@@ -35,7 +35,6 @@ public sealed class AttachCrmClientArtifactHandler
     {
         var client = await _clients.GetByIdAsync(command.ClientId, ct)
             ?? throw new InvalidOperationException($"Client {command.ClientId} not found.");
-        if (!_store.IsEnabled) throw new InvalidOperationException("File storage is not configured.");
         if (command.Content.Length == 0) throw new ArgumentException("Choose a non-empty file.");
         if (command.Content.Length > MaxFileBytes)
             throw new ArgumentException($"Files must be {MaxFileBytes / 1024 / 1024} MB or smaller.");
@@ -44,12 +43,17 @@ public sealed class AttachCrmClientArtifactHandler
         var title = SafeFileName(command.FileName);
         // Keep the object-store key opaque: the user-visible filename is encrypted in the CRM
         // artifact row, and file bytes are encrypted by IObjectStore itself.
-        var key = $"crm-clients/{client.ProjectId:N}/{client.Id:N}/{id:N}/content";
+        var stored = await _storage.StoreAsync(
+            client.ProjectId,
+            client.Id,
+            id,
+            command.Content,
+            command.ContentType ?? "application/octet-stream",
+            ct);
         var value = CrmClientArtifact.CreateUpload(
-            id, client.ProjectId, client.Id, title, _store.ReportsBucket, key,
+            id, client.ProjectId, client.Id, title, stored.Bucket, stored.ObjectKey,
             command.ContentType ?? "application/octet-stream", command.Content.LongLength, _clock.UtcNow);
 
-        await _store.PutAsync(value.Bucket, value.ObjectKey, command.Content, value.ContentType, ct);
         try
         {
             await _artifacts.AddAsync(value, ct);
@@ -60,7 +64,7 @@ public sealed class AttachCrmClientArtifactHandler
         }
         catch
         {
-            await _store.DeleteAsync(value.Bucket, value.ObjectKey, ct);
+            await _storage.DeleteAsync(value.Bucket, value.ObjectKey, ct);
             throw;
         }
         return CrmClientArtifactMapper.ToView(value);

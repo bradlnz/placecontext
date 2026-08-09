@@ -15,6 +15,7 @@ using PlaceContext.Jobs.Infrastructure.Security;
 using PlaceContext.Jobs.Infrastructure.Workload;
 using PlaceContext.Jobs.Infrastructure.Integration;
 using PlaceContext.Jobs.Integration;
+using PlaceContext.Jobs.Contracts.Integration;
 
 namespace PlaceContext.Jobs;
 
@@ -51,6 +52,9 @@ public static class JobsInfrastructureDependencyInjection
         services.AddSingleton<IBackgroundOperationNotifier, LoggingBackgroundOperationNotifier>();
         services.AddScoped<ITenantCatalog, HttpJobTenantCatalog>();
         services.AddScoped<IJobLaunchpadClient, HttpJobLaunchpadClient>();
+        services.AddScoped<IJobCrmClient, HttpJobCrmClient>();
+        services.AddScoped<IJobCommunicationsClient, HttpJobCommunicationsClient>();
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IChainRunCompletionObserver, JobCrmCompletionObserver>());
 
         services.Configure<WorkloadRunnerOptions>(
             configuration.GetSection("PlaceContext:WorkloadRunner"));

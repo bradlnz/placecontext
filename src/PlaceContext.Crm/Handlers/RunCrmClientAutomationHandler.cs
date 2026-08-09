@@ -1,7 +1,8 @@
 using System.Text.Json;
 using PlaceContext.Application.Cqrs;
-using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Ports;
+using PlaceContext.Crm.Integration;
+using PlaceContext.Crm.Services;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.Repositories;
 
@@ -12,22 +13,18 @@ public sealed class RunCrmClientAutomationHandler
 {
     private readonly ICrmClientRepository _clients;
     private readonly ICrmChainRunRepository _crmRuns;
-    private readonly IJobChainRepository _chains;
-    private readonly ICommandHandler<RunJobChainCommand, ChainRunView> _chainRunner;
-    private readonly IRunArtifactLinkRepository _runArtifacts;
-    private readonly ICrmClientArtifactRepository _clientArtifacts;
+    private readonly ICrmJobsClient _jobs;
+    private readonly CrmArtifactAssociationService _artifactAssociation;
     private readonly ICrmUnitOfWork _uow;
 
     public RunCrmClientAutomationHandler(
         ICrmClientRepository clients,
         ICrmChainRunRepository crmRuns,
-        IJobChainRepository chains,
-        ICommandHandler<RunJobChainCommand, ChainRunView> chainRunner,
-        IRunArtifactLinkRepository runArtifacts,
-        ICrmClientArtifactRepository clientArtifacts,
+        ICrmJobsClient jobs,
+        CrmArtifactAssociationService artifactAssociation,
         ICrmUnitOfWork uow)
-        => (_clients, _crmRuns, _chains, _chainRunner, _runArtifacts, _clientArtifacts, _uow)
-            = (clients, crmRuns, chains, chainRunner, runArtifacts, clientArtifacts, uow);
+        => (_clients, _crmRuns, _jobs, _artifactAssociation, _uow)
+            = (clients, crmRuns, jobs, artifactAssociation, uow);
 
     public async Task<CrmChainRunView> HandleAsync(
         RunCrmClientAutomationCommand command,
@@ -35,7 +32,8 @@ public sealed class RunCrmClientAutomationHandler
     {
         var client = await _clients.GetByIdAsync(command.ClientId, ct)
             ?? throw new InvalidOperationException($"Client {command.ClientId} not found.");
-        var chain = await _chains.GetByIdAsync(command.ChainId, ct)
+        var chain = (await _jobs.GetCatalogAsync(client.ProjectId, ct)).Chains
+            .FirstOrDefault(candidate => candidate.Id == command.ChainId)
             ?? throw new InvalidOperationException($"Job chain {command.ChainId} not found.");
         if (chain.ProjectId != client.ProjectId)
             throw new InvalidOperationException("The job chain and client must belong to the same project.");
@@ -55,29 +53,28 @@ public sealed class RunCrmClientAutomationHandler
             lifecycle = client.LifecycleStage.ToString(),
         });
 
-        var result = await _chainRunner.HandleAsync(
-            new RunJobChainCommand(
+        var result = await _jobs.RunChainAsync(
+            new CrmRunJobChainRequest(
+                client.ProjectId,
                 chain.Id,
                 command.InputPayload ?? payload,
                 StepPayloadOverrides: command.StepPayloadOverrides,
-                CrmClientId: client.Id), ct);
-        var link = CrmChainRun.Create(client.ProjectId, client.Id, chain.Id, result.Id,
-            client.LifecycleStage, result.StartedAt);
-        await _crmRuns.AddAsync(link, ct);
-
-        foreach (var runId in result.Steps.Where(step => step.RunId is not null)
-                     .Select(step => step.RunId!.Value).Distinct())
+                CrmClientId: client.Id),
+            ct);
+        var link = await _crmRuns.GetByChainRunIdAsync(result.Id, ct);
+        if (link is null)
         {
-            foreach (var artifact in await _runArtifacts.ListForRunAsync(runId, ct))
-            {
-                if (await _clientArtifacts.ExistsForSourceAsync(client.Id, artifact.Id, ct)) continue;
-                await _clientArtifacts.AddAsync(CrmClientArtifact.CreateFromRunArtifact(
-                    client.ProjectId, client.Id, artifact.Id, result.Id, artifact.Title,
-                    artifact.Bucket, artifact.ObjectKey, artifact.ContentType,
-                    artifact.SizeBytes, artifact.CreatedAt), ct);
-            }
+            link = CrmChainRun.Create(client.ProjectId, client.Id, chain.Id, result.Id,
+                client.LifecycleStage, result.StartedAt);
+            await _crmRuns.AddAsync(link, ct);
+            await _uow.SaveChangesAsync(ct);
         }
-        await _uow.SaveChangesAsync(ct);
+        await _artifactAssociation.AssociateAsync(
+            client.ProjectId,
+            client.Id,
+            result.Id,
+            result.Steps.Select(step => step.RunId).OfType<Guid>(),
+            ct);
 
         return new CrmChainRunView(link.Id, client.Id, chain.Id, result.ChainName, result.Id,
             link.LifecycleStage.ToString(), result.Status, result.StartedAt, result.FinishedAt);

@@ -1,5 +1,6 @@
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Ports;
+using PlaceContext.Crm.Integration;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.Repositories;
 using PlaceContext.Domain.ValueObjects;
@@ -10,20 +11,20 @@ public sealed class SaveCrmAutomationRuleHandler
     : ICommandHandler<SaveCrmAutomationRuleCommand, CrmAutomationRuleView>
 {
     private readonly ICrmAutomationRuleRepository _rules;
-    private readonly IJobChainRepository _chains;
-    private readonly IJobRepository _jobs;
+    private readonly ICrmJobsClient _jobs;
     private readonly ICrmUnitOfWork _uow;
     private readonly IClock _clock;
 
     public SaveCrmAutomationRuleHandler(
-        ICrmAutomationRuleRepository rules, IJobChainRepository chains, IJobRepository jobs,
+        ICrmAutomationRuleRepository rules, ICrmJobsClient jobs,
         ICrmUnitOfWork uow, IClock clock)
-        => (_rules, _chains, _jobs, _uow, _clock) = (rules, chains, jobs, uow, clock);
+        => (_rules, _jobs, _uow, _clock) = (rules, jobs, uow, clock);
 
     public async Task<CrmAutomationRuleView> HandleAsync(
         SaveCrmAutomationRuleCommand command, CancellationToken ct = default)
     {
-        var chain = await _chains.GetByIdAsync(command.ChainId, ct)
+        var chain = (await _jobs.GetCatalogAsync(command.ProjectId, ct)).Chains
+            .FirstOrDefault(candidate => candidate.Id == command.ChainId)
             ?? throw new InvalidOperationException($"Job chain {command.ChainId} not found.");
         if (chain.ProjectId != command.ProjectId)
             throw new InvalidOperationException("The automation chain must belong to this project.");
@@ -50,18 +51,16 @@ public sealed class SaveCrmAutomationRuleHandler
             await _rules.AddAsync(rule, ct);
         }
         await _uow.SaveChangesAsync(ct);
-        return await MapAsync(rule, chain, _jobs, ct);
+        return Map(rule, chain);
     }
 
-    internal static async Task<CrmAutomationRuleView> MapAsync(
-        CrmAutomationRule rule, JobChain? chain, IJobRepository jobs, CancellationToken ct)
+    internal static CrmAutomationRuleView Map(
+        CrmAutomationRule rule,
+        CrmJobChainSummary? chain)
     {
-        var stepCount = chain?.ExecutionStepCount ?? 0;
-        // Resolve at least one step to distinguish a deleted chain from an empty display.
-        if (chain?.StepJobIds is { Count: > 0 } jobIds) _ = await jobs.GetByIdAsync(jobIds[0], ct);
         return new CrmAutomationRuleView(
             rule.Id, rule.ProjectId, rule.Name, rule.EventType.ToString(),
             rule.LifecycleStage?.ToString(), rule.ChainId, chain?.Name ?? "Deleted job chain",
-            stepCount, rule.Enabled, rule.UpdatedAt);
+            chain?.StepCount ?? 0, rule.Enabled, rule.UpdatedAt);
     }
 }

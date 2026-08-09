@@ -1,7 +1,7 @@
 using System.Text.Json;
 using PlaceContext.Application.Cqrs;
-using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Ports;
+using PlaceContext.Crm.Integration;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.Repositories;
 
@@ -11,14 +11,14 @@ public sealed class RemoveCrmClientArtifactHandler
     : ICommandHandler<RemoveCrmClientArtifactCommand, bool>
 {
     private readonly ICrmClientArtifactRepository _artifacts;
-    private readonly IObjectStore _store;
+    private readonly ICrmArtifactsClient _storage;
     private readonly ICrmUnitOfWork _uow;
 
     public RemoveCrmClientArtifactHandler(
         ICrmClientArtifactRepository artifacts,
-        IObjectStore store,
+        ICrmArtifactsClient storage,
         ICrmUnitOfWork uow)
-        => (_artifacts, _store, _uow) = (artifacts, store, uow);
+        => (_artifacts, _storage, _uow) = (artifacts, storage, uow);
 
     public async Task<bool> HandleAsync(
         RemoveCrmClientArtifactCommand command,
@@ -26,7 +26,7 @@ public sealed class RemoveCrmClientArtifactHandler
     {
         var value = await _artifacts.GetByIdAsync(command.ArtifactId, ct);
         if (value is null) return false;
-        if (value.IsDirectUpload) await _store.DeleteAsync(value.Bucket, value.ObjectKey, ct);
+        if (value.IsDirectUpload) await _storage.DeleteAsync(value.Bucket, value.ObjectKey, ct);
         await _artifacts.RemoveAsync(value.Id, ct);
         await _uow.SaveChangesAsync(ct);
         return true;

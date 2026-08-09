@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using PlaceContext.Application.Dtos;
+using PlaceContext.Application.Cqrs;
+using PlaceContext.Application.Features;
 using PlaceContext.Application.Ports;
 
 namespace PlaceContext.Search.Controllers;
@@ -9,9 +11,19 @@ namespace PlaceContext.Search.Controllers;
 [Route("api/search/internal")]
 [Authorize(AuthenticationSchemes = "ApiKey")]
 public sealed class InternalSearchController(
+    IDispatcher dispatcher,
     IOpenSearchDataGateway gateway,
     IOpenSearchConnectionResolver connectionResolver) : ControllerBase
 {
+    [HttpGet("projects/{projectId:guid}/run-outputs")]
+    public async Task<IActionResult> SearchRunOutputs(
+        Guid projectId,
+        [FromQuery] string term,
+        [FromQuery] int take = 10,
+        CancellationToken ct = default)
+        => Ok(await dispatcher.Query(
+            new SearchRunOutputsQuery(projectId, term, Math.Clamp(take, 1, 100)), ct));
+
     [HttpGet("projects/{projectId:guid}/job-environment")]
     public async Task<IActionResult> JobEnvironment(Guid projectId, CancellationToken ct)
         => Ok(await connectionResolver.GetJobEnvironmentAsync(projectId, ct));

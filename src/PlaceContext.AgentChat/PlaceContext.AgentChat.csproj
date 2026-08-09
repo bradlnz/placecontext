@@ -5,7 +5,7 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="PlaceContext.AgentChat.Contracts.csproj" />
-    <ProjectReference Include="..\PlaceContext.Application\PlaceContext.Application.csproj" />
+    <ProjectReference Include="..\PlaceContext.BuildingBlocks\PlaceContext.BuildingBlocks.csproj" />
     <ProjectReference Include="..\PlaceContext.Domain\PlaceContext.Domain.csproj" />
   </ItemGroup>
   <ItemGroup>

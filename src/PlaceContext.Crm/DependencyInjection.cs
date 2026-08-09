@@ -1,11 +1,9 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using PlaceContext.Application.Cqrs;
-using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Features;
 using PlaceContext.Crm.Automation;
 using PlaceContext.Crm.Services;
-using PlaceContext.Jobs.Contracts.Integration;
 
 namespace PlaceContext.Crm;
 
@@ -56,7 +54,5 @@ public static class DependencyInjection
     {
         services.TryAddScoped<CrmAutomationDispatcher>();
         services.TryAddScoped<CrmArtifactAssociationService>();
-        services.TryAddEnumerable(ServiceDescriptor.Scoped<IChainRunCompletionObserver>(provider =>
-            provider.GetRequiredService<CrmArtifactAssociationService>()));
     }
 }

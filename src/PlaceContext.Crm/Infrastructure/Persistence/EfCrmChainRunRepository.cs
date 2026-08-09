@@ -23,6 +23,15 @@ public sealed class EfCrmChainRunRepository : ICrmChainRunRepository
             StartedAt = run.StartedAt,
         }, ct);
 
+    public async Task<CrmChainRun?> GetByChainRunIdAsync(
+        Guid chainRunId,
+        CancellationToken ct = default)
+    {
+        var row = await _db.CrmChainRuns.AsNoTracking()
+            .FirstOrDefaultAsync(candidate => candidate.ChainRunId == chainRunId, ct);
+        return row is null ? null : Map(row);
+    }
+
     public async Task<IReadOnlyList<CrmChainRun>> ListForClientAsync(
         Guid clientId,
         int take = 20,
@@ -32,14 +41,16 @@ public sealed class EfCrmChainRunRepository : ICrmChainRunRepository
             .OrderByDescending(r => r.StartedAt)
             .Take(Math.Clamp(take, 1, 100))
             .ToListAsync(ct))
-            .Select(row => new CrmChainRun(
-                row.Id,
-                row.ProjectId,
-                row.ClientId,
-                row.ChainId,
-                row.ChainRunId,
-                Enum.TryParse<CustomerLifecycleStage>(row.LifecycleStage, out var stage)
-                    ? stage : CustomerLifecycleStage.Lead,
-                row.StartedAt))
+            .Select(Map)
             .ToList();
+
+    private static CrmChainRun Map(CrmChainRunRow row) => new(
+        row.Id,
+        row.ProjectId,
+        row.ClientId,
+        row.ChainId,
+        row.ChainRunId,
+        Enum.TryParse<CustomerLifecycleStage>(row.LifecycleStage, out var stage)
+            ? stage : CustomerLifecycleStage.Lead,
+        row.StartedAt);
 }

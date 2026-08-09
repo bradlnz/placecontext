@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Features;
+using PlaceContext.Jobs.Contracts.Api;
 
 namespace PlaceContext.Jobs.Controllers;
 
@@ -15,9 +16,11 @@ public sealed class InternalJobsController(IDispatcher dispatcher) : ControllerB
     {
         var jobs = await dispatcher.Query(new ListJobsQuery(projectId), ct);
         var chainsTask = dispatcher.Query(new ListJobChainsQuery(projectId), ct);
+        var triggersTask = dispatcher.Query(new ListTriggersQuery(projectId), ct);
         var runTasks = jobs.Select(job => dispatcher.Query(new ListJobRunsQuery(job.Id), ct)).ToArray();
         await Task.WhenAll(runTasks);
         var chains = await chainsTask;
+        var triggers = await triggersTask;
 
         return Ok(new
         {
@@ -35,6 +38,7 @@ public sealed class InternalJobsController(IDispatcher dispatcher) : ControllerB
                 chain.ProjectId,
                 chain.Name,
                 chain.Description,
+                stepCount = chain.Steps.Count,
                 stages = chain.Stages.Select(stage => new
                 {
                     jobIds = stage.Jobs.Select(job => job.JobId),
@@ -47,6 +51,46 @@ public sealed class InternalJobsController(IDispatcher dispatcher) : ControllerB
                 run.Status,
                 run.StartedAt,
             }),
+            triggers,
         });
+    }
+
+    [HttpPost("jobs/{jobId:guid}/runs")]
+    public async Task<IActionResult> RunJob(
+        Guid jobId,
+        InternalRunJobRequest request,
+        CancellationToken ct)
+    {
+        var job = await dispatcher.Query(new GetJobQuery(jobId), ct);
+        if (job is null || job.ProjectId != request.ProjectId)
+            return NotFound(new { error = "Job not found for this project." });
+        return Ok(await dispatcher.Send(new RunJobCommand(jobId, request.InputPayload), ct));
+    }
+
+    [HttpPost("chains/{chainId:guid}/runs")]
+    public async Task<IActionResult> RunChain(
+        Guid chainId,
+        InternalRunJobChainRequest request,
+        CancellationToken ct)
+    {
+        var chain = (await dispatcher.Query(new ListJobChainsQuery(request.ProjectId), ct))
+            .FirstOrDefault(candidate => candidate.Id == chainId);
+        if (chain is null) return NotFound(new { error = "Job chain not found for this project." });
+
+        return Ok(await dispatcher.Send(
+            new RunJobChainCommand(
+                chainId,
+                request.InputPayload,
+                request.ChainRunId,
+                request.StepPayloadOverrides,
+                CrmClientId: request.CrmClientId),
+            ct));
+    }
+
+    [HttpGet("chain-runs/{chainRunId:guid}")]
+    public async Task<IActionResult> GetChainRun(Guid chainRunId, CancellationToken ct)
+    {
+        var run = await dispatcher.Query(new GetChainRunQuery(chainRunId), ct);
+        return run is null ? NotFound() : Ok(run);
     }
 }

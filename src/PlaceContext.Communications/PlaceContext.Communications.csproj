@@ -3,6 +3,7 @@
   <ItemGroup>
     <ProjectReference Include="PlaceContext.Communications.Contracts.csproj" />
     <ProjectReference Include="PlaceContext.Communications.Domain.csproj" />
+    <ProjectReference Include="..\PlaceContext.BuildingBlocks\PlaceContext.BuildingBlocks.csproj" />
   </ItemGroup>
   <ItemGroup><Compile Remove="bin/**/*.cs;obj/**/*.cs;Contracts/**/*.cs;Domain/**/*.cs;Infrastructure/**/*.cs;Runtime/**/*.cs" /></ItemGroup>
   <ItemGroup><FrameworkReference Include="Microsoft.AspNetCore.App" /></ItemGroup>

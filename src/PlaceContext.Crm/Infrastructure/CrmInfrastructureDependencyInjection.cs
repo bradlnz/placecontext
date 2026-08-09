@@ -7,10 +7,12 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using PlaceContext.Application.Ports;
 using PlaceContext.Crm.Automation;
 using PlaceContext.Crm.Infrastructure.Crm;
+using PlaceContext.Crm.Infrastructure.Integration;
 using PlaceContext.Crm.Infrastructure.Persistence;
 using PlaceContext.Crm.Infrastructure.Scheduling;
 using PlaceContext.Crm.Infrastructure.Security;
 using PlaceContext.Crm.Services;
+using PlaceContext.Crm.Integration;
 using PlaceContext.Domain.Repositories;
 
 namespace PlaceContext.Crm;
@@ -54,6 +56,14 @@ public static class CrmInfrastructureDependencyInjection
         services.AddScoped<ICrmClientJobChainAssignmentRepository, EfCrmClientJobChainAssignmentRepository>();
         services.AddScoped<ICrmAutomationRuleRepository, EfCrmAutomationRuleRepository>();
         services.AddScoped<ICrmAutomationQueue, DbCrmAutomationQueue>();
+        services.AddScoped<ICrmJobsClient, HttpCrmJobsClient>();
+        services.AddScoped<ICrmArtifactsClient, HttpCrmArtifactsClient>();
+        services.AddScoped<ICrmCommunicationsClient, HttpCrmCommunicationsClient>();
+        services.AddScoped<ICrmCustomerPortalClient, HttpCrmCustomerPortalClient>();
+        services.AddScoped<ICrmDataClient, HttpCrmDataClient>();
+        services.AddScoped<ICrmProjectsClient, HttpCrmProjectsClient>();
+        services.AddScoped<ITenantCatalog, HttpCrmTenantCatalog>();
+        services.AddHttpClient();
         services.AddHostedService<CrmAutomationWorker>();
         services.AddHostedService<CrmArtifactReconciliationWorker>();
         return services;

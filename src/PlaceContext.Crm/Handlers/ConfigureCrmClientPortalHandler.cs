@@ -1,7 +1,7 @@
 using System.Text.Json;
 using PlaceContext.Application.Cqrs;
-using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Ports;
+using PlaceContext.Crm.Integration;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.Repositories;
 
@@ -14,14 +14,14 @@ public sealed class ConfigureCrmClientPortalHandler
     private readonly ICurrentTenant _tenant;
     private readonly ICrmUnitOfWork _uow;
     private readonly IClock _clock;
-    private readonly ICustomerPortalProvisioner _provisioner;
+    private readonly ICrmCustomerPortalClient _provisioner;
 
     public ConfigureCrmClientPortalHandler(
         ICrmClientRepository clients,
         ICurrentTenant tenant,
         ICrmUnitOfWork uow,
         IClock clock,
-        ICustomerPortalProvisioner provisioner)
+        ICrmCustomerPortalClient provisioner)
         => (_clients, _tenant, _uow, _clock, _provisioner) = (clients, tenant, uow, clock, provisioner);
 
     public async Task<CrmClientView> HandleAsync(

@@ -20,6 +20,9 @@ public sealed record JobEmailAttachment(string Name, string ContentType, string 
 public interface IJobCrmClient
 {
     Task<JobCrmCustomer?> GetCustomerAsync(Guid id, CancellationToken ct = default);
+    Task NotifyChainCompletedAsync(
+        JobCrmChainCompletion completion,
+        CancellationToken ct = default);
 }
 
 public sealed record JobCrmCustomer(

@@ -1,6 +1,7 @@
 using System.Net;
 using Microsoft.Extensions.Options;
 using Microsoft.Net.Http.Headers;
+using System.Net.Http.Headers;
 
 namespace PlaceContext.App.Proxy;
 
@@ -47,16 +48,19 @@ public sealed class MicroserviceProxyMiddleware
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly MicroserviceProxyOptions _options;
     private readonly ILogger<MicroserviceProxyMiddleware> _logger;
+    private readonly EdgeServiceTokenClient _serviceTokens;
 
     public MicroserviceProxyMiddleware(
         RequestDelegate next,
         IHttpClientFactory httpClientFactory,
         IOptions<MicroserviceProxyOptions> options,
+        EdgeServiceTokenClient serviceTokens,
         ILogger<MicroserviceProxyMiddleware> logger)
     {
         _next = next;
         _httpClientFactory = httpClientFactory;
         _options = options.Value;
+        _serviceTokens = serviceTokens;
         _logger = logger;
     }
 
@@ -106,6 +110,10 @@ public sealed class MicroserviceProxyMiddleware
     {
         var target = BuildTargetUri(destination, context.Request);
         using var proxyRequest = CreateProxyRequest(context, route, target);
+        if (route.ServiceName != "Identity"
+            && proxyRequest.Headers.Authorization is null
+            && await _serviceTokens.ExchangeAsync(context) is { Length: > 0 } token)
+            proxyRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
         try
         {

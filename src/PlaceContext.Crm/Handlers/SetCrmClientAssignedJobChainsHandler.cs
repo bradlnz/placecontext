@@ -1,7 +1,7 @@
 using System.Text.Json;
 using PlaceContext.Application.Cqrs;
-using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Ports;
+using PlaceContext.Crm.Integration;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.Repositories;
 
@@ -12,15 +12,15 @@ public sealed class SetCrmClientAssignedJobChainsHandler
 {
     private readonly ICrmClientRepository _clients;
     private readonly ICrmClientJobChainAssignmentRepository _assignments;
-    private readonly IJobChainRepository _chains;
+    private readonly ICrmJobsClient _jobs;
     private readonly ICrmUnitOfWork _uow;
 
     public SetCrmClientAssignedJobChainsHandler(
         ICrmClientRepository clients,
         ICrmClientJobChainAssignmentRepository assignments,
-        IJobChainRepository chains,
+        ICrmJobsClient jobs,
         ICrmUnitOfWork uow)
-        => (_clients, _assignments, _chains, _uow) = (clients, assignments, chains, uow);
+        => (_clients, _assignments, _jobs, _uow) = (clients, assignments, jobs, uow);
 
     public async Task<IReadOnlyList<Guid>> HandleAsync(
         SetCrmClientAssignedJobChainsCommand command,
@@ -38,7 +38,7 @@ public sealed class SetCrmClientAssignedJobChainsHandler
 
         if (desired.Length > 0)
         {
-            var chainIds = (await _chains.ListForProjectAsync(command.ProjectId, ct))
+            var chainIds = (await _jobs.GetCatalogAsync(command.ProjectId, ct)).Chains
                 .Select(chain => chain.Id)
                 .ToHashSet();
             var invalidChainId = desired.FirstOrDefault(chainId => !chainIds.Contains(chainId));

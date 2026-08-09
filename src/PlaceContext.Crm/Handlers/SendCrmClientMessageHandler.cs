@@ -1,8 +1,8 @@
 using System.Text.Json;
 using PlaceContext.Application.Cqrs;
-using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Ports;
 using PlaceContext.Crm.Automation;
+using PlaceContext.Crm.Integration;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.Repositories;
 
@@ -13,7 +13,7 @@ public sealed class SendCrmClientMessageHandler
 {
     private readonly ICrmClientRepository _clients;
     private readonly ICrmCommunicationRepository _communications;
-    private readonly IClientCommunicationSender _sender;
+    private readonly ICrmCommunicationsClient _sender;
     private readonly ICurrentUser _currentUser;
     private readonly ICrmUnitOfWork _uow;
     private readonly IClock _clock;
@@ -22,7 +22,7 @@ public sealed class SendCrmClientMessageHandler
     public SendCrmClientMessageHandler(
         ICrmClientRepository clients,
         ICrmCommunicationRepository communications,
-        IClientCommunicationSender sender,
+        ICrmCommunicationsClient sender,
         ICurrentUser currentUser,
         ICrmUnitOfWork uow,
         IClock clock,

@@ -6,7 +6,7 @@ using PlaceContext.Application.Ports;
 using PlaceContext.Crm.Automation;
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Features;
-using PlaceContext.Application.Dtos;
+using PlaceContext.Crm.Integration;
 using PlaceContext.Crm.Infrastructure.Persistence;
 
 namespace PlaceContext.Crm.Infrastructure.Scheduling;
@@ -104,13 +104,17 @@ public sealed class CrmAutomationWorker : BackgroundService
                     chainRunId = item.ChainRunId ?? Guid.NewGuid();
                     await MarkRunningAsync(item.Id, chainRunId, ct);
                     var encryptor = scope.ServiceProvider.GetRequiredService<IDataEncryptor>();
-                    var handler = scope.ServiceProvider.GetRequiredService<
-                        ICommandHandler<RunJobChainCommand, ChainRunView>>();
+                    var jobs = scope.ServiceProvider.GetRequiredService<ICrmJobsClient>();
                     var payload = encryptor.Unprotect(
                         item.InputPayloadProtected, DataEncryptionPurpose.CrmAutomationPayload);
-                    var result = await handler.HandleAsync(
-                        new RunJobChainCommand(item.ChainId, payload, chainRunId,
-                            CrmClientId: item.ClientId), ct);
+                    var result = await jobs.RunChainAsync(
+                        new CrmRunJobChainRequest(
+                            item.ProjectId,
+                            item.ChainId,
+                            payload,
+                            chainRunId,
+                            CrmClientId: item.ClientId),
+                        ct);
                     resultStatus = result.Status;
                 }
                 await CompleteAsync(item.Id, chainRunId, resultStatus, ct);

@@ -96,6 +96,88 @@ public sealed class MicroserviceProxyMiddlewareTests
     }
 
     [Fact]
+    public async Task Exchanges_the_identity_cookie_for_a_service_token_on_non_identity_routes()
+    {
+        var requests = new List<(Uri? Uri, string? Cookie, string? Authorization)>();
+        var handler = new RecordingHandler(request =>
+        {
+            requests.Add((
+                request.RequestUri,
+                request.Headers.TryGetValues("Cookie", out var cookies) ? cookies.Single() : null,
+                request.Headers.Authorization?.ToString()));
+            return Task.FromResult(request.RequestUri?.Host == "identity.internal"
+                ? new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(
+                        "{\"accessToken\":\"edge-issued-token\",\"expiresAt\":\"2026-08-09T07:00:00Z\"}",
+                        Encoding.UTF8,
+                        "application/json"),
+                }
+                : new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent("{}", Encoding.UTF8, "application/json"),
+                });
+        });
+        var context = CreateContext("GET", "/api/jobs/projects/one/runs");
+        context.Request.Headers.Cookie = "placecontext.identity=session-value";
+        var middleware = CreateMiddleware(
+            handler,
+            new Dictionary<string, string>
+            {
+                ["Identity"] = "https://identity.internal",
+                ["Jobs"] = "https://jobs.internal",
+            });
+
+        await middleware.InvokeAsync(context);
+
+        Assert.Collection(
+            requests,
+            exchange =>
+            {
+                Assert.Equal(
+                    "https://identity.internal/api/identity/internal/service-token",
+                    exchange.Uri?.AbsoluteUri);
+                Assert.Equal("placecontext.identity=session-value", exchange.Cookie);
+                Assert.Null(exchange.Authorization);
+            },
+            service =>
+            {
+                Assert.Equal(
+                    "https://jobs.internal/api/jobs/projects/one/runs",
+                    service.Uri?.AbsoluteUri);
+                Assert.Null(service.Cookie);
+                Assert.Equal("Bearer edge-issued-token", service.Authorization);
+            });
+    }
+
+    [Fact]
+    public async Task Forwards_the_cookie_directly_to_identity_without_token_exchange()
+    {
+        var requests = new List<(Uri? Uri, string? Cookie)>();
+        var handler = new RecordingHandler(request =>
+        {
+            requests.Add((
+                request.RequestUri,
+                request.Headers.TryGetValues("Cookie", out var cookies) ? cookies.Single() : null));
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("{}", Encoding.UTF8, "application/json"),
+            });
+        });
+        var context = CreateContext("GET", "/api/identity/context");
+        context.Request.Headers.Cookie = "placecontext.identity=session-value";
+        var middleware = CreateMiddleware(
+            handler,
+            new Dictionary<string, string> { ["Identity"] = "https://identity.internal" });
+
+        await middleware.InvokeAsync(context);
+
+        var forwarded = Assert.Single(requests);
+        Assert.Equal("https://identity.internal/api/identity/context", forwarded.Uri?.AbsoluteUri);
+        Assert.Equal("placecontext.identity=session-value", forwarded.Cookie);
+    }
+
+    [Fact]
     public async Task Returns_503_for_an_owned_route_without_a_configured_destination()
     {
         var nextCalled = false;
@@ -152,12 +234,20 @@ public sealed class MicroserviceProxyMiddlewareTests
     private static MicroserviceProxyMiddleware CreateMiddleware(
         HttpMessageHandler handler,
         Dictionary<string, string> destinations,
-        RequestDelegate? next = null) =>
-        new(
+        RequestDelegate? next = null)
+    {
+        var factory = new StubHttpClientFactory(handler);
+        var options = Options.Create(new MicroserviceProxyOptions { Destinations = destinations });
+        return new MicroserviceProxyMiddleware(
             next ?? (_ => Task.CompletedTask),
-            new StubHttpClientFactory(handler),
-            Options.Create(new MicroserviceProxyOptions { Destinations = destinations }),
+            factory,
+            options,
+            new EdgeServiceTokenClient(
+                factory,
+                options,
+                NullLogger<EdgeServiceTokenClient>.Instance),
             NullLogger<MicroserviceProxyMiddleware>.Instance);
+    }
 
     private static DefaultHttpContext CreateContext(
         string method,

@@ -3,6 +3,8 @@ using PlaceContext.Application.Features;
 using PlaceContext.Application.Ports;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.Repositories;
+using PlaceContext.AgentChat.Integration;
+using PlaceContext.Application.Agents;
 
 namespace PlaceContext.Application.Agents.Services;
 
@@ -22,7 +24,7 @@ public sealed class AgentSessionRunner : ILaunchpadRunner
     private readonly IChatGateway _gateway;
     private readonly AgentContextBuilder _contextBuilder;
     private readonly IAgentConfigRepository _configs;
-    private readonly IProjectDataStore _dataStore;
+    private readonly IAgentChatWorkspaceClient _workspace;
     private readonly IAgentSessionStore _sessions;
     private readonly LaunchpadToolExecutor _executor;
     private readonly IClock _clock;
@@ -31,7 +33,7 @@ public sealed class AgentSessionRunner : ILaunchpadRunner
         IChatGateway gateway,
         AgentContextBuilder contextBuilder,
         IAgentConfigRepository configs,
-        IProjectDataStore dataStore,
+        IAgentChatWorkspaceClient workspace,
         IAgentSessionStore sessions,
         LaunchpadToolExecutor executor,
         IClock clock)
@@ -39,7 +41,7 @@ public sealed class AgentSessionRunner : ILaunchpadRunner
         _gateway = gateway;
         _contextBuilder = contextBuilder;
         _configs = configs;
-        _dataStore = dataStore;
+        _workspace = workspace;
         _sessions = sessions;
         _executor = executor;
         _clock = clock;
@@ -66,7 +68,8 @@ public sealed class AgentSessionRunner : ILaunchpadRunner
             {
                 try
                 {
-                    var page = await _dataStore.QueryTablePageAsync(projectId, sourceTable, null, 1, 200, ct: ct);
+                    var page = await _workspace.QueryTablePageAsync(
+                        projectId, sourceTable, null, 1, 200, ct);
                     rowCount = page.TotalCount;
                     rowsBlock = TableRowsJson.Convert(page.Columns, page.Rows);
                 }

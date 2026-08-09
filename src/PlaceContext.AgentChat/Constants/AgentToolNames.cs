@@ -1,9 +1,5 @@
 namespace PlaceContext.Application.Agents;
 
-/// <summary>
-/// Canonical names for agent/chat tools. Use these everywhere a tool is dispatched, catalogued,
-/// or matched in model output — never hardcode the string.
-/// </summary>
 public static class AgentToolNames
 {
     public const string ListTables = "list_tables";

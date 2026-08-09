@@ -4,11 +4,13 @@
     <Nullable>enable</Nullable>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
   </PropertyGroup>
-  <ItemGroup><Compile Include="Runtime/**/*.cs" /></ItemGroup>
+  <ItemGroup>
+    <Compile Include="Runtime/**/*.cs" />
+    <Compile Include="Controllers/CrmIngestionController.cs" />
+  </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="PlaceContext.Crm.csproj" />
     <ProjectReference Include="PlaceContext.Crm.Infrastructure.csproj" />
-    <ProjectReference Include="..\PlaceContext.Infrastructure\PlaceContext.Infrastructure.csproj" />
   </ItemGroup>
   <ItemGroup><ProjectReference Include="..\PlaceContext.ServiceDefaults\PlaceContext.ServiceDefaults.csproj" /></ItemGroup>
 </Project>

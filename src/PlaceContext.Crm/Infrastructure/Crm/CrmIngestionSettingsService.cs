@@ -5,6 +5,7 @@ using PlaceContext.Application.Ports;
 using PlaceContext.Crm.Contracts.Ingestion;
 using PlaceContext.Crm.Services;
 using PlaceContext.Crm.Infrastructure.Persistence;
+using PlaceContext.Crm.Integration;
 using PlaceContext.Domain.Repositories;
 using PlaceContext.Domain.ValueObjects;
 
@@ -19,13 +20,13 @@ public sealed class CrmIngestionSettingsService : ICrmIngestionSettingsService
     public const string TokenHeader = "X-PlaceContext-CRM-Token";
     private readonly CrmDbContext _db;
     private readonly ITenantCatalog _tenants;
-    private readonly IProjectRepository _projects;
+    private readonly ICrmProjectsClient _projects;
     private readonly ICurrentTenant _tenant;
 
     public CrmIngestionSettingsService(
         CrmDbContext db,
         ITenantCatalog tenants,
-        IProjectRepository projects,
+        ICrmProjectsClient projects,
         ICurrentTenant tenant)
         => (_db, _tenants, _projects, _tenant) = (db, tenants, projects, tenant);
 
@@ -146,7 +147,7 @@ public sealed class CrmIngestionSettingsService : ICrmIngestionSettingsService
     private async Task EnsureProjectAsync(Guid projectId, CancellationToken ct)
     {
         if (projectId == Guid.Empty
-            || await _projects.GetByIdAsync(ProjectId.From(projectId), ct) is null)
+            || !await _projects.ExistsAsync(projectId, ct))
             throw new InvalidOperationException("Project not found.");
     }
 

@@ -3,9 +3,10 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using PlaceContext.Application.Features;
 using PlaceContext.Application.Ports;
+using PlaceContext.Crm.Integration;
 using PlaceContext.Crm.Services;
-using PlaceContext.Domain.Repositories;
-using PlaceContext.Domain.ValueObjects;
+using PlaceContext.Crm.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
 
 namespace PlaceContext.Crm.Infrastructure.Scheduling;
 
@@ -40,12 +41,24 @@ public sealed class CrmArtifactReconciliationWorker : BackgroundService
                 try
                 {
                     await using var scope = _scopes.CreateAsyncScope();
-                    var runs = scope.ServiceProvider.GetRequiredService<IChainRunRepository>();
+                    var db = scope.ServiceProvider.GetRequiredService<CrmDbContext>();
+                    var jobs = scope.ServiceProvider.GetRequiredService<ICrmJobsClient>();
                     var linker = scope.ServiceProvider.GetRequiredService<CrmArtifactAssociationService>();
-                    foreach (var run in (await runs.ListRecentAsync(200, stoppingToken))
-                                 .Where(run => run.CrmClientId is not null
-                                     && run.Status is not (ChainRunStatus.Running or ChainRunStatus.Waiting)))
-                        associated += await linker.AssociateAsync(run, stoppingToken);
+                    var links = await db.CrmChainRuns.AsNoTracking()
+                        .OrderByDescending(run => run.StartedAt)
+                        .Take(200)
+                        .ToListAsync(stoppingToken);
+                    foreach (var link in links)
+                    {
+                        var run = await jobs.GetRunAsync(link.ChainRunId, stoppingToken);
+                        if (run is null || run.Status is "Running" or "Waiting") continue;
+                        associated += await linker.AssociateAsync(
+                            link.ProjectId,
+                            link.ClientId,
+                            link.ChainRunId,
+                            run.Steps.Select(step => step.RunId).OfType<Guid>(),
+                            stoppingToken);
+                    }
                 }
                 finally { _tenantAccessor.Clear(); }
             }

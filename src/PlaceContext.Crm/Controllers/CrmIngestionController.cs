@@ -1,10 +1,9 @@
 using System.Text.Json;
-using FluentValidation;
+using System.Net.Mail;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using PlaceContext.Application;
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Features;
 using PlaceContext.Application.Ports;
@@ -14,9 +13,12 @@ using PlaceContext.Domain.ValueObjects;
 using PlaceContext.Crm.Infrastructure.Crm;
 using PlaceContext.Crm.Infrastructure.Persistence;
 using PlaceContext.Crm.Automation;
-using PlaceContext.Infrastructure.Tenancy;
+using PlaceContext.Crm.Contracts.Ingestion;
+using PlaceContext.Crm.Ingestion;
+using PlaceContext.Crm.Integration;
+using PlaceContext.Crm.Domain.Persistence;
 
-namespace PlaceContext.Host.Controllers;
+namespace PlaceContext.Crm.Controllers;
 
 [ApiController]
 [Route("api/crm/ingest")]
@@ -28,14 +30,14 @@ public sealed class CrmIngestionController : ControllerBase
     private readonly ICrmClientRepository _clients;
     private readonly ICommandHandler<SaveCrmClientCommand, CrmClientView> _save;
     private readonly CrmAutomationDispatcher _automations;
-    private readonly IProjectDataStore _projectData;
+    private readonly ICrmDataClient _projectData;
     private readonly CrmDbContext _db;
     private readonly IDataEncryptor _encryptor;
-    private readonly IPlaceContextService _service;
-    private readonly IRunArtifactLinkRepository _artifactLinks;
-    private readonly IObjectStore _objectStore;
-    private readonly IUnitOfWork _uow;
-    private readonly IValidator<JsonElement> _validator;
+    private readonly ICrmJobsClient _jobs;
+    private readonly ICrmArtifactsClient _artifacts;
+    private readonly ICrmUnitOfWork _uow;
+    private readonly ICurrentTenant _currentTenant;
+    private readonly ICurrentTenantAccessor _tenantAccessor;
     private static readonly JsonSerializerOptions WebJson = new(JsonSerializerDefaults.Web);
 
     public CrmIngestionController(
@@ -43,18 +45,18 @@ public sealed class CrmIngestionController : ControllerBase
         ICrmClientRepository clients,
         ICommandHandler<SaveCrmClientCommand, CrmClientView> save,
         CrmAutomationDispatcher automations,
-        IProjectDataStore projectData,
+        ICrmDataClient projectData,
         CrmDbContext db,
         IDataEncryptor encryptor,
-        IPlaceContextService service,
-        IRunArtifactLinkRepository artifactLinks,
-        IObjectStore objectStore,
-        IUnitOfWork uow,
-        IValidator<JsonElement> validator)
+        ICrmJobsClient jobs,
+        ICrmArtifactsClient artifacts,
+        ICrmUnitOfWork uow,
+        ICurrentTenant currentTenant,
+        ICurrentTenantAccessor tenantAccessor)
         => (_settings, _clients, _save, _automations, _projectData, _db, _encryptor,
-                _service, _artifactLinks, _objectStore, _uow, _validator)
+                _jobs, _artifacts, _uow, _currentTenant, _tenantAccessor)
             = (settings, clients, save, automations, projectData, db, encryptor,
-                service, artifactLinks, objectStore, uow, validator);
+                jobs, artifacts, uow, currentTenant, tenantAccessor);
 
     [HttpOptions]
     public async Task<IActionResult> Options(CancellationToken ct)
@@ -81,17 +83,12 @@ public sealed class CrmIngestionController : ControllerBase
             return StatusCode(StatusCodes.Status403Forbidden, new { error = "Origin is not allowed." });
         ApplyCors(normalizedOrigin);
 
-        var validation = await _validator.ValidateAsync(payload, ct);
-        if (!validation.IsValid)
-            return BadRequest(new
-            {
-                error = validation.Errors[0].ErrorMessage,
-                errors = validation.Errors.Select(error => error.ErrorMessage).Distinct(),
-            });
-
         LeadIngestionRequest? request = null;
         if (payload.ValueKind == JsonValueKind.Object)
             request = payload.Deserialize<LeadIngestionRequest>(WebJson);
+        var errors = Validate(payload, request);
+        if (errors.Count > 0)
+            return BadRequest(new { error = errors[0], errors });
 
         // Conventional contact-form honeypot: acknowledge bots without adding a CRM record or job.
         if (!string.IsNullOrWhiteSpace(request?.Website)) return Accepted(new { accepted = true });
@@ -100,8 +97,8 @@ public sealed class CrmIngestionController : ControllerBase
             && !string.IsNullOrWhiteSpace(request.Name)
             && (!string.IsNullOrWhiteSpace(request.Email) || !string.IsNullOrWhiteSpace(request.Phone));
 
-        var previousTenant = CurrentTenant.Current;
-        CurrentTenant.Set(resolved.Tenant);
+        var previousTenant = SnapshotTenant();
+        _tenantAccessor.Set(resolved.Tenant);
         try
         {
             CrmClientView? result = null;
@@ -160,8 +157,7 @@ public sealed class CrmIngestionController : ControllerBase
         }
         finally
         {
-            if (previousTenant is null) CurrentTenant.Clear();
-            else CurrentTenant.Set(previousTenant);
+            RestoreTenant(previousTenant);
         }
     }
 
@@ -184,8 +180,8 @@ public sealed class CrmIngestionController : ControllerBase
             return StatusCode(StatusCodes.Status403Forbidden, new { error = "Origin is not allowed." });
         ApplyCors(normalizedOrigin);
 
-        var previousTenant = CurrentTenant.Current;
-        CurrentTenant.Set(resolved.Tenant);
+        var previousTenant = SnapshotTenant();
+        _tenantAccessor.Set(resolved.Tenant);
         try
         {
             var row = await _db.CrmAutomationQueue.AsNoTracking().FirstOrDefaultAsync(
@@ -195,7 +191,7 @@ public sealed class CrmIngestionController : ControllerBase
             if (row is null) return NotFound();
 
             var chain = row.ChainRunId is { } chainRunId
-                ? await _service.GetChainRunAsync(chainRunId, ct)
+                ? await _jobs.GetRunAsync(chainRunId, ct)
                 : null;
             var error = row.LastError is { Length: > 0 }
                 ? _encryptor.Unprotect(row.LastError, DataEncryptionPurpose.CrmAutomation)
@@ -208,11 +204,11 @@ public sealed class CrmIngestionController : ControllerBase
                         ? "Running"
                         : row.Attempts > 0 ? "Retrying" : "Queued";
             var terminal = row.CompletedAt is not null || row.FailedAt is not null;
-            var artifactsByRun = new Dictionary<Guid, IReadOnlyList<RunArtifactLinkView>>();
+            var artifactsByRun = new Dictionary<Guid, IReadOnlyList<CrmRunArtifactSummary>>();
             if (terminal && chain is not null)
             {
                 foreach (var runId in chain.Steps.Select(step => step.RunId).OfType<Guid>().Distinct())
-                    artifactsByRun[runId] = await _service.ListRunArtifactsAsync(runId, ct);
+                    artifactsByRun[runId] = await _artifacts.ListForRunAsync(runId, ct);
             }
 
             return Ok(new
@@ -250,8 +246,7 @@ public sealed class CrmIngestionController : ControllerBase
         }
         finally
         {
-            if (previousTenant is null) CurrentTenant.Clear();
-            else CurrentTenant.Set(previousTenant);
+            RestoreTenant(previousTenant);
         }
     }
 
@@ -271,8 +266,8 @@ public sealed class CrmIngestionController : ControllerBase
             return StatusCode(StatusCodes.Status403Forbidden, new { error = "Origin is not allowed." });
         ApplyCors(normalizedOrigin);
 
-        var previousTenant = CurrentTenant.Current;
-        CurrentTenant.Set(resolved.Tenant);
+        var previousTenant = SnapshotTenant();
+        _tenantAccessor.Set(resolved.Tenant);
         try
         {
             var row = await _db.CrmAutomationQueue.AsNoTracking().FirstOrDefaultAsync(
@@ -281,21 +276,25 @@ public sealed class CrmIngestionController : ControllerBase
                     && value.ProjectId == resolved.ProjectId, ct);
             if (row?.ChainRunId is not { } chainRunId) return NotFound();
 
-            var chain = await _service.GetChainRunAsync(chainRunId, ct);
+            var chain = await _jobs.GetRunAsync(chainRunId, ct);
             var allowedRuns = chain?.Steps.Select(step => step.RunId).OfType<Guid>().ToHashSet()
                 ?? new HashSet<Guid>();
-            var artifact = await _artifactLinks.GetByIdAsync(artifactId, ct);
-            if (artifact is null || artifact.ProjectId != resolved.ProjectId ||
-                !allowedRuns.Contains(artifact.RunId)) return NotFound();
+            CrmRunArtifactSummary? artifact = null;
+            foreach (var runId in allowedRuns)
+            {
+                artifact = (await _artifacts.ListForRunAsync(runId, ct))
+                    .FirstOrDefault(candidate => candidate.Id == artifactId);
+                if (artifact is not null) break;
+            }
+            if (artifact is null) return NotFound();
 
-            var value = await _objectStore.OpenReadAsync(artifact.Bucket, artifact.ObjectKey, ct);
+            var value = await _artifacts.ReadAsync(artifact.Bucket, artifact.ObjectKey, ct);
             if (value is null) return NotFound();
             return File(value.Content, artifact.ContentType, artifact.Title);
         }
         finally
         {
-            if (previousTenant is null) CurrentTenant.Clear();
-            else CurrentTenant.Set(previousTenant);
+            RestoreTenant(previousTenant);
         }
     }
 
@@ -329,5 +328,44 @@ public sealed class CrmIngestionController : ControllerBase
 
     private static string? Clean(string? value)
         => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private TenantContext? SnapshotTenant()
+        => _currentTenant.IsResolved
+            ? new TenantContext(
+                _currentTenant.TenantId,
+                _currentTenant.Slug,
+                _currentTenant.TimeZoneId)
+            : null;
+
+    private void RestoreTenant(TenantContext? tenant)
+    {
+        if (tenant is null) _tenantAccessor.Clear();
+        else _tenantAccessor.Set(tenant);
+    }
+
+    private static IReadOnlyList<string> Validate(
+        JsonElement payload,
+        LeadIngestionRequest? request)
+    {
+        if (payload.ValueKind is JsonValueKind.Undefined or JsonValueKind.Null)
+            return ["A JSON payload is required."];
+        if (request is null
+            || string.IsNullOrWhiteSpace(request.Name)
+            || string.IsNullOrWhiteSpace(request.Email) && string.IsNullOrWhiteSpace(request.Phone))
+            return [];
+
+        var errors = new List<string>();
+        if (request.Name!.Length > 200) errors.Add("Name is too long.");
+        if (!string.IsNullOrWhiteSpace(request.Email)
+            && (request.Email.Length > 320 || !MailAddress.TryCreate(request.Email, out _)))
+            errors.Add("Enter a valid email address.");
+        if (request.Phone?.Length > 80) errors.Add("Phone is too long.");
+        if (request.Company?.Length > 300) errors.Add("Company is too long.");
+        if (request.Message?.Length > 10_000) errors.Add("Message is too long.");
+        if (request.Source?.Length > 200) errors.Add("Source is too long.");
+        if (request.Address?.Length > 1_000) errors.Add("Address is too long.");
+        if (request.Metadata?.Count > 30) errors.Add("Metadata has too many fields.");
+        return errors;
+    }
 
 }

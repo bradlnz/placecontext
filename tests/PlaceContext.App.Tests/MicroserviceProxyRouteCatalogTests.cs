@@ -25,14 +25,15 @@ public sealed class MicroserviceProxyRouteCatalogTests
     }
 
     [Fact]
-    public void Catalog_routes_the_legacy_opensearch_contract_to_search()
+    public void Catalog_routes_the_legacy_opensearch_contract_to_search_and_jobs_to_jobs()
     {
         var route = Assert.Single(MicroserviceProxyRouteCatalog.All, candidate =>
             candidate.Matches("/api/v1/projects/8fbcc0ff-e259-4d9f-b9eb-c0ea064a3e46/opensearch/search"));
 
         Assert.Equal("Search", route.ServiceName);
-        Assert.DoesNotContain(MicroserviceProxyRouteCatalog.All, candidate =>
+        var jobsRoute = Assert.Single(MicroserviceProxyRouteCatalog.All, candidate =>
             candidate.Matches("/api/v1/projects/8fbcc0ff-e259-4d9f-b9eb-c0ea064a3e46/jobs"));
+        Assert.Equal("Jobs", jobsRoute.ServiceName);
     }
 
     [Theory]

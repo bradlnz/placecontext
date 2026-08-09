@@ -1,6 +1,5 @@
 using Microsoft.EntityFrameworkCore;
 using PlaceContext.Application.Ports;
-using PlaceContext.Application.Shared;
 using PlaceContext.Domain.Repositories;
 
 namespace PlaceContext.AgentChat.Infrastructure.Persistence;
@@ -64,9 +63,9 @@ public sealed class AgentChatDbContext : DbContext, IAgentChatUnitOfWork
         {
             entity.ToTable("chat_commands");
             entity.HasKey(row => row.Id);
-            entity.Property(row => row.Id).HasColumnType(DataColumnTypes.Uuid);
-            entity.Property(row => row.ProjectId).HasColumnType(DataColumnTypes.Uuid);
-            entity.Property(row => row.TenantId).HasColumnType(DataColumnTypes.Uuid);
+            entity.Property(row => row.Id).HasColumnType("uuid");
+            entity.Property(row => row.ProjectId).HasColumnType("uuid");
+            entity.Property(row => row.TenantId).HasColumnType("uuid");
             entity.Property(row => row.Name).HasMaxLength(100);
             entity.Property(row => row.ToolName).HasMaxLength(100);
             entity.HasIndex(row => new { row.ProjectId, row.Name }).IsUnique();
