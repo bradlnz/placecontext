@@ -1531,17 +1531,17 @@
 }
 
 .data-page .run-bar .dcbtn.primary {
-    background: var(--ch-yellow);
-    border-color: var(--ch-yellow);
-    color: #1f2125;
+    background: var(--button-bg);
+    border-color: var(--button-border);
+    color: var(--button-text);
     box-shadow: var(--ch-run-shadow);
     font-weight: 700;
     padding: 6px 16px;
 }
 
 .data-page .run-bar .dcbtn.primary:hover {
-    background: var(--ch-yellow-hover);
-    border-color: var(--ch-yellow-hover);
+    background: var(--button-hover);
+    border-color: #5a5a5a;
 }
 
 .data-page .run-bar .dcbtn.primary:disabled {
@@ -1779,10 +1779,10 @@
     gap: 6px;
     margin: 12px;
     padding: 8px;
-    border: 1px solid var(--ch-yellow);
+    border: 1px solid var(--button-border);
     border-radius: 4px;
-    background: var(--ch-yellow);
-    color: #1f2125;
+    background: var(--button-bg);
+    color: var(--button-text);
     font: inherit;
     font-size: 12px;
     font-weight: 700;
@@ -1791,8 +1791,8 @@
 }
 
 .studio-new-table:hover {
-    background: var(--ch-yellow-hover);
-    border-color: var(--ch-yellow-hover);
+    background: var(--button-hover);
+    border-color: #5a5a5a;
 }
 
 .studio-new-table svg {
@@ -2093,10 +2093,10 @@
     align-items: center;
     gap: 6px;
     padding: 6px 14px;
-    border: 1px solid var(--ch-yellow);
+    border: 1px solid var(--button-border);
     border-radius: 4px;
-    background: var(--ch-yellow);
-    color: #1f2125;
+    background: var(--button-bg);
+    color: var(--button-text);
     font: inherit;
     font-size: 12px;
     font-weight: 700;
@@ -2106,8 +2106,8 @@
 }
 
 .studio-run:hover {
-    background: var(--ch-yellow-hover);
-    border-color: var(--ch-yellow-hover);
+    background: var(--button-hover);
+    border-color: #5a5a5a;
 }
 
 .studio-run:disabled {

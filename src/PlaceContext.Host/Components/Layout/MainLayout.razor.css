@@ -7,24 +7,30 @@
     width: 100%;
     overflow: hidden;
     background: var(--bg);
+    position: relative;
 }
 
 .sidebar {
     width: var(--menu-width-collapsed);
     flex: none;
     min-width: 0;
-    position: relative;
+    position: absolute;
+    inset: 0 auto 0 0;
+    z-index: 40;
     display: flex;
     flex-direction: column;
     background: var(--ch-panel, var(--panel));
     border-right: 1px solid var(--ch-border, var(--border));
     overflow: hidden;
-    transition: width .2s cubic-bezier(.4, 0, .2, 1);
+    contain: layout paint;
+    will-change: width;
+    transition: width .18s cubic-bezier(.2, .8, .2, 1), box-shadow .18s ease;
 }
 
 .sidebar:hover {
     width: var(--menu-width-expanded);
-    overflow: visible;
+    overflow: hidden;
+    box-shadow: 12px 0 28px rgba(0, 0, 0, .28);
 }
 
 .sidebar:not(:hover)::before {
@@ -50,6 +56,16 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+}
+
+.brand-text,
+.nav-label,
+.nav-section,
+.switcher-name,
+.switcher-caret,
+.user-detail {
+    opacity: 1;
+    transition: opacity .11s ease .055s;
 }
 
 .sidebar:not(:hover) .nav-label,
@@ -95,6 +111,7 @@
     flex: none;
     border-radius: 3px;
     background: var(--brand);
+    color: var(--brand-fg);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -158,6 +175,25 @@
     height: 16px;
     min-width: 16px;
     min-height: 16px;
+}
+
+.dcnav .nav-icon {
+    opacity: .78;
+    transition: opacity .12s ease, color .12s ease, transform .12s ease;
+}
+
+.dcnav:hover .nav-icon,
+.dcnav.active .nav-icon {
+    opacity: 1;
+}
+
+.dcnav.active .nav-icon {
+    color: var(--brand-2);
+}
+
+.nav-caret-svg {
+    width: 12px;
+    height: 12px;
 }
 
 .mcp-dot {
@@ -430,6 +466,9 @@
 .icon-btn {
     width: 30px;
     height: 30px;
+    min-width: 30px;
+    min-height: 30px;
+    flex: none;
     border-radius: 3px;
     border: 1px solid var(--border);
     background: var(--card);
@@ -438,11 +477,41 @@
     align-items: center;
     justify-content: center;
     color: var(--text-2);
+    transition: background .12s ease, border-color .12s ease, color .12s ease;
+}
+
+.icon-btn:hover,
+.nav-toggle:hover {
+    background: var(--hover);
+    border-color: var(--border-2);
+    color: var(--text);
+}
+
+.icon-btn svg,
+.nav-toggle svg,
+.brand-mark svg {
+    flex: none;
+}
+
+.shell-control-icon {
+    width: 16px;
+    height: 16px;
+}
+
+.shell-brand-icon {
+    width: 17px;
+    height: 17px;
+}
+
+.search-icon {
+    width: 14px;
+    height: 14px;
 }
 
 .main {
     flex: 1;
     min-width: 0;
+    margin-left: var(--menu-width-collapsed);
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -571,7 +640,9 @@
         bottom: 0;
         z-index: 45;
         transform: translateX(-100%);
-        transition: none;
+        contain: layout paint;
+        will-change: transform;
+        transition: transform .18s cubic-bezier(.2, .8, .2, 1);
         width: 220px;
     }
 
@@ -581,6 +652,26 @@
 
     .sidebar:hover {
         width: 220px;
+        box-shadow: 12px 0 28px rgba(0, 0, 0, .28);
+    }
+
+    .sidebar.open .nav-label,
+    .sidebar.open .brand-text,
+    .sidebar.open .nav-section,
+    .sidebar.open .switcher-name,
+    .sidebar.open .switcher-caret,
+    .sidebar.open .user-detail {
+        width: auto;
+        max-width: none;
+        opacity: 1;
+    }
+
+    .sidebar.open .nav-section {
+        padding: 15px 8px 5px;
+    }
+
+    .main {
+        margin-left: 0;
     }
 
     .sidebar:not(:hover)::before {
@@ -631,5 +722,17 @@
 
     .running-badge {
         display: none;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .sidebar,
+    .brand-text,
+    .nav-label,
+    .nav-section,
+    .switcher-name,
+    .switcher-caret,
+    .user-detail {
+        transition: none;
     }
 }

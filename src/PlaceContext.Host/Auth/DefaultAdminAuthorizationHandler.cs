@@ -24,13 +24,16 @@ public sealed class DefaultAdminAuthorizationHandler : AuthorizationHandler<Defa
     protected override async Task HandleRequirementAsync(AuthorizationHandlerContext context, DefaultAdminRequirement requirement)
     {
         var idClaim = context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? context.User.FindFirst("sub")?.Value;
-        if (!Guid.TryParse(idClaim, out var userId))
+        var tenantClaim = context.User.FindFirst("tenant")?.Value;
+        if (!Guid.TryParse(idClaim, out var userId) || !Guid.TryParse(tenantClaim, out var tenantId))
             return; // no parseable identity — deny
 
         await using var scope = _scopeFactory.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        var isDefaultAdmin = await db.Users.AsNoTracking()
-            .Where(u => u.Id == userId)
+        // Authorization runs before UserResolutionMiddleware and may execute in a child DI scope.
+        // Bind the lookup to the signed tenant claim explicitly instead of depending on ambient state.
+        var isDefaultAdmin = await db.Users.IgnoreQueryFilters().AsNoTracking()
+            .Where(u => u.Id == userId && u.TenantId == tenantId)
             .Select(u => u.IsDefaultAdmin)
             .FirstOrDefaultAsync();
         if (isDefaultAdmin)

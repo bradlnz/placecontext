@@ -34,7 +34,6 @@ public sealed class MenuSettingsViewModel(IMenuConfigService menu, PortalUiState
         ["artifacts"] = "Artifacts",
         ["observability"] = "Observability",
         ["sec-workspace"] = "Workspace (section)",
-        ["overview"] = "Projects overview",
         ["wiki"] = "Wiki",
         ["settings"] = "Settings",
         ["about"] = "About",

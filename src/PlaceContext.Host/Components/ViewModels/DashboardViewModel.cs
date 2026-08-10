@@ -45,6 +45,7 @@ public sealed class DashboardViewModel : PageViewModel, IDisposable
     }
 
     public bool Ready { get; private set; }
+    public bool ChainsReady { get; private set; }
     public IReadOnlyList<RunReportView> Reports { get; private set; } =
         Array.Empty<RunReportView>();
     public int Running { get; private set; }
@@ -104,16 +105,19 @@ public sealed class DashboardViewModel : PageViewModel, IDisposable
 
     public async Task LoadAsync()
     {
+        Ready = false;
+        ChainsReady = false;
         try
         {
             Reports = await _service.ListRecentRunReportsAsync(take: 50);
         }
         catch { }
+        UpdateRunMetrics();
+        Ready = true;
+        NotifyStateChanged();
+
         if (_ui.CurrentProjectId is not { } projectId)
-        {
-            Ready = true;
             return;
-        }
 
         try
         {
@@ -128,10 +132,16 @@ public sealed class DashboardViewModel : PageViewModel, IDisposable
             Chains = Array.Empty<JobChainView>();
             Jobs = Array.Empty<JobView>();
         }
+        finally
+        {
+            ChainsReady = true;
+            NotifyStateChanged();
+        }
 
         try
         {
             Charts = await _service.ListProjectChartsAsync(projectId);
+            NotifyStateChanged();
         }
         catch { }
         try
@@ -142,9 +152,13 @@ public sealed class DashboardViewModel : PageViewModel, IDisposable
                 EntityTables = await _service.ListProjectDataTablesAsync(projectId);
                 await LoadEntityChartsAsync();
             }
+            NotifyStateChanged();
         }
         catch { }
+    }
 
+    private void UpdateRunMetrics()
+    {
         var dayAgo = DateTimeOffset.UtcNow.AddHours(-24);
         Running = Reports.Count(report => report.Run.Status == "Running");
         Failed24 = Reports.Count(report =>
@@ -158,8 +172,6 @@ public sealed class DashboardViewModel : PageViewModel, IDisposable
                 .ListForTenant(_tenant.TenantId)
                 .Count(operation => operation.Status == PortalOperationStatus.Queued)
             : 0;
-        Ready = true;
-        NotifyStateChanged();
     }
 
     public IReadOnlyList<RunReportView> Filtered() =>

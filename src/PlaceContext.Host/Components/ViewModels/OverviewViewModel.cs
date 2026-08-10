@@ -76,7 +76,7 @@ public sealed class OverviewViewModel : PageViewModel
         }
     }
 
-    public void Open(Guid projectId) => _navigation.NavigateTo($"/project/{projectId}");
+    public void Open(Guid projectId) => _navigation.NavigateTo($"/project/{projectId}/jobs");
 
     public void OpenFocus(string url) => _navigation.NavigateTo(url);
 

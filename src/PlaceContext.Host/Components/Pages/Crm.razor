@@ -1079,7 +1079,7 @@ else
     </div>
 }
 
-@if (Vm.Selected is not null && Vm.CurrentSection is not CrmSection.Conversations and not CrmSection.Portals)
+@if (Vm.ShowCustomerDetailPanel)
 {
     <div class="dcslide-scrim crm-detail-scrim" @onclick="Vm.CloseClient"></div>
     <div class="dcslide crm-detail">

@@ -69,9 +69,18 @@ public sealed class AuthService : IAuthService
     {
         // The first user in the tenant is the operator. AsNoTracking + oldest-first keeps this stable
         // even if invites later add more members; the operator is whoever the deployment was created for.
-        var existing = await _db.Users.AsNoTracking().OrderBy(u => u.CreatedAt).FirstOrDefaultAsync(ct);
+        var existing = await _db.Users.OrderBy(u => u.CreatedAt).FirstOrDefaultAsync(ct);
         if (existing is not null)
+        {
+            // The machine-provisioned operator is the administrator of a local/self-hosted workspace.
+            // Older databases created it before IsDefaultAdmin existed, so adopt that row on startup.
+            if (existing.Email == "operator@localhost" && !existing.IsDefaultAdmin)
+            {
+                existing.IsDefaultAdmin = true;
+                await _db.SaveChangesAsync(ct);
+            }
             return ToAuthUser(existing);
+        }
 
         var row = new UserRow
         {
@@ -84,6 +93,7 @@ public sealed class AuthService : IAuthService
             // through the machine token still needs a real /setup before interactive password login works.
             PasswordHash = PasswordHasher.Hash(Guid.NewGuid().ToString("N")),
             Role = UserRole.Owner.ToString(),
+            IsDefaultAdmin = true,
             CreatedAt = DateTimeOffset.UtcNow,
         };
         await _db.Users.AddAsync(row, ct);

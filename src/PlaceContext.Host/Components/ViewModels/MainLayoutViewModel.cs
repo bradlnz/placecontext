@@ -120,8 +120,8 @@ public sealed class MainLayoutViewModel : PageViewModel, IDisposable
     public bool IsThemeLightPressed => IsLightTheme;
     public string ThemeIcon =>
         IsDarkTheme
-            ? "<svg width='15' height='15' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='4'></circle><path d='M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5L19 19M19 5l-1.5 1.5M6.5 17.5L5 19'></path></svg>"
-            : "<svg width='15' height='15' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M20.5 14.3A8.5 8.5 0 1 1 9.7 3.5 8.5 8.5 0 0 0 20.5 14.3Z'></path></svg>";
+            ? "<svg class='shell-control-icon' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><circle cx='12' cy='12' r='4'/><path d='M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41'/></svg>"
+            : "<svg class='shell-control-icon' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M21 12.8A8.5 8.5 0 1 1 11.2 3 6.6 6.6 0 0 0 21 12.8Z'/></svg>";
 
     public async Task InitializeAsync()
     {
@@ -129,18 +129,20 @@ public sealed class MainLayoutViewModel : PageViewModel, IDisposable
         _operations.Changed += OnOperationsChanged;
         _navigation.LocationChanged += OnLocationChanged;
         _ui.SetMainNavOpener(OpenNavigation);
+        var brandTask = InScopeAsync<BrandingService, TenantBranding>(service =>
+            service.GetAsync()
+        );
+        var projectsTask = InScopeAsync<IPlaceContextService, IReadOnlyList<ProjectSummaryView>>(
+            service => service.GetProjectsAsync()
+        );
         try
         {
-            Brand = await InScopeAsync<BrandingService, TenantBranding>(service =>
-                service.GetAsync()
-            );
+            Brand = await brandTask;
         }
         catch { }
         try
         {
-            _projects = await InScopeAsync<IPlaceContextService, IReadOnlyList<ProjectSummaryView>>(
-                service => service.GetProjectsAsync()
-            );
+            _projects = await projectsTask;
         }
         catch
         {
@@ -325,7 +327,7 @@ public sealed class MainLayoutViewModel : PageViewModel, IDisposable
     public string IconMarkup(string? kind) => MainLayoutIconCatalog.Markup(kind);
 
     public const string CaretMarkup =
-        "<svg width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'><path d='M9 6l6 6-6 6'></path></svg>";
+        "<svg class='nav-caret-svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='m9 18 6-6-6-6'/></svg>";
 
     public async Task ToggleThemeAsync() =>
         Theme = NormalizeTheme(await _js.InvokeAsync<string>("placecontext.toggleTheme"));
@@ -471,62 +473,37 @@ internal static class MainLayoutIconCatalog
     public static string Markup(string? kind)
     {
         var resolved = kind?.Trim().ToLowerInvariant();
-        return resolved switch
+        var body = resolved switch
         {
-            "grid" =>
-                "<svg width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.7'><rect x='3' y='3' width='7' height='7' rx='1.5'></rect><rect x='14' y='3' width='7' height='7' rx='1.5'></rect><rect x='14' y='14' width='7' height='7' rx='1.5'></rect><rect x='3' y='14' width='7' height='7' rx='1.5'></rect></svg>",
-            "dashboard" =>
-                "<svg width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.7'><rect x='3' y='3' width='7' height='7' rx='1.5'></rect><rect x='14' y='3' width='7' height='7' rx='1.5'></rect><rect x='14' y='14' width='7' height='7' rx='1.5'></rect><rect x='3' y='14' width='7' height='7' rx='1.5'></rect></svg>",
-            "rocket" =>
-                "<svg width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='currentColor'><path d='M9 11a14 14 0 0 1 7-8c2.6 0 4 1.4 4 4a14 14 0 0 1-8 7l-3-3z'></path></svg>",
-            "users" =>
-                "<svg width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'><path d='M7 21a4 4 0 0 1 4-4h2a4 4 0 0 1 4 4'></path><circle cx='9' cy='8' r='3'></circle><path d='M17 11a3 3 0 0 1 0 6'></path><circle cx='15' cy='8' r='3'></circle></svg>",
-            "box" =>
-                "<svg width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'><path d='M4 7l8-4 8 4-8 4-8-4Z'></path><path d='M4 7v10l8 4 8-4V7'></path><path d='M12 11v10'></path></svg>",
-            "test" =>
-                "<svg width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'><path d='M9 2h6'></path><path d='M10 22h4'></path><path d='M12 9v3'></path><path d='M9 6l-3 3 3 3'></path><path d='M15 6l3 3-3 3'></path><path d='M12 14v7'></path><path d='M6 12h12'></path></svg>",
-            "chain" =>
-                "<svg width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'><path d='M4 12h3.5'></path><path d='M9 12h6'></path><path d='M16.5 12h3.5'></path><path d='M8 9h8L16 7V5m-4 10h0v5m0-5 4-2.5m0 0 4 2.5m-4-2.5-4 2.5M4 12h.5'></path><path d='M6.5 8.5h3m-3 7h3'></path><path d='M14.5 9h3m-3 6h3'></path></svg>",
-            "crm" or "users" =>
-                "<svg width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'><path d='M12 13.5c3 0 5.5 2.5 5.5 5.5v1H6.5v-1c0-3 2.5-5.5 5.5-5.5Z'></path><circle cx='12' cy='8' r='3.2'></circle></svg>",
-            "clock" =>
-                "<svg width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='9'></circle><polyline points='12 7 12 12 15 15'></polyline></svg>",
-            "map" =>
-                "<svg width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'><path d='M3 6l6.5-2.5L15 6l5.5-2.5V19L15 21.5 9.5 19 3 21.5z'></path><path d='M15 6v16'></path><path d='M3.4 6.2L9.5 9l5.5-2.8'></path><path d='M9.5 9v13'></path></svg>",
-            "key" =>
-                "<svg width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'><circle cx='7.5' cy='16.5' r='2.5'></circle><path d='M10 16.5h9.5'></path><path d='M19.5 16.5l-1.1-1.1-2.2-2.2-1.8-1.8'></path><path d='M16.5 13.5 14 11a3 3 0 1 0-4.2 4.2'></path></svg>",
-            "pulse" =>
-                "<svg width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'><path d='M3 12h4l2-4 3 8 2-4 3 4h7'></path></svg>",
-            "chat" =>
-                "<svg width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'><path d='M21 15a4 4 0 0 1-4 4H7l-4 3v-18a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z'></path></svg>",
-            "file" =>
-                "<svg width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'><path d='M14 2H7.5A1.5 1.5 0 0 0 6 3.5V20.5A1.5 1.5 0 0 0 7.5 22h9A1.5 1.5 0 0 0 18 20.5V8z'></path><path d='M14 2v6h6'></path><path d='M8 10h8'></path><path d='M8 14h8'></path><path d='M8 18h6'></path></svg>",
-            "ledger" =>
-                "<svg width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'><path d='M4 4h16'></path><path d='M4 8h16'></path><path d='M4 12h16'></path><path d='M4 16h16'></path><path d='M4 20h16'></path><path d='M8 4v16'></path><path d='M16 4v16'></path></svg>",
-            "data" or "data.tables" =>
-                "<svg width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M4 7h16M4 11h16M4 15h16M4 19h16'/></svg>",
-            "data.analytics" =>
-                "<svg width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M4 19h16M7 19V5M11 19V8M15 19V11M4 16h16'/></svg>",
-            "data.search" =>
-                "<svg width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><circle cx='11' cy='11' r='7'></circle><path d='M20 20l-3.5-3.5'/></svg>",
-            "data.datamap" =>
-                "<svg width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M4 4h16M4 20h16M8 4v16M12 4v16M16 4v16'/></svg>",
-            "data.entities" =>
-                "<svg width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><circle cx='9' cy='8' r='3'></circle><circle cx='16' cy='8' r='3'></circle><path d='M4 21a4 4 0 0 1 4-4h8a4 4 0 0 1 4 4'></path><path d='M2 19.5c0-4 4-5 7-5s7 1 7 5'></path><path d='M9 21a7 7 0 0 1 14 0'></path></svg>",
-            "data.graph" =>
-                "<svg width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><circle cx='5' cy='12' r='3'></circle><circle cx='19' cy='5' r='3'></circle><circle cx='19' cy='19' r='3'></circle><path d='M8 10.5l8-4M8 13.5l8 4'></path></svg>",
-            "observability" =>
-                "<svg width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'><path d='M3 3v18h18M7 15v-4M12 15V9M17 15V11'></path></svg>",
-            "overview" =>
-                "<svg width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'><path d='M3 4h18M3 8h18M3 12h18M3 16h18M3 20h18'></path></svg>",
-            "wiki" =>
-                "<svg width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'><path d='M6 4h8l4 4v12H6z'></path><path d='M14 4v4h4M9 12h6'/></svg>",
-            "about" =>
-                "<svg width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='9'/><path d='M12 10h.01M12 14h.01M9 8h6'/></svg>",
-            "settings" =>
-                "<svg width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'><path d='M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z'></path><path d='M19.4 15a1.8 1.8 0 0 0 .4-1.1v-.9a1.8 1.8 0 0 0-.4-1.1l-1.5-1.2a1.8 1.8 0 0 0-.2-2l.6-1.8a1.8 1.8 0 0 0-1-2h-1.6a1.8 1.8 0 0 0-1.3.3l-1.9 1.2a1.8 1.8 0 0 0-1.9 0l-1.9-1.2a1.8 1.8 0 0 0-1.3-.3h-1.6a1.8 1.8 0 0 0-1 2l.6 1.8a1.8 1.8 0 0 0-.2 2l-1.5 1.2A1.8 1.8 0 0 0 4 12.9v1.8a1.8 1.8 0 0 0 .4 1.1l1.5 1.2a1.8 1.8 0 0 0 .2 2l-.6 1.8a1.8 1.8 0 0 0 1 2h1.6a1.8 1.8 0 0 0 1.3-.3l1.9-1.2a1.8 1.8 0 0 0 1.9 0l1.9 1.2a1.8 1.8 0 0 0 1.3.3h1.6a1.8 1.8 0 0 0 1-2l-.6-1.8a1.8 1.8 0 0 0 .2-2z'/></svg>",
-            _ =>
-                "<svg width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='currentColor'><rect x='3' y='4' width='18' height='16' rx='2'></rect><path d='M7 9l3 2.5L7 14'></path><path d='M13 14.5h4'></path></svg>",
+            "grid" => "<rect x='3' y='3' width='7' height='7' rx='1.5'/><rect x='14' y='3' width='7' height='7' rx='1.5'/><rect x='14' y='14' width='7' height='7' rx='1.5'/><rect x='3' y='14' width='7' height='7' rx='1.5'/>",
+            "dashboard" => "<rect x='3' y='3' width='7' height='9' rx='1.5'/><rect x='14' y='3' width='7' height='5' rx='1.5'/><rect x='14' y='11' width='7' height='10' rx='1.5'/><rect x='3' y='15' width='7' height='6' rx='1.5'/>",
+            "rocket" => "<path d='M14 4.1c2.3-1.5 4.8-1.3 5.9-1 .3 1.1.5 3.6-1 5.9l-5.4 5.4-3.9.6-.6-3.9L14 4.1Z'/><circle cx='16' cy='7' r='1.5'/><path d='M9.5 7.8 5.8 8.9 3 11.7l6 .3M16.2 14.5 15.1 18.2 12.3 21l-.3-6M6.5 15.5l-2 4 4-2'/>",
+            "users" => "<path d='M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2'/><circle cx='9' cy='7' r='4'/><path d='M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75'/>",
+            "box" => "<path d='m21 8-9 5-9-5 9-5 9 5Z'/><path d='m3 8 9 5 9-5v8l-9 5-9-5V8Z'/><path d='M12 13v8'/>",
+            "test" => "<path d='M9 3h6M10 3v6l-5 9a2 2 0 0 0 1.7 3h10.6A2 2 0 0 0 19 18l-5-9V3'/><path d='M8 14h8'/>",
+            "chain" => "<rect x='3' y='5' width='6' height='5' rx='1.5'/><rect x='15' y='14' width='6' height='5' rx='1.5'/><path d='M9 7.5h4a3 3 0 0 1 3 3V14M12 7.5l2-2M12 7.5l2 2'/>",
+            "crm" => "<rect x='3' y='4' width='18' height='16' rx='2'/><circle cx='9' cy='10' r='2.5'/><path d='M5.5 17a3.5 3.5 0 0 1 7 0M15 9h3M15 13h3'/>",
+            "clock" => "<circle cx='12' cy='12' r='9'/><path d='M12 7v5l3 2'/>",
+            "map" => "<polygon points='3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21 3 6'/><path d='M9 3v15M15 6v15'/>",
+            "key" => "<circle cx='8' cy='15' r='4'/><path d='m11 12 8-8M15 8l3 3M17 6l2 2'/>",
+            "pulse" => "<path d='M3 12h4l2.5-5 5 10 2.5-5h4'/>",
+            "chat" => "<path d='M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4v8Z'/><path d='M8 9h8M8 13h5'/>",
+            "file" => "<path d='M14 2H7a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7l-5-5Z'/><path d='M14 2v5h5M9 13h6M9 17h6'/>",
+            "ledger" => "<rect x='4' y='3' width='16' height='18' rx='2'/><path d='M8 3v18M12 8h5M12 12h5M12 16h3'/>",
+            "data" or "data.tables" => "<ellipse cx='12' cy='5' rx='8' ry='3'/><path d='M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6'/>",
+            "data.analytics" => "<path d='M4 20V10M10 20V4M16 20v-7M22 20H2'/>",
+            "data.search" => "<circle cx='11' cy='11' r='7'/><path d='m20 20-4-4'/>",
+            "data.datamap" => "<circle cx='5' cy='6' r='2'/><circle cx='19' cy='6' r='2'/><circle cx='12' cy='18' r='2'/><path d='M7 6h10M6 8l5 8M18 8l-5 8'/>",
+            "data.entities" => "<rect x='3' y='3' width='7' height='7' rx='1.5'/><rect x='14' y='3' width='7' height='7' rx='1.5'/><rect x='8.5' y='14' width='7' height='7' rx='1.5'/><path d='M6.5 10v2h11v-2M12 12v2'/>",
+            "data.graph" => "<circle cx='5' cy='12' r='2.5'/><circle cx='18.5' cy='5' r='2.5'/><circle cx='18.5' cy='19' r='2.5'/><path d='m7.3 10.8 9-4.6M7.3 13.2l9 4.6'/>",
+            "observability" => "<path d='M3 12h4l2.5-5 5 10 2.5-5h4'/><circle cx='12' cy='12' r='10'/>",
+            "overview" => "<rect x='3' y='4' width='18' height='16' rx='2'/><path d='M3 9h18M8 9v11'/>",
+            "wiki" => "<path d='M4 5a3 3 0 0 1 3-2h5v18H7a3 3 0 0 0-3 2V5ZM20 5a3 3 0 0 0-3-2h-5v18h5a3 3 0 0 1 3 2V5Z'/>",
+            "about" => "<circle cx='12' cy='12' r='9'/><path d='M12 11v5M12 8h.01'/>",
+            "settings" => "<path d='M4 6h10M18 6h2M4 12h2M10 12h10M4 18h7M15 18h5'/><circle cx='16' cy='6' r='2'/><circle cx='8' cy='12' r='2'/><circle cx='13' cy='18' r='2'/>",
+            _ => "<rect x='3' y='4' width='18' height='16' rx='2'/><path d='m7 9 3 3-3 3M13 15h4'/>",
         };
+
+        return $"<svg class='nav-icon' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true' focusable='false'>{body}</svg>";
     }
 }

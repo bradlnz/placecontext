@@ -209,6 +209,14 @@ public sealed class CrmViewModel : PageViewModel
         CrmPresentationCatalog.ParseArtifactSource(ArtifactSourceFilter);
     public CrmCommunicationChannel CurrentComposeChannel =>
         CrmPresentationCatalog.ParseChannel(ComposeChannel);
+    public bool ShowCustomerDetailPanel =>
+        Selected is not null
+        && CurrentSection
+            is not global::PlaceContext.Host.Components.ViewModels.Crm.CrmSection.Conversations
+            and not global::PlaceContext.Host.Components.ViewModels.Crm.CrmSection.Portals
+        && !ShowEditor
+        && !PortalProvisioningOpen
+        && !NotesMetadataOpen;
     public string StageFilterLabel =>
         StageFilter is { } stage ? StageLabel(stage).ToLowerInvariant() : "all";
     public string ComposeSubject = "";

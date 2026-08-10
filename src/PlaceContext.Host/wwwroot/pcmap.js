@@ -2,6 +2,39 @@
 window.pcmap = (function () {
   const maps = {};
   const specs = {};
+  let leafletLoader = null;
+
+  function ensureLeaflet() {
+    if (typeof window.L !== 'undefined') return Promise.resolve(window.L);
+    if (leafletLoader) return leafletLoader;
+    leafletLoader = Promise.all([
+      new Promise((resolve, reject) => {
+        let link = document.getElementById('pc-leaflet-css');
+        if (link) { resolve(); return; }
+        link = document.createElement('link');
+        link.id = 'pc-leaflet-css';
+        link.rel = 'stylesheet';
+        link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+        link.crossOrigin = '';
+        link.onload = resolve;
+        link.onerror = () => reject(new Error('Leaflet styles failed to load.'));
+        document.head.appendChild(link);
+      }),
+      new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+        script.crossOrigin = '';
+        script.onload = resolve;
+        script.onerror = () => reject(new Error('Leaflet failed to load.'));
+        document.head.appendChild(script);
+      })
+    ]).then(() => window.L).catch(error => {
+      leafletLoader = null;
+      console.warn('pcmap:', error.message);
+      throw error;
+    });
+    return leafletLoader;
+  }
 
   function tokens() {
     const shell = document.getElementById('dcshell');
@@ -9,13 +42,14 @@ window.pcmap = (function () {
     return { dark };
   }
 
-  function render(containerId, specRaw) {
-    const el = document.getElementById(containerId);
-    if (!el) return;
-
+  async function render(containerId, specRaw) {
     let spec;
     try { spec = typeof specRaw === 'string' ? JSON.parse(specRaw) : specRaw; }
     catch { return; }
+    try { await ensureLeaflet(); }
+    catch { return; }
+    const el = document.getElementById(containerId);
+    if (!el) return;
 
     // Blazor can replace the container element on re-render (streaming updates, session
     // loads) — the old Leaflet instance then sits on a detached node and the visible div

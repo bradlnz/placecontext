@@ -8,8 +8,10 @@
     <link rel="icon" type="image/svg+xml" href="favicon.svg" />
     <link rel="alternate icon" type="image/x-icon" href="favicon.ico" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap"
+          rel="stylesheet" media="print" onload="this.media='all'" />
+    <noscript><link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" /></noscript>
     @* Blazor scoped-CSS bundle: per-component <Name>.razor.css files compile into this. Component
        classes resolve --var() values from the #dcshell ancestor's cascade below. *@
     <link rel="stylesheet" href="PlaceContext.Host.styles.css?v=2" />
@@ -18,16 +20,17 @@
     <HeadOutlet @rendermode="new InteractiveServerRenderMode(prerender: false)" />
     <style>
         #dcshell {
-            --bg:var(--tenant-bg,#182026); --panel:var(--tenant-panel,#202b33); --card:var(--tenant-panel,#202b33); --card-2:#293742; --hover:#30404d;
-            --bg-tilt:linear-gradient(150deg, rgba(22, 32, 44, 0.98), rgba(21, 35, 50, 0.94), rgba(26, 42, 58, 0.88));
-            --border:#30404d; --border-2:#394b59;
-            --text:var(--tenant-text,#f5f8fa); --text-2:#bfccd6; --text-3:#8a9ba8; --text-4:#738694;
-            --brand:var(--tenant-accent,#137cbd); --brand-2:var(--tenant-accent,#48aff0); --brand-bg:rgba(19,124,189,0.18); --brand-fg:#fff;
-            --good:#0f9960; --good-bg:rgba(15,153,96,0.16);
+            --bg:var(--tenant-bg,#171717); --panel:var(--tenant-panel,#1c1c1c); --card:var(--tenant-panel,#1c1c1c); --card-2:#242424; --hover:#2a2a2a;
+            --bg-tilt:#171717;
+            --border:#2e2e2e; --border-2:#3e3e3e;
+            --text:var(--tenant-text,#ededed); --text-2:#c7c7c7; --text-3:#929292; --text-4:#737373;
+            --brand:var(--tenant-accent,#d6d6d6); --brand-2:var(--tenant-accent,#f0f0f0); --brand-bg:rgba(255,255,255,0.08); --brand-fg:#171717;
+            --button-bg:#292929; --button-hover:#333333; --button-border:#454545; --button-text:#ededed;
+            --good:#3ecf8e; --good-bg:rgba(62,207,142,0.13);
             --warn:#d9822b; --warn-bg:rgba(217,130,43,0.16);
             --bad:#db3737; --bad-bg:rgba(219,55,55,0.15);
-            --human:#48aff0; --human-bg:rgba(72,175,240,0.16);
-            --shadow:0 2px 6px rgba(16,22,26,.38), 0 8px 24px rgba(16,22,26,.28);
+            --human:#a8a8a8; --human-bg:rgba(255,255,255,0.08);
+            --shadow:0 1px 2px rgba(0,0,0,.45), 0 12px 32px rgba(0,0,0,.28);
             --font-sans:'Manrope',system-ui,-apple-system,sans-serif;
             --font-mono:'IBM Plex Mono',ui-monospace,'SFMono-Regular',Menlo,monospace;
         }
@@ -37,6 +40,7 @@
             --border:#d8e1e8; --border-2:#bfccd6;
             --text:#182026; --text-2:#5c7080; --text-3:#738694; --text-4:#8a9ba8;
             --brand:var(--tenant-accent,#137cbd); --brand-2:var(--tenant-accent,#106ba3); --brand-bg:rgba(19,124,189,0.11); --brand-fg:#ffffff;
+            --button-bg:#e5e7eb; --button-hover:#d8dadd; --button-border:#c5c7ca; --button-text:#171717;
             --good:#0d8050; --good-bg:rgba(15,153,96,0.11);
             --warn:#bf7326; --warn-bg:rgba(217,130,43,0.12);
             --bad:#c23030; --bad-bg:rgba(219,55,55,0.10);
@@ -46,10 +50,30 @@
         * { box-sizing:border-box; }
         html, body { margin:0; padding:0; height:100%; }
         html.pc-focus-layer-open, html.pc-focus-layer-open body { overflow:hidden; overscroll-behavior:none; }
-        body { font-family:var(--font-sans); background:linear-gradient(150deg, #111a24 10%, #15202e 70%, #101824); -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility; }
+        body { font-family:var(--font-sans); background:#171717; -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility; }
         #dcshell { font-family:var(--font-sans); color:var(--text); font-variant-numeric:tabular-nums; letter-spacing:-0.005em; background:var(--bg-tilt); min-height:100vh; border-radius:0; }
         a { color:inherit; text-decoration:none; }
         button, a, [role="button"] { touch-action: manipulation; }
+        /* Icons are structural controls, not flexible content. Text may truncate when a row is
+           tight, but fixed-size SVGs and their conventional icon wrappers must retain their size. */
+        #dcshell :where(button, a, [role="button"]) > svg,
+        #dcshell :where(.dcnav, .dcsearch-trigger, .dcsearch-hit) > svg,
+        #dcshell :where(svg[class*="icon"], [class$="-icon"] > svg, [class*="-icon "] > svg, [class^="icon-"] > svg, [class*=" icon-"] > svg) {
+            flex-shrink:0;
+        }
+        #dcshell :where([class$="-icon"], [class*="-icon "], [class^="icon-"], [class*=" icon-"]) {
+            flex-shrink:0;
+        }
+        /* MarkupString-generated SVGs do not receive Blazor's scoped-CSS attribute. Keep their
+           intrinsic dimensions here as a second guard against the browser's 300x150 SVG default. */
+        #dcshell svg.nav-icon { width:16px; height:16px; min-width:16px; min-height:16px; }
+        #dcshell svg.shell-control-icon { width:16px; height:16px; min-width:16px; min-height:16px; }
+        #dcshell svg.nav-caret-svg { width:12px; height:12px; min-width:12px; min-height:12px; }
+        /* Match the Monaco host to the editor theme before its CDN bundle initializes, avoiding
+           a blue/default-theme flash and keeping every editor surface neutral. */
+        #dcshell :where(.editor-host, .monaco-box, .sql-monaco, .source-editor-monaco) {
+            background:#171717;
+        }
         ::selection { background:var(--brand-bg); }
         ::-webkit-scrollbar { width:10px; height:10px; }
         ::-webkit-scrollbar-thumb { background:var(--border-2); border-radius:8px; border:3px solid var(--bg); }
@@ -85,15 +109,15 @@
         .dcnav.active { color:var(--text); background:var(--brand-bg); }
         .dcnav .bar { position:absolute; left:-12px; top:9px; bottom:9px; width:2.5px; border-radius:2px; background:var(--brand); opacity:0; }
         .dcnav.active .bar { opacity:1; }
-        .dcbtn { appearance:none; background:var(--card-2); color:var(--text-2);
-            border:1px solid var(--border-2); border-radius:8px; padding:8px 14px; cursor:pointer; font-size:12.5px; font-family:inherit; font-weight:700;
-            letter-spacing:0.2px; transition:transform .14s ease, border-color .14s ease, box-shadow .14s ease, filter .14s ease; box-shadow:0 2px 0 rgba(0,0,0,.08); }
-        .dcbtn:hover { background:var(--hover); border-color:var(--text-2); color:var(--text); transform:translateY(-1px); box-shadow:0 5px 14px color-mix(in srgb, var(--brand) 16%, transparent); }
+        .dcbtn { appearance:none; background:var(--button-bg); color:var(--button-text);
+            border:1px solid var(--button-border); border-radius:8px; padding:8px 14px; cursor:pointer; font-size:12.5px; font-family:inherit; font-weight:700;
+            letter-spacing:0.2px; transition:background .14s ease, border-color .14s ease, box-shadow .14s ease; box-shadow:0 1px 2px rgba(0,0,0,.2); }
+        .dcbtn:hover { background:var(--button-hover); border-color:#5a5a5a; color:var(--button-text); box-shadow:0 2px 6px rgba(0,0,0,.28); }
         .dcbtn:active { transform:translateY(0); }
         .dcbtn:focus-visible { outline:none; box-shadow:0 0 0 3px color-mix(in srgb, var(--brand) 24%, transparent); }
         .dcbtn[disabled], .dcbtn[disabled]:hover { transform:none; filter:none; cursor:not-allowed; opacity:0.65; }
-        .dcbtn.primary { background:var(--brand); border-color:var(--brand); color:var(--brand-fg,#fff); }
-        .dcbtn.primary:hover { border-color:var(--brand-2); color:#fff; background:var(--brand-2); }
+        .dcbtn.primary { background:var(--button-bg); border-color:#5a5a5a; color:var(--button-text); }
+        .dcbtn.primary:hover { border-color:#707070; color:var(--text); background:var(--button-hover); }
         .dcbtn.danger { background:var(--bad); border-color:var(--bad); color:#fff; font-weight:700; }
         .dcbtn.danger:hover { filter:brightness(1.04); }
         .dccard { background:var(--card); border:1px solid var(--border); border-radius:3px; }
@@ -194,18 +218,18 @@
            bright yellow action accent. This replaces the previous -style rounded
            card override across the portal. */
         #dcshell {
-            --ch-bg:#1f2125;
-            --ch-panel:#2a2d33;
-            --ch-panel-2:#33363d;
-            --ch-border:#3e4249;
-            --ch-border-2:#4b4f57;
-            --ch-text:#e4e7ec;
-            --ch-text-2:#b0b5bd;
-            --ch-text-3:#7e838d;
-            --ch-yellow:#fc0;
-            --ch-yellow-hover:#e6b800;
+            --ch-bg:#171717;
+            --ch-panel:#1c1c1c;
+            --ch-panel-2:#242424;
+            --ch-border:#2e2e2e;
+            --ch-border-2:#3e3e3e;
+            --ch-text:#ededed;
+            --ch-text-2:#c7c7c7;
+            --ch-text-3:#929292;
+            --ch-yellow:#d6d6d6;
+            --ch-yellow-hover:#f0f0f0;
             --ch-run-shadow:0 1px 0 rgba(0,0,0,.35);
-            --bg-tilt:linear-gradient(150deg, rgba(31,33,37,0.98), rgba(26,28,32,0.98), rgba(31,33,37,0.98));
+            --bg-tilt:#171717;
         }
         #dcshell[data-theme="light"] {
             --ch-bg:#ffffff;
@@ -288,13 +312,11 @@
 <body>
     <Routes @rendermode="new InteractiveServerRenderMode(prerender: false)" />
     <script src="_framework/blazor.web.js"></script>
-    <script src="placecontext.js?v=6"></script>
-    <script src="pcgraph.js?v=2"></script>
-    <script src="pcmonaco.js?v=4"></script>
-    <script src="vendor/chart.umd.min.js"></script>
-    <script src="pcchart.js?v=3"></script>
-    <script src="pcstudio.js?v=1"></script>
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
-    <script src="pcmap.js?v=2"></script>
+    <script defer src="placecontext.js?v=6"></script>
+    <script defer src="pcgraph.js?v=2"></script>
+    <script defer src="pcmonaco.js?v=5"></script>
+    <script defer src="pcchart.js?v=4"></script>
+    <script defer src="pcstudio.js?v=1"></script>
+    <script defer src="pcmap.js?v=3"></script>
 </body>
 </html>

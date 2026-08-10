@@ -49,7 +49,6 @@ public sealed class MenuConfigService : IMenuConfigService
         new("observability", "Observability", "link", "/observability", Permission.JobsView, "pulse", null),
         new("cluster", "Cluster", "link", "/cluster", Permission.SettingsManage, "box", null),
         new("sec-workspace", "Workspace", "section", null, null, null, "Workspace"),
-        new("overview", "Projects overview", "link", "/overview", Permission.ProjectsView, "pulse", "Workspace"),
         new("wiki", "Wiki", "link", "/wiki", null, "ledger", "Workspace"),
         new("settings", "Settings", "link", "/settings/branding", Permission.SettingsManage, "key", "Workspace"),
         new("about", "About", "link", "/about", null, "grid", "Workspace"),

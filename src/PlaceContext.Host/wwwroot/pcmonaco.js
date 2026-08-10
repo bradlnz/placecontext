@@ -35,18 +35,18 @@ window.pcmonaco = (function () {
   // here would propagate through JS interop and terminate the Blazor circuit, freezing
   // the page on "Loading…".
   // The editor follows the portal's theme: light shells get Monaco's white 'vs', dark get
-  // a yellow-inspired 'placecontext-ch' theme — and a toggle mid-session re-themes
+  // a neutral PlaceContext theme — and a toggle mid-session re-themes
   // every mounted editor live.
   function shellTheme() {
     const shell = document.getElementById('dcshell');
-    return shell && shell.getAttribute('data-theme') === 'light' ? 'vs' : 'placecontext-ch';
+    return shell && shell.getAttribute('data-theme') === 'light' ? 'vs' : 'placecontext-dark';
   }
 
-  let yellowThemeDefined = false;
-  function defineyellowTheme(monaco) {
-    if (yellowThemeDefined) return;
-    yellowThemeDefined = true;
-    monaco.editor.defineTheme('placecontext-ch', {
+  let darkThemeDefined = false;
+  function defineDarkTheme(monaco) {
+    if (darkThemeDefined) return;
+    darkThemeDefined = true;
+    monaco.editor.defineTheme('placecontext-dark', {
       base: 'vs-dark',
       inherit: true,
       rules: [
@@ -58,14 +58,28 @@ window.pcmonaco = (function () {
         { token: 'comment.sql', foreground: '7E838D', fontStyle: 'italic' }
       ],
       colors: {
-        'editor.background': '#1F2125',
-        'editor.lineHighlightBackground': '#2A2D33',
-        'editorLineNumber.foreground': '#7E838D',
-        'editorLineNumber.activeForeground': '#E4E7EC',
-        'editor.selectionBackground': '#3E4249',
-        'editor.inactiveSelectionBackground': '#33363D',
-        'editorCursor.foreground': '#ff6200',
-        'editorWhitespace.foreground': '#4B4F57'
+        'editor.background': '#171717',
+        'editor.foreground': '#EDEDED',
+        'editorGutter.background': '#171717',
+        'minimap.background': '#171717',
+        'editor.lineHighlightBackground': '#1C1C1C',
+        'editorLineNumber.foreground': '#737373',
+        'editorLineNumber.activeForeground': '#C7C7C7',
+        'editor.selectionBackground': '#3E3E3E',
+        'editor.inactiveSelectionBackground': '#2A2A2A',
+        'editorCursor.foreground': '#EDEDED',
+        'editorWhitespace.foreground': '#3E3E3E',
+        'editorWidget.background': '#1C1C1C',
+        'editorWidget.border': '#3E3E3E',
+        'editorSuggestWidget.background': '#1C1C1C',
+        'editorSuggestWidget.border': '#3E3E3E',
+        'editorSuggestWidget.selectedBackground': '#333333',
+        'editorHoverWidget.background': '#1C1C1C',
+        'editorHoverWidget.border': '#3E3E3E',
+        'focusBorder': '#5A5A5A',
+        'scrollbarSlider.background': '#3E3E3E88',
+        'scrollbarSlider.hoverBackground': '#5A5A5AAA',
+        'scrollbarSlider.activeBackground': '#707070AA'
       }
     });
   }
@@ -75,7 +89,7 @@ window.pcmonaco = (function () {
     if (themeWatcher) return;
     const shell = document.getElementById('dcshell');
     if (!shell) return;
-    defineyellowTheme(monaco);
+    defineDarkTheme(monaco);
     themeWatcher = new MutationObserver(() => monaco.editor.setTheme(shellTheme()));
     themeWatcher.observe(shell, { attributes: true, attributeFilter: ['data-theme'] });
   }
@@ -259,7 +273,7 @@ window.pcmonaco = (function () {
           ta.spellcheck = false;
           ta.style.cssText =
             'width:100%;height:100%;box-sizing:border-box;resize:none;border:none;outline:none;' +
-            'background:#1f2125;color:#e4e7ec;padding:10px 12px;font-size:13px;line-height:1.55;' +
+            'background:#171717;color:#ededed;padding:10px 12px;font-size:13px;line-height:1.55;' +
             "font-family:'JetBrains Mono',ui-monospace,monospace;tab-size:2";
           el.appendChild(ta);
           fallbacks.set(id, ta);

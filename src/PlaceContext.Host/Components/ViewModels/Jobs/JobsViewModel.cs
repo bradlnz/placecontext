@@ -226,6 +226,10 @@ public sealed partial class JobsViewModel : PageViewModel
         try
         {
             Jobs = await _svc.ListJobsAsync(ProjectId);
+            // The catalogue is the primary content. Reveal it before the editor-only metadata
+            // below finishes so users can scan and select a job immediately.
+            Loading = false;
+            NotifyStateChanged();
             VaultSecrets = await _svc.ListProjectSecretsAsync(ProjectId);
             Triggers = await _svc.ListTriggersAsync(ProjectId);
             EventTypes = await _svc.ListEventTypesAsync();

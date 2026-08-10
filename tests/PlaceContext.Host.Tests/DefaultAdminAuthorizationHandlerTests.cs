@@ -12,6 +12,8 @@ namespace PlaceContext.Host.Tests;
 /// deny-by-default for everyone else (including a missing/unparsable identity).</summary>
 public sealed class DefaultAdminAuthorizationHandlerTests
 {
+    private static readonly Guid TenantId = Guid.NewGuid();
+
     private static (DefaultAdminAuthorizationHandler Handler, AppDbContext Db) NewHandler()
     {
         var services = new ServiceCollection();
@@ -44,10 +46,14 @@ public sealed class DefaultAdminAuthorizationHandlerTests
         return context.HasSucceeded;
     }
 
-    private static ClaimsPrincipal Principal(Guid userId) =>
+    private static ClaimsPrincipal Principal(Guid userId, Guid? tenantId = null) =>
         new(
             new ClaimsIdentity(
-                new[] { new Claim(ClaimTypes.NameIdentifier, userId.ToString()) },
+                new[]
+                {
+                    new Claim(ClaimTypes.NameIdentifier, userId.ToString()),
+                    new Claim("tenant", (tenantId ?? TenantId).ToString()),
+                },
                 "test"
             )
         );
@@ -63,6 +69,7 @@ public sealed class DefaultAdminAuthorizationHandlerTests
             PasswordSet = true,
             Role = "Owner",
             IsDefaultAdmin = isDefaultAdmin,
+            TenantId = TenantId,
             CreatedAt = DateTimeOffset.UtcNow,
         };
         db.Users.Add(row);
@@ -97,6 +104,15 @@ public sealed class DefaultAdminAuthorizationHandlerTests
     }
 
     [Fact]
+    public async Task A_default_admin_from_another_tenant_is_denied()
+    {
+        var (handler, db) = NewHandler();
+        var userId = await AddUser(db, isDefaultAdmin: true);
+
+        Assert.False(await Succeeds(handler, Principal(userId, Guid.NewGuid())));
+    }
+
+    [Fact]
     public async Task A_principal_without_a_parseable_identity_is_denied()
     {
         var (handler, _) = NewHandler();
@@ -106,7 +122,7 @@ public sealed class DefaultAdminAuthorizationHandlerTests
 
     private sealed class StubTenant : ICurrentTenant
     {
-        public Guid TenantId => Guid.Empty;
+        public Guid TenantId => DefaultAdminAuthorizationHandlerTests.TenantId;
         public string Slug => string.Empty;
         public string TimeZoneId => "UTC";
         public bool IsResolved => false;

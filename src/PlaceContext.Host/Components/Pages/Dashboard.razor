@@ -74,6 +74,10 @@
         {
             <div class="quick-chain-empty">Select a project to run its job chains.</div>
         }
+        else if (!Vm.ChainsReady)
+        {
+            <div class="quick-chain-empty"><Skeleton Kind="text" Rows="2" /></div>
+        }
         else if (Vm.Chains.Count == 0)
         {
             <div class="quick-chain-empty">No job chains are configured for this project.</div>

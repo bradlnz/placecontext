@@ -10,6 +10,24 @@ window.pcchart = (function () {
 
   const charts = {};   // canvas id → Chart instance
   const specs = {};    // canvas id → spec (for theme re-render)
+  let chartLoader = null;
+
+  function ensureChart() {
+    if (typeof window.Chart !== 'undefined') return Promise.resolve(window.Chart);
+    if (chartLoader) return chartLoader;
+    chartLoader = new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = '/vendor/chart.umd.min.js';
+      script.onload = () => resolve(window.Chart);
+      script.onerror = () => reject(new Error('Chart.js failed to load.'));
+      document.head.appendChild(script);
+    }).catch(error => {
+      chartLoader = null;
+      console.warn('pcchart:', error.message);
+      throw error;
+    });
+    return chartLoader;
+  }
 
   function tokens() {
     const shell = document.getElementById('dcshell');
@@ -130,19 +148,21 @@ window.pcchart = (function () {
     try { specs[id] = typeof specJson === 'string' ? JSON.parse(specJson) : specJson; }
     catch { return; }
     if (pending[id]) { clearTimeout(pending[id]); delete pending[id]; }
-    mount(id, 0);
+    return ensureChart().then(() => mount(id, 0));
   }
 
   return {
     render(id, specJson) {
-      renderCore(id, specJson);
+      return renderCore(id, specJson);
     },
     // Batch entry point: one interop round-trip for many charts. entries = [{id, spec}].
     renderAll(entries) {
-      for (let i = 0; i < entries.length; i++) {
-        const e = entries[i];
-        if (e) renderCore(e.id, e.spec);
-      }
+      return ensureChart().then(() => {
+        for (let i = 0; i < entries.length; i++) {
+          const e = entries[i];
+          if (e) renderCore(e.id, e.spec);
+        }
+      });
     },
     destroy(id) {
       if (pending[id]) { clearTimeout(pending[id]); delete pending[id]; }

@@ -33,6 +33,7 @@ using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
 using PlaceContext.Host.Branding;
+using PlaceContext.Host.Startup;
 using PlaceContext.Infrastructure.Security;
 using Microsoft.AspNetCore.DataProtection.XmlEncryption;
 using Microsoft.AspNetCore.DataProtection.KeyManagement;
@@ -422,6 +423,11 @@ app.Use(async (ctx, next) =>
 });
 
 PlaceContext.Infrastructure.DependencyInjection.MigrateDatabase(app.Services);
+await DefaultWorkspaceBootstrap.RunAsync(
+    app.Services,
+    app.Configuration,
+    app.Environment,
+    app.Logger);
 // CRM records are small, and older releases stored client identity/contact fields in plaintext.
 // Rewrite those legacy rows in bounded batches before accepting requests. New writes are encrypted
 // in their repositories, so this normally becomes a quick no-op after the first upgraded launch.
