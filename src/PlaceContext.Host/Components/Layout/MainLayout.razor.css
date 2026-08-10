@@ -613,6 +613,17 @@
     flex-direction: column;
 }
 
+/* Every routed section owns the same full-width content canvas as CRM. Individual pages can still
+   constrain fields, prose, side panes, and cards internally, but the outer section no longer jumps
+   between 1120/1180/1320px caps as users move through the product. */
+.body-scroll ::deep > * {
+    width: 100%;
+    max-width: none;
+    margin-left: 0;
+    margin-right: 0;
+    box-sizing: border-box;
+}
+
 /* Mobile nav — hidden on desktop, shown by the media query below. */
 .nav-toggle {
     display: none;

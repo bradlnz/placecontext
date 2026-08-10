@@ -26,6 +26,7 @@ namespace PlaceContext.Host.Controllers;
 /// </summary>
 public sealed class AuthController : ControllerBase
 {
+    private const string ManualLogoutCookie = "placecontext_manual_logout";
     private readonly IAuthService _auth;
     private readonly PortalToken _portal;
     private readonly IMembershipService _members;
@@ -82,7 +83,7 @@ public sealed class AuthController : ControllerBase
                 ? "/setup"
                 : $"/setup?returnUrl={Uri.EscapeDataString(returnUrl)}");
 
-        if (_env.IsDevelopment())
+        if (_env.IsDevelopment() && !Request.Cookies.ContainsKey(ManualLogoutCookie))
         {
             var operatorUser = await _auth.GetOrCreateOperatorAsync(HttpContext.RequestAborted);
             await SignInAsync(HttpContext, operatorUser);
@@ -324,12 +325,25 @@ public sealed class AuthController : ControllerBase
     {
         if (!await ValidAntiforgeryAsync()) return BadRequest();
         await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
-        return Redirect("/locked");
+        if (_env.IsDevelopment())
+        {
+            // /locked normally performs convenient local auto-login. Remember an explicit sign-out so
+            // it does not immediately recreate the session the user just ended.
+            Response.Cookies.Append(ManualLogoutCookie, "1", new CookieOptions
+            {
+                HttpOnly = true,
+                IsEssential = true,
+                SameSite = SameSiteMode.Lax,
+                Secure = Request.IsHttps,
+            });
+        }
+        return Redirect("/login");
     }
 
     // Signs the user into the cookie scheme with their identity + tenant + role claims.
     private static Task SignInAsync(HttpContext ctx, AuthUser user)
     {
+        ctx.Response.Cookies.Delete(ManualLogoutCookie);
         var claims = new[]
         {
             new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
