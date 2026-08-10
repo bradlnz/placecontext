@@ -13,63 +13,137 @@
 
 <PageTitle>placecontext — set up this workspace</PageTitle>
 
-<div class="dccard auth-card">
-    <div class="auth-brand">
-        <div class="auth-mark">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M5 8l3.5 4L5 16"></path><path d="M13 16h6"></path></svg>
+<main class="setup-frame">
+    <section class="setup-intro" aria-label="PlaceContext introduction">
+        <div class="auth-brand">
+            <div class="auth-mark" aria-hidden="true">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M5 8l3.5 4L5 16"></path><path d="M13 16h6"></path></svg>
+            </div>
+            <span class="auth-brand-name">placecontext</span>
         </div>
-        <span class="auth-brand-name">placecontext</span>
-    </div>
 
-    @if (Vm.Configured)
-    {
-        <h1 class="auth-title">Already set up</h1>
-        <p class="auth-sub">This workspace already has an admin account.</p>
-        <a class="dcbtn primary auth-submit" href="@PageRoutes.Login">Go to sign in</a>
-    }
-    else
-    {
-        <h1 class="auth-title">Set up this workspace</h1>
-        <p class="auth-sub">
-            Create the admin account before anything else is reachable. There is no default password —
-            you choose one now.
-        </p>
+        <div class="intro-copy">
+            <div class="setup-kicker"><span></span> Self-hosted workspace</div>
+            <h1>Turn operational data into working systems.</h1>
+            <p>One secure control plane for data, jobs, automations, agents, and the people who run them.</p>
+        </div>
 
-        <form method="post" action="/auth/setup" class="auth-form">
-            <AntiforgeryToken />
+        <div class="setup-capabilities">
+            <div class="capability">
+                <span class="capability-icon">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M7 4v16m10-8H7m10 5H7"></path></svg>
+                </span>
+                <div><strong>Unified operations</strong><span>Projects, pipelines, CRM, and analytics in one workspace.</span></div>
+            </div>
+            <div class="capability">
+                <span class="capability-icon">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 4v5c0 5-3.4 8-8 9-4.6-1-8-4-8-9V7l8-4z"></path><path d="M9 12l2 2 4-5"></path></svg>
+                </span>
+                <div><strong>Private by default</strong><span>Your data and workloads stay inside your infrastructure.</span></div>
+            </div>
+            <div class="capability">
+                <span class="capability-icon">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="6" r="2"></circle><circle cx="18" cy="18" r="2"></circle><path d="M8 11l8-4M8 13l8 4"></path></svg>
+                </span>
+                <div><strong>Ready to connect</strong><span>Add your team and approved AI clients after setup.</span></div>
+            </div>
+        </div>
+
+        <div class="setup-trust"><span class="trust-dot"></span> Services are ready. Complete setup to unlock this workspace.</div>
+    </section>
+
+    <section class="dccard auth-card">
+        @if (Vm.Configured)
+        {
+            <div class="setup-state-icon success" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="M5 12l4 4L19 6"></path></svg>
+            </div>
+            <div class="setup-step">Setup complete</div>
+            <h2 class="auth-title">Your workspace is ready</h2>
+            <p class="auth-sub">An owner account already exists. Sign in to continue.</p>
+            <a class="dcbtn primary auth-submit" href="@PageRoutes.Login">Continue to sign in</a>
+        }
+        else
+        {
+            <div class="setup-heading">
+                <div>
+                    <div class="setup-step">Initial setup <span>1 of 1</span></div>
+                    <h2 class="auth-title">Create your owner account</h2>
+                    <p class="auth-sub">This first account has full workspace access. You can invite the rest of your team later.</p>
+                </div>
+                <div class="setup-state-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><path d="M12 13a4 4 0 100-8 4 4 0 000 8z"></path><path d="M5 21a7 7 0 0114 0"></path><path d="M19 8v4m-2-2h4"></path></svg>
+                </div>
+            </div>
+
             @if (!string.IsNullOrEmpty(Vm.Error))
             {
-                <div class="auth-error">@Vm.Error</div>
+                <div class="auth-error" role="alert">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v6m0 4h.01"></path></svg>
+                    <span>@Vm.Error</span>
+                </div>
             }
-            <div class="dcfield">
-                <label>Admin email <span class="req">*</span></label>
-                <input class="dcinput" type="email" name="email" required autofocus placeholder="you@example.com" />
-            </div>
-            <div class="dcfield">
-                <label>Display name</label>
-                <input class="dcinput" type="text" name="displayName" placeholder="Optional — defaults to the email's local part" />
-            </div>
-            <div class="dcfield">
-                <label>Password <span class="req">*</span> <span class="code">min 12 characters</span></label>
-                <input class="dcinput" type="password" name="password" required minlength="12" autocomplete="new-password" />
-            </div>
-            <div class="dcfield">
-                <label>Confirm password <span class="req">*</span></label>
-                <input class="dcinput" type="password" name="confirmPassword" required minlength="12" autocomplete="new-password" />
-            </div>
-            <button type="submit" class="dcbtn primary auth-submit">Create admin account</button>
-            <div class="dchint">Avoid common or reused passwords — this account can manage the whole workspace.</div>
-        </form>
-    }
-</div>
+
+            <form method="post" action="/auth/setup" class="auth-form">
+                <AntiforgeryToken />
+                @if (!string.IsNullOrEmpty(Vm.ReturnUrl))
+                {
+                    <input type="hidden" name="returnUrl" value="@Vm.ReturnUrl" />
+                }
+                <div class="form-row">
+                    <div class="dcfield">
+                        <label for="setup-name">Full name <span class="optional">Optional</span></label>
+                        <input id="setup-name" class="dcinput" type="text" name="displayName" value="@Vm.DisplayName"
+                               autocomplete="name" placeholder="Alex Morgan" maxlength="120" />
+                    </div>
+                    <div class="dcfield">
+                        <label for="setup-email">Work email</label>
+                        <input id="setup-email" class="dcinput" type="email" name="email" value="@Vm.Email" required autofocus
+                               autocomplete="email" placeholder="alex@company.com" maxlength="254" />
+                    </div>
+                </div>
+                <div class="dcfield">
+                    <label for="setup-password">Password <span class="field-note">12+ characters</span></label>
+                    <input id="setup-password" class="dcinput" type="password" name="password" required minlength="12"
+                           autocomplete="new-password" aria-describedby="password-guidance" placeholder="Create a secure password" />
+                </div>
+                <div class="dcfield">
+                    <label for="setup-confirm">Confirm password</label>
+                    <input id="setup-confirm" class="dcinput" type="password" name="confirmPassword" required minlength="12"
+                           autocomplete="new-password" placeholder="Enter it once more" />
+                </div>
+
+                <div id="password-guidance" class="security-note">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10V8a5 5 0 0110 0v2"></path><rect x="5" y="10" width="14" height="11" rx="2"></rect><path d="M12 14v3"></path></svg>
+                    <span>No default credentials are created. Your password is salted and hashed before storage.</span>
+                </div>
+
+                <button type="submit" class="dcbtn primary auth-submit">
+                    Create workspace account
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14m-5-5l5 5-5 5"></path></svg>
+                </button>
+                <p class="setup-fineprint">By continuing, you become the default workspace owner and security administrator.</p>
+            </form>
+        }
+    </section>
+</main>
 
 @code {
     [SupplyParameterFromQuery(Name = "error")]
     public string? Error { get; set; }
 
+    [SupplyParameterFromQuery(Name = "returnUrl")]
+    public string? ReturnUrl { get; set; }
+
+    [SupplyParameterFromQuery(Name = "email")]
+    public string? Email { get; set; }
+
+    [SupplyParameterFromQuery(Name = "displayName")]
+    public string? DisplayName { get; set; }
+
     protected override async Task OnInitializedAsync()
     {
-        Vm.Error = Error;
+        Vm.SetParameters(Error, ReturnUrl, Email, DisplayName);
         await Vm.InitializeAsync();
     }
 }

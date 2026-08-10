@@ -1,13 +1,68 @@
 .auth-shell {
+    position: relative;
+    isolation: isolate;
     min-height: 100vh;
     display: flex;
     align-items: center;
     justify-content: center;
-    background: var(--bg);
-    padding: 24px;
+    overflow: hidden;
+    background: #141414;
+    padding: 56px 32px 72px;
 }
 
 .auth-wrap {
+    position: relative;
+    z-index: 1;
     width: 100%;
-    max-width: 420px;
+    max-width: 1040px;
+}
+
+.auth-grid {
+    position: absolute;
+    z-index: -2;
+    inset: 0;
+    opacity: .18;
+    background-image:
+        linear-gradient(rgba(255,255,255,.032) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,.032) 1px, transparent 1px);
+    background-size: 48px 48px;
+    mask-image: linear-gradient(to bottom, black, transparent 82%);
+}
+
+.auth-glow {
+    position: absolute;
+    z-index: -1;
+    width: 760px;
+    height: 760px;
+    top: -480px;
+    left: 50%;
+    transform: translateX(-50%);
+    border-radius: 50%;
+    background: rgba(255,255,255,.055);
+    filter: blur(80px);
+}
+
+.auth-footer {
+    position: absolute;
+    z-index: 1;
+    left: 32px;
+    bottom: 22px;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    color: var(--text-4);
+    font-size: 9.5px;
+    letter-spacing: .035em;
+    text-transform: uppercase;
+}
+
+.footer-separator { width: 3px; height: 3px; border-radius: 50%; background: #555; }
+
+@media (max-width: 880px) {
+    .auth-shell { align-items: flex-start; padding: 36px 24px 72px; overflow-y: auto; }
+}
+
+@media (max-width: 520px) {
+    .auth-shell { padding: 24px 16px 62px; }
+    .auth-footer { left: 16px; bottom: 16px; }
 }

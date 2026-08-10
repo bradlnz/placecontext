@@ -5,7 +5,14 @@
 @inherits LayoutComponentBase
 
 <div id="dcshell" data-theme="dark" class="auth-shell">
+    <div class="auth-grid" aria-hidden="true"></div>
+    <div class="auth-glow" aria-hidden="true"></div>
     <div class="auth-wrap">
         @Body
     </div>
+    <footer class="auth-footer">
+        <span>PlaceContext</span>
+        <span class="footer-separator"></span>
+        <span>Self-hosted data operations</span>
+    </footer>
 </div>

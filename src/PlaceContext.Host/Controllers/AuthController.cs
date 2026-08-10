@@ -17,9 +17,9 @@ namespace PlaceContext.Host.Controllers;
 ///
 /// Password login (added here): a fresh tenant is "unconfigured" until an operator completes /setup
 /// (email + strong password → the tenant's Owner); from then on /login verifies email + password. In
-/// Development, /locked keeps auto-signing the operator in with no password (unchanged — the team's
-/// local workflow and the Playwright/verify harness rely on it); everywhere else /locked now redirects
-/// to /setup or /login instead of signing anyone in. The pctl TUI's HMAC-token machine path
+/// Development, /locked can auto-sign the operator in with no password after setup (the team's local
+/// workflow and the Playwright/verify harness rely on it); an unconfigured workspace always goes to
+/// /setup first. Everywhere else /locked redirects to /setup or /login. The pctl TUI's HMAC-token path
 /// (/auth/portal) is untouched — it never counts towards "configured" (see IAuthService.GetOrCreateOperatorAsync),
 /// so it can keep bootstrapping a headless session without ever needing a password. /join turns an
 /// invite token into a member. Login and setup actions are anonymous; 2FA management endpoints require authentication.
@@ -65,14 +65,23 @@ public sealed class AuthController : ControllerBase
     }
 
     // The cookie scheme's LoginPath: every unauthenticated request to a protected page lands here.
-    //   • Development: unchanged — auto-signs in as the operator with no password, exactly as before, so
-    //     local dev and the Playwright/verify harness keep working with zero setup.
-    //   • Everywhere else: no more password-less auto-login. Send the operator to /setup (tenant has no
-    //     admin with a real password yet) or /login (it does), carrying the return URL through either way.
+    //   • Every environment: send a workspace with no human owner to /setup.
+    //   • Development after setup: auto-sign in the machine operator for the local test workflow.
+    //   • Everywhere else after setup: send the operator to /login.
     [HttpGet("/locked")]
     [AllowAnonymous]
     public async Task<IActionResult> Locked()
     {
+        var returnUrl = LocalOrHome(Request.Query["ReturnUrl"]);
+
+        // First-run setup always wins, including in Development. Previously the development auto-login
+        // created a machine operator first and made a brand-new install look configured from the browser,
+        // so the human owner never saw the setup experience.
+        if (await _auth.IsUnconfiguredAsync(HttpContext.RequestAborted))
+            return Redirect(returnUrl == "/"
+                ? "/setup"
+                : $"/setup?returnUrl={Uri.EscapeDataString(returnUrl)}");
+
         if (_env.IsDevelopment())
         {
             var operatorUser = await _auth.GetOrCreateOperatorAsync(HttpContext.RequestAborted);
@@ -81,9 +90,9 @@ public sealed class AuthController : ControllerBase
             return Redirect(LocalOrHome(Request.Query["ReturnUrl"]));
         }
 
-        var returnUrl = LocalOrHome(Request.Query["ReturnUrl"]);
-        var target = await _auth.IsUnconfiguredAsync(HttpContext.RequestAborted) ? "/setup" : "/login";
-        return Redirect(returnUrl == "/" ? target : $"{target}?returnUrl={Uri.EscapeDataString(returnUrl)}");
+        return Redirect(returnUrl == "/"
+            ? "/login"
+            : $"/login?returnUrl={Uri.EscapeDataString(returnUrl)}");
     }
 
     // First-run setup: creates this tenant's Owner (email + strong password) and signs them straight in.
@@ -94,28 +103,38 @@ public sealed class AuthController : ControllerBase
     [HttpPost("/auth/setup")]
     [AllowAnonymous]
     public async Task<IActionResult> Setup([FromForm] string email, [FromForm] string? displayName,
-        [FromForm] string password, [FromForm] string confirmPassword)
+        [FromForm] string password, [FromForm] string confirmPassword, [FromForm] string? returnUrl)
     {
         if (!await ValidAntiforgeryAsync())
-            return Redirect("/setup?error=" + Uri.EscapeDataString("Your session expired — please try again."));
+            return Redirect(BuildSetupErrorUrl("Your session expired — please try again.", returnUrl, email, displayName));
 
         if (!await _auth.IsUnconfiguredAsync(HttpContext.RequestAborted))
             return Redirect("/login"); // someone already finished setup — this page is a dead end now
 
         if (string.IsNullOrWhiteSpace(email) || !email.Contains('@'))
-            return Redirect("/setup?error=" + Uri.EscapeDataString("Enter a valid email address."));
+            return Redirect(BuildSetupErrorUrl("Enter a valid email address.", returnUrl, email, displayName));
 
         // Defense in depth: the Setup page enforces this client-side too, but the server never trusts that.
         var policyError = PasswordPolicy.Validate(password, confirmPassword);
         if (policyError is not null)
-            return Redirect("/setup?error=" + Uri.EscapeDataString(policyError));
+            return Redirect(BuildSetupErrorUrl(policyError, returnUrl, email, displayName));
 
         var admin = await _auth.CreateFirstAdminAsync(email, displayName ?? "", password, HttpContext.RequestAborted);
         if (admin is null)
-            return Redirect("/login"); // lost a race to a concurrent /setup submission
+        {
+            // A concurrent request may have completed setup, in which case login is the only safe next
+            // destination. A duplicate machine-operator email leaves setup open, so explain it instead.
+            if (!await _auth.IsUnconfiguredAsync(HttpContext.RequestAborted))
+                return Redirect("/login");
+            return Redirect(BuildSetupErrorUrl(
+                "That email is already reserved in this workspace. Use another email address.",
+                returnUrl,
+                email,
+                displayName));
+        }
 
         await SignInAsync(HttpContext, admin);
-        return Redirect("/");
+        return Redirect(LocalOrHome(returnUrl));
     }
 
     /// <summary>
@@ -243,6 +262,22 @@ public sealed class AuthController : ControllerBase
             url += "&returnUrl=" + Uri.EscapeDataString(returnUrl);
         if (!string.IsNullOrEmpty(email))
             url += "&email=" + Uri.EscapeDataString(email);
+        return url;
+    }
+
+    private static string BuildSetupErrorUrl(
+        string error,
+        string? returnUrl,
+        string? email,
+        string? displayName)
+    {
+        var url = "/setup?error=" + Uri.EscapeDataString(error);
+        if (!string.IsNullOrEmpty(returnUrl))
+            url += "&returnUrl=" + Uri.EscapeDataString(returnUrl);
+        if (!string.IsNullOrWhiteSpace(email))
+            url += "&email=" + Uri.EscapeDataString(email.Trim());
+        if (!string.IsNullOrWhiteSpace(displayName))
+            url += "&displayName=" + Uri.EscapeDataString(displayName.Trim());
         return url;
     }
 

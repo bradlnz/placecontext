@@ -56,6 +56,9 @@
     [SupplyParameterFromQuery(Name = "email")]
     public string? EmailQuery { get; set; }
 
-    protected override void OnParametersSet() =>
+    protected override async Task OnParametersSetAsync()
+    {
         Vm.SetParameters(ErrorQuery, ReturnUrlQuery, EmailQuery);
+        await Vm.InitializeAsync();
+    }
 }

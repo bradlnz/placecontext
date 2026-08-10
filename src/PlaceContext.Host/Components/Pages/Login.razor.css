@@ -1,8 +1,15 @@
 .auth-card {
+    width: 100%;
+    max-width: 420px;
+    margin: 0 auto;
     padding: 28px;
     display: flex;
     flex-direction: column;
     gap: 16px;
+    border-color: #373737;
+    border-radius: 12px;
+    background: linear-gradient(180deg, #202020 0%, #1b1b1b 100%);
+    box-shadow: 0 30px 80px rgba(0,0,0,.42), 0 2px 8px rgba(0,0,0,.3);
 }
 
 .auth-brand {

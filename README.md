@@ -135,10 +135,16 @@ flowchart LR
 ## Developing
 
 ```bash
+./run.sh                            # first run: prerequisites, database, build, migrations, app
+./start.sh                          # later runs: build and start the prepared app
+./start.sh --no-build --port 7710   # fast restart on a different port
 dotnet build && dotnet test        # all suites green; architecture tests enforce the onion
 dotnet run --project src/PlaceContext.Host   # portal http://localhost:7700, MCP at /mcp
 make -C deploy/tui                 # build the TUI binary
 ```
+
+On a database without a human owner account, opening the portal redirects to the first-run setup.
+That flow creates the default workspace owner and signs them in; no shared default password is used.
 
 You'll need the .NET 10 SDK, Go (for the TUI), and a PostgreSQL (the dev cluster provides one, or:
 `docker run -d -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=placecontext -p 5433:5432 postgres:16`).
