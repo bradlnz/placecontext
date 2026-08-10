@@ -12,6 +12,7 @@
 #
 # Usage:
 #   ./setup.sh                 # core setup
+#   ./setup.sh --fresh         # DELETE and recreate the local PlaceContext database
 #
 # Safe to re-run: every step checks before acting.
 set -euo pipefail
@@ -20,9 +21,12 @@ cd "$(dirname "$0")"
 DOTNET_CHANNEL="10.0"
 DB_CONTAINER="placecontext-db"
 DB_PORT="5433"
+HOST_PROJECT="src/PlaceContext.Host/PlaceContext.Host.csproj"
+fresh_database=false
 
 for arg in "$@"; do
   case "$arg" in
+    --fresh) fresh_database=true ;;
     -h|--help) grep '^#' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "Unknown option: $arg (try --help)" >&2; exit 2 ;;
   esac
@@ -76,14 +80,29 @@ if have docker && docker info >/dev/null 2>&1; then
     printf '.'; sleep 1
   done
   echo ' ready.'
+
+  if [ "${fresh_database}" = true ]; then
+    warn "--fresh will permanently delete every workspace, user, project, and run in the local 'placecontext' database."
+    say "Recreating the local placecontext database…"
+    docker exec "${DB_CONTAINER}" dropdb --force --if-exists -U postgres placecontext
+    docker exec "${DB_CONTAINER}" createdb -U postgres placecontext
+    echo "    Fresh database created."
+  fi
 else
+  if [ "${fresh_database}" = true ]; then
+    echo "ERROR: --fresh only operates on the managed '${DB_CONTAINER}' Docker database, but Docker is unavailable." >&2
+    exit 1
+  fi
   warn "Skipping PostgreSQL container (Docker unavailable). Provide a Postgres reachable on localhost:${DB_PORT}."
 fi
 
 # ── Restore, build, tools, migrations ──────────────────────────────────────────────────────────
-say "Restoring and building the solution…"
-dotnet restore
-dotnet build --no-restore -clp:ErrorsOnly
+say "Restoring and building the PlaceContext Host…"
+# Starting the product only requires the Host and its transitive project dependencies. Building the
+# solution here also compiles every test project, which can make the launcher fail on unrelated test
+# fixture work even while the application itself is healthy and runnable.
+dotnet restore "${HOST_PROJECT}" --nologo
+dotnet build "${HOST_PROJECT}" --no-restore --nologo --tl:off -clp:ErrorsOnly
 
 say "Restoring local dotnet tools (dotnet-ef)…"
 dotnet tool restore

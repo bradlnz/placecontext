@@ -6,9 +6,11 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using PlaceContext.Application;
 using PlaceContext.Application.Auth;
 using PlaceContext.Application.Ports;
 using PlaceContext.Host.Auth;
+using PlaceContext.Infrastructure.Tenancy;
 
 namespace PlaceContext.Host.Controllers;
 
@@ -34,9 +36,11 @@ public sealed class AuthController : ControllerBase
     private readonly IConfiguration _config;
     private readonly IWebHostEnvironment _env;
     private readonly IDataEncryptor _encryptor;
+    private readonly IPlaceContextService _placeContext;
 
     public AuthController(IAuthService auth, PortalToken portal, IMembershipService members,
-        IAntiforgery antiforgery, IConfiguration config, IWebHostEnvironment env, IDataEncryptor encryptor)
+        IAntiforgery antiforgery, IConfiguration config, IWebHostEnvironment env, IDataEncryptor encryptor,
+        IPlaceContextService placeContext)
     {
         _auth = auth;
         _portal = portal;
@@ -45,6 +49,7 @@ public sealed class AuthController : ControllerBase
         _config = config;
         _env = env;
         _encryptor = encryptor;
+        _placeContext = placeContext;
     }
 
     // Token sign-in (self-hosted; the pctl TUI mints the token and opens /auth/portal).
@@ -134,6 +139,7 @@ public sealed class AuthController : ControllerBase
                 displayName));
         }
 
+        await EnsureDefaultProjectAsync(admin, HttpContext.RequestAborted);
         await SignInAsync(HttpContext, admin);
         return Redirect(LocalOrHome(returnUrl));
     }
@@ -174,6 +180,7 @@ public sealed class AuthController : ControllerBase
         if (admin is null)
             return Conflict(new { error = "Could not create admin (already configured or email taken)." });
 
+        await EnsureDefaultProjectAsync(admin, HttpContext.RequestAborted);
         return Ok(new { email = admin.Email, displayName = admin.DisplayName, role = admin.Role.ToString() });
     }
 
@@ -280,6 +287,31 @@ public sealed class AuthController : ControllerBase
         if (!string.IsNullOrWhiteSpace(displayName))
             url += "&displayName=" + Uri.EscapeDataString(displayName.Trim());
         return url;
+    }
+
+    private async Task EnsureDefaultProjectAsync(AuthUser admin, CancellationToken cancellationToken)
+    {
+        var previousUser = CurrentUser.Current;
+        CurrentUser.Set(new UserIdentity(admin.Id, admin.Role));
+        try
+        {
+            var projects = await _placeContext.GetProjectsAsync(cancellationToken);
+            if (projects.Any(project =>
+                    string.Equals(project.Name, "Default project", StringComparison.OrdinalIgnoreCase)))
+                return;
+
+            await _placeContext.CreateProjectAsync(
+                _config["PlaceContext:Bootstrap:DefaultProjectPath"] ?? "/workspace/default",
+                "Default project",
+                cancellationToken);
+        }
+        finally
+        {
+            if (previousUser is null)
+                CurrentUser.Clear();
+            else
+                CurrentUser.Set(previousUser);
+        }
     }
 
     // Invite acceptance (join page).

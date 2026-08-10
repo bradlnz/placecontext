@@ -21,6 +21,14 @@ window.placecontext = {
     const cur = (document.getElementById('dcshell')?.dataset.theme) || 'dark';
     return this.applyTheme(cur === 'dark' ? 'light' : 'dark');
   },
+  beginSetup(form) {
+    if (!(form instanceof HTMLFormElement)) return true;
+    form.classList.add('is-submitting');
+    form.setAttribute('aria-busy', 'true');
+    const button = form.querySelector('button[type="submit"]');
+    if (button) button.disabled = true;
+    return true;
+  },
   animateMeters() {
     requestAnimationFrame(() => {
       document.querySelectorAll('.dcbar').forEach(el => {

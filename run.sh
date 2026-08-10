@@ -8,6 +8,7 @@
 #
 # Usage:
 #   ./run.sh                 # full setup + run on port 7700
+#   ./run.sh --fresh         # DELETE the local database, migrate from empty, then run
 #   PORT=7710 ./run.sh       # run on a different port (e.g. when the k3d
 #                            # dev cluster's load balancer holds 7700)
 #
@@ -16,6 +17,11 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 PORT="${PORT:-7700}"
+
+if [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ]; then
+  sed -n '2,13s/^# \{0,1\}//p' "$0"
+  exit 0
+fi
 
 ./setup.sh "$@"
 

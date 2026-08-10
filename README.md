@@ -136,6 +136,7 @@ flowchart LR
 
 ```bash
 ./run.sh                            # first run: prerequisites, database, build, migrations, app
+./run.sh --fresh                    # destructive: recreate the local database, then start
 ./start.sh                          # later runs: build and start the prepared app
 ./start.sh --no-build --port 7710   # fast restart on a different port
 dotnet build && dotnet test        # all suites green; architecture tests enforce the onion
