@@ -27,7 +27,7 @@ public class LaunchpadToolExecutor
                 AgentToolNames.ListJobs => await ListJobsAsync(projectId, ct),
                 AgentToolNames.ListJobRuns => await ListJobRunsAsync(args, ct),
                 AgentToolNames.ListChains => await ListChainsAsync(projectId, ct),
-                AgentToolNames.RunJob => await RunJobAsync(args, ct),
+                AgentToolNames.RunJob => await RunJobAsync(projectId, args, ct),
                 AgentToolNames.RunJobChain => await RunJobChainAsync(projectId, args, ct),
                 AgentToolNames.Search => await SearchAsync(projectId, args, ct),
                 AgentToolNames.QueryGraph => await QueryGraphAsync(projectId, ct),
@@ -104,10 +104,13 @@ public class LaunchpadToolExecutor
         return sb.ToString();
     }
 
-    private async Task<string> RunJobAsync(string args, CancellationToken ct)
+    private async Task<string> RunJobAsync(Guid projectId, string args, CancellationToken ct)
     {
         if (!Guid.TryParse(args.Trim(), out var jobId) || jobId == Guid.Empty)
             return $"Error: invalid jobId '{args.Trim()}'";
+        var job = await _svc.GetJobAsync(jobId, ct);
+        if (job is null || job.ProjectId != projectId)
+            return "Error: Job does not belong to this project.";
         var run = await _svc.RunJobAsync(jobId, inputPayload: null, ct: ct);
         return $"Job run started: {run.Id}\nStatus: {run.Status}\nStarted: {run.StartedAt:yyyy-MM-dd HH:mm}";
     }
@@ -143,10 +146,11 @@ public class LaunchpadToolExecutor
     {
         if (string.IsNullOrWhiteSpace(key))
             return (Guid.Empty, "usage: run_job_chain|chainIdOrName|payloadJson");
-        if (Guid.TryParse(key, out var chainId) && chainId != Guid.Empty)
-            return (chainId, null);
-
         var chains = await _svc.ListJobChainsAsync(projectId, ct);
+        if (Guid.TryParse(key, out var chainId) && chainId != Guid.Empty)
+            return chains.Any(chain => chain.Id == chainId)
+                ? (chainId, null)
+                : (Guid.Empty, "chain does not belong to this project");
         var matches = chains
             .Where(c => string.Equals(c.Name, key, StringComparison.OrdinalIgnoreCase))
             .ToList();

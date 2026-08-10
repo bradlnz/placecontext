@@ -1,4 +1,5 @@
 using PlaceContext.Application.Cqrs;
+using PlaceContext.Application.Agents;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Ports;
 using PlaceContext.Domain.Entities;
@@ -10,7 +11,8 @@ public sealed class SendAgentMessageHandler : ICommandHandler<SendAgentMessageCo
 {
     private readonly IAgentConfigRepository _configs;
     private readonly IAgentChatSessionRepository _sessions;
-    private readonly IChatGateway _chat;
+    private readonly IProjectChatGateway _chat;
+    private readonly CommandAgentOrchestrator _orchestrator;
     private readonly IUnitOfWork _uow;
     private readonly IClock _clock;
     private readonly AgentContextBuilder _contextBuilder;
@@ -18,7 +20,8 @@ public sealed class SendAgentMessageHandler : ICommandHandler<SendAgentMessageCo
     public SendAgentMessageHandler(
         IAgentConfigRepository configs,
         IAgentChatSessionRepository sessions,
-        IChatGateway chat,
+        IProjectChatGateway chat,
+        CommandAgentOrchestrator orchestrator,
         IUnitOfWork uow,
         IClock clock,
         AgentContextBuilder contextBuilder)
@@ -26,6 +29,7 @@ public sealed class SendAgentMessageHandler : ICommandHandler<SendAgentMessageCo
         _configs = configs;
         _sessions = sessions;
         _chat = chat;
+        _orchestrator = orchestrator;
         _uow = uow;
         _clock = clock;
         _contextBuilder = contextBuilder;
@@ -38,7 +42,7 @@ public sealed class SendAgentMessageHandler : ICommandHandler<SendAgentMessageCo
         if (config is null || !config.Enabled)
             return DisabledSession(command);
 
-        if (!_chat.IsEnabled)
+        if (!(await _chat.GetStatusAsync(command.ProjectId, ct)).IsEnabled)
             return NoModelSession(command);
 
         // 2. Load or create session.
@@ -59,9 +63,10 @@ public sealed class SendAgentMessageHandler : ICommandHandler<SendAgentMessageCo
             command.ProjectId, command.Message, config.MaxContextChunks, ct);
 
         // 4. Build the message list for the LLM.
+        var route = await _orchestrator.RouteAsync(command.ProjectId, command.Message, context, ct);
         var messages = new List<ChatMessage>
         {
-            new("system", BuildSystemPrompt(config, context)),
+            new("system", BuildSystemPrompt(config, context) + "\n\n" + route.PromptSection),
         };
 
         // Include conversation history.
@@ -74,7 +79,7 @@ public sealed class SendAgentMessageHandler : ICommandHandler<SendAgentMessageCo
         var settings = new ChatSettings(
             Temperature: config.Temperature,
             TopP: config.TopP);
-        var reply = await _chat.ChatAsync(messages, settings, ct);
+        var reply = await _chat.ChatAsync(command.ProjectId, messages, settings, ct);
 
         // 6. Persist the new messages.
         session.AppendMessages(command.Message, reply, _clock.UtcNow);
@@ -104,7 +109,7 @@ public sealed class SendAgentMessageHandler : ICommandHandler<SendAgentMessageCo
     private static AgentChatSessionView NoModelSession(SendAgentMessageCommand command)
     {
         var session = AgentChatSession.Create(command.ProjectId, null, "No model", DateTimeOffset.UtcNow);
-        session.AppendMessages(command.Message, "No local language model is configured. Set PlaceContext:Chat:Endpoint to enable the chat agent.", DateTimeOffset.UtcNow);
+        session.AppendMessages(command.Message, "No language model is configured. Add LLM_API_TOKEN to the project Vault or configure the local agent cluster.", DateTimeOffset.UtcNow);
         return AgentSessionViewMapper.ToView(session);
     }
 }

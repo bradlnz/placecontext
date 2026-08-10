@@ -24,6 +24,9 @@ public class ProjectDataTests
             return Task.FromResult(new ProjectQueryResult(new[] { "n" }, new[] { new string?[] { "1" } }, 0, false));
         }
 
+        public Task<ProjectTableReadResult> ReadTableAsync(Guid projectId, string tableName, long maxRows = 10000, CancellationToken ct = default)
+            => throw new NotSupportedException();
+
         public Task<IReadOnlyList<ProjectTableInfo>> ListTablesAsync(Guid projectId, CancellationToken ct = default)
         {
             SawProject = projectId;

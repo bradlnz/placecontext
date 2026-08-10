@@ -108,6 +108,29 @@ public sealed class ResponsiveShellContractTests
     }
 
     [Fact]
+    public void Data_pages_use_the_same_full_width_shell_as_records()
+    {
+        var records = ReadHostSource("Components/Pages/ProjectData.razor.css");
+        Assert.Contains("max-width: none;", records);
+
+        foreach (
+            var page in new[]
+            {
+                "ProjectAnalytics.razor.css",
+                "DataMap.razor.css",
+                "DataEntities.razor.css",
+            }
+        )
+        {
+            var styles = ReadHostSource($"Components/Pages/{page}");
+
+            Assert.Contains("max-width: none;", styles);
+            Assert.Contains("width: 100%;", styles);
+            Assert.Contains("box-sizing: border-box;", styles);
+        }
+    }
+
+    [Fact]
     public void Data_map_only_presents_job_to_table_mappings()
     {
         var page = ReadHostSource("Components/Pages/DataMap.razor");

@@ -19,7 +19,8 @@ public sealed class AgentSessionRunner
     private static readonly TimeSpan DefaultToolTimeout = TimeSpan.FromSeconds(60);
     private static readonly TimeSpan JobToolTimeout = TimeSpan.FromMinutes(15);
 
-    private readonly IChatGateway _gateway;
+    private readonly IProjectChatGateway _gateway;
+    private readonly CommandAgentOrchestrator _orchestrator;
     private readonly AgentContextBuilder _contextBuilder;
     private readonly IAgentConfigRepository _configs;
     private readonly IProjectDataStore _dataStore;
@@ -28,7 +29,8 @@ public sealed class AgentSessionRunner
     private readonly IClock _clock;
 
     public AgentSessionRunner(
-        IChatGateway gateway,
+        IProjectChatGateway gateway,
+        CommandAgentOrchestrator orchestrator,
         AgentContextBuilder contextBuilder,
         IAgentConfigRepository configs,
         IProjectDataStore dataStore,
@@ -37,6 +39,7 @@ public sealed class AgentSessionRunner
         IClock clock)
     {
         _gateway = gateway;
+        _orchestrator = orchestrator;
         _contextBuilder = contextBuilder;
         _configs = configs;
         _dataStore = dataStore;
@@ -148,7 +151,7 @@ public sealed class AgentSessionRunner
         DateTimeOffset createdAt, string userPromptForRag, string channelInstruction,
         string disabledMessage, CancellationToken ct)
     {
-        if (!_gateway.IsEnabled)
+        if (!(await _gateway.GetStatusAsync(projectId, ct)).IsEnabled)
         {
             messages.Add(new AgentSessionMessage("assistant", disabledMessage, _clock.UtcNow));
             return disabledMessage;
@@ -172,6 +175,9 @@ public sealed class AgentSessionRunner
         if (!string.IsNullOrWhiteSpace(ragContext))
             systemPrompt += "\n\n## Project context (retrieved automatically)\n\n" + ragContext;
 
+        var route = await _orchestrator.RouteAsync(projectId, userPromptForRag, ragContext, ct);
+        systemPrompt += "\n\n" + route.PromptSection;
+
         var temperature = config?.Temperature ?? AgentConfig.DefaultTemperature;
         string finalText = "I've completed the requested actions.";
 
@@ -179,7 +185,7 @@ public sealed class AgentSessionRunner
         {
             var chatMessages = BuildChatMessages(systemPrompt, messages);
             var response = await _gateway.ChatAsync(
-                chatMessages, new ChatSettings(Temperature: temperature), ct);
+                projectId, chatMessages, new ChatSettings(Temperature: temperature), ct);
 
             var toolCalls = AgentToolCallParser.Parse(response);
             if (toolCalls.Count == 0)
@@ -203,7 +209,9 @@ public sealed class AgentSessionRunner
                 using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct, timeoutCts.Token);
                 try
                 {
-                    result = await _executor.ExecuteAsync(projectId, name, args, linkedCts.Token);
+                    result = route.CanUse(name, args)
+                        ? await _executor.ExecuteAsync(projectId, name, args, linkedCts.Token)
+                        : $"Error: the collaborating agents are not allowed to use {name} with these arguments.";
                     status = result.StartsWith("Error:", StringComparison.OrdinalIgnoreCase)
                         ? "Error" : "Completed";
                 }

@@ -286,6 +286,10 @@ public interface IPlaceContextService
     Task<AgentChatSessionView> SendAgentMessageAsync(SendAgentMessageCommand command, CancellationToken ct = default);
     Task<IReadOnlyList<AgentChatSessionView>> ListAgentChatSessionsAsync(Guid projectId, CancellationToken ct = default);
     Task<AgentChatSessionView?> GetAgentChatSessionAsync(Guid sessionId, CancellationToken ct = default);
+    Task<AgentDefinitionView> EnsureCommandAgentAsync(Guid projectId, CancellationToken ct = default);
+    Task<IReadOnlyList<AgentDefinitionView>> ListAgentDefinitionsAsync(Guid projectId, CancellationToken ct = default);
+    Task<AgentDefinitionView> SaveAgentDefinitionAsync(SaveAgentDefinitionCommand command, CancellationToken ct = default);
+    Task<bool> DeleteAgentDefinitionAsync(Guid agentId, CancellationToken ct = default);
 
     // Chat commands
     Task<ChatCommandView> CreateChatCommandAsync(Features.CreateChatCommandCommand command, CancellationToken ct = default);

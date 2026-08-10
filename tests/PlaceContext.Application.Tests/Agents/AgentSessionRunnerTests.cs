@@ -1,4 +1,5 @@
 using PlaceContext.Application.Agents.Services;
+using PlaceContext.Application.Agents;
 using PlaceContext.Application.Features;
 using PlaceContext.Application.Ports;
 using PlaceContext.TestSupport;
@@ -137,6 +138,7 @@ public class AgentSessionRunnerTests
         ScriptedChatGateway gateway, RecordingExecutor executor, FakeAgentSessionStore store)
         => new(
             gateway,
+            new CommandAgentOrchestrator(new InMemoryAgentDefinitionRepository(), gateway, new FakeClock(T0)),
             new AgentContextBuilder(),
             new InMemoryAgentConfigRepository(),
             new StubProjectDataStore(),
@@ -146,7 +148,7 @@ public class AgentSessionRunnerTests
 
     // ── Fakes ────────────────────────────────────────────────────────────────────────────────
 
-    private sealed class ScriptedChatGateway : IChatGateway
+    private sealed class ScriptedChatGateway : IProjectChatGateway
     {
         private readonly Queue<string> _responses;
 
@@ -155,7 +157,13 @@ public class AgentSessionRunnerTests
         public bool IsEnabled { get; set; } = true;
         public List<IReadOnlyList<ChatMessage>> Calls { get; } = new();
 
-        public Task<string> ChatAsync(IReadOnlyList<ChatMessage> messages, ChatSettings? settings = null, CancellationToken ct = default)
+        public Task<ProjectChatStatus> GetStatusAsync(Guid projectId, CancellationToken ct = default)
+            => Task.FromResult(new ProjectChatStatus(
+                IsEnabled ? ProjectChatBackend.LocalCluster : ProjectChatBackend.None,
+                IsEnabled,
+                IsEnabled ? "Local agent cluster" : "No model configured"));
+
+        public Task<string> ChatAsync(Guid projectId, IReadOnlyList<ChatMessage> messages, ChatSettings? settings = null, CancellationToken ct = default)
         {
             Calls.Add(messages);
             return Task.FromResult(_responses.Count > 0 ? _responses.Dequeue() : "final answer");
@@ -208,6 +216,9 @@ public class AgentSessionRunnerTests
 
         // Everything else is irrelevant to the runner and must not be called.
         public Task<ProjectQueryResult> ExecuteAsync(Guid projectId, string sql, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<ProjectTableReadResult> ReadTableAsync(Guid projectId, string tableName, long maxRows = 10000, CancellationToken ct = default)
+            => throw new NotSupportedException();
+
         public Task<IReadOnlyList<ProjectTableInfo>> ListTablesAsync(Guid projectId, CancellationToken ct = default) => throw new NotSupportedException();
         public Task CreateTableAsync(Guid projectId, string tableName, IReadOnlyList<ProjectColumnSpec> columns, CancellationToken ct = default) => throw new NotSupportedException();
         public Task RenameTableAsync(Guid projectId, string from, string to, CancellationToken ct = default) => throw new NotSupportedException();

@@ -71,6 +71,7 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
     public DbSet<RecordLinkRow> RecordLinks => Set<RecordLinkRow>();
     public DbSet<UserApiTokenRow> UserApiTokens => Set<UserApiTokenRow>();
     public DbSet<AgentConfigRow> AgentConfigs => Set<AgentConfigRow>();
+    public DbSet<AgentDefinitionRow> AgentDefinitions => Set<AgentDefinitionRow>();
     public DbSet<AgentChatSessionRow> AgentChatSessions => Set<AgentChatSessionRow>();
     public DbSet<McpConnectionRow> McpConnections => Set<McpConnectionRow>();
     public DbSet<ChatCommandRow> ChatCommands => Set<ChatCommandRow>();
@@ -590,6 +591,21 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
             e.Property(x => x.Temperature).HasDefaultValue(0.7f);
             e.Property(x => x.TopP).HasDefaultValue(0.9f);
             e.Property(x => x.Enabled).HasDefaultValue(true);
+        });
+
+        b.Entity<AgentDefinitionRow>(e =>
+        {
+            e.ToTable("agent_definitions");
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => new { x.ProjectId, x.Kind });
+            e.HasIndex(x => new { x.ProjectId, x.Name }).IsUnique();
+            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
+            e.Property(x => x.Kind).HasMaxLength(20);
+            e.Property(x => x.Name).HasMaxLength(100);
+            e.Property(x => x.Description).HasMaxLength(500);
+            e.Property(x => x.TemplateKey).HasMaxLength(100);
+            e.Property(x => x.CapabilitiesJson).HasDefaultValue("[]");
+            e.Property(x => x.AllowedJobIdsJson).HasDefaultValue("[]");
         });
 
         b.Entity<AgentChatSessionRow>(e =>

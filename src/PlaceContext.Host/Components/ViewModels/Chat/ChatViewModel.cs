@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Components.Forms;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.JSInterop;
 using PlaceContext.Application;
+using PlaceContext.Application.Agents;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Features;
 using PlaceContext.Application.Mcp;
@@ -17,6 +18,8 @@ namespace PlaceContext.Host.Components.ViewModels;
 public sealed partial class ChatViewModel : PageViewModel
 {
     private readonly IChatGateway _gateway;
+    private readonly IProjectChatGateway _projectChat;
+    private readonly CommandAgentOrchestrator _orchestrator;
     private readonly IPlaceContextService _svc;
     private readonly IMcpClientService _mcpClient;
     private readonly PortalUiState _ui;
@@ -37,6 +40,8 @@ public sealed partial class ChatViewModel : PageViewModel
 
     public ChatViewModel(
         IChatGateway gateway,
+        IProjectChatGateway projectChat,
+        CommandAgentOrchestrator orchestrator,
         IPlaceContextService svc,
         IMcpClientService mcpClient,
         PortalUiState ui,
@@ -51,6 +56,8 @@ public sealed partial class ChatViewModel : PageViewModel
     )
     {
         _gateway = gateway;
+        _projectChat = projectChat;
+        _orchestrator = orchestrator;
         _svc = svc;
         _mcpClient = mcpClient;
         _ui = ui;
@@ -185,6 +192,12 @@ public sealed partial class ChatViewModel : PageViewModel
     private TaskCompletionSource<ClarificationResult>? _clarificationTcs;
     private bool _attachmentsBucketEnsured;
     private CancellationTokenSource? _sendCts;
+    private ProjectChatStatus _chatStatus = new(ProjectChatBackend.None, false, "No model configured");
+    private CommandAgentRoute? _activeRoute;
+
+    public string ActiveAgentName => _activeRoute is { CollaboratingAgents.Count: > 0 } route
+        ? string.Join(" + ", route.CollaboratingAgents.Select(agent => agent.Name))
+        : "Command Agent";
 
     /// <summary>Cancels the currently running chat send loop.</summary>
     public async Task StopAsync()
@@ -206,15 +219,11 @@ public sealed partial class ChatViewModel : PageViewModel
 
     // ── Gateway status ───────────────────────────────────────────────────────
 
-    public string GatewayStatusText =>
-        _gateway is ClusterChatGateway cg ? cg.StatusText
-        : _gateway.IsEnabled ? ChatCopy.GatewayActive
-        : ChatCopy.GatewayUnconfigured;
+    public string GatewayStatusText => _chatStatus.Label;
 
     public bool GatewayIsCluster => _gateway is ClusterChatGateway;
 
-    public bool GatewayReady =>
-        _gateway is ClusterChatGateway cg ? cg.IsEnabled : _gateway.IsEnabled;
+    public bool GatewayReady => _chatStatus.IsEnabled;
 
     /// <summary>True once sessions, MCP, artifacts, and agent config have finished loading.</summary>
     public bool WorkspaceLoaded { get; private set; }

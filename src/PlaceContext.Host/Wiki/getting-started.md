@@ -61,6 +61,7 @@ search.
 | **Data** | Tables, SQL analytics, data mappings, entities, and searchable project data |
 | **Vault** | Store encrypted project secrets |
 | **Events** | View event types and recent occurrences |
+| **Agents** | Configure the Command Agent, collaborating worker agents, capabilities, and Job access |
 | **Chat** | Ask the selected project's agent questions and run tools |
 | **Artifacts** | Browse, preview, and optionally share files produced by job runs |
 | **Observability** | Review job and chain runs across projects |

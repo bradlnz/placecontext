@@ -185,6 +185,9 @@ public class RecordLinkServiceTests
         public int UpdateAffected { get; set; }
         public int DeleteAffected { get; set; }
 
+        public Task<ProjectTableReadResult> ReadTableAsync(Guid projectId, string tableName, long maxRows = 10000, CancellationToken ct = default)
+            => throw new NotSupportedException();
+
         public Task<IReadOnlyList<ProjectTableInfo>> ListTablesAsync(Guid projectId, CancellationToken ct = default)
             => Task.FromResult<IReadOnlyList<ProjectTableInfo>>(Tables);
 

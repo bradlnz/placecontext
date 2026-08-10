@@ -195,6 +195,9 @@ public class RecordLinkHookTests
             IReadOnlyList<IReadOnlyList<string?>> rows, bool createTable, CancellationToken ct = default)
             => Task.FromResult(rows.Count);
 
+        public Task<ProjectTableReadResult> ReadTableAsync(Guid projectId, string tableName, long maxRows = 10000, CancellationToken ct = default)
+            => throw new NotSupportedException();
+
         public Task<IReadOnlyList<ProjectTableInfo>> ListTablesAsync(Guid projectId, CancellationToken ct = default)
             => Task.FromResult<IReadOnlyList<ProjectTableInfo>>(Array.Empty<ProjectTableInfo>());
         public Task<ProjectTablePageResult> QueryTablePageAsync(Guid projectId, string tableName, string? search,

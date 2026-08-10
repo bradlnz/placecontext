@@ -37,6 +37,7 @@ public sealed partial class ChatViewModel
         {
             await Task.WhenAll(
                 LoadAgentConfigAsync(),
+                LoadProjectChatStatusAsync(),
                 LoadSessionsAsync(),
                 LoadMcpConnectionsAsync(),
                 LoadCommandsAsync(),
@@ -66,6 +67,7 @@ public sealed partial class ChatViewModel
         WorkspaceLoaded = false;
         NotifyStateChanged();
         await LoadAgentConfigAsync();
+        await LoadProjectChatStatusAsync();
         await LoadGraphAsync();
         ActiveActions.Clear();
         FetchedData.Clear();
@@ -77,5 +79,11 @@ public sealed partial class ChatViewModel
         NewSession();
         WorkspaceLoaded = true;
         NotifyStateChanged();
+    }
+
+    private async Task LoadProjectChatStatusAsync()
+    {
+        if (ProjectId.HasValue)
+            _chatStatus = await _projectChat.GetStatusAsync(ProjectId.Value);
     }
 }

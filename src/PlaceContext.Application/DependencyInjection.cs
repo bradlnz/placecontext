@@ -115,10 +115,15 @@ public static class DependencyInjection
         // Agent chat (Phase 1).
         services.AddScoped<ICommandHandler<Features.UpdateAgentConfigCommand, Dtos.AgentConfigView>, Features.UpdateAgentConfigHandler>();
         services.AddScoped<ICommandHandler<Features.SendAgentMessageCommand, Dtos.AgentChatSessionView>, Features.SendAgentMessageHandler>();
+        services.AddScoped<ICommandHandler<Features.EnsureCommandAgentCommand, Dtos.AgentDefinitionView>, Features.EnsureCommandAgentHandler>();
+        services.AddScoped<ICommandHandler<Features.SaveAgentDefinitionCommand, Dtos.AgentDefinitionView>, Features.SaveAgentDefinitionHandler>();
+        services.AddScoped<ICommandHandler<Features.DeleteAgentDefinitionCommand, bool>, Features.DeleteAgentDefinitionHandler>();
         services.AddScoped<IQueryHandler<Features.GetAgentConfigQuery, Dtos.AgentConfigView>, Features.GetAgentConfigHandler>();
+        services.AddScoped<IQueryHandler<Features.ListAgentDefinitionsQuery, IReadOnlyList<Dtos.AgentDefinitionView>>, Features.ListAgentDefinitionsHandler>();
         services.AddScoped<IQueryHandler<Features.ListAgentChatSessionsQuery, IReadOnlyList<Dtos.AgentChatSessionView>>, Features.ListAgentChatSessionsHandler>();
         services.AddScoped<IQueryHandler<Features.GetAgentChatSessionQuery, Dtos.AgentChatSessionView?>, Features.GetAgentChatSessionHandler>();
         services.AddScoped<Features.AgentContextBuilder>();
+        services.AddScoped<Agents.CommandAgentOrchestrator>();
         services.AddScoped<IMcpClientService, McpClientService>();
 
         // Job execution orchestrator (applies per-job retry policy).

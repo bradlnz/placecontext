@@ -488,6 +488,7 @@ internal static class MainLayoutIconCatalog
             "key" => "<circle cx='8' cy='15' r='4'/><path d='m11 12 8-8M15 8l3 3M17 6l2 2'/>",
             "pulse" => "<path d='M3 12h4l2.5-5 5 10 2.5-5h4'/>",
             "chat" => "<path d='M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4v8Z'/><path d='M8 9h8M8 13h5'/>",
+            "agents" => "<circle cx='12' cy='7' r='3'/><circle cx='5' cy='17' r='2.5'/><circle cx='19' cy='17' r='2.5'/><path d='M12 10v3M7 16l5-3 5 3'/>",
             "file" => "<path d='M14 2H7a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7l-5-5Z'/><path d='M14 2v5h5M9 13h6M9 17h6'/>",
             "ledger" => "<rect x='4' y='3' width='16' height='18' rx='2'/><path d='M8 3v18M12 8h5M12 12h5M12 16h3'/>",
             "data" or "data.tables" => "<ellipse cx='12' cy='5' rx='8' ry='3'/><path d='M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6'/>",

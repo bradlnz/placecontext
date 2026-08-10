@@ -1,3 +1,4 @@
+using PlaceContext.Application.Agents;
 using PlaceContext.Application.Features;
 using PlaceContext.Application.Ports;
 using PlaceContext.Domain.Entities;
@@ -105,7 +106,7 @@ public class AgentHandlerTests
         var chat = new FakeChatGateway();
         var uow = new RecordingUnitOfWork();
 
-        var handler = new SendAgentMessageHandler(configs, sessions, chat, uow, new FakeClock(T0), new AgentContextBuilder());
+        var handler = new SendAgentMessageHandler(configs, sessions, chat, CreateOrchestrator(chat), uow, new FakeClock(T0), new AgentContextBuilder());
 
         var projectId = Guid.NewGuid();
         var view = await handler.HandleAsync(new SendAgentMessageCommand(projectId, null, "hello"));
@@ -127,11 +128,11 @@ public class AgentHandlerTests
         var config = AgentConfig.Create(projectId, T0);
         await configs.AddAsync(config);
 
-        var handler = new SendAgentMessageHandler(configs, sessions, chat, uow, new FakeClock(T0), new AgentContextBuilder());
+        var handler = new SendAgentMessageHandler(configs, sessions, chat, CreateOrchestrator(chat), uow, new FakeClock(T0), new AgentContextBuilder());
 
         var view = await handler.HandleAsync(new SendAgentMessageCommand(projectId, null, "hello"));
 
-        Assert.Contains("No local language model", view.Messages[1].Content);
+        Assert.Contains("No language model", view.Messages[1].Content);
     }
 
     [Fact]
@@ -146,7 +147,7 @@ public class AgentHandlerTests
         var config = AgentConfig.Create(projectId, T0);
         await configs.AddAsync(config);
 
-        var handler = new SendAgentMessageHandler(configs, sessions, chat, uow, new FakeClock(T0), new AgentContextBuilder());
+        var handler = new SendAgentMessageHandler(configs, sessions, chat, CreateOrchestrator(chat), uow, new FakeClock(T0), new AgentContextBuilder());
 
         var view = await handler.HandleAsync(new SendAgentMessageCommand(projectId, null, "hi there"));
 
@@ -180,7 +181,7 @@ public class AgentHandlerTests
         var config = AgentConfig.Create(projectId, T0);
         await configs.AddAsync(config);
 
-        var handler = new SendAgentMessageHandler(configs, sessions, chat, uow, clock, new AgentContextBuilder());
+        var handler = new SendAgentMessageHandler(configs, sessions, chat, CreateOrchestrator(chat), uow, clock, new AgentContextBuilder());
 
         // First message — creates new session.
         var view1 = await handler.HandleAsync(new SendAgentMessageCommand(projectId, null, "first"));
@@ -196,6 +197,9 @@ public class AgentHandlerTests
         Assert.Equal("first", view2.Messages[0].Content);
         Assert.Equal("second", view2.Messages[2].Content);
     }
+
+    private static CommandAgentOrchestrator CreateOrchestrator(IProjectChatGateway chat)
+        => new(new InMemoryAgentDefinitionRepository(), chat, new FakeClock(T0));
 
     // ── List + Get session queries ───────────────────────────────────────────────────────────
 

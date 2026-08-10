@@ -1,7 +1,9 @@
 .page {
     padding: 20px 24px 40px;
-    max-width: 1320px;
-    margin: 0 auto;
+    max-width: none;
+    margin: 0;
+    width: 100%;
+    box-sizing: border-box;
 }
 
 .page-head {

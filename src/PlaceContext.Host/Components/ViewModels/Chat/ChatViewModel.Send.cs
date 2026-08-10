@@ -99,6 +99,7 @@ public sealed partial class ChatViewModel
         AttachmentError = null;
         Streaming = true;
         StreamBuffer = "";
+        _activeRoute = null;
 
         if (Messages.Count(m => m.Role == "user") == 1)
             _sessionTitle =
@@ -125,6 +126,8 @@ public sealed partial class ChatViewModel
             var ct = _sendCts.Token;
             var maxToolRounds = 3;
             var round = 0;
+            var collaborationContext = await ragTask;
+            _activeRoute = await _orchestrator.RouteAsync(ProjectId.Value, requestText, collaborationContext, ct);
 
             while (round < maxToolRounds)
             {
@@ -138,7 +141,8 @@ public sealed partial class ChatViewModel
                 if (round > 1 || Messages.Any(m => m.ToolCalls.Count > 0))
                     await Task.Delay(300, ct);
 
-                if (_gateway is ClusterChatGateway cg && cg.IsEnabled)
+                if (_chatStatus.Backend == ProjectChatBackend.LocalCluster
+                    && _gateway is ClusterChatGateway cg && cg.IsEnabled)
                 {
                     var settings = new ChatSettings(
                         Temperature: _temperature,
@@ -168,7 +172,7 @@ public sealed partial class ChatViewModel
                     if (tokenCount == 0)
                         StreamBuffer = ChatCopy.EmptyModelResponse;
                 }
-                else if (
+                else if (_chatStatus.Backend == ProjectChatBackend.LocalCluster &&
                     _gateway is ClusterChatGateway configuredButNotReady
                     && !configuredButNotReady.IsEnabled
                 )
@@ -181,7 +185,7 @@ public sealed partial class ChatViewModel
                         Temperature: _temperature,
                         MaxTokens: _maxTokens
                     );
-                    StreamBuffer = await _gateway.ChatAsync(messages, settings, ct);
+                    StreamBuffer = await _projectChat.ChatAsync(ProjectId.Value, messages, settings, ct);
                 }
 
                 var toolCalls = ParseToolCalls(StreamBuffer);
@@ -220,7 +224,10 @@ public sealed partial class ChatViewModel
                         );
                         try
                         {
-                            result = await ExecuteToolAsync(tc.ToolName, tc.Args, linkedCts.Token);
+                            result = _activeRoute is not null
+                                && !_activeRoute.CanUse(tc.ToolName, tc.Args)
+                                ? ToolCallResult.Fail($"The collaborating agents are not allowed to use {tc.ToolName} with these arguments.")
+                                : await ExecuteToolAsync(tc.ToolName, tc.Args, linkedCts.Token);
                         }
                         catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested)
                         {
@@ -334,7 +341,8 @@ public sealed partial class ChatViewModel
                             Temperature: _temperature,
                             MaxTokens: _maxTokens
                         );
-                        if (_gateway is ClusterChatGateway cg2 && cg2.IsEnabled)
+                        if (_chatStatus.Backend == ProjectChatBackend.LocalCluster
+                            && _gateway is ClusterChatGateway cg2 && cg2.IsEnabled)
                         {
                             var renderThrottle = System.Diagnostics.Stopwatch.StartNew();
                             await foreach (
@@ -359,7 +367,7 @@ public sealed partial class ChatViewModel
                         }
                         else
                         {
-                            StreamBuffer = await _gateway.ChatAsync(retryMessages, settings, ct);
+                            StreamBuffer = await _projectChat.ChatAsync(ProjectId.Value, retryMessages, settings, ct);
                         }
                         var sumSplit = SplitThinking(StreamBuffer);
                         var summarised = TruncateRepeatedLines(sumSplit.Answer);
@@ -397,7 +405,8 @@ public sealed partial class ChatViewModel
                         Temperature: _temperature,
                         MaxTokens: _maxTokens
                     );
-                    if (_gateway is ClusterChatGateway cg3 && cg3.IsEnabled)
+                    if (_chatStatus.Backend == ProjectChatBackend.LocalCluster
+                        && _gateway is ClusterChatGateway cg3 && cg3.IsEnabled)
                     {
                         var renderThrottle = System.Diagnostics.Stopwatch.StartNew();
                         await foreach (
@@ -422,7 +431,7 @@ public sealed partial class ChatViewModel
                     }
                     else
                     {
-                        StreamBuffer = await _gateway.ChatAsync(retryMessages, settings, ct);
+                        StreamBuffer = await _projectChat.ChatAsync(ProjectId.Value, retryMessages, settings, ct);
                     }
                     var retrySplit = SplitThinking(StreamBuffer);
                     var retried = TruncateRepeatedLines(retrySplit.Answer);
@@ -483,6 +492,8 @@ public sealed partial class ChatViewModel
             : _toolCatalog;
 
         var systemPrompt = preamble + _systemPrompt + "\n\n" + toolDesc;
+        if (_activeRoute is not null)
+            systemPrompt += "\n\n" + _activeRoute.PromptSection;
         if (!string.IsNullOrWhiteSpace(ragContext))
             systemPrompt += "\n\n## Project context (retrieved automatically)\n\n" + ragContext;
 

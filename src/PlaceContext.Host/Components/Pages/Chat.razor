@@ -18,18 +18,7 @@
         <div>
             <h2 class="page-title">Agent Chat</h2>
             <div class="page-sub">
-                @if (Vm.Gateway is ClusterChatGateway cg)
-                {
-                    <span>@cg.StatusText — @Vm.ProjectName</span>
-                }
-                else if (Vm.Gateway.IsEnabled)
-                {
-                    <span>Chat backend active</span>
-                }
-                else
-                {
-                    <span>No model configured</span>
-                }
+                <span>@Vm.GatewayStatusText — @Vm.ProjectName — via @Vm.ActiveAgentName</span>
             </div>
         </div>
         <div class="chat-controls">

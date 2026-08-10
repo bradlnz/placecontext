@@ -638,6 +638,18 @@ public sealed class PlaceContextService : IPlaceContextService
     public Task<AgentConfigView> GetAgentConfigAsync(Guid projectId, CancellationToken ct = default)
         => _dispatcher.Query(new Features.GetAgentConfigQuery(projectId), ct);
 
+    public Task<AgentDefinitionView> EnsureCommandAgentAsync(Guid projectId, CancellationToken ct = default)
+        => _dispatcher.Send(new Features.EnsureCommandAgentCommand(projectId), ct);
+
+    public Task<IReadOnlyList<AgentDefinitionView>> ListAgentDefinitionsAsync(Guid projectId, CancellationToken ct = default)
+        => _dispatcher.Query(new Features.ListAgentDefinitionsQuery(projectId), ct);
+
+    public Task<AgentDefinitionView> SaveAgentDefinitionAsync(Features.SaveAgentDefinitionCommand command, CancellationToken ct = default)
+        => _dispatcher.Send(command, ct);
+
+    public Task<bool> DeleteAgentDefinitionAsync(Guid agentId, CancellationToken ct = default)
+        => _dispatcher.Send(new Features.DeleteAgentDefinitionCommand(agentId), ct);
+
     public Task<AgentConfigView> UpdateAgentConfigAsync(Features.UpdateAgentConfigCommand command, CancellationToken ct = default)
         => _dispatcher.Send(command, ct);
 

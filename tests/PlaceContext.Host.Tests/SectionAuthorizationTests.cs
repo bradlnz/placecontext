@@ -18,6 +18,7 @@ public sealed class SectionAuthorizationTests
             { typeof(Pages.Crm), Permission.CrmView },
             { typeof(Pages.Artifacts), Permission.ArtifactsView },
             { typeof(Pages.Chat), Permission.AgentsChat },
+            { typeof(Pages.Agents), Permission.AgentsManage },
             { typeof(Pages.DataEntities), Permission.DataRead },
             { typeof(Pages.DataMap), Permission.DataRead },
             { typeof(Pages.ProjectAnalytics), Permission.DataRead },

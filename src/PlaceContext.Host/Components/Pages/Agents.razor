@@ -1,0 +1,184 @@
+@page "/project/{ProjectId:guid}/agents"
+@attribute [Authorize(Policy = Permission.AgentsManage)]
+@layout PlaceContext.Host.Components.Layout.ProjectLayout
+@implements IDisposable
+@using PlaceContext.Application.Dtos
+@using PlaceContext.Domain.Entities
+@using PlaceContext.Host.Components.ViewModels
+@inject AgentsViewModel Vm
+
+<PageTitle>PlaceContext — Agents</PageTitle>
+
+<div class="agents-page">
+    <header class="agents-head">
+        <div>
+            <h2>Agents</h2>
+            <p>Coordinate specialised agents through one Command Agent, grounded in the project data graph.</p>
+        </div>
+        <a class="dcbtn" href="/chat">Open Agent Chat</a>
+    </header>
+
+    @if (Vm.Message is not null)
+    {
+        <div class="agents-message @(Vm.MessageIsError ? "error" : null)">@Vm.Message</div>
+    }
+
+    @if (Vm.Loading)
+    {
+        <Skeleton Kind="list" Rows="5" />
+    }
+    else
+    {
+        <section class="agent-canvas" aria-label="Agent orchestration canvas">
+            <div class="canvas-grid"></div>
+            @if (Vm.CommandAgent is { } command)
+            {
+                <button class="agent-node command-node" @onclick="@(() => Vm.Edit(command))">
+                    <span class="node-kicker">Central command</span>
+                    <strong>@command.Name</strong>
+                    <span>@command.Description</span>
+                    <small>Graph-grounded · full orchestration</small>
+                </button>
+            }
+
+            <div class="worker-rail" aria-label="Worker agents">
+                @foreach (var agent in Vm.Workers)
+                {
+                    <button class="agent-node worker-node @(agent.Enabled ? null : "disabled")"
+                            @onclick="@(() => Vm.Edit(agent))">
+                        <span class="node-status"></span>
+                        <strong>@agent.Name</strong>
+                        <span>@agent.Description</span>
+                        <small>@agent.Capabilities.Count capabilities · @AgentJobLabel(agent)</small>
+                    </button>
+                }
+                @if (!Vm.Workers.Any())
+                {
+                    <div class="worker-empty">Add a template below to give the Command Agent a specialist to delegate to.</div>
+                }
+            </div>
+        </section>
+
+        <section class="templates-section">
+            <div class="section-head">
+                <div>
+                    <h3>Agent templates</h3>
+                    <p>Start with a focused role, then narrow its tools and approved Jobs.</p>
+                </div>
+            </div>
+            <div class="template-grid">
+                @foreach (var template in Vm.Templates)
+                {
+                    <article class="template-card">
+                        <div class="template-icon">@template.Name[..1]</div>
+                        <div>
+                            <strong>@template.Name</strong>
+                            <p>@template.Description</p>
+                            <div class="capability-chips">
+                                @foreach (var capability in template.Capabilities.Take(3))
+                                {
+                                    <span>@AgentsViewModel.CapabilityLabel(capability)</span>
+                                }
+                            </div>
+                        </div>
+                        <button class="dcbtn sm" @onclick="@(() => Vm.CreateFromTemplate(template))">Add agent</button>
+                    </article>
+                }
+            </div>
+        </section>
+    }
+
+    @if (Vm.EditorOpen)
+    {
+        <div class="editor-scrim" @onclick="Vm.CloseEditor"></div>
+        <aside class="agent-editor" aria-label="Agent editor">
+            <header>
+                <div>
+                    <span class="node-kicker">@(Vm.EditingCommand ? "Central command" : "Worker agent")</span>
+                    <h3>@(Vm.EditId.HasValue ? "Configure agent" : "Add agent")</h3>
+                </div>
+                <button class="icon-close" aria-label="Close" @onclick="Vm.CloseEditor">×</button>
+            </header>
+
+            <div class="editor-body">
+                <label>
+                    <span>Name</span>
+                    <input class="dcinput" @bind="Vm.EditName" />
+                </label>
+                <label>
+                    <span>Description</span>
+                    <input class="dcinput" @bind="Vm.EditDescription" />
+                </label>
+                <label>
+                    <span>Instructions</span>
+                    <textarea class="dcinput instructions" @bind="Vm.EditInstructions"></textarea>
+                </label>
+                <label class="toggle-row">
+                    <input type="checkbox" @bind="Vm.EditEnabled" disabled="@Vm.EditingCommand" />
+                    <span>Agent enabled</span>
+                </label>
+
+                <fieldset>
+                    <legend>Capabilities</legend>
+                    <p>Every agent reads the data graph. Grant only the additional actions it needs.</p>
+                    <div class="control-grid">
+                        @foreach (var capability in Vm.CapabilityOptions)
+                        {
+                            <label class="control-option @(Vm.HasCapability(capability) ? "selected" : null)">
+                                <input type="checkbox" checked="@Vm.HasCapability(capability)"
+                                       disabled="@(Vm.EditingCommand || capability == AgentCapability.GraphRead)"
+                                       @onchange="@(_ => Vm.ToggleCapability(capability))" />
+                                <span>@AgentsViewModel.CapabilityLabel(capability)</span>
+                            </label>
+                        }
+                    </div>
+                </fieldset>
+
+                @if (!Vm.EditingCommand && Vm.HasCapability(AgentCapability.JobsRun))
+                {
+                    <fieldset>
+                        <legend>Jobs this agent can run</legend>
+                        <p>No selection means all project Jobs. Select Jobs to create an explicit allowlist.</p>
+                        <div class="job-list">
+                            @foreach (var job in Vm.Jobs)
+                            {
+                                <label class="control-option @(Vm.HasJob(job.Id) ? "selected" : null)">
+                                    <input type="checkbox" checked="@Vm.HasJob(job.Id)"
+                                           @onchange="@(_ => Vm.ToggleJob(job.Id))" />
+                                    <span>@job.Name</span>
+                                </label>
+                            }
+                        </div>
+                    </fieldset>
+                }
+            </div>
+
+            <footer>
+                @if (Vm.EditId.HasValue && !Vm.EditingCommand)
+                {
+                    <button class="dcbtn danger" @onclick="Vm.DeleteAsync">Delete</button>
+                }
+                <span class="footer-spacer"></span>
+                <button class="dcbtn" @onclick="Vm.CloseEditor">Cancel</button>
+                <button class="dcbtn primary" disabled="@Vm.Saving" @onclick="Vm.SaveAsync">
+                    @(Vm.Saving ? "Saving…" : "Save agent")
+                </button>
+            </footer>
+        </aside>
+    }
+</div>
+
+@code {
+    [Parameter] public Guid ProjectId { get; set; }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        Vm.Attach(() => InvokeAsync(StateHasChanged));
+        await Vm.LoadAsync(ProjectId);
+    }
+
+    private static string AgentJobLabel(AgentDefinitionView agent)
+        => agent.AllowedJobIds.Count == 0 ? "all approved jobs" : $"{agent.AllowedJobIds.Count} approved jobs";
+
+    public void Dispose() => Vm.Detach();
+}

@@ -268,9 +268,11 @@ public static class DependencyInjection
             services.AddSingleton<IChatGateway, Chat.NullChatGateway>();
             Console.WriteLine("[di] IChatGateway -> NullChatGateway (no endpoint configured)");
         }
+        services.AddScoped<IProjectChatGateway, Chat.VaultProjectChatGateway>();
 
         // Agent repositories.
         services.AddScoped<IAgentConfigRepository, EfAgentConfigRepository>();
+        services.AddScoped<IAgentDefinitionRepository, EfAgentDefinitionRepository>();
         services.AddScoped<IAgentChatSessionRepository, EfAgentChatSessionRepository>();
         services.AddScoped<Domain.Repositories.IMcpConnectionRepository, Persistence.EfMcpConnectionRepository>();
         services.AddScoped<IChatCommandRepository, EfChatCommandRepository>();

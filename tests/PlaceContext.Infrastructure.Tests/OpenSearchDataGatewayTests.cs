@@ -60,7 +60,7 @@ public sealed class OpenSearchDataGatewayTests
                       ],
                       "total": 14
                     }
-                    """))),
+                    """)))),
             new StubConnectionResolver());
 
         var result = await gateway.SearchSqlAsync(Guid.NewGuid(), "SELECT status, COUNT(*) FROM logs GROUP BY 1");
@@ -86,7 +86,7 @@ public sealed class OpenSearchDataGatewayTests
                       "row_count": 3,
                       "cursor": "next-page-token"
                     }
-                    """))),
+                    """)))),
             new StubConnectionResolver());
 
         var result = await gateway.SearchSqlAsync(Guid.NewGuid(), "SELECT project_id, size_bytes FROM projects");
@@ -110,7 +110,7 @@ public sealed class OpenSearchDataGatewayTests
                         {"status":"idle","city":null}
                       ]
                     }
-                    """))),
+                    """)))),
             new StubConnectionResolver());
 
         var result = await gateway.SearchSqlAsync(Guid.NewGuid(), "SELECT status, city FROM logs");
@@ -138,7 +138,7 @@ public sealed class OpenSearchDataGatewayTests
                         "cursor": "next-page-token"
                       }
                     }
-                    """))),
+                    """)))),
             new StubConnectionResolver());
 
         var result = await gateway.SearchSqlAsync(Guid.NewGuid(), "SELECT project_id, size_bytes FROM projects");

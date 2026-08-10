@@ -1,4 +1,4 @@
-.data-map-page { max-width: 1320px; margin: 0 auto; padding: 20px 24px 40px; }
+.data-map-page { max-width: none; margin: 0; padding: 20px 24px 40px; width: 100%; box-sizing: border-box; }
 .data-map-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 18px; margin: 18px 0; }
 .data-map-head h2 { margin: 0; font-size: 18px; font-weight: 650; }
 .data-map-head p { margin: 4px 0 0; color: var(--text-3); font-size: 12px; }

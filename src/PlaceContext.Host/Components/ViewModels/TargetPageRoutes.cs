@@ -13,6 +13,8 @@ public static class PageRoutes
 
     public static string ProjectSecrets(Guid projectId) => $"/project/{projectId}/secrets";
 
+    public static string ProjectAgents(Guid projectId) => $"/project/{projectId}/agents";
+
     public static string ProjectJob(Guid projectId, Guid jobId) =>
         $"{ProjectJobs(projectId)}/{jobId}";
 

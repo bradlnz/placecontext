@@ -762,6 +762,11 @@ public sealed partial class ChatViewModel
         var jobId = Guid.TryParse(args.Trim(), out var id) ? id : Guid.Empty;
         if (jobId == Guid.Empty)
             return ToolCallResult.Fail("Invalid jobId");
+        if (!ProjectId.HasValue)
+            return ToolCallResult.Fail(ChatCopy.NoProjectSelected);
+        var job = await _svc.GetJobAsync(jobId, ct);
+        if (job is null || job.ProjectId != ProjectId.Value)
+            return ToolCallResult.Fail("Job does not belong to this project.");
         AddActiveAction(AgentToolNames.RunJob, ChatCopy.RunningJob(jobId.ToString()[..8]));
         var run = await _svc.RunJobAsync(jobId, null, null, ct);
         CompleteActiveAction(AgentToolNames.RunJob, true);
@@ -816,12 +821,14 @@ public sealed partial class ChatViewModel
     {
         if (string.IsNullOrWhiteSpace(key))
             return (Guid.Empty, "Usage: run_job_chain|chainIdOrName|payloadJson");
-        if (Guid.TryParse(key, out var chainId) && chainId != Guid.Empty)
-            return (chainId, null);
         if (!ProjectId.HasValue)
             return (Guid.Empty, ChatCopy.NoProjectSelected);
 
         var chains = await _svc.ListJobChainsAsync(ProjectId.Value, ct);
+        if (Guid.TryParse(key, out var chainId) && chainId != Guid.Empty)
+            return chains.Any(chain => chain.Id == chainId)
+                ? (chainId, null)
+                : (Guid.Empty, "Chain does not belong to this project.");
         var matches = chains
             .Where(c => string.Equals(c.Name, key, StringComparison.OrdinalIgnoreCase))
             .ToList();
