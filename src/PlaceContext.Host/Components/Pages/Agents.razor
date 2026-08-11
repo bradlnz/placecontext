@@ -157,6 +157,7 @@
                                         <button type="button" class="work-card" @onclick="@(() => Vm.OpenWorkItem(item))">
                                             <span class="work-badge @AgentsViewModel.WorkBucketClass(item.Run.Status)">@AgentsViewModel.WorkStatusLabel(item.Run.Status)</span>
                                             <div class="work-card-title">@item.JobName</div>
+                                            <p>@AgentsViewModel.WorkGoal(item)</p>
                                             <p>@AgentsViewModel.WorkSummaryProject(item)</p>
                                             <small>Started @AgentsViewModel.WorkStartedAt(item)</small>
                                         </button>
@@ -177,7 +178,7 @@
                 <div class="dcmodal-head">
                     <div class="flex-fill-min">
                         <div class="title-14">Add work item</div>
-                        <div class="subtitle-11-5">Select a job and provide input, then enqueue it on the board.</div>
+                        <div class="subtitle-11-5">Write a clear goal and enqueue it on the board.</div>
                     </div>
                     <button class="dcslide-x" type="button" @onclick="Vm.CloseWorkItemComposer">×</button>
                 </div>
@@ -192,41 +193,12 @@
                             }
                         </select>
                     </div>
-
-                    @if (Vm.WorkComposeJob?.Parameters.Count > 0)
-                    {
-                        <div class="dcform-section">
-                            <div class="dcform-title">Parameters</div>
-                            @foreach (var parameter in Vm.WorkComposeJob.Parameters)
-                            {
-                                <div class="dcfield">
-                                    <label>
-                                        @(parameter.Label ?? parameter.Name)
-                                        @if (parameter.Required)
-                                        {
-                                            <span class="req">*</span>
-                                        }
-                                        <span class="code ml-5">@parameter.Name</span>
-                                    </label>
-                                    <ParamInput Parameter="parameter" ProjectId="@ProjectId" Value="@Vm.GetWorkComposeArg(parameter.Name)"
-                                              ValueChanged="@(v => Vm.SetWorkComposeArg(parameter.Name, v))" />
-                                </div>
-                            }
-                        </div>
-                    }
-                    else
-                    {
-                        <div class="dcfield">
-                            <label>Payload (optional JSON override)</label>
-                            <textarea class="dcinput work-compose-payload" rows="6" @bind="Vm.WorkComposePayloadRaw"></textarea>
-                            <small>Leave blank to use the job's saved payloads.</small>
-                        </div>
-                    }
-
-                    @if (!string.IsNullOrWhiteSpace(Vm.WorkComposeError))
-                    {
-                        <div class="prompt-error">@Vm.WorkComposeError</div>
-                    }
+                    <div class="dcfield">
+                        <label>Goal <span class="req">*</span></label>
+                        <textarea class="dcinput work-compose-payload" rows="6" @bind="Vm.WorkComposeGoal"
+                                  placeholder="Add a short, actionable goal for this work item"></textarea>
+                        <small>Examples: “Create onboarding checklist for first-time customers” or “Investigate API errors in last 24h”.</small>
+                    </div>
                 </div>
 
                 <div class="dcmodal-foot">
@@ -351,6 +323,8 @@
                             @AgentsViewModel.WorkStatusLabel(selectedWorkItem.Run.Status)
                         </span>
                     </dd>
+                    <dt>Goal</dt>
+                    <dd>@AgentsViewModel.WorkGoal(selectedWorkItem)</dd>
                     <dt>Project</dt>
                     <dd>@AgentsViewModel.WorkSummaryProject(selectedWorkItem)</dd>
                     <dt>Started</dt>

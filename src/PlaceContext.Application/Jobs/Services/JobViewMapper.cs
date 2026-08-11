@@ -1,6 +1,7 @@
 using PlaceContext.Application.Dtos;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.ValueObjects;
+using System.Text.Json;
 
 namespace PlaceContext.Application.Features;
 
@@ -81,9 +82,33 @@ internal static class JobViewMapper
         MapSourceLabel: snap.MapSource.Label,
         ReduceSourceKind: snap.ReduceSource is null ? null : SourceKind(snap.ReduceSource),
         ReduceSourceLabel: snap.ReduceSource?.Label,
+        Goal: GoalFromInputPayload(snap.InputPayloads.FirstOrDefault()),
         ConcurrencyLimit: snap.ConcurrencyLimit,
         ShardCount: snap.InputPayloads.Count,
         AllowNetworkEgress: snap.AllowNetworkEgress);
+
+    private static string? GoalFromInputPayload(string? payload)
+    {
+        if (string.IsNullOrWhiteSpace(payload))
+            return null;
+
+        try
+        {
+            using var document = JsonDocument.Parse(payload);
+            if (!document.RootElement.TryGetProperty("goal", out var goalElement))
+                return null;
+
+            var goal = goalElement.ValueKind == JsonValueKind.String
+                ? goalElement.GetString()
+                : goalElement.ToString();
+
+            return string.IsNullOrWhiteSpace(goal) ? null : goal.Trim();
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
 
     private static IReadOnlyList<CodeFileDto> Files(WorkloadSource source) =>
         source is WorkloadSource.CodeWorkload code

@@ -80,6 +80,7 @@ public static class CoreApiMapper
             v.Snapshot.MapSourceLabel,
             v.Snapshot.ReduceSourceKind,
             v.Snapshot.ReduceSourceLabel,
+            v.Snapshot.Goal,
             v.Snapshot.ConcurrencyLimit,
             v.Snapshot.ShardCount,
             v.Snapshot.AllowNetworkEgress),

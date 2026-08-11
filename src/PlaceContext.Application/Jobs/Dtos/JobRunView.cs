@@ -42,6 +42,7 @@ public sealed record JobRunSnapshotView(
     string MapSourceLabel,
     string? ReduceSourceKind,
     string? ReduceSourceLabel,
+    string? Goal,
     int ConcurrencyLimit,
     int ShardCount,
     /// <summary>Whether outbound network access was permitted for this run's containers.</summary>

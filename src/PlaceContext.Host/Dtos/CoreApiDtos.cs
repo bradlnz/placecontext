@@ -100,6 +100,7 @@ public sealed record CoreRunSnapshotResponse(
     string MapSourceLabel,
     string? ReduceSourceKind,
     string? ReduceSourceLabel,
+    string? Goal,
     int ConcurrencyLimit,
     int ShardCount,
     bool AllowNetworkEgress);

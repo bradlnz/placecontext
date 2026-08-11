@@ -4,14 +4,12 @@ using PlaceContext.Application.Agents;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Features;
 using PlaceContext.Domain.Entities;
-using PlaceContext.Host.Components.ViewModels.Helpers;
 
 namespace PlaceContext.Host.Components.ViewModels;
 
 public sealed class AgentsViewModel(IPlaceContextService service, PortalUiState ui) : PageViewModel
 {
     private static readonly TimeSpan WorkRefreshInterval = TimeSpan.FromSeconds(6);
-    private readonly ParameterPromptState _workPrompt = new();
     public Guid ProjectId { get; private set; }
     public bool Loading { get; private set; }
     public bool Saving { get; private set; }
@@ -42,8 +40,7 @@ public sealed class AgentsViewModel(IPlaceContextService service, PortalUiState 
     public bool WorkItemComposerOpen { get; private set; }
     public bool WorkItemComposerSubmitting { get; private set; }
     public Guid? WorkComposeJobId { get; private set; }
-    public string WorkComposePayloadRaw { get; set; } = "{}";
-    public string? WorkComposeError => _workPrompt.Error;
+    public string WorkComposeGoal { get; set; } = string.Empty;
     public Guid? EditId { get; private set; }
     public AgentKind EditKind { get; private set; } = AgentKind.Worker;
     public string EditName { get; set; } = string.Empty;
@@ -118,7 +115,7 @@ public sealed class AgentsViewModel(IPlaceContextService service, PortalUiState 
         EditorOpen = false;
         WorkItemComposerOpen = true;
         SelectedWorkItem = null;
-        WorkComposePayloadRaw = "{}";
+        WorkComposeGoal = string.Empty;
         WorkItemComposerSubmitting = false;
 
         var selectedJob = Jobs.OrderBy(j => j.Name).FirstOrDefault();
@@ -135,8 +132,7 @@ public sealed class AgentsViewModel(IPlaceContextService service, PortalUiState 
     {
         WorkItemComposerOpen = false;
         WorkComposeJobId = null;
-        WorkComposePayloadRaw = "{}";
-        _workPrompt.Clear();
+        WorkComposeGoal = string.Empty;
         WorkItemComposerSubmitting = false;
         NotifyStateChanged();
     }
@@ -146,7 +142,6 @@ public sealed class AgentsViewModel(IPlaceContextService service, PortalUiState 
         if (!Guid.TryParse(value, out var jobId))
         {
             WorkComposeJobId = null;
-            _workPrompt.Clear();
             return;
         }
 
@@ -154,34 +149,17 @@ public sealed class AgentsViewModel(IPlaceContextService service, PortalUiState 
         if (job is null)
         {
             WorkComposeJobId = null;
-            _workPrompt.Clear();
             return;
         }
 
         WorkComposeJobId = jobId;
-        WorkComposePayloadRaw = "{}";
         WorkItemComposerSubmitting = false;
-        _workPrompt.Clear();
-        if (job.Parameters.Count > 0)
-        {
-            _workPrompt.Reset(
-                JsonPayloadHelper.FlattenScalars(job.InputPayloads).ToDictionary(
-                    kv => kv.Key,
-                    kv => kv.Value,
-                    StringComparer.Ordinal
-                )
-            );
-        }
-        _workPrompt.SetError(null);
         NotifyStateChanged();
     }
 
     public JobView? WorkComposeJob => WorkComposeJobId is { } id
         ? Jobs.FirstOrDefault(job => job.Id == id)
         : Jobs.FirstOrDefault();
-
-    public string GetWorkComposeArg(string name) => _workPrompt.Get(name);
-    public void SetWorkComposeArg(string name, string value) => _workPrompt.Set(name, value);
 
     public RunReportView[] WorkItemsFor(string bucket) =>
         [..WorkItems
@@ -231,39 +209,14 @@ public sealed class AgentsViewModel(IPlaceContextService service, PortalUiState 
         if (WorkItemComposerSubmitting)
             return;
 
-        string? payload = null;
-        if (job.Parameters.Count > 0)
+        var goal = WorkComposeGoal?.Trim();
+        if (string.IsNullOrWhiteSpace(goal))
         {
-            if (!_workPrompt.ValidateJobParameters(job.Parameters))
-            {
-                SetMessage(_workPrompt.Error ?? "Please complete all required fields.", true);
-                NotifyStateChanged();
-                return;
-            }
-
-            payload = _workPrompt.ToJobPayload(job.Parameters);
+            SetMessage("Goal is required.", true);
+            NotifyStateChanged();
+            return;
         }
-        else
-        {
-            payload = string.IsNullOrWhiteSpace(WorkComposePayloadRaw)
-                ? null
-                : WorkComposePayloadRaw.Trim();
-            if (payload is not null)
-            {
-                try
-                {
-                    using var payloadDoc = JsonDocument.Parse(payload);
-                    if (payloadDoc.RootElement.ValueKind is not (JsonValueKind.Object or JsonValueKind.Array))
-                        throw new JsonException("Input payload must be JSON.");
-                }
-                catch (JsonException)
-                {
-                    _workPrompt.SetError("Payload is not valid JSON.");
-                    NotifyStateChanged();
-                    return;
-                }
-            }
-        }
+        var payload = JsonSerializer.Serialize(new Dictionary<string, string> { ["goal"] = goal });
 
         WorkItemComposerSubmitting = true;
         Message = null;
@@ -294,6 +247,9 @@ public sealed class AgentsViewModel(IPlaceContextService service, PortalUiState 
 
     public static string WorkSummaryProject(RunReportView item) =>
         string.IsNullOrWhiteSpace(item.ProjectName) ? "—" : item.ProjectName;
+
+    public static string WorkGoal(RunReportView item) =>
+        string.IsNullOrWhiteSpace(item.Run.Snapshot.Goal) ? "No goal provided" : item.Run.Snapshot.Goal;
 
     public static string WorkStartedAt(RunReportView item) =>
         item.Run.StartedAt.ToLocalTime().ToString("MMM d, yyyy • HH:mm");
