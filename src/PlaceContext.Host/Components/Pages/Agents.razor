@@ -1,10 +1,12 @@
 @page "/project/{ProjectId:guid}/agents"
 @attribute [Authorize(Policy = Permission.AgentsManage)]
 @layout PlaceContext.Host.Components.Layout.ProjectLayout
-@implements IDisposable
+@implements IAsyncDisposable
 @using PlaceContext.Application.Dtos
 @using PlaceContext.Domain.Entities
 @using PlaceContext.Host.Components.ViewModels
+@using PlaceContext.Host.Components.ViewModels.Helpers
+@inject IJSRuntime JS
 @inject AgentsViewModel Vm
 
 <PageTitle>PlaceContext — Agents</PageTitle>
@@ -15,7 +17,20 @@
             <h2>Agents</h2>
             <p>Coordinate specialised agents through one Command Agent, grounded in the project data graph.</p>
         </div>
-        <a class="dcbtn" href="/chat">Open Agent Chat</a>
+        <div class="agents-head-actions">
+            <div class="agents-tabs" role="tablist" aria-label="Agents workspace section">
+                <button class="agents-tab @(IsAgentsTab ? "active" : null)" type="button"
+                        @onclick="() => SetActiveTab(AgentsSectionTab.Agents)" role="tab" aria-selected="@IsAgentsTab">
+                    Agents
+                </button>
+                <button class="agents-tab @(IsWorkTab ? "active" : null)" type="button"
+                        @onclick="() => SetActiveTab(AgentsSectionTab.Work)" role="tab" aria-selected="@IsWorkTab">
+                    Work
+                </button>
+            </div>
+            <button class="dcbtn" @onclick="Vm.CreateBlankWorker">Add agent</button>
+            <a class="dcbtn" href="/chat">Open Agent Chat</a>
+        </div>
     </header>
 
     @if (Vm.Message is not null)
@@ -29,63 +44,199 @@
     }
     else
     {
-        <section class="agent-canvas" aria-label="Agent orchestration canvas">
-            <div class="canvas-grid"></div>
-            @if (Vm.CommandAgent is { } command)
-            {
-                <button class="agent-node command-node" @onclick="@(() => Vm.Edit(command))">
-                    <span class="node-kicker">Central command</span>
-                    <strong>@command.Name</strong>
-                    <span>@command.Description</span>
-                    <small>Graph-grounded · full orchestration</small>
-                </button>
-            }
+        @if (IsAgentsTab)
+        {
+            <section class="agents-workspace">
+                <section id="agents-canvas" class="agent-canvas" aria-label="Agent orchestration canvas">
+                    <div class="canvas-grid"></div>
+                    <svg class="agent-connections" aria-hidden="true">
+                        @if (Vm.CommandAgent is { } command)
+                        {
+                            @foreach (var agent in Vm.Workers)
+                            {
+                                var explicitParent = agent.ParentAgentId is { } parentId && Vm.Agents.Any(item => item.Id == parentId)
+                                    ? parentId
+                                    : command.Id;
+                                <line class="agent-connection-line"
+                                      data-from="@explicitParent"
+                                      data-to="@agent.Id"></line>
+                            }
+                        }
+                    </svg>
+                    @if (Vm.CommandAgent is { } commandAgent)
+                    {
+                        <button class="agent-node command-node draggable-node" type="button"
+                                style="--agent-dx:0px;--agent-dy:0px;"
+                                data-agent-id="@commandAgent.Id"
+                                data-agent-kind="command"
+                                @onclick="@(() => Vm.Edit(commandAgent))">
+                            <span class="node-kicker">Central command</span>
+                            <strong>@commandAgent.Name</strong>
+                            <span>@commandAgent.Description</span>
+                            <small>Graph-grounded · full orchestration</small>
+                        </button>
+                    }
 
-            <div class="worker-rail" aria-label="Worker agents">
-                @foreach (var agent in Vm.Workers)
-                {
-                    <button class="agent-node worker-node @(agent.Enabled ? null : "disabled")"
-                            @onclick="@(() => Vm.Edit(agent))">
-                        <span class="node-status"></span>
-                        <strong>@agent.Name</strong>
-                        <span>@agent.Description</span>
-                        <small>@agent.Capabilities.Count capabilities · @AgentJobLabel(agent)</small>
-                    </button>
-                }
-                @if (!Vm.Workers.Any())
-                {
-                    <div class="worker-empty">Add a template below to give the Command Agent a specialist to delegate to.</div>
-                }
-            </div>
-        </section>
+                    <div class="worker-rail" aria-label="Worker agents">
+                        @foreach (var agent in Vm.Workers)
+                        {
+                            <button class="agent-node worker-node @(agent.Enabled ? null : "disabled") draggable-node"
+                                    type="button"
+                                    style="--agent-dx:0px;--agent-dy:0px;"
+                                    data-agent-id="@agent.Id"
+                                    data-agent-kind="worker"
+                                    data-parent-agent-id="@agent.ParentAgentId"
+                                    @onclick="@(() => Vm.Edit(agent))">
+                                <span class="node-status"></span>
+                                <strong>@agent.Name</strong>
+                                <span>@agent.Description</span>
+                                <small>@agent.Capabilities.Count capabilities · @Vm.ParentAgentLabel(agent.ParentAgentId) · @AgentJobLabel(agent)</small>
+                            </button>
+                        }
+                        @if (!Vm.Workers.Any())
+                        {
+                            <div class="worker-empty">Add a template on the right to give the Command Agent a specialist to delegate to.</div>
+                        }
+                    </div>
+                </section>
 
-        <section class="templates-section">
-            <div class="section-head">
-                <div>
-                    <h3>Agent templates</h3>
-                    <p>Start with a focused role, then narrow its tools and approved Jobs.</p>
-                </div>
-            </div>
-            <div class="template-grid">
-                @foreach (var template in Vm.Templates)
-                {
-                    <article class="template-card">
-                        <div class="template-icon">@template.Name[..1]</div>
+                <aside class="templates-pane" aria-label="Agent templates">
+                    <div class="section-head">
                         <div>
-                            <strong>@template.Name</strong>
-                            <p>@template.Description</p>
-                            <div class="capability-chips">
-                                @foreach (var capability in template.Capabilities.Take(3))
+                            <h3>Agent templates</h3>
+                            <p>Start with a focused role, then narrow its tools and approved Jobs.</p>
+                        </div>
+                    </div>
+                    <div class="template-grid">
+                        @foreach (var template in Vm.Templates)
+                        {
+                            <article class="template-card">
+                                <div class="template-icon">@template.Name[..1]</div>
+                                <div>
+                                    <strong>@template.Name</strong>
+                                    <p>@template.Description</p>
+                                    <div class="capability-chips">
+                                        @foreach (var capability in template.Capabilities.Take(3))
+                                        {
+                                            <span>@AgentsViewModel.CapabilityLabel(capability)</span>
+                                        }
+                                    </div>
+                                </div>
+                                <button class="dcbtn sm" @onclick="@(() => Vm.CreateFromTemplate(template))">Add agent</button>
+                            </article>
+                        }
+                    </div>
+                </aside>
+            </section>
+        }
+        else
+        {
+            <section class="work-board-wrap" aria-label="Work board">
+                <header class="work-board-head">
+                    <h3>Work board</h3>
+                    <button type="button" class="dcbtn primary" @onclick="Vm.OpenWorkItemComposer">+ Add work item</button>
+                </header>
+                <section class="work-board" aria-label="Kanban columns">
+                    @foreach (var workBucket in AgentsViewModel.WorkBuckets)
+                    {
+                        var items = Vm.WorkItemsFor(workBucket);
+                        <section class="work-column" aria-label="@AgentsViewModel.WorkBucketLabel(workBucket)">
+                            <header class="work-column-head">
+                                <strong>@AgentsViewModel.WorkBucketLabel(workBucket)</strong>
+                                <span class="work-count">@Vm.WorkItemCount(workBucket)</span>
+                            </header>
+                            <div class="work-column-body">
+                                @if (Vm.WorkItemCount(workBucket) == 0)
                                 {
-                                    <span>@AgentsViewModel.CapabilityLabel(capability)</span>
+                                    <div class="work-empty">No work in this stage.</div>
+                                }
+                                else
+                                {
+                                    @foreach (var item in items)
+                                    {
+                                        <button type="button" class="work-card" @onclick="@(() => Vm.OpenWorkItem(item))">
+                                            <span class="work-badge @AgentsViewModel.WorkBucketClass(item.Run.Status)">@AgentsViewModel.WorkStatusLabel(item.Run.Status)</span>
+                                            <div class="work-card-title">@item.JobName</div>
+                                            <p>@AgentsViewModel.WorkSummaryProject(item)</p>
+                                            <small>Started @AgentsViewModel.WorkStartedAt(item)</small>
+                                        </button>
+                                    }
                                 }
                             </div>
+                        </section>
+                    }
+                </section>
+            </section>
+        }
+    }
+
+    @if (Vm.WorkItemComposerOpen)
+    {
+        <div class="dcmodal-overlay" @onclick="Vm.CloseWorkItemComposer">
+            <div class="dcmodal work-item-composer-modal" @onclick:stopPropagation="true">
+                <div class="dcmodal-head">
+                    <div class="flex-fill-min">
+                        <div class="title-14">Add work item</div>
+                        <div class="subtitle-11-5">Select a job and provide input, then enqueue it on the board.</div>
+                    </div>
+                    <button class="dcslide-x" type="button" @onclick="Vm.CloseWorkItemComposer">×</button>
+                </div>
+
+                <div class="dcmodal-body">
+                    <div class="dcfield">
+                        <label>Job <span class="req">*</span></label>
+                        <select class="dcinput" value="@(Vm.WorkComposeJob?.Id.ToString())" @onchange="OnWorkComposeJobChanged">
+                            @foreach (var job in Vm.Jobs.OrderBy(j => j.Name))
+                            {
+                                <option value="@job.Id">@job.Name</option>
+                            }
+                        </select>
+                    </div>
+
+                    @if (Vm.WorkComposeJob?.Parameters.Count > 0)
+                    {
+                        <div class="dcform-section">
+                            <div class="dcform-title">Parameters</div>
+                            @foreach (var parameter in Vm.WorkComposeJob.Parameters)
+                            {
+                                <div class="dcfield">
+                                    <label>
+                                        @(parameter.Label ?? parameter.Name)
+                                        @if (parameter.Required)
+                                        {
+                                            <span class="req">*</span>
+                                        }
+                                        <span class="code ml-5">@parameter.Name</span>
+                                    </label>
+                                    <ParamInput Parameter="parameter" ProjectId="@ProjectId" Value="@Vm.GetWorkComposeArg(parameter.Name)"
+                                              ValueChanged="@(v => Vm.SetWorkComposeArg(parameter.Name, v))" />
+                                </div>
+                            }
                         </div>
-                        <button class="dcbtn sm" @onclick="@(() => Vm.CreateFromTemplate(template))">Add agent</button>
-                    </article>
-                }
+                    }
+                    else
+                    {
+                        <div class="dcfield">
+                            <label>Payload (optional JSON override)</label>
+                            <textarea class="dcinput work-compose-payload" rows="6" @bind="Vm.WorkComposePayloadRaw"></textarea>
+                            <small>Leave blank to use the job's saved payloads.</small>
+                        </div>
+                    }
+
+                    @if (!string.IsNullOrWhiteSpace(Vm.WorkComposeError))
+                    {
+                        <div class="prompt-error">@Vm.WorkComposeError</div>
+                    }
+                </div>
+
+                <div class="dcmodal-foot">
+                    <button type="button" class="dcbtn" @onclick="Vm.CloseWorkItemComposer">Cancel</button>
+                    <button type="button" class="dcbtn primary" disabled="@Vm.WorkItemComposerSubmitting" @onclick="Vm.CreateWorkItemAsync">
+                        @(Vm.WorkItemComposerSubmitting ? "Adding…" : "Add work item")
+                    </button>
+                </div>
             </div>
-        </section>
+        </div>
     }
 
     @if (Vm.EditorOpen)
@@ -117,6 +268,20 @@
                     <input type="checkbox" @bind="Vm.EditEnabled" disabled="@Vm.EditingCommand" />
                     <span>Agent enabled</span>
                 </label>
+
+                @if (!Vm.EditingCommand)
+                {
+                    <label>
+                        <span>Parent agent</span>
+                        <select class="dcinput" value="@(Vm.EditParentAgentId?.ToString() ?? "")" @onchange="OnEditParentChanged">
+                            <option value="">Command root</option>
+                            @foreach (var parent in Vm.ParentCandidates)
+                            {
+                                <option value="@parent.Id">@parent.Name (@(parent.Kind == AgentKind.Command ? "Command" : "Worker"))</option>
+                            }
+                        </select>
+                    </label>
+                }
 
                 <fieldset>
                     <legend>Capabilities</legend>
@@ -166,6 +331,51 @@
             </footer>
         </aside>
     }
+
+    @if (Vm.SelectedWorkItem is { } selectedWorkItem)
+    {
+        <div class="work-scrim" @onclick="Vm.CloseWorkItem"></div>
+        <aside class="work-item-modal" aria-label="Work item details">
+            <header>
+                <div>
+                    <span class="node-kicker">Work item</span>
+                    <h3>@selectedWorkItem.JobName</h3>
+                </div>
+                <button class="icon-close" aria-label="Close" @onclick="Vm.CloseWorkItem">×</button>
+            </header>
+            <div class="work-body">
+                <dl class="work-item-meta">
+                    <dt>Status</dt>
+                    <dd>
+                        <span class="work-badge @AgentsViewModel.WorkBucketClass(selectedWorkItem.Run.Status)">
+                            @AgentsViewModel.WorkStatusLabel(selectedWorkItem.Run.Status)
+                        </span>
+                    </dd>
+                    <dt>Project</dt>
+                    <dd>@AgentsViewModel.WorkSummaryProject(selectedWorkItem)</dd>
+                    <dt>Started</dt>
+                    <dd>@AgentsViewModel.WorkStartedAt(selectedWorkItem)</dd>
+                    <dt>Finished</dt>
+                    <dd>@AgentsViewModel.WorkFinishedAt(selectedWorkItem)</dd>
+                    <dt>Duration</dt>
+                    <dd>@AgentsViewModel.WorkDuration(selectedWorkItem)</dd>
+                    <dt>Attempt</dt>
+                    <dd>@AgentsViewModel.WorkAttemptLabel(selectedWorkItem)</dd>
+                    <dt>Run id</dt>
+                    <dd>@selectedWorkItem.Run.Id</dd>
+                    <dt>Map</dt>
+                    <dd>@selectedWorkItem.Run.Snapshot.MapSourceLabel</dd>
+                    <dt>Shards</dt>
+                    <dd>@AgentsViewModel.WorkShardCount(selectedWorkItem) shards</dd>
+                </dl>
+                <div class="work-metric"><span>Succeeded / failed</span><strong>@AgentsViewModel.WorkShardSuccessCount(selectedWorkItem) / @AgentsViewModel.WorkShardFailureCount(selectedWorkItem)</strong></div>
+            </div>
+            <footer>
+                <span class="footer-spacer"></span>
+                <button class="dcbtn" @onclick="Vm.CloseWorkItem">Close</button>
+            </footer>
+        </aside>
+    }
 </div>
 
 @code {
@@ -175,10 +385,89 @@
     {
         Vm.Attach(() => InvokeAsync(StateHasChanged));
         await Vm.LoadAsync(ProjectId);
+
+        if (IsWorkTab)
+        {
+            Vm.StartWorkItemPolling();
+            _ = Vm.RefreshWorkItemsAsync(silent: true);
+        }
+        else
+            Vm.StopWorkItemPolling();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (Vm.Loading || !IsAgentsTab) return;
+
+        try
+        {
+            await JS.InvokeVoidAsync("agentsCanvas.init", "agents-canvas");
+        }
+        catch
+        {
+            // Canvas behavior is best effort; if JS is unavailable, core agent editing still works.
+        }
     }
 
     private static string AgentJobLabel(AgentDefinitionView agent)
         => agent.AllowedJobIds.Count == 0 ? "all approved jobs" : $"{agent.AllowedJobIds.Count} approved jobs";
 
-    public void Dispose() => Vm.Detach();
+    private bool IsAgentsTab => _activeTab == AgentsSectionTab.Agents;
+    private bool IsWorkTab => _activeTab == AgentsSectionTab.Work;
+
+    private void OnEditParentChanged(ChangeEventArgs e)
+    {
+        Vm.SetEditParent(e.Value?.ToString());
+    }
+
+    private void OnWorkComposeJobChanged(ChangeEventArgs e)
+    {
+        Vm.SetWorkComposeJob(e.Value?.ToString());
+    }
+
+    private void SetActiveTab(AgentsSectionTab tab)
+    {
+        if (_activeTab == tab)
+            return;
+
+        _activeTab = tab;
+
+        if (tab == AgentsSectionTab.Agents)
+        {
+            Vm.StopWorkItemPolling();
+        }
+        else if (Vm.WorkItemOpen)
+            Vm.CloseWorkItem();
+        if (Vm.WorkItemComposerOpen)
+            Vm.CloseWorkItemComposer();
+        if (tab == AgentsSectionTab.Work)
+        {
+            Vm.StartWorkItemPolling();
+            _ = Vm.RefreshWorkItemsAsync(silent: true);
+        }
+
+        InvokeAsync(StateHasChanged);
+    }
+
+    private AgentsSectionTab _activeTab = AgentsSectionTab.Agents;
+
+    private enum AgentsSectionTab
+    {
+        Agents,
+        Work,
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        Vm.Detach();
+        Vm.StopWorkItemPolling();
+        try
+        {
+            await JS.InvokeVoidAsync("agentsCanvas.dispose", "agents-canvas");
+        }
+        catch
+        {
+            // Ignore cleanup errors to avoid masking unrelated teardown failures.
+        }
+    }
 }
