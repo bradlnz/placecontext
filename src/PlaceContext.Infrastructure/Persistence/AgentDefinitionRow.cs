@@ -10,6 +10,7 @@ public sealed class AgentDefinitionRow : ITenantOwned
     public string Description { get; set; } = string.Empty;
     public string Instructions { get; set; } = string.Empty;
     public string TemplateKey { get; set; } = string.Empty;
+    public Guid? ParentAgentId { get; set; }
     public string CapabilitiesJson { get; set; } = "[]";
     public string AllowedJobIdsJson { get; set; } = "[]";
     public bool Enabled { get; set; } = true;

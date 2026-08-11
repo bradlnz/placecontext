@@ -262,7 +262,7 @@ public sealed class AgentsViewModel(IPlaceContextService service, PortalUiState 
         if (item.Run.FinishedAt is null)
             return "running";
 
-        return FormatHelper.Duration(item.Run.StartedAt, item.Run.FinishedAt.Value);
+        return Helpers.FormatHelper.Duration(item.Run.StartedAt, item.Run.FinishedAt.Value);
     }
 
     public static int WorkShardCount(RunReportView item) => item.Run.ShardResults.Count;

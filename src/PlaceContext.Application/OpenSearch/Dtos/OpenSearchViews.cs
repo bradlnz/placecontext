@@ -36,6 +36,15 @@ public sealed record OpenSearchSearchView(
     IReadOnlyList<OpenSearchHitView> Hits,
     string? ChartSpecJson);
 
+public sealed record OpenSearchExportField(
+    string Name,
+    string PostgresType);
+
+public sealed record OpenSearchExportView(
+    IReadOnlyList<OpenSearchExportField> Fields,
+    IReadOnlyList<IReadOnlyList<string?>> Rows,
+    bool Truncated);
+
 /// <summary>One column of a materialised index: the field name and its OpenSearch mapping type.</summary>
 public sealed record OpenSearchMappingField(string Name, string OpenSearchType);
 

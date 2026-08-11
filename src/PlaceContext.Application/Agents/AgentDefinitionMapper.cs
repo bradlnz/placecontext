@@ -8,5 +8,5 @@ public static class AgentDefinitionMapper
     public static AgentDefinitionView ToView(AgentDefinition agent)
         => new(agent.Id, agent.ProjectId, agent.Kind, agent.Name, agent.Description,
             agent.Instructions, agent.TemplateKey, agent.Capabilities, agent.AllowedJobIds,
-            agent.Enabled, agent.UpdatedAt);
+            agent.ParentAgentId, agent.Enabled, agent.UpdatedAt);
 }

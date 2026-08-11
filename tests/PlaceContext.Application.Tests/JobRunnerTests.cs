@@ -32,7 +32,7 @@ public class JobRunnerTests
             FinishedAt: T0.AddSeconds(1),
             ShardResults: Array.Empty<ShardResultView>(),
             ReduceResult: null,
-            Snapshot: new JobRunSnapshotView("image", "img", null, null, 1, 1, false),
+            Snapshot: new JobRunSnapshotView("image", "img", null, null, null, 1, 1, false),
             AttemptNumber: attempt,
             OriginalRunId: originalRunId);
 

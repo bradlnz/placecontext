@@ -323,7 +323,7 @@ public sealed class JobTestCaseTests
             Array.Empty<RunArtifactView>()),
         },
         null,
-        new JobRunSnapshotView("code", "test.py", null, null, 1, 1, false));
+        new JobRunSnapshotView("code", "test.py", null, null, null, 1, 1, false));
 
     private sealed class MemoryTestStore : IJobTestStore
     {

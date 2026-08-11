@@ -15,6 +15,8 @@ public sealed class SaveAgentDefinitionHandler(
 {
     public async Task<AgentDefinitionView> HandleAsync(SaveAgentDefinitionCommand command, CancellationToken ct = default)
     {
+        var projectAgents = await repository.ListForProjectAsync(command.ProjectId, ct);
+
         foreach (var jobId in command.AllowedJobIds.Distinct())
         {
             var job = await jobs.GetByIdAsync(jobId, ct);
@@ -37,21 +39,75 @@ public sealed class SaveAgentDefinitionHandler(
                 ?? throw new InvalidOperationException($"Agent {command.AgentId} not found.");
             if (agent.ProjectId != command.ProjectId)
                 throw new InvalidOperationException("Agent does not belong to this project.");
+
+            var parentAgentId = ResolveParentAgentId(agent.Id, agent.Kind, command.ParentAgentId, projectAgents);
+
             agent.Update(command.Name, command.Description, instructions, command.TemplateKey,
-                capabilities, command.AllowedJobIds, command.Enabled, clock.UtcNow);
+                capabilities, command.AllowedJobIds, command.Enabled, parentAgentId, clock.UtcNow);
             await repository.UpdateAsync(agent, ct);
         }
         else
         {
+            var parentAgentId = ResolveParentAgentId(null, AgentKind.Worker, command.ParentAgentId, projectAgents);
             agent = AgentDefinition.CreateWorker(command.ProjectId, command.Name, command.Description,
-                instructions, command.TemplateKey, capabilities, command.AllowedJobIds, clock.UtcNow);
+                instructions, command.TemplateKey, capabilities, command.AllowedJobIds,
+                parentAgentId, clock.UtcNow);
             if (!command.Enabled)
                 agent.Update(agent.Name, agent.Description, agent.Instructions, agent.TemplateKey,
-                    agent.Capabilities, agent.AllowedJobIds, false, clock.UtcNow);
+                    agent.Capabilities, agent.AllowedJobIds, false, parentAgentId, clock.UtcNow);
             await repository.AddAsync(agent, ct);
         }
 
         await unitOfWork.SaveChangesAsync(ct);
         return AgentDefinitionMapper.ToView(agent);
+    }
+
+    private static Guid? ResolveParentAgentId(
+        Guid? currentAgentId,
+        AgentKind agentKind,
+        Guid? requestedParentId,
+        IReadOnlyList<AgentDefinition> projectAgents)
+    {
+        if (agentKind == AgentKind.Command)
+        {
+            if (requestedParentId is not null)
+                throw new InvalidOperationException("The command agent cannot have a parent.");
+
+            return null;
+        }
+
+        var command = projectAgents.FirstOrDefault(agent => agent.Kind == AgentKind.Command);
+        var parentId = NormalizeParentId(requestedParentId, command?.Id);
+        if (!parentId.HasValue)
+            return null;
+
+        if (projectAgents.FirstOrDefault(agent => agent.Id == parentId.Value) is null)
+            throw new InvalidOperationException($"Parent agent {parentId} was not found in this project.");
+
+        if (parentId == currentAgentId)
+            throw new InvalidOperationException("An agent cannot be its own parent.");
+
+        var visited = new HashSet<Guid>();
+        var current = parentId;
+        while (current.HasValue)
+        {
+            if (!visited.Add(current.Value))
+                throw new InvalidOperationException("Invalid parent hierarchy: cycle detected.");
+
+            if (current.Value == currentAgentId)
+                throw new InvalidOperationException("Invalid parent hierarchy: cycle detected.");
+
+            current = projectAgents.FirstOrDefault(agent => agent.Id == current.Value)?.ParentAgentId;
+        }
+
+        return parentId;
+    }
+
+    private static Guid? NormalizeParentId(Guid? requestedParentId, Guid? commandAgentId)
+    {
+        if (!requestedParentId.HasValue || requestedParentId == Guid.Empty)
+            return commandAgentId;
+
+        return requestedParentId;
     }
 }

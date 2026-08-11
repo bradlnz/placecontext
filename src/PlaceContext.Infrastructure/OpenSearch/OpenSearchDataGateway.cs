@@ -15,6 +15,7 @@ public sealed class OpenSearchDataGateway : IOpenSearchDataGateway
     private const int MaxSqlRows = 500;
     private const int MaxSqlLength = 16000;
     private const int BulkChunkSize = 1000;
+    private const int MaxExportRows = 500;
     private readonly IHttpClientFactory _httpFactory;
     private readonly IOpenSearchConnectionResolver _connections;
 
@@ -268,6 +269,71 @@ public sealed class OpenSearchDataGateway : IOpenSearchDataGateway
         return ParseSqlResult(document.RootElement);
     }
 
+    public async Task<OpenSearchExportView> ExportIndexAsync(
+        Guid projectId, string indexPattern, int maxRows = MaxExportRows, CancellationToken ct = default)
+    {
+        if (maxRows is <= 0)
+            throw new ArgumentOutOfRangeException(nameof(maxRows), "maxRows must be greater than zero.");
+
+        var safeIndex = SafeIndex(indexPattern);
+        var connection = await RequiredConnectionAsync(projectId, ct);
+        var fields = await ReadExportFieldsAsync(connection, safeIndex, ct);
+        if (fields.Count == 0)
+            return new OpenSearchExportView(Array.Empty<OpenSearchExportField>(), Array.Empty<IReadOnlyList<string?>>(), false);
+
+        var types = fields.ToDictionary(field => field.Name, field => field.PostgresType, StringComparer.Ordinal);
+        var rows = new List<IReadOnlyList<string?>>();
+        JsonArray? after = null;
+
+        while (rows.Count < maxRows)
+        {
+            var size = Math.Min(maxRows - rows.Count, MaxExportRows);
+            var body = new JsonObject
+            {
+                ["sort"] = new JsonArray
+                {
+                    new JsonObject { ["_doc"] = "asc" },
+                },
+                ["size"] = size,
+            };
+            if (after is not null)
+                body["search_after"] = after;
+
+            using var response = await SendAsync(connection, HttpMethod.Post,
+                $"/{safeIndex}/_search", body.ToJsonString(), ct);
+            using var document = await ReadSuccessAsync(response, ct);
+            if (!document.RootElement.TryGetProperty("hits", out var hitsNode)
+                || !hitsNode.TryGetProperty("hits", out var hitsArray)
+                || hitsArray.ValueKind != JsonValueKind.Array)
+                break;
+
+            var page = hitsArray.EnumerateArray().ToList();
+            if (page.Count == 0)
+                break;
+
+            foreach (var hit in page)
+            {
+                if (rows.Count >= maxRows)
+                    break;
+
+                rows.Add(ExportRow(hit, fields, types));
+            }
+            if (!TryGetSortToken(page[^1], out after))
+            {
+                break;
+            }
+
+            if (page.Count < size)
+                break;
+        }
+
+        if (rows.Count < maxRows)
+            return new OpenSearchExportView(fields, rows, false);
+
+        var truncated = await HasMoreRowsAsync(connection, safeIndex, after, ct);
+        return new OpenSearchExportView(fields, rows, truncated);
+    }
+
     private static bool IsReadOnlySql(string sql)
     {
         var first = sql.Split(new[] { ' ', '\t', '\r', '\n', '(', ';' },
@@ -363,6 +429,7 @@ public sealed class OpenSearchDataGateway : IOpenSearchDataGateway
                 .EnumerateArray()
                 .Select(GetString)
                 .Where(name => !string.IsNullOrWhiteSpace(name))
+                .Select(name => name!)
                 .ToList();
             return columns.Count > 0;
         }
@@ -474,6 +541,164 @@ public sealed class OpenSearchDataGateway : IOpenSearchDataGateway
                 && long.TryParse(value.GetString(), out result);
 
         return value.TryGetInt64(out result);
+    }
+
+    private static bool TryGetSortToken(JsonElement hit, out JsonArray? token)
+    {
+        token = null;
+        if (!hit.TryGetProperty("sort", out var sort) || sort.ValueKind != JsonValueKind.Array)
+            return false;
+
+        var next = new JsonArray();
+        foreach (var item in sort.EnumerateArray())
+        {
+            var node = JsonNode.Parse(item.GetRawText());
+            next.Add(node);
+        }
+
+        token = next;
+        return true;
+    }
+
+    private async Task<IReadOnlyList<OpenSearchExportField>> ReadExportFieldsAsync(
+        OpenSearchConnection connection, string safeIndex, CancellationToken ct)
+    {
+        using var response = await SendAsync(connection, HttpMethod.Get,
+            $"/{safeIndex}/_field_caps?fields=*", null, ct);
+        using var document = await ReadSuccessAsync(response, ct);
+        if (!document.RootElement.TryGetProperty("fields", out var fields) || fields.ValueKind != JsonValueKind.Object)
+            return Array.Empty<OpenSearchExportField>();
+
+        var result = new List<OpenSearchExportField>();
+        foreach (var field in fields.EnumerateObject())
+        {
+            if (field.Name.StartsWith('_'))
+                continue;
+
+            var type = ExportFieldType(field.Value);
+            if (type is null)
+                continue;
+
+            var mapped = MapPostgresType(type);
+            if (mapped is null)
+                continue;
+
+            result.Add(new OpenSearchExportField(field.Name, mapped));
+        }
+
+        result.Sort(static (left, right) => string.Compare(left.Name, right.Name, StringComparison.Ordinal));
+        return result;
+    }
+
+    private static string? ExportFieldType(JsonElement fieldDefinition)
+    {
+        foreach (var typeSpec in fieldDefinition.EnumerateObject())
+        {
+            if (typeSpec.Value.ValueKind != JsonValueKind.Object)
+                continue;
+            if (!typeSpec.Value.TryGetProperty("type", out var typeValue) || typeValue.ValueKind != JsonValueKind.String)
+                continue;
+            return typeValue.GetString();
+        }
+        return null;
+    }
+
+    private static string? MapPostgresType(string? openSearchType)
+        => openSearchType switch
+        {
+            "date" => "timestamptz",
+            "text" or "keyword" or "match_only_text" or "constant_keyword" => "text",
+            "boolean" => "boolean",
+            "long" or "integer" or "short" or "byte" => "bigint",
+            "double" or "float" or "half_float" or "scaled_float" => "numeric",
+            "flattened" or "object" or "alias" or "nested" => null,
+            _ => null,
+        };
+
+    private static IReadOnlyList<string?> ExportRow(
+        JsonElement hit, IReadOnlyList<OpenSearchExportField> fields,
+        IReadOnlyDictionary<string, string> types)
+    {
+        if (!hit.TryGetProperty("_source", out var source) || source.ValueKind != JsonValueKind.Object)
+            return fields.Select(_ => (string?)null).ToList();
+
+        var row = new List<string?>();
+        foreach (var field in fields)
+        {
+            if (!ReadSourceValue(source, field.Name, out var value))
+            {
+                row.Add(null);
+                continue;
+            }
+
+            row.Add(ConvertExportValue(value, types[field.Name]));
+        }
+        return row;
+    }
+
+    private static bool ReadSourceValue(JsonElement source, string path, out JsonElement value)
+    {
+        var current = source;
+        foreach (var part in path.Split('.'))
+        {
+            if (current.ValueKind != JsonValueKind.Object || !current.TryGetProperty(part, out current))
+            {
+                value = default;
+                return false;
+            }
+        }
+        value = current;
+        return current.ValueKind != JsonValueKind.Null;
+    }
+
+    private static string? ConvertExportValue(JsonElement value, string postgresType)
+    {
+        if (value.ValueKind == JsonValueKind.Null)
+            return null;
+
+        if (postgresType is "timestamptz" && value.ValueKind == JsonValueKind.Number
+            && value.TryGetInt64(out var epochMillis))
+        {
+            return DateTimeOffset.FromUnixTimeMilliseconds(epochMillis).UtcDateTime.ToString("yyyy-MM-ddTHH:mm:ss'Z'");
+        }
+
+        return value.ValueKind switch
+        {
+            JsonValueKind.String => value.GetString(),
+            JsonValueKind.Number or JsonValueKind.True or JsonValueKind.False => value.GetRawText(),
+            _ => value.GetRawText().Length > 800 ? value.GetRawText()[..800] : value.GetRawText(),
+        };
+    }
+
+    private async Task<bool> HasMoreRowsAsync(
+        OpenSearchConnection connection, string safeIndex, JsonArray? after, CancellationToken ct)
+    {
+        if (after is null)
+            return false;
+
+        var probe = new JsonObject
+        {
+            ["sort"] = new JsonArray
+            {
+                new JsonObject { ["_doc"] = "asc" },
+            },
+            ["size"] = 1,
+            ["search_after"] = after,
+        };
+
+        using var response = await SendAsync(connection, HttpMethod.Post,
+            $"/{safeIndex}/_search", probe.ToJsonString(), ct);
+        using var document = await ReadSuccessAsync(response, ct);
+        if (!document.RootElement.TryGetProperty("hits", out var hitsNode)
+            || !hitsNode.TryGetProperty("hits", out var hitsArray)
+            || hitsArray.ValueKind != JsonValueKind.Array)
+            return false;
+
+        var firstPage = hitsArray.EnumerateArray().ToList();
+        if (firstPage.Count == 0)
+            return false;
+
+        return true;
     }
 
     private static bool TryGetArrayProperty(JsonElement root, string property, out JsonElement array)

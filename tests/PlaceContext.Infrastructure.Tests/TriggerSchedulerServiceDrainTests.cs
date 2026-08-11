@@ -150,7 +150,7 @@ public class TriggerSchedulerServiceDrainTests
             }
             finally { Interlocked.Decrement(ref _current); }
 
-            var snapshot = new JobRunSnapshotView("image", "img", null, null, 1, 1, false);
+            var snapshot = new JobRunSnapshotView("image", "img", null, null, null, 1, 1, false);
             var view = new JobRunDetailView(run.RunId ?? Guid.NewGuid(), run.JobId, Guid.NewGuid(), "Succeeded",
                 DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, Array.Empty<ShardResultView>(), null, snapshot);
             return Task.FromResult((TResult)(object)view);

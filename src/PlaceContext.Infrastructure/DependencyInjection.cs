@@ -7,6 +7,7 @@ using PlaceContext.Infrastructure.Skills;
 using PlaceContext.Infrastructure.Tenancy;
 using PlaceContext.Infrastructure.Workload;
 using Microsoft.EntityFrameworkCore;
+using System.Data;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.EntityFrameworkCore.Diagnostics;
@@ -354,6 +355,7 @@ public static class DependencyInjection
         using var scope = provider.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         db.Database.Migrate();
+        EnsureAgentHierarchySchema(db);
         // Additive columns for workspace UI customization (safe if already present).
         try
         {
@@ -412,6 +414,60 @@ public static class DependencyInjection
         // Backfill denormalized shard counts for existing runs.
         // The JSON is encrypted at the app layer, so we must read/decrypt/count in C#.
         BackfillShardCounts(db, scope.ServiceProvider);
+    }
+
+    private static void EnsureAgentHierarchySchema(AppDbContext db)
+    {
+        var connection = db.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        try
+        {
+            if (shouldClose)
+            {
+                connection.Open();
+            }
+
+            using (var hasParentAgentId = connection.CreateCommand())
+            {
+                hasParentAgentId.CommandText =
+                    """
+                    SELECT EXISTS (
+                        SELECT 1
+                        FROM information_schema.columns
+                        WHERE table_schema = 'public'
+                          AND table_name = 'agent_definitions'
+                          AND lower(column_name) = 'parentagentid'
+                    );
+                    """;
+                var exists = Convert.ToBoolean(hasParentAgentId.ExecuteScalar());
+                if (exists)
+                {
+                    return;
+                }
+            }
+
+            using (var ensureColumns = connection.CreateCommand())
+            {
+                ensureColumns.CommandText =
+                    """
+                    ALTER TABLE agent_definitions ADD COLUMN IF NOT EXISTS "ParentAgentId" uuid;
+                    CREATE INDEX IF NOT EXISTS "IX_agent_definitions_ParentAgentId" ON agent_definitions ("ParentAgentId");
+                    """;
+                ensureColumns.ExecuteNonQuery();
+            }
+        }
+        catch
+        {
+            // Keep this best-effort for mixed environments (non-PostgreSQL, bootstrap ordering,
+            // or manually managed legacy schemas).
+        }
+        finally
+        {
+            if (shouldClose && connection.State == ConnectionState.Open)
+            {
+                connection.Close();
+            }
+        }
     }
 
     private static void BackfillShardCounts(AppDbContext db, IServiceProvider sp)

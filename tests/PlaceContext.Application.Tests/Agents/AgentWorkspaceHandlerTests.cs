@@ -38,7 +38,7 @@ public sealed class AgentWorkspaceHandlerTests
 
         var view = await handler.HandleAsync(new SaveAgentDefinitionCommand(
             projectId, null, "Researcher", "Find evidence", "", "research",
-            [], [], true));
+            [], [], null, true));
 
         Assert.Equal("research", view.TemplateKey);
         Assert.Contains(AgentCapability.GraphRead, view.Capabilities);
@@ -46,6 +46,67 @@ public sealed class AgentWorkspaceHandlerTests
         Assert.Contains(AgentCapability.ArtifactsRead, view.Capabilities);
         Assert.NotEmpty(view.Instructions);
         Assert.Equal(1, unitOfWork.SaveCount);
+    }
+
+    [Fact]
+    public async Task Save_worker_defaults_parent_to_command_when_not_provided()
+    {
+        var repository = new InMemoryAgentDefinitionRepository();
+        var unitOfWork = new RecordingUnitOfWork();
+        var handler = new SaveAgentDefinitionHandler(repository, new InMemoryJobRepository(), unitOfWork, new FakeClock(Now));
+        var projectId = Guid.NewGuid();
+
+        var command = AgentDefinition.CreateCommand(projectId, Now);
+        await repository.AddAsync(command);
+
+        var view = await handler.HandleAsync(new SaveAgentDefinitionCommand(
+            projectId, null, "Researcher", "Find evidence", "", "research",
+            [], [], null, true));
+
+        Assert.Equal(command.Id, view.ParentAgentId);
+    }
+
+    [Fact]
+    public async Task Save_worker_rejects_parent_cycles()
+    {
+        var repository = new InMemoryAgentDefinitionRepository();
+        var handler = new SaveAgentDefinitionHandler(repository, new InMemoryJobRepository(), new RecordingUnitOfWork(), new FakeClock(Now));
+        var projectId = Guid.NewGuid();
+
+        var command = AgentDefinition.CreateCommand(projectId, Now);
+        var parent = AgentDefinition.CreateWorker(
+            projectId, "Parent", "", "", "research", [AgentCapability.GraphRead], [], command.Id, Now);
+        var child = AgentDefinition.CreateWorker(
+            projectId, "Child", "", "", "research", [AgentCapability.GraphRead], [], parent.Id, Now);
+
+        await repository.AddAsync(command);
+        await repository.AddAsync(parent);
+        await repository.AddAsync(child);
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            handler.HandleAsync(new SaveAgentDefinitionCommand(
+                projectId, parent.Id, "Parent", "", "", "research", [AgentCapability.GraphRead],
+                [], child.Id, true)));
+
+        Assert.Contains("cycle", error.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Command_agent_cannot_have_parent()
+    {
+        var repository = new InMemoryAgentDefinitionRepository();
+        var handler = new SaveAgentDefinitionHandler(repository, new InMemoryJobRepository(), new RecordingUnitOfWork(), new FakeClock(Now));
+        var projectId = Guid.NewGuid();
+
+        var command = AgentDefinition.CreateCommand(projectId, Now);
+        await repository.AddAsync(command);
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            handler.HandleAsync(new SaveAgentDefinitionCommand(
+                projectId, command.Id, command.Name, command.Description, command.Instructions,
+                command.TemplateKey, command.Capabilities, command.AllowedJobIds, Guid.NewGuid(), command.Enabled)));
+
+        Assert.Contains("command agent cannot have a parent", error.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -69,7 +130,7 @@ public sealed class AgentWorkspaceHandlerTests
         var deniedJob = Guid.NewGuid();
         var agent = AgentDefinition.CreateWorker(
             Guid.NewGuid(), "Operator", "", "", "job-operator",
-            [AgentCapability.JobsRead, AgentCapability.JobsRun], [allowedJob], Now);
+            [AgentCapability.JobsRead, AgentCapability.JobsRun], [allowedJob], null, Now);
 
         Assert.True(AgentToolAuthorization.CanUse(agent, AgentToolNames.ListJobs, ""));
         Assert.True(AgentToolAuthorization.CanUse(agent, AgentToolNames.RunJob, allowedJob.ToString()));
@@ -83,9 +144,9 @@ public sealed class AgentWorkspaceHandlerTests
         var projectId = Guid.NewGuid();
         var repository = new InMemoryAgentDefinitionRepository();
         var research = AgentDefinition.CreateWorker(projectId, "Research", "", "Find evidence", "research",
-            [AgentCapability.GraphRead, AgentCapability.DataRead], [], Now);
+            [AgentCapability.GraphRead, AgentCapability.DataRead], [], null, Now);
         var operations = AgentDefinition.CreateWorker(projectId, "Operations", "", "Plan execution", "operations",
-            [AgentCapability.GraphRead, AgentCapability.JobsRun], [], Now);
+            [AgentCapability.GraphRead, AgentCapability.JobsRun], [], null, Now);
         await repository.AddAsync(AgentDefinition.CreateCommand(projectId, Now));
         await repository.AddAsync(research);
         await repository.AddAsync(operations);

@@ -55,6 +55,10 @@ public interface IOpenSearchDataGateway
     /// <summary>Run a SELECT-style query through OpenSearch's SQL engine against the project's indices.</summary>
     Task<ProjectQueryResult> SearchSqlAsync(
         Guid projectId, string sql, CancellationToken ct = default);
+
+    Task<OpenSearchExportView> ExportIndexAsync(
+        Guid projectId, string indexPattern, int maxRows = 500,
+        CancellationToken ct = default);
 }
 
 /// <summary>Triggers the external collector without coupling the application to its transport.</summary>

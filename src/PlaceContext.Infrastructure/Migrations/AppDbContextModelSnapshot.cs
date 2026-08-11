@@ -264,6 +264,9 @@ namespace PlaceContext.Infrastructure.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
+                    b.Property<Guid?>("ParentAgentId")
+                        .HasColumnType("uuid");
+
                     b.Property<Guid>("ProjectId")
                         .HasColumnType("uuid");
 
@@ -281,6 +284,8 @@ namespace PlaceContext.Infrastructure.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("ProjectId", "Kind");
+
+                    b.HasIndex("ParentAgentId");
 
                     b.HasIndex("ProjectId", "Name")
                         .IsUnique();

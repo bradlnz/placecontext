@@ -222,6 +222,12 @@ public class SearchTests
             Guid projectId, string sql, CancellationToken ct = default)
             => Task.FromResult(new ProjectQueryResult(
                 new[] { "index" }, new IReadOnlyList<string?>[] { new[] { sql } }, 0, false));
+
+        public Task<OpenSearchExportView> ExportIndexAsync(
+            Guid projectId, string indexPattern, int maxRows = 500,
+            CancellationToken ct = default)
+            => Task.FromResult(new OpenSearchExportView(
+                Array.Empty<OpenSearchExportField>(), Array.Empty<IReadOnlyList<string?>>(), false));
     }
 
     private sealed class FakePermissionService : IPermissionService

@@ -694,7 +694,7 @@ public class JobChainTests
             ? null
             : new ReduceResultView(0, true, reduceArtifact, null, Array.Empty<RunArtifactView>());
         return new JobRunDetailView(Guid.NewGuid(), jobId, ProjectId, status, T0, T0.AddSeconds(1),
-            shards, reduce, new JobRunSnapshotView("image", "img", null, null, 1, shards.Count, false));
+            shards, reduce, new JobRunSnapshotView("image", "img", null, null, null, 1, shards.Count, false));
     }
 
     /// <summary>Dispatcher that answers RunJobCommand from a canned per-job result and records the

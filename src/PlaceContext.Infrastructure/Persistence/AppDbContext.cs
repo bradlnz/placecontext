@@ -598,12 +598,14 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
             e.ToTable("agent_definitions");
             e.HasKey(x => x.Id);
             e.HasIndex(x => new { x.ProjectId, x.Kind });
+            e.HasIndex(x => x.ParentAgentId);
             e.HasIndex(x => new { x.ProjectId, x.Name }).IsUnique();
             e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
             e.Property(x => x.Kind).HasMaxLength(20);
             e.Property(x => x.Name).HasMaxLength(100);
             e.Property(x => x.Description).HasMaxLength(500);
             e.Property(x => x.TemplateKey).HasMaxLength(100);
+            e.Property(x => x.ParentAgentId);
             e.Property(x => x.CapabilitiesJson).HasDefaultValue("[]");
             e.Property(x => x.AllowedJobIdsJson).HasDefaultValue("[]");
         });
