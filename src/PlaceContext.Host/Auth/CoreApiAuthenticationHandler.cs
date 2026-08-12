@@ -17,6 +17,7 @@ public sealed class CoreApiAuthenticationHandler : AuthenticationHandler<Authent
 
     private readonly CoreApiOptions _coreApiOptions;
 
+    #pragma warning disable CS0618
     public CoreApiAuthenticationHandler(
         IOptionsMonitor<AuthenticationSchemeOptions> options,
         ILoggerFactory logger,
@@ -27,6 +28,7 @@ public sealed class CoreApiAuthenticationHandler : AuthenticationHandler<Authent
     {
         _coreApiOptions = coreApiOptions.Value;
     }
+    #pragma warning restore CS0618
 
     protected override Task<AuthenticateResult> HandleAuthenticateAsync()
     {

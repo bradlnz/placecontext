@@ -907,27 +907,27 @@ else
     </div>
 }
 
-@if (Vm.ShowCustomerDetailPanel)
+@if (Vm.ShowCustomerDetailPanel && Vm.Selected is { } selected)
 {
     <div class="dcslide-scrim crm-detail-scrim" @onclick="Vm.CloseClient"></div>
     <div class="dcslide crm-detail">
         <div class="dcslide-head">
             <div class="detail-heading">
-                <span class="client-avatar large @CrmViewModel.StageClass(CrmViewModel.ParseStage(Vm.Selected.LifecycleStage))">@CrmViewModel.Initials(Vm.Selected.Name)</span>
+                <span class="client-avatar large @CrmViewModel.StageClass(CrmViewModel.ParseStage(selected.LifecycleStage))">@CrmViewModel.Initials(selected.Name)</span>
                 <span>
-                    <span class="title-14">@Vm.Selected.Name</span>
-                    <span class="subtitle-11-5">@(Vm.Selected.Company ?? CrmViewModel.StageLabel(CrmViewModel.ParseStage(Vm.Selected.LifecycleStage)))</span>
+                    <span class="title-14">@selected.Name</span>
+                    <span class="subtitle-11-5">@(selected.Company ?? CrmViewModel.StageLabel(CrmViewModel.ParseStage(selected.LifecycleStage)))</span>
                 </span>
             </div>
             <button class="dcslide-x" @onclick="Vm.CloseClient" aria-label="Close"><CrmIcon Name="close" /></button>
         </div>
         <div class="dcslide-body detail-body">
-            <div class="detail-hero @CrmViewModel.StageClass(CrmViewModel.ParseStage(Vm.Selected.LifecycleStage))">
+            <div class="detail-hero @CrmViewModel.StageClass(CrmViewModel.ParseStage(selected.LifecycleStage))">
                 <span class="hero-stage">
                     <span class="badge-dot"></span>
-                    @CrmViewModel.StageLabel(CrmViewModel.ParseStage(Vm.Selected.LifecycleStage))
+                    @CrmViewModel.StageLabel(CrmViewModel.ParseStage(selected.LifecycleStage))
                 </span>
-                <span class="hero-updated">Updated @Vm.UpdatedDate(Vm.Selected.UpdatedAt)</span>
+                <span class="hero-updated">Updated @Vm.UpdatedDate(selected.UpdatedAt)</span>
             </div>
             <div class="detail-tabs" role="tablist" aria-label="Client details">
                 <button class="@(Vm.CurrentDetailTab == CrmDetailTab.Overview ? "active" : "")"
