@@ -9,7 +9,6 @@ using PlaceContext.Application.Ports;
 using PlaceContext.Domain.ValueObjects;
 using PlaceContext.Host;
 using PlaceContext.Infrastructure.Crm;
-using System.Net.Http.Json;
 using System.Text.Json;
 
 namespace PlaceContext.Host.Components.ViewModels.Crm;
@@ -23,12 +22,14 @@ public sealed class CrmViewModel : PageViewModel
     private readonly IMembershipService Membership;
     private readonly CrmIngestionSettingsService IngestionSettingsService;
     private readonly IPermissionService Permissions;
-    private readonly ICurrentTenant CurrentTenant;
-    private readonly IHttpClientFactory HttpClientFactory;
-    private readonly IConfiguration Configuration;
-
-    public const string ProvisioningKey = "PlaceContext:CustomerPortal:ProvisioningKey";
-    public const string ProvisionUsersRoute = "/api/provision/users";
+    private bool _canManageClients;
+    private bool _canRunAutomations;
+    private bool _canManageAutomationCatalog;
+    private bool _canPostClientNotes;
+    private bool _canUploadArtifacts;
+    private bool _canManageCalendars;
+    private bool _canSendCommunications;
+    private Guid _ingestionClientId;
 
     public CrmViewModel(
         IPlaceContextService svc,
@@ -37,10 +38,7 @@ public sealed class CrmViewModel : PageViewModel
         NavigationManager nav,
         IMembershipService membership,
         CrmIngestionSettingsService ingestionSettings,
-        IPermissionService permissions,
-        ICurrentTenant currentTenant,
-        IHttpClientFactory httpClientFactory,
-        IConfiguration configuration
+        IPermissionService permissions
     )
     {
         Svc = svc;
@@ -50,9 +48,6 @@ public sealed class CrmViewModel : PageViewModel
         Membership = membership;
         IngestionSettingsService = ingestionSettings;
         Permissions = permissions;
-        CurrentTenant = currentTenant;
-        HttpClientFactory = httpClientFactory;
-        Configuration = configuration;
     }
 
     [Parameter]
@@ -108,35 +103,13 @@ public sealed class CrmViewModel : PageViewModel
     public IReadOnlyList<CrmCalendarView> Calendars = Array.Empty<CrmCalendarView>();
     public CrmCommsCapabilitiesView? CommsCapabilities;
     public bool Loading = true;
-    public bool PortalProvisioningOpen;
-    public bool SavingPortal;
-    public bool PortalRedeploying;
-    public bool PortalInviting;
-    public bool PortalImpersonating;
-    public bool CanManagePortal;
-    public string PortalCustomerSlug = "";
-    public string PortalDomain = "";
-    public string PortalUserName = "";
-    public string PortalPassword = "";
-    public string PortalBrandName = "";
-    public string PortalBrandLogoUrl = "";
-    public string PortalInviteRole = "member";
-    public string? PortalMessage;
-    public bool SelectedPortalEnabled => Selected?.CustomerPortalEnabled ?? false;
-    public string SelectedPortalHost =>
-        string.IsNullOrWhiteSpace(Selected?.CustomerPortalDomain)
-            ? BuildClientPortalHost()
-            : $"https://{Selected.CustomerPortalDomain.Trim()}";
-    private string BuildClientPortalHost()
-    {
-        var slug = Selected?.CustomerPortalSlug;
-        if (string.IsNullOrWhiteSpace(slug) && Selected is not null)
-            slug = Slugify(Selected.Name);
-        if (string.IsNullOrWhiteSpace(slug))
-            slug = "customer";
-        return $"{Nav.BaseUri.TrimEnd('/')}/p/{Slugify(slug)}";
-    }
-
+    public bool CanManageClients => _canManageClients;
+    public bool CanRunAutomationJobs => _canRunAutomations;
+    public bool CanManageAutomationCatalog => _canManageAutomationCatalog;
+    public bool CanPostNotes => _canPostClientNotes;
+    public bool CanUploadArtifacts => _canUploadArtifacts;
+    public bool CanManageCalendarEntries => _canManageCalendars;
+    public bool CanSendComms => _canSendCommunications;
     private static string Slugify(string value)
     {
         if (string.IsNullOrWhiteSpace(value))
@@ -213,9 +186,7 @@ public sealed class CrmViewModel : PageViewModel
         Selected is not null
         && CurrentSection
             is not global::PlaceContext.Host.Components.ViewModels.Crm.CrmSection.Conversations
-            and not global::PlaceContext.Host.Components.ViewModels.Crm.CrmSection.Portals
         && !ShowEditor
-        && !PortalProvisioningOpen
         && !NotesMetadataOpen;
     public string StageFilterLabel =>
         StageFilter is { } stage ? StageLabel(stage).ToLowerInvariant() : "all";
@@ -243,7 +214,6 @@ public sealed class CrmViewModel : PageViewModel
         }
     }
     public CrmClientView? Selected;
-    public CrmClientView? PortalTarget;
     public Guid? SelectedChainId;
     public Guid? ConfirmArtifactRemoveId;
     public Guid? EditId;
@@ -261,10 +231,25 @@ public sealed class CrmViewModel : PageViewModel
     public Guid? AutomationChainId;
     public bool AutomationEnabled = true;
     public string? AutomationError;
-    public CrmIngestionSettingsView? IngestionSettings;
+    public IReadOnlyList<CrmIngestionSettingsView> IngestionSettings = Array.Empty<CrmIngestionSettingsView>();
     public bool LoadingIngestionSettings;
     public bool SavingIngestion;
     public string IngestionOrigin = "";
+    public Guid IngestionClientId
+    {
+        get => _ingestionClientId;
+        set
+        {
+            _ingestionClientId = value;
+            var selected = SelectedIngestionSetting;
+            IngestionOrigin = selected?.AllowedOrigin ?? "";
+            NewIngestionToken = null;
+            IngestionError = null;
+            IngestionMessage = null;
+        }
+    }
+    public CrmIngestionSettingsView? SelectedIngestionSetting =>
+        IngestionSettings.FirstOrDefault(setting => setting.ClientId == IngestionClientId);
     public string? NewIngestionToken;
     public string? IngestionError;
     public string? IngestionMessage;
@@ -275,6 +260,19 @@ public sealed class CrmViewModel : PageViewModel
 
     public bool HasPrimaryAction => CurrentSectionPresentation.CanAdd;
     public string PrimaryActionLabel => CurrentSectionPresentation.AddLabel;
+    public bool CanUsePrimaryAction =>
+        CurrentSection switch
+        {
+            global::PlaceContext.Host.Components.ViewModels.Crm.CrmSection.Contacts
+                or global::PlaceContext.Host.Components.ViewModels.Crm.CrmSection.Opportunities => CanManageClients,
+            global::PlaceContext.Host.Components.ViewModels.Crm.CrmSection.Automations => CanManageAutomationCatalog,
+            _ => false,
+        };
+
+    public IEnumerable<JobChainView> RunableChains =>
+        CanManageAutomationCatalog
+            ? Chains
+            : Chains.Where(chain => SelectedClientChainIds.Contains(chain.Id));
 
     public Task OpenCrmSection(CrmSection section) =>
         OpenCrmSection(CrmPresentationCatalog.SectionKey(section));
@@ -341,16 +339,6 @@ public sealed class CrmViewModel : PageViewModel
             )
             .ToList();
 
-    public IReadOnlyList<CrmClientView> PortalClients =>
-        string.IsNullOrWhiteSpace(Search)
-            ? Clients.OrderBy(client => client.Name).ToList()
-            : Clients
-                .Where(client =>
-                    Searchable(client).Contains(Search.Trim(), StringComparison.OrdinalIgnoreCase)
-                )
-                .OrderBy(client => client.Name)
-                .ToList();
-
     public IEnumerable<CrmClientView> FilteredConversationClients =>
         Clients
             .Where(client =>
@@ -362,27 +350,46 @@ public sealed class CrmViewModel : PageViewModel
 
     public async Task LoadAsync()
     {
-        Ui.Set("CRM", "conversations · calendars · contacts · opportunities · portals");
+        Ui.Set("CRM", "conversations · calendars · contacts · opportunities");
         Loading = true;
         try
         {
+            var canManageClientsTask = Permissions.HasAsync(Permission.DataWrite);
+            var canRunAutomationsTask = Permissions.HasAsync(Permission.JobsRun);
+            var canManageAutomationCatalogTask = Permissions.HasAsync(Permission.CrmAutomationManage);
+            var canPostNotesTask = Permissions.HasAsync(Permission.DataWrite);
+            var canUploadArtifactsTask = Permissions.HasAsync(Permission.DataWrite);
+            var canManageCalendarsTask = Permissions.HasAsync(Permission.DataWrite);
+            var canSendCommsTask = Permissions.HasAsync(Permission.CrmCommsSend);
+
             var clientsTask = Svc.ListCrmClientsAsync(ProjectId);
             var chainsTask = Svc.ListJobChainsAsync(ProjectId);
             var automationsTask = Svc.ListCrmAutomationRulesAsync(ProjectId);
             var appointmentsTask = Svc.ListCrmAppointmentsAsync(ProjectId);
             var calendarsTask = Svc.ListCrmCalendarsAsync(ProjectId);
             var membersTask = Membership.ListMembersAsync();
-            var portalPermissionTask = Permissions.HasAsync(Permission.SettingsManage);
             await Task.WhenAll(
+                canManageClientsTask,
+                canRunAutomationsTask,
+                canManageAutomationCatalogTask,
+                canPostNotesTask,
+                canUploadArtifactsTask,
+                canManageCalendarsTask,
+                canSendCommsTask,
                 clientsTask,
                 chainsTask,
                 automationsTask,
                 appointmentsTask,
                 calendarsTask,
-                membersTask,
-                portalPermissionTask
+                membersTask
             );
-            CanManagePortal = await portalPermissionTask;
+            _canManageClients = await canManageClientsTask;
+            _canRunAutomations = await canRunAutomationsTask;
+            _canManageAutomationCatalog = await canManageAutomationCatalogTask;
+            _canPostClientNotes = await canPostNotesTask;
+            _canUploadArtifacts = await canUploadArtifactsTask;
+            _canManageCalendars = await canManageCalendarsTask;
+            _canSendCommunications = await canSendCommsTask;
             var adminEmails = (await membersTask)
                 .Where(member =>
                     member.IsDefaultAdmin
@@ -418,7 +425,6 @@ public sealed class CrmViewModel : PageViewModel
             "contacts" => "Contacts",
             "opportunities" => "Opportunities",
             "automations" => "Automations",
-            "portals" => "Customer portals",
             _ => "CRM settings",
         };
 
@@ -431,23 +437,8 @@ public sealed class CrmViewModel : PageViewModel
             "contacts" => "Manage customer contact details and relationship context.",
             "opportunities" => "Move customer opportunities through the full lifecycle pipeline.",
             "automations" => "Connect customer lifecycle events to durable job-chain workflows.",
-            "portals" => "Provision, configure, and manage portal access for selected CRM clients.",
             _ => "Connect external lead forms without exposing the rest of your CRM.",
         };
-
-    public string ClientPortalHost(CrmClientView client)
-    {
-        if (!string.IsNullOrWhiteSpace(client.CustomerPortalDomain))
-            return $"https://{client.CustomerPortalDomain.Trim()}";
-
-        var slug = client.CustomerPortalSlug;
-        if (string.IsNullOrWhiteSpace(slug))
-            slug = Slugify(client.Name);
-        if (string.IsNullOrWhiteSpace(slug))
-            slug = "tenant";
-
-        return $"{Nav.BaseUri.TrimEnd('/')}/p/{slug}";
-    }
 
     public void ToggleCrmNavigation() => CrmNavOpen = !CrmNavOpen;
 
@@ -753,7 +744,16 @@ public sealed class CrmViewModel : PageViewModel
                 return;
             }
             IngestionSettings = await IngestionSettingsService.GetAsync(ProjectId);
-            IngestionOrigin = IngestionSettings?.AllowedOrigin ?? "";
+            if (!IngestionSettings.Any())
+            {
+                IngestionClientId = Guid.Empty;
+                IngestionOrigin = "";
+                return;
+            }
+            if (!IngestionSettings.Any(setting => setting.ClientId == IngestionClientId))
+                IngestionClientId = IngestionSettings[0].ClientId;
+            else
+                IngestionOrigin = SelectedIngestionSetting?.AllowedOrigin ?? "";
         }
         catch (Exception ex)
         {
@@ -775,11 +775,13 @@ public sealed class CrmViewModel : PageViewModel
         {
             if (!await CanManageIngestion())
                 return;
-            IngestionSettings = await IngestionSettingsService.SaveOriginAsync(
+            var result = await IngestionSettingsService.SaveOriginAsync(
                 ProjectId,
+                IngestionClientId,
                 IngestionOrigin
             );
-            IngestionOrigin = IngestionSettings?.AllowedOrigin ?? IngestionOrigin;
+            await LoadIngestionSettings();
+            IngestionOrigin = result.AllowedOrigin;
             IngestionMessage = "Allowed origin saved.";
         }
         catch (Exception ex)
@@ -802,10 +804,13 @@ public sealed class CrmViewModel : PageViewModel
         {
             if (!await CanManageIngestion())
                 return;
-            var result = await IngestionSettingsService.RotateAsync(ProjectId, IngestionOrigin);
-            IngestionSettings = result?.Settings;
+            var result = await IngestionSettingsService.RotateAsync(
+                ProjectId,
+                IngestionClientId,
+                IngestionOrigin
+            );
+            await LoadIngestionSettings();
             NewIngestionToken = result?.Token;
-            IngestionOrigin = result?.Settings.AllowedOrigin ?? IngestionOrigin;
             IngestionMessage = "CRM lead ingestion is enabled.";
         }
         catch (Exception ex)
@@ -828,7 +833,7 @@ public sealed class CrmViewModel : PageViewModel
         {
             if (!await CanManageIngestion())
                 return;
-            await IngestionSettingsService.DisableAsync(ProjectId);
+            await IngestionSettingsService.DisableAsync(ProjectId, IngestionClientId);
             await LoadIngestionSettings();
             IngestionMessage = "CRM lead ingestion disabled.";
         }
@@ -862,8 +867,9 @@ public sealed class CrmViewModel : PageViewModel
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
-                "{{CrmIngestionSettingsService.TokenHeader}}": "{{NewIngestionToken
-                ?? "YOUR_TOKEN"}}"
+                "{{CrmIngestionSettingsService.TokenHeader}}": "{{(NewIngestionToken
+                ?? SelectedIngestionSetting?.TokenPrefix
+                ?? "YOUR_TOKEN")}}"
               },
               body: JSON.stringify({
                 address: "123 Example Street, Brisbane QLD 4000"
@@ -1062,296 +1068,7 @@ public sealed class CrmViewModel : PageViewModel
         ArtifactSearch = "";
         ArtifactSourceFilter = "all";
         ConfirmArtifactRemoveId = null;
-        PortalMessage = null;
         await Task.WhenAll(LoadRuns(), LoadCommunications(), LoadArtifacts(), LoadClientChainAssignments());
-    }
-
-    public void OpenPortalProvisioningFor(CrmClientView client)
-    {
-        PortalTarget = client;
-        PortalDomain = client.CustomerPortalDomain ?? "";
-        PortalCustomerSlug = !string.IsNullOrWhiteSpace(client.CustomerPortalSlug)
-            ? client.CustomerPortalSlug
-            : client.Name;
-        PortalBrandName = client.CustomerPortalBrandName ?? "";
-        PortalBrandLogoUrl = client.CustomerPortalLogoUrl ?? "";
-        PortalUserName = "";
-        PortalPassword = "";
-        PortalMessage = null;
-        PortalProvisioningOpen = true;
-    }
-
-    public void OpenPortalProvisioning(string? customerName = null)
-    {
-        if (Selected is null)
-            return;
-
-        OpenPortalProvisioningFor(Selected);
-
-        if (!string.IsNullOrWhiteSpace(customerName))
-            PortalCustomerSlug = customerName;
-    }
-
-    public void ClosePortalProvisioning()
-    {
-        PortalProvisioningOpen = false;
-        PortalTarget = null;
-        PortalMessage = null;
-        PortalUserName = "";
-        PortalPassword = "";
-        PortalBrandName = "";
-        PortalBrandLogoUrl = "";
-    }
-
-    public async Task SavePortalProvisioning()
-    {
-        if (PortalTarget is null && Selected is null)
-            return;
-
-        var target = PortalTarget ?? Selected;
-        if (target is null)
-            return;
-
-        SavingPortal = true;
-        PortalMessage = null;
-        try
-        {
-            var saved = await ConfigurePortalAsync(target);
-            var defaultPortalUserName = string.IsNullOrWhiteSpace(PortalUserName) ? null : PortalUserName.Trim();
-            var defaultPortalUserEmail = string.IsNullOrWhiteSpace(saved.Email) ? null : saved.Email;
-            if (Selected?.Id == saved.Id)
-                Selected = saved;
-            if (PortalTarget?.Id == saved.Id)
-                PortalTarget = saved;
-            await RefreshClients();
-            if (string.IsNullOrWhiteSpace(defaultPortalUserName) || string.IsNullOrWhiteSpace(defaultPortalUserEmail))
-            {
-                await TryCreateOrUpdatePortalUserAsync(saved, PortalUserName, PortalPassword);
-                PortalMessage = string.IsNullOrWhiteSpace(PortalUserName)
-                    ? "Customer portal provisioned."
-                    : "Customer portal provisioned and portal user updated.";
-            }
-            else
-            {
-                PortalMessage = "Customer portal provisioned and default portal user seeded.";
-            }
-            PortalProvisioningOpen = false;
-            PortalTarget = null;
-            PortalUserName = "";
-            PortalPassword = "";
-            PortalBrandName = "";
-            PortalBrandLogoUrl = "";
-        }
-        catch (Exception ex)
-        {
-            PortalMessage = ex.Message;
-        }
-        finally
-        {
-            SavingPortal = false;
-        }
-    }
-
-    public async Task RedeployPortal()
-    {
-        if (PortalTarget is null && Selected is null)
-            return;
-
-        var target = PortalTarget ?? Selected;
-        if (target is null || !target.CustomerPortalEnabled)
-            return;
-
-        PortalRedeploying = true;
-        PortalMessage = null;
-        try
-        {
-            var saved = await ConfigurePortalAsync(target);
-            if (Selected?.Id == saved.Id)
-                Selected = saved;
-            if (PortalTarget?.Id == saved.Id)
-                PortalTarget = saved;
-            await RefreshClients();
-            PortalMessage = "Customer portal redeploy requested.";
-            PortalProvisioningOpen = false;
-            PortalTarget = null;
-            PortalUserName = "";
-            PortalPassword = "";
-            PortalBrandName = "";
-            PortalBrandLogoUrl = "";
-            PortalCustomerSlug = "";
-            PortalDomain = "";
-        }
-        catch (Exception ex)
-        {
-            PortalMessage = ex.Message;
-        }
-        finally
-        {
-            PortalRedeploying = false;
-        }
-    }
-
-    private async Task TryCreateOrUpdatePortalUserAsync(CrmClientView client, string userName, string password)
-    {
-        if (string.IsNullOrWhiteSpace(userName))
-            return;
-
-        var host = BuildPortalHost(client, PortalCustomerSlug, PortalDomain);
-        var key = Configuration[ProvisioningKey];
-        if (string.IsNullOrWhiteSpace(key))
-            throw new InvalidOperationException("Customer portal provisioning is not configured.");
-
-        var clientApi = HttpClientFactory.CreateClient();
-        clientApi.BaseAddress = new Uri($"{host}/");
-        clientApi.DefaultRequestHeaders.Add("X-PlaceContext-Provisioning-Key", key);
-        clientApi.DefaultRequestHeaders.Add("X-PlaceContext-Tenant-Id", CurrentTenant.TenantId.ToString());
-        var payload = new
-        {
-            username = userName.Trim(),
-            password = string.IsNullOrWhiteSpace(password) ? null : password.Trim(),
-            role = "admin"
-        };
-        using var response = await clientApi.PostAsJsonAsync(ProvisionUsersRoute, payload);
-        if (!response.IsSuccessStatusCode)
-        {
-            var detail = await TryReadErrorDetailAsync(response);
-            throw new InvalidOperationException(detail ?? $"Portal user provisioning failed ({(int)response.StatusCode}).");
-        }
-    }
-
-    private string BuildPortalHost(CrmClientView? client, string slugInput, string domainInput)
-    {
-        if (!string.IsNullOrWhiteSpace(domainInput))
-            return $"https://{domainInput.Trim()}";
-
-        var slug = !string.IsNullOrWhiteSpace(slugInput)
-            ? Slugify(slugInput)
-            : (client is not null ? Slugify(client.CustomerPortalSlug ?? client.Name) : "customer");
-
-        return $"{Nav.BaseUri.TrimEnd('/')}/p/{slug}";
-    }
-
-    public async Task InviteSelectedToPortalAsync()
-    {
-        if (Selected?.Email is not { Length: > 0 } email)
-        {
-            PortalMessage = "This client has no email address.";
-            return;
-        }
-
-        PortalInviting = true;
-        PortalMessage = null;
-        try
-        {
-            if (!SelectedPortalEnabled)
-                throw new InvalidOperationException("Configure and enable the customer portal first.");
-
-            var key = Configuration[ProvisioningKey];
-            if (string.IsNullOrWhiteSpace(key))
-                throw new InvalidOperationException("Customer portal provisioning is not configured.");
-
-            var client = HttpClientFactory.CreateClient();
-            client.BaseAddress = new Uri($"{SelectedPortalHost}/");
-            client.DefaultRequestHeaders.Add("X-PlaceContext-Provisioning-Key", key);
-            client.DefaultRequestHeaders.Add("X-PlaceContext-Tenant-Id", CurrentTenant.TenantId.ToString());
-            using var response = await client.PostAsJsonAsync(
-                ProvisionUsersRoute,
-                new { email = email.Trim(), role = PortalInviteRole }
-            );
-            if (!response.IsSuccessStatusCode)
-                throw new InvalidOperationException($"Portal invitation failed ({(int)response.StatusCode}).");
-
-            PortalMessage = $"Invitation sent to {email.Trim()}.";
-        }
-        catch (Exception ex)
-        {
-            PortalMessage = ex.Message;
-        }
-        finally
-        {
-            PortalInviting = false;
-        }
-    }
-
-    private async Task<CrmClientView> ConfigurePortalAsync(CrmClientView target)
-    {
-        var slug = string.IsNullOrWhiteSpace(PortalCustomerSlug)
-            ? Slugify(target.Name)
-            : Slugify(PortalCustomerSlug);
-        var defaultPortalUserName = string.IsNullOrWhiteSpace(PortalUserName) ? null : PortalUserName.Trim();
-        var defaultPortalUserEmail = string.IsNullOrWhiteSpace(target.Email) ? null : target.Email?.Trim();
-        return await Svc.ConfigureCrmClientPortalAsync(
-            target.Id,
-            true,
-            slug,
-            string.IsNullOrWhiteSpace(PortalDomain) ? null : PortalDomain.Trim(),
-            string.IsNullOrWhiteSpace(PortalBrandName) ? null : PortalBrandName.Trim(),
-            string.IsNullOrWhiteSpace(PortalBrandLogoUrl) ? null : PortalBrandLogoUrl.Trim(),
-            defaultPortalUserName,
-            defaultPortalUserEmail,
-            string.IsNullOrWhiteSpace(PortalPassword) ? null : PortalPassword.Trim()
-        );
-    }
-
-    public async Task ImpersonateSelectedToPortalAsync()
-    {
-        if (Selected?.Email is not { Length: > 0 } email)
-        {
-            PortalMessage = "This client has no email address.";
-            return;
-        }
-
-        PortalImpersonating = true;
-        PortalMessage = null;
-        try
-        {
-            if (!SelectedPortalEnabled)
-                throw new InvalidOperationException("Configure and enable the customer portal first.");
-
-            var key = Configuration[ProvisioningKey];
-            if (string.IsNullOrWhiteSpace(key))
-                throw new InvalidOperationException("Customer portal provisioning is not configured.");
-
-            var client = HttpClientFactory.CreateClient();
-            client.BaseAddress = new Uri($"{SelectedPortalHost}/");
-            client.DefaultRequestHeaders.Add("X-PlaceContext-Provisioning-Key", key);
-            client.DefaultRequestHeaders.Add("X-PlaceContext-Tenant-Id", CurrentTenant.TenantId.ToString());
-            using var response = await client.PostAsJsonAsync(
-                "/api/provision/impersonate",
-                new { email = email.Trim() }
-            );
-            if (!response.IsSuccessStatusCode)
-            {
-                var detail = await TryReadErrorDetailAsync(response);
-                throw new InvalidOperationException(detail ?? $"Impersonation failed ({(int)response.StatusCode}).");
-            }
-
-            var payload = await response.Content.ReadFromJsonAsync<PortalImpersonateResponse>();
-            Nav.NavigateTo($"{SelectedPortalHost}{payload.Url}", forceLoad: true);
-        }
-        catch (Exception ex)
-        {
-            PortalMessage = ex.Message;
-        }
-        finally
-        {
-            PortalImpersonating = false;
-        }
-    }
-
-    private static async Task<string?> TryReadErrorDetailAsync(HttpResponseMessage response)
-    {
-        try
-        {
-            using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-            return json.RootElement.TryGetProperty("error", out var error)
-                ? error.GetString()
-                : null;
-        }
-        catch (Exception)
-        {
-            return null;
-        }
     }
 
     public void CloseClient()
@@ -1361,7 +1078,6 @@ public sealed class CrmViewModel : PageViewModel
         Communications = Array.Empty<CrmCommunicationView>();
         ClientArtifacts = Array.Empty<CrmClientArtifactView>();
         SelectedClientChainIds = new HashSet<Guid>();
-        PortalMessage = null;
         ClientChainAssignmentMessage = null;
         LoadingClientChainAssignments = false;
         SavingClientChainAssignments = false;
@@ -1992,5 +1708,3 @@ public sealed class CrmViewModel : PageViewModel
         return string.Concat(parts.Take(2).Select(part => char.ToUpperInvariant(part[0])));
     }
 }
-
-public sealed record PortalImpersonateResponse(string Url);

@@ -35,4 +35,8 @@
     <EmbeddedResource Include="Workload\Scripts\**\*" />
   </ItemGroup>
 
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
 </Project>

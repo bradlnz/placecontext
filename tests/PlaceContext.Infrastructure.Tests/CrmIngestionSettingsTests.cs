@@ -28,7 +28,7 @@ public sealed class CrmIngestionSettingsTests
         await db.SaveChangesAsync();
         var service = new CrmIngestionSettingsService(db, tenant);
 
-        var rotated = await service.RotateAsync(project.Id, "https://forms.example.com/");
+        var rotated = await service.RotateAsync(project.Id, Guid.Empty, "https://forms.example.com/");
 
         Assert.StartsWith("pc_crm_", rotated.Token);
         Assert.Equal("https://forms.example.com", rotated.Settings.AllowedOrigin);
@@ -40,7 +40,7 @@ public sealed class CrmIngestionSettingsTests
         Assert.Equal(project.Id, resolved.ProjectId);
         Assert.Equal(tenantId, resolved.Tenant.Id);
 
-        await service.DisableAsync(project.Id);
+        await service.DisableAsync(project.Id, Guid.Empty);
         Assert.Null(await service.ResolveAsync(rotated.Token));
     }
 

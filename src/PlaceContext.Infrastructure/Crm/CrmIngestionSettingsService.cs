@@ -9,6 +9,7 @@ namespace PlaceContext.Infrastructure.Crm;
 
 public sealed record CrmIngestionSettingsView(
     Guid ProjectId,
+    Guid ClientId,
     string AllowedOrigin,
     bool Enabled,
     string? TokenPrefix,
@@ -19,6 +20,7 @@ public sealed record CrmIngestionTokenResult(CrmIngestionSettingsView Settings, 
 public sealed record ResolvedCrmIngestion(
     Guid ProjectId,
     TenantInfo Tenant,
+    Guid ClientId,
     string AllowedOrigin);
 
 /// <summary>
@@ -34,20 +36,21 @@ public sealed class CrmIngestionSettingsService
     public CrmIngestionSettingsService(AppDbContext db, ICurrentTenant tenant)
         => (_db, _tenant) = (db, tenant);
 
-    public async Task<CrmIngestionSettingsView> GetAsync(
+    public async Task<IReadOnlyList<CrmIngestionSettingsView>> GetAsync(
         Guid projectId,
         CancellationToken ct = default)
     {
         await EnsureProjectAsync(projectId, ct);
-        var row = await _db.CrmIngestionSettings.AsNoTracking()
-            .FirstOrDefaultAsync(item => item.ProjectId == projectId, ct);
-        return row is null
-            ? new CrmIngestionSettingsView(projectId, "", false, null, null)
-            : ToView(row);
+        var rows = await _db.CrmIngestionSettings.AsNoTracking()
+            .Where(item => item.ProjectId == projectId)
+            .OrderBy(item => item.ClientId)
+            .ToListAsync(ct);
+        return rows.Select(ToView).ToList();
     }
 
     public async Task<CrmIngestionSettingsView> SaveOriginAsync(
         Guid projectId,
+        Guid clientId,
         string origin,
         CancellationToken ct = default)
     {
@@ -55,12 +58,13 @@ public sealed class CrmIngestionSettingsService
         var normalized = NormalizeOrigin(origin);
         var now = DateTimeOffset.UtcNow;
         var row = await _db.CrmIngestionSettings
-            .FirstOrDefaultAsync(item => item.ProjectId == projectId, ct);
+            .FirstOrDefaultAsync(item => item.ProjectId == projectId && item.ClientId == clientId, ct);
         if (row is null)
         {
             row = new CrmIngestionSettingsRow
             {
                 ProjectId = projectId,
+                ClientId = clientId,
                 TenantId = _tenant.TenantId,
                 AllowedOrigin = normalized,
                 CreatedAt = now,
@@ -79,12 +83,13 @@ public sealed class CrmIngestionSettingsService
 
     public async Task<CrmIngestionTokenResult> RotateAsync(
         Guid projectId,
+        Guid clientId,
         string origin,
         CancellationToken ct = default)
     {
-        await SaveOriginAsync(projectId, origin, ct);
+        await SaveOriginAsync(projectId, clientId, origin, ct);
         var row = await _db.CrmIngestionSettings.SingleAsync(
-            item => item.ProjectId == projectId, ct);
+            item => item.ProjectId == projectId && item.ClientId == clientId, ct);
         var token = NewToken();
         row.TokenHash = Hash(token);
         row.TokenPrefix = token[..Math.Min(15, token.Length)] + "…";
@@ -93,11 +98,11 @@ public sealed class CrmIngestionSettingsService
         return new CrmIngestionTokenResult(ToView(row), token);
     }
 
-    public async Task DisableAsync(Guid projectId, CancellationToken ct = default)
+    public async Task DisableAsync(Guid projectId, Guid clientId, CancellationToken ct = default)
     {
         await EnsureProjectAsync(projectId, ct);
         var row = await _db.CrmIngestionSettings
-            .FirstOrDefaultAsync(item => item.ProjectId == projectId, ct);
+            .FirstOrDefaultAsync(item => item.ProjectId == projectId && item.ClientId == clientId, ct);
         if (row is null) return;
         row.TokenHash = null;
         row.TokenPrefix = null;
@@ -118,6 +123,7 @@ public sealed class CrmIngestionSettingsService
             select new ResolvedCrmIngestion(
                 settings.ProjectId,
                 new TenantInfo(tenant.Id, tenant.Slug, tenant.Name, tenant.TimeZoneId),
+                settings.ClientId,
                 settings.AllowedOrigin))
             .SingleOrDefaultAsync(ct);
     }
@@ -154,7 +160,7 @@ public sealed class CrmIngestionSettingsService
     }
 
     private static CrmIngestionSettingsView ToView(CrmIngestionSettingsRow row)
-        => new(row.ProjectId, row.AllowedOrigin, row.TokenHash is not null,
+        => new(row.ProjectId, row.ClientId, row.AllowedOrigin, row.TokenHash is not null,
             row.TokenPrefix, row.UpdatedAt);
 
     private static string NewToken()

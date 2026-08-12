@@ -307,7 +307,8 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
         b.Entity<CrmIngestionSettingsRow>(e =>
         {
             e.ToTable("crm_ingestion_settings");
-            e.HasKey(x => x.ProjectId);
+            e.HasKey(x => new { x.ProjectId, x.ClientId });
+            e.HasIndex(x => x.ProjectId);
             e.HasIndex(x => x.TokenHash).IsUnique();
             e.HasIndex(x => x.AllowedOrigin);
             e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);

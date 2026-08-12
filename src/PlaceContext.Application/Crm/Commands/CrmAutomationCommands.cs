@@ -13,17 +13,17 @@ public sealed record SaveCrmAutomationRuleCommand(
     bool Enabled = true,
     Guid? RuleId = null) : ICommand<CrmAutomationRuleView>, IRequiresPermission
 {
-    public string RequiredPermission => Permission.DataWrite;
+    public string RequiredPermission => Permission.CrmAutomationManage;
 }
 
 public sealed record SetCrmAutomationEnabledCommand(Guid RuleId, bool Enabled)
     : ICommand<CrmAutomationRuleView>, IRequiresPermission
 {
-    public string RequiredPermission => Permission.DataWrite;
+    public string RequiredPermission => Permission.CrmAutomationManage;
 }
 
 public sealed record DeleteCrmAutomationRuleCommand(Guid RuleId)
     : ICommand<bool>, IRequiresPermission
 {
-    public string RequiredPermission => Permission.DataWrite;
+    public string RequiredPermission => Permission.CrmAutomationManage;
 }

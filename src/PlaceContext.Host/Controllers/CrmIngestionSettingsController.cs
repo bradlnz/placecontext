@@ -24,7 +24,7 @@ public sealed class CrmIngestionSettingsController : ControllerBase
         [FromBody] SaveCrmIngestionSettingsRequest request,
         CancellationToken ct)
     {
-        try { return Ok(await _settings.SaveOriginAsync(request.ProjectId, request.AllowedOrigin, ct)); }
+        try { return Ok(await _settings.SaveOriginAsync(request.ProjectId, request.ClientId, request.AllowedOrigin, ct)); }
         catch (ArgumentException ex) { return BadRequest(new { error = ex.Message }); }
         catch (InvalidOperationException ex) { return NotFound(new { error = ex.Message }); }
     }
@@ -34,17 +34,23 @@ public sealed class CrmIngestionSettingsController : ControllerBase
         [FromBody] SaveCrmIngestionSettingsRequest request,
         CancellationToken ct)
     {
-        try { return Ok(await _settings.RotateAsync(request.ProjectId, request.AllowedOrigin, ct)); }
+        try { return Ok(await _settings.RotateAsync(request.ProjectId, request.ClientId, request.AllowedOrigin, ct)); }
         catch (ArgumentException ex) { return BadRequest(new { error = ex.Message }); }
         catch (InvalidOperationException ex) { return NotFound(new { error = ex.Message }); }
     }
 
     [HttpDelete]
-    public async Task<IActionResult> Disable([FromQuery] Guid projectId, CancellationToken ct)
+    public async Task<IActionResult> Disable(
+        [FromQuery] Guid projectId,
+        [FromQuery] Guid? clientId,
+        CancellationToken ct)
     {
-        await _settings.DisableAsync(projectId, ct);
+        await _settings.DisableAsync(projectId, clientId ?? Guid.Empty, ct);
         return NoContent();
     }
 
-    public sealed record SaveCrmIngestionSettingsRequest(Guid ProjectId, string AllowedOrigin);
+    public sealed record SaveCrmIngestionSettingsRequest(
+        Guid ProjectId,
+        Guid ClientId,
+        string AllowedOrigin);
 }

@@ -208,21 +208,25 @@ public sealed class RunCrmClientAutomationHandler
     private readonly ICrmClientRepository _clients;
     private readonly ICrmChainRunRepository _crmRuns;
     private readonly IJobChainRepository _chains;
+    private readonly ICrmClientJobChainAssignmentRepository _assignments;
     private readonly ICommandHandler<RunJobChainCommand, ChainRunView> _chainRunner;
     private readonly IRunArtifactLinkRepository _runArtifacts;
     private readonly ICrmClientArtifactRepository _clientArtifacts;
+    private readonly IPermissionService? _permissions;
     private readonly IUnitOfWork _uow;
 
     public RunCrmClientAutomationHandler(
         ICrmClientRepository clients,
         ICrmChainRunRepository crmRuns,
         IJobChainRepository chains,
+        ICrmClientJobChainAssignmentRepository assignments,
         ICommandHandler<RunJobChainCommand, ChainRunView> chainRunner,
         IRunArtifactLinkRepository runArtifacts,
         ICrmClientArtifactRepository clientArtifacts,
-        IUnitOfWork uow)
-        => (_clients, _crmRuns, _chains, _chainRunner, _runArtifacts, _clientArtifacts, _uow)
-            = (clients, crmRuns, chains, chainRunner, runArtifacts, clientArtifacts, uow);
+        IUnitOfWork uow,
+        IPermissionService? permissions = null)
+        => (_clients, _crmRuns, _chains, _assignments, _chainRunner, _runArtifacts, _clientArtifacts, _permissions, _uow)
+            = (clients, crmRuns, chains, assignments, chainRunner, runArtifacts, clientArtifacts, permissions, uow);
 
     public async Task<CrmChainRunView> HandleAsync(
         RunCrmClientAutomationCommand command,
@@ -234,6 +238,13 @@ public sealed class RunCrmClientAutomationHandler
             ?? throw new InvalidOperationException($"Job chain {command.ChainId} not found.");
         if (chain.ProjectId != client.ProjectId)
             throw new InvalidOperationException("The job chain and client must belong to the same project.");
+        if (_permissions is null || !await _permissions.HasAsync(Permission.CrmAutomationManage, ct))
+        {
+            var assigned = (await _assignments.ListForClientAsync(client.ProjectId, client.Id, ct))
+                .ToHashSet();
+            if (!assigned.Contains(command.ChainId))
+                throw new InvalidOperationException("This automation is not assigned to this client.");
+        }
 
         var payload = JsonSerializer.Serialize(new
         {

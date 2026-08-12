@@ -1009,7 +1009,9 @@ namespace PlaceContext.Infrastructure.Migrations
             modelBuilder.Entity("PlaceContext.Infrastructure.Persistence.CrmIngestionSettingsRow", b =>
                 {
                     b.Property<Guid>("ProjectId")
-                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ClientId")
                         .HasColumnType("uuid");
 
                     b.Property<string>("AllowedOrigin")
@@ -1035,9 +1037,11 @@ namespace PlaceContext.Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasDefaultValueSql("now()");
 
-                    b.HasKey("ProjectId");
+                    b.HasKey("ProjectId", "ClientId");
 
                     b.HasIndex("AllowedOrigin");
+
+                    b.HasIndex("ProjectId");
 
                     b.HasIndex("TokenHash")
                         .IsUnique();

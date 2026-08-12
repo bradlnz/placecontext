@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Text.Json;
 using FluentValidation;
 using Microsoft.AspNetCore.Authorization;
@@ -105,20 +106,39 @@ public sealed class CrmIngestionController : ControllerBase
         {
             CrmClientView? result = null;
             CrmClient? existing = null;
+            CrmClient? endpointClient = resolved.ClientId == Guid.Empty
+                ? null
+                : await _clients.GetByIdAsync(resolved.ClientId, ct);
+            if (endpointClient is not null && endpointClient.ProjectId != resolved.ProjectId)
+                endpointClient = null;
             if (isLead)
             {
-                existing = await _clients.FindByContactAsync(
-                    resolved.ProjectId, request!.Email, request.Phone, ct);
+                var normalizedEmail = Clean(request!.Email);
+                var normalizedPhone = NormalizePhone(Clean(request.Phone));
+                var matched = (await _clients.FindByContactMatchesAsync(
+                    resolved.ProjectId, normalizedEmail, normalizedPhone, ct)).ToList();
+                if (endpointClient is not null && !matched.Any(client => client.Id == endpointClient.Id))
+                    matched = matched.Append(endpointClient).ToList();
+                existing = endpointClient ?? CanonicalClient(matched, normalizedEmail, normalizedPhone);
+                if (endpointClient is not null && existing is null)
+                    existing = endpointClient;
+                if (existing is not null)
+                    await ConsolidateClientProfileClusterAsync(
+                        resolved.ProjectId, existing, matched, ct);
                 var submissionNotes = BuildNotes(request);
-                var notes = existing is null
+                var groupedNotes = BuildGroupingNotes(matched, existing);
+                var combinedSubmissionNotes = groupedNotes is null
                     ? submissionNotes
-                    : AppendNotes(existing.Notes, submissionNotes);
+                    : AppendNotes(submissionNotes, groupedNotes);
+                var notes = existing is null
+                    ? combinedSubmissionNotes
+                    : AppendNotes(existing.Notes, combinedSubmissionNotes);
                 result = await _save.HandleAsync(new SaveCrmClientCommand(
                     resolved.ProjectId,
                     request.Name!.Trim(),
                     Clean(request.Company) ?? existing?.Company,
-                    Clean(request.Email) ?? existing?.Email,
-                    Clean(request.Phone) ?? existing?.Phone,
+                    normalizedEmail ?? existing?.Email,
+                    normalizedPhone ?? existing?.Phone,
                     existing?.LifecycleStage ?? CustomerLifecycleStage.Lead,
                     notes,
                     existing?.Id), ct);
@@ -309,25 +329,158 @@ public sealed class CrmIngestionController : ControllerBase
 
     private static string? BuildNotes(LeadIngestionRequest request)
     {
-        var parts = new List<string>();
-        if (!string.IsNullOrWhiteSpace(request.Message)) parts.Add(request.Message.Trim());
-        if (!string.IsNullOrWhiteSpace(request.Source)) parts.Add($"Source: {request.Source.Trim()}");
-        if (request.Metadata is { Count: > 0 })
-            parts.Add("Metadata: " + JsonSerializer.Serialize(request.Metadata));
-        if (parts.Count == 0) return "Lead received through CRM ingestion endpoint.";
-        return string.Join(Environment.NewLine + Environment.NewLine, parts);
+        var profilePoint = new Dictionary<string, object?>
+        {
+            ["source"] = "crm.ingestion",
+            ["event"] = "lead.ingested",
+            ["receivedAtUtc"] = DateTimeOffset.UtcNow.ToString("O"),
+            ["data"] = new Dictionary<string, object?>
+            {
+                ["name"] = request.Name?.Trim(),
+                ["email"] = Clean(request.Email),
+                ["phone"] = NormalizePhone(Clean(request.Phone)),
+                ["company"] = Clean(request.Company),
+                ["address"] = Clean(request.Address),
+                ["website"] = Clean(request.Website),
+                ["message"] = Clean(request.Message),
+                ["source"] = Clean(request.Source),
+                ["metadata"] = request.Metadata,
+            },
+        };
+        return "Contact form data point:" + Environment.NewLine
+            + JsonSerializer.Serialize(profilePoint, WebJson);
     }
 
     private static string? AppendNotes(string? current, string? submission)
     {
         if (string.IsNullOrWhiteSpace(current)) return submission;
         if (string.IsNullOrWhiteSpace(submission)) return current;
-        var combined = $"{current.Trim()}\n\n--- Contact form submission ---\n{submission.Trim()}";
+        var combined = $"{current.Trim()}\n\n--- Contact form data point ---\n{submission.Trim()}";
         return combined.Length <= 50_000 ? combined : combined[^50_000..];
     }
 
     private static string? Clean(string? value)
         => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private static string? NormalizePhone(string? phone)
+    {
+        if (string.IsNullOrWhiteSpace(phone)) return null;
+        var cleaned = new string(phone.Where(ch => char.IsDigit(ch) || ch == '+').ToArray());
+        return cleaned.Length == 0 ? null : cleaned;
+    }
+
+    private static CrmClient? CanonicalClient(
+        IReadOnlyList<CrmClient> matches,
+        string? normalizedEmail,
+        string? normalizedPhone)
+    {
+        if (matches.Count == 0) return null;
+        if (normalizedEmail is not null)
+        {
+            var byEmail = matches.FirstOrDefault(client =>
+                string.Equals(client.Email, normalizedEmail, StringComparison.OrdinalIgnoreCase));
+            if (byEmail is not null) return byEmail;
+        }
+        if (normalizedPhone is not null)
+        {
+            var byPhone = matches.FirstOrDefault(client =>
+                string.Equals(NormalizePhone(client.Phone), normalizedPhone, StringComparison.Ordinal));
+            if (byPhone is not null) return byPhone;
+        }
+        return matches.OrderBy(client => client.CreatedAt).FirstOrDefault();
+    }
+
+    private async Task ConsolidateClientProfileClusterAsync(
+        Guid projectId,
+        CrmClient canonical,
+        IReadOnlyList<CrmClient> matches,
+        CancellationToken ct)
+    {
+        var duplicateIds = matches
+            .Where(client => client.Id != canonical.Id)
+            .Select(client => client.Id)
+            .ToArray();
+        if (duplicateIds.Length == 0) return;
+
+        var duplicateSet = duplicateIds.ToHashSet();
+
+        var duplicateCommunications = await _db.CrmCommunications
+            .Where(item => item.ProjectId == projectId && duplicateSet.Contains(item.ClientId))
+            .ToListAsync(ct);
+        foreach (var row in duplicateCommunications)
+            row.ClientId = canonical.Id;
+
+        var duplicateArtifacts = await _db.CrmClientArtifacts
+            .Where(item => item.ProjectId == projectId && duplicateSet.Contains(item.ClientId))
+            .ToListAsync(ct);
+        foreach (var row in duplicateArtifacts)
+            row.ClientId = canonical.Id;
+
+        var duplicateChainRuns = await _db.CrmChainRuns
+            .Where(item => item.ProjectId == projectId && duplicateSet.Contains(item.ClientId))
+            .ToListAsync(ct);
+        foreach (var row in duplicateChainRuns)
+            row.ClientId = canonical.Id;
+
+        var duplicateJobRuns = await _db.CrmJobRuns
+            .Where(item => item.ProjectId == projectId && duplicateSet.Contains(item.ClientId))
+            .ToListAsync(ct);
+        foreach (var row in duplicateJobRuns)
+            row.ClientId = canonical.Id;
+
+        var canonicalChainIds = (await _db.CrmClientJobChainAssignments
+            .Where(item => item.ProjectId == projectId && item.ClientId == canonical.Id)
+            .Select(item => item.ChainId)
+            .ToListAsync(ct))
+            .ToHashSet();
+        var duplicateAssignments = await _db.CrmClientJobChainAssignments
+            .Where(item => item.ProjectId == projectId && duplicateSet.Contains(item.ClientId))
+            .ToListAsync(ct);
+        foreach (var row in duplicateAssignments)
+        {
+            if (canonicalChainIds.Contains(row.ChainId))
+            {
+                _db.CrmClientJobChainAssignments.Remove(row);
+                continue;
+            }
+
+            row.ClientId = canonical.Id;
+            canonicalChainIds.Add(row.ChainId);
+        }
+
+        var duplicateAppointments = await _db.CrmAppointments
+            .Where(item => item.ProjectId == projectId && item.ClientId.HasValue
+                && duplicateSet.Contains(item.ClientId.Value))
+            .ToListAsync(ct);
+        foreach (var row in duplicateAppointments)
+            row.ClientId = canonical.Id;
+
+        var duplicateQueueEntries = await _db.CrmAutomationQueue
+            .Where(item => item.ProjectId == projectId && item.ClientId.HasValue
+                && duplicateSet.Contains(item.ClientId.Value))
+            .ToListAsync(ct);
+        foreach (var row in duplicateQueueEntries)
+            row.ClientId = canonical.Id;
+
+        var duplicateClients = await _db.CrmClients
+            .Where(item => item.ProjectId == projectId && duplicateSet.Contains(item.Id))
+            .ToListAsync(ct);
+        _db.CrmClients.RemoveRange(duplicateClients);
+    }
+
+    private static string? BuildGroupingNotes(
+        IReadOnlyList<CrmClient> matches,
+        CrmClient? canonical)
+    {
+        if (canonical is null) return null;
+        var groupedIds = matches.Where(client => client.Id != canonical.Id)
+            .Select(client => client.Id)
+            .ToList();
+        if (groupedIds.Count == 0) return null;
+
+        return $"Grouped profile cluster ({groupedIds.Count} other profile(s) merged for lead correlation): " +
+               string.Join(", ", groupedIds);
+    }
 
 }
 

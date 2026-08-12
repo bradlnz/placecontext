@@ -11,5 +11,11 @@ public interface ICrmClientRepository
     Task<CrmClient?> FindByContactAsync(
         Guid projectId, string? email, string? phone, CancellationToken ct = default)
         => Task.FromResult<CrmClient?>(null);
+    Task<IReadOnlyList<CrmClient>> FindByContactMatchesAsync(
+        Guid projectId,
+        string? email,
+        string? phone,
+        CancellationToken ct = default)
+        => Task.FromResult<IReadOnlyList<CrmClient>>(Array.Empty<CrmClient>());
     Task<IReadOnlyList<CrmClient>> ListForProjectAsync(Guid projectId, CancellationToken ct = default);
 }

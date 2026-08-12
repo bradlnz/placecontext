@@ -65,10 +65,18 @@ public sealed class EfCrmClientRepository : ICrmClientRepository
         string? email,
         string? phone,
         CancellationToken ct = default)
+        => (await FindByContactMatchesAsync(projectId, email, phone, ct))
+            .FirstOrDefault();
+
+    public async Task<IReadOnlyList<CrmClient>> FindByContactMatchesAsync(
+        Guid projectId,
+        string? email,
+        string? phone,
+        CancellationToken ct = default)
     {
         var normalizedEmail = email?.Trim();
-        var normalizedPhone = phone?.Trim();
-        if (normalizedEmail is null && normalizedPhone is null) return null;
+        var normalizedPhone = NormalizePhone(phone);
+        if (normalizedEmail is null && normalizedPhone is null) return Array.Empty<CrmClient>();
 
         // Data Protection uses randomized authenticated encryption, so equality over ciphertext is
         // deliberately impossible. Scope by the non-sensitive ProjectId in SQL, then compare the
@@ -77,11 +85,12 @@ public sealed class EfCrmClientRepository : ICrmClientRepository
         var rows = await _db.CrmClients.AsNoTracking()
             .Where(c => c.ProjectId == projectId)
             .ToListAsync(ct);
-        return rows.Select(ToDomain).FirstOrDefault(client =>
+        return rows.Select(ToDomain).Where(client =>
             (normalizedEmail is not null
                 && string.Equals(client.Email, normalizedEmail, StringComparison.OrdinalIgnoreCase))
             || (normalizedPhone is not null
-                && string.Equals(client.Phone, normalizedPhone, StringComparison.Ordinal)));
+                && string.Equals(NormalizePhone(client.Phone), normalizedPhone, StringComparison.Ordinal))
+        ).ToList();
     }
 
     public async Task<IReadOnlyList<CrmClient>> ListForProjectAsync(
@@ -138,4 +147,11 @@ public sealed class EfCrmClientRepository : ICrmClientRepository
     private string Unprotect(string value) => _encryptor.Unprotect(value, Purpose);
     private string? ProtectNullable(string? value) => value is null ? null : Protect(value);
     private string? UnprotectNullable(string? value) => value is null ? null : Unprotect(value);
+
+    private static string? NormalizePhone(string? phone)
+    {
+        if (string.IsNullOrWhiteSpace(phone)) return null;
+        var digits = new string(phone.Where(ch => char.IsDigit(ch) || ch == '+').ToArray());
+        return digits.Length == 0 ? null : digits;
+    }
 }
