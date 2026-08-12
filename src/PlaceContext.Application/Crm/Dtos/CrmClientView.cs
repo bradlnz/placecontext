@@ -9,11 +9,6 @@ public sealed record CrmClientView(
     string? Phone,
     string LifecycleStage,
     string? Notes,
-    bool CustomerPortalEnabled,
-    string? CustomerPortalSlug,
-    string? CustomerPortalDomain,
-    string? CustomerPortalBrandName,
-    string? CustomerPortalLogoUrl,
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt);
 

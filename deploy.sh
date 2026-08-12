@@ -37,9 +37,6 @@ fi
 docker build -t registry.digitalocean.com/ctrlsignalregistryimg/placecontext:latest -f Dockerfile . 2>&1 | tail -3
 docker push registry.digitalocean.com/ctrlsignalregistryimg/placecontext:latest 2>&1 | tail -3
 
-docker build -t registry.digitalocean.com/ctrlsignalregistryimg/placecontext-customer-portal:latest -f Dockerfile.customer-portal . 2>&1 | tail -3
-docker push registry.digitalocean.com/ctrlsignalregistryimg/placecontext-customer-portal:latest 2>&1 | tail -3
-
 printf '%s\n' "$sync_token" | ssh -o BatchMode=yes -i "$ssh_key" "$app_host" '
 read -r sync_token
 set -euo pipefail
@@ -49,38 +46,6 @@ kubectl -n placecontext create secret generic opensearch-sync \
 unset sync_token
 kubectl -n placecontext set env deployment/placecontext \
   PlaceContext__OpenSearch__SyncEndpoint=http://100.116.60.120:9340/v1/sync
-
-# Keep customer-portal API authentication aligned with portal deployments by sourcing the same
-# shared secret key into the host env from customer-portal-secrets/core-api-key.
-customer_portal_api_key_patch=$(cat <<'PATCH'
-{
-  "spec": {
-    "template": {
-      "spec": {
-        "containers": [
-          {
-            "name": "host",
-            "env": [
-              {
-                "name": "PlaceContext__CustomerPortal__ApiKey",
-                "valueFrom": {
-                  "secretKeyRef": {
-                    "name": "customer-portal-secrets",
-                    "key": "core-api-key",
-                    "optional": true
-                  }
-                }
-              }
-            ]
-          }
-        ]
-      }
-    }
-  }
-}
-PATCH
-)
-kubectl -n placecontext patch deployment/placecontext --type=strategic -p "$customer_portal_api_key_patch"
 kubectl -n placecontext set env deployment/placecontext --from=secret/opensearch-sync
 '
 

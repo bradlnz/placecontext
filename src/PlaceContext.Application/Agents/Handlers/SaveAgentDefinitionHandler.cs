@@ -41,20 +41,22 @@ public sealed class SaveAgentDefinitionHandler(
                 throw new InvalidOperationException("Agent does not belong to this project.");
 
             var parentAgentId = ResolveParentAgentId(agent.Id, agent.Kind, command.ParentAgentId, projectAgents);
+            var schema = string.IsNullOrWhiteSpace(command.Schema) ? "{}" : command.Schema;
 
             agent.Update(command.Name, command.Description, instructions, command.TemplateKey,
-                capabilities, command.AllowedJobIds, command.Enabled, parentAgentId, clock.UtcNow);
+                capabilities, command.AllowedJobIds, command.Enabled, parentAgentId, clock.UtcNow, schema);
             await repository.UpdateAsync(agent, ct);
         }
         else
         {
+            var schema = string.IsNullOrWhiteSpace(command.Schema) ? "{}" : command.Schema;
             var parentAgentId = ResolveParentAgentId(null, AgentKind.Worker, command.ParentAgentId, projectAgents);
             agent = AgentDefinition.CreateWorker(command.ProjectId, command.Name, command.Description,
-                instructions, command.TemplateKey, capabilities, command.AllowedJobIds,
+                instructions, command.TemplateKey, schema, capabilities, command.AllowedJobIds,
                 parentAgentId, clock.UtcNow);
             if (!command.Enabled)
                 agent.Update(agent.Name, agent.Description, agent.Instructions, agent.TemplateKey,
-                    agent.Capabilities, agent.AllowedJobIds, false, parentAgentId, clock.UtcNow);
+                    agent.Capabilities, agent.AllowedJobIds, false, parentAgentId, clock.UtcNow, agent.Schema);
             await repository.AddAsync(agent, ct);
         }
 

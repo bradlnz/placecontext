@@ -7,7 +7,6 @@ namespace PlaceContext.Infrastructure.Tenancy;
 public interface ITenantStore
 {
     Task<TenantInfo?> FindBySlugAsync(string slug, CancellationToken ct = default);
-    Task<TenantInfo?> FindByCustomerPortalDomainAsync(string domain, CancellationToken ct = default);
     /// <summary>Resolves the tenant for a slug, provisioning one on first sight (self-service signup).</summary>
     Task<TenantInfo> GetOrCreateAsync(string slug, CancellationToken ct = default);
     /// <summary>Lists all known tenants. Used for startup warmers and admin operations.</summary>
@@ -15,6 +14,4 @@ public interface ITenantStore
     Task<TenantRow?> GetRowAsync(Guid tenantId, CancellationToken ct = default);
     Task SaveGitHubAsync(Guid tenantId, string githubLogin, string accessToken, CancellationToken ct = default);
     Task SetTimeZoneAsync(Guid tenantId, string timeZoneId, CancellationToken ct = default);
-    Task SetCustomerPortalDomainAsync(Guid tenantId, string? domain, CancellationToken ct = default);
-    Task SetCustomerPortalEnabledAsync(Guid tenantId, bool enabled, CancellationToken ct = default);
 }

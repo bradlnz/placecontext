@@ -1,4 +1,4 @@
-.chains-page { width:min(1120px, 100%); margin:0 auto; padding:24px 24px 48px }
+.chains-page { width:100%; max-width:none; margin:0; padding:20px 24px 32px }
 .chains-head { display:flex; align-items:flex-start; justify-content:space-between; gap:20px; margin-bottom:18px }
 .chains-head h2 { margin:0; font-size:20px; font-weight:650 }
 .chains-head p { margin:6px 0 0; color:var(--text-3); font-size:12.5px }

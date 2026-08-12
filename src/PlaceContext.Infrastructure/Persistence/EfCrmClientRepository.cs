@@ -28,11 +28,6 @@ public sealed class EfCrmClientRepository : ICrmClientRepository
         row.Phone = ProtectNullable(client.Phone);
         row.LifecycleStage = client.LifecycleStage.ToString();
         row.Notes = ProtectNullable(client.Notes);
-        row.CustomerPortalEnabled = client.CustomerPortalEnabled;
-        row.CustomerPortalSlug = client.CustomerPortalSlug;
-        row.CustomerPortalDomain = client.CustomerPortalDomain;
-        row.CustomerPortalBrandName = client.CustomerPortalBrandName;
-        row.CustomerPortalLogoUrl = client.CustomerPortalLogoUrl;
         row.UpdatedAt = client.UpdatedAt;
     }
 
@@ -114,11 +109,6 @@ public sealed class EfCrmClientRepository : ICrmClientRepository
         Phone = ProtectNullable(client.Phone),
         LifecycleStage = client.LifecycleStage.ToString(),
         Notes = ProtectNullable(client.Notes),
-        CustomerPortalEnabled = client.CustomerPortalEnabled,
-        CustomerPortalSlug = client.CustomerPortalSlug,
-        CustomerPortalDomain = client.CustomerPortalDomain,
-        CustomerPortalBrandName = client.CustomerPortalBrandName,
-        CustomerPortalLogoUrl = client.CustomerPortalLogoUrl,
         CreatedAt = client.CreatedAt,
         UpdatedAt = client.UpdatedAt,
     };
@@ -135,11 +125,6 @@ public sealed class EfCrmClientRepository : ICrmClientRepository
                 ? stage
                 : CustomerLifecycleStage.Lead,
             UnprotectNullable(row.Notes),
-            row.CustomerPortalEnabled,
-            row.CustomerPortalSlug,
-            row.CustomerPortalDomain,
-            row.CustomerPortalBrandName,
-            row.CustomerPortalLogoUrl,
             row.CreatedAt,
             row.UpdatedAt);
 

@@ -75,9 +75,9 @@ public sealed class AgentWorkspaceHandlerTests
 
         var command = AgentDefinition.CreateCommand(projectId, Now);
         var parent = AgentDefinition.CreateWorker(
-            projectId, "Parent", "", "", "research", [AgentCapability.GraphRead], [], command.Id, Now);
+            projectId, "Parent", "", "", "research", "{}", [AgentCapability.GraphRead], [], command.Id, Now);
         var child = AgentDefinition.CreateWorker(
-            projectId, "Child", "", "", "research", [AgentCapability.GraphRead], [], parent.Id, Now);
+            projectId, "Child", "", "", "research", "{}", [AgentCapability.GraphRead], [], parent.Id, Now);
 
         await repository.AddAsync(command);
         await repository.AddAsync(parent);
@@ -130,7 +130,7 @@ public sealed class AgentWorkspaceHandlerTests
         var deniedJob = Guid.NewGuid();
         var agent = AgentDefinition.CreateWorker(
             Guid.NewGuid(), "Operator", "", "", "job-operator",
-            [AgentCapability.JobsRead, AgentCapability.JobsRun], [allowedJob], null, Now);
+            "{}", [AgentCapability.JobsRead, AgentCapability.JobsRun], [allowedJob], null, Now);
 
         Assert.True(AgentToolAuthorization.CanUse(agent, AgentToolNames.ListJobs, ""));
         Assert.True(AgentToolAuthorization.CanUse(agent, AgentToolNames.RunJob, allowedJob.ToString()));
@@ -144,9 +144,9 @@ public sealed class AgentWorkspaceHandlerTests
         var projectId = Guid.NewGuid();
         var repository = new InMemoryAgentDefinitionRepository();
         var research = AgentDefinition.CreateWorker(projectId, "Research", "", "Find evidence", "research",
-            [AgentCapability.GraphRead, AgentCapability.DataRead], [], null, Now);
+            "{}", [AgentCapability.GraphRead, AgentCapability.DataRead], [], null, Now);
         var operations = AgentDefinition.CreateWorker(projectId, "Operations", "", "Plan execution", "operations",
-            [AgentCapability.GraphRead, AgentCapability.JobsRun], [], null, Now);
+            "{}", [AgentCapability.GraphRead, AgentCapability.JobsRun], [], null, Now);
         await repository.AddAsync(AgentDefinition.CreateCommand(projectId, Now));
         await repository.AddAsync(research);
         await repository.AddAsync(operations);

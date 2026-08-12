@@ -9,11 +9,11 @@ public sealed class CrmViewModelTests
     [Fact]
     public void Customer_detail_yields_primary_position_to_action_panels()
     {
-        var viewModel = new CrmViewModel(null!, null!, null!, null!, null!, null!, null!, null!, null!, null!)
+        var viewModel = new CrmViewModel(null!, null!, null!, null!, null!, null!, null!)
         {
             Selected = new CrmClientView(
                 Guid.NewGuid(), Guid.NewGuid(), "Acme", null, null, null, "Lead", null,
-                false, null, null, null, null, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow)
+                DateTimeOffset.UtcNow, DateTimeOffset.UtcNow)
         };
 
         Assert.True(viewModel.ShowCustomerDetailPanel);
@@ -21,10 +21,6 @@ public sealed class CrmViewModelTests
         viewModel.ShowEditor = true;
         Assert.False(viewModel.ShowCustomerDetailPanel);
         viewModel.ShowEditor = false;
-
-        viewModel.PortalProvisioningOpen = true;
-        Assert.False(viewModel.ShowCustomerDetailPanel);
-        viewModel.PortalProvisioningOpen = false;
 
         viewModel.NotesMetadataOpen = true;
         Assert.False(viewModel.ShowCustomerDetailPanel);

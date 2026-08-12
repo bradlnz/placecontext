@@ -13,6 +13,7 @@ public sealed class AgentDefinition : AggregateRoot
         string description,
         string instructions,
         string templateKey,
+        string schema,
         IReadOnlyList<AgentCapability> capabilities,
         IReadOnlyList<Guid> allowedJobIds,
         bool enabled,
@@ -26,6 +27,7 @@ public sealed class AgentDefinition : AggregateRoot
         Name = name;
         Description = description;
         Instructions = instructions;
+        Schema = schema;
         TemplateKey = templateKey;
         Capabilities = capabilities;
         AllowedJobIds = allowedJobIds;
@@ -41,6 +43,7 @@ public sealed class AgentDefinition : AggregateRoot
     public string Name { get; private set; }
     public string Description { get; private set; }
     public string Instructions { get; private set; }
+    public string Schema { get; private set; }
     public string TemplateKey { get; private set; }
     public IReadOnlyList<AgentCapability> Capabilities { get; private set; }
     public IReadOnlyList<Guid> AllowedJobIds { get; private set; }
@@ -56,7 +59,7 @@ public sealed class AgentDefinition : AggregateRoot
             Guid.NewGuid(), projectId, AgentKind.Command, "Command Agent",
             "Routes work to the right agent and coordinates the final response.",
             "Coordinate worker agents toward the shared goal. Choose the least-privileged capable collaborators for each request, combine their contributions, and use the project data graph as the authoritative knowledge source.",
-            "command", Enum.GetValues<AgentCapability>(), [], true, null, now, now);
+            "command", "{}", Enum.GetValues<AgentCapability>(), [], true, null, now, now);
     }
 
     public static AgentDefinition CreateWorker(
@@ -65,6 +68,7 @@ public sealed class AgentDefinition : AggregateRoot
         string description,
         string instructions,
         string templateKey,
+        string schema,
         IEnumerable<AgentCapability> capabilities,
         IEnumerable<Guid> allowedJobIds,
         Guid? parentAgentId,
@@ -74,7 +78,8 @@ public sealed class AgentDefinition : AggregateRoot
         EnsureName(name);
         return new AgentDefinition(
             Guid.NewGuid(), projectId, AgentKind.Worker, name.Trim(), Normalize(description, 500, nameof(description)),
-            Normalize(instructions, 12_000, nameof(instructions)), Normalize(templateKey, 100, nameof(templateKey)), NormalizeCapabilities(capabilities),
+            Normalize(instructions, 12_000, nameof(instructions)), Normalize(templateKey, 100, nameof(templateKey)), NormalizeSchema(schema),
+            NormalizeCapabilities(capabilities),
             NormalizeJobs(allowedJobIds), true, parentAgentId, now, now);
     }
 
@@ -86,13 +91,16 @@ public sealed class AgentDefinition : AggregateRoot
         string description,
         string instructions,
         string templateKey,
+        string schema,
         IEnumerable<AgentCapability> capabilities,
         IEnumerable<Guid> allowedJobIds,
         bool enabled,
         Guid? parentAgentId,
         DateTimeOffset createdAt,
         DateTimeOffset updatedAt)
-        => new(id, projectId, kind, name, description, instructions, templateKey,
+        => new(id, projectId, kind, name, description, instructions,
+            templateKey,
+            kind == AgentKind.Command ? "{}" : NormalizeSchema(schema),
             kind == AgentKind.Command ? Enum.GetValues<AgentCapability>() : NormalizeCapabilities(capabilities),
             kind == AgentKind.Command ? [] : NormalizeJobs(allowedJobIds),
             kind == AgentKind.Command || enabled, kind == AgentKind.Command ? null : parentAgentId, createdAt, updatedAt);
@@ -106,13 +114,15 @@ public sealed class AgentDefinition : AggregateRoot
         IEnumerable<Guid> allowedJobIds,
         bool enabled,
         Guid? parentAgentId,
-        DateTimeOffset updatedAt)
+        DateTimeOffset updatedAt,
+        string schema)
     {
         EnsureName(name);
         Name = name.Trim();
         Description = Normalize(description, 500, nameof(description));
         Instructions = Normalize(instructions, 12_000, nameof(instructions));
         TemplateKey = Normalize(templateKey, 100, nameof(templateKey));
+        Schema = NormalizeSchema(schema);
         Capabilities = Kind == AgentKind.Command
             ? Enum.GetValues<AgentCapability>()
             : NormalizeCapabilities(capabilities);
@@ -137,6 +147,16 @@ public sealed class AgentDefinition : AggregateRoot
         var normalized = value?.Trim() ?? string.Empty;
         if (normalized.Length > maxLength)
             throw new ArgumentException($"{parameterName} must be {maxLength} characters or fewer.", parameterName);
+        return normalized;
+    }
+
+    private static string NormalizeSchema(string? value)
+    {
+        var normalized = value?.Trim() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(normalized))
+            throw new ArgumentException("Schema is required.", nameof(value));
+        if (normalized.Length > 12_000)
+            throw new ArgumentException("Schema must be 12,000 characters or fewer.", nameof(value));
         return normalized;
     }
 

@@ -1,5 +1,4 @@
 using System.Text.Json;
-using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using PlaceContext.Application.Ports;
@@ -24,15 +23,13 @@ public sealed class MenuConfigService : IMenuConfigService
     private readonly ICurrentTenant _tenant;
     private readonly IPermissionService _perms;
     private readonly ICurrentUser _currentUser;
-    private readonly IHttpContextAccessor _httpContext;
 
-    public MenuConfigService(IServiceScopeFactory scopeFactory, ICurrentTenant tenant, IPermissionService perms, ICurrentUser currentUser, IHttpContextAccessor httpContext)
+    public MenuConfigService(IServiceScopeFactory scopeFactory, ICurrentTenant tenant, IPermissionService perms, ICurrentUser currentUser)
     {
         _scopeFactory = scopeFactory;
         _tenant = tenant;
         _perms = perms;
         _currentUser = currentUser;
-        _httpContext = httpContext;
     }
 
     /// <summary>Built-in catalog — ids are stable; do not rename without a migration of stored layouts.</summary>
@@ -52,10 +49,9 @@ public sealed class MenuConfigService : IMenuConfigService
         new("artifacts", "Artifacts", "link", "/artifacts", Permission.ArtifactsView, "file", null),
         new("observability", "Observability", "link", "/observability", Permission.JobsView, "pulse", null),
         new("cluster", "Cluster", "link", "/cluster", Permission.SettingsManage, "box", null),
-        new("sec-workspace", "Workspace", "section", null, null, null, "Workspace"),
-        new("wiki", "Wiki", "link", "/wiki", null, "ledger", "Workspace"),
-        new("settings", "Settings", "link", "/settings/branding", Permission.SettingsManage, "key", "Workspace"),
-        new("about", "About", "link", "/about", null, "grid", "Workspace"),
+        new("wiki", "Wiki", "link", "/wiki", null, "ledger"),
+        new("settings", "Settings", "link", "/settings/branding", Permission.SettingsManage, "key"),
+        new("about", "About", "link", "/about", null, "grid"),
     };
 
     internal sealed record CatalogItem(
@@ -108,7 +104,6 @@ public sealed class MenuConfigService : IMenuConfigService
     public async Task<IReadOnlyList<ResolvedMenuItem>> GetWorkspaceMenuAsync(Guid? projectId, CancellationToken ct = default)
     {
         var layout = await GetLayoutAsync(ct);
-        var isPortal = IsCustomerPortalRequest();
         var perms = await SafePermsAsync(ct);
         var isDefaultAdmin = await SafeIsDefaultAdminAsync(ct);
         var byId = WorkspaceCatalog.ToDictionary(c => c.Id, StringComparer.Ordinal);
@@ -116,11 +111,11 @@ public sealed class MenuConfigService : IMenuConfigService
         foreach (var o in layout.Workspace.OrderBy(x => x.Order))
         {
             if (!o.Visible || !byId.TryGetValue(o.Id, out var cat)) continue;
-            if (isPortal && !string.Equals(o.Id, "crm", StringComparison.Ordinal))
-                continue;
             if (cat.Kind == "section")
             {
-                items.Add(new ResolvedMenuItem(cat.Id, o.Label ?? cat.DefaultLabel, "section", null, null, o.Section ?? cat.DefaultSection, o.Order));
+                var section = NormalizeSection(o.Section) ?? NormalizeSection(cat.DefaultSection);
+                if (string.IsNullOrWhiteSpace(section) && string.IsNullOrWhiteSpace(o.Label)) continue;
+                items.Add(new ResolvedMenuItem(cat.Id, o.Label ?? cat.DefaultLabel, "section", null, null, section, o.Order));
                 continue;
             }
             if (cat.RequiredPermission is not null && !perms.Contains(cat.RequiredPermission)) continue;
@@ -144,10 +139,15 @@ public sealed class MenuConfigService : IMenuConfigService
                 .Replace("{projectId}", projectId?.ToString() ?? "", StringComparison.Ordinal);
             items.Add(new ResolvedMenuItem(
                 cat.Id, o.Label ?? cat.DefaultLabel, cat.Kind, href, cat.Icon,
-                o.Section ?? cat.DefaultSection, o.Order, cat.Parent));
+                NormalizeSection(o.Section) ?? NormalizeSection(cat.DefaultSection), o.Order, cat.Parent));
         }
         return items;
     }
+
+    private static string? NormalizeSection(string? section) =>
+        string.Equals(section?.Trim(), "Workspace", StringComparison.OrdinalIgnoreCase)
+            ? null
+            : section;
 
     private async Task<HashSet<string>> SafePermsAsync(CancellationToken ct)
     {
@@ -232,7 +232,4 @@ public sealed class MenuConfigService : IMenuConfigService
 
     private sealed record MenuLayoutDto(List<MenuItemDto>? Workspace);
     private sealed record MenuItemDto(string Id, string? Label, int Order, bool Visible, string? Section);
-
-    private bool IsCustomerPortalRequest()
-        => _httpContext.HttpContext?.Items.ContainsKey("PlaceContext.CustomerPortalDomain") == true;
 }

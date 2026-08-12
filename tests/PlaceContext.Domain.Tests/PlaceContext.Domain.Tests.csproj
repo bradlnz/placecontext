@@ -19,7 +19,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\PlaceContext.Domain\PlaceContext.Domain.csproj" />
-    <ProjectReference Include="..\PlaceContext.TestSupport\PlaceContext.TestSupport.csproj" />
   </ItemGroup>
 
 </Project>

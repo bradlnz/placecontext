@@ -10,10 +10,6 @@ public sealed class TenantRow
     public string Slug { get; set; } = "";
     public string Name { get; set; } = "";
     public string TimeZoneId { get; set; } = "UTC";
-    /// <summary>Optional fully-qualified host serving this tenant's customer portal.</summary>
-    public string? CustomerPortalDomain { get; set; }
-    /// <summary>Whether external customer-portal accounts may be provisioned for this tenant.</summary>
-    public bool CustomerPortalEnabled { get; set; }
     public string? GitHubLogin { get; set; }
     public string? GitHubToken { get; set; }
     /// <summary>Whitelabel branding JSON ({productName, logoDataUri, colors…}); null = default look.</summary>

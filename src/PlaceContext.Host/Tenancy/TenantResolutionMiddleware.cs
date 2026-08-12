@@ -15,42 +15,7 @@ public sealed class TenantResolutionMiddleware
     public async Task Invoke(HttpContext context, ITenantStore store, TenantHolder holder)
     {
         var host = context.Request.Host.Host;
-        TenantInfo? customDomainTenant = null;
-        if (context.Request.Path.StartsWithSegments("/api/customer-portal"))
-        {
-            if (!Guid.TryParse(context.Request.Headers["X-PlaceContext-Tenant-Id"], out var apiTenantId))
-            {
-                context.Response.StatusCode = StatusCodes.Status400BadRequest;
-                await context.Response.WriteAsync("X-PlaceContext-Tenant-Id is required.");
-                return;
-            }
-
-            var row = await store.GetRowAsync(apiTenantId, context.RequestAborted);
-            if (row is null)
-            {
-                context.Response.StatusCode = StatusCodes.Status404NotFound;
-                return;
-            }
-
-            if (!row.CustomerPortalEnabled)
-            {
-                context.Response.StatusCode = StatusCodes.Status403Forbidden;
-                await context.Response.WriteAsync("Customer portal accounts are disabled for this tenant.");
-                return;
-            }
-
-            customDomainTenant = new TenantInfo(row.Id, row.Slug, row.Name, row.TimeZoneId);
-        }
-        else
-        {
-            customDomainTenant = await store.FindByCustomerPortalDomainAsync(host, context.RequestAborted);
-        }
-
-        var tenant = customDomainTenant ?? await store.GetOrCreateAsync(ResolveSlug(host), context.RequestAborted);
-        if (customDomainTenant is not null)
-        {
-            context.Items["PlaceContext.CustomerPortalDomain"] = true;
-        }
+        var tenant = await store.GetOrCreateAsync(ResolveSlug(host), context.RequestAborted);
         CurrentTenant.Set(tenant);
         holder.Tenant = tenant;
         await _next(context);

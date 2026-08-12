@@ -943,6 +943,18 @@ else
                             <strong>@selected.Name</strong>
                         </div>
                         <p>@selected.Description</p>
+                        @if (selected.MapSourceKind == "code")
+                        {
+                            <div class="template-detail-section">Language</div>
+                            <select class="dcinput" @bind="Vm.SelectedTemplateRuntime">
+                                <option value="node">node</option>
+                                <option value="python">python</option>
+                                <option value="go">go</option>
+                                <option value="ruby">ruby</option>
+                                <option value="dotnet">.NET (C#)</option>
+                            </select>
+                            <div class="dchint">Starter code is provided for node and python; other runtimes get a generic stdin/stdout skeleton.</div>
+                        }
                         @if (selected.RequiredCredentials.Count > 0)
                         {
                             <div class="template-detail-section">Required vault credentials</div>

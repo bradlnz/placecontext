@@ -58,7 +58,17 @@ public sealed class MainLayoutViewModel : PageViewModel, IDisposable
     private readonly HashSet<string> _expanded = new(StringComparer.Ordinal);
     private Guid? _entitiesFor;
     private bool _focusSearch;
+    private bool _focusCli;
+    private bool _scrollCliOutput;
     private ElementReference _searchInput;
+    private const int CliLineLimit = 400;
+    private const string CliDefaultWorkingDir = "/workspace";
+    private readonly List<string> _cliLines = new();
+    private readonly List<string> _cliWelcome = new()
+    {
+        "Welcome to the Virtual CLI.",
+        "Type 'help' to list available commands."
+    };
 
     public MainLayoutViewModel(
         PortalUiState ui,
@@ -103,6 +113,11 @@ public sealed class MainLayoutViewModel : PageViewModel, IDisposable
         SearchTerm.Trim().Length >= 2
             ? $"No matches for “{SearchTerm}”."
             : "Type at least 2 characters to search this workspace.";
+    public bool CliOpen { get; private set; }
+    public string CliInput { get; set; } = string.Empty;
+    public string CliPrompt => $"{CliWorkingDir}>";
+    public string CliWorkingDir => CliDefaultWorkingDir;
+    public IReadOnlyList<string> CliLines => _cliLines;
     public string ThemeToggleLabel => Theme == ThemeNames.Dark ? "light" : "dark";
     public bool IsLightTheme => Theme == ThemeNames.Light;
     public string BrandCssOverrides => Brand.CssOverrides();
@@ -155,7 +170,12 @@ public sealed class MainLayoutViewModel : PageViewModel, IDisposable
         RefreshRunningCount();
     }
 
-    public async Task AfterRenderAsync(bool firstRender, ElementReference searchInput)
+    public async Task AfterRenderAsync(
+        bool firstRender,
+        ElementReference searchInput,
+        ElementReference cliInput,
+        ElementReference cliOutput
+    )
     {
         _searchInput = searchInput;
         if (firstRender)
@@ -170,6 +190,24 @@ public sealed class MainLayoutViewModel : PageViewModel, IDisposable
             try
             {
                 await _searchInput.FocusAsync();
+            }
+            catch { }
+        }
+        if (_focusCli)
+        {
+            _focusCli = false;
+            try
+            {
+                await cliInput.FocusAsync();
+            }
+            catch { }
+        }
+        if (_scrollCliOutput)
+        {
+            _scrollCliOutput = false;
+            try
+            {
+                await _js.InvokeVoidAsync("placecontext.scrollToBottom", cliOutput);
             }
             catch { }
         }
@@ -259,6 +297,114 @@ public sealed class MainLayoutViewModel : PageViewModel, IDisposable
         _focusSearch = true;
         SearchTerm = string.Empty;
         SearchResults = null;
+    }
+
+    public Task ToggleCliAsync()
+    {
+        if (CliOpen)
+            CloseCli();
+        else
+            OpenCli();
+        return Task.CompletedTask;
+    }
+
+    public void OpenCli()
+    {
+        if (!CliOpen)
+            SetCliWelcome();
+        CliOpen = true;
+        _focusCli = true;
+        _scrollCliOutput = true;
+        if (_cliLines.Count == 0)
+            _cliLines.Add("No session output yet.");
+        NotifyStateChanged();
+    }
+
+    public void CloseCli()
+    {
+        CliOpen = false;
+        NotifyStateChanged();
+    }
+
+    public async Task SubmitCliCommandAsync()
+    {
+        var command = (CliInput ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(command))
+            return;
+
+        var normalized = command.ToLowerInvariant();
+        var commandLine = $"{CliPrompt} {command}";
+        AddCliLine(commandLine);
+        CliInput = string.Empty;
+
+        switch (normalized)
+        {
+            case "help":
+                AddCliLine("Available commands:");
+                AddCliLine("  help        Show this command list");
+                AddCliLine("  clear       Clear output history");
+                AddCliLine("  status      Show quick portal status");
+                AddCliLine("  echo <msg>  Print a message");
+                AddCliLine("  close       Close the virtual CLI");
+                AddCliLine("  date        Show local timestamp");
+                break;
+            case "clear":
+                _cliLines.Clear();
+                AddCliLine("Session output cleared.");
+                break;
+            case "close":
+                AddCliLine("Closing CLI...");
+                NotifyStateChanged();
+                await Task.Delay(120);
+                CloseCli();
+                return;
+            case "status":
+                AddCliLine($"Workspace: {CurrentProjectName ?? "no project"}");
+                AddCliLine($"Running tasks: {RunningCount}");
+                break;
+            case "date":
+                AddCliLine(DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ"));
+                break;
+            default:
+                if (normalized.StartsWith("echo "))
+                {
+                    AddCliLine(command.Length > 5 ? command[5..] : string.Empty);
+                }
+                else
+                {
+                    AddCliLine($"Command not found: {command}");
+                }
+                break;
+        }
+
+        _focusCli = true;
+        _scrollCliOutput = true;
+        NotifyStateChanged();
+    }
+
+    public Task HandleCliKeyAsync(string key)
+    {
+        if (key == "Escape")
+            CloseCli();
+        else if (key == "Enter")
+            return SubmitCliCommandAsync();
+        return Task.CompletedTask;
+    }
+
+    private void AddCliLine(string line)
+    {
+        _cliLines.Add(line);
+        if (_cliLines.Count > CliLineLimit)
+            _cliLines.RemoveRange(0, _cliLines.Count - CliLineLimit);
+        _scrollCliOutput = true;
+    }
+
+    private void SetCliWelcome()
+    {
+        if (_cliLines.Count > 0)
+            return;
+        foreach (var line in _cliWelcome)
+            AddCliLine(line);
     }
 
     public void CloseSearch() => SearchOpen = false;

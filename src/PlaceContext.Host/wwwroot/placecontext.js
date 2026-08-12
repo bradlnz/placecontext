@@ -79,6 +79,7 @@ window.placecontext = {
     const layerSelector = [
       '.dcmodal-overlay',
       '.dcsearch-overlay',
+      '.cli-overlay',
       '.table-modal-overlay',
       '.cluster-overlay',
       '.editor-backdrop',
@@ -90,6 +91,7 @@ window.placecontext = {
       '[role="dialog"]',
       '.dcmodal',
       '.dcsearch-modal',
+      '.cli-shell',
       '.table-modal',
       '.join-dialog'
     ].join(',');

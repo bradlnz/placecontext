@@ -1,13 +1,7 @@
 @inject RoutesViewModel Vm
-@inject AuthenticationStateProvider AuthStateProvider
-@inject IHttpContextAccessor HttpContextAccessor
-@inject NavigationManager Nav
-@inject PlaceContext.Application.IPlaceContextService PlaceContextService
 @implements IDisposable
-@using Microsoft.AspNetCore.Components.Routing
-@using Microsoft.AspNetCore.Http
 
-<Router AppAssembly="@typeof(Program).Assembly" OnNavigateAsync="RouteGateAsync">
+<Router AppAssembly="@typeof(Program).Assembly">
     <Found Context="routeData">
         <AuthorizeRouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)">
             <NotAuthorized>
@@ -26,88 +20,4 @@
 @code {
     protected override void OnInitialized() => Vm.Attach(() => InvokeAsync(StateHasChanged));
     public void Dispose() => Vm.Dispose();
-
-    private Task RouteGateAsync(NavigationContext context)
-    {
-        if (!IsCustomerPortalDomain())
-            return Task.CompletedTask;
-
-        return EnforcePortalOnlyNavigation(context);
-    }
-
-    private async Task EnforcePortalOnlyNavigation(NavigationContext context)
-    {
-        var isAuthenticated = await AuthStateProvider.GetAuthenticationStateAsync();
-        if (isAuthenticated.User.Identity?.IsAuthenticated != true)
-            return;
-
-        var path = context.Path;
-        if (string.IsNullOrWhiteSpace(path))
-            return;
-
-        if (IsPortalAllowedRoute(path))
-            return;
-
-        var fallbackProject = await ResolvePortalFallbackProjectAsync(path);
-        if (fallbackProject is null)
-            return;
-
-        var current = context.Path.TrimEnd('/');
-        var target = fallbackProject.Value.ToString("D");
-        var destination = $"/project/{target}/crm";
-        if (!string.Equals(current, destination, StringComparison.OrdinalIgnoreCase))
-            Nav.NavigateTo(destination, forceLoad: false);
-    }
-
-    private bool IsCustomerPortalDomain()
-        => HttpContextAccessor.HttpContext?.Items.ContainsKey("PlaceContext.CustomerPortalDomain") == true;
-
-    private static bool IsPortalCrmRoute(string path)
-    {
-        if (!path.StartsWith("/project/", StringComparison.OrdinalIgnoreCase))
-            return false;
-
-        var parts = path.Split('/', StringSplitOptions.RemoveEmptyEntries);
-        return parts.Length >= 3
-            && string.Equals(parts[0], "project", StringComparison.OrdinalIgnoreCase)
-            && Guid.TryParse(parts[1], out _)
-            && string.Equals(parts[2], "crm", StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static bool IsPortalAllowedRoute(string path)
-        => path == "/"
-            || IsPortalCrmRoute(path);
-
-    private async Task<Guid?> ResolvePortalFallbackProjectAsync(string path)
-    {
-        if (TryResolveProjectFromPath(path, out var projectId))
-            return projectId;
-
-        if (_fallbackPortalProjectId is not null)
-            return _fallbackPortalProjectId == Guid.Empty ? null : _fallbackPortalProjectId;
-
-        try
-        {
-            var projects = await PlaceContextService.GetProjectsAsync();
-            _fallbackPortalProjectId = projects.FirstOrDefault()?.Id ?? Guid.Empty;
-        }
-        catch
-        {
-            _fallbackPortalProjectId = Guid.Empty;
-        }
-
-        return _fallbackPortalProjectId == Guid.Empty ? null : _fallbackPortalProjectId;
-    }
-
-    private static bool TryResolveProjectFromPath(string path, out Guid projectId)
-    {
-        projectId = Guid.Empty;
-        if (!path.StartsWith("/project/", StringComparison.OrdinalIgnoreCase))
-            return false;
-
-        var parts = path.Split('/', StringSplitOptions.RemoveEmptyEntries);
-        return parts.Length >= 2 && Guid.TryParse(parts[1], out projectId);
-    }
-
-    private Guid? _fallbackPortalProjectId;
 }

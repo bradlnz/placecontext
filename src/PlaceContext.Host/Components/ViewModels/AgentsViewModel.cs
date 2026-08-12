@@ -47,6 +47,7 @@ public sealed class AgentsViewModel(IPlaceContextService service, PortalUiState 
     public string EditDescription { get; set; } = string.Empty;
     public string EditInstructions { get; set; } = string.Empty;
     public string EditTemplateKey { get; private set; } = string.Empty;
+    public string EditSchema { get; set; } = string.Empty;
     public bool EditEnabled { get; set; } = true;
     public Guid? EditParentAgentId { get; set; }
     public HashSet<AgentCapability> EditCapabilities { get; } = [];
@@ -92,6 +93,7 @@ public sealed class AgentsViewModel(IPlaceContextService service, PortalUiState 
         EditDescription = agent.Description;
         EditInstructions = agent.Instructions;
         EditTemplateKey = agent.TemplateKey;
+        EditSchema = agent.Schema;
         EditEnabled = agent.Enabled;
         EditParentAgentId = agent.ParentAgentId;
         EditCapabilities.Clear();
@@ -373,6 +375,7 @@ public sealed class AgentsViewModel(IPlaceContextService service, PortalUiState 
         EditDescription = template.Description;
         EditInstructions = template.Instructions;
         EditTemplateKey = template.Key;
+        EditSchema = string.Empty;
         EditParentAgentId = CommandAgent?.Id;
         EditEnabled = true;
         EditCapabilities.Clear();
@@ -391,6 +394,7 @@ public sealed class AgentsViewModel(IPlaceContextService service, PortalUiState 
         EditDescription = string.Empty;
         EditInstructions = string.Empty;
         EditTemplateKey = string.Empty;
+        EditSchema = string.Empty;
         EditParentAgentId = CommandAgent?.Id;
         EditEnabled = true;
         EditCapabilities.Clear();
@@ -441,9 +445,10 @@ public sealed class AgentsViewModel(IPlaceContextService service, PortalUiState 
         NotifyStateChanged();
         try
         {
+            var schema = string.IsNullOrWhiteSpace(EditSchema) ? "{}" : EditSchema;
             await service.SaveAgentDefinitionAsync(new SaveAgentDefinitionCommand(
                 ProjectId, EditId, EditName, EditDescription, EditInstructions, EditTemplateKey,
-                EditCapabilities.ToArray(), EditAllowedJobs.ToArray(), EditParentAgentId, EditEnabled));
+                EditCapabilities.ToArray(), EditAllowedJobs.ToArray(), EditParentAgentId, EditEnabled, schema));
             EditorOpen = false;
             Agents = await service.ListAgentDefinitionsAsync(ProjectId);
             SetMessage("Agent saved.", false);

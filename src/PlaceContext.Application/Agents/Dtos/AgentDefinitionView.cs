@@ -10,6 +10,7 @@ public sealed record AgentDefinitionView(
     string Description,
     string Instructions,
     string TemplateKey,
+    string Schema,
     IReadOnlyList<AgentCapability> Capabilities,
     IReadOnlyList<Guid> AllowedJobIds,
     Guid? ParentAgentId,

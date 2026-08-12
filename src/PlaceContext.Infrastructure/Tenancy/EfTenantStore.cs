@@ -14,14 +14,6 @@ public sealed class EfTenantStore : ITenantStore
         return row is null ? null : ToInfo(row);
     }
 
-    public async Task<TenantInfo?> FindByCustomerPortalDomainAsync(string domain, CancellationToken ct = default)
-    {
-        var normalized = NormalizeDomain(domain);
-        if (normalized is null) return null;
-        var row = await _db.Tenants.AsNoTracking().FirstOrDefaultAsync(t => t.CustomerPortalDomain == normalized, ct);
-        return row is null ? null : ToInfo(row);
-    }
-
     public async Task<TenantInfo> GetOrCreateAsync(string slug, CancellationToken ct = default)
     {
         var row = await _db.Tenants.FirstOrDefaultAsync(t => t.Slug == slug, ct);
@@ -78,31 +70,6 @@ public sealed class EfTenantStore : ITenantStore
         if (row is null) return;
         row.TimeZoneId = timeZoneId;
         await _db.SaveChangesAsync(ct);
-    }
-
-    public async Task SetCustomerPortalDomainAsync(Guid tenantId, string? domain, CancellationToken ct = default)
-    {
-        var row = await _db.Tenants.FirstOrDefaultAsync(t => t.Id == tenantId, ct);
-        if (row is null) return;
-        row.CustomerPortalDomain = NormalizeDomain(domain);
-        await _db.SaveChangesAsync(ct);
-    }
-
-    public async Task SetCustomerPortalEnabledAsync(Guid tenantId, bool enabled, CancellationToken ct = default)
-    {
-        var row = await _db.Tenants.FirstOrDefaultAsync(t => t.Id == tenantId, ct);
-        if (row is null) return;
-        row.CustomerPortalEnabled = enabled;
-        await _db.SaveChangesAsync(ct);
-    }
-
-    private static string? NormalizeDomain(string? domain)
-    {
-        if (string.IsNullOrWhiteSpace(domain)) return null;
-        var value = domain.Trim().ToLowerInvariant();
-        if (value.Contains('/') || value.Contains(':') || value.Length > 253 || value.Any(char.IsWhiteSpace))
-            throw new ArgumentException("Use a hostname only, for example crm.example.com.", nameof(domain));
-        return value.TrimEnd('.');
     }
 
     private static TenantInfo ToInfo(TenantRow r) => new(r.Id, r.Slug, r.Name, r.TimeZoneId);

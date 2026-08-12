@@ -259,11 +259,6 @@ public sealed class TargetPageViewModelTests
         public Task<TenantInfo?> FindBySlugAsync(string slug, CancellationToken ct = default) =>
             throw new NotImplementedException();
 
-        public Task<TenantInfo?> FindByCustomerPortalDomainAsync(
-            string domain,
-            CancellationToken ct = default
-        ) => throw new NotImplementedException();
-
         public Task<TenantInfo> GetOrCreateAsync(string slug, CancellationToken ct = default) =>
             throw new NotImplementedException();
 
@@ -274,18 +269,6 @@ public sealed class TargetPageViewModelTests
             Guid tenantId,
             string githubLogin,
             string accessToken,
-            CancellationToken ct = default
-        ) => throw new NotImplementedException();
-
-        public Task SetCustomerPortalDomainAsync(
-            Guid tenantId,
-            string? domain,
-            CancellationToken ct = default
-        ) => throw new NotImplementedException();
-
-        public Task SetCustomerPortalEnabledAsync(
-            Guid tenantId,
-            bool enabled,
             CancellationToken ct = default
         ) => throw new NotImplementedException();
 

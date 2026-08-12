@@ -71,7 +71,6 @@ public static class DependencyInjection
         services.AddScoped<ICommandHandler<SaveCrmClientCommand, CrmClientView>, SaveCrmClientHandler>();
         services.AddScoped<ICommandHandler<MoveCrmClientCommand, CrmClientView>, MoveCrmClientHandler>();
         services.AddScoped<ICommandHandler<DeleteCrmClientCommand, bool>, DeleteCrmClientHandler>();
-        services.AddScoped<ICommandHandler<ConfigureCrmClientPortalCommand, CrmClientView>, ConfigureCrmClientPortalHandler>();
         services.AddScoped<ICommandHandler<RunCrmClientAutomationCommand, CrmChainRunView>, RunCrmClientAutomationHandler>();
         services.AddScoped<CrmArtifactAssociationService>();
         services.AddScoped<ICommandHandler<AddCrmClientNoteCommand, CrmCommunicationView>, AddCrmClientNoteHandler>();

@@ -24,6 +24,11 @@ public sealed record JobTemplate(
     IReadOnlyList<JobCredentialRequirement> RequiredCredentials)
 {
     public string MapImage => MapSourceKind == "image" ? MapSource : "";
+
+    /// <summary>Starter source code per runtime id ("node", "python"). Runtimes without an
+    /// entry fall back to a generic stdin/stdout skeleton in the editor.</summary>
+    public IReadOnlyDictionary<string, string> SourcesByRuntime { get; init; } =
+        new Dictionary<string, string>();
 }
 
 /// <summary>Describes one credential that must be stored in the project vault before the
@@ -81,7 +86,14 @@ public static class JobTemplateCatalog
         RequiredCredentials: new[]
         {
             new JobCredentialRequirement("HubSpot Private App token", "A HubSpot Private App access token with crm.objects.contacts.read scope.", "HUBSPOT_ACCESS_TOKEN")
-        });
+        })
+    {
+        SourcesByRuntime = new Dictionary<string, string>
+        {
+            ["node"] = HubSpotSource,
+            ["python"] = HubSpotPythonSource,
+        },
+    };
 
     private static JobTemplate XeroInvoices() => new(
         Id: "xero-invoices",
@@ -103,7 +115,14 @@ public static class JobTemplateCatalog
             new JobCredentialRequirement("Xero client ID", "The client ID from your Xero OAuth 2 app.", "XERO_CLIENT_ID"),
             new JobCredentialRequirement("Xero client secret", "The client secret from your Xero OAuth 2 app.", "XERO_CLIENT_SECRET"),
             new JobCredentialRequirement("Xero tenant ID", "The Xero organisation tenant ID to query.", "XERO_TENANT_ID")
-        });
+        })
+    {
+        SourcesByRuntime = new Dictionary<string, string>
+        {
+            ["node"] = XeroSource,
+            ["python"] = XeroPythonSource,
+        },
+    };
 
     private static JobTemplate ShopifyOrders() => new(
         Id: "shopify-orders",
@@ -124,7 +143,14 @@ public static class JobTemplateCatalog
         {
             new JobCredentialRequirement("Shopify Admin API access token", "A Shopify Admin API access token with read_orders scope.", "SHOPIFY_ACCESS_TOKEN"),
             new JobCredentialRequirement("Shopify shop domain", "The store's .myshopify.com domain.", "SHOPIFY_SHOP_DOMAIN")
-        });
+        })
+    {
+        SourcesByRuntime = new Dictionary<string, string>
+        {
+            ["node"] = ShopifySource,
+            ["python"] = ShopifyPythonSource,
+        },
+    };
 
     // ── Databases ───────────────────────────────────────────────────────────────────────────────
 
@@ -146,7 +172,14 @@ public static class JobTemplateCatalog
         RequiredCredentials: new[]
         {
             new JobCredentialRequirement("PostgreSQL connection string", "A full DATABASE_URL including credentials for the target database.", "DATABASE_URL")
-        });
+        })
+    {
+        SourcesByRuntime = new Dictionary<string, string>
+        {
+            ["node"] = PostgresSource,
+            ["python"] = PostgresPythonSource,
+        },
+    };
 
     private static JobTemplate MySqlQuery() => new(
         Id: "mysql-query",
@@ -166,7 +199,14 @@ public static class JobTemplateCatalog
         RequiredCredentials: new[]
         {
             new JobCredentialRequirement("MySQL connection string", "A full DATABASE_URL including credentials for the target database.", "DATABASE_URL")
-        });
+        })
+    {
+        SourcesByRuntime = new Dictionary<string, string>
+        {
+            ["node"] = MySqlSource,
+            ["python"] = MySqlPythonSource,
+        },
+    };
 
     private static JobTemplate SqlServerQuery() => new(
         Id: "sqlserver-query",
@@ -186,7 +226,14 @@ public static class JobTemplateCatalog
         RequiredCredentials: new[]
         {
             new JobCredentialRequirement("SQL Server connection string", "A full DATABASE_URL including credentials for the target database.", "DATABASE_URL")
-        });
+        })
+    {
+        SourcesByRuntime = new Dictionary<string, string>
+        {
+            ["node"] = SqlServerSource,
+            ["python"] = SqlServerPythonSource,
+        },
+    };
 
     private static JobTemplate MongoDbExport() => new(
         Id: "mongodb-export",
@@ -206,7 +253,14 @@ public static class JobTemplateCatalog
         RequiredCredentials: new[]
         {
             new JobCredentialRequirement("MongoDB URI", "A MongoDB connection URI with embedded credentials.", "MONGODB_URI")
-        });
+        })
+    {
+        SourcesByRuntime = new Dictionary<string, string>
+        {
+            ["node"] = MongoDbSource,
+            ["python"] = MongoDbPythonSource,
+        },
+    };
 
     private static JobTemplate SnowflakeQuery() => new(
         Id: "snowflake-query",
@@ -228,7 +282,14 @@ public static class JobTemplateCatalog
             new JobCredentialRequirement("Snowflake account", "Your Snowflake account identifier (e.g. xy12345.region).", "SNOWFLAKE_ACCOUNT"),
             new JobCredentialRequirement("Snowflake username", "The username to authenticate with.", "SNOWFLAKE_USER"),
             new JobCredentialRequirement("Snowflake password", "The password for the Snowflake user.", "SNOWFLAKE_PASSWORD")
-        });
+        })
+    {
+        SourcesByRuntime = new Dictionary<string, string>
+        {
+            ["node"] = SnowflakeSource,
+            ["python"] = SnowflakePythonSource,
+        },
+    };
 
     private static JobTemplate BigQueryQuery() => new(
         Id: "bigquery-query",
@@ -249,7 +310,14 @@ public static class JobTemplateCatalog
         {
             new JobCredentialRequirement("Google service account JSON", "The JSON key of a service account with BigQuery Data Viewer / Job User roles.", "GOOGLE_APPLICATION_CREDENTIALS_JSON"),
             new JobCredentialRequirement("Google Cloud project ID", "The project ID that owns the BigQuery dataset.", "GOOGLE_PROJECT_ID")
-        });
+        })
+    {
+        SourcesByRuntime = new Dictionary<string, string>
+        {
+            ["node"] = BigQuerySource,
+            ["python"] = BigQueryPythonSource,
+        },
+    };
 
     // ── Common patterns ─────────────────────────────────────────────────────────────────────────
 
@@ -271,7 +339,14 @@ public static class JobTemplateCatalog
         RequiredCredentials: new[]
         {
             new JobCredentialRequirement("API key / bearer token", "The API key or bearer token used to authenticate requests.", "API_KEY")
-        });
+        })
+    {
+        SourcesByRuntime = new Dictionary<string, string>
+        {
+            ["node"] = RestApiSource,
+            ["python"] = RestApiPythonSource,
+        },
+    };
 
     private static JobTemplate WebhookReceiver() => new(
         Id: "webhook-receiver",
@@ -291,7 +366,14 @@ public static class JobTemplateCatalog
         RequiredCredentials: new[]
         {
             new JobCredentialRequirement("Webhook secret (optional)", "A shared secret used to validate webhook signatures. Optional but recommended.", "WEBHOOK_SECRET")
-        });
+        })
+    {
+        SourcesByRuntime = new Dictionary<string, string>
+        {
+            ["node"] = WebhookSource,
+            ["python"] = WebhookPythonSource,
+        },
+    };
 
     private static JobTemplate CsvToDatabase() => new(
         Id: "csv-to-database",
@@ -311,7 +393,14 @@ public static class JobTemplateCatalog
         RequiredCredentials: new[]
         {
             new JobCredentialRequirement("Database connection string", "A connection string for the target database.", "DATABASE_URL")
-        });
+        })
+    {
+        SourcesByRuntime = new Dictionary<string, string>
+        {
+            ["node"] = CsvToDbSource,
+            ["python"] = CsvToDbPythonSource,
+        },
+    };
 
     private static JobTemplate EmailReport() => new(
         Id: "email-report",
@@ -333,9 +422,16 @@ public static class JobTemplateCatalog
             new JobCredentialRequirement("SMTP host", "The SMTP server hostname.", "SMTP_HOST"),
             new JobCredentialRequirement("SMTP username", "The username for SMTP authentication.", "SMTP_USER"),
             new JobCredentialRequirement("SMTP password", "The password for SMTP authentication.", "SMTP_PASS")
-        });
+        })
+    {
+        SourcesByRuntime = new Dictionary<string, string>
+        {
+            ["node"] = EmailReportSource,
+            ["python"] = EmailReportPythonSource,
+        },
+    };
 
-    // ── Starter source code ─────────────────────────────────────────────────────────────────────
+    // ── Starter source code (node) ────────────────────────────────────────────────────────────
 
     private const string HubSpotSource = @"const fs = require('fs');
 const token = process.env.HUBSPOT_ACCESS_TOKEN;
@@ -586,4 +682,451 @@ async function main() {
 }
 
 main().catch(e => { console.error(e); process.exit(1); });";
+
+    // ── Starter source code (python) ──────────────────────────────────────────────────────────
+
+    private const string HubSpotPythonSource = @"# requirements.txt: requests
+import json
+import os
+import sys
+
+import requests
+
+
+def main():
+    token = os.environ.get(""HUBSPOT_ACCESS_TOKEN"")
+    limit = int(os.environ.get(""HUBSPOT_LIMIT"", ""100""))
+    if not token:
+        raise RuntimeError(""Missing HUBSPOT_ACCESS_TOKEN"")
+    res = requests.get(
+        f""https://api.hubapi.com/crm/v3/objects/contacts?limit={limit}&properties=email,firstname,lastname,phone"",
+        headers={""Authorization"": f""Bearer {token}""},
+    )
+    if not res.ok:
+        raise RuntimeError(f""HubSpot {res.status_code}: {res.text}"")
+    print(json.dumps(res.json()), end="""")
+
+
+if __name__ == ""__main__"":
+    try:
+        main()
+    except Exception as e:
+        print(e, file=sys.stderr)
+        sys.exit(1)";
+
+    private const string XeroPythonSource = @"# requirements.txt: requests
+import base64
+import json
+import os
+import sys
+
+import requests
+
+
+def get_token(client_id, client_secret):
+    res = requests.post(
+        ""https://identity.xero.com/connect/token"",
+        headers={
+            ""Content-Type"": ""application/x-www-form-urlencoded"",
+            ""Authorization"": ""Basic ""
+            + base64.b64encode(f""{client_id}:{client_secret}"".encode()).decode(),
+        },
+        data=""grant_type=client_credentials"",
+    )
+    if not res.ok:
+        raise RuntimeError(f""Xero token {res.status_code}: {res.text}"")
+    return res.json()[""access_token""]
+
+
+def main():
+    client_id = os.environ.get(""XERO_CLIENT_ID"")
+    client_secret = os.environ.get(""XERO_CLIENT_SECRET"")
+    tenant_id = os.environ.get(""XERO_TENANT_ID"")
+    if not client_id or not client_secret or not tenant_id:
+        raise RuntimeError(""Missing Xero credentials"")
+    token = get_token(client_id, client_secret)
+    res = requests.get(
+        ""https://api.xero.com/api.xro/2.0/Invoices"",
+        headers={""Authorization"": f""Bearer {token}"", ""Xero-tenant-id"": tenant_id},
+    )
+    if not res.ok:
+        raise RuntimeError(f""Xero {res.status_code}: {res.text}"")
+    print(json.dumps(res.json()), end="""")
+
+
+if __name__ == ""__main__"":
+    try:
+        main()
+    except Exception as e:
+        print(e, file=sys.stderr)
+        sys.exit(1)";
+
+    private const string ShopifyPythonSource = @"# requirements.txt: requests
+import json
+import os
+import sys
+
+import requests
+
+
+def main():
+    token = os.environ.get(""SHOPIFY_ACCESS_TOKEN"")
+    shop = os.environ.get(""SHOPIFY_SHOP_DOMAIN"")
+    limit = int(os.environ.get(""SHOPIFY_LIMIT"", ""50""))
+    if not token or not shop:
+        raise RuntimeError(""Missing SHOPIFY_ACCESS_TOKEN or SHOPIFY_SHOP_DOMAIN"")
+    res = requests.get(
+        f""https://{shop}/admin/api/2024-04/orders.json?limit={limit}&status=any"",
+        headers={""X-Shopify-Access-Token"": token},
+    )
+    if not res.ok:
+        raise RuntimeError(f""Shopify {res.status_code}: {res.text}"")
+    print(json.dumps(res.json()), end="""")
+
+
+if __name__ == ""__main__"":
+    try:
+        main()
+    except Exception as e:
+        print(e, file=sys.stderr)
+        sys.exit(1)";
+
+    private const string PostgresPythonSource = @"# requirements.txt: psycopg2-binary
+import json
+import os
+import sys
+
+import psycopg2
+import psycopg2.extras
+
+
+def main():
+    if not os.environ.get(""DATABASE_URL""):
+        raise RuntimeError(""Missing DATABASE_URL"")
+    conn = psycopg2.connect(os.environ[""DATABASE_URL""])
+    try:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(os.environ.get(""SQL_QUERY"", ""SELECT now()""))
+            rows = [dict(r) for r in cur.fetchall()]
+    finally:
+        conn.close()
+    print(json.dumps(rows, default=str), end="""")
+
+
+if __name__ == ""__main__"":
+    try:
+        main()
+    except Exception as e:
+        print(e, file=sys.stderr)
+        sys.exit(1)";
+
+    private const string MySqlPythonSource = @"# requirements.txt: pymysql
+import json
+import os
+import sys
+from urllib.parse import urlparse
+
+import pymysql
+import pymysql.cursors
+
+
+def main():
+    if not os.environ.get(""DATABASE_URL""):
+        raise RuntimeError(""Missing DATABASE_URL"")
+    url = urlparse(os.environ[""DATABASE_URL""])
+    conn = pymysql.connect(
+        host=url.hostname,
+        port=url.port or 3306,
+        user=url.username,
+        password=url.password,
+        database=url.path.lstrip(""/""),
+        cursorclass=pymysql.cursors.DictCursor,
+    )
+    try:
+        with conn.cursor() as cur:
+            cur.execute(os.environ.get(""SQL_QUERY"", ""SELECT now()""))
+            rows = cur.fetchall()
+    finally:
+        conn.close()
+    print(json.dumps(rows, default=str), end="""")
+
+
+if __name__ == ""__main__"":
+    try:
+        main()
+    except Exception as e:
+        print(e, file=sys.stderr)
+        sys.exit(1)";
+
+    private const string SqlServerPythonSource = @"# requirements.txt: pyodbc
+import json
+import os
+import sys
+from urllib.parse import unquote, urlparse
+
+import pyodbc
+
+
+def main():
+    if not os.environ.get(""DATABASE_URL""):
+        raise RuntimeError(""Missing DATABASE_URL"")
+    url = urlparse(os.environ[""DATABASE_URL""])
+    conn_str = (
+        ""DRIVER={ODBC Driver 18 for SQL Server};""
+        f""SERVER={url.hostname},{url.port or 1433};""
+        f""DATABASE={url.path.lstrip('/')};""
+        f""UID={url.username};PWD={unquote(url.password or '')};""
+        ""TrustServerCertificate=yes""
+    )
+    conn = pyodbc.connect(conn_str)
+    try:
+        cur = conn.cursor()
+        cur.execute(os.environ.get(""SQL_QUERY"", ""SELECT GETDATE()""))
+        columns = [col[0] for col in cur.description]
+        rows = [dict(zip(columns, row)) for row in cur.fetchall()]
+    finally:
+        conn.close()
+    print(json.dumps(rows, default=str), end="""")
+
+
+if __name__ == ""__main__"":
+    try:
+        main()
+    except Exception as e:
+        print(e, file=sys.stderr)
+        sys.exit(1)";
+
+    private const string MongoDbPythonSource = @"# requirements.txt: pymongo
+import json
+import os
+import sys
+
+from pymongo import MongoClient
+
+
+def main():
+    if not os.environ.get(""MONGODB_URI""):
+        raise RuntimeError(""Missing MONGODB_URI"")
+    client = MongoClient(os.environ[""MONGODB_URI""])
+    try:
+        db = client.get_default_database()
+        coll = db[os.environ.get(""MONGODB_COLLECTION"", ""items"")]
+        docs = list(coll.find({}).limit(int(os.environ.get(""MONGODB_LIMIT"", ""100""))))
+    finally:
+        client.close()
+    print(json.dumps(docs, default=str), end="""")
+
+
+if __name__ == ""__main__"":
+    try:
+        main()
+    except Exception as e:
+        print(e, file=sys.stderr)
+        sys.exit(1)";
+
+    private const string SnowflakePythonSource = @"# requirements.txt: snowflake-connector-python
+import json
+import os
+import sys
+
+import snowflake.connector
+
+
+def main():
+    required = [
+        ""SNOWFLAKE_ACCOUNT"",
+        ""SNOWFLAKE_USER"",
+        ""SNOWFLAKE_PASSWORD"",
+        ""SNOWFLAKE_DATABASE"",
+        ""SNOWFLAKE_WAREHOUSE"",
+    ]
+    missing = [k for k in required if not os.environ.get(k)]
+    if missing:
+        raise RuntimeError(""Missing: "" + "", "".join(missing))
+    conn = snowflake.connector.connect(
+        account=os.environ[""SNOWFLAKE_ACCOUNT""],
+        user=os.environ[""SNOWFLAKE_USER""],
+        password=os.environ[""SNOWFLAKE_PASSWORD""],
+        database=os.environ[""SNOWFLAKE_DATABASE""],
+        warehouse=os.environ[""SNOWFLAKE_WAREHOUSE""],
+    )
+    try:
+        cur = conn.cursor()
+        cur.execute(os.environ.get(""SQL_QUERY"", ""SELECT CURRENT_TIMESTAMP()""))
+        columns = [col[0] for col in cur.description]
+        rows = [dict(zip(columns, row)) for row in cur.fetchall()]
+    finally:
+        conn.close()
+    print(json.dumps(rows, default=str), end="""")
+
+
+if __name__ == ""__main__"":
+    try:
+        main()
+    except Exception as e:
+        print(e, file=sys.stderr)
+        sys.exit(1)";
+
+    private const string BigQueryPythonSource = @"# requirements.txt: google-cloud-bigquery
+import json
+import os
+import sys
+
+from google.cloud import bigquery
+
+
+def main():
+    if not os.environ.get(""GOOGLE_APPLICATION_CREDENTIALS_JSON""):
+        raise RuntimeError(""Missing GOOGLE_APPLICATION_CREDENTIALS_JSON"")
+    if not os.environ.get(""GOOGLE_PROJECT_ID""):
+        raise RuntimeError(""Missing GOOGLE_PROJECT_ID"")
+    key_file = ""/tmp/gcp-key.json""
+    with open(key_file, ""w"") as f:
+        f.write(os.environ[""GOOGLE_APPLICATION_CREDENTIALS_JSON""])
+    client = bigquery.Client.from_service_account_json(
+        key_file, project=os.environ[""GOOGLE_PROJECT_ID""]
+    )
+    job = client.query(os.environ.get(""SQL_QUERY"", ""SELECT 1""))
+    rows = [dict(row) for row in job.result()]
+    print(json.dumps(rows, default=str), end="""")
+
+
+if __name__ == ""__main__"":
+    try:
+        main()
+    except Exception as e:
+        print(e, file=sys.stderr)
+        sys.exit(1)";
+
+    private const string RestApiPythonSource = @"# requirements.txt: requests
+import json
+import os
+import sys
+
+import requests
+
+
+def main():
+    base_url = os.environ.get(""API_BASE_URL"")
+    api_key = os.environ.get(""API_KEY"")
+    if not base_url:
+        raise RuntimeError(""Missing API_BASE_URL"")
+    headers = {""Authorization"": f""Bearer {api_key}""} if api_key else {}
+    res = requests.get(f""{base_url.rstrip('/')}/resource"", headers=headers)
+    if not res.ok:
+        raise RuntimeError(f""API {res.status_code}: {res.text}"")
+    print(json.dumps(res.json()), end="""")
+
+
+if __name__ == ""__main__"":
+    try:
+        main()
+    except Exception as e:
+        print(e, file=sys.stderr)
+        sys.exit(1)";
+
+    private const string WebhookPythonSource = @"import hashlib
+import hmac
+import json
+import os
+import sys
+
+
+def main():
+    data = sys.stdin.read()
+    payload = json.loads(data or ""{}"")
+    secret = os.environ.get(""WEBHOOK_SECRET"")
+    signature = os.environ.get(""WEBHOOK_SIGNATURE"", """")
+
+    if secret and signature:
+        expected = hmac.new(secret.encode(), data.encode(), hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(signature, expected):
+            raise RuntimeError(""Invalid webhook signature"")
+
+    print(json.dumps({""received"": True, ""payload"": payload}), end="""")
+
+
+if __name__ == ""__main__"":
+    try:
+        main()
+    except Exception as e:
+        print(e, file=sys.stderr)
+        sys.exit(1)";
+
+    private const string CsvToDbPythonSource = @"# requirements.txt: requests psycopg2-binary
+import csv
+import io
+import json
+import os
+import sys
+
+import psycopg2
+import requests
+
+
+def main():
+    if (
+        not os.environ.get(""CSV_URL"")
+        or not os.environ.get(""DATABASE_URL"")
+        or not os.environ.get(""TARGET_TABLE"")
+    ):
+        raise RuntimeError(""Missing CSV_URL, DATABASE_URL or TARGET_TABLE"")
+    res = requests.get(os.environ[""CSV_URL""])
+    if not res.ok:
+        raise RuntimeError(f""CSV {res.status_code}"")
+    records = list(csv.DictReader(io.StringIO(res.text)))
+    conn = psycopg2.connect(os.environ[""DATABASE_URL""])
+    try:
+        with conn:
+            with conn.cursor() as cur:
+                # Example: insert records. Adjust columns to match your table.
+                for r in records[:100]:
+                    cur.execute(
+                        f""INSERT INTO {os.environ['TARGET_TABLE']} (data) VALUES (%s)"",
+                        (json.dumps(r),),
+                    )
+    finally:
+        conn.close()
+    print(json.dumps({""imported"": len(records)}), end="""")
+
+
+if __name__ == ""__main__"":
+    try:
+        main()
+    except Exception as e:
+        print(e, file=sys.stderr)
+        sys.exit(1)";
+
+    private const string EmailReportPythonSource = @"# No third-party packages required — smtplib and email are in the standard library.
+import os
+import smtplib
+import sys
+from datetime import datetime, timezone
+from email.message import EmailMessage
+
+
+def main():
+    required = [""SMTP_HOST"", ""SMTP_PORT"", ""SMTP_USER"", ""SMTP_PASS"", ""SMTP_FROM"", ""SMTP_TO""]
+    missing = [k for k in required if not os.environ.get(k)]
+    if missing:
+        raise RuntimeError(""Missing: "" + "", "".join(missing))
+    html = f""<h1>Report</h1><p>Generated at {datetime.now(timezone.utc).isoformat()}</p>""
+    msg = EmailMessage()
+    msg[""From""] = os.environ[""SMTP_FROM""]
+    msg[""To""] = os.environ[""SMTP_TO""]
+    msg[""Subject""] = ""Scheduled report""
+    msg.add_alternative(html, subtype=""html"")
+    with smtplib.SMTP(os.environ[""SMTP_HOST""], int(os.environ[""SMTP_PORT""])) as server:
+        server.starttls()
+        server.login(os.environ[""SMTP_USER""], os.environ[""SMTP_PASS""])
+        server.send_message(msg)
+    print(html, end="""")
+
+
+if __name__ == ""__main__"":
+    try:
+        main()
+    except Exception as e:
+        print(e, file=sys.stderr)
+        sys.exit(1)";
 }

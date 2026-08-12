@@ -1,7 +1,8 @@
 .page {
-    width: min(1120px, 100%);
-    margin: 0 auto;
-    padding: 24px 24px 48px;
+    width: 100%;
+    max-width: none;
+    margin: 0;
+    padding: 20px 24px 32px;
 }
 
 .page-head {
@@ -425,4 +426,3 @@
         margin: 3px 0 0;
     }
 }
-

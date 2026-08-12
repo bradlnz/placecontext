@@ -18,19 +18,17 @@
 else
 {
     <div class="cluster-page">
-        <section class="cluster-hero">
-            <div class="hero-copy">
-                <div class="eyebrow"><span class="live-dot"></span> Infrastructure</div>
-                <h1>Cluster overview</h1>
-                <p>Monitor the machines running your workloads and grow the fleet when capacity changes.</p>
-</div>
-
-
+        <section class="page-head">
+            <div>
+                <h2 class="page-title">Cluster overview</h2>
+                <p class="page-sub">Monitor the machines running your workloads and grow the fleet when capacity changes.</p>
+            </div>
             <div class="hero-actions">
-                <button class="icon-button" @onclick="() => Vm.RefreshAsync(false)" disabled="@Vm.Busy" title="Refresh nodes" aria-label="Refresh nodes">
+                <button class="dcbtn" @onclick="() => Vm.RefreshAsync(false)" disabled="@Vm.Busy" title="Refresh nodes" aria-label="Refresh nodes">
                     <span class="@(Vm.Busy ? "spin" : "")">↻</span>
+                    Refresh
                 </button>
-                <button class="add-worker" @onclick="Vm.AddWorkerAsync" disabled="@Vm.Busy">
+                <button class="dcbtn primary" @onclick="Vm.AddWorkerAsync" disabled="@Vm.Busy">
                     <span class="button-plus">+</span>
                     Add worker
                 </button>
@@ -42,39 +40,26 @@ else
             <div class="message-banner @(Vm.MessageOk ? "" : "err")">@Vm.Message</div>
         }
 
-        <section class="metrics-grid">
-            <article class="metric-card">
-                <div class="metric-icon nodes-icon">⌘</div>
-                <div>
-                    <span class="metric-label">Total nodes</span>
-                    <strong>@(Vm.Nodes?.Count ?? 0)</strong>
-                    <small>@(Vm.Cluster?.IsRealCluster == true ? "Kubernetes fleet" : "Local environment")</small>
-                </div>
-            </article>
-            <article class="metric-card">
-                <div class="metric-icon ready-icon">✓</div>
-                <div>
-                    <span class="metric-label">Healthy</span>
-                    <strong>@(Vm.Nodes?.Count(n => n.Ready) ?? 0)</strong>
-                    <small>@($"{Vm.ReadyPercent:0}% ready")</small>
-                </div>
-            </article>
-            <article class="metric-card">
-                <div class="metric-icon control-icon">◇</div>
-                <div>
-                    <span class="metric-label">Control plane</span>
-                    <strong>@(Vm.Nodes?.Count(n => n.IsControlPlane) ?? 0)</strong>
-                    <small>@(Vm.Cluster?.DesignatedMasterName ?? "No master selected")</small>
-                </div>
-            </article>
-            <article class="metric-card">
-                <div class="metric-icon worker-icon">↗</div>
-                <div>
-                    <span class="metric-label">Workers</span>
-                    <strong>@(Vm.Nodes?.Count(n => !n.IsControlPlane) ?? 0)</strong>
-                    <small>Available for jobs</small>
-                </div>
-            </article>
+        <section class="summary-strip" aria-label="Cluster summary">
+            <div class="summary-count">
+                <strong>@(Vm.Nodes?.Count ?? 0)</strong>
+                <span>nodes</span>
+            </div>
+            <div class="summary-count succeeded">
+                <strong>@(Vm.Nodes?.Count(n => n.Ready) ?? 0)</strong>
+                <span>ready</span>
+            </div>
+            <div class="summary-count">
+                <strong>@(Vm.Nodes?.Count(n => n.IsControlPlane) ?? 0)</strong>
+                <span>control plane</span>
+            </div>
+            <div class="summary-count">
+                <strong>@(Vm.Nodes?.Count(n => !n.IsControlPlane) ?? 0)</strong>
+                <span>workers</span>
+            </div>
+            <div class="summary-progress" title="@($"{Vm.ReadyPercent:0}% ready")">
+                <span style="width:@($"{Vm.ReadyPercent:0}%")"></span>
+            </div>
         </section>
 
         <section class="fleet-section">
@@ -155,7 +140,7 @@ else
         </section>
 
         @* ── Join command modal ─────────────────────────────────────────────────────── *@
-        @if (Vm.JoinCommand is not null)
+        @if (Vm.ShowAddWorkerOptions)
         {
             <div class="cluster-overlay" @onclick="Vm.DismissJoin">
                 <div class="join-dialog" @onclick:stopPropagation="true">
@@ -170,11 +155,25 @@ else
                     <div class="join-body">
                         <div class="join-step">
                             <span>1</span>
-                            <p>Open a terminal on the machine you want to add.</p>
+                            <p>Choose what you are adding.</p>
+                        </div>
+                        <div class="worker-target-grid">
+                            <button
+                                class="worker-target-btn @(Vm.SelectedWorkerTarget == WorkerTarget.Server ? "selected" : "")"
+                                @onclick="() => Vm.SelectWorkerTarget(WorkerTarget.Server)">
+                                <strong>Server</strong>
+                                <span>Linux server or VM worker</span>
+                            </button>
+                            <button
+                                class="worker-target-btn @(Vm.SelectedWorkerTarget == WorkerTarget.Mac ? "selected" : "")"
+                                @onclick="() => Vm.SelectWorkerTarget(WorkerTarget.Mac)">
+                                <strong>Mac</strong>
+                                <span>Mac workstation worker</span>
+                            </button>
                         </div>
                         <div class="join-step">
                             <span>2</span>
-                            <p>Run this one-time command:</p>
+                            <p>@Vm.WorkerDescription(Vm.SelectedWorkerTarget)</p>
                         </div>
                         <div class="command-shell">
                             <code>@Vm.JoinCommand</code>

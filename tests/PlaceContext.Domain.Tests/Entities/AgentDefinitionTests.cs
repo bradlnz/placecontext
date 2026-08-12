@@ -21,7 +21,7 @@ public sealed class AgentDefinitionTests
         Assert.Contains(AgentCapability.JobsRun, agent.Capabilities);
         Assert.Empty(agent.AllowedJobIds);
 
-        agent.Update("Command Agent", "", "Coordinate", "command", [], [], false, null, Now.AddMinutes(1));
+        agent.Update("Command Agent", "", "Coordinate", "command", [], [], false, null, Now.AddMinutes(1), "{}");
         Assert.True(agent.Enabled);
     }
 
@@ -29,11 +29,11 @@ public sealed class AgentDefinitionTests
     public void Worker_agent_requires_a_name_and_always_has_graph_access()
     {
         Assert.Throws<ArgumentException>(() => AgentDefinition.CreateWorker(
-            Guid.NewGuid(), " ", "", "", "custom", [], [], null, Now));
+            Guid.NewGuid(), " ", "", "", "custom", "{}", [], [], null, Now));
 
         var agent = AgentDefinition.CreateWorker(
             Guid.NewGuid(), "Researcher", "Finds evidence", "Use primary evidence.", "research",
-            [AgentCapability.ArtifactsRead], [], null, Now);
+            "{}", [AgentCapability.ArtifactsRead], [], null, Now);
 
         Assert.Contains(AgentCapability.GraphRead, agent.Capabilities);
         Assert.Contains(AgentCapability.ArtifactsRead, agent.Capabilities);
@@ -44,13 +44,13 @@ public sealed class AgentDefinitionTests
     {
         var firstJob = Guid.NewGuid();
         var agent = AgentDefinition.CreateWorker(
-            Guid.NewGuid(), "Operator", "", "", "job-operator", 
-            [AgentCapability.JobsRun], [firstJob, firstJob, Guid.Empty], null, Now);
+            Guid.NewGuid(), "Operator", "", "", "job-operator",
+            "{}", [AgentCapability.JobsRun], [firstJob, firstJob, Guid.Empty], null, Now);
 
         agent.Update(
             " Operator ", " Runs approved jobs ", " Be careful. ", "job-operator",
             [AgentCapability.JobsRun, AgentCapability.JobsRun],
-            [firstJob, firstJob, Guid.Empty], false, null, Now.AddMinutes(1));
+            [firstJob, firstJob, Guid.Empty], false, null, Now.AddMinutes(1), "{}");
 
         Assert.Equal("Operator", agent.Name);
         Assert.Equal("Runs approved jobs", agent.Description);

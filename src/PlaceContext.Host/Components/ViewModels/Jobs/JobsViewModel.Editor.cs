@@ -108,6 +108,7 @@ public sealed partial class JobsViewModel
     public bool ShowTemplateModal { get; private set; }
     public JobTemplate? SelectedTemplate { get; private set; }
     public string TemplateFilter { get; set; } = "";
+    public string SelectedTemplateRuntime { get; set; } = "node";
     public IReadOnlyList<JobTemplate> FilteredTemplates =>
         string.IsNullOrWhiteSpace(TemplateFilter)
             ? JobTemplateCatalog.All
@@ -233,6 +234,7 @@ public sealed partial class JobsViewModel
         ShowTemplateModal = true;
         SelectedTemplate = null;
         TemplateFilter = "";
+        SelectedTemplateRuntime = "node";
         NotifyStateChanged();
     }
 
@@ -241,6 +243,7 @@ public sealed partial class JobsViewModel
         ShowTemplateModal = false;
         SelectedTemplate = null;
         TemplateFilter = "";
+        SelectedTemplateRuntime = "node";
         NotifyStateChanged();
     }
 
@@ -260,9 +263,14 @@ public sealed partial class JobsViewModel
         EdDescription = template.Description;
         EdMapSourceKind = template.MapSourceKind;
         EdMapImage = template.MapImage;
-        EdMapRuntimeId = template.MapRuntimeId ?? "node";
-        EdMapEntrypoint = template.MapEntrypoint ?? "";
-        EdMapSource = template.MapSource;
+        var runtime = string.IsNullOrWhiteSpace(SelectedTemplateRuntime)
+            ? template.MapRuntimeId ?? "node"
+            : SelectedTemplateRuntime;
+        EdMapRuntimeId = runtime;
+        EdMapEntrypoint = DefaultEntrypointFor(runtime);
+        EdMapSource = template.SourcesByRuntime.TryGetValue(runtime, out var src)
+            ? src
+            : SourcePlaceholderFor(runtime);
         EdMapEnvRaw = template.MapEnvRaw;
         EdInputPayloadsRaw = template.InputPayloadsRaw;
         EdReturnType = template.ReturnType;

@@ -14,4 +14,5 @@ public sealed record SaveAgentDefinitionCommand(
     IReadOnlyList<AgentCapability> Capabilities,
     IReadOnlyList<Guid> AllowedJobIds,
     Guid? ParentAgentId,
-    bool Enabled) : ICommand<AgentDefinitionView>;
+    bool Enabled,
+    string? Schema = null) : ICommand<AgentDefinitionView>;

@@ -48,7 +48,7 @@ public sealed class EfAgentDefinitionRepository(AppDbContext db) : IAgentDefinit
     private static AgentDefinition ToDomain(AgentDefinitionRow row)
         => AgentDefinition.Rehydrate(
             row.Id, row.ProjectId, Enum.Parse<AgentKind>(row.Kind), row.Name, row.Description,
-            row.Instructions, row.TemplateKey,
+            row.Instructions, row.TemplateKey, row.Schema,
             Deserialize<AgentCapability>(row.CapabilitiesJson), Deserialize<Guid>(row.AllowedJobIdsJson),
             row.Enabled, row.ParentAgentId, row.CreatedAt, row.UpdatedAt);
 
@@ -67,6 +67,7 @@ public sealed class EfAgentDefinitionRepository(AppDbContext db) : IAgentDefinit
         row.Description = agent.Description;
         row.Instructions = agent.Instructions;
         row.TemplateKey = agent.TemplateKey;
+        row.Schema = agent.Schema;
         row.ParentAgentId = agent.ParentAgentId;
         row.CapabilitiesJson = JsonSerializer.Serialize(agent.Capabilities, Json);
         row.AllowedJobIdsJson = JsonSerializer.Serialize(agent.AllowedJobIds, Json);

@@ -166,13 +166,6 @@ spec:
                 secretKeyRef:
                   name: placecontext-portal
                   key: signing-key
-            # Key used by `/api/customer-portal/*` endpoints (Bearer token in the customer portal).
-            - name: PlaceContext__CustomerPortal__ApiKey
-              valueFrom:
-                secretKeyRef:
-                  name: customer-portal-secrets
-                  key: core-api-key
-                  optional: true
             # Shared RSA key for signing OAuth/MCP access tokens, so every replica verifies the same kid.
             - name: PlaceContext__OAuth__SigningKeyPem
               valueFrom:
@@ -440,13 +433,6 @@ spec:
   - host: feasibility.ossenpropertygroup.com.au
     http:
       paths:
-      - path: /p/
-        pathType: Prefix
-        backend:
-          service:
-            name: customer-portal
-            port:
-              number: 80
       - path: /
         pathType: Prefix
         backend:

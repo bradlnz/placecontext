@@ -5,6 +5,12 @@ using PlaceContext.Application.Ports;
 
 namespace PlaceContext.Host.Components.ViewModels;
 
+public enum WorkerTarget
+{
+    Server,
+    Mac
+}
+
 public sealed class ClusterViewModel(
     IPlaceContextService service,
     PortalUiState ui,
@@ -19,11 +25,14 @@ public sealed class ClusterViewModel(
     public bool MessageOk { get; private set; }
     public IReadOnlyList<ClusterNode>? Nodes { get; private set; }
     public ClusterInfo? Cluster { get; private set; }
-    public string? JoinCommand { get; private set; }
+    public bool ShowAddWorkerOptions { get; private set; }
+    public WorkerTarget SelectedWorkerTarget { get; private set; } = WorkerTarget.Server;
     public bool Copied { get; private set; }
     public double ReadyPercent =>
         Nodes is { Count: > 0 } ? Nodes.Count(node => node.Ready) * 100d / Nodes.Count : 0;
     public string LastSyncLabel => $"Updated {Presentation.Time(DateTimeOffset.Now)}";
+    private string? _serverJoinCommand;
+    private string? _macJoinCommand;
 
     public async Task InitializeAsync()
     {
@@ -59,12 +68,19 @@ public sealed class ClusterViewModel(
     {
         Busy = true;
         Message = null;
-        JoinCommand = null;
+        _serverJoinCommand = null;
+        _macJoinCommand = null;
+        SelectedWorkerTarget = WorkerTarget.Server;
         Copied = false;
+        ShowAddWorkerOptions = false;
+        NotifyStateChanged();
         try
         {
             var token = await service.CreateAgentJoinTokenAsync();
-            JoinCommand = BuildJoinCommand(navigation.BaseUri, token);
+            var command = BuildJoinCommand(navigation.BaseUri, token);
+            _serverJoinCommand = command;
+            _macJoinCommand = command;
+            ShowAddWorkerOptions = true;
             MessageOk = true;
         }
         catch (Exception ex)
@@ -90,9 +106,37 @@ public sealed class ClusterViewModel(
 
     public void DismissJoin()
     {
-        JoinCommand = null;
+        _serverJoinCommand = null;
+        _macJoinCommand = null;
+        ShowAddWorkerOptions = false;
+        SelectedWorkerTarget = WorkerTarget.Server;
         Copied = false;
+        NotifyStateChanged();
     }
+
+    public void SelectWorkerTarget(WorkerTarget target)
+    {
+        SelectedWorkerTarget = target;
+        Copied = false;
+        NotifyStateChanged();
+    }
+
+    public string? WorkerDescription(WorkerTarget target) =>
+        target switch
+        {
+            WorkerTarget.Server => "Join a Linux/server machine with k3s and Docker.",
+            WorkerTarget.Mac => "Join a Mac workstation via Docker worker mode.",
+            _ => "Join a worker node."
+        };
+
+    private string? ActiveJoinCommand => SelectedWorkerTarget switch
+    {
+        WorkerTarget.Server => _serverJoinCommand,
+        WorkerTarget.Mac => _macJoinCommand,
+        _ => _serverJoinCommand
+    };
+
+    public string? JoinCommand => ActiveJoinCommand;
 
     public static string BuildJoinCommand(string baseUri, string token)
     {

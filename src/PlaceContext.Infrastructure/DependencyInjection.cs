@@ -2,7 +2,6 @@ using PlaceContext.Application.Ports;
 using PlaceContext.Domain.Repositories;
 using PlaceContext.Infrastructure.Git;
 using PlaceContext.Infrastructure.Persistence;
-using PlaceContext.Infrastructure.CustomerPortal;
 using PlaceContext.Infrastructure.Skills;
 using PlaceContext.Infrastructure.Tenancy;
 using PlaceContext.Infrastructure.Workload;
@@ -108,11 +107,6 @@ public static class DependencyInjection
             services.AddSingleton<IWorkloadRunner, KubernetesWorkloadRunner>();
         else
             services.AddSingleton<IWorkloadRunner, DockerWorkloadRunner>();
-
-        if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("KUBERNETES_SERVICE_HOST")))
-            services.AddSingleton<ICustomerPortalProvisioner, CustomerPortalProvisioningService>();
-        else
-            services.AddSingleton<ICustomerPortalProvisioner, NoOpCustomerPortalProvisioner>();
 
         // Field encryption at rest (AES via Data Protection). Portal/jobs decrypt in-process;
         // raw Postgres/MinIO without the DP key ring only see ciphertext.
@@ -423,13 +417,12 @@ public static class DependencyInjection
         try
         {
             if (shouldClose)
-            {
                 connection.Open();
-            }
 
-            using (var hasParentAgentId = connection.CreateCommand())
+            bool hasParentAgentId;
+            using (var hasParentAgentIdCommand = connection.CreateCommand())
             {
-                hasParentAgentId.CommandText =
+                hasParentAgentIdCommand.CommandText =
                     """
                     SELECT EXISTS (
                         SELECT 1
@@ -439,12 +432,27 @@ public static class DependencyInjection
                           AND lower(column_name) = 'parentagentid'
                     );
                     """;
-                var exists = Convert.ToBoolean(hasParentAgentId.ExecuteScalar());
-                if (exists)
-                {
-                    return;
-                }
+                hasParentAgentId = Convert.ToBoolean(hasParentAgentIdCommand.ExecuteScalar());
             }
+
+            bool hasSchema;
+            using (var hasSchemaCommand = connection.CreateCommand())
+            {
+                hasSchemaCommand.CommandText =
+                    """
+                    SELECT EXISTS (
+                        SELECT 1
+                        FROM information_schema.columns
+                        WHERE table_schema = 'public'
+                          AND table_name = 'agent_definitions'
+                          AND lower(column_name) = 'schema'
+                    );
+                    """;
+                hasSchema = Convert.ToBoolean(hasSchemaCommand.ExecuteScalar());
+            }
+
+            if (hasParentAgentId && hasSchema)
+                return;
 
             using (var ensureColumns = connection.CreateCommand())
             {
@@ -452,6 +460,9 @@ public static class DependencyInjection
                     """
                     ALTER TABLE agent_definitions ADD COLUMN IF NOT EXISTS "ParentAgentId" uuid;
                     CREATE INDEX IF NOT EXISTS "IX_agent_definitions_ParentAgentId" ON agent_definitions ("ParentAgentId");
+                    ALTER TABLE agent_definitions ADD COLUMN IF NOT EXISTS "Schema" text;
+                    UPDATE agent_definitions SET "Schema" = '' WHERE "Schema" IS NULL;
+                    ALTER TABLE agent_definitions ALTER COLUMN "Schema" SET NOT NULL;
                     """;
                 ensureColumns.ExecuteNonQuery();
             }
@@ -464,9 +475,7 @@ public static class DependencyInjection
         finally
         {
             if (shouldClose && connection.State == ConnectionState.Open)
-            {
                 connection.Close();
-            }
         }
     }
 
