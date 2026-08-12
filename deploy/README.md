@@ -32,6 +32,10 @@ placecontext connect --code PC1.…
 placecontext status
 ```
 
+The first time you run install on a fresh machine, cluster setup will pull the PlaceContext image
+from the remote registry if a local `placecontext-local.tar` image is not already available.
+Set `LOCAL_IMAGE_ONLY=1` for offline installs that require the packaged image only.
+
 ## Operator TUI
 
 ```bash

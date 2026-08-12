@@ -12,6 +12,7 @@ same durable platform.
 # Install the placecontext CLI, then open the TUI
 curl -fsSL https://get.placecontext.ai/install.sh | bash
 placecontext               # install / upgrade / connect a cluster
+# one command installs CLI + assets; cluster install pulls the PlaceContext image if not cached locally
 # after cluster install → portal http://localhost:7700   ·   MCP /mcp
 ```
 
@@ -135,6 +136,8 @@ flowchart LR
 ## Developing
 
 ```bash
+./setup-tui.sh                      # interactive install wizard (choose option 1 for full local setup)
+                                    # pulls image from registry by default; set LOCAL_IMAGE_ONLY=1 for air-gapped/offline use
 ./run.sh                            # first run: prerequisites, database, build, migrations, app
 ./run.sh --fresh                    # destructive: recreate the local database, then start
 ./start.sh                          # later runs: build and start the prepared app

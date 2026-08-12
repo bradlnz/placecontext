@@ -47,6 +47,8 @@ BASE_URL="${PLACECONTEXT_BASE_URL:-${PLACECONTEXT_BUCKET_URL:-}}"
 [ -z "$BASE_URL" ] && [ -f "$ROOT/BASE_URL" ] && BASE_URL="$(tr -d '[:space:]' < "$ROOT/BASE_URL")"
 [ -z "$BASE_URL" ] && [ -f "$ROOT/BUCKET_URL" ] && BASE_URL="$(tr -d '[:space:]' < "$ROOT/BUCKET_URL")"
 BASE_URL="${BASE_URL:-https://placecontext.syd1.cdn.digitaloceanspaces.com}"
+PCTL_IMAGE_PULL_POLICY="${PCTL_IMAGE_PULL_POLICY:-Always}"
+PCTL_LOCAL_IMAGE_REQUIRED="${PCTL_LOCAL_IMAGE_REQUIRED:-0}"
 KUBECTL="${PCTL_KUBECTL:-kubectl}"
 # Tailscale OAuth client file paths — saved once by `placecontext ts-oauth`, then join codes
 # auto-mint a fresh key from these credentials instead of needing --ts-authkey every time.
@@ -489,9 +491,11 @@ apply_manifests() {
   if [ -f "$K3S_DIR/placecontext.yaml" ]; then
     if [ "${VERBOSE:-0}" -ge 1 ]; then
       sed -e "s|__IMAGE__|${image}|g" -e "s|__NAMESPACE__|${PCTL_NAMESPACE}|g" \
+        -e "s|__IMAGE_PULL_POLICY__|${PCTL_IMAGE_PULL_POLICY}|g" \
         "$K3S_DIR/placecontext.yaml" | kube -n "$PCTL_NAMESPACE" apply -f -
     else
       sed -e "s|__IMAGE__|${image}|g" -e "s|__NAMESPACE__|${PCTL_NAMESPACE}|g" \
+        -e "s|__IMAGE_PULL_POLICY__|${PCTL_IMAGE_PULL_POLICY}|g" \
         "$K3S_DIR/placecontext.yaml" | kube -n "$PCTL_NAMESPACE" apply -f - >/dev/null
     fi
     ok "host deployment applied (image=${image})"
@@ -861,11 +865,22 @@ cmd_install() {
     if [ -s "$PCTL_IMAGE_TAR" ]; then
       say "Importing image tarball ($(du -h "$PCTL_IMAGE_TAR" | cut -f1))…"
       if [ "${VERBOSE:-0}" -ge 1 ]; then
-        k3d image import -c "$PCTL_CLUSTER" "$PCTL_IMAGE_TAR" || warn "image import failed"
+        if k3d image import -c "$PCTL_CLUSTER" "$PCTL_IMAGE_TAR"; then
+          ok "image import finished"
+        elif [ "$PCTL_LOCAL_IMAGE_REQUIRED" = "1" ]; then
+          die "local image import failed — set PCTL_LOCAL_IMAGE_REQUIRED=0 to allow remote pull fallback"
+        else
+          warn "image import failed"
+        fi
       else
-        k3d image import -c "$PCTL_CLUSTER" "$PCTL_IMAGE_TAR" || warn "image import failed"
+        if k3d image import -c "$PCTL_CLUSTER" "$PCTL_IMAGE_TAR"; then
+          ok "image import finished"
+        elif [ "$PCTL_LOCAL_IMAGE_REQUIRED" = "1" ]; then
+          die "local image import failed — set PCTL_LOCAL_IMAGE_REQUIRED=0 to allow remote pull fallback"
+        else
+          warn "image import failed"
+        fi
       fi
-      ok "image import finished (or skipped on error)"
     else
       warn "no image tarball at ${PCTL_IMAGE_TAR:-unset}"
     fi
@@ -951,7 +966,13 @@ cmd_upgrade() {
     use_dev_kubeconfig
     if [ -s "$PCTL_IMAGE_TAR" ]; then
       info "importing image…"
-      k3d image import -c "$PCTL_CLUSTER" "$PCTL_IMAGE_TAR" || warn "image import failed"
+      if k3d image import -c "$PCTL_CLUSTER" "$PCTL_IMAGE_TAR" >/dev/null; then
+        ok "image import finished"
+      elif [ "$PCTL_LOCAL_IMAGE_REQUIRED" = "1" ]; then
+        die "local image import failed — set PCTL_LOCAL_IMAGE_REQUIRED=0 to allow remote pull fallback"
+      else
+        warn "image import failed"
+      fi
     fi
     apply_manifests "$PCTL_IMAGE"
     wait_rollout

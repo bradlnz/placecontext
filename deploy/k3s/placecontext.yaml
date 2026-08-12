@@ -148,7 +148,7 @@ spec:
       containers:
         - name: host
           image: __IMAGE__
-          imagePullPolicy: Always
+          imagePullPolicy: __IMAGE_PULL_POLICY__
           ports:
             - containerPort: 7700
           env:
@@ -294,7 +294,7 @@ spec:
         # Runs independently of the Host so the portal can start without the cluster being available.
         - name: cluster
           image: __IMAGE__
-          imagePullPolicy: Always
+          imagePullPolicy: __IMAGE_PULL_POLICY__
           ports:
             - containerPort: 8081
           env:

@@ -16,6 +16,9 @@ Then run the guided installer:
 placecontext
 ```
 
+The guided installer will download the image from the remote registry when needed
+(it will use `lib/placecontext-local.tar` first if present).
+
 You can also choose a mode directly:
 
 ```bash
