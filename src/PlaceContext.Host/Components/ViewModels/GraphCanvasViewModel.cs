@@ -19,6 +19,7 @@ public static class GraphCatalog
 {
     public static GraphNodeKind NodeKind(string? value) =>
         string.Equals(value, "good", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(value, "artifact", StringComparison.OrdinalIgnoreCase)
             ? GraphNodeKind.Artifact
             : GraphNodeKind.Unknown;
 
@@ -33,12 +34,20 @@ public sealed class GraphCanvasViewModel(IJSRuntime js)
         IComponentViewModel,
         IAsyncDisposable
 {
+    private const int InitialNodeChunk = 2500;
+    private const int NodeChunk = 2500;
+
     private readonly IJSRuntime _js = js;
     private DotNetObjectReference<GraphCanvasViewModel>? _selfReference;
     private GraphVizView? _graph;
     private Func<GraphNodeView, string?>? _nodeUrl;
     private Func<string?, Task>? _nodeClick;
     private string _search = string.Empty;
+    private string? _renderedGraphKey;
+    private GraphVizView? _graphForRender;
+    private Dictionary<string, int> _nodeIndex = [];
+    private HashSet<string> _sentLinkKeys = [];
+    private int _renderedNodeCount;
     public string Id { get; } = "pcgraph-" + Guid.NewGuid().ToString("N");
     public GraphVizView? Graph => _graph;
     public int Height { get; private set; } = 340;
@@ -66,6 +75,7 @@ public sealed class GraphCanvasViewModel(IJSRuntime js)
     public string CanvasStyle => Fullscreen ? "flex:1; min-height:0" : $"height:{Height}px";
     public string DetailStyle => $"max-height:{Height - 20}px";
     public string FullscreenLabel => Fullscreen ? "✕ Exit full screen" : "⛶ Full screen";
+    public bool HasMoreGraphNodes => _graph is not null && _renderedNodeCount < _graph.Nodes.Count;
 
     public string ShortLabel(string label)
     {
@@ -88,6 +98,14 @@ public sealed class GraphCanvasViewModel(IJSRuntime js)
             _graph = graph;
             Selected = null;
             Matches = [];
+            _graphForRender = null;
+            _renderedGraphKey = null;
+            _nodeIndex = [];
+            _sentLinkKeys = [];
+            _renderedNodeCount = 0;
+            if (_graph is not null)
+                for (var i = 0; i < _graph.Nodes.Count; i++)
+                    _nodeIndex[_graph.Nodes[i].Id] = i;
         }
         Height = height;
         _nodeUrl = nodeUrl;
@@ -96,34 +114,125 @@ public sealed class GraphCanvasViewModel(IJSRuntime js)
         _nodeClick = nodeClick;
     }
 
-    public async Task AfterRenderAsync()
+    public async Task LoadMoreAsync()
     {
-        if (_graph is null || _graph.Nodes.Count == 0)
+        if (_graph is null || _renderedNodeCount >= _graph.Nodes.Count)
             return;
-        _selfReference ??= DotNetObjectReference.Create(this);
-        var payload = new
+        var nextCount = Math.Min(_graph.Nodes.Count, _renderedNodeCount + NodeChunk);
+        await LoadToNodeCountAsync(nextCount);
+    }
+
+    public async Task EnsureNodeVisibleAsync(string? nodeId)
+    {
+        if (string.IsNullOrWhiteSpace(nodeId) || _graph is null)
+            return;
+        if (!_nodeIndex.TryGetValue(nodeId, out var targetIndex))
+            return;
+        if (targetIndex < _renderedNodeCount)
+            return;
+        await LoadToNodeCountAsync(targetIndex + 1);
+    }
+
+    private async Task LoadToNodeCountAsync(int targetNodeCount)
+    {
+        if (_graph is null)
+            return;
+
+        var nextCount = Math.Min(_graph.Nodes.Count, targetNodeCount);
+        if (nextCount <= _renderedNodeCount)
+            return;
+
+        var payload = BuildGraphPayload(nextCount);
+        if (payload.Nodes.Count == 0)
+            return;
+        await _js.InvokeVoidAsync("pcgraph.append", Id, BuildPayloadForCall(payload));
+    }
+
+    private GraphPayload BuildGraphPayload(int? targetNodeCount = null)
+    {
+        if (_graph is null)
+            return GraphPayload.Empty;
+
+        var requestedCount = targetNodeCount ?? Math.Min(InitialNodeChunk, _graph.Nodes.Count);
+        var targetCount = Math.Max(requestedCount, _renderedNodeCount + 1);
+        if (targetCount > _graph.Nodes.Count)
+            targetCount = _graph.Nodes.Count;
+
+        var nodesToRender = new List<GraphNodeView>(_graph.Nodes.Take(targetCount).Skip(_renderedNodeCount));
+        if (nodesToRender.Count == 0)
+            return GraphPayload.Empty;
+
+        var visibleIds = new HashSet<string>(_graph.Nodes.Take(targetCount).Select(n => n.Id), StringComparer.Ordinal);
+        var linksToRender = new List<GraphLinkView>();
+        foreach (var link in _graph.Links)
         {
-            nodes = _graph
-                .Nodes.Take(180)
-                .Select(node => new
-                {
-                    id = node.Id,
-                    label = node.Label,
-                    degree = node.Degree,
-                    god = node.IsGod,
-                    kind = node.Kind,
-                    labeled = node.Labeled,
-                }),
-            links = _graph
-                .Links.Take(500)
-                .Select(link => new
-                {
-                    source = link.Source,
-                    target = link.Target,
-                    confidence = link.Confidence,
-                }),
+            if (linksToRender.Count > 50000) break;
+            if (!visibleIds.Contains(link.Source) || !visibleIds.Contains(link.Target))
+                continue;
+            var key = BuildLinkKey(link.Source, link.Target);
+            if (_sentLinkKeys.Add(key))
+                linksToRender.Add(link);
+        }
+
+        _renderedNodeCount = targetCount;
+
+        return new GraphPayload(
+            nodesToRender,
+            linksToRender,
+            _graph.Nodes.Count,
+            _graph.Links.Count
+        );
+    }
+
+    private static string BuildLinkKey(string source, string target)
+    {
+        return string.CompareOrdinal(source, target) < 0
+            ? $"{source}:{target}"
+            : $"{target}:{source}";
+    }
+
+    private sealed record GraphPayload(
+        IReadOnlyList<GraphNodeView> Nodes,
+        IReadOnlyList<GraphLinkView> Links,
+        int TotalNodes,
+        int TotalLinks
+    )
+    {
+        public static readonly GraphPayload Empty = new(Array.Empty<GraphNodeView>(), Array.Empty<GraphLinkView>(), 0, 0);
+    }
+
+    private static object BuildNodePayload(GraphNodeView n)
+    {
+        return new
+        {
+            id = n.Id,
+            label = n.Label,
+            degree = n.Degree,
+            god = n.IsGod,
+            kind = n.Kind,
+            labeled = n.Labeled,
         };
-        await _js.InvokeVoidAsync("pcgraph.init", Id, payload, _selfReference);
+    }
+
+    private static object BuildLinkPayload(GraphLinkView l)
+    {
+        return new
+        {
+            source = l.Source,
+            target = l.Target,
+            confidence = l.Confidence,
+        };
+    }
+
+    private static string BuildGraphRenderKey(GraphVizView graph)
+    {
+        if (graph.Nodes.Count == 0)
+            return $"{graph.ProjectId}:0:0";
+
+        var first = graph.Nodes.First();
+        var last = graph.Nodes[^1];
+        return
+            $"{graph.ProjectId}|{graph.Nodes.Count}|{graph.Links.Count}|{first.Id}|{first.Label}|{last.Id}|{last.Label}";
     }
 
     [JSInvokable]
@@ -243,8 +352,46 @@ public sealed class GraphCanvasViewModel(IJSRuntime js)
 
     public Task ClearAsync() => SelectAsync(null);
 
-    public Task SelectAsync(string? nodeId) =>
-        _js.InvokeVoidAsync("pcgraph.select", Id, nodeId).AsTask();
+    public async Task SelectAsync(string? nodeId)
+    {
+        await EnsureNodeVisibleAsync(nodeId);
+        await _js.InvokeVoidAsync("pcgraph.select", Id, nodeId);
+    }
+
+    private object BuildPayloadForCall(GraphPayload payload) =>
+        new
+        {
+            graphKey = _renderedGraphKey,
+            totalNodes = payload.TotalNodes,
+            totalLinks = payload.TotalLinks,
+            nodes = payload.Nodes.Select(BuildNodePayload),
+            links = payload.Links.Select(BuildLinkPayload),
+        };
+
+    public Task AfterRenderAsync()
+    {
+        if (_graph is null || _graph.Nodes.Count == 0)
+            return Task.CompletedTask;
+
+        var graphKey = BuildGraphRenderKey(_graph);
+        if (_renderedGraphKey == graphKey && ReferenceEquals(_graphForRender, _graph) && _renderedNodeCount > 0)
+            return Task.CompletedTask;
+
+        _selfReference ??= DotNetObjectReference.Create(this);
+        var payload = BuildGraphPayload();
+        if (payload.Nodes.Count == 0)
+            return Task.CompletedTask;
+
+        _graphForRender = _graph;
+        _renderedGraphKey = graphKey;
+
+        return _js.InvokeVoidAsync("pcgraph.init", Id, BuildPayloadForCall(payload), _selfReference).AsTask();
+    }
+
+    private GraphPayload BuildGraphPayload()
+    {
+        return BuildGraphPayload(InitialNodeChunk);
+    }
 
     public async ValueTask DisposeAsync()
     {

@@ -2,15 +2,29 @@
 @inject GraphCanvasViewModel Vm
 @implements IAsyncDisposable
 
-<div style="@(Vm.Fullscreen ? "position:fixed; inset:0; z-index:200; background:var(--bg); padding:14px; display:flex; flex-direction:column" : "position:relative")">
+<div class="pcgraph-shell" style="@Vm.ContainerStyle" @onmouseup="StopPdfWindowDrag" @onmouseleave="StopPdfWindowDrag">
     @if (Searchable || AllowFullscreen)
     {
         <div class="chrome-bar" style="@(Vm.Fullscreen ? "" : "position:absolute; top:8px; left:10px; right:10px; z-index:5")">
             @if (Searchable)
             {
                 <div class="search-wrap">
-                    <input class="dcinput search-input" placeholder="search nodes…"
-                           value="@Vm.SearchTerm" @oninput="OnSearchInput" />
+                        <div class="search-row">
+                            <input class="dcinput search-input" placeholder="search nodes…"
+                                   value="@Vm.SearchTerm" @oninput="OnSearchInput" />
+                            @if (Vm.HasMoreGraphNodes)
+                            {
+                                <button class="dcbtn btn-fs" @onclick="LoadMoreGraphAsync">
+                                    Load more
+                                </button>
+                            }
+                            @if (AllowFullscreen)
+                            {
+                                <button class="dcbtn btn-fs" @onclick="Vm.ToggleFullscreenAsync">
+                                    @(Vm.Fullscreen ? "✕ Exit full screen" : "⛶ Full screen")
+                                </button>
+                        }
+                    </div>
                     @if (Vm.Matches.Count > 0)
                     {
                         <div class="search-drop">
@@ -29,9 +43,14 @@
                     }
                 </div>
             }
-            <span class="flex-1"></span>
-            @if (AllowFullscreen)
+            else if (AllowFullscreen)
             {
+                @if (Vm.HasMoreGraphNodes)
+                {
+                    <button class="dcbtn btn-fs" @onclick="LoadMoreGraphAsync">
+                        Load more
+                    </button>
+                }
                 <button class="dcbtn btn-fs" @onclick="Vm.ToggleFullscreenAsync">
                     @(Vm.Fullscreen ? "✕ Exit full screen" : "⛶ Full screen")
                 </button>
@@ -44,8 +63,16 @@
        queries. Clicking a connection re-selects in the canvas too (pcgraph.select). *@
     @if (Vm.Selected is { } sel)
     {
-        <div class="dccard detail-card" style="max-height:@(Height - 20)px">
-            <div class="card-head">
+        var pdfArtifact = PdfWindowArtifact;
+        var isPdfPanel = pdfArtifact is not null;
+        <div class="dccard detail-card @(isPdfPanel ? "pdf-detail-window" : "")" style="@(isPdfPanel ? PdfWindowStyle : Vm.DetailStyle)">
+            <div class="card-head @(isPdfPanel ? "pdf-window-head" : "")">
+                @if (isPdfPanel)
+                {
+                    <span class="pdf-window-handle"
+                          @onmousedown="StartPdfWindowDrag"
+                          @onmousemove="OnPdfWindowDrag"></span>
+                }
                 <div class="flex-min">
                     <div class="sel-label">@Vm.ShortLabel(sel.Label)</div>
                     <div class="sel-id">@sel.Id</div>
@@ -78,7 +105,7 @@
                 }
                 else if (Vm.IsPdf(artifact))
                 {
-                    <iframe src="@Vm.PreviewUrl(artifact)" class="graph-preview-frame" title="@artifact.Title"
+                    <iframe src="@Vm.PreviewUrl(artifact)" class="graph-preview-frame graph-pdf-frame" title="@artifact.Title"
                             loading="lazy" referrerpolicy="no-referrer"></iframe>
                 }
                 else if (Vm.IsPreviewable(artifact))
@@ -102,7 +129,7 @@
                 }
                 else if (Vm.IsPdf(preview))
                 {
-                    <iframe src="@Vm.PreviewUrl(preview)" class="graph-preview-frame" title="@preview.Title"
+                    <iframe src="@Vm.PreviewUrl(preview)" class="graph-preview-frame graph-pdf-frame" title="@preview.Title"
                             loading="lazy" referrerpolicy="no-referrer"></iframe>
                 }
                 else
@@ -173,8 +200,67 @@
     protected override void OnInitialized() => Vm.Attach(() => InvokeAsync(StateHasChanged));
     protected override void OnParametersSet() =>
         Vm.SetParameters(Graph, Height, NodeUrl, Searchable, AllowFullscreen, nodeId => NodeClick.InvokeAsync(nodeId));
-    protected override Task OnAfterRenderAsync(bool firstRender) => Vm.AfterRenderAsync();
+    protected override Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_lastSelectedNodeId != Vm.Selected?.Id && Vm.Selected is not null)
+        {
+            _lastSelectedNodeId = Vm.Selected.Id;
+            if (Vm.Selected.Artifact is { } artifact && Vm.IsPdf(artifact))
+            {
+                _pdfWindowLeft = 14;
+                _pdfWindowTop = 14;
+            }
+        }
+        else if (Vm.Selected is null)
+        {
+            _lastSelectedNodeId = null;
+            _isPdfWindowDragging = false;
+        }
+        return Vm.AfterRenderAsync();
+    }
+
     private void OnSearchInput(ChangeEventArgs args) => Vm.SearchNodes(args.Value?.ToString());
+    private Task LoadMoreGraphAsync() => Vm.LoadMoreAsync();
     public ValueTask DisposeAsync() => Vm.DisposeAsync();
     public Task SelectNodeAsync(string? nodeId) => Vm.SelectAsync(nodeId);
+    private GraphNodeArtifactRef? PdfWindowArtifact =>
+        Vm.Selected?.Artifact is { } artifact && Vm.IsPdf(artifact) ? artifact : null;
+    private string PdfWindowStyle =>
+        $"top:{_pdfWindowTop}px; left:{_pdfWindowLeft}px; z-index:20; max-height:{Math.Max(Height - 20, 220)}px;";
+
+    private string? _lastSelectedNodeId;
+    private bool _isPdfWindowDragging;
+    private double _pdfWindowLeft = 14;
+    private double _pdfWindowTop = 14;
+    private double _dragStartX;
+    private double _dragStartY;
+    private double _windowStartLeft;
+    private double _windowStartTop;
+
+    private void StartPdfWindowDrag(MouseEventArgs args)
+    {
+        if (PdfWindowArtifact is null || Vm.Selected is null)
+            return;
+
+        _isPdfWindowDragging = true;
+        _dragStartX = args.ClientX;
+        _dragStartY = args.ClientY;
+        _windowStartLeft = _pdfWindowLeft;
+        _windowStartTop = _pdfWindowTop;
+    }
+
+    private void OnPdfWindowDrag(MouseEventArgs args)
+    {
+        if (!_isPdfWindowDragging)
+            return;
+
+        _pdfWindowLeft = _windowStartLeft + (args.ClientX - _dragStartX);
+        _pdfWindowTop = _windowStartTop + (args.ClientY - _dragStartY);
+        StateHasChanged();
+    }
+
+    private void StopPdfWindowDrag(MouseEventArgs _)
+    {
+        _isPdfWindowDragging = false;
+    }
 }
