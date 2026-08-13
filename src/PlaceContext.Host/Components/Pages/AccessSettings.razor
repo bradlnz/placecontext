@@ -2,6 +2,7 @@
 @layout PlaceContext.Host.Components.Layout.SettingsLayout
 @attribute [Authorize(Policy = Policies.DefaultAdmin)]
 @using PlaceContext.Host.Components.ViewModels
+@using Microsoft.AspNetCore.Components.Authorization
 @inject AccessSettingsViewModel Vm
 @implements IDisposable
 
@@ -15,6 +16,20 @@
             <h2>Access</h2>
             <p>Manage members, roles and permission overrides. Explicit overrides take precedence over role permissions.</p>
         </div>
+@if (_isImpersonating)
+{
+            <div class="impersonation-header">
+                <div class="impersonation-banner">
+                    You are impersonating <strong>@_currentDisplayName</strong>.
+                    Signed in as <strong>@_impersonatorDisplay</strong>.
+                </div>
+                <form method="post" action="/auth/impersonate/stop" class="impersonation-stop-form">
+                    <AntiforgeryToken />
+                    <input type="hidden" name="returnUrl" value="/settings/access" />
+                    <button class="dcbtn danger" type="submit">Stop impersonation</button>
+                </form>
+            </div>
+        }
     </header>
 
     @if (Vm.Loading)
@@ -105,6 +120,13 @@
                                     <option value="@m.Role">@m.Role</option>
                                 }
                             </select>
+                            <form method="post" action="/auth/impersonate">
+                                <AntiforgeryToken />
+                                <input type="hidden" name="userId" value="@m.Id" />
+                                <input type="hidden" name="returnUrl" value="/settings/access" />
+                                <button type="submit" class="dcbtn"
+                                        disabled="@(_isImpersonating || m.Id == Vm.CurrentUserId)">Impersonate</button>
+                            </form>
                             <button class="dcbtn perm-toggle" @onclick="@(() => Vm.ToggleMatrixAsync(m.Id))">
                                 @(Vm.Expanded == m.Id ? "Hide permissions" : "Permissions")
                             </button>
@@ -257,11 +279,54 @@
         => Vm.Attach(() => InvokeAsync(StateHasChanged));
 
     protected override async Task OnInitializedAsync()
-        => await Vm.LoadAsync();
+    {
+        await Vm.LoadAsync();
+        await LoadImpersonationStateAsync();
+    }
 
     protected override Task OnAfterRenderAsync(bool firstRender)
         => Vm.AfterRenderAsync(firstRender);
 
     public void Dispose()
         => Vm.Detach();
+
+    [CascadingParameter]
+    public Task<AuthenticationState> AuthenticationStateTask { get; set; } = default!;
+
+    private const string ClaimImpersonating = "pc-impersonate-active";
+    private const string ClaimImpersonatorName = "pc-impersonate-impersonator-name";
+    private const string ClaimImpersonatorEmail = "pc-impersonate-impersonator-email";
+
+    private bool _isImpersonating;
+    private string _impersonatorDisplay = "";
+    private string _currentDisplayName = "";
+
+    private async Task LoadImpersonationStateAsync()
+    {
+        var auth = await AuthenticationStateTask;
+        var user = auth.User;
+        if (user.Identity is null || !user.Identity.IsAuthenticated)
+        {
+            _isImpersonating = false;
+            _currentDisplayName = "";
+            _impersonatorDisplay = "";
+            return;
+        }
+
+        _isImpersonating = user.FindFirst(ClaimImpersonating) is not null;
+        if (!_isImpersonating)
+        {
+            _currentDisplayName = "";
+            _impersonatorDisplay = "";
+            return;
+        }
+
+        _currentDisplayName = !string.IsNullOrWhiteSpace(user.Identity?.Name)
+            ? user.Identity.Name
+            : "this user";
+        _impersonatorDisplay = user.FindFirst(ClaimImpersonatorName)?.Value
+            ?? user.FindFirst(ClaimImpersonatorEmail)?.Value
+            ?? "a workspace admin";
+        StateHasChanged();
+    }
 }

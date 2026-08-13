@@ -1147,7 +1147,11 @@ else
                 <section class="detail-section action-panel">
                     <div class="section-label">Automation access</div>
                     <p class="section-help">Assign this client’s available automations to control what appears in their automation workspace.</p>
-                    @if (Vm.LoadingClientChainAssignments)
+                    @if (!Vm.CanAssignAutomationChains && !Vm.CanManageAutomationCatalog)
+                    {
+                        <div class="run-empty">You do not have permission to edit automation assignments.</div>
+                    }
+                    else if (Vm.LoadingClientChainAssignments)
                     {
                         <div class="run-empty">Loading automation assignments…</div>
                     }
@@ -1179,7 +1183,11 @@ else
                 <section class="detail-section action-panel">
                     <div class="section-label">CRM users</div>
                     <p class="section-help">Assign CRM users who should be linked to this contact.</p>
-                    @if (Vm.LoadingClientUserAssignments)
+                    @if (!Vm.CanManageMembers)
+                    {
+                        <div class="run-empty">This action requires the members.manage permission.</div>
+                    }
+                    else if (Vm.LoadingClientUserAssignments)
                     {
                         <div class="run-empty">Loading user assignments…</div>
                     }
@@ -1211,16 +1219,20 @@ else
                 <section class="detail-section run-section action-panel">
                     <div class="section-label">Run a lifecycle automation</div>
                     <p class="section-help">The chain starts with this client’s contact details, notes, and lifecycle stage as JSON.</p>
-                    @if (Vm.Chains.Count == 0)
+                    @if (!Vm.CanRunAutomationJobs)
                     {
-                        <div class="run-empty">No job chains exist in this project yet.</div>
+                        <div class="run-empty">You do not have permission to run automations.</div>
+                    }
+                    else if (Vm.RunableChains.Count() == 0)
+                    {
+                        <div class="run-empty">No automation chains are available for this client.</div>
                     }
                     else
                     {
                         <div class="run-controls">
                             <select class="dcinput" @bind="Vm.SelectedChainId">
                                 <option value="">Select an automation…</option>
-                                @foreach (var chain in Vm.Chains)
+                                @foreach (var chain in Vm.RunableChains)
                                 {
                                     <option value="@chain.Id">@chain.Name (@chain.Steps.Count step@(chain.Steps.Count == 1 ? "" : "s"))</option>
                                 }

@@ -31,6 +31,13 @@ namespace PlaceContext.Host.Controllers;
 public sealed class AuthController : ControllerBase
 {
     private const string ManualLogoutCookie = "placecontext_manual_logout";
+    private const string ClaimPrefix = "pc-impersonate";
+    private const string ClaimImpersonatorId = ClaimPrefix + "-impersonator-id";
+    private const string ClaimImpersonatorTenant = ClaimPrefix + "-impersonator-tenant";
+    private const string ClaimImpersonatorEmail = ClaimPrefix + "-impersonator-email";
+    private const string ClaimImpersonatorName = ClaimPrefix + "-impersonator-name";
+    private const string ClaimImpersonatorRole = ClaimPrefix + "-impersonator-role";
+    private const string ClaimImpersonating = ClaimPrefix + "-active";
     private readonly IAuthService _auth;
     private readonly PortalToken _portal;
     private readonly IMembershipService _members;
@@ -428,11 +435,62 @@ public sealed class AuthController : ControllerBase
         return Redirect("/login");
     }
 
+    [HttpPost("/auth/impersonate")]
+    [Authorize(Policy = Policies.DefaultAdmin)]
+    public async Task<IActionResult> Impersonate([FromForm] Guid userId, [FromForm] string? returnUrl)
+    {
+        if (!await ValidAntiforgeryAsync())
+            return BadRequest();
+
+        if (HttpContext.User.FindFirst(ClaimImpersonating) is not null)
+            return Redirect(LocalOrHome(returnUrl) + AddQuery(LocalOrHome(returnUrl), "error", "Already impersonating a user."));
+
+        var target = await _members.GetMemberAsync(userId);
+        if (target is null)
+            return Redirect(LocalOrHome(returnUrl) + AddQuery(LocalOrHome(returnUrl), "error", "Invalid target user."));
+
+        var actor = ResolveActorIdentity(HttpContext.User);
+        if (actor is null)
+            return Redirect("/login");
+
+        if (actor.UserId == target.Id)
+            return Redirect(LocalOrHome(returnUrl) + AddQuery(LocalOrHome(returnUrl), "error", "Cannot impersonate yourself."));
+
+        var actorUser = new AuthUser(
+            actor.UserId,
+            actor.TenantId,
+            actor.Email,
+            actor.DisplayName,
+            actor.Role);
+
+        await SignInAsync(
+            HttpContext,
+            new AuthUser(target.Id, actor.TenantId, target.Email, target.DisplayName, target.Role),
+            actorUser);
+
+        return Redirect(LocalOrHome(returnUrl));
+    }
+
+    [HttpPost("/auth/impersonate/stop")]
+    [Authorize]
+    public async Task<IActionResult> StopImpersonation([FromForm] string? returnUrl)
+    {
+        if (!await ValidAntiforgeryAsync())
+            return BadRequest();
+
+        var actor = ResolveImpersonatorIdentity(HttpContext.User);
+        if (actor is null)
+            return Redirect(LocalOrHome(returnUrl) + AddQuery(LocalOrHome(returnUrl), "error", "No active impersonation."));
+
+        await SignInAsync(HttpContext, actor);
+        return Redirect(LocalOrHome(returnUrl));
+    }
+
     // Signs the user into the cookie scheme with their identity + tenant + role claims.
-    private static Task SignInAsync(HttpContext ctx, AuthUser user)
+    private static Task SignInAsync(HttpContext ctx, AuthUser user, AuthUser? impersonator = null)
     {
         ctx.Response.Cookies.Delete(ManualLogoutCookie);
-        var claims = new[]
+        var claims = new List<Claim>
         {
             new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
             new Claim(ClaimTypes.Email, user.Email),
@@ -441,9 +499,75 @@ public sealed class AuthController : ControllerBase
             new Claim(ClaimTypes.Role, user.Role.ToString()),
             new Claim("role", user.Role.ToString()),
         };
+        if (impersonator is not null)
+        {
+            claims.Add(new Claim(ClaimImpersonating, "1"));
+            claims.Add(new Claim(ClaimImpersonatorId, impersonator.Id.ToString()));
+            claims.Add(new Claim(ClaimImpersonatorTenant, impersonator.TenantId.ToString()));
+            claims.Add(new Claim(ClaimImpersonatorEmail, impersonator.Email));
+            claims.Add(new Claim(ClaimImpersonatorName, impersonator.DisplayName));
+            claims.Add(new Claim(ClaimImpersonatorRole, impersonator.Role.ToString()));
+        }
         var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
         return ctx.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme,
             new ClaimsPrincipal(identity), new AuthenticationProperties { IsPersistent = true });
+    }
+
+    private sealed record ActorIdentity(
+        Guid UserId,
+        Guid TenantId,
+        string Email,
+        string DisplayName,
+        string Role);
+
+    private static ActorIdentity? ResolveActorIdentity(ClaimsPrincipal user)
+    {
+        var id = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        var tenant = user.FindFirst("tenant")?.Value;
+        var email = user.FindFirst(ClaimTypes.Email)?.Value;
+        var name = user.FindFirst(ClaimTypes.Name)?.Value;
+        var role = user.FindFirst(ClaimTypes.Role)?.Value ?? user.FindFirst("role")?.Value;
+        if (!Guid.TryParse(id, out var userId)
+            || !Guid.TryParse(tenant, out var tenantId)
+            || string.IsNullOrWhiteSpace(role))
+        {
+            return null;
+        }
+
+        return new ActorIdentity(
+            userId,
+            tenantId,
+            email ?? string.Empty,
+            name ?? string.Empty,
+            role);
+    }
+
+    private static AuthUser? ResolveImpersonatorIdentity(ClaimsPrincipal user)
+    {
+        var id = user.FindFirst(ClaimImpersonatorId)?.Value;
+        var tenant = user.FindFirst(ClaimImpersonatorTenant)?.Value;
+        var email = user.FindFirst(ClaimImpersonatorEmail)?.Value;
+        var name = user.FindFirst(ClaimImpersonatorName)?.Value;
+        var role = user.FindFirst(ClaimImpersonatorRole)?.Value;
+        if (!Guid.TryParse(id, out var userId)
+            || !Guid.TryParse(tenant, out var tenantId)
+            || string.IsNullOrWhiteSpace(role))
+        {
+            return null;
+        }
+
+        return new AuthUser(
+            userId,
+            tenantId,
+            email ?? string.Empty,
+            name ?? string.Empty,
+            role);
+    }
+
+    private static string AddQuery(string baseUrl, string key, string value)
+    {
+        var separator = baseUrl.Contains('?') ? "&" : "?";
+        return baseUrl + separator + $"{key}={Uri.EscapeDataString(value)}";
     }
 
     // Guards against open redirects: only a same-site relative path (e.g. "/connect/authorize?…") is

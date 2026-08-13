@@ -1,9 +1,12 @@
 .access-settings-page { width:min(920px,100%); margin:0 auto; padding:30px 28px 56px; box-sizing:border-box; }
-.settings-head { margin-bottom:18px; }
+.settings-head { margin-bottom:18px; display:flex; align-items:flex-start; justify-content:space-between; gap:14px; flex-wrap:wrap; }
 .settings-kicker { color:var(--brand-2); font-size:9px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; }
 .settings-head h2 { margin:6px 0 5px; color:var(--text); font-size:24px; }
 .settings-head p { margin:0; color:var(--text-2); font-size:11.5px; }
 .message { margin-bottom:12px; padding:10px 12px; border:1px solid var(--border); border-radius:9px; color:var(--text-2); font-size:10.5px; }
+.impersonation-header { margin-top:8px; display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+.impersonation-banner { display:flex; align-items:center; padding:10px 12px; border:1px solid color-mix(in srgb,var(--bad) 30%, var(--border)); border-radius:9px; background:color-mix(in srgb,var(--bad) 8%, transparent); color:var(--text-2); font-size:11px; }
+.impersonation-stop-form { margin:0; }
 
 .invite-card { display:flex; flex-direction:column; gap:10px; margin-bottom:14px; padding:16px; }
 .toggle-row { display:flex; align-items:center; gap:9px; width:max-content; font-size:13px; font-weight:600; cursor:pointer; }

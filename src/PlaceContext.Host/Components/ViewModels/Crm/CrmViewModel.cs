@@ -24,6 +24,7 @@ public sealed class CrmViewModel : PageViewModel
     private bool _canManageClients;
     private bool _canRunAutomations;
     private bool _canManageAutomationCatalog;
+    private bool _canAssignAutomationChains;
     private bool _canPostClientNotes;
     private bool _canUploadArtifacts;
     private bool _canManageCalendars;
@@ -108,6 +109,7 @@ public sealed class CrmViewModel : PageViewModel
     public bool CanPostNotes => _canPostClientNotes;
     public bool CanUploadArtifacts => _canUploadArtifacts;
     public bool CanManageCalendarEntries => _canManageCalendars;
+    public bool CanAssignAutomationChains => _canAssignAutomationChains;
     public bool CanSendComms => _canSendCommunications;
     public bool CanManageMembers => _canManageMembers;
     private static string Slugify(string value)
@@ -366,11 +368,12 @@ public sealed class CrmViewModel : PageViewModel
         Loading = true;
         try
         {
-            var canManageClientsTask = Permissions.HasAsync(Permission.DataWrite);
+            var canManageClientsTask = Permissions.HasAsync(Permission.CrmOpportunityWrite);
             var canRunAutomationsTask = Permissions.HasAsync(Permission.JobsRun);
             var canManageAutomationCatalogTask = Permissions.HasAsync(Permission.CrmAutomationManage);
-            var canPostNotesTask = Permissions.HasAsync(Permission.DataWrite);
-            var canUploadArtifactsTask = Permissions.HasAsync(Permission.DataWrite);
+            var canAssignAutomationTask = Permissions.HasAsync(Permission.CrmAutomationAssign);
+            var canPostNotesTask = Permissions.HasAsync(Permission.CrmOpportunityWrite);
+            var canUploadArtifactsTask = Permissions.HasAsync(Permission.CrmOpportunityWrite);
             var canManageCalendarsTask = Permissions.HasAsync(Permission.DataWrite);
             var canSendCommsTask = Permissions.HasAsync(Permission.CrmCommsSend);
             var canManageMembersTask = Permissions.HasAsync(Permission.MembersManage);
@@ -384,6 +387,7 @@ public sealed class CrmViewModel : PageViewModel
                 canManageClientsTask,
                 canRunAutomationsTask,
                 canManageAutomationCatalogTask,
+                canAssignAutomationTask,
                 canPostNotesTask,
                 canUploadArtifactsTask,
                 canManageCalendarsTask,
@@ -398,6 +402,7 @@ public sealed class CrmViewModel : PageViewModel
             _canManageClients = await canManageClientsTask;
             _canRunAutomations = await canRunAutomationsTask;
             _canManageAutomationCatalog = await canManageAutomationCatalogTask;
+            _canAssignAutomationChains = await canAssignAutomationTask;
             _canPostClientNotes = await canPostNotesTask;
             _canUploadArtifacts = await canUploadArtifactsTask;
             _canManageCalendars = await canManageCalendarsTask;
@@ -1343,10 +1348,10 @@ public sealed class CrmViewModel : PageViewModel
     {
         if (Selected is null)
             return;
-        if (!_canManageAutomationCatalog)
+        if (!_canAssignAutomationChains && !_canManageAutomationCatalog)
         {
             ClientChainAssignmentMessage =
-                "The crm.automation.manage permission is required to edit automation assignments.";
+                "A CRM automation-assignment permission is required to edit automation assignments.";
             return;
         }
 
@@ -1417,7 +1422,7 @@ public sealed class CrmViewModel : PageViewModel
     {
         if (Selected is null)
             return;
-        if (!_canManageAutomationCatalog)
+        if (!_canAssignAutomationChains && !_canManageAutomationCatalog)
             return;
 
         LoadingClientChainAssignments = true;

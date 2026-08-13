@@ -36,6 +36,8 @@ public static class RolePermissionDefaults
     {
         Permission.CrmView,
         Permission.CrmCommsSend,
+        Permission.CrmOpportunityWrite,
+        Permission.CrmAutomationAssign,
     };
 
     private static readonly IReadOnlySet<string> MemberDefaults =

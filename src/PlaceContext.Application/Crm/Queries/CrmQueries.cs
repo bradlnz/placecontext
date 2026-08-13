@@ -28,7 +28,7 @@ public sealed record ListCrmClientAssignedJobChainsQuery(
     : IQuery<IReadOnlyList<Guid>>,
     IRequiresPermission
 {
-    public string RequiredPermission => Permission.CrmAutomationManage;
+    public string RequiredPermission => Permission.CrmAutomationAssign;
 }
 
 public sealed record ListCrmClientAssignedUsersQuery(

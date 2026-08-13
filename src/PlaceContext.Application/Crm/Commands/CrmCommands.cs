@@ -14,19 +14,19 @@ public sealed record SaveCrmClientCommand(
     string? Notes,
     Guid? ClientId = null) : ICommand<CrmClientView>, IRequiresPermission
 {
-    public string RequiredPermission => Permission.DataWrite;
+    public string RequiredPermission => Permission.CrmOpportunityWrite;
 }
 
 public sealed record MoveCrmClientCommand(
     Guid ClientId,
     CustomerLifecycleStage LifecycleStage) : ICommand<CrmClientView>, IRequiresPermission
 {
-    public string RequiredPermission => Permission.DataWrite;
+    public string RequiredPermission => Permission.CrmOpportunityWrite;
 }
 
 public sealed record DeleteCrmClientCommand(Guid ClientId) : ICommand<bool>, IRequiresPermission
 {
-    public string RequiredPermission => Permission.DataWrite;
+    public string RequiredPermission => Permission.CrmOpportunityWrite;
 }
 
 public sealed record RunCrmClientAutomationCommand(Guid ClientId, Guid ChainId)
@@ -40,13 +40,13 @@ public sealed record SetCrmClientAssignedJobChainsCommand(
     Guid ClientId,
     IReadOnlyList<Guid> ChainIds) : ICommand<IReadOnlyList<Guid>>, IRequiresPermission
 {
-    public string RequiredPermission => Permission.CrmAutomationManage;
+    public string RequiredPermission => Permission.CrmAutomationAssign;
 }
 
 public sealed record AddCrmClientNoteCommand(Guid ClientId, string Body)
     : ICommand<CrmCommunicationView>, IRequiresPermission
 {
-    public string RequiredPermission => Permission.DataWrite;
+    public string RequiredPermission => Permission.CrmOpportunityWrite;
 }
 
 public sealed record SendCrmClientMessageCommand(
@@ -64,13 +64,13 @@ public sealed record AttachCrmClientArtifactCommand(
     string? ContentType,
     byte[] Content) : ICommand<CrmClientArtifactView>, IRequiresPermission
 {
-    public string RequiredPermission => Permission.DataWrite;
+    public string RequiredPermission => Permission.CrmOpportunityWrite;
 }
 
 public sealed record RemoveCrmClientArtifactCommand(Guid ArtifactId)
     : ICommand<bool>, IRequiresPermission
 {
-    public string RequiredPermission => Permission.DataWrite;
+    public string RequiredPermission => Permission.CrmOpportunityWrite;
 }
 
 public sealed record CreateCrmAppointmentCommand(Guid ProjectId, Guid? CalendarId, Guid? ClientId, string Title,

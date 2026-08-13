@@ -139,9 +139,73 @@ public sealed class DeleteCrmCalendarHandler : ICommandHandler<DeleteCrmCalendar
 
 public sealed class ListCrmCalendarsHandler : IQueryHandler<ListCrmCalendarsQuery, IReadOnlyList<CrmCalendarView>>
 {
-    private readonly ICrmCalendarRepository _calendars; public ListCrmCalendarsHandler(ICrmCalendarRepository calendars) => _calendars = calendars;
+    private readonly ICrmCalendarRepository _calendars;
+    private readonly ICrmClientRepository _clients;
+    private readonly ICrmClientUserAssignmentRepository _assignments;
+    private readonly ICrmUserRepository _crmUsers;
+    private readonly ICrmAppointmentRepository _appointments;
+    private readonly CrmUserScope _scope;
+    private readonly ICurrentUser _currentUser;
+
+    public ListCrmCalendarsHandler(
+        ICrmCalendarRepository calendars,
+        ICrmClientRepository clients,
+        ICrmClientUserAssignmentRepository assignments,
+        ICrmUserRepository crmUsers,
+        ICrmAppointmentRepository appointments,
+        CrmUserScope scope,
+        ICurrentUser currentUser)
+        => (_calendars, _clients, _assignments, _crmUsers, _appointments, _scope, _currentUser)
+            = (calendars, clients, assignments, crmUsers, appointments, scope, currentUser);
+
     public async Task<IReadOnlyList<CrmCalendarView>> HandleAsync(ListCrmCalendarsQuery query, CancellationToken ct = default)
-        => (await _calendars.ListForProjectAsync(query.ProjectId, ct)).Select(SaveCrmCalendarHandler.Map).ToArray();
+    {
+        var calendars = (await _calendars.ListForProjectAsync(query.ProjectId, ct))
+            .Select(SaveCrmCalendarHandler.Map)
+            .ToArray();
+
+        if (!string.Equals(_currentUser.Role, UserRole.CrmUser.ToString(), StringComparison.OrdinalIgnoreCase))
+            return calendars;
+
+        var clients = await _clients.ListForProjectAsync(query.ProjectId, ct);
+        var allowedClientIds = (await _scope.FilterByAccessAsync(
+                query.ProjectId,
+                clients,
+                client => client.Id,
+                ct))
+            .Select(client => client.Id)
+            .ToHashSet();
+        if (allowedClientIds.Count == 0)
+            return Array.Empty<CrmCalendarView>();
+
+        var linkedCrmUserIds = new HashSet<Guid>();
+        foreach (var clientId in allowedClientIds)
+        {
+            foreach (var crmUserId in await _assignments.ListForClientAsync(query.ProjectId, clientId, ct))
+                linkedCrmUserIds.Add(crmUserId);
+        }
+
+        if (linkedCrmUserIds.Count == 0)
+            return Array.Empty<CrmCalendarView>();
+
+        var linkedAuthUserIds = (await _crmUsers.ListForProjectAsync(query.ProjectId, ct))
+            .Where(user => linkedCrmUserIds.Contains(user.Id) && user.AuthUserId is not null)
+            .Select(user => user.AuthUserId!.Value)
+            .ToHashSet();
+        if (linkedAuthUserIds.Count == 0)
+            return Array.Empty<CrmCalendarView>();
+
+        var allowedCalendarIds = (await _appointments.ListForProjectAsync(query.ProjectId, ct))
+            .Where(appointment => linkedAuthUserIds.Contains(appointment.CreatedByUserId) && appointment.CalendarId is not null)
+            .Select(appointment => appointment.CalendarId!.Value)
+            .Distinct()
+            .ToHashSet();
+
+        if (allowedCalendarIds.Count == 0)
+            return Array.Empty<CrmCalendarView>();
+
+        return calendars.Where(calendar => allowedCalendarIds.Contains(calendar.Id)).ToArray();
+    }
 }
 
 public sealed class ListCrmAppointmentsHandler

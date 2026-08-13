@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.JSInterop;
 using PlaceContext.Application;
@@ -50,11 +51,21 @@ public sealed class AccessSettingsViewModel(
     public Guid? ConfirmDeleteRoleId;
     public string NewRoleName = "";
     public readonly HashSet<string> NewRolePerms = new();
+    public Guid CurrentUserId => CurrentUser.UserId;
 
     public async Task LoadAsync()
     {
         Ui.Set("Settings", "Access");
+        LoadRouteMessage();
         await LoadDataAsync();
+    }
+
+    private void LoadRouteMessage()
+    {
+        var uri = new Uri(Nav.Uri);
+        var query = QueryHelpers.ParseQuery(uri.Query);
+        if (query.TryGetValue("error", out var message) && !string.IsNullOrWhiteSpace(message))
+            Message = message.ToString();
     }
 
     public async Task AfterRenderAsync(bool firstRender)
