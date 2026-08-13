@@ -47,6 +47,8 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
     public DbSet<CrmJobRunRow> CrmJobRuns => Set<CrmJobRunRow>();
     public DbSet<CrmChainRunRow> CrmChainRuns => Set<CrmChainRunRow>();
     public DbSet<CrmCommunicationRow> CrmCommunications => Set<CrmCommunicationRow>();
+    public DbSet<CrmUserRow> CrmUsers => Set<CrmUserRow>();
+    public DbSet<CrmClientUserAssignmentRow> CrmClientUserAssignments => Set<CrmClientUserAssignmentRow>();
     public DbSet<CrmAppointmentRow> CrmAppointments => Set<CrmAppointmentRow>();
     public DbSet<CrmCalendarRow> CrmCalendars => Set<CrmCalendarRow>();
     public DbSet<CrmClientArtifactRow> CrmClientArtifacts => Set<CrmClientArtifactRow>();
@@ -301,6 +303,18 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
             e.Property(x => x.UpdatedAt).HasDefaultValueSql("now()");
         });
 
+        b.Entity<CrmUserRow>(e =>
+        {
+            e.ToTable("crm_users");
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => new { x.ProjectId, x.Email }).IsUnique();
+            e.HasIndex(x => x.JoinCode);
+            e.HasIndex(x => x.AuthUserId);
+            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
+            e.Property(x => x.CreatedAt).HasDefaultValueSql("now()");
+            e.Property(x => x.UpdatedAt).HasDefaultValueSql("now()");
+        });
+
         b.Entity<CrmIngestionSettingsRow>(e =>
         {
             e.ToTable("crm_ingestion_settings");
@@ -379,6 +393,18 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
             e.HasIndex(x => new { x.ProjectId, x.ClientId, x.ChainId }).IsUnique();
             e.HasIndex(x => new { x.ProjectId, x.ClientId });
             e.HasIndex(x => x.ChainId);
+            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
+            e.Property(x => x.CreatedAt).HasDefaultValueSql("now()");
+            e.Property(x => x.UpdatedAt).HasDefaultValueSql("now()");
+        });
+
+        b.Entity<CrmClientUserAssignmentRow>(e =>
+        {
+            e.ToTable("crm_client_user_assignments");
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => new { x.ProjectId, x.ClientId, x.CrmUserId }).IsUnique();
+            e.HasIndex(x => new { x.ProjectId, x.ClientId });
+            e.HasIndex(x => x.CrmUserId);
             e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
             e.Property(x => x.CreatedAt).HasDefaultValueSql("now()");
             e.Property(x => x.UpdatedAt).HasDefaultValueSql("now()");

@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CRM onboarding · PlaceContext</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/auth.css">
+</head>
+<body>
+  <form class="card" method="post" action="/auth/complete-crm-onboarding">
+    <div class="brand"><div class="logo">P</div><strong>PlaceContext CRM</strong></div>
+    <h1>Finish your CRM setup</h1>
+    <div class="err {{errorClass}}">{{error}}</div>
+    <p class="alt" style="text-align:left;margin:0 0 14px">
+      Use this code in the form below: <strong>{{code}}</strong>.
+    </p>
+    <label>Display name<input type="text" name="displayName" autocomplete="name"></label>
+    <label>Password<input type="password" name="password" autocomplete="new-password" minlength="12" required autofocus>
+      <span class="hint">At least 12 characters.</span></label>
+    <input type="hidden" name="code" value="{{code}}">
+    <input type="hidden" name="{{afName}}" value="{{afValue}}">
+    <button type="submit">Create account</button>
+  </form>
+</body>
+</html>

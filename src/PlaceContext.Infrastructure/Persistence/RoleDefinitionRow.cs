@@ -1,8 +1,8 @@
 namespace PlaceContext.Infrastructure.Persistence;
 
 /// <summary>
-/// One role definition per tenant: a named permission grant set members can be assigned. The four
-/// system roles (Viewer/Member/Admin/Owner) are materialized lazily on first read from the hardcoded
+/// One role definition per tenant: a named permission grant set members can be assigned. The system
+/// roles (Viewer/Member/Admin/Owner/CrmUser) are materialized lazily on first read from the hardcoded
 /// <c>RolePermissionDefaults</c> mapping; custom roles are created from the Access settings UI.
 /// <see cref="PermissionsJson"/> is a JSON array of granted permission strings (see the
 /// <c>Permission</c> catalog).

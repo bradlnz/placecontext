@@ -19,7 +19,6 @@ public sealed class CrmViewModel : PageViewModel
     private readonly PortalUiState Ui;
     private readonly IJSRuntime Js;
     private readonly NavigationManager Nav;
-    private readonly IMembershipService Membership;
     private readonly CrmIngestionSettingsService IngestionSettingsService;
     private readonly IPermissionService Permissions;
     private bool _canManageClients;
@@ -29,6 +28,7 @@ public sealed class CrmViewModel : PageViewModel
     private bool _canUploadArtifacts;
     private bool _canManageCalendars;
     private bool _canSendCommunications;
+    private bool _canManageMembers;
     private Guid _ingestionClientId;
 
     public CrmViewModel(
@@ -36,7 +36,6 @@ public sealed class CrmViewModel : PageViewModel
         PortalUiState ui,
         IJSRuntime js,
         NavigationManager nav,
-        IMembershipService membership,
         CrmIngestionSettingsService ingestionSettings,
         IPermissionService permissions
     )
@@ -45,7 +44,6 @@ public sealed class CrmViewModel : PageViewModel
         Ui = ui;
         Js = js;
         Nav = nav;
-        Membership = membership;
         IngestionSettingsService = ingestionSettings;
         Permissions = permissions;
     }
@@ -103,6 +101,7 @@ public sealed class CrmViewModel : PageViewModel
     public IReadOnlyList<CrmCalendarView> Calendars = Array.Empty<CrmCalendarView>();
     public CrmCommsCapabilitiesView? CommsCapabilities;
     public bool Loading = true;
+    public IReadOnlyList<CrmUserView> CrmUsers = Array.Empty<CrmUserView>();
     public bool CanManageClients => _canManageClients;
     public bool CanRunAutomationJobs => _canRunAutomations;
     public bool CanManageAutomationCatalog => _canManageAutomationCatalog;
@@ -110,6 +109,7 @@ public sealed class CrmViewModel : PageViewModel
     public bool CanUploadArtifacts => _canUploadArtifacts;
     public bool CanManageCalendarEntries => _canManageCalendars;
     public bool CanSendComms => _canSendCommunications;
+    public bool CanManageMembers => _canManageMembers;
     private static string Slugify(string value)
     {
         if (string.IsNullOrWhiteSpace(value))
@@ -253,10 +253,22 @@ public sealed class CrmViewModel : PageViewModel
     public string? NewIngestionToken;
     public string? IngestionError;
     public string? IngestionMessage;
+    public string NewCrmUserEmail = "";
+    public string NewCrmUserName = "";
+    public string NewCrmUserClientId = "";
+    public string? NewCrmUserJoinCode;
+    public string? NewCrmUserJoinLink;
+    public string? NewCrmUserJoinMessage;
+    public bool CreatingCrmUser;
+    public string? CrmUserError;
     public HashSet<Guid> SelectedClientChainIds = new();
     public bool LoadingClientChainAssignments;
     public bool SavingClientChainAssignments;
     public string? ClientChainAssignmentMessage;
+    public HashSet<Guid> SelectedClientUserIds = new();
+    public bool LoadingClientUserAssignments;
+    public bool SavingClientUserAssignments;
+    public string? ClientUserAssignmentMessage;
 
     public bool HasPrimaryAction => CurrentSectionPresentation.CanAdd;
     public string PrimaryActionLabel => CurrentSectionPresentation.AddLabel;
@@ -350,7 +362,7 @@ public sealed class CrmViewModel : PageViewModel
 
     public async Task LoadAsync()
     {
-        Ui.Set("CRM", "conversations · calendars · contacts · opportunities");
+        Ui.Set("CRM", "conversations · calendars · contacts · opportunities · users");
         Loading = true;
         try
         {
@@ -361,13 +373,13 @@ public sealed class CrmViewModel : PageViewModel
             var canUploadArtifactsTask = Permissions.HasAsync(Permission.DataWrite);
             var canManageCalendarsTask = Permissions.HasAsync(Permission.DataWrite);
             var canSendCommsTask = Permissions.HasAsync(Permission.CrmCommsSend);
+            var canManageMembersTask = Permissions.HasAsync(Permission.MembersManage);
 
             var clientsTask = Svc.ListCrmClientsAsync(ProjectId);
             var chainsTask = Svc.ListJobChainsAsync(ProjectId);
             var automationsTask = Svc.ListCrmAutomationRulesAsync(ProjectId);
             var appointmentsTask = Svc.ListCrmAppointmentsAsync(ProjectId);
             var calendarsTask = Svc.ListCrmCalendarsAsync(ProjectId);
-            var membersTask = Membership.ListMembersAsync();
             await Task.WhenAll(
                 canManageClientsTask,
                 canRunAutomationsTask,
@@ -376,12 +388,12 @@ public sealed class CrmViewModel : PageViewModel
                 canUploadArtifactsTask,
                 canManageCalendarsTask,
                 canSendCommsTask,
+                canManageMembersTask,
                 clientsTask,
                 chainsTask,
                 automationsTask,
                 appointmentsTask,
-                calendarsTask,
-                membersTask
+                calendarsTask
             );
             _canManageClients = await canManageClientsTask;
             _canRunAutomations = await canRunAutomationsTask;
@@ -390,22 +402,15 @@ public sealed class CrmViewModel : PageViewModel
             _canUploadArtifacts = await canUploadArtifactsTask;
             _canManageCalendars = await canManageCalendarsTask;
             _canSendCommunications = await canSendCommsTask;
-            var adminEmails = (await membersTask)
-                .Where(member =>
-                    member.IsDefaultAdmin
-                    || member.Role.Equals("Admin", StringComparison.OrdinalIgnoreCase)
-                    || member.Role.Equals("Owner", StringComparison.OrdinalIgnoreCase)
-                )
-                .Select(member => NormalizeEmail(member.Email))
-                .Where(email => email.Length > 0)
-                .ToHashSet(StringComparer.OrdinalIgnoreCase);
-            Clients = (await clientsTask)
-                .Where(client => !adminEmails.Contains(NormalizeEmail(client.Email)))
-                .ToList();
+            _canManageMembers = await canManageMembersTask;
+            Clients = (await clientsTask).ToList();
             Chains = await chainsTask;
             AutomationRules = await automationsTask;
             Appointments = await appointmentsTask;
             Calendars = await calendarsTask;
+            CrmUsers = _canManageMembers
+                ? await Svc.ListCrmUsersAsync(ProjectId)
+                : Array.Empty<CrmUserView>();
         }
         catch (Exception ex)
         {
@@ -425,6 +430,7 @@ public sealed class CrmViewModel : PageViewModel
             "contacts" => "Contacts",
             "opportunities" => "Opportunities",
             "automations" => "Automations",
+            "users" => "Users",
             _ => "CRM settings",
         };
 
@@ -437,6 +443,7 @@ public sealed class CrmViewModel : PageViewModel
             "contacts" => "Manage customer contact details and relationship context.",
             "opportunities" => "Move customer opportunities through the full lifecycle pipeline.",
             "automations" => "Connect customer lifecycle events to durable job-chain workflows.",
+            "users" => "Create CRM users and control who can access each contact.",
             _ => "Connect external lead forms without exposing the rest of your CRM.",
         };
 
@@ -885,6 +892,108 @@ public sealed class CrmViewModel : PageViewModel
             NewClient();
     }
 
+    public async Task CreateCrmUser()
+    {
+            CrmUserError = null;
+            NewCrmUserJoinCode = null;
+            NewCrmUserJoinLink = null;
+            NewCrmUserJoinMessage = null;
+        if (!CanManageMembers)
+        {
+            CrmUserError =
+                "The members.manage permission is required to invite users to CRM access.";
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(NewCrmUserEmail) || !NewCrmUserEmail.Contains('@'))
+        {
+            CrmUserError = "Enter a valid email.";
+            return;
+        }
+
+        CreatingCrmUser = true;
+        try
+        {
+            var email = NewCrmUserEmail.Trim();
+            var name = string.IsNullOrWhiteSpace(NewCrmUserName)
+                ? null
+                : NewCrmUserName.Trim();
+            var assignedClientId = Guid.TryParse(NewCrmUserClientId, out var parsedClientId)
+                ? parsedClientId
+                : (Guid?)null;
+            if (assignedClientId == Guid.Empty)
+                assignedClientId = null;
+            var result = await Svc.CreateCrmUserAsync(new CreateCrmUserCommand(
+                ProjectId,
+                email,
+                name,
+                assignedClientId
+            ));
+            CrmUsers = await Svc.ListCrmUsersAsync(ProjectId);
+            NewCrmUserJoinCode = result.JoinCode;
+            NewCrmUserJoinLink = $"/crm/onboarding?code={result.JoinCode}";
+            var notes = new List<string>(capacity: 2);
+            if (result.AssignedClientId is { } assigned && assigned != Guid.Empty)
+            {
+                var assignedClient = Clients.FirstOrDefault(client => client.Id == assigned);
+                notes.Add(string.IsNullOrWhiteSpace(assignedClient?.Name)
+                    ? "Assigned to selected contact."
+                    : $"Assigned to {assignedClient.Name}.");
+            }
+            if (result.EmailSent)
+            {
+                notes.Add($"An onboarding email was sent to {email}.");
+            }
+            else if (result.EmailProviderAvailable)
+            {
+                notes.Add($"Email could not be sent: {result.EmailError ?? "unexpected error"}");
+            }
+            else
+            {
+                notes.Add("No email provider is configured. Share the onboarding link manually.");
+            }
+            NewCrmUserJoinMessage = string.Join(" ", notes);
+            NewCrmUserEmail = "";
+            NewCrmUserName = "";
+            NewCrmUserClientId = "";
+            Message = $"CRM user added for {email}.";
+            CrmUserError = null;
+        }
+        catch (Exception ex)
+        {
+            CrmUserError = ex.Message;
+        }
+        finally
+        {
+            CreatingCrmUser = false;
+        }
+    }
+
+    public async Task DeleteCrmUser(Guid crmUserId)
+    {
+        if (!CanManageMembers)
+            return;
+
+        var user = CrmUsers.FirstOrDefault(item => item.Id == crmUserId);
+        if (user is null)
+            return;
+
+        if (!await Js.InvokeAsync<bool>("confirm", $"Remove {user.Email} from CRM users?"))
+            return;
+
+        try
+        {
+            await Svc.DeleteCrmUserAsync(ProjectId, crmUserId);
+            CrmUsers = CrmUsers.Where(item => item.Id != crmUserId).ToArray();
+            if (Selected is not null && SelectedClientUserIds.Remove(crmUserId))
+                ClientUserAssignmentMessage = $"{user.Email} was unassigned from this contact.";
+            Message = $"{user.Email} removed from CRM users.";
+        }
+        catch (Exception ex)
+        {
+            CrmUserError = ex.Message;
+        }
+    }
+
     public void NewClient()
     {
         EditId = null;
@@ -1059,6 +1168,7 @@ public sealed class CrmViewModel : PageViewModel
         Selected = client;
         SelectedChainId = null;
         SelectedClientChainIds = new HashSet<Guid>();
+        SelectedClientUserIds = new HashSet<Guid>();
         ConfirmDelete = false;
         DetailTab = "overview";
         ComposeChannel = "Note";
@@ -1068,7 +1178,13 @@ public sealed class CrmViewModel : PageViewModel
         ArtifactSearch = "";
         ArtifactSourceFilter = "all";
         ConfirmArtifactRemoveId = null;
-        await Task.WhenAll(LoadRuns(), LoadCommunications(), LoadArtifacts(), LoadClientChainAssignments());
+        await Task.WhenAll(
+            LoadRuns(),
+            LoadCommunications(),
+            LoadArtifacts(),
+            LoadClientChainAssignments(),
+            LoadClientUserAssignments()
+        );
     }
 
     public void CloseClient()
@@ -1081,6 +1197,10 @@ public sealed class CrmViewModel : PageViewModel
         ClientChainAssignmentMessage = null;
         LoadingClientChainAssignments = false;
         SavingClientChainAssignments = false;
+        SelectedClientUserIds = new HashSet<Guid>();
+        ClientUserAssignmentMessage = null;
+        LoadingClientUserAssignments = false;
+        SavingClientUserAssignments = false;
         NotesMetadataOpen = false;
         NotesMetadataJson = null;
     }
@@ -1206,6 +1326,11 @@ public sealed class CrmViewModel : PageViewModel
         return SelectedClientChainIds.Contains(chainId);
     }
 
+    public bool IsUserAssigned(Guid crmUserId)
+    {
+        return SelectedClientUserIds.Contains(crmUserId);
+    }
+
     public void ToggleClientChainAssignment(Guid chainId, bool assigned)
     {
         if (assigned)
@@ -1218,6 +1343,12 @@ public sealed class CrmViewModel : PageViewModel
     {
         if (Selected is null)
             return;
+        if (!_canManageAutomationCatalog)
+        {
+            ClientChainAssignmentMessage =
+                "The crm.automation.manage permission is required to edit automation assignments.";
+            return;
+        }
 
         SavingClientChainAssignments = true;
         ClientChainAssignmentMessage = null;
@@ -1241,9 +1372,52 @@ public sealed class CrmViewModel : PageViewModel
         }
     }
 
+    public void ToggleClientUserAssignment(Guid crmUserId, bool assigned)
+    {
+        if (assigned)
+            SelectedClientUserIds.Add(crmUserId);
+        else
+            SelectedClientUserIds.Remove(crmUserId);
+    }
+
+    public async Task SaveClientUserAssignments()
+    {
+        if (Selected is null)
+            return;
+        if (!_canManageMembers)
+        {
+            ClientUserAssignmentMessage =
+                "The members.manage permission is required to edit CRM user assignments.";
+            return;
+        }
+
+        SavingClientUserAssignments = true;
+        ClientUserAssignmentMessage = null;
+        try
+        {
+            var crmUserIds = SelectedClientUserIds.OrderBy(userId => userId).ToList();
+            SelectedClientUserIds = (await Svc.SetCrmClientAssignedUserIdsAsync(
+                ProjectId,
+                Selected.Id,
+                crmUserIds
+            )).ToHashSet();
+            ClientUserAssignmentMessage = "CRM user assignments saved.";
+        }
+        catch (Exception ex)
+        {
+            ClientUserAssignmentMessage = ex.Message;
+        }
+        finally
+        {
+            SavingClientUserAssignments = false;
+        }
+    }
+
     private async Task LoadClientChainAssignments()
     {
         if (Selected is null)
+            return;
+        if (!_canManageAutomationCatalog)
             return;
 
         LoadingClientChainAssignments = true;
@@ -1262,6 +1436,32 @@ public sealed class CrmViewModel : PageViewModel
         finally
         {
             LoadingClientChainAssignments = false;
+        }
+    }
+
+    private async Task LoadClientUserAssignments()
+    {
+        if (Selected is null)
+            return;
+        if (!_canManageMembers)
+            return;
+
+        LoadingClientUserAssignments = true;
+        ClientUserAssignmentMessage = null;
+        try
+        {
+            SelectedClientUserIds = (await Svc.ListCrmClientAssignedUserIdsAsync(
+                Selected.Id,
+                ProjectId
+            )).ToHashSet();
+        }
+        catch (Exception ex)
+        {
+            ClientUserAssignmentMessage = ex.Message;
+        }
+        finally
+        {
+            LoadingClientUserAssignments = false;
         }
     }
 

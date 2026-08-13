@@ -32,6 +32,12 @@ public static class RolePermissionDefaults
         Permission.ArtifactsView,
     };
 
+    private static readonly IReadOnlySet<string> CrmUserDefaults = new HashSet<string>
+    {
+        Permission.CrmView,
+        Permission.CrmCommsSend,
+    };
+
     private static readonly IReadOnlySet<string> MemberDefaults =
         new HashSet<string>(Permission.All.Where(p => !AdminOnly.Contains(p)));
 
@@ -40,6 +46,7 @@ public static class RolePermissionDefaults
     public static IReadOnlySet<string> GetDefaults(UserRole role) => role switch
     {
         UserRole.Viewer => ViewerDefaults,
+        UserRole.CrmUser => CrmUserDefaults,
         UserRole.Member => MemberDefaults,
         UserRole.Admin => FullCatalog,
         UserRole.Owner => FullCatalog,

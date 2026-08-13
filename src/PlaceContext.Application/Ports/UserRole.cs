@@ -1,12 +1,13 @@
 namespace PlaceContext.Application.Ports;
 
 /// <summary>
-/// A member's role within an organisation, ordered by privilege so "at least Member" is a simple
-/// comparison: Viewer (read-only) &lt; Member (does the work) &lt; Admin (manages members + settings) &lt;
-/// Owner (everything, incl. the org itself).
+/// A member's role within an organisation. The coarse ladder used by legacy policies is
+/// Viewer's role and above, while <see cref="CrmUser"/> is a separate constrained role that does not
+/// participate in that ladder.
 /// </summary>
 public enum UserRole
 {
+    CrmUser = -1,
     Viewer = 0,
     Member = 1,
     Admin = 2,

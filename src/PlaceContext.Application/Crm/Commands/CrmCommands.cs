@@ -89,3 +89,28 @@ public sealed record SaveCrmCalendarCommand(Guid ProjectId, string Name, string 
 
 public sealed record DeleteCrmCalendarCommand(Guid CalendarId) : ICommand<bool>, IRequiresPermission
 { public string RequiredPermission => Permission.DataWrite; }
+
+public sealed record CreateCrmUserCommand(
+    Guid ProjectId,
+    string Email,
+    string? Name,
+    Guid? ClientId = null)
+    : ICommand<CrmUserCreationResult>, IRequiresPermission
+{ public string RequiredPermission => Permission.MembersManage; }
+
+public sealed record DeleteCrmUserCommand(Guid ProjectId, Guid CrmUserId)
+    : ICommand<bool>, IRequiresPermission
+{ public string RequiredPermission => Permission.MembersManage; }
+
+public sealed record CompleteCrmOnboardingCommand(
+    string JoinCode,
+    string Password,
+    string? DisplayName)
+    : ICommand<CrmOnboardingResult>;
+
+public sealed record SetCrmClientAssignedUsersCommand(
+    Guid ProjectId,
+    Guid ClientId,
+    IReadOnlyList<Guid> CrmUserIds)
+    : ICommand<IReadOnlyList<Guid>>, IRequiresPermission
+{ public string RequiredPermission => Permission.DataWrite; }

@@ -10,14 +10,19 @@ namespace PlaceContext.Application.Features;
 public sealed class SaveCrmClientHandler : ICommandHandler<SaveCrmClientCommand, CrmClientView>
 {
     private readonly ICrmClientRepository _clients;
+    private readonly CrmUserScope _scope;
     private readonly IUnitOfWork _uow;
     private readonly IClock _clock;
     private readonly CrmAutomationDispatcher? _automations;
 
     public SaveCrmClientHandler(
-        ICrmClientRepository clients, IUnitOfWork uow, IClock clock,
+        ICrmClientRepository clients,
+        CrmUserScope scope,
+        IUnitOfWork uow,
+        IClock clock,
         CrmAutomationDispatcher? automations = null)
-        => (_clients, _uow, _clock, _automations) = (clients, uow, clock, automations);
+        => (_clients, _scope, _uow, _clock, _automations)
+            = (clients, scope, uow, clock, automations);
 
     public async Task<CrmClientView> HandleAsync(SaveCrmClientCommand command, CancellationToken ct = default)
     {
@@ -28,6 +33,7 @@ public sealed class SaveCrmClientHandler : ICommandHandler<SaveCrmClientCommand,
                 ?? throw new InvalidOperationException($"Client {id} not found.");
             if (client.ProjectId != command.ProjectId)
                 throw new InvalidOperationException("Client does not belong to this project.");
+            await _scope.EnsureClientAccessAsync(client.ProjectId, client.Id, ct);
             var previousStage = client.LifecycleStage;
             client.Update(command.Name, command.Company, command.Email, command.Phone,
                 command.LifecycleStage, command.Notes, _clock.UtcNow);
@@ -59,19 +65,25 @@ public sealed class SaveCrmClientHandler : ICommandHandler<SaveCrmClientCommand,
 public sealed class MoveCrmClientHandler : ICommandHandler<MoveCrmClientCommand, CrmClientView>
 {
     private readonly ICrmClientRepository _clients;
+    private readonly CrmUserScope _scope;
     private readonly IUnitOfWork _uow;
     private readonly IClock _clock;
     private readonly CrmAutomationDispatcher? _automations;
 
     public MoveCrmClientHandler(
-        ICrmClientRepository clients, IUnitOfWork uow, IClock clock,
+        ICrmClientRepository clients,
+        CrmUserScope scope,
+        IUnitOfWork uow,
+        IClock clock,
         CrmAutomationDispatcher? automations = null)
-        => (_clients, _uow, _clock, _automations) = (clients, uow, clock, automations);
+        => (_clients, _scope, _uow, _clock, _automations)
+            = (clients, scope, uow, clock, automations);
 
     public async Task<CrmClientView> HandleAsync(MoveCrmClientCommand command, CancellationToken ct = default)
     {
         var client = await _clients.GetByIdAsync(command.ClientId, ct)
             ?? throw new InvalidOperationException($"Client {command.ClientId} not found.");
+        await _scope.EnsureClientAccessAsync(client.ProjectId, client.Id, ct);
         var previousStage = client.LifecycleStage;
         client.MoveTo(command.LifecycleStage, _clock.UtcNow);
         await _clients.UpdateAsync(client, ct);
@@ -86,20 +98,24 @@ public sealed class MoveCrmClientHandler : ICommandHandler<MoveCrmClientCommand,
 public sealed class DeleteCrmClientHandler : ICommandHandler<DeleteCrmClientCommand, bool>
 {
     private readonly ICrmClientRepository _clients;
+    private readonly CrmUserScope _scope;
     private readonly ICrmClientArtifactRepository _artifacts;
     private readonly IObjectStore _store;
     private readonly IUnitOfWork _uow;
 
     public DeleteCrmClientHandler(
         ICrmClientRepository clients,
+        CrmUserScope scope,
         ICrmClientArtifactRepository artifacts,
         IObjectStore store,
         IUnitOfWork uow)
-        => (_clients, _artifacts, _store, _uow) = (clients, artifacts, store, uow);
+        => (_clients, _scope, _artifacts, _store, _uow) = (clients, scope, artifacts, store, uow);
 
     public async Task<bool> HandleAsync(DeleteCrmClientCommand command, CancellationToken ct = default)
     {
-        if (await _clients.GetByIdAsync(command.ClientId, ct) is null) return false;
+        var client = await _clients.GetByIdAsync(command.ClientId, ct);
+        if (client is null) return false;
+        await _scope.EnsureClientAccessAsync(client.ProjectId, client.Id, ct);
         foreach (var artifact in await _artifacts.ListForClientAsync(command.ClientId, 1000, ct))
             if (artifact.IsDirectUpload)
                 await _store.DeleteAsync(artifact.Bucket, artifact.ObjectKey, ct);
@@ -113,13 +129,19 @@ public sealed class ListCrmClientsHandler
     : IQueryHandler<ListCrmClientsQuery, IReadOnlyList<CrmClientView>>
 {
     private readonly ICrmClientRepository _clients;
+    private readonly CrmUserScope _scope;
 
-    public ListCrmClientsHandler(ICrmClientRepository clients) => _clients = clients;
+    public ListCrmClientsHandler(ICrmClientRepository clients, CrmUserScope scope)
+        => (_clients, _scope) = (clients, scope);
 
     public async Task<IReadOnlyList<CrmClientView>> HandleAsync(
         ListCrmClientsQuery query,
         CancellationToken ct = default)
-        => (await _clients.ListForProjectAsync(query.ProjectId, ct))
+        => (await _scope.FilterByAccessAsync(
+            query.ProjectId,
+            await _clients.ListForProjectAsync(query.ProjectId, ct),
+            client => client.Id,
+            ct))
             .Select(CrmClientMapper.ToView)
             .ToList();
 }
@@ -128,12 +150,14 @@ public sealed class ListCrmClientAssignedJobChainsHandler
     : IQueryHandler<ListCrmClientAssignedJobChainsQuery, IReadOnlyList<Guid>>
 {
     private readonly ICrmClientRepository _clients;
+    private readonly CrmUserScope _scope;
     private readonly ICrmClientJobChainAssignmentRepository _assignments;
 
     public ListCrmClientAssignedJobChainsHandler(
         ICrmClientRepository clients,
+        CrmUserScope scope,
         ICrmClientJobChainAssignmentRepository assignments)
-        => (_clients, _assignments) = (clients, assignments);
+        => (_clients, _scope, _assignments) = (clients, scope, assignments);
 
     public async Task<IReadOnlyList<Guid>> HandleAsync(
         ListCrmClientAssignedJobChainsQuery query,
@@ -143,6 +167,7 @@ public sealed class ListCrmClientAssignedJobChainsHandler
             ?? throw new InvalidOperationException($"Client {query.ClientId} not found.");
         if (client.ProjectId != query.ProjectId)
             throw new InvalidOperationException("The client and project do not match.");
+        await _scope.EnsureClientAccessAsync(client.ProjectId, client.Id, ct);
         return await _assignments.ListForClientAsync(query.ProjectId, query.ClientId, ct);
     }
 }
@@ -151,6 +176,7 @@ public sealed class RunCrmClientAutomationHandler
     : ICommandHandler<RunCrmClientAutomationCommand, CrmChainRunView>
 {
     private readonly ICrmClientRepository _clients;
+    private readonly CrmUserScope _scope;
     private readonly ICrmChainRunRepository _crmRuns;
     private readonly IJobChainRepository _chains;
     private readonly ICrmClientJobChainAssignmentRepository _assignments;
@@ -162,6 +188,7 @@ public sealed class RunCrmClientAutomationHandler
 
     public RunCrmClientAutomationHandler(
         ICrmClientRepository clients,
+        CrmUserScope scope,
         ICrmChainRunRepository crmRuns,
         IJobChainRepository chains,
         ICrmClientJobChainAssignmentRepository assignments,
@@ -170,8 +197,8 @@ public sealed class RunCrmClientAutomationHandler
         ICrmClientArtifactRepository clientArtifacts,
         IUnitOfWork uow,
         IPermissionService? permissions = null)
-        => (_clients, _crmRuns, _chains, _assignments, _chainRunner, _runArtifacts, _clientArtifacts, _permissions, _uow)
-            = (clients, crmRuns, chains, assignments, chainRunner, runArtifacts, clientArtifacts, permissions, uow);
+        => (_clients, _scope, _crmRuns, _chains, _assignments, _chainRunner, _runArtifacts, _clientArtifacts, _permissions, _uow)
+            = (clients, scope, crmRuns, chains, assignments, chainRunner, runArtifacts, clientArtifacts, permissions, uow);
 
     public async Task<CrmChainRunView> HandleAsync(
         RunCrmClientAutomationCommand command,
@@ -179,6 +206,7 @@ public sealed class RunCrmClientAutomationHandler
     {
         var client = await _clients.GetByIdAsync(command.ClientId, ct)
             ?? throw new InvalidOperationException($"Client {command.ClientId} not found.");
+        await _scope.EnsureClientAccessAsync(client.ProjectId, client.Id, ct);
         var chain = await _chains.GetByIdAsync(command.ChainId, ct)
             ?? throw new InvalidOperationException($"Job chain {command.ChainId} not found.");
         if (chain.ProjectId != client.ProjectId)
@@ -235,16 +263,19 @@ public sealed class SetCrmClientAssignedJobChainsHandler
     : ICommandHandler<SetCrmClientAssignedJobChainsCommand, IReadOnlyList<Guid>>
 {
     private readonly ICrmClientRepository _clients;
+    private readonly CrmUserScope _scope;
     private readonly ICrmClientJobChainAssignmentRepository _assignments;
     private readonly IJobChainRepository _chains;
     private readonly IUnitOfWork _uow;
 
     public SetCrmClientAssignedJobChainsHandler(
         ICrmClientRepository clients,
+        CrmUserScope scope,
         ICrmClientJobChainAssignmentRepository assignments,
         IJobChainRepository chains,
         IUnitOfWork uow)
-        => (_clients, _assignments, _chains, _uow) = (clients, assignments, chains, uow);
+        => (_clients, _scope, _assignments, _chains, _uow)
+            = (clients, scope, assignments, chains, uow);
 
     public async Task<IReadOnlyList<Guid>> HandleAsync(
         SetCrmClientAssignedJobChainsCommand command,
@@ -254,6 +285,7 @@ public sealed class SetCrmClientAssignedJobChainsHandler
             ?? throw new InvalidOperationException($"Client {command.ClientId} not found.");
         if (client.ProjectId != command.ProjectId)
             throw new InvalidOperationException("The client and project do not match.");
+        await _scope.EnsureClientAccessAsync(client.ProjectId, client.Id, ct);
 
         var desired = command.ChainIds
             .Where(chainId => chainId != Guid.Empty)
@@ -280,17 +312,24 @@ public sealed class ListCrmClientChainRunsHandler
     : IQueryHandler<ListCrmClientChainRunsQuery, IReadOnlyList<CrmChainRunView>>
 {
     private readonly ICrmChainRunRepository _crmRuns;
+    private readonly ICrmClientRepository _clients;
+    private readonly CrmUserScope _scope;
     private readonly IChainRunRepository _runs;
 
     public ListCrmClientChainRunsHandler(
         ICrmChainRunRepository crmRuns,
+        ICrmClientRepository clients,
+        CrmUserScope scope,
         IChainRunRepository runs)
-        => (_crmRuns, _runs) = (crmRuns, runs);
+        => (_crmRuns, _clients, _scope, _runs) = (crmRuns, clients, scope, runs);
 
     public async Task<IReadOnlyList<CrmChainRunView>> HandleAsync(
         ListCrmClientChainRunsQuery query,
         CancellationToken ct = default)
     {
+        var client = await _clients.GetByIdAsync(query.ClientId, ct)
+            ?? throw new InvalidOperationException($"Client {query.ClientId} not found.");
+        await _scope.EnsureClientAccessAsync(client.ProjectId, client.Id, ct);
         var links = await _crmRuns.ListForClientAsync(query.ClientId, query.Take, ct);
         var views = new List<CrmChainRunView>(links.Count);
         foreach (var link in links)
@@ -316,6 +355,7 @@ public sealed class AddCrmClientNoteHandler
 {
     private readonly ICrmClientRepository _clients;
     private readonly ICrmCommunicationRepository _communications;
+    private readonly CrmUserScope _scope;
     private readonly ICurrentUser _currentUser;
     private readonly IUnitOfWork _uow;
     private readonly IClock _clock;
@@ -324,12 +364,13 @@ public sealed class AddCrmClientNoteHandler
     public AddCrmClientNoteHandler(
         ICrmClientRepository clients,
         ICrmCommunicationRepository communications,
+        CrmUserScope scope,
         ICurrentUser currentUser,
         IUnitOfWork uow,
         IClock clock,
         CrmAutomationDispatcher? automations = null)
-        => (_clients, _communications, _currentUser, _uow, _clock, _automations)
-            = (clients, communications, currentUser, uow, clock, automations);
+        => (_clients, _communications, _scope, _currentUser, _uow, _clock, _automations)
+            = (clients, communications, scope, currentUser, uow, clock, automations);
 
     public async Task<CrmCommunicationView> HandleAsync(
         AddCrmClientNoteCommand command,
@@ -337,6 +378,7 @@ public sealed class AddCrmClientNoteHandler
     {
         var client = await _clients.GetByIdAsync(command.ClientId, ct)
             ?? throw new InvalidOperationException($"Client {command.ClientId} not found.");
+        await _scope.EnsureClientAccessAsync(client.ProjectId, client.Id, ct);
         var note = CrmCommunication.CreateNote(
             client.ProjectId, client.Id, command.Body, _currentUser.UserId, _clock.UtcNow);
         await _communications.AddAsync(note, ct);
@@ -353,6 +395,7 @@ public sealed class SendCrmClientMessageHandler
 {
     private readonly ICrmClientRepository _clients;
     private readonly ICrmCommunicationRepository _communications;
+    private readonly CrmUserScope _scope;
     private readonly IClientCommunicationSender _sender;
     private readonly ICurrentUser _currentUser;
     private readonly IUnitOfWork _uow;
@@ -362,13 +405,14 @@ public sealed class SendCrmClientMessageHandler
     public SendCrmClientMessageHandler(
         ICrmClientRepository clients,
         ICrmCommunicationRepository communications,
+        CrmUserScope scope,
         IClientCommunicationSender sender,
         ICurrentUser currentUser,
         IUnitOfWork uow,
         IClock clock,
         CrmAutomationDispatcher? automations = null)
-        => (_clients, _communications, _sender, _currentUser, _uow, _clock, _automations)
-            = (clients, communications, sender, currentUser, uow, clock, automations);
+        => (_clients, _communications, _scope, _sender, _currentUser, _uow, _clock, _automations)
+            = (clients, communications, scope, sender, currentUser, uow, clock, automations);
 
     public async Task<CrmCommunicationView> HandleAsync(
         SendCrmClientMessageCommand command,
@@ -376,6 +420,7 @@ public sealed class SendCrmClientMessageHandler
     {
         var client = await _clients.GetByIdAsync(command.ClientId, ct)
             ?? throw new InvalidOperationException($"Client {command.ClientId} not found.");
+        await _scope.EnsureClientAccessAsync(client.ProjectId, client.Id, ct);
         var recipient = command.Channel switch
         {
             Domain.ValueObjects.CrmCommunicationChannel.Email => client.Email,
@@ -416,17 +461,27 @@ public sealed class SendCrmClientMessageHandler
 public sealed class ListCrmClientCommunicationsHandler
     : IQueryHandler<ListCrmClientCommunicationsQuery, IReadOnlyList<CrmCommunicationView>>
 {
+    private readonly ICrmClientRepository _clients;
+    private readonly CrmUserScope _scope;
     private readonly ICrmCommunicationRepository _communications;
 
-    public ListCrmClientCommunicationsHandler(ICrmCommunicationRepository communications)
-        => _communications = communications;
+    public ListCrmClientCommunicationsHandler(
+        ICrmClientRepository clients,
+        CrmUserScope scope,
+        ICrmCommunicationRepository communications)
+        => (_clients, _scope, _communications) = (clients, scope, communications);
 
     public async Task<IReadOnlyList<CrmCommunicationView>> HandleAsync(
         ListCrmClientCommunicationsQuery query,
         CancellationToken ct = default)
-        => (await _communications.ListForClientAsync(query.ClientId, query.Take, ct))
+    {
+        var client = await _clients.GetByIdAsync(query.ClientId, ct)
+            ?? throw new InvalidOperationException($"Client {query.ClientId} not found.");
+        await _scope.EnsureClientAccessAsync(client.ProjectId, client.Id, ct);
+        return (await _communications.ListForClientAsync(query.ClientId, query.Take, ct))
             .Select(CrmCommunicationMapper.ToView)
             .ToList();
+    }
 }
 
 public sealed class GetCrmCommsCapabilitiesHandler
@@ -451,6 +506,7 @@ public sealed class AttachCrmClientArtifactHandler
 {
     public const int MaxFileBytes = 20 * 1024 * 1024;
     private readonly ICrmClientRepository _clients;
+    private readonly CrmUserScope _scope;
     private readonly ICrmClientArtifactRepository _artifacts;
     private readonly IObjectStore _store;
     private readonly IUnitOfWork _uow;
@@ -459,13 +515,14 @@ public sealed class AttachCrmClientArtifactHandler
 
     public AttachCrmClientArtifactHandler(
         ICrmClientRepository clients,
+        CrmUserScope scope,
         ICrmClientArtifactRepository artifacts,
         IObjectStore store,
         IUnitOfWork uow,
         IClock clock,
         CrmAutomationDispatcher? automations = null)
-        => (_clients, _artifacts, _store, _uow, _clock, _automations)
-            = (clients, artifacts, store, uow, clock, automations);
+        => (_clients, _scope, _artifacts, _store, _uow, _clock, _automations)
+            = (clients, scope, artifacts, store, uow, clock, automations);
 
     public async Task<CrmClientArtifactView> HandleAsync(
         AttachCrmClientArtifactCommand command,
@@ -473,6 +530,7 @@ public sealed class AttachCrmClientArtifactHandler
     {
         var client = await _clients.GetByIdAsync(command.ClientId, ct)
             ?? throw new InvalidOperationException($"Client {command.ClientId} not found.");
+        await _scope.EnsureClientAccessAsync(client.ProjectId, client.Id, ct);
         if (!_store.IsEnabled) throw new InvalidOperationException("File storage is not configured.");
         if (command.Content.Length == 0) throw new ArgumentException("Choose a non-empty file.");
         if (command.Content.Length > MaxFileBytes)
@@ -515,15 +573,19 @@ public sealed class AttachCrmClientArtifactHandler
 public sealed class RemoveCrmClientArtifactHandler
     : ICommandHandler<RemoveCrmClientArtifactCommand, bool>
 {
+    private readonly ICrmClientRepository _clients;
+    private readonly CrmUserScope _scope;
     private readonly ICrmClientArtifactRepository _artifacts;
     private readonly IObjectStore _store;
     private readonly IUnitOfWork _uow;
 
     public RemoveCrmClientArtifactHandler(
+        ICrmClientRepository clients,
+        CrmUserScope scope,
         ICrmClientArtifactRepository artifacts,
         IObjectStore store,
         IUnitOfWork uow)
-        => (_artifacts, _store, _uow) = (artifacts, store, uow);
+        => (_clients, _scope, _artifacts, _store, _uow) = (clients, scope, artifacts, store, uow);
 
     public async Task<bool> HandleAsync(
         RemoveCrmClientArtifactCommand command,
@@ -531,6 +593,9 @@ public sealed class RemoveCrmClientArtifactHandler
     {
         var value = await _artifacts.GetByIdAsync(command.ArtifactId, ct);
         if (value is null) return false;
+        var client = await _clients.GetByIdAsync(value.ClientId, ct)
+            ?? throw new InvalidOperationException($"Client {value.ClientId} not found.");
+        await _scope.EnsureClientAccessAsync(client.ProjectId, client.Id, ct);
         if (value.IsDirectUpload) await _store.DeleteAsync(value.Bucket, value.ObjectKey, ct);
         await _artifacts.RemoveAsync(value.Id, ct);
         await _uow.SaveChangesAsync(ct);
@@ -542,16 +607,26 @@ public sealed class ListCrmClientArtifactsHandler
     : IQueryHandler<ListCrmClientArtifactsQuery, IReadOnlyList<CrmClientArtifactView>>
 {
     private readonly ICrmClientArtifactRepository _artifacts;
+    private readonly ICrmClientRepository _clients;
+    private readonly CrmUserScope _scope;
 
-    public ListCrmClientArtifactsHandler(ICrmClientArtifactRepository artifacts)
-        => _artifacts = artifacts;
+    public ListCrmClientArtifactsHandler(
+        ICrmClientArtifactRepository artifacts,
+        ICrmClientRepository clients,
+        CrmUserScope scope)
+        => (_artifacts, _clients, _scope) = (artifacts, clients, scope);
 
     public async Task<IReadOnlyList<CrmClientArtifactView>> HandleAsync(
         ListCrmClientArtifactsQuery query,
         CancellationToken ct = default)
-        => (await _artifacts.ListForClientAsync(query.ClientId, query.Take, ct))
+    {
+        var client = await _clients.GetByIdAsync(query.ClientId, ct)
+            ?? throw new InvalidOperationException($"Client {query.ClientId} not found.");
+        await _scope.EnsureClientAccessAsync(client.ProjectId, client.Id, ct);
+        return (await _artifacts.ListForClientAsync(query.ClientId, query.Take, ct))
             .Select(CrmClientArtifactMapper.ToView)
             .ToList();
+    }
 }
 
 internal static class CrmClientMapper

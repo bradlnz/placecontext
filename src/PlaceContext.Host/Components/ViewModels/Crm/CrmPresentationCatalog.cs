@@ -9,6 +9,7 @@ public enum CrmSection
     Contacts,
     Opportunities,
     Automations,
+    Users,
     Settings,
 }
 
@@ -74,6 +75,13 @@ public static class CrmPresentationCatalog
             "Add automation"
         ),
         new(
+            CrmSection.Users,
+            "Users",
+            "Invite users and verify who can access your CRM.",
+            false,
+            ""
+        ),
+        new(
             CrmSection.Settings,
             "CRM settings",
             "Connect external lead forms without exposing the rest of your CRM.",
@@ -97,6 +105,7 @@ public static class CrmPresentationCatalog
             "contacts" => CrmSection.Contacts,
             "opportunities" => CrmSection.Opportunities,
             "automations" => CrmSection.Automations,
+            "users" => CrmSection.Users,
             _ => CrmSection.Settings,
         };
 
@@ -108,6 +117,7 @@ public static class CrmPresentationCatalog
             CrmSection.Contacts => "contacts",
             CrmSection.Opportunities => "opportunities",
             CrmSection.Automations => "automations",
+            CrmSection.Users => "users",
             _ => "settings",
         };
 

@@ -302,6 +302,33 @@ public sealed class PlaceContextService : IPlaceContextService
         CancellationToken ct = default)
         => _dispatcher.Send(new SetCrmClientAssignedJobChainsCommand(projectId, clientId, chainIds), ct);
 
+    public Task<CrmUserCreationResult> CreateCrmUserAsync(CreateCrmUserCommand command, CancellationToken ct = default)
+        => _dispatcher.Send(command, ct);
+
+    public Task<CrmOnboardingResult> CompleteCrmOnboardingAsync(
+        CompleteCrmOnboardingCommand command,
+        CancellationToken ct = default)
+        => _dispatcher.Send(command, ct);
+
+    public Task<bool> DeleteCrmUserAsync(Guid projectId, Guid crmUserId, CancellationToken ct = default)
+        => _dispatcher.Send(new DeleteCrmUserCommand(projectId, crmUserId), ct);
+
+    public Task<IReadOnlyList<CrmUserView>> ListCrmUsersAsync(Guid projectId, CancellationToken ct = default)
+        => _dispatcher.Query(new ListCrmUsersQuery(projectId), ct);
+
+    public Task<IReadOnlyList<Guid>> ListCrmClientAssignedUserIdsAsync(
+        Guid clientId,
+        Guid projectId,
+        CancellationToken ct = default)
+        => _dispatcher.Query(new ListCrmClientAssignedUsersQuery(clientId, projectId), ct);
+
+    public Task<IReadOnlyList<Guid>> SetCrmClientAssignedUserIdsAsync(
+        Guid clientId,
+        Guid projectId,
+        IReadOnlyList<Guid> crmUserIds,
+        CancellationToken ct = default)
+        => _dispatcher.Send(new SetCrmClientAssignedUsersCommand(projectId, clientId, crmUserIds), ct);
+
     public Task<IReadOnlyList<CrmChainRunView>> ListCrmClientChainRunsAsync(
         Guid clientId,
         int take = 20,

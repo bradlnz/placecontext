@@ -177,6 +177,280 @@
     gap: 16px;
 }
 
+.crm-users-top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.crm-users-top-copy {
+    min-width: 0;
+}
+
+.crm-users-top-copy strong {
+    display: block;
+    margin: 5px 0 5px;
+    color: var(--text);
+    font-size: 22px;
+    font-weight: 650;
+    letter-spacing: -.02em;
+}
+
+.crm-users-top-copy small {
+    color: var(--text-3);
+    font-size: 11px;
+}
+
+.crm-users-top-count {
+    min-width: 120px;
+    padding: 9px 11px;
+    border-radius: 9px;
+    border: 1px solid var(--border);
+    background: var(--card-2);
+    color: var(--text-2);
+    font-size: 11px;
+    white-space: nowrap;
+}
+
+.crm-user-invite {
+    display: grid;
+    gap: 12px;
+}
+
+.crm-user-invite-form {
+    display: grid;
+    grid-template-columns: minmax(180px, 2fr) minmax(140px, 1fr) minmax(170px, 1.2fr) auto;
+    align-items: end;
+    gap: 10px;
+}
+
+.crm-user-invite-form .dcfield {
+    margin-bottom: 0;
+}
+
+.crm-user-invite-link {
+    display: grid;
+    gap: 8px;
+}
+
+.crm-user-invite-link label {
+    color: var(--text-3);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+}
+
+.crm-user-invite-link .dcfield {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 8px;
+    margin-bottom: 0;
+}
+
+.crm-user-invite-link .dcinput {
+    min-width: 0;
+}
+
+.crm-user-invite-link .dcbtn {
+    white-space: nowrap;
+}
+
+.crm-user-join-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+}
+
+.crm-user-join-row code {
+    display: block;
+    min-width: 0;
+    flex: 1;
+    margin: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.crm-user-join-row .dcbtn {
+    flex: none;
+    white-space: nowrap;
+}
+
+.crm-user-invite-note {
+    margin-top: 6px;
+    color: var(--text-3);
+    font-size: 11px;
+    line-height: 1.45;
+}
+
+.crm-users-permissions {
+    display: grid;
+    gap: 6px;
+}
+
+.crm-users-permissions strong {
+    color: var(--text);
+    font-size: 12px;
+}
+
+.crm-users-permissions span {
+    color: var(--text-3);
+    font-size: 11px;
+    line-height: 1.45;
+}
+
+.crm-users-list {
+    display: contents;
+}
+
+.crm-users-table {
+    margin-top: 2px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--card);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.crm-users-empty {
+    display: grid;
+    gap: 6px;
+    padding: 6px 2px;
+}
+
+.crm-users-empty strong {
+    color: var(--text);
+    font-size: 14px;
+}
+
+.crm-users-empty span {
+    color: var(--text-3);
+    font-size: 11px;
+}
+
+.crm-user-row {
+    --stage-color: var(--text-3);
+    display: grid;
+    grid-template-columns: minmax(260px, 1fr) 120px auto;
+    align-items: center;
+    gap: 12px;
+    min-height: 58px;
+    padding: 0 10px;
+    border-bottom: 1px solid var(--border);
+    background: transparent;
+    border-radius: 0;
+}
+
+.crm-user-row:hover {
+    background: var(--hover);
+}
+
+.crm-users-table .crm-user-row:last-child {
+    border-bottom: 0;
+}
+
+.crm-users-table .client-table-head {
+    background: var(--card-2);
+    color: var(--text-3);
+    font-size: 9.5px;
+    font-weight: 650;
+    letter-spacing: .045em;
+    text-transform: uppercase;
+    min-height: 34px;
+    padding: 0 10px;
+    border-bottom: 1px solid var(--border);
+    grid-template-columns: minmax(260px, 1fr) 120px auto;
+}
+
+.crm-user-row .user-avatar {
+    width: 34px;
+    height: 34px;
+    display: grid;
+    place-items: center;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: var(--card-2);
+    color: var(--text-3);
+}
+
+.crm-user-row .user-avatar svg {
+    width: 16px;
+    height: 16px;
+}
+
+.crm-user-row-identity {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.crm-user-main {
+    min-width: 0;
+}
+
+.crm-user-main strong {
+    display: block;
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.crm-user-main small {
+    margin-top: 4px;
+    color: var(--text-3);
+    font-size: 11px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.crm-user-created {
+    color: var(--text-3);
+    font-size: 11px;
+}
+
+.crm-user-meta {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 6px;
+    min-width: 0;
+}
+
+.crm-role-pill,
+.crm-admin-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    border-radius: 999px;
+    font-size: 10px;
+    white-space: nowrap;
+}
+
+.crm-role-pill {
+    background: color-mix(in srgb, var(--brand-2) 14%, var(--card));
+    color: var(--text-2);
+}
+
+.crm-admin-pill {
+    background: color-mix(in srgb, var(--brand) 14%, var(--card));
+    color: var(--text-2);
+}
+
+.crm-user-meta small {
+    display: inline-flex;
+    align-items: center;
+    color: var(--text-3);
+    font-size: 10px;
+}
+
 .conversation-inbox {
     display: grid;
     grid-template-columns: minmax(240px, 300px) minmax(0, 1fr);
@@ -3080,6 +3354,47 @@
     .crm-workspace {
         width: 100%;
         min-width: 0;
+    }
+
+    .crm-users-top {
+        flex-direction: column;
+        gap: 6px;
+    }
+
+    .crm-users-top-copy strong {
+        font-size: 20px;
+    }
+
+    .crm-users-top-count {
+        min-width: 0;
+        width: 100%;
+        text-align: center;
+    }
+
+    .crm-user-invite-form {
+        grid-template-columns: 1fr;
+    }
+
+    .crm-user-invite-link .dcfield {
+        flex-direction: column;
+    }
+
+    .crm-users-table > .client-table-head {
+        grid-template-columns: minmax(0, 1fr) auto;
+    }
+
+    .crm-user-row {
+        grid-template-columns: minmax(0, 1fr) auto;
+    }
+
+    .crm-users-date-header,
+    .crm-user-created {
+        display: none;
+    }
+
+    .crm-user-meta {
+        justify-content: flex-start;
+        margin-top: 0;
     }
 }
 

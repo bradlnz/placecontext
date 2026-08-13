@@ -478,6 +478,7 @@ app.Use(async (ctx, next) =>
     await next();
 });
 app.UseMiddleware<TenantResolutionMiddleware>(); // resolve {user}.placecontext.ai → tenant, before any data access
+app.UseMiddleware<CrmOnboardingMiddleware>(); // reject CRM onboarding requests early when code missing/invalid
 // Project for the entity data and search APIs: X-Project-Id / X-Project (optional elsewhere).
 app.UseMiddleware<ProjectResolutionMiddleware>();
 app.UseAuthentication();

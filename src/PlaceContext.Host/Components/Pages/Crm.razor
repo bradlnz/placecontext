@@ -99,6 +99,17 @@ else
                     </svg>
                     <span>Automations</span><small>@Vm.AutomationRules.Count</small>
                 </button>
+                <button class="@(Vm.CurrentSection == CrmSection.Users ? "active" : "")"
+                        role="tab" aria-selected="@(Vm.CurrentSection == CrmSection.Users)"
+                        @onclick="@(() => Vm.OpenCrmSection(CrmSection.Users))">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                        <circle cx="10" cy="7" r="3"></circle>
+                        <path d="M2 20v-2a5 5 0 0 1 10 0v2"></path>
+                        <circle cx="18" cy="9" r="3"></circle>
+                        <path d="M14 21v-2a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"></path>
+                    </svg>
+                    <span>Users</span><small>@Vm.CrmUsers.Count</small>
+                </button>
                 <button class="@(Vm.CurrentSection == CrmSection.Settings ? "active" : "")"
                         role="tab" aria-selected="@(Vm.CurrentSection == CrmSection.Settings)"
                         @onclick="@(() => Vm.OpenCrmSection(CrmSection.Settings))">
@@ -267,6 +278,135 @@ else
                 </div>
             }
         </section>
+        }
+        else if (Vm.CurrentSection == CrmSection.Users)
+        {
+            <section class="crm-channel-workspace">
+                <section class="dccard crm-users-top">
+                    <div class="crm-users-top-copy">
+                        <span class="section-kicker">Team access</span>
+                        <strong>CRM users</strong>
+                        <small>Create CRM users for this project and assign them to contacts.</small>
+                    </div>
+                    <div class="crm-users-top-count">
+                        <strong>@Vm.CrmUsers.Count</strong> CRM user@(Vm.CrmUsers.Count == 1 ? "" : "s")
+                    </div>
+                </section>
+
+                @if (Vm.CanManageMembers)
+                {
+                    <section class="dccard crm-user-invite">
+                        <div class="section-label">Add CRM user</div>
+                        <div class="crm-user-invite-form">
+                            <div class="dcfield">
+                                <label>Email</label>
+                                <input class="dcinput"
+                                       @bind="Vm.NewCrmUserEmail"
+                                       placeholder="name@company.com" />
+                            </div>
+                            <div class="dcfield">
+                                <label>Name (optional)</label>
+                                <input class="dcinput"
+                                       @bind="Vm.NewCrmUserName"
+                                       placeholder="Display name" />
+                            </div>
+                            <div class="dcfield">
+                                <label>Assign to contact (optional)</label>
+                                <select class="dcinput" @bind="Vm.NewCrmUserClientId">
+                                    <option value="">No contact</option>
+                                    @foreach (var client in Vm.Clients.OrderBy(client => client.Name))
+                                    {
+                                        <option value="@client.Id">@client.Name</option>
+                                    }
+                                </select>
+                            </div>
+                            <button class="dcbtn primary"
+                                    disabled="@Vm.CreatingCrmUser"
+                                    @onclick="Vm.CreateCrmUser">
+                                @(Vm.CreatingCrmUser ? "Creating user…" : "Create user")
+                            </button>
+                        </div>
+                        @if (Vm.NewCrmUserJoinCode is not null)
+                        {
+                            <div class="crm-user-invite-link">
+                                <label>Onboarding link</label>
+                                <div class="crm-user-join-row">
+                                    <code>@Vm.NewCrmUserJoinLink</code>
+                                    <button type="button" class="dcbtn" @onclick="() => Vm.CopyAsync(Vm.NewCrmUserJoinLink!)">
+                                        Copy
+                                    </button>
+                                </div>
+                                @if (Vm.NewCrmUserJoinMessage is not null)
+                                {
+                                    <small class="crm-user-invite-note">@Vm.NewCrmUserJoinMessage</small>
+                                }
+                            </div>
+                        }
+                        @if (Vm.CrmUserError is not null)
+                        {
+                            <div class="form-error">@Vm.CrmUserError</div>
+                        }
+                    </section>
+                }
+                else
+                {
+                    <section class="dccard crm-users-permissions">
+                        <strong>Invite is restricted</strong>
+                        <span>Only members with member-management permission can add or remove CRM users.</span>
+                    </section>
+                }
+
+                    <section class="dccard">
+                        <div class="section-label">Current users</div>
+                        @if (!Vm.CrmUsers.Any())
+                        {
+                            <div class="crm-users-empty">
+                                <strong>No CRM users</strong>
+                                <span>No users are listed for this project yet.</span>
+                            </div>
+                        }
+                        else
+                        {
+                        <div class="client-table crm-users-table" role="table" aria-label="CRM users">
+                            <div class="client-table-head" role="row">
+                                <span role="columnheader">CRM user</span>
+                                <span class="crm-users-date-header" role="columnheader">Added</span>
+                                <span role="columnheader" class="visually-hidden">Actions</span>
+                            </div>
+                            <div class="crm-users-list" role="rowgroup">
+                            @foreach (var user in Vm.CrmUsers.OrderBy(user => user.Email))
+                            {
+                                <article class="client-row crm-user-row" role="row">
+                                    <div class="crm-user-row-identity" role="cell">
+                                        <span class="user-avatar">
+                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+                                                <circle cx="12" cy="8" r="4"></circle>
+                                                <path d="M4 20v-2a4 4 0 0 1 4-4h8a4 4 0 0 1 4 4v2"></path>
+                                            </svg>
+                                        </span>
+                                        <div class="crm-user-main">
+                                            <strong>@(string.IsNullOrWhiteSpace(user.Name) ? user.Email : user.Name)</strong>
+                                            <small>@user.Email</small>
+                                        </div>
+                                    </div>
+                                    <div class="crm-user-created" role="cell">
+                                        @user.CreatedAt.LocalDateTime.ToString("MMM dd, yyyy")
+                                    </div>
+                                    <div class="crm-user-meta" role="cell">
+                                        @if (Vm.CanManageMembers)
+                                        {
+                                            <button class="dcbtn xs danger" @onclick="@(() => Vm.DeleteCrmUser(user.Id))">
+                                                Remove
+                                            </button>
+                                        }
+                                    </div>
+                                </article>
+                            }
+                            </div>
+                        </div>
+                    }
+                </section>
+            </section>
         }
         else if (Vm.CurrentSection == CrmSection.Conversations)
         {
@@ -1032,6 +1172,38 @@ else
                         @if (Vm.ClientChainAssignmentMessage is not null)
                         {
                             <div class="section-help">@Vm.ClientChainAssignmentMessage</div>
+                        }
+                    }
+                </section>
+
+                <section class="detail-section action-panel">
+                    <div class="section-label">CRM users</div>
+                    <p class="section-help">Assign CRM users who should be linked to this contact.</p>
+                    @if (Vm.LoadingClientUserAssignments)
+                    {
+                        <div class="run-empty">Loading user assignments…</div>
+                    }
+                    else if (Vm.CrmUsers.Count == 0)
+                    {
+                        <div class="run-empty">No CRM users have been created yet.</div>
+                    }
+                    else
+                    {
+                        <div class="client-chain-list">
+                            @foreach (var user in Vm.CrmUsers.OrderBy(user => user.Email))
+                            {
+                                <label class="client-chain-item">
+                                    <input type="checkbox" checked="@Vm.IsUserAssigned(user.Id)" disabled="@Vm.SavingClientUserAssignments" @onchange="e => Vm.ToggleClientUserAssignment(user.Id, (e.Value is bool assigned) && assigned)" />
+                                    <span>@(string.IsNullOrWhiteSpace(user.Name) ? user.Email : user.Name) (@user.Email)</span>
+                                </label>
+                            }
+                        </div>
+                        <button class="dcbtn primary" disabled="@Vm.SavingClientUserAssignments" @onclick="Vm.SaveClientUserAssignments">
+                            @(Vm.SavingClientUserAssignments ? "Saving assignments…" : "Save user assignments")
+                        </button>
+                        @if (Vm.ClientUserAssignmentMessage is not null)
+                        {
+                            <div class="section-help">@Vm.ClientUserAssignmentMessage</div>
                         }
                     }
                 </section>

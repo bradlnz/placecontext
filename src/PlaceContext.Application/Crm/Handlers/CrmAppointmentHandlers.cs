@@ -11,14 +11,21 @@ public sealed class CreateCrmAppointmentHandler
     private readonly ICrmAppointmentRepository _appointments;
     private readonly ICrmClientRepository _clients;
     private readonly ICrmCalendarRepository _calendars;
+    private readonly CrmUserScope _scope;
     private readonly ICurrentUser _currentUser;
     private readonly IUnitOfWork _uow;
     private readonly IClock _clock;
 
-    public CreateCrmAppointmentHandler(ICrmAppointmentRepository appointments,
-        ICrmClientRepository clients, ICrmCalendarRepository calendars, ICurrentUser currentUser, IUnitOfWork uow, IClock clock)
-        => (_appointments, _clients, _calendars, _currentUser, _uow, _clock)
-            = (appointments, clients, calendars, currentUser, uow, clock);
+    public CreateCrmAppointmentHandler(
+        ICrmAppointmentRepository appointments,
+        ICrmClientRepository clients,
+        ICrmCalendarRepository calendars,
+        CrmUserScope scope,
+        ICurrentUser currentUser,
+        IUnitOfWork uow,
+        IClock clock)
+        => (_appointments, _clients, _calendars, _scope, _currentUser, _uow, _clock)
+            = (appointments, clients, calendars, scope, currentUser, uow, clock);
 
     public async Task<CrmAppointmentView> HandleAsync(CreateCrmAppointmentCommand command, CancellationToken ct = default)
     {
@@ -29,6 +36,11 @@ public sealed class CreateCrmAppointmentHandler
                 ?? throw new InvalidOperationException("The selected CRM contact no longer exists.");
             if (client.ProjectId != command.ProjectId)
                 throw new InvalidOperationException("The selected contact belongs to another project.");
+            await _scope.EnsureClientAccessAsync(client.ProjectId, client.Id, ct);
+        }
+        else
+        {
+            await _scope.EnsureClientAccessAsync(command.ProjectId, Guid.Empty, ct);
         }
 
         if (command.CalendarId is { } calendarId)
@@ -45,6 +57,10 @@ public sealed class CreateCrmAppointmentHandler
             value = await _appointments.GetByIdAsync(appointmentId, ct)
                 ?? throw new InvalidOperationException("The appointment no longer exists.");
             if (value.ProjectId != command.ProjectId) throw new InvalidOperationException("The appointment belongs to another project.");
+            if (value.ClientId is { } existingClientId)
+                await _scope.EnsureClientAccessAsync(value.ProjectId, existingClientId, ct);
+            else
+                await _scope.EnsureClientAccessAsync(value.ProjectId, Guid.Empty, ct);
             value.Update(command.CalendarId, command.ClientId, command.Title, command.StartsAt,
                 command.EndsAt, command.Location, command.Notes);
             await _appointments.UpdateAsync(value, ct);
@@ -67,11 +83,24 @@ public sealed class CreateCrmAppointmentHandler
 
 public sealed class DeleteCrmAppointmentHandler : ICommandHandler<DeleteCrmAppointmentCommand, bool>
 {
-    private readonly ICrmAppointmentRepository _appointments; private readonly IUnitOfWork _uow;
-    public DeleteCrmAppointmentHandler(ICrmAppointmentRepository appointments, IUnitOfWork uow) => (_appointments, _uow) = (appointments, uow);
+    private readonly ICrmAppointmentRepository _appointments;
+    private readonly CrmUserScope _scope;
+    private readonly IUnitOfWork _uow;
+
+    public DeleteCrmAppointmentHandler(
+        ICrmAppointmentRepository appointments,
+        CrmUserScope scope,
+        IUnitOfWork uow)
+        => (_appointments, _scope, _uow) = (appointments, scope, uow);
+
     public async Task<bool> HandleAsync(DeleteCrmAppointmentCommand command, CancellationToken ct = default)
     {
-        if (await _appointments.GetByIdAsync(command.AppointmentId, ct) is null) return false;
+        var value = await _appointments.GetByIdAsync(command.AppointmentId, ct);
+        if (value is null) return false;
+        if (value.ClientId is { } clientId)
+            await _scope.EnsureClientAccessAsync(value.ProjectId, clientId, ct);
+        else
+            await _scope.EnsureClientAccessAsync(value.ProjectId, Guid.Empty, ct);
         await _appointments.DeleteAsync(command.AppointmentId, ct); await _uow.SaveChangesAsync(ct); return true;
     }
 }
@@ -120,13 +149,23 @@ public sealed class ListCrmAppointmentsHandler
 {
     private readonly ICrmAppointmentRepository _appointments;
     private readonly ICrmClientRepository _clients;
-    public ListCrmAppointmentsHandler(ICrmAppointmentRepository appointments, ICrmClientRepository clients)
-        => (_appointments, _clients) = (appointments, clients);
+    private readonly CrmUserScope _scope;
+
+    public ListCrmAppointmentsHandler(
+        ICrmAppointmentRepository appointments,
+        ICrmClientRepository clients,
+        CrmUserScope scope)
+        => (_appointments, _clients, _scope) = (appointments, clients, scope);
 
     public async Task<IReadOnlyList<CrmAppointmentView>> HandleAsync(ListCrmAppointmentsQuery query, CancellationToken ct = default)
     {
         var clients = (await _clients.ListForProjectAsync(query.ProjectId, ct)).ToDictionary(x => x.Id, x => x.Name);
-        return (await _appointments.ListForProjectAsync(query.ProjectId, ct))
+        var values = await _scope.FilterByAccessAsync(
+            query.ProjectId,
+            await _appointments.ListForProjectAsync(query.ProjectId, ct),
+            value => value.ClientId ?? Guid.Empty,
+            ct);
+        return values
             .Select(value => CreateCrmAppointmentHandler.Map(value,
                 value.ClientId is { } id && clients.TryGetValue(id, out var name) ? name : null))
             .ToArray();

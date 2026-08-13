@@ -158,6 +158,21 @@ public interface IPlaceContextService
     Task<bool> DeleteCrmAutomationRuleAsync(Guid ruleId, CancellationToken ct = default);
     Task<IReadOnlyList<CrmAutomationRuleView>> ListCrmAutomationRulesAsync(
         Guid projectId, CancellationToken ct = default);
+    Task<CrmUserCreationResult> CreateCrmUserAsync(CreateCrmUserCommand command, CancellationToken ct = default);
+    Task<CrmOnboardingResult> CompleteCrmOnboardingAsync(
+        CompleteCrmOnboardingCommand command,
+        CancellationToken ct = default);
+    Task<bool> DeleteCrmUserAsync(Guid projectId, Guid crmUserId, CancellationToken ct = default);
+    Task<IReadOnlyList<CrmUserView>> ListCrmUsersAsync(Guid projectId, CancellationToken ct = default);
+    Task<IReadOnlyList<Guid>> ListCrmClientAssignedUserIdsAsync(
+        Guid clientId,
+        Guid projectId,
+        CancellationToken ct = default);
+    Task<IReadOnlyList<Guid>> SetCrmClientAssignedUserIdsAsync(
+        Guid clientId,
+        Guid projectId,
+        IReadOnlyList<Guid> crmUserIds,
+        CancellationToken ct = default);
 
     // Job chains (staged pipelines: each stage's output feeds the next stage's input; a stage with
     // more than one job id is a parallel fan-out group, and the stage right after it is the join).

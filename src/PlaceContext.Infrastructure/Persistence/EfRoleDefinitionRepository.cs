@@ -59,18 +59,28 @@ public sealed class EfRoleDefinitionRepository : IRoleDefinitionRepository
     }
 
     /// <summary>
-    /// Lazy per-tenant seed: the first read against a tenant with no role_definitions rows inserts the
-    /// four system roles from the hardcoded <see cref="RolePermissionDefaults"/> mapping. Done in code
-    /// rather than as a per-tenant SQL seed in the migration so brand-new tenants (created after the
-    /// migration ran) get the same rows deterministically. Saves immediately — read paths have no unit
-    /// of work commit of their own. A concurrent first read losing the unique-index race is fine: the
-    /// rows exist by then either way.
+    /// Lazy per-tenant seed: the first read against a tenant without expected roles inserts missing system
+    /// roles from the hardcoded <see cref="RolePermissionDefaults"/> mapping. Done in code rather than as a
+    /// per-tenant SQL seed in the migration so brand-new and upgraded tenants get deterministic role rows.
+    /// Saves immediately — read paths have no unit-of-work commit of their own. A concurrent first read
+    /// losing the unique-index race is fine: the rows exist by then either way.
     /// </summary>
     private async Task EnsureSystemRolesAsync(CancellationToken ct)
     {
-        if (await _db.RoleDefinitions.AnyAsync(ct)) return;
+        var existing = await _db.RoleDefinitions
+            .Select(r => r.Name)
+            .ToListAsync(ct);
+        var existingNames = existing.ToHashSet(StringComparer.Ordinal);
+        var requiredRoles = Enum.GetValues<UserRole>()
+            .Select(role => role.ToString())
+            .ToHashSet(StringComparer.Ordinal);
+        if (requiredRoles.All(existingNames.Contains))
+            return;
+
         foreach (var role in Enum.GetValues<UserRole>())
         {
+            if (existingNames.Contains(role.ToString())) continue;
+
             _db.RoleDefinitions.Add(new RoleDefinitionRow
             {
                 Id = Guid.NewGuid(),

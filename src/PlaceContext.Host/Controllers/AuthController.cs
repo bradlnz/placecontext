@@ -7,8 +7,10 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using PlaceContext.Application;
+using PlaceContext.Application.Features;
 using PlaceContext.Application.Auth;
 using PlaceContext.Application.Ports;
+using PlaceContext.Domain.Entities;
 using PlaceContext.Host.Auth;
 using PlaceContext.Infrastructure.Tenancy;
 
@@ -289,6 +291,10 @@ public sealed class AuthController : ControllerBase
         return url;
     }
 
+    private static string CrmOnboardingErrorUrl(string? code, string message)
+        => "/crm/onboarding?code=" + Uri.EscapeDataString(code ?? string.Empty)
+            + "&error=" + Uri.EscapeDataString(message);
+
     private async Task EnsureDefaultProjectAsync(AuthUser admin, CancellationToken cancellationToken)
     {
         var previousUser = CurrentUser.Current;
@@ -325,6 +331,22 @@ public sealed class AuthController : ControllerBase
         return Content(AuthPages.Join(_antiforgery.GetAndStoreTokens(HttpContext), token!, info, error), "text/html");
     }
 
+    [HttpGet("/joininvalid")]
+    [AllowAnonymous]
+    public IActionResult JoinInvalid()
+        => Content(AuthPages.JoinInvalid(), "text/html");
+
+    [HttpGet("/crm/onboarding")]
+    [AllowAnonymous]
+    public IActionResult CrmOnboarding([FromQuery] string? code, [FromQuery] string? error)
+    {
+        var normalizedCode = string.IsNullOrWhiteSpace(code) ? null : code.Trim().ToLowerInvariant();
+        if (!CrmUser.IsJoinCodeFormatValid(normalizedCode))
+            return Content(AuthPages.JoinInvalid(), "text/html");
+
+        return Content(AuthPages.CrmOnboarding(_antiforgery.GetAndStoreTokens(HttpContext), normalizedCode, error), "text/html");
+    }
+
     [HttpPost("/auth/accept-invite")]
     [AllowAnonymous]
     public async Task<IActionResult> AcceptInvite([FromForm] string token, [FromForm] string password, [FromForm] string? displayName)
@@ -349,6 +371,40 @@ public sealed class AuthController : ControllerBase
             return Redirect($"/join?token={Uri.EscapeDataString(token)}&error=" + Uri.EscapeDataString("This invite is invalid, used, expired, or the email is already a member."));
         await SignInAsync(HttpContext, user);
         return Redirect("/");
+    }
+
+    [HttpPost("/auth/complete-crm-onboarding")]
+    [AllowAnonymous]
+    public async Task<IActionResult> CompleteCrmOnboarding([FromForm] string code, [FromForm] string password, [FromForm] string? displayName)
+    {
+        if (!await ValidAntiforgeryAsync())
+            return Redirect($"/crm/onboarding?code={Uri.EscapeDataString(code ?? "")}"
+                + "&error=" + Uri.EscapeDataString("Your session expired — please try again."));
+
+        var policyError = PasswordPolicy.Validate(password);
+        if (policyError is not null)
+            return Redirect(CrmOnboardingErrorUrl(code, policyError));
+
+        CrmOnboardingResult result;
+        try
+        {
+            result = await _placeContext.CompleteCrmOnboardingAsync(new CompleteCrmOnboardingCommand(code, password, displayName), HttpContext.RequestAborted);
+        }
+        catch (ArgumentException ex)
+        {
+            return Redirect(CrmOnboardingErrorUrl(code, ex.Message));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Redirect(CrmOnboardingErrorUrl(code, ex.Message));
+        }
+
+        var user = await _auth.ValidateCredentialsAsync(result.Email, password, HttpContext.RequestAborted);
+        if (user is null)
+            return Redirect("/login?error=" + Uri.EscapeDataString("We could not sign you in. Please try logging in."));
+
+        await SignInAsync(HttpContext, user);
+        return Redirect($"/project/{result.ProjectId}/crm");
     }
 
     [HttpPost("/auth/logout")]

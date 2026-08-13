@@ -184,8 +184,10 @@ public static class DependencyInjection
         services.AddScoped<ICrmCommunicationRepository, EfCrmCommunicationRepository>();
         services.AddScoped<ICrmAppointmentRepository, EfCrmAppointmentRepository>();
         services.AddScoped<ICrmCalendarRepository, EfCrmCalendarRepository>();
+        services.AddScoped<ICrmUserRepository, EfCrmUserRepository>();
         services.AddScoped<ICrmClientArtifactRepository, EfCrmClientArtifactRepository>();
         services.AddScoped<ICrmClientJobChainAssignmentRepository, EfCrmClientJobChainAssignmentRepository>();
+        services.AddScoped<ICrmClientUserAssignmentRepository, EfCrmClientUserAssignmentRepository>();
         services.AddScoped<ICrmAutomationRuleRepository, EfCrmAutomationRuleRepository>();
         services.AddScoped<ICrmAutomationQueue, Scheduling.DbCrmAutomationQueue>();
         services.Configure<Comms.ClientCommsOptions>(
@@ -382,6 +384,66 @@ public static class DependencyInjection
                     ON crm_client_job_chain_assignments ("ChainId");
                 CREATE UNIQUE INDEX IF NOT EXISTS uq_crm_client_job_chain_assignments_project_client_chain
                     ON crm_client_job_chain_assignments ("ProjectId", "ClientId", "ChainId");
+                """);
+        }
+        catch { /* non-Postgres or partially initialized database */ }
+
+        // Additive CRM users and CRM user assignment tables (safe to replay if already created).
+        try
+        {
+            db.Database.ExecuteSqlRaw(
+                """
+                CREATE TABLE IF NOT EXISTS crm_users (
+                    "Id" uuid PRIMARY KEY,
+                    "TenantId" uuid NOT NULL,
+                    "ProjectId" uuid NOT NULL,
+                    "Name" text NULL,
+                    "Email" text NOT NULL,
+                    "JoinCode" text NULL,
+                    "JoinCodeExpiresAt" timestamptz NULL,
+                    "AuthUserId" uuid NULL,
+                    "OnboardedAt" timestamptz NULL,
+                    "CreatedAt" timestamptz NOT NULL DEFAULT now(),
+                    "UpdatedAt" timestamptz NOT NULL DEFAULT now()
+                );
+                CREATE INDEX IF NOT EXISTS ix_crm_users_project_email
+                    ON crm_users ("ProjectId", "Email");
+                CREATE UNIQUE INDEX IF NOT EXISTS uq_crm_users_project_email
+                    ON crm_users ("ProjectId", lower("Email"));
+                CREATE INDEX IF NOT EXISTS ix_crm_users_join_code
+                    ON crm_users ("JoinCode");
+                CREATE INDEX IF NOT EXISTS ix_crm_users_auth_user_id
+                    ON crm_users ("AuthUserId");
+
+                CREATE TABLE IF NOT EXISTS crm_client_user_assignments (
+                    "Id" uuid PRIMARY KEY,
+                    "TenantId" uuid NOT NULL,
+                    "ProjectId" uuid NOT NULL,
+                    "ClientId" uuid NOT NULL,
+                    "CrmUserId" uuid NOT NULL,
+                    "CreatedAt" timestamptz NOT NULL DEFAULT now(),
+                    "UpdatedAt" timestamptz NOT NULL DEFAULT now()
+                );
+                CREATE INDEX IF NOT EXISTS ix_crm_client_user_assignments_project_client
+                    ON crm_client_user_assignments ("ProjectId", "ClientId");
+                CREATE INDEX IF NOT EXISTS ix_crm_client_user_assignments_crm_user_id
+                    ON crm_client_user_assignments ("CrmUserId");
+                CREATE UNIQUE INDEX IF NOT EXISTS uq_crm_client_user_assignments_project_client_user
+                    ON crm_client_user_assignments ("ProjectId", "ClientId", "CrmUserId");
+                """);
+        }
+        catch { /* non-Postgres or partially initialized database */ }
+
+        try
+        {
+            db.Database.ExecuteSqlRaw(
+                """
+                ALTER TABLE crm_users ADD COLUMN IF NOT EXISTS "JoinCode" text NULL;
+                ALTER TABLE crm_users ADD COLUMN IF NOT EXISTS "JoinCodeExpiresAt" timestamptz NULL;
+                ALTER TABLE crm_users ADD COLUMN IF NOT EXISTS "AuthUserId" uuid NULL;
+                ALTER TABLE crm_users ADD COLUMN IF NOT EXISTS "OnboardedAt" timestamptz NULL;
+                CREATE INDEX IF NOT EXISTS ix_crm_users_join_code ON crm_users ("JoinCode");
+                CREATE INDEX IF NOT EXISTS ix_crm_users_auth_user_id ON crm_users ("AuthUserId");
                 """);
         }
         catch { /* non-Postgres or partially initialized database */ }
