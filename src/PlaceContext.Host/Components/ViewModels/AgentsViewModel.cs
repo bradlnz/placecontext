@@ -93,7 +93,7 @@ public sealed class AgentsViewModel(IPlaceContextService service, PortalUiState 
         EditDescription = agent.Description;
         EditInstructions = agent.Instructions;
         EditTemplateKey = agent.TemplateKey;
-        EditSchema = agent.Schema;
+        EditSchema = NormalizeSchemaForEditor(agent.Schema);
         EditEnabled = agent.Enabled;
         EditParentAgentId = agent.ParentAgentId;
         EditCapabilities.Clear();
@@ -375,7 +375,7 @@ public sealed class AgentsViewModel(IPlaceContextService service, PortalUiState 
         EditDescription = template.Description;
         EditInstructions = template.Instructions;
         EditTemplateKey = template.Key;
-        EditSchema = string.Empty;
+        EditSchema = "{}";
         EditParentAgentId = CommandAgent?.Id;
         EditEnabled = true;
         EditCapabilities.Clear();
@@ -394,7 +394,7 @@ public sealed class AgentsViewModel(IPlaceContextService service, PortalUiState 
         EditDescription = string.Empty;
         EditInstructions = string.Empty;
         EditTemplateKey = string.Empty;
-        EditSchema = string.Empty;
+        EditSchema = "{}";
         EditParentAgentId = CommandAgent?.Id;
         EditEnabled = true;
         EditCapabilities.Clear();
@@ -445,7 +445,7 @@ public sealed class AgentsViewModel(IPlaceContextService service, PortalUiState 
         NotifyStateChanged();
         try
         {
-            var schema = string.IsNullOrWhiteSpace(EditSchema) ? "{}" : EditSchema;
+            var schema = NormalizeSchemaForEditor(EditSchema);
             await service.SaveAgentDefinitionAsync(new SaveAgentDefinitionCommand(
                 ProjectId, EditId, EditName, EditDescription, EditInstructions, EditTemplateKey,
                 EditCapabilities.ToArray(), EditAllowedJobs.ToArray(), EditParentAgentId, EditEnabled, schema));
@@ -508,4 +508,9 @@ public sealed class AgentsViewModel(IPlaceContextService service, PortalUiState 
         Message = message;
         MessageIsError = error;
     }
+
+    private static string NormalizeSchemaForEditor(string? schema)
+        => string.IsNullOrWhiteSpace(schema?.Trim())
+            ? "{}"
+            : schema!.Trim();
 }

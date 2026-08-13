@@ -11,38 +11,43 @@ namespace PlaceContext.Infrastructure.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.CreateTable(
-                name: "crm_client_job_chain_assignments",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    TenantId = table.Column<Guid>(type: "uuid", nullable: false),
-                    ProjectId = table.Column<Guid>(type: "uuid", nullable: false),
-                    ClientId = table.Column<Guid>(type: "uuid", nullable: false),
-                    ChainId = table.Column<Guid>(type: "uuid", nullable: false),
-                    CreatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false, defaultValueSql: "now()"),
-                    UpdatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false, defaultValueSql: "now()")
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_crm_client_job_chain_assignments", x => x.Id);
-                });
+            migrationBuilder.Sql(
+                """
+                CREATE TABLE IF NOT EXISTS crm_client_job_chain_assignments (
+                    "Id" uuid NOT NULL,
+                    "TenantId" uuid NOT NULL,
+                    "ProjectId" uuid NOT NULL,
+                    "ClientId" uuid NOT NULL,
+                    "ChainId" uuid NOT NULL,
+                    "CreatedAt" timestamp with time zone NOT NULL DEFAULT now(),
+                    "UpdatedAt" timestamp with time zone NOT NULL DEFAULT now()
+                );
 
-            migrationBuilder.CreateIndex(
-                name: "IX_crm_client_job_chain_assignments_ChainId",
-                table: "crm_client_job_chain_assignments",
-                column: "ChainId");
+                DO $$
+                DECLARE
+                    has_primary_key boolean;
+                BEGIN
+                    SELECT EXISTS (
+                        SELECT 1
+                        FROM pg_constraint
+                        WHERE conrelid = 'crm_client_job_chain_assignments'::regclass
+                          AND contype = 'p'
+                    )
+                    INTO has_primary_key;
 
-            migrationBuilder.CreateIndex(
-                name: "IX_crm_client_job_chain_assignments_ProjectId_ClientId",
-                table: "crm_client_job_chain_assignments",
-                columns: new[] { "ProjectId", "ClientId" });
+                    IF NOT has_primary_key THEN
+                        ALTER TABLE crm_client_job_chain_assignments
+                        ADD CONSTRAINT "PK_crm_client_job_chain_assignments" PRIMARY KEY ("Id");
+                    END IF;
+                END $$;
 
-            migrationBuilder.CreateIndex(
-                name: "IX_crm_client_job_chain_assignments_ProjectId_ClientId_ChainId",
-                table: "crm_client_job_chain_assignments",
-                columns: new[] { "ProjectId", "ClientId", "ChainId" },
-                unique: true);
+                CREATE INDEX IF NOT EXISTS "IX_crm_client_job_chain_assignments_ChainId"
+                  ON crm_client_job_chain_assignments ("ChainId");
+                CREATE INDEX IF NOT EXISTS "IX_crm_client_job_chain_assignments_ProjectId_ClientId"
+                  ON crm_client_job_chain_assignments ("ProjectId", "ClientId");
+                CREATE UNIQUE INDEX IF NOT EXISTS "IX_crm_client_job_chain_assignments_ProjectId_ClientId_ChainId"
+                  ON crm_client_job_chain_assignments ("ProjectId", "ClientId", "ChainId");
+                """);
         }
 
         /// <inheritdoc />

@@ -11,19 +11,19 @@
 
 <PageTitle>PlaceContext — Agents</PageTitle>
 
-<div class="agents-page">
-    <header class="agents-head">
+<div class="page agents-page">
+    <header class="agents-head page-head">
         <div>
-            <h2>Agents</h2>
-            <p>Coordinate specialised agents through one Command Agent, grounded in the project data graph.</p>
+            <h2 class="page-title">Agents</h2>
+            <p class="page-sub">Coordinate specialised agents through one Command Agent, grounded in the project data graph.</p>
         </div>
-        <div class="agents-head-actions">
-            <div class="agents-tabs" role="tablist" aria-label="Agents workspace section">
-                <button class="agents-tab @(IsAgentsTab ? "active" : null)" type="button"
+        <div class="agents-head-actions head-actions">
+            <div class="agents-tabs dctabs tabs-strip" role="tablist" aria-label="Agents workspace section">
+                <button class="dctab @(IsAgentsTab ? "active" : null)" type="button"
                         @onclick="() => SetActiveTab(AgentsSectionTab.Agents)" role="tab" aria-selected="@IsAgentsTab">
                     Agents
                 </button>
-                <button class="agents-tab @(IsWorkTab ? "active" : null)" type="button"
+                <button class="dctab @(IsWorkTab ? "active" : null)" type="button"
                         @onclick="() => SetActiveTab(AgentsSectionTab.Work)" role="tab" aria-selected="@IsWorkTab">
                     Work
                 </button>
