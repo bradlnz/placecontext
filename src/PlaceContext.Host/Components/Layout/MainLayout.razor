@@ -129,11 +129,7 @@
                 <span class="title-14">@Vm.Title</span>
                 <span class="topbar-sub">@Vm.Subtitle</span>
             </div>
-            <div class="topbar-right">
-                <button class="dcsearch-trigger cli-trigger" @onclick="Vm.ToggleCliAsync">
-                    <svg class="shell-control-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h11" /><polyline points="7 8 3 12 7 16" /><line x1="16" y1="12" x2="21" y2="12" /></svg>
-                    <span class="dcsearch-text">Virtual CLI</span>
-                </button>
+        <div class="topbar-right">
                 <button class="dcsearch-trigger" @onclick="Vm.OpenSearch">
                     <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-4-4" /></svg>
                     <span class="dcsearch-text">Search context, files, changes</span>
@@ -235,57 +231,16 @@
         </div>
     }
 
-    @if (Vm.CliOpen)
-    {
-        <div class="cli-overlay" @onclick="Vm.CloseCli">
-            <div class="cli-shell" role="dialog" aria-modal="true" aria-label="Virtual CLI" @onclick:stopPropagation="true">
-                <div class="cli-shell-head">
-                    <div class="cli-shell-title">
-                        <span class="cli-shell-name">Virtual CLI</span>
-                        <span class="cli-shell-sub">@Vm.CliWorkingDir</span>
-                    </div>
-                    <button class="icon-btn" type="button" title="Close virtual CLI" aria-label="Close virtual CLI" @onclick="Vm.CloseCli">
-                        <svg class="shell-control-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12" /></svg>
-                    </button>
-                </div>
-                <div class="cli-output" @ref="_cliOutput">
-                    @if (Vm.CliLines.Count == 0)
-                    {
-                        <div class="cli-line cli-line-empty">Type a command to begin.</div>
-                    }
-                    else
-                    {
-                        @foreach (var line in Vm.CliLines)
-                        {
-                            <div class="cli-line">@line</div>
-                        }
-                    }
-                </div>
-                <div class="cli-input-row">
-                    <span class="cli-prompt">@Vm.CliPrompt</span>
-                    <input class="cli-input" placeholder="Type command and press Enter"
-                           value="@Vm.CliInput" @oninput="OnCliInput" @onkeydown="OnCliKey" @ref="_cliInput" />
-                    <button class="icon-btn cli-send" title="Run command" @onclick="Vm.SubmitCliCommandAsync">
-                        <svg class="shell-control-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h13M16 8l4 4-4 4" /></svg>
-                    </button>
-                </div>
-            </div>
-        </div>
-    }
 </div>
 
 @code {
     private ElementReference _searchInput;
-    private ElementReference _cliInput;
-    private ElementReference _cliOutput;
     protected override void OnInitialized() => Vm.Attach(() => InvokeAsync(StateHasChanged));
     protected override Task OnInitializedAsync() => Vm.InitializeAsync();
     protected override Task OnAfterRenderAsync(bool firstRender) =>
-        Vm.AfterRenderAsync(firstRender, _searchInput, _cliInput, _cliOutput);
+        Vm.AfterRenderAsync(firstRender, _searchInput);
     private Task OnSearchInput(ChangeEventArgs args) => Vm.SearchAsync(args.Value?.ToString());
     private void OnSearchKey(KeyboardEventArgs args) => Vm.HandleSearchKey(args.Key);
-    private void OnCliInput(ChangeEventArgs args) => Vm.CliInput = args.Value?.ToString() ?? string.Empty;
-    private Task OnCliKey(KeyboardEventArgs args) => Vm.HandleCliKeyAsync(args.Key);
     private Task ToggleTheme() => Vm.ToggleThemeAsync();
     public void Dispose() => Vm.Dispose();
 }

@@ -27,9 +27,16 @@
                         @onclick="() => SetActiveTab(AgentsSectionTab.Work)" role="tab" aria-selected="@IsWorkTab">
                     Work
                 </button>
+                <AuthorizeView Policy="@Permission.AgentsChat">
+                    <Authorized>
+                        <button class="dctab @(IsChatTab ? "active" : null)" type="button"
+                                @onclick="() => SetActiveTab(AgentsSectionTab.Chat)" role="tab" aria-selected="@IsChatTab">
+                            Chat
+                        </button>
+                    </Authorized>
+                </AuthorizeView>
             </div>
             <button class="dcbtn" @onclick="Vm.CreateBlankWorker">Add agent</button>
-            <a class="dcbtn" href="/chat">Open Agent Chat</a>
         </div>
     </header>
 
@@ -129,7 +136,7 @@
                 </aside>
             </section>
         }
-        else
+        else if (IsWorkTab)
         {
             <section class="work-board-wrap" aria-label="Work board">
                 <header class="work-board-head">
@@ -168,6 +175,17 @@
                     }
                 </section>
             </section>
+        }
+        else
+        {
+            <AuthorizeView Policy="@Permission.AgentsChat">
+                <Authorized>
+                    <Chat />
+                </Authorized>
+                <NotAuthorized>
+                    <div class="agents-message error">You need Agent Chat permission to view this tab.</div>
+                </NotAuthorized>
+            </AuthorizeView>
         }
     }
 
@@ -388,6 +406,7 @@
 
     private bool IsAgentsTab => _activeTab == AgentsSectionTab.Agents;
     private bool IsWorkTab => _activeTab == AgentsSectionTab.Work;
+    private bool IsChatTab => _activeTab == AgentsSectionTab.Chat;
 
     private void OnEditParentChanged(ChangeEventArgs e)
     {
@@ -406,7 +425,7 @@
 
         _activeTab = tab;
 
-        if (tab == AgentsSectionTab.Agents)
+        if (tab == AgentsSectionTab.Agents || tab == AgentsSectionTab.Chat)
         {
             Vm.StopWorkItemPolling();
         }
@@ -429,6 +448,7 @@
     {
         Agents,
         Work,
+        Chat,
     }
 
     public async ValueTask DisposeAsync()

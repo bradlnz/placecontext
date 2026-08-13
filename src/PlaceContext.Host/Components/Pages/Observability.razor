@@ -190,6 +190,8 @@ else
 @code {
     [SupplyParameterFromQuery(Name = "run")] public string? RunId { get; set; }
     [SupplyParameterFromQuery(Name = "chainRun")] public string? ChainRunId { get; set; }
+    private string? _chainContextJson;
+    private string? _chainContextJsonPath;
 
     protected override async Task OnInitializedAsync()
     {
@@ -207,6 +209,61 @@ else
     }
 
     public void Dispose() => Vm.Dispose();
+
+    private bool IsJsonLike(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return false;
+
+        try
+        {
+            using var document = System.Text.Json.JsonDocument.Parse(value);
+            return document.RootElement.ValueKind is System.Text.Json.JsonValueKind.Object
+                or System.Text.Json.JsonValueKind.Array;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static string GetJsonPreview(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return "(empty)";
+
+        var trimmed = value.Trim();
+        const int max = 90;
+        return trimmed.Length <= max ? trimmed : trimmed[..max] + "…";
+    }
+
+    private static string FormatJson(string raw)
+    {
+        try
+        {
+            using var document = System.Text.Json.JsonDocument.Parse(raw);
+            return System.Text.Json.JsonSerializer.Serialize(document.RootElement, new System.Text.Json.JsonSerializerOptions
+            {
+                WriteIndented = true
+            });
+        }
+        catch
+        {
+            return raw;
+        }
+    }
+
+    private void OpenChainContextJson(string path, string value)
+    {
+        _chainContextJson = FormatJson(value);
+        _chainContextJsonPath = path;
+    }
+
+    private void CloseChainContextJson()
+    {
+        _chainContextJson = null;
+        _chainContextJsonPath = null;
+    }
 }
 
 @* ── Chain run detail slide-out: the fan-out/fan-in pipeline — a fan-out stage stacks its branches
@@ -239,13 +296,70 @@ else
 
             <ChainPipeline Run="chainRun" OnStepClick="Vm.OpenChainStep" />
 
+            @if (Vm.OpenChainContextRows.Count > 0)
+            {
+                <div class="dccard chain-context-panel">
+                    <div class="out-label">Accumulated chain context</div>
+                    <div class="chain-context-scroll">
+                        <table class="chain-context-table">
+                            <thead>
+                                <tr>
+                                    <th class="chain-context-cell chain-context-path">Field</th>
+                                    <th class="chain-context-cell">Value</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var row in Vm.OpenChainContextRows)
+                                {
+                                    <tr>
+                                        <td class="chain-context-cell chain-context-path"><code>@row.Path</code></td>
+                                        <td class="chain-context-cell">
+                                            @if (IsJsonLike(row.Value))
+                                            {
+                                                <button class="dcbtn btn-2-8 json-view-button"
+                                                        @onclick="(() => OpenChainContextJson(row.Path, row.Value))">
+                                                    View JSON
+                                                </button>
+                                                <span class="chain-context-preview">@GetJsonPreview(row.Value)</span>
+                                            }
+                                            else
+                                            {
+                                                <code class="chain-context-value">@row.Value</code>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            }
+
             @if (chainRun.FinalOutput is { Length: > 0 })
             {
                 <div class="dccard panel-card">
                     <div class="panel-title">Pipeline output</div>
-                <pre class="shard-json">@Vm.Presentation.Json(chainRun.FinalOutput)</pre>
+                    <pre class="shard-json">@Vm.Presentation.Json(chainRun.FinalOutput)</pre>
                 </div>
             }
+        </div>
+    </div>
+}
+
+@if (_chainContextJson is not null)
+{
+    <div class="dcmodal-overlay" @onclick="CloseChainContextJson">
+        <div class="dcmodal chain-json-modal" @onclick:stopPropagation="true">
+            <div class="dcmodal-head">
+                <div>
+                    <div class="title-14">Chain context JSON</div>
+                    <div class="sub-115">Path: <code>@_chainContextJsonPath</code></div>
+                </div>
+                <button class="dcslide-x" @onclick="CloseChainContextJson">×</button>
+            </div>
+            <div class="dcmodal-body chain-json-body">
+                <pre class="json-pre">@_chainContextJson</pre>
+            </div>
         </div>
     </div>
 }

@@ -8,6 +8,7 @@ public static class PageRoutes
     public const string LocalitySettings = "/settings/locality";
 
     public static string ProjectJobs(Guid projectId) => $"/project/{projectId}/jobs";
+    public static string ProjectDataJobs(Guid projectId) => $"/project/{projectId}/data-jobs";
 
     public static string ProjectTests(Guid projectId) => $"/project/{projectId}/tests";
 

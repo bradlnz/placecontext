@@ -31,6 +31,8 @@ public sealed class ObservabilityViewModel(
     public IReadOnlyList<JobRunTelemetry>? LiveTraces { get; private set; }
     public IReadOnlyList<ChainRunReportView>? ChainReports { get; private set; }
     public ChainRunReportView? OpenChain { get; private set; }
+    public IReadOnlyList<(string Path, string Value)> OpenChainContextRows =>
+        OpenChain is null ? Array.Empty<(string, string)>() : FlattenContext(OpenChain.Run.FinalOutput);
     public string Tab { get; private set; } = RunsTab;
     public bool IsRunsTab => Tab == RunsTab;
     public bool IsChainsTab => Tab == ChainsTab;
@@ -95,6 +97,46 @@ public sealed class ObservabilityViewModel(
         run.Steps.Count(s =>
             ScopedPresentationCatalog.StepStatus(s.Status) == ChainStepStatus.Succeeded
         );
+
+    private static IReadOnlyList<(string Path, string Value)> FlattenContext(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+            return Array.Empty<(string, string)>();
+
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            var rows = new List<(string, string)>();
+            Flatten(doc.RootElement, "", rows);
+            return rows.Take(250).ToList();
+        }
+        catch (JsonException)
+        {
+            return new[] { ("payload", json) };
+        }
+    }
+
+    private static void Flatten(JsonElement node, string path, List<(string, string)> rows)
+    {
+        if (node.ValueKind == JsonValueKind.Object)
+        {
+            foreach (var property in node.EnumerateObject())
+                Flatten(
+                    property.Value,
+                    string.IsNullOrEmpty(path) ? property.Name : $"{path}.{property.Name}",
+                    rows
+                );
+            return;
+        }
+
+        if (node.ValueKind == JsonValueKind.Array)
+        {
+            rows.Add((path, node.GetRawText()));
+            return;
+        }
+
+        rows.Add((path, node.ToString()));
+    }
 
     public bool IsFailed(string? status) =>
         ScopedPresentationCatalog.JobStatus(status) == JobRunStatus.Failed

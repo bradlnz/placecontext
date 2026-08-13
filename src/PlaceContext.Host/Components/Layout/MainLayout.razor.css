@@ -551,18 +551,6 @@
     flex: none;
 }
 
-.cli-trigger {
-    background: color-mix(in srgb, var(--brand-bg) 58%, var(--card));
-    border-color: color-mix(in srgb, var(--brand) 36%, var(--border));
-    color: var(--brand-2);
-}
-
-.cli-trigger:hover {
-    border-color: color-mix(in srgb, var(--brand) 58%, var(--border-2));
-    color: var(--text-2);
-    background: color-mix(in srgb, var(--brand-bg) 78%, var(--card-2));
-}
-
 .topbar-switcher-wrap {
     padding: 0;
     border-top: none;
@@ -623,121 +611,6 @@
     /* Let nested ProjectLayout/SettingsLayout fill height and manage their own scroll. */
     display: flex;
     flex-direction: column;
-}
-
-.cli-overlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.44);
-    z-index: 50;
-    display: flex;
-    align-items: stretch;
-    justify-content: flex-end;
-    padding: 58px 20px 24px;
-}
-
-.cli-shell {
-    width: min(840px, calc(100vw - 40px));
-    max-height: 78vh;
-    background: var(--panel);
-    border: 1px solid var(--border-2);
-    border-radius: 14px;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    box-shadow: 0 24px 70px rgba(0, 0, 0, .55);
-}
-
-.cli-shell-head {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
-    padding: 10px 12px;
-    border-bottom: 1px solid var(--border);
-}
-
-.cli-shell-title {
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-}
-
-.cli-shell-name {
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--text);
-}
-
-.cli-shell-sub {
-    font-size: 10.5px;
-    color: var(--text-3);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.cli-output {
-    flex: 1;
-    min-height: 0;
-    overflow-y: auto;
-    padding: 10px 12px;
-    background: var(--bg);
-    font-family: var(--font-mono);
-    font-size: 12.5px;
-    line-height: 1.42;
-    color: var(--text);
-    border-bottom: 1px solid var(--border);
-}
-
-.cli-line {
-    white-space: pre-wrap;
-    word-break: break-word;
-}
-
-.cli-line-empty {
-    color: var(--text-3);
-}
-
-.cli-input-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 10px 12px;
-    background: var(--panel);
-}
-
-.cli-prompt {
-    flex: none;
-    color: var(--text-3);
-    font-family: var(--font-mono);
-    font-size: 12px;
-}
-
-.cli-input {
-    flex: 1;
-    min-width: 0;
-    font-size: 12px;
-    font-family: var(--font-mono);
-    border: 1px solid var(--border);
-    border-radius: 3px;
-    background: var(--bg);
-    color: var(--text);
-    padding: 7px 10px;
-    outline: none;
-}
-
-.cli-input:focus {
-    border-color: var(--brand);
-    box-shadow: 0 0 0 1px var(--brand);
-}
-
-.cli-send {
-    width: 30px;
-    height: 30px;
-    min-width: 30px;
-    min-height: 30px;
 }
 
 /* Every routed section owns the same full-width content canvas as CRM. Individual pages can still
@@ -853,31 +726,9 @@
         padding: 6px;
     }
 
-    .cli-trigger {
-        min-width: 0;
-        padding: 6px;
-    }
-
-    .cli-trigger .dcsearch-text {
-        display: none;
-    }
-
     .dcsearch-trigger .dcsearch-text,
     .dcsearch-trigger kbd {
         display: none;
-    }
-
-    .cli-overlay {
-        padding: 58px 0 0;
-    }
-
-    .cli-shell {
-        width: 100%;
-        max-height: calc(100vh - 58px);
-        max-height: calc(100dvh - 58px);
-        border-radius: 14px 14px 0 0;
-        border-left-width: 0;
-        border-right-width: 0;
     }
 
     .running-badge {

@@ -210,6 +210,138 @@
     margin-bottom: 8px;
 }
 
+.chain-context-panel {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--card);
+    padding: 9px 10px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.chain-context-scroll {
+    overflow: auto;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--card);
+    max-height: 260px;
+}
+
+.chain-context-table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+    font-size: 11px;
+}
+
+.chain-context-table th,
+.chain-context-table td {
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+    text-align: left;
+}
+
+.chain-context-table thead th {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: var(--text-3);
+    position: sticky;
+    top: 0;
+    background: color-mix(in srgb, var(--card-2) 58%, var(--card));
+    z-index: 1;
+}
+
+.chain-context-table tbody tr:hover {
+    background: color-mix(in srgb, var(--card-2) 45%, transparent);
+}
+
+.chain-context-cell {
+    word-break: break-all;
+    overflow: hidden;
+}
+
+.chain-context-path {
+    width: 34%;
+}
+
+.chain-context-cell code,
+.chain-context-cell .chain-context-value {
+    font-size: 10.8px;
+    color: var(--text-2);
+    font-family: var(--font-mono);
+}
+
+.chain-context-cell code {
+    display: inline-block;
+    max-width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.chain-context-preview {
+    display: inline-block;
+    margin-left: 8px;
+    color: var(--text-3);
+    font-size: 10.2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: min(52vw, 410px);
+}
+
+.json-view-button {
+    padding: 2px 8px;
+    border: 1px solid var(--border-2);
+    border-radius: 5px;
+    color: var(--text-2);
+    background: var(--card-2);
+    font: inherit;
+    font-size: 10px;
+    cursor: pointer;
+}
+
+.json-view-button:hover {
+    border-color: var(--border);
+    background: var(--hover);
+}
+
+.json-pre {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px;
+    font-size: 11px;
+    font-family: var(--font-mono);
+    white-space: pre-wrap;
+    word-break: break-all;
+    color: var(--text-2);
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.chain-json-modal {
+    width: min(840px, calc(100vw - 32px));
+}
+
+.chain-json-body {
+    min-height: 0;
+}
+
+.chain-json-body .json-pre {
+    margin: 0;
+    max-height: 68vh;
+}
+
+.out-label {
+    font-size: 12px;
+    color: var(--text-3);
+    margin-bottom: 3px;
+}
+
 .output-list {
     display: flex;
     flex-direction: column;

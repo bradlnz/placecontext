@@ -45,7 +45,6 @@ public sealed class MenuConfigService : IMenuConfigService
         new("vault", "Vault", "link", "/project/{projectId}/secrets", Permission.SecretsManage, "key", null, null),
         new("project.events", "Events", "link", "/project/{projectId}/events", Permission.EventsManage, "pulse", null, null),
         new("agents", "Agents", "link", "/project/{projectId}/agents", Permission.AgentsManage, "agents", null, null),
-        new("chat", "Chat", "link", "/chat", Permission.AgentsChat, "chat", null, null),
         new("artifacts", "Artifacts", "link", "/artifacts", Permission.ArtifactsView, "file", null, null),
         new("observability", "Observability", "link", "/observability", Permission.JobsView, "pulse", null, null),
         new("cluster", "Cluster", "link", "/cluster", Permission.SettingsManage, "box", null, null),

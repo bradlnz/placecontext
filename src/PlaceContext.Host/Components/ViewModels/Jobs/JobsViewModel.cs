@@ -54,6 +54,15 @@ public sealed partial class JobsViewModel : PageViewModel
 
     public bool IsCodeJob(JobView job) => job.MapSourceKind == JobSourceCatalog.Code;
 
+    public static bool IsPostgresQueryJob(JobView job)
+    {
+        if (!job.MapEnv.TryGetValue("DATABASE_URL", out var databaseUrl) || string.IsNullOrWhiteSpace(databaseUrl))
+            return false;
+        if (!job.MapEnv.ContainsKey("SQL_QUERY"))
+            return false;
+        return databaseUrl.StartsWith("postgresql://", StringComparison.OrdinalIgnoreCase);
+    }
+
     public MapSourceMode MapMode =>
         EdMapSourceKind.Equals("code", StringComparison.OrdinalIgnoreCase)
             ? MapSourceMode.Code

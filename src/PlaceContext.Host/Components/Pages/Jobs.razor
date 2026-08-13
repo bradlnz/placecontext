@@ -1,12 +1,15 @@
 @page "/project/{ProjectId:guid}/jobs"
+@page "/project/{ProjectId:guid}/data-jobs"
 @attribute [Authorize(Policy = Permission.JobsView)]
 @layout PlaceContext.Host.Components.Layout.ProjectLayout
 @implements IDisposable
 @inject JobsViewModel Vm
+@inject NavigationManager Navigation
+@using PlaceContext.Application.Dtos
 @using PlaceContext.Host.Components.ViewModels
 @using PlaceContext.Host.Components.ViewModels.Helpers
 
-<PageTitle>PlaceContext — Jobs</PageTitle>
+<PageTitle>@(IsDataJobsPage ? "PlaceContext — Data jobs" : "PlaceContext — Jobs")</PageTitle>
 
 @if (Vm.Loading)
 {
@@ -14,14 +17,41 @@
 }
 else
 {
+    var jobs = (Vm.Jobs ?? Array.Empty<JobView>())
+        .Where(job => !IsDataJobsPage || JobsViewModel.IsPostgresQueryJob(job))
+        .ToList();
+
+    var jobsCount = jobs.Count;
+    var shardCount = jobs.Sum(job => job.ShardCount);
+    var automatedCount = jobs.Count(job => Vm.EnabledTriggersFor(job.Id) > 0);
+    var activeTriggerCount = jobs.Sum(job => Vm.EnabledTriggersFor(job.Id));
+    var automationPercent = jobsCount is 0 ? 0 : (int)Math.Round(automatedCount * 100d / jobsCount);
+
     <div class="jobs-page">
+
         <header class="jobs-head">
             <div>
-                <h2>Jobs</h2>
-                <p>Build reusable workloads, run them on demand, and connect them to automated triggers.</p>
+                <h2>@(IsDataJobsPage ? "PostgreSQL calculations" : "Jobs")</h2>
+                <p>
+                    @(IsDataJobsPage
+                        ? "Run project data calculations directly in PostgreSQL with a managed schedule and reusable workload definition."
+                        : "Build reusable workloads, run them on demand, and connect them to automated triggers.")
+                </p>
             </div>
             <div class="head-actions">
+                @if (IsDataJobsPage)
+                {
+                    <button class="dcbtn" @onclick="@(() => Navigation.NavigateTo(PageRoutes.ProjectJobs(ProjectId)))">All jobs</button>
+                }
+                else
+                {
+                    <button class="dcbtn" @onclick="@(() => Navigation.NavigateTo(PageRoutes.ProjectDataJobs(ProjectId)))">Data jobs</button>
+                }
                 <button class="dcbtn" @onclick="Vm.NavigateToTests">View tests</button>
+                @if (IsDataJobsPage)
+                {
+                    <button class="dcbtn" @onclick="Vm.OpenPostgresTemplate">+ PostgreSQL calculation</button>
+                }
                 <button class="dcbtn primary" @onclick="() => Vm.OpenTemplateModal()">+ New job</button>
             </div>
         </header>
@@ -31,24 +61,30 @@ else
             <div class="status-message">@Vm.Message</div>
         }
 
-        @if (Vm.Jobs is null || Vm.Jobs.Count == 0)
+        @if (jobsCount == 0)
         {
             <div class="dccard empty-state">
                 <div class="empty-icon">⌁</div>
-                <strong>No jobs yet</strong>
-                <span>Create a reusable workload, then run it manually or connect it to a schedule or event.</span>
-                <button class="dcbtn primary" @onclick="() => Vm.OpenTemplateModal()">Create first job</button>
+                <strong>@(IsDataJobsPage ? "No PostgreSQL calculations yet" : "No jobs yet")</strong>
+                <span>
+                    @(IsDataJobsPage
+                        ? "Create a PostgreSQL calculation first, then schedule it like any other job."
+                        : "Create a reusable workload, then run it manually or connect it to a schedule or event.")
+                </span>
+                <button class="dcbtn primary" @onclick="@(IsDataJobsPage ? (() => Vm.OpenPostgresTemplate()) : (() => Vm.OpenTemplateModal()))">
+                    @(IsDataJobsPage ? "Create first calculation" : "Create first job")
+                </button>
             </div>
         }
         else
         {
             <section class="summary-strip" aria-label="Job summary">
-                <div class="summary-count"><strong>@Vm.Jobs.Count</strong><span>jobs</span></div>
-                <div class="summary-count"><strong>@Vm.Jobs.Sum(job => job.ShardCount)</strong><span>shards</span></div>
-                <div class="summary-count automated"><strong>@Vm.AutomatedJobCount</strong><span>automated</span></div>
-                <div class="summary-count"><strong>@Vm.EnabledTriggerCount</strong><span>active triggers</span></div>
-                <div class="summary-progress" title="@Vm.AutomationPercent% of jobs have an active trigger">
-                    <span style="width:@Vm.AutomationPercent%"></span>
+                <div class="summary-count"><strong>@jobsCount</strong><span>jobs</span></div>
+                <div class="summary-count"><strong>@shardCount</strong><span>shards</span></div>
+                <div class="summary-count automated"><strong>@automatedCount</strong><span>automated</span></div>
+                <div class="summary-count"><strong>@activeTriggerCount</strong><span>active triggers</span></div>
+                <div class="summary-progress" title="@automationPercent% of jobs have an active trigger">
+                    <span style="width:@automationPercent%"></span>
                 </div>
             </section>
 
@@ -57,13 +93,13 @@ else
                     <div>
                         <span class="suite-caret">⌄</span>
                         <strong>Job catalogue</strong>
-                        <span>@Vm.Jobs.Count reusable workload@(Vm.Jobs.Count == 1 ? "" : "s")</span>
+                        <span>@jobsCount reusable workload@(jobsCount == 1 ? "" : "s")</span>
                     </div>
-                    <span class="suite-result">@Vm.AutomatedJobCount automated</span>
+                    <span class="suite-result">@automatedCount automated</span>
                 </header>
 
                 <div class="job-rows">
-                    @foreach (var job in Vm.Jobs)
+                    @foreach (var job in jobs)
                     {
                         var triggerCount = Vm.EnabledTriggersFor(job.Id);
                         var isRunning = Vm.IsRunningJob(job.Id);
@@ -1040,6 +1076,8 @@ else
 
 @code {
     [Parameter] public Guid ProjectId { get; set; }
+    private bool IsDataJobsPage { get; set; }
+
     protected override void OnInitialized()
     {
         Vm.Attach(() => InvokeAsync(StateHasChanged));
@@ -1056,6 +1094,10 @@ else
 
     protected override async Task OnParametersSetAsync()
     {
+        IsDataJobsPage = new Uri(Navigation.Uri).AbsolutePath.TrimEnd('/').EndsWith(
+            "/data-jobs",
+            StringComparison.OrdinalIgnoreCase
+        );
         Vm.Initialize(ProjectId);
         await Vm.LoadAsync();
     }

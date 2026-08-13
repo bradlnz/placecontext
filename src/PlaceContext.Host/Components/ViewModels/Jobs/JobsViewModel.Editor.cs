@@ -238,6 +238,15 @@ public sealed partial class JobsViewModel
         NotifyStateChanged();
     }
 
+    public void OpenPostgresTemplate()
+    {
+        ShowTemplateModal = true;
+        SelectedTemplate = JobTemplateCatalog.GetById("postgres-query");
+        TemplateFilter = "";
+        SelectedTemplateRuntime = "node";
+        NotifyStateChanged();
+    }
+
     public void CloseTemplateModal()
     {
         ShowTemplateModal = false;
