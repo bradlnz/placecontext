@@ -122,6 +122,11 @@ spec:
   replicas: 1
   selector:
     matchLabels: { app: placecontext }
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 1
   template:
     metadata:
       labels: { app: placecontext }
@@ -149,6 +154,13 @@ spec:
         - name: host
           image: __IMAGE__
           imagePullPolicy: __IMAGE_PULL_POLICY__
+          resources:
+            requests:
+              cpu: "150m"
+              memory: "512Mi"
+            limits:
+              cpu: "1500m"
+              memory: "2Gi"
           ports:
             - containerPort: 7700
           env:
@@ -295,6 +307,13 @@ spec:
         - name: cluster
           image: __IMAGE__
           imagePullPolicy: __IMAGE_PULL_POLICY__
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
           ports:
             - containerPort: 8081
           env:

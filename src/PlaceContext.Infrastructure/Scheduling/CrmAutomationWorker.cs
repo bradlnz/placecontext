@@ -14,7 +14,8 @@ namespace PlaceContext.Infrastructure.Scheduling;
 /// <summary>Durably drains lifecycle-event automation rules without blocking the CRM request.</summary>
 public sealed class CrmAutomationWorker : BackgroundService
 {
-    private static readonly TimeSpan Interval = TimeSpan.FromSeconds(1);
+    // Slightly slower polling avoids hot-loop contention during replica rotation/restart.
+    private static readonly TimeSpan Interval = TimeSpan.FromSeconds(3);
     private const int BatchSize = 4;
     private const int MaxAttempts = 3;
     private static readonly TimeSpan TrackingRetention = TimeSpan.FromDays(30);

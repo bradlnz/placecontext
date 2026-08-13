@@ -13,7 +13,9 @@ namespace PlaceContext.Infrastructure.Scheduling;
 /// <summary>Claims due wait gates and resumes the same persisted chain run on any replica.</summary>
 public sealed class ChainContinuationWorker : BackgroundService
 {
-    private static readonly TimeSpan Interval = TimeSpan.FromSeconds(1);
+    // Slightly slower polling reduces deploy-time CPU contention while still keeping
+    // waits, resumes, and chain-continuation behavior responsive.
+    private static readonly TimeSpan Interval = TimeSpan.FromSeconds(3);
     private readonly IServiceScopeFactory _scopes;
     private readonly ILogger<ChainContinuationWorker> _log;
     private readonly string _instanceId = $"{Environment.MachineName}:{Guid.NewGuid():N}";

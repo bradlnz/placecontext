@@ -47,6 +47,8 @@ unset sync_token
 kubectl -n placecontext set env deployment/placecontext \
   PlaceContext__OpenSearch__SyncEndpoint=http://100.116.60.120:9340/v1/sync
 kubectl -n placecontext set env deployment/placecontext --from=secret/opensearch-sync
+kubectl -n placecontext patch deployment/placecontext --type=merge -p \
+  '{"spec":{"strategy":{"type":"RollingUpdate","rollingUpdate":{"maxSurge":0,"maxUnavailable":1}},"template":{"spec":{"containers":[{"name":"host","resources":{"requests":{"cpu":"150m","memory":"512Mi"},"limits":{"cpu":"1500m","memory":"2Gi"}}},{"name":"cluster","resources":{"requests":{"cpu":"50m","memory":"256Mi"},"limits":{"cpu":"500m","memory":"512Mi"}}}]}}}}'
 '
 
 ssh -o BatchMode=yes -i "$ssh_key" "$app_host" 'bash -s' <<'REMOTE'

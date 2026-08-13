@@ -31,8 +31,9 @@ public sealed class TriggerSchedulerService : BackgroundService
     private const long ScanLockKey = 0x504C4143_4378_7363L; // "PLAC...sc"
     private static readonly TimeSpan ScanInterval = TimeSpan.FromSeconds(20);
     // Queue pickup is the first hop of every TUI/trigger run — a short drain tick keeps queued runs
-    // from idling; the claim query is a cheap indexed SKIP LOCKED select, so 1s is safe.
-    private static readonly TimeSpan DrainInterval = TimeSpan.FromSeconds(1);
+    // from idling; the claim query is a cheap indexed SKIP LOCKED select.
+    // Keep a small interval to prevent startup/rollout stampede when multiple replicas start.
+    private static readonly TimeSpan DrainInterval = TimeSpan.FromSeconds(3);
     private static readonly TimeSpan ReapInterval = TimeSpan.FromSeconds(30);
     private const int ClaimBatch = 16;
     // The drain loop used to await each claimed run fully before starting the next — one slow run
