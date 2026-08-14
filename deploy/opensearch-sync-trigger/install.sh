@@ -3,15 +3,17 @@ set -euo pipefail
 
 host="${OPENSEARCH_SYNC_HOST:-root@100.116.60.120}"
 key="${SSH_KEY:-$HOME/.ssh/id_ed25519}"
+ssh_opts=(-F /dev/null -o BatchMode=yes -i "$key")
+scp_opts=(-F /dev/null -o BatchMode=yes -i "$key")
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-ssh -o BatchMode=yes -i "$key" "$host" \
+ssh "${ssh_opts[@]}" "$host" \
   'install -d -m 0755 /opt/placecontext/opensearch-sync-trigger /etc/placecontext'
-scp -q -o BatchMode=yes -i "$key" \
+scp -q "${scp_opts[@]}" \
   "$root/server.py" "$host:/opt/placecontext/opensearch-sync-trigger/server.py"
-scp -q -o BatchMode=yes -i "$key" \
+scp -q "${scp_opts[@]}" \
   "$root/opensearch-sync-trigger.service" "$host:/etc/systemd/system/opensearch-sync-trigger.service"
-ssh -o BatchMode=yes -i "$key" "$host" 'set -euo pipefail
+ssh "${ssh_opts[@]}" "$host" 'set -euo pipefail
 chmod 0755 /opt/placecontext/opensearch-sync-trigger/server.py
 if [ ! -s /etc/placecontext/opensearch-sync-trigger.env ]; then
   umask 077
