@@ -18,11 +18,6 @@ and individual overrides may differ, so ask an administrator if your access look
 The project **Vault** encrypts secrets such as API credentials. Jobs receive a secret only while
 they run; it should not be copied into job code, prompts, notes, or ordinary settings.
 
-Sensitive CRM fields are also encrypted in the database. This includes customer contact details,
-notes, communication contents, delivery references, client-file names and locations, and customer
-workflow output. The running application needs its protection keys to turn those stored values back
-into readable information.
-
 ## Normal artifact access
 
 Run artifacts normally require sign-in and the **View artifacts** permission. An artifact lookup is
@@ -47,7 +42,7 @@ link.
 
 ## Access tokens
 
-Personal API tokens, CRM lead-ingestion tokens, cluster join codes, and artifact share links serve
+Personal API tokens, cluster join codes, and artifact share links serve
 different purposes and cannot be used interchangeably. Keep every full token private. When one is
 lost or exposed, rotate or revoke it from the page where it was created.
 

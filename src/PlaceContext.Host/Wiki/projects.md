@@ -21,10 +21,6 @@ A project owns:
 - chat sessions and agent settings;
 - run history and artifacts.
 
-When CRM is enabled, the project also owns its client directory, customer messages, files, and
-lifecycle automations. Keeping these inside the project prevents one project's customers from
-appearing in another project.
-
 Select a project from the project switcher before using project pages or Agent Chat.
 
 ## Project overview

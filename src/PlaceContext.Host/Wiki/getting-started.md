@@ -14,7 +14,7 @@ You do not need to understand the technical parts to use the portal. A **job** i
 
 1. If the workspace has no projects, connect an approved MCP client and ask it to onboard a project.
 2. Select the project from the switcher in the lower-left corner.
-3. Open **Jobs** to run a saved task, **Data** to explore reusable outputs, or **CRM** to work with customers.
+3. Open **Jobs** to run a saved task or **Data** to explore reusable outputs.
 4. Follow progress in **Jobs** or **Observability**, then open **Artifacts** for files produced by completed tasks.
 
 ## Connect an MCP client
@@ -40,7 +40,7 @@ clients can use the same endpoint with Streamable HTTP; OAuth is discovered auto
 Ask the connected client to **“onboard this project into PlaceContext.”** The onboarding tools register
 the repository, import its git history, seed context from project documentation, and prepare the client
 to record activities and decisions. A project is the boundary for jobs, reusable data, entities,
-analytics, CRM information, permissions, and provenance.
+analytics, permissions, and provenance.
 
 Once the project exists, ask the client to load the project overview at the beginning of work and record
 activities and decisions as work progresses. Use **Jobs** for repeatable computation and **Chains** for
@@ -52,7 +52,6 @@ search.
 | Area | Purpose |
 |---|---|
 | **Dashboard** | Workspace totals, recent runs, charts, and pinned entities |
-| **CRM** | Manage clients, lifecycle stages, notes, messages, files, and automations |
 | **Project overview** | Project activity, decisions, and dependency graph |
 | **Jobs** | Create, edit, run, and monitor jobs |
 | **Tests** | Check a job with saved example inputs before using it in a workflow |

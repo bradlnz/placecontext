@@ -7,7 +7,6 @@ public sealed class MenuAuthorizationTests
 {
     [Theory]
     [InlineData("dashboard", Permission.ProjectsView)]
-    [InlineData("crm", Permission.CrmView)]
     [InlineData("jobs", Permission.JobsView)]
     [InlineData("chains", Permission.ChainsManage)]
     [InlineData("schedules", Permission.TriggersManage)]

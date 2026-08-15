@@ -43,7 +43,7 @@ placecontext upgrade
 - **Branding** changes the workspace name, logo, accent, and dark-mode colours.
 - **Menu** controls navigation labels, order, and visibility.
 - **Artifacts** controls the file categories shown on the Artifacts page.
-- **Communications** connects email and SMS delivery for CRM and chain actions. Jobs and users see
+- **Communications** connects email and SMS delivery for chain actions. Jobs and users see
   the generic Email or SMS channel rather than needing to choose a delivery provider.
 - **MCP servers** connects extra tools that approved agents and jobs may use.
 - **Locality** sets the timezone used by schedules and displayed dates.

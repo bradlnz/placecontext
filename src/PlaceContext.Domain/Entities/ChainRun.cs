@@ -23,7 +23,7 @@ public sealed class ChainRun : AggregateRoot
 
     private ChainRun(Guid id, Guid chainId, Guid projectId, string chainName, ChainRunStatus status,
         List<ChainStepRun> steps, string? finalOutput, DateTimeOffset startedAt, DateTimeOffset? finishedAt,
-        DateTimeOffset? resumeAt = null, int? resumeStageIndex = null, Guid? crmClientId = null,
+        DateTimeOffset? resumeAt = null, int? resumeStageIndex = null,
         string? continuationOverridesJson = null)
     {
         Id = id;
@@ -37,7 +37,6 @@ public sealed class ChainRun : AggregateRoot
         FinishedAt = finishedAt;
         ResumeAt = resumeAt;
         ResumeStageIndex = resumeStageIndex;
-        CrmClientId = crmClientId;
         ContinuationOverridesJson = continuationOverridesJson;
     }
 
@@ -68,7 +67,6 @@ public sealed class ChainRun : AggregateRoot
     public DateTimeOffset? FinishedAt { get; private set; }
     public DateTimeOffset? ResumeAt { get; private set; }
     public int? ResumeStageIndex { get; private set; }
-    public Guid? CrmClientId { get; private set; }
     public string? ContinuationOverridesJson { get; private set; }
 
     /// <summary>Starts a run: every step pending, the run itself Running. Callers may pre-allocate
@@ -76,7 +74,7 @@ public sealed class ChainRun : AggregateRoot
     /// required per job across every stage, in stage order then branch order within a stage (i.e.
     /// the same flattening as <see cref="JobChain.StepJobIds"/>).</summary>
     public static ChainRun Start(JobChain chain, IReadOnlyList<string> stepJobNames, DateTimeOffset now,
-        Guid? id = null, Guid? crmClientId = null)
+        Guid? id = null)
     {
         if (stepJobNames.Count != chain.ExecutionStepCount)
             throw new ArgumentException("One display name per chain step is required.", nameof(stepJobNames));
@@ -104,7 +102,7 @@ public sealed class ChainRun : AggregateRoot
             }
         }
         return new ChainRun(id ?? Guid.NewGuid(), chain.Id, chain.ProjectId, chain.Name, ChainRunStatus.Running,
-            steps, null, now, null, crmClientId: crmClientId);
+            steps, null, now, null);
     }
 
     public void Pause(int resumeStageIndex, string? payload, DateTimeOffset resumeAt,
@@ -207,9 +205,9 @@ public sealed class ChainRun : AggregateRoot
     public static ChainRun Rehydrate(Guid id, Guid chainId, Guid projectId, string chainName,
         ChainRunStatus status, IReadOnlyList<ChainStepRun> steps, string? finalOutput,
         DateTimeOffset startedAt, DateTimeOffset? finishedAt, DateTimeOffset? resumeAt = null,
-        int? resumeStageIndex = null, Guid? crmClientId = null, string? continuationOverridesJson = null)
+        int? resumeStageIndex = null, string? continuationOverridesJson = null)
         => new(id, chainId, projectId, chainName, status, steps.ToList(), finalOutput, startedAt,
-            finishedAt, resumeAt, resumeStageIndex, crmClientId, continuationOverridesJson);
+            finishedAt, resumeAt, resumeStageIndex, continuationOverridesJson);
 }
 
 /// <summary>One step of a chain run: which job, which stage/branch position it occupies, the run it

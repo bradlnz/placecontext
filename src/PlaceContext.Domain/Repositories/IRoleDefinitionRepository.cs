@@ -5,7 +5,7 @@ namespace PlaceContext.Domain.Repositories;
 public sealed record RoleDefinition(Guid Id, string Name, bool IsSystem, IReadOnlyList<string> Permissions);
 
 /// <summary>
-/// Tenant-scoped role definitions. The system roles (Viewer/Member/Admin/Owner/CrmUser) are materialized
+/// Tenant-scoped role definitions. The system roles (Viewer/Member/Admin/Owner) are materialized
 /// lazily: any read against a tenant with no rows yet seeds them from the hardcoded
 /// <c>RolePermissionDefaults</c> mapping, so fresh and pre-existing tenants behave identically without
 /// a per-tenant SQL seed in the migration.

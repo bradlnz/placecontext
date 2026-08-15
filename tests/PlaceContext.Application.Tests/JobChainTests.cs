@@ -18,11 +18,10 @@ public class JobChainTests
     private static RunJobChainHandler RunHandler(InMemoryJobChainRepository chains, InMemoryJobRepository jobs,
         FakeRunDispatcher dispatcher, InMemoryChainRunRepository? runs = null,
         IClientCommunicationSender? communications = null,
-        IPermissionService? permissions = null,
-        ICrmClientRepository? crmClients = null)
+        IPermissionService? permissions = null)
         => new(chains, jobs, runs ?? new InMemoryChainRunRepository(),
             new RecordingUnitOfWork(), new FakeClock(T0), new FakeJobRunner(dispatcher),
-            communications: communications, permissions: permissions, crmClients: crmClients);
+            communications: communications, permissions: permissions);
 
     private static Job MakeJob(string name, Guid? projectId = null)
     {
@@ -220,35 +219,6 @@ public class JobChainTests
         Assert.Equal("Postmark", actionStep.Provider);
         Assert.Equal("message-123", actionStep.ExternalId);
         Assert.Null(actionStep.Error);
-    }
-
-    [Fact]
-    public async Task Send_actions_pull_the_current_crm_customer_contact_details()
-    {
-        var jobs = new InMemoryJobRepository();
-        var source = MakeJob("source");
-        await jobs.AddAsync(source);
-        var customer = CrmClient.Create(ProjectId, "Casey Customer", null,
-            "casey@example.com", "+61412345678", CustomerLifecycleStage.Active, null, T0);
-        var customers = new SingleCrmClientRepository(customer);
-        var chains = new InMemoryJobChainRepository();
-        var email = new SendEmailChainAction(
-            "fallback@example.com", "Fallback", "Hello {{customer.name}}", "Your report is ready.");
-        var chain = JobChain.Create(ProjectId, "customer delivery", null,
-            new[] { ChainStage.Of(source.Id), ChainStage.ForAction(email) }, T0);
-        await chains.AddAsync(chain);
-        var dispatcher = new FakeRunDispatcher();
-        dispatcher.Results[source.Id] = Run(source.Id, "Succeeded", shardArtifacts: new[] { "{}" });
-        var sender = new FakeCommunicationSender();
-
-        await RunHandler(chains, jobs, dispatcher, communications: sender,
-                permissions: new FakePermissionService(true), crmClients: customers)
-            .HandleAsync(new RunJobChainCommand(chain.Id, CrmClientId: customer.Id));
-
-        var sent = Assert.Single(sender.Emails);
-        Assert.Equal("casey@example.com", sent.Recipient);
-        Assert.Equal("Casey Customer", sent.RecipientName);
-        Assert.Equal("Hello Casey Customer", sent.Subject);
     }
 
     [Fact]
@@ -757,18 +727,4 @@ public class JobChainTests
             => _dispatcher.Send(new RunJobCommand(jobId, inputPayload, runId, replayOfRunId), ct);
     }
 
-    private sealed class SingleCrmClientRepository : ICrmClientRepository
-    {
-        private readonly CrmClient _client;
-        public SingleCrmClientRepository(CrmClient client) => _client = client;
-        public Task AddAsync(CrmClient client, CancellationToken ct = default) => Task.CompletedTask;
-        public Task UpdateAsync(CrmClient client, CancellationToken ct = default) => Task.CompletedTask;
-        public Task DeleteAsync(Guid clientId, CancellationToken ct = default) => Task.CompletedTask;
-        public Task<CrmClient?> GetByIdAsync(Guid clientId, CancellationToken ct = default)
-            => Task.FromResult<CrmClient?>(clientId == _client.Id ? _client : null);
-        public Task<IReadOnlyList<CrmClient>> ListForProjectAsync(Guid projectId, CancellationToken ct = default)
-            => Task.FromResult<IReadOnlyList<CrmClient>>(projectId == _client.ProjectId
-                ? new[] { _client }
-                : Array.Empty<CrmClient>());
-    }
 }

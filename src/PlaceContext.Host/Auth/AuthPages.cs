@@ -26,10 +26,6 @@ public static class AuthPages
             .Replace("{{email}}", WebUtility.HtmlEncode(invite.Email))
             .Replace("{{role}}", WebUtility.HtmlEncode(invite.Role));
 
-    public static string CrmOnboarding(AntiforgeryTokenSet tokens, string code, string? error)
-        => Render("crm-onboarding", tokens, error)
-            .Replace("{{code}}", WebUtility.HtmlEncode(code));
-
     public static string JoinInvalid() => Cache.GetOrAdd("joininvalid", static name =>
         File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Auth", "templates", name + ".html")));
 

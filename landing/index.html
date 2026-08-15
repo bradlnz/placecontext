@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Placecontext is an open-source, self-hosted platform for data, jobs, automation, artifacts, CRM, optional OpenSearch analytics, and on-prem AI workloads.">
-  <title>Placecontext — self-hosted data, jobs, AI, and automation</title>
+  <meta name="description" content="Placecontext is an open-source, self-hosted job engine for reusable workloads, schedules, event triggers, pipelines, artifacts, and on-prem compute.">
+  <title>Placecontext — the self-hosted job engine</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -13,7 +13,7 @@
     <nav aria-label="Primary navigation">
       <a href="#fleet">Fleet</a>
       <a href="#console">Console</a>
-      <a href="#platform">Platform</a>
+      <a href="#job-engine">Job engine</a>
       <a href="#self-hosted">Self-hosted</a>
       <a href="https://github.com/bradlnz/placecontext">Source</a>
       <a class="nav-button" href="https://get.placecontext.ai/install.sh">Install</a>
@@ -24,8 +24,8 @@
     <section class="hero hero-split">
       <div class="hero-copy-block">
         <div class="eyebrow"><span></span> Open source · self-hosted · yours</div>
-        <h1>Run data, jobs, and AI on infrastructure you own.</h1>
-        <p class="hero-copy">Placecontext brings operational data, code-first automation, artifacts, CRM, and optional OpenSearch into one workspace — then schedules work across the Macs and on-prem machines you already own.</p>
+        <h1>The job engine for infrastructure you own.</h1>
+        <p class="hero-copy">Define reusable workloads in code or containers, trigger them on demand, on a schedule, or from events, and run them across the Macs and on-prem machines you already own.</p>
         <div class="hero-actions">
           <a class="button primary" href="https://get.placecontext.ai/install.sh">Install Placecontext <span>↗</span></a>
           <a class="button secondary" href="#console">See the console</a>
@@ -35,7 +35,7 @@
           <code><span class="prompt">$</span> curl -fsSL https://get.placecontext.ai/install.sh | bash</code>
           <button class="copy" type="button" data-copy="curl -fsSL https://get.placecontext.ai/install.sh | bash">Copy</button>
         </div>
-        <div class="capability-cloud" aria-label="Platform capabilities">
+        <div class="capability-cloud" aria-label="Job engine capabilities">
           <span class="active">Jobs</span><span>Data</span><span>Artifacts</span><span>OpenSearch optional</span><span>Local AI</span><span>3D rendering</span><span>Agents · MCP</span>
         </div>
       </div>
@@ -124,7 +124,7 @@
                     <article class="job-row is-running"><span class="job-icon spinner"></span><div><div class="job-title"><strong>Blender scene render</strong><span>python code</span><span>json output</span><span class="good-chip">2 triggers</span></div><p>Render frames and publish a 4K preview artifact.</p><small>12 shards · concurrency 6 · updated Aug 4</small></div><div class="job-actions">▶ ✎ &lt;/&gt; ⋯</div></article>
                     <article class="job-row"><span class="job-icon">⌁</span><div><div class="job-title"><strong>Shopify order sync</strong><span>node code</span><span>json output</span></div><p>Import orders and map them into project tables.</p><small>4 shards · cron 15 * * * * · updated Aug 3</small></div><div class="job-actions">▶ ✎ &lt;/&gt; ⋯</div></article>
                     <article class="job-row"><span class="job-icon">□</span><div><div class="job-title"><strong>OpenSearch indexer</strong><span>container</span><span class="good-chip">automated</span></div><p>Refresh optional search indexes after pipeline runs.</p><small>1 shard · event job.completed · updated Aug 1</small></div><div class="job-actions">▶ ✎ &lt;/&gt; ⋯</div></article>
-                    <article class="job-row"><span class="job-icon">⌁</span><div><div class="job-title"><strong>Monthly CRM digest</strong><span>ruby code</span><span>email action</span></div><p>Summarise accounts and deliver a customer-health report.</p><small>2 shards · monthly · updated Jul 30</small></div><div class="job-actions">▶ ✎ &lt;/&gt; ⋯</div></article>
+                    <article class="job-row"><span class="job-icon">⌁</span><div><div class="job-title"><strong>Nightly inventory forecast</strong><span>ruby code</span><span>json output</span></div><p>Forecast stock requirements and publish replenishment data.</p><small>2 shards · nightly · updated Jul 30</small></div><div class="job-actions">▶ ✎ &lt;/&gt; ⋯</div></article>
                   </div>
                   <div class="run-history">
                     <header>RECENT RUN DURATIONS (OTEL)</header>
@@ -195,7 +195,7 @@ LIMIT 5;</pre>
                   <div class="app-page-head"><div><h3>Data Search</h3><p>Search OpenSearch documents, explore fields, and turn aggregations into reusable charts.</p></div><div class="head-actions"><span class="app-button">Sync now</span><span class="proxy-chip"><i></i>server proxy</span></div></div>
                   <div class="index-grid">
                     <div class="index-card is-active"><code>orders-2026</code><strong>84,211</strong><span>documents · 142 MB</span></div>
-                    <div class="index-card"><code>crm-contacts</code><strong>12,480</strong><span>documents · 18 MB</span></div>
+                    <div class="index-card"><code>product-catalog</code><strong>12,480</strong><span>documents · 18 MB</span></div>
                     <div class="index-card"><code>job-runs</code><strong>9,642</strong><span>documents · 26 MB</span></div>
                   </div>
                   <div class="app-card search-builder">
@@ -223,14 +223,14 @@ LIMIT 5;</pre>
       </div>
     </section>
 
-    <section class="section" id="platform">
-      <div class="section-intro"><span class="eyebrow">One durable workspace</span><h2>The platform around your compute.</h2><p>Keep rendering, local AI, data pipelines, business data, optional search, and customer operations connected instead of scattered across disconnected tools.</p></div>
+    <section class="section" id="job-engine">
+      <div class="section-intro"><span class="eyebrow">One durable engine</span><h2>From job definition to finished output.</h2><p>Build a workload once, run it anywhere, and keep its triggers, inputs, logs, data, and artifacts connected through every execution.</p></div>
       <div class="feature-grid">
         <article><span class="feature-number">01</span><h3>Data section</h3><p>Create tables, import CSV files, write SQL views, map job outputs into queryable data, and model entities with records, graphs, and analytics.</p></article>
         <article><span class="feature-number">02</span><h3>Artifacts view</h3><p>Search and filter outputs across projects, inspect versions, preview JSON, CSV, PDF, image, video, and HTML files, and share expiring links.</p></article>
         <article><span class="feature-number">03</span><h3>Job code editor</h3><p>Supported runtimes: Node.js, Python, Go, Ruby, and C#. Write multi-file jobs, test and deploy them, then chain them into a data pipeline or any automation.</p></article>
         <article><span class="feature-number">04</span><h3>Optional OpenSearch</h3><p>Connect OpenSearch only when you need it: search indexes through the authenticated server proxy, explore fields, turn aggregations into charts, and save reusable dashboards.</p></article>
-        <article><span class="feature-number">05</span><h3>CRM and automation</h3><p>Move customers from lead to retention with calendars, appointments, notes, messages, and automations that file outputs against their records.</p></article>
+        <article><span class="feature-number">05</span><h3>Triggers and chains</h3><p>Run jobs manually, on schedules, or from events, then connect them into multi-step flows with durable state and observable execution.</p></article>
         <article><span class="feature-number">06</span><h3>Agents and MCP</h3><p>Give automation and AI clients governed access to the same data and operations as your team.</p></article>
         <article><span class="feature-number">07</span><h3>Local AI shards</h3><p>Split supported local models across multiple computers for private inference without sending prompts outside your network.</p></article>
       </div>

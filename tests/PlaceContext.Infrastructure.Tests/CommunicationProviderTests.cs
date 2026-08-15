@@ -159,7 +159,7 @@ public sealed class CommunicationProviderTests
         var captured = fixture.Captured!;
         Assert.Equal("postmark-key", captured.Headers["X-Postmark-Server-Token"]);
         Assert.Contains("\"MessageStream\":\"outbound\"", captured.Body);
-        Assert.Contains("\"Tag\":\"crm-transactional\"", captured.Body);
+        Assert.Contains("\"Tag\":\"job-transactional\"", captured.Body);
         Assert.Contains("\"From\":\"\\u0022Example Team\\u0022 \\u003Chello@example.test\\u003E\"", captured.Body);
         Assert.Contains("\"Attachments\":[{\"Name\":\"report.pdf\",\"Content\":\"UERG\",\"ContentType\":\"application/pdf\"}]", captured.Body);
 

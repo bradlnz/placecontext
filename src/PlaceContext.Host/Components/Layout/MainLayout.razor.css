@@ -613,7 +613,7 @@
     flex-direction: column;
 }
 
-/* Every routed section owns the same full-width content canvas as CRM. Individual pages can still
+/* Every routed section owns the same full-width content canvas. Individual pages can still
    constrain fields, prose, side panes, and cards internally, but the outer section no longer jumps
    between 1120/1180/1320px caps as users move through the product. */
 .body-scroll ::deep > * {

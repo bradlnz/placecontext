@@ -241,7 +241,7 @@ public sealed class AuthController : ControllerBase
             {
                 UserId = user.Id, TenantId = user.TenantId, Email = user.Email,
                 DisplayName = user.DisplayName, Role = user.Role.ToString(),
-                ReturnUrl = LocalOrHome(returnUrl),
+                ReturnUrl = await ResolvePostLoginUrlAsync(user, returnUrl, HttpContext.RequestAborted),
                 Channel = channel,
                 Destination = destination,
                 NeedsPhone = delivery.RequiresPhoneEnrollment,
@@ -253,7 +253,7 @@ public sealed class AuthController : ControllerBase
         }
 
         await SignInAsync(HttpContext, user);
-        return Redirect(LocalOrHome(returnUrl));
+        return Redirect(await ResolvePostLoginUrlAsync(user, returnUrl, HttpContext.RequestAborted));
     }
 
     private async Task<bool> ValidAntiforgeryAsync()
@@ -298,10 +298,6 @@ public sealed class AuthController : ControllerBase
         return url;
     }
 
-    private static string CrmOnboardingErrorUrl(string? code, string message)
-        => "/crm/onboarding?code=" + Uri.EscapeDataString(code ?? string.Empty)
-            + "&error=" + Uri.EscapeDataString(message);
-
     private async Task EnsureDefaultProjectAsync(AuthUser admin, CancellationToken cancellationToken)
     {
         var previousUser = CurrentUser.Current;
@@ -343,17 +339,6 @@ public sealed class AuthController : ControllerBase
     public IActionResult JoinInvalid()
         => Content(AuthPages.JoinInvalid(), "text/html");
 
-    [HttpGet("/crm/onboarding")]
-    [AllowAnonymous]
-    public IActionResult CrmOnboarding([FromQuery] string? code, [FromQuery] string? error)
-    {
-        var normalizedCode = string.IsNullOrWhiteSpace(code) ? null : code.Trim().ToLowerInvariant();
-        if (!CrmUser.IsJoinCodeFormatValid(normalizedCode))
-            return Content(AuthPages.JoinInvalid(), "text/html");
-
-        return Content(AuthPages.CrmOnboarding(_antiforgery.GetAndStoreTokens(HttpContext), normalizedCode, error), "text/html");
-    }
-
     [HttpPost("/auth/accept-invite")]
     [AllowAnonymous]
     public async Task<IActionResult> AcceptInvite([FromForm] string token, [FromForm] string password, [FromForm] string? displayName)
@@ -378,40 +363,6 @@ public sealed class AuthController : ControllerBase
             return Redirect($"/join?token={Uri.EscapeDataString(token)}&error=" + Uri.EscapeDataString("This invite is invalid, used, expired, or the email is already a member."));
         await SignInAsync(HttpContext, user);
         return Redirect("/");
-    }
-
-    [HttpPost("/auth/complete-crm-onboarding")]
-    [AllowAnonymous]
-    public async Task<IActionResult> CompleteCrmOnboarding([FromForm] string code, [FromForm] string password, [FromForm] string? displayName)
-    {
-        if (!await ValidAntiforgeryAsync())
-            return Redirect($"/crm/onboarding?code={Uri.EscapeDataString(code ?? "")}"
-                + "&error=" + Uri.EscapeDataString("Your session expired — please try again."));
-
-        var policyError = PasswordPolicy.Validate(password);
-        if (policyError is not null)
-            return Redirect(CrmOnboardingErrorUrl(code, policyError));
-
-        CrmOnboardingResult result;
-        try
-        {
-            result = await _placeContext.CompleteCrmOnboardingAsync(new CompleteCrmOnboardingCommand(code, password, displayName), HttpContext.RequestAborted);
-        }
-        catch (ArgumentException ex)
-        {
-            return Redirect(CrmOnboardingErrorUrl(code, ex.Message));
-        }
-        catch (InvalidOperationException ex)
-        {
-            return Redirect(CrmOnboardingErrorUrl(code, ex.Message));
-        }
-
-        var user = await _auth.ValidateCredentialsAsync(result.Email, password, HttpContext.RequestAborted);
-        if (user is null)
-            return Redirect("/login?error=" + Uri.EscapeDataString("We could not sign you in. Please try logging in."));
-
-        await SignInAsync(HttpContext, user);
-        return Redirect($"/project/{result.ProjectId}/crm");
     }
 
     [HttpPost("/auth/logout")]
@@ -578,6 +529,12 @@ public sealed class AuthController : ControllerBase
             && returnUrl.StartsWith('/') && !returnUrl.StartsWith("//") && !returnUrl.StartsWith("/\\")
                 ? returnUrl : "/";
 
+    private static Task<string> ResolvePostLoginUrlAsync(
+        AuthUser _,
+        string? returnUrl,
+        CancellationToken __)
+        => Task.FromResult(LocalOrHome(returnUrl));
+
     // ── Login 2FA (verification code by email or SMS) ──────────────────────────────────────────
 
     [HttpGet("/auth/email-verify")]
@@ -646,7 +603,7 @@ public sealed class AuthController : ControllerBase
         var user = new AuthUser(pending.UserId, pending.TenantId, pending.Email,
             pending.DisplayName, pending.Role);
         await SignInAsync(HttpContext, user);
-        return Redirect(LocalOrHome(pending.ReturnUrl));
+        return Redirect(await ResolvePostLoginUrlAsync(user, pending.ReturnUrl, HttpContext.RequestAborted));
     }
 
     [HttpPost("/auth/email-verify/resend")]

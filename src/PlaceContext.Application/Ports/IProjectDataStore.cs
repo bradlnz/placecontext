@@ -118,7 +118,7 @@ public interface IProjectDataStore
         IReadOnlyList<IReadOnlyList<string?>> rows, bool createTable, CancellationToken ct = default);
 
     /// <summary>
-    /// Insert one project-owned row (CRM path). Column names validated; text/jsonb cells encrypted.
+    /// Insert one project-owned row. Column names are validated; text/jsonb cells are encrypted.
     /// </summary>
     Task InsertRowAsync(Guid projectId, string tableName, IReadOnlyDictionary<string, string?> values, CancellationToken ct = default);
 

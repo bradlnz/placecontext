@@ -1,7 +1,6 @@
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
-using System.Text.Json;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.HttpOverrides;
@@ -17,7 +16,6 @@ using PlaceContext.Host.CoreApi;
 using PlaceContext.Host.Tenancy;
 using PlaceContext.Host.Tools;
 using PlaceContext.Infrastructure;
-using PlaceContext.Infrastructure.Crm;
 using PlaceContext.Infrastructure.Tenancy;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authentication;
@@ -41,7 +39,6 @@ using PlaceContext.Infrastructure.Persistence;
 using Microsoft.AspNetCore.ResponseCompression;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.StaticFiles;
-using FluentValidation;
 
 // PlaceContext is a single hosted web app on http://localhost:7700, serving two surfaces from one
 // process and the same Postgres store:
@@ -110,8 +107,6 @@ builder.Services.AddResponseCompression(o =>
 // The former minimal-API endpoints (ingest, backup, auth, artifacts, health) now live as controllers
 // under Controllers/ — attribute-routed, same paths/auth, wired below with MapControllers().
 builder.Services.AddControllers();
-builder.Services.AddScoped<IValidator<LeadIngestionRequest>, LeadIngestionRequestValidator>();
-builder.Services.AddScoped<IValidator<JsonElement>, CrmIngestionPayloadValidator>();
 builder.Services.Configure<CoreApiOptions>(builder.Configuration.GetSection("PlaceContext:CoreApi"));
 builder.Services.AddRateLimiter(options =>
 {
@@ -120,9 +115,7 @@ builder.Services.AddRateLimiter(options =>
     {
         // Valid webhook credentials receive independent limits. Invalid/credential-less traffic is
         // grouped by host and peer address so it cannot consume a valid integration's allowance.
-        var credential = context.Request.Headers[CrmIngestionSettingsService.TokenHeader].ToString();
-        if (string.IsNullOrEmpty(credential))
-            credential = context.Request.Headers["X-Ingest-Key"].ToString();
+        var credential = context.Request.Headers["X-Ingest-Key"].ToString();
         if (string.IsNullOrEmpty(credential))
             credential = context.Request.Headers["X-Slack-Signature"].ToString();
         var partition = string.IsNullOrEmpty(credential)
@@ -428,10 +421,6 @@ await DefaultWorkspaceBootstrap.RunAsync(
     app.Configuration,
     app.Environment,
     app.Logger);
-// CRM records are small, and older releases stored client identity/contact fields in plaintext.
-// Rewrite those legacy rows in bounded batches before accepting requests. New writes are encrypted
-// in their repositories, so this normally becomes a quick no-op after the first upgraded launch.
-await PlaceContext.Infrastructure.DependencyInjection.EncryptExistingCrmDataAsync(app.Services);
 // Legacy JSON blob flattening is OFF by default: the data map now stores objects/arrays as JSON
 // text in their declared column, so huge nested payloads don't explode into hundreds of leaf
 // columns. The bootstrap remains available via PlaceContext:DataMapFlattening:BootstrapOnStartup=true
@@ -478,7 +467,6 @@ app.Use(async (ctx, next) =>
     await next();
 });
 app.UseMiddleware<TenantResolutionMiddleware>(); // resolve {user}.placecontext.ai → tenant, before any data access
-app.UseMiddleware<CrmOnboardingMiddleware>(); // reject CRM onboarding requests early when code missing/invalid
 // Project for the entity data and search APIs: X-Project-Id / X-Project (optional elsewhere).
 app.UseMiddleware<ProjectResolutionMiddleware>();
 app.UseAuthentication();

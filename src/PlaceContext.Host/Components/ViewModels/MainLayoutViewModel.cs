@@ -485,7 +485,6 @@ internal static class MainLayoutIconCatalog
             "box" => "<path d='m21 8-9 5-9-5 9-5 9 5Z'/><path d='m3 8 9 5 9-5v8l-9 5-9-5V8Z'/><path d='M12 13v8'/>",
             "test" => "<path d='M9 3h6M10 3v6l-5 9a2 2 0 0 0 1.7 3h10.6A2 2 0 0 0 19 18l-5-9V3'/><path d='M8 14h8'/>",
             "chain" => "<rect x='3' y='5' width='6' height='5' rx='1.5'/><rect x='15' y='14' width='6' height='5' rx='1.5'/><path d='M9 7.5h4a3 3 0 0 1 3 3V14M12 7.5l2-2M12 7.5l2 2'/>",
-            "crm" => "<rect x='3' y='4' width='18' height='16' rx='2'/><circle cx='9' cy='10' r='2.5'/><path d='M5.5 17a3.5 3.5 0 0 1 7 0M15 9h3M15 13h3'/>",
             "clock" => "<circle cx='12' cy='12' r='9'/><path d='M12 7v5l3 2'/>",
             "map" => "<polygon points='3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21 3 6'/><path d='M9 3v15M15 6v15'/>",
             "key" => "<circle cx='8' cy='15' r='4'/><path d='m11 12 8-8M15 8l3 3M17 6l2 2'/>",

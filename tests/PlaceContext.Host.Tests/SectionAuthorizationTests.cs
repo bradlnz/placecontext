@@ -15,7 +15,6 @@ public sealed class SectionAuthorizationTests
             { typeof(Pages.Overview), Permission.ProjectsView },
             { typeof(Pages.ProjectView), Permission.ProjectsView },
             { typeof(Pages.Onboarding), Permission.ProjectsView },
-            { typeof(Pages.Crm), Permission.CrmView },
             { typeof(Pages.Artifacts), Permission.ArtifactsView },
             { typeof(Pages.Chat), Permission.AgentsChat },
             { typeof(Pages.Agents), Permission.AgentsManage },
@@ -76,7 +75,6 @@ public sealed class SectionAuthorizationTests
         {
             { typeof(ArtifactsController), Permission.ArtifactsView },
             { typeof(ChatAttachmentsController), Permission.AgentsChat },
-            { typeof(CrmArtifactsController), Permission.CrmView },
         };
 
     [Theory]

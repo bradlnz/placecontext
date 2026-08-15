@@ -28,14 +28,6 @@ public interface IDataEncryptor
         /// <summary>Source text stored with embedding rows (vectors stay searchable in pgvector).</summary>
         public const string EmbeddingText = "content.embedding.text.v1";
         public const string EmailTwoFactorState = "auth.email-2fa.state.v1";
-        /// <summary>Customer identity and contact fields stored on CRM client rows.</summary>
-        public const string CrmClient = "crm.client.v1";
-        public const string CrmCommunication = "crm.communication.v1";
-        public const string CrmAppointment = "crm.appointment.v1";
-        /// <summary>Customer-facing filenames and storage references on CRM artifact rows.</summary>
-        public const string CrmArtifactMetadata = "crm.artifact.metadata.v1";
-        public const string CrmAutomation = "crm.automation.v1";
-        public const string CrmAutomationPayload = "crm.automation.payload.v1";
     }
 
     /// <summary>True when <paramref name="value"/> is already in the protected wire format.</summary>

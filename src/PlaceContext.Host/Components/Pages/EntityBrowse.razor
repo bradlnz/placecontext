@@ -260,7 +260,7 @@
     }
 </div>
 
-@* ── Record detail / CRM edit modal ────── *@
+@* ── Record detail / edit modal ────── *@
 @if ((Vm.Open is not null || Vm.Editing) && Vm.Entity is not null)
 {
     <div class="dcslide-scrim" @onclick="() => Vm.CloseRecordPanel()"></div>
@@ -290,25 +290,25 @@
             }
             @if (Vm.Editing)
             {
-                <div class="dccard card-pad crm-form">
+                <div class="dccard card-pad record-form">
                     @foreach (var col in Vm.FormColumns)
                     {
-                        <label class="crm-label">@col.Name
+                        <label class="record-label">@col.Name
                             @if (Vm.IsChartInput(col.Type))
                             {
-                                <input type="checkbox" class="dccheckbox crm-input" style="margin-top:2px"
+                                <input type="checkbox" class="dccheckbox record-input" style="margin-top:2px"
                                        checked="@Vm.FormValueIsTrue(col.Name)"
                                        @onchange="e => Vm.ToggleBool(col.Name, e.Value is bool value && value)" />
                             }
                             else
                             {
-                                <input type="@Vm.FormInputType(col.Type)" class="dcinput crm-input"
+                                <input type="@Vm.FormInputType(col.Type)" class="dcinput record-input"
                                        value="@(Vm.FormValues.GetValueOrDefault(col.Name))"
                                        @oninput="@(e => Vm.SetFormValue(col.Name, e))" />
                             }
                         </label>
                     }
-                    <div class="crm-actions">
+                    <div class="record-actions">
                         <button class="dcbtn" @onclick="() => Vm.CloseRecordPanel()" disabled="@Vm.Saving">Cancel</button>
                         <button class="dcbtn primary" @onclick="() => Vm.SaveRecordAsync()" disabled="@Vm.Saving">
                             @(Vm.Saving ? "Saving…" : (Vm.Creating ? "Create" : "Save"))

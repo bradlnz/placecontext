@@ -38,7 +38,6 @@ public static class DependencyInjection
         services.AddScoped<IMenuConfigService, Tenancy.MenuConfigService>();
         services.AddScoped<IArtifactViewConfigService, Tenancy.ArtifactViewConfigService>();
         services.AddScoped<IArtifactShareTokenService, Artifacts.ArtifactShareTokenService>();
-        services.AddScoped<Crm.CrmIngestionSettingsService>();
 
         // Portal authentication (tenant-scoped users) + persisted OAuth clients.
         services.AddScoped<IAuthService, Auth.AuthService>();
@@ -178,18 +177,6 @@ public static class DependencyInjection
         // Job / JobRun repositories.
         services.AddScoped<IJobRepository, EfJobRepository>();
         services.AddScoped<IJobRunRepository, EfJobRunRepository>();
-        services.AddScoped<ICrmClientRepository, EfCrmClientRepository>();
-        services.AddScoped<ICrmJobRunRepository, EfCrmJobRunRepository>();
-        services.AddScoped<ICrmChainRunRepository, EfCrmChainRunRepository>();
-        services.AddScoped<ICrmCommunicationRepository, EfCrmCommunicationRepository>();
-        services.AddScoped<ICrmAppointmentRepository, EfCrmAppointmentRepository>();
-        services.AddScoped<ICrmCalendarRepository, EfCrmCalendarRepository>();
-        services.AddScoped<ICrmUserRepository, EfCrmUserRepository>();
-        services.AddScoped<ICrmClientArtifactRepository, EfCrmClientArtifactRepository>();
-        services.AddScoped<ICrmClientJobChainAssignmentRepository, EfCrmClientJobChainAssignmentRepository>();
-        services.AddScoped<ICrmClientUserAssignmentRepository, EfCrmClientUserAssignmentRepository>();
-        services.AddScoped<ICrmAutomationRuleRepository, EfCrmAutomationRuleRepository>();
-        services.AddScoped<ICrmAutomationQueue, Scheduling.DbCrmAutomationQueue>();
         services.Configure<Comms.ClientCommsOptions>(
             configuration.GetSection(Comms.ClientCommsOptions.SectionName));
         services.AddScoped<Comms.CommunicationProviderService>();
@@ -287,9 +274,7 @@ public static class DependencyInjection
         services.AddSingleton<ICronSchedule, Scheduling.CronosCronSchedule>();
         services.AddScoped<IJobRunQueue, Scheduling.DbJobRunQueue>();
         services.AddHostedService<Scheduling.TriggerSchedulerService>();
-        services.AddHostedService<Scheduling.CrmAutomationWorker>();
         services.AddHostedService<Scheduling.ChainContinuationWorker>();
-        services.AddHostedService<Scheduling.CrmArtifactReconciliationWorker>();
 
         // Background portal operations (the notifications-pane ledger) + the analytics chart sweep
         // worker (generation can be slow; the portal only enqueues and reads stored charts).
@@ -363,90 +348,6 @@ public static class DependencyInjection
                 """);
         }
         catch { /* non-Postgres or already applied via migration */ }
-
-        // Additive CRM client → job-chain assignment table for customer-specific automation visibility.
-        try
-        {
-            db.Database.ExecuteSqlRaw(
-                """
-                CREATE TABLE IF NOT EXISTS crm_client_job_chain_assignments (
-                    "Id" uuid PRIMARY KEY,
-                    "TenantId" uuid NOT NULL,
-                    "ProjectId" uuid NOT NULL,
-                    "ClientId" uuid NOT NULL,
-                    "ChainId" uuid NOT NULL,
-                    "CreatedAt" timestamptz NOT NULL DEFAULT now(),
-                    "UpdatedAt" timestamptz NOT NULL DEFAULT now()
-                );
-                CREATE INDEX IF NOT EXISTS ix_crm_client_job_chain_assignments_project_client
-                    ON crm_client_job_chain_assignments ("ProjectId", "ClientId");
-                CREATE INDEX IF NOT EXISTS ix_crm_client_job_chain_assignments_chain_id
-                    ON crm_client_job_chain_assignments ("ChainId");
-                CREATE UNIQUE INDEX IF NOT EXISTS uq_crm_client_job_chain_assignments_project_client_chain
-                    ON crm_client_job_chain_assignments ("ProjectId", "ClientId", "ChainId");
-                """);
-        }
-        catch { /* non-Postgres or partially initialized database */ }
-
-        // Additive CRM users and CRM user assignment tables (safe to replay if already created).
-        try
-        {
-            db.Database.ExecuteSqlRaw(
-                """
-                CREATE TABLE IF NOT EXISTS crm_users (
-                    "Id" uuid PRIMARY KEY,
-                    "TenantId" uuid NOT NULL,
-                    "ProjectId" uuid NOT NULL,
-                    "Name" text NULL,
-                    "Email" text NOT NULL,
-                    "JoinCode" text NULL,
-                    "JoinCodeExpiresAt" timestamptz NULL,
-                    "AuthUserId" uuid NULL,
-                    "OnboardedAt" timestamptz NULL,
-                    "CreatedAt" timestamptz NOT NULL DEFAULT now(),
-                    "UpdatedAt" timestamptz NOT NULL DEFAULT now()
-                );
-                CREATE INDEX IF NOT EXISTS ix_crm_users_project_email
-                    ON crm_users ("ProjectId", "Email");
-                CREATE UNIQUE INDEX IF NOT EXISTS uq_crm_users_project_email
-                    ON crm_users ("ProjectId", lower("Email"));
-                CREATE INDEX IF NOT EXISTS ix_crm_users_join_code
-                    ON crm_users ("JoinCode");
-                CREATE INDEX IF NOT EXISTS ix_crm_users_auth_user_id
-                    ON crm_users ("AuthUserId");
-
-                CREATE TABLE IF NOT EXISTS crm_client_user_assignments (
-                    "Id" uuid PRIMARY KEY,
-                    "TenantId" uuid NOT NULL,
-                    "ProjectId" uuid NOT NULL,
-                    "ClientId" uuid NOT NULL,
-                    "CrmUserId" uuid NOT NULL,
-                    "CreatedAt" timestamptz NOT NULL DEFAULT now(),
-                    "UpdatedAt" timestamptz NOT NULL DEFAULT now()
-                );
-                CREATE INDEX IF NOT EXISTS ix_crm_client_user_assignments_project_client
-                    ON crm_client_user_assignments ("ProjectId", "ClientId");
-                CREATE INDEX IF NOT EXISTS ix_crm_client_user_assignments_crm_user_id
-                    ON crm_client_user_assignments ("CrmUserId");
-                CREATE UNIQUE INDEX IF NOT EXISTS uq_crm_client_user_assignments_project_client_user
-                    ON crm_client_user_assignments ("ProjectId", "ClientId", "CrmUserId");
-                """);
-        }
-        catch { /* non-Postgres or partially initialized database */ }
-
-        try
-        {
-            db.Database.ExecuteSqlRaw(
-                """
-                ALTER TABLE crm_users ADD COLUMN IF NOT EXISTS "JoinCode" text NULL;
-                ALTER TABLE crm_users ADD COLUMN IF NOT EXISTS "JoinCodeExpiresAt" timestamptz NULL;
-                ALTER TABLE crm_users ADD COLUMN IF NOT EXISTS "AuthUserId" uuid NULL;
-                ALTER TABLE crm_users ADD COLUMN IF NOT EXISTS "OnboardedAt" timestamptz NULL;
-                CREATE INDEX IF NOT EXISTS ix_crm_users_join_code ON crm_users ("JoinCode");
-                CREATE INDEX IF NOT EXISTS ix_crm_users_auth_user_id ON crm_users ("AuthUserId");
-                """);
-        }
-        catch { /* non-Postgres or partially initialized database */ }
 
         // Additive indexes for the hot run queries (safe if already present). The status watcher
         // scans job_runs/chain_runs for in-flight or recently-finished rows every 2 seconds — a
@@ -587,10 +488,4 @@ public static class DependencyInjection
     public static Task EncryptExistingDataAsync(IServiceProvider provider, CancellationToken ct = default)
         => Security.EncryptionAtRestBootstrap.RunAsync(provider, ct);
 
-    /// <summary>
-    /// Bounded, idempotent CRM-only backfill. Runs on every Host launch so customer data created by
-    /// versions predating CRM field encryption cannot remain plaintext after an upgrade.
-    /// </summary>
-    public static Task EncryptExistingCrmDataAsync(IServiceProvider provider, CancellationToken ct = default)
-        => Security.EncryptionAtRestBootstrap.RunCrmAsync(provider, ct);
 }

@@ -68,16 +68,13 @@ public static class DefaultWorkspaceBootstrap
         await SeedSecretsAsync(app, projectId, ct);
         var mcpIds = await SeedMcpConnectionsAsync(app, projectId, ct);
         var jobs = await SeedJobsAsync(app, projectId, mcpIds, ct);
-        var chain = await SeedChainAsync(app, projectId, jobs, ct);
-        await SeedCrmAsync(app, projectId, chain.Id, ct);
+        await SeedChainAsync(app, projectId, jobs, ct);
         await SeedProjectDataAsync(app, projectId, jobs["Ingest customer activity"].Id, ct);
     }
 
     private static async Task SeedSecretsAsync(IPlaceContextService app, Guid projectId, CancellationToken ct)
     {
         var existing = await app.ListProjectSecretsAsync(projectId, ct);
-        if (!existing.Any(item => item.Name == "CRM_API_TOKEN"))
-            await app.AddProjectSecretAsync(projectId, "CRM_API_TOKEN", "local-demo-crm-token", ct);
         if (!existing.Any(item => item.Name == "REPORT_SIGNING_KEY"))
             await app.AddProjectSecretAsync(projectId, "REPORT_SIGNING_KEY", "local-demo-report-signing-key", ct);
     }
@@ -90,7 +87,7 @@ public static class DefaultWorkspaceBootstrap
         var connections = (await app.ListMcpConnectionsAsync(projectId, ct)).ToList();
         foreach (var definition in new[]
                  {
-                     (Name: "Customer CRM MCP", Endpoint: "https://mcp.demo.local/crm"),
+                     (Name: "Commerce MCP", Endpoint: "https://mcp.demo.local/commerce"),
                      (Name: "Warehouse MCP", Endpoint: "https://mcp.demo.local/warehouse"),
                  })
         {
@@ -222,83 +219,6 @@ public static class DefaultWorkspaceBootstrap
             [ingest, score, digest, report],
             stages: [[ingest], [score, digest], [report]],
             ct: ct);
-    }
-
-    private static async Task SeedCrmAsync(
-        IPlaceContextService app,
-        Guid projectId,
-        Guid chainId,
-        CancellationToken ct)
-    {
-        var clients = (await app.ListCrmClientsAsync(projectId, ct)).ToList();
-
-        async Task<CrmClientView> EnsureClient(
-            string name,
-            string email,
-            CustomerLifecycleStage stage,
-            string notes)
-        {
-            var existing = clients.FirstOrDefault(item => item.Name == name);
-            if (existing is not null)
-                return existing;
-            var created = await app.SaveCrmClientAsync(new SaveCrmClientCommand(
-                projectId, name, name, email, null, stage, notes), ct);
-            clients.Add(created);
-            return created;
-        }
-
-        var northwind = await EnsureClient(
-            "Northwind Labs",
-            "ops@northwind.example",
-            CustomerLifecycleStage.Active,
-            "Enterprise account; weekly health review enabled.");
-        var bluebird = await EnsureClient(
-            "Bluebird Studio",
-            "team@bluebird.example",
-            CustomerLifecycleStage.AtRisk,
-            "Follow up on activity and onboarding blockers.");
-        await EnsureClient(
-            "Acme Field Services",
-            "hello@acme.example",
-            CustomerLifecycleStage.Lead,
-            "New inbound opportunity from the demonstration workspace.");
-
-        foreach (var client in new[] { northwind, bluebird })
-        {
-            var assignments = await app.ListCrmClientAssignedJobChainIdsAsync(client.Id, projectId, ct);
-            if (!assignments.Contains(chainId))
-                await app.SetCrmClientAssignedJobChainIdsAsync(client.Id, projectId, [chainId], ct);
-        }
-
-        var calendars = await app.ListCrmCalendarsAsync(projectId, ct);
-        var calendar = calendars.FirstOrDefault(item => item.Name == "Customer success")
-            ?? await app.SaveCrmCalendarAsync(
-                new SaveCrmCalendarCommand(projectId, "Customer success", "#c58b21"), ct);
-        var appointments = await app.ListCrmAppointmentsAsync(projectId, ct);
-        if (!appointments.Any(item => item.Title == "Northwind health review"))
-        {
-            await app.CreateCrmAppointmentAsync(new CreateCrmAppointmentCommand(
-                projectId,
-                calendar.Id,
-                northwind.Id,
-                "Northwind health review",
-                DateTimeOffset.UtcNow.Date.AddDays(2).AddHours(9),
-                DateTimeOffset.UtcNow.Date.AddDays(2).AddHours(9).AddMinutes(30),
-                "Video call",
-                "Review the seeded account health report."), ct);
-        }
-
-        var automations = await app.ListCrmAutomationRulesAsync(projectId, ct);
-        if (!automations.Any(item => item.Name == "At-risk account review"))
-        {
-            await app.SaveCrmAutomationRuleAsync(new SaveCrmAutomationRuleCommand(
-                projectId,
-                "At-risk account review",
-                CrmAutomationEventType.StageEntered,
-                CustomerLifecycleStage.AtRisk,
-                chainId,
-                true), ct);
-        }
     }
 
     private static async Task SeedProjectDataAsync(

@@ -2,10 +2,10 @@
 .unknown-entity { padding:24px; color:var(--text-3) }
 .header-row { display:flex; align-items:baseline; justify-content:space-between; margin-bottom:14px; gap:12px }
 .header-actions { display:flex; align-items:center; gap:10px }
-.crm-form { display:flex; flex-direction:column; gap:10px }
-.crm-label { display:flex; flex-direction:column; gap:4px; font-size:11px; color:var(--text-3); letter-spacing:.04em; text-transform:uppercase }
-.crm-input { font-size:13px; text-transform:none; letter-spacing:0 }
-.crm-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:6px }
+.record-form { display:flex; flex-direction:column; gap:10px }
+.record-label { display:flex; flex-direction:column; gap:4px; font-size:11px; color:var(--text-3); letter-spacing:.04em; text-transform:uppercase }
+.record-input { font-size:13px; text-transform:none; letter-spacing:0 }
+.record-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:6px }
 .page-title { font-size:18px; font-weight:600; margin:0 }
 .page-sub { font-size:12px; color:var(--text-3); margin-top:3px }
 .mono { font-family:var(--font-sans) }

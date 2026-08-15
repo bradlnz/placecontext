@@ -56,7 +56,7 @@ public sealed class SearchApiMapperTests
                     "hidden",
                     "/project/other"
                 ),
-                new SearchHit("entity", selected, "Second", "CRM", "/project/selected/entity"),
+                new SearchHit("entity", selected, "Second", "Data", "/project/selected/entity"),
             }
         );
 

@@ -17,7 +17,6 @@ public sealed class MvvmBoundaryContractTests
 
     private static readonly HashSet<string> PresentationalComponents =
     [
-        "Components/Shared/CrmIcon.razor",
         "Components/Shared/DataTabs.razor",
         "Components/Shared/OpenSearchDataValue.razor",
         "Components/Shared/Skeleton.razor",
@@ -25,7 +24,6 @@ public sealed class MvvmBoundaryContractTests
 
     private static readonly HashSet<string> StatelessPresentationalComponents =
     [
-        "Components/Shared/CrmIcon.razor",
         "Components/Shared/DataTabs.razor",
     ];
 

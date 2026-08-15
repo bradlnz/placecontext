@@ -13,6 +13,5 @@ namespace PlaceContext.Application.Features;
 /// from each step job's declared parameters. Merged over the step's chained input: object-over-object
 /// merges shallowly (override keys win); a non-object chained input is preserved under "previous".</param>
 public sealed record RunJobChainCommand(Guid ChainId, string? InputPayload = null, Guid? ChainRunId = null,
-    IReadOnlyDictionary<int, string>? StepPayloadOverrides = null, int? ResumeFromStageIndex = null,
-    Guid? CrmClientId = null)
+    IReadOnlyDictionary<int, string>? StepPayloadOverrides = null, int? ResumeFromStageIndex = null)
     : ICommand<ChainRunView>;

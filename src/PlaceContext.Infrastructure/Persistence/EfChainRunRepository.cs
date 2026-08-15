@@ -32,7 +32,6 @@ public sealed class EfChainRunRepository : IChainRunRepository
         existing.FinishedAt = run.FinishedAt;
         existing.ResumeAt = run.ResumeAt;
         existing.ResumeStageIndex = run.ResumeStageIndex;
-        existing.CrmClientId = run.CrmClientId;
         existing.ContinuationOverrides = EncryptNullable(run.ContinuationOverridesJson);
         if (run.Status != ChainRunStatus.Running)
         {
@@ -79,7 +78,6 @@ public sealed class EfChainRunRepository : IChainRunRepository
         FinishedAt = r.FinishedAt,
         ResumeAt = r.ResumeAt,
         ResumeStageIndex = r.ResumeStageIndex,
-        CrmClientId = r.CrmClientId,
         ContinuationOverrides = EncryptNullable(r.ContinuationOverridesJson),
     };
 
@@ -90,7 +88,7 @@ public sealed class EfChainRunRepository : IChainRunRepository
             .ToList();
         return ChainRun.Rehydrate(r.Id, r.ChainId, r.ProjectId, r.ChainName,
             Enum.Parse<ChainRunStatus>(r.Status), steps, DecryptNullable(r.FinalOutput),
-            r.StartedAt, r.FinishedAt, r.ResumeAt, r.ResumeStageIndex, r.CrmClientId,
+            r.StartedAt, r.FinishedAt, r.ResumeAt, r.ResumeStageIndex,
             DecryptNullable(r.ContinuationOverrides));
     }
 

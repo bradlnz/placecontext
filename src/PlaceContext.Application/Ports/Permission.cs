@@ -18,10 +18,6 @@ public static class Permission
     public const string JobsManage = "jobs.manage";
     public const string ChainsManage = "chains.manage";
     public const string TriggersManage = "triggers.manage";
-    public const string CrmView = "crm.view";
-    public const string CrmAutomationManage = "crm.automation.manage";
-    public const string CrmAutomationAssign = "crm.automation.assign";
-    public const string CrmOpportunityWrite = "crm.opportunity.write";
     public const string DataRead = "data.read";
     public const string DataWrite = "data.write";
     public const string ArtifactsView = "artifacts.view";
@@ -34,7 +30,6 @@ public static class Permission
     public const string EventsManage = "events.manage";
     public const string AgentsChat = "agents.chat";
     public const string AgentsManage = "agents.manage";
-    public const string CrmCommsSend = "crm.comms.send";
     public const string EmailSend = "email.send";
     public const string SmsSend = "sms.send";
 
@@ -42,9 +37,9 @@ public static class Permission
     public static readonly IReadOnlyList<string> All = new[]
     {
         ProjectsView, ProjectsManage, JobsView, JobsEdit, JobsRun, JobsReplay, JobsManage,
-        ChainsManage, TriggersManage, CrmView, CrmAutomationManage, CrmAutomationAssign, CrmOpportunityWrite,
+        ChainsManage, TriggersManage,
         DataRead, DataWrite, ArtifactsView, ArtifactsShare, ArtifactsDelete,
         SecretsManage, BackupManage, MembersManage, SettingsManage, EventsManage,
-        AgentsChat, AgentsManage, CrmCommsSend, EmailSend, SmsSend,
+        AgentsChat, AgentsManage, EmailSend, SmsSend,
     };
 }

@@ -1,12 +1,11 @@
 # PlaceContext
 
-**A full-scale, self-hosted data platform.** Built by Bradley Lietz.
+**An open-source, self-hosted job engine.** Built by Bradley Lietz.
 
-PlaceContext unifies operational data, compute, automation, analytics, and governance in one project-scoped
-workspace. Create SQL tables and entity models, ingest and transform data with containerised jobs, orchestrate
-multi-step pipelines, inspect lineage and execution traces, publish artifacts and charts, and activate records
-through built-in CRM workflows. The web portal, CLI/TUI, schedules, events, and MCP endpoint all operate on the
-same durable platform.
+PlaceContext turns code and containers into reusable jobs that run across infrastructure you own. Trigger work
+on demand, on schedules, or from events; fan it out across a fleet; connect jobs into multi-step pipelines; and
+retain the resulting data, logs, traces, and artifacts. The web portal, CLI/TUI, schedules, events, and MCP
+endpoint all operate on the same durable job engine.
 
 ```bash
 # Install the placecontext CLI, then open the TUI
@@ -18,7 +17,7 @@ placecontext               # install / upgrade / connect a cluster
 
 ### Connect automation and AI clients
 
-MCP is one interface to the platform—not the product boundary. Claude Code and other MCP clients can query
+MCP is one interface to the job engine—not the product boundary. Claude Code and other MCP clients can query
 project data and context, submit jobs and pipelines, record decisions, and retrieve outputs through the same
 permission model as the portal:
 
@@ -29,7 +28,7 @@ claude mcp add --transport http placecontext http://localhost:7700/mcp
 The first tool call opens a browser to sign in (OAuth 2.1 + PKCE, tenant-scoped tokens with
 automatic refresh). No API keys to paste.
 
-## Platform capabilities
+## Job engine capabilities
 
 - **Project databases and entity models** — create project-scoped SQL tables, define linked entities, browse
   records, map job outputs into tables, and explore relationships without mixing tenant data.
@@ -41,8 +40,6 @@ automatic refresh). No API keys to paste.
   structured run artifacts in object storage.
 - **Lineage and observability** — inspect job-to-table mappings, run and chain history, shard outcomes, logs,
   OpenTelemetry traces, and operational status across the workspace.
-- **Operational CRM** — manage client records, lifecycle stages, communications, artifacts, and automations
-  alongside the data and workloads that support them.
 - **Governed access** — project and tenant boundaries, role-based permissions, OAuth 2.1 + PKCE, encrypted
   secrets, and sandboxed jobs with network egress disabled by default.
 - **Agent and automation integration** — durable project context and MCP tools let AI and automation clients use

@@ -63,7 +63,7 @@ public sealed class DatabaseCommunicationSender : IClientCommunicationSender
             ?? throw new InvalidOperationException(
                 "Email is not configured. Add an email provider in Settings → Communications.");
         return await SendResolvedEmailAsync(
-            provider, recipient, recipientName, subject, body, "crm-transactional", ct, attachments);
+            provider, recipient, recipientName, subject, body, "job-transactional", ct, attachments);
     }
 
     public async Task<ClientMessageDelivery> SendAuthenticationEmailAsync(
