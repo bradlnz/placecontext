@@ -3,6 +3,7 @@ using System.Net.Mail;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using Microsoft.Extensions.Logging;
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Observability;
@@ -54,6 +55,7 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
     private readonly IClientCommunicationSender? _communications;
     private readonly IPermissionService? _permissions;
     private readonly IChainContextStore? _contextStore;
+    private readonly ILogger<RunJobChainHandler>? _log;
 
     public RunJobChainHandler(IJobChainRepository chains, IJobRepository jobs, IChainRunRepository runs,
         IUnitOfWork uow, IClock clock, IJobRunner jobRunner,
@@ -61,7 +63,8 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
         DataMappingIngestionService? dataMappings = null,
         IClientCommunicationSender? communications = null,
         IPermissionService? permissions = null,
-        IChainContextStore? contextStore = null)
+        IChainContextStore? contextStore = null,
+        ILogger<RunJobChainHandler>? log = null)
     {
         _dataMappings = dataMappings;
         _chains = chains;
@@ -73,6 +76,7 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
         _communications = communications;
         _permissions = permissions;
         _contextStore = contextStore;
+        _log = log;
     }
 
     private readonly DataMappingIngestionService? _dataMappings;
