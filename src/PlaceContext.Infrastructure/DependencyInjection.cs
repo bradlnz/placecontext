@@ -273,8 +273,10 @@ public static class DependencyInjection
         // service (advisory-lock-elected schedule scan + atomic queue drain — correct across replicas).
         services.AddSingleton<ICronSchedule, Scheduling.CronosCronSchedule>();
         services.AddScoped<IJobRunQueue, Scheduling.DbJobRunQueue>();
+        services.AddScoped<IJobChainSubmissionQueue, Scheduling.DbJobChainSubmissionQueue>();
         services.AddHostedService<Scheduling.TriggerSchedulerService>();
         services.AddHostedService<Scheduling.ChainContinuationWorker>();
+        services.AddHostedService<Scheduling.RpcChainSubmissionWorker>();
 
         // Background portal operations (the notifications-pane ledger) + the analytics chart sweep
         // worker (generation can be slow; the portal only enqueues and reads stored charts).
@@ -337,6 +339,7 @@ public static class DependencyInjection
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         db.Database.Migrate();
         EnsureAgentHierarchySchema(db);
+        EnsureRpcChainSubmissionSchema(db);
         // Additive columns for workspace UI customization (safe if already present).
         try
         {
@@ -371,6 +374,42 @@ public static class DependencyInjection
         // Backfill denormalized shard counts for existing runs.
         // The JSON is encrypted at the app layer, so we must read/decrypt/count in C#.
         BackfillShardCounts(db, scope.ServiceProvider);
+    }
+
+    private static void EnsureRpcChainSubmissionSchema(AppDbContext db)
+    {
+        // This operational queue deliberately lives outside the EF aggregate model: workers claim it
+        // globally, then restore tenant/user ambient context before entering the application layer.
+        // Additive DDL keeps upgrades safe for existing clusters and creates the queue on fresh ones.
+        db.Database.ExecuteSqlRaw(
+            """
+            CREATE TABLE IF NOT EXISTS rpc_chain_submissions (
+                "Id" uuid PRIMARY KEY,
+                "TenantId" uuid NOT NULL,
+                "ProjectId" uuid NOT NULL,
+                "ChainId" uuid NOT NULL,
+                "ChainRunId" uuid NOT NULL UNIQUE,
+                "IdempotencyKey" text NULL,
+                "InputPayload" text NULL,
+                "SubmitterUserId" uuid NOT NULL,
+                "SubmitterRole" text NOT NULL,
+                "Status" text NOT NULL,
+                "Attempts" integer NOT NULL DEFAULT 0,
+                "LastError" text NULL,
+                "SubmittedAt" timestamptz NOT NULL,
+                "NextAttemptAt" timestamptz NOT NULL,
+                "StartedAt" timestamptz NULL,
+                "FinishedAt" timestamptz NULL,
+                "ClaimedBy" text NULL,
+                "ClaimedAt" timestamptz NULL,
+                "HeartbeatAt" timestamptz NULL
+            );
+            CREATE UNIQUE INDEX IF NOT EXISTS ux_rpc_chain_submissions_idempotency
+                ON rpc_chain_submissions ("TenantId", "IdempotencyKey")
+                WHERE "IdempotencyKey" IS NOT NULL;
+            CREATE INDEX IF NOT EXISTS ix_rpc_chain_submissions_pending
+                ON rpc_chain_submissions ("Status", "NextAttemptAt", "SubmittedAt");
+            """);
     }
 
     private static void EnsureAgentHierarchySchema(AppDbContext db)

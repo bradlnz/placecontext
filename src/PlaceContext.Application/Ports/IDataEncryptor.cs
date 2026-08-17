@@ -22,6 +22,8 @@ public interface IDataEncryptor
         public const string Activity = "project.activity.v1";
         public const string ToolCall = "mcp.toolcall.v1";
         public const string PendingRun = "job.pending.v1";
+        /// <summary>Input payloads waiting for asynchronous MCP chain execution.</summary>
+        public const string RpcChainSubmission = "job.chain.rpc-submission.v1";
         /// <summary>Persisted step details and outputs for job-chain executions.</summary>
         public const string ChainRun = "job.chain.run.v1";
         public const string Chart = "project.chart.v1";

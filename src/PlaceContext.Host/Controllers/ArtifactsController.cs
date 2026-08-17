@@ -1,4 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Mvc;
 using PlaceContext.Application.Ports;
 using PlaceContext.Domain.Repositories;
@@ -10,7 +12,9 @@ namespace PlaceContext.Host.Controllers;
 /// previewable types in a same-origin <c>iframe</c>; the <see cref="IRunArtifactLinkRepository"/>
 /// tenant filter scopes the lookup so one tenant cannot read another's artifacts.
 /// </summary>
-[Authorize(Policy = Permission.ArtifactsView)]
+[Authorize(
+    AuthenticationSchemes = CookieAuthenticationDefaults.AuthenticationScheme + "," + AgentAuthenticationDefaults.SchemeName,
+    Policy = Permission.ArtifactsView)]
 public sealed class ArtifactsController : ControllerBase
 {
     private readonly IRunArtifactLinkRepository _links;

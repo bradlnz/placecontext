@@ -480,8 +480,13 @@ app.MapRazorComponents<App>()
 .AddInteractiveServerRenderMode()
 .AllowAnonymous();
 
-// MCP requires an OAuth bearer token (validated by the JwtBearer scheme); the token binds the tenant.
-app.MapMcp("/mcp").RequireAuthorization(new AuthorizeAttribute { AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme });
+// MCP accepts either an OAuth access token or a scoped personal API token. The policy scheme routes
+// pct_ credentials to the tenant-scoped token store and JWTs to the OAuth validator; both resolve a
+// real current user so the same fine-grained tool permissions apply.
+app.MapMcp("/mcp").RequireAuthorization(new AuthorizeAttribute
+{
+    AuthenticationSchemes = AgentAuthenticationDefaults.SchemeName,
+});
 
 // First-party OAuth 2.1 authorization server (authorize/token/register/jwks + metadata).
 app.MapOAuthServer();

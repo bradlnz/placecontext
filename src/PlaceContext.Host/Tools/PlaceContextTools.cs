@@ -357,6 +357,120 @@ public sealed class PlaceContextTools
         => Traced(log, AgentToolNames.RunJobChain, chainId.ToString(), "run job chain", new { chainId, inputPayload },
             () => svc.RunJobChainAsync(chainId, inputPayload));
 
+    [Authorize(Policy = Permission.JobsRun)]
+    [McpServerTool(Name = "submit_job_chain"), Description("Durably submit a job chain for asynchronous execution and return immediately with stable trackingId + chainRunId receipts. Select the chain by chainId or its exact chainName (for example full-feasibility-report). Use this for service-to-service ingestion instead of holding an MCP request open for the entire chain. The encrypted payload survives restarts; workers claim atomically across replicas. Supply a stable idempotencyKey (for example the source order UUID) so retries return the original receipt rather than launching duplicate work. Poll get_job_chain_submission for status, steps, and artifact download URLs.")]
+    public static Task<string> SubmitJobChain(
+        IPlaceContextService svc,
+        IJobChainSubmissionQueue submissions,
+        IToolCallLog log,
+        Guid projectId,
+        [Description("Chain ID; provide exactly one of chainId or chainName")] Guid? chainId = null,
+        [Description("Exact chain name, such as full-feasibility-report; provide exactly one of chainId or chainName")] string? chainName = null,
+        [Description("Optional input payload for the first step (typically JSON)")] string? inputPayload = null,
+        [Description("Stable caller-supplied retry key; repeated submissions in this tenant return the original receipt")] string? idempotencyKey = null)
+        => Traced(log, "submit_job_chain", projectId.ToString(), $"submit chain {chainId?.ToString() ?? chainName}",
+            new { projectId, chainId, chainName, idempotencyKey, hasInputPayload = inputPayload is not null },
+            async () =>
+            {
+                var hasName = !string.IsNullOrWhiteSpace(chainName);
+                if (chainId.HasValue == hasName)
+                    throw new ArgumentException("Provide exactly one of chainId or chainName.");
+
+                var chains = await svc.ListJobChainsAsync(projectId);
+                var matchingChains = chainId.HasValue
+                    ? chains.Where(value => value.Id == chainId.Value).ToList()
+                    : chains.Where(value => string.Equals(
+                        value.Name, chainName!.Trim(), StringComparison.OrdinalIgnoreCase)).ToList();
+                if (matchingChains.Count > 1)
+                    throw new ArgumentException(
+                        "The chain name is ambiguous in the supplied project; use chainId instead.");
+                var chain = matchingChains.SingleOrDefault();
+                if (chain is null)
+                    throw new ArgumentException(
+                        "The requested chain does not exist in the supplied project.");
+                var receipt = await submissions.EnqueueAsync(
+                    projectId, chain.Id, inputPayload, idempotencyKey);
+                return new
+                {
+                    receipt.TrackingId,
+                    receipt.ProjectId,
+                    receipt.ChainId,
+                    receipt.ChainRunId,
+                    receipt.Status,
+                    receipt.SubmittedAt,
+                    idempotent = idempotencyKey is not null,
+                };
+            });
+
+    [Authorize(Policy = "Member")]
+    [McpServerTool(Name = "get_job_chain_submission"), Description("Poll an asynchronous submit_job_chain receipt. Returns the authoritative chain status, terminal flag, step run ids/errors, and managed artifact download URLs. Queued is reported before the worker establishes the pre-allocated chain run; later calls follow that same run through waiting/resume and terminal states.")]
+    public static Task<string> GetJobChainSubmission(
+        IPlaceContextService svc,
+        IJobChainSubmissionQueue submissions,
+        IToolCallLog log,
+        Guid trackingId)
+        => Traced(log, "get_job_chain_submission", trackingId.ToString(), "get chain submission",
+            new { trackingId }, async () =>
+            {
+                var receipt = await submissions.GetAsync(trackingId);
+                if (receipt is null) return (object)new { found = false, trackingId };
+
+                var run = await svc.GetChainRunAsync(receipt.ChainRunId);
+                var status = run?.Status ?? receipt.Status;
+                var terminal = status is "Succeeded" or "Partial" or "Failed" or "Cancelled";
+                var steps = new List<object>();
+                if (run is not null)
+                {
+                    foreach (var step in run.Steps)
+                    {
+                        var artifacts = step.RunId is { } runId
+                            ? await svc.ListRunArtifactsAsync(runId)
+                            : Array.Empty<RunArtifactLinkView>();
+                        steps.Add(new
+                        {
+                            step.Index,
+                            step.StageIndex,
+                            step.BranchIndex,
+                            step.JobId,
+                            step.JobName,
+                            step.RunId,
+                            step.Status,
+                            step.Error,
+                            step.StartedAt,
+                            step.FinishedAt,
+                            artifacts = artifacts.Select(artifact => new
+                            {
+                                artifact.Id,
+                                artifact.RunId,
+                                artifact.Kind,
+                                artifact.Title,
+                                artifact.ContentType,
+                                artifact.SizeBytes,
+                                artifact.CreatedAt,
+                                downloadUrl = $"/runs/{artifact.RunId}/artifacts/{artifact.Id}",
+                            }).ToList(),
+                        });
+                    }
+                }
+
+                return new
+                {
+                    found = true,
+                    receipt.TrackingId,
+                    receipt.ProjectId,
+                    receipt.ChainId,
+                    receipt.ChainRunId,
+                    status,
+                    terminal,
+                    receipt.Attempts,
+                    error = receipt.Error,
+                    receipt.SubmittedAt,
+                    startedAt = run?.StartedAt ?? receipt.StartedAt,
+                    finishedAt = run?.FinishedAt ?? receipt.FinishedAt,
+                    steps,
+                };
+            });
+
     [Authorize(Policy = "Member")]
     [McpServerTool(Name = "delete_job_chain"), Description("Permanently remove a job chain definition (the jobs and their run history are untouched). Returns true if it existed.")]
     public static Task<string> DeleteJobChain(IPlaceContextService svc, IToolCallLog log, Guid chainId)

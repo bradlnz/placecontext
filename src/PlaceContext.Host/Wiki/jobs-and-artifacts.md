@@ -69,6 +69,27 @@ Communications** and your send permission.
 Open a chain's **Runs** tab to watch the pipeline update in real time. Select a step to see its
 live output and logs. Failed chains can be replayed from a failed step.
 
+## Submit chains from another service
+
+For service-to-service ingestion, use the MCP JSON-RPC tools instead of keeping `run_job_chain`
+open until a long pipeline finishes:
+
+1. Call `submit_job_chain` with the project ID, either a chain ID or exact `chainName` (for example
+   `full-feasibility-report`), JSON input, and a stable `idempotencyKey` such as the source order UUID.
+2. Store the returned `trackingId` and `chainRunId`.
+3. Poll `get_job_chain_submission` by tracking ID until `terminal` is true.
+4. Download any returned artifact URL with the same OAuth bearer token.
+
+The acknowledgement is returned only after the encrypted input is durable in PostgreSQL. Repeating
+the submission with the same idempotency key returns the original receipt. Workers claim requests
+atomically across replicas and use the preallocated chain-run ID, so a reconnect, retry, pod restart,
+or stale worker claim cannot create a second established run.
+
+Both tools are normal calls to the existing `/mcp` Streamable HTTP endpoint. The JSON-RPC method is
+`tools/call`; set `params.name` to `submit_job_chain` or `get_job_chain_submission` and authenticate
+with an OAuth access token or a scoped personal API token. `Queued`, `Running`, and `Waiting` are non-terminal. `Succeeded`,
+`Partial`, `Failed`, and `Cancelled` are terminal.
+
 ## Artifacts
 
 Every job declares a return type: JSON, table, chart, HTML, CSV, text, PDF, image, or video.
