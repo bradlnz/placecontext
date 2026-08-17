@@ -392,12 +392,12 @@ public sealed class PlaceContextTools
                     projectId, chain.Id, inputPayload, idempotencyKey);
                 return new
                 {
-                    receipt.TrackingId,
-                    receipt.ProjectId,
-                    receipt.ChainId,
-                    receipt.ChainRunId,
-                    receipt.Status,
-                    receipt.SubmittedAt,
+                    trackingId = receipt.TrackingId,
+                    projectId = receipt.ProjectId,
+                    chainId = receipt.ChainId,
+                    chainRunId = receipt.ChainRunId,
+                    status = receipt.Status,
+                    submittedAt = receipt.SubmittedAt,
                     idempotent = idempotencyKey is not null,
                 };
             });
@@ -428,25 +428,25 @@ public sealed class PlaceContextTools
                             : Array.Empty<RunArtifactLinkView>();
                         steps.Add(new
                         {
-                            step.Index,
-                            step.StageIndex,
-                            step.BranchIndex,
-                            step.JobId,
-                            step.JobName,
-                            step.RunId,
-                            step.Status,
-                            step.Error,
-                            step.StartedAt,
-                            step.FinishedAt,
+                            index = step.Index,
+                            stageIndex = step.StageIndex,
+                            branchIndex = step.BranchIndex,
+                            jobId = step.JobId,
+                            jobName = step.JobName,
+                            runId = step.RunId,
+                            status = step.Status,
+                            error = step.Error,
+                            startedAt = step.StartedAt,
+                            finishedAt = step.FinishedAt,
                             artifacts = artifacts.Select(artifact => new
                             {
-                                artifact.Id,
-                                artifact.RunId,
-                                artifact.Kind,
-                                artifact.Title,
-                                artifact.ContentType,
-                                artifact.SizeBytes,
-                                artifact.CreatedAt,
+                                id = artifact.Id,
+                                runId = artifact.RunId,
+                                kind = artifact.Kind,
+                                title = artifact.Title,
+                                contentType = artifact.ContentType,
+                                sizeBytes = artifact.SizeBytes,
+                                createdAt = artifact.CreatedAt,
                                 downloadUrl = $"/runs/{artifact.RunId}/artifacts/{artifact.Id}",
                             }).ToList(),
                         });
@@ -456,15 +456,15 @@ public sealed class PlaceContextTools
                 return new
                 {
                     found = true,
-                    receipt.TrackingId,
-                    receipt.ProjectId,
-                    receipt.ChainId,
-                    receipt.ChainRunId,
+                    trackingId = receipt.TrackingId,
+                    projectId = receipt.ProjectId,
+                    chainId = receipt.ChainId,
+                    chainRunId = receipt.ChainRunId,
                     status,
                     terminal,
-                    receipt.Attempts,
+                    attempts = receipt.Attempts,
                     error = receipt.Error,
-                    receipt.SubmittedAt,
+                    submittedAt = receipt.SubmittedAt,
                     startedAt = run?.StartedAt ?? receipt.StartedAt,
                     finishedAt = run?.FinishedAt ?? receipt.FinishedAt,
                     steps,

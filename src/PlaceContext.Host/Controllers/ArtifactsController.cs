@@ -1,9 +1,9 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Authentication.Cookies;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Mvc;
 using PlaceContext.Application.Ports;
 using PlaceContext.Domain.Repositories;
+using PlaceContext.Host.Auth;
 
 namespace PlaceContext.Host.Controllers;
 

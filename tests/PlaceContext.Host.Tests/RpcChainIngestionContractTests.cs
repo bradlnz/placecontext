@@ -12,6 +12,9 @@ public sealed class RpcChainIngestionContractTests
         Assert.Contains("idempotencyKey", tools);
         Assert.Contains("full-feasibility-report", tools);
         Assert.Contains("Provide exactly one of chainId or chainName", tools);
+        Assert.Contains("trackingId = receipt.TrackingId", tools);
+        Assert.Contains("jobName = step.JobName", tools);
+        Assert.Contains("contentType = artifact.ContentType", tools);
         Assert.Contains("IJobChainSubmissionQueue", tools);
         Assert.Contains("ListRunArtifactsAsync", tools);
     }
