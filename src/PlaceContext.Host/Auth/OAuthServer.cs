@@ -249,20 +249,26 @@ public static class OAuthServer
             Encoding.ASCII.GetBytes(computed), Encoding.ASCII.GetBytes(challenge));
     }
 
-    private static OAuthClient? TrustedWebClient(IConfiguration config, string clientId, string redirectUri)
+    internal static OAuthClient? TrustedWebClient(IConfiguration config, string clientId, string redirectUri)
     {
-        var configuredId = config["PlaceContext:OAuth:TrustedClients:AdminPortal:ClientId"];
-        var configuredRedirect = config["PlaceContext:OAuth:TrustedClients:AdminPortal:RedirectUri"];
-        var configuredName = config["PlaceContext:OAuth:TrustedClients:AdminPortal:Name"];
-        if (string.IsNullOrWhiteSpace(configuredId) || string.IsNullOrWhiteSpace(configuredRedirect))
-            return null;
-        if (!string.Equals(clientId, configuredId, StringComparison.Ordinal)
-            || !string.Equals(redirectUri, configuredRedirect, StringComparison.Ordinal))
-            return null;
-        if (!Uri.TryCreate(configuredRedirect, UriKind.Absolute, out var uri)
-            || !uri.Scheme.Equals(Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
-            return null;
-        return new OAuthClient(configuredId, new[] { configuredRedirect }, configuredName ?? "Trusted Admin Portal");
+        foreach (var client in config.GetSection("PlaceContext:OAuth:TrustedClients").GetChildren())
+        {
+            var configuredId = client["ClientId"];
+            var configuredRedirect = client["RedirectUri"];
+            var configuredName = client["Name"];
+            if (string.IsNullOrWhiteSpace(configuredId) || string.IsNullOrWhiteSpace(configuredRedirect))
+                continue;
+            if (!string.Equals(clientId, configuredId, StringComparison.Ordinal)
+                || !string.Equals(redirectUri, configuredRedirect, StringComparison.Ordinal))
+                continue;
+            if (!Uri.TryCreate(configuredRedirect, UriKind.Absolute, out var uri)
+                || !uri.Scheme.Equals(Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
+                return null;
+
+            return new OAuthClient(configuredId, new[] { configuredRedirect }, configuredName ?? "Trusted web client");
+        }
+
+        return null;
     }
 
     private sealed record RegisterRequest(

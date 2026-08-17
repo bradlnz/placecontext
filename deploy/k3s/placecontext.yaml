@@ -184,13 +184,19 @@ spec:
                 secretKeyRef:
                   name: placecontext-oauth
                   key: key.pem
-            # Operator-controlled remote OAuth client. Dynamic registration remains loopback-only.
+            # Operator-controlled remote OAuth clients. Dynamic registration remains loopback-only.
             - name: PlaceContext__OAuth__TrustedClients__AdminPortal__ClientId
               value: "ossen-reports-admin"
             - name: PlaceContext__OAuth__TrustedClients__AdminPortal__RedirectUri
               value: "https://reports.ossenpropertygroup.com.au/auth/placecontext/callback"
             - name: PlaceContext__OAuth__TrustedClients__AdminPortal__Name
               value: "Reports admin"
+            - name: PlaceContext__OAuth__TrustedClients__OssenCrm__ClientId
+              value: "ossen-crm"
+            - name: PlaceContext__OAuth__TrustedClients__OssenCrm__RedirectUri
+              value: "https://crm.ossenpropertygroup.com.au/oauth/mcp/callback"
+            - name: PlaceContext__OAuth__TrustedClients__OssenCrm__Name
+              value: "Ossen CRM"
             # Encrypts the Data Protection key ring at rest (vault secrets + auth cookies).
             - name: PlaceContext__DataProtection__Key
               valueFrom:
