@@ -586,7 +586,10 @@
 @code {
     [Parameter] public Guid ProjectId { get; set; }
 
-    private enum TableTabSource { Project, OpenSearch }
+    private enum TableTabSource { Project, OpenSearch, SavedQuery }
+
+    private sealed record StoredTableTab(string TableName, string Sql, TableTabSource Source);
+    private sealed record StoredSqlStudioState(string? ActiveTableName, List<StoredTableTab> Tabs);
 
     private sealed class TableTab
     {
@@ -618,6 +621,9 @@
     private int? _selectedRowIndex;
     private string? _lastChartJson;
     private string? _lastRenderKey;
+    private Guid? _loadedProjectId;
+    private bool _restoreTabsPending;
+    private bool _pageDataReady;
 
     private TableTab? ActiveTableTab =>
         _openTabs.FirstOrDefault(tab => tab.TableName == _activeTableName);
@@ -737,8 +743,18 @@
 
     protected override async Task OnParametersSetAsync()
     {
+        if (_loadedProjectId != ProjectId)
+        {
+            _loadedProjectId = ProjectId;
+            _openTabs.Clear();
+            _activeTableName = null;
+            _restoreTabsPending = true;
+        }
+
+        _pageDataReady = false;
         Vm.Initialize(ProjectId);
         await Vm.LoadAsync();
+        _pageDataReady = true;
         PruneOpenTabs();
         _lastRenderKey = null;
         _lastChartJson = null;
@@ -809,6 +825,16 @@
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        if (_restoreTabsPending && _pageDataReady)
+        {
+            _restoreTabsPending = false;
+            if (await RestoreTabsAsync())
+            {
+                StateHasChanged();
+                return;
+            }
+        }
+
         await Vm.AfterRenderAsync();
         if (ActiveTableTab is { } active)
         {
@@ -844,7 +870,8 @@
         _openTabs.Add(tab);
         _activeTableName = tableName;
         await Vm.ShowSqlTabAsync(tableName, tab.Sql);
-        await RunTableTabAsync(tab);
+        await PersistTabsAsync(captureActiveEditor: false);
+        await RunTableTabAsync(tab, captureEditorSql: false);
     }
 
     private async Task OpenIndexTabAsync(string indexName)
@@ -863,7 +890,8 @@
         _openTabs.Add(tab);
         _activeTableName = indexName;
         await Vm.ShowSqlTabAsync(indexName, tab.Sql);
-        await RunTableTabAsync(tab);
+        await PersistTabsAsync(captureActiveEditor: false);
+        await RunTableTabAsync(tab, captureEditorSql: false);
     }
 
     private async Task OpenSavedQueryAsync(SavedQueryRecord query)
@@ -878,11 +906,12 @@
             return;
         }
 
-        var tab = new TableTab(query.Name, query.Sql);
+        var tab = new TableTab(query.Name, query.Sql, TableTabSource.SavedQuery);
         _openTabs.Add(tab);
         _activeTableName = query.Name;
         await Vm.ShowSqlTabAsync(query.Name, tab.Sql);
-        await RunTableTabAsync(tab);
+        await PersistTabsAsync(captureActiveEditor: false);
+        await RunTableTabAsync(tab, captureEditorSql: false);
     }
 
     private void SaveCurrentQuery() =>
@@ -911,6 +940,7 @@
 
         _activeTableName = tableName;
         await Vm.ShowSqlTabAsync(tableName, ActiveTableTab?.Sql ?? DefaultSqlFor(tableName));
+        await PersistTabsAsync(captureActiveEditor: false);
         StateHasChanged();
     }
 
@@ -945,6 +975,8 @@
         {
             Vm.ResetSqlEditor();
         }
+
+        await PersistTabsAsync(captureActiveEditor: false);
     }
 
     private async Task ResetTableTabSql(TableTab tab)
@@ -953,19 +985,23 @@
         tab.Result = null;
         tab.Error = null;
         await Vm.SetSqlEditorValueAsync(tab.Sql);
+        await PersistTabsAsync(captureActiveEditor: false);
         StateHasChanged();
     }
 
-    private async Task RunTableTabAsync(TableTab tab)
+    private async Task RunTableTabAsync(TableTab tab, bool captureEditorSql = true)
     {
         tab.Running = true;
         tab.Error = null;
         StateHasChanged();
         try
         {
-            var editorSql = await Vm.GetSqlEditorValueAsync();
-            if (editorSql is not null)
-                tab.Sql = editorSql;
+            if (captureEditorSql)
+            {
+                var editorSql = await Vm.GetSqlEditorValueAsync();
+                if (editorSql is not null)
+                    tab.Sql = editorSql;
+            }
             tab.Result = tab.IsIndex
                 ? await DataService.SearchOpenSearchSqlAsync(ProjectId, tab.Sql)
                 : await DataService.ExecuteProjectDataAsync(ProjectId, tab.Sql);
@@ -978,6 +1014,7 @@
         finally
         {
             tab.Running = false;
+            await PersistTabsAsync(captureActiveEditor: false);
             StateHasChanged();
         }
     }
@@ -1034,15 +1071,90 @@
     private void PruneOpenTabs()
     {
         if (_openTabs.Count == 0) return;
-        var existing = Vm.Tables.Select(t => t.Name).ToHashSet(StringComparer.Ordinal);
+        var tables = Vm.Tables.Select(t => t.Name).ToHashSet(StringComparer.Ordinal);
+        var indexes = Vm.Indices.Select(i => i.Name).ToHashSet(StringComparer.Ordinal);
         for (var i = _openTabs.Count - 1; i >= 0; i--)
         {
-            if (!existing.Contains(_openTabs[i].TableName))
+            var tab = _openTabs[i];
+            var exists = tab.Source switch
+            {
+                TableTabSource.Project => tables.Contains(tab.TableName),
+                TableTabSource.OpenSearch => indexes.Contains(tab.TableName),
+                TableTabSource.SavedQuery => true,
+                _ => false,
+            };
+            if (!exists)
                 _openTabs.RemoveAt(i);
         }
 
         if (_activeTableName is null) return;
         if (_openTabs.Any(tab => StringComparer.Ordinal.Equals(tab.TableName, _activeTableName))) return;
         _activeTableName = _openTabs.FirstOrDefault()?.TableName;
+    }
+
+    private string SqlStudioStorageKey => $"pc-sql-studio-{ProjectId}";
+
+    private async Task<bool> RestoreTabsAsync()
+    {
+        try
+        {
+            var json = await _js.InvokeAsync<string?>("localStorage.getItem", SqlStudioStorageKey);
+            if (string.IsNullOrWhiteSpace(json))
+                return false;
+
+            var state = JsonSerializer.Deserialize<StoredSqlStudioState>(json);
+            if (state?.Tabs is null)
+                return false;
+
+            _openTabs.Clear();
+            foreach (var stored in state.Tabs)
+            {
+                if (string.IsNullOrWhiteSpace(stored.TableName) || string.IsNullOrWhiteSpace(stored.Sql))
+                    continue;
+                if (!Enum.IsDefined(stored.Source))
+                    continue;
+                if (_openTabs.Any(tab => tab.Source == stored.Source
+                    && StringComparer.Ordinal.Equals(tab.TableName, stored.TableName)))
+                    continue;
+                _openTabs.Add(new TableTab(stored.TableName, stored.Sql, stored.Source));
+            }
+
+            _activeTableName = state.ActiveTableName;
+            PruneOpenTabs();
+            if (_activeTableName is null && _openTabs.Count > 0)
+                _activeTableName = _openTabs[0].TableName;
+            if (ActiveTableTab is { } active)
+                await Vm.ShowSqlTabAsync(active.TableName, active.Sql);
+            return _openTabs.Count > 0;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private async Task PersistTabsAsync(bool captureActiveEditor = true)
+    {
+        try
+        {
+            if (captureActiveEditor && ActiveTableTab is { } active)
+            {
+                var editorSql = await Vm.GetSqlEditorValueAsync();
+                if (editorSql is not null)
+                    active.Sql = editorSql;
+            }
+
+            var state = new StoredSqlStudioState(
+                _activeTableName,
+                _openTabs.Select(tab => new StoredTableTab(tab.TableName, tab.Sql, tab.Source)).ToList());
+            await _js.InvokeVoidAsync(
+                "localStorage.setItem",
+                SqlStudioStorageKey,
+                JsonSerializer.Serialize(state));
+        }
+        catch
+        {
+            // Browser storage is best-effort; SQL Studio remains fully usable without it.
+        }
     }
 }

@@ -172,6 +172,13 @@ public sealed class TargetPageViewModelTests
             CancellationToken ct = default
         ) => throw new NotImplementedException();
 
+        public Task<AuthUser> GetOrCreateExternalUserAsync(
+            string email,
+            string displayName,
+            UserRole defaultRole,
+            CancellationToken ct = default
+        ) => throw new NotImplementedException();
+
         public Task<AuthUser> GetOrCreateOperatorAsync(CancellationToken ct = default) =>
             throw new NotImplementedException();
 

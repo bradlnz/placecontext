@@ -12,6 +12,13 @@ public interface IAuthService
     /// <summary>Creates a member with the given role in the current tenant; returns null if the email is already taken.</summary>
     Task<AuthUser?> RegisterAsync(string email, string displayName, string password, UserRole role, CancellationToken ct = default);
     /// <summary>
+    /// Resolves an existing tenant member by email or provisions a passwordless member for a trusted
+    /// external identity. Existing roles are always retained; newly provisioned identities receive
+    /// the supplied least-privilege role.
+    /// </summary>
+    Task<AuthUser> GetOrCreateExternalUserAsync(
+        string email, string displayName, UserRole newUserRole, CancellationToken ct = default);
+    /// <summary>
     /// Returns the sole operator (Owner) for the current tenant, creating one on first use. Backs the
     /// token sign-in path: a self-hosted deployment has no registration, so the cluster operator who
     /// presents a valid portal token is signed in as this user.

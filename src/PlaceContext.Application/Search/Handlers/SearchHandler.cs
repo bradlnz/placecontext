@@ -171,7 +171,7 @@ public sealed class SearchHandler : IQueryHandler<SearchQuery, SearchResultsView
             ContentKind.Chart => $"/project/{projectId}/analytics",
             ContentKind.ProjectData => $"/project/{projectId}/data",
             ContentKind.RunOutput => $"/project/{projectId}/jobs",
-            ContentKind.Requirements => $"/project/{projectId}/agents",
+            ContentKind.Requirements => $"/project/{projectId}?tab=requirements",
             _ => $"/project/{projectId}"
         };
 }

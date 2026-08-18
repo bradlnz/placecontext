@@ -71,26 +71,26 @@ public sealed partial class JobChainsViewModel
     public List<(int Index, JobView Job)> RunPromptSteps { get; } = new();
     public Dictionary<string, string> RunArgs => _runPrompt.Args;
     public string? RunPromptError => _runPrompt.Error;
+    public string RunAttachment { get; private set; } = "";
 
     // ── Run chain ─────────────────────────────────────────────────────────────────────────────
-    public async Task RunChainAsync(JobChainView chain)
+    public Task RunChainAsync(JobChainView chain)
     {
         var plan = ChainParameterPromptPlan.Build(chain, Jobs ?? Array.Empty<JobView>());
-        if (plan.Steps.Count > 0)
-        {
-            RunPromptChain = chain;
-            RunPromptSteps.Clear();
-            RunPromptSteps.AddRange(plan.Steps);
-            _runPrompt.Reset(plan.Defaults);
-            NotifyStateChanged();
-            return;
-        }
-        await RunChainCoreAsync(chain, null);
+        RunPromptChain = chain;
+        RunPromptSteps.Clear();
+        RunPromptSteps.AddRange(plan.Steps);
+        _runPrompt.Reset(plan.Defaults);
+        RunAttachment = "";
+        NotifyStateChanged();
+        return Task.CompletedTask;
     }
 
     public string GetArg(string name) => _runPrompt.Get(name);
 
     public void SetArg(string name, string value) => _runPrompt.Set(name, value);
+
+    public void SetRunAttachment(string value) => RunAttachment = value;
 
     public async Task SubmitRunPromptAsync()
     {
@@ -105,7 +105,10 @@ public sealed partial class JobChainsViewModel
 
         // Form keys stay stepN:param; wire format is per-step bare-param JSON via StepPayloadOverrides.
         var overrides = _runPrompt.ToStepPayloadOverrides(RunPromptSteps);
-        var payload = overrides.GetValueOrDefault(0);
+        var payload = ParameterPromptState.WithChainAttachment(
+            overrides.GetValueOrDefault(0),
+            RunAttachment
+        );
         await RunChainCoreAsync(RunPromptChain, payload, overrides);
     }
 
@@ -114,6 +117,7 @@ public sealed partial class JobChainsViewModel
         RunPromptChain = null;
         RunPromptSteps.Clear();
         _runPrompt.Clear();
+        RunAttachment = "";
         NotifyStateChanged();
     }
 
@@ -147,6 +151,7 @@ public sealed partial class JobChainsViewModel
         RunPromptChain = null;
         RunPromptSteps.Clear();
         _runPrompt.Clear();
+        RunAttachment = "";
         PendingChainRunId = chainRunId;
         PendingChainId = chain.Id;
         Message = $"Run of {chain.Name} started — follow it in the notifications bell.";

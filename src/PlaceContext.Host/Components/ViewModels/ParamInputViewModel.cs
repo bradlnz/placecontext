@@ -98,10 +98,24 @@ public sealed class ParamInputViewModel(
             );
             using var content = new StreamContent(file.OpenReadStream(MaxFileBytes));
             content.Headers.ContentType = new MediaTypeHeaderValue(contentType);
+            // BrowserFileStream is not seekable, so StreamContent cannot infer its length and
+            // otherwise sends the presigned PUT using chunked transfer encoding. S3-compatible
+            // stores such as DigitalOcean Spaces reject that request with HTTP 400.
+            content.Headers.ContentLength = file.Size;
             using var response = await httpClientFactory
                 .CreateClient()
                 .PutAsync(uploadUrl, content);
-            response.EnsureSuccessStatusCode();
+            if (!response.IsSuccessStatusCode)
+            {
+                var details = await response.Content.ReadAsStringAsync();
+                throw new HttpRequestException(
+                    string.IsNullOrWhiteSpace(details)
+                        ? $"File storage returned {(int)response.StatusCode} ({response.ReasonPhrase})."
+                        : $"File storage returned {(int)response.StatusCode} ({response.ReasonPhrase}): {details}",
+                    null,
+                    response.StatusCode
+                );
+            }
             var marker = JsonSerializer.Serialize(
                 new Dictionary<string, object?>
                 {

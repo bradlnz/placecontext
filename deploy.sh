@@ -83,7 +83,8 @@ set -euo pipefail
 # The deployment may be pinned to an older release tag. Point it at the image
 # this script just pushed before restarting so a successful push is actually deployed.
 kubectl -n placecontext set image deployment/placecontext \
-  host=registry.digitalocean.com/ctrlsignalregistryimg/placecontext:latest
+  host=registry.digitalocean.com/ctrlsignalregistryimg/placecontext:latest \
+  cluster=registry.digitalocean.com/ctrlsignalregistryimg/placecontext:latest
 kubectl -n placecontext rollout restart deployment/placecontext
 sleep 30
 kubectl -n placecontext get pods

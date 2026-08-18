@@ -65,6 +65,7 @@ public sealed class DashboardViewModel : PageViewModel, IDisposable
     public ParameterPromptState RunPrompt { get; } = new();
     public JobChainView? RunPromptChain { get; private set; }
     public List<(int Index, JobView Job)> RunPromptSteps { get; } = new();
+    public string RunAttachment { get; private set; } = "";
     public Guid? RunningChainId { get; private set; }
     public string? ChainMessage { get; private set; }
     public bool ChainError { get; private set; }
@@ -203,24 +204,22 @@ public sealed class DashboardViewModel : PageViewModel, IDisposable
 
     public void OpenRun(Guid runId) => _navigation.NavigateTo($"/observability?run={runId}");
 
-    public async Task PrepareQuickChainRunAsync(JobChainView chain)
+    public Task PrepareQuickChainRunAsync(JobChainView chain)
     {
         RunningChainId = null;
         var plan = ChainParameterPromptPlan.Build(chain, Jobs ?? Array.Empty<JobView>());
-        if (plan.Steps.Count > 0)
-        {
-            RunPromptChain = chain;
-            RunPromptSteps.Clear();
-            RunPromptSteps.AddRange(plan.Steps);
-            RunPrompt.Reset(plan.Defaults);
-            ChainError = false;
-            ChainMessage = null;
-            NotifyStateChanged();
-            return;
-        }
-
-        await RunQuickChainCoreAsync(chain, null);
+        RunPromptChain = chain;
+        RunPromptSteps.Clear();
+        RunPromptSteps.AddRange(plan.Steps);
+        RunPrompt.Reset(plan.Defaults);
+        RunAttachment = "";
+        ChainError = false;
+        ChainMessage = null;
+        NotifyStateChanged();
+        return Task.CompletedTask;
     }
+
+    public void SetRunAttachment(string value) => RunAttachment = value;
 
     public async Task SubmitQuickChainPromptAsync()
     {
@@ -235,7 +234,10 @@ public sealed class DashboardViewModel : PageViewModel, IDisposable
         }
 
         var overrides = RunPrompt.ToStepPayloadOverrides(RunPromptSteps);
-        var payload = overrides.GetValueOrDefault(0);
+        var payload = ParameterPromptState.WithChainAttachment(
+            overrides.GetValueOrDefault(0),
+            RunAttachment
+        );
         await RunQuickChainCoreAsync(RunPromptChain, payload, overrides);
     }
 
@@ -244,6 +246,7 @@ public sealed class DashboardViewModel : PageViewModel, IDisposable
         RunPromptChain = null;
         RunPromptSteps.Clear();
         RunPrompt.Clear();
+        RunAttachment = "";
         RunningChainId = null;
         ChainMessage = null;
         ChainError = false;
@@ -287,6 +290,7 @@ public sealed class DashboardViewModel : PageViewModel, IDisposable
         RunPromptChain = null;
         RunPromptSteps.Clear();
         RunPrompt.Clear();
+        RunAttachment = "";
         ChainMessage = $"Run of {chain.Name} started — follow it in the notifications bell.";
         RunningChainId = null;
         NotifyStateChanged();

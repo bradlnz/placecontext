@@ -1,4 +1,3 @@
-@page "/project/{ProjectId:guid}/agents"
 @attribute [Authorize(Policy = Permission.AgentsManage)]
 @layout PlaceContext.Host.Components.Layout.ProjectLayout
 @implements IAsyncDisposable

@@ -32,6 +32,7 @@ public sealed partial class ProjectDataViewModel : PageViewModel
         {
             ProjectId = projectId;
             ViewMonacoReady = false;
+            ResetStudioResources();
         }
         ResetSqlEditor();
     }
@@ -175,6 +176,7 @@ public sealed partial class ProjectDataViewModel : PageViewModel
     public async Task LoadAsync()
     {
         await RefreshTablesAsync();
+        await LoadIndicesAsync();
         await PushSqlSchemaAsync();
         NotifyStateChanged();
     }

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using PlaceContext.Application.Dtos;
 
 namespace PlaceContext.Host.Components.ViewModels.Helpers;
@@ -10,6 +11,14 @@ namespace PlaceContext.Host.Components.ViewModels.Helpers;
 /// </summary>
 public sealed class ParameterPromptState
 {
+    public const string ChainAttachmentField = "attachment";
+    public static JobParameterDto ChainAttachmentParameter { get; } = new(
+        ChainAttachmentField,
+        "File attachment",
+        Required: false,
+        Type: "file"
+    );
+
     public Dictionary<string, string> Args { get; private set; } = new(StringComparer.Ordinal);
     public string? Error { get; private set; }
 
@@ -111,6 +120,40 @@ public sealed class ParameterPromptState
 
     public string ToJobPayload(IEnumerable<JobParameterDto> parameters) =>
         ToJsonPayload(parameters, Get);
+
+    /// <summary>
+    /// Adds the optional chain attachment to an initial JSON payload. Object payloads are merged;
+    /// non-object JSON is retained under <c>previous</c>. Invalid file markers are ignored.
+    /// </summary>
+    public static string? WithChainAttachment(string? payload, string? marker)
+    {
+        if (!TryParseFileReference(marker ?? "", out var reference))
+            return payload;
+
+        JsonObject result;
+        if (string.IsNullOrWhiteSpace(payload))
+        {
+            result = new JsonObject();
+        }
+        else
+        {
+            try
+            {
+                var existing = JsonNode.Parse(payload);
+                if (existing is JsonObject existingObject)
+                    result = (JsonObject)existingObject.DeepClone();
+                else
+                    result = new JsonObject { ["previous"] = existing?.DeepClone() };
+            }
+            catch (JsonException)
+            {
+                result = new JsonObject { ["previous"] = payload };
+            }
+        }
+
+        result[ChainAttachmentField] = JsonNode.Parse(reference.GetRawText());
+        return result.ToJsonString();
+    }
 
     /// <summary>
     /// Group chain form values into per-step JSON overrides keyed by flat step index.

@@ -97,6 +97,33 @@ public sealed class ParameterPromptStateTests
     }
 
     [Fact]
+    public void Chain_attachment_merges_into_the_initial_payload_as_a_file_object()
+    {
+        var marker = """
+            {"$file":{"bucket":"reports","key":"job-inputs/project/plan.pdf","filename":"plan.pdf"}}
+            """;
+
+        var json = ParameterPromptState.WithChainAttachment(
+            """{"customer":"Acme"}""",
+            marker
+        );
+
+        using var document = JsonDocument.Parse(json!);
+        Assert.Equal("Acme", document.RootElement.GetProperty("customer").GetString());
+        var attachment = document.RootElement.GetProperty("attachment").GetProperty("$file");
+        Assert.Equal("plan.pdf", attachment.GetProperty("filename").GetString());
+    }
+
+    [Fact]
+    public void Chain_attachment_is_optional_and_ignores_invalid_markers()
+    {
+        const string payload = """{"customer":"Acme"}""";
+
+        Assert.Equal(payload, ParameterPromptState.WithChainAttachment(payload, ""));
+        Assert.Equal(payload, ParameterPromptState.WithChainAttachment(payload, "not a marker"));
+    }
+
+    [Fact]
     public void ToStepPayloadOverrides_groups_by_step_with_bare_param_names()
     {
         var prompt = new ParameterPromptState();

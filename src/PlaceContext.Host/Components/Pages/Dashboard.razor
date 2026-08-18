@@ -243,13 +243,24 @@
                 <div class="quick-chain-modal-title">
                     <div id="quick-chain-prompt-title" class="title-14">Run @Vm.RunPromptChain.Name</div>
                     <div class="quick-chain-modal-sub">
-                        Enter the declared inputs for each chain step. Stored job values are prefilled.
+                        Add an optional attachment, then review any declared step inputs.
                     </div>
                 </div>
                 <button class="dcslide-x" aria-label="Close run input prompt"
                         disabled="@(Vm.RunningChainId is not null)" @onclick="Vm.CancelQuickChainPrompt">×</button>
             </div>
             <div class="dcmodal-body quick-chain-modal-body">
+                <div class="dcfield">
+                    <label>
+                        @ParameterPromptState.ChainAttachmentParameter.Label
+                        <span class="code ml-5">@ParameterPromptState.ChainAttachmentField</span>
+                    </label>
+                    <ParamInput Parameter="@ParameterPromptState.ChainAttachmentParameter"
+                                ProjectId="@Vm.RunPromptChain.ProjectId"
+                                Value="@Vm.RunAttachment"
+                                ValueChanged="@Vm.SetRunAttachment" />
+                    <small>Available to the chain as <code>attachment.$file</code>.</small>
+                </div>
                 @foreach (var step in Vm.RunPromptSteps)
                 {
                     <section class="quick-chain-prompt-step">

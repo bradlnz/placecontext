@@ -1,3 +1,7 @@
+using Microsoft.AspNetCore.Authorization;
+using PlaceContext.Application.Ports;
+using PlaceContext.Host.Tools;
+
 namespace PlaceContext.Host.Tests;
 
 public sealed class RpcChainIngestionContractTests
@@ -17,6 +21,17 @@ public sealed class RpcChainIngestionContractTests
         Assert.Contains("contentType = artifact.ContentType", tools);
         Assert.Contains("IJobChainSubmissionQueue", tools);
         Assert.Contains("ListRunArtifactsAsync", tools);
+    }
+
+    [Fact]
+    public void Submission_polling_uses_the_same_fine_grained_permission_as_submission()
+    {
+        var method = typeof(PlaceContextTools).GetMethod(nameof(PlaceContextTools.GetJobChainSubmission));
+        var policies = method!.GetCustomAttributes(typeof(AuthorizeAttribute), inherit: true)
+            .Cast<AuthorizeAttribute>()
+            .Select(attribute => attribute.Policy);
+
+        Assert.Contains(Permission.JobsRun, policies);
     }
 
     [Fact]

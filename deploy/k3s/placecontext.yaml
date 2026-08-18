@@ -138,11 +138,20 @@ spec:
         - key: node-role.kubernetes.io/control-plane
           operator: Exists
           effect: NoSchedule
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
       # Wait for PostgreSQL to accept connections before starting the Host, so the
       # first boot doesn't crash-loop while the DB is still coming up / migrating.
       initContainers:
         - name: wait-for-db
           image: pgvector/pgvector:pg16
+          securityContext:
+            runAsNonRoot: false
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
           command:
             - sh
             - -c
@@ -154,6 +163,10 @@ spec:
         - name: host
           image: __IMAGE__
           imagePullPolicy: __IMAGE_PULL_POLICY__
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
           resources:
             requests:
               cpu: "150m"
@@ -197,6 +210,13 @@ spec:
               value: "https://crm.ossenpropertygroup.com.au/oauth/mcp/callback"
             - name: PlaceContext__OAuth__TrustedClients__OssenCrm__Name
               value: "Ossen CRM"
+            # Provider-neutral browser SSO. New identities are provisioned as Viewer; existing roles stay intact.
+            - name: PlaceContext__Sso__Authority
+              value: "https://crm.ossenpropertygroup.com.au"
+            - name: PlaceContext__Sso__ClientId
+              value: "ossen-crm-placecontext"
+            - name: PlaceContext__Sso__CallbackUrl
+              value: "https://feasibility.ossenpropertygroup.com.au/auth/sso/callback"
             # Encrypts the Data Protection key ring at rest (vault secrets + auth cookies).
             - name: PlaceContext__DataProtection__Key
               valueFrom:
@@ -313,6 +333,10 @@ spec:
         - name: cluster
           image: __IMAGE__
           imagePullPolicy: __IMAGE_PULL_POLICY__
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
           resources:
             requests:
               cpu: "50m"

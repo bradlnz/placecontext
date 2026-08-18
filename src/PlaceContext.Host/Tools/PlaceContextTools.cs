@@ -402,7 +402,7 @@ public sealed class PlaceContextTools
                 };
             });
 
-    [Authorize(Policy = "Member")]
+    [Authorize(Policy = Permission.JobsRun)]
     [McpServerTool(Name = "get_job_chain_submission"), Description("Poll an asynchronous submit_job_chain receipt. Returns the authoritative chain status, terminal flag, step run ids/errors, and managed artifact download URLs. Queued is reported before the worker establishes the pre-allocated chain run; later calls follow that same run through waiting/resume and terminal states.")]
     public static Task<string> GetJobChainSubmission(
         IPlaceContextService svc,

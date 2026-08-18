@@ -65,6 +65,51 @@ public sealed class AuthService : IAuthService
         return ToAuthUser(row);
     }
 
+    public async Task<AuthUser> GetOrCreateExternalUserAsync(
+        string email, string displayName, UserRole newUserRole, CancellationToken ct = default)
+    {
+        email = Normalize(email);
+        if (string.IsNullOrWhiteSpace(email) || !email.Contains('@'))
+            throw new ArgumentException("A valid external identity email is required.", nameof(email));
+
+        var existing = await _db.Users.FirstOrDefaultAsync(u => u.Email == email, ct);
+        if (existing is not null)
+        {
+            if (!string.IsNullOrWhiteSpace(displayName)
+                && !string.Equals(existing.DisplayName, displayName.Trim(), StringComparison.Ordinal))
+            {
+                existing.DisplayName = displayName.Trim();
+                await _db.SaveChangesAsync(ct);
+            }
+            return ToAuthUser(existing);
+        }
+
+        var row = new UserRow
+        {
+            Id = Guid.NewGuid(),
+            Email = email,
+            DisplayName = string.IsNullOrWhiteSpace(displayName) ? email.Split('@')[0] : displayName.Trim(),
+            PasswordHash = PasswordHasher.Hash(Guid.NewGuid().ToString("N")),
+            PasswordSet = false,
+            Role = newUserRole.ToString(),
+            CreatedAt = DateTimeOffset.UtcNow,
+        };
+        await _db.Users.AddAsync(row, ct);
+        try
+        {
+            await _db.SaveChangesAsync(ct);
+            return ToAuthUser(row);
+        }
+        catch (DbUpdateException)
+        {
+            // A concurrent first sign-in may have won the tenant/email unique-index race.
+            _db.Entry(row).State = EntityState.Detached;
+            var raced = await _db.Users.FirstOrDefaultAsync(u => u.Email == email, ct);
+            if (raced is not null) return ToAuthUser(raced);
+            throw;
+        }
+    }
+
     public async Task<AuthUser> GetOrCreateOperatorAsync(CancellationToken ct = default)
     {
         // The first user in the tenant is the operator. AsNoTracking + oldest-first keeps this stable

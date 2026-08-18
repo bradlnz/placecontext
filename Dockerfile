@@ -29,4 +29,5 @@ EXPOSE 7700
 EXPOSE 8081
 
 # Default entrypoint runs the Host. Use CLUSTER=1 env var to run the cluster sidecar instead.
+USER $APP_UID
 ENTRYPOINT ["sh", "-c", "if [ \"$CLUSTER\" = \"1\" ]; then exec dotnet cluster/PlaceContext.ClusterHost.dll --urls=http://+:8081; else exec dotnet host/PlaceContext.Host.dll; fi"]

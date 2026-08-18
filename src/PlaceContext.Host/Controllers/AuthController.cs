@@ -438,7 +438,7 @@ public sealed class AuthController : ControllerBase
     }
 
     // Signs the user into the cookie scheme with their identity + tenant + role claims.
-    private static Task SignInAsync(HttpContext ctx, AuthUser user, AuthUser? impersonator = null)
+    internal static Task SignInAsync(HttpContext ctx, AuthUser user, AuthUser? impersonator = null)
     {
         ctx.Response.Cookies.Delete(ManualLogoutCookie);
         var claims = new List<Claim>

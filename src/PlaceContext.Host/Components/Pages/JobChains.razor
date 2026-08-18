@@ -833,12 +833,23 @@ else
                 <div class="flex-min">
                     <div class="title-14">Run @Vm.RunPromptChain.Name</div>
                     <div class="sub-115">
-                        Every step that takes input is listed below — values are prefilled from each job's stored payload.
+                        Add an optional attachment, then review any declared step inputs below.
                     </div>
                 </div>
                 <button class="dcslide-x" @onclick="() => Vm.CancelRunPrompt()">×</button>
             </div>
             <div class="dcmodal-body modal-body-scroll">
+                <div class="dcfield">
+                    <label>
+                        @ParameterPromptState.ChainAttachmentParameter.Label
+                        <span class="code ml-5">@ParameterPromptState.ChainAttachmentField</span>
+                    </label>
+                    <ParamInput Parameter="@ParameterPromptState.ChainAttachmentParameter"
+                                ProjectId="@ProjectId"
+                                Value="@Vm.RunAttachment"
+                                ValueChanged="@Vm.SetRunAttachment" />
+                    <small>Available to the chain as <code>attachment.$file</code>.</small>
+                </div>
                 @foreach (var step in Vm.RunPromptSteps)
                 {
                     <div class="prompt-step">

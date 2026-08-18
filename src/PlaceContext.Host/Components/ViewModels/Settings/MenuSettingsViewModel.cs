@@ -30,7 +30,6 @@ public sealed class MenuSettingsViewModel(IMenuConfigService menu, PortalUiState
         ["project.entities.registry"] = "Entities",
         ["vault"] = "Vault",
         ["project.events"] = "Events",
-        ["agents"] = "Agents",
         ["chat"] = "Chat",
         ["artifacts"] = "Artifacts",
         ["observability"] = "Observability",

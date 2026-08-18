@@ -21,6 +21,18 @@ public sealed partial class ProjectDataViewModel
     private static readonly TimeSpan MaterializeIndexRefreshDelay = TimeSpan.FromMilliseconds(450);
     private const int MaterializeIndexRefreshAttempts = 6;
 
+    private void ResetStudioResources()
+    {
+        SidebarPane = SidebarPane.Tables;
+        Indices = Array.Empty<OpenSearchIndexView>();
+        IndicesReady = false;
+        IndicesError = null;
+        SavedQueries = Array.Empty<SavedQueryRecord>();
+        SavedQueriesReady = false;
+        SavedQueriesError = null;
+        _sqlSchemaPushed = false;
+    }
+
     // ── Sidebar panes ────────────────────────────────────────────────────────────────────────
     public SidebarPane SidebarPane { get; private set; } = SidebarPane.Tables;
 

@@ -117,6 +117,35 @@ public class AuthServiceTests
     }
 
     [Fact]
+    public async Task External_identity_is_provisioned_as_a_passwordless_viewer()
+    {
+        var (auth, db) = NewService();
+
+        var user = await auth.GetOrCreateExternalUserAsync(
+            "crm.user@example.com", "CRM User", UserRole.Viewer);
+
+        Assert.Equal(UserRole.Viewer.ToString(), user.Role);
+        var row = await db.Users.SingleAsync(item => item.Id == user.Id);
+        Assert.False(row.PasswordSet);
+        Assert.Equal("CRM User", row.DisplayName);
+    }
+
+    [Fact]
+    public async Task External_identity_keeps_an_existing_local_role()
+    {
+        var (auth, _) = NewService();
+        var existing = await auth.RegisterAsync(
+            "admin@example.com", "Old Name", "Zx7!qLmP4#vRw2", UserRole.Admin);
+
+        var resolved = await auth.GetOrCreateExternalUserAsync(
+            "ADMIN@example.com", "CRM Name", UserRole.Viewer);
+
+        Assert.Equal(existing!.Id, resolved.Id);
+        Assert.Equal(UserRole.Admin.ToString(), resolved.Role);
+        Assert.Equal("CRM Name", resolved.DisplayName);
+    }
+
+    [Fact]
     public async Task CreateFirstAdmin_refuses_once_the_tenant_is_already_configured()
     {
         var (auth, _) = NewService();
