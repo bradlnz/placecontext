@@ -11,7 +11,7 @@
                                   ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                         K8s MASTER NODE                                    │
-│                    (feasiblity-node-1: 100.81.205.22)                      │
+│                    (control-plane: 100.64.0.1)                             │
 │                                                                            │
 │  ┌─────────────────────────────────────────────────────────────────────┐   │
 │  │                    PlaceContext Host (.NET)                         │   │
@@ -39,7 +39,7 @@
              ▼                                          ▼
 ┌────────────────────────────┐          ┌────────────────────────────┐
 │    SHARD 0: Mac Mini       │          │    SHARD 1: Mac Pro        │
-│    (100.83.58.75:8080)     │          │    (100.x.x.x:8080)        │
+│    (100.64.0.10:8080)      │          │    (100.64.0.11:8080)      │
 │                            │          │                            │
 │  ┌──────────────────────┐  │          │  ┌──────────────────────┐  │
 │  │ mlx-lm (Metal)       │  │          │  │ mlx-lm (Metal)       │  │
@@ -123,7 +123,7 @@ User sends: "Explain quantum computing"
 │                    NEW MAC NODE                                 │
 │                                                                 │
 │  curl -fsSL .../install.sh | bash -s -- --role shard \         │
-│    --shard-index 1 --total-shards 2 --master-ip 100.83.58.75   │
+│    --shard-index 1 --total-shards 2 --master-ip 100.64.0.10    │
 │                                                                 │
 │  1. Detect platform (macos-arm64)                               │
 │  2. Install deps (mlx-lm, fastapi, uvicorn)                    │
@@ -166,8 +166,8 @@ User sends: "Explain quantum computing"
                     │                             │
                     │  ┌───────────────────────┐  │
                     │  │ K8s Master            │  │
-                    │  │ 100.81.205.22         │  │
-                    │  │ (feasiblity-node-1)   │  │
+                    │  │ 100.64.0.1            │  │
+                    │  │ (control-plane)       │  │
                     │  └───────────┬───────────┘  │
                     │              │              │
                     │     ┌───────┴───────┐      │
@@ -176,7 +176,7 @@ User sends: "Explain quantum computing"
                     │  ┌──────┐       ┌──────┐   │
                     │  │Mac   │       │Mac   │   │
                     │  │Mini  │       │Pro   │   │
-                    │  │.75   │       │.x.x  │   │
+                    │  │.10   │       │.11   │   │
                     │  └──────┘       └──────┘   │
                     │                             │
                     └─────────────────────────────┘

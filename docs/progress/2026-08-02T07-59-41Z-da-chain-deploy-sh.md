@@ -11,7 +11,7 @@ Make the production deployment path deploy the council-aware Queensland developm
 
 `deploy.sh` now:
 
-1. Resolves the DA job source root from `DA_JOBS_ROOT`, defaulting to `~/code/ossen-reports/placecontext_jobs`.
+1. Resolves the DA job source root from the required `DA_JOBS_ROOT` environment variable.
 2. Fails before deployment when any required job, council registry, overlay, or council-requirements source is missing.
 3. Streams the minimum reviewed source bundle to the PlaceContext Kubernetes host after the application rollout.
 4. Runs the committed idempotent `deploy_da_application.py` deployment there. The script updates job definitions through the management API and transactionally upserts the `development-application-preparation` chain in PostgreSQL.

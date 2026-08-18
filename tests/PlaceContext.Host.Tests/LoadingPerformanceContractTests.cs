@@ -25,6 +25,20 @@ public sealed class LoadingPerformanceContractTests
         Assert.Contains("media=\"print\" onload=\"this.media='all'\"", app, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void Interop_modules_are_registered_before_blazor_starts()
+    {
+        var app = ReadHostSource("Components/App.razor");
+        var charts = app.IndexOf("<script defer src=\"pcchart.js", StringComparison.Ordinal);
+        var blazor = app.IndexOf(
+            "<script defer src=\"_framework/blazor.web.js\"",
+            StringComparison.Ordinal
+        );
+
+        Assert.True(charts >= 0, "The chart interop module must be loaded.");
+        Assert.True(blazor > charts, "Blazor must start after the chart interop module.");
+    }
+
     private static string ReadHostSource(string relativePath)
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);

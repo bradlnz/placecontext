@@ -20,7 +20,7 @@ public class ManagementApiHandlerTests
     public async Task GetProjectById_returns_the_matching_project()
     {
         var repo = new InMemoryProjectRepository();
-        var project = Project.Discover(ProjectPath.From("/home/brad/code/alpha"), ProjectName.From("alpha"), T0);
+        var project = Project.Discover(ProjectPath.From("/workspace/alpha"), ProjectName.From("alpha"), T0);
         project.Register(T0);
         await repo.AddAsync(project);
 

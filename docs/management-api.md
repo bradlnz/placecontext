@@ -81,7 +81,7 @@ List every project in the workspace.
   {
     "id": "8f14e45f-ceea-4b3e-8c7a-6a5b6b6d8a10",
     "name": "storefront-api",
-    "path": "/home/brad/code/storefront-api",
+    "path": "/workspace/storefront-api",
     "status": "Registered",
     "isGraphified": false,
     "technicalRisk": null,
@@ -112,7 +112,7 @@ succeeded.
 
 ```json
 {
-  "path": "/home/brad/code/storefront-api",
+  "path": "/workspace/storefront-api",
   "name": "storefront-api"
 }
 ```

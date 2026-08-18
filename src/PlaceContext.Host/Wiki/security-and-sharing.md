@@ -48,3 +48,6 @@ lost or exposed, rotate or revoke it from the page where it was created.
 
 Backup exports deliberately exclude vault secrets and run history. Always protect downloaded
 backups and job-code ZIP files according to your organisation's policies.
+
+For trusted web-client registration, external sign-in, callback restrictions, and key-rotation
+guidance, see [SSO and OAuth](/wiki/sso-and-oauth).

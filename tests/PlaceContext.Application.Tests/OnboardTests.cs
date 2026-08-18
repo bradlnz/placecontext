@@ -37,7 +37,7 @@ public class OnboardTests
         var files = new FakeRepoFiles();
         var (handler, projects, ledgers, _) = Build(GitWithTwoCommits(), files);
 
-        var result = await handler.HandleAsync(new OnboardCommand("/home/brad/code/payments", null, "claude", 50));
+        var result = await handler.HandleAsync(new OnboardCommand("/workspace/payments", null, "claude", 50));
 
         Assert.Equal("payments", result.Project.Name);
         Assert.Equal(2, result.ChangesBackfilled);
@@ -58,7 +58,7 @@ public class OnboardTests
         var files = new FakeRepoFiles();
         var (handler, _, _, _) = Build(GitWithTwoCommits(), files);
 
-        await handler.HandleAsync(new OnboardCommand("/home/brad/code/payments", null, "codex", 50));
+        await handler.HandleAsync(new OnboardCommand("/workspace/payments", null, "codex", 50));
 
         Assert.Contains(files.Written, w => w.Path == ".codex/prompts/placecontext.md");
         Assert.Contains(files.Written, w => w.Path == ".codex/prompts/reviewer.md");
@@ -69,7 +69,7 @@ public class OnboardTests
     {
         var files = new FakeRepoFiles();
         var (handler, _, ledgers, _) = Build(GitWithTwoCommits(), files);
-        var cmd = new OnboardCommand("/home/brad/code/payments", null, "claude", 50);
+        var cmd = new OnboardCommand("/workspace/payments", null, "claude", 50);
 
         var first = await handler.HandleAsync(cmd);
         var second = await handler.HandleAsync(cmd);

@@ -11,9 +11,9 @@ model: "Qwen/Qwen3.5-4B"
 total_layers: 36
 
 shard_servers:
-  - ip: "100.83.58.75"
+  - ip: "100.64.0.10"
     port: 8080
-    name: "jarvis-mac-mini"
+    name: "first-mac"
     platform: "macos-arm64"
     layers: "0-17"
 

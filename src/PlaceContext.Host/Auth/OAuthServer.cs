@@ -47,6 +47,7 @@ public static class OAuthServer
                 ["authorization_endpoint"] = $"{b}/connect/authorize",
                 ["token_endpoint"] = $"{b}/connect/token",
                 ["registration_endpoint"] = $"{b}/connect/register",
+                ["userinfo_endpoint"] = $"{b}/connect/userinfo",
                 ["jwks_uri"] = $"{b}/.well-known/jwks.json",
                 ["response_types_supported"] = new[] { "code" },
                 ["grant_types_supported"] = new[] { "authorization_code", "refresh_token" },
@@ -99,9 +100,9 @@ public static class OAuthServer
 
             if (string.IsNullOrWhiteSpace(client_id) || string.IsNullOrWhiteSpace(redirect_uri))
                 return Results.BadRequest("Missing client_id or redirect_uri.");
-            // Public dynamically registered MCP clients remain loopback-only. Reports is the sole
-            // browser client allowed to use a remote callback, and must match the operator-controlled
-            // client id + redirect URI configuration exactly.
+            // Public dynamically registered MCP clients remain loopback-only. Browser clients may
+            // use remote callbacks only when their client id and redirect URI exactly match an
+            // operator-controlled trusted-client entry.
             OAuthClient client;
             var config = ctx.RequestServices.GetRequiredService<IConfiguration>();
             var trustedWebClient = TrustedWebClient(config, client_id, redirect_uri);

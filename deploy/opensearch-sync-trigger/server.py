@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Authenticated, tailnet-only trigger for property-intelligence ingestion."""
+"""Authenticated private-network trigger for an operator-managed OpenSearch ingestion unit."""
 
 from __future__ import annotations
 
@@ -11,8 +11,8 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 TOKEN = os.environ["SYNC_TRIGGER_TOKEN"]
-UNIT = os.environ.get("SYNC_TRIGGER_UNIT", "property-intelligence-ingest.service")
-BIND = os.environ.get("SYNC_TRIGGER_BIND", "100.116.60.120")
+UNIT = os.environ.get("SYNC_TRIGGER_UNIT", "opensearch-ingest.service")
+BIND = os.environ.get("SYNC_TRIGGER_BIND", "127.0.0.1")
 PORT = int(os.environ.get("SYNC_TRIGGER_PORT", "9340"))
 
 

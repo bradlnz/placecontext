@@ -1,7 +1,7 @@
 # Third-party notices
 
-PlaceContext software is proprietary © Bradley Lietz / CTRL SIGNAL SOFTWARE PTY LTD
-(see [LICENSE](LICENSE)). Customer data and jobs remain the customer's property.
+PlaceContext is open-source software licensed under the MIT License
+(see [LICENSE](LICENSE)). Instance data and jobs remain the operator's property.
 It builds on the following third-party software. Each component is the property of
 its respective authors and is used under the license noted. Version numbers track
 the manifests (`src/*/*.csproj`, `deploy/tui/go.mod`) — those files are authoritative.

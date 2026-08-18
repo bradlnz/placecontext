@@ -86,7 +86,8 @@ public sealed class MainLayoutViewModel : PageViewModel, IDisposable
     public int RunningCount { get; private set; }
     public string OrganizationName =>
         string.IsNullOrEmpty(_tenant.Slug) ? "organisation" : _tenant.Slug;
-    public string RootPath => _configuration["PlaceContext:RootPath"] ?? "/home/brad/code";
+    public string RootPath =>
+        _configuration["PlaceContext:RootPath"] ?? Directory.GetCurrentDirectory();
     public string Title => _ui.Title;
     public string Subtitle => _ui.Sub;
     public Guid? CurrentProjectId => _ui.CurrentProjectId;

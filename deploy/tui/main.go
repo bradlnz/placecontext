@@ -165,7 +165,7 @@ VERBOSITY
 Install the CLI itself with:
   curl -fsSL https://get.placecontext.ai/install.sh | bash
 
-Your data and jobs are yours. Product © Bradley Lietz / CTRL SIGNAL SOFTWARE PTY LTD.
+Your data and jobs are yours. PlaceContext is MIT licensed.
 `)
 }
 
@@ -448,7 +448,7 @@ func (m model) View() string {
 		b.WriteString(boxStyle.Render(strings.Join(lines, "\n")) + "\n\n")
 		b.WriteString(dimStyle.Render("enter back to menu  q quit") + "\n")
 	}
-	b.WriteString("\n" + dimStyle.Render("© Bradley Lietz / CTRL SIGNAL SOFTWARE PTY LTD · your data & jobs are yours") + "\n")
+	b.WriteString("\n" + dimStyle.Render("MIT licensed · your data & jobs are yours") + "\n")
 	return b.String()
 }
 

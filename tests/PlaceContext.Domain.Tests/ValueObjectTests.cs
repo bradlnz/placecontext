@@ -16,8 +16,8 @@ public class ValueObjectTests
     public void ProjectPath_requires_absolute_and_trims_trailing_slash()
     {
         Assert.Throws<ArgumentException>(() => ProjectPath.From("relative/path"));
-        Assert.Equal("/home/brad/code/demo", ProjectPath.From("/home/brad/code/demo/").Value);
-        Assert.Equal("demo", ProjectPath.From("/home/brad/code/demo").LeafName);
+        Assert.Equal("/workspace/demo", ProjectPath.From("/workspace/demo/").Value);
+        Assert.Equal("demo", ProjectPath.From("/workspace/demo").LeafName);
     }
 
     [Fact]

@@ -45,7 +45,7 @@ public class BackupTests
     {
         var ctx = new Ctx();
 
-        var project = Project.Discover(ProjectPath.From("/home/brad/code/alpha"), ProjectName.From("alpha"), T0);
+        var project = Project.Discover(ProjectPath.From("/workspace/alpha"), ProjectName.From("alpha"), T0);
         project.Register(T0);
         await ctx.Projects.AddAsync(project);
 
@@ -216,7 +216,7 @@ public class BackupTests
         var manifest = new BackupManifest(
             BackupManifest.CurrentSchemaVersion, T0,
             new TenantSettingsManifest("UTC", null, null),
-            Projects: new[] { new ProjectManifest(Guid.NewGuid(), "alpha", "/home/brad/code/alpha") },
+            Projects: new[] { new ProjectManifest(Guid.NewGuid(), "alpha", "/workspace/alpha") },
             Jobs: Array.Empty<JobManifest>(), // no jobs at all
             JobChains: new[]
             {

@@ -49,7 +49,7 @@ public sealed class AgentStreamAuthorizationContractTests
     }
 
     [Fact]
-    public void Input_contract_is_reusable_and_carries_no_ossen_domain_fields()
+    public void Input_contract_is_reusable_and_carries_no_customer_specific_fields()
     {
         var names = typeof(AgentStreamRequest).GetProperties().Select(p => p.Name).ToArray();
         Assert.Equal(new[] { "Message", "Context", "CorrelationId" }, names);

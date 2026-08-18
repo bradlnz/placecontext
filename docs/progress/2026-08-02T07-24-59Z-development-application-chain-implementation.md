@@ -5,7 +5,7 @@
 
 ## Delivered implementation
 
-The canonical PlaceContext DA preparation chain is implemented in `/home/brad/code/ossen-reports/placecontext_jobs` as one council-aware, sequential workflow:
+The canonical PlaceContext DA preparation chain was implemented in a separate private jobs repository as one council-aware, sequential workflow:
 
 1. `da-intake`
 2. `resolve-site`

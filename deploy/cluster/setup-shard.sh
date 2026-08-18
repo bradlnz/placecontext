@@ -6,7 +6,7 @@ set -euo pipefail
 # Run this on the Mac you want to add as a shard node.
 #
 # Usage:
-#   bash setup-shard.sh --master-ip 100.83.58.75 --shard-index 1 --total-shards 2
+#   bash setup-shard.sh --master-ip 100.64.0.10 --shard-index 1 --total-shards 2
 # =============================================================================
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -89,13 +89,7 @@ else
     log "Downloading server.py from master ($MASTER_IP)..."
     curl -fsSL "http://$MASTER_IP:8080/health" &>/dev/null || warn "Master not reachable at $MASTER_IP:8080"
 
-    # Fallback: check if there's a shared location
-    if [[ -f "$HOME/Vault/Ossen/devcontext/deploy/mac-shard/server.py" ]]; then
-        cp "$HOME/Vault/Ossen/devcontext/deploy/mac-shard/server.py" "$CLUSTER_DIR/server.py"
-        log "Copied server.py from Vault"
-    else
-        err "Cannot find server.py. Copy deploy/mac-shard/server.py to $CLUSTER_DIR/"
-    fi
+    err "Cannot find server.py. Copy deploy/mac-shard/server.py to $CLUSTER_DIR/"
 fi
 
 # ── Create service ───────────────────────────────────────────────────────────

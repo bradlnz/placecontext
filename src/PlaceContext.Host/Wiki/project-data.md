@@ -29,6 +29,12 @@ and run ID columns for traceability. A new target table is created on first inge
 
 Use **Suggest from last run** to prefill fields for a job with a recent result.
 
+## Data graph
+
+Open **Data → Graph** to follow project relationships between tables, entities, jobs, runs,
+decisions, and artifacts. Clicking a previewable artifact or attachment renders it in the graph
+detail panel, so supporting files can be inspected without leaving the graph.
+
 ## Good practice
 
 Use stable column names, store timestamps with timezones, keep one row per fact, and aggregate

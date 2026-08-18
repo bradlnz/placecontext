@@ -14,7 +14,7 @@ public class FocusTests
     public async Task Focus_flags_unverified_changes_high_first()
     {
         var projects = new InMemoryProjectRepository();
-        var project = Project.Discover(ProjectPath.From("/home/brad/code/alpha"), ProjectName.From("alpha"), T0);
+        var project = Project.Discover(ProjectPath.From("/workspace/alpha"), ProjectName.From("alpha"), T0);
         project.Register(T0);
         await projects.AddAsync(project);
 

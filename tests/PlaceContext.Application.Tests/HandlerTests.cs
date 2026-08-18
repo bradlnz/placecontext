@@ -20,7 +20,7 @@ public class HandlerTests
         var uow = new RecordingUnitOfWork();
         var handler = new CreateProjectHandler(repo, uow, new FakeClock(T0));
 
-        var view = await handler.HandleAsync(new CreateProjectCommand("/home/brad/code/alpha", null));
+        var view = await handler.HandleAsync(new CreateProjectCommand("/workspace/alpha", null));
 
         Assert.Equal("alpha", view.Name); // name defaults to the last path segment
         Assert.Equal(nameof(ProjectStatus.Registered), view.Status);
@@ -34,8 +34,8 @@ public class HandlerTests
         var repo = new InMemoryProjectRepository();
         var handler = new CreateProjectHandler(repo, new RecordingUnitOfWork(), new FakeClock(T0));
 
-        await handler.HandleAsync(new CreateProjectCommand("/home/brad/code/alpha", "alpha"));
-        await handler.HandleAsync(new CreateProjectCommand("/home/brad/code/alpha", "alpha"));
+        await handler.HandleAsync(new CreateProjectCommand("/workspace/alpha", "alpha"));
+        await handler.HandleAsync(new CreateProjectCommand("/workspace/alpha", "alpha"));
 
         Assert.Single(await repo.ListAsync());
     }
@@ -44,7 +44,7 @@ public class HandlerTests
     public async Task RecordActivity_appends_commits_and_attaches_sha()
     {
         var repo = new InMemoryProjectRepository();
-        var project = Project.Discover(ProjectPath.From("/home/brad/code/alpha"), ProjectName.From("alpha"), T0);
+        var project = Project.Discover(ProjectPath.From("/workspace/alpha"), ProjectName.From("alpha"), T0);
         project.Register(T0);
         await repo.AddAsync(project);
 
@@ -73,7 +73,7 @@ public class HandlerTests
     public async Task RebuildGraph_records_tree_snapshot_and_marks_graphified()
     {
         var repo = new InMemoryProjectRepository();
-        var project = Project.Discover(ProjectPath.From("/home/brad/code/alpha"), ProjectName.From("alpha"), T0);
+        var project = Project.Discover(ProjectPath.From("/workspace/alpha"), ProjectName.From("alpha"), T0);
         project.Register(T0);
         await repo.AddAsync(project);
 

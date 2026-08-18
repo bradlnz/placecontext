@@ -16,7 +16,7 @@ public class RootQueryTests
         var projects = new InMemoryProjectRepository();
         var ledgers = new InMemoryActivityLogRepository();
 
-        var p = Project.Discover(ProjectPath.From("/home/brad/code/alpha"), ProjectName.From("alpha"), T0);
+        var p = Project.Discover(ProjectPath.From("/workspace/alpha"), ProjectName.From("alpha"), T0);
         p.Register(T0);
         await projects.AddAsync(p);
         return (projects, ledgers, p);

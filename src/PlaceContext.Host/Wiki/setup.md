@@ -1,34 +1,47 @@
 # Setup and settings
 
-*Install PlaceContext, check it, and configure the workspace.*
+*Install PlaceContext, configure a durable instance, and verify it before adding projects.*
 
-## Install
+## Choose an installation
 
-Install the client:
+Use the Docker mode for a laptop, evaluation, or a single-machine workspace. Use the service mode
+for an always-on server or the first node of a fleet.
+
+| Mode | Command | Best for |
+|---|---|---|
+| Guided | `placecontext` | Choosing interactively |
+| Docker | `placecontext install --docker` | Local and single-machine use |
+| Service | `placecontext install --service` | A Linux server or fleet master |
+| Source checkout | `./run.sh` | Development and contributing |
+
+Install the client and start the guided installer:
 
 ```bash
 curl -fsSL https://get.placecontext.ai/install.sh | bash
-```
-
-Then run the guided installer:
-
-```bash
 placecontext
 ```
 
-The guided installer will download the image from the remote registry when needed
-(it will use `lib/placecontext-local.tar` first if present).
+The installer prefers an included `lib/placecontext-local.tar` image for offline packages and pulls
+the configured release image otherwise. PostgreSQL and MinIO are installed with the managed cluster.
+The portal is normally available at `http://localhost:7700` until a reverse proxy is configured.
 
-You can also choose a mode directly:
+For a source checkout, install the .NET 10 SDK, Docker, PostgreSQL, and Go if you plan to build the
+TUI. Then run:
 
 ```bash
-placecontext install --docker   # laptop or single-machine install
-placecontext install --service  # server or fleet master
+./setup-tui.sh
+./run.sh
 ```
 
-The portal is normally available at `http://localhost:7700`.
+## First boot
 
-## Useful commands
+1. Run `placecontext doctor` and resolve failed prerequisite or connectivity checks.
+2. Open the URL printed by `placecontext url`.
+3. If there is no owner account, complete the first-run setup form. There is no default password.
+4. Create or onboard a project, then run a small job and confirm its logs and artifact are retained.
+5. Export a configuration backup from **Settings → Backup** and store it outside the cluster.
+
+Useful day-two commands are:
 
 ```bash
 placecontext status
@@ -38,6 +51,57 @@ placecontext doctor
 placecontext upgrade
 ```
 
+## Production URL and reverse proxy
+
+Use HTTPS before enabling browser integrations or exposing the service outside a private network.
+Forward normal proxy headers and WebSocket/streaming traffic to port `7700`, then set the canonical
+origin with no trailing slash:
+
+```text
+PlaceContext__PublicBaseUrl=https://placecontext.example.com
+```
+
+The canonical URL is used for OAuth issuer metadata, callbacks, MCP challenges, and generated links.
+It must match the URL users and external applications actually open. Keep the OAuth signing key and
+Data Protection key stable across restarts and identical across replicas; changing either key can
+invalidate tokens or protected cookies.
+
+## Configuration and secrets
+
+PlaceContext uses standard .NET configuration. A setting such as
+`PlaceContext:OpenSearch:Endpoint` becomes the environment variable
+`PlaceContext__OpenSearch__Endpoint`. Environment variables override `appsettings.json`.
+
+Do not commit a populated `.env`, Kubernetes Secret, private key, password, or project Vault export.
+For managed cluster installs, let `pctl` create deployment secrets and use an environment-specific
+overlay for optional settings instead of editing the shared manifest with real values.
+
+Use **Settings → Connections** for a project-specific database or OpenSearch endpoint. Those
+credentials are encrypted in that project's Vault. Use workspace environment settings only when all
+projects should share the same service.
+
+## Storage and backups
+
+The managed deployment uses PostgreSQL for application and project data and MinIO for artifacts and
+warm dependency layers. A settings backup does not include run history, object-store files, database
+contents, or Vault plaintext. A recoverable deployment therefore needs all of the following:
+
+- PostgreSQL backups;
+- MinIO/object-store backups;
+- the configuration export;
+- independently protected deployment secrets and encryption keys.
+
+Test restore procedures on a separate instance. A backup that has never been restored is not yet a
+verified recovery plan.
+
+## Optional integrations
+
+- Follow [OpenSearch integration](/wiki/opensearch-integration) to connect searchable indices,
+  enable SQL and aggregations, and optionally configure a collector trigger.
+- Follow [SSO and OAuth](/wiki/sso-and-oauth) to use PlaceContext sign-in in another platform or to
+  sign users into PlaceContext through a compatible identity authority.
+- Follow [Cluster and nodes](/wiki/cluster-and-nodes) before adding worker machines.
+
 ## Workspace settings
 
 - **Branding** changes the workspace name, logo, accent, and dark-mode colours.
@@ -45,6 +109,7 @@ placecontext upgrade
 - **Artifacts** controls the file categories shown on the Artifacts page.
 - **Communications** connects email and SMS delivery for chain actions. Jobs and users see
   the generic Email or SMS channel rather than needing to choose a delivery provider.
+- **Connections** configures project-specific PostgreSQL and OpenSearch services.
 - **MCP servers** connects extra tools that approved agents and jobs may use.
 - **Locality** sets the timezone used by schedules and displayed dates.
 - **Backup** exports or imports workspace configuration. It can also download all job source
@@ -58,6 +123,18 @@ environment values.
 
 Most settings pages are available only to the default workspace administrator. **API tokens** is
 self-service, so signed-in users can manage their own tokens.
+
+## Verification checklist
+
+Before opening the instance to other users, verify:
+
+- `placecontext doctor` and `placecontext status` are healthy;
+- the public HTTPS URL produces the expected OAuth issuer metadata at
+  `/.well-known/oauth-authorization-server`;
+- a test job can write logs and an artifact;
+- a non-admin account sees only its permitted projects and actions;
+- backups exist outside the machine or cluster; and
+- credentials are supplied by the deployment environment or project Vault, not tracked files.
 
 ## Your display theme
 

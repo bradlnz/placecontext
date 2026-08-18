@@ -10,5 +10,7 @@
     <Project Path="tests/PlaceContext.Architecture.Tests/PlaceContext.Architecture.Tests.csproj" />
     <Project Path="tests/PlaceContext.Domain.Tests/PlaceContext.Domain.Tests.csproj" />
     <Project Path="tests/PlaceContext.Infrastructure.Tests/PlaceContext.Infrastructure.Tests.csproj" />
+    <Project Path="tests/PlaceContext.Host.Tests/PlaceContext.Host.Tests.csproj" />
+    <Project Path="tests/PlaceContext.TestSupport/PlaceContext.TestSupport.csproj" />
   </Folder>
 </Solution>

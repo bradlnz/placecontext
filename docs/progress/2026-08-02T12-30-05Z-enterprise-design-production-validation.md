@@ -12,7 +12,7 @@
 
 ## Production artifact validation
 
-Fetched `https://feasibility.ossenpropertygroup.com.au/PlaceContext.Host.styles.css` successfully and confirmed the deployed scoped stylesheet contains:
+Fetched the stylesheet from the private production deployment and confirmed the deployed scoped stylesheet contains:
 
 - `.run-suite[` — Observability Jobs-style catalogue hierarchy.
 - `.crm-shell[` — persistent CRM sub-page workspace.

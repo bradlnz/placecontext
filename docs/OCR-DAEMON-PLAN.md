@@ -4,7 +4,7 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│  Mac (jarvis@100.83.58.75) — Apple Silicon M4 Pro               │
+│  Mac (worker@100.64.0.10) — Apple Silicon                       │
 │  ┌───────────────────────────────────────────────────────────┐  │
 │  │  Python OCR Daemon (launchd background service)           │  │
 │  │  ┌─────────────────┐    ┌──────────────────────────────┐  │  │
@@ -351,7 +351,7 @@ class PlaceContextClient:
 
 set -euo pipefail
 
-MAC_HOST="jarvis@100.83.58.75"
+MAC_HOST="worker@100.64.0.10"
 SSH_KEY="$HOME/.ssh/id_ed25519"
 TOKEN="${1:-}"
 

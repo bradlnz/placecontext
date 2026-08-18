@@ -151,6 +151,16 @@ You'll need the .NET 10 SDK, Go (for the TUI), and a PostgreSQL (the dev cluster
 `docker run -d -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=placecontext -p 5433:5432 postgres:16`).
 EF migrations apply automatically on startup.
 
+## Documentation
+
+- [Installation and fleet setup](docs/SETUP.md)
+- [OpenSearch integration](src/PlaceContext.Host/Wiki/opensearch-integration.md)
+- [SSO and OAuth integration](src/PlaceContext.Host/Wiki/sso-and-oauth.md)
+- [Security and sharing](src/PlaceContext.Host/Wiki/security-and-sharing.md)
+
+The Markdown files under `src/PlaceContext.Host/Wiki/` are embedded into the portal and are the
+operator-facing documentation shipped with each build.
+
 ## Upgrading
 
 - From a git checkout: `./deploy/pctl update --deploy` (pulls, rebuilds, rolls the cluster).
@@ -166,3 +176,9 @@ knowledge, job definitions, runs, or artifacts you create or import. Details are
 
 Third-party components used by PlaceContext are listed in
 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
+
+## Contributing and security
+
+Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for the development workflow and
+[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) for community expectations. Please report vulnerabilities
+privately as described in [SECURITY.md](SECURITY.md).

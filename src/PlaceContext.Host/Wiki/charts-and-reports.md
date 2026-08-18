@@ -33,4 +33,5 @@ ORDER BY status;
 The first column supplies labels and numeric columns supply the series. Charts can be displayed
 as bar, line, or pie charts and also appear on the Dashboard.
 
-Keep queries small and aggregate the data before charting it.
+Charts load their renderer on demand. Keep queries small and aggregate the data before charting it;
+the page can display the chart as soon as its data and renderer are ready.

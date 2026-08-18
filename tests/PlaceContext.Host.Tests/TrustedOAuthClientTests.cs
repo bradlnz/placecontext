@@ -8,18 +8,18 @@ public class TrustedOAuthClientTests
     private readonly IConfiguration _configuration = new ConfigurationBuilder()
         .AddInMemoryCollection(new Dictionary<string, string?>
         {
-            ["PlaceContext:OAuth:TrustedClients:AdminPortal:ClientId"] = "ossen-reports-admin",
-            ["PlaceContext:OAuth:TrustedClients:AdminPortal:RedirectUri"] = "https://reports.example/auth/callback",
-            ["PlaceContext:OAuth:TrustedClients:AdminPortal:Name"] = "Reports admin",
-            ["PlaceContext:OAuth:TrustedClients:OssenCrm:ClientId"] = "ossen-crm",
-            ["PlaceContext:OAuth:TrustedClients:OssenCrm:RedirectUri"] = "https://crm.example/oauth/mcp/callback",
-            ["PlaceContext:OAuth:TrustedClients:OssenCrm:Name"] = "Ossen CRM",
+            ["PlaceContext:OAuth:TrustedClients:ReportsPortal:ClientId"] = "reports-portal",
+            ["PlaceContext:OAuth:TrustedClients:ReportsPortal:RedirectUri"] = "https://reports.example/auth/callback",
+            ["PlaceContext:OAuth:TrustedClients:ReportsPortal:Name"] = "Reports portal",
+            ["PlaceContext:OAuth:TrustedClients:Crm:ClientId"] = "example-crm",
+            ["PlaceContext:OAuth:TrustedClients:Crm:RedirectUri"] = "https://crm.example/oauth/mcp/callback",
+            ["PlaceContext:OAuth:TrustedClients:Crm:Name"] = "Example CRM",
         })
         .Build();
 
     [Theory]
-    [InlineData("ossen-reports-admin", "https://reports.example/auth/callback", "Reports admin")]
-    [InlineData("ossen-crm", "https://crm.example/oauth/mcp/callback", "Ossen CRM")]
+    [InlineData("reports-portal", "https://reports.example/auth/callback", "Reports portal")]
+    [InlineData("example-crm", "https://crm.example/oauth/mcp/callback", "Example CRM")]
     public void Resolves_each_configured_trusted_web_client(string clientId, string redirectUri, string name)
     {
         var client = OAuthServer.TrustedWebClient(_configuration, clientId, redirectUri);
@@ -31,7 +31,7 @@ public class TrustedOAuthClientTests
     }
 
     [Theory]
-    [InlineData("ossen-crm", "https://attacker.example/callback")]
+    [InlineData("example-crm", "https://attacker.example/callback")]
     [InlineData("unknown-client", "https://crm.example/oauth/mcp/callback")]
     public void Rejects_unknown_client_and_redirect_combinations(string clientId, string redirectUri)
     {

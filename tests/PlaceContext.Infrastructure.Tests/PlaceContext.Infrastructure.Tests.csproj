@@ -24,6 +24,7 @@
     <ProjectReference Include="..\..\src\PlaceContext.Infrastructure\PlaceContext.Infrastructure.csproj" />
     <ProjectReference Include="..\..\src\PlaceContext.Application\PlaceContext.Application.csproj" />
     <ProjectReference Include="..\..\src\PlaceContext.Domain\PlaceContext.Domain.csproj" />
+    <ProjectReference Include="..\PlaceContext.TestSupport\PlaceContext.TestSupport.csproj" />
   </ItemGroup>
 
   <ItemGroup>

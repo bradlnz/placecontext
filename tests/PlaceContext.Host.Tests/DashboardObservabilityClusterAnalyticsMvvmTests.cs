@@ -69,6 +69,15 @@ public sealed class DashboardObservabilityClusterAnalyticsMvvmTests
         Assert.Equal(DataSection.Analytics, ProjectAnalyticsViewModel.ActiveSection);
     }
 
+    [Fact]
+    public void Entities_catalogue_does_not_render_raw_linked_values()
+    {
+        var page = ReadHostSource("Components/Pages/DataEntities.razor");
+
+        Assert.DoesNotContain("Linked values", page, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Vm.LinkGroups", page, StringComparison.Ordinal);
+    }
+
     private static string ReadHostSource(string relativePath)
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);

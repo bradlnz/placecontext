@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-host="${OPENSEARCH_SYNC_HOST:-root@100.116.60.120}"
+: "${OPENSEARCH_SYNC_HOST:?set OPENSEARCH_SYNC_HOST to the SSH target}"
+host="$OPENSEARCH_SYNC_HOST"
 key="${SSH_KEY:-$HOME/.ssh/id_ed25519}"
 ssh_opts=(-F /dev/null -o BatchMode=yes -i "$key")
 scp_opts=(-F /dev/null -o BatchMode=yes -i "$key")

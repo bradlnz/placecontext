@@ -17,7 +17,7 @@ public class SearchTests
         IPermissionService? permissions = null)
     {
         var projects = new InMemoryProjectRepository();
-        var project = Project.Discover(ProjectPath.From("/home/brad/code/payments"), ProjectName.From("payments"), T0);
+        var project = Project.Discover(ProjectPath.From("/workspace/payments"), ProjectName.From("payments"), T0);
         project.Register(T0);
         await projects.AddAsync(project);
 

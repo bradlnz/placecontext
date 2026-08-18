@@ -59,7 +59,7 @@ public sealed class PlaceContextTools
     [Authorize(Policy = Permission.ProjectsManage)]
     [McpServerTool(Name = "create_project"), Description("Register a project with PlaceContext by its absolute path. Idempotent: re-creating a known path returns the existing project. New projects are created already registered.")]
     public static Task<string> CreateProject(IPlaceContextService svc, IToolCallLog log,
-        [Description("Absolute path of the project repo, e.g. /home/brad/code/myapp")] string path,
+        [Description("Absolute path of the project repo, e.g. /workspace/myapp")] string path,
         [Description("Optional display name; defaults to the last path segment")] string? name = null)
         => Traced(log, "create_project", "—", $"create {path}", new { path, name },
             () => svc.CreateProjectAsync(path, name));

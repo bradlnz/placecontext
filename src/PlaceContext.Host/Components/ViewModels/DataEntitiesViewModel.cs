@@ -34,8 +34,6 @@ public sealed class DataEntitiesViewModel : PageViewModel
     public List<RelationEdit> EditRelations { get; } = new();
     public List<string> EditTags { get; } = new();
     public string TagInput { get; set; } = "";
-    public IReadOnlyList<RecordLinkGroup> LinkGroups { get; private set; } =
-        Array.Empty<RecordLinkGroup>();
     public bool Rescanning { get; private set; }
     public string? RescanMessage { get; private set; }
 
@@ -59,24 +57,11 @@ public sealed class DataEntitiesViewModel : PageViewModel
         {
             Error = ex.Message;
         }
-        await LoadLinkGroupsAsync();
         NotifyStateChanged();
     }
 
     public void NavigateToEntity(string name) =>
         _navigation.NavigateTo($"/project/{ProjectId}/entity/{Uri.EscapeDataString(name)}");
-
-    public async Task LoadLinkGroupsAsync()
-    {
-        try
-        {
-            LinkGroups = await _service.ListRecordLinkGroupsAsync(ProjectId);
-        }
-        catch (Exception ex)
-        {
-            RescanMessage = ex.Message;
-        }
-    }
 
     public async Task RescanAsync()
     {
@@ -87,7 +72,6 @@ public sealed class DataEntitiesViewModel : PageViewModel
             var result = await _service.RescanRecordLinksAsync(ProjectId);
             RescanMessage =
                 $"scanned {result.TablesScanned} table(s) · {result.LinksFound} link(s)";
-            await LoadLinkGroupsAsync();
         }
         catch (Exception ex)
         {

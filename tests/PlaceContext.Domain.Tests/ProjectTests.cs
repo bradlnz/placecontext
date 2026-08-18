@@ -9,10 +9,10 @@ public class ProjectTests
     private static readonly DateTimeOffset T0 = new(2026, 6, 23, 12, 0, 0, TimeSpan.Zero);
 
     private static Project Discovered() =>
-        Project.Discover(ProjectPath.From("/home/brad/code/demo"), ProjectName.From("demo"), T0);
+        Project.Discover(ProjectPath.From("/workspace/demo"), ProjectName.From("demo"), T0);
 
     private static GraphSnapshotRef Snapshot() =>
-        GraphSnapshotRef.Of("/home/brad/code/demo/graphify-out/graph.json", T0, 10, 20,
+        GraphSnapshotRef.Of("/workspace/demo/graphify-out/graph.json", T0, 10, 20,
             new[] { GodNode.Of(GraphNodeId.From("auth"), NormLabel.From("Auth"), 12) });
 
     [Fact]

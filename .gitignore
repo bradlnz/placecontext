@@ -6,6 +6,15 @@ obj/
 [Tt]est[Rr]esults/
 __pycache__/
 *.py[cod]
+.DS_Store
+*.log
+.env
+.env.*
+!.env.example
+*.p12
+*.pfx
+*.pem
+*.key
 graphify-out/
 .claude/settings.local.json
 

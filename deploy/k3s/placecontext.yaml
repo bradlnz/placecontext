@@ -197,26 +197,8 @@ spec:
                 secretKeyRef:
                   name: placecontext-oauth
                   key: key.pem
-            # Operator-controlled remote OAuth clients. Dynamic registration remains loopback-only.
-            - name: PlaceContext__OAuth__TrustedClients__AdminPortal__ClientId
-              value: "ossen-reports-admin"
-            - name: PlaceContext__OAuth__TrustedClients__AdminPortal__RedirectUri
-              value: "https://reports.ossenpropertygroup.com.au/auth/placecontext/callback"
-            - name: PlaceContext__OAuth__TrustedClients__AdminPortal__Name
-              value: "Reports admin"
-            - name: PlaceContext__OAuth__TrustedClients__OssenCrm__ClientId
-              value: "ossen-crm"
-            - name: PlaceContext__OAuth__TrustedClients__OssenCrm__RedirectUri
-              value: "https://crm.ossenpropertygroup.com.au/oauth/mcp/callback"
-            - name: PlaceContext__OAuth__TrustedClients__OssenCrm__Name
-              value: "Ossen CRM"
-            # Provider-neutral browser SSO. New identities are provisioned as Viewer; existing roles stay intact.
-            - name: PlaceContext__Sso__Authority
-              value: "https://crm.ossenpropertygroup.com.au"
-            - name: PlaceContext__Sso__ClientId
-              value: "ossen-crm-placecontext"
-            - name: PlaceContext__Sso__CallbackUrl
-              value: "https://feasibility.ossenpropertygroup.com.au/auth/sso/callback"
+            # Trusted OAuth clients and browser SSO are operator-specific. Configure them with
+            # PlaceContext__OAuth__TrustedClients__* and PlaceContext__Sso__* environment variables.
             # Encrypts the Data Protection key ring at rest (vault secrets + auth cookies).
             - name: PlaceContext__DataProtection__Key
               valueFrom:
@@ -226,27 +208,27 @@ spec:
             # No in-cluster LLM: the jobs pipeline is fully deterministic.
             - name: PlaceContext__Llm__Provider
               value: "none"
-            # Object store (DigitalOcean Spaces) for post-job artifacts.
+            # In-cluster MinIO stores post-job artifacts. pctl generates this secret at deploy time.
             - name: PlaceContext__ObjectStore__Endpoint
-              value: "https://syd1.digitaloceanspaces.com"
+              value: "http://minio:9000"
             - name: PlaceContext__ObjectStore__AccessKey
               valueFrom:
                 secretKeyRef:
-                  name: placecontext-do-spaces
+                  name: placecontext-minio
                   key: ACCESS_KEY_ID
             - name: PlaceContext__ObjectStore__SecretKey
               valueFrom:
                 secretKeyRef:
-                  name: placecontext-do-spaces
-                  key: ACCESS_KEY_SECRET
+                  name: placecontext-minio
+                  key: ACCESS_SECRET_KEY
             - name: PlaceContext__ObjectStore__Region
-              value: "syd1"
+              value: "us-east-1"
             - name: PlaceContext__ObjectStore__ForcePathStyle
-              value: "false"
+              value: "true"
             - name: PlaceContext__ObjectStore__ReportsBucket
-              value: "ossenfeasibility"
+              value: "placecontext-reports"
             - name: PlaceContext__ObjectStore__DepsBucket
-              value: "ossenfeasibility"
+              value: "placecontext-reports"
             # Redis cache for job_runs ShardResultsJson (keeps Postgres lean).
             - name: PlaceContext__Redis__ConnectionString
               value: "redis:6379,abortConnect=false,connectRetry=5,keepAlive=60,syncTimeout=10000,connectTimeout=5000,responseTimeout=10000,"
@@ -258,37 +240,16 @@ spec:
             # Internal CA cert for the /ca endpoint (client trust installation).
             - name: PLACECONTEXT_CA_CERT_PATH
               value: "/etc/placecontext/ca/tls.crt"
-            - name: PLACECONTEXT_HOSTNAME
-              value: "feasibility.ossenpropertygroup.com.au"
-            # Pin the public origin so OAuth metadata and MCP Www-Authenticate headers use https://
-            # even when Traefik forwards X-Forwarded-Proto is not propagated to the app.
-            - name: PlaceContext__PublicBaseUrl
-              value: "https://feasibility.ossenpropertygroup.com.au"
+            # Set PLACECONTEXT_HOSTNAME and PlaceContext__PublicBaseUrl at deployment time when
+            # publishing the portal behind a stable external hostname.
             # Job placement: job pods always *prefer* worker (agent) nodes, so a cloud portal
             # server stays responsive while execution happens on the machines you joined over
             # Tailscale. Set "true" to *require* workers — jobs then never run on the control
             # plane and queue until a worker is online (pctl jobs placement require|prefer).
             - name: PlaceContext__WorkloadRunner__RequireWorkerNodes
               value: "false"
-            # Cluster proxy runs as a sidecar on localhost:8081 — the Host probes this for health.
-            - name: PlaceContext__ClusterChat__Endpoint
-              value: "http://localhost:8081/api/cluster"
-            - name: PlaceContext__ClusterChat__Model
-              value: "qwen3.5-4b"
-            - name: PlaceContext__ClusterChat__ShardEndpoints__0
-              value: "http://100.83.58.75:8080"
-            # Voyage AI embeddings (fast). Takes precedence over cluster mean-pool embeddings
-            # whenever PlaceContext__Voyage__ApiKey is set (see DependencyInjection). Dimensions
-            # must match voyage-3 (1024) — pgvector tables self-init to this size on first use.
-            - name: PlaceContext__Voyage__ApiKey
-              valueFrom:
-                secretKeyRef:
-                  name: placecontext-voyage
-                  key: api-key
-            - name: PlaceContext__Voyage__Model
-              value: "voyage-3"
-            - name: PlaceContext__Voyage__Dimensions
-              value: "1024"
+            # Configure PlaceContext__ClusterChat__* or PlaceContext__Voyage__* only when an
+            # operator has provisioned the corresponding local shards or external provider.
             # Kept for reference if Voyage is unset and cluster embeddings are used instead.
             - name: PlaceContext__ClusterChat__EmbeddingDimensions
               value: "2560"
@@ -327,41 +288,6 @@ spec:
             - name: ca-cert
               mountPath: /etc/placecontext/ca
               readOnly: true
-
-        # Cluster proxy sidecar — handles shard server health checks and proxies chat requests.
-        # Runs independently of the Host so the portal can start without the cluster being available.
-        - name: cluster
-          image: __IMAGE__
-          imagePullPolicy: __IMAGE_PULL_POLICY__
-          securityContext:
-            allowPrivilegeEscalation: false
-            capabilities:
-              drop: ["ALL"]
-          resources:
-            requests:
-              cpu: "50m"
-              memory: "256Mi"
-            limits:
-              cpu: "500m"
-              memory: "512Mi"
-          ports:
-            - containerPort: 8081
-          env:
-            - name: CLUSTER
-              value: "1"
-            - name: ASPNETCORE_URLS
-              value: "http://+:8081"
-            - name: PlaceContext__ClusterChat__Model
-              value: "qwen3.5-4b"
-            - name: PlaceContext__ClusterChat__ShardEndpoints__0
-              value: "http://100.83.58.75:8080"
-          startupProbe:
-            httpGet: { path: /api/cluster/health, port: 8081 }
-            periodSeconds: 5
-            failureThreshold: 12
-          readinessProbe:
-            httpGet: { path: /api/cluster/health, port: 8081 }
-            periodSeconds: 10
       volumes:
         - name: ca-cert
           secret:
@@ -464,23 +390,17 @@ spec:
       port: 6334
       targetPort: 6334
 ---
-# k3s ships Traefik — expose the portal/MCP via an Ingress with TLS (internal CA).
+# k3s ships Traefik — expose the portal/MCP on its configured HTTP entrypoint.
+# Operators can add a host and TLS block in an environment-specific overlay.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: placecontext
   namespace: placecontext
-  annotations:
-    cert-manager.io/cluster-issuer: letsencrypt-prod
 spec:
   ingressClassName: traefik
-  tls:
-  - hosts:
-    - feasibility.ossenpropertygroup.com.au
-    secretName: feasibility-tls
   rules:
-  - host: feasibility.ossenpropertygroup.com.au
-    http:
+  - http:
       paths:
       - path: /
         pathType: Prefix

@@ -12,6 +12,8 @@ public sealed class WikiLibraryTests
         Assert.Equal("getting-started", slugs[0]);
         Assert.Contains("events-and-schedules", slugs);
         Assert.Contains("security-and-sharing", slugs);
+        Assert.Contains("opensearch-integration", slugs);
+        Assert.Contains("sso-and-oauth", slugs);
         Assert.True(slugs.IndexOf("jobs-and-artifacts") < slugs.IndexOf("events-and-schedules"));
 
         Assert.Contains(
@@ -22,5 +24,7 @@ public sealed class WikiLibraryTests
         Assert.Contains("Test an event manually", WikiLibrary.Find("events-and-schedules")!.Html);
         Assert.Contains("View tests", WikiLibrary.Find("jobs-and-artifacts")!.Html);
         Assert.Contains("api/v1/search", WikiLibrary.Find("project-data")!.Html);
+        Assert.Contains("OPENSEARCH_URL", WikiLibrary.Find("opensearch-integration")!.Html);
+        Assert.Contains("TrustedClients", WikiLibrary.Find("sso-and-oauth")!.Html);
     }
 }

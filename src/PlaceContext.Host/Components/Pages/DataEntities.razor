@@ -70,32 +70,6 @@
         <div class="rescan-msg">@Vm.RescanMessage</div>
     }
 
-    <div class="section-label">Linked values</div>
-    @if (Vm.LinkGroups.Count == 0)
-    {
-        <div class="empty-note">No linked values yet — rescan after adding data.</div>
-    }
-    else
-    {
-        <div class="link-groups">
-            @foreach (var g in Vm.LinkGroups)
-            {
-                <div class="dccard link-group">
-                    <div class="link-group-head">
-                        <span class="kind-badge">@g.Kind</span>
-                        <span class="link-value">@g.DisplayValue</span>
-                        <span class="link-count">@g.Occurrences.Count occurrence(s)</span>
-                    </div>
-                    <div class="link-occurrences">
-                        @foreach (var o in g.Occurrences.Take(6))
-                        {
-                            <div class="occurrence">@o.TableName · @o.ColumnName · @o.RowKey</div>
-                        }
-                    </div>
-                </div>
-            }
-        </div>
-    }
 </div>
 
 @* ── Entity editor slide-out ─────────────────────────────────────────────────────────────── *@

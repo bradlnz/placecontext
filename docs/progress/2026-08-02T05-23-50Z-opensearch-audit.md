@@ -4,7 +4,7 @@ Timestamp: 2026-08-02T05:23:50Z
 
 ## Completed
 
-- Audited the OpenSearch host at `100.116.60.120` without exposing credentials.
+- Audited the private OpenSearch host without exposing its address or credentials.
 - Verified the cluster is green, has one data node, no unassigned shards, and no pending tasks.
 - Verified the latest full ingestion run completed successfully with 37,753 records seen, 9,303 changed, and zero failed sources.
 - Verified a real search for `Darra` returned indexed development-application addresses.
