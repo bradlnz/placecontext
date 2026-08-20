@@ -13,6 +13,9 @@
 
 set -euo pipefail
 
+# Ensure the .NET SDK and tools (dotnet-ef) are on PATH
+export PATH="$HOME/.dotnet:$HOME/.dotnet/tools:$PATH"
+
 cd "$(dirname "$0")"
 
 app_port="${PORT:-7700}"
