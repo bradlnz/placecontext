@@ -12,6 +12,9 @@ public enum ParameterInputType
     Text,
     Select,
     Number,
+    Date,
+    DateTime,
+    Time,
     Checkbox,
     File,
 }
@@ -23,6 +26,9 @@ public static class ParameterInputCatalog
         {
             "select" => ParameterInputType.Select,
             "number" => ParameterInputType.Number,
+            "date" => ParameterInputType.Date,
+            "datetime" or "datetime-local" => ParameterInputType.DateTime,
+            "time" => ParameterInputType.Time,
             "checkbox" => ParameterInputType.Checkbox,
             "file" => ParameterInputType.File,
             _ => ParameterInputType.Text,

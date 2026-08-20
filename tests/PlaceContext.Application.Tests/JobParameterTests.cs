@@ -31,6 +31,19 @@ public class JobParameterTests
         Assert.Equal(new[] { "application/pdf", "image/*" }, parameter.Options);
     }
 
+    [Theory]
+    [InlineData("date", "date")]
+    [InlineData("datetime", "datetime-local")]
+    [InlineData("datetime-local", "datetime-local")]
+    [InlineData("time", "time")]
+    [InlineData("DATE", "date")]
+    public void JobParameter_preserves_date_and_time_input_types(string input, string expected)
+    {
+        var parameter = new JobParameter("when", type: input);
+
+        Assert.Equal(expected, parameter.Type);
+    }
+
     [Fact]
     public void Job_with_parameters_requires_input()
     {

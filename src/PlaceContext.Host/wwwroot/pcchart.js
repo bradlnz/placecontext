@@ -10,6 +10,7 @@ window.pcchart = (function () {
 
   const charts = {};   // canvas id → Chart instance
   const specs = {};    // canvas id → spec (for theme re-render)
+  const observed = {}; // canvas id → canvas waiting for IntersectionObserver
   let chartLoader = null;
 
   function ensureChart() {
@@ -116,9 +117,20 @@ window.pcchart = (function () {
   const io = window.IntersectionObserver
     ? new IntersectionObserver(entries => {
         for (const e of entries) {
+          const id = e.target.id;
+          // A Blazor diff can replace the canvas between observe() and this callback. Observing
+          // the detached node forever leaves its visible replacement blank, so follow the id to
+          // the current element and mount that one instead.
+          if (document.getElementById(id) !== e.target) {
+            io.unobserve(e.target);
+            if (observed[id] === e.target) delete observed[id];
+            mount(id, 0);
+            continue;
+          }
           if (!e.isIntersecting) continue;
           io.unobserve(e.target);
-          draw(e.target.id);
+          delete observed[id];
+          draw(id);
         }
       }, { rootMargin: '200px' })
     : null;
@@ -132,8 +144,46 @@ window.pcchart = (function () {
         pending[id] = setTimeout(() => mount(id, attempt + 1), attempt < 10 ? 100 : 500);
       return;
     }
-    if (io) io.observe(el);
+    if (io) {
+      if (observed[id] && observed[id] !== el) io.unobserve(observed[id]);
+      observed[id] = el;
+      io.observe(el);
+    }
     else draw(id);
+  }
+
+  // Once a chart has rendered, the .NET view models intentionally cache that fact to avoid an
+  // interop call after every unrelated component update. Blazor can still replace a canvas during
+  // one of those updates. Reconcile child-list changes here so the cache cannot strand a fresh
+  // canvas with its Chart instance attached to an old, detached element.
+  let reconcileQueued = false;
+  function reconcileMounts() {
+    if (reconcileQueued) return;
+    reconcileQueued = true;
+    queueMicrotask(() => {
+      reconcileQueued = false;
+      for (const id of Object.keys(specs)) {
+        const el = document.getElementById(id);
+        const chartEl = charts[id]?.canvas;
+        const observedEl = observed[id];
+        if (chartEl && chartEl !== el) {
+          charts[id].destroy();
+          delete charts[id];
+          if (el) mount(id, 0);
+        } else if (observedEl && observedEl !== el) {
+          if (io) io.unobserve(observedEl);
+          delete observed[id];
+          if (el) mount(id, 0);
+        } else if (el && !chartEl && !observedEl && !pending[id]) {
+          mount(id, 0);
+        }
+      }
+    });
+  }
+
+  if (window.MutationObserver && document.documentElement) {
+    new MutationObserver(reconcileMounts)
+      .observe(document.documentElement, { childList: true, subtree: true });
   }
 
   // Theme flips re-render every live chart with the new tokens (dark is its own selected palette,
@@ -167,7 +217,8 @@ window.pcchart = (function () {
     destroy(id) {
       if (pending[id]) { clearTimeout(pending[id]); delete pending[id]; }
       if (charts[id]) { charts[id].destroy(); delete charts[id]; }
-      if (io) { const el = document.getElementById(id); if (el) io.unobserve(el); }
+      if (io && observed[id]) io.unobserve(observed[id]);
+      delete observed[id];
       delete specs[id];
     },
   };

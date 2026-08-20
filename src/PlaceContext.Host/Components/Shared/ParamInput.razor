@@ -22,6 +22,18 @@
         <input class="dcinput number-input" type="number" value="@Vm.Value"
                @oninput="OnValueChanged" />
         break;
+    case ParameterInputType.Date:
+        <input class="dcinput" type="date" value="@Vm.Value"
+               @oninput="OnValueChanged" />
+        break;
+    case ParameterInputType.DateTime:
+        <input class="dcinput" type="datetime-local" value="@Vm.Value"
+               @oninput="OnValueChanged" />
+        break;
+    case ParameterInputType.Time:
+        <input class="dcinput" type="time" value="@Vm.Value"
+               @oninput="OnValueChanged" />
+        break;
     case ParameterInputType.Checkbox:
         <label class="checkbox-field">
             <input type="checkbox" checked="@Vm.CheckboxChecked" class="checkbox-box"

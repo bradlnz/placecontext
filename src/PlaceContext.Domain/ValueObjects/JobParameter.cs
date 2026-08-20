@@ -16,7 +16,14 @@ public sealed record JobParameter
         Name = name.Trim();
         Label = string.IsNullOrWhiteSpace(label) ? null : label.Trim();
         Required = required;
-        Type = type is "number" or "select" or "checkbox" or "file" ? type : "text";
+        var normalizedType = type?.Trim().ToLowerInvariant();
+        Type = normalizedType switch
+        {
+            "number" or "select" or "checkbox" or "file" or "date" or "time" =>
+                normalizedType!,
+            "datetime" or "datetime-local" => "datetime-local",
+            _ => "text",
+        };
         Options = Type is "select" or "file"
             ? (options ?? Array.Empty<string>()).Where(o => !string.IsNullOrWhiteSpace(o)).Select(o => o.Trim()).ToList()
             : Array.Empty<string>();
@@ -31,7 +38,8 @@ public sealed record JobParameter
     /// <summary>Whether a value must be supplied before the job can run.</summary>
     public bool Required { get; }
 
-    /// <summary>Input kind rendered in run forms: "text" | "number" | "select" | "checkbox" | "file".</summary>
+    /// <summary>Input kind rendered in run forms: "text" | "number" | "date" | "datetime-local" |
+    /// "time" | "select" | "checkbox" | "file".</summary>
     public string Type { get; }
 
     /// <summary>Select choices, or accepted MIME/extension filters for a file input.</summary>

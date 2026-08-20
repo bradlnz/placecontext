@@ -68,7 +68,21 @@ die()  { printf '%s✗%s %s\n'  "$C_RED" "$C_RESET" "$*" >&2; exit 1; }
 have() { command -v "$1" >/dev/null 2>&1; }
 
 have curl || die "curl is required"
-have tar  || die "tar is required"
+
+extract_zip() {
+  local archive="$1" destination="$2"
+  if have unzip; then
+    unzip -q "$archive" -d "$destination"
+  elif have bsdtar; then
+    bsdtar -xf "$archive" -C "$destination"
+  elif have ditto; then
+    ditto -x -k "$archive" "$destination"
+  elif have python3; then
+    python3 -m zipfile -e "$archive" "$destination"
+  else
+    die "unzip, bsdtar, ditto, or python3 is required to unpack PlaceContext"
+  fi
+}
 
 fetch() {
   # $1=url $2=dest — fail clearly on 404
@@ -95,7 +109,7 @@ else
 fi
 ok "version ${VERSION}"
 
-ASSET="placecontext-${OS}-${ARCH}.tar.gz"
+ASSET="placecontext-${OS}-${ARCH}.zip"
 URLS=(
   "${BASE_URL}/${CHANNEL}/${ASSET}"
   "${BASE_URL}/${VERSION}/${ASSET}"
@@ -110,7 +124,7 @@ trap cleanup EXIT
 say "Downloading PlaceContext…"
 ARCHIVE=""
 for url in "${URLS[@]}"; do
-  if fetch "$url" "$TMP/pkg.tar.gz"; then
+  if fetch "$url" "$TMP/pkg.zip"; then
     ARCHIVE="$url"
     ok "download complete"
     break
@@ -122,7 +136,7 @@ say "Installing → ${INSTALL_ROOT}…"
 mkdir -p "$INSTALL_ROOT"
 rm -rf "$INSTALL_ROOT/bin" "$INSTALL_ROOT/lib"
 mkdir -p "$INSTALL_ROOT/bin" "$INSTALL_ROOT/lib"
-tar -xzf "$TMP/pkg.tar.gz" -C "$TMP"
+extract_zip "$TMP/pkg.zip" "$TMP"
 
 # Locate stage root (flat or single top-level dir).
 STAGE="$TMP"

@@ -5,7 +5,7 @@ Client-facing install and day-2 ops. **Build / package / mesh tooling is not shi
 
 ```
 deploy/
-  install.sh       ← one-command installer (deps + first-run bring-up)
+  install.sh       ← one-command installer (downloads the platform ZIP from DigitalOcean Spaces)
   placecontext     ← client CLI: install | upgrade | connect | status | logs | url
   tui/             ← operator TUI (install · upgrade · connect)
   k3s/             ← Kubernetes manifests

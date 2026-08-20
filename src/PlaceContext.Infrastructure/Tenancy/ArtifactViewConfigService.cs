@@ -21,13 +21,7 @@ public sealed class ArtifactViewConfigService : IArtifactViewConfigService
     public ArtifactViewConfigService(IServiceScopeFactory scopeFactory, ICurrentTenant tenant)
         => (_scopeFactory, _tenant) = (scopeFactory, tenant);
 
-    public ArtifactViewConfig DefaultConfig() => new(
-    [
-        new ArtifactCategoryRule(
-            "feasibility-reports",
-            "Feasibility Reports",
-            ["feasibility_v1_"]),
-    ]);
+    public ArtifactViewConfig DefaultConfig() => new([]);
 
     public async Task<ArtifactViewConfig> GetAsync(CancellationToken ct = default)
     {

@@ -62,6 +62,16 @@ public sealed class RemainingShellMvvmTests
         Assert.Equal("2", vm.Value);
     }
 
+    [Theory]
+    [InlineData("date", ParameterInputType.Date)]
+    [InlineData("datetime", ParameterInputType.DateTime)]
+    [InlineData("datetime-local", ParameterInputType.DateTime)]
+    [InlineData("time", ParameterInputType.Time)]
+    public void Param_input_catalog_maps_temporal_controls(
+        string type,
+        ParameterInputType expected
+    ) => Assert.Equal(expected, ParameterInputCatalog.Parse(type));
+
     [Fact]
     public void Chain_canvas_view_model_owns_picker_drag_and_gate_formatting()
     {

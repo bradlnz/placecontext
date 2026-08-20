@@ -39,6 +39,16 @@ public sealed class LoadingPerformanceContractTests
         Assert.True(blazor > charts, "Blazor must start after the chart interop module.");
     }
 
+    [Fact]
+    public void Chart_renderer_recovers_when_blazor_replaces_a_canvas()
+    {
+        var charts = ReadHostSource("wwwroot/pcchart.js");
+
+        Assert.Contains("chartEl && chartEl !== el", charts, StringComparison.Ordinal);
+        Assert.Contains("observedEl && observedEl !== el", charts, StringComparison.Ordinal);
+        Assert.Contains("new MutationObserver(reconcileMounts)", charts, StringComparison.Ordinal);
+    }
+
     private static string ReadHostSource(string relativePath)
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);

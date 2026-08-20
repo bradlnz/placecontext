@@ -164,7 +164,7 @@ operator-facing documentation shipped with each build.
 ## Upgrading
 
 - From a git checkout: `./deploy/pctl update --deploy` (pulls, rebuilds, rolls the cluster).
-- From a packaged install: download the latest release package and re-run `./install.sh` — it
+- From a packaged install: re-run the one-click installer — it downloads the latest platform ZIP and
   detects the existing cluster and rolls the new image in.
 
 ## License

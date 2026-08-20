@@ -144,7 +144,7 @@ public static class DefaultWorkspaceBootstrap
                 PartialExitCodes: [],
                 AllowNetworkEgress: false,
                 AllowApiInvocation: true,
-                Parameters: [new JobParameterDto("run_date", "Run date", false, "text")],
+                Parameters: [new JobParameterDto("run_date", "Run date", false, "date")],
                 PostJobActions: actions,
                 ReturnType: returnType,
                 RetryCount: 1,

@@ -249,7 +249,7 @@ Full field reference (all fields except `name` are optional and default as shown
 | `successExitCodes` | `int[]` | `[0]` | |
 | `partialExitCodes` | `int[]` | `[]` | |
 | `allowNetworkEgress` | bool | `false` | `false` runs containers with `--network none` |
-| `parameters` | `[{name, label?, required, type, options?}]?` | `null` | inputs prompted before a manual run |
+| `parameters` | `[{name, label?, required, type, options?}]?` | `null` | inputs prompted before a manual run; `type` is `text`, `number`, `date`, `datetime-local`, `time`, `select`, `checkbox`, or `file` |
 | `postJobActions` | `string[]?` | `null` | any of `HtmlReport`, `Chart`, `Csv`, `RawBundle`, `HtmlOutput` |
 | `returnType` | string | `"Json"` | one of `Json`, `Table`, `Chart`, `Html`, `Csv`, `Text`, `Pdf`, `Image`, `Video` |
 | `returnFileName` | string? | `null` | expected `/out` filename for `Pdf`/`Image`/`Video` return types |

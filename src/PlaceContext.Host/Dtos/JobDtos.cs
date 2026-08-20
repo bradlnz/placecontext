@@ -13,7 +13,8 @@ public sealed record JobParameterRequest(
     string Name,
     string? Label = null,
     bool Required = true,
-    /// <summary>"text" | "number" | "select" | "checkbox" | "file".</summary>
+    /// <summary>"text" | "number" | "date" | "datetime-local" | "time" | "select" |
+    /// "checkbox" | "file".</summary>
     string Type = "text",
     IReadOnlyList<string>? Options = null);
 
