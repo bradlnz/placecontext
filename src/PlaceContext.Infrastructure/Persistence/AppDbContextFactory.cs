@@ -1,5 +1,6 @@
 using PlaceContext.Application.Ports;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Design;
 
 namespace PlaceContext.Infrastructure.Persistence;
@@ -14,6 +15,7 @@ public sealed class AppDbContextFactory : IDesignTimeDbContextFactory<AppDbConte
     {
         var options = new DbContextOptionsBuilder<AppDbContext>()
             .UseNpgsql("Host=localhost;Port=5433;Database=placecontext;Username=postgres;Password=postgres")
+            .ConfigureWarnings(w => w.Ignore(RelationalEventId.PendingModelChangesWarning))
             .Options;
         return new AppDbContext(options, new DesignTimeTenant());
     }

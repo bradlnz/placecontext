@@ -2,10 +2,10 @@
 
 #nullable disable
 
-namespace PlaceContext.Infrastructure.src.PlaceContext.Infrastructure.Migrations
+namespace PlaceContext.Infrastructure.Migrations
 {
     /// <inheritdoc />
-    public partial class SyncPendingModelChanges2 : Migration
+    public partial class PendingChanges : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
