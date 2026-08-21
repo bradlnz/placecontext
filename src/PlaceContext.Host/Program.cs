@@ -396,9 +396,9 @@ builder.Services
     .AddAuthorizationFilters(); // enforce [Authorize] on tools/prompts against the bearer token's role
 
 // Honor ASPNETCORE_URLS when set (containers bind http://+:7700 so the k8s Service/Ingress can reach
-// the pod); default to localhost:7700 for local dev.
+// the pod); default to 0.0.0.0:7700 so the host is reachable from other machines on the LAN.
 var bindUrls = Environment.GetEnvironmentVariable("ASPNETCORE_URLS");
-builder.WebHost.UseUrls(string.IsNullOrWhiteSpace(bindUrls) ? "http://localhost:7700" : bindUrls);
+builder.WebHost.UseUrls(string.IsNullOrWhiteSpace(bindUrls) ? "http://0.0.0.0:7700" : bindUrls);
 
 var app = builder.Build();
 

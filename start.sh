@@ -88,6 +88,6 @@ echo "A new workspace will open the secure owner-account setup automatically."
 echo "Press Ctrl+C to stop."
 echo
 
-export ASPNETCORE_URLS="http://localhost:${app_port}"
+export ASPNETCORE_URLS="http://0.0.0.0:${app_port}"
 export ASPNETCORE_ENVIRONMENT="$app_environment"
 exec dotnet run --no-build --no-launch-profile --project src/PlaceContext.Host

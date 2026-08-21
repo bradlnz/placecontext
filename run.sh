@@ -26,8 +26,9 @@ fi
 ./setup.sh "$@"
 
 # setup.sh may have installed the SDK to ~/.dotnet in its own shell; make sure
-# this shell can see it too.
-if ! command -v dotnet >/dev/null 2>&1 && [ -x "$HOME/.dotnet/dotnet" ]; then
+# this shell can see it too.  A bare `command -v dotnet` isn't enough — some
+# distros ship a runtime-only stub at /usr/bin/dotnet that has no SDK.
+if [ -x "$HOME/.dotnet/dotnet" ] && "$HOME/.dotnet/dotnet" --list-sdks 2>/dev/null | grep -q .; then
   export PATH="$HOME/.dotnet:$PATH"
 fi
 
@@ -42,6 +43,6 @@ fi
 # URL to localhost:5169 via ASPNETCORE_URLS. That also skips the profile's
 # ASPNETCORE_ENVIRONMENT=Development, so set it here (overridable).
 echo "Starting PlaceContext Host → http://localhost:${PORT} (MCP at /mcp)"
-export ASPNETCORE_URLS="http://localhost:${PORT}"
+export ASPNETCORE_URLS="http://0.0.0.0:${PORT}"
 export ASPNETCORE_ENVIRONMENT="${ASPNETCORE_ENVIRONMENT:-Development}"
 exec dotnet run --no-build --no-launch-profile --project src/PlaceContext.Host
