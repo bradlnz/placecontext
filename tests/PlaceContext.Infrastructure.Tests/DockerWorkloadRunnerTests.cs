@@ -201,4 +201,111 @@ public class DockerWorkloadRunnerTests
         Assert.True(userAt >= 0);
         Assert.Equal("10001:10001", args[userAt + 1]);
     }
+
+    // ── always-on runtime sandbox profiles (dotnet, go) ──────────────────────────────────────────
+    // These toolchains must write AND exec their caches (dotnet's runfile cache, go's GOCACHE) —
+    // impossible under the baseline sandbox (64m noexec /tmp, 256m memory). The profile gives each
+    // run an exec tmpfs, relocated env dirs (mkdir'd by the pre-invoke wrap), and a memory override.
+
+    private static WorkloadRunRequest CodeRequest(string runtimeId, string entrypoint) => new(
+        Image: null,
+        StdinPayload: "{}",
+        Env: new Dictionary<string, string>(),
+        ArtifactMounts: Array.Empty<(string, string)>(),
+        CorrelationId: "corr",
+        CodeFiles: new[] { (entrypoint, "code") },
+        RuntimeId: runtimeId,
+        Entrypoint: entrypoint);
+
+    private List<string> ProfileArgs(string runtimeId, string entrypoint, string[] invoke, bool depsBaked)
+    {
+        var opts = new WorkloadRunnerOptions();
+        var sut = new DockerWorkloadRunner(Options.Create(opts));
+        return sut.BuildArgs(CodeRequest(runtimeId, entrypoint), opts.Runtimes[runtimeId].BaseImage, "/tmp/out",
+            new List<(string HostPath, string ContainerPath)>(), "/tmp/work", invoke, depsBaked,
+            opts.Runtimes[runtimeId]);
+    }
+
+    [Fact]
+    public void Dotnet_runs_get_an_exec_tmpfs_more_memory_and_relocated_env_dirs()
+    {
+        var args = ProfileArgs("dotnet", "main.cs", new[] { "dotnet", "run", "/work/main.cs" }, depsBaked: false);
+
+        var memAt = args.IndexOf("--memory");
+        Assert.True(memAt >= 0);
+        Assert.Equal("1g", args[memAt + 1]);
+
+        // The exec tmpfs rides on every run — and exactly once, even though the always-on dotnet
+        // recipe would also mount the deps root on the cold path.
+        Assert.Single(args.Where(a => a == "/pcdeps:rw,exec,nosuid,size=512m"));
+
+        foreach (var expected in new[]
+        {
+            "HOME=/pcdeps/home", "XDG_DATA_HOME=/pcdeps/xdg", "NUGET_PACKAGES=/pcdeps/nuget",
+            "DOTNET_CLI_HOME=/pcdeps/dotnet", "TMPDIR=/pcdeps/tmp",
+        })
+        {
+            var at = args.IndexOf(expected);
+            Assert.True(at >= 1 && args[at - 1] == "-e", $"missing env: {expected}");
+        }
+        Assert.DoesNotContain("HOME=/tmp", args); // the profile relocated HOME
+    }
+
+    [Fact]
+    public void Dotnet_invoke_is_wrapped_in_sh_c_with_the_mkdir_preinvoke()
+    {
+        var args = ProfileArgs("dotnet", "main.cs", new[] { "dotnet", "run", "/work/main.cs" }, depsBaked: false);
+
+        var imageAt = args.IndexOf("mcr.microsoft.com/dotnet/sdk:10.0");
+        Assert.True(imageAt >= 0);
+        Assert.Equal(new[] { "sh", "-c" }, args.Skip(imageAt + 1).Take(2).ToArray());
+        var script = args[imageAt + 3];
+        Assert.StartsWith("mkdir -p \"$HOME\" \"$XDG_DATA_HOME\" \"$NUGET_PACKAGES\" \"$DOTNET_CLI_HOME\" \"$TMPDIR\"", script);
+        Assert.EndsWith("&& exec 'dotnet' 'run' '/work/main.cs'", script);
+    }
+
+    [Fact]
+    public void Dotnet_warm_runs_keep_the_exec_tmpfs_and_preinvoke()
+    {
+        // depsBaked skips the recipe scratch mount — the profile's tmpfs must still be there, or the
+        // runfile cache lands on the noexec /tmp again.
+        var args = ProfileArgs("dotnet", "main.cs", new[] { "dotnet", "run", "/work/main.cs" }, depsBaked: true);
+
+        Assert.Single(args.Where(a => a == "/pcdeps:rw,exec,nosuid,size=512m"));
+        Assert.Equal("sh", args[^3]);
+        Assert.Contains("mkdir -p", args[^1]);
+    }
+
+    [Fact]
+    public void Go_runs_get_exec_caches_without_a_go_mod()
+    {
+        var args = ProfileArgs("go", "main.go", new[] { "go", "run", "/work/main.go" }, depsBaked: false);
+
+        var memAt = args.IndexOf("--memory");
+        Assert.Equal("512m", args[memAt + 1]);
+        Assert.Single(args.Where(a => a == "/pcdeps:rw,exec,nosuid,size=256m"));
+        Assert.Contains("GOCACHE=/pcdeps/gocache", args);
+        Assert.Contains("GOTMPDIR=/pcdeps/gotmp", args);
+        Assert.Equal("sh", args[^3]);
+        Assert.EndsWith("&& exec 'go' 'run' '/work/main.go'", args[^1]);
+    }
+
+    [Fact]
+    public void Job_env_still_overrides_the_runtime_profile()
+    {
+        var opts = new WorkloadRunnerOptions();
+        var sut = new DockerWorkloadRunner(Options.Create(opts));
+        var request = CodeRequest("dotnet", "main.cs") with
+        {
+            Env = new Dictionary<string, string> { ["HOME"] = "/custom", ["MY_FLAG"] = "1" },
+        };
+        var args = sut.BuildArgs(request, opts.Runtimes["dotnet"].BaseImage, "/tmp/out",
+            new List<(string HostPath, string ContainerPath)>(), "/tmp/work",
+            new[] { "dotnet", "run", "/work/main.cs" }, depsBaked: false, opts.Runtimes["dotnet"]);
+
+        Assert.DoesNotContain("HOME=/pcdeps/home", args);
+        Assert.Contains("HOME=/custom", args);
+        Assert.Contains("MY_FLAG=1", args);
+        Assert.Single(args.Where(a => a == "HOME=/custom"));
+    }
 }

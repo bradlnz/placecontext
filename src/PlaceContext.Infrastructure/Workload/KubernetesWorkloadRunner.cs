@@ -73,23 +73,30 @@ public sealed class KubernetesWorkloadRunner : IWorkloadRunner
         string runShell; // shell run inside the pod (pipes the payload into the program on stdin)
         string? depsGetUrl = null;   // presigned GET for the baked dependency layer (warm cache)
         var storeScopedEgress = false; // warm-cache pods get MinIO+DNS egress instead of deny-all
+        RuntimeDefinition? runtime = null; // the code workload's runtime (its always-on sandbox profile)
         if (request.CodeFiles is not null)
         {
             var runtimeId = request.RuntimeId ?? throw new InvalidOperationException("RuntimeId is required for code workloads.");
             if (!_options.Runtimes.TryGetValue(runtimeId, out var rt) || string.IsNullOrWhiteSpace(rt.BaseImage))
                 throw new InvalidOperationException($"Unknown runtime '{runtimeId}'.");
+            runtime = rt;
             var entrypoint = !string.IsNullOrWhiteSpace(request.Entrypoint) ? request.Entrypoint! : rt.DefaultEntrypoint;
             image = rt.BaseImage;
             var invoke = string.Join(" ", rt.InvokeCommand.Select(s => ShQuote(s.Replace("{entrypoint}", entrypoint))));
+
+            // The runtime's always-on sandbox profile (dotnet, go): its pre-invoke script (mkdir the
+            // env dirs the toolchain requires) runs before anything else in the pod; its env and
+            // memory limit are applied to the run container below.
+            var depsPreamble = string.IsNullOrWhiteSpace(rt.PreInvokeScript) ? "" : rt.PreInvokeScript + "\n";
 
             // A job shipping its runtime's dependency manifest (requirements.txt, package.json,
             // Gemfile, go.mod) gets its packages installed first — unless the baked layer already
             // exists in the object store: then the init container fetches it and the preamble's
             // .baked check skips the install. Downloads (cold path) still need AllowNetworkEgress.
-            var depsPreamble = "";
+            // dotnet's recipe is always-on: its bake primes the NuGet fallback cache instead.
             if (WorkloadDependencies.For(runtimeId, request.CodeFiles) is { } recipe)
             {
-                depsPreamble = WorkloadDependencies.ShellPreamble(recipe);
+                depsPreamble += WorkloadDependencies.ShellPreamble(recipe);
                 if (recipe.InvokePrefix is not null) invoke = recipe.InvokePrefix + " " + invoke;
                 if (_options.WarmDependencyCache && _store is { IsEnabled: true })
                 {
@@ -134,10 +141,10 @@ public sealed class KubernetesWorkloadRunner : IWorkloadRunner
         {
             Name = "run",
             Image = image,
-            // A writable HOME for tools that insist on one (npm cache, go env); listed first so the
-            // job's own env can still override it.
-            Env = new[] { new V1EnvVar { Name = "HOME", Value = "/tmp" } }
-                .Concat(request.Env.Select(kv => new V1EnvVar { Name = kv.Key, Value = kv.Value })).ToList(),
+            // A writable HOME for tools that insist on one (npm cache, go env), then the runtime
+            // profile's env (which may relocate HOME to an exec-capable root), then the job's own
+            // env — later entries override earlier ones by key, so the job always wins.
+            Env = BuildContainerEnv(runtime, request),
             VolumeMounts = new[]
             {
                 new V1VolumeMount { Name = "work", MountPath = "/work" },
@@ -145,7 +152,7 @@ public sealed class KubernetesWorkloadRunner : IWorkloadRunner
                 // root-owned image rootfs. The pod fsGroup makes the emptyDir group-writable.
                 new V1VolumeMount { Name = "out", MountPath = "/out" },
             },
-            Resources = ResourceLimits(),
+            Resources = ResourceLimits(runtime),
             SecurityContext = BuildRestrictedContainerSecurityContext(_options),
         };
         if (runShell.Length > 0) runContainer.Command = new[] { "sh", "-c", runShell };
@@ -734,7 +741,33 @@ public sealed class KubernetesWorkloadRunner : IWorkloadRunner
         };
     }
 
-    private V1ResourceRequirements ResourceLimits() => BuildResourceLimits(_options.SandboxMemory, _options.SandboxCpus);
+    // A runtime's always-on profile may override the global memory limit (the .NET SDK can't
+    // restore + build a file-based app in 256m). Internal: tests assert the profile mapping.
+    internal V1ResourceRequirements ResourceLimits(RuntimeDefinition? runtime = null) => BuildResourceLimits(
+        !string.IsNullOrWhiteSpace(runtime?.SandboxMemory) ? runtime!.SandboxMemory! : _options.SandboxMemory,
+        _options.SandboxCpus);
+
+    /// <summary>
+    /// The run container's env: the default writable HOME, then the runtime profile's env
+    /// (<c>{deps}</c> → <see cref="WorkloadDependencies.K8sDepsRoot"/>, the writable emptyDir), then
+    /// the job's own env — later entries override earlier ones by key, position preserved.
+    /// </summary>
+    internal static List<V1EnvVar> BuildContainerEnv(RuntimeDefinition? runtime, WorkloadRunRequest request)
+    {
+        var pairs = new List<V1EnvVar> { new() { Name = "HOME", Value = "/tmp" } };
+        void Set(string name, string value)
+        {
+            var existing = pairs.FindIndex(p => string.Equals(p.Name, name, StringComparison.Ordinal));
+            if (existing >= 0) pairs[existing].Value = value;
+            else pairs.Add(new V1EnvVar { Name = name, Value = value });
+        }
+        if (runtime?.Env is { } profileEnv)
+            foreach (var (key, value) in profileEnv)
+                Set(key, value.Replace("{deps}", WorkloadDependencies.K8sDepsRoot, StringComparison.Ordinal));
+        foreach (var (key, value) in request.Env)
+            Set(key, value);
+        return pairs;
+    }
 
     /// <summary>
     /// Bake containers run untrusted install scripts (pip install, npm install) that are far more

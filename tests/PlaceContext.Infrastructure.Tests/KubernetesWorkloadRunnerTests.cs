@@ -275,4 +275,49 @@ public class KubernetesWorkloadRunnerTests
         // the code — node_modules, .bundle, an npm-rewritten lockfile, the .pcdeps deps root.
         Assert.EndsWith("chmod -R a+rwX /work\n", script);
     }
+
+    // ── always-on runtime sandbox profiles (dotnet, go) ──────────────────────────────────────────
+    // Parity with the Docker runner: the profile's env (with {deps} → the writable emptyDir) and
+    // memory override apply in-cluster too. The exec tmpfs has no k8s counterpart — /work already
+    // is one (emptyDir), which is where the profile points the caches.
+
+    [Fact]
+    public void Dotnet_container_env_relocates_the_toolchain_dirs_into_the_work_emptydir()
+    {
+        var opts = new WorkloadRunnerOptions();
+        var request = CodeRequest(("main.cs", "x")) with { RuntimeId = "dotnet" };
+        var env = KubernetesWorkloadRunner.BuildContainerEnv(opts.Runtimes["dotnet"], request);
+
+        Assert.Equal("/work/.pcdeps/home", env.Single(e => e.Name == "HOME").Value);
+        Assert.Equal("/work/.pcdeps/nuget", env.Single(e => e.Name == "NUGET_PACKAGES").Value);
+        Assert.Equal("/work/.pcdeps/xdg", env.Single(e => e.Name == "XDG_DATA_HOME").Value);
+        Assert.Equal("/work/.pcdeps/tmp", env.Single(e => e.Name == "TMPDIR").Value);
+    }
+
+    [Fact]
+    public void Job_env_overrides_the_runtime_profile_in_cluster_too()
+    {
+        var opts = new WorkloadRunnerOptions();
+        var request = CodeRequest(("main.cs", "x")) with
+        {
+            RuntimeId = "dotnet",
+            Env = new Dictionary<string, string> { ["HOME"] = "/custom" },
+        };
+        var env = KubernetesWorkloadRunner.BuildContainerEnv(opts.Runtimes["dotnet"], request);
+
+        Assert.Equal("/custom", env.Single(e => e.Name == "HOME").Value);
+    }
+
+    [Fact]
+    public void Runtime_profile_memory_overrides_the_global_limit()
+    {
+        var opts = new WorkloadRunnerOptions();
+        var sut = new KubernetesWorkloadRunner(Microsoft.Extensions.Options.Options.Create(opts));
+
+        var dotnet = sut.ResourceLimits(opts.Runtimes["dotnet"]);
+        Assert.Equal("1Gi", dotnet.Limits["memory"].CanonicalizeString());
+
+        var @default = sut.ResourceLimits(opts.Runtimes["python"]);
+        Assert.Equal("256Mi", @default.Limits["memory"].CanonicalizeString());
+    }
 }

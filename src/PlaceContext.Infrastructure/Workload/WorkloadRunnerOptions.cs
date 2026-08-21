@@ -148,6 +148,18 @@ public sealed class WorkloadRunnerOptions
             BaseImage = "golang:1.23-alpine",
             InvokeCommand = new[] { "go", "run", "/work/{entrypoint}" },
             DefaultEntrypoint = "main.go",
+            // `go run` compiles into GOCACHE and execs the binary from there — the sandbox /tmp
+            // tmpfs is deliberately noexec, so without a module (no recipe) every run failed with
+            // "permission denied". The profile moves HOME/GOCACHE/GOTMPDIR onto an exec tmpfs.
+            SandboxMemory = "512m",
+            ExtraTmpfs = new[] { WorkloadDependencies.DockerDepsRoot + ":rw,exec,nosuid,size=256m" },
+            Env = new()
+            {
+                ["HOME"] = "{deps}/home",
+                ["GOCACHE"] = "{deps}/gocache",
+                ["GOTMPDIR"] = "{deps}/gotmp",
+            },
+            PreInvokeScript = "mkdir -p \"$HOME\" \"$GOCACHE\" \"$GOTMPDIR\"",
         },
         ["ruby"] = new RuntimeDefinition
         {
@@ -156,11 +168,28 @@ public sealed class WorkloadRunnerOptions
             DefaultEntrypoint = "main.rb",
         },
         // .NET 10 file-based apps: `dotnet run app.cs` runs a single C# file with no project file.
+        // The first run implicitly restores ~300MB of runtime packs into $NUGET_PACKAGES and execs
+        // the built binary from a cache — impossible under the default sandbox (64MB noexec /tmp,
+        // 256m memory). The profile gives the toolchain a writable+exec scratch root and room to
+        // build; the always-on dotnet recipe (WorkloadDependencies) bakes the restored packs into a
+        // warm image once so sealed (no-network) runs restore offline from the baked fallback.
         ["dotnet"] = new RuntimeDefinition
         {
             BaseImage = "mcr.microsoft.com/dotnet/sdk:10.0",
             InvokeCommand = new[] { "dotnet", "run", "/work/{entrypoint}" },
             DefaultEntrypoint = "main.cs",
+            SandboxMemory = "1g",
+            ExtraTmpfs = new[] { WorkloadDependencies.DockerDepsRoot + ":rw,exec,nosuid,size=512m" },
+            Env = new()
+            {
+                ["HOME"] = "{deps}/home",
+                ["XDG_DATA_HOME"] = "{deps}/xdg",          // the runfile build cache execs from here
+                ["NUGET_PACKAGES"] = "{deps}/nuget",
+                ["DOTNET_CLI_HOME"] = "{deps}/dotnet",
+                ["TMPDIR"] = "{deps}/tmp",
+            },
+            // The SDK requires these dirs to actually exist (notably for #:property directives).
+            PreInvokeScript = "mkdir -p \"$HOME\" \"$XDG_DATA_HOME\" \"$NUGET_PACKAGES\" \"$DOTNET_CLI_HOME\" \"$TMPDIR\"",
         },
     };
 }
@@ -183,4 +212,37 @@ public sealed class RuntimeDefinition
 
     /// <summary>Default entry-point filename when the job doesn't specify one (e.g. "index.js").</summary>
     public string DefaultEntrypoint { get; set; } = "";
+
+    // ── Always-on sandbox profile ────────────────────────────────────────────────────────────────
+    // Applied to EVERY run of this runtime, manifest or not — for toolchains that cannot execute
+    // under the baseline sandbox at all (dotnet's implicit restore + runfile cache, go's compile
+    // cache: both must write and exec outside the noexec /tmp tmpfs). All fields optional; runtimes
+    // without them behave exactly as before.
+
+    /// <summary>
+    /// Overrides <see cref="WorkloadRunnerOptions.SandboxMemory"/> for this runtime (e.g. "1g").
+    /// Applied by both runners (docker --memory, k8s memory limit). Null = the global default.
+    /// </summary>
+    public string? SandboxMemory { get; set; }
+
+    /// <summary>
+    /// Extra tmpfs mounts (docker --tmpfs syntax, e.g. "/pcdeps:rw,exec,nosuid,size=512m"), mounted
+    /// on every run of this runtime — including warm runs, where the dependency scratch mount is
+    /// otherwise skipped. Docker runner only; on Kubernetes /work is already a writable emptyDir.
+    /// </summary>
+    public string[] ExtraTmpfs { get; set; } = Array.Empty<string>();
+
+    /// <summary>
+    /// Environment variables the toolchain needs (e.g. HOME, GOCACHE). The <c>{deps}</c> token
+    /// resolves to the runner's writable deps root (/pcdeps on Docker, /work/.pcdeps on Kubernetes).
+    /// Applied after the default HOME=/tmp and before the job's own env, so jobs can still override.
+    /// </summary>
+    public Dictionary<string, string> Env { get; set; } = new();
+
+    /// <summary>
+    /// Shell snippet run inside the container before the invoke command (command becomes
+    /// <c>sh -c '&lt;script&gt; &amp;&amp; exec &lt;cmd&gt;'</c>), e.g. mkdir -p the env dirs the
+    /// toolchain requires to exist. Compose-safe: wraps an already recipe-wrapped command.
+    /// </summary>
+    public string? PreInvokeScript { get; set; }
 }

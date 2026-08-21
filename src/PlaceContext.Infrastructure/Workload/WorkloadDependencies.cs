@@ -33,7 +33,9 @@ public static class WorkloadDependencies
     /// One runtime's recipe. <c>{app}</c> = where the code lives at run time, <c>{deps}</c> = the
     /// writable root. <paramref name="NeedsWritableApp"/> marks tooling that must write beside the
     /// code (node_modules, .bundle) — the Docker runner copies /work into the deps tmpfs for those;
-    /// on Kubernetes /work is already a writable emptyDir.
+    /// on Kubernetes /work is already a writable emptyDir. An <b>empty</b> <paramref name="Manifest"/>
+    /// makes the recipe always-on (applies to every code workload of the runtime) — used by dotnet,
+    /// which has no manifest but whose warm bake primes the NuGet fallback cache.
     /// </summary>
     /// <param name="SetupTemplate">Cold path verbatim: env + install in one chain (unchanged legacy).</param>
     /// <param name="EnvTemplate">Exports the runtime needs to FIND the deps (always applied, warm or cold).</param>
@@ -124,13 +126,32 @@ public static class WorkloadDependencies
             BakeInstall: WorkloadScriptLoader.Load("go/bake.sh"),
             // GOCACHE (the compile cache) is NOT baked — it's huge; a per-run tmpfs keeps builds correct.
             BakeEnv: WorkloadScriptLoader.Load("go/bake.env")),
+        // .NET file-based apps ship no manifest — this recipe is always-on. Its payload is the warm
+        // bake: the first `dotnet run` implicitly restores ~300MB of runtime packs, which the bake
+        // downloads once into a NuGet fallback folder baked into the image (BakeEnv points the
+        // runtime at it) — sealed no-network runs then restore offline. The per-run sandbox shape
+        // (exec tmpfs, env dirs, 1g memory) is the runtime's always-on sandbox profile instead
+        // (see RuntimeDefinition); the install step is a no-op because `dotnet run` restores itself.
+        ["dotnet"] = new(
+            "", NeedsWritableApp: false,
+            SetupTemplate: WorkloadScriptLoader.Load("dotnet/setup.sh"),
+            EnvTemplate: WorkloadScriptLoader.Load("dotnet/env.sh"),
+            InstallTemplate: WorkloadScriptLoader.Load("dotnet/install.sh"),
+            Companions: Array.Empty<string>(),
+            BakeInstall: WorkloadScriptLoader.Load("dotnet/bake.sh"),
+            BakeEnv: WorkloadScriptLoader.Load("dotnet/bake.env")),
     };
 
-    /// <summary>The recipe for this workload, when its runtime has one and the manifest is in the file set.</summary>
+    /// <summary>
+    /// The recipe for this workload, when its runtime has one and the manifest is in the file set.
+    /// A recipe with an empty manifest (dotnet) is always-on: it applies to every code workload of
+    /// its runtime, no manifest required.
+    /// </summary>
     public static Recipe? For(string? runtimeId, IReadOnlyList<(string Path, string Content)>? codeFiles) =>
         runtimeId is not null && codeFiles is not null
         && Recipes.TryGetValue(runtimeId, out var recipe)
-        && codeFiles.Any(f => string.Equals(f.Path, recipe.Manifest, StringComparison.OrdinalIgnoreCase))
+        && (recipe.Manifest.Length == 0
+            || codeFiles.Any(f => string.Equals(f.Path, recipe.Manifest, StringComparison.OrdinalIgnoreCase)))
             ? recipe
             : null;
 
@@ -217,14 +238,15 @@ public static class WorkloadDependencies
     /// (always — it locates the deps), then install (or fail the run with the installer's exit
     /// code) only when no warm cache landed — the <see cref="BakedMarker"/> check is what makes a
     /// warmed shard skip the install. /work is writable there, so {app} stays /work. Guarded by a
-    /// manifest check so the shell stays harmless if the file didn't materialise.
+    /// manifest check so the shell stays harmless if the file didn't materialise; always-on
+    /// recipes (empty manifest) run unconditionally.
     /// </summary>
     public static string ShellPreamble(Recipe recipe)
     {
         var env = Apply(recipe.EnvTemplate, "/work", K8sDepsRoot);
         var install = Apply(recipe.InstallTemplate, "/work", K8sDepsRoot);
         return WorkloadScriptLoader.Load("k8s/shell-preamble.sh")
-            .Replace("{{MANIFEST}}", recipe.Manifest, StringComparison.Ordinal)
+            .Replace("{{GUARD}}", recipe.Manifest.Length == 0 ? "true" : $"[ -f /work/{recipe.Manifest} ]", StringComparison.Ordinal)
             .Replace("{{DEPS_ROOT}}", K8sDepsRoot, StringComparison.Ordinal)
             .Replace("{{BAKED_MARKER}}", BakedMarker, StringComparison.Ordinal)
             .Replace("{{ENV}}", env, StringComparison.Ordinal)

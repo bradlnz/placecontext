@@ -29,7 +29,17 @@ public class WorkloadDependenciesTests
     {
         // A python job carrying package.json (say, as data) must not npm install.
         Assert.Null(WorkloadDependencies.For("python", Files("main.py", "package.json")));
-        Assert.Null(WorkloadDependencies.For("dotnet", Files("main.cs", "requirements.txt")));
+        Assert.Null(WorkloadDependencies.For("go", Files("main.go", "requirements.txt")));
+    }
+
+    // dotnet ships no manifest — its recipe is always-on: every dotnet code workload gets it (the
+    // warm bake primes the NuGet fallback cache so sealed no-network runs can restore offline).
+    [Fact]
+    public void Dotnet_recipe_is_always_on()
+    {
+        Assert.NotNull(WorkloadDependencies.For("dotnet", Files("main.cs")));
+        Assert.NotNull(WorkloadDependencies.For("dotnet", Files("main.cs", "helper.cs")));
+        Assert.Null(WorkloadDependencies.For("dotnet", null)); // image workloads still excluded
     }
 
     [Fact]
@@ -184,5 +194,32 @@ public class WorkloadDependenciesTests
         Assert.Contains("GOPATH={deps}/go", recipe.SetupTemplate);
         Assert.Contains("GOCACHE={deps}/gocache", recipe.SetupTemplate);  // cold path: deps tmpfs
         Assert.Contains("GOCACHE=/tmp/gocache", recipe.EnvTemplate);      // warm path: per-run scratch
+    }
+
+    // ── dotnet (always-on recipe: the warm bake primes the NuGet fallback cache) ─────────────────
+
+    [Fact]
+    public void Dotnet_bake_primes_the_nuget_fallback_cache_into_the_warm_image()
+    {
+        var files = new[] { ("main.cs", "x") };
+        var recipe = WorkloadDependencies.For("dotnet", files)!;
+        var dockerfile = WorkloadDependencies.Dockerfile("mcr.microsoft.com/dotnet/sdk:10.0", recipe, files);
+
+        Assert.StartsWith("FROM mcr.microsoft.com/dotnet/sdk:10.0\n", dockerfile);
+        Assert.DoesNotContain("COPY", dockerfile);                       // no manifests to copy
+        Assert.Contains("NUGET_PACKAGES=/pcw/nuget-seed", dockerfile);   // the primed cache is the payload
+        Assert.Contains("ENV NUGET_FALLBACK_PACKAGES=/pcw/nuget-seed", dockerfile); // runs restore offline from it
+    }
+
+    [Fact]
+    public void Dotnet_k8s_preamble_runs_unguarded_and_points_nuget_at_the_baked_cache()
+    {
+        var recipe = WorkloadDependencies.For("dotnet", Files("main.cs"))!;
+        var preamble = WorkloadDependencies.ShellPreamble(recipe);
+
+        Assert.Contains("if true; then", preamble);                                   // always-on: no manifest guard
+        Assert.Contains("export HOME=/work/.pcdeps/home", preamble);
+        Assert.Contains("NUGET_FALLBACK_PACKAGES=/work/.pcdeps/nuget-seed", preamble);
+        Assert.Contains("if [ ! -f /work/.baked ]; then", preamble);                  // warm shards still skip the install
     }
 }

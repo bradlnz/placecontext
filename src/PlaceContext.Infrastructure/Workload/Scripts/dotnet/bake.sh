@@ -1,0 +1,1 @@
+mkdir -p {deps}/nuget-seed {app} && printf 'Console.WriteLine("prime");\n' > {app}/prime.cs && env -u NUGET_FALLBACK_PACKAGES NUGET_PACKAGES={deps}/nuget-seed dotnet run {app}/prime.cs

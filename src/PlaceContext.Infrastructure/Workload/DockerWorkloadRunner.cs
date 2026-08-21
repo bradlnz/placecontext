@@ -60,6 +60,7 @@ public sealed class DockerWorkloadRunner : IWorkloadRunner
         string? workDir = null;          // host-side temp dir for code source
         string[]? overrideCmd = null;    // docker CMD override for code workloads
         var depsBaked = false;           // true when running from a warm pcwarm-* image
+        RuntimeDefinition? runtime = null; // the code workload's runtime (its always-on sandbox profile)
 
         if (request.CodeFiles is not null)
         {
@@ -67,9 +68,10 @@ public sealed class DockerWorkloadRunner : IWorkloadRunner
             var runtimeId = request.RuntimeId
                 ?? throw new InvalidOperationException("RuntimeId is required for code workloads.");
 
-            if (!_options.Runtimes.TryGetValue(runtimeId, out var runtime))
+            if (!_options.Runtimes.TryGetValue(runtimeId, out var rt))
                 throw new InvalidOperationException(
                     $"Unknown runtimeId '{runtimeId}'. Configured runtimes: {string.Join(", ", _options.Runtimes.Keys)}.");
+            runtime = rt;
 
             if (string.IsNullOrWhiteSpace(runtime.BaseImage))
                 throw new InvalidOperationException($"Runtime '{runtimeId}' has no BaseImage configured.");
@@ -162,7 +164,7 @@ public sealed class DockerWorkloadRunner : IWorkloadRunner
         var timeoutSeconds = request.TimeoutSeconds is > 0 ? request.TimeoutSeconds.Value : _options.DefaultTimeoutSeconds;
         try
         {
-            var args = BuildArgs(request, image, hostOutDir, hostMounts, workDir, overrideCmd, depsBaked);
+            var args = BuildArgs(request, image, hostOutDir, hostMounts, workDir, overrideCmd, depsBaked, runtime);
             var psi = BuildProcessStartInfo(args);
 
             using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
@@ -407,7 +409,8 @@ public sealed class DockerWorkloadRunner : IWorkloadRunner
         List<(string HostPath, string ContainerPath)> hostMounts,
         string? workDir,
         string[]? overrideCmd,
-        bool depsBaked)
+        bool depsBaked,
+        RuntimeDefinition? runtime = null)
     {
         var args = new List<string> { "run", "--rm", "-i" };
 
@@ -422,10 +425,13 @@ public sealed class DockerWorkloadRunner : IWorkloadRunner
             args.Add(_options.SandboxPidsLimit.ToString());
         }
 
-        if (!string.IsNullOrWhiteSpace(_options.SandboxMemory))
+        // A runtime's always-on profile may need more than the global default (the .NET SDK can't
+        // restore + build a file-based app in 256m once the deps tmpfs counts toward the cgroup).
+        var memory = !string.IsNullOrWhiteSpace(runtime?.SandboxMemory) ? runtime!.SandboxMemory! : _options.SandboxMemory;
+        if (!string.IsNullOrWhiteSpace(memory))
         {
             args.Add("--memory");
-            args.Add(_options.SandboxMemory);
+            args.Add(memory);
         }
 
         if (_options.SandboxCpus > 0)
@@ -442,11 +448,24 @@ public sealed class DockerWorkloadRunner : IWorkloadRunner
             args.Add("/tmp:rw,noexec,nosuid,size=64m");
         }
 
+        // ── Always-on runtime sandbox profile: extra exec-capable tmpfs ──────────────────────────
+        // Toolchains like dotnet (runfile cache) and go (GOCACHE) must exec binaries from their
+        // caches — impossible on the deliberately noexec /tmp. Mounted on EVERY run of the runtime,
+        // including warm runs where the recipe scratch below is skipped.
+        var extraTmpfs = runtime?.ExtraTmpfs ?? Array.Empty<string>();
+        foreach (var tmpfs in extraTmpfs)
+        {
+            args.Add("--tmpfs");
+            args.Add(tmpfs);
+        }
+
         // ── Dependency installs: writable, exec-capable scratch ──────────────────────────────────
         // The /tmp tmpfs above is deliberately noexec; dependency installs (node_modules native
         // addons, pip wheels with .so files) need their own exec mount. Only when a recipe applies
         // AND the run is cold — a warm pcwarm-* image has the layer baked in, no scratch needed.
-        if (!depsBaked && WorkloadDependencies.For(request.RuntimeId, request.CodeFiles) is not null)
+        // Skipped when the runtime profile already mounts the deps root (dotnet: always-on recipe).
+        if (!depsBaked && WorkloadDependencies.For(request.RuntimeId, request.CodeFiles) is not null
+            && !extraTmpfs.Any(t => t.StartsWith(WorkloadDependencies.DockerDepsRoot + ":", StringComparison.Ordinal)))
         {
             args.Add("--tmpfs");
             args.Add($"{WorkloadDependencies.DockerDepsRoot}:rw,exec,nosuid,size=512m");
@@ -499,10 +518,11 @@ public sealed class DockerWorkloadRunner : IWorkloadRunner
 
         // ── Environment variables ─────────────────────────────────────────────────────────────────
         // A writable HOME for tools that insist on one (npm cache, go env) — /tmp is the
-        // world-writable tmpfs. Added before the job's own env so the job can still override it.
-        args.Add("-e");
-        args.Add("HOME=/tmp");
-        foreach (var (key, value) in request.Env)
+        // world-writable tmpfs. The runtime profile's env comes next ({deps} → the deps tmpfs) and
+        // may relocate HOME to an exec-capable root; the job's own env is applied last so it can
+        // still override anything. Merged by key — docker would take the last -e anyway, but a
+        // single entry per key keeps the argv inspectable.
+        foreach (var (key, value) in MergeEnvironment(runtime, request))
         {
             args.Add("-e");
             args.Add($"{key}={value}");
@@ -512,11 +532,44 @@ public sealed class DockerWorkloadRunner : IWorkloadRunner
         args.Add(image);
 
         // ── CMD override (CodeWorkload: runtime invoke command) ───────────────────────────────────
+        // The runtime profile's pre-invoke script (mkdir the env dirs, …) wraps the command as
+        // `sh -c '<script> && exec <cmd>'` — after any recipe wrap, so both compose (nested sh -c).
         if (overrideCmd is not null)
+        {
+            if (!string.IsNullOrWhiteSpace(runtime?.PreInvokeScript))
+            {
+                var invoke = string.Join(" ", overrideCmd.Select(ShQuote));
+                overrideCmd = new[] { "sh", "-c", runtime!.PreInvokeScript! + " && exec " + invoke };
+            }
             args.AddRange(overrideCmd);
+        }
 
         return args;
     }
+
+    /// <summary>
+    /// The ordered env for a run: default HOME, then the runtime profile's env (<c>{deps}</c> →
+    /// <see cref="WorkloadDependencies.DockerDepsRoot"/>), then the job's own env — later entries
+    /// override earlier ones by key, position preserved.
+    /// </summary>
+    internal static List<(string Key, string Value)> MergeEnvironment(RuntimeDefinition? runtime, WorkloadRunRequest request)
+    {
+        var pairs = new List<(string Key, string Value)> { ("HOME", "/tmp") };
+        void Set(string key, string value)
+        {
+            var i = pairs.FindIndex(p => string.Equals(p.Key, key, StringComparison.Ordinal));
+            if (i >= 0) pairs[i] = (key, value);
+            else pairs.Add((key, value));
+        }
+        if (runtime?.Env is { } profileEnv)
+            foreach (var (key, value) in profileEnv)
+                Set(key, value.Replace("{deps}", WorkloadDependencies.DockerDepsRoot, StringComparison.Ordinal));
+        foreach (var (key, value) in request.Env)
+            Set(key, value);
+        return pairs;
+    }
+
+    private static string ShQuote(string s) => "'" + s.Replace("'", "'\\''") + "'";
 
     private ProcessStartInfo BuildProcessStartInfo(List<string> args)
     {

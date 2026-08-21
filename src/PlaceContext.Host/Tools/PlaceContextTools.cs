@@ -190,13 +190,19 @@ public sealed class PlaceContextTools
         - `node`  → base `node:22-slim`, default entrypoint `index.js`, invoked `node /work/index.js`.
         - `go`    → base `golang:1.23-alpine`, default entrypoint `main.go`, invoked `go run /work/main.go`.
         - `ruby`  → base `ruby:3.3-slim`, default entrypoint `main.rb`, invoked `ruby /work/main.rb`.
-        - `dotnet`→ base `mcr.microsoft.com/dotnet/sdk:10.0`, default entrypoint `main.cs`, invoked `dotnet run /work/main.cs` (.NET 10 file-based app).
+        - `dotnet`→ base `mcr.microsoft.com/dotnet/sdk:10.0`, default entrypoint `main.cs`, invoked `dotnet run /work/main.cs` (.NET 10 file-based app). The first run is slower (an implicit
+          restore is baked once and reused afterwards). File-based apps disable reflection-based
+          `System.Text.Json` by default — use a source-generated `JsonSerializerContext`, or add
+          `#:property JsonSerializerIsReflectionEnabledByDefault=true` at the top of the file.
+          `#:property`/`#:package` directives are supported; `#:package` downloads need network egress.
 
         ## Dependencies
         Ship your runtime's manifest as an extra file and packages install before the entrypoint runs:
         `requirements.txt` (pip), `package.json` (npm), `Gemfile` (bundler), `go.mod` (go modules).
         Downloads need the job's network-egress policy set to allow — the sealed sandbox is never
-        relaxed implicitly. `dotnet` has no manifest step; stay dependency-free there.
+        relaxed implicitly. `dotnet` has no manifest step; the runtime packs it needs are baked into
+        a warm image, and extra packages come from `#:package` directives (those downloads need
+        network egress).
 
         ## Environment variables & secrets
         Plain config goes in the job's `env`. **Secrets/credentials come from the encrypted vault** —
