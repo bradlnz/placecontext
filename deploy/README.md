@@ -19,7 +19,7 @@ tools/             ← NOT delivered to clients
 ## Install (customers)
 
 ```bash
-curl -fsSL https://get.placecontext.ai/install.sh | bash
+curl -fsSL https://get.placecontext.io/install.sh | bash
 ```
 
 Installs the `placecontext` command and opens the TUI. From there (or CLI):

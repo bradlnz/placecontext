@@ -1,4 +1,4 @@
-module placecontext.dev/placecontext-tui
+module placecontext.io/placecontext-tui
 
 go 1.26.2
 

@@ -9,7 +9,7 @@ endpoint all operate on the same durable job engine.
 
 ```bash
 # Install the placecontext CLI, then open the TUI
-curl -fsSL https://get.placecontext.ai/install.sh | bash
+curl -fsSL https://get.placecontext.io/install.sh | bash
 placecontext               # install / upgrade / connect a cluster
 # one command installs CLI + assets; cluster install pulls the PlaceContext image if not cached locally
 # after cluster install → portal http://localhost:7700   ·   MCP /mcp

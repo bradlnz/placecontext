@@ -8,10 +8,10 @@ namespace PlaceContext.Host.Tenancy;
 public static class PublicUrl
 {
     /// <summary>Base domains whose subdomains identify tenants (product apex + dev loopback).</summary>
-    internal static readonly string[] TenantBaseDomains = [".placecontext.ai", ".localhost"];
+    internal static readonly string[] TenantBaseDomains = [".placecontext.io", ".localhost"];
 
     /// <summary>Exact hosts served as the shared default tenant (loopback addresses + apex).</summary>
-    internal static readonly string[] DefaultTenantHosts = ["localhost", "placecontext.ai", "127.0.0.1", "::1", "[::1]"];
+    internal static readonly string[] DefaultTenantHosts = ["localhost", "placecontext.io", "127.0.0.1", "::1", "[::1]"];
 
     /// <summary>
     /// True when <paramref name="host"/> is one of ours: the apex, a tenant subdomain of a known

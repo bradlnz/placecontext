@@ -10,7 +10,7 @@ There is also a **personal project data API** for entities and search at `/api/v
 `X-Project-Id` / `X-Project` middleware) authenticated with user API tokens from
 **Settings → API tokens** (`pct_…`). See the end of this document.
 
-- Base URL: `https://{your-workspace}.placecontext.ai/api/v1` (or `http://{workspace}.localhost:7700/api/v1`
+- Base URL: `https://{your-workspace}.placecontext.io/api/v1` (or `http://{workspace}.localhost:7700/api/v1`
   in local dev — the workspace is resolved from the subdomain, same as the portal/MCP).
 - All request/response bodies are JSON, `camelCase` field names.
 - All endpoints require authentication (see below) — there is no anonymous access.
@@ -444,7 +444,7 @@ Example:
 ```bash
 curl -H "Authorization: Bearer pct_…" \
      -H "X-Project: storefront-api" \
-     https://ws.placecontext.ai/api/v1/sites
+     https://ws.placecontext.io/api/v1/sites
 ```
 
 Search example:
@@ -452,7 +452,7 @@ Search example:
 ```bash
 curl -H "Authorization: Bearer pct_…" \
      -H "X-Project: storefront-api" \
-     "https://ws.placecontext.ai/api/v1/search?q=customer&limit=25"
+     "https://ws.placecontext.io/api/v1/search?q=customer&limit=25"
 ```
 
 The search response contains `query`, `projectId`, `count`, and a `hits` array. Each hit includes

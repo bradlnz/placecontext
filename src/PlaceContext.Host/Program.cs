@@ -465,7 +465,7 @@ app.Use(async (ctx, next) =>
     ctx.Response.Headers.TryAdd("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
     await next();
 });
-app.UseMiddleware<TenantResolutionMiddleware>(); // resolve {user}.placecontext.ai → tenant, before any data access
+app.UseMiddleware<TenantResolutionMiddleware>(); // resolve {user}.placecontext.io → tenant, before any data access
 // Project for the entity data and search APIs: X-Project-Id / X-Project (optional elsewhere).
 app.UseMiddleware<ProjectResolutionMiddleware>();
 app.UseAuthentication();

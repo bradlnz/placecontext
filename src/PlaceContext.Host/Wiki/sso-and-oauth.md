@@ -19,7 +19,7 @@ still receives the PlaceContext role and project access assigned in the workspac
 Use a stable public HTTPS origin and configure it explicitly:
 
 ```text
-PlaceContext__PublicBaseUrl=https://placecontext.example.com
+PlaceContext__PublicBaseUrl=https://placecontext.io
 ```
 
 Persist `PlaceContext:OAuth:SigningKeyPem` and `PlaceContext:DataProtection:Key`, and share the same
@@ -27,8 +27,8 @@ values across replicas. The reverse proxy must preserve the original host/protoc
 authorization redirects. Verify the advertised endpoints before registering another application:
 
 ```text
-https://placecontext.example.com/.well-known/oauth-authorization-server
-https://placecontext.example.com/.well-known/jwks.json
+https://placecontext.io/.well-known/oauth-authorization-server
+https://placecontext.io/.well-known/jwks.json
 ```
 
 ## Use PlaceContext sign-in in another platform
@@ -51,11 +51,11 @@ then configure the external application with:
 
 | Item | Value |
 |---|---|
-| Authorization server metadata | `https://placecontext.example.com/.well-known/oauth-authorization-server` |
-| Authorization endpoint | `https://placecontext.example.com/connect/authorize` |
-| Token endpoint | `https://placecontext.example.com/connect/token` |
-| User information endpoint | `https://placecontext.example.com/connect/userinfo` |
-| JWKS | `https://placecontext.example.com/.well-known/jwks.json` |
+| Authorization server metadata | `https://placecontext.io/.well-known/oauth-authorization-server` |
+| Authorization endpoint | `https://placecontext.io/connect/authorize` |
+| Token endpoint | `https://placecontext.io/connect/token` |
+| User information endpoint | `https://placecontext.io/connect/userinfo` |
+| JWKS | `https://placecontext.io/.well-known/jwks.json` |
 | Client authentication | Public client; no client secret |
 | Flow | Authorization code with PKCE S256 |
 | Scope | `identity` |
@@ -74,7 +74,7 @@ an exact trusted-client match; dynamically registered MCP clients cannot request
 Register PlaceContext as a public PKCE client at the external authority. Use this callback exactly:
 
 ```text
-https://placecontext.example.com/auth/sso/callback
+https://placecontext.io/auth/sso/callback
 ```
 
 Then configure:
@@ -82,7 +82,7 @@ Then configure:
 ```text
 PlaceContext__Sso__Authority=https://identity.example.com
 PlaceContext__Sso__ClientId=placecontext
-PlaceContext__Sso__CallbackUrl=https://placecontext.example.com/auth/sso/callback
+PlaceContext__Sso__CallbackUrl=https://placecontext.io/auth/sso/callback
 ```
 
 Start the flow at `/auth/sso` (optionally with a local `returnUrl`). The authority must support a
