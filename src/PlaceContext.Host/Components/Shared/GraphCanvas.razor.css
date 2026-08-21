@@ -74,6 +74,53 @@
     width: 100%;
 }
 
+.docked-detail-shell.docked-panel-open {
+    grid-template-columns: minmax(0, 1fr) 7px var(--graph-detail-width, 380px);
+    grid-template-rows: minmax(0, 1fr);
+}
+
+.docked-detail-shell.docked-panel-open .graph-canvas {
+    grid-column: 1;
+    grid-row: 1;
+}
+
+.graph-detail-splitter {
+    grid-column: 2;
+    grid-row: 1;
+    position: relative;
+    cursor: col-resize;
+    background: var(--panel);
+    border-left: 1px solid var(--border);
+    border-right: 1px solid var(--border);
+    touch-action: none;
+    outline: none;
+    z-index: 6;
+}
+
+.graph-detail-splitter::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 3px;
+    height: 42px;
+    border-radius: 3px;
+    background: var(--border-2);
+    transform: translate(-50%, -50%);
+}
+
+.graph-detail-splitter:hover,
+.graph-detail-splitter:focus-visible,
+.graph-detail-splitter.dragging {
+    background: color-mix(in srgb, var(--brand) 18%, var(--panel));
+}
+
+.graph-detail-splitter:hover::after,
+.graph-detail-splitter:focus-visible::after,
+.graph-detail-splitter.dragging::after {
+    background: var(--brand-2);
+}
+
 .detail-card {
     position: absolute;
     width: min(340px, calc(100% - 28px));
@@ -90,6 +137,20 @@
 
 .media-detail-window {
     width: min(480px, calc(100% - 28px));
+}
+
+.docked-detail-window,
+.docked-detail-window.media-detail-window {
+    grid-column: 3;
+    grid-row: 1;
+    position: relative;
+    top: auto;
+    left: auto;
+    width: auto;
+    min-width: 0;
+    box-sizing: border-box;
+    border-radius: 0;
+    box-shadow: none;
 }
 
 .panel-window-head {
@@ -111,21 +172,27 @@
 
 .panel-window-handle {
     appearance: none;
-    width: 22px;
+    width: auto;
     height: 22px;
+    padding: 0 7px;
     border-radius: 6px;
     flex: none;
-    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
     background: color-mix(in srgb, var(--card-2) 85%, var(--card));
     border: 1px solid var(--border);
+    color: var(--text-3);
+    font: 9px/1 var(--font-sans);
+    text-transform: uppercase;
+    letter-spacing: .04em;
     cursor: grab;
     touch-action: none;
 }
 
-.panel-window-handle::before {
-    content: "";
-    position: absolute;
-    inset: 5px 4px;
+.panel-window-grip {
+    width: 12px;
+    height: 10px;
     border-top: 1px solid var(--text-3);
     border-bottom: 1px solid var(--text-3);
 }
@@ -478,6 +545,28 @@
 }
 
 @media (max-width: 700px) {
+    .docked-detail-shell.docked-panel-open {
+        display: flex !important;
+        flex-direction: column;
+    }
+
+    .docked-detail-shell .graph-detail-splitter {
+        display: none;
+    }
+
+    .docked-detail-shell .docked-detail-window {
+        position: absolute;
+        top: 8px !important;
+        left: 8px !important;
+        right: 8px;
+        width: auto;
+        height: calc(100% - 16px) !important;
+        max-height: none !important;
+        border-radius: 8px;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, .35);
+        z-index: 20;
+    }
+
     .graph-detail-window {
         left: 8px !important;
         width: calc(100% - 16px);

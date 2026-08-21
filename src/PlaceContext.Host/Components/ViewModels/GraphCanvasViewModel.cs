@@ -54,13 +54,22 @@ public sealed class GraphCanvasViewModel(IJSRuntime js, IPlaceContextService? se
     private readonly Dictionary<string, JobRunDetailView> _runDetails = [];
     private readonly Dictionary<string, string> _runDetailErrors = [];
     private readonly HashSet<string> _runDetailRequests = [];
+    private readonly Dictionary<string, PanelPosition> _panelPositions = [];
+    private string? _draggingPanelId;
+    private double _dragStartX;
+    private double _dragStartY;
+    private double _windowStartLeft;
+    private double _windowStartTop;
     public string Id { get; } = "pcgraph-" + Guid.NewGuid().ToString("N");
     public GraphVizView? Graph => _graph;
     public int Height { get; private set; } = 340;
     public Func<GraphNodeView, string?>? NodeUrl => _nodeUrl;
     public bool Searchable { get; private set; }
     public bool AllowFullscreen { get; private set; }
+    public bool DockDetails { get; private set; }
+    public bool SinglePanel { get; private set; }
     public bool Fullscreen { get; private set; }
+    public bool IsPanelDragging => _draggingPanelId is not null;
     public string SearchTerm => _search;
     public GraphNodeView? Selected { get; private set; }
     public IReadOnlyList<GraphNodeView> OpenPanels { get; private set; } = [];
@@ -75,11 +84,15 @@ public sealed class GraphCanvasViewModel(IJSRuntime js, IPlaceContextService? se
     [];
     public string ContainerStyle =>
         Fullscreen
-            ? "position:fixed; inset:0; z-index:200; background:var(--bg); padding:14px; display:flex; flex-direction:column"
+            ? DockDetails
+                ? "position:fixed; inset:0; z-index:200; background:var(--bg); padding:14px; display:grid"
+                : "position:fixed; inset:0; z-index:200; background:var(--bg); padding:14px; display:flex; flex-direction:column"
             : "position:relative";
     public string ChromeStyle =>
         Fullscreen ? string.Empty : "position:absolute; top:8px; left:10px; right:10px; z-index:5";
-    public string CanvasStyle => Fullscreen ? "flex:1; min-height:0" : $"height:{Height}px";
+    public string CanvasStyle => Fullscreen
+        ? DockDetails ? "min-height:0; height:100%" : "flex:1; min-height:0"
+        : $"height:{Height}px";
     public string DetailStyle => $"max-height:{Height - 20}px";
     public string FullscreenLabel => Fullscreen ? "✕ Exit full screen" : "⛶ Full screen";
     public bool HasMoreGraphNodes => _graph is not null && _renderedNodeCount < _graph.Nodes.Count;
@@ -97,7 +110,9 @@ public sealed class GraphCanvasViewModel(IJSRuntime js, IPlaceContextService? se
         Func<GraphNodeView, string?>? nodeUrl,
         bool searchable,
         bool allowFullscreen,
-        Func<string?, Task>? nodeClick = null
+        Func<string?, Task>? nodeClick = null,
+        bool dockDetails = false,
+        bool singlePanel = false
     )
     {
         if (!ReferenceEquals(_graph, graph))
@@ -114,6 +129,8 @@ public sealed class GraphCanvasViewModel(IJSRuntime js, IPlaceContextService? se
             _runDetails.Clear();
             _runDetailErrors.Clear();
             _runDetailRequests.Clear();
+            _panelPositions.Clear();
+            _draggingPanelId = null;
             if (_graph is not null)
                 for (var i = 0; i < _graph.Nodes.Count; i++)
                     _nodeIndex[_graph.Nodes[i].Id] = i;
@@ -122,6 +139,8 @@ public sealed class GraphCanvasViewModel(IJSRuntime js, IPlaceContextService? se
         _nodeUrl = nodeUrl;
         Searchable = searchable;
         AllowFullscreen = allowFullscreen;
+        DockDetails = dockDetails;
+        SinglePanel = singlePanel;
         _nodeClick = nodeClick;
     }
 
@@ -258,13 +277,19 @@ public sealed class GraphCanvasViewModel(IJSRuntime js, IPlaceContextService? se
                 ? []
                 : WalkToArtifacts(Selected.Id);
         SelectedNeighbors = Selected is null ? [] : NeighborsFor(Selected);
-        if (selected is not null)
+        if (selected is null && SinglePanel)
         {
-            OpenPanels = OpenPanels
-                .Where(node => node.Id != selected.Id)
-                .Append(selected)
-                .TakeLast(MaxOpenPanels)
-                .ToList();
+            OpenPanels = [];
+        }
+        else if (selected is not null)
+        {
+            OpenPanels = SinglePanel
+                ? [selected]
+                : OpenPanels
+                    .Where(node => node.Id != selected.Id)
+                    .Append(selected)
+                    .TakeLast(MaxOpenPanels)
+                    .ToList();
         }
         NotifyStateChanged();
         if (_nodeClick is not null)
@@ -325,6 +350,9 @@ public sealed class GraphCanvasViewModel(IJSRuntime js, IPlaceContextService? se
 
     public async Task ClosePanelAsync(string nodeId)
     {
+        if (_draggingPanelId == nodeId)
+            _draggingPanelId = null;
+        _panelPositions.Remove(nodeId);
         OpenPanels = OpenPanels.Where(node => node.Id != nodeId).ToList();
         _runDetails.Remove(nodeId);
         _runDetailErrors.Remove(nodeId);
@@ -339,6 +367,67 @@ public sealed class GraphCanvasViewModel(IJSRuntime js, IPlaceContextService? se
             return;
         }
         NotifyStateChanged();
+    }
+
+    public string PanelStyle(string nodeId)
+    {
+        var position = EnsurePanelPosition(nodeId);
+        var zIndex = 20 + Math.Max(0, OpenPanels.ToList().FindIndex(node => node.Id == nodeId));
+        return FormattableString.Invariant(
+            $"top:{position.Top:0.##}px; left:{position.Left:0.##}px; z-index:{zIndex}; max-height:{Math.Max(Height - 20, 220)}px;"
+        );
+    }
+
+    public string DetailPanelStyle(string nodeId) =>
+        DockDetails
+            ? Fullscreen
+                ? "height:100%; max-height:none;"
+                : $"height:{Height}px; max-height:{Height}px;"
+            : PanelStyle(nodeId);
+
+    public void StartPanelDrag(string nodeId, double clientX, double clientY)
+    {
+        var position = EnsurePanelPosition(nodeId);
+        BringPanelToFront(nodeId);
+        _draggingPanelId = nodeId;
+        _dragStartX = clientX;
+        _dragStartY = clientY;
+        _windowStartLeft = position.Left;
+        _windowStartTop = position.Top;
+    }
+
+    public void MovePanel(double clientX, double clientY)
+    {
+        if (_draggingPanelId is null)
+            return;
+
+        _panelPositions[_draggingPanelId] = new PanelPosition(
+            Math.Max(0, _windowStartLeft + clientX - _dragStartX),
+            Math.Max(0, _windowStartTop + clientY - _dragStartY)
+        );
+        NotifyStateChanged();
+    }
+
+    public void StopPanelDrag() => _draggingPanelId = null;
+
+    public void PrunePanelPositions()
+    {
+        var openIds = OpenPanels.Select(node => node.Id).ToHashSet(StringComparer.Ordinal);
+        foreach (var nodeId in _panelPositions.Keys.Where(nodeId => !openIds.Contains(nodeId)).ToList())
+            _panelPositions.Remove(nodeId);
+        if (_draggingPanelId is not null && !openIds.Contains(_draggingPanelId))
+            _draggingPanelId = null;
+    }
+
+    private PanelPosition EnsurePanelPosition(string nodeId)
+    {
+        if (_panelPositions.TryGetValue(nodeId, out var position))
+            return position;
+
+        var offset = _panelPositions.Count % 7 * 26;
+        position = new PanelPosition(14 + offset, 14 + offset);
+        _panelPositions[nodeId] = position;
+        return position;
     }
 
     public void BringPanelToFront(string nodeId)
@@ -477,24 +566,40 @@ public sealed class GraphCanvasViewModel(IJSRuntime js, IPlaceContextService? se
             links = payload.Links.Select(BuildLinkPayload),
         };
 
-    public Task AfterRenderAsync()
+    public async Task AfterRenderAsync()
     {
         if (_graph is null || _graph.Nodes.Count == 0)
-            return Task.CompletedTask;
+            return;
 
         var graphKey = BuildGraphRenderKey(_graph);
-        if (_renderedGraphKey == graphKey && ReferenceEquals(_graphForRender, _graph) && _renderedNodeCount > 0)
-            return Task.CompletedTask;
+        if (_renderedGraphKey != graphKey || !ReferenceEquals(_graphForRender, _graph) || _renderedNodeCount == 0)
+        {
+            _selfReference ??= DotNetObjectReference.Create(this);
+            var payload = BuildGraphPayload();
+            if (payload.Nodes.Count > 0)
+            {
+                _graphForRender = _graph;
+                _renderedGraphKey = graphKey;
+                await _js.InvokeVoidAsync("pcgraph.init", Id, BuildPayloadForCall(payload), _selfReference);
+            }
+        }
 
-        _selfReference ??= DotNetObjectReference.Create(this);
-        var payload = BuildGraphPayload();
-        if (payload.Nodes.Count == 0)
-            return Task.CompletedTask;
-
-        _graphForRender = _graph;
-        _renderedGraphKey = graphKey;
-
-        return _js.InvokeVoidAsync("pcgraph.init", Id, BuildPayloadForCall(payload), _selfReference).AsTask();
+        if (DockDetails && OpenPanels.Count > 0)
+        {
+            await _js.InvokeVoidAsync(
+                "pcgraph.splitter",
+                $"{Id}-detail-splitter",
+                new
+                {
+                    cssProperty = "--graph-detail-width",
+                    side = "next",
+                    defaultWidth = 380,
+                    min = 300,
+                    max = 620,
+                    reserve = 360,
+                }
+            );
+        }
     }
 
     private GraphPayload BuildGraphPayload()
@@ -554,4 +659,6 @@ public sealed class GraphCanvasViewModel(IJSRuntime js, IPlaceContextService? se
         }
         return found.OrderBy(item => item.Item2).ToList();
     }
+
+    private sealed record PanelPosition(double Left, double Top);
 }

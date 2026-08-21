@@ -421,5 +421,63 @@
     instances.delete(id);
   }
 
-  window.pcgraph = { init, append, select, destroy };
+  function splitter(handleId, options) {
+    const handle = document.getElementById(handleId);
+    if (!handle || handle.dataset.bound === '1') return;
+    const studio = handle.parentElement;
+    if (!studio) return;
+    handle.dataset.bound = '1';
+    options = options || {};
+    const side = options.side === 'next' ? 'next' : 'previous';
+    const resized = side === 'next' ? handle.nextElementSibling : handle.previousElementSibling;
+    if (!resized) return;
+    const cssProperty = options.cssProperty || '--graph-sidebar-width';
+    const defaultWidth = options.defaultWidth || 280;
+    const minWidth = options.min || 220;
+    const maxWidth = options.max || 520;
+    const reserve = options.reserve || 320;
+    const direction = side === 'next' ? -1 : 1;
+
+    const resizeTo = width => {
+      const available = studio.getBoundingClientRect().width;
+      const max = Math.max(minWidth, Math.min(maxWidth, available - reserve));
+      const next = Math.min(max, Math.max(minWidth, width));
+      studio.style.setProperty(cssProperty, `${Math.round(next)}px`);
+      handle.setAttribute('aria-valuenow', String(Math.round(next)));
+    };
+
+    handle.addEventListener('pointerdown', e => {
+      if (e.button !== 0) return;
+      e.preventDefault();
+      const startX = e.clientX;
+      const startWidth = resized.getBoundingClientRect().width;
+      handle.setPointerCapture(e.pointerId);
+      handle.classList.add('dragging');
+
+      const move = ev => resizeTo(startWidth + (ev.clientX - startX) * direction);
+      const stop = ev => {
+        if (handle.hasPointerCapture(ev.pointerId)) handle.releasePointerCapture(ev.pointerId);
+        handle.classList.remove('dragging');
+        handle.removeEventListener('pointermove', move);
+        handle.removeEventListener('pointerup', stop);
+        handle.removeEventListener('pointercancel', stop);
+      };
+      handle.addEventListener('pointermove', move);
+      handle.addEventListener('pointerup', stop);
+      handle.addEventListener('pointercancel', stop);
+    });
+
+    handle.addEventListener('keydown', e => {
+      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+      e.preventDefault();
+      const current = resized.getBoundingClientRect().width;
+      const movement = e.key === 'ArrowLeft' ? -20 : 20;
+      resizeTo(current + movement * direction);
+    });
+
+    handle.addEventListener('dblclick', () => resizeTo(defaultWidth));
+    resizeTo(resized.getBoundingClientRect().width || defaultWidth);
+  }
+
+  window.pcgraph = { init, append, select, destroy, splitter };
 })();

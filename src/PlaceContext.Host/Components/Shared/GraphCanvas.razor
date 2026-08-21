@@ -2,7 +2,8 @@
 @inject GraphCanvasViewModel Vm
 @implements IAsyncDisposable
 
-<div class="pcgraph-shell @(_draggingPanelId is null ? null : "panel-dragging")" style="@Vm.ContainerStyle"
+<div class="pcgraph-shell @(Vm.IsPanelDragging ? "panel-dragging" : null) @(DockDetails ? "docked-detail-shell" : null) @(DockDetails && Vm.OpenPanels.Count > 0 ? "docked-panel-open" : null)"
+     style="@Vm.ContainerStyle"
      @onpointermove="OnPanelDrag" @onpointerup="StopPanelDrag" @onpointerleave="StopPanelDrag">
     @if (Searchable || AllowFullscreen)
     {
@@ -58,10 +59,10 @@
             }
         </div>
     }
-    <canvas id="@Vm.Id" class="graph-canvas" style="@(Vm.Fullscreen ? "flex:1; min-height:0" : $"height:{Height}px")"></canvas>
+    <canvas id="@Vm.Id" class="graph-canvas" style="@Vm.CanvasStyle"></canvas>
 
-    @* Each selected node stays open as its own draggable window. This makes it possible to inspect
-       a run beside one or more of its PDFs/images instead of replacing the previous selection. *@
+    @* Data Graph uses one docked inspector whose contents are replaced on selection. Other graph
+       surfaces can keep several movable inspectors open for side-by-side comparison. *@
     @foreach (var sel in Vm.OpenPanels)
     {
         var reachableArtifacts = Vm.ReachableArtifactsFor(sel);
@@ -71,13 +72,26 @@
             .FirstOrDefault(artifact => artifact is not null && Vm.IsPreviewable(artifact));
         var hasPreview = sel.Artifact is { } ownArtifact && Vm.IsPreviewable(ownArtifact)
             || relatedPreview is not null;
-        <div @key="sel.Id" class="dccard detail-card graph-detail-window @(hasPreview ? "media-detail-window" : "")"
-             style="@PanelStyle(sel.Id)">
+        @if (DockDetails)
+        {
+            <div id="@(Vm.Id)-detail-splitter" class="graph-detail-splitter"
+                 role="separator" aria-label="Resize details panel" aria-orientation="vertical"
+                 aria-valuemin="300" aria-valuemax="620" tabindex="0"
+                 title="Drag to resize details"></div>
+        }
+        <div @key="@(DockDetails ? "docked-detail-panel" : sel.Id)" class="dccard detail-card graph-detail-window @(DockDetails ? "docked-detail-window" : null) @(hasPreview ? "media-detail-window" : "")"
+             style="@Vm.DetailPanelStyle(sel.Id)">
             <div class="card-head panel-window-head">
-                <button type="button" class="panel-window-handle"
-                        title="Drag panel" aria-label="Drag panel"
-                        @onpointerdown="@(args => StartPanelDrag(sel.Id, args))"
-                        @onpointerdown:preventDefault="true"></button>
+                @if (!DockDetails)
+                {
+                    <button type="button" class="panel-window-handle"
+                            title="Drag panel" aria-label="Drag panel"
+                            @onpointerdown="@(args => StartPanelDrag(sel.Id, args))"
+                            @onpointerdown:preventDefault="true">
+                        <span class="panel-window-grip" aria-hidden="true"></span>
+                        <span>Drag</span>
+                    </button>
+                }
                 <div class="flex-min">
                     <div class="sel-label">@Vm.ShortLabel(sel.Label)</div>
                     <div class="sel-id">@sel.Id</div>
@@ -280,17 +294,24 @@
     [Parameter] public Func<GraphNodeView, string?>? NodeUrl { get; set; }
     [Parameter] public bool Searchable { get; set; }
     [Parameter] public bool AllowFullscreen { get; set; }
+    [Parameter] public bool DockDetails { get; set; }
+    [Parameter] public bool SinglePanel { get; set; }
     [Parameter] public EventCallback<string?> NodeClick { get; set; }
     protected override void OnInitialized() => Vm.Attach(() => InvokeAsync(StateHasChanged));
     protected override void OnParametersSet() =>
-        Vm.SetParameters(Graph, Height, NodeUrl, Searchable, AllowFullscreen, nodeId => NodeClick.InvokeAsync(nodeId));
+        Vm.SetParameters(
+            Graph,
+            Height,
+            NodeUrl,
+            Searchable,
+            AllowFullscreen,
+            nodeId => NodeClick.InvokeAsync(nodeId),
+            DockDetails,
+            SinglePanel
+        );
     protected override Task OnAfterRenderAsync(bool firstRender)
     {
-        var openIds = Vm.OpenPanels.Select(node => node.Id).ToHashSet(StringComparer.Ordinal);
-        foreach (var nodeId in _panelPositions.Keys.Where(nodeId => !openIds.Contains(nodeId)).ToList())
-            _panelPositions.Remove(nodeId);
-        if (_draggingPanelId is not null && !openIds.Contains(_draggingPanelId))
-            _draggingPanelId = null;
+        Vm.PrunePanelPositions();
         return Vm.AfterRenderAsync();
     }
 
@@ -298,63 +319,14 @@
     private Task LoadMoreGraphAsync() => Vm.LoadMoreAsync();
     public ValueTask DisposeAsync() => Vm.DisposeAsync();
     public Task SelectNodeAsync(string? nodeId) => Vm.SelectAsync(nodeId);
-    private readonly Dictionary<string, PanelPosition> _panelPositions = [];
-    private string? _draggingPanelId;
-    private double _dragStartX;
-    private double _dragStartY;
-    private double _windowStartLeft;
-    private double _windowStartTop;
-
-    private string PanelStyle(string nodeId)
-    {
-        if (!_panelPositions.TryGetValue(nodeId, out var position))
-        {
-            var offset = _panelPositions.Count % 7 * 26;
-            position = new PanelPosition(14 + offset, 14 + offset);
-            _panelPositions[nodeId] = position;
-        }
-        var zIndex = 20 + Math.Max(0, Vm.OpenPanels.ToList().FindIndex(node => node.Id == nodeId));
-        return FormattableString.Invariant(
-            $"top:{position.Top:0.##}px; left:{position.Left:0.##}px; z-index:{zIndex}; max-height:{Math.Max(Height - 20, 220)}px;"
-        );
-    }
-
     private void StartPanelDrag(string nodeId, PointerEventArgs args)
-    {
-        if (!_panelPositions.TryGetValue(nodeId, out var position))
-            return;
-        Vm.BringPanelToFront(nodeId);
-        _draggingPanelId = nodeId;
-        _dragStartX = args.ClientX;
-        _dragStartY = args.ClientY;
-        _windowStartLeft = position.Left;
-        _windowStartTop = position.Top;
-    }
+        => Vm.StartPanelDrag(nodeId, args.ClientX, args.ClientY);
 
     private void OnPanelDrag(PointerEventArgs args)
-    {
-        if (_draggingPanelId is null)
-            return;
-
-        _panelPositions[_draggingPanelId] = new PanelPosition(
-            Math.Max(0, _windowStartLeft + args.ClientX - _dragStartX),
-            Math.Max(0, _windowStartTop + args.ClientY - _dragStartY)
-        );
-        StateHasChanged();
-    }
+        => Vm.MovePanel(args.ClientX, args.ClientY);
 
     private void StopPanelDrag(PointerEventArgs _)
-    {
-        _draggingPanelId = null;
-    }
+        => Vm.StopPanelDrag();
 
-    private Task ClosePanelAsync(string nodeId)
-    {
-        if (_draggingPanelId == nodeId)
-            _draggingPanelId = null;
-        _panelPositions.Remove(nodeId);
-        return Vm.ClosePanelAsync(nodeId);
-    }
-
-    private sealed record PanelPosition(double Left, double Top);
+    private Task ClosePanelAsync(string nodeId) => Vm.ClosePanelAsync(nodeId);
 }

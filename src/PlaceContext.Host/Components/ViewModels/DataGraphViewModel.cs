@@ -1,3 +1,4 @@
+using Microsoft.JSInterop;
 using PlaceContext.Application;
 using PlaceContext.Application.Dtos;
 
@@ -6,8 +7,13 @@ namespace PlaceContext.Host.Components.ViewModels;
 public sealed class DataGraphViewModel : PageViewModel
 {
     private readonly IPlaceContextService _service;
+    private readonly IJSRuntime _js;
 
-    public DataGraphViewModel(IPlaceContextService service) => _service = service;
+    public DataGraphViewModel(IPlaceContextService service, IJSRuntime js)
+    {
+        _service = service;
+        _js = js;
+    }
 
     public Guid ProjectId { get; private set; }
     public GraphVizView? Graph { get; private set; }
@@ -81,8 +87,12 @@ public sealed class DataGraphViewModel : PageViewModel
     {
         SelectedNodeId = null;
         SearchTerm = string.Empty;
+        NodeSelected?.Invoke(null);
         NotifyStateChanged();
     }
+
+    public Task AfterRenderAsync() =>
+        _js.InvokeVoidAsync("pcgraph.splitter", "data-graph-splitter").AsTask();
 
     private IReadOnlyList<GraphNodeView> BuildFilteredNodes()
     {

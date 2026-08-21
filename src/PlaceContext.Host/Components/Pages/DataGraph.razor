@@ -57,12 +57,23 @@
                     <span>@Vm.Graph.Links.Count links</span>
                 </div>
             </aside>
+            <div id="data-graph-splitter"
+                 class="graph-splitter"
+                 role="separator"
+                 aria-label="Resize node list"
+                 aria-orientation="vertical"
+                 aria-valuemin="220"
+                 aria-valuemax="520"
+                 tabindex="0"
+                 title="Drag to resize the node list"></div>
             <main class="graph-main">
                 <GraphCanvas @ref="_canvas"
                              Graph="Vm.Graph"
                              Height="640"
                              Searchable="true"
                              AllowFullscreen="true"
+                             DockDetails="true"
+                             SinglePanel="true"
                              NodeClick="Vm.SelectNode" />
             </main>
         </div>
@@ -82,10 +93,15 @@
 
     protected override async Task OnParametersSetAsync() => await Vm.LoadAsync(ProjectId);
 
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (Vm.Graph is not null)
+            await Vm.AfterRenderAsync();
+    }
+
     private void OnNodeSelected(string? nodeId)
     {
-        if (nodeId is not null)
-            _ = InvokeAsync(() => _canvas.SelectNodeAsync(nodeId));
+        _ = InvokeAsync(() => _canvas.SelectNodeAsync(nodeId));
     }
 
     public void Dispose()

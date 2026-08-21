@@ -108,6 +108,52 @@ public sealed class TargetShellMvvmMigrationTests
     }
 
     [Fact]
+    public async Task Graph_canvas_moves_an_open_detail_panel_from_its_drag_handle()
+    {
+        var graph = new GraphVizView(
+            Guid.NewGuid(),
+            1,
+            0,
+            [new GraphNodeView("node:one", "Node one", 0, false, null, "Entity")],
+            []
+        );
+        var vm = new GraphCanvasViewModel(new NoOpJsRuntime());
+        vm.SetParameters(graph, 340, null, true, false);
+        await vm.OnNodeClick("node:one");
+
+        vm.StartPanelDrag("node:one", 100, 100);
+        vm.MovePanel(140, 125);
+
+        Assert.True(vm.IsPanelDragging);
+        Assert.Contains("top:39px; left:54px", vm.PanelStyle("node:one"), StringComparison.Ordinal);
+
+        vm.StopPanelDrag();
+        Assert.False(vm.IsPanelDragging);
+    }
+
+    [Fact]
+    public async Task Graph_canvas_single_panel_mode_replaces_the_open_detail_panel()
+    {
+        var graph = new GraphVizView(
+            Guid.NewGuid(),
+            2,
+            0,
+            [
+                new GraphNodeView("node:one", "Node one", 0, false, null, "Entity"),
+                new GraphNodeView("node:two", "Node two", 0, false, null, "Entity"),
+            ],
+            []
+        );
+        var vm = new GraphCanvasViewModel(new NoOpJsRuntime());
+        vm.SetParameters(graph, 340, null, true, false, singlePanel: true);
+
+        await vm.OnNodeClick("node:one");
+        await vm.OnNodeClick("node:two");
+
+        Assert.Equal(["node:two"], vm.OpenPanels.Select(node => node.Id));
+    }
+
+    [Fact]
     public void Graph_canvas_renders_draggable_run_and_artifact_windows_with_close_controls()
     {
         var source = ReadHostSource("Components/Shared/GraphCanvas.razor");
@@ -117,6 +163,30 @@ public sealed class TargetShellMvvmMigrationTests
         Assert.Contains("aria-label=\"Close panel\"", source, StringComparison.Ordinal);
         Assert.Contains("Vm.RunDetailsFor(sel)", source, StringComparison.Ordinal);
         Assert.Contains("Vm.IsPdf(artifact)", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Data_graph_renders_an_accessible_draggable_split_between_the_node_list_and_canvas()
+    {
+        var source = ReadHostSource("Components/Pages/DataGraph.razor");
+        var viewModel = ReadHostSource("Components/ViewModels/DataGraphViewModel.cs");
+
+        Assert.Contains("id=\"data-graph-splitter\"", source, StringComparison.Ordinal);
+        Assert.Contains("role=\"separator\"", source, StringComparison.Ordinal);
+        Assert.Contains("pcgraph.splitter", viewModel, StringComparison.Ordinal);
+        Assert.Contains("DockDetails=\"true\"", source, StringComparison.Ordinal);
+        Assert.Contains("SinglePanel=\"true\"", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Default_workspace_includes_a_job_that_returns_a_named_pdf_file()
+    {
+        var source = ReadHostSource("Startup/DefaultWorkspaceBootstrap.cs");
+
+        Assert.Contains("\"Generate PDF report\"", source, StringComparison.Ordinal);
+        Assert.Contains("JobReturnType.Pdf", source, StringComparison.Ordinal);
+        Assert.Contains("returnFileName: \"workspace-report.pdf\"", source, StringComparison.Ordinal);
+        Assert.Contains("Path(\"/out\")", source, StringComparison.Ordinal);
     }
 
     [Fact]
