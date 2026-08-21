@@ -352,26 +352,26 @@ public static class JobTemplateCatalog
         Id: "webhook-receiver",
         Name: "Webhook receiver",
         Category: "Common patterns",
-        Description: "A starter job that echoes and validates a webhook payload. Pair with an Event trigger to run automatically.",
+        Description: "Handle JSON delivered through the authenticated /api/ingest/{event} endpoint. Pair the job with an Event trigger using the same event name.",
         Icon: "⇄",
         MapSourceKind: "code",
         MapRuntimeId: "node",
         MapEntrypoint: "index.js",
         MapSource: WebhookSource,
-        MapEnvRaw: "WEBHOOK_SECRET=",
-        InputPayloadsRaw: "{}",
+        MapEnvRaw: "",
+        InputPayloadsRaw: "{\"event\":\"example\",\"data\":{}}",
         Parameters: Array.Empty<JobParameterDto>(),
         ReturnType: JobReturnType.Json,
         AllowNetworkEgress: false,
-        RequiredCredentials: new[]
-        {
-            new JobCredentialRequirement("Webhook secret (optional)", "A shared secret used to validate webhook signatures. Optional but recommended.", "WEBHOOK_SECRET")
-        })
+        RequiredCredentials: Array.Empty<JobCredentialRequirement>())
     {
         SourcesByRuntime = new Dictionary<string, string>
         {
             ["node"] = WebhookSource,
             ["python"] = WebhookPythonSource,
+            ["go"] = WebhookGoSource,
+            ["ruby"] = WebhookRubySource,
+            ["dotnet"] = WebhookDotNetSource,
         },
     };
 
@@ -615,21 +615,9 @@ async function main() {
 
 main().catch(e => { console.error(e); process.exit(1); });";
 
-    private const string WebhookSource = @"const crypto = require('crypto');
-
-function main() {
+    private const string WebhookSource = @"function main() {
   const data = require('fs').readFileSync('/dev/stdin', 'utf8');
   const payload = JSON.parse(data || '{}');
-  const secret = process.env.WEBHOOK_SECRET;
-  const signature = process.env.WEBHOOK_SIGNATURE || '';
-
-  if (secret && signature) {
-    const expected = crypto.createHmac('sha256', secret).update(data).digest('hex');
-    if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) {
-      throw new Error('Invalid webhook signature');
-    }
-  }
-
   process.stdout.write(JSON.stringify({ received: true, payload }));
 }
 
@@ -1025,24 +1013,13 @@ if __name__ == ""__main__"":
         print(e, file=sys.stderr)
         sys.exit(1)";
 
-    private const string WebhookPythonSource = @"import hashlib
-import hmac
-import json
-import os
+    private const string WebhookPythonSource = @"import json
 import sys
 
 
 def main():
     data = sys.stdin.read()
     payload = json.loads(data or ""{}"")
-    secret = os.environ.get(""WEBHOOK_SECRET"")
-    signature = os.environ.get(""WEBHOOK_SIGNATURE"", """")
-
-    if secret and signature:
-        expected = hmac.new(secret.encode(), data.encode(), hashlib.sha256).hexdigest()
-        if not hmac.compare_digest(signature, expected):
-            raise RuntimeError(""Invalid webhook signature"")
-
     print(json.dumps({""received"": True, ""payload"": payload}), end="""")
 
 
@@ -1052,6 +1029,52 @@ if __name__ == ""__main__"":
     except Exception as e:
         print(e, file=sys.stderr)
         sys.exit(1)";
+
+    private const string WebhookGoSource = @"package main
+
+import (
+    ""encoding/json""
+    ""fmt""
+    ""io""
+    ""os""
+)
+
+func main() {
+    data, err := io.ReadAll(os.Stdin)
+    if err != nil {
+        panic(err)
+    }
+    if len(data) == 0 {
+        data = []byte(""{}"")
+    }
+    var payload any
+    if err := json.Unmarshal(data, &payload); err != nil {
+        fmt.Fprintln(os.Stderr, err)
+        os.Exit(1)
+    }
+    if err := json.NewEncoder(os.Stdout).Encode(map[string]any{
+        ""received"": true,
+        ""payload"": payload,
+    }); err != nil {
+        panic(err)
+    }
+}";
+
+    private const string WebhookRubySource = @"require 'json'
+
+data = STDIN.read
+payload = JSON.parse(data.empty? ? '{}' : data)
+STDOUT.write(JSON.generate({ received: true, payload: payload }))";
+
+    private const string WebhookDotNetSource = @"using System.Text.Json;
+
+var data = Console.In.ReadToEnd();
+using var payload = JsonDocument.Parse(string.IsNullOrWhiteSpace(data) ? ""{}"" : data);
+Console.Write(JsonSerializer.Serialize(new
+{
+    received = true,
+    payload = payload.RootElement
+}));";
 
     private const string CsvToDbPythonSource = @"# requirements.txt: requests psycopg2-binary
 import csv

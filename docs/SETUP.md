@@ -152,7 +152,7 @@ never lose them.
 
 | Feature | Setting | Notes |
 |---|---|---|
-| **Event ingest webhook** | `PlaceContext:Ingest:Key` | External systems `POST /ingest/{event}` with `X-Ingest-Key`; disabled until set |
+| **Event ingest webhook/API** | `PlaceContext:Ingest:Key` | External systems `POST /api/ingest/{event}` with `X-Ingest-Key`, `X-Api-Key`, or bearer auth; disabled until set (legacy `/ingest/{event}` remains supported) |
 | **GitHub import** | `PlaceContext:GitHub:ClientId` / `ClientSecret` | OAuth app; callback `{host}/auth/github/callback` |
 | **LLM provider** | `PlaceContext:Llm:Provider` | `none` (default — the jobs pipeline is deterministic) or `anthropic` + `ApiKey` for report polish |
 | **App runtime** | `PlaceContext:Runtime:DockerEndpoint` / `AppHost` | Pre-wired to the bundled DinD in the manifests |

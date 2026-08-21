@@ -29,6 +29,7 @@ public sealed class IngestController : ControllerBase
     // the JSON body injected as the triggered runs' input payload. Gated by a shared ingest key
     // (PlaceContext:Ingest:Key); disabled when no key is configured to avoid an open relay.
     [HttpPost("/ingest/{eventName}")]
+    [HttpPost("/api/ingest/{eventName}")]
     [RequestSizeLimit(1024 * 1024)]
     public async Task<IActionResult> Ingest(string eventName, Guid? projectId)
     {
@@ -38,7 +39,7 @@ public sealed class IngestController : ControllerBase
         if (string.IsNullOrWhiteSpace(configuredKey))
             return StatusCode(StatusCodes.Status404NotFound);
 
-        var presented = Request.Headers["X-Ingest-Key"].ToString();
+        var presented = PresentedKey(Request);
         if (!SecureCompare.Equals(presented, configuredKey))
             return Unauthorized();
 
@@ -51,5 +52,22 @@ public sealed class IngestController : ControllerBase
 
         var result = await _svc.EmitEventAsync(eventName, projectId, payload, HttpContext.RequestAborted);
         return Ok(new { result.Name, result.TriggeredRuns, result.OccurredAt });
+    }
+
+    /// <summary>Accept the purpose-built header plus the two authentication shapes used by the
+    /// rest of the public API, so webhook clients are not forced to implement a custom transport.</summary>
+    internal static string PresentedKey(HttpRequest request)
+    {
+        var key = request.Headers["X-Ingest-Key"].ToString();
+        if (string.IsNullOrWhiteSpace(key))
+            key = request.Headers["X-Api-Key"].ToString();
+        if (!string.IsNullOrWhiteSpace(key))
+            return key.Trim();
+
+        var authorization = request.Headers.Authorization.ToString();
+        const string bearer = "Bearer ";
+        return authorization.StartsWith(bearer, StringComparison.OrdinalIgnoreCase)
+            ? authorization[bearer.Length..].Trim()
+            : string.Empty;
     }
 }

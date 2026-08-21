@@ -18,6 +18,23 @@ You can configure one workspace default and override it per project:
 
 The project override wins. Resetting it returns that project to the workspace default.
 
+## Decide whether to install it
+
+OpenSearch is optional. Do not install it when PostgreSQL tables, CSV imports, MCP tools, and job
+outputs cover the workspace's needs. Install or connect it when you need full-text document search,
+aggregations across large indexes, search dashboards, or compatibility with an existing
+OpenSearch/Elasticsearch data estate.
+
+If the organisation already operates a reachable OpenSearch or compatible Elasticsearch endpoint,
+reuse it with a dedicated PlaceContext service user and index scope. Otherwise, choose an
+operator-managed deployment appropriate to the environment (for example a managed service or a
+separately maintained cluster). PlaceContext deliberately does not start infrastructure from the
+browser: installation changes cluster capacity, storage, networking, certificates, and backup
+responsibilities and must remain an explicit operator action.
+
+After the service is healthy, continue with **Prepare OpenSearch** and configure either the
+workspace default or a project override below.
+
 ## Prepare OpenSearch
 
 1. Create or select the indices PlaceContext may access.

@@ -66,15 +66,20 @@ public sealed class TargetPageViewModelTests
     }
 
     [Fact]
-    public void Onboarding_navigates_to_the_getting_started_article()
+    public void Onboarding_routes_each_source_to_its_existing_setup_surface()
     {
-        var nav = new TestNavigationManager();
-        var vm = new OnboardingViewModel(nav);
+        var projectId = Guid.NewGuid();
 
-        vm.Initialize();
-
-        Assert.Equal(PageRoutes.GettingStartedWiki, nav.NavigatedUri);
-        Assert.True(nav.Replace);
+        Assert.Equal(PageRoutes.ProjectData(projectId),
+            OnboardingViewModel.DataSourceRoute("workspace-database", projectId));
+        Assert.Equal(PageRoutes.ConnectionsSettings,
+            OnboardingViewModel.DataSourceRoute("postgresql", projectId));
+        Assert.Equal(PageRoutes.McpSettings,
+            OnboardingViewModel.DataSourceRoute("mcp", projectId));
+        Assert.Equal(PageRoutes.WebhookIngestionWiki,
+            OnboardingViewModel.DataSourceRoute("webhook", projectId));
+        Assert.Equal(PageRoutes.ProjectDataJobs(projectId),
+            OnboardingViewModel.DataSourceRoute("job", projectId));
     }
 
     [Fact]

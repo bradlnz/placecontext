@@ -150,7 +150,8 @@ public sealed class AuthController : ControllerBase
 
         await EnsureDefaultProjectAsync(admin, HttpContext.RequestAborted);
         await SignInAsync(HttpContext, admin);
-        return Redirect(LocalOrHome(returnUrl));
+        var destination = LocalOrHome(returnUrl);
+        return Redirect(destination == "/" ? "/onboarding" : destination);
     }
 
     /// <summary>

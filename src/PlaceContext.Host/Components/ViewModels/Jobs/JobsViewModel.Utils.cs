@@ -80,6 +80,8 @@ public sealed partial class JobsViewModel
                 "const fs = require('fs');\nconst data = JSON.parse(fs.readFileSync('/dev/stdin','utf8'));\nconst result = {};\nprocess.stdout.write(JSON.stringify(result));",
         };
 
+    public static string RuntimeLabel(string runtime) => runtime == "dotnet" ? ".NET (C#)" : runtime;
+
     public static string StatusColor(string? status) => StatusHelper.Color(status);
 
     public static string StatusBg(string? status) => StatusHelper.Background(status);

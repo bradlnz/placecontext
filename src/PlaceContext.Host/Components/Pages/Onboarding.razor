@@ -2,7 +2,193 @@
 @attribute [Authorize(Policy = Permission.ProjectsView)]
 @using PlaceContext.Host.Components.ViewModels
 @inject OnboardingViewModel Vm
+@implements IDisposable
+
+<PageTitle>placecontext — Setup guide</PageTitle>
+
+<main class="setup-guide">
+    <header class="guide-head">
+        <div class="guide-kicker">FIRST LOGIN SETUP</div>
+        <h1>Bring your data into PlaceContext</h1>
+        <p>Choose how this workspace will access data, then decide whether search needs OpenSearch.</p>
+    </header>
+
+    <ol class="guide-steps" aria-label="Setup progress">
+        <li class="@(Vm.Step == SetupGuideStep.DataSource ? "active" : Vm.Step > SetupGuideStep.DataSource ? "done" : null)">
+            <span>1</span>Data source
+        </li>
+        <li class="@(Vm.Step == SetupGuideStep.OpenSearch ? "active" : Vm.Step > SetupGuideStep.OpenSearch ? "done" : null)">
+            <span>2</span>OpenSearch
+        </li>
+        <li class="@(Vm.Step == SetupGuideStep.Ready ? "active" : null)">
+            <span>3</span>Ready
+        </li>
+    </ol>
+
+    @if (Vm.Loading)
+    {
+        <section class="dccard guide-card"><Skeleton Kind="list" Rows="4" /></section>
+    }
+    else if (Vm.Error is not null)
+    {
+        <section class="dccard guide-card guide-error">
+            <h2>We couldn't inspect this workspace</h2>
+            <p>@Vm.Error</p>
+            <button class="dcbtn primary" @onclick="Vm.LoadAsync">Try again</button>
+        </section>
+    }
+    else if (Vm.Step == SetupGuideStep.DataSource)
+    {
+        <section class="dccard guide-card">
+            <div class="guide-section-head">
+                <div>
+                    <div class="guide-number">STEP 1</div>
+                    <h2>Choose a data source</h2>
+                    <p>Start with any supported source. You can add more later.</p>
+                </div>
+                @if (Vm.Projects.Count > 1)
+                {
+                    <label class="project-choice">
+                        Project
+                        <select class="dcinput" value="@Vm.ProjectId" @onchange="Vm.ProjectChangedAsync">
+                            @foreach (var project in Vm.Projects)
+                            {
+                                <option value="@project.Id">@project.Name</option>
+                            }
+                        </select>
+                    </label>
+                }
+            </div>
+
+            @if (Vm.Projects.Count == 0)
+            {
+                <div class="guide-notice">Create a project before connecting a project data source.</div>
+            }
+
+            <div class="source-grid">
+                @foreach (var source in OnboardingViewModel.DataSourceOptions)
+                {
+                    var selected = Vm.SelectedDataSource == source.Key;
+                    <button type="button" class="source-card @(selected ? "selected" : null)"
+                            aria-pressed="@selected" @onclick="() => Vm.SelectDataSource(source.Key)">
+                        <span class="source-mark">@OnboardingViewModel.SourceMark(source.Key)</span>
+                        <span class="source-copy">
+                            <strong>@source.Title</strong>
+                            <small>@source.Description</small>
+                        </span>
+                        <span class="source-check">@(selected ? "✓" : "→")</span>
+                    </button>
+                }
+            </div>
+
+            <div class="guide-actions">
+                <button class="dcbtn quiet" @onclick="Vm.SkipGuide">Set up later</button>
+                <button class="dcbtn primary" disabled="@(!Vm.CanContinue)" @onclick="Vm.ContinueToOpenSearch">
+                    Continue
+                </button>
+            </div>
+        </section>
+    }
+    else if (Vm.Step == SetupGuideStep.OpenSearch)
+    {
+        <section class="dccard guide-card">
+            <div class="guide-section-head">
+                <div>
+                    <div class="guide-number">STEP 2</div>
+                    <h2>Do you need OpenSearch?</h2>
+                    <p>It is optional. Add it for document search, field discovery, aggregations, and search dashboards.</p>
+                </div>
+            </div>
+
+            @if (Vm.HasConfiguredDataSource)
+            {
+                <div class="detected-box">
+                    <strong>Data source already enabled for @Vm.ProjectName</strong>
+                    <span>@string.Join(" · ", Vm.DetectedSources)</span>
+                </div>
+            }
+
+            @if (Vm.OpenSearchConfigured)
+            {
+                <div class="guide-notice success">
+                    <span class="status-dot"></span>
+                    OpenSearch is already configured. You can keep it or change the project connection later.
+                </div>
+            }
+
+            <div class="choice-list">
+                <button type="button" class="choice-row @(Vm.OpenSearchChoice == OnboardingViewModel.ExistingOpenSearch ? "selected" : null)"
+                        @onclick="() => Vm.SelectOpenSearch(OnboardingViewModel.ExistingOpenSearch)">
+                    <span class="choice-radio"></span>
+                    <span><strong>@(Vm.OpenSearchConfigured ? "Use the configured OpenSearch" : "I already have OpenSearch")</strong>
+                        <small>@(Vm.OpenSearchConfigured ? "Keep using the detected workspace or project endpoint." : "Connect an existing OpenSearch or Elasticsearch endpoint securely.")</small></span>
+                </button>
+                <button type="button" class="choice-row @(Vm.OpenSearchChoice == OnboardingViewModel.InstallOpenSearch ? "selected" : null)"
+                        @onclick="() => Vm.SelectOpenSearch(OnboardingViewModel.InstallOpenSearch)">
+                    <span class="choice-radio"></span>
+                    <span><strong>I need to install OpenSearch</strong>
+                        <small>Open the operator guide for deployment, access controls, and PlaceContext configuration.</small></span>
+                </button>
+                <button type="button" class="choice-row @(Vm.OpenSearchChoice == OnboardingViewModel.SkipOpenSearch ? "selected" : null)"
+                        @onclick="() => Vm.SelectOpenSearch(OnboardingViewModel.SkipOpenSearch)">
+                    <span class="choice-radio"></span>
+                    <span><strong>Not now</strong>
+                        <small>Use PostgreSQL, files, MCP, and jobs without a search service. Add OpenSearch later.</small></span>
+                </button>
+            </div>
+
+            <div class="guide-actions">
+                @if (!Vm.HasConfiguredDataSource)
+                {
+                    <button class="dcbtn quiet" @onclick="Vm.Back">Back</button>
+                }
+                else
+                {
+                    <button class="dcbtn quiet" @onclick="Vm.SkipGuide">Exit guide</button>
+                }
+                <button class="dcbtn primary" disabled="@(!Vm.CanFinish)" @onclick="Vm.Finish">Continue</button>
+            </div>
+        </section>
+    }
+    else
+    {
+        <section class="dccard guide-card ready-card">
+            <div class="ready-mark">✓</div>
+            <div class="guide-number">SETUP READY</div>
+            <h2>Your next step is ready</h2>
+            @if (Vm.OpenSearchChoice == OnboardingViewModel.InstallOpenSearch)
+            {
+                <p>Use the OpenSearch operator guide to deploy it safely, then return to Connections to add the endpoint.</p>
+            }
+            else if (Vm.OpenSearchChoice == OnboardingViewModel.ExistingOpenSearch && !Vm.OpenSearchConfigured)
+            {
+                <p>Add the existing endpoint to <strong>@Vm.ProjectName</strong>. Credentials remain server-side in the encrypted project Vault.</p>
+            }
+            else if (Vm.SelectedOption is { } source)
+            {
+                <p>Continue to @source.ActionLabel.ToLowerInvariant() for <strong>@Vm.ProjectName</strong>.</p>
+            }
+            else
+            {
+                <p>Your existing data source is ready. Continue to the workspace dashboard.</p>
+            }
+
+            <div class="ready-summary">
+                <div><span>Data source</span><strong>@(Vm.SelectedOption?.Title ?? string.Join(", ", Vm.DetectedSources))</strong></div>
+                <div><span>OpenSearch</span><strong>@Vm.OpenSearchSummary</strong></div>
+            </div>
+
+            <div class="guide-actions">
+                <button class="dcbtn quiet" @onclick="Vm.Back">Back</button>
+                <button class="dcbtn primary" @onclick="Vm.OpenNextStep">@Vm.NextLabel</button>
+            </div>
+        </section>
+    }
+</main>
 
 @code {
-    protected override void OnInitialized() => Vm.Initialize();
+    protected override void OnInitialized() => Vm.Attach(() => InvokeAsync(StateHasChanged));
+    protected override async Task OnInitializedAsync() => await Vm.LoadAsync();
+
+    public void Dispose() => Vm.Detach();
 }

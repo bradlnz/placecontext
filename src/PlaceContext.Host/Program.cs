@@ -115,12 +115,11 @@ builder.Services.AddRateLimiter(options =>
     {
         // Valid webhook credentials receive independent limits. Invalid/credential-less traffic is
         // grouped by host and peer address so it cannot consume a valid integration's allowance.
-        var credential = context.Request.Headers["X-Ingest-Key"].ToString();
-        if (string.IsNullOrEmpty(credential))
-            credential = context.Request.Headers["X-Slack-Signature"].ToString();
-        var partition = string.IsNullOrEmpty(credential)
-            ? $"{context.Request.Host.Host}:{context.Connection.RemoteIpAddress}"
-            : Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(credential)));
+        var credential = IngestController.PresentedKey(context.Request);
+        var configuredIngestKey = builder.Configuration["PlaceContext:Ingest:Key"];
+        var partition = SecureCompare.Equals(credential, configuredIngestKey)
+            ? Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(credential)))
+            : $"{context.Request.Host.Host}:{context.Connection.RemoteIpAddress}";
         return RateLimitPartition.GetFixedWindowLimiter(partition, _ =>
             new FixedWindowRateLimiterOptions
             {
