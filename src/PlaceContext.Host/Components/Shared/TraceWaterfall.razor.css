@@ -1,0 +1,95 @@
+.trace-waterfall {
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+    margin-top: 8px;
+}
+
+.trace-span {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.trace-span-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    color: var(--text-2);
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.trace-duration {
+    color: var(--text-3);
+    font: 10.5px var(--font-mono);
+    font-weight: 400;
+}
+
+.trace-bar-track {
+    position: relative;
+    height: 8px;
+    overflow: hidden;
+    border-radius: 4px;
+    background: var(--card-2);
+}
+
+.trace-bar-fill {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    min-width: 2px;
+    border-radius: 4px;
+    background: var(--brand-2);
+}
+
+.trace-details {
+    color: var(--text-3);
+    font-size: 10.5px;
+}
+
+.trace-details summary {
+    width: max-content;
+    cursor: pointer;
+}
+
+.trace-details summary span {
+    margin-left: 3px;
+    color: var(--text-4);
+}
+
+.trace-detail-grid {
+    display: grid;
+    grid-template-columns: minmax(80px, auto) minmax(0, 1fr);
+    gap: 5px 12px;
+    margin: 7px 0 2px;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--bg);
+}
+
+.trace-detail-grid dt,
+.trace-detail-grid dd {
+    min-width: 0;
+    margin: 0;
+}
+
+.trace-detail-grid dd {
+    color: var(--text-2);
+    overflow-wrap: anywhere;
+}
+
+.trace-detail-grid code {
+    font: 10.5px var(--font-mono);
+}
+
+.trace-children {
+    margin: 3px 0 0 14px;
+    padding-left: 11px;
+    border-left: 1px solid var(--border-2);
+}
+
+.trace-children .trace-waterfall {
+    margin-top: 0;
+}

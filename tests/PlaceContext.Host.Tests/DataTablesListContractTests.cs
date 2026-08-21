@@ -1,5 +1,7 @@
 namespace PlaceContext.Host.Tests;
 
+using PlaceContext.Host.Components.ViewModels;
+
 public sealed class DataTablesListContractTests
 {
     [Fact]
@@ -87,6 +89,40 @@ public sealed class DataTablesListContractTests
         Assert.Contains("OpenJsonViewer(columnName, cellValue!)", page, StringComparison.Ordinal);
         Assert.Contains("padding: 0;", css, StringComparison.Ordinal);
         Assert.Contains("border-radius: 0;", css, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Indexes_tab_explains_missing_opensearch_and_links_to_setup()
+    {
+        var root = FindRepoRoot();
+        var page = File.ReadAllText(
+            Path.Combine(root, "src", "PlaceContext.Host", "Components", "Pages", "ProjectData.razor")
+        );
+        var connections = File.ReadAllText(
+            Path.Combine(root, "src", "PlaceContext.Host", "Components", "Pages", "ConnectionsSettings.razor")
+        );
+
+        Assert.Contains("Vm.OpenSearchSetupRequired", page, StringComparison.Ordinal);
+        Assert.Contains("OpenSearch isn’t set up", page, StringComparison.Ordinal);
+        Assert.Contains("Set up OpenSearch", page, StringComparison.Ordinal);
+        Assert.Contains("href=\"@Vm.OpenSearchSetupUrl\"", page, StringComparison.Ordinal);
+        Assert.Contains("SupplyParameterFromQuery(Name = \"project\")", connections, StringComparison.Ordinal);
+        Assert.Contains("id=\"search-index\"", connections, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Indexes_tab_only_treats_the_not_configured_error_as_setup_required()
+    {
+        Assert.True(
+            ProjectDataViewModel.IsOpenSearchConfigurationMissing(
+                new InvalidOperationException("OpenSearch is not configured. Add OPENSEARCH_URL to this project's Vault.")
+            )
+        );
+        Assert.False(
+            ProjectDataViewModel.IsOpenSearchConfigurationMissing(
+                new HttpRequestException("Connection refused")
+            )
+        );
     }
 
     private static string FindRepoRoot()

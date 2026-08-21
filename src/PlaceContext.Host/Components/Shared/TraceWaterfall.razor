@@ -1,0 +1,71 @@
+@using System.Globalization
+
+<div class="trace-waterfall" aria-label="Trace span details">
+    @foreach (var span in Spans)
+    {
+        <div class="trace-span">
+            <div class="trace-span-head">
+                <span>@span.Name</span>
+                <span class="trace-duration">@ObservabilityViewModel.FormatMilliseconds(span.DurationMs)</span>
+            </div>
+            <div class="trace-bar-track" title="@span.Name · @ObservabilityViewModel.FormatMilliseconds(span.DurationMs)">
+                <span class="trace-bar-fill" style="left:@Offset(span)%; width:@Width(span)%"></span>
+            </div>
+            <details class="trace-details">
+                <summary>Details <span>@span.Tags.Count tag(s)</span></summary>
+                <dl class="trace-detail-grid">
+                    <dt>Started</dt>
+                    <dd>@span.StartedAt.ToLocalTime().ToString("g")</dd>
+                    <dt>Span ID</dt>
+                    <dd><code>@(span.SpanId ?? "—")</code></dd>
+                    <dt>Parent span</dt>
+                    <dd><code>@(span.ParentSpanId ?? "—")</code></dd>
+                    @foreach (var tag in span.Tags.OrderBy(tag => tag.Key))
+                    {
+                        <dt><code>@tag.Key</code></dt>
+                        <dd><code>@tag.Value</code></dd>
+                    }
+                </dl>
+            </details>
+            @if (span.Children.Count > 0)
+            {
+                <div class="trace-children">
+                    <TraceWaterfall Spans="span.Children"
+                                    RootStartedAt="RootStartedAt"
+                                    TotalDurationMs="TotalDurationMs" />
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<TraceSpanNode> Spans { get; set; } = [];
+    [Parameter] public DateTimeOffset RootStartedAt { get; set; }
+    [Parameter] public double TotalDurationMs { get; set; }
+
+    private string Offset(TraceSpanNode span)
+        => Percent(OffsetPercent(span));
+
+    private double OffsetPercent(TraceSpanNode span)
+    {
+        if (TotalDurationMs <= 0)
+            return 0;
+
+        var milliseconds = Math.Max(0, (span.StartedAt - RootStartedAt).TotalMilliseconds);
+        return Math.Clamp(milliseconds / TotalDurationMs * 100, 0, 99);
+    }
+
+    private string Width(TraceSpanNode span)
+    {
+        if (TotalDurationMs <= 0)
+            return "100";
+
+        var offset = OffsetPercent(span);
+        var width = Math.Clamp(span.DurationMs / TotalDurationMs * 100, 1, 100 - offset);
+        return Percent(width);
+    }
+
+    private static string Percent(double value) =>
+        value.ToString("0.##", CultureInfo.InvariantCulture);
+}

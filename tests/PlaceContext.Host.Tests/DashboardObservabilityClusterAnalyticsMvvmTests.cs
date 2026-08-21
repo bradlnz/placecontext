@@ -54,6 +54,20 @@ public sealed class DashboardObservabilityClusterAnalyticsMvvmTests
     }
 
     [Fact]
+    public void Observability_exposes_job_run_and_trace_details()
+    {
+        var page = ReadHostSource("Components/Pages/Observability.razor");
+        var trace = ReadHostSource("Components/Shared/TraceWaterfall.razor");
+        var viewModel = ReadHostSource("Components/ViewModels/ObservabilityViewModel.cs");
+
+        Assert.Contains("class=\"run-detail-grid\"", page, StringComparison.Ordinal);
+        Assert.Contains("<TraceWaterfall", page, StringComparison.Ordinal);
+        Assert.Contains("Vm.CloseLiveTrace", page, StringComparison.Ordinal);
+        Assert.Contains("<summary>Details", trace, StringComparison.Ordinal);
+        Assert.Contains("service.GetJobRunAsync(runId)", viewModel, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Cluster_formats_join_commands_from_the_navigation_base_uri()
     {
         Assert.Equal(

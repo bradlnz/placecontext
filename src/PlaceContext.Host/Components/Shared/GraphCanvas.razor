@@ -2,7 +2,8 @@
 @inject GraphCanvasViewModel Vm
 @implements IAsyncDisposable
 
-<div class="pcgraph-shell" style="@Vm.ContainerStyle" @onmouseup="StopPdfWindowDrag" @onmouseleave="StopPdfWindowDrag">
+<div class="pcgraph-shell @(_draggingPanelId is null ? null : "panel-dragging")" style="@Vm.ContainerStyle"
+     @onpointermove="OnPanelDrag" @onpointerup="StopPanelDrag" @onpointerleave="StopPanelDrag">
     @if (Searchable || AllowFullscreen)
     {
         <div class="chrome-bar" style="@(Vm.Fullscreen ? "" : "position:absolute; top:8px; left:10px; right:10px; z-index:5")">
@@ -59,25 +60,30 @@
     }
     <canvas id="@Vm.Id" class="graph-canvas" style="@(Vm.Fullscreen ? "flex:1; min-height:0" : $"height:{Height}px")"></canvas>
 
-    @* Details for the clicked node: computed from the graph data already on the circuit, no extra
-       queries. Clicking a connection re-selects in the canvas too (pcgraph.select). *@
-    @if (Vm.Selected is { } sel)
+    @* Each selected node stays open as its own draggable window. This makes it possible to inspect
+       a run beside one or more of its PDFs/images instead of replacing the previous selection. *@
+    @foreach (var sel in Vm.OpenPanels)
     {
-        var pdfArtifact = PdfWindowArtifact;
-        var isPdfPanel = pdfArtifact is not null;
-        <div class="dccard detail-card @(isPdfPanel ? "pdf-detail-window" : "")" style="@(isPdfPanel ? PdfWindowStyle : Vm.DetailStyle)">
-            <div class="card-head @(isPdfPanel ? "pdf-window-head" : "")">
-                @if (isPdfPanel)
-                {
-                    <span class="pdf-window-handle"
-                          @onmousedown="StartPdfWindowDrag"
-                          @onmousemove="OnPdfWindowDrag"></span>
-                }
+        var reachableArtifacts = Vm.ReachableArtifactsFor(sel);
+        var neighbors = Vm.NeighborsFor(sel);
+        var relatedPreview = reachableArtifacts
+            .Select(item => item.Node.Artifact)
+            .FirstOrDefault(artifact => artifact is not null && Vm.IsPreviewable(artifact));
+        var hasPreview = sel.Artifact is { } ownArtifact && Vm.IsPreviewable(ownArtifact)
+            || relatedPreview is not null;
+        <div @key="sel.Id" class="dccard detail-card graph-detail-window @(hasPreview ? "media-detail-window" : "")"
+             style="@PanelStyle(sel.Id)">
+            <div class="card-head panel-window-head">
+                <button type="button" class="panel-window-handle"
+                        title="Drag panel" aria-label="Drag panel"
+                        @onpointerdown="@(args => StartPanelDrag(sel.Id, args))"
+                        @onpointerdown:preventDefault="true"></button>
                 <div class="flex-min">
                     <div class="sel-label">@Vm.ShortLabel(sel.Label)</div>
                     <div class="sel-id">@sel.Id</div>
                 </div>
-                <button class="dcbtn card-x" @onclick="Vm.ClearAsync">×</button>
+                <button type="button" class="dcslide-x card-x" aria-label="Close panel"
+                        @onclick="@(() => ClosePanelAsync(sel.Id))">×</button>
             </div>
             @if (NodeUrl?.Invoke(sel) is { Length: > 0 } url)
             {
@@ -90,6 +96,84 @@
                 }
                 <span class="badge-deg">@sel.Degree connection(s)</span>
             </div>
+            @if (Vm.RunDetailsFor(sel) is { } run)
+            {
+                <div class="section-cap">Run details</div>
+                <div class="run-status-line">
+                    <span class="run-status" style="color:@Vm.Presentation.StatusColor(run.Status); background:@Vm.Presentation.StatusBackground(run.Status)">@run.Status</span>
+                    <a href="@($"/observability?run={run.Id}")" class="run-observability-link">Observability ↗</a>
+                </div>
+                <dl class="run-detail-grid">
+                    <dt>Run ID</dt>
+                    <dd><code>@run.Id</code></dd>
+                    <dt>Job ID</dt>
+                    <dd><code>@run.JobId</code></dd>
+                    <dt>Started</dt>
+                    <dd>@Vm.Presentation.DateTime(run.StartedAt)</dd>
+                    <dt>Finished</dt>
+                    <dd>@(run.FinishedAt.HasValue ? Vm.Presentation.DateTime(run.FinishedAt.Value) : "Still running")</dd>
+                    <dt>Duration</dt>
+                    <dd>@(run.FinishedAt.HasValue ? Vm.Presentation.Duration(run.StartedAt, run.FinishedAt.Value) : "—")</dd>
+                    <dt>Attempt</dt>
+                    <dd>@run.AttemptNumber</dd>
+                    <dt>Workload</dt>
+                    <dd><code>@run.Snapshot.MapSourceKind</code> · @run.Snapshot.MapSourceLabel</dd>
+                    <dt>Execution</dt>
+                    <dd>@run.Snapshot.ShardCount shard(s) · concurrency @run.Snapshot.ConcurrencyLimit</dd>
+                    <dt>Network</dt>
+                    <dd>@(run.Snapshot.AllowNetworkEgress ? "Egress allowed" : "Egress blocked")</dd>
+                </dl>
+                @if (!string.IsNullOrWhiteSpace(run.Snapshot.Goal))
+                {
+                    <div class="run-goal">@run.Snapshot.Goal</div>
+                }
+                <div class="run-shards">
+                    @foreach (var shard in run.ShardResults.OrderBy(shard => shard.Index))
+                    {
+                        <details class="run-shard" open="@Vm.IsFailed(shard.Outcome)">
+                            <summary>
+                                <span>Shard @shard.Index</span>
+                                <span style="color:@Vm.Presentation.StatusColor(shard.Outcome)">@shard.Outcome</span>
+                                <span>exit @shard.ExitCode</span>
+                            </summary>
+                            @if (!string.IsNullOrWhiteSpace(shard.Artifact))
+                            {
+                                <pre>@Vm.Presentation.Json(shard.Artifact)</pre>
+                            }
+                            @if (!string.IsNullOrWhiteSpace(shard.Log))
+                            {
+                                <pre class="run-log">@shard.Log</pre>
+                            }
+                        </details>
+                    }
+                </div>
+                @if (run.ReduceResult is { } reduce)
+                {
+                    <details class="run-shard">
+                        <summary>
+                            <span>Reduce</span>
+                            <span style="color:@(reduce.Succeeded ? "var(--good)" : "var(--bad)")">@(reduce.Succeeded ? "Succeeded" : "Failed")</span>
+                            <span>exit @reduce.ExitCode</span>
+                        </summary>
+                        @if (!string.IsNullOrWhiteSpace(reduce.Artifact))
+                        {
+                            <pre>@Vm.Presentation.Json(reduce.Artifact)</pre>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(reduce.Log))
+                        {
+                            <pre class="run-log">@reduce.Log</pre>
+                        }
+                    </details>
+                }
+            }
+            else if (Vm.RunDetailsLoading(sel))
+            {
+                <div class="panel-loading">Loading run details…</div>
+            }
+            else if (Vm.RunDetailErrorFor(sel) is { } runError)
+            {
+                <div class="panel-error">@runError</div>
+            }
             @if (!string.IsNullOrWhiteSpace(sel.Content))
             {
                 @* The note behind the node — decision rationale, a change's why, or run-output text. *@
@@ -118,7 +202,7 @@
                     <div class="preview-none">No inline preview for @artifact.ContentType.</div>
                 }
             }
-            else if (Vm.FirstPreviewableArtifact is { } preview)
+            else if (relatedPreview is { } preview)
             {
                 @* The selected entity is not itself an artifact, but it is linked to at least one
                    previewable artifact — render the first one inline so the graph is immediately useful. *@
@@ -138,13 +222,13 @@
                             loading="lazy" referrerpolicy="no-referrer"></iframe>
                 }
             }
-            @if (Vm.ReachableArtifacts.Count > 0)
+            @if (reachableArtifacts.Count > 0)
             {
                 @* Related artifacts — including ones reached by stepping UP the tree from an
                    outer node (record → run → artifact), with the hop distance shown. *@
                 <div class="section-cap">Related artifacts</div>
                 <div class="col-4">
-                    @foreach (var (node, hops) in Vm.ReachableArtifacts)
+                    @foreach (var (node, hops) in reachableArtifacts)
                     {
                         <div class="artifact-row">
                             <button type="button" class="artifact-link" @onclick="@(() => Vm.SelectAsync(node.Id))"
@@ -163,11 +247,11 @@
                     }
                 </div>
             }
-            @if (Vm.SelectedNeighbors.Any(x => !Vm.IsArtifact(x.Node)))
+            @if (neighbors.Any(x => !Vm.IsArtifact(x.Node)))
             {
                 <div class="section-cap">Connected to</div>
                 <div class="col-3">
-                    @foreach (var (node, confidence) in Vm.SelectedNeighbors.Where(x => !Vm.IsArtifact(x.Node)))
+                    @foreach (var (node, confidence) in neighbors.Where(x => !Vm.IsArtifact(x.Node)))
                     {
                         <div class="neighbor-row">
                             <button class="neighbor-btn"
@@ -181,7 +265,7 @@
                         </div>
                     }
                 </div>
-                @if (Vm.SelectedNeighbors.Any(n => Vm.IsAmbiguous(n.Confidence)))
+                @if (neighbors.Any(n => Vm.IsAmbiguous(n.Confidence)))
                 {
                     <div class="ambiguous-note">⇢ ambiguous link (low confidence)</div>
                 }
@@ -202,20 +286,11 @@
         Vm.SetParameters(Graph, Height, NodeUrl, Searchable, AllowFullscreen, nodeId => NodeClick.InvokeAsync(nodeId));
     protected override Task OnAfterRenderAsync(bool firstRender)
     {
-        if (_lastSelectedNodeId != Vm.Selected?.Id && Vm.Selected is not null)
-        {
-            _lastSelectedNodeId = Vm.Selected.Id;
-            if (Vm.Selected.Artifact is { } artifact && Vm.IsPdf(artifact))
-            {
-                _pdfWindowLeft = 14;
-                _pdfWindowTop = 14;
-            }
-        }
-        else if (Vm.Selected is null)
-        {
-            _lastSelectedNodeId = null;
-            _isPdfWindowDragging = false;
-        }
+        var openIds = Vm.OpenPanels.Select(node => node.Id).ToHashSet(StringComparer.Ordinal);
+        foreach (var nodeId in _panelPositions.Keys.Where(nodeId => !openIds.Contains(nodeId)).ToList())
+            _panelPositions.Remove(nodeId);
+        if (_draggingPanelId is not null && !openIds.Contains(_draggingPanelId))
+            _draggingPanelId = null;
         return Vm.AfterRenderAsync();
     }
 
@@ -223,44 +298,63 @@
     private Task LoadMoreGraphAsync() => Vm.LoadMoreAsync();
     public ValueTask DisposeAsync() => Vm.DisposeAsync();
     public Task SelectNodeAsync(string? nodeId) => Vm.SelectAsync(nodeId);
-    private GraphNodeArtifactRef? PdfWindowArtifact =>
-        Vm.Selected?.Artifact is { } artifact && Vm.IsPdf(artifact) ? artifact : null;
-    private string PdfWindowStyle =>
-        $"top:{_pdfWindowTop}px; left:{_pdfWindowLeft}px; z-index:20; max-height:{Math.Max(Height - 20, 220)}px;";
-
-    private string? _lastSelectedNodeId;
-    private bool _isPdfWindowDragging;
-    private double _pdfWindowLeft = 14;
-    private double _pdfWindowTop = 14;
+    private readonly Dictionary<string, PanelPosition> _panelPositions = [];
+    private string? _draggingPanelId;
     private double _dragStartX;
     private double _dragStartY;
     private double _windowStartLeft;
     private double _windowStartTop;
 
-    private void StartPdfWindowDrag(MouseEventArgs args)
+    private string PanelStyle(string nodeId)
     {
-        if (PdfWindowArtifact is null || Vm.Selected is null)
-            return;
-
-        _isPdfWindowDragging = true;
-        _dragStartX = args.ClientX;
-        _dragStartY = args.ClientY;
-        _windowStartLeft = _pdfWindowLeft;
-        _windowStartTop = _pdfWindowTop;
+        if (!_panelPositions.TryGetValue(nodeId, out var position))
+        {
+            var offset = _panelPositions.Count % 7 * 26;
+            position = new PanelPosition(14 + offset, 14 + offset);
+            _panelPositions[nodeId] = position;
+        }
+        var zIndex = 20 + Math.Max(0, Vm.OpenPanels.ToList().FindIndex(node => node.Id == nodeId));
+        return FormattableString.Invariant(
+            $"top:{position.Top:0.##}px; left:{position.Left:0.##}px; z-index:{zIndex}; max-height:{Math.Max(Height - 20, 220)}px;"
+        );
     }
 
-    private void OnPdfWindowDrag(MouseEventArgs args)
+    private void StartPanelDrag(string nodeId, PointerEventArgs args)
     {
-        if (!_isPdfWindowDragging)
+        if (!_panelPositions.TryGetValue(nodeId, out var position))
+            return;
+        Vm.BringPanelToFront(nodeId);
+        _draggingPanelId = nodeId;
+        _dragStartX = args.ClientX;
+        _dragStartY = args.ClientY;
+        _windowStartLeft = position.Left;
+        _windowStartTop = position.Top;
+    }
+
+    private void OnPanelDrag(PointerEventArgs args)
+    {
+        if (_draggingPanelId is null)
             return;
 
-        _pdfWindowLeft = _windowStartLeft + (args.ClientX - _dragStartX);
-        _pdfWindowTop = _windowStartTop + (args.ClientY - _dragStartY);
+        _panelPositions[_draggingPanelId] = new PanelPosition(
+            Math.Max(0, _windowStartLeft + args.ClientX - _dragStartX),
+            Math.Max(0, _windowStartTop + args.ClientY - _dragStartY)
+        );
         StateHasChanged();
     }
 
-    private void StopPdfWindowDrag(MouseEventArgs _)
+    private void StopPanelDrag(PointerEventArgs _)
     {
-        _isPdfWindowDragging = false;
+        _draggingPanelId = null;
     }
+
+    private Task ClosePanelAsync(string nodeId)
+    {
+        if (_draggingPanelId == nodeId)
+            _draggingPanelId = null;
+        _panelPositions.Remove(nodeId);
+        return Vm.ClosePanelAsync(nodeId);
+    }
+
+    private sealed record PanelPosition(double Left, double Top);
 }

@@ -221,7 +221,7 @@ public class DecisionTreeTests
             Array.Empty<ToolActivity>(), jobs: new[] { job }, runs: new[] { run }, artifacts: new[] { artifact });
 
         var jobId = "job:" + job.Id.ToString("N");
-        var runNodeId = "run:" + run.Id.ToString("N")[..8];
+        var runNodeId = "run:" + run.Id.ToString("N");
         var artifactNodeId = "artifact:" + artifact.Id.ToString("N");
 
         Assert.Contains(tree.Nodes, n => n.Kind == TreeNodeKind.JobRun && n.Id == runNodeId);

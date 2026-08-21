@@ -183,12 +183,37 @@ public sealed class ObservabilityViewModel(
 
     public async Task ApplyDeepLinkAsync()
     {
-        if (
-            Guid.TryParse(RunId, out var runId)
-            && Open?.Run.Id != runId
-            && Reports?.FirstOrDefault(report => report.Run.Id == runId) is { } report
-        )
-            await OpenRun(report);
+        if (Guid.TryParse(RunId, out var runId) && Open?.Run.Id != runId)
+        {
+            var report = Reports?.FirstOrDefault(item => item.Run.Id == runId);
+            if (report is null)
+            {
+                try
+                {
+                    var run = await service.GetJobRunAsync(runId);
+                    if (run is not null)
+                    {
+                        var job = await service.GetJobAsync(run.JobId);
+                        var project = await service.GetProjectByIdAsync(run.ProjectId);
+                        report = new RunReportView(
+                            run.JobId,
+                            job?.Name ?? "(deleted job)",
+                            project?.Name ?? "(deleted project)",
+                            run
+                        );
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Message = ex.Message;
+                }
+            }
+
+            if (report is not null)
+                await OpenRun(report);
+            else
+                Message ??= "That job run could not be found.";
+        }
         if (
             Guid.TryParse(ChainRunId, out var chainId)
             && OpenChain?.Run.Id != chainId
@@ -212,6 +237,7 @@ public sealed class ObservabilityViewModel(
 
     public async Task OpenRun(RunReportView report)
     {
+        OpenChain = null;
         Open = report;
         OpenArtifacts = null;
         OpenTelemetry = null;
@@ -242,10 +268,18 @@ public sealed class ObservabilityViewModel(
 
     public void OpenLiveTrace(JobRunTelemetry trace)
     {
+        Open = null;
+        OpenChain = null;
         OpenTelemetry = trace;
         OpenTraceSpans = telemetry.TraceForRun(trace.RunId);
         if (Reports?.FirstOrDefault(report => report.Run.Id == trace.RunId) is { } report)
             _ = OpenRun(report);
+    }
+
+    public void CloseLiveTrace()
+    {
+        OpenTelemetry = null;
+        OpenTraceSpans = null;
     }
 
     public void OpenChainRun(ChainRunReportView report) => OpenChain = report;

@@ -72,7 +72,7 @@ public sealed class ConnectionsSettingsViewModel(
 
     public IReadOnlyList<string> SslModeOptions => SslModes;
 
-    public async Task LoadAsync()
+    public async Task LoadAsync(Guid? requestedProjectId = null)
     {
         ui.Set(PageTitle, "external databases and search indices per project");
         Loading = true;
@@ -81,7 +81,9 @@ public sealed class ConnectionsSettingsViewModel(
         try
         {
             Projects = await service.GetProjectsAsync();
-            if (Projects.Count > 0 && SelectedProjectId is null)
+            if (requestedProjectId is { } projectId && Projects.Any(project => project.Id == projectId))
+                SelectedProjectId = projectId;
+            else if (Projects.Count > 0 && SelectedProjectId is null)
                 SelectedProjectId = Projects[0].Id;
             await LoadSecretsAsync();
         }
