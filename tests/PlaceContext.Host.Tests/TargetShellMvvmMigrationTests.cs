@@ -170,12 +170,18 @@ public sealed class TargetShellMvvmMigrationTests
     {
         var source = ReadHostSource("Components/Pages/DataGraph.razor");
         var viewModel = ReadHostSource("Components/ViewModels/DataGraphViewModel.cs");
+        var graphStyles = ReadHostSource("Components/Shared/GraphCanvas.razor.css");
 
         Assert.Contains("id=\"data-graph-splitter\"", source, StringComparison.Ordinal);
         Assert.Contains("role=\"separator\"", source, StringComparison.Ordinal);
         Assert.Contains("pcgraph.splitter", viewModel, StringComparison.Ordinal);
         Assert.Contains("DockDetails=\"true\"", source, StringComparison.Ordinal);
         Assert.Contains("SinglePanel=\"true\"", source, StringComparison.Ordinal);
+        Assert.Contains(
+            ".docked-detail-shell.docked-panel-open {\n    display: grid;",
+            graphStyles,
+            StringComparison.Ordinal
+        );
     }
 
     [Fact]

@@ -75,6 +75,7 @@
 }
 
 .docked-detail-shell.docked-panel-open {
+    display: grid;
     grid-template-columns: minmax(0, 1fr) 7px var(--graph-detail-width, 380px);
     grid-template-rows: minmax(0, 1fr);
 }
