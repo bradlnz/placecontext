@@ -8,8 +8,9 @@ public class PublicUrlAndTenantSlugTests
     [InlineData("localhost", true)]
     [InlineData("127.0.0.1", true)]
     [InlineData("brad.localhost", true)]
-    [InlineData("acme.placecontext.ai", true)]
-    [InlineData("placecontext.ai", true)]
+    [InlineData("acme.placecontext.io", true)]
+    [InlineData("placecontext.io", true)]
+    [InlineData("acme.placecontext.ai", false)]
     [InlineData("evil.attacker", false)]
     [InlineData("foo.evil.com", false)]
     [InlineData("evil.com", false)]
@@ -20,7 +21,8 @@ public class PublicUrlAndTenantSlugTests
     [InlineData("localhost", "default")]
     [InlineData("127.0.0.1", "default")]
     [InlineData("brad.localhost", "brad")]
-    [InlineData("acme.placecontext.ai", "acme")]
+    [InlineData("acme.placecontext.io", "acme")]
+    [InlineData("acme.placecontext.ai", "default")]
     [InlineData("evil.attacker", "default")] // was: would not match 3-part rule; still default
     [InlineData("foo.evil.com", "default")] // was: slug "foo" — Host-header tenant minting
     [InlineData("sub.foo.evil.com", "default")]

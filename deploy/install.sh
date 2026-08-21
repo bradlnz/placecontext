@@ -5,7 +5,7 @@
 # Installs the global `placecontext` command, then (on a TTY) launches the TUI.
 # Cluster install / upgrade / connect are done from the TUI after this step.
 #
-#   curl -fsSL https://get.placecontext.ai/install.sh | bash
+#   curl -fsSL https://get.placecontext.io/install.sh | bash
 #
 # Options (pass after bash -s -- …):
 #   --version X.Y.Z    install a specific release (default: latest)

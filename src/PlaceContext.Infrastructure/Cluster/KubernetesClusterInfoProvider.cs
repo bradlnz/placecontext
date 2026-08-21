@@ -15,7 +15,9 @@ public sealed class KubernetesClusterInfoProvider : IClusterInfoProvider, IClust
 {
     public const string ClusterConfigMap = "placecontext-cluster";
     public const string JoinSecret = "placecontext-cluster-join";
-    public const string MasterAnnotation = "placecontext.ai/designated-master";
+    public const string MasterAnnotation = "placecontext.io/designated-master";
+    private const string TailscaleIpAnnotation = "placecontext.io/tailscale-ip";
+    private const string LegacyTailscaleIpAnnotation = "placecontext.ai/tailscale-ip";
     private const string MasterKey = "designatedMaster";
 
     public async Task<ClusterInfo> GetClusterInfoAsync(CancellationToken ct = default)
@@ -173,7 +175,7 @@ public sealed class KubernetesClusterInfoProvider : IClusterInfoProvider, IClust
                 ? $"""
                   On a new Linux machine (Mac masters hand this code to Linux workers):
                     1. Install Tailscale and join the same tailnet as the master ({master?.Name ?? "master"}).
-                    2. curl -fsSL https://get.placecontext.ai/install.sh | bash
+                    2. curl -fsSL https://get.placecontext.io/install.sh | bash
                     3. placecontext connect --code {code}
                        (or: sudo placecontext  → Connect, paste the code)
 
@@ -183,7 +185,7 @@ public sealed class KubernetesClusterInfoProvider : IClusterInfoProvider, IClust
                   """
                 : $"""
                   On a new Linux machine:
-                    curl -fsSL https://get.placecontext.ai/install.sh | bash
+                    curl -fsSL https://get.placecontext.io/install.sh | bash
                     placecontext connect --code {code}
 
                   The code includes a Tailscale auth key and the master mesh address ({serverUrl}),
@@ -290,10 +292,16 @@ public sealed class KubernetesClusterInfoProvider : IClusterInfoProvider, IClust
                 return a.Address;
         }
         // Annotation override if ops stamped it
-        if (node.Metadata?.Annotations is { } ann
-            && ann.TryGetValue("placecontext.ai/tailscale-ip", out var stamped)
-            && !string.IsNullOrWhiteSpace(stamped))
-            return stamped.Trim();
+        if (node.Metadata?.Annotations is { } ann)
+        {
+            if (ann.TryGetValue(TailscaleIpAnnotation, out var stamped)
+                && !string.IsNullOrWhiteSpace(stamped))
+                return stamped.Trim();
+            // Nodes stamped before the public-domain migration remain discoverable during upgrades.
+            if (ann.TryGetValue(LegacyTailscaleIpAnnotation, out var legacy)
+                && !string.IsNullOrWhiteSpace(legacy))
+                return legacy.Trim();
+        }
         return null;
     }
 

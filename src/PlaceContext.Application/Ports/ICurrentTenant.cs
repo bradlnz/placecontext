@@ -4,7 +4,7 @@ using PlaceContext.Domain.ValueObjects;
 namespace PlaceContext.Application.Ports;
 
 /// <summary>
-/// The tenant the current request belongs to, resolved from the <c>{user}.placecontext.ai</c>
+/// The tenant the current request belongs to, resolved from the <c>{user}.placecontext.io</c>
 /// subdomain. All tenant-owned data is isolated by <see cref="TenantId"/> (row-level filter). Backed
 /// by an ambient (AsyncLocal) value so it flows into the dispatcher's per-operation DI scopes.
 /// </summary>

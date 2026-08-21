@@ -163,7 +163,7 @@ VERBOSITY
   Install/upgrade always print step progress (secrets, manifests, waits, pods).
 
 Install the CLI itself with:
-  curl -fsSL https://get.placecontext.ai/install.sh | bash
+  curl -fsSL https://get.placecontext.io/install.sh | bash
 
 Your data and jobs are yours. PlaceContext is MIT licensed.
 `)

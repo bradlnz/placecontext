@@ -63,7 +63,7 @@ Host and is only used to call the Tailscale API when minting a key.
 3. On the new machine:
 
    ```bash
-   curl -fsSL https://get.placecontext.ai/install.sh | bash
+   curl -fsSL https://get.placecontext.io/install.sh | bash
    sudo placecontext connect --code PC2.…      # the key is embedded in the code
    ```
 

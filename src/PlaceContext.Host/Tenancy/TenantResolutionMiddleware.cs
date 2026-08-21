@@ -3,7 +3,7 @@ using PlaceContext.Infrastructure.Tenancy;
 namespace PlaceContext.Host.Tenancy;
 
 /// <summary>
-/// Resolves the tenant from the request's host — the <c>{user}.placecontext.ai</c> subdomain (or
+/// Resolves the tenant from the request's host — the <c>{user}.placecontext.io</c> subdomain (or
 /// <c>{user}.localhost</c> in dev) — provisioning one on first sight for those known suffixes only.
 /// Arbitrary Host headers no longer mint tenants (was: <c>foo.evil.com</c> → slug <c>foo</c>).
 /// </summary>

@@ -17,7 +17,7 @@ for an always-on server or the first node of a fleet.
 Install the client and start the guided installer:
 
 ```bash
-curl -fsSL https://get.placecontext.ai/install.sh | bash
+curl -fsSL https://get.placecontext.io/install.sh | bash
 placecontext
 ```
 
@@ -58,7 +58,7 @@ Forward normal proxy headers and WebSocket/streaming traffic to port `7700`, the
 origin with no trailing slash:
 
 ```text
-PlaceContext__PublicBaseUrl=https://placecontext.example.com
+PlaceContext__PublicBaseUrl=https://placecontext.io
 ```
 
 The canonical URL is used for OAuth issuer metadata, callbacks, MCP challenges, and generated links.

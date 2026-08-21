@@ -1392,7 +1392,7 @@ Mac workers ALWAYS need a key (k3s runs in Docker and can't share the Mac's Tail
   printf '  server:  https://%s:%s\n' "$ip" "$api_port"
   printf '  code:    %s\n\n' "$code"
   printf 'On the new computer:\n'
-  printf '  curl -fsSL https://get.placecontext.ai/install.sh | bash\n'
+  printf '  curl -fsSL https://get.placecontext.io/install.sh | bash\n'
   printf '  Linux worker:  sudo placecontext connect --code %s\n' "$code"
   printf '  Mac worker:         placecontext connect --code %s   (runs k3s in Docker; needs the --ts-authkey code above)\n\n' "$code"
   if is_mesh_host "$ip"; then
@@ -1464,7 +1464,7 @@ Connect (no tools/pctl required) — join code always uses the master's Tailscal
   On the master (Tailscale up):  sudo placecontext join-code
     Mac worker coming?  add --ts-authkey KEY (its k3s runs in Docker and self-joins the tailnet)
   On the new host:
-    curl -fsSL https://get.placecontext.ai/install.sh | bash
+    curl -fsSL https://get.placecontext.io/install.sh | bash
     Linux:  sudo placecontext connect --code PC2.…
     Mac:         placecontext connect --code PC2.…   (k3s-agent container; override image with PCTL_K3S_IMAGE)
   Pass the key separately (keyless code, or rotating key):  connect --code PC1.… --ts-authkey KEY

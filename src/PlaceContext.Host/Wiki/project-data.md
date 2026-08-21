@@ -51,7 +51,7 @@ Every request needs the token and the project name or ID. For example:
 ```bash
 curl -H "Authorization: Bearer pct_your_token" \
      -H "X-Project: storefront-api" \
-     "https://your-workspace.placecontext.ai/api/v1/search?q=customer&limit=25"
+     "https://your-workspace.placecontext.io/api/v1/search?q=customer&limit=25"
 ```
 
 Useful read endpoints are:
