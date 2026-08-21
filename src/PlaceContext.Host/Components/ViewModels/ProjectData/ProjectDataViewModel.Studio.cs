@@ -27,6 +27,7 @@ public sealed partial class ProjectDataViewModel
         Indices = Array.Empty<OpenSearchIndexView>();
         IndicesReady = false;
         IndicesError = null;
+        OpenSearchSetupRequired = false;
         SavedQueries = Array.Empty<SavedQueryRecord>();
         SavedQueriesReady = false;
         SavedQueriesError = null;
@@ -53,6 +54,9 @@ public sealed partial class ProjectDataViewModel
         Array.Empty<OpenSearchIndexView>();
     public bool IndicesReady { get; private set; }
     public string? IndicesError { get; private set; }
+    public bool OpenSearchSetupRequired { get; private set; }
+    public string OpenSearchSetupUrl =>
+        $"{PageRoutes.ConnectionsSettings}?project={ProjectId}#search-index";
 
     public async Task LoadIndicesAsync(bool force = false)
     {
@@ -64,6 +68,7 @@ public sealed partial class ProjectDataViewModel
         _loadingIndices = true;
         IndicesReady = false;
         IndicesError = null;
+        OpenSearchSetupRequired = false;
         NotifyStateChanged();
         try
         {
@@ -72,6 +77,7 @@ public sealed partial class ProjectDataViewModel
         catch (Exception ex)
         {
             IndicesError = Trim(ex.Message);
+            OpenSearchSetupRequired = IsOpenSearchConfigurationMissing(ex);
         }
         finally
         {
@@ -80,6 +86,13 @@ public sealed partial class ProjectDataViewModel
             NotifyStateChanged();
         }
     }
+
+    public static bool IsOpenSearchConfigurationMissing(Exception exception) =>
+        exception is InvalidOperationException
+        && exception.Message.Contains(
+            "OpenSearch is not configured",
+            StringComparison.OrdinalIgnoreCase
+        );
 
     // ── Materialize table → OpenSearch index ────────────────────────────────────────────────
     public bool ShowMaterializeDialog { get; private set; }

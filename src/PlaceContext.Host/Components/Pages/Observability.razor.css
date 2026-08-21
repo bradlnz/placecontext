@@ -108,7 +108,7 @@
 
 .run-row-inner {
     display: grid;
-    grid-template-columns: auto minmax(0, 1fr) auto auto auto;
+    grid-template-columns: auto minmax(0, 1fr) auto auto auto auto;
     align-items: center;
     gap: 10px;
 }
@@ -155,6 +155,12 @@
     color: var(--text-3);
     font: 11px var(--font-sans);
     text-align: right;
+}
+
+.details-link {
+    color: var(--brand-2);
+    font-size: 11px;
+    white-space: nowrap;
 }
 
 .slide-wide {
@@ -208,6 +214,57 @@
     font-size: 12.5px;
     font-weight: 600;
     margin-bottom: 8px;
+}
+
+.run-details-card {
+    background: color-mix(in srgb, var(--card-2) 32%, var(--card));
+}
+
+.run-detail-grid {
+    display: grid;
+    grid-template-columns: minmax(92px, auto) minmax(0, 1fr);
+    gap: 7px 16px;
+    margin: 0;
+    font-size: 11.5px;
+}
+
+.run-detail-grid dt,
+.run-detail-grid dd {
+    min-width: 0;
+    margin: 0;
+}
+
+.run-detail-grid dt {
+    color: var(--text-3);
+}
+
+.run-detail-grid dd {
+    color: var(--text-2);
+    overflow-wrap: anywhere;
+}
+
+.run-detail-grid code,
+.run-goal code {
+    font: 10.5px var(--font-mono);
+}
+
+.run-goal {
+    margin-top: 10px;
+    padding-top: 9px;
+    border-top: 1px solid var(--border);
+}
+
+.run-goal > span {
+    color: var(--text-3);
+    font-size: 11.5px;
+}
+
+.run-goal p {
+    margin: 4px 0 0;
+    color: var(--text-2);
+    font-size: 11.5px;
+    line-height: 1.5;
+    white-space: pre-wrap;
 }
 
 .chain-context-panel {
@@ -499,15 +556,6 @@
     overflow-y: auto;
 }
 
-.trace-waterfall { display:flex; flex-direction:column; gap:8px; margin-top:8px }
-.trace-span { display:flex; flex-direction:column; gap:3px }
-.trace-span-head { font-size:12px; font-family:var(--font-sans); font-weight:600 }
-.trace-id { font-size:10px; color:var(--text-3); font-weight:400 }
-.trace-bar-track { height:8px; border-radius:4px; background:var(--card-2); overflow:hidden }
-.trace-bar-fill { height:100%; background:var(--brand-2); border-radius:4px }
-.trace-tags { display:flex; flex-wrap:wrap; gap:4px }
-.trace-tag { font-size:10px; padding:1px 6px; border-radius:4px; background:var(--card-2); color:var(--text-3); font-family:var(--font-sans) }
-
 @media (max-width: 950px) {
     .page {
         padding: 18px 14px 34px;
@@ -547,7 +595,8 @@
 
     .run-row-inner > .note-sm,
     .run-row-inner > .run-time,
-    .run-row-inner > .run-duration {
+    .run-row-inner > .run-duration,
+    .run-row-inner > .details-link {
         width: auto;
         grid-column: 2;
         text-align: left;
@@ -556,5 +605,14 @@
     .project-name {
         display: block;
         margin: 3px 0 0;
+    }
+
+    .run-detail-grid {
+        grid-template-columns: 1fr;
+        gap: 3px;
+    }
+
+    .run-detail-grid dd + dt {
+        margin-top: 7px;
     }
 }

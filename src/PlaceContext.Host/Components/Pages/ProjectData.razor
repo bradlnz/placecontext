@@ -89,13 +89,29 @@
                     {
                         <Skeleton Kind="list" Rows="6" />
                     }
+                    else if (Vm.OpenSearchSetupRequired)
+                    {
+                        <div class="studio-index-setup">
+                            <strong>OpenSearch isn’t set up</strong>
+                            <span>Connect an OpenSearch or Elasticsearch endpoint to browse and query indexes here.</span>
+                            <a class="dcbtn primary" href="@Vm.OpenSearchSetupUrl">Set up OpenSearch</a>
+                        </div>
+                    }
                     else if (Vm.IndicesError is not null)
                     {
-                        <div class="empty-tables">@Vm.IndicesError</div>
+                        <div class="studio-index-setup error">
+                            <strong>Couldn’t load indexes</strong>
+                            <span>@Vm.IndicesError</span>
+                            <button class="dcbtn" @onclick="@(() => Vm.LoadIndicesAsync(force: true))">Try again</button>
+                        </div>
+                    }
+                    else if (Vm.Indices.Count == 0)
+                    {
+                        <div class="empty-tables">No indexes are available yet.</div>
                     }
                     else if (FilteredIndices.Count == 0)
                     {
-                        <div class="empty-tables">No indices match.</div>
+                        <div class="empty-tables">No indexes match.</div>
                     }
                     else
                     {

@@ -103,7 +103,7 @@ else
                 }
             </div>
 
-            <div class="dccard card">
+            <div id="search-index" class="dccard card">
                 <div class="card-head">
                     <span class="add-title">External search index</span>
                     @if (Vm.HasExternalIndex)
@@ -148,9 +148,11 @@ else
 }
 
 @code {
-    protected override async Task OnInitializedAsync() => await Vm.LoadAsync();
+    [SupplyParameterFromQuery(Name = "project")] public Guid? ProjectId { get; set; }
 
     protected override void OnInitialized() => Vm.Attach(() => InvokeAsync(StateHasChanged));
+
+    protected override async Task OnParametersSetAsync() => await Vm.LoadAsync(ProjectId);
 
     public void Dispose() => Vm.Detach();
 }

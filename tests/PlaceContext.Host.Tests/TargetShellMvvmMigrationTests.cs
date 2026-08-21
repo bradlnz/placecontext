@@ -82,6 +82,44 @@ public sealed class TargetShellMvvmMigrationTests
     }
 
     [Fact]
+    public async Task Graph_canvas_keeps_multiple_detail_panels_open_until_each_is_closed()
+    {
+        var graph = new GraphVizView(
+            Guid.NewGuid(),
+            2,
+            1,
+            [
+                new GraphNodeView("run:one", "Run one", 1, false, null, "JobRun"),
+                new GraphNodeView("artifact:two", "report.pdf", 1, false, null, "Artifact"),
+            ],
+            [new GraphLinkView("run:one", "artifact:two", "Extracted")]
+        );
+        var vm = new GraphCanvasViewModel(new NoOpJsRuntime());
+        vm.SetParameters(graph, 340, null, true, false);
+
+        await vm.OnNodeClick("run:one");
+        await vm.OnNodeClick("artifact:two");
+
+        Assert.Equal(["run:one", "artifact:two"], vm.OpenPanels.Select(node => node.Id));
+
+        await vm.ClosePanelAsync("run:one");
+
+        Assert.Equal(["artifact:two"], vm.OpenPanels.Select(node => node.Id));
+    }
+
+    [Fact]
+    public void Graph_canvas_renders_draggable_run_and_artifact_windows_with_close_controls()
+    {
+        var source = ReadHostSource("Components/Shared/GraphCanvas.razor");
+
+        Assert.Contains("foreach (var sel in Vm.OpenPanels)", source, StringComparison.Ordinal);
+        Assert.Contains("class=\"panel-window-handle\"", source, StringComparison.Ordinal);
+        Assert.Contains("aria-label=\"Close panel\"", source, StringComparison.Ordinal);
+        Assert.Contains("Vm.RunDetailsFor(sel)", source, StringComparison.Ordinal);
+        Assert.Contains("Vm.IsPdf(artifact)", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Param_input_view_model_preserves_file_marker_display_and_accept_catalog()
     {
         var vm = new ParamInputViewModel(null!, null!);

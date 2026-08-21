@@ -93,6 +93,7 @@ else
                                             @Vm.Presentation.Duration(run.StartedAt, run.FinishedAt.Value)
                                         </span>
                                     }
+                                    <span class="details-link">Details →</span>
                                 </div>
                             </article>
                         }
@@ -177,6 +178,7 @@ else
                                     </div>
                                     <span class="note-sm">@t.Shards.Count shard(s)</span>
                                     <span class="run-duration">@Vm.Presentation.Milliseconds(t.DurationMs)</span>
+                                    <span class="details-link">Details →</span>
                                 </div>
                             </article>
                         }
@@ -392,6 +394,54 @@ else
                 </span>
             </div>
 
+            <div class="dccard panel-card run-details-card">
+                <div class="panel-title">Run details</div>
+                <dl class="run-detail-grid">
+                    <dt>Run ID</dt>
+                    <dd><code>@run.Id</code></dd>
+                    <dt>Job ID</dt>
+                    <dd><code>@run.JobId</code></dd>
+                    <dt>Started</dt>
+                    <dd>@Vm.Presentation.DateTime(run.StartedAt)</dd>
+                    <dt>Finished</dt>
+                    <dd>@(run.FinishedAt.HasValue ? Vm.Presentation.DateTime(run.FinishedAt.Value) : "Still running")</dd>
+                    <dt>Duration</dt>
+                    <dd>@(run.FinishedAt.HasValue ? Vm.Presentation.Duration(run.StartedAt, run.FinishedAt.Value) : "—")</dd>
+                    <dt>Attempt</dt>
+                    <dd>
+                        @run.AttemptNumber
+                        @if (run.OriginalRunId is { } originalRunId)
+                        {
+                            <span> · original <code>@originalRunId</code></span>
+                        }
+                    </dd>
+                    <dt>Map workload</dt>
+                    <dd><code>@run.Snapshot.MapSourceKind</code> · @run.Snapshot.MapSourceLabel</dd>
+                    <dt>Reduce workload</dt>
+                    <dd>
+                        @if (run.Snapshot.ReduceSourceKind is { Length: > 0 })
+                        {
+                            <code>@run.Snapshot.ReduceSourceKind</code><span> · @run.Snapshot.ReduceSourceLabel</span>
+                        }
+                        else
+                        {
+                            <span>None</span>
+                        }
+                    </dd>
+                    <dt>Execution</dt>
+                    <dd>@run.Snapshot.ShardCount shard(s) · concurrency @run.Snapshot.ConcurrencyLimit</dd>
+                    <dt>Network egress</dt>
+                    <dd>@(run.Snapshot.AllowNetworkEgress ? "Allowed" : "Blocked")</dd>
+                </dl>
+                @if (!string.IsNullOrWhiteSpace(run.Snapshot.Goal))
+                {
+                    <div class="run-goal">
+                        <span>Goal</span>
+                        <p>@run.Snapshot.Goal</p>
+                    </div>
+                }
+            </div>
+
             @if (Vm.OpenArtifacts is { Count: > 0 })
             {
                 <div class="dccard panel-card">
@@ -424,12 +474,9 @@ else
                             · @Vm.Presentation.Milliseconds(Vm.OpenTelemetry?.DurationMs) total
                         </div>
                     </div>
-                    <div class="trace-waterfall">
-                        @foreach (var span in Vm.OpenTraceSpans)
-                        {
-                            @* Trace spans are rendered by the existing trace component markup. *@
-                        }
-                    </div>
+                    <TraceWaterfall Spans="Vm.OpenTraceSpans"
+                                    RootStartedAt="Vm.OpenTraceSpans[0].StartedAt"
+                                    TotalDurationMs="@(Vm.OpenTelemetry?.DurationMs ?? Vm.OpenTraceSpans[0].DurationMs)" />
                 </div>
             }
             else if (Vm.OpenTelemetry is { } tel)
@@ -510,6 +557,80 @@ else
                             <pre class="log-pre">@reduce.Log</pre>
                         </details>
                     }
+                </div>
+            }
+        </div>
+    </div>
+}
+
+@* A live trace may not have a persisted run in the 50-item history window. It still gets a
+   complete detail drawer instead of silently doing nothing when selected. *@
+@if (Vm.Open is null && Vm.OpenTelemetry is { } liveTrace)
+{
+    <div class="dcslide-scrim" @onclick="Vm.CloseLiveTrace"></div>
+    <div class="dcslide slide-wide">
+        <div class="dcslide-head">
+            <div class="flex-fill">
+                <div class="slide-title">@(liveTrace.JobName ?? Vm.Presentation.AbbreviatedId(liveTrace.JobId))</div>
+                <div class="slide-sub">
+                    Live trace @Vm.TraceLabel(liveTrace) · run @Vm.Presentation.AbbreviatedId(liveTrace.RunId)
+                </div>
+            </div>
+            @if (liveTrace.ProjectId is { } projectId)
+            {
+                <button class="dcbtn btn-open-project"
+                        @onclick="@(() => Vm.OpenProject(projectId, "jobs"))">Open project →</button>
+            }
+            <button class="dcslide-x" @onclick="Vm.CloseLiveTrace">×</button>
+        </div>
+        <div class="dcslide-body slide-body-scroll">
+            <div class="status-line">
+                <span class="status-pill-lg" style="color:@Vm.Presentation.StatusColor(liveTrace.Status); background:@Vm.Presentation.StatusBackground(liveTrace.Status)">@Vm.Presentation.StatusLabel(liveTrace.Status)</span>
+                <span class="note-sm">@Vm.Presentation.Milliseconds(liveTrace.DurationMs) · @liveTrace.Shards.Count shard(s) @(liveTrace.Replay ? "· replay" : "")</span>
+            </div>
+
+            <div class="dccard panel-card run-details-card">
+                <div class="panel-title">Trace details</div>
+                <dl class="run-detail-grid">
+                    <dt>Run ID</dt>
+                    <dd><code>@liveTrace.RunId</code></dd>
+                    <dt>Job ID</dt>
+                    <dd><code>@liveTrace.JobId</code></dd>
+                    <dt>Trace ID</dt>
+                    <dd><code>@(liveTrace.TraceId ?? "—")</code></dd>
+                    <dt>Root span ID</dt>
+                    <dd><code>@(liveTrace.SpanId ?? "—")</code></dd>
+                    <dt>Started</dt>
+                    <dd>@Vm.Presentation.DateTime(liveTrace.StartedAt)</dd>
+                    <dt>Duration</dt>
+                    <dd>@Vm.Presentation.Milliseconds(liveTrace.DurationMs)</dd>
+                </dl>
+            </div>
+
+            @if (Vm.OpenTraceSpans is { Count: > 0 })
+            {
+                <div class="dccard panel-card">
+                    <div class="panel-title">Full trace</div>
+                    <TraceWaterfall Spans="Vm.OpenTraceSpans"
+                                    RootStartedAt="Vm.OpenTraceSpans[0].StartedAt"
+                                    TotalDurationMs="@(liveTrace.DurationMs ?? Vm.OpenTraceSpans[0].DurationMs)" />
+                </div>
+            }
+            else
+            {
+                <div class="dccard panel-card">
+                    <div class="panel-title">Shard details</div>
+                    <div class="shard-chips">
+                        @foreach (var shard in liveTrace.Shards.OrderBy(shard => shard.Index))
+                        {
+                            <span class="shard-chip">
+                                shard @shard.Index ·
+                                <span style="color:@Vm.Presentation.StatusColor(shard.Outcome)">@Vm.Presentation.StatusLabel(shard.Outcome)</span>
+                                · exit @(shard.ExitCode?.ToString() ?? "—")
+                                · @Vm.Presentation.Milliseconds(shard.DurationMs)
+                            </span>
+                        }
+                    </div>
                 </div>
             }
         </div>

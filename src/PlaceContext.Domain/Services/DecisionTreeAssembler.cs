@@ -196,7 +196,9 @@ public sealed class DecisionTreeAssembler
         foreach (var run in runs ?? (IReadOnlyList<JobRun>)Array.Empty<JobRun>())
         {
             if (runNodeIds.Count >= MaxJobRuns) break;
-            var id = "run:" + run.Id.ToString("N")[..8];
+            // Keep the full run id in the graph identity. The label remains abbreviated, while
+            // consumers such as Data Graph can resolve the selected node to its complete run.
+            var id = "run:" + run.Id.ToString("N");
             runNodeIds[run.Id] = id;
             AddNode(id, $"run {run.Id.ToString("N")[..8]}", TreeNodeKind.JobRun,
                 $"{run.Status} · {run.StartedAt:yyyy-MM-dd HH:mm}");

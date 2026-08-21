@@ -1,5 +1,7 @@
 using Microsoft.JSInterop;
+using PlaceContext.Application;
 using PlaceContext.Application.Dtos;
+using PlaceContext.Domain.Entities;
 
 namespace PlaceContext.Host.Components.ViewModels;
 
@@ -29,13 +31,14 @@ public static class GraphCatalog
             : GraphLinkConfidence.Normal;
 }
 
-public sealed class GraphCanvasViewModel(IJSRuntime js)
+public sealed class GraphCanvasViewModel(IJSRuntime js, IPlaceContextService? service = null)
     : PageViewModel,
         IComponentViewModel,
         IAsyncDisposable
 {
     private const int InitialNodeChunk = 2500;
     private const int NodeChunk = 2500;
+    private const int MaxOpenPanels = 8;
 
     private readonly IJSRuntime _js = js;
     private DotNetObjectReference<GraphCanvasViewModel>? _selfReference;
@@ -48,6 +51,9 @@ public sealed class GraphCanvasViewModel(IJSRuntime js)
     private Dictionary<string, int> _nodeIndex = [];
     private HashSet<string> _sentLinkKeys = [];
     private int _renderedNodeCount;
+    private readonly Dictionary<string, JobRunDetailView> _runDetails = [];
+    private readonly Dictionary<string, string> _runDetailErrors = [];
+    private readonly HashSet<string> _runDetailRequests = [];
     public string Id { get; } = "pcgraph-" + Guid.NewGuid().ToString("N");
     public GraphVizView? Graph => _graph;
     public int Height { get; private set; } = 340;
@@ -57,6 +63,7 @@ public sealed class GraphCanvasViewModel(IJSRuntime js)
     public bool Fullscreen { get; private set; }
     public string SearchTerm => _search;
     public GraphNodeView? Selected { get; private set; }
+    public IReadOnlyList<GraphNodeView> OpenPanels { get; private set; } = [];
     public IReadOnlyList<GraphNodeView> Matches { get; private set; } =
         Array.Empty<GraphNodeView>();
     public IReadOnlyList<(GraphNodeView Node, GraphLinkConfidence Confidence)> SelectedNeighbors
@@ -103,6 +110,10 @@ public sealed class GraphCanvasViewModel(IJSRuntime js)
             _nodeIndex = [];
             _sentLinkKeys = [];
             _renderedNodeCount = 0;
+            OpenPanels = [];
+            _runDetails.Clear();
+            _runDetailErrors.Clear();
+            _runDetailRequests.Clear();
             if (_graph is not null)
                 for (var i = 0; i < _graph.Nodes.Count; i++)
                     _nodeIndex[_graph.Nodes[i].Id] = i;
@@ -238,39 +249,135 @@ public sealed class GraphCanvasViewModel(IJSRuntime js)
     [JSInvokable]
     public async Task OnNodeClick(string? nodeId)
     {
-        Selected = nodeId is null ? null : _graph?.Nodes.FirstOrDefault(node => node.Id == nodeId);
+        var selected = nodeId is null
+            ? null
+            : _graph?.Nodes.FirstOrDefault(node => node.Id == nodeId);
+        Selected = selected;
         ReachableArtifacts =
             Selected is null || GraphCatalog.NodeKind(Selected.Kind) == GraphNodeKind.Artifact
                 ? []
                 : WalkToArtifacts(Selected.Id);
-        SelectedNeighbors =
-            Selected is null || _graph is null
-                ? []
-                : _graph
-                    .Links.Where(link => link.Source == Selected.Id || link.Target == Selected.Id)
-                    .Select(link =>
-                        (
-                            Other: link.Source == Selected.Id ? link.Target : link.Source,
-                            Confidence: GraphCatalog.LinkConfidence(link.Confidence)
-                        )
-                    )
-                    .Select(item =>
-                        (
-                            Node: _graph.Nodes.FirstOrDefault(node => node.Id == item.Other),
-                            item.Confidence
-                        )
-                    )
-                    .Where(item => item.Node is not null)
-                    .Select(item => (item.Node!, item.Confidence))
-                    .DistinctBy(item => item.Item1.Id)
-                    .OrderByDescending(item =>
-                        GraphCatalog.NodeKind(item.Item1.Kind) == GraphNodeKind.Artifact
-                    )
-                    .ThenByDescending(item => item.Item1.Degree)
-                    .ToList();
+        SelectedNeighbors = Selected is null ? [] : NeighborsFor(Selected);
+        if (selected is not null)
+        {
+            OpenPanels = OpenPanels
+                .Where(node => node.Id != selected.Id)
+                .Append(selected)
+                .TakeLast(MaxOpenPanels)
+                .ToList();
+        }
         NotifyStateChanged();
         if (_nodeClick is not null)
             await _nodeClick(nodeId);
+        if (selected is not null)
+            await LoadRunDetailsAsync(selected);
+    }
+
+    public IReadOnlyList<(GraphNodeView Node, GraphLinkConfidence Confidence)> NeighborsFor(
+        GraphNodeView selected
+    ) =>
+        _graph is null
+            ? []
+            : _graph
+                .Links.Where(link => link.Source == selected.Id || link.Target == selected.Id)
+                .Select(link =>
+                    (
+                        Other: link.Source == selected.Id ? link.Target : link.Source,
+                        Confidence: GraphCatalog.LinkConfidence(link.Confidence)
+                    )
+                )
+                .Select(item =>
+                    (
+                        Node: _graph.Nodes.FirstOrDefault(node => node.Id == item.Other),
+                        item.Confidence
+                    )
+                )
+                .Where(item => item.Node is not null)
+                .Select(item => (item.Node!, item.Confidence))
+                .DistinctBy(item => item.Item1.Id)
+                .OrderByDescending(item => IsArtifact(item.Item1))
+                .ThenByDescending(item => item.Item1.Degree)
+                .ToList();
+
+    public IReadOnlyList<(GraphNodeView Node, int Hops)> ReachableArtifactsFor(
+        GraphNodeView selected
+    ) => IsArtifact(selected) ? [] : WalkToArtifacts(selected.Id);
+
+    public GraphNodeArtifactRef? FirstPreviewableArtifactFor(GraphNodeView selected) =>
+        ReachableArtifactsFor(selected)
+            .Select(item => item.Node.Artifact)
+            .FirstOrDefault(artifact => artifact is not null && IsPreviewable(artifact));
+
+    public bool IsJobRun(GraphNodeView node) =>
+        string.Equals(node.Kind, "JobRun", StringComparison.OrdinalIgnoreCase);
+
+    public JobRunDetailView? RunDetailsFor(GraphNodeView node) =>
+        _runDetails.GetValueOrDefault(node.Id);
+
+    public string? RunDetailErrorFor(GraphNodeView node) =>
+        _runDetailErrors.GetValueOrDefault(node.Id);
+
+    public bool RunDetailsLoading(GraphNodeView node) =>
+        IsJobRun(node)
+        && _runDetailRequests.Contains(node.Id)
+        && !_runDetails.ContainsKey(node.Id)
+        && !_runDetailErrors.ContainsKey(node.Id);
+
+    public async Task ClosePanelAsync(string nodeId)
+    {
+        OpenPanels = OpenPanels.Where(node => node.Id != nodeId).ToList();
+        _runDetails.Remove(nodeId);
+        _runDetailErrors.Remove(nodeId);
+        _runDetailRequests.Remove(nodeId);
+        if (Selected?.Id == nodeId)
+        {
+            Selected = null;
+            SelectedNeighbors = [];
+            ReachableArtifacts = [];
+            NotifyStateChanged();
+            await SelectAsync(null);
+            return;
+        }
+        NotifyStateChanged();
+    }
+
+    public void BringPanelToFront(string nodeId)
+    {
+        var panel = OpenPanels.FirstOrDefault(node => node.Id == nodeId);
+        if (panel is null || OpenPanels.LastOrDefault()?.Id == nodeId)
+            return;
+        OpenPanels = OpenPanels.Where(node => node.Id != nodeId).Append(panel).ToList();
+        NotifyStateChanged();
+    }
+
+    private async Task LoadRunDetailsAsync(GraphNodeView node)
+    {
+        if (!IsJobRun(node) || !_runDetailRequests.Add(node.Id))
+            return;
+
+        const string prefix = "run:";
+        if (service is null
+            || !node.Id.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
+            || !Guid.TryParse(node.Id[prefix.Length..], out var runId))
+        {
+            _runDetailErrors[node.Id] = "Run details are unavailable for this graph node.";
+            NotifyStateChanged();
+            return;
+        }
+
+        try
+        {
+            var detail = await service.GetJobRunAsync(runId);
+            if (detail is null)
+                _runDetailErrors[node.Id] = "This run could not be found.";
+            else
+                _runDetails[node.Id] = detail;
+        }
+        catch (Exception ex)
+        {
+            _runDetailErrors[node.Id] = ex.Message;
+        }
+        NotifyStateChanged();
     }
 
     public void SearchNodes(string? input)
@@ -299,6 +406,9 @@ public sealed class GraphCanvasViewModel(IJSRuntime js)
 
     public bool IsAmbiguous(GraphLinkConfidence confidence) =>
         confidence == GraphLinkConfidence.Ambiguous;
+
+    public bool IsFailed(string? outcome) =>
+        ScopedPresentationCatalog.JobStatus(outcome) == JobRunStatus.Failed;
 
     public string PreviewUrl(GraphNodeArtifactRef artifact) =>
         $"/runs/{artifact.RunId}/artifacts/{artifact.Id}?v={artifact.CreatedAt.ToUnixTimeSeconds()}";
@@ -331,9 +441,7 @@ public sealed class GraphCanvasViewModel(IJSRuntime js)
         || artifact.ContentType.Contains("svg", StringComparison.OrdinalIgnoreCase);
 
     public GraphNodeArtifactRef? FirstPreviewableArtifact =>
-        ReachableArtifacts
-            .Select(r => r.Node.Artifact)
-            .FirstOrDefault(a => a is not null && IsPreviewable(a));
+        Selected is null ? null : FirstPreviewableArtifactFor(Selected);
 
     public async Task JumpAsync(string nodeId)
     {
@@ -350,7 +458,8 @@ public sealed class GraphCanvasViewModel(IJSRuntime js)
             await SelectAsync(Selected.Id);
     }
 
-    public Task ClearAsync() => SelectAsync(null);
+    public Task ClearAsync() =>
+        Selected is null ? Task.CompletedTask : ClosePanelAsync(Selected.Id);
 
     public async Task SelectAsync(string? nodeId)
     {
