@@ -85,9 +85,23 @@ PlaceContext__Sso__ClientId=placecontext
 PlaceContext__Sso__CallbackUrl=https://placecontext.io/auth/sso/callback
 ```
 
-Start the flow at `/auth/sso` (optionally with a local `returnUrl`). The authority must support a
-public authorization-code client with PKCE S256 and the `identity` scope, using these authority-
-relative endpoints:
+For a standard OpenID Connect authority such as Keycloak, enable discovery:
+
+```text
+PlaceContext__Sso__Protocol=OpenIdConnect
+PlaceContext__Sso__Authority=https://auth.example.com/realms/example
+PlaceContext__Sso__ClientId=placecontext
+PlaceContext__Sso__CallbackUrl=https://placecontext.example.com/auth/sso/callback
+```
+
+OpenID Connect mode discovers the authorization, token, and user-information
+endpoints from the authority and requests the `openid email profile` scopes.
+The client must be public, use authorization code flow, and require PKCE S256.
+
+Start the flow at `/auth/sso` (optionally with a local `returnUrl`). Without
+`Protocol=OpenIdConnect`, the legacy PlaceContext-to-PlaceContext mode expects
+a public authorization-code client with PKCE S256 and the `identity` scope,
+using these authority-relative endpoints:
 
 ```text
 /oauth/authorize
