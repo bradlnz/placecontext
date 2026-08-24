@@ -97,6 +97,14 @@ public sealed class AuthController : ControllerBase
                 ? "/setup"
                 : $"/setup?returnUrl={Uri.EscapeDataString(returnUrl)}");
 
+        // A configured external identity provider is the default interactive login path. Keep /login
+        // available for local recovery and after an explicit logout, but don't make normal users find
+        // and click a separate SSO link after the cookie middleware sends them here.
+        if (ExternalSsoConfigured(_config) && !Request.Cookies.ContainsKey(ManualLogoutCookie))
+            return Redirect(returnUrl == "/"
+                ? "/auth/sso"
+                : $"/auth/sso?returnUrl={Uri.EscapeDataString(returnUrl)}");
+
         if (_env.IsDevelopment() && !Request.Cookies.ContainsKey(ManualLogoutCookie))
         {
             var operatorUser = await _auth.GetOrCreateOperatorAsync(HttpContext.RequestAborted);
@@ -463,6 +471,16 @@ public sealed class AuthController : ControllerBase
         var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
         return ctx.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme,
             new ClaimsPrincipal(identity), new AuthenticationProperties { IsPersistent = true });
+    }
+
+    internal static bool ExternalSsoConfigured(IConfiguration configuration)
+    {
+        var section = configuration.GetSection("PlaceContext:Sso");
+        return Uri.TryCreate(section["Authority"], UriKind.Absolute, out var authority)
+            && authority.Scheme == Uri.UriSchemeHttps
+            && !string.IsNullOrWhiteSpace(section["ClientId"])
+            && Uri.TryCreate(section["CallbackUrl"], UriKind.Absolute, out var callback)
+            && callback.Scheme == Uri.UriSchemeHttps;
     }
 
     private sealed record ActorIdentity(
