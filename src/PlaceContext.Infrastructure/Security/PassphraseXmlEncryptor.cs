@@ -14,6 +14,17 @@ public sealed class PassphraseXmlEncryptor : IXmlEncryptor, IXmlDecryptor
 {
     private readonly byte[] _key;
 
+    // Data Protection records the decryptor type in the persisted key XML and later creates it
+    // with Activator.CreateInstance. Keep this constructor parameterless so persisted keys remain
+    // readable after a process restart; Kubernetes/.NET configuration exposes the setting through
+    // the double-underscore environment variable.
+    public PassphraseXmlEncryptor()
+        : this(Environment.GetEnvironmentVariable("PlaceContext__DataProtection__Key")
+            ?? throw new InvalidOperationException(
+                "PlaceContext:DataProtection:Key is required to decrypt the Data Protection key ring."))
+    {
+    }
+
     public PassphraseXmlEncryptor(string passphrase)
     {
         // Fixed salt for deterministic derivation from the same passphrase across replicas.
