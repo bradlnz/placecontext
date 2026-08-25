@@ -48,6 +48,69 @@ public sealed partial class ChatViewModel
         NotifyStateChanged();
     }
 
+    public void OpenCreateChannel()
+    {
+        if (Streaming)
+            return;
+        NewChannelName = "";
+        ChannelError = null;
+        ShowCreateChannel = true;
+        NotifyStateChanged();
+    }
+
+    public void CancelCreateChannel()
+    {
+        ShowCreateChannel = false;
+        NewChannelName = "";
+        ChannelError = null;
+        NotifyStateChanged();
+    }
+
+    public async Task CreateChannelAsync()
+    {
+        if (!ProjectId.HasValue || CreatingChannel || Streaming)
+            return;
+
+        var name = ChatChannel.NormalizeName(NewChannelName);
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            ChannelError = "Enter a channel name using letters or numbers.";
+            NotifyStateChanged();
+            return;
+        }
+
+        if (Sessions.Any(session =>
+                string.Equals(ChatChannel.NormalizeName(session.Title), name, StringComparison.OrdinalIgnoreCase)))
+        {
+            ChannelError = $"#{name} already exists.";
+            NotifyStateChanged();
+            return;
+        }
+
+        CreatingChannel = true;
+        ChannelError = null;
+        NotifyStateChanged();
+        try
+        {
+            var channel = ChatChannel.Create(ProjectId.Value, name, DateTimeOffset.Now);
+            await _memoryStore.SaveSessionAsync(channel.Id, channel);
+            await LoadSessionsAsync();
+            var summary = Sessions.First(session => session.Id == channel.Id);
+            ShowCreateChannel = false;
+            NewChannelName = "";
+            await SelectSessionAsync(summary);
+        }
+        catch (Exception ex)
+        {
+            ChannelError = $"Could not add the channel: {ex.Message}";
+        }
+        finally
+        {
+            CreatingChannel = false;
+            NotifyStateChanged();
+        }
+    }
+
     public async Task DeleteSessionAsync(ChatSessionSummary session)
     {
         if (Streaming)
@@ -75,7 +138,8 @@ public sealed partial class ChatViewModel
             }
             catch { }
         }
-        _sessionTitle = ChatCopy.DefaultSessionTitle;
+        if (!Sessions.Any(session => session.Id == _sessionId))
+            _sessionTitle = ChatCopy.DefaultSessionTitle;
         Messages.Clear();
         ActiveActions.Clear();
         FetchedData.Clear();

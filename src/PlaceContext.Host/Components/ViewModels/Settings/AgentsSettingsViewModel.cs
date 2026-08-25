@@ -2,20 +2,25 @@ using Microsoft.AspNetCore.Components;
 using PlaceContext.Application;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Features;
+using PlaceContext.Infrastructure.Caching;
 
 namespace PlaceContext.Host.Components.ViewModels;
 
 public sealed class AgentsSettingsViewModel(
     IPlaceContextService service,
+    IChatMemoryStore chatMemory,
     PortalUiState ui,
     NavigationManager navigation
 ) : PageViewModel
 {
     public IReadOnlyList<ProjectSummaryView> Projects { get; private set; } = [];
     public IReadOnlyList<AgentDefinitionView> Team { get; private set; } = [];
+    public IReadOnlyList<ChatSessionSummary> Channels { get; private set; } = [];
     public Guid? ProjectId { get; private set; }
     public bool Loading { get; private set; } = true;
     public bool Saving { get; private set; }
+    public bool AddingChannel { get; private set; }
+    public Guid? DeletingChannelId { get; private set; }
     public string? Message { get; private set; }
     public bool MessageIsError { get; private set; }
 
@@ -28,9 +33,13 @@ public sealed class AgentsSettingsViewModel(
     public float Temperature { get; set; }
     public float TopP { get; set; }
     public bool Enabled { get; set; }
+    public string NewChannelName { get; set; } = "";
 
     public int EnabledAgentCount => Team.Count(agent => agent.Enabled);
     public string TeamHref => ProjectId is { } id ? PageRoutes.ProjectAgents(id) : "#";
+
+    public string ChannelHref(ChatSessionSummary channel) =>
+        ProjectId is { } id ? $"{PageRoutes.ProjectAgentChat(id)}?channel={channel.Id}" : "#";
 
     public async Task LoadAsync()
     {
@@ -123,6 +132,74 @@ public sealed class AgentsSettingsViewModel(
         }
     }
 
+    public async Task AddChannelAsync()
+    {
+        if (ProjectId is null || AddingChannel)
+            return;
+
+        var name = ChatChannel.NormalizeName(NewChannelName);
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            SetMessage("Enter a channel name using letters or numbers.", true);
+            NotifyStateChanged();
+            return;
+        }
+
+        if (Channels.Any(channel =>
+                string.Equals(ChatChannel.NormalizeName(channel.Title), name, StringComparison.OrdinalIgnoreCase)))
+        {
+            SetMessage($"#{name} already exists.", true);
+            NotifyStateChanged();
+            return;
+        }
+
+        AddingChannel = true;
+        Message = null;
+        NotifyStateChanged();
+        try
+        {
+            var channel = ChatChannel.Create(ProjectId.Value, name, DateTimeOffset.Now);
+            await chatMemory.SaveSessionAsync(channel.Id, channel);
+            NewChannelName = "";
+            await LoadChannelsAsync();
+            SetMessage($"#{channel.Title} added.", false);
+        }
+        catch (Exception ex)
+        {
+            SetMessage($"Could not add the channel: {ex.Message}", true);
+        }
+        finally
+        {
+            AddingChannel = false;
+            NotifyStateChanged();
+        }
+    }
+
+    public async Task DeleteChannelAsync(ChatSessionSummary channel)
+    {
+        if (DeletingChannelId.HasValue)
+            return;
+
+        DeletingChannelId = channel.Id;
+        Message = null;
+        NotifyStateChanged();
+        try
+        {
+            await chatMemory.DeleteSessionAsync(channel.Id);
+            await LoadChannelsAsync();
+            SetMessage($"#{channel.Title} deleted.", false);
+        }
+        catch (Exception ex)
+        {
+            SetMessage($"Could not delete the channel: {ex.Message}", true);
+        }
+        finally
+        {
+            DeletingChannelId = null;
+            NotifyStateChanged();
+        }
+    }
+
     public void OpenTeam()
     {
         if (ProjectId is { } id)
@@ -134,11 +211,24 @@ public sealed class AgentsSettingsViewModel(
         if (ProjectId is null)
         {
             Team = [];
+            Channels = [];
             return;
         }
 
-        Apply(await service.GetAgentConfigAsync(ProjectId.Value));
-        Team = await service.ListAgentDefinitionsAsync(ProjectId.Value);
+        var configTask = service.GetAgentConfigAsync(ProjectId.Value);
+        var teamTask = service.ListAgentDefinitionsAsync(ProjectId.Value);
+        var channelsTask = chatMemory.ListSessionsAsync(ProjectId.Value);
+        await Task.WhenAll(configTask, teamTask, channelsTask);
+        Apply(await configTask);
+        Team = await teamTask;
+        Channels = await channelsTask;
+    }
+
+    private async Task LoadChannelsAsync()
+    {
+        Channels = ProjectId is { } id
+            ? await chatMemory.ListSessionsAsync(id)
+            : [];
     }
 
     private void Apply(AgentConfigView config)

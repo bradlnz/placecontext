@@ -1,6 +1,7 @@
 @page "/settings/agents"
 @layout PlaceContext.Host.Components.Layout.SettingsLayout
 @attribute [Authorize(Policy = Policies.DefaultAdmin)]
+@using PlaceContext.Infrastructure.Caching
 @inject AgentsSettingsViewModel Vm
 @implements IDisposable
 
@@ -44,13 +45,70 @@
     }
     else
     {
-        <section class="dccard team-card">
-            <div>
-                <span class="card-kicker">Team</span>
-                <strong>@Vm.EnabledAgentCount active agent@(Vm.EnabledAgentCount == 1 ? "" : "s")</strong>
-                <p>The team shares project-scoped channels and works toward the goals on its work board.</p>
+        <section class="workspace-grid">
+            <div class="dccard team-card">
+                <div class="team-card-head">
+                    <div>
+                        <span class="card-kicker">Agent team</span>
+                        <strong>@Vm.EnabledAgentCount active agent@(Vm.EnabledAgentCount == 1 ? "" : "s")</strong>
+                    </div>
+                    <button class="dcbtn sm" @onclick="Vm.OpenTeam">Manage team and goals</button>
+                </div>
+                <div class="settings-team-list">
+                    @foreach (var agent in Vm.Team.Where(agent => agent.Enabled))
+                    {
+                        <span class="settings-team-member">
+                            <span class="settings-agent-avatar">@(string.IsNullOrWhiteSpace(agent.Name) ? "A" : agent.Name.Trim()[..1].ToUpperInvariant())</span>
+                            <span><strong>@agent.Name</strong><small>@agent.Description</small></span>
+                        </span>
+                    }
+                    @if (!Vm.Team.Any(agent => agent.Enabled))
+                    {
+                        <span class="settings-empty">The Command Agent will lead chats until worker agents are enabled.</span>
+                    }
+                </div>
             </div>
-            <button class="dcbtn" @onclick="Vm.OpenTeam">Manage team and goals</button>
+
+            <div class="dccard channel-card">
+                <div class="channel-card-head">
+                    <div>
+                        <span class="card-kicker">Group chat</span>
+                        <strong>@Vm.Channels.Count channel@(Vm.Channels.Count == 1 ? "" : "s")</strong>
+                    </div>
+                    @if (Vm.ProjectId is { } chatProjectId)
+                    {
+                        <a class="dcbtn sm" href="@PageRoutes.ProjectAgentChat(chatProjectId)">Open chat</a>
+                    }
+                </div>
+                <div class="settings-channel-create">
+                    <div class="settings-channel-input">
+                        <span aria-hidden="true">#</span>
+                        <input class="dcinput" maxlength="@ChatChannel.MaxNameLength" @bind="Vm.NewChannelName"
+                               @bind:event="oninput" placeholder="team-updates" aria-label="New channel name" />
+                    </div>
+                    <button class="dcbtn primary" @onclick="Vm.AddChannelAsync"
+                            disabled="@(Vm.AddingChannel || string.IsNullOrWhiteSpace(Vm.NewChannelName))">
+                        @(Vm.AddingChannel ? "Adding…" : "Add")
+                    </button>
+                </div>
+                <div class="settings-channel-list">
+                    @foreach (var channel in Vm.Channels)
+                    {
+                        <div class="settings-channel-row">
+                            <a href="@Vm.ChannelHref(channel)">
+                                <strong># @channel.Title</strong>
+                                <small>@channel.MessageCount message@(channel.MessageCount == 1 ? "" : "s")</small>
+                            </a>
+                            <button class="channel-delete" title="Delete channel" aria-label="Delete @channel.Title channel"
+                                    disabled="@(Vm.DeletingChannelId.HasValue)" @onclick="@(() => Vm.DeleteChannelAsync(channel))">×</button>
+                        </div>
+                    }
+                    @if (Vm.Channels.Count == 0)
+                    {
+                        <span class="settings-empty">Add a shared channel for this project’s agent team.</span>
+                    }
+                </div>
+            </div>
         </section>
 
         <section class="dccard settings-card">

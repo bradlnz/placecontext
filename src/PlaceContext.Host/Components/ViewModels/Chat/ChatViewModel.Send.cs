@@ -101,7 +101,8 @@ public sealed partial class ChatViewModel
         StreamBuffer = "";
         _activeRoute = null;
 
-        if (Messages.Count(m => m.Role == "user") == 1)
+        if (Messages.Count(m => m.Role == "user") == 1
+            && !Sessions.Any(session => session.Id == _sessionId))
             _sessionTitle =
                 text.Length > 50 ? text[..50] + "…"
                 : string.IsNullOrWhiteSpace(text) ? sentAttachmentName ?? "File upload"

@@ -13,7 +13,7 @@ public sealed partial class ChatViewModel
 {
     // ── Lifecycle ────────────────────────────────────────────────────────────
 
-    public async Task InitializeAsync()
+    public async Task InitializeAsync(Guid? requestedChannelId = null)
     {
         _ui.Set("Chat", "Agent inference");
         ProjectId = _ui.CurrentProjectId;
@@ -23,7 +23,7 @@ public sealed partial class ChatViewModel
             NewSession();
             NotifyStateChanged();
             // Fire-and-forget: populate sidebar data in the background so the UI renders immediately.
-            _ = LoadAndRestoreSessionAsync();
+            _ = LoadAndRestoreSessionAsync(requestedChannelId);
         }
         else
         {
@@ -31,7 +31,7 @@ public sealed partial class ChatViewModel
         }
     }
 
-    private async Task LoadAndRestoreSessionAsync()
+    private async Task LoadAndRestoreSessionAsync(Guid? requestedChannelId)
     {
         try
         {
@@ -44,8 +44,12 @@ public sealed partial class ChatViewModel
                 LoadPanelArtifactsAsync()
             );
             await LoadTeamWorkspaceAsync();
-            if (Sessions.Count > 0)
-                await SelectSessionAsync(Sessions[0]);
+            var channel = requestedChannelId is { } id
+                ? Sessions.FirstOrDefault(session => session.Id == id)
+                : null;
+            channel ??= Sessions.FirstOrDefault();
+            if (channel is not null)
+                await SelectSessionAsync(channel);
         }
         catch { }
         WorkspaceLoaded = true;
@@ -79,6 +83,8 @@ public sealed partial class ChatViewModel
         await LoadPanelArtifactsAsync();
         await LoadTeamWorkspaceAsync();
         NewSession();
+        if (Sessions.FirstOrDefault() is { } channel)
+            await SelectSessionAsync(channel);
         WorkspaceLoaded = true;
         NotifyStateChanged();
     }

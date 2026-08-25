@@ -506,9 +506,30 @@
                             <h4>Channels</h4>
                             <div class="session-header-actions">
                                 <button class="dcbtn xs" @onclick="Vm.ClearCurrentSessionAsync" disabled="@(Vm.Messages.Count == 0 || Vm.Streaming)" title="Clear messages in this channel">Clear</button>
-                                <button class="dcbtn xs" @onclick="Vm.NewSession" disabled="@Vm.Streaming">+ Channel</button>
+                                <button class="dcbtn xs" @onclick="Vm.OpenCreateChannel" disabled="@Vm.Streaming">+ Channel</button>
                             </div>
                         </div>
+                        @if (Vm.ShowCreateChannel)
+                        {
+                            <div class="channel-create">
+                                <div class="channel-name-input">
+                                    <span aria-hidden="true">#</span>
+                                    <input class="dcinput" maxlength="@ChatChannel.MaxNameLength" @bind="Vm.NewChannelName"
+                                           @bind:event="oninput" placeholder="team-updates" aria-label="Channel name" />
+                                </div>
+                                @if (Vm.ChannelError is not null)
+                                {
+                                    <span class="channel-error">@Vm.ChannelError</span>
+                                }
+                                <div class="channel-create-actions">
+                                    <button class="dcbtn xs" @onclick="Vm.CancelCreateChannel" disabled="@Vm.CreatingChannel">Cancel</button>
+                                    <button class="dcbtn xs primary" @onclick="Vm.CreateChannelAsync"
+                                            disabled="@(Vm.CreatingChannel || string.IsNullOrWhiteSpace(Vm.NewChannelName))">
+                                        @(Vm.CreatingChannel ? "Adding…" : "Add channel")
+                                    </button>
+                                </div>
+                            </div>
+                        }
                         @foreach (var s in Vm.Sessions.Take(20))
                         {
                             <div class="session-item @(s.Id == Vm.SessionId ? "active" : "")" @onclick="@(() => Vm.SelectSessionAsync(s))">
@@ -797,6 +818,7 @@
 
 @code {
     [Parameter] public Guid? RouteProjectId { get; set; }
+    [SupplyParameterFromQuery(Name = "channel")] public Guid? RouteChannelId { get; set; }
 
     protected override void OnInitialized()
     {
@@ -804,7 +826,7 @@
         Vm.Attach(() => InvokeAsync(StateHasChanged));
     }
 
-    protected override Task OnInitializedAsync() => Vm.InitializeAsync();
+    protected override Task OnInitializedAsync() => Vm.InitializeAsync(RouteChannelId);
 
     protected override Task OnAfterRenderAsync(bool firstRender) =>
         Vm.AfterRenderAsync(Vm.MessagesElement, Vm.ScrollAnchorElement, Vm.DropZoneElement, firstRender);

@@ -14,8 +14,9 @@ Graphs, maps, and supported artifacts can render inline.
 ## Channels, team, and goals
 
 The Slack-style side panel lists the configured agent team, shared channels, and the team's recent
-goals. A channel preserves its conversation for everyone working in that project. You can create,
-clear, reopen, or delete channels, and jump from **Team goals** to the full work board.
+goals. Use **+ Channel** to name and create a channel immediately; empty channels are saved and are
+available to everyone working in that project. You can clear, reopen, or delete channels, and jump
+from **Team goals** to the full work board.
 
 The panel also keeps recent artifacts, fetched data, graph context, and tool history close to the
 conversation.
@@ -27,6 +28,8 @@ The file appears as a tile in the conversation and its readable text is supplied
 
 Default administrators use **Settings → Agents** to select a project and configure:
 
+- shared group-chat channels, including creating, opening, and deleting them;
+- the enabled agent-team roster and a shortcut to the team and goals board;
 - whether agent chat is enabled;
 - the local base model and shared team instructions;
 - retrieval context, temperature, and Top P;

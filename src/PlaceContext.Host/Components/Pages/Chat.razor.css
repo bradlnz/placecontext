@@ -542,6 +542,11 @@
 .team-member { display:flex; align-items:center; gap:7px; min-width:0; color:var(--text-2); font-size:10.5px; }
 .team-avatar { display:inline-flex; width:22px; height:22px; flex:none; align-items:center; justify-content:center; border-radius:6px; background:var(--brand-bg); color:var(--brand-2); font-size:9px; font-weight:700; }
 .team-empty { display:block; color:var(--muted); font-size:10px; line-height:1.45; }
+.channel-create { display:flex; flex-direction:column; gap:7px; margin:8px 0 10px; padding:9px; border:1px solid var(--border); border-radius:8px; background:var(--bg-3); }
+.channel-name-input { display:flex; align-items:center; gap:5px; color:var(--muted); font-size:12px; }
+.channel-name-input .dcinput { min-width:0; height:30px; flex:1; font-size:10.5px; }
+.channel-error { color:var(--error); font-size:9.5px; line-height:1.35; }
+.channel-create-actions { display:flex; justify-content:flex-end; gap:6px; }
 .team-goal { display:flex; align-items:flex-start; gap:8px; padding:7px 0; border-bottom:1px solid var(--border); }
 .team-goal:last-child { border-bottom:0; }
 .goal-status { width:7px; height:7px; flex:none; margin-top:4px; border-radius:50%; background:var(--text-3); }

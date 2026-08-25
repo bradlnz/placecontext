@@ -159,6 +159,10 @@ public sealed partial class ChatViewModel : PageViewModel
     public bool PendingRagEnabled { get; set; } = true;
     public int PendingMaxContextChunks { get; set; } = 5;
     public bool ShowSessionList { get; set; } = true;
+    public bool ShowCreateChannel { get; private set; }
+    public bool CreatingChannel { get; private set; }
+    public string NewChannelName { get; set; } = "";
+    public string? ChannelError { get; private set; }
     public IReadOnlyList<ChatSessionSummary> Sessions { get; private set; } =
         Array.Empty<ChatSessionSummary>();
     public IReadOnlyList<AgentDefinitionView> TeamAgents { get; private set; } =
